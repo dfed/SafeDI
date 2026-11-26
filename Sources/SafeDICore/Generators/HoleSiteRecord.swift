@@ -34,7 +34,7 @@ extension ScopeGenerator {
 	static func holeSitePlace(
 		text: String,
 		of property: Property,
-		at site: SeamSignature.Hole,
+		at site: HoleSiteView,
 		functionName: String?,
 		valuesBindings: [SeamHoles.ValuesBinding],
 		readingInstancesOf lazilyInstantiatedInstanceProperties: Set<Property>,
@@ -62,22 +62,22 @@ extension ScopeGenerator {
 
 /// The reads a hole's site makes, as `holeSitePlace` records them, in the order its text makes them, each name once.
 private struct HoleSiteReads {
-	init(site: SeamSignature.Hole, lazilyInstantiatedInstanceProperties: Set<Property>, carrierUse: SeamCarrierValues.Use?) {
+	init(site: HoleSiteView, lazilyInstantiatedInstanceProperties: Set<Property>, carrierUse: SeamCarrierValues.Use?) {
 		self.site = site
 		self.lazilyInstantiatedInstanceProperties = lazilyInstantiatedInstanceProperties
 		self.carrierUse = carrierUse
-		// The type of each struct a member call is made on by name: the root builder's, and each level its route binds. A
-		// level's type is spelled over the type the builder builds, which is the root's too.
-		guard let enumPlace = site.enumPlace else { return }
-		let members = enumPlace.route.compactMap(\.member)
-		// A level is spelled over the type the builder builds, its innermost generic argument (`ReservedName.levelType(ofEnum:built:)`).
-		let builtType = members.lazy.compactMap(\.levelType.genericArgumentsOfThisAndEnclosingTypes.last).first ?? site.builtType
-		let rootEnumType = TypeDescription.simple(name: enumPlace.rootEnumTypeName ?? enumPlace.enumTypeName, generics: [])
-		levelTypesByName[site.internalName] = ReservedName.levelType(ofEnum: rootEnumType, built: builtType)
-		for member in members {
-			levelTypesByName[member.bindingName] = member.levelType
+		// The type of the struct the site's member call is made on by name: the root builder's, or the level its route's last
+		// case returned. A level's type is spelled over the type the builder builds, which is the root's too.
+		guard let place = site.place else { return }
+		switch place.parent {
+		case let .builder(levelType):
+			levelTypesByName[site.internalName] = levelType
+		case let .level(name, type):
+			levelTypesByName[name] = type
+		case .fillLevelStruct:
+			break
 		}
-		structStaysOutsideSendableFunctions = !enumPlace.isBuiltBySendableBuilder
+		structStaysOutsideSendableFunctions = !place.isBuiltBySendableBuilder
 	}
 
 	/// What the site reads, or `nil` once a read is of a value no binding of the seam's tree types.
@@ -92,17 +92,18 @@ private struct HoleSiteReads {
 	mutating func recordSite(of property: Property, functionName: String?) -> String? {
 		// Every site has its place's case before code is generated, so `buildSiteCode` writes the member call this records;
 		// where it has none, the site writes nothing and reads nothing, as `reads` starts.
-		guard let enumPlace = site.enumPlace, enumPlace.memberValuesTypeName != nil else { return nil }
-		let fields = enumPlace.values
-		let lastStep = enumPlace.route.last
-		if lastStep?.member != nil, lastStep?.innerScope != nil {
+		guard let place = site.place else { return nil }
+		let fields = place.values
+		switch place.parent {
+		case .builder:
+			readStruct(named: site.internalName, ofType: levelTypesByName[site.internalName])
+		case let .level(name, _):
+			readStruct(named: name, ofType: levelTypesByName[name])
+		case .fillLevelStruct:
 			// The struct of a fill's own level, which the fill is handed.
 			reads = nil
-		} else {
-			let parentName = lastStep?.member?.bindingName ?? site.internalName
-			readStruct(named: parentName, ofType: levelTypesByName[parentName])
 		}
-		if ReservedName.seamCarrier(ofEnum: enumPlace.enumType(qualifiedBy: nil)) != nil {
+		if ReservedName.seamCarrier(ofEnum: place.enumType) != nil {
 			readCarrierArguments(of: fields, use: carrierUse)
 		} else {
 			readFields(fields)
@@ -114,7 +115,7 @@ private struct HoleSiteReads {
 
 	// MARK: Private
 
-	private let site: SeamSignature.Hole
+	private let site: HoleSiteView
 	private let lazilyInstantiatedInstanceProperties: Set<Property>
 	private let carrierUse: SeamCarrierValues.Use?
 	private var levelTypesByName = [String: TypeDescription]()

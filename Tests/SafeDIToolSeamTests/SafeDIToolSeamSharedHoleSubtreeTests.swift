@@ -716,7 +716,8 @@ struct SafeDIToolSeamSharedHoleSubtreeTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_bindsNilToUnfulfilledDependency_whenTypeInstantiatingItOnlyIfAvailableIsReachedOnTwoPathsOfRootCallingSeam() async throws {
 		// `AppRoot` calls the seam `Feature`, so its tree is built over the seam map, where `S`'s `extra`, instantiated only if
-		// available and fulfilled by nothing, is a hole generator that holds no place: both `S`s bind it to `nil`.
+		// available and fulfilled by nothing, is a hole generator that holds no place: both `S`s bind it to `nil`. A
+		// production root's tree has no `SeamHoles`, so the second `S` reuses the first's generator.
 		let modules = SafeDIToolSeamBuilderParameterTests.modules(
 			feature: [
 				seamFixtureType(named: "Part", declarations: []),
@@ -730,7 +731,16 @@ struct SafeDIToolSeamSharedHoleSubtreeTests: ~Copyable {
 				seamFixtureType(named: "AppRoot", isRoot: true, declarations: ["@Instantiated public let a: A", "@Instantiated public let b: B", "@Instantiated public let feature: Feature"]),
 			],
 		)
-		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		let (reuses, continuation) = AsyncStream.makeStream(of: String.self)
+		let output = try await ConstructionMemoOracle.$reusedPlaceObserver.withValue({ concreteType, _ in continuation.yield(concreteType) }) { [modules] in
+			try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		}
+		continuation.finish()
+		var reusesOfS = 0
+		for await reusedType in reuses where reusedType == "S" {
+			reusesOfS += 1
+		}
+		#expect(reusesOfS == 1)
 		#expect(output.modules["App"]?.generatedFiles["App.swift"] == generatedFileHeader + """
 		#if canImport(Feature)
 		import Feature

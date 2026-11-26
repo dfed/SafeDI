@@ -483,8 +483,8 @@ extension DependencyTreeGenerator {
 		// `<label>.instance` when it builds the type that reads it, as production reads a received wrapper's instance.
 		var instancesReadThroughWrapperParameters = Set<Property>()
 		let (mockRootTable, mockRootRecord) = MockRootPlan(mockRootScope: mockRootScope, frozenScopeMap: frozenScopeMap).freezingRoot()
-		// A public mock's tree built with builders has holes, whose places no memo holds, so only the tree built without
-		// them shares the mock roots' memo.
+		// A public mock's tree built with builders has holes, whose places a mock's tree never stores, and reads its own
+		// `SeamHoles`, so only the tree built without them shares the mock roots' memo.
 		func mockRootGenerator(builders: ShapedBuilders?, constructionMemo: inout ConstructionMemo) throws -> ScopeGenerator {
 			try mockRootRecord.createScopeGenerator(
 				in: mockRootTable,

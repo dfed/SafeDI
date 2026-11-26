@@ -607,7 +607,10 @@ func executeSafeDIToolMultiModuleTest(
 										try await ReusedSeamTreeChecks.comparing(handingOn: SeamTreeReuseObservation.comparesBuiltTrees) {
 											// Every hole's owner stack derived from its site's path must be the stack construction built it with (`HoleOwnerStackChecks`).
 											try await HoleOwnerStackObservation.$observer.withValue(HoleOwnerStackObservation.checkingDerivedStacksWherePossible(handingOn: HoleOwnerStackObservation.observer)) {
-												try await tool.generate()
+												// Every seam's signature passes must find over a tree that shares no hole subtree what they find over the shared tree (`UnsharedTreeChecks`).
+												try await SeamSignatureObservation.$comparesUnsharedTrees.withValue(UnsharedTreeChecks.recordingDifferences(handingOn: SeamSignatureObservation.comparesUnsharedTrees)) {
+													try await tool.generate()
+												}
 											}
 										}
 									}

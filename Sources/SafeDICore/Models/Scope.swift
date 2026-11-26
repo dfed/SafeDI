@@ -495,9 +495,14 @@ extension ScopeRecord {
 		var placeHoldingPropertiesOfPreviousPass: [TypeDescription: Set<Property>]?
 		// A tree with a seam root or a mock root's builders reads its own `SeamHoles` (its values bindings, member calls,
 		// builder structs and the names the seam binds), constant within the tree but not across trees, so its memo is never
-		// shared across trees or kept past a pass. Its places with holes store nothing; a seam without holes memoizes the
-		// rest, a pass at a time.
+		// shared across trees, and a pass reads the pass before's only for the generators it built settled. A seam's places,
+		// holes included, are keyed by their path's position class (`SeamHoles.positionClass(at:)`); a mock's places with
+		// holes store nothing, and its other places memoize, a pass at a time.
 		let sharesMemo = seamRoot == nil && mockBuilders == nil
+		// One `SeamHoles` serves every pass, so the position classes are numbered once per tree.
+		let seamHoles = seamRoot.map { SeamHoles(of: $0, seamType: instantiable.concreteInstantiable) }
+			?? mockBuilders.map { SeamHoles(seamType: instantiable.concreteInstantiable, holes: $0.holes, builders: $0.builders, callRoutes: $0.callRoutes) }
+			?? SeamHoles()
 		var placeHoldingPropertiesByType: [TypeDescription: Set<Property>]?
 		var scopeGenerator: ScopeGenerator
 		// Every scope of the tree is enclosed by these, so they are held in storage each scope's copy shares.
@@ -528,6 +533,7 @@ extension ScopeRecord {
 					lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
 					seamRoot: seamRoot,
 					mockBuilders: mockBuilders,
+					seamHoles: seamHoles,
 					erasedToConcreteExistential: erasedToConcreteExistential,
 					forMockGeneration: forMockGeneration,
 					validatesForwardedProperties: validatesForwardedProperties,
@@ -546,6 +552,7 @@ extension ScopeRecord {
 				lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
 				seamRoot: seamRoot,
 				mockBuilders: mockBuilders,
+				seamHoles: seamHoles,
 				erasedToConcreteExistential: erasedToConcreteExistential,
 				forMockGeneration: forMockGeneration,
 				validatesForwardedProperties: validatesForwardedProperties,
@@ -633,6 +640,7 @@ extension ScopeRecord {
 		lazilyInstantiatedInstanceProperties: Set<Property>,
 		seamRoot: ScopeGenerator.SeamRoot?,
 		mockBuilders: DependencyTreeGenerator.ShapedBuilders?,
+		seamHoles: SeamHoles,
 		erasedToConcreteExistential: Bool,
 		forMockGeneration: Bool,
 		validatesForwardedProperties: Bool,
@@ -654,9 +662,7 @@ extension ScopeRecord {
 			lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
 			seamRoot: seamRoot,
 			mockBuilders: mockBuilders,
-			seamHoles: seamRoot.map { SeamHoles(of: $0, seamType: instantiable.concreteInstantiable) }
-				?? mockBuilders.map { SeamHoles(seamType: instantiable.concreteInstantiable, holes: $0.holes, builders: $0.builders, callRoutes: $0.callRoutes) }
-				?? SeamHoles(),
+			seamHoles: seamHoles,
 			sitePath: [],
 			erasedToConcreteExistential: erasedToConcreteExistential,
 			forMockGeneration: forMockGeneration,
@@ -701,6 +707,7 @@ extension ScopeRecord {
 						memo.store(reuse.entry, for: key, keepingAlive: scope.identity)
 						scopeGeneratorsUnderConstruction[index].add(reusing: reuse)
 					} else {
+						GenerationWork.record(1, by: seamRoot == nil || !reusesGenerators ? nil : .buildingGeneratorsOfSeamTree)
 						var child = scopeGeneratorsUnderConstruction[index].childUnderConstruction(
 							scope: scope,
 							property: property,
@@ -1268,9 +1275,10 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		}
 		childGenerators.reserveCapacity(propertiesToGenerate.count + fillsOfThisCall.count)
 		self.log = log
-		// Every scope of a tree with holes reads context the log does not cover, and so does a call that passes fills outside a
-		// mock's tree, until production trees are measured with it.
-		subtreeIsShareable = seamHoles.isEmpty && seamRoot == nil && mockBuilders == nil && (holeArguments.isEmpty || forMockGeneration)
+		// A scope of a seam's tree reads its `SeamHoles` only at its own path, which its key's class names
+		// (`SeamHoles.positionClass(at:)`); a mock's tree with holes reads context the log does not cover, and so does a call
+		// that passes fills outside a mock's tree, until production trees are measured with it.
+		subtreeIsShareable = (seamHoles.isEmpty || !forMockGeneration) && seamRoot == nil && mockBuilders == nil && (holeArguments.isEmpty || forMockGeneration)
 		// A fill and a scope inside one are built only as part of the call that passes the fill, whose place is stored whole.
 		isMemoizable = subtreeIsShareable && fill == nil && enclosingFills.isEmpty
 		if !holeArguments.isEmpty {
@@ -1858,12 +1866,14 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 
 	/// Creates the generator of a hole this scope's type instantiates, a site of the seam whose tree is generated.
 	mutating func addHoleGenerator(property: Property, erasedToConcreteExistential: Bool) {
-		// A scope that holds a place is never shared between paths: the walks of a finished tree that read a site's path
-		// (`SeamBuilderParameters`' declarations of each generator, the owner's stack `buildSites(in:)` derives from the
-		// path) take each generator to stand for one path. A tree built only to find a seam's or public mock's signature has
-		// holes but no `seamHoles`, so the key alone would not keep two paths apart.
-		isMemoizable = false
-		subtreeIsShareable = false
+		// A hole's generator holds nothing of its path: its site's view (`HoleSiteView`), carrier site and lazy set are what
+		// the key's class and lazy set name, and the walks of a finished tree derive a site's path facts from the path
+		// (`SeamBuilderParameters`), so two paths of a seam's tree share it. A mock's tree, whose `SeamHoles` names no
+		// class, never shares a scope that holds a place.
+		if forMockGeneration {
+			isMemoizable = false
+			subtreeIsShareable = false
+		}
 		let holeGenerator = ScopeGenerator(
 			holeProperty: property,
 			erasedToConcreteExistential: erasedToConcreteExistential,
@@ -1941,9 +1951,10 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 
 	/// The key under which the generator of the child of this scope that builds `property` with `scope` is stored and looked
 	/// up in a construction memo, or `nil` where the child reads context the memo's log does not cover: it is inside a fill,
-	/// or in a tree with holes (see `ConstructionMemo`).
+	/// or in a mock's tree with holes (see `ConstructionMemo`). In a seam's tree the key holds the class of the child's path
+	/// (`SeamHoles.positionClass(at:)`).
 	func memoKey(ofChildBuilding scope: ConstructionScope, as property: Property, id propertyID: PropertyID, erasedToConcreteExistential: Bool) -> ConstructionMemo.Key? {
-		guard enclosingFills.isEmpty, seamHoles.isEmpty, fill == nil else { return nil }
+		guard enclosingFills.isEmpty, seamHoles.isEmpty || !forMockGeneration, fill == nil else { return nil }
 		return ConstructionMemo.Key(
 			scope: ObjectIdentifier(scope.identity),
 			property: propertyID,
@@ -1957,6 +1968,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			spellings: Property.spellingsForConstructionMemo(of: childLazilyInstantiatedInstanceProperties, childReboundProperties),
 			previousPassGenerator: previousPassChildGenerator.map(ObjectIdentifier.init),
 			cycleParameterSeed: cycleParameterSeed?.child(at: childGenerators.count).map(ObjectIdentifier.init),
+			positionClass: seamHoles.positionClass(at: sitePath + [property]),
 		)
 	}
 
@@ -2814,6 +2826,7 @@ struct SeamHoles: Sendable {
 		namesBoundBySeam = GenerationWork.Shared([])
 		carrierValues = SeamCarrierValues()
 		carrierSitesByPath = [:]
+		positionClassByPath = [:]
 	}
 
 	/// How each carrier level's members take its values, and the runs the tree forms.
@@ -2833,7 +2846,17 @@ struct SeamHoles: Sendable {
 		carrierSitesByPath.isEmpty ? nil : carrierSitesByPath[sitePath]
 	}
 
-	init(seamType: TypeDescription, holes: [SeamSignature.Hole], builders: [SeamSignature.Builder], parameters: [SeamSignature.Parameter] = [], callRoutes: [SeamSignature.CallRoute] = [], scopeEnums: [SeamSignature.ScopeEnum] = [], holdsLoopPayloadsInBoxes: Bool = false) {
+	/// The class of `sitePath` among the paths of the seam's tree (`SeamPositionClasses`): two paths of one class read the
+	/// same of these maps at every depth beneath them, so a generator built at one serves the other. 0 for a path beneath
+	/// which nothing reads them, and for every path where the classes are not computed: a mock's tree, which keys no place
+	/// whose subtree holds a hole.
+	func positionClass(at sitePath: [Property]) -> Int {
+		positionClassByPath.isEmpty ? 0 : positionClassByPath[sitePath] ?? 0
+	}
+
+	private let positionClassByPath: [[Property]: Int]
+
+	init(seamType: TypeDescription, holes: [SeamSignature.Hole], builders: [SeamSignature.Builder], parameters: [SeamSignature.Parameter] = [], callRoutes: [SeamSignature.CallRoute] = [], scopeEnums: [SeamSignature.ScopeEnum] = [], holdsLoopPayloadsInBoxes: Bool = false, computesPositionClasses: Bool = false) {
 		self.holdsLoopPayloadsInBoxes = holdsLoopPayloadsInBoxes
 		var routeCasesByCall = [RouteCall: RouteCase]()
 		let builderByEnum = Dictionary(builders.map { ($0.enumKey, $0) }, uniquingKeysWith: { first, _ in first })
@@ -3000,6 +3023,22 @@ struct SeamHoles: Sendable {
 			valuesBindingsByPath[path] = (formationsByPath[path] ?? []) + orderedBindings.filter { !$0.isCalledInsideFunction }
 		}
 		self.memberCallsInsideFunctionByPath = memberCallsInsideFunctionByPath
+		if computesPositionClasses {
+			// What each path's scopes read of these maps, which the construction memo's key holds as the path's class
+			// (`positionClass(at:)`). Calls, which read the maps of calls, and fills store no generator in a memo.
+			var contentByPath = [[Property]: PositionClassContent]()
+			for path in Set(valuesBindingsByPath.keys).union(memberCallsInsideFunctionByPath.keys).union(sitesByPath.keys).union(carrierSitesByPath.keys) {
+				var content = PositionClassContent()
+				content.append(valuesBindingsByPath[path] ?? [])
+				content.append(memberCallsInsideFunctionByPath[path] ?? [])
+				content.append(sitesByPath[path].map(HoleSiteView.init))
+				content.append(carrierSitesByPath[path])
+				contentByPath[path] = content
+			}
+			positionClassByPath = SeamPositionClasses.classes(of: contentByPath)
+		} else {
+			positionClassByPath = [:]
+		}
 		self.seamType = seamType
 		self.sitesByPath = sitesByPath
 		self.passedUpHolesBySite = passedUpHolesBySite
@@ -3710,14 +3749,15 @@ extension Property {
 extension SeamHoles {
 	/// The holes, builders and routes of `seamRoot`, the seam root of `seamType`, as a tree of the seam reads them.
 	init(of seamRoot: ScopeGenerator.SeamRoot, seamType: TypeDescription) {
-		self.init(seamType: seamType, holes: seamRoot.signature.holes, builders: seamRoot.signature.builders, parameters: seamRoot.signature.parameters, callRoutes: seamRoot.signature.callRoutes, scopeEnums: seamRoot.signature.scopeEnums, holdsLoopPayloadsInBoxes: true)
+		self.init(seamType: seamType, holes: seamRoot.signature.holes, builders: seamRoot.signature.builders, parameters: seamRoot.signature.parameters, callRoutes: seamRoot.signature.callRoutes, scopeEnums: seamRoot.signature.scopeEnums, holdsLoopPayloadsInBoxes: true, computesPositionClasses: true)
 	}
 }
 
 extension ScopeGenerator {
 	/// The tree rooted at `tree`, the tree the first signature pass of `seamType` built, made again for the seam's
 	/// emission from its final seam root, `seamRoot`: each generator is made again (`init(reseating:children:sitePath:seamRoot:seamHoles:namesBoundBySeam:)`)
-	/// once its children are, in index order, and a generator several places share is made again once and shared alike.
+	/// once its children are, in index order, and a generator several places share is made again once per class of their
+	/// paths (`SeamHoles.positionClass(at:)`) and shared alike.
 	/// Only a tree that `DependencyTreeGenerator.confirmingPassFindsNothingNew` let settle is made again: it holds no
 	/// call, fill or hole passed up, and its root's parameters are the final ones (see `seam-signature-passes.md`).
 	static func reseating(treeRootedAt tree: ScopeGenerator, of seamType: TypeDescription, seamRoot: SeamRoot) -> ScopeGenerator {
@@ -3737,7 +3777,13 @@ extension ScopeGeneratorUnderConstruction {
 		}
 		// A tree can be as deep as the module has types, so it is walked on a stack of its own.
 		var stack = [Reseating(generator: tree, sitePath: [])]
-		var reseatedByGenerator = [ObjectIdentifier: ScopeGenerator]()
+		// A generator the first pass shared between paths is made again once per class of those paths in the final
+		// `SeamHoles` (`positionClass(at:)`), since it reads the paths' payloads and sites again.
+		struct ReseatedKey: Hashable {
+			let generator: ObjectIdentifier
+			let positionClass: Int
+		}
+		var reseatedByKey = [ReseatedKey: ScopeGenerator]()
 		// Replaced by the root's new generator, made last.
 		var reseatedTree = tree
 		while !stack.isEmpty {
@@ -3745,14 +3791,16 @@ extension ScopeGeneratorUnderConstruction {
 			let children = stack[index].generator.children
 			if stack[index].children.count < children.count {
 				let child = children[stack[index].children.count]
-				if let reseated = reseatedByGenerator[ObjectIdentifier(child)] {
+				let childSitePath = stack[index].sitePath + (child.property.map { [$0] } ?? [])
+				if let reseated = reseatedByKey[ReseatedKey(generator: ObjectIdentifier(child), positionClass: seamHoles.positionClass(at: childSitePath))] {
 					stack[index].children.append(reseated)
 				} else {
-					stack.append(Reseating(generator: child, sitePath: stack[index].sitePath + (child.property.map { [$0] } ?? [])))
+					stack.append(Reseating(generator: child, sitePath: childSitePath))
 				}
 				continue
 			}
 			let reseating = stack.removeLast()
+			GenerationWork.record(1, by: .reseatingGenerators)
 			let reseated = ScopeGenerator(
 				reseating: reseating.generator,
 				children: reseating.children,
@@ -3767,7 +3815,7 @@ extension ScopeGeneratorUnderConstruction {
 			if stack.isEmpty {
 				reseatedTree = reseated
 			} else {
-				reseatedByGenerator[ObjectIdentifier(reseating.generator)] = reseated
+				reseatedByKey[ReseatedKey(generator: ObjectIdentifier(reseating.generator), positionClass: seamHoles.positionClass(at: reseating.sitePath))] = reseated
 				stack[stack.count - 1].children.append(reseated)
 			}
 		}

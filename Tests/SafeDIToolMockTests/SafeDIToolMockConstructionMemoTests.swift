@@ -146,6 +146,30 @@ struct SafeDIToolMockConstructionMemoTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_reusesNoPlaceWhoseSubtreeHoldsHole_whenPublicMockReachesTypeWithHoleByTwoPaths() async throws {
+		// `P` reaches `S`, whose `api` is a place, as its own child and beneath `X`. A mock's root binds receives again,
+		// which no position class covers, so in a mock's tree a place whose subtree holds a hole is never stored, and the
+		// second place of `S` builds its own generator, while a seam's tree shares such places by their class.
+		let fixture = [
+			"public protocol Api {}",
+			seamFixtureType(named: "S", declarations: ["@Instantiated public let api: any Api"]),
+			seamFixtureType(named: "X", declarations: ["@Instantiated public let s: S"]),
+			Self.publicMockedType(named: "P", declarations: ["@Instantiated public let s: S", "@Instantiated public let x: X"]),
+		]
+		let (stream, continuation) = AsyncStream.makeStream(of: String.self)
+		_ = try await ConstructionMemoOracle.$reusedPlaceObserver.withValue({ concreteType, _ in continuation.yield(concreteType) }) { [fixture] in
+			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		continuation.finish()
+		var reusedTypes = Set<String>()
+		for await reusedType in stream {
+			reusedTypes.insert(reusedType)
+		}
+		#expect(reusedTypes.isDisjoint(with: ["S", "X"]))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_generatesSameMockWithMemoAsWithout_whenPublicMockReachesTypeWithHoleByTwoPathsAndMockConditionIsOff() async throws {
 		// As above, compiled without `DEBUG`, the module's mock condition, so the generated mocks are compiled out.
 		let fixture = [

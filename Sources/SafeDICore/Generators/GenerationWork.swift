@@ -98,6 +98,26 @@ public struct GenerationWork: Sendable {
 		/// fill then takes. Scanned for, the fills of a case were compared for every place of it, and the places stood
 		/// for for every fill.
 		case findingFillThatStandsForPlace
+		/// Numbering the position classes of a seam's tree (`SeamPositionClasses.classes(of:)`): each class interned. A
+		/// position's class holds its children's classes, not their contents, so each path is read once and each class is
+		/// built once, however many paths share it.
+		///
+		/// This step and the next two count only where the construction memo is on: a tree the tests build without it
+		/// shares nothing, by design.
+		case interningPositionClasses
+		/// Asking whether a build of a seam's tree starts its children otherwise than their paths say
+		/// (`SeamDeclarationGraph.ordersChildrenOtherwiseThanTheirPaths(inTreeRootedAt:)`): each generator visited. A
+		/// generator shared between places is visited once; entered at every place, a tree of n layers of screens that each
+		/// build three screens of the next layer was visited once per path.
+		case findingBuildsThatOrderChildrenOtherwise
+		/// Building the generators of a seam's tree in a signature pass (`Scope.createScopeGenerator`): each place the
+		/// construction memo does not hand a generator it holds. The places of one position class share a generator, so a
+		/// tree builds one per class and property, not one per path.
+		case buildingGeneratorsOfSeamTree
+		/// Making the generators of a seam's tree again for its final `SeamHoles`
+		/// (`ScopeGenerator.reseating(treeRootedAt:of:seamRoot:)`): each generator made again, once per generator of the
+		/// first pass and position class of the paths that reach it.
+		case reseatingGenerators
 	}
 
 	/// The step that did the work.

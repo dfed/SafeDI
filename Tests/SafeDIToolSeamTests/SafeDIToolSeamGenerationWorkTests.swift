@@ -180,6 +180,82 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 		#expect(work == [112, 224])
 	}
 
+	@Test(arguments: [false, true])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsSeamsTreeOncePerPositionClass_whenScreensOpenEveryScreenOfTheNextLayer(reachesItselfAgain: Bool) async throws {
+		// The seam `Screen0x0` opens three screens a layer through an `Instantiator`, each of which opens all three of the
+		// next layer's and instantiates `any Tracker`, a place: 3^(layers - 1) paths reach the last layer. The places of a
+		// position class share their generators, so each counted step grows with the layers, not the paths: in the first
+		// signature pass, and, where `Again` builds the seam again so that no pass may be skipped, in every later pass. The
+		// classes are numbered once per tree, whatever its passes.
+		var measures = [[GenerationWork.Step: Int]]()
+		var tableCounts = [Int]()
+		for layerCount in Self.sharedTreeLayerCounts {
+			let (stream, continuation) = AsyncStream.makeStream(of: GenerationWork.self)
+			let modules = Self.screensOpeningTheNextLayer(layerCount: layerCount, width: 3, labelsNameTheLayer: true, reachesItselfAgain: reachesItselfAgain)
+			try await GenerationWork.$observer.withValue({ continuation.yield($0) }) { [modules] in
+				_ = try await executeSafeDIToolMultiModuleTest(
+					modules: modules,
+					integration: .moduleInfo,
+					compileVerification: layerCount == Self.sharedTreeLayerCounts.first ? .recordingIssues : .skipped,
+					filesToDelete: &filesToDelete,
+				)
+			}
+			continuation.finish()
+			var workByStep = [GenerationWork.Step: Int]()
+			var tableCount = 0
+			for await work in stream where Self.sharedTreeSteps.contains(work.step) {
+				workByStep[work.step, default: 0] += work.elementCount
+				if work.step == .interningPositionClasses {
+					tableCount += 1
+				}
+			}
+			measures.append(workByStep)
+			tableCounts.append(tableCount)
+		}
+		for step in Self.sharedTreeSteps {
+			// A seam that builds itself again takes every signature pass and generates from the last, so it reseats nothing.
+			let isCounted = step != .reseatingGenerators || !reachesItselfAgain
+			#expect(measures.allSatisfy { ($0[step, default: 0] > 0) == isCounted }, "\(step.rawValue): \(measures.map { $0[step, default: 0] })")
+			// Each layer adds the same work: the work is an affine function of the layers. Built once per path, it tripled
+			// with each layer.
+			let work = measures.map { $0[step, default: 0] }
+			let workAddedByEachLayer = zip(work, work.dropFirst()).map { $1 - $0 }
+			#expect(Set(workAddedByEachLayer).count == 1, "\(step.rawValue) does \(work) units of work at \(Self.sharedTreeLayerCounts) layers")
+		}
+		// One table per tree with a seam root: numbered once per pass instead, the trees that take more passes add tables.
+		#expect(tableCounts == Array(repeating: reachesItselfAgain ? 8 : 7, count: Self.sharedTreeLayerCounts.count))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_numbersPositionClassesAsAPolynomialOfTheLayers_whenScreensRepeatTheirBuildersLabels() async throws {
+		// As above, two screens a layer, each holding `next0Builder` and `next1Builder` whatever its layer: a member binding
+		// is named by how often its label is bound above it (`memberBindingNames`), so a path's class follows how many times
+		// it took each label, a polynomial of the layers, while 2^layers paths reach the last layer.
+		var classCounts = [Int]()
+		for layerCount in Self.sharedTreeLayerCounts {
+			let (stream, continuation) = AsyncStream.makeStream(of: GenerationWork.self)
+			let modules = Self.screensOpeningTheNextLayer(layerCount: layerCount, width: 2, labelsNameTheLayer: false, reachesItselfAgain: false)
+			try await GenerationWork.$observer.withValue({ continuation.yield($0) }) { [modules] in
+				_ = try await executeSafeDIToolMultiModuleTest(
+					modules: modules,
+					integration: .moduleInfo,
+					compileVerification: layerCount == Self.sharedTreeLayerCounts.first ? .recordingIssues : .skipped,
+					filesToDelete: &filesToDelete,
+				)
+			}
+			continuation.finish()
+			var classCount = 0
+			for await work in stream where work.step == .interningPositionClasses {
+				classCount += work.elementCount
+			}
+			classCounts.append(classCount)
+		}
+		// Each layer adds 30 more classes than the layer before: a polynomial of degree 2, while the paths double.
+		#expect(classCounts == [65, 135, 235, 365])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -224,6 +300,45 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 	/// The screens of each shape measured: three, four and five layers of four, whose last layers' screens are reached
 	/// along 36, 108 and 324 paths.
 	private static let screenCounts = [12, 16, 20]
+	/// The layers of screens the counts of shared trees are taken at.
+	private static let sharedTreeLayerCounts = [3, 4, 5, 6]
+	/// The steps a seam's tree shares the work of between the places of one position class.
+	private static let sharedTreeSteps: [GenerationWork.Step] = [.interningPositionClasses, .findingBuildsThatOrderChildrenOtherwise, .buildingGeneratorsOfSeamTree, .reseatingGenerators]
+
+	/// Module `Feature`: the seam `Screen0x0` over `layerCount` layers of `width` screens, each opening every screen of the
+	/// next layer through an `Instantiator`, labeled by the screen's name or, unless `labelsNameTheLayer`, by its position
+	/// alone, instantiating `any Tracker`, which no type of the module fulfills, and receiving `service`; where
+	/// `reachesItselfAgain`, the seam also instantiates `again: Again`, which opens the seam again. Module `App`: the root
+	/// and the only `Tracker`.
+	private static func screensOpeningTheNextLayer(layerCount: Int, width: Int, labelsNameTheLayer: Bool, reachesItselfAgain: Bool) -> [ModuleFixture] {
+		var feature = [
+			"public protocol Tracker: AnyObject {}",
+			seamFixtureType(named: "Service", isFinalClass: true, declarations: []),
+		]
+		for layer in 0..<layerCount {
+			for position in 0..<width {
+				var declarations = ["@Instantiated public let tracker: any Tracker", "@Received public let service: Service"]
+				if layer + 1 < layerCount {
+					declarations += (0..<width).map { next in
+						"@Instantiated public let \(labelsNameTheLayer ? "screen\(layer + 1)x\(next)" : "next\(next)")Builder: Instantiator<Screen\(layer + 1)x\(next)>"
+					}
+				}
+				if reachesItselfAgain, layer == 0, position == 0 {
+					declarations.append("@Instantiated public let again: Again")
+				}
+				feature.append(seamFixtureType(named: "Screen\(layer)x\(position)", isSeam: layer == 0 && position == 0, isFinalClass: true, declarations: declarations))
+			}
+		}
+		if reachesItselfAgain {
+			feature.append(seamFixtureType(named: "Again", isFinalClass: true, declarations: ["@Instantiated public let rootBuilder: Instantiator<Screen0x0>"]))
+		}
+		let app = [
+			seamFixtureType(named: "LiveTracker", isFinalClass: true, declarations: ["@Received public let service: Service"], conformances: ", Tracker")
+				.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(fulfillingAdditionalTypes: [(any Tracker).self])\n"),
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated public let service: Service", "@Instantiated public let home: Screen0x0"]),
+		]
+		return SafeDIToolSeamBuilderParameterTests.modules(feature: feature, app: app)
+	}
 
 	/// How much faster than the paths to the places a step's work may grow from one shape to the next. A step whose work
 	/// grows with the places grows as fast as the paths, or slower where part of its work is the same for every shape; a

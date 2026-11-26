@@ -37,12 +37,14 @@
 /// hold alike reads in different orders, as the entries of the memo the mock roots share do on a module of twelve mocks.
 /// So no lookup accepts a candidate on a matching prefix of its log, or compares two logs read by read in order.
 ///
-/// A place is never stored or reused when it or anything in its subtree is a fill, is inside one, holds a hole, calls a
-/// seam or public mock with holes, or is in a tree with seam holes, which read context this log does not cover. A
-/// seam's or public mock's tree without holes is memoized, with a memo of its own: what it reads of its `SeamHoles` is
-/// the same at every place of the tree, since `sitePath` is empty wherever `seamHoles` is. The memo lives for one pass,
-/// so what is constant in a pass (the order a seam's places start in, the declared type names) is equal for every place
-/// it compares. Only completed builds are stored: a pass that throws throws away its memo.
+/// A place is never stored or reused when it or anything in its subtree is a fill, is inside one, or calls a seam or
+/// public mock with holes, or, in a mock's tree, holds a hole, which read context this log does not cover. A place of a
+/// seam's tree, holes and all, is keyed by its path's class (`SeamHoles.positionClass(at:)`), which says what the
+/// place's subtree reads of its `SeamHoles` at every depth, so two places of one key read the same of it; a tree without
+/// holes has every path in class 0, since `sitePath` is empty wherever `seamHoles` is. A seam's tree keeps a memo of its
+/// own, for one pass and the pass after it (`settledReuse`), so what is constant in a pass (the order a seam's places start
+/// in, the declared type names) is equal for every place it compares. Only completed builds are stored: a pass that throws
+/// throws away its memo.
 ///
 /// A memo shared across trees (`Sharing.acrossTrees`) carries every pass of each tree that finished to the trees created
 /// after it with the same memo, which only the mock roots do: production trees keep a memo per tree. Each pass of a tree
@@ -142,6 +144,9 @@ struct ConstructionMemo {
 		/// The settled cycle parameters the place is built with (`CycleParameterSeed`), which it reads in place of what
 		/// `previousPassGenerator` found, or `nil`.
 		let cycleParameterSeed: ObjectIdentifier?
+		/// The class of the place's path in its seam's tree (`SeamHoles.positionClass(at:)`): what its subtree reads of the
+		/// tree's `SeamHoles`, which differs between paths. 0 where it reads nothing of it.
+		let positionClass: Int
 
 		/// This key with `previousPassGenerator` replaced.
 		func withPreviousPassGenerator(_ previousPassGenerator: ObjectIdentifier?) -> Key {
@@ -158,6 +163,7 @@ struct ConstructionMemo {
 				spellings: spellings,
 				previousPassGenerator: previousPassGenerator,
 				cycleParameterSeed: cycleParameterSeed,
+				positionClass: positionClass,
 			)
 		}
 	}

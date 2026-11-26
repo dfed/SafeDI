@@ -1354,7 +1354,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		carrierSite: SeamHoles.CarrierSite? = nil,
 		isInsideFill: Bool = false,
 	) {
-		scopeData = .hole(property: holeProperty, erasedToConcreteExistential: erasedToConcreteExistential, site: site)
+		// The site keeps only what its code reads (`HoleSiteView`), which names no path: two paths can share this generator.
+		scopeData = .hole(property: holeProperty, erasedToConcreteExistential: erasedToConcreteExistential, site: site.map(HoleSiteView.init))
 		receivedProperties = []
 		receivedOnlyByPublicMockCalls = []
 		passedByPublicMockCalls = []
@@ -1448,7 +1449,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		case let .hole(property, erasedToConcreteExistential, _):
 			let site = seamHoles.site(at: sitePath)
 			let carrierSite = seamHoles.carrierSite(at: sitePath)
-			scopeData = .hole(property: property, erasedToConcreteExistential: erasedToConcreteExistential, site: site)
+			scopeData = .hole(property: property, erasedToConcreteExistential: erasedToConcreteExistential, site: site.map(HoleSiteView.init))
 			fields.valuesBindings = carrierSite?.formations ?? []
 			fields.siteCarrierUse = carrierSite?.use
 			// Only a tree that holds no fill is reseated (`confirmingPassFindsNothingNew`), so no fill encloses the site.
@@ -4725,7 +4726,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		)
 		/// A site in a seam's tree of a property the builder the seam's generated initializer takes builds. `site` is
 		/// `nil` in a tree built only to compute the seam's signature.
-		case hole(property: Property, erasedToConcreteExistential: Bool, site: SeamSignature.Hole?)
+		case hole(property: Property, erasedToConcreteExistential: Bool, site: HoleSiteView?)
 		/// The function, named `functionName`, a caller of a seam generates to fill the builder for `hole`.
 		case fill(hole: SeamSignature.Hole, functionName: String)
 
@@ -9354,28 +9355,31 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	///     (`SeamHoles.valuesArguments(of:readingInstancesOf:bindingNamesPassedByName:lazilyInstantiatedBindingNames:)`).
 	// Kept out of `generatePropertyCode`'s async frame, as the functions that write a property's scope are.
 	@inline(never)
-	static func buildSiteCode(of property: Property, at site: SeamSignature.Hole, functionName: String?, readingInstancesOf lazilyInstantiatedInstanceProperties: Set<Property> = [], lazilyInstantiatedBindingNames: [String: [TypeDescription: String]] = [:], carrierUse: SeamCarrierValues.Use? = nil) -> String {
-		// A place nested by type is handed what its owner binds before it; the cases that lead to it carry what each type on
-		// the way binds, which the tree bound before building the next. A place in a `@Sendable` enum held in a `Sendable`
-		// wrapper carries nothing.
-		let fields = site.enumPlace?.values ?? site.fields
-		let arguments = SeamHoles.valuesArguments(of: fields, readingInstancesOf: lazilyInstantiatedInstanceProperties, lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames)
+	static func buildSiteCode(of property: Property, at site: HoleSiteView, functionName: String?, readingInstancesOf lazilyInstantiatedInstanceProperties: Set<Property> = [], lazilyInstantiatedBindingNames: [String: [TypeDescription: String]] = [:], carrierUse: SeamCarrierValues.Use? = nil) -> String {
 		// The expression that builds the value: the place's member, called on the struct the last case on its route returned,
 		// or on the builder itself. An instantiator's member returns the builder its wrapper keeps. Every place of a seam's or
 		// a public mock's tree has its enum's case, whose member takes a struct (`SeamBuilderFamilies`). The `""` is never
-		// returned: a hole is built before its place's case is known, so `enumPlace` is optional, and it is assigned to every
+		// returned: a hole is built before its place's case is known, so `place` is optional, and it is assigned to every
 		// place before any code is generated; no type holds that order. 2.3.1's emitter rewrite replaces this code and drops
 		// the fallback.
-		guard let enumPlace = site.enumPlace, let memberValuesTypeName = enumPlace.memberValuesTypeName else { return "" }
-		let valuesType = TypeDescription.nested(name: memberValuesTypeName, parentType: enumPlace.enumType(qualifiedBy: nil), generics: [])
+		guard let place = site.place else { return "" }
+		// A place nested by type is handed what its owner binds before it; the cases that lead to it carry what each type on
+		// the way binds, which the tree bound before building the next. A place in a `@Sendable` enum held in a `Sendable`
+		// wrapper carries nothing.
+		let fields = place.values
+		let valuesType = TypeDescription.nested(name: place.memberValuesTypeName, parentType: place.enumType, generics: [])
 		// Inside a fill whose call's case leads on, the fill is handed the struct of its own level.
-		let lastStep = enumPlace.route.last
-		let parentName = (lastStep?.member == nil ? nil : lastStep?.innerScope?.name) ?? lastStep?.member?.bindingName ?? site.internalName
-		let buildExpression = if ReservedName.seamCarrier(ofEnum: enumPlace.enumType(qualifiedBy: nil)) != nil {
+		let parentName = switch place.parent {
+		case .builder:
+			site.internalName
+		case let .level(name, _), let .fillLevelStruct(name):
+			name
+		}
+		let buildExpression = if ReservedName.seamCarrier(ofEnum: place.enumType) != nil {
 			// A seam's carrier takes the place's values as its member's arguments.
-			"\(parentName).\(enumPlace.caseName)(\(SeamHoles.carrierArguments(of: fields, use: carrierUse, readingInstancesOf: lazilyInstantiatedInstanceProperties, lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames)))"
+			"\(parentName).\(place.caseName)(\(SeamHoles.carrierArguments(of: fields, use: carrierUse, readingInstancesOf: lazilyInstantiatedInstanceProperties, lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames)))"
 		} else {
-			"\(parentName).\(enumPlace.caseName)(\(valuesType.asSource)(\(arguments)))"
+			"\(parentName).\(place.caseName)(\(valuesType.asSource)(\(SeamHoles.valuesArguments(of: fields, readingInstancesOf: lazilyInstantiatedInstanceProperties, lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames))))"
 		}
 		let propertyType = property.propertyType
 		guard !propertyType.isConstant else {

@@ -591,10 +591,14 @@ struct SeamDeclarationGraph {
 	/// reverse, so that the children of that build would start in another order (`ScopeGenerator.startsAsCarrier(_:)`).
 	/// Only a tangle of cycles, or a type that one declaration builds outside a cycle and another builds inside one, makes it
 	/// so (see the type's documentation). Every build is visited, since the builds of one declaration differ in which of
-	/// their children close a cycle.
+	/// their children close a cycle, but a generator the construction memo shares between places once: what is asked of
+	/// it, its type, its children and whether each holds a site, is the generator's own, whatever path reaches it.
 	func ordersChildrenOtherwiseThanTheirPaths(inTreeRootedAt root: ScopeGenerator) -> Bool {
 		var generatorsToVisit = [root]
+		var visitedGenerators = Set<ObjectIdentifier>()
 		while let generator = generatorsToVisit.popLast() {
+			guard visitedGenerators.insert(ObjectIdentifier(generator)).inserted else { continue }
+			GenerationWork.record(1, by: ConstructionMemo.isEnabled ? .findingBuildsThatOrderChildrenOtherwise : nil)
 			guard let type = generator.builtInstantiable?.concreteInstantiable else { continue }
 			let placeHoldingProperties = placeHoldingPropertiesByType[type] ?? []
 			for child in generator.children {

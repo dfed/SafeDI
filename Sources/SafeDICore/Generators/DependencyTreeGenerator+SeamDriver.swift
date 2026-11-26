@@ -1071,21 +1071,49 @@ extension DependencyTreeGenerator {
 				// a change to the trees of the module's other seams can make it a seam after all.
 				let previousSeamRoot = seamRoots[seam.concreteInstantiable] ?? nil
 				do {
-					let generator = try Self.seamRootGenerator(
-						rootScope: rootScope,
-						in: construction.signaturePass(over: frozenScopeMap),
-						seamRoot: previousSeamRoot ?? initialSeamRoot(of: seam),
-						declaredTypeNames: declaredTypeNames,
-					)
-					let seamRoot = try Self.seamRoot(
-						of: seam,
-						generator: generator,
-						proof: proof,
-						instantiables: instantiables,
-						ownScopeEnums: ownScopeEnums,
-						generatesPlainInitializers: seams.generatesPlainDependencyTreeInitializers,
-						declaredTypeNames: declaredTypeNames,
-					)
+					let passTree = {
+						try Self.seamRootGenerator(
+							rootScope: rootScope,
+							in: construction.signaturePass(over: frozenScopeMap),
+							seamRoot: previousSeamRoot ?? initialSeamRoot(of: seam),
+							declaredTypeNames: declaredTypeNames,
+						)
+					}
+					let passSeamRoot = { (generator: ScopeGenerator) in
+						try Self.seamRoot(
+							of: seam,
+							generator: generator,
+							proof: proof,
+							instantiables: instantiables,
+							ownScopeEnums: ownScopeEnums,
+							generatesPlainInitializers: seams.generatesPlainDependencyTreeInitializers,
+							declaredTypeNames: declaredTypeNames,
+						)
+					}
+					let shared = Result { () throws -> (ScopeGenerator, ScopeGenerator.SeamRoot?) in
+						let generator = try passTree()
+						return (generator, try passSeamRoot(generator))
+					}
+					if let comparesUnsharedTrees = SeamSignatureObservation.comparesUnsharedTrees {
+						// The test's differential: the pass computed again over a tree built with no construction memo, which
+						// shares no generator between paths, must find the same signature, or throw the same error.
+						let unshared = Result {
+							try ConstructionMemo.$isEnabled.withValue(false) {
+								try ConstructionMemoOracle.$observer.withValue(nil) {
+									try GenerationWork.$observer.withValue(nil) {
+										try passSeamRoot(passTree())
+									}
+								}
+							}
+						}
+						let seamType = seam.concreteInstantiable
+						comparesUnsharedTrees(UnsharedTreeComparison(
+							seamType: seamType,
+							shared: UnsharedTreeComparison.Outcome(shared.map { StoredSeamSignature(seamType: seamType, signature: $0.1?.signature) }),
+							unshared: UnsharedTreeComparison.Outcome(unshared.map { StoredSeamSignature(seamType: seamType, signature: $0?.signature) }),
+						))
+					}
+					let (generator, seamRoot) = try shared.get()
 					if seamRoot?.signature.settledContent != previousSeamRoot?.signature.settledContent {
 						changed = true
 					}
@@ -1646,7 +1674,8 @@ extension DependencyTreeGenerator {
 			}
 		}
 		// A seam's tree reads its own `SeamHoles`, constant within the tree but not across trees, so it keeps a memo of its
-		// own, for one pass: a seam without holes reuses its places within a pass, and one with holes stores none.
+		// own, for one pass and the pass after it: its places, holes included, are shared within a pass between the paths of
+		// one position class (`SeamHoles.positionClass(at:)`).
 		var constructionMemo = ConstructionMemo()
 		let (table, rootRecord) = world.frozenScopeMap.freezing(rootScope: rootScope)
 		return try rootRecord.createScopeGenerator(
@@ -2388,6 +2417,10 @@ public enum SeamSignatureObservation {
 	/// (`DependencyTreeGenerator.confirmingPassFindsNothingNew`), after running that pass anyway as every second pass runs:
 	/// the two must find the same signature. The tool generates from the first pass's either way.
 	@TaskLocal public static var confirmsSkippedPasses: (@Sendable (SkippedConfirmingPass) -> Void)?
+	/// Called, when set, for each signature pass of each seam, with the signature the pass finds and the one it finds over
+	/// a tree built with no construction memo, which shares no generator between the paths of the seam's tree, or the error
+	/// each throws: the two must be the same.
+	@TaskLocal public static var comparesUnsharedTrees: (@Sendable (UnsharedTreeComparison) -> Void)?
 	/// When set, how many tasks settle one level of a module's seam components at once, in place of the processor
 	/// count, so that a test runs a level on one task or on several whatever machine runs it.
 	@TaskLocal public static var width: Int?
@@ -2424,6 +2457,32 @@ public struct ReusedSeamTree: Sendable {
 	public let reusedTreeCode: @Sendable () async throws -> String
 	/// The code of the tree built anew from the final signature.
 	public let builtTreeCode: @Sendable () async throws -> String
+}
+
+/// A seam's signature from one signature pass, and from the same pass over a tree that shares no generator between paths.
+public struct UnsharedTreeComparison: Sendable {
+	/// What one computation of a pass found.
+	public enum Outcome: Sendable {
+		/// The signature the pass found.
+		case found(StoredSeamSignature)
+		/// The description of the error the pass threw.
+		case threw(String)
+
+		init(_ result: Result<StoredSeamSignature, any Error>) {
+			switch result {
+			case let .success(signature):
+				self = .found(signature)
+			case let .failure(error):
+				self = .threw(String(describing: error))
+			}
+		}
+	}
+
+	public let seamType: TypeDescription
+	/// What the pass found.
+	public let shared: Outcome
+	/// What the pass found over the unshared tree.
+	public let unshared: Outcome
 }
 
 /// A seam's signature from the first pass that settled it, and the one the confirming pass the tool skipped finds.

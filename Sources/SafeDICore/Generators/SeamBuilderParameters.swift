@@ -51,7 +51,11 @@ extension DependencyTreeGenerator {
 	) -> [SeamSignature.Hole] {
 		guard generator.containsBuildSite || generator.passesUpBuilder else { return [] }
 		let seamTypeAccess = parameterAccess(seam.effectiveTypeAccess)
-		let sites = buildSites(in: generator)
+		// A tree built with the construction memo shares a hole's generator between the paths of one position class, which
+		// can be paths whose owners' stacks differ, so the stack a path derives is checked against the one its generator
+		// was built with only where nothing is shared: a tree built without the memo, which the tests build of every seam
+		// beside the shared one, and a public mock's tree, whose holes are never stored.
+		let sites = buildSites(in: generator, observesOwnerStacks: !ConstructionMemo.isEnabled || bindsReceivesAgain)
 		let seamModule = ModuleIdentity(moduleName: seam.moduleName, packageName: seam.packageName)
 		// What the calls inside the fills of each seam call on a place's path hide from those fills, by the call's identity.
 		var hiddenByCall = [ObjectIdentifier: [String: FillReentryHidings]]()
@@ -407,8 +411,9 @@ extension DependencyTreeGenerator {
 	}
 
 	/// The build sites in the tree `generator` roots, in the order the generated code builds them, found by walking
-	/// only the subtrees that hold one.
-	private static func buildSites(in generator: ScopeGenerator) -> [BuildSite] {
+	/// only the subtrees that hold one, handing `HoleOwnerStackObservation.observer` each site's derived stack where
+	/// `observesOwnerStacks`.
+	private static func buildSites(in generator: ScopeGenerator, observesOwnerStacks: Bool) -> [BuildSite] {
 		var sites = [BuildSite]()
 		var frames = [PathFrame(generator: generator, orderedChildren: generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: []), nextPosition: 0)]
 		while let frame = frames.last {
@@ -420,7 +425,7 @@ extension DependencyTreeGenerator {
 			let child = frame.orderedChildren[frame.nextPosition]
 			if let holeSite = child.generator.holeSite {
 				let ownerStack = ownerStack(of: frames)
-				if let observer = HoleOwnerStackObservation.observer {
+				if observesOwnerStacks, let observer = HoleOwnerStackObservation.observer {
 					observer(.derived(generator: ObjectIdentifier(child.generator), stack: ownerStack))
 				}
 				sites.append(BuildSite(frames: frames, property: holeSite.property, erasedToConcreteExistential: holeSite.erasedToConcreteExistential, fillPropertyStack: ownerStack.properties, fillConcreteTypeStack: ownerStack.concreteTypes))
