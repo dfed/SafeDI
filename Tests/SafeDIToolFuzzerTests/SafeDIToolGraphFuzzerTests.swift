@@ -1367,6 +1367,16 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
+	func acceptedDrawFeatureCounts_holdAtLeastTenGraphs_forEachSharedFillBodyShape() {
+		// Calls of a seam at two depths, and places at two levels of it, whose fills share one body that each adapter calls
+		// with its own level's values, stand in for unit tests of those adapters only while each lands in at least ten graphs
+		// the tool accepts, whose values the value comparator judges against the inline and visible builds.
+		for feature in GraphFuzzerSeamDrawFeature.allCases where feature.isSharedFillBodyShape {
+			#expect(Self.seamCorpusAcceptedDrawFeatureCounts[feature, default: 0] >= Self.gatingDrawJudgedGraphFloor, "\(feature.rawValue) is pinned in fewer than ten accepted graphs")
+		}
+	}
+
+	@Test
 	func acceptedDrawFeatureCounts_holdAtLeastTenGraphs_forEachLazyRouteShape() {
 		// Two routes to one case whose fill reads a value one route binds lazily and the caller holds by value – with a
 		// `SendableLazilyInstantiated`, read only if available, and beneath an instantiator – stand in for unit tests of the
@@ -7401,7 +7411,7 @@ struct SafeDIToolGraphFuzzerTests {
 		omittedValueGraphCount: seamCorpusOmittedValueGraphCount,
 		errorMarkers: seamCorpusErrorMarkers,
 		errorGraphCounts: seamCorpusErrorGraphCounts,
-		drawFeaturesCountedWhenAccepted: Set(GraphFuzzerSeamDrawFeature.allCases.filter { $0.isAliasSpellingRollShape || $0.isCycleParameterShape || $0.isForwardedLabelAcrossSeamCallShape || $0.isRetentionShape || $0.isErasurePlaceShape || $0.isForwardingPlaceShape || $0.isPassedUpPlaceReadingPassingSeamsValueShape || $0.isFixedSeamCallDefectShape || $0.isOptionalPlaceShape || $0.isReadThroughViewShape || $0.isSeamCallReachedOnTwoPathsShape || $0.isSendableFillKeptInItsCallShape || $0.isRootDispatcherHandingCallersValueShape || $0.isScreenPlaceShape || $0.isLazyRouteShape }),
+		drawFeaturesCountedWhenAccepted: Set(GraphFuzzerSeamDrawFeature.allCases.filter { $0.isAliasSpellingRollShape || $0.isCycleParameterShape || $0.isForwardedLabelAcrossSeamCallShape || $0.isRetentionShape || $0.isErasurePlaceShape || $0.isForwardingPlaceShape || $0.isPassedUpPlaceReadingPassingSeamsValueShape || $0.isFixedSeamCallDefectShape || $0.isOptionalPlaceShape || $0.isReadThroughViewShape || $0.isSeamCallReachedOnTwoPathsShape || $0.isSendableFillKeptInItsCallShape || $0.isRootDispatcherHandingCallersValueShape || $0.isSharedFillBodyShape || $0.isScreenPlaceShape || $0.isLazyRouteShape }),
 		acceptedDrawFeatureCounts: seamCorpusAcceptedDrawFeatureCounts,
 		readTwinGraphCount: seamCorpusReadTwinGraphCount,
 		retentionCounts: seamCorpusRetentionCounts,

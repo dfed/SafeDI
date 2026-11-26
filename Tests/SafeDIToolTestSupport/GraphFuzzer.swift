@@ -1377,6 +1377,17 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// caller's value. `HolePaneScreenA` and `HolePaneScreenB`, beside the roots, each declare the value and make the call, and
 	/// the root declares it too, so a dispatcher declared at the root's top would hand every fill the root's value.
 	case holeRootDispatcherHandsCallersValue
+	/// `HoleShareSeam`, a seam that binds `holeShareFirst` and `holeShareSecond`, two values of one type, before its place of
+	/// `HoleShareApi`, which `HoleShareLive` fills from the roots' module reading both and building `HoleSharePart`. The root
+	/// calls the seam, and `HoleShareScreen`, beneath `HoleShareShelf`, calls it again, so the two calls' fills build one
+	/// tree, which the root declares once and each call's adapter calls with its own seam's values.
+	case holeFillBodySharedByCallsAtTwoDepths
+	/// The same, with a second place of `HoleShareApi` on `HoleShareRow`, a type the seam builds after its own place: two
+	/// cases at two levels of one seam whose fills share the body.
+	case holeFillBodySharedByPlacesAtTwoLevels
+	/// The same, with `HoleShareRow` declaring `holeShareSecond` again before its place, so the two levels' adapters hand
+	/// the shared body other values under one label.
+	case holeFillBodySharedReadsValueLevelBindsAgain
 	/// One of those values `package` on a `public` seam: narrower than the carrier's members, so it travels in a run struct.
 	case holeLevelWithPackageValueOnPublicSeam
 	/// Every one of those values `package` on a `package` seam: as visible as the carrier's members, so they stay positional.
@@ -2138,6 +2149,12 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// graphs the seam corpus pins (`acceptedDrawFeatureCounts`), at least ten.
 	var isRootDispatcherHandingCallersValueShape: Bool {
 		self == .holeRootDispatcherHandsCallersValue
+	}
+
+	/// Whether `addingHoleShapes` draws this fill body that calls of a seam, or places at two levels of it, share, whose count
+	/// in accepted graphs the seam corpus pins (`acceptedDrawFeatureCounts`), at least ten.
+	var isSharedFillBodyShape: Bool {
+		[.holeFillBodySharedByCallsAtTwoDepths, .holeFillBodySharedByPlacesAtTwoLevels, .holeFillBodySharedReadsValueLevelBindsAgain].contains(self)
 	}
 
 	static func < (lhs: GraphFuzzerSeamDrawFeature, rhs: GraphFuzzerSeamDrawFeature) -> Bool {
@@ -5933,6 +5950,9 @@ enum GraphFuzzerGenerator {
 			let drawsSeamCallOnTwoPaths = holeRolls.seamCallOnTwoPaths.percentChance(40)
 			let drawsKeptSendableFill = holeRolls.keptSendableFill.percentChance(40) && sendability != .nonSendable
 			let drawsPaneCalls = holeRolls.paneCalls.percentChance(40)
+			let drawsSharedFillBody = holeRolls.sharedFillBody.percentChance(40)
+			let sharedFillBodyRowHoldsPlace = holeRolls.sharedFillBody.percentChance(50)
+			let sharedFillBodyRowDeclaresValueAgain = holeRolls.sharedFillBody.percentChance(50)
 			let wideLevelValueCount = holeRolls.wideLevel.element(of: [7, 8, 9, 12])
 			let wideLevelNarrowsOneValue = holeRolls.wideLevel.percentChance(50)
 			let wideLevelNarrowedIndex = holeRolls.wideLevel.integer(in: 0...(wideLevelValueCount - 1))
@@ -6266,6 +6286,56 @@ enum GraphFuzzerGenerator {
 					PropertyDeclaration(attribute: "@Instantiated", label: "holePaneSession", type: session.name),
 					PropertyDeclaration(attribute: "@Instantiated", label: "holePaneScreenA", type: screenA.name),
 					PropertyDeclaration(attribute: "@Instantiated", label: "holePaneScreenB", type: screenB.name),
+				]
+			}
+			// A fill body shared by calls at two depths: `HoleShareSeam` binds `holeShareFirst` and `holeShareSecond`, two
+			// `HoleShareToken`s, before its place of `HoleShareApi`, which `HoleShareLive` fills from the roots' module reading
+			// both and building `HoleSharePart`. The root calls the seam, and `HoleShareScreen`, which the root builds beneath
+			// `HoleShareShelf`, calls it again: both calls' fills build one tree, so the root declares its body once and each
+			// call's adapter hands it that call's values. Half the time `HoleShareRow`, which the seam builds after its own
+			// place, holds a second place, a case of another level whose fill shares the body too, and half of those declare
+			// `holeShareSecond` again before it, so the two levels hand the body other values under one label. No instantiator
+			// holds a call or a place, so no `@Sendable` function keeps a body in its fill. The value comparator checks that
+			// each fill reads its own level's tokens, which an adapter handing the body its reads in another order fails.
+			var shareDeclarations = [TypeDeclaration]()
+			var shareRootProperties = [PropertyDeclaration]()
+			if drawsSharedFillBody {
+				let apiName = name("HoleShareApi")
+				let token = instantiable("HoleShareToken", module: .seamModule)
+				var shareSeamProperties = [
+					PropertyDeclaration(attribute: "@Instantiated", label: "holeShareFirst", type: token.name),
+					PropertyDeclaration(attribute: "@Instantiated", label: "holeShareSecond", type: token.name),
+					PropertyDeclaration(attribute: "@Instantiated", label: "holeShareApi", type: "any \(apiName)"),
+				]
+				var shareSeamDeclarations = [token]
+				if sharedFillBodyRowHoldsPlace {
+					var rowProperties = [PropertyDeclaration]()
+					if sharedFillBodyRowDeclaresValueAgain {
+						rowProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeShareSecond", type: token.name))
+					}
+					rowProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeShareApi", type: "any \(apiName)"))
+					let row = instantiable("HoleShareRow", module: .seamModule, properties: rowProperties)
+					shareSeamDeclarations.append(row)
+					shareSeamProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeShareRow", type: row.name))
+				}
+				var shareSeam = instantiable("HoleShareSeam", module: .seamModule, properties: shareSeamProperties)
+				shareSeam.instantiableArguments = ["generateDependencyTree: true"]
+				shareSeam.additionalDeclarations.append("public protocol \(apiName)\(helperTypesAreSendable ? ": Sendable" : "") {}")
+				let part = instantiable("HoleSharePart", module: fillerModule, properties: [PropertyDeclaration(attribute: "@Received", label: "holeShareSecond", type: token.name)])
+				var live = instantiable("HoleShareLive", module: fillerModule, properties: [
+					PropertyDeclaration(attribute: "@Received", label: "holeShareFirst", type: token.name),
+					PropertyDeclaration(attribute: "@Received", label: "holeShareSecond", type: token.name),
+					PropertyDeclaration(attribute: "@Instantiated", label: "holeSharePart", type: part.name),
+				])
+				live.instantiableArguments = ["fulfillingAdditionalTypes: [\(apiName).self]"]
+				live.additionalConformances.append(apiName)
+				live.fillsHole = true
+				let screen = instantiable("HoleShareScreen", module: fillerModule, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "holeShareSeam", type: shareSeam.name)])
+				let shelf = instantiable("HoleShareShelf", module: fillerModule, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "holeShareScreen", type: screen.name)])
+				shareDeclarations = shareSeamDeclarations + [shareSeam, part, live, screen, shelf]
+				shareRootProperties = [
+					PropertyDeclaration(attribute: "@Instantiated", label: "holeShareSeam", type: shareSeam.name),
+					PropertyDeclaration(attribute: "@Instantiated", label: "holeShareShelf", type: shelf.name),
 				]
 			}
 			var impl = instantiable("HoleImpl", module: fillerModule)
@@ -7231,6 +7301,7 @@ enum GraphFuzzerGenerator {
 			rootProperties += wideRootProperties
 			rootProperties += keptRootProperties
 			rootProperties += paneRootProperties
+			rootProperties += shareRootProperties
 			// A second path to a call of the seam: `HoleCallTab`, beside the roots, makes the root's call again, and the root
 			// builds it through an instantiator and beneath `HoleCallShelf`, which builds it so too. Its fills read what the
 			// root's own do, all declared before it, so a root laid out by type key builds `HoleCallTab`, with its call and
@@ -7250,7 +7321,7 @@ enum GraphFuzzerGenerator {
 			} else {
 				declarations[0].properties += rootProperties
 			}
-			return declarations + [seam] + seamModuleDeclarations + [impl] + callerDeclarations + wideSeamDeclarations + keptSeamDeclarations + paneDeclarations
+			return declarations + [seam] + seamModuleDeclarations + [impl] + callerDeclarations + wideSeamDeclarations + keptSeamDeclarations + paneDeclarations + shareDeclarations
 		}
 
 		/// The generators of `addingHoleShapes`' further rolls, one apiece, each seeded from the graph's seed.
@@ -7291,6 +7362,7 @@ enum GraphFuzzerGenerator {
 				seamCallOnTwoPaths = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6554775061)
 				keptSendableFill = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C654B657074)
 				paneCalls = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6550616E65)
+				sharedFillBody = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6546426479)
 			}
 
 			var crossPackage: GraphFuzzerRandomNumberGenerator
@@ -7365,6 +7437,10 @@ enum GraphFuzzerGenerator {
 			/// seeds 19 and 21 of the `generateDependencyTree` corpus build other values than the visible build: the root
 			/// declares the dispatcher at its top, which hands each fill the root's `holePaneSession`, not its screen's.
 			var paneCalls: GraphFuzzerRandomNumberGenerator
+			/// A fill body two calls of a seam share, and the places at two levels of it that share it too
+			/// (`holeFillBodySharedByCallsAtTwoDepths`, `holeFillBodySharedByPlacesAtTwoLevels`,
+			/// `holeFillBodySharedReadsValueLevelBindsAgain`).
+			var sharedFillBody: GraphFuzzerRandomNumberGenerator
 		}
 
 		private static let holeRandomSeedMask: UInt64 = 0x686F6C655F726E64
@@ -12760,6 +12836,15 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		}
 		if declares("HolePaneUserImpl") {
 			features.insert(.holeRootDispatcherHandsCallersValue)
+		}
+		if declares("HoleShareLive") {
+			features.insert(.holeFillBodySharedByCallsAtTwoDepths)
+			if declares("HoleShareRow") {
+				features.insert(.holeFillBodySharedByPlacesAtTwoLevels)
+				if properties(of: "HoleShareRow").contains(where: { $0.label == "holeShareSecond" }) {
+					features.insert(.holeFillBodySharedReadsValueLevelBindsAgain)
+				}
+			}
 		}
 		let wideValueCount = properties(of: "HoleWideSeam").count { $0.label.hasPrefix("holeWide") && $0.label != "holeWideService" }
 		switch wideValueCount {
