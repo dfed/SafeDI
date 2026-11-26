@@ -2307,9 +2307,11 @@ public struct SeamCall: Sendable {
 		callerModuleName: String? = nil,
 		seamPackageName: String? = nil,
 		callerPackageName: String? = nil,
+		places: SeamSignature.Places = SeamSignature.Places(levels: [], cases: []),
+		caseIndexByHole: [Int] = [],
 	) {
 		self.parameters = parameters
-		calledBuilders = CalledBuilders(holes: holes, builders: builders, scopeEnums: scopeEnums)
+		calledBuilders = CalledBuilders(holes: holes, builders: builders, scopeEnums: scopeEnums, places: places, caseIndexByHole: caseIndexByHole)
 		self.guardTypeName = guardTypeName
 		self.comment = comment
 		self.unreachableTierIsReported = unreachableTierIsReported
@@ -2370,15 +2372,27 @@ public struct SeamCall: Sendable {
 /// The builders a call passes another module's seam or public mock: the builders, every enum they reach, and every place
 /// they reach, in the order they reach them, which the calling module fills or passes up.
 struct CalledBuilders: Sendable {
-	init(holes: [SeamSignature.Hole], builders: [SeamSignature.Builder], scopeEnums: [SeamSignature.ScopeEnum]) {
+	init(
+		holes: [SeamSignature.Hole],
+		builders: [SeamSignature.Builder],
+		scopeEnums: [SeamSignature.ScopeEnum],
+		places: SeamSignature.Places = SeamSignature.Places(levels: [], cases: []),
+		caseIndexByHole: [Int] = [],
+	) {
 		self.holes = holes
 		self.builders = builders
 		self.scopeEnums = scopeEnums
+		self.places = places
 		var holeBySite = [SeamSignature.Hole.Site: SeamSignature.Hole]()
-		for hole in holes where holeBySite[hole.site] == nil {
+		var caseIndexBySite = [SeamSignature.Hole.Site: Int]()
+		for (index, hole) in holes.enumerated() where holeBySite[hole.site] == nil {
 			holeBySite[hole.site] = hole
+			if caseIndexByHole.indices.contains(index), caseIndexByHole[index] >= 0 {
+				caseIndexBySite[hole.site] = caseIndexByHole[index]
+			}
 		}
 		self.holeBySite = holeBySite
+		self.caseIndexBySite = caseIndexBySite
 		let enumsByKey = Dictionary(scopeEnums.map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first })
 		self.enumsByKey = enumsByKey
 		carrierValuesBySeam = SeamCarrierValues.bySeam(of: scopeEnums)
@@ -2447,6 +2461,12 @@ struct CalledBuilders: Sendable {
 	/// Each hole by its site, the first of `holes` at a site: found once for the call, never once for each builder whose
 	/// routes are asked for, which grew a call's construction with the square of its hole types.
 	let holeBySite: [SeamSignature.Hole.Site: SeamSignature.Hole]
+	/// The called seam's place graph (`SeamSignature.places`), which answers what the routes to a case hand its places.
+	/// Empty for a public mock's call, whose plan holds no graph yet.
+	let places: SeamSignature.Places
+	/// The case in `places` of the place at each site (`SeamSignature.caseIndexByHole`). A place a call passes up, which
+	/// is no case of the graph yet, and every place of a call whose graph was not built, has no entry.
+	let caseIndexBySite: [SeamSignature.Hole.Site: Int]
 
 	/// The sites of `sites` that a route from the root enum of `rootKey` reaches (see `sitesReachedOnItsRoutes(by:in:)`).
 	static func sites(_ sites: Set<SeamSignature.Hole.Site>, onRoutesOf rootKey: SeamSignature.ScopeEnum.Key, holeBySite: [SeamSignature.Hole.Site: SeamSignature.Hole]) -> Set<SeamSignature.Hole.Site> {

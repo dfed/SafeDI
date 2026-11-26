@@ -1500,6 +1500,8 @@ extension DependencyTreeGenerator {
 						callerModuleName: callerModule.moduleName,
 						seamPackageName: instantiable.packageName,
 						callerPackageName: callerModule.packageName,
+						places: signature.places,
+						caseIndexByHole: signature.caseIndexByHole,
 					),
 				)
 			} else {
