@@ -9212,7 +9212,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				for enumCase in scopeEnum.cases {
 					switch enumCase.kind {
 					case let .place(sites):
-						for place in sites.compactMap({ holesBySite[$0] }) {
+						// Every place of a case spells alike: its spelling is its property's, which one owner level fixes for every
+						// place of a case of the place graph, and one case of the enum for every site it lists.
+						if let place = sites.first.flatMap({ holesBySite[$0] }) {
 							let spelling = PlaceSpelling(of: place)
 							places[spelling] = places[spelling] ?? place
 						}

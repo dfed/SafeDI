@@ -31,6 +31,7 @@ extension SeamPlaceLevels {
 enum SeamPlaceCaseFactChecks {
 	static func mismatches(of observation: SeamSignature.Places.Observation) -> [String] {
 		var mismatches = [String]()
+		var firstSpellingByCase = [Int: (spelling: Spelling, path: String)]()
 		for (hole, caseIndex) in zip(observation.siteHoles, observation.caseIndexBySite) where caseIndex >= 0 {
 			let place = "\(observation.seamType.asSource) at \(hole.sitePath.map(\.label).joined(separator: "."))"
 			// A builder that reaches the case is no wider than the narrowest of its places (`shapedBuilders`).
@@ -42,7 +43,44 @@ enum SeamPlaceCaseFactChecks {
 			} else {
 				mismatches.append("The case of the place of \(place) holds no access")
 			}
+			// The scope enums' readers that take one place of a case for all of them: the builder's form and the wrapper's
+			// spelling (`LevelBuilderForms`, `PlaceSpelling`), the forwarded type an enum names, a case's return type and the
+			// dispatcher's wrapper builder (`ScopeGenerator`), each from the place's property; and whether the place is below the
+			// called type's root (`MockOrchestration`), from its path's length, which the case's naming route gives.
+			let placeCase = observation.places.cases[caseIndex]
+			let isBelowRoot = hole.sitePath.count > 1
+			if isBelowRoot != (placeCase.namingRoute.count > 1) {
+				mismatches.append("The place of \(place) is \(isBelowRoot ? "" : "not ")below its seam’s root, its case’s naming route of \(placeCase.namingRoute.count) levels says otherwise")
+			}
+			let spelling = Spelling(of: hole)
+			if let first = firstSpellingByCase[caseIndex] {
+				if first.spelling != spelling {
+					mismatches.append("The place of \(place) spells \(spelling), its case’s first place at \(first.path) spells \(first.spelling)")
+				}
+			} else {
+				firstSpellingByCase[caseIndex] = (spelling, hole.sitePath.map(\.label).joined(separator: "."))
+			}
 		}
 		return mismatches
+	}
+
+	/// What a reader that takes one place of a case reads of it, each spelled: the property's type decides whether the place
+	/// is held in an instantiator.
+	private struct Spelling: Equatable, CustomStringConvertible {
+		init(of hole: SeamSignature.Hole) {
+			property = hole.property.asSource
+			wrapper = hole.property.typeDescription.unwrapped.strippingEscaping.asSource
+			forwarded = hole.forwardedType?.strippingEscaping.asSource
+			ownerType = hole.ownerType.asSource
+		}
+
+		let property: String
+		let wrapper: String
+		let forwarded: String?
+		let ownerType: String
+
+		var description: String {
+			"\(ownerType).\(property) (\(wrapper) forwarding \(forwarded ?? "nothing"))"
+		}
 	}
 }
