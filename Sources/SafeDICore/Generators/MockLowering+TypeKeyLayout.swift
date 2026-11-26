@@ -444,7 +444,8 @@ extension MockLowering.Walk {
 		for statement in statements {
 			let spelled = statement.spelled()
 			guard !spelled.allSatisfy(\.isWhitespace) else { continue }
-			lines.append(contentsOf: spelled.split(separator: "\n", omittingEmptySubsequences: false).map(String.init))
+			// A root's body is its largest text, so its lines are found over bytes (`generator-design.md`).
+			lines.append(contentsOf: GeneratedCodeText.lines(of: spelled))
 		}
 		return (lines, "laidOut")
 	}
