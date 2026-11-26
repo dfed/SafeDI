@@ -359,19 +359,19 @@ extension SeamSignature {
 
 		/// A place another seam's tree holds, which a call in this seam's tree presents: a reference to that seam's case,
 		/// never a copy of its levels.
-		public struct PassedUpReference: Codable, Sendable {
-			public init(innerSeamType: TypeDescription, innerIsPublicMock: Bool, innerCaseIndex: Int) {
-				self.innerSeamType = innerSeamType
-				self.innerIsPublicMock = innerIsPublicMock
-				self.innerCaseIndex = innerCaseIndex
+		public struct CalledCase: Codable, Sendable {
+			public init(seamType: TypeDescription, isPublicMock: Bool, caseIndex: Int) {
+				self.seamType = seamType
+				self.isPublicMock = isPublicMock
+				self.caseIndex = caseIndex
 			}
 
 			/// The seam, or the public mock, whose signature holds the place's case.
-			public let innerSeamType: TypeDescription
+			public let seamType: TypeDescription
 			/// Whether that is another module's public mock, whose plan the run holds in `PublicMockPlans`, rather than a seam.
-			public let innerIsPublicMock: Bool
+			public let isPublicMock: Bool
 			/// The index of the case in that signature's `places.cases`.
-			public let innerCaseIndex: Int
+			public let caseIndex: Int
 		}
 
 		/// The places of one owner level in one family.
@@ -380,7 +380,7 @@ extension SeamSignature {
 				ownerLevel: Int,
 				isBuiltInSendableFunction: Bool,
 				siteOpensSendableFunction: Bool,
-				passedUp: PassedUpReference?,
+				passedUp: CalledCase?,
 				isPassedOnSendable: Bool = false,
 				calledCopyDeclarations: [Hole.UncarriedDeclaration] = [],
 				uncarriedReplacedOnPathsToCalls: [Hole.UncarriedDeclaration] = [],
@@ -409,7 +409,7 @@ extension SeamSignature {
 			/// Whether the places are held in a `Sendable` wrapper, built in a `@Sendable` function of their own.
 			public let siteOpensSendableFunction: Bool
 			/// For a place a call presents, the inner seam's case it stands for.
-			public let passedUp: PassedUpReference?
+			public let passedUp: CalledCase?
 			/// The levels, root first, of the route of the case's first place in builder-label order: the place a name made from a
 			/// path, or a diagnostic that names one place, names, as each did when a seam held a hole per site. Stored, since the
 			/// order of the places is the generated code's, which the levels' parents do not keep.

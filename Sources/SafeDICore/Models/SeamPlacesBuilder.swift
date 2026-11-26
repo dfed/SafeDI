@@ -71,7 +71,7 @@ struct SeamPlacesBuilder {
 
 	private struct CaseDraft {
 		let ownerLevel: Int
-		let passedUp: SeamSignature.Places.PassedUpReference?
+		let passedUp: SeamSignature.Places.CalledCase?
 		let isBuiltInSendableFunction: Bool
 		let siteOpensSendableFunction: Bool
 		var isPassedOnSendable = false
@@ -123,7 +123,7 @@ struct SeamPlacesBuilder {
 	mutating func addPassedUpPlace(
 		_ site: SeamSignature.Hole.Site,
 		levels: [LevelDraft],
-		reference: SeamSignature.Places.PassedUpReference,
+		reference: SeamSignature.Places.CalledCase,
 		isBuiltInSendableFunction: Bool,
 		siteOpensSendableFunction: Bool,
 	) -> (caseIndex: Int, route: SeamSignature.Places.Route) {
@@ -136,7 +136,7 @@ struct SeamPlacesBuilder {
 
 	private mutating func addCase(
 		levels: [LevelDraft],
-		passedUp: SeamSignature.Places.PassedUpReference?,
+		passedUp: SeamSignature.Places.CalledCase?,
 		isBuiltInSendableFunction: Bool,
 		siteOpensSendableFunction: Bool,
 	) -> (caseIndex: Int, route: SeamSignature.Places.Route) {
@@ -151,9 +151,9 @@ struct SeamPlacesBuilder {
 		}
 		var key = CaseKey(ownerLevel: route.last ?? 0, isBuiltInSendableFunction: isBuiltInSendableFunction)
 		if let passedUp {
-			key.innerSeamType = passedUp.innerSeamType
-			key.innerIsPublicMock = passedUp.innerIsPublicMock
-			key.innerCaseIndex = passedUp.innerCaseIndex
+			key.innerSeamType = passedUp.seamType
+			key.innerIsPublicMock = passedUp.isPublicMock
+			key.innerCaseIndex = passedUp.caseIndex
 		}
 		let caseIndex: Int
 		if let known = caseIndexByKey[key] {

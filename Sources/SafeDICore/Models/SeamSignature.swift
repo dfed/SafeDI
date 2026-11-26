@@ -2309,9 +2309,10 @@ public struct SeamCall: Sendable {
 		callerPackageName: String? = nil,
 		places: SeamSignature.Places = SeamSignature.Places(levels: [], cases: []),
 		caseIndexByHole: [Int] = [],
+		placesOfSeamsBeneath: @escaping @Sendable (SeamSignature.Places.CalledCase) -> SeamSignature.Places? = { _ in nil },
 	) {
 		self.parameters = parameters
-		calledBuilders = CalledBuilders(holes: holes, builders: builders, scopeEnums: scopeEnums, places: places, caseIndexByHole: caseIndexByHole)
+		calledBuilders = CalledBuilders(holes: holes, builders: builders, scopeEnums: scopeEnums, places: places, caseIndexByHole: caseIndexByHole, placesOfSeamsBeneath: placesOfSeamsBeneath)
 		self.guardTypeName = guardTypeName
 		self.comment = comment
 		self.unreachableTierIsReported = unreachableTierIsReported
@@ -2378,11 +2379,13 @@ struct CalledBuilders: Sendable {
 		scopeEnums: [SeamSignature.ScopeEnum],
 		places: SeamSignature.Places = SeamSignature.Places(levels: [], cases: []),
 		caseIndexByHole: [Int] = [],
+		placesOfSeamsBeneath: @escaping @Sendable (SeamSignature.Places.CalledCase) -> SeamSignature.Places? = { _ in nil },
 	) {
 		self.holes = holes
 		self.builders = builders
 		self.scopeEnums = scopeEnums
 		self.places = places
+		self.placesOfSeamsBeneath = placesOfSeamsBeneath
 		var holeBySite = [SeamSignature.Hole.Site: SeamSignature.Hole]()
 		var caseIndexBySite = [SeamSignature.Hole.Site: Int]()
 		for (index, hole) in holes.enumerated() where holeBySite[hole.site] == nil {
@@ -2467,6 +2470,10 @@ struct CalledBuilders: Sendable {
 	/// The case in `places` of the place at each site (`SeamSignature.caseIndexByHole`). A place a call passes up, which
 	/// is no case of the graph yet, and every place of a call whose graph was not built, has no entry.
 	let caseIndexBySite: [SeamSignature.Hole.Site: Int]
+	/// The place graph a case of `places` that the called seam itself passes up refers into (`Places.CalledCase`): that of
+	/// a seam the called seam calls, wherever the run holds its signature, or `nil` where it holds none. It captures the
+	/// run's signatures, which live as long as the run.
+	let placesOfSeamsBeneath: @Sendable (SeamSignature.Places.CalledCase) -> SeamSignature.Places?
 
 	/// The sites of `sites` that a route from the root enum of `rootKey` reaches (see `sitesReachedOnItsRoutes(by:in:)`).
 	static func sites(_ sites: Set<SeamSignature.Hole.Site>, onRoutesOf rootKey: SeamSignature.ScopeEnum.Key, holeBySite: [SeamSignature.Hole.Site: SeamSignature.Hole]) -> Set<SeamSignature.Hole.Site> {

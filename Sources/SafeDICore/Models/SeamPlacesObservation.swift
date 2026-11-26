@@ -26,15 +26,28 @@ extension SeamSignature.Places {
 	public struct Observation: Sendable {
 		/// The place graph of a seam or public mock a call in the tree presents places of.
 		public struct CalledPlaces: Sendable {
-			public init(seamType: TypeDescription, isPublicMock: Bool, places: SeamSignature.Places) {
+			public init(seamType: TypeDescription, isPublicMock: Bool, places: SeamSignature.Places, placesOfSeamsBeneath: @escaping @Sendable (CalledCase) -> SeamSignature.Places?) {
 				self.seamType = seamType
 				self.isPublicMock = isPublicMock
 				self.places = places
+				self.placesOfSeamsBeneath = placesOfSeamsBeneath
 			}
 
 			public let seamType: TypeDescription
 			public let isPublicMock: Bool
 			public let places: SeamSignature.Places
+			/// The graphs the called seam's own passed-up cases refer into.
+			public let placesOfSeamsBeneath: @Sendable (CalledCase) -> SeamSignature.Places?
+		}
+
+		/// The graph `reference` refers into: the called seam's of a direct call, or one a called seam's own passed-up case
+		/// refers into, or `nil` where the run holds none.
+		public func calledPlaces(of reference: CalledCase) -> SeamSignature.Places? {
+			if let direct = calledPlaces.first(where: { $0.seamType == reference.seamType && $0.isPublicMock == reference.isPublicMock }) {
+				direct.places
+			} else {
+				calledPlaces.lazy.compactMap { $0.placesOfSeamsBeneath(reference) }.first
+			}
 		}
 
 		public init(seamType: TypeDescription, places: SeamSignature.Places, siteHoles: [SeamSignature.Hole], caseIndexBySite: [Int], routeBySite: [Route], calledPlaces: [CalledPlaces] = []) {

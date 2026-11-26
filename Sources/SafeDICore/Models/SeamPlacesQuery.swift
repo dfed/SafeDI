@@ -44,11 +44,11 @@ extension SeamSignature.Places {
 		/// - Parameter excludedEntries: The entries a route's stack (`stack(along:)`) must hold none of for any question to
 		///   range over it; empty, every route of a case's family.
 		/// - Parameter calledPlaces: The place graph of the seam or public mock a passed-up case refers to
-		///   (`PassedUpReference`), or `nil` where the run holds none; never asked where no case is passed up.
+		///   (`CalledCase`), or `nil` where the run holds none; never asked where no case is passed up.
 		public init(
 			of places: SeamSignature.Places,
 			excludingRoutesWhoseStackHolds excludedEntries: Set<SeamSignature.Places.StackEntry> = [],
-			calledPlaces: @escaping (SeamSignature.Places.PassedUpReference) -> SeamSignature.Places? = { _ in nil },
+			calledPlaces: @escaping (SeamSignature.Places.CalledCase) -> SeamSignature.Places? = { _ in nil },
 		) {
 			self.places = places
 			self.calledPlaces = calledPlaces
@@ -829,7 +829,7 @@ extension SeamSignature.Places {
 		// MARK: Places a call presents
 
 		/// A case of a called seam's graph, with the query that answers it.
-		public struct CalledCase {
+		public struct ResolvedCase {
 			public init(query: Query, caseIndex: Int) {
 				self.query = query
 				self.caseIndex = caseIndex
@@ -842,9 +842,9 @@ extension SeamSignature.Places {
 		/// The case of the called seam's graph that the case at `caseIndex` stands for, or `nil` for a case of the seam's own
 		/// places, or where the run holds no graph of the called seam. One query per called seam serves every case that refers
 		/// into it, so its memos are shared between them.
-		public func calledCase(of caseIndex: Int) -> CalledCase? {
+		public func calledCase(of caseIndex: Int) -> ResolvedCase? {
 			guard let reference = places.cases[caseIndex].passedUp else { return nil }
-			let key = CalledSeam(seamType: reference.innerSeamType, isPublicMock: reference.innerIsPublicMock)
+			let key = CalledSeam(seamType: reference.seamType, isPublicMock: reference.isPublicMock)
 			let query: Query
 			if let known = calledQueries[key] {
 				query = known
@@ -853,18 +853,18 @@ extension SeamSignature.Places {
 				query = Query(of: called, calledPlaces: calledPlaces)
 				calledQueries[key] = query
 			}
-			guard query.places.cases.indices.contains(reference.innerCaseIndex) else { return nil }
-			return CalledCase(query: query, caseIndex: reference.innerCaseIndex)
+			guard query.places.cases.indices.contains(reference.caseIndex) else { return nil }
+			return ResolvedCase(query: query, caseIndex: reference.caseIndex)
 		}
 
 		/// The case at `caseIndex`, then the case each stands for in turn, down to the case of the seam whose tree holds the
 		/// places. A case met again ends the chain: seams that call each other inside a lazy cycle can each present the
 		/// other's places.
-		public func casesPresented(from caseIndex: Int) -> [CalledCase] {
-			var chain = [CalledCase(query: self, caseIndex: caseIndex)]
+		public func casesPresented(from caseIndex: Int) -> [ResolvedCase] {
+			var chain = [ResolvedCase(query: self, caseIndex: caseIndex)]
 			var seen = Set<PresentedCase>()
 			while let last = chain.last, let reference = last.query.places.cases[last.caseIndex].passedUp,
-			      seen.insert(PresentedCase(seam: CalledSeam(seamType: reference.innerSeamType, isPublicMock: reference.innerIsPublicMock), caseIndex: reference.innerCaseIndex)).inserted,
+			      seen.insert(PresentedCase(seam: CalledSeam(seamType: reference.seamType, isPublicMock: reference.isPublicMock), caseIndex: reference.caseIndex)).inserted,
 			      let called = last.query.calledCase(of: last.caseIndex)
 			{
 				chain.append(called)
@@ -920,7 +920,7 @@ extension SeamSignature.Places {
 			let caseIndex: Int
 		}
 
-		private let calledPlaces: (SeamSignature.Places.PassedUpReference) -> SeamSignature.Places?
+		private let calledPlaces: (SeamSignature.Places.CalledCase) -> SeamSignature.Places?
 		/// The query of each called seam a case was asked through, kept as long as this query.
 		private var calledQueries = [CalledSeam: Query]()
 
