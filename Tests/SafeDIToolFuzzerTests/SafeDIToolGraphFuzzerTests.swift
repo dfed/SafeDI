@@ -3227,6 +3227,34 @@ struct SafeDIToolGraphFuzzerTests {
 		#expect(errorsByBuild["hole"] == errorsByBuild["visible"])
 	}
 
+	/// The seeds `lazyCycleBackEdgeSharesBuilderFunctionsReason` lists. Their mocks change under a renaming that reorders
+	/// type names, which that entry excuses as `.mockCode` beside `.mockConfigurationFieldPresence`, because
+	/// `computeCycleEdges` then leaves out another back-edge of a lazy cycle. Ordered by the original names
+	/// (`DependencyTreeGenerator.cycleEdgeOrderingName`), the renamed graph must generate the original's code, so nothing
+	/// else follows the names; and without that order some renaming must change a mock's code, so the entry is needed.
+	@Test(arguments: [UInt64(311), 525, 991, 1_075, 1_857, 2_013, 3_180, 3_215, 3_221, 3_584, 3_832, 4_776])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func toolRuns_generateSameCodeUnderRenamingsOfTypeNames_whenCycleEdgesAreChosenInOriginalOrder(seed: UInt64) async throws {
+		let fixture = GraphFuzzerGenerator.fixture(forSeed: seed)
+		let prefix = fixture.typeNamePrefix
+		let outcome = try await GraphFuzzerOracle.toolOutcome(of: fixture)
+		var mockCodeChangesWithoutOriginalOrder = false
+		for renaming in GraphFuzzerRenaming.all where renaming.changesOrderOfTypeNames && !renaming.reversesLabels {
+			let renamedFixture = fixture.renamed(by: renaming)
+			let fileNames = renaming.fileNames(of: renamedFixture)
+			let renamedOutcome = try await renaming.restore(GraphFuzzerOracle.toolOutcome(of: renamedFixture, fileNames: fileNames), typeNamePrefix: prefix)
+			let renamedOutcomeInOriginalOrder = try await DependencyTreeGenerator.$cycleEdgeOrderingName.withValue({ renaming.restore($0, typeNamePrefix: prefix) }) {
+				try await renaming.restore(GraphFuzzerOracle.toolOutcome(of: renamedFixture, fileNames: fileNames), typeNamePrefix: prefix)
+			}
+			let differences = GraphFuzzerToolOutcome.differences(between: outcome, and: renamedOutcomeInOriginalOrder, comparingCode: .inAnyOrderOfExtensions)
+			#expect(differences.isEmpty, "Seed \(seed), \(renaming): \(differences.map(\.description))")
+			if GraphFuzzerToolOutcome.differences(between: outcome, and: renamedOutcome, comparingCode: .inAnyOrderOfExtensions).contains(where: { $0.aspect == .mockCode }) {
+				mockCodeChangesWithoutOriginalOrder = true
+			}
+		}
+		#expect(mockCodeChangesWithoutOriginalOrder, "Seed \(seed)’s mock code changes under no renaming of its type names")
+	}
+
 	@Test(arguments: [UInt64(609), 10_921])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func toolRuns_rejectBothBuildsWithDeferringSeamsTwoForms_whenCarriedOuterReceivesWrapperItsLevelsFillReadsOptionally(seed: UInt64) async throws {
@@ -9592,7 +9620,8 @@ struct SafeDIToolGraphFuzzerTests {
 	/// The same cause as `lazyCycleConfigurationFieldReason`, where the configuration field the back-edge drops also decides
 	/// which of the laid-out mock's calls share a hoisted builder function, so the layout writes one function more or fewer,
 	/// with its `_` name. With `computeCycleEdges` made to pick the same edges under both namings, both namings of every
-	/// listed seed generated the same mock code, so the difference is the edge choice, not the layout.
+	/// listed seed generate the same code, so the difference is the edge choice, not the layout:
+	/// `toolRuns_generateSameCodeUnderRenamingsOfTypeNames_whenCycleEdgesAreChosenInOriginalOrder` holds each seed to it.
 	private static let lazyCycleBackEdgeSharesBuilderFunctionsReason = "Which back-edge of a lazy cycle loses its override follows the order of type names, and so which calls of the laid-out mock share a builder function: one field of a configuration struct is present under one naming and absent under another, and the mock declares one builder function more or fewer"
 
 	private static let mockParameterAndFieldOrderAndLazyCycleConfigurationFieldReason = "\(mockParameterAndFieldOrderReason), and which back-edge of a lazy cycle loses its override follows the order of type names, so one field of a configuration struct is present under one naming and absent under another"
