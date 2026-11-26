@@ -304,6 +304,186 @@ struct SafeDIToolVariantBodyTests: ~Copyable {
 		#expect(counts == [8, 12])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsOneBodyPerTypeOnCycle_whenEachMemberDeclaresLabelHubReceivesOnlyIfAvailable() async throws {
+		// A hub opens n members, each of which declares its own label and opens the hub again, and the hub's leaf receives
+		// every member's label only if available. A path around the cycle can declare any subset of the labels, so a body
+		// per set of answers would be 2^n hubs and n·2^(n-1) members. Today's tree writes one function per type, which takes
+		// each label as an optional parameter, so the plan builds one body per type: n + 1.
+		var counts = [Int]()
+		for memberCount in [8, 16] {
+			let (stream, continuation) = AsyncStream.makeStream(of: Plan.self)
+			try await PlanBodiesObservation.$observer.withValue({ root, bodiesOfPlan, todaysBodiesPlanLacks, twinValues in
+				continuation.yield(Plan(root: root, bodiesOfPlan: bodiesOfPlan, todaysBodiesPlanLacks: todaysBodiesPlanLacks, twinValues: twinValues))
+			}) {
+				_ = try await executeSafeDIToolTest(
+					swiftFileContent: Self.hubOpeningMembers(count: memberCount),
+					buildSwiftOutputDirectory: true,
+					filesToDelete: &filesToDelete,
+					// This test counts the bodies of the plan; the code is today's.
+					skipCompileVerification: true,
+				)
+			}
+			continuation.finish()
+			for await plan in stream {
+				#expect(plan.todaysBodiesPlanLacks.isEmpty)
+				counts.append(plan.bodiesOfPlan.count)
+			}
+		}
+		#expect(counts == [9, 17])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsRootPerPath_whenBodiesOfOneDeclarationPassTheirBound() async throws {
+		// The hub's members declare their labels lazily, which a receive only if available reads through the wrapper's
+		// instance, so no optional parameter takes them and the hub's bodies double with each member: 8 at three members,
+		// which the plan builds, and 16 at four, past the bound, where the root keeps today's tree and builds no plan.
+		var hubBodyCounts = [Int?]()
+		for memberCount in [3, 4] {
+			let (stream, continuation) = AsyncStream.makeStream(of: Plan.self)
+			try await PlanBodiesObservation.$observer.withValue({ root, bodiesOfPlan, todaysBodiesPlanLacks, twinValues in
+				continuation.yield(Plan(root: root, bodiesOfPlan: bodiesOfPlan, todaysBodiesPlanLacks: todaysBodiesPlanLacks, twinValues: twinValues))
+			}) {
+				_ = try await executeSafeDIToolTest(
+					swiftFileContent: Self.hubOpeningMembers(count: memberCount, declaringLabelsLazily: true),
+					buildSwiftOutputDirectory: true,
+					filesToDelete: &filesToDelete,
+					// This test counts the bodies of the plan; the code is today's.
+					skipCompileVerification: true,
+				)
+			}
+			continuation.finish()
+			var hubBodyCount: Int?
+			for await plan in stream {
+				hubBodyCount = plan.bodiesOfPlan.count { $0.hasPrefix("Hub ") }
+			}
+			hubBodyCounts.append(hubBodyCount)
+		}
+		#expect(hubBodyCounts == [8, nil])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsPlan_whenBodyCalledBeneathOptionalParameterDeclaresLabelInAnotherForm() async throws {
+		// `Flow` forwards `mark: Mark?` on the cycle, above `Detail`'s receive of `mark: Stamp?` only if available. Hiding is
+		// by label, so `Detail` reads `Flow`'s declaration, which provides no `Stamp?`, and nothing above `Flow` answers a
+		// read: neither `Screen` nor `Flow` is keyed by `mark`, and only `Detail` takes it, optionally.
+		let (stream, continuation) = AsyncStream.makeStream(of: Plan.self)
+		try await PlanBodiesObservation.$observer.withValue({ root, bodiesOfPlan, todaysBodiesPlanLacks, twinValues in
+			continuation.yield(Plan(root: root, bodiesOfPlan: bodiesOfPlan, todaysBodiesPlanLacks: todaysBodiesPlanLacks, twinValues: twinValues))
+		}) {
+			_ = try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true) public final class Root: Instantiable {
+					    @Instantiated let screenBuilder: Instantiator<Screen>
+					    public init(screenBuilder: Instantiator<Screen>) { self.screenBuilder = screenBuilder }
+					}
+
+					@Instantiable public final class Screen: Instantiable {
+					    @Instantiated let flowBuilder: Instantiator<Flow>
+					    public init(flowBuilder: Instantiator<Flow>) { self.flowBuilder = flowBuilder }
+					}
+
+					@Instantiable public final class Flow: Instantiable {
+					    @Forwarded let mark: Mark?
+					    @Instantiated let detailBuilder: Instantiator<Detail>
+					    public init(mark: Mark?, detailBuilder: Instantiator<Detail>) { self.mark = mark; self.detailBuilder = detailBuilder }
+					}
+
+					@Instantiable public final class Detail: Instantiable {
+					    @Received(onlyIfAvailable: true) let mark: Stamp?
+					    @Instantiated let screenBuilder: Instantiator<Screen>
+					    public init(mark: Stamp?, screenBuilder: Instantiator<Screen>) { self.mark = mark; self.screenBuilder = screenBuilder }
+					}
+
+					public final class Mark {}
+
+					public final class Stamp {}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		continuation.finish()
+		var plans = [Plan]()
+		for await plan in stream {
+			plans.append(plan)
+		}
+		#expect(plans == [
+			Plan(
+				root: "Root",
+				bodiesOfPlan: [
+					"Screen as screenBuilder: Instantiator<Screen> [screenBuilder = screenBuilder: Instantiator<Screen>, being built]",
+					"Flow as flowBuilder: Instantiator<Flow> [flowBuilder = flowBuilder: Instantiator<Flow>, being built]",
+					"Detail as detailBuilder: Instantiator<Detail> [detailBuilder = detailBuilder: Instantiator<Detail>, being built] [mark = mark: Stamp?, optional]",
+				],
+				todaysBodiesPlanLacks: [],
+				twinValues: [],
+			),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesRenamedValueOptionally_whenAliasReceivesLabelOnlyIfAvailableThatCycleDeclares() async throws {
+		// `Screen` renames `context: Context` only if available, and `Flow`, on its cycle, instantiates `context`: the root
+		// opens `Screen` beneath no `Context`, and `Flow` beneath its own. `Screen`'s body takes `context` optionally, as
+		// the value the alias reads, so both calls share it.
+		let (stream, continuation) = AsyncStream.makeStream(of: Plan.self)
+		try await PlanBodiesObservation.$observer.withValue({ root, bodiesOfPlan, todaysBodiesPlanLacks, twinValues in
+			continuation.yield(Plan(root: root, bodiesOfPlan: bodiesOfPlan, todaysBodiesPlanLacks: todaysBodiesPlanLacks, twinValues: twinValues))
+		}) {
+			_ = try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true) public final class Root: Instantiable {
+					    @Instantiated let screenBuilder: Instantiator<Screen>
+					    public init(screenBuilder: Instantiator<Screen>) { self.screenBuilder = screenBuilder }
+					}
+
+					@Instantiable public final class Screen: Instantiable {
+					    @Received(fulfilledByDependencyNamed: "context", ofType: Context.self, onlyIfAvailable: true) let renamedContext: Context?
+					    @Instantiated let flowBuilder: Instantiator<Flow>
+					    public init(renamedContext: Context?, flowBuilder: Instantiator<Flow>) { self.renamedContext = renamedContext; self.flowBuilder = flowBuilder }
+					}
+
+					@Instantiable public final class Flow: Instantiable {
+					    @Instantiated let context: Context
+					    @Instantiated let screenBuilder: Instantiator<Screen>
+					    public init(context: Context, screenBuilder: Instantiator<Screen>) { self.context = context; self.screenBuilder = screenBuilder }
+					}
+
+					@Instantiable public final class Context: Instantiable {
+					    public init() {}
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		continuation.finish()
+		var plans = [Plan]()
+		for await plan in stream {
+			plans.append(plan)
+		}
+		#expect(plans == [
+			Plan(
+				root: "Root",
+				bodiesOfPlan: [
+					"Screen as screenBuilder: Instantiator<Screen> [context = context: Context?, optional] [screenBuilder = screenBuilder: Instantiator<Screen>, being built]",
+					"Flow as flowBuilder: Instantiator<Flow> [flowBuilder = flowBuilder: Instantiator<Flow>, being built]",
+				],
+				todaysBodiesPlanLacks: [],
+				twinValues: [],
+			),
+		])
+	}
+
 	// MARK: Private
 
 	/// How a screen of `screensOpeningEachOther(roles:targets:)` takes the root's `Context`.
@@ -337,6 +517,22 @@ struct SafeDIToolVariantBodyTests: ~Copyable {
 			}
 			declarations += targets[screen].map { "@Instantiated let screen\($0)Builder: Instantiator<Screen\($0)>" }
 			files.append(seamFixtureType(named: "Screen\(screen)", isFinalClass: true, declarations: declarations))
+		}
+		return files
+	}
+
+	/// A root that opens a hub, which opens `count` members and builds a leaf that receives each member's label only if
+	/// available; each member declares its own label, lazily where `declaringLabelsLazily`, and opens the hub again.
+	private static func hubOpeningMembers(count: Int, declaringLabelsLazily: Bool = false) -> [String] {
+		var files = [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let hubBuilder: Instantiator<Hub>"]),
+			seamFixtureType(named: "Hub", isFinalClass: true, declarations: (0..<count).map { "@Instantiated let member\($0)Builder: Instantiator<Member\($0)>" } + ["@Instantiated let leaf: Leaf"]),
+			seamFixtureType(named: "Leaf", isFinalClass: true, declarations: (0..<count).map { "@Received(onlyIfAvailable: true) let label\($0): Label\($0)?" }),
+		]
+		for member in 0..<count {
+			let label = declaringLabelsLazily ? "LazilyInstantiated<Label\(member)>" : "Label\(member)"
+			files.append(seamFixtureType(named: "Member\(member)", isFinalClass: true, declarations: ["@Instantiated let label\(member): \(label)", "@Instantiated let hubBuilder: Instantiator<Hub>"]))
+			files.append(seamFixtureType(named: "Label\(member)", isFinalClass: true, declarations: []))
 		}
 		return files
 	}

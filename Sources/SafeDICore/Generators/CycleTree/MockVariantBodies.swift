@@ -86,7 +86,7 @@ extension DependencyTreeGenerator {
 		)
 		while let (context, isCalledByCycleClosingScope) = walk.next() {
 			if let copy = shadow.copy(of: context.scope) {
-				let labels = labels(readBy: context.scope, builtAs: context.property, cache: &cache)
+				let labels = labels(readBy: context.scope, builtAs: context.property)
 				let key = VariantBodyKey(scope: ObjectIdentifier(context.scope), property: context.property, twinsBeingBuilt: context.twinsBeingBuilt)
 				// A label whose declaration the scopes above build after the place is `nil` in its tree.
 				let answeredLabels = VariantAnswers.answeredLabels(labels, builtAfter: context.labelsBuiltAfter)
@@ -128,8 +128,24 @@ extension DependencyTreeGenerator {
 					callsCompared[ObjectIdentifier(context.generator), default: []].append(call)
 					walk.followCall()
 				}
-				if shadow.isOnCycle(context.scope), !todaysBodies.contains(body) {
-					todaysBodies.append(body)
+				// The plan's body for today's place, which takes optionally each label every call passes its own answer.
+				if shadow.isOnCycle(context.scope) {
+					let planBody = try bodies.calledBody(
+						of: copy,
+						calledScope: context.scope,
+						as: key,
+						keyedBy: labels,
+						answering: answeredLabels,
+						beneath: context.nearestDeclarations,
+						lazilyInstantiatedInstanceProperties: context.lazilyInstantiatedInstanceProperties,
+						makingAgain: context.labelsMadeAgainAtCall,
+						takingOptionallyAmong: shadow.parameterLabels(ofFunctionOf: context.scope),
+						builtBy: (context.builder, context.erasedToConcreteExistential),
+						cache: &cache,
+					).body
+					if !todaysBodies.contains(planBody) {
+						todaysBodies.append(planBody)
+					}
 				}
 				observer?(
 					mockRoot,
@@ -171,9 +187,9 @@ extension DependencyTreeGenerator {
 		return false
 	}
 
-	/// The labels a body of `scope` built as `property` is keyed by: those its tree receives, and its own.
-	private static func labels(readBy scope: Scope, builtAs property: Property, cache: inout ReceivedPropertiesCache) -> [String] {
-		var labelSet = Set(collectReceivedProperties(from: scope, cache: &cache).received.map(\.label))
+	/// The labels a body of `scope` built as `property` is keyed by: those its tree reads from above, and its own.
+	private static func labels(readBy scope: Scope, builtAs property: Property) -> [String] {
+		var labelSet = Set(VariantBodies.sortedLabelsReadFromAbove(inTreeOf: scope))
 		labelSet.insert(property.label)
 		return labelSet.sorted()
 	}

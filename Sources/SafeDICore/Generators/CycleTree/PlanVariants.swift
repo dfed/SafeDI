@@ -48,11 +48,7 @@ struct PlanVariants: Sendable {
 
 	init(plan: PerTypePlan) {
 		let graph = plan.graph
-		let labels = LabelsReadFromAbove(
-			graph: graph,
-			own: { Self.labelsReadFromAbove(byDependenciesOf: graph.nodes[$0].record) },
-			bound: { graph.nodes[$0].record.declaredLabels },
-		)
+		let labels = Self.labelsReadFromAbove(inGraph: graph)
 		var bodies = [Body(declaration: 0, answers: labels.labels(of: 0).map { _ in .none }, targets: [])]
 		var positionByKey = [Key(declaration: 0, answers: bodies[0].answers): 0]
 		// Bodies are numbered in the order they are first asked for and their edges followed in that order, so the
@@ -92,13 +88,6 @@ struct PlanVariants: Sendable {
 		}
 		self.bodies = bodies
 		self.labels = labels
-		var plannedLabelsByPlace = [PlaceReadLabels.Place: Set<String>]()
-		for (index, declaration) in graph.nodes.enumerated() {
-			if let built = declaration.built {
-				plannedLabelsByPlace[PlaceReadLabels.Place(record: ObjectIdentifier(declaration.record), property: built.id), default: []].formUnion(labels.labels(of: index))
-			}
-		}
-		placeReadLabels = PlaceReadLabels(plannedLabelsByPlace: plannedLabelsByPlace)
 		nodeDescriptions = graph.nodes.map { declaration in
 			if let built = declaration.built {
 				"\(declaration.record.instantiable.concreteInstantiable.asSource) as \(built.property.asSource)"
@@ -109,8 +98,20 @@ struct PlanVariants: Sendable {
 	}
 
 	let bodies: [Body]
-	/// The labels each declaration reads from above, for the comparison with what its places read (`PlaceReadsObservation`).
-	let placeReadLabels: PlaceReadLabels
+
+	/// The labels each declaration of `plan` reads from above, for the comparison with what its places read
+	/// (`PlaceReadsObservation`): read of the plan's graph alone, without the bodies, which grow with the subsets of the
+	/// labels a path around a cycle declares.
+	static func placeReadLabels(of plan: PerTypePlan) -> PlaceReadLabels {
+		let labels = labelsReadFromAbove(inGraph: plan.graph)
+		var plannedLabelsByPlace = [PlaceReadLabels.Place: Set<String>]()
+		for (index, declaration) in plan.graph.nodes.enumerated() {
+			if let built = declaration.built {
+				plannedLabelsByPlace[PlaceReadLabels.Place(record: ObjectIdentifier(declaration.record), property: built.id), default: []].formUnion(labels.labels(of: index))
+			}
+		}
+		return PlaceReadLabels(plannedLabelsByPlace: plannedLabelsByPlace)
+	}
 
 	/// One line per body: its position, its declaration, each label it reads from above with its answer, and the
 	/// positions of the bodies its edges lead to.
@@ -134,11 +135,20 @@ struct PlanVariants: Sendable {
 		return lines.joined(separator: "\n")
 	}
 
+	/// The labels each declaration of `graph` reads from above.
+	private static func labelsReadFromAbove(inGraph graph: OrderedGraph<Declaration>) -> LabelsReadFromAbove {
+		LabelsReadFromAbove(
+			graph: graph,
+			own: { labelsReadFromAbove(byDependenciesOf: graph.nodes[$0].record.instantiable) },
+			bound: { graph.nodes[$0].record.declaredLabels },
+		)
+	}
+
 	/// The labels a scope's own dependencies read from above it: each received property's, and the label an alias is
 	/// fulfilled by unless the scope instantiates or forwards a property of that label, which the alias then renames.
-	private static func labelsReadFromAbove(byDependenciesOf record: ScopeRecord) -> [String] {
+	static func labelsReadFromAbove(byDependenciesOf instantiable: Instantiable) -> [String] {
 		var createdLabels = Set<String>()
-		for dependency in record.instantiable.dependencies {
+		for dependency in instantiable.dependencies {
 			switch dependency.source {
 			case .instantiated, .forwarded:
 				createdLabels.insert(dependency.property.label)
@@ -147,7 +157,7 @@ struct PlanVariants: Sendable {
 			}
 		}
 		var labels = [String]()
-		for dependency in record.instantiable.dependencies {
+		for dependency in instantiable.dependencies {
 			switch dependency.source {
 			case .instantiated, .forwarded:
 				break

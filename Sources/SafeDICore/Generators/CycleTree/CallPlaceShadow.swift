@@ -471,6 +471,12 @@ extension DependencyTreeGenerator {
 			callPlaceByIdentifier[ObjectIdentifier(scope)] != nil
 		}
 
+		/// The labels the function of `scope` can take as parameters of a lazy cycle closed on it
+		/// (`parameterLabelsByCallPlace`), where the scope is on a cycle; none for any other scope.
+		func parameterLabels(ofFunctionOf scope: Scope) -> Set<String> {
+			callPlaceByIdentifier[ObjectIdentifier(scope)].flatMap { parameterLabelsByCallPlace[ObjectIdentifier($0)] } ?? []
+		}
+
 		/// The scope on a cycle that `callPlace` stands for in a copy, or `nil` for any other scope.
 		func scope(calledAt callPlace: Scope) -> Scope? {
 			calledScopeByCallPlace[ObjectIdentifier(callPlace)]

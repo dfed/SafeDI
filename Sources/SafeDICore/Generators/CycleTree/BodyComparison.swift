@@ -111,7 +111,7 @@ extension DependencyTreeGenerator {
 				callsOfOtherFunction += VariantAnswers.placesCallingOtherFunctionThanPlan(at: context, twinValues: shadow.twinValues)
 			}
 			if let copy = shadow.copy(of: context.scope) {
-				var labelSet = Set(Self.collectReceivedProperties(from: context.scope, cache: &cache).received.map(\.label))
+				var labelSet = Set(VariantBodies.sortedLabelsReadFromAbove(inTreeOf: context.scope))
 				labelSet.insert(context.property.label)
 				let labels = labelSet.sorted()
 				let key = VariantBodyKey(scope: ObjectIdentifier(context.scope), property: context.property, twinsBeingBuilt: context.twinsBeingBuilt)
@@ -154,8 +154,24 @@ extension DependencyTreeGenerator {
 					callsCompared[ObjectIdentifier(context.generator), default: []].append(call)
 					walk.followCall()
 				}
-				if shadow.isOnCycle(context.scope), !todaysBodies.contains(body) {
-					todaysBodies.append(body)
+				// The plan's body for today's place, which takes optionally each label every call passes its own answer.
+				if shadow.isOnCycle(context.scope) {
+					let planBody = try bodies.calledBody(
+						of: copy,
+						calledScope: context.scope,
+						as: key,
+						keyedBy: labels,
+						answering: answeredLabels,
+						beneath: context.nearestDeclarations,
+						lazilyInstantiatedInstanceProperties: context.lazilyInstantiatedInstanceProperties,
+						makingAgain: context.labelsMadeAgainAtCall,
+						takingOptionallyAmong: shadow.parameterLabels(ofFunctionOf: context.scope),
+						builtBy: (context.builder, context.erasedToConcreteExistential),
+						cache: &cache,
+					).body
+					if !todaysBodies.contains(planBody) {
+						todaysBodies.append(planBody)
+					}
 				}
 				variantBodyObserver?(
 					context.place,

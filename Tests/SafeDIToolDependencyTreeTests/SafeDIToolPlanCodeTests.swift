@@ -146,10 +146,11 @@ struct SafeDIToolPlanCodeTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_declaresOneFunctionPerAnswer_whenBodiesOfOneTypeAreAnsweredApart() async throws {
+	mutating func generate_declaresOneFunctionTakingOptionalParameter_whenCallsAnswerLabelReceivedOnlyIfAvailableApart() async throws {
 		// `Home` receives `context` only if available: `Plain` builds it again beneath no `Context`, and `Scoped` beneath
-		// its own. Each `Home` and `Plain` the plan answers apart gets a function of its own, which takes `context` where
-		// its answer declares it.
+		// its own. A body per answer would double with each such label a path around the cycle can declare, so `Home`'s
+		// and `Plain`'s functions take `context` optionally, as today's do, and each call passes its own declaration or
+		// `nil`. `Home` built as `home` and as `homeBuilder` lay out alike, so they share one function.
 		let codes = try await planCodes(of: """
 		@Instantiable(isRoot: true) public final class Root: Instantiable {
 		    @Instantiated let home: Home
@@ -180,37 +181,89 @@ struct SafeDIToolPlanCodeTests: ~Copyable {
 		#expect(codes == ["Root": """
 		extension Root {
 		    public convenience init() {
-		        func __safeDI_home() -> Home {
-		            let plainBuilder = Instantiator<Plain>(__safeDI_plainBuilder)
+		        func __safeDI_home(context: Context?) -> Home {
+		            let plainBuilder = Instantiator<Plain> {
+		                __safeDI_plainBuilder(context: context)
+		            }
 		            let scopedBuilder = Instantiator<Scoped>(__safeDI_scopedBuilder)
-		            return Home(context: nil, plainBuilder: plainBuilder, scopedBuilder: scopedBuilder)
+		            return Home(context: context, plainBuilder: plainBuilder, scopedBuilder: scopedBuilder)
 		        }
-		        func __safeDI_plainBuilder() -> Plain {
-		            let homeBuilder = Instantiator<Home>(__safeDI_home)
+		        func __safeDI_plainBuilder(context: Context?) -> Plain {
+		            let homeBuilder = Instantiator<Home> {
+		                __safeDI_home(context: context)
+		            }
 		            return Plain(homeBuilder: homeBuilder)
 		        }
 		        func __safeDI_scopedBuilder() -> Scoped {
 		            let context = Context()
 		            let homeBuilder = Instantiator<Home> {
-		                __safeDI_homeBuilder(context: context)
+		                __safeDI_home(context: context)
 		            }
 		            return Scoped(context: context, homeBuilder: homeBuilder)
 		        }
-		        func __safeDI_homeBuilder(context: Context) -> Home {
-		            let plainBuilder = Instantiator<Plain> {
-		                __safeDI_plainBuilder_(context: context)
-		            }
-		            let scopedBuilder = Instantiator<Scoped>(__safeDI_scopedBuilder)
-		            return Home(context: context, plainBuilder: plainBuilder, scopedBuilder: scopedBuilder)
-		        }
-		        func __safeDI_plainBuilder_(context: Context) -> Plain {
-		            let homeBuilder = Instantiator<Home> {
-		                __safeDI_homeBuilder(context: context)
-		            }
-		            return Plain(homeBuilder: homeBuilder)
-		        }
-		        let home: Home = __safeDI_home()
+		        let home: Home = __safeDI_home(context: nil)
 		        self.init(home: home)
+		    }
+		}
+		"""])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesNilToOptionalParameter_whenNearestDeclarationOfLabelIsOfAnotherForm() async throws {
+		// `Detail` receives `mark: Stamp?` only if available, so its function takes `mark` optionally, as `Flow`, another
+		// scope of the cycle, declares it. `Flow` forwards `mark: Mark?`: hiding is by label, so the call beneath `Flow`
+		// passes what its nearest declaration of `mark` provides of `Stamp?`, which is nothing, and passes `nil`, as today's
+		// tree does.
+		let codes = try await planCodes(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let screenBuilder: Instantiator<Screen>
+		    public init(screenBuilder: Instantiator<Screen>) { self.screenBuilder = screenBuilder }
+		}
+
+		@Instantiable public final class Screen: Instantiable {
+		    @Instantiated let flowBuilder: Instantiator<Flow>
+		    public init(flowBuilder: Instantiator<Flow>) { self.flowBuilder = flowBuilder }
+		}
+
+		@Instantiable public final class Flow: Instantiable {
+		    @Forwarded let mark: Mark?
+		    @Instantiated let detailBuilder: Instantiator<Detail>
+		    public init(mark: Mark?, detailBuilder: Instantiator<Detail>) { self.mark = mark; self.detailBuilder = detailBuilder }
+		}
+
+		@Instantiable public final class Detail: Instantiable {
+		    @Received(onlyIfAvailable: true) let mark: Stamp?
+		    @Instantiated let screenBuilder: Instantiator<Screen>
+		    public init(mark: Stamp?, screenBuilder: Instantiator<Screen>) { self.mark = mark; self.screenBuilder = screenBuilder }
+		}
+
+		public final class Mark {}
+
+		public final class Stamp {}
+		""")
+
+		#expect(codes == ["Root": """
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_screenBuilder() -> Screen {
+		            let flowBuilder = Instantiator<Flow> {
+		                __safeDI_flowBuilder(mark: $0)
+		            }
+		            return Screen(flowBuilder: flowBuilder)
+		        }
+		        func __safeDI_flowBuilder(mark: Mark?) -> Flow {
+		            let detailBuilder = Instantiator<Detail> {
+		                __safeDI_detailBuilder(mark: nil)
+		            }
+		            return Flow(mark: mark, detailBuilder: detailBuilder)
+		        }
+		        func __safeDI_detailBuilder(mark: Stamp?) -> Detail {
+		            let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
+		            return Detail(mark: mark, screenBuilder: screenBuilder)
+		        }
+		        let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
+		        self.init(screenBuilder: screenBuilder)
 		    }
 		}
 		"""])

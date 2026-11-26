@@ -153,7 +153,8 @@ extension TypeKeyBody {
 			return nil
 		}
 		let labels = plan.labels(of: call.calledBody)
-		guard labels.count == call.arguments.count else { return nil }
+		let answers = plan.answers(of: call.calledBody)
+		guard labels.count == call.arguments.count, answers.count == call.arguments.count else { return nil }
 		return ClosingPlaceRecord(
 			callingVariant: call.calledBody - 1,
 			property: call.property,
@@ -161,6 +162,7 @@ extension TypeKeyBody {
 			isExtension: isExtension,
 			forwardedProperties: forwardedProperties,
 			labels: labels,
+			answers: answers,
 			arguments: call.arguments,
 		)
 	}
