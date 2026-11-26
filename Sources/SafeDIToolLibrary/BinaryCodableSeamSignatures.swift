@@ -223,6 +223,8 @@ extension SeamSignature.Parameter: BinarySchemaMember {
 }
 
 extension SeamSignature.Hole.Field: BinarySchemaMember {
+	static let writesFieldFlags = true
+
 	static var binaryLayout: BinaryLayout<Self> {
 		.structure(
 			fields: [
@@ -260,35 +262,40 @@ extension SeamSignature.Hole.Field: BinarySchemaMember {
 	}
 
 	private init(readingUnsharedFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		var fieldFlags = try reader.readFieldFlags()
 		try self.init(
 			property: reader.read(),
 			access: reader.read(),
-			accessCause: reader.read() as TypeAccessProof.Cause?,
+			accessCause: reader.readOptional(flaggedIn: &fieldFlags) as TypeAccessProof.Cause?,
 			declaringType: reader.read(),
-			declarationLocation: reader.read() as Dependency.DeclarationLocation?,
-			isReceivedOnlyIfAvailable: reader.read(),
-			parameterTakingType: reader.read() as TypeDescription?,
+			declarationLocation: reader.readOptional(flaggedIn: &fieldFlags) as Dependency.DeclarationLocation?,
+			isReceivedOnlyIfAvailable: fieldFlags.next(),
+			parameterTakingType: reader.readOptional(flaggedIn: &fieldFlags) as TypeDescription?,
 			deferral: reader.read(),
-			bindsMemo: reader.read(),
-			isSeamParameter: reader.read(),
-			isBoundByPublicMockRoot: reader.read(),
-			seamParameterOrigin: reader.read() as SeamSignature.Hole.Field.SeamParameterOrigin?,
+			bindsMemo: fieldFlags.next(),
+			isSeamParameter: fieldFlags.next(),
+			isBoundByPublicMockRoot: fieldFlags.next(),
+			seamParameterOrigin: reader.readOptional(flaggedIn: &fieldFlags) as SeamSignature.Hole.Field.SeamParameterOrigin?,
 		)
+		try fieldFlags.finish()
 	}
 
 	private func writeUnshared(to writer: inout BinaryWriter) {
+		var fieldFlags = BinaryFieldFlags()
+		let fieldsStart = writer.startFields()
 		writer.write(property)
 		writer.write(access)
-		writer.write(accessCause)
+		writer.writeOptional(accessCause, flaggedIn: &fieldFlags)
 		writer.write(declaringType)
-		writer.write(declarationLocation)
-		writer.write(isReceivedOnlyIfAvailable)
-		writer.write(parameterTakingType)
+		writer.writeOptional(declarationLocation, flaggedIn: &fieldFlags)
+		fieldFlags.append(isReceivedOnlyIfAvailable)
+		writer.writeOptional(parameterTakingType, flaggedIn: &fieldFlags)
 		writer.write(deferral)
-		writer.write(bindsMemo)
-		writer.write(isSeamParameter)
-		writer.write(isBoundByPublicMockRoot)
-		writer.write(seamParameterOrigin)
+		fieldFlags.append(bindsMemo)
+		fieldFlags.append(isSeamParameter)
+		fieldFlags.append(isBoundByPublicMockRoot)
+		writer.writeOptional(seamParameterOrigin, flaggedIn: &fieldFlags)
+		writer.finishFields(fieldFlags, startingAt: fieldsStart)
 	}
 }
 
