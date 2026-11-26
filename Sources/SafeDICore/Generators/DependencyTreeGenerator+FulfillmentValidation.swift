@@ -1670,18 +1670,15 @@ extension DependencyTreeGenerator {
 		/// `onlyIfAvailable` alias bound from a property the tree builds hands the stack to
 		/// `validateNoCycleInReceivedProperties`, which reads its first entry, finds by its first index each entry that
 		/// `propertiesReceivedTransitively(from:)` holds, and reads the entries up to the one it finds: the stack up to the
-		/// farthest of those first indices decides that walk. A walk that finds an entry raises `memoBlockingEventCount` or
-		/// throws, so a key is kept only from a walk that found none.
+		/// farthest entry it holds covers every first index that walk can find, and so decides it. A walk that finds an
+		/// entry raises `memoBlockingEventCount` or throws, but a second receive of the alias along the same stack is spared
+		/// that walk and raises nothing, so a key can be kept from a walk whose check found a builder: an equal key holds
+		/// the entries up to it, and finds it too.
 		func declaringStackEntriesReadByFulfillingPropertyWalk(of alias: ReceivableAlias, lastFulfillingProperty: Property) -> [Property] {
 			if alias.onlyIfAvailable, case .built? = alias.binding {
 				let reachableProperties = propertiesReceivedTransitively(from: lastFulfillingProperty)
 				let stack = alias.lastAliasDeclaringInstantiationStack
-				// The walk finds an entry by its first index.
-				var entriesFound = Set<Property>()
-				var farthestIndexFound = 0
-				for (index, entry) in stack.enumerated() where reachableProperties.contains(entry) && entriesFound.insert(entry).inserted {
-					farthestIndexFound = index
-				}
+				let farthestIndexFound = stack.lastIndex(where: reachableProperties.contains) ?? 0
 				return Array(stack.prefix(farthestIndexFound + 1))
 			} else {
 				return []
