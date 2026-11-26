@@ -41,8 +41,11 @@ extension SeamSignature.Places {
 	/// It holds its memos for as long as its owner keeps it: one computation of a seam's holes, or one caller's reads of a
 	/// signature.
 	public final class Query {
-		public init(of places: SeamSignature.Places) {
+		/// - Parameter excludedEntries: The entries a route's stack (`stack(along:)`) must hold none of for any question to
+		///   range over it; empty, every route of a case's family.
+		public init(of places: SeamSignature.Places, excludingRoutesWhoseStackHolds excludedEntries: Set<SeamSignature.Places.StackEntry> = []) {
 			self.places = places
+			self.excludedEntries = excludedEntries
 			lastDeclarationIndexByLabel = places.levels.map { level in
 				var indexByLabel = [String: Int]()
 				for (index, declaration) in level.declarations.enumerated() {
@@ -58,6 +61,7 @@ extension SeamSignature.Places {
 				return indexByLabel
 			}
 			(plainReach, openReach) = Self.reaches(of: places.levels)
+			validity = excludedEntries.isEmpty ? [] : Self.validity(of: places.levels, excluding: excludedEntries, plainReach: plainReach, openReach: openReach)
 		}
 
 		public let places: SeamSignature.Places
@@ -828,14 +832,43 @@ extension SeamSignature.Places {
 		private var reentryFold = Fold<StateKey, ReentryElement>()
 		private var variantFold = Fold<AnswerKey, VariantElement>()
 
+		/// The entries a route's stack holds none of, for any question to range over it.
+		private let excludedEntries: Set<SeamSignature.Places.StackEntry>
+		/// Where `excludedEntries` is not empty, per level and route state (`RouteState.index`), whether some route up from
+		/// the level in that state reaches a root of its family with no excluded entry on its stack.
+		private let validity: [[Bool]]
+
 		/// What a walk up from a case's owner still requires of the rest of its route to keep it in the case's family.
-		private enum RouteState: Hashable {
+		private enum Family: Int, Hashable {
 			/// A plain place: no level on the route may open a `@Sendable` function.
 			case plainOnly
 			/// A place of the `@Sendable` family that no function encloses yet: some level above must open one.
 			case needsOpenAbove
 			/// Any route will do.
 			case any
+		}
+
+		private struct RouteState: Hashable {
+			let family: Family
+			/// Whether the route is still below its nearest fill, where the stack the owner is built with ends, so that an
+			/// entry the next edge stacks can exclude it. Never, where no entry excludes a route.
+			let isStacking: Bool
+
+			static let count = 6
+
+			var index: Int {
+				family.rawValue * 2 + (isStacking ? 1 : 0)
+			}
+
+			init(family: Family, isStacking: Bool) {
+				self.family = family
+				self.isStacking = isStacking
+			}
+
+			init(index: Int) {
+				family = Family(rawValue: index / 2) ?? .any
+				isStacking = index % 2 == 1
+			}
 		}
 
 		private struct AnswerKey: Hashable {
@@ -873,18 +906,30 @@ extension SeamSignature.Places {
 		}
 
 		private func startState(of placeCase: SeamSignature.Places.Case) -> RouteState? {
+			let family: Family
 			if !placeCase.isBuiltInSendableFunction {
-				return plainReach[placeCase.ownerLevel] && !placeCase.siteOpensSendableFunction ? .plainOnly : nil
+				guard plainReach[placeCase.ownerLevel], !placeCase.siteOpensSendableFunction else { return nil }
+				family = .plainOnly
+			} else if placeCase.siteOpensSendableFunction {
+				family = .any
+			} else {
+				guard openReach[placeCase.ownerLevel] else { return nil }
+				family = .needsOpenAbove
 			}
-			if placeCase.siteOpensSendableFunction {
-				return .any
-			}
-			return openReach[placeCase.ownerLevel] ? .needsOpenAbove : nil
+			let state = RouteState(family: family, isStacking: !excludedEntries.isEmpty)
+			return isValid(placeCase.ownerLevel, state) ? state : nil
 		}
 
-		/// Whether a route that ends its walk at `level`, in `state`, is of the case's family.
+		/// Whether a route that ends its walk at `level`, in `state`, is of the case's family, with no excluded entry on its
+		/// stack.
 		private func isValid(_ level: Int, _ state: RouteState) -> Bool {
-			switch state {
+			guard excludedEntries.isEmpty else { return validity[level][state.index] }
+			return Self.isOfFamily(level, state.family, openReach: openReach)
+		}
+
+		/// Whether a route that ends its walk at `level`, with `family`, is of the case's family.
+		private static func isOfFamily(_ level: Int, _ family: Family, openReach: [Bool]) -> Bool {
+			switch family {
 			case .plainOnly, .any:
 				true
 			case .needsOpenAbove:
@@ -894,9 +939,30 @@ extension SeamSignature.Places {
 
 		/// The parents a walk at `level` in `state` may go on to, each with the state there, in the order of `parents`.
 		private func transitions(from level: Int, state: RouteState) -> [(parent: Int, state: RouteState)] {
-			let opens = places.levels[level].opensSendableFunction.isPresent
-			let parents = places.levels[level].parents
-			switch state {
+			let parents = Self.familyParents(of: level, family: state.family, in: places.levels, plainReach: plainReach, openReach: openReach)
+			guard !excludedEntries.isEmpty else {
+				return parents.map { ($0.parent, RouteState(family: $0.family, isStacking: false)) }
+			}
+			return parents.compactMap { parent, family in
+				guard let isStacking = Self.isStacking(above: level, toward: parent, state: state, in: places.levels, excluding: excludedEntries) else { return nil }
+				let parentState = RouteState(family: family, isStacking: isStacking)
+				return validity[parent][parentState.index] ? (parent, parentState) : nil
+			}
+		}
+
+		/// Whether a route in `state` at `level` is still stacking on the edge to `parent`, or `nil` where that edge stacks an
+		/// excluded entry.
+		private static func isStacking(above level: Int, toward parent: Int, state: RouteState, in levels: [SeamSignature.Places.Level], excluding excludedEntries: Set<SeamSignature.Places.StackEntry>) -> Bool? {
+			guard state.isStacking, let builtType = levels[level].key.builtType else { return false }
+			guard let property = levels[parent].key.nextProperty else { return true }
+			return entries(of: property, builtAs: builtType).contains(where: excludedEntries.contains) ? nil : true
+		}
+
+		/// The parents a walk at `level` with `family` may go on to in its family, each with the family there.
+		private static func familyParents(of level: Int, family: Family, in levels: [SeamSignature.Places.Level], plainReach: [Bool], openReach: [Bool]) -> [(parent: Int, family: Family)] {
+			let opens = levels[level].opensSendableFunction.isPresent
+			let parents = levels[level].parents
+			switch family {
 			case .plainOnly:
 				guard !opens else { return [] }
 				return parents.filter { plainReach[$0] }.map { ($0, .plainOnly) }
@@ -908,6 +974,43 @@ extension SeamSignature.Places {
 			case .any:
 				return parents.map { ($0, .any) }
 			}
+		}
+
+		/// Per level and route state, whether some route up from the level in that state reaches a root of its family with
+		/// no entry of `excludedEntries` on its stack: a least fixed point over the parents, since the graph can hold a cycle,
+		/// each level judged again when a parent turns valid.
+		private static func validity(of levels: [SeamSignature.Places.Level], excluding excludedEntries: Set<SeamSignature.Places.StackEntry>, plainReach: [Bool], openReach: [Bool]) -> [[Bool]] {
+			var validity = [[Bool]](repeating: [Bool](repeating: false, count: RouteState.count), count: levels.count)
+			var children = [[Int]](repeating: [], count: levels.count)
+			for (index, level) in levels.enumerated() {
+				for parent in level.parents {
+					children[parent].append(index)
+				}
+			}
+			func isValid(_ level: Int, _ state: RouteState) -> Bool {
+				var state = state
+				// A fill's base stack ends the stack.
+				if state.isStacking, levels[level].key.builtType == nil {
+					guard !levels[level].fillBaseStack.contains(where: excludedEntries.contains) else { return false }
+					state = RouteState(family: state.family, isStacking: false)
+				}
+				if levels[level].parents.isEmpty {
+					return isOfFamily(level, state.family, openReach: openReach)
+				}
+				return familyParents(of: level, family: state.family, in: levels, plainReach: plainReach, openReach: openReach).contains { parent, family in
+					guard let isStacking = Self.isStacking(above: level, toward: parent, state: state, in: levels, excluding: excludedEntries) else { return false }
+					return validity[parent][RouteState(family: family, isStacking: isStacking).index]
+				}
+			}
+			var toJudge = levels.indices.flatMap { level in (0..<RouteState.count).map { (level, $0) } }
+			while let (level, index) = toJudge.popLast() {
+				guard !validity[level][index], isValid(level, RouteState(index: index)) else { continue }
+				validity[level][index] = true
+				for child in children[level] {
+					toJudge += (0..<RouteState.count).map { (child, $0) }
+				}
+			}
+			return validity
 		}
 
 		private func directAnswers(of key: AnswerKey) -> [SeamSignature.Places.Answer]? {

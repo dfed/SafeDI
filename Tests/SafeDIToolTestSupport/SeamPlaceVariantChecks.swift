@@ -45,7 +45,33 @@ enum SeamPlaceVariantChecks {
 		var mismatches = [String]()
 		for caseIndex in routesByCase.keys.sorted() {
 			let routes = routesByCase[caseIndex] ?? []
-			let naming = query.representativeRoute(of: caseIndex).map { query.sitePath(along: $0).map(\.label).joined(separator: ".") } ?? "?"
+			mismatches += self.mismatches(of: caseIndex, routes: routes, query: query, observation: observation, excluding: [])
+			// The routes whose stack holds none of a few of the entries the case's routes stack.
+			var entries = [SeamSignature.Places.StackEntry]()
+			for route in routes {
+				for entry in query.stack(along: route) where !entries.contains(entry) {
+					entries.append(entry)
+				}
+			}
+			for entry in entries.prefix(4) {
+				let kept = routes.filter { !query.stack(along: $0).contains(entry) }
+				let excludingQuery = SeamSignature.Places.Query(of: places, excludingRoutesWhoseStackHolds: [entry])
+				mismatches += self.mismatches(of: caseIndex, routes: kept, query: excludingQuery, observation: observation, excluding: [entry])
+			}
+		}
+		return mismatches
+	}
+
+	static func mismatches(of caseIndex: Int, routes: [SeamSignature.Places.Route], query: SeamSignature.Places.Query, observation: SeamSignature.Places.Observation, excluding excluded: [SeamSignature.Places.StackEntry]) -> [String] {
+		let places = observation.places
+		var mismatches = [String]()
+		do {
+			let excluding = excluded.isEmpty ? "" : " excluding \(excluded.map { "\($0.property.asSource)@\($0.concreteType.asSource)" })"
+			let naming = (query.representativeRoute(of: caseIndex).map { query.sitePath(along: $0).map(\.label).joined(separator: ".") } ?? "?") + excluding
+			guard !routes.isEmpty else {
+				let variants = query.labels(reaching: caseIndex).flatMap { query.labelVariants(ofLabel: $0, at: caseIndex) }
+				return variants.isEmpty ? [] : ["The label variants at \(naming) in \(observation.seamType.asSource) list \(variants.count) values where every route is excluded"]
+			}
 			for label in query.labels(reaching: caseIndex) {
 				let variants = query.labelVariants(ofLabel: label, at: caseIndex)
 				let valueByRoute = routes.map { (route: $0, value: value(ofLabel: label, along: $0, at: caseIndex, in: places)) }
