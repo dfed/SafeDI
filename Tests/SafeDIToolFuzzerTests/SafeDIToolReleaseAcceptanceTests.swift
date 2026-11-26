@@ -167,8 +167,41 @@ struct SafeDIToolReleaseAcceptanceTests {
 			ListedSeed(corpus: .base, seed: 4_885, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
 			ListedSeed(corpus: .base, seed: 4_890, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
 			ListedSeed(corpus: .base, seed: 4_993, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .seam, seed: 19, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .seam, seed: 68, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .seam, seed: 69, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .seam, seed: 151, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .seam, seed: 155, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .seam, seed: 162, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .seam, seed: 222, kind: .knownBreak, verdictClass: .currentRejects, reason: fillReadsLabelNestedCyclesDeclareAgainReason),
+			ListedSeed(corpus: .seam, seed: 227, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .seam, seed: 300, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .seam, seed: 341, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
 			ListedSeed(corpus: .seam, seed: 391, kind: .beyondComparator, verdictClass: .valuesNotCompared, reason: beyondComparatorReason),
+			ListedSeed(corpus: .seam, seed: 471, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .seam, seed: 484, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .seam, seed: 500, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .seam, seed: 742, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .seam, seed: 787, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .seam, seed: 819, kind: .knownBreak, verdictClass: .currentRejects, reason: fillReadsLabelNestedCyclesDeclareAgainReason),
+			ListedSeed(corpus: .seam, seed: 905, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .seam, seed: 934, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .seam, seed: 967, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .seam, seed: 990, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .seam, seed: 1_050, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .seam, seed: 1_059, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .seam, seed: 1_149, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .seam, seed: 1_168, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
 			ListedSeed(corpus: .seam, seed: 1_311, kind: .beyondComparator, verdictClass: .valuesNotCompared, reason: beyondComparatorReason),
+			ListedSeed(corpus: .seam, seed: 1_501, kind: .knownBreak, verdictClass: .currentRejects, reason: fillReadsLabelNestedCyclesDeclareAgainReason),
+			ListedSeed(corpus: .seam, seed: 1_536, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .seam, seed: 1_560, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .seam, seed: 1_637, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .seam, seed: 1_773, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .seam, seed: 1_788, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .seam, seed: 1_921, kind: .knownBreak, verdictClass: .currentRejects, reason: fillReadsLabelNestedCyclesDeclareAgainReason),
+			ListedSeed(corpus: .seam, seed: 1_954, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .seam, seed: 1_986, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
 		],
 	]
 
@@ -183,6 +216,10 @@ struct SafeDIToolReleaseAcceptanceTests {
 
 	/// A type built again through a second lazy cycle received the outer declaration of a label where the nearest one is in scope. Each seed draws that shape (`S<seed>_NestRoot`), and its only difference is that label’s value.
 	static let nearestDeclarationInNestedCycleReason = "#1065, a 2.3.0 defect fixed: a type a second lazy cycle builds again received the outer declaration of a label"
+
+	/// 2.3.0 accepted the graph and handed the fill the same values at every level of the nested cycle, so the type the
+	/// cycle builds again was built with the outer declaration of the label; this tree reports the read instead.
+	static let fillReadsLabelNestedCyclesDeclareAgainReason = "#1115, release-noted under Fixes: a seam fill’s read of a label that nested lazy cycles declare again, which 2.3.0 built with the outer declaration, is now an error"
 
 	@Test(arguments: GraphFuzzerReleaseAcceptanceCorpus.allCases)
 	func releaseAcceptanceFixture_drawsTheCorpusGraphWithoutFeaturesOlderReleaseRejects_whenDrawnForComparison(corpus: GraphFuzzerReleaseAcceptanceCorpus) {
