@@ -12924,26 +12924,20 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
 			            return A(bBuilder: bBuilder)
 			        }
+			        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
 			        func __safeDI_bBuilder() -> B {
 			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-			            let innerCBuilder = Instantiator<C> {
-			                __safeDI_innerCBuilder(aBuilder: aBuilder)
+			            func __safeDI_innerCBuilder() -> C {
+			                func __safeDI_innerBBuilder() -> B {
+			                    let innerCBuilder = Instantiator<C>(__safeDI_innerCBuilder)
+			                    return B(innerCBuilder: innerCBuilder)
+			                }
+			                let innerBBuilder = Instantiator<B>(__safeDI_innerBBuilder)
+			                return C(innerBBuilder: innerBBuilder, aBuilder: aBuilder)
 			            }
+			            let innerCBuilder = Instantiator<C>(__safeDI_innerCBuilder)
 			            return B(innerCBuilder: innerCBuilder)
 			        }
-			        func __safeDI_innerCBuilder(aBuilder: Instantiator<A>?) -> C {
-			            let innerBBuilder = Instantiator<B> {
-			                __safeDI_innerBBuilder(aBuilder: aBuilder)
-			            }
-			            return C(innerBBuilder: innerBBuilder, aBuilder: aBuilder)
-			        }
-			        func __safeDI_innerBBuilder(aBuilder: Instantiator<A>?) -> B {
-			            let innerCBuilder = Instantiator<C> {
-			                __safeDI_innerCBuilder(aBuilder: aBuilder)
-			            }
-			            return B(innerCBuilder: innerCBuilder)
-			        }
-			        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
 			        let bBuilder = Instantiator<B>(__safeDI_bBuilder)
 			        self.init(aBuilder: aBuilder, bBuilder: bBuilder)
 			    }

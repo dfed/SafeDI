@@ -110,6 +110,9 @@ extension TypeKeyLayout {
 					statement = .inline(built)
 				}
 			case let .closer(closer):
+				if closer.rebindsLoopMember {
+					loopRebindingBodies.insert(body)
+				}
 				// The function a closing scope calls is the nearest of its name, as Swift resolves it: an enclosing place's, or,
 				// for a member of a loop of builders, one a statement of an enclosing body declares.
 				switch resolvedFunction(named: closer.closedOnFunctionName, from: body) {

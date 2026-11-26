@@ -277,19 +277,19 @@ struct SafeDIToolSeamRequiredAliasTests: ~Copyable {
 			            let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
 			            return Token(screenBuilder: screenBuilder)
 			        }
+			        let tokenBuilder = Instantiator<Token>(__safeDI_tokenBuilder)
 			        func __safeDI_screenBuilder() -> Screen {
 			            let tokenBuilder = Instantiator<Token>(__safeDI_tokenBuilder)
-			            let detail: Detail = __safeDI_detail(tokenBuilder: tokenBuilder)
+			            func __safeDI_detail() -> Detail {
+			                #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
+			                let authTokenBuilder: Instantiator<Token>? = tokenBuilder
+			                #sourceLocation()
+			                let child = Child(authTokenBuilder: authTokenBuilder)
+			                return Detail(authTokenBuilder: authTokenBuilder, child: child)
+			            }
+			            let detail: Detail = __safeDI_detail()
 			            return Screen(detail: detail)
 			        }
-			        func __safeDI_detail(tokenBuilder: Instantiator<Token>) -> Detail {
-			            #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
-			            let authTokenBuilder: Instantiator<Token>? = tokenBuilder
-			            #sourceLocation()
-			            let child = Child(authTokenBuilder: authTokenBuilder)
-			            return Detail(authTokenBuilder: authTokenBuilder, child: child)
-			        }
-			        let tokenBuilder = Instantiator<Token>(__safeDI_tokenBuilder)
 			        let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
 			        self.init(tokenBuilder: tokenBuilder, screenBuilder: screenBuilder)
 			    }

@@ -56,6 +56,9 @@ enum TypeKeyBody {
 		GenerationWork.record(layout.bodies.count - 1, by: .layingOutTypeKeyViews)
 		guard layout.computeReads() else { return nil }
 		layout.computeClasses()
+		// A root whose loops of builders the path key writes once each keeps the path key's body, the members' functions
+		// nested as before the type key laid loops out.
+		guard layout.laysOutLoops() else { return nil }
 		guard layout.computePlacement() else { return nil }
 		layout.computeOutcomes()
 		guard layout.computeParameterTypes(),
@@ -210,6 +213,8 @@ struct TypeKeyLayout {
 	var rootFunctionNames = Set<String>()
 	/// The names bound around the root's body, which no function the layout declares takes.
 	var namesInScope = Set<String>()
+	/// The views whose bodies wrap a member of a loop of builders again (`ClosingPlaceRecord.rebindsLoopMember`).
+	var loopRebindingBodies = Set<Int>()
 	/// The views other than the root's in post-order of the view DAG.
 	var postOrder = [Int]()
 	/// The domain of each plan node the walk reached.
