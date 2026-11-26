@@ -184,6 +184,9 @@ extension ScopeGenerator {
 		// The walk shares a built node's subtree between the places that build one generator in one context, where the root
 		// lays out with the type key and no closer or loop of builders reads every path's place
 		// (`MockLowering+SubtreeSharing.swift`).
+		if laysOutWithTypeKey {
+			walk.sharedBuilderAttributesByType = context.sharedBuilderAttributesByType
+		}
 		if laysOutWithTypeKey, MockLowering.sharesSubtrees {
 			walk.subtreeSharing = MockLowering.SubtreeSharing(sharingBeneath: self, inlinePlacePaths: walk.filledCallBuilders.holeBuildersByInlinePlace.keys)
 		}
@@ -200,8 +203,9 @@ extension ScopeGenerator {
 			walk.recordBuiltPlaces()
 		}
 		var layoutOutcome: String?
+		var sharedBuilders = [MockLowering.SharedBuilder]()
 		if laysOutWithTypeKey {
-			let layout = walk.typeKeyRootLines(declaredAtRoot: signature.typeKeyRootDeclarations)
+			let layout = await walk.typeKeyRootLines(declaredAtRoot: signature.typeKeyRootDeclarations, rootAttributes: instantiable.mockAttributes)
 			let sharedMeetings = walk.subtreeSharing?.sharedMeetings ?? 0
 			// A shared subtree wrote no text, so a root that keeps the walk's body is lowered again on every path.
 			if layout.lines == nil, sharedMeetings > 0 {
@@ -219,6 +223,7 @@ extension ScopeGenerator {
 			}
 			if let typeKeyLines = layout.lines {
 				bindingLines.replaceSubrange(rootReceiverBindingIndex..., with: typeKeyLines)
+				sharedBuilders = layout.sharedBuilders
 			}
 			MockLowering.typeKeyLayoutObserver?(instantiable.concreteInstantiable.asSource, layout.fallback)
 			if MockLowering.sharesSubtrees {
@@ -273,7 +278,7 @@ extension ScopeGenerator {
 			// A public mock's parameters named apart and its values passed `nil`, as the internal mock's.
 			return (publicMockWithTree(of: instantiable, plan: publicMockRoot.plan, publicMockContext: publicMockRoot.context, signature: signature, nodes: nodes, bindingLines: bindingLines, rootRenames: rootRenames, unavailableProperties: unavailableOptionalProperties, instancesReadByValue: rootInstancesReadByValue, configurations: walk.configurationRecords, context: context), layoutOutcome)
 		} else {
-			let result = MockLowering.Result(code: Self.mockWithTree(of: instantiable, signature: signature, nodes: nodes, inlineOrderedNodes: inlineOrdered(nodes, property: \.property), bindingLines: bindingLines, builders: (walk.filledCallBuilders.parameters + signature.placeOnlyBuilderDeclarations).sorted { $0.label < $1.label }, rootRenames: rootRenames, unavailableProperties: unavailableOptionalProperties, instancesReadByValue: rootInstancesReadByValue, context: context), configurations: walk.configurationRecords)
+			let result = MockLowering.Result(code: Self.mockWithTree(of: instantiable, signature: signature, nodes: nodes, inlineOrderedNodes: inlineOrdered(nodes, property: \.property), bindingLines: bindingLines, builders: (walk.filledCallBuilders.parameters + signature.placeOnlyBuilderDeclarations).sorted { $0.label < $1.label }, rootRenames: rootRenames, unavailableProperties: unavailableOptionalProperties, instancesReadByValue: rootInstancesReadByValue, context: context), configurations: walk.configurationRecords, sharedBuilders: sharedBuilders)
 			return (result, layoutOutcome)
 		}
 	}
@@ -593,6 +598,13 @@ extension MockLowering {
 		/// The root's sharing of subtrees between the places that build one generator in one context
 		/// (`MockLowering+SubtreeSharing.swift`), or `nil` where the walk descends every path.
 		var subtreeSharing: MockLowering.SubtreeSharing?
+		/// The attributes of each type whose internal mock this module generates, whose places the root may build through a
+		/// static builder function shared by every mock that builds the type (`MockLowering+SharedBuilders.swift`), or empty
+		/// where the root lifts none.
+		var sharedBuilderAttributesByType = [TypeDescription: String]()
+		/// Whether each generator's subtree is closed (`MockLowering.SubtreeSharing.isClosed(atNode:)` at every node), by the
+		/// generator, for the places that ask; it dies with the walk.
+		var closedSubtrees = [ObjectIdentifier: Bool]()
 
 		/// The nodes `generators` build, in generation order, where the nodes `scope` holds are bound before them, their
 		/// overrides at `path`, with their statements appended to `lines` at `indent`.

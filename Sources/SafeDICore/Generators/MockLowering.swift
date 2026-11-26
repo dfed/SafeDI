@@ -26,10 +26,13 @@ public enum MockLowering {
 	public struct Result: Sendable, Equatable {
 		let code: String
 		let configurations: [ConfigurationRecord]
+		/// The builders the mock's body calls that the built types' extensions declare (`MockLowering+SharedBuilders.swift`).
+		let sharedBuilders: [SharedBuilder]
 
-		init(code: String, configurations: [ConfigurationRecord] = []) {
+		init(code: String, configurations: [ConfigurationRecord] = [], sharedBuilders: [SharedBuilder] = []) {
 			self.code = code
 			self.configurations = configurations
+			self.sharedBuilders = sharedBuilders
 		}
 	}
 

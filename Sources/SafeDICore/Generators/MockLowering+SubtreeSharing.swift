@@ -295,14 +295,37 @@ extension MockLowering {
 
 		/// The facts of `generator`'s subtree, given its children's.
 		private func facts(of generator: ScopeGenerator, children: [SubtreeFacts]) -> SubtreeFacts {
-			var isClosed = true
+			var isClosed = Self.isClosed(atNode: generator)
 			var readLabels = LabelSet()
 			switch generator.scopeData {
 			case let .alias(property, fulfillingProperty, _, _, _):
 				readLabels.insert(labelIndex(of: property.label))
 				readLabels.insert(labelIndex(of: fulfillingProperty.label))
-			case let .property(instantiable, property, _, _, _, seamCall):
-				isClosed = seamCall == nil
+			case let .property(instantiable, property, _, _, _, _):
+				readLabels.insert(labelIndex(of: property.label))
+				for dependency in instantiable.dependencies {
+					readLabels.insert(labelIndex(of: dependency.property.label))
+				}
+			case .root, .hole, .fill:
+				break
+			}
+			for child in children {
+				isClosed = isClosed && child.isClosed
+				readLabels.formUnion(child.readLabels)
+			}
+			return SubtreeFacts(isClosed: isClosed, readLabels: readLabels)
+		}
+
+		/// Whether `generator`'s own node reads nothing but its place's walk state and the declarations around it: no seam
+		/// or public mock call, no override of a value nothing fulfills, no cycle parameter or loop of builders, no
+		/// `@Sendable` function, no payload or member call, and no actor. A subtree each node of which is closed is built
+		/// alike wherever its walk state is alike, which a shared builder relies on too (`MockLowering+SharedBuilders.swift`).
+		static func isClosed(atNode generator: ScopeGenerator) -> Bool {
+			switch generator.scopeData {
+			case .alias:
+				true
+			case let .property(instantiable, _, _, _, _, seamCall):
+				seamCall == nil
 					&& generator.publicMockCall == nil
 					&& !generator.isUnavailableDependency
 					&& generator.cycleParameters.isEmpty
@@ -311,18 +334,9 @@ extension MockLowering {
 					&& generator.valuesBindingsBeforeBuilderFunction.isEmpty
 					&& generator.memberCallsInsideBuilderFunction.isEmpty
 					&& instantiable.declarationType != .actorType
-				readLabels.insert(labelIndex(of: property.label))
-				for dependency in instantiable.dependencies {
-					readLabels.insert(labelIndex(of: dependency.property.label))
-				}
 			case .root, .hole, .fill:
-				isClosed = false
+				false
 			}
-			for child in children {
-				isClosed = isClosed && child.isClosed
-				readLabels.formUnion(child.readLabels)
-			}
-			return SubtreeFacts(isClosed: isClosed, readLabels: readLabels)
 		}
 
 		private func labelIndex(of label: String) -> Int {

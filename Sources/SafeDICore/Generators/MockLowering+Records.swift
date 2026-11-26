@@ -202,6 +202,53 @@ extension MockLowering.Walk {
 		)
 	}
 
+	/// The attributes of the static builder function a place of `instantiable` may be built through, shared by every mock of
+	/// the module that builds the type (`MockLowering+SharedBuilders.swift`), or `nil` where the place stays inline: a type
+	/// with no internal mock of this module, a generic type, a construction whose initializer is `nonisolated`, which a
+	/// static function of the type's isolation could not call as the mock's body does, and a place whose builder function
+	/// reads what a function apart from the mock's body could not (a loop of builders, a `@Sendable` function or an actor's
+	/// argument, whose overrides are read into locals first, a configuration a repeated ancestor reads, a filled call's
+	/// builders), or whose subtree is not closed (`MockLowering.SubtreeSharing.isClosed(atNode:)`).
+	mutating func sharedBuilderAttributes(of generator: ScopeGenerator, instantiable: Instantiable, isLoopMember: Bool) -> String? {
+		guard let attributes = sharedBuilderAttributesByType[instantiable.concreteInstantiable],
+		      !isLoopMember,
+		      sendableOverrideExtractor == nil,
+		      !isInsideActorArgument,
+		      !isBeneathRepeatedConfiguredAncestor,
+		      !isInsideSendableFunction,
+		      !generator.buildsInSendableFunction,
+		      filledCallBuilders.holeBuildersByInlinePlace.isEmpty,
+		      instantiable.concreteInstantiable.namesNoGenericType,
+		      !(instantiable.initializer?.isNonisolated ?? false),
+		      !(instantiable.mockInitializer?.isNonisolated ?? false)
+		else { return nil }
+		return isClosedSubtree(at: generator) ? attributes : nil
+	}
+
+	/// Whether every node of the subtree `generator` roots is closed (`MockLowering.SubtreeSharing.isClosed(atNode:)`),
+	/// remembered per generator for the walk.
+	private mutating func isClosedSubtree(at generator: ScopeGenerator) -> Bool {
+		if let isClosed = closedSubtrees[ObjectIdentifier(generator)] {
+			return isClosed
+		}
+		// Children before parents, on an explicit stack: a subtree can be deep.
+		var stack = [(generator: generator, childrenVisited: false)]
+		while let (current, childrenVisited) = stack.popLast() {
+			let key = ObjectIdentifier(current)
+			guard closedSubtrees[key] == nil else { continue }
+			let children = current.orderedChildGenerators
+			if childrenVisited {
+				closedSubtrees[key] = MockLowering.SubtreeSharing.isClosed(atNode: current) && children.allSatisfy { closedSubtrees[ObjectIdentifier($0)] == true }
+			} else {
+				stack.append((current, true))
+				for child in children where closedSubtrees[ObjectIdentifier(child)] == nil {
+					stack.append((child, false))
+				}
+			}
+		}
+		return closedSubtrees[ObjectIdentifier(generator)] == true
+	}
+
 	/// Records, through production's record function, the built place the walk lowered `node` at.
 	mutating func recordBuiltPlace(of generator: ScopeGenerator, node: MockLowering.TreeNode, isLoopMember: Bool, unavailableProperties: Set<Property>) {
 		guard case let .built(constantNode) = node,
@@ -221,6 +268,7 @@ extension MockLowering.Walk {
 			node: PlanNode(),
 			nodeConfiguration: constantNode.configuration,
 			isPlannedAtPlace: seamCall == nil && !isLoopMember && !pathsWithUnplannedLines.contains(childIndexPath),
+			sharedBuilderAttributes: sharedBuilderAttributes(of: generator, instantiable: instantiable, isLoopMember: isLoopMember),
 		)
 		let (isFirstOfNode, first) = planNodes.insert(PlanNodeKey(call: call))
 		builtPlaceCalls[childIndexPath] = isFirstOfNode ? call : call.sharing(first.call.node)

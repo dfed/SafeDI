@@ -75,50 +75,62 @@ extension TypeKeyLayout {
 	// MARK: Spelling
 
 	mutating func spelledRootStatements() -> [GeneratedCode]? {
+		guard let functionCode = spelledFunctionCode() else { return nil }
+		return spelledStatements(ofClass: 0, indentation: TypeKeyBody.rootStatementIndentation, functionCode: functionCode)
+	}
+
+	/// The code of each class's function, by class, the root's empty, each spelled after the functions its body declares.
+	func spelledFunctionCode() -> [GeneratedCode]? {
 		var functionCode = [GeneratedCode](repeating: .empty, count: membersByClass.count)
 		let classesByDepth = membersByClass.indices.dropFirst().sorted { placementDepth[$0] > placementDepth[$1] }
 		for owner in classesByDepth {
-			guard let representative = representative(of: owner),
-			      let body = spelledStatements(ofClass: owner, indentation: ScopeGenerator.standardIndent, functionCode: functionCode),
-			      let argumentValues = spelledArgumentValues(representative.arguments, replacedAt: representative.argumentValues, inClass: owner, before: statements(ofClass: owner).count, sourceAtMember: { member, position in bodies[member].record?.arguments[position].source })
-			else { return nil }
-			let arguments = Self.labeled(argumentValues, of: representative.arguments)
-			var parameters = representative.forwardedProperties
-			var typesDeclaredEscaping = representative.typesDeclaredEscaping
-			for label in reads[membersByClass[owner][0]] where outcomes[owner][label] == .passed {
-				guard let parameterType = parameterTypes[owner][label] else { return nil }
-				parameters.append(Property(label: label, typeDescription: parameterType))
-				if parameterType.isClosure {
-					typesDeclaredEscaping.insert(parameterType)
-				}
-			}
-			for argument in representative.passedArguments {
-				parameters.append(Property(label: argument.parameterName, typeDescription: argument.type))
-				if argument.type.isClosure {
-					typesDeclaredEscaping.insert(argument.type)
-				}
-			}
-			// A function that returns a type of its own erases an erased place's value itself, so its calls do not.
-			var value = Expression.construction(representative.target, arguments: arguments)
-			if let functionReturnType = representative.functionReturnType {
-				value = value.erased(to: functionReturnType, where: representative.isErased)
-			}
-			if !representative.alternatives.isEmpty || representative.constructionValue != nil {
-				guard let construction = spelledConstruction(of: representative, call: value.spelled, argumentValues: argumentValues, inClass: owner, before: statements(ofClass: owner).count) else { return nil }
-				value = .spelledConstruction(construction)
-			}
-			functionCode[owner] = BuilderNode(
-				name: functionNames[owner],
-				isSendable: isDecorated[owner],
-				parameters: parameters,
-				typesDeclaredEscaping: typesDeclaredEscaping,
-				returnType: representative.functionReturnType ?? representative.concreteType,
-				body: BuilderBody(statements: body),
-				value: value,
-				lineEnd: representative.lineEnd,
-			).spelled()
+			guard let node = builderNode(ofClass: owner, functionCode: functionCode) else { return nil }
+			functionCode[owner] = node.spelled()
 		}
-		return spelledStatements(ofClass: 0, indentation: TypeKeyBody.rootStatementIndentation, functionCode: functionCode)
+		return functionCode
+	}
+
+	/// The function of `owner`'s class, whose body declares the functions of `functionCode` placed in it.
+	func builderNode(ofClass owner: Int, functionCode: [GeneratedCode]) -> BuilderNode? {
+		guard let representative = representative(of: owner),
+		      let body = spelledStatements(ofClass: owner, indentation: ScopeGenerator.standardIndent, functionCode: functionCode),
+		      let argumentValues = spelledArgumentValues(representative.arguments, replacedAt: representative.argumentValues, inClass: owner, before: statements(ofClass: owner).count, sourceAtMember: { member, position in bodies[member].record?.arguments[position].source })
+		else { return nil }
+		let arguments = Self.labeled(argumentValues, of: representative.arguments)
+		var parameters = representative.forwardedProperties
+		var typesDeclaredEscaping = representative.typesDeclaredEscaping
+		for label in reads[membersByClass[owner][0]] where outcomes[owner][label] == .passed {
+			guard let parameterType = parameterTypes[owner][label] else { return nil }
+			parameters.append(Property(label: label, typeDescription: parameterType))
+			if parameterType.isClosure {
+				typesDeclaredEscaping.insert(parameterType)
+			}
+		}
+		for argument in representative.passedArguments {
+			parameters.append(Property(label: argument.parameterName, typeDescription: argument.type))
+			if argument.type.isClosure {
+				typesDeclaredEscaping.insert(argument.type)
+			}
+		}
+		// A function that returns a type of its own erases an erased place's value itself, so its calls do not.
+		var value = Expression.construction(representative.target, arguments: arguments)
+		if let functionReturnType = representative.functionReturnType {
+			value = value.erased(to: functionReturnType, where: representative.isErased)
+		}
+		if !representative.alternatives.isEmpty || representative.constructionValue != nil {
+			guard let construction = spelledConstruction(of: representative, call: value.spelled, argumentValues: argumentValues, inClass: owner, before: statements(ofClass: owner).count) else { return nil }
+			value = .spelledConstruction(construction)
+		}
+		return BuilderNode(
+			name: functionNames[owner],
+			isSendable: isDecorated[owner],
+			parameters: parameters,
+			typesDeclaredEscaping: typesDeclaredEscaping,
+			returnType: representative.functionReturnType ?? representative.concreteType,
+			body: BuilderBody(statements: body),
+			value: value,
+			lineEnd: representative.lineEnd,
+		)
 	}
 
 	/// The statements of `owner`'s body, each with the functions declared before it, each indented by `indentation`.
@@ -197,14 +209,27 @@ extension TypeKeyLayout {
 
 	/// The binding of `property` to a call of `callee`'s function that hands it `arguments`.
 	private func spelledCall(of callee: Int, binding property: Property, isErased: Bool, isExtension: Bool, handing arguments: [String], representative: BuiltPlaceRecord) -> String {
-		let functionName = functionNames[callee]
+		Self.spelledCall(
+			ofFunctionNamed: functionNames[callee],
+			binding: property,
+			isErased: isErased,
+			isExtension: isExtension,
+			handing: arguments,
+			forwardedProperties: representative.forwardedProperties,
+			returnedType: representative.functionReturnType ?? representative.concreteType,
+		)
+	}
+
+	/// The binding of `property` to a call of the function `functionName` names, which returns `returnedType` and is handed
+	/// `forwardedProperties`, then `arguments`.
+	static func spelledCall(ofFunctionNamed functionName: String, binding property: Property, isErased: Bool, isExtension: Bool, handing arguments: [String], forwardedProperties: [Property], returnedType: TypeDescription) -> String {
 		switch property.propertyType {
 		case .instantiator,
 		     .erasedInstantiator,
 		     .sendableInstantiator,
 		     .sendableErasedInstantiator:
-			let isOnly = representative.forwardedProperties.count == 1
-			let forwardedArguments = representative.forwardedProperties.map {
+			let isOnly = forwardedProperties.count == 1
+			let forwardedArguments = forwardedProperties.map {
 				CallArgument(label: $0.label, source: .forwardedSpread(label: $0.label, isOnly: isOnly, spreadName: "$0")).spelled
 			}
 			return ScopeGenerator.instantiatorDeclaration(
@@ -222,7 +247,7 @@ extension TypeKeyLayout {
 				property: property,
 				rule: .constant(
 					isErased: isErased,
-					constructedTypeIsPropertyType: (representative.functionReturnType ?? representative.concreteType).asSource == property.typeDescription.asSource,
+					constructedTypeIsPropertyType: returnedType.asSource == property.typeDescription.asSource,
 					hasBuilderFunction: true,
 					isExtension: isExtension,
 				),

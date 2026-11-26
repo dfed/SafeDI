@@ -2227,7 +2227,8 @@ struct GraphFuzzerValueOracleRun {
 	var drawnMockFileNamesChanged: [String] {
 		guard case let .accepted(valueOracleFiles, _) = outcome else { return [] }
 		return plan.drawnMockFiles.keys.sorted().filter { fileName in
-			valueOracleFiles[fileName].map(GraphFuzzerMockOverrides.comparableWithAnotherRunsMocks) != plan.drawnMockFiles[fileName].map(GraphFuzzerMockOverrides.comparableWithAnotherRunsMocks)
+			valueOracleFiles[fileName].map { GraphFuzzerMockOverrides.comparableWithAnotherRunsMocks(GraphFuzzerMockOverrides.removingSharedBuilders(notDeclaredIn: plan.drawnMockFiles[fileName] ?? "", from: $0)) }
+				!= plan.drawnMockFiles[fileName].map(GraphFuzzerMockOverrides.comparableWithAnotherRunsMocks)
 		}
 	}
 
@@ -2239,12 +2240,43 @@ struct GraphFuzzerValueOracleRun {
 		return plan.drawnMockFiles.keys.sorted().filter { fileName in
 			guard let valueOracleFile = valueOracleFiles[fileName], let drawnFile = plan.drawnMockFiles[fileName] else { return false }
 			return valueOracleFile != drawnFile
-				&& GraphFuzzerMockOverrides.comparableWithAnotherRunsMocks(valueOracleFile) == GraphFuzzerMockOverrides.comparableWithAnotherRunsMocks(drawnFile)
+				&& GraphFuzzerMockOverrides.comparableWithAnotherRunsMocks(GraphFuzzerMockOverrides.removingSharedBuilders(notDeclaredIn: drawnFile, from: valueOracleFile)) == GraphFuzzerMockOverrides.comparableWithAnotherRunsMocks(drawnFile)
 		}
 	}
 }
 
 extension GraphFuzzerMockOverrides {
+	/// `contents`, a mocked type's generated mock file in the value-oracle run, without each shared builder
+	/// (`static func __safeDI_build_<hash>`, which every mock of the module that builds the type alike calls) that
+	/// `drawnContents`, the corpus run's file, does not declare, with the extension each is declared in: the root
+	/// mocks the value-oracle fixture adds build the type too, and their builders join the type's file, as their
+	/// configurations do (R6).
+	static func removingSharedBuilders(notDeclaredIn drawnContents: String, from contents: String) -> String {
+		let drawnNames = Set(drawnContents.split(separator: "\n").compactMap(sharedBuilderName(declaredBy:)))
+		var lines = [Substring]()
+		var isRemovingFunction = false
+		for line in contents.split(separator: "\n", omittingEmptySubsequences: false) {
+			if isRemovingFunction {
+				isRemovingFunction = line != "    }"
+				continue
+			}
+			if let name = sharedBuilderName(declaredBy: line), !drawnNames.contains(name) {
+				isRemovingFunction = true
+				continue
+			}
+			lines.append(line)
+		}
+		return lines.joined(separator: "\n")
+			.replacingOccurrences(of: #"\n\n#if [^\n]+\nextension [^\n]+ \{\n\}\n#endif"#, with: "", options: .regularExpression)
+	}
+
+	/// The name of the shared builder `line` declares, if it declares one.
+	private static func sharedBuilderName(declaredBy line: Substring) -> String? {
+		guard line.hasPrefix("    "), let range = line.range(of: "static func __safeDI_build_") else { return nil }
+		let start = line.index(range.lowerBound, offsetBy: "static func ".count)
+		return String(line[start...].prefix { $0 != "(" })
+	}
+
 	/// `contents`, a generated mock file, without the blocks that declare a type's `SafeDIMockConfiguration` and no
 	/// `mock()`.
 	static func removingConfigurations(from contents: String) -> String {

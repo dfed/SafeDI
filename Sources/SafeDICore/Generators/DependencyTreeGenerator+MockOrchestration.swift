@@ -220,6 +220,14 @@ extension DependencyTreeGenerator {
 			sendableConfigurationTypeNames: sendableConfigurationTypeNames,
 			publicMockContext: publicMockContext,
 			foreignPublicMocks: foreignPublicMocks,
+			sharedBuilderAttributesByType: mockRoots.reduce(into: [TypeDescription: String]()) { attributes, instantiableAndMockRoot in
+				let instantiable = instantiableAndMockRoot.0
+				// A public mock's file declares no shared builder: its mock is no internal mock's, and its module's other
+				// mocks build its type as its own tree does.
+				if instantiable.generateMock != .public {
+					attributes[instantiable.concreteInstantiable] = instantiable.mockAttributes
+				}
+			},
 		)
 		let fulfillingInstantiables = typeDescriptionToFulfillingInstantiableMap
 		let loweredRoots = try await BoundedConcurrency.map(mockRoots, width: BoundedConcurrency.mockRootWidth) { instantiableAndMockRoot, _ in

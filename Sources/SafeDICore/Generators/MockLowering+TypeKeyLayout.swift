@@ -50,6 +50,7 @@ extension MockLowering {
 			node: PlanNode,
 			nodeConfiguration: NodeConfiguration,
 			isPlannedAtPlace: Bool,
+			sharedBuilderAttributes: String?,
 		) {
 			self.generator = generator
 			self.property = property
@@ -61,6 +62,7 @@ extension MockLowering {
 			self.node = node
 			self.nodeConfiguration = nodeConfiguration
 			self.isPlannedAtPlace = isPlannedAtPlace
+			self.sharedBuilderAttributes = sharedBuilderAttributes
 		}
 
 		let generator: ScopeGenerator
@@ -74,6 +76,9 @@ extension MockLowering {
 		/// How the node the walk lowered the place to is configured, which the record reads (`relateConfiguration(ofBuiltPlaceAt:…)`).
 		let nodeConfiguration: NodeConfiguration
 		let isPlannedAtPlace: Bool
+		/// The attributes of the static builder function the place may be built through, or `nil` where it stays inline
+		/// (`Walk.sharedBuilderAttributes(of:instantiable:isLoopMember:)`).
+		let sharedBuilderAttributes: String?
 
 		/// This call with the plan node of a place alike in everything a node is made once for (`Walk.PlanNodeKey`).
 		func sharing(_ node: PlanNode) -> BuiltPlaceCall {
@@ -88,6 +93,7 @@ extension MockLowering {
 				node: node,
 				nodeConfiguration: nodeConfiguration,
 				isPlannedAtPlace: isPlannedAtPlace,
+				sharedBuilderAttributes: sharedBuilderAttributes,
 			)
 		}
 	}
@@ -301,6 +307,11 @@ extension MockLowering.Walk {
 					readPassedConfigurationInPlace(ofBuiltPlaceAt: path)
 				}
 				sharingNode(ofBuiltPlaceAt: path, nodesByKey: &sharedRecordsByKey)
+				// Set after the node is shared, which takes the first alike record's fields.
+				if let attributes = call.sharedBuilderAttributes, case var .built(built)? = builtRecords[path] {
+					built.staticBuilderAttributes = attributes
+					builtRecords[path] = .built(built)
+				}
 			} catch {
 				// The error is named by its case alone (`unexpectedArgument`), and by whether the place calls its type's hand-written
 				// mock or reads its configuration's defaults, whose arguments production's initializer need not take: the tests and
@@ -395,7 +406,7 @@ extension MockLowering.Walk {
 	/// The root's statements in the type key's layout, each line indented as the root's are, or `nil` where the root keeps
 	/// the walk's: a place records nothing, a read names a value no record or root declaration binds, or the type key
 	/// cannot lay the body out.
-	func typeKeyRootLines(declaredAtRoot rootDeclarations: [Property]) -> (lines: [String]?, fallback: String) {
+	func typeKeyRootLines(declaredAtRoot rootDeclarations: [Property], rootAttributes: String) async -> (lines: [String]?, fallback: String, sharedBuilders: [MockLowering.SharedBuilder]) {
 		var rootBody = [GeneratedCode]()
 		// The values `mock()` declares before the tree, as renames the type key copies as empty text, which it drops below.
 		for property in rootDeclarations {
@@ -405,19 +416,34 @@ extension MockLowering.Walk {
 			rootBody.append(placeCode(at: path))
 		}
 		if let path = firstUnrecordedPath {
-			return (nil, "unrecorded:\(unrecordedReasons[path] ?? "closerOrOther")")
+			return (nil, "unrecorded:\(unrecordedReasons[path] ?? "closerOrOther")", [])
 		}
 		if let label = Self.unresolvedRead(in: rootBody, declaredAtRoot: Set(rootDeclarations.map(\.label))) {
-			return (nil, "readUnresolved:\(label)")
+			return (nil, "readUnresolved:\(label)", [])
 		}
-		guard let statements = TypeKeyBody.statements(ofRootBody: rootBody) else { return (nil, "engineRefused") }
+		// The places a shared builder can build call it (`MockLowering+SharedBuilders.swift`), where the body so lifted
+		// lays out; otherwise every place stays in the body.
+		if !sharedBuilderAttributesByType.isEmpty {
+			var lifting = MockLowering.SharedBuilderLifting(rootAttributes: rootAttributes)
+			if let lifted = await lifting.lifting(rootBody, declarationCount: rootDeclarations.count),
+			   let statements = TypeKeyBody.statements(ofRootBody: lifted)
+			{
+				return (Self.lines(of: statements), "laidOut", lifting.buildersByTypeAndName.keys.sorted().compactMap { lifting.buildersByTypeAndName[$0] })
+			}
+		}
+		guard let statements = TypeKeyBody.statements(ofRootBody: rootBody) else { return (nil, "engineRefused", []) }
+		return (Self.lines(of: statements), "laidOut", [])
+	}
+
+	/// The lines of a root's `statements`, each indented as the root's are, a statement of whitespace alone left out.
+	private static func lines(of statements: [GeneratedCode]) -> [String] {
 		var lines = [String]()
 		for statement in statements {
 			let spelled = statement.spelled()
 			guard !spelled.allSatisfy(\.isWhitespace) else { continue }
 			lines.append(contentsOf: spelled.split(separator: "\n", omittingEmptySubsequences: false).map(String.init))
 		}
-		return (lines, "laidOut")
+		return lines
 	}
 
 	/// The label of the first read the places of `rootBody` make, other than of `nil`, that no declaration visible where it

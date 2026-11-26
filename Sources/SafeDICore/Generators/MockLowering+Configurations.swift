@@ -88,8 +88,20 @@ extension MockLowering {
 				}
 			}
 		}
+		// The shared builders every root's body calls, each declared in the file of the mock of the type it builds
+		// (`MockLowering+SharedBuilders.swift`), after the mock, each in an extension of its own: which of two builders of
+		// a type comes first follows their hashes, which follow names, so the builders are extensions, whose order in a
+		// file tells nothing, as the configurations' does not.
+		let sharedBuilderDeclarations = Self.sharedBuilderDeclarations(of: roots)
 		let mergedCodes = zip(roots, loweredRoots).map { root, loweredRoot in
-			let code = loweredRoot.code
+			var code = loweredRoot.code
+			for declaration in sharedBuilderDeclarations[root.mockedType.asSource] ?? [] {
+				var builder = "extension \(root.mockedType.asSource) {\n" + declaration + "\n}"
+				if let mockConditionalCompilation {
+					builder = "#if \(mockConditionalCompilation)\n" + builder + "\n#endif"
+				}
+				code += "\n\n" + builder
+			}
 			guard let structCode = rootedStructs[root.mockedType.asSource] else { return code }
 			let configurationCode = Self.configurationCode(
 				extensions: [(typeName: root.mockedType.asSource, structCode: structCode)],

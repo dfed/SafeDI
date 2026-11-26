@@ -164,7 +164,7 @@ struct SafeDIToolMockSharedBuilderTests: ~Copyable {
 		    ) -> FirstRoot {
 		        let service = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { Service() }
 		        func __safeDI_middle(__safeDI_Middle_configuration: Middle.SafeDIMockConfiguration) -> Middle {
-		            let screen: Screen = Screen.__safeDI_build_8907f0b7(service: service, __safeDI_Screen_configuration: __safeDI_Middle_configuration.screen)
+		            let screen: Screen = Screen.__safeDI_build_D0B4A558AFDB25AD(service: service, __safeDI_Screen_configuration: __safeDI_Middle_configuration.screen)
 		            return if let safeDIBuilder = __safeDI_Middle_configuration.safeDIBuilder { safeDIBuilder(service, screen) } else { Middle(service: service, screen: screen) }
 		        }
 		        let middle: Middle = __safeDI_middle(__safeDI_Middle_configuration: safeDIOverrides.middle)
@@ -267,7 +267,7 @@ struct SafeDIToolMockSharedBuilderTests: ~Copyable {
 
 		#if DEBUG
 		extension Screen {
-		    static func __safeDI_build_8907f0b7(service: Service, __safeDI_Screen_configuration: Screen.SafeDIMockConfiguration) -> Screen {
+		    static func __safeDI_build_D0B4A558AFDB25AD(service: Service, __safeDI_Screen_configuration: Screen.SafeDIMockConfiguration) -> Screen {
 		        let viewModel = if let safeDIBuilder = __safeDI_Screen_configuration.viewModel { safeDIBuilder(service) } else { ViewModel(service: service) }
 		        return if let safeDIBuilder = __safeDI_Screen_configuration.safeDIBuilder { safeDIBuilder(service, viewModel) } else { Screen(service: service, viewModel: viewModel) }
 		    }
@@ -354,7 +354,7 @@ struct SafeDIToolMockSharedBuilderTests: ~Copyable {
 		    ) -> SecondRoot {
 		        let service = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { Service() }
 		        let screenBuilder = Instantiator<Screen> {
-		            Screen.__safeDI_build_8907f0b7(service: service, __safeDI_Screen_configuration: safeDIOverrides.screenBuilder)
+		            Screen.__safeDI_build_D0B4A558AFDB25AD(service: service, __safeDI_Screen_configuration: safeDIOverrides.screenBuilder)
 		        }
 		        return SecondRoot(service: service, screenBuilder: screenBuilder)
 		    }
@@ -482,7 +482,7 @@ struct SafeDIToolMockSharedBuilderTests: ~Copyable {
 		    ) -> FirstRoot {
 		        let service = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { Service() }
 		        func __safeDI_middle(__safeDI_Middle_configuration: Middle.SafeDIMockConfiguration) -> Middle {
-		            let screen: Screen = Screen.__safeDI_build_48c56e07(service: service, __safeDI_Screen_configuration: __safeDI_Middle_configuration.screen)
+		            let screen: Screen = Screen.__safeDI_build_9AD353C52200555D(service: service, __safeDI_Screen_configuration: __safeDI_Middle_configuration.screen)
 		            return if let safeDIBuilder = __safeDI_Middle_configuration.safeDIBuilder { safeDIBuilder(service, screen) } else { Middle(service: service, screen: screen) }
 		        }
 		        let middle: Middle = __safeDI_middle(__safeDI_Middle_configuration: safeDIOverrides.middle)
@@ -585,7 +585,7 @@ struct SafeDIToolMockSharedBuilderTests: ~Copyable {
 
 		#if DEBUG
 		extension Screen {
-		    @MainActor static func __safeDI_build_48c56e07(service: Service, __safeDI_Screen_configuration: Screen.SafeDIMockConfiguration) -> Screen {
+		    @MainActor static func __safeDI_build_9AD353C52200555D(service: Service, __safeDI_Screen_configuration: Screen.SafeDIMockConfiguration) -> Screen {
 		        let viewModel = if let safeDIBuilder = __safeDI_Screen_configuration.viewModel { safeDIBuilder(service) } else { ViewModel(service: service) }
 		        return if let safeDIBuilder = __safeDI_Screen_configuration.safeDIBuilder { safeDIBuilder(service, viewModel) } else { Screen(service: service, viewModel: viewModel) }
 		    }
@@ -827,7 +827,7 @@ struct SafeDIToolMockSharedBuilderTests: ~Copyable {
 
 		#if DEBUG
 		extension Detail {
-		    static func __safeDI_build_e9dc6829(service: Service, __safeDI_Detail_configuration: Detail.SafeDIMockConfiguration) -> Detail {
+		    static func __safeDI_build_E4E870EDA5267E77(service: Service, __safeDI_Detail_configuration: Detail.SafeDIMockConfiguration) -> Detail {
 		        let detailModel = if let safeDIBuilder = __safeDI_Detail_configuration.detailModel { safeDIBuilder(service) } else { DetailModel(service: service) }
 		        return if let safeDIBuilder = __safeDI_Detail_configuration.safeDIBuilder { safeDIBuilder(service, detailModel) } else { Detail(service: service, detailModel: detailModel) }
 		    }
@@ -924,7 +924,7 @@ struct SafeDIToolMockSharedBuilderTests: ~Copyable {
 		            return if let safeDIBuilder = __safeDI_Screen_configuration.safeDIBuilder { safeDIBuilder(service, viewModel) } else { Screen(service: service, viewModel: viewModel) }
 		        }
 		        let screen: Screen = __safeDI_screen(__safeDI_Screen_configuration: safeDIOverrides.screen)
-		        let detail: Detail = Detail.__safeDI_build_e9dc6829(service: service, __safeDI_Detail_configuration: safeDIOverrides.detail)
+		        let detail: Detail = Detail.__safeDI_build_E4E870EDA5267E77(service: service, __safeDI_Detail_configuration: safeDIOverrides.detail)
 		        return FirstRoot(service: service, screen: screen, detail: detail)
 		    }
 		}
@@ -1079,7 +1079,7 @@ struct SafeDIToolMockSharedBuilderTests: ~Copyable {
 		        let screenBuilder = Instantiator<Screen> {
 		            __safeDI_screenBuilder(__safeDI_Screen_configuration: safeDIOverrides.screenBuilder)
 		        }
-		        let detail: Detail = Detail.__safeDI_build_e9dc6829(service: service, __safeDI_Detail_configuration: safeDIOverrides.detail)
+		        let detail: Detail = Detail.__safeDI_build_E4E870EDA5267E77(service: service, __safeDI_Detail_configuration: safeDIOverrides.detail)
 		        return SecondRoot(service: service, screenBuilder: screenBuilder, detail: detail)
 		    }
 		}

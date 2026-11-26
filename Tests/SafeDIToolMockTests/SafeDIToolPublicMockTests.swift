@@ -15224,11 +15224,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
-		        func __safeDI_service(__safeDI_Service_configuration: Service.SafeDIMockConfiguration) -> Service {
-		            let session = if let safeDIBuilder = __safeDI_Service_configuration.session { safeDIBuilder() } else { Session() }
-		            return if let safeDIBuilder = __safeDI_Service_configuration.safeDIBuilder { safeDIBuilder(analytics, session) } else { Service(analytics: analytics, session: session) }
-		        }
-		        let service: Service = __safeDI_service(__safeDI_Service_configuration: safeDIOverrides.service)
+		        let service: Service = Service.__safeDI_build_7937CA71617841AD(analytics: analytics, __safeDI_Service_configuration: safeDIOverrides.service)
 		        let filter: any FilterProtocol = if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder(service) } else { AppFilter(service: service) }
 		        return Screen(analytics: analytics, service: service, filter: filter)
 		    }
@@ -15274,6 +15270,15 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        let session = if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session() }
 		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        return Service(analytics: analytics, session: session)
+		    }
+		}
+		#endif
+
+		#if DEBUG
+		extension Service {
+		    static func __safeDI_build_7937CA71617841AD(analytics: Analytics, __safeDI_Service_configuration: Service.SafeDIMockConfiguration) -> Service {
+		        let session = if let safeDIBuilder = __safeDI_Service_configuration.session { safeDIBuilder() } else { Session() }
+		        return if let safeDIBuilder = __safeDI_Service_configuration.safeDIBuilder { safeDIBuilder(analytics, session) } else { Service(analytics: analytics, session: session) }
 		    }
 		}
 		#endif

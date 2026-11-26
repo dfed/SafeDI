@@ -4854,6 +4854,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// The public mocks other modules generate, by type, whose declarations decide which places of one the mock builds
 		/// inline are holes of its module (`ScopeGenerator.holeBuildersByInlinePlace(in:buildersByFamily:foreignPublicMocks:)`).
 		let foreignPublicMocks: [TypeDescription: SeamResolution.ForeignPublicMock]
+		/// The `mockAttributes` of each type this module generates an internal mock of, by concrete type: a place of such a
+		/// type an internal mock builds alike in every root is built by one static function in the type's extension, which
+		/// spells these attributes (`MockLowering+SharedBuilders.swift`).
+		var sharedBuilderAttributesByType: [TypeDescription: String] = [:]
 	}
 
 	let scopeData: ScopeData

@@ -74,19 +74,25 @@ enum TypeKeyBody {
 			layout.rootFunctionNames = rootFunctionNames
 			layout.namesInScope.formUnion(rootFunctionNames)
 		}
-		guard layout.read(rootBody) else { return nil }
+		guard plans(rootBody, in: &layout), let statements = layout.spelledRootStatements() else { return nil }
+		return rootFunctionDeclarations + statements
+	}
+
+	/// Whether `layout` plans `rootBody`, every step but the spelling done: its views, classes, placements, outcomes and
+	/// names, each checked.
+	static func plans(_ rootBody: [GeneratedCode], in layout: inout TypeKeyLayout) -> Bool {
+		guard layout.read(rootBody) else { return false }
 		GenerationWork.record(layout.bodies.count - 1, by: .layingOutTypeKeyViews)
-		guard layout.computeReads(), layout.variantsReadOnlyTheirCycleParameters() else { return nil }
+		guard layout.computeReads(), layout.variantsReadOnlyTheirCycleParameters() else { return false }
 		layout.computeClasses()
-		guard layout.computePlacement() else { return nil }
+		guard layout.computePlacement() else { return false }
 		layout.computeOutcomes()
 		guard layout.computeParameterTypes(),
 		      layout.checkEveryRead(),
 		      layout.checkValuePaths()
-		else { return nil }
+		else { return false }
 		layout.computeDecoratorsAndNames()
-		guard layout.checkSendableMarks(), let statements = layout.spelledRootStatements() else { return nil }
-		return rootFunctionDeclarations + statements
+		return layout.checkSendableMarks()
 	}
 
 	/// The indentation of a root's statements, which every root body is written after.

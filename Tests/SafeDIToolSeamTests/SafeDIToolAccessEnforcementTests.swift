@@ -250,7 +250,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 
 		// Every construction of a type of another module relies on `package` access: in a builder function, an
 		// instantiator's, and a lazily instantiated dependency's; in a mock's tree, with an initializer and with a
-		// hand-written mock; and the construction of a listed mock's root. No line says so.
+		// hand-written mock, in a builder its mocks share; and the construction of a listed mock's root. No line says so.
 		#expect(try #require(output.modules["App"]).generatedFiles == [
 			"Engine+SafeDIMock.swift": generatedFileHeader + """
 			#if canImport(Feature)
@@ -292,6 +292,15 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			    ) -> Engine {
 			        let service = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { Service.mock() }
 			        return Engine(service: service)
+			    }
+			}
+			#endif
+
+			#if DEBUG
+			extension Engine {
+			    static func __safeDI_build_51AF432CEA8245D3(__safeDI_Engine_configuration: Engine.SafeDIMockConfiguration) -> Engine {
+			        let service = if let safeDIBuilder = __safeDI_Engine_configuration.service { safeDIBuilder() } else { Service.mock() }
+			        return if let safeDIBuilder = __safeDI_Engine_configuration.safeDIBuilder { safeDIBuilder(service) } else { Engine(service: service) }
 			    }
 			}
 			#endif
@@ -404,11 +413,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
-			        func __safeDI_engine(__safeDI_Engine_configuration: Engine.SafeDIMockConfiguration) -> Engine {
-			            let service = if let safeDIBuilder = __safeDI_Engine_configuration.service { safeDIBuilder() } else { Service.mock() }
-			            return if let safeDIBuilder = __safeDI_Engine_configuration.safeDIBuilder { safeDIBuilder(service) } else { Engine(service: service) }
-			        }
-			        let engine: Engine = __safeDI_engine(__safeDI_Engine_configuration: safeDIOverrides.engine)
+			        let engine: Engine = Engine.__safeDI_build_51AF432CEA8245D3(__safeDI_Engine_configuration: safeDIOverrides.engine)
 			        return Screen(engine: engine)
 			    }
 			}

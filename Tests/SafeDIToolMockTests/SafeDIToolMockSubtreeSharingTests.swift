@@ -462,6 +462,8 @@ struct SafeDIToolMockSubtreeSharingTests: ~Copyable {
 		"closedOnPlacesByLabel": guarded + "a closed subtree holds no cycle-closing node beneath.",
 		"closerParentFieldReads": guarded + "a closed subtree holds no closer.",
 		"subtreeSharing": output + "the subtrees met so far, which the key looks up.",
+		"sharedBuilderAttributesByType": rootConstant + "set from the context before the walk.",
+		"closedSubtrees": rootConstant + "a memo of `SubtreeSharing.isClosed(atNode:)` over each generator's subtree, a fact of the generator, which the key holds.",
 	]
 
 	private static func fieldNames(of value: Any) -> Set<String> {

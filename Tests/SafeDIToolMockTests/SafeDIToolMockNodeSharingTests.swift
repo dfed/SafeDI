@@ -143,6 +143,7 @@ struct SafeDIToolMockNodeSharingTests {
 			}),
 			"argumentValues": record(changingSharingFields: { $0.argumentValues = [0: .passedArgument("panel")] }),
 			"functionReturnType": record(changingSharingFields: { $0.functionReturnType = otherType }),
+			"staticBuilderAttributes": record(changingSharingFields: { $0.staticBuilderAttributes = "" }),
 		]
 		let key = try #require(MockLowering.SharedRecordKey(record()))
 		#expect(try #require(MockLowering.SharedRecordKey(record())) == key)

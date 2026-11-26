@@ -59,6 +59,7 @@ extension MockLowering {
 		let alternatives: [AlternativeShape]
 		let argumentValues: [Int: ValuePath]
 		let functionReturnType: TypeDescription?
+		let staticBuilderAttributes: String?
 
 		init?(_ record: BuiltPlaceRecord, passedArgumentValues: Bool) {
 			var children = [ChildShape]()
@@ -91,6 +92,7 @@ extension MockLowering {
 			alternatives = record.alternatives.map(AlternativeShape.init)
 			argumentValues = record.argumentValues
 			functionReturnType = record.functionReturnType
+			staticBuilderAttributes = record.staticBuilderAttributes
 		}
 	}
 

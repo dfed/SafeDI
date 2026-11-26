@@ -18,6 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+import Foundation
 import SwiftSyntax
 
 /// A name that SafeDI’s generated code introduces into a scope where it also binds, or refers to, the names it is
@@ -166,6 +167,30 @@ public enum ReservedName: Hashable, Sendable {
 	/// structs where `mock()` takes plain builders. The two overloads differ by the construction function's required
 	/// `safeDIBuilder:` label.
 	static let publicMockFunctionName = "\(builderFunctionNamePrefix)mock"
+
+	/// The name a mocked type's shared builder is spelled with while its declaration is hashed: the static function in the
+	/// type's extension that builds it as each internal mock of its module builds it (`MockLowering+SharedBuilders.swift`).
+	static let sharedBuilderFunctionName = "\(builderFunctionNamePrefix)build"
+
+	/// The declaration of a shared builder spelled `declaration` under `sharedBuilderFunctionName`, renamed after its
+	/// code: `__safeDI_build_` and the 64-bit FNV-1a hash of its lines, sixteen uppercase hexadecimal digits, leaving out
+	/// its `#sourceLocation` lines, whose paths follow where the run reads the files from. Every mock that builds the type
+	/// alike spells one declaration, so it names one function, which no mock's run needs another's to name. Returns the
+	/// name and the renamed declaration.
+	static func sharedBuilder(named declaration: String) -> (name: String, declaration: String) {
+		// The hash `SeamSignatureHash` computes, which the macro target, compiling this file alone, cannot name.
+		var hash: UInt64 = 0xCBF2_9CE4_8422_2325
+		for line in declaration.split(separator: "\n", omittingEmptySubsequences: false) where !line.drop(while: { $0 == " " || $0 == "\t" }).hasPrefix("#sourceLocation") {
+			for byte in line.utf8 {
+				hash = (hash ^ UInt64(byte)) &* 0x0000_0100_0000_01B3
+			}
+			hash = (hash ^ 0xFF) &* 0x0000_0100_0000_01B3
+		}
+		let digits = String(hash, radix: 16, uppercase: true)
+		let name = "\(sharedBuilderFunctionName)_\(String(repeating: "0", count: 16 - digits.count))\(digits)"
+		guard let range = declaration.range(of: "func \(sharedBuilderFunctionName)(") else { return (name, declaration) }
+		return (name, declaration.replacingCharacters(in: range, with: "func \(name)("))
+	}
 
 	/// The name of the struct a generated mock declares for the overrides of its tree, which its `mock()` takes as
 	/// `mockOverridesParameterName`.
