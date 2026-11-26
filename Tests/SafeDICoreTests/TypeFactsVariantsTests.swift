@@ -33,7 +33,7 @@ struct TypeFactsVariantsTests {
 
 		#expect(variants.count == 3)
 		#expect((0..<variants.count).map { Array(variants.callees(of: $0)) } == [[1], [2], [1]])
-		#expect(variants.isInline == [false, false, false])
+		#expect(variants.isCalledOnce == [false, false, false])
 	}
 
 	@Test
@@ -50,9 +50,9 @@ struct TypeFactsVariantsTests {
 
 		#expect(variants.count == 4)
 		#expect(variants.callees(of: 1) == variants.callees(of: 2))
-		#expect(Array(variants.sources(ofCall: variants.callOffset(of: 1))) == [.bound(1)])
-		#expect(Array(variants.sources(ofCall: variants.callOffset(of: 2))) == [.bound(2)])
-		#expect(variants.isInline == [false, true, true, false])
+		#expect(Array(variants.sources(ofCall: variants.callOffset(of: 1))) == [.bound(1, answer: 7)])
+		#expect(Array(variants.sources(ofCall: variants.callOffset(of: 2))) == [.bound(2, answer: 7)])
+		#expect(variants.isCalledOnce == [false, true, true, false])
 	}
 
 	@Test
@@ -67,23 +67,28 @@ struct TypeFactsVariantsTests {
 
 		#expect(variants.count == 5)
 		#expect((0..<variants.count).map { variants.node(of: $0) } == [0, 1, 3, 2, 2])
-		#expect((0..<variants.count).map { Array(variants.answers(of: $0)) } == [[], [], [], [7], [8]])
+		#expect((0..<variants.count).map { Array(variants.keys(of: $0)) } == [[], [], [], [7], [8]])
 	}
 
 	@Test
-	func init_sharesVariant_whenKeyProjectsTwoAnswersToOne() {
+	func init_sharesVariantAndKeepsEachCallsAnswer_whenKeyProjectsTwoAnswersToOneInEitherEdgeOrder() {
 		// The parameter rules live in the key: answers a parameter can carry project to one key, and the variant keeps
-		// the answers of the call that made it.
-		let graph = OrderedGraph(root: 0) { node in
-			[0: [1, 2], 1: [3], 2: [3]][node, default: []]
-		}
-		let variants = makeVariants(graph: graph, own: [[], [], [], [0]], bindings: [
-			Edge(node: 1, index: 0): [0: VariantBinding(answer: 7, declaration: 1)],
-			Edge(node: 2, index: 0): [0: VariantBinding(answer: 8, declaration: 2)],
-		], key: { _, _ in 0 })
+		// the key alone, so whichever caller the worklist meets first, each call's own answer is its source's.
+		for rootEdges in [[1, 2], [2, 1]] {
+			let graph = OrderedGraph(root: 0) { node in
+				[0: rootEdges, 1: [3], 2: [3]][node, default: []]
+			}
+			let variants = makeVariants(graph: graph, own: [[], [], [], [0]], bindings: [
+				Edge(node: 1, index: 0): [0: VariantBinding(answer: 7, declaration: 1)],
+				Edge(node: 2, index: 0): [0: VariantBinding(answer: 8, declaration: 2)],
+			], key: { _, _ in 9 })
+			let variantOfNode = { (node: Int) in Int(variants.callees(of: 0)[rootEdges.firstIndex(of: node) ?? 0]) }
 
-		#expect(variants.count == 4)
-		#expect(Array(variants.answers(of: 3)) == [7])
+			#expect(variants.count == 4)
+			#expect(Array(variants.keys(of: 3)) == [9])
+			#expect(Array(variants.sources(ofCall: variants.callOffset(of: variantOfNode(1)))) == [.bound(1, answer: 7)], "\(rootEdges)")
+			#expect(Array(variants.sources(ofCall: variants.callOffset(of: variantOfNode(2)))) == [.bound(2, answer: 8)], "\(rootEdges)")
+		}
 	}
 
 	@Test
@@ -96,9 +101,9 @@ struct TypeFactsVariantsTests {
 			Edge(node: 0, index: 0): [0: VariantBinding(answer: 5, declaration: 0)],
 		])
 
-		#expect(Array(variants.sources(ofCall: variants.callOffset(of: 0))) == [.bound(0)])
+		#expect(Array(variants.sources(ofCall: variants.callOffset(of: 0))) == [.bound(0, answer: 5)])
 		#expect(Array(variants.sources(ofCall: variants.callOffset(of: 1))) == [.passedThrough(0)])
-		#expect(Array(variants.answers(of: 2)) == [5])
+		#expect(Array(variants.keys(of: 2)) == [5])
 	}
 
 	@Test
@@ -124,8 +129,8 @@ struct TypeFactsVariantsTests {
 			read == 0 ? VariantBinding(answer: 3, declaration: 0) : nil
 		})
 
-		#expect(variants.rootSources == [.bound(0), .none])
-		#expect(Array(variants.answers(of: 0)) == [3, -1])
+		#expect(variants.rootSources == [.bound(0, answer: 3), .none])
+		#expect(Array(variants.keys(of: 0)) == [3, -1])
 		#expect(Array(variants.sources(ofCall: 0)) == [.passedThrough(0)])
 	}
 

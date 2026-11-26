@@ -25,29 +25,33 @@ enum VariantFamily: UInt8, Sendable {
 	case sendable
 }
 
-/// Where the answer a call hands its callee for one read comes from.
+/// Where the answer a call hands its callee for one read comes from: the only per-call answer, since a variant keeps only
+/// the key its callers share.
 struct AnswerSource: Equatable, Sendable {
 	enum Kind: UInt8, Sendable {
 		/// Nothing answers the read: no declaration above binds it.
 		case none
-		/// The caller binds the read at the call's edge, with the declaration `payload` names.
+		/// The caller binds the read at the call's edge, with the declaration `payload` names, answering `answer`.
 		case bound
-		/// The caller's own answer to the same read, at the position `payload` names in the caller's run of answers.
+		/// The caller's own answer to the same read, at the position `payload` names in the caller's run of keys.
 		case passedThrough
 	}
 
-	static let none = AnswerSource(kind: .none, payload: -1)
+	static let none = AnswerSource(kind: .none, payload: -1, answer: -1)
 
-	static func bound(_ declaration: Int32) -> AnswerSource {
-		AnswerSource(kind: .bound, payload: declaration)
+	static func bound(_ declaration: Int32, answer: Int32) -> AnswerSource {
+		AnswerSource(kind: .bound, payload: declaration, answer: answer)
 	}
 
 	static func passedThrough(_ position: Int32) -> AnswerSource {
-		AnswerSource(kind: .passedThrough, payload: position)
+		AnswerSource(kind: .passedThrough, payload: position, answer: -1)
 	}
 
 	let kind: Kind
 	let payload: Int32
+	/// The answer a bound source gives, as the caller interns it; -1 for the others, whose answer is the caller's own,
+	/// found through the calls into the caller.
+	let answer: Int32
 }
 
 /// What a node binds for a read at one of its edges: the answer by value, as the caller interns it (form, whether it is
@@ -63,8 +67,8 @@ struct VariantBinding: Equatable, Sendable {
 /// where a recursive type closes. It ends because answers are compared by value, never by the declaration that gave
 /// them, and each node has finitely many.
 ///
-/// Every fact is a column of 32-bit IDs: a variant's node, family and run of answers (one per read of its node's
-/// reads from above, in read order), and for each of its node's edges in order the variant it calls and the run of
+/// Every fact is a column of 32-bit IDs: a variant's node, family and run of keys (one per read of its node's reads from
+/// above, in read order: what its callers' answers share, never one caller's answer), and for each of its node's edges in order the variant it calls and the run of
 /// sources of what that call hands. A variant's ID is its position, in the order the worklist first makes it, so it
 /// orders deterministically with no sort. It holds those columns for as long as its owner keeps it.
 struct TypeFactsVariants: Sendable {
@@ -73,7 +77,10 @@ struct TypeFactsVariants: Sendable {
 	///   - binding: What a node binds for a read of the edge's target at the edge (the edge's position among every node's
 	///     edges, `OrderedGraph.edgeOffset(of:)` plus its index), or `nil` where it binds nothing for it there and the
 	///     caller's own answer passes through.
-	///   - family: The family a call at the edge builds its callee in, given the caller's.
+	///   - family: The family a call at the edge builds its callee in, given the caller's. A world whose bodies are one per
+	///     node whatever encloses them (production: `@Sendable` is a mark folded over call edges, lead 11-26 20:26Z)
+	///     returns the caller's, so the root's `.plain` reaches every node; only seam contracts and mocks whose parameter
+	///     types differ by family key on it.
 	///   - key: The value of an answer to a read that a variant is told apart by. The two parameter rules live here: a
 	///     difference a parameter can carry projects to one key.
 	init(
@@ -87,7 +94,6 @@ struct TypeFactsVariants: Sendable {
 		var columns = Columns()
 		var bucketByHash = [Int: Int32]()
 		var nextInBucket = [Int32]()
-		var scratchAnswers = [Int32]()
 		var scratchKeys = [Int32]()
 		var scratchSources = [AnswerSource]()
 		var work = 0
@@ -108,7 +114,7 @@ struct TypeFactsVariants: Sendable {
 				}
 				candidate = nextInBucket[Int(candidate)]
 			}
-			let made = columns.append(node: node, family: family, answers: scratchAnswers, keys: scratchKeys)
+			let made = columns.append(node: node, family: family, keys: scratchKeys)
 			nextInBucket.append(bucketByHash[hash] ?? -1)
 			bucketByHash[hash] = made
 			return made
@@ -116,9 +122,8 @@ struct TypeFactsVariants: Sendable {
 
 		reads.rows.forEachColumn(inRow: 0) { read, _ in
 			let answer = rootAnswer(read)
-			scratchAnswers.append(answer?.answer ?? -1)
 			scratchKeys.append(key(read, answer?.answer ?? -1))
-			columns.rootSources.append(answer.map { .bound($0.declaration) } ?? .none)
+			columns.rootSources.append(answer.map { .bound($0.declaration, answer: $0.answer) } ?? .none)
 		}
 		_ = variant(of: 0, family: .plain)
 		var next = 0
@@ -130,7 +135,6 @@ struct TypeFactsVariants: Sendable {
 			columns.callOffsets.append(Int32(columns.callees.count))
 			for (edgeIndex, target) in graph.edges(from: node).enumerated() {
 				let edge = graph.edgeOffset(of: node) + edgeIndex
-				scratchAnswers.removeAll(keepingCapacity: true)
 				scratchKeys.removeAll(keepingCapacity: true)
 				scratchSources.removeAll(keepingCapacity: true)
 				reads.rows.forEachColumn(inRow: Int(target)) { read, _ in
@@ -138,15 +142,15 @@ struct TypeFactsVariants: Sendable {
 					let answer: Int32
 					if let bound = binding(edge, read) {
 						answer = bound.answer
-						scratchSources.append(.bound(bound.declaration))
+						scratchSources.append(.bound(bound.declaration, answer: bound.answer))
 					} else if let position = reads.rows.rank(of: read, inRow: node) {
-						answer = columns.answer(ofVariant: caller, at: position)
+						// The caller's key: an answer its callers share, which is all a body shared by them can hand on.
+						answer = columns.key(ofVariant: caller, at: position)
 						scratchSources.append(.passedThrough(Int32(position)))
 					} else {
 						answer = -1
 						scratchSources.append(.none)
 					}
-					scratchAnswers.append(answer)
 					scratchKeys.append(key(read, answer))
 				}
 				columns.sourceOffsets.append(Int32(columns.sources.count))
@@ -161,7 +165,7 @@ struct TypeFactsVariants: Sendable {
 		for callee in columns.callees {
 			callsOfVariant[Int(callee)] += 1
 		}
-		isInline = columns.nodes.indices.map { variant in
+		isCalledOnce = columns.nodes.indices.map { variant in
 			variant != 0 && callsOfVariant[variant] == 1 && !graph.isOnCycle(Int(columns.nodes[variant]))
 		}
 		self.columns = columns
@@ -180,9 +184,10 @@ struct TypeFactsVariants: Sendable {
 		columns.families[variant]
 	}
 
-	/// The answers the variant was made with, one per read of its node's reads from above, in read order.
-	func answers(of variant: Int) -> ArraySlice<Int32> {
-		columns.answers[Int(columns.answerOffsets[variant])..<Int(columns.answerOffsets[variant + 1])]
+	/// The keys every call into the variant shares, one per read of its node's reads from above, in read order. Not any
+	/// one caller's answer, which only `sources(ofCall:)` gives.
+	func keys(of variant: Int) -> ArraySlice<Int32> {
+		columns.keys[Int(columns.keyOffsets[variant])..<Int(columns.keyOffsets[variant + 1])]
 	}
 
 	/// The variant each of the variant's node's edges calls, in edge order.
@@ -205,9 +210,10 @@ struct TypeFactsVariants: Sendable {
 		columns.rootSources
 	}
 
-	/// Whether each variant is built in line in the body of the one variant that calls it, rather than as a function:
-	/// the root is not, nor is a variant called more than once or whose node is on a cycle.
-	let isInline: [Bool]
+	/// Whether each variant is called by exactly one call and its node is on no cycle: a fact the layout may use later to
+	/// build it in line. It is not whether a body is a function, which today's layout decides by its own rule
+	/// (`BuiltPlaceRecord.hasFunction`).
+	let isCalledOnce: [Bool]
 
 	/// The reads of edges' targets the worklist answered, summed over the variants it walked, for a test to count how its
 	/// work grows.
@@ -215,14 +221,13 @@ struct TypeFactsVariants: Sendable {
 
 	/// The 32-bit elements the variants hold, for a test to count per variant and per call.
 	var columnElementCount: Int {
-		columns.nodes.count * 2 + columns.answers.count * 2 + columns.answerOffsets.count + columns.callees.count + columns.callOffsets.count + columns.sources.count * 2 + columns.sourceOffsets.count
+		columns.nodes.count * 2 + columns.keys.count + columns.keyOffsets.count + columns.callees.count + columns.callOffsets.count + columns.sources.count * 3 + columns.sourceOffsets.count
 	}
 
 	private struct Columns {
 		var nodes = [Int32]()
 		var families = [VariantFamily]()
-		var answerOffsets: [Int32] = [0]
-		var answers = [Int32]()
+		var keyOffsets: [Int32] = [0]
 		var keys = [Int32]()
 		var callOffsets = [Int32]()
 		var callees = [Int32]()
@@ -230,16 +235,16 @@ struct TypeFactsVariants: Sendable {
 		var sources = [AnswerSource]()
 		var rootSources = [AnswerSource]()
 
-		func answer(ofVariant variant: Int, at position: Int) -> Int32 {
-			answers[Int(answerOffsets[variant]) + position]
+		func key(ofVariant variant: Int, at position: Int) -> Int32 {
+			keys[Int(keyOffsets[variant]) + position]
 		}
 
 		func matches(_ variant: Int, node: Int32, family: VariantFamily, keys candidateKeys: [Int32]) -> Bool {
 			guard nodes[variant] == node, families[variant] == family else {
 				return false
 			}
-			let start = Int(answerOffsets[variant])
-			let end = Int(answerOffsets[variant + 1])
+			let start = Int(keyOffsets[variant])
+			let end = Int(keyOffsets[variant + 1])
 			guard end - start == candidateKeys.count else {
 				return false
 			}
@@ -249,12 +254,11 @@ struct TypeFactsVariants: Sendable {
 			return true
 		}
 
-		mutating func append(node: Int32, family: VariantFamily, answers newAnswers: [Int32], keys newKeys: [Int32]) -> Int32 {
+		mutating func append(node: Int32, family: VariantFamily, keys newKeys: [Int32]) -> Int32 {
 			nodes.append(node)
 			families.append(family)
-			answers.append(contentsOf: newAnswers)
 			keys.append(contentsOf: newKeys)
-			answerOffsets.append(Int32(answers.count))
+			keyOffsets.append(Int32(keys.count))
 			return Int32(nodes.count - 1)
 		}
 	}
