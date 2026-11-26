@@ -52,6 +52,8 @@ public enum SeamPlacesOracle {
 		/// The cases compared whose facts the references alone gave too, and those whose path through the calls was compared.
 		public var passedUpCasesJoinedBothWays = 0
 		public var passedUpPathQuestions = 0
+		/// The cases compared whose places, the first of each case the called seam hands, carry fewer fields than the case.
+		public var passedUpCasesHandedFewerFields = 0
 		/// The declarations bound by a seam that passes places up whose reason's place was looked for among the places the
 		/// run hands, those a reference of another pass kept from being compared, and those found under another builder
 		/// label or case name.
@@ -401,7 +403,9 @@ public enum SeamPlacesOracle {
 	private static func addPresentedFacts(of caseIndex: Int, query: SeamSignature.Places.Query, depth: Int, seen: inout Set<String>, to facts: inout PresentedFacts) -> Bool {
 		let places = query.places
 		let placeCase = places.cases[caseIndex]
-		guard placeCase.passedUp != nil else {
+		let rootType = places.levels.first(where: \.key.isSeamRoot)?.key.builtType
+		let presentingCases: [Int]
+		if placeCase.passedUp == nil {
 			for label in query.labels(reaching: caseIndex) {
 				for answer in query.answers(ofLabel: label, at: caseIndex) {
 					switch answer {
@@ -421,11 +425,22 @@ public enum SeamPlacesOracle {
 			// The called seam's own place takes its builder `@Sendable` where it is built inside a `@Sendable` function, which
 			// its seam settles with its builders, after its places.
 			facts.isPassedOnSendable = facts.isPassedOnSendable || placeCase.isPassedOnSendable || placeCase.isBuiltInSendableFunction || placeCase.siteOpensSendableFunction
-			return true
+			// The calls of the seam's own tree that present its places back to it, through the seams they call: the cases
+			// whose chains end at this case of this seam.
+			presentingCases = places.cases.indices.filter { index in
+				guard places.cases[index].passedUp != nil, let last = query.casesPresented(from: index).last else { return false }
+				return last.caseIndex == caseIndex && last.query.places.cases[last.caseIndex].passedUp == nil && last.query.places.levels.first(where: \.key.isSeamRoot)?.key.builtType == rootType
+			}
+			// Where two seams the tree calls each present the places first through the other, the chain of such a call
+			// never ends at this seam, and the chains do not say which calls present its places back.
+			guard query.casesPresentingSamePlaces(as: caseIndex).allSatisfy({ $0 == caseIndex || presentingCases.contains($0) }) else { return false }
+		} else {
+			guard let cases = casesPresentingSamePlaces(as: caseIndex, query: query) else { return false }
+			presentingCases = cases
 		}
-		guard depth < 64, let presentingCases = casesPresentingSamePlaces(as: caseIndex, query: query) else { return false }
+		guard depth < 64 else { return false }
 		for presenting in presentingCases {
-			guard let reference = places.cases[presenting].passedUp, let rootType = places.levels.first(where: \.key.isSeamRoot)?.key.builtType else { return false }
+			guard let reference = places.cases[presenting].passedUp, let rootType else { return false }
 			// Seams that call each other present one another's places: each case is read once.
 			guard seen.insert("\(rootType.asSource) \(presenting) \(reference.seamType.asSource) \(reference.caseIndex)").inserted else { continue }
 			let presentingCase = places.cases[presenting]
@@ -433,7 +448,8 @@ public enum SeamPlacesOracle {
 			facts.isPassedOnSendable = facts.isPassedOnSendable || presentingCase.isPassedOnSendable
 			for declaration in query.declarationsBoundOnRoutes(to: presenting) {
 				facts.boundOnPathsToCalls.insert(boundKey(declaration))
-				if depth == 0 {
+				// The labels of the seam asked: a holding seam's calls back are asked through the seams between.
+				if depth == 0, placeCase.passedUp != nil {
 					facts.labelsBoundOnPathsToCalls.insert(declaration.property.label)
 				}
 			}
@@ -504,7 +520,15 @@ public enum SeamPlacesOracle {
 			compare("presented places passed on @Sendable, by chain and by link", at: path, today: String(factsByChain.isPassedOnSendable), graph: String(facts.isPassedOnSendable), into: &report)
 		}
 		report.passedUpCaseQuestions += 1
-		compare("fields of the presented places", at: path, today: Set(sites.flatMap { holes[$0].fields.map { json($0) } }).sorted(), graph: facts.fields.sorted(), into: &report)
+		// A seam that calls another holds one place per case of the called seam (`SeamSignature.placesHandedToCallers`), so
+		// the places it passes up are the first of each case, whose fields lack one only another route to the case
+		// carries. Such a case is counted; the holding seam's own observation compares the fields of every place.
+		let fieldsToday = Set(sites.flatMap { holes[$0].fields.map { json($0) } })
+		if fieldsToday.isStrictSubset(of: facts.fields) {
+			report.passedUpCasesHandedFewerFields += 1
+		} else {
+			compare("fields of the presented places", at: path, today: fieldsToday.sorted(), graph: facts.fields.sorted(), into: &report)
+		}
 		compare("presented places passed on @Sendable", at: path, today: String(sites.contains { holes[$0].isSendable }), graph: String(facts.isPassedOnSendable), into: &report)
 		for site in sites {
 			let hole = holes[site]

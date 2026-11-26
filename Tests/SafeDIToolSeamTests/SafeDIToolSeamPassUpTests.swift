@@ -3001,6 +3001,12 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 
 	/// The place graph of `Outer` as the last run over `modules` computes it, with the graphs its references resolve to.
 	private mutating func observationOfOuter(over modules: [ModuleFixture]) async throws -> SeamSignature.Places.Observation {
+		try await observation(ofSeamNamed: "Outer", over: modules)
+	}
+
+	/// The place graph of the seam named `seamName` as the last run over `modules` computes it, with the graphs its
+	/// references resolve to.
+	private mutating func observation(ofSeamNamed seamName: String, over modules: [ModuleFixture]) async throws -> SeamSignature.Places.Observation {
 		let (stream, continuation) = AsyncStream.makeStream(of: SeamSignature.Places.Observation.self)
 		let enclosingObserver = SeamPlaceLevels.observer
 		var writtenFiles = [URL]()
@@ -3014,11 +3020,11 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 		}
 		filesToDelete += writtenFiles
 		continuation.finish()
-		var observationOfOuter: SeamSignature.Places.Observation?
-		for await observation in stream where observation.seamType.asSource == "Outer" {
-			observationOfOuter = observation
+		var observationOfSeam: SeamSignature.Places.Observation?
+		for await observation in stream where observation.seamType.asSource == seamName {
+			observationOfSeam = observation
 		}
-		return try #require(observationOfOuter)
+		return try #require(observationOfSeam)
 	}
 
 	private static func seamAndCase(_ resolved: SeamSignature.Places.Query.ResolvedCase) -> String {
@@ -3144,6 +3150,69 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 			}
 		}
 		#expect(seamsThatBind == ["Middle 0"])
+	}
+
+	/// `Holder`, a seam, holds the place `api` of `Detail`, and its tree builds `Turn`, which declares `logger` and then
+	/// builds `Caller`, a seam whose tree builds `Holder`. So `Caller` passes `Holder`'s place up, and `Holder`'s own tree
+	/// presents its place back to it through its call of `Caller`, on a path that binds `Turn`'s `logger`.
+	private static var seamCalledBackByTheSeamItCalls: [ModuleFixture] {
+		[
+			ModuleFixture(name: "Base", packageName: "Shop", swiftFileContent: [
+				"public protocol Api: AnyObject {}",
+				"""
+				@Instantiable
+				public final class Logger: Instantiable { public init() {} }
+				""",
+				"""
+				@Instantiable
+				public final class Detail: Instantiable {
+				    public init(api: any Api) { self.api = api }
+				    @Instantiated public let api: any Api
+				}
+				""",
+				seamFixtureType(named: "Holder", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let detailBuilder: Instantiator<Detail>", "@Instantiated public let turnBuilder: Instantiator<Turn>"]),
+				seamFixtureType(named: "Turn", isFinalClass: true, declarations: ["@Instantiated public let logger: Logger", "@Instantiated public let callerBuilder: Instantiator<Caller>"]),
+				seamFixtureType(named: "Caller", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let holderBuilder: Instantiator<Holder>"]),
+			]),
+		]
+	}
+
+	private static func seamsThatAnswer(_ answers: [SeamSignature.Places.Query.PresentedAnswer], holdingSeam: String) -> [String] {
+		answers.map { answer in
+			switch answer {
+			case .ofHoldingSeam:
+				holdingSeam
+			case let .boundByPassingUpSeam(presentingCase, _):
+				seamAndCase(presentingCase)
+			case .callersOwn:
+				"the caller"
+			}
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func presentedAnswers_nameDeclarationHoldingSeamBindsOnPathToItsCallBack_whenHoldingSeamCallsSeamThatPassesItsPlaceUp() async throws {
+		// A fill of the place `Caller` passes up reads `logger` in the world of `Caller`'s caller where `Caller` is built
+		// there, and behind `Turn`'s `logger` where `Holder`'s tree builds `Caller`: `Holder`'s case of that call, its
+		// second after its own place's, binds it.
+		let caller = try await observation(ofSeamNamed: "Caller", over: Self.seamCalledBackByTheSeamItCalls)
+		let query = SeamSignature.Places.Query(of: caller.places, calledPlaces: caller.calledPlaces(of:))
+		#expect(try Self.seamAndCase(#require(query.holdingCase(of: 0))) == "Holder 0")
+		let answers = try #require(query.presentedAnswers(ofLabel: "logger", at: 0))
+		#expect(Self.seamsThatAnswer(answers, holdingSeam: "Holder") == ["Holder 1", "the caller"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func presentedAnswers_nameDeclarationSeamBindsOnPathToItsCallBack_whenSeamIsAskedOfItsOwnPlace() async throws {
+		// `Holder`'s own place is read by `Holder`'s caller with no seam between, and, where `Caller` built this `Holder`
+		// inside another `Holder`'s tree, behind `Turn`'s `logger`. No call leads to the place: it is the seam's own.
+		let holder = try await observation(ofSeamNamed: "Holder", over: Self.seamCalledBackByTheSeamItCalls)
+		let query = SeamSignature.Places.Query(of: holder.places, calledPlaces: holder.calledPlaces(of:))
+		let answers = try #require(query.presentedAnswers(ofLabel: "logger", at: 0))
+		#expect(Self.seamsThatAnswer(answers, holdingSeam: "Holder") == ["Holder 1", "the caller"])
+		#expect(try #require(query.pathToHoldingSeam(of: 0)).calls.isEmpty)
 	}
 
 	@Test
