@@ -10151,7 +10151,8 @@ enum GraphFuzzerGenerator {
 			let prefix = prefix
 			guard !modulesOmittingPackageName.contains(.seamModule) else { return declarations }
 			let declaresHole = declarations.contains { $0.name == "\(prefix)HoleSeam" || $0.name == prefix + GraphFuzzerCycleNames.seam }
-			let leavesGadgetUnfilled = unfilledRoll && !declaresHole
+			// Release acceptance draws the fulfilled tree too: every release before the fix wrote a call that does not compile.
+			let leavesGadgetUnfilled = unfilledRoll && !declaresHole && !omitsDrawsOlderReleasesReject
 			func instantiator(sendableRoll: Bool) -> String {
 				switch sendability {
 				case .nonSendable: "Instantiator"
