@@ -7452,7 +7452,7 @@ struct SafeDIToolGraphFuzzerTests {
 	static let publicMockCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 693, judgedDrawingRetentionShape: 131, judgedThroughHandWrittenBuilder: 92, unpairedExperiments: 0)
 
 	static let seamCorpusSeedCount = 2_000
-	static let seamCorpusFixtureHash: UInt64 = 0xB8EFAF506E37BFC7
+	static let seamCorpusFixtureHash: UInt64 = 0x8B3BE6419DF0ED7F
 	static let seamCorpusAcceptedSeedCount = 613
 	static let seamCorpusAcceptedSeedsSum: UInt64 = 0xC3943ECB0724FC69
 	/// How many of the seam corpus's graphs the tool accepts with their seams and without them, which the value
@@ -8081,6 +8081,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.nestedFillHoleBeneathInstantiator: 186,
 		.nestedFillHoleInnerPlaceBeneathInstantiator: 207,
 		.nestedFillHoleUnfilled: 19,
+		.seamRing: 196,
 		.carrierDrawUnequalSiblings: 299,
 		.carrierDrawUnequalSiblingsBeneathChild: 153,
 		.carrierDrawCoincidingLabel: 332,

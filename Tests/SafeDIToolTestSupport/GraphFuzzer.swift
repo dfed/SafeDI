@@ -1910,6 +1910,10 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// with a place no one fills, which the tool rejects by design at `NestedFillRoot`'s property, as it rejects a place of
 	/// `NestedFillHome`'s own that no one fills.
 	case nestedFillHoleUnfilled
+	/// `addingSeamRingShapes`' tree: `RingSeamA` to `RingSeamC`, three seams that each build three panels through
+	/// instantiators, each panel holding a place of `RingService` and building the next seam, so that each seam passes up
+	/// the places of the others in one component of the seam-reaches-seam graph.
+	case seamRing
 	/// `addingCarrierShapes`' sibling places with unequal read sets: `UnequalHome`, a seam, binds `unequalFirst` and
 	/// `unequalSecond` and then holds places of `Unequal1Api1` and `Unequal1Api2`, whose fills read one value each, so each
 	/// carrier member captures only what its own fill reads.
@@ -2075,8 +2079,8 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 		rawValue.hasPrefix("holePassedUpPlaceReads")
 	}
 
-	/// Whether `addingFillCallShapes`, `addingCarriedLevelShapes`, `addingPassingUpCopyShapes`, `addingReenteredFillShapes` or
-	/// `addingWrapperMixShapes` draws this shape of a fixed
+	/// Whether `addingFillCallShapes`, `addingCarriedLevelShapes`, `addingPassingUpCopyShapes`, `addingReenteredFillShapes`,
+	/// `addingWrapperMixShapes`, `addingPlacesOfOneCaseShapes` or `addingSeamRingShapes` draws this shape of a fixed
 	/// generator defect, whose count in accepted graphs the seam corpus pins (`acceptedDrawFeatureCounts`), at least ten
 	/// each: every shape but those the tool rejects by design – `passingUpCopiesHideLabel`, which the renamings judge, and
 	/// the unremedied reads of a value one route holds, which `toolRuns_rejectBothBuildsWithDeclarationBoundOnPathToReenteringCall_whenFillReadsValueOnlyOneRouteHoldsUnremedied` judges,
@@ -2097,7 +2101,7 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 		     .nestedFillHoleUnfilled:
 			false
 		default:
-			["fillCallReadsOwnLevel", "carriedLevel", "passingUpCopies", "reenteredFill", "wrapperMix", "placesOfOneCase", "nestedFillHole"].contains { rawValue.hasPrefix($0) }
+			["fillCallReadsOwnLevel", "carriedLevel", "passingUpCopies", "reenteredFill", "wrapperMix", "placesOfOneCase", "nestedFillHole", "seamRing"].contains { rawValue.hasPrefix($0) }
 		}
 	}
 
@@ -2929,6 +2933,7 @@ enum GraphFuzzerGenerator {
 			placesOfOneCaseRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.placesOfOneCaseRandomSeedMask)
 			placeStoodForRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.placeStoodForRandomSeedMask)
 			nestedFillHoleRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.nestedFillHoleRandomSeedMask)
+			seamRingRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.seamRingRandomSeedMask)
 			reenteredPlaceFieldRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.reenteredPlaceFieldRandomSeedMask)
 			reenteredRelayTagRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.reenteredRelayTagRandomSeedMask)
 			repeatedAncestorRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.repeatedAncestorRandomSeedMask)
@@ -3067,6 +3072,11 @@ enum GraphFuzzerGenerator {
 				}
 				// Drawn after it, from a stream of its own, so that every graph the passes before it draw is drawn as before.
 				finalDeclarations = addingNestedFillHoleShapes(to: finalDeclarations)
+				// Drawn after it, from a stream of its own, so that every graph the passes before it draw is drawn as before.
+				// Every release before the fix rejects it, so release acceptance leaves it out.
+				if !omitsDrawsOlderReleasesReject {
+					finalDeclarations = addingSeamRingShapes(to: finalDeclarations)
+				}
 				presentModules = Set(finalDeclarations.compactMap(\.module))
 			}
 			// Left out after every draw, so that the graph without its second place is drawn, and split, as the graph with it.
@@ -3478,6 +3488,8 @@ enum GraphFuzzerGenerator {
 		private var placeStoodForRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only `addingNestedFillHoleShapes`' choices.
 		private var nestedFillHoleRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only `addingSeamRingShapes`' choices.
+		private var seamRingRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only `addingReenteredFillShapes`' choices of `reenteredTag`, which `ReenteredSubA` binds before the place whose
 		/// fill builds `ReenteredSubB` again: whether the graph reads it, and how.
 		private var reenteredPlaceFieldRandom: GraphFuzzerRandomNumberGenerator
@@ -10209,6 +10221,70 @@ enum GraphFuzzerGenerator {
 		}
 
 		private static let nestedFillHoleRandomSeedMask: UInt64 = 0x6E65737446696C6C
+		// MARK: A ring of seams that pass up each other's places
+
+		/// Adds three seams that reach one another, each passing up the places of the others: `RingSeamA` to `RingSeamC`,
+		/// seams of the seam's module, each receive `ringToken` and build `RingPanelA` to `RingPanelC` through
+		/// instantiators, each starting at its own panel, and each panel holds a place of `RingService` and builds the next
+		/// seam through an instantiator (`RingPanelA` builds `RingSeamB`, `RingPanelB` `RingSeamC`, `RingPanelC`
+		/// `RingSeamA`). Each seam's signature passes up the places of the seams it reaches, all in one component of the
+		/// seam-reaches-seam graph, the shape whose fixed point did not settle before a place passed up from a seam of the
+		/// same component was labeled from its site (`SeamBuilderParameters`' `holes(of:…unsettledSeams:)`). The seams
+		/// receive the token so that their roots' levels each hold a value, as the regression test's do.
+		///
+		/// Two deliberate limits:
+		/// - No root builds the ring, and no module fills its place. The value comparator calls each instantiator twice
+		///   beneath a first call and stops only where an owner and property are on its path twice, so a probe of a ring
+		///   of three seams that each build three panels spent its traversals in every graph that drew one. The
+		///   fixed point failed in the seam's module, which generates the ring here; a caller's fill of the ring is pinned,
+		///   with a value probe, by `generate_settlesSignatures_whenThreeSeamsEachPassUpThePlacesOfTheOthers`.
+		/// - The instantiators are plain, and a graph whose wrappers are all `Sendable` draws no ring. A ring of
+		///   `SendableInstantiator`s puts its places in the `@Sendable` family, whose root levels carry no value, and there
+		///   the seam's tree reads a member of its carrier as a value where the carrier declares a function, which does not
+		///   compile: a defect of its own, whose fix draws that ring.
+		///
+		/// `seamRingRandom` draws only for this pass, which runs after every other pass and only in a graph another pass
+		/// split, so that every graph in one module, and every other draw of a graph it draws in, draws as before.
+		private mutating func addingSeamRingShapes(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			// `build()` calls this pass only for a graph split across modules.
+			guard features.contains(.generateDependencyTree), seamRingRandom.percentChance(25) else { return declarations }
+			guard !modulesOmittingPackageName.contains(.seamModule), sendability != .sendable else { return declarations }
+			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
+			let prefix = prefix
+			func instantiable(_ suffix: String, properties: [PropertyDeclaration] = []) -> TypeDeclaration {
+				var declaration = TypeDeclaration(name: "\(prefix)\(suffix)", instantiableArguments: [], properties: properties, declaresHelperTypes: false, additionalConformances: conformances)
+				declaration.module = .seamModule
+				return declaration
+			}
+			let serviceName = "\(prefix)RingService"
+			let token = instantiable("RingToken")
+			let suffixes = ["A", "B", "C"]
+			var panels = [TypeDeclaration]()
+			var seams = [TypeDeclaration]()
+			for (index, suffix) in suffixes.enumerated() {
+				let nextSeamSuffix = suffixes[(index + 1) % suffixes.count]
+				var panel = instantiable("RingPanel\(suffix)", properties: [
+					PropertyDeclaration(attribute: "@Instantiated", label: "ringService", type: "any \(serviceName)"),
+					PropertyDeclaration(attribute: "@Instantiated", label: "ringSeam\(nextSeamSuffix)Builder", type: "Instantiator<\(prefix)RingSeam\(nextSeamSuffix)>"),
+				])
+				if index == 0 {
+					panel.additionalDeclarations.append("public protocol \(serviceName)\(helperTypesAreSendable ? ": Sendable" : "") {}")
+				}
+				panels.append(panel)
+				var seamProperties = [PropertyDeclaration(attribute: "@Received", label: "ringToken", type: token.name)]
+				for offset in suffixes.indices {
+					let panelSuffix = suffixes[(index + offset) % suffixes.count]
+					seamProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "ringPanel\(panelSuffix)Builder", type: "Instantiator<\(prefix)RingPanel\(panelSuffix)>"))
+				}
+				var seam = instantiable("RingSeam\(suffix)", properties: seamProperties)
+				seam.instantiableArguments = ["generateDependencyTree: true"]
+				seams.append(seam)
+			}
+			return declarations + [token] + panels + seams
+		}
+
+		/// "seamRing" plus an offset, chosen so that no seam smoke seed draws the ring.
+		private static let seamRingRandomSeedMask: UInt64 = 0x7365616D5269E6DD
 
 		// MARK: Carriers
 
@@ -12202,6 +12278,9 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 			if propertiesByType[prefix + "NestedFillGadgetImpl"] == nil {
 				features.insert(.nestedFillHoleUnfilled)
 			}
+		}
+		if propertiesByType[prefix + "RingSeamA"] != nil {
+			features.insert(.seamRing)
 		}
 		if let liveProperties = propertiesByType[prefix + "StoodForLive"] {
 			if liveProperties.contains(where: { $0.label == "stoodForShellBuilder" }) {
