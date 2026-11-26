@@ -179,8 +179,9 @@ extension MockLowering.Walk {
 				// Where a built place of the closed-on type and the closer's label reads its parent's field, the closer hands
 				// the same expression that place hands, `nearest ?? parent.field`: the nearest is set exactly where a place
 				// of its type is above, so both read what they read before, and both are one call of the type's function.
+				// In `.v3Unstable` every configured child has its parent's field, which the closer reads first.
 				let parentField = closerParentFieldReads[path].flatMap { read in
-					parentFieldsReadByBuiltPlaces.contains(ParentFieldRead(parentConfiguration: read.parentConfiguration, fieldName: read.fieldName))
+					isV3 || parentFieldsReadByBuiltPlaces.contains(ParentFieldRead(parentConfiguration: read.parentConfiguration, fieldName: read.fieldName))
 						? ValuePath.member(read.fieldName, of: read.parentConfiguration)
 						: nil
 				}
@@ -270,10 +271,18 @@ extension MockLowering.Walk {
 					// A place that reads its parent's field of it, or a configuration of its own, reads the nearest place of
 					// its type's configuration first, as a closer of its type hands it, where its parent's function takes
 					// that nearest one: it is set exactly where a place of its type is above, which no built place has.
+					// In `.v3Unstable` it reads its parent's field first, then the nearest, as a closer of its type does.
 					if let first = built.passedArguments.first, first.parameterName == own.name,
 					   let nearestRead = nearest.nearestRead(of: own, calledFrom: Array(path.dropLast()))
 					{
-						let value = Self.nearestFirst(nearestRead, orElse: first.value, own: own)
+						let parentField = builtPlaceConfigurationContexts[path].flatMap { context in
+							context.parentConfiguration.map { ValuePath.member(context.fieldName, of: $0) }
+						}
+						let value = if isV3, let parentField {
+							Self.fieldFirst(parentField, nearest: nearestRead, own: own)
+						} else {
+							Self.nearestFirst(nearestRead, orElse: first.value, own: own)
+						}
 						var handed = PassedArgument(parameterName: first.parameterName, type: first.type, value: value, staysOutsideSendableFunctions: first.staysOutsideSendableFunctions)
 						handed.bindsBeforeCall = first.bindsBeforeCall
 						built.passedArguments[0] = handed
@@ -323,6 +332,17 @@ extension MockLowering.Walk {
 	/// its type, `nearestRead`: that, else what it hands now. `value` is what `MockLowering.passedArguments(ofBuiltPlaceOf:…)`
 	/// hands, one of four forms: its parent's field of it, a configuration built afresh, a read of its own type's parameter,
 	/// or `nil`.
+	/// What a configured place, or a closer, hands its configuration parameter in `.v3Unstable`: its parent's field of it, else
+	/// the nearest place of its type's configuration, else, for a configuration struct, one built afresh.
+	static func fieldFirst(_ parentField: ValuePath, nearest: ValuePath, own: MockLowering.ConfigurationParameter) -> ValuePath {
+		var segments: [ValueSegment] = [.value(parentField), .text(" ?? "), .value(nearest)]
+		// The nearest configuration a function was handed is optional; its own, and the mock's `safeDIOverrides`, are not.
+		if own.readsConfigurationStruct, nearest == .passedArgument(MockLowering.NearestConfigurations.nearestName(of: own)) {
+			segments.append(.text(" ?? .init()"))
+		}
+		return .spliced(segments)
+	}
+
 	static func nearestFirst(_ nearestRead: ValuePath, orElse value: ValuePath, own: MockLowering.ConfigurationParameter) -> ValuePath {
 		switch value {
 		case .read:

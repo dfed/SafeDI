@@ -77,6 +77,11 @@ extension ScopeGenerator {
 		walk.buildsPublicMock = instantiable.generateMock == .public
 		walk.isV3 = context.apiVersion == .v3Unstable
 		walk.v3ConfigurationNames = context.v3ConfigurationNames
+		walk.mockedTypeConfigurationName = MockLowering.ConfigurationParameter(
+			concreteType: instantiable.concreteInstantiable,
+			builtWithHandWrittenMock: instantiable.mockInitializer != nil,
+			configurationType: .simple(name: ReservedName.mockOverridesTypeName, generics: []),
+		).name
 		// The mocked type's own initializer takes the root's level, an actor's into its isolation, so the root's children
 		// read their overrides as a `@Sendable` builder function does. A public mock's configurations are never `Sendable`, so
 		// it reads each field into a local of its own, and its construction functions take an actor's arguments `sending`
@@ -474,6 +479,9 @@ extension MockLowering {
 		var v3PromotedLoopMemberInstanceNames = [Property: String]()
 		/// In `.v3Unstable`, what the module names each type's configuration.
 		var v3ConfigurationNames = MockLowering.V3ConfigurationNames()
+		/// In `.v3Unstable`, the name of the mocked type's configuration parameter in the type key's form, whose nearest
+		/// configuration at the root is `safeDIOverrides` (`MockLowering.NearestConfigurations.rootConfigurationName`).
+		var mockedTypeConfigurationName: String?
 
 		/// Whether a configured node of `type` is built with its type's construction function, reading its public
 		/// configuration: in a public mock, and in `.v3Unstable`, wherever the module configures the type publicly.
