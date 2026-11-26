@@ -850,7 +850,7 @@ public actor DependencyTreeGenerator {
 					}
 					// Whether the plan's detector of labels no one parameter can pass keeps the root on today's tree, checked
 					// against what today's tree reports only where a test observes it.
-					if let observer = UnpassableCycleLabelObservation.observer, let todaysTree = roots.last?.scopeGenerator {
+					if let observer = UnpassableCycleLabelObservation.observer, let todaysTree {
 						observer(
 							typeDescription.asSource,
 							Self.mayHaveUnpassableCycleLabel(inTreeOf: scope, cache: &receivedPropertiesCache),
@@ -866,7 +866,7 @@ public actor DependencyTreeGenerator {
 				rootScopeGenerators = seamWorldRoots.roots
 			}
 		}
-		// A root planned per type holds no such label (`canHoldUnpassableCycleLabel(inTreeRootedAt:)`).
+		// A root planned per type holds no such label (`mayHaveUnpassableCycleLabel(inTreeOf:cache:)`).
 		try Self.validateCycleLabelsArePassable(inTreesRootedAt: rootScopeGenerators.compactMap(\.scopeGenerator) + inlineForeignSeamTrees)
 		for root in rootScopeGenerators {
 			GenerationLayerObservation.record(.dependencyTree(of: root.typeDescription), inRunOf: seams.currentModule.moduleName)

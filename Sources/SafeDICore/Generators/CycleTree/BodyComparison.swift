@@ -28,12 +28,13 @@ extension DependencyTreeGenerator {
 			|| TwinIdentityObservation.observer != nil
 			|| PlanCodeObservation.observer != nil
 			|| PlanSendableObservation.observer != nil
+			|| UnpassableCycleLabelObservation.observer != nil
 	}
 
 	/// The per-type plan of the cycles of a production root, built with no tree of the root's built per path, for the type
 	/// key to lay the root's code out of; or why the root's tree is built per path: it reaches no cycle
 	/// (`nil`), its tree can hold a label no one parameter of a cycle's function can pass
-	/// (`canHoldUnpassableCycleLabel(inTreeRootedAt:)`, whose error only a tree per path reports), the root has no plan,
+	/// (`mayHaveUnpassableCycleLabel(inTreeOf:cache:)`, whose error only a tree per path reports), the root has no plan,
 	/// or a call of the plan passes an argument the layout cannot write yet
 	/// (`WrittenVariantPlan.Unplanned.argumentTheLayoutCannotWrite`).
 	static func perTypePlan(
@@ -42,11 +43,15 @@ extension DependencyTreeGenerator {
 		declaredTypeNames: DeclaredTypeNames,
 		cache: inout ReceivedPropertiesCache,
 	) throws -> PerTypePlanChoice? {
+		guard let shapeOutsidePlan = shapeOutsidePerTypePlan(inTreeOf: scope, cache: &cache) else { return nil }
 		guard let shadow = CallPlaceShadow(root: scope, cache: &cache) else { return nil }
-		guard !canHoldUnpassableCycleLabel(inTreeRootedAt: scope) else { return .perPath(.canHoldUnpassableCycleLabel) }
+		if let reason = shapeOutsidePlan.reason {
+			return .perPath(reason)
+		}
+		guard !mayHaveUnpassableCycleLabel(inTreeOf: scope, cache: &cache) else { return .perPath(.mayHaveUnpassableCycleLabel) }
 		var bodies = VariantBodies(frozenScopeMap: frozenScopeMap, declaredTypeNames: declaredTypeNames)
 		guard let plan = try bodies.plan(ofRoot: scope, shadow: shadow, cache: &cache) else { return .perPath(.noPlan) }
-		let unplanned = WrittenVariantPlan.Unplanned(of: bodies, plan: plan)
+		let unplanned = WrittenVariantPlan.Unplanned(of: bodies, plan: plan, labelsDeclaredInComponentByScope: shadow.labelsDeclaredInComponentByScope)
 		if let reason = unplanned.argumentTheLayoutCannotWrite {
 			return .perPath(reason)
 		} else {
