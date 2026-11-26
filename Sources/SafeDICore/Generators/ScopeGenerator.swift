@@ -3542,7 +3542,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	///   - isOwnFile: Whether a file a declaration records is one of the module's own files.
 	func seamTierOmissions(ofTreeRootedAt instantiable: Instantiable, isOwnFile: @escaping @Sendable (String) -> Bool) async -> [SeamTierOmission] {
 		// Only a call of a seam tier that omits a parameter reports, and only a scope that closes a lazy cycle records a
-		// call that judges a read elsewhere, so the walk enters no subtree that holds neither: its visits record nothing.
+		// call that judges a read elsewhere, so the walk enters no subtree that holds neither, and no tree that holds no
+		// such call: its visits record nothing.
 		// Several places of the tree can share one generator (see `ConstructionMemo`), so entered at every place a tree of
 		// screens that each open three screens of the next layer was walked once per path.
 		let generatorsLeadingToOmissions = Self.generatorsLeadingToSeamTierOmissions(inTreeRootedAt: self)
@@ -3701,10 +3702,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	/// The generators of the tree `root` roots whose subtree holds a call of a seam tier that omits a parameter, or one no
-	/// tier takes, or a scope that closes a lazy cycle: the scopes `seamTierOmissions` enters. Each generator is visited
-	/// once, from the leaves up; the set dies with the walk.
+	/// tier takes, or a scope that closes a lazy cycle: the scopes `seamTierOmissions` enters. Empty where the tree holds no
+	/// such call, since a scope that closes a lazy cycle only records calls, which judge the reads of an omitting call
+	/// alone: a tree without one reports nothing, and a lazy cycle in it would have the walk enter every path to it again.
+	/// Each generator is visited once, from the leaves up; the set dies with the walk.
 	private static func generatorsLeadingToSeamTierOmissions(inTreeRootedAt root: ScopeGenerator) -> Set<ObjectIdentifier> {
 		var leadingToOmissions = Set<ObjectIdentifier>()
+		var holdsCallOmittingParameter = false
 		var visitedGenerators = Set<ObjectIdentifier>()
 		var generatorsToVisit = [(generator: root, childrenAreVisited: false)]
 		while let (visited, childrenAreVisited) = generatorsToVisit.popLast() {
@@ -3716,15 +3720,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				}
 				continue
 			}
-			let holdsOmittingCall = if case let .property(_, _, _, _, isPropertyCycle, seamCall) = visited.scopeData {
-				isPropertyCycle || seamCall.map { !($0.omittedParameters.isEmpty && $0.noTierParameters.isEmpty) } ?? false
+			let (closesCycle, callOmitsParameter) = if case let .property(_, _, _, _, isPropertyCycle, seamCall) = visited.scopeData {
+				(isPropertyCycle, seamCall.map { !($0.omittedParameters.isEmpty && $0.noTierParameters.isEmpty) } ?? false)
 			} else {
-				false
+				(false, false)
 			}
-			if holdsOmittingCall || visited.children.contains(where: { leadingToOmissions.contains(ObjectIdentifier($0)) }) {
+			holdsCallOmittingParameter = holdsCallOmittingParameter || callOmitsParameter
+			if closesCycle || callOmitsParameter || visited.children.contains(where: { leadingToOmissions.contains(ObjectIdentifier($0)) }) {
 				leadingToOmissions.insert(ObjectIdentifier(visited))
 			}
 		}
+		guard holdsCallOmittingParameter else { return [] }
 		return leadingToOmissions
 	}
 
