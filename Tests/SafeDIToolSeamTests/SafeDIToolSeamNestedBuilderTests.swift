@@ -3738,14 +3738,14 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 	/// seam passes up the places of the other two.
 	private static var threeSeamRing: [String] {
 		[
-			Self.service,
-			Self.type("Token"),
-			Self.type("S0", seam: true, ["@Received public let token: Token", "@Instantiated public let p0Builder: Instantiator<P0>", "@Instantiated public let p1Builder: Instantiator<P1>", "@Instantiated public let p2Builder: Instantiator<P2>"]),
-			Self.type("S1", seam: true, ["@Received public let token: Token", "@Instantiated public let p1Builder: Instantiator<P1>", "@Instantiated public let p2Builder: Instantiator<P2>", "@Instantiated public let p0Builder: Instantiator<P0>"]),
-			Self.type("S2", seam: true, ["@Received public let token: Token", "@Instantiated public let p2Builder: Instantiator<P2>", "@Instantiated public let p0Builder: Instantiator<P0>", "@Instantiated public let p1Builder: Instantiator<P1>"]),
-			Self.type("P0", ["@Instantiated public let service: any Service", "@Instantiated public let s1Builder: Instantiator<S1>"]),
-			Self.type("P1", ["@Instantiated public let service: any Service", "@Instantiated public let s2Builder: Instantiator<S2>"]),
-			Self.type("P2", ["@Instantiated public let service: any Service", "@Instantiated public let s0Builder: Instantiator<S0>"]),
+			service,
+			type("Token"),
+			type("S0", seam: true, ["@Received public let token: Token", "@Instantiated public let p0Builder: Instantiator<P0>", "@Instantiated public let p1Builder: Instantiator<P1>", "@Instantiated public let p2Builder: Instantiator<P2>"]),
+			type("S1", seam: true, ["@Received public let token: Token", "@Instantiated public let p1Builder: Instantiator<P1>", "@Instantiated public let p2Builder: Instantiator<P2>", "@Instantiated public let p0Builder: Instantiator<P0>"]),
+			type("S2", seam: true, ["@Received public let token: Token", "@Instantiated public let p2Builder: Instantiator<P2>", "@Instantiated public let p0Builder: Instantiator<P0>", "@Instantiated public let p1Builder: Instantiator<P1>"]),
+			type("P0", ["@Instantiated public let service: any Service", "@Instantiated public let s1Builder: Instantiator<S1>"]),
+			type("P1", ["@Instantiated public let service: any Service", "@Instantiated public let s2Builder: Instantiator<S2>"]),
+			type("P2", ["@Instantiated public let service: any Service", "@Instantiated public let s0Builder: Instantiator<S0>"]),
 		]
 	}
 
