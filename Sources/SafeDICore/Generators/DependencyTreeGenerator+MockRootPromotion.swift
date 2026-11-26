@@ -1083,7 +1083,9 @@ extension DependencyTreeGenerator {
 				// declaration to the forms both read, which no one declaration may provide. The closest type above that
 				// receives the label and this type's earlier receives are compared first, then every required receive above.
 				let receivesAbove = scopeToWalk.hidingReceivesByLabel[receive.property.label, default: []]
-				let earlierReceives = receivesAbove + receivesByLabel[receive.property.label, default: []]
+				// A leaf that calls another module's public mock reads each form of a label the called mock takes beside the
+				// others, as the called tree's types built inline read them in trees of their own (`leafDependency(passing:for:isRequired:besideForwardedLabels:declarationLocation:)`).
+				let earlierReceives = receivesAbove + (scope.publicMockCall == nil ? receivesByLabel[receive.property.label, default: []] : [])
 				let propertiesRead = receive.propertiesRead
 				func isHiddenBy(_ earlierReceive: HidingReceive) -> Bool {
 					earlierReceive.isRequired && !Self.oneDeclarationFulfills(propertiesRead, and: earlierReceive.propertiesRead)
@@ -1124,7 +1126,9 @@ extension DependencyTreeGenerator {
 						!Self.oneDeclarationFulfills(propertiesRead, and: requiredReceivePropertiesRead)
 					}
 					let isPinnedWhereverBuilt: Bool
-					if receivesOfLabel.contains(where: { $0.isRequired && pins($0.propertiesRead) }) {
+					// A leaf that calls another module's public mock reads each form of a label the called mock takes beside the
+					// others, so its own required receives pin none of its receives only if available.
+					if scope.publicMockCall == nil, receivesOfLabel.contains(where: { $0.isRequired && pins($0.propertiesRead) }) {
 						isPinnedWhereverBuilt = true
 					} else {
 						let propertiesReadBeneath = requiredPropertiesReadBeneath ?? Self.propertiesReadByRequiredReceives(of: label, beneath: scope)

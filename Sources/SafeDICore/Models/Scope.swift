@@ -2205,7 +2205,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		log: inout ConstructionLog,
 	) -> CallersOwnLabels {
 		let labelsHandedFromCaller = Set(call.passedParameters.compactMap { parameter in
-			parameter.builder == nil && parameter.dependency.source.isReceived ? parameter.dependency.property.label : nil
+			parameter.builder == nil && (parameter.dependency.source.isReceived || parameter.dependency.source.fulfillingProperty != nil) ? parameter.readProperty.label : nil
 		})
 		// Whether the fill reads the caller's declaration of `label` at `place`: where the place carries a field of the label,
 		// where that field is the called mock's copy; where it carries none, always. A place carries no field of a label no

@@ -140,6 +140,13 @@ public enum ReservedName: Hashable, Sendable {
 		"\(builderFunctionNamePrefix)\(label)".spelledAsJoinedIdentifier
 	}
 
+	/// The label of the alias a leaf that calls another module's public mock declares for the parameter `name`, which the
+	/// declaring module named apart from another form of its label (`DependencyTreeGenerator.publicMockCalls(in:)`): no name
+	/// SafeDI is given begins with this prefix, so the alias hides no declaration of the caller's.
+	static func publicMockFormAliasLabel(of name: String) -> String {
+		"\(builderFunctionNamePrefix)\(name)".spelledAsJoinedIdentifier
+	}
+
 	/// The name of the function a scope declares beside the builder function named `functionName` of a member of a loop of
 	/// builders whose function takes parameters a lazy cycle needs: the function of no such parameters that every wrapper of
 	/// the member hands, which passes them (see `ScopeGenerator.ReceivedBuilderLoops`).

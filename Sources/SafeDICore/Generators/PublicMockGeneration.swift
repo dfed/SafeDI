@@ -666,9 +666,9 @@ extension ScopeGenerator {
 				publicMockCalls += ScopeGenerator.publicMockCallsInFills(of: node.generator)
 			}
 			for publicMockCall in publicMockCalls {
-				for parameter in publicMockCall.passedParameters where parameter.isBuiltWhenNil && parameter.dependency.source == .received(onlyIfAvailable: true) {
+				for parameter in publicMockCall.passedParameters where parameter.isBuiltWhenNil && parameter.isReadOnlyIfAvailable {
 					// A call that builds the wrapper decides the wrapper, whichever call the tree reaches first.
-					let property = parameter.dependency.property.asUnwrappedProperty
+					let property = parameter.readProperty.asUnwrappedProperty
 					if let builtWrapper = parameter.builtWrapper {
 						wrapperBuiltByCallsWhenNil[property] = .some(builtWrapper)
 					} else if wrapperBuiltByCallsWhenNil[property] == nil {
@@ -1510,6 +1510,17 @@ extension PublicMockCall {
 		var builtWrapper: Property?
 		/// For a builder, the builder (`PublicMockParameter.builder`).
 		let builder: SeamSignature.Builder?
+
+		/// The property the leaf reads for the parameter from the declarations above it: the dependency's own, or, for a
+		/// parameter the declaring module named apart, the form its alias stands for.
+		var readProperty: Property {
+			dependency.source.fulfillingProperty ?? dependency.property
+		}
+
+		/// Whether the leaf receives the parameter only if available, under its label or as an alias.
+		var isReadOnlyIfAvailable: Bool {
+			dependency.source.isOnlyIfAvailableReceiveOrAlias
+		}
 	}
 
 	/// The line before the call that names the mock's guard enum, so that a call generated from another signature

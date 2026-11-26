@@ -447,6 +447,12 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 	/// `FormScreen`'s public mock receives an optional wrapper of the value only if available beside a sibling that
 	/// receives the label as `FormMark`, so that it names the wrapper apart by its type.
 	case valueFormsBesidePublicMockCallPublicOptionalWrapperBesideOtherType
+	/// `FormCache`'s public mock takes the label in two forms, the second named apart: `FormPromoted`, which it promotes,
+	/// requires `FormSession`, and `FormCacheEntry` receives `FormMark`, while a sibling of the consumer's requires
+	/// `FormMark`, so that the call passes each form the consumer's own declaration of it.
+	case valueFormsBesidePublicMockCallCalledMockTakesFormNamedApart
+	/// `FormCacheEntry` receives the named-apart form only if available.
+	case valueFormsBesidePublicMockCallCalledMockTakesFormNamedApartOnlyIfAvailable
 	/// On a stream of its own (`publicMockOptionalPlaceRandomSeedMask`), a place a public mock's tree instantiates only if
 	/// available, which no declaration of its module fulfills, so that the public mock takes a builder for it that returns
 	/// the optional: `OptionalNode`, a `.public` type of the declaring module, holds `optionalApi: (any OptionalApi)?`, or
@@ -3196,6 +3202,8 @@ struct GraphFuzzerPublicMockDraw {
 		let entryFormRoll = random.integer(in: 0...3)
 		let publicConsumerHoldsOptionalWrapperBesideOtherType = random.percentChance(40)
 		let optionalWrapperIsSendable = random.percentChance(50)
+		let calledMockTakesFormNamedApart = random.percentChance(15)
+		let namedApartFormIsOptional = random.percentChance(50)
 		let consumerModules = consumerModules
 		guard drawsShape, !consumerModules.isEmpty, !hasDifferingMockCondition else { return }
 		let consumerModule = consumerModules[consumerModuleRoll % consumerModules.count]
@@ -3229,7 +3237,25 @@ struct GraphFuzzerPublicMockDraw {
 		cache.initializerAccess = .internal
 		cache.properties = [cacheFormRoll < 5 ? sessionProperty(form: 0) : cacheFormRoll < 8 ? sessionProperty(form: 1) : sessionProperty(form: 2)]
 		var entry: InstantiableClass?
-		if cacheBuildsEntry {
+		var promoted: InstantiableClass?
+		if calledMockTakesFormNamedApart {
+			// The called mock takes the label in two forms, the second named apart (`formSession_FormMark`): `FormPromoted`,
+			// which `FormCache` receives and its mock promotes, requires the value, and `FormCacheEntry`, beneath `FormCache`,
+			// receives it as `FormMark`, required or only if available. A sibling of the consumer's requires `FormMark` too,
+			// so that the consumer holds both forms, and the call passes each its own.
+			var cachePromoted = InstantiableClass(name: name("FormPromoted"), conformances: conformances)
+			cachePromoted.properties = [sessionProperty(form: 0)]
+			var cacheEntry = InstantiableClass(name: name("FormCacheEntry"), conformances: conformances)
+			cacheEntry.properties = [namedApartFormIsOptional
+				? Property(attribute: "@Received(onlyIfAvailable: true)", label: "formSession", type: "\(markName)?")
+				: sessionProperty(form: 6)]
+			cache.properties = [
+				Property(attribute: "@Received", label: "formPromoted", type: cachePromoted.name),
+				Property(attribute: "@Instantiated", label: "formCacheEntry", type: cacheEntry.name),
+			]
+			promoted = cachePromoted
+			entry = cacheEntry
+		} else if cacheBuildsEntry {
 			// A type of the called mock's own tree that receives the label in another form.
 			var cacheEntry = InstantiableClass(name: name("FormCacheEntry"), conformances: conformances)
 			cacheEntry.properties = switch entryFormRoll {
@@ -3249,6 +3275,9 @@ struct GraphFuzzerPublicMockDraw {
 		screen.mockGeneration = consumerIsPublic ? ".public" : "true"
 		screen.properties = [Property(attribute: "@Received", label: "formToken", type: tokenName)]
 		var siblingForms = siblingFormRolls
+		if calledMockTakesFormNamedApart {
+			siblingForms[0] = 6
+		}
 		if consumerIsPublic, publicConsumerHoldsOptionalWrapperBesideOtherType {
 			// A public mock whose own optional wrapper, received only if available, shares its label with another type a
 			// sibling receives, so that the mock names the wrapper apart by its wrapper type.
@@ -3282,6 +3311,9 @@ struct GraphFuzzerPublicMockDraw {
 		var declaringModuleDeclarations = [Self.renderer(of: cache), Self.renderer(of: InstantiableClass(name: markName, conformances: conformances))]
 		if let entry {
 			declaringModuleDeclarations.append(Self.renderer(of: entry))
+		}
+		if let promoted {
+			declaringModuleDeclarations.append(Self.renderer(of: promoted))
 		}
 		if buildsEmptyPublicMock {
 			// A `.public` type that takes nothing and builds nothing, whose public mock is one call of its initializer.
@@ -4674,6 +4706,12 @@ extension GraphFuzzerPublicMockDraw {
 			}
 			if types.declarations["\(prefix)FormCacheEntry"] != nil {
 				features.insert(.valueFormsBesidePublicMockCallCalledTreeReceivesValue)
+			}
+			if types.declarations["\(prefix)FormPromoted"] != nil {
+				features.insert(.valueFormsBesidePublicMockCallCalledMockTakesFormNamedApart)
+				if types.declarations["\(prefix)FormCacheEntry"]?.properties.contains(where: { $0.type == "\(prefix)FormMark?" }) == true {
+					features.insert(.valueFormsBesidePublicMockCallCalledMockTakesFormNamedApartOnlyIfAvailable)
+				}
 			}
 			if fixture.swiftFileContent.contains(where: { $0.contains("let formSession: \(prefix)FormMark") }) {
 				features.insert(.valueFormsBesidePublicMockCallLabelOfAnotherType)

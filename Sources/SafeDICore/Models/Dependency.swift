@@ -237,6 +237,16 @@ extension Dependency.Source {
 		}
 	}
 
+	/// Whether the dependency is received only if available, under its declared label or as an alias.
+	var isOnlyIfAvailableReceiveOrAlias: Bool {
+		switch self {
+		case let .received(onlyIfAvailable), let .aliased(_, _, onlyIfAvailable):
+			onlyIfAvailable
+		case .instantiated, .forwarded:
+			false
+		}
+	}
+
 	/// Whether the dependency is `@Instantiated`.
 	var isInstantiated: Bool {
 		switch self {

@@ -995,6 +995,9 @@ extension DependencyTreeGenerator {
 					// where they're promoted as root-level children.
 					continue
 				case let .aliased(fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable):
+					// A leaf that calls another module's public mock binds no alias: the call passes the parameter the alias
+					// stands for the binding of the form it reads (`MockLowering.Walk.publicMockCallNode`).
+					guard scope.publicMockCall == nil else { continue }
 					scope.propertiesToGenerate.append(.aliased(
 						dependency.property,
 						fulfilledBy: fulfillingProperty,

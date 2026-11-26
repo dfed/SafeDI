@@ -376,8 +376,10 @@ extension DependencyTreeGenerator {
 	static func renamesContradictingOwnProperties(
 		in scope: Scope,
 	) -> [DependencyTreeGeneratorError.RenameContradictingOwnProperty] {
-		// Most types rename nothing, and every walk of every tree asks of each of its scopes.
-		guard scope.instantiable.dependencies.contains(where: { $0.source.fulfillingProperty != nil }) else { return [] }
+		// Most types rename nothing, and every walk of every tree asks of each of its scopes. A leaf that calls another
+		// module's public mock renames no property of its own: its aliases read forms of labels above it
+		// (`leafDependency(passing:for:isRequired:besideForwardedLabels:declarationLocation:)`).
+		guard scope.publicMockCall == nil, scope.instantiable.dependencies.contains(where: { $0.source.fulfillingProperty != nil }) else { return [] }
 		var ownDependencyByLabel = [String: Dependency]()
 		for dependency in scope.instantiable.dependencies {
 			switch dependency.source {
@@ -1351,16 +1353,16 @@ extension DependencyTreeGenerator {
 			// tree provides it, and `nil` elsewhere, so the mock binds no parameter or override for it: the public mock
 			// builds what the call does not pass (see `Scope.publicMockCall`).
 			if let publicMockCall = scope.publicMockCall {
-				for parameter in publicMockCall.passedParameters where parameter.dependency.source == .received(onlyIfAvailable: true) {
-					passedByPublicMockCalls.insert(parameter.dependency.property)
+				for parameter in publicMockCall.passedParameters where parameter.isReadOnlyIfAvailable {
+					passedByPublicMockCalls.insert(parameter.readProperty)
 					if parameter.isBuiltWhenNil {
 						// A lazily instantiated dependency is built as the wrapper the called mock builds, as the inline mock
 						// promotes it, and the call is passed its instance.
-						builtWhenNilByPublicMockCalls.insert(parameter.builtWrapper ?? parameter.dependency.property)
+						builtWhenNilByPublicMockCalls.insert(parameter.builtWrapper ?? parameter.readProperty)
 					}
 				}
 			}
-			for dependency in scope.instantiable.dependencies where scope.publicMockCall == nil || dependency.source != .received(onlyIfAvailable: true) {
+			for dependency in scope.instantiable.dependencies where scope.publicMockCall == nil || !dependency.source.isOnlyIfAvailableReceiveOrAlias {
 				switch dependency.source {
 				case let .received(isOnlyIfAvailable):
 					received.insertKeepingMostExplicitSpelling(dependency.property)

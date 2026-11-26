@@ -1659,17 +1659,20 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		        init(
 		            user: (() -> User)? = nil,
 		            hub: Hub.SafeDIOverrides = .init(),
+		            user_Draft: Draft? = nil,
 		            x: X? = nil
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
 		                user: user,
 		                hub: hub
 		            )
+		            self.user_Draft = user_Draft
 		            self.x = x
 		        }
 
 		        var user: (() -> User)? { __safeDI_storage.user }
 		        var hub: Hub.SafeDIOverrides { __safeDI_storage.hub }
+		        let user_Draft: Draft?
 		        let x: X?
 
 		        private let __safeDI_storage: __safeDI_Storage
@@ -1692,6 +1695,7 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		        apiBuilder: (() -> any Api)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
+		        let user_Draft: Draft? = safeDIOverrides.user_Draft
 		        let x: X? = safeDIOverrides.x
 		        let user = if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { User() }
 		        func __safeDI_hub() -> Hub {
@@ -1709,7 +1713,7 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		                })
 		            }
 		            _ = Hub.__safeDI_Hub_mock_06EB73166E9429F2.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Hub.__safeDI_mock(apiBuilder: apiBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_apiBuilder_Hub(), user: user, x: x, safeDIOverrides: safeDIOverrides.hub)
+		            return Hub.__safeDI_mock(apiBuilder: apiBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_apiBuilder_Hub(), user: user, user_Draft: user_Draft, x: x, safeDIOverrides: safeDIOverrides.hub)
 		        }
 		        let hub: Hub = __safeDI_hub()
 		        return Screen(hub: hub)

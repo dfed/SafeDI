@@ -284,6 +284,8 @@ extension MockLowering.Walk {
 		func labeled(_ value: String, as argument: Initializer.Argument) -> String {
 			argument.label == "_" ? value : "\(argument.label.spelledAsArgumentLabel): \(value)"
 		}
+		// The labels whose forms the leaf's aliases read, beside a form it may receive under the label.
+		let labelsOfAliasedForms = Set(instantiable.dependencies.compactMap { $0.source.fulfillingProperty?.label })
 		for argument in initializer.arguments {
 			if let dependency = instantiable.dependencies.first(where: { $0.property.label == argument.innerLabel }),
 			   let builderName = filledCallBuilders.passedUpBuilderNames[dependency.property]
@@ -308,9 +310,19 @@ extension MockLowering.Walk {
 			} else if overrideBuilders == nil, let holeValue = holeArgumentValuesByLabel[argument.innerLabel] {
 				// A builder a `.public` caller's call passes up, as its own struct's member.
 				arguments.append(labeled(holeValue, as: argument))
-			} else if let dependency = instantiable.dependencies.first(where: { $0.property.label == argument.innerLabel }) {
+			} else if let declaredDependency = instantiable.dependencies.first(where: { $0.property.label == argument.innerLabel }) {
 				// A value the call passes is the root level's binding of its label, which an optional parameter takes as it is, or
-				// the instance of the lazy wrapper the tree holds of it, read at the call (`dependencyArgument`).
+				// the instance of the lazy wrapper the tree holds of it, read at the call (`dependencyArgument`). A parameter the
+				// declaring module named apart is passed the binding of the form its alias stands for, as a receive of that form
+				// is, but by the name the mock binds it under, never bound again under its label, where another form of the label
+				// is read (`DependencyTreeGenerator.leafDependency(passing:for:isRequired:besideForwardedLabels:declarationLocation:)`).
+				// A receive of a label an alias reads another form of is passed by name too, so that no binding hides that form.
+				let passesNameApart = declaredDependency.source.fulfillingProperty != nil || labelsOfAliasedForms.contains(declaredDependency.property.label)
+				let dependency = if case let .aliased(fulfillingProperty, _, onlyIfAvailable) = declaredDependency.source {
+					Dependency(property: fulfillingProperty, source: .received(onlyIfAvailable: onlyIfAvailable), declarationLocation: declaredDependency.declarationLocation)
+				} else {
+					declaredDependency
+				}
 				let value: String
 				if generator.unavailableOptionalProperties.contains(dependency.property) || unavailableProperties.contains(dependency.property) {
 					// A value the call's leaf receives only if available that nothing provides where the call is made, or that a
@@ -350,10 +362,14 @@ extension MockLowering.Walk {
 				{
 					// The instance of a wrapper the mock names apart, bound again under its label in the call's builder function
 					// (`emitReceiverBindings`), as a receive the mock names apart is below.
-					if filledCall == nil {
-						passedUpBuilderBindings.append("let \(dependency.property.label): \(wrapperType.asSource) = \(renamedName)")
+					if passesNameApart {
+						value = "\(renamedName).\(Dependency.lazilyInstantiatedInstancePropertyName)"
+					} else {
+						if filledCall == nil {
+							passedUpBuilderBindings.append("let \(dependency.property.label): \(wrapperType.asSource) = \(renamedName)")
+						}
+						value = "\(dependency.property.label).\(Dependency.lazilyInstantiatedInstancePropertyName)"
 					}
-					value = "\(dependency.property.label).\(Dependency.lazilyInstantiatedInstancePropertyName)"
 				} else if dependency.source.isReceived, let wrapperName = lazilyInstantiatedNamesOfLabels[dependency.property.label]?[dependency.property.typeDescription] {
 					// The wrapper `mock()` binds around the instance it takes, passed by name
 					// (`dependencyArgument`).
@@ -363,10 +379,14 @@ extension MockLowering.Walk {
 					// of a public mock's tier is fulfilled by a non-optional value named apart, is bound again under its label in
 					// the call's builder function (`emitReceiverBindings`): a call that fills a builder binds it with the leaf's
 					// other receives, after its fills.
-					if filledCall == nil {
-						passedUpBuilderBindings.append("let \(dependency.property.label): \(dependency.property.typeDescription.asSource) = \(renamedName)")
+					if passesNameApart {
+						value = renamedName
+					} else {
+						if filledCall == nil {
+							passedUpBuilderBindings.append("let \(dependency.property.label): \(dependency.property.typeDescription.asSource) = \(renamedName)")
+						}
+						value = dependency.property.label
 					}
-					value = dependency.property.label
 				} else if dependency.source.isReceived, lazilyInstantiatedInstances.contains(dependency.property.asUnwrappedProperty) {
 					value = "\(dependency.property.label).\(Dependency.lazilyInstantiatedInstancePropertyName)"
 				} else {
@@ -482,7 +502,8 @@ extension MockLowering.Walk {
 				}
 				continue
 			}
-			guard case .received = dependency.source, !generator.unavailableOptionalProperties.contains(dependency.property), let names = renames[dependency.property.label] else { continue }
+			// A receive of a label whose other form an alias reads is passed by name instead.
+			guard case .received = dependency.source, !labelsOfAliasedForms.contains(dependency.property.label), !generator.unavailableOptionalProperties.contains(dependency.property), let names = renames[dependency.property.label] else { continue }
 			if generator.mockLoweringLazilyInstantiatedInstanceProperties.contains(dependency.property.asUnwrappedProperty) {
 				let instanceType = dependency.property.typeDescription.unwrapped
 				guard let (wrapperType, name) = [Dependency.lazilyInstantiatedType, Dependency.sendableLazilyInstantiatedType]

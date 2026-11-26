@@ -178,6 +178,11 @@ extension DependencyTreeGenerator {
 			// The narrowest tier the module reaches: every module reaches the `public` one.
 			let tier = plan.tiers.last { $0.satisfies(requirement) } ?? .public
 			let tierParameters = plan.parameters(ofTier: tier)
+			// The labels the mocked type forwards, which the leaf binds inside its builder function.
+			let forwardedLabels = Set(tierParameters.compactMap { parameter -> String? in
+				guard case let .forwarded(property) = parameter.role else { return nil }
+				return property.label
+			})
 			publicMockCalls[type] = PublicMockCall(
 				type: type,
 				tier: tier,
@@ -186,17 +191,10 @@ extension DependencyTreeGenerator {
 					case let .forwarded(property):
 						PublicMockCall.PassedParameter(name: parameter.name, type: parameter.type, dependency: Dependency(property: property, source: .forwarded, declarationLocation: declarationLocation), isBuiltWhenNil: false, builder: nil)
 					case let .received(property, isRequired):
-						// A required parameter the declaring module named apart from another of its label – a dependency it cannot
-						// build – has no default to leave it to, so the leaf receives it under the parameter's name, which the
-						// calling mock then takes it by.
 						PublicMockCall.PassedParameter(
 							name: parameter.name,
 							type: parameter.type,
-							dependency: Dependency(
-								property: isRequired && parameter.name != property.label ? Property(label: parameter.name, typeDescription: property.typeDescription) : property,
-								source: .received(onlyIfAvailable: !isRequired),
-								declarationLocation: declarationLocation,
-							),
+							dependency: Self.leafDependency(passing: parameter.name, for: property, isRequired: isRequired, besideForwardedLabels: forwardedLabels, declarationLocation: declarationLocation),
 							isBuiltWhenNil: parameter.isBuiltWhenNil,
 							builtWrapper: parameter.builtWrapper,
 							builder: parameter.builder,
@@ -495,11 +493,30 @@ extension DependencyTreeGenerator {
 		)
 	}
 
+	/// The dependency a leaf that calls another module's public mock declares for the parameter `name` of the tier it
+	/// reaches, which stands for `property`, a dependency the called tree receives.
+	///
+	/// A parameter the declaring module named apart from another form of its label (`user_Draft` beside `user`) is declared
+	/// as an alias of the form it stands for, under a name no declaration of the caller's takes
+	/// (`ReservedName.publicMockFormAliasLabel(of:)`), so that the call passes it the caller's nearest declaration of the label
+	/// in that form, as the called tree built inline reads it, and the leaf declares each label once. A deliberate gap: where
+	/// the mocked type forwards the label, which the leaf binds inside its builder function and which would hide the
+	/// caller's declaration there, a required parameter is received under its name, which the calling mock takes it by,
+	/// and an optional one is left to its default (`publicMockLeafInstantiable`), whatever the caller declares of the label.
+	static func leafDependency(passing name: String, for property: Property, isRequired: Bool, besideForwardedLabels forwardedLabels: Set<String>, declarationLocation: Dependency.DeclarationLocation?) -> Dependency {
+		if name == property.label {
+			Dependency(property: property, source: .received(onlyIfAvailable: !isRequired), declarationLocation: declarationLocation)
+		} else if forwardedLabels.contains(property.label) {
+			Dependency(property: isRequired ? Property(label: name, typeDescription: property.typeDescription) : property, source: .received(onlyIfAvailable: !isRequired), declarationLocation: declarationLocation)
+		} else {
+			Dependency(property: Property(label: ReservedName.publicMockFormAliasLabel(of: name), typeDescription: property.typeDescription), source: .aliased(fulfillingProperty: property, erasedToConcreteExistential: false, onlyIfAvailable: !isRequired), declarationLocation: declarationLocation)
+		}
+	}
+
 	/// The instantiable of the leaf scope through which a mock tree calls `publicMockCall`: `instantiable`, declaring
 	/// the whole signature as its dependencies – the parameters of the tier the call reaches as the dependencies they
 	/// stand for, and each parameter that tier omits as a receive only if available – and built by a mock method that
-	/// takes the tier's parameters. One dependency per label: a required parameter the declaring module named apart is
-	/// declared under its name (`publicMockCalls(in:)`), and a second form of a label that has a default is left to it.
+	/// takes the tier's parameters. One dependency per label (`leafDependency(passing:for:isRequired:besideForwardedLabels:declarationLocation:)`).
 	/// - Parameter takesBuildersFromOwnEnums: Whether the leaf is in a public mock's tree, which hands each place it does not
 	///   fill up in a case of its own enums (`Scope.builderCallArguments`), so it receives no builder; an internal mock's
 	///   receives each builder that reaches a place the call does not fill, which the mock takes as a parameter.

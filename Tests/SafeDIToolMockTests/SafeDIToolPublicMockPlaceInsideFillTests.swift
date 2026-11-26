@@ -2354,18 +2354,21 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			    /// Overrides for the mock dependency tree.
 			    struct SafeDIOverrides {
 			        init(
-			            user: (() -> Draft)? = nil,
+			            user_Draft: (() -> Draft)? = nil,
+			            user_User: (() -> User)? = nil,
 			            outer: Outer.SafeDIOverrides = .init(),
 			            b: B? = nil
 			        ) {
 			            __safeDI_storage = __safeDI_Storage(
-			                user: user,
+			                user_Draft: user_Draft,
+			                user_User: user_User,
 			                outer: outer
 			            )
 			            self.b = b
 			        }
 
-			        var user: (() -> Draft)? { __safeDI_storage.user }
+			        var user_Draft: (() -> Draft)? { __safeDI_storage.user_Draft }
+			        var user_User: (() -> User)? { __safeDI_storage.user_User }
 			        var outer: Outer.SafeDIOverrides { __safeDI_storage.outer }
 			        let b: B?
 
@@ -2373,14 +2376,17 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 
 			        private final class __safeDI_Storage {
 			            init(
-			                user: (() -> Draft)?,
+			                user_Draft: (() -> Draft)?,
+			                user_User: (() -> User)?,
 			                outer: Outer.SafeDIOverrides
 			            ) {
-			                self.user = user
+			                self.user_Draft = user_Draft
+			                self.user_User = user_User
 			                self.outer = outer
 			            }
 
-			            let user: (() -> Draft)?
+			            let user_Draft: (() -> Draft)?
+			            let user_User: (() -> User)?
 			            let outer: Outer.SafeDIOverrides
 			        }
 			    }
@@ -2390,7 +2396,8 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
 			        let b: B? = safeDIOverrides.b
-			        let user = if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { Draft() }
+			        let user_Draft = if let safeDIBuilder = safeDIOverrides.user_Draft { safeDIBuilder() } else { Draft() }
+			        let user_User = if let safeDIBuilder = safeDIOverrides.user_User { safeDIBuilder() } else { User() }
 			        func __safeDI_outer() -> Outer {
 			            func __safeDI_gadgetBuilder_Outer() -> Outer.SafeDIMockScope_Gadget.__safeDI_Builder<any Gadget> {
 			                .init(b: { _ in __safeDI_gadgetBuilder_Outer_B_Scope() })
@@ -2411,7 +2418,7 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			                })
 			            }
 			            _ = Outer.__safeDI_Outer_mock_E5D2D7DC816652D9.self // If this line does not compile, compile the code SafeDI generates for module Middle into Middle: under Bazel, add Middle’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            return Outer.__safeDI_mock(gadgetBuilder: gadgetBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_gadgetBuilder_Outer(), b: b, user_Draft: user, safeDIOverrides: safeDIOverrides.outer)
+			            return Outer.__safeDI_mock(gadgetBuilder: gadgetBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_gadgetBuilder_Outer(), b: b, user_Draft: user_Draft, user_User: user_User, safeDIOverrides: safeDIOverrides.outer)
 			        }
 			        let outer: Outer = __safeDI_outer()
 			        return Root(outer: outer)
@@ -2672,30 +2679,36 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			    /// Overrides for the mock dependency tree.
 			    struct SafeDIOverrides {
 			        init(
-			            user: (() -> Draft)? = nil,
+			            user_Draft: (() -> Draft)? = nil,
+			            user_User: (() -> User)? = nil,
 			            outer: Outer.SafeDIOverrides = .init()
 			        ) {
 			            __safeDI_storage = __safeDI_Storage(
-			                user: user,
+			                user_Draft: user_Draft,
+			                user_User: user_User,
 			                outer: outer
 			            )
 			        }
 
-			        var user: (() -> Draft)? { __safeDI_storage.user }
+			        var user_Draft: (() -> Draft)? { __safeDI_storage.user_Draft }
+			        var user_User: (() -> User)? { __safeDI_storage.user_User }
 			        var outer: Outer.SafeDIOverrides { __safeDI_storage.outer }
 
 			        private let __safeDI_storage: __safeDI_Storage
 
 			        private final class __safeDI_Storage {
 			            init(
-			                user: (() -> Draft)?,
+			                user_Draft: (() -> Draft)?,
+			                user_User: (() -> User)?,
 			                outer: Outer.SafeDIOverrides
 			            ) {
-			                self.user = user
+			                self.user_Draft = user_Draft
+			                self.user_User = user_User
 			                self.outer = outer
 			            }
 
-			            let user: (() -> Draft)?
+			            let user_Draft: (() -> Draft)?
+			            let user_User: (() -> User)?
 			            let outer: Outer.SafeDIOverrides
 			        }
 			    }
@@ -2704,7 +2717,8 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			        gadgetBuilder: (() -> any Gadget)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        let user = if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { Draft() }
+			        let user_Draft = if let safeDIBuilder = safeDIOverrides.user_Draft { safeDIBuilder() } else { Draft() }
+			        let user_User = if let safeDIBuilder = safeDIOverrides.user_User { safeDIBuilder() } else { User() }
 			        func __safeDI_outer() -> Outer {
 			            func __safeDI_gadgetBuilder_Outer() -> Outer.SafeDIMockScope_Gadget.__safeDI_Builder<any Gadget> {
 			                .init(b: { _ in __safeDI_gadgetBuilder_Outer_B_Scope() })
@@ -2725,7 +2739,7 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			                })
 			            }
 			            _ = Outer.__safeDI_Outer_mock_0E01DEE84E2CF82B.self // If this line does not compile, compile the code SafeDI generates for module Middle into Middle: under Bazel, add Middle’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            return Outer.__safeDI_mock(gadgetBuilder: gadgetBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_gadgetBuilder_Outer(), user_Draft: user, safeDIOverrides: safeDIOverrides.outer)
+			            return Outer.__safeDI_mock(gadgetBuilder: gadgetBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_gadgetBuilder_Outer(), user_Draft: user_Draft, user_User: user_User, safeDIOverrides: safeDIOverrides.outer)
 			        }
 			        let outer: Outer = __safeDI_outer()
 			        return Root(outer: outer)

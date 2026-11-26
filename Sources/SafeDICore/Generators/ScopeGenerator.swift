@@ -983,8 +983,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var passedByPublicMockCalls = Set<Property>()
 		if !receivedOnlyByPublicMockCalls.isEmpty {
 			if let publicMockCall {
-				for parameter in publicMockCall.passedParameters where parameter.dependency.source == .received(onlyIfAvailable: true) {
-					passedByPublicMockCalls.insert(parameter.dependency.property)
+				for parameter in publicMockCall.passedParameters where parameter.isReadOnlyIfAvailable {
+					passedByPublicMockCalls.insert(parameter.readProperty)
 				}
 			}
 			for child in children {
