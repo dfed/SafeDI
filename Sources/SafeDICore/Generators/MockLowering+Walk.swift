@@ -32,7 +32,9 @@ extension ScopeGenerator {
 			let unshared = try await MockLowering.$sharesSubtrees.withValue(false) {
 				try await MockLowering.$typeKeyLayoutObserver.withValue(nil) {
 					try await MockLowering.$subtreeSharingObserver.withValue(nil) {
-						try await loweringMockRootWithTree(of: instantiable, context: context)
+						try await MockLowering.$labelReadScanObserver.withValue(nil) {
+							try await loweringMockRootWithTree(of: instantiable, context: context)
+						}
 					}
 				}
 			}
@@ -2264,6 +2266,10 @@ extension MockLowering {
 		return parts.joined(separator: ", ")
 	}
 
+	/// Called, where set, with how many nodes each scan of `receiveReadsLabelByName` computed an answer for. Set by the tests that check
+	/// the scan grows with the nodes and contexts beneath it, never with the paths; never by the tool.
+	@TaskLocal public static var labelReadScanObserver: (@Sendable (_ visitedNodes: Int) -> Void)?
+
 	/// Whether a receive among `generators`, or beneath them up to a node that declares `label`, reads `label` by name: a
 	/// receive or an alias's fulfilling property whose form `renames` does not name apart
 	/// (`ScopeGenerator.receiveReadsLabelByName`).
@@ -2278,8 +2284,21 @@ extension MockLowering {
 		let flatWrapperNames = publicMockNodeBindingNames.map { nodeBindingNames in names.filter { nodeBindingNames.contains($0.value) } } ?? names
 		// A stack of its own, since a mock tree can be as deep as the module has types.
 		var childrenToVisit = children
+		// The nodes this scan has visited: what a node answers, and the children it visits, follow from its generator, the
+		// properties it is built without and the properties generated after it, so a node met again in the same context
+		// answers as it did. A tree whose screens build the next layer's beneath two parents meets each node on
+		// exponentially many paths and in few contexts. The set dies with the scan (`generator-design.md`'s "Share work by
+		// construction", the set of the nodes one walk has already seen).
+		var visited = Set<VisitedNode>()
+		// The nodes whose answer the scan computed, which a test reads through the observer.
+		var visitedNodes = 0
+		defer {
+			labelReadScanObserver?(visitedNodes)
+		}
 		while let child = childrenToVisit.popLast() {
 			let generator = child.generator
+			guard visited.insert(VisitedNode(generator: ObjectIdentifier(generator), unavailableProperties: child.unavailableProperties, propertiesGeneratedLater: child.propertiesGeneratedLater)).inserted else { continue }
+			visitedNodes += 1
 			switch generator.scopeData {
 			case let .alias(_, fulfillingProperty, _, onlyIfAvailable, _):
 				// An alias bound to `nil` reads nothing (`emitAliasBinding`).
@@ -2315,6 +2334,13 @@ extension MockLowering {
 			}
 		}
 		return false
+	}
+
+	/// A node `receiveReadsLabelByName` visits, in the context that decides its answer and its children.
+	private struct VisitedNode: Hashable {
+		let generator: ObjectIdentifier
+		let unavailableProperties: Set<Property>
+		let propertiesGeneratedLater: Set<Property>
 	}
 
 	/// The name `names` gives the `LazilyInstantiated` or `SendableLazilyInstantiated` of `instanceType`, as

@@ -28,8 +28,8 @@
 /// the same records but for what each place's own call hands, which `SharedRecordKey` already lets differ. The walk
 /// descends into such a subtree once: at a later meeting of its key it takes the first meeting's tree nodes and child
 /// records, and writes no text for it. One scan still runs at every meeting, before the key is looked up: a receive named
-/// apart asks whether a receive beneath reads its label by name (`MockLowering.receiveReadsLabelByName`), which walks the
-/// paths beneath the meeting.
+/// apart asks whether a receive beneath reads its label by name (`MockLowering.receiveReadsLabelByName`), which visits
+/// each node beneath the meeting once per context it is built in.
 ///
 /// What a subtree reads of the walk state around it is its key (`SubtreeKey`), each part restricted to the labels its
 /// readers read (`SubtreeFacts`). A subtree is shared only where nothing in it reads state the key does not hold

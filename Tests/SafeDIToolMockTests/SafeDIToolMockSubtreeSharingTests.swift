@@ -322,6 +322,28 @@ struct SafeDIToolMockSubtreeSharingTests: ~Copyable {
 		#expect(outcomes.mapValues(\.sharedMeetings) == [3: 3, 6: 6, 12: 12])
 	}
 
+	/// Every layer receives `token` as `any TokenA` while `Other` receives it as `any TokenB`, so `mock()` takes both, named
+	/// apart, and each layer's builder function asks whether a receive beneath reads `token` by name
+	/// (`MockLowering.receiveReadsLabelByName`). Each such scan visits a node once per context, so the visits grow with the
+	/// square of the layers, never with the paths, which double with each layer.
+	@Test
+	mutating func mock_scansForLabelReadByNameInNodesNotPaths_whenEveryLayerReceivesValueNamedApart() async throws {
+		var visits = [Int: Int]()
+		for layers in [3, 6, 12] {
+			let (stream, continuation) = AsyncStream.makeStream(of: Int.self)
+			_ = try await MockLowering.$labelReadScanObserver.withValue({ visitedNodes in
+				continuation.yield(visitedNodes)
+			}) {
+				try await outcomes(of: Self.layeredChain(layers: layers, receivesTokenNamedApart: true))
+			}
+			continuation.finish()
+			for await visitedNodes in stream {
+				visits[layers, default: 0] += visitedNodes
+			}
+		}
+		#expect(visits == [3: 24, 6: 102, 12: 420])
+	}
+
 	/// A chain that builds each type on one path, as a long chain of features does, holds no facts at all, however long.
 	@Test
 	mutating func mock_holdsNoFacts_whenChainBuildsEachTypeOnOnePath() async throws {
@@ -432,16 +454,21 @@ struct SafeDIToolMockSubtreeSharingTests: ~Copyable {
 	/// `Root` builds `First0` and `Second0`, each of which builds `Layer1`; each `Layer<n>` builds `First<n>` and
 	/// `Second<n>`, each of which builds `Layer<n+1>`, up to `Layer<layers>`, which builds `Leaf`. The labels carry the
 	/// layer's number where `suffixesLabels`, and are `first`, `second` and `layer` at every layer otherwise. Where
-	/// `buildsViewModels`, each `Layer<n>` first builds a `ViewModel<n>` under `viewModel`.
-	private static func layeredChain(layers: Int, suffixesLabels: Bool = true, buildsViewModels: Bool = false) -> [String] {
+	/// `buildsViewModels`, each `Layer<n>` first builds a `ViewModel<n>` under `viewModel`. Where `receivesTokenNamedApart`,
+	/// each `Layer<n>` receives `token: any TokenA` and `Root` builds `Other`, which receives `token: any TokenB`.
+	private static func layeredChain(layers: Int, suffixesLabels: Bool = true, buildsViewModels: Bool = false, receivesTokenNamedApart: Bool = false) -> [String] {
 		func label(_ name: String, _ layer: Int) -> String {
 			suffixesLabels ? "\(name)\(layer)" : name
 		}
-		var files = [Self.type("Root", kind: "final class", generateMock: true, properties: ["@Instantiated let \(label("first", 0)): First0", "@Instantiated let \(label("second", 0)): Second0"])]
+		var files = [Self.type("Root", kind: "final class", generateMock: true, properties: ["@Instantiated let \(label("first", 0)): First0", "@Instantiated let \(label("second", 0)): Second0"] + (receivesTokenNamedApart ? ["@Instantiated let other: Other"] : []))]
+		if receivesTokenNamedApart {
+			files.append(Self.type("Other", kind: "final class", properties: ["@Received let token: any TokenB"]))
+			files.append(Self.protocols(["TokenA", "TokenB"]))
+		}
 		for layer in 0..<layers {
 			files.append(Self.type("First\(layer)", kind: "final class", properties: ["@Instantiated let \(label("layer", layer + 1)): Layer\(layer + 1)"]))
 			files.append(Self.type("Second\(layer)", kind: "final class", properties: ["@Instantiated let \(label("layer", layer + 1)): Layer\(layer + 1)"]))
-			var layerProperties = [String]()
+			var layerProperties = receivesTokenNamedApart ? ["@Received let token: any TokenA"] : []
 			if buildsViewModels {
 				layerProperties.append("@Instantiated let viewModel: ViewModel\(layer + 1)")
 				files.append(Self.type("ViewModel\(layer + 1)", kind: "final class", properties: []))
