@@ -360,6 +360,115 @@ struct SafeDIToolMockSubtreeSharingTests: ~Copyable {
 		#expect(visits == [3: 24, 6: 102, 12: 420])
 	}
 
+	/// The walk that names a mock's parameters (`ScopeGenerator.treeNames(of:readsFills:)`) visits each node of the layered
+	/// chain once per generator and family, and records each other meeting of it, so both grow with the layers, never with
+	/// the paths, which double with each layer. Each mock's parameters are classified more than once (its signature, its
+	/// lowering), so the counts are of every walk.
+	@Test
+	mutating func mock_walksTreeNamesInNodesNotPaths_whenScreensBuildNextLayerBeneathTwoParents() async throws {
+		var visits = [Int: [Int]]()
+		for layers in [3, 6, 12] {
+			let (stream, continuation) = AsyncStream.makeStream(of: (visitedNodes: Int, meetings: Int).self)
+			_ = try await MockLowering.$treeNamesWalkObserver.withValue({ visitedNodes, meetings in
+				continuation.yield((visitedNodes: visitedNodes, meetings: meetings))
+			}) {
+				try await outcomes(of: Self.layeredChain(layers: layers))
+			}
+			continuation.finish()
+			var totals = [0, 0]
+			for await walk in stream {
+				totals[0] += walk.visitedNodes
+				totals[1] += walk.meetings
+			}
+			visits[layers] = totals
+		}
+		#expect(visits == [3: [20, 26], 6: [38, 50], 12: [74, 98]])
+	}
+
+	/// `Screen` instantiates `config`, which the mock cannot build, beneath `First` and beneath `Second`, whose builder function
+	/// declares a `config` of its own. The tree-names walk visits `Screen` once, from `First`, so it names `mock()`'s
+	/// parameter apart from what a builder function around `Screen` declares on every path that meets it, not only the first.
+	@Test
+	mutating func mock_namesParameterApart_whenBuilderFunctionOnLaterPathToTypeDeclaresItsLabel() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: Self.screenHiddenOnOnePath,
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.mockFiles["Root+SafeDIMock.swift"] == generatedFileHeader + """
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            first: First.SafeDIMockConfiguration = .init(),
+		            second: Second.SafeDIMockConfiguration = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                first: first,
+		                second: second
+		            )
+		        }
+
+		        var first: First.SafeDIMockConfiguration { __safeDI_storage.first }
+		        var second: Second.SafeDIMockConfiguration { __safeDI_storage.second }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                first: First.SafeDIMockConfiguration,
+		                second: Second.SafeDIMockConfiguration
+		            ) {
+		                self.first = first
+		                self.second = second
+		            }
+
+		            let first: First.SafeDIMockConfiguration
+		            let second: Second.SafeDIMockConfiguration
+		        }
+		    }
+
+		    static func mock(
+		        config_Config: Config,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        func __safeDI_screen(__safeDI_Screen_configuration: Screen.SafeDIMockConfiguration) -> Screen {
+		            let model = if let safeDIBuilder = __safeDI_Screen_configuration.model { safeDIBuilder() } else { Model() }
+		            return if let safeDIBuilder = __safeDI_Screen_configuration.safeDIBuilder { safeDIBuilder(config_Config, model) } else { Screen(config: config_Config, model: model) }
+		        }
+		        func __safeDI_first(__safeDI_First_configuration: First.SafeDIMockConfiguration) -> First {
+		            let screen: Screen = __safeDI_screen(__safeDI_Screen_configuration: __safeDI_First_configuration.screen)
+		            return if let safeDIBuilder = __safeDI_First_configuration.safeDIBuilder { safeDIBuilder(screen) } else { First(screen: screen) }
+		        }
+		        let first: First = __safeDI_first(__safeDI_First_configuration: safeDIOverrides.first)
+		        func __safeDI_second(__safeDI_Second_configuration: Second.SafeDIMockConfiguration) -> Second {
+		            let config = if let safeDIBuilder = __safeDI_Second_configuration.config { safeDIBuilder() } else { Setting() }
+		            let screen: Screen = __safeDI_screen(__safeDI_Screen_configuration: __safeDI_Second_configuration.screen)
+		            return if let safeDIBuilder = __safeDI_Second_configuration.safeDIBuilder { safeDIBuilder(config, screen) } else { Second(config: config, screen: screen) }
+		        }
+		        let second: Second = __safeDI_second(__safeDI_Second_configuration: safeDIOverrides.second)
+		        return Root(first: first, second: second)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Root+SafeDIMock.swift"] ?? "")")
+	}
+
+	/// `Root` builds `First`, then `Second`, each of which builds `Screen`, which instantiates a `Config` nothing builds; `Second`
+	/// also declares `config`, a `Setting`.
+	private static let screenHiddenOnOnePath = [
+		Self.type("Root", kind: "final class", generateMock: true, properties: ["@Instantiated let first: First", "@Instantiated let second: Second"]),
+		Self.type("First", kind: "final class", properties: ["@Instantiated let screen: Screen"]),
+		Self.type("Second", kind: "final class", properties: ["@Instantiated let config: Setting", "@Instantiated let screen: Screen"]),
+		Self.type("Setting", kind: "final class", properties: []),
+		Self.type("Screen", kind: "final class", properties: ["@Instantiated let config: Config", "@Instantiated let model: Model"]),
+		Self.type("Model", kind: "final class", properties: []),
+		"""
+		public final class Config {}
+		""",
+	]
+
 	/// A chain that builds each type on one path, as a long chain of features does, holds no facts at all, however long.
 	@Test
 	mutating func mock_holdsNoFacts_whenChainBuildsEachTypeOnOnePath() async throws {
