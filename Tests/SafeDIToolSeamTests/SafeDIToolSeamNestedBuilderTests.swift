@@ -3541,9 +3541,9 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		modules(feature: fourSeamsInCyclesFeature, app: [fourSeamsInCyclesFulfiller, fourSeamsInCyclesRoot])
 	}
 
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func holdingCase_isCaseOfSeamThatHoldsPlace_whenReferencesOfTwoSeamsCasesLeadToEachOther() async throws {
+	/// Each seam's place graph over `fourSeamsInCyclesModules` as its last pass computed it, once the signatures have
+	/// settled, with the graphs its references resolve to.
+	private mutating func lastObservationsOfFourSeamsInCycles() async throws -> [String: SeamSignature.Places.Observation] {
 		let (stream, continuation) = AsyncStream.makeStream(of: SeamSignature.Places.Observation.self)
 		let enclosingObserver = SeamPlaceLevels.observer
 		var writtenFiles = [URL]()
@@ -3557,11 +3557,55 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		}
 		filesToDelete += writtenFiles
 		continuation.finish()
-		// Each seam's graph as its last pass computed it, once the signatures have settled.
 		var lastObservationBySeam = [String: SeamSignature.Places.Observation]()
 		for await observation in stream {
 			lastObservationBySeam[observation.seamType.asSource] = observation
 		}
+		return lastObservationBySeam
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func called_handsPlaceEachReasonNames_whenSeamsThatPresentThePlaceCallEachOther() async throws {
+		let lastObservationBySeam = try await lastObservationsOfFourSeamsInCycles()
+		// Each declaration a place holds as bound by a seam that passes it up names, in its reason, the called seam's place
+		// the call presents. Where no case stores the declaration with that reason, the run hands the same place, under the
+		// same builder label and case name, for the case the call's case refers to.
+		var reasonsCompared = 0
+		var reasonsNotHanded = [String]()
+		for (seam, observation) in lastObservationBySeam {
+			let query = SeamSignature.Places.Query(of: observation.places, calledPlaces: observation.calledPlaces(of:))
+			for (hole, caseIndex) in zip(observation.siteHoles, observation.caseIndexBySite) where observation.places.cases[caseIndex].passedUp != nil {
+				let additions = try #require(query.presentationAdditions(of: caseIndex))
+				let holding = try #require(query.holdingCase(of: caseIndex))
+				let stored = Set(additions.calledCopyDeclarations + holding.query.places.cases[holding.caseIndex].calledCopyDeclarations)
+				for declaration in hole.uncarriedDeclarations where !stored.contains(declaration) {
+					guard case let .boundByPassingUpSeam(passingSeam, _, place) = declaration.reason else { continue }
+					reasonsCompared += 1
+					let isHanded = additions.boundOnPathsToCalls.contains { bound in
+						let presentingPlaces = bound.presentingCase.query.places
+						guard bound.declaration.property == declaration.property, bound.declaration.declaringType == declaration.declaringType,
+						      presentingPlaces.levels.first(where: \.key.isSeamRoot)?.key.builtType == passingSeam,
+						      let reference = presentingPlaces.cases[bound.presentingCase.caseIndex].passedUp,
+						      let calledHole = observation.called(of: reference)?.hole(ofCaseAt: reference.caseIndex)
+						else { return false }
+						return calledHole.scopeSeamType == place.seamType && calledHole.ownerType == place.ownerType && calledHole.property == place.property
+							&& calledHole.instantiatedType == place.instantiatedType && calledHole.builderLabel == place.builderLabel && calledHole.enumPlace?.caseName == place.caseName
+					}
+					if !isHanded {
+						reasonsNotHanded.append("\(seam): \(declaration.property.asSource) of \(declaration.declaringType.asSource), bound by \(passingSeam.asSource), presenting \(place.builderLabel)")
+					}
+				}
+			}
+		}
+		#expect(reasonsCompared > 0)
+		#expect(reasonsNotHanded.sorted() == [])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func holdingCase_isCaseOfSeamThatHoldsPlace_whenReferencesOfTwoSeamsCasesLeadToEachOther() async throws {
+		let lastObservationBySeam = try await lastObservationsOfFourSeamsInCycles()
 		func seamAndProperty(_ resolved: SeamSignature.Places.Query.ResolvedCase) -> String {
 			let places = resolved.query.places
 			let seam = places.levels.first(where: \.key.isSeamRoot)?.key.builtType?.asSource ?? "no seam"
@@ -3594,23 +3638,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func pathToHoldingSeam_passesNoSeamTwice_whenSeamsThatPresentThePlaceCallEachOther() async throws {
-		let (stream, continuation) = AsyncStream.makeStream(of: SeamSignature.Places.Observation.self)
-		let enclosingObserver = SeamPlaceLevels.observer
-		var writtenFiles = [URL]()
-		_ = try await SeamPlaceLevels.$observer.withValue({ placeLevels in
-			if let observation = placeLevels.placesObservation {
-				continuation.yield(observation)
-			}
-			enclosingObserver?(placeLevels)
-		}) {
-			try await executeSafeDIToolMultiModuleTest(modules: Self.fourSeamsInCyclesModules, integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &writtenFiles)
-		}
-		filesToDelete += writtenFiles
-		continuation.finish()
-		var lastObservationBySeam = [String: SeamSignature.Places.Observation]()
-		for await observation in stream {
-			lastObservationBySeam[observation.seamType.asSource] = observation
-		}
+		let lastObservationBySeam = try await lastObservationsOfFourSeamsInCycles()
 		/// The path through the calls from `seam` down to `S3`, which holds the place `service` asked of.
 		func pathToServiceOfS3(from seam: String) throws -> [String] {
 			let observation = try #require(lastObservationBySeam[seam])

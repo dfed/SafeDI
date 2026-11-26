@@ -32,6 +32,7 @@ enum SeamPlaceCaseFactChecks {
 	static func mismatches(of observation: SeamSignature.Places.Observation) -> [String] {
 		var mismatches = [String]()
 		var firstSpellingByCase = [Int: (spelling: Spelling, path: String)]()
+		let query = SeamSignature.Places.Query(of: observation.places, calledPlaces: observation.calledPlaces(of:))
 		for (hole, caseIndex) in zip(observation.siteHoles, observation.caseIndexBySite) where caseIndex >= 0 {
 			let place = "\(observation.seamType.asSource) at \(hole.sitePath.map(\.label).joined(separator: "."))"
 			// A builder that reaches the case is no wider than the narrowest of its places (`shapedBuilders`).
@@ -47,10 +48,19 @@ enum SeamPlaceCaseFactChecks {
 			// spelling (`LevelBuilderForms`, `PlaceSpelling`), the forwarded type an enum names, a case's return type and the
 			// dispatcher's wrapper builder (`ScopeGenerator`), each from the place's property; and whether the place is below the
 			// called type's root (`MockOrchestration`), from its path's length, which the case's naming route gives.
-			let placeCase = observation.places.cases[caseIndex]
+			// A place a call presents is below the root of the seam that holds it, or not, as the naming route of that seam's
+			// case says (`Query.holdingCase(of:)`): the route of the presenting case leads to the call. Seams that call each
+			// other settle over several passes, and on a pass before the last the calls can lead to a case of another place,
+			// which is not compared.
 			let isBelowRoot = hole.sitePath.count > 1
-			if isBelowRoot != (placeCase.namingRoute.count > 1) {
-				mismatches.append("The place of \(place) is \(isBelowRoot ? "" : "not ")below its seam’s root, its case’s naming route of \(placeCase.namingRoute.count) levels says otherwise")
+			if let holding = query.holdingCase(of: caseIndex) {
+				let holdingPlaces = holding.query.places
+				let holdingCase = holdingPlaces.cases[holding.caseIndex]
+				let holdsThePlace = observation.places.cases[caseIndex].passedUp == nil
+					|| (holdingPlaces.levels.first(where: \.key.isSeamRoot)?.key.builtType == hole.site.seamType && holdingPlaces.levels[holdingCase.ownerLevel].key.nextProperty == hole.property)
+				if holdsThePlace, isBelowRoot != (holdingCase.namingRoute.count > 1) {
+					mismatches.append("The place of \(place) is \(isBelowRoot ? "" : "not ")below its seam’s root, its case’s naming route of \(holdingCase.namingRoute.count) levels says otherwise")
+				}
 			}
 			let spelling = Spelling(of: hole)
 			if let first = firstSpellingByCase[caseIndex] {
