@@ -1020,7 +1020,6 @@ extension DependencyTreeGenerator {
 			var nextSuccessorIndex = 0
 			var lowestReachedIndex: Int
 			var reachesScopeLeftToWalk = false
-			var reachesItself = false
 		}
 		var visits = [Visit]()
 		var visitIndexByScope = [ObjectIdentifier: Int]()
@@ -1047,9 +1046,6 @@ extension DependencyTreeGenerator {
 				} else if let successorVisitIndex = visitIndexByScope[successorID] {
 					// Every visit whose component is closed is complete or left to the walk, so this one's is open.
 					visits[visitIndex].lowestReachedIndex = min(visits[visitIndex].lowestReachedIndex, successorVisitIndex)
-					if successorVisitIndex == visitIndex {
-						visits[visitIndex].reachesItself = true
-					}
 				} else {
 					visit(successor)
 				}
@@ -1067,7 +1063,10 @@ extension DependencyTreeGenerator {
 						break
 					}
 				}
-				let isCycle = componentVisitIndices.count > 1 || visits[visitIndex].reachesItself
+				// A scope that creates only itself again needs one pass, as a scope outside every cycle does: what it
+				// receives from itself it has already received, less what it declares, and a walk that re-enters it
+				// takes nothing from it either.
+				let isCycle = componentVisitIndices.count > 1
 				var isLeftToWalk = false
 				for componentVisitIndex in componentVisitIndices {
 					let componentVisit = visits[componentVisitIndex]
