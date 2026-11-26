@@ -1120,7 +1120,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		var foundCycleParameters = [CycleParameter]()
 		var unpassableCycleLabelsInTree = [UnpassableCycleLabel]()
+		// The labels declared between this scope and the scopes that close a cycle on it, where one does. They are declared
+		// between every other cycle-closing scope in this subtree and the scope it closes on, too (see below).
+		var redeclarationsOfOwnCycle = [String: CycleParameter.Redeclaration]()
 		if let property, let declaration, !isPropertyCycle, let redeclarations = cycleClosingRedeclaredLabels.removeRedeclarations(closedOn: declaration) {
+			redeclarationsOfOwnCycle = redeclarations
 			// The property's own label is no parameter: the function's body is passed `nil` for it wherever it is called,
 			// since every call is made inside the tree that builds a declaration of the label – the property itself where
 			// the function is declared, and the cycle-closing scope's own property where it closes the cycle. Nor is a label
@@ -1178,6 +1182,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 			for parameter in cycleParameters {
 				redeclarations[parameter.property.label] = redeclarations[parameter.property.label].map { $0.preceding(parameter.redeclaration) } ?? parameter.redeclaration
+			}
+			// A scope in this subtree that closes a cycle on a scope above this one is built inside this scope's builder
+			// function, which the scopes closing a cycle on this scope call again: beneath every declaration between this
+			// scope and them. So the type that scope builds again is built beneath those declarations too, whether or not
+			// this scope's own tree receives their labels: `W` builds `U`, which builds `W` again and `P`, which declares
+			// `l` and builds `U` again, so the `W` that the `U` beneath `P` builds is beneath `P`'s `l`, though no scope on
+			// `W` -> `U` -> `W` declares it. Without them `W`'s function took no `l`, `U`'s tree therefore received none, and
+			// a receiver in `W`'s tree read the `l` above the first `W` wherever it was built.
+			for (label, redeclaration) in redeclarationsOfOwnCycle {
+				redeclarations[label] = redeclarations[label].map { $0.preceding(redeclaration) } ?? redeclaration
 			}
 			cycleClosingRedeclaredLabels.add(redeclarations)
 		}

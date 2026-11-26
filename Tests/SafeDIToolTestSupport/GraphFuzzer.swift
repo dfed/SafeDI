@@ -2885,6 +2885,7 @@ enum GraphFuzzerGenerator {
 			actorArgumentRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.actorArgumentRandomSeedMask)
 			instantiatedOnlyIfAvailableRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.instantiatedOnlyIfAvailableRandomSeedMask)
 			optionalPlaceRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.optionalPlaceRandomSeedMask)
+			nestedCycleRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.nestedCycleRandomSeedMask)
 			seamDependencyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ GraphFuzzerSeamDependencyDraw.seamRandomSeedMask)
 			prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
 			// One draw decides, so graphs that are not mixed draw exactly what they drew before mixed graphs existed.
@@ -2968,6 +2969,8 @@ enum GraphFuzzerGenerator {
 			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
 			finalDeclarations = addingActorArgumentShapes(to: finalDeclarations)
 			finalDeclarations = addingDependencyInstantiatedOnlyIfAvailable(to: finalDeclarations)
+			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
+			finalDeclarations = addingTypeBuiltAgainThroughSecondLazyCycle(to: finalDeclarations)
 			// In a graph split across modules, every file names its module and imports the seam's, so that a type of the
 			// caller can name what the seam's module declares, such as the creation stamps' counter.
 			let isSplit = finalDeclarations.contains { $0.module == .seamModule }
@@ -3424,6 +3427,9 @@ enum GraphFuzzerGenerator {
 		/// Draws only `addingOptionalPlaceShapes`' choices: whether a split graph gains `OptionalPlaceRoot`'s tree, and every
 		/// shape of that tree.
 		private var optionalPlaceRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only `addingTypeBuiltAgainThroughSecondLazyCycle`'s choices: whether a graph gains `NestRoot`'s tree, and
+		/// every shape of that tree.
+		private var nestedCycleRandom: GraphFuzzerRandomNumberGenerator
 		/// The files `markerFreeFileRandom` moved a declaration into: each named, holding the declaration alone, and in the
 		/// module of the type, `ownerName`, whose file it was drawn in.
 		private var markerFreeFiles = [(ownerName: String, fileName: String, declaration: String)]()
@@ -8245,6 +8251,61 @@ enum GraphFuzzerGenerator {
 		}
 
 		private static let instantiatedOnlyIfAvailableRandomSeedMask: UInt64 = 0x4966417661696C21
+
+		// MARK: A type built again through a second lazy cycle
+
+		/// The base corpus's draw, in one graph of twenty-five, of two lazy cycles that share a type, with a label declared
+		/// again on one of them. `NestRoot`, a root, instantiates `nestLabel` and an instantiator of `NestOuter`, which
+		/// instantiates instantiators of `NestInner` and of `NestReader`, which receives `nestLabel`. `NestInner` instantiates
+		/// an instantiator of `NestOuter` again, closing the first cycle, and one of `NestRedeclarer`, which instantiates
+		/// its own `nestLabel` and an instantiator of `NestInner` again, closing the second, in either order. So the
+		/// `NestReader` of the `NestOuter` that the `NestInner` beneath a `NestRedeclarer` builds reads that
+		/// `NestRedeclarer`'s `nestLabel`, although nothing declares the label between `NestOuter` and the scope that builds
+		/// it again. One graph in three, `NestThird` sits between `NestInner` and `NestRedeclarer` and is what
+		/// `NestRedeclarer` builds again, a third cycle inside the second. One graph in four, `NestReader` receives the label
+		/// only if available and `NestRoot` declares none, so a `NestReader` beneath no `NestRedeclarer` is passed `nil`.
+		/// A mock of `NestRoot` and its production build pass the label by the same rule, so the value oracle compares
+		/// `NestRoot()` with a tree built by hand to the Manual's rule (`GraphFuzzerValueOraclePlan.nestedCyclePair`).
+		/// `nestedCycleRandom` draws only for this pass, after every other, and only in the base corpus.
+		private mutating func addingTypeBuiltAgainThroughSecondLazyCycle(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			guard features.isEmpty, nestedCycleRandom.percentChance(4) else { return declarations }
+			var declarations = declarations
+			let closesFirstCycleFirst = nestedCycleRandom.percentChance(50)
+			let hasThirdCycle = nestedCycleRandom.percentChance(33)
+			let receivesOnlyIfAvailable = nestedCycleRandom.percentChance(25)
+			let instantiator = sendability == .sendable ? "SendableInstantiator" : "Instantiator"
+			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
+			func append(_ name: String, isRoot: Bool = false, _ properties: [PropertyDeclaration]) {
+				declarations.append(TypeDeclaration(
+					name: name,
+					instantiableArguments: isRoot ? ["isRoot: true"] : [],
+					properties: properties,
+					declaresHelperTypes: false,
+					additionalConformances: conformances,
+				))
+			}
+			func builder(_ label: String, of name: String) -> PropertyDeclaration {
+				PropertyDeclaration(attribute: "@Instantiated", label: label, type: "\(instantiator)<\(prefix)\(name)>")
+			}
+			let labelName = "\(prefix)NestLabel"
+			let label = PropertyDeclaration(attribute: "@Instantiated", label: "nestLabel", type: labelName)
+			append(labelName, [])
+			append("\(prefix)NestReader", [receivesOnlyIfAvailable
+					? PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "nestLabel", type: labelName + "?")
+					: PropertyDeclaration(attribute: "@Received", label: "nestLabel", type: labelName)])
+			append("\(prefix)NestOuter", [builder("nestInnerBuilder", of: "NestInner"), builder("nestReaderBuilder", of: "NestReader")])
+			let closingFirstCycle = builder("nestOuterBuilder", of: "NestOuter")
+			let openingSecondCycle = hasThirdCycle ? builder("nestThirdBuilder", of: "NestThird") : builder("nestRedeclarerBuilder", of: "NestRedeclarer")
+			append("\(prefix)NestInner", closesFirstCycleFirst ? [closingFirstCycle, openingSecondCycle] : [openingSecondCycle, closingFirstCycle])
+			if hasThirdCycle {
+				append("\(prefix)NestThird", [builder("nestRedeclarerBuilder", of: "NestRedeclarer"), builder("nestInnerBuilder", of: "NestInner")])
+			}
+			append("\(prefix)NestRedeclarer", [label, hasThirdCycle ? builder("nestThirdBuilder", of: "NestThird") : builder("nestInnerBuilder", of: "NestInner")])
+			append("\(prefix)NestRoot", isRoot: true, (receivesOnlyIfAvailable ? [] : [label]) + [builder("nestOuterBuilder", of: "NestOuter")])
+			return declarations
+		}
+
+		private static let nestedCycleRandomSeedMask: UInt64 = 0x6E657374437963
 
 		// MARK: Cycle parameters
 
