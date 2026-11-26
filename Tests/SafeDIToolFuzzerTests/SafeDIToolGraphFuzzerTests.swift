@@ -4870,6 +4870,18 @@ struct SafeDIToolGraphFuzzerTests {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_nameNeitherReason_whenALaidOutMockPassesADefaultConfigurationWhereItHoldsTheDroppedField() async throws {
+		// The reversal holds the field the graph drops, and builds its type's configuration afresh in its place, so the
+		// override the field holds is never read.
+		let prefix = Self.mockDifferencePrefix
+		#expect(try await Self.aspectsOfT7sLaidOutMock(
+			replacing: "__safeDI_\(prefix)T7_configuration: __safeDI_\(prefix)T8_configuration.t7Builder,",
+			with: "__safeDI_\(prefix)T7_configuration: \(prefix)T7.SafeDIMockConfiguration(),",
+		) == [.mockCode])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func differences_namePresence_whenALazyCycleOfErasedTypesDropsAField() async throws {
 		let toolRuns = try await GraphFuzzerOracle.toolRuns(of: Self.lazyCycleOfErasedTypesFixture, multiModuleRenamings: [])
 		let reversalOfTypeNames = try #require(toolRuns.renamedOutcomes.first { $0.renaming.reversesTypeNames && !$0.renaming.reversesLabels && !$0.renaming.reversesFileNames })
