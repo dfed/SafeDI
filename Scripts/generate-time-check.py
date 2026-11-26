@@ -167,6 +167,9 @@ alternating runs after one untimed run of each graph. A run still going after 30
                                the next layer and receiving `service`; every screen of an odd layer renames `service`
                                and every screen of an even layer below the first receives the rename (V: a required
                                rename read only if available; VO: an only-if-available rename that is required).
+  PR-parents-router            one module: layers of three screens, each holding `Instantiator`s of every screen of
+                               the next layer, instantiating a `Router` under its layer's label and receiving the
+                               one its parents declare.
 A row whose growth is known and not yet removed carries limits of its own (`GROWTH_ROWS`), each what it measured with
 room for noise, which the change that removes the growth deletes. Add a row with each change that removes growth of
 this kind, for the shape it fixed.
@@ -584,6 +587,23 @@ def shape_alternating_renames(layers, only_if_available, width=4):
     return [("App", [], source)]
 
 
+def shape_parent_router(layers, width=3):
+    """One module: a root over `layers` layers of `width` screens, each holding `Instantiator`s of every screen of the
+    next layer, instantiating a `Router` under its own layer's label and receiving the one the layer before declares,
+    so each screen receives what every one of its parents declares."""
+    source = "import SafeDI\n\n" + declaration("@Instantiable", "Router", [])
+    for layer in range(layers):
+        for position in range(width):
+            properties = [("@Instantiated", f"router{layer}", "Router")]
+            if layer > 0:
+                properties.append(("@Received", f"router{layer - 1}", "Router"))
+            if layer + 1 < layers:
+                properties += [("@Instantiated", f"screen{layer + 1}x{child}Builder", f"Instantiator<Screen{layer + 1}x{child}>") for child in range(width)]
+            source += declaration("@Instantiable", f"Screen{layer}x{position}", properties)
+    source += declaration("@Instantiable(isRoot: true)", "Root", [("@Instantiated", f"screen0x{child}Builder", f"Instantiator<Screen0x{child}>") for child in range(width)])
+    return [("App", [], source)]
+
+
 def shape_w(width):
     """One module: a root over two layers of `width` screens, each first-layer screen holding `Instantiator`s of three
     second-layer screens, from its own position on, and each second-layer screen one of the first-layer screen after
@@ -661,6 +681,8 @@ GROWTH_ROWS = {
     # V 0.45 s and 3.8 s (8.6); VO 0.51 s and 4.6 s (9.2).
     "V-renames-in-alternate-layers": (lambda layers: shape_alternating_renames(layers, only_if_available=False), 10, {"time": 11.0}),
     "VO-only-if-available-renames-in-alternate-layers": (lambda layers: shape_alternating_renames(layers, only_if_available=True), 10, {"time": 11.5}),
+    # PR 0.33 s and 3.0 s (9.1), 52 MB and 179 MB (3.5); its code grows with the graph.
+    "PR-parents-router": (lambda layers: shape_parent_router(layers), 8, {"time": 12.0, "memory": 4.5}),
 }
 GROWTH_STEP = 2
 GROWTH_RUNS = 3
