@@ -364,7 +364,7 @@ struct GraphFuzzerFixture: Equatable {
 	}
 
 	/// The roots `declaresRootOfDrawBeneathSeamsModule` reads.
-	private static let rootsOfDrawsBeneathTheSeamsModule = ["FillCallRoot", "CarriedRoot", "ReenteredRoot", "MixRoot", "MixCallRoot"]
+	private static let rootsOfDrawsBeneathTheSeamsModule = ["FillCallRoot", "CarriedRoot", "ReenteredRoot", "MixRoot", "MixCallRoot", "NestHoleHubRoot"]
 
 	/// The visible build of a graph with a hole: every file whose first line says it fills a hole declared in the seam's
 	/// module instead, which can then see the fulfilling type and builds it inline, so the seam takes no builder.
@@ -1867,6 +1867,26 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	case carriedLevelFillReadsOptionalSendableWrapperOuterReceives
 	/// `addingWrapperMixShapes`' tree, reading the value alone, or the wrapper alone where no seam on the route declares it
 	/// and no route hands a plain memo.
+	/// `addingNestedCycleHoleShapes`' tree: `NestHoleHome`, a seam, builds `NestHoleOuter` through an instantiator,
+	/// `NestHoleInner` beneath it builds it again and builds `NestHoleRedeclarer`, which declares `nestHoleTag` again and
+	/// builds `NestHoleInner` again, and `NestHoleLive` fills a place on `NestHoleOuter`'s level reading the tag.
+	case nestedCycleHole
+	/// `NestHoleOuter` receives `nestHoleTag`, so each level's builder function takes it and the fill reads its own level's.
+	case nestedCycleHoleLabelReceivedByTypeBuiltAgain
+	/// No type of the cycles receives `nestHoleTag`, so no builder function takes it, and the tool rejects the fill's read.
+	case nestedCycleHoleLabelNoFunctionTakes
+	/// The place is on `NestHoleScreen`, which `NestHoleOuter` builds through an instantiator.
+	case nestedCycleHolePlaceOnScreen
+	/// `NestHoleRedeclarer` declares `nestHoleTag` after the instantiator that closes its cycle.
+	case nestedCycleHoleLabelDeclaredAfterCloser
+	/// `NestHoleThird` sits between `NestHoleInner` and `NestHoleRedeclarer`, which builds it again: a third cycle inside
+	/// the second.
+	case nestedCycleHoleThirdCycle
+	/// The place is `NestHoleHub`'s, a seam of the module beneath the seam's module that the type holding the place calls,
+	/// so `NestHoleHome` passes it up from inside its cycles.
+	case nestedCycleHolePlacePassedUp
+	/// `NestHoleHub` receives `nestHoleTag`, so each level's builder function takes it and passes the seam its own level's.
+	case nestedCycleHoleLabelReceivedBySeamPassingPlaceUp
 	case wrapperMix
 	/// The fill's tree reads the value and its `SendableLazilyInstantiated` where every memo route is `@Sendable`: accepted.
 	case wrapperMixValueAndSendableWrapper
@@ -2086,7 +2106,7 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	}
 
 	/// Whether `addingFillCallShapes`, `addingCarriedLevelShapes`, `addingPassingUpCopyShapes`, `addingReenteredFillShapes`,
-	/// `addingWrapperMixShapes`, `addingPlacesOfOneCaseShapes` or `addingSeamRingShapes` draws this shape of a fixed
+	/// `addingWrapperMixShapes`, `addingPlacesOfOneCaseShapes`, `addingSeamRingShapes` or `addingNestedCycleHoleShapes` draws this shape of a fixed
 	/// generator defect, whose count in accepted graphs the seam corpus pins (`acceptedDrawFeatureCounts`), at least ten
 	/// each: every shape but those the tool rejects by design – `passingUpCopiesHideLabel`, which the renamings judge, and
 	/// the unremedied reads of a value one route holds, which `toolRuns_rejectBothBuildsWithDeclarationBoundOnPathToReenteringCall_whenFillReadsValueOnlyOneRouteHoldsUnremedied` judges,
@@ -2096,7 +2116,9 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// passes on the wrapper, which
 	/// `toolRuns_rejectBothBuildsWithEachDeferringSeamsTwoForms_whenCarriedLevelsFillReadsOptionalSendableWrapper` judges,
 	/// and a passing-up seam's binding of the label a place inside its re-entered fill reads, a wrapper read beside a plain
-	/// memo, and a wrapper a seam on the route declares above its call, whose rejections the builds' comparison judges.
+	/// memo, and a wrapper a seam on the route declares above its call, whose rejections the builds' comparison judges,
+	/// and a fill's read of a label a second cycle declares again that no builder function takes, which
+	/// `toolRuns_rejectFillWithDeclarationBoundOnCycleReentry_whenNoTypeOfNestedCyclesReceivesLabel` judges.
 	var isFixedSeamCallDefectShape: Bool {
 		switch self {
 		case .passingUpCopiesHideLabel, .reenteredFillReadsValueOfOneRoute, .reenteredFillReadsValueOfOneRouteBoundAboveCall,
@@ -2104,10 +2126,10 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 		     .carriedLevelFillReadsOptionalSendableWrapper, .carriedLevelFillReadsOptionalSendableWrapperOuterReceives,
 		     .reenteredFillReadsLabelPassingUpSeamBinds, .wrapperMixSendableWrapperBesidePlainMemo, .wrapperMixWrapperDeclaredAboveCall,
 		     .placesOfOneCaseFillClosesCycleAtTwoDepths, .placesOfOneCaseFillCapturesWrapperOfEveryPlace, .placesOfOneCaseValueBoundAfterOnePlace,
-		     .nestedFillHoleUnfilled:
+		     .nestedFillHoleUnfilled, .nestedCycleHoleLabelNoFunctionTakes:
 			false
 		default:
-			["fillCallReadsOwnLevel", "carriedLevel", "passingUpCopies", "reenteredFill", "wrapperMix", "placesOfOneCase", "nestedFillHole", "seamRing"].contains { rawValue.hasPrefix($0) }
+			["fillCallReadsOwnLevel", "carriedLevel", "passingUpCopies", "reenteredFill", "wrapperMix", "placesOfOneCase", "nestedFillHole", "seamRing", "nestedCycleHole"].contains { rawValue.hasPrefix($0) }
 		}
 	}
 
@@ -2940,6 +2962,7 @@ enum GraphFuzzerGenerator {
 			placeStoodForRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.placeStoodForRandomSeedMask)
 			nestedFillHoleRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.nestedFillHoleRandomSeedMask)
 			seamRingRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.seamRingRandomSeedMask)
+			nestedCycleHoleRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.nestedCycleHoleRandomSeedMask)
 			reenteredPlaceFieldRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.reenteredPlaceFieldRandomSeedMask)
 			reenteredRelayTagRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.reenteredRelayTagRandomSeedMask)
 			repeatedAncestorRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.repeatedAncestorRandomSeedMask)
@@ -3069,6 +3092,7 @@ enum GraphFuzzerGenerator {
 				if !omitsDrawsOlderReleasesReject {
 					finalDeclarations = addingOptionalPlaceShapes(to: finalDeclarations)
 				}
+				finalDeclarations = addingNestedCycleHoleShapes(to: finalDeclarations)
 				// Drawn after it, from a stream of its own, so that every graph the passes before it draw is drawn as before.
 				finalDeclarations = addingPlacesOfOneCaseShapes(to: finalDeclarations)
 				// Drawn after it, from a stream of its own, so that every graph the passes before it draw is drawn as before.
@@ -3496,6 +3520,9 @@ enum GraphFuzzerGenerator {
 		private var nestedFillHoleRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only `addingSeamRingShapes`' choices.
 		private var seamRingRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only `addingNestedCycleHoleShapes`' choices: whether a split graph gains `NestHoleHome`'s tree, a place on
+		/// a type a second lazy cycle builds again, and its rolls.
+		private var nestedCycleHoleRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only `addingReenteredFillShapes`' choices of `reenteredTag`, which `ReenteredSubA` binds before the place whose
 		/// fill builds `ReenteredSubB` again: whether the graph reads it, and how.
 		private var reenteredPlaceFieldRandom: GraphFuzzerRandomNumberGenerator
@@ -10586,6 +10613,132 @@ enum GraphFuzzerGenerator {
 
 		private static let optionalPlaceRandomSeedMask: UInt64 = 0x4F7074506C616365
 
+		// MARK: A place on a type a second lazy cycle builds again
+
+		/// Adds, to three in ten of the graphs another pass split whose wrappers are not all `Sendable`, a place on a type a
+		/// second lazy cycle builds again beneath another declaration of a label its fill reads: `NestHoleHome`, a seam,
+		/// instantiates `nestHoleTag` and the builder of `NestHoleOuter`, which instantiates the builder of `NestHoleInner`
+		/// and holds a place of `NestHoleApi`, on itself or on `NestHoleScreen`, which it builds through an instantiator;
+		/// `NestHoleInner` instantiates the builder of `NestHoleOuter` again, which closes the first cycle, and that of
+		/// `NestHoleRedeclarer`, which declares `nestHoleTag` again, before or after it instantiates the builder of
+		/// `NestHoleInner` again, which closes the second, directly or, one draw in three, through `NestHoleThird`, which
+		/// the redeclarer builds and builds again, a third cycle inside the second. `NestHoleLive`, beside `NestHoleRoot` in
+		/// the roots' module, fills the place and reads `nestHoleTag`.
+		///
+		/// Two draws in five, where the seam's module names its package, the place is passed up from inside the cycles: the
+		/// type that would hold it instantiates `NestHoleHub`, a seam of the module beneath the seam's module that holds the
+		/// place, so `NestHoleHome` takes the builder from its callers. `NestHoleHubRoot`, a root of the roots' module that
+		/// lists every module beneath it, then instantiates `nestHoleTag` in `NestHoleHome`'s place, since a tag the seam
+		/// that passes the place up binds is rejected whatever the cycles declare. The remedy there is `NestHoleHub`'s
+		/// receive of the tag, which each level passes its own.
+		///
+		/// Inline, the `NestHoleOuter` built beneath `NestHoleRedeclarer` reads that type's tag. Neither builder function
+		/// takes the label unless a type of the cycles receives it, and the seam hands the fill the same values at every
+		/// level of a cycle, so the tool rejects the graph (`declarationBoundOnCycleReentry`), one draw in two, and never
+		/// in a graph with a hole of another draw's, whose shapes the rejection would throw away. Otherwise `NestHoleOuter`,
+		/// or `NestHoleHub` where the place is passed up, receives the tag, the error's remedy, so each level's function
+		/// takes it and the fill reads its own level's, which
+		/// the value comparator judges against the inline and the visible builds. A graph whose wrappers are all `Sendable`
+		/// draws nothing: its place would be in the `@Sendable` family, which is handed no values, so the tool rejects the
+		/// read with or without the remedy.
+		///
+		/// `nestedCycleHoleRandom` draws only for this pass, which runs after every other pass and only in a graph another
+		/// pass split, so that every graph in one module, and every other draw of a graph it draws in, draws as before.
+		private mutating func addingNestedCycleHoleShapes(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			// `build()` calls this pass only for a graph split across modules.
+			guard features.contains(.generateDependencyTree) else { return declarations }
+			// Every roll is made before any is read, so that each draws as it does whatever the others draw.
+			let isDrawn = nestedCycleHoleRandom.percentChance(30)
+			let leavesLabelToNoFunction = nestedCycleHoleRandom.percentChance(50)
+			let placeIsOnScreen = nestedCycleHoleRandom.percentChance(50)
+			let declaresLabelAfterCloser = nestedCycleHoleRandom.percentChance(50)
+			// Drawn after the rolls above, so that a graph that draws neither is the graph it was.
+			let hasThirdCycle = nestedCycleHoleRandom.percentChance(33)
+			let passesPlaceUp = nestedCycleHoleRandom.percentChance(40)
+			guard isDrawn, sendability != .sendable else { return declarations }
+			// `NestHoleHub` is a seam of the module beneath the seam's module, which a seam's module without a package does
+			// not draw (`addingWrapperMixShapes`).
+			let placeIsPassedUp = passesPlaceUp && !modulesOmittingPackageName.contains(.seamModule)
+			// A graph with a hole holds shapes the tool accepts that a rejection by design here would throw away, so it draws
+			// the accepted variant instead.
+			let holeSeamNames = ["HoleSeam", GraphFuzzerCycleNames.seam].map { self.prefix + $0 }
+			let receivesLabel = !leavesLabelToNoFunction || declarations.contains { holeSeamNames.contains($0.name) }
+			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
+			let prefix = prefix
+			func instantiable(_ suffix: String, module: GraphFuzzerModule = .seamModule, properties: [PropertyDeclaration] = []) -> TypeDeclaration {
+				var declaration = TypeDeclaration(name: "\(prefix)\(suffix)", instantiableArguments: [], properties: properties, declaresHelperTypes: false, additionalConformances: conformances)
+				declaration.module = module
+				return declaration
+			}
+			func builder(of suffix: String) -> PropertyDeclaration {
+				PropertyDeclaration(attribute: "@Instantiated", label: "nestHole\(suffix)Builder", type: "Instantiator<\(prefix)NestHole\(suffix)>")
+			}
+			let apiName = "\(prefix)NestHoleApi"
+			// `NestHoleHub` receives the tag where it is drawn, so the tag is a type of its module.
+			let tag = instantiable("NestHoleTag", module: placeIsPassedUp ? .seamDependency : .seamModule)
+			func tagProperty(_ attribute: String) -> PropertyDeclaration {
+				PropertyDeclaration(attribute: attribute, label: "nestHoleTag", type: tag.name)
+			}
+			let apiDeclaration = "public protocol \(apiName)\(helperTypesAreSendable ? ": Sendable" : "") {}"
+			let ownPlace = PropertyDeclaration(attribute: "@Instantiated", label: "nestHoleApi", type: "any \(apiName)")
+			var added = [tag]
+			let place: PropertyDeclaration
+			if placeIsPassedUp {
+				// The error's remedy for a place a seam called inside the cycles passes up: the called seam receives the label.
+				var hub = instantiable("NestHoleHub", module: .seamDependency, properties: (receivesLabel ? [tagProperty("@Received")] : []) + [ownPlace])
+				hub.instantiableArguments = ["generateDependencyTree: true"]
+				hub.additionalDeclarations.append(apiDeclaration)
+				added.append(hub)
+				place = PropertyDeclaration(attribute: "@Instantiated", label: "nestHoleHub", type: hub.name)
+			} else {
+				place = ownPlace
+			}
+			var outerProperties = [PropertyDeclaration]()
+			if receivesLabel, !placeIsPassedUp {
+				outerProperties.append(tagProperty("@Received"))
+			}
+			outerProperties.append(builder(of: "Inner"))
+			if placeIsOnScreen {
+				outerProperties.append(builder(of: "Screen"))
+				added.append(instantiable("NestHoleScreen", properties: [place]))
+			} else {
+				outerProperties.append(place)
+			}
+			added.append(instantiable("NestHoleOuter", properties: outerProperties))
+			added.append(instantiable("NestHoleInner", properties: [builder(of: hasThirdCycle ? "Third" : "Redeclarer"), builder(of: "Outer")]))
+			if hasThirdCycle {
+				added.append(instantiable("NestHoleThird", properties: [builder(of: "Redeclarer"), builder(of: "Inner")]))
+			}
+			let closer = builder(of: hasThirdCycle ? "Third" : "Inner")
+			let redeclarerProperties = declaresLabelAfterCloser
+				? [closer, tagProperty("@Instantiated")]
+				: [tagProperty("@Instantiated"), closer]
+			added.append(instantiable("NestHoleRedeclarer", properties: redeclarerProperties))
+			// A value the seam that passes the place up binds on its way to the call is one its caller cannot hand the
+			// builder, whatever the cycles declare (`boundByPassingUpSeam`), so there the root declares the tag, which
+			// `NestHoleHome` takes from it where `NestHoleHub` receives it.
+			var home = instantiable("NestHoleHome", properties: (placeIsPassedUp ? [] : [tagProperty("@Instantiated")]) + [builder(of: "Outer")])
+			home.instantiableArguments = ["generateDependencyTree: true"]
+			var live = instantiable("NestHoleLive", module: .samePackageCaller, properties: [tagProperty("@Received")])
+			live.instantiableArguments = ["fulfillingAdditionalTypes: [\(apiName).self]"]
+			live.additionalConformances.append(apiName)
+			live.fillsHole = true
+			// A root of its own name where the place is beneath the seam's module, whose module then lists every module
+			// beneath it (`GraphFuzzerFixture.modulesListingEveryModuleBeneath`).
+			var root = instantiable(placeIsPassedUp ? "NestHoleHubRoot" : "NestHoleRoot", module: .samePackageCaller, properties: (placeIsPassedUp ? [tagProperty("@Instantiated")] : []) + [PropertyDeclaration(attribute: "@Instantiated", label: "nestHoleHome", type: home.name)])
+			root.instantiableArguments = ["isRoot: true"]
+			if placeIsPassedUp {
+				// `NestHoleTag` and `NestHoleApi` are declared beneath the seam's module, which the roots' module does not import.
+				live.imports.append(GraphFuzzerModule.seamDependency.name)
+				root.imports.append(GraphFuzzerModule.seamDependency.name)
+			} else {
+				home.additionalDeclarations.append(apiDeclaration)
+			}
+			return declarations + added + [home, live, root]
+		}
+
+		private static let nestedCycleHoleRandomSeedMask: UInt64 = 0x6E657374486F6C65
+
 		// MARK: Access proof extensions
 
 		/// With the `generateDependencyTree` feature on, extends `addingAccessProofShapes`' tree with the shapes that pass
@@ -12224,6 +12377,29 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		let prefix = fixture.typeNamePrefix
 		let (propertiesByType, _) = declaredProperties(of: fixture)
 		var features = Set<GraphFuzzerSeamDrawFeature>()
+		if let outerProperties = propertiesByType[prefix + "NestHoleOuter"] {
+			features.insert(.nestedCycleHole)
+			let hubProperties = propertiesByType[prefix + "NestHoleHub"]
+			if hubProperties != nil {
+				features.insert(.nestedCycleHolePlacePassedUp)
+			}
+			if hubProperties?.contains(where: { $0.label == "nestHoleTag" }) == true {
+				features.insert(.nestedCycleHoleLabelReceivedBySeamPassingPlaceUp)
+			} else if outerProperties.contains(where: { $0.label == "nestHoleTag" }) {
+				features.insert(.nestedCycleHoleLabelReceivedByTypeBuiltAgain)
+			} else {
+				features.insert(.nestedCycleHoleLabelNoFunctionTakes)
+			}
+			if propertiesByType[prefix + "NestHoleThird"] != nil {
+				features.insert(.nestedCycleHoleThirdCycle)
+			}
+			if propertiesByType[prefix + "NestHoleScreen"] != nil {
+				features.insert(.nestedCycleHolePlaceOnScreen)
+			}
+			if propertiesByType[prefix + "NestHoleRedeclarer"]?.first?.label != "nestHoleTag" {
+				features.insert(.nestedCycleHoleLabelDeclaredAfterCloser)
+			}
+		}
 		if let shellProperties = propertiesByType[prefix + "FillCallShell"] {
 			features.insert(.fillCallReadsOwnLevel)
 			let badgePlace = propertiesByType[prefix + "FillCallBadge"]?.first { $0.type.hasPrefix("any ") }

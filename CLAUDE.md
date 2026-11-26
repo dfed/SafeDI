@@ -157,7 +157,7 @@ If your session started outside the worktree you are editing, scoped rules and n
 | a new test file, a fixture's file name, a temporary or expected path in a test | `.claude/rules/test-infrastructure.md` |
 | `Documentation/`, `README.md` | `.claude/rules/documentation.md` |
 | a breaking-change judgment, release notes, `publish.yml`, packaging | `.claude/rules/releases-and-packaging.md` |
-| "Graph fuzzer" | `.claude/rules/fuzzer-overview.md`, then `fuzzer-known-issues.md`, `fuzzer-seam-draws.md`, `fuzzer-seam-oracles.md`, `fuzzer-builder-surface.md`, `fuzzer-gating-checks.md`, `fuzzer-corpora.md`, `fuzzer-seam-dependencies.md`, `fuzzer-value-oracles.md`, `fuzzer-remedy-oracle.md`, `fuzzer-calling-mocks.md`, `fuzzer-calling-mock-draw.md`, `fuzzer-calling-mock-limits.md`, `fuzzer-query-oracle.md`, `fuzzer-public-mock-corpus.md`, `fuzzer-release-acceptance.md`, `fuzzer-base-comparison.md` |
+| "Graph fuzzer" | `.claude/rules/fuzzer-overview.md`, then `fuzzer-known-issues.md`, `fuzzer-seam-draws.md`, `fuzzer-seam-oracles.md`, `fuzzer-builder-surface.md`, `fuzzer-gating-checks.md`, `fuzzer-corpora.md`, `fuzzer-seam-dependencies.md`, `fuzzer-value-oracles.md`, `fuzzer-remedy-oracle.md`, `fuzzer-calling-mocks.md`, `fuzzer-calling-mock-draw.md`, `fuzzer-calling-mock-limits.md`, `fuzzer-query-oracle.md`, `fuzzer-public-mock-corpus.md`, `fuzzer-release-acceptance.md`, `fuzzer-base-comparison.md`, `fuzzer-nested-cycle-hole.md` |
 | Bazel rules | `bazel/CLAUDE.md` |
 | the macro target's sources (what it compiles of SafeDICore) | `Sources/SafeDIMacros/CLAUDE.md` |
 | the Tuist plugin | `TuistPlugins/CLAUDE.md` |

@@ -531,7 +531,7 @@ public struct SeamSignature: Sendable {
 		/// built again receives that declaration through the function's parameter; a fill, which reads the scope struct or
 		/// the caller's scope, reads the same value at every level of the cycle.
 		public struct CycleReentryDeclaration: Codable, Sendable {
-			public init(property: Property, declaringType: TypeDescription, declarationLocation: Dependency.DeclarationLocation?, parameterTakingType: TypeDescription?, closedOnProperty: Property, closedOnBuiltType: TypeDescription, closedOnDeclaringType: TypeDescription, reenteringType: TypeDescription) {
+			public init(property: Property, declaringType: TypeDescription, declarationLocation: Dependency.DeclarationLocation?, parameterTakingType: TypeDescription?, closedOnProperty: Property, closedOnBuiltType: TypeDescription, closedOnDeclaringType: TypeDescription, reenteringType: TypeDescription, calledSeamType: TypeDescription? = nil, placeIsInFurtherSendableFunction: Bool = false) {
 				self.property = property
 				self.declaringType = declaringType
 				self.declarationLocation = declarationLocation
@@ -540,6 +540,8 @@ public struct SeamSignature: Sendable {
 				self.closedOnBuiltType = closedOnBuiltType
 				self.closedOnDeclaringType = closedOnDeclaringType
 				self.reenteringType = reenteringType
+				self.calledSeamType = calledSeamType
+				self.placeIsInFurtherSendableFunction = placeIsInFurtherSendableFunction
 			}
 
 			/// The declaration between the function and the cycle-closing scope, or, where a scope between takes the label as
@@ -557,6 +559,15 @@ public struct SeamSignature: Sendable {
 			public let closedOnDeclaringType: TypeDescription
 			/// The type that instantiates `closedOnProperty` again, closing the cycle.
 			public let reenteringType: TypeDescription
+			/// Where the cycle is in the tree of a seam that passes the place up, around its call of the seam the place came
+			/// from, the seam whose scope the place's builder takes: that seam's tree, not the cycle's, hands the builder its
+			/// values, so the label reaches each level's builder only as a value that seam receives. `nil` for a cycle in the
+			/// tree of the seam that holds the place.
+			public let calledSeamType: TypeDescription?
+			/// Whether a `@Sendable` function beneath the closed-on scope's own builds the place. A value the closed-on type
+			/// received would be bound outside that function, which hands the place's builder no value bound outside it, so
+			/// the message does not offer that receive.
+			public let placeIsInFurtherSendableFunction: Bool
 		}
 
 		/// A declaration on the path from the root of a fill of the seam call whose tree holds this place, inside another fill
@@ -895,7 +906,7 @@ public struct SeamSignature: Sendable {
 			var uncarriedDeclarations: [UncarriedDeclaration]
 			/// The declarations a cycle in the tree of the seam that holds the site hands the site's owner when it builds it
 			/// again, which a fill cannot read, the first of each label.
-			let cycleReentryDeclarations: [CycleReentryDeclaration]
+			var cycleReentryDeclarations: [CycleReentryDeclaration]
 			/// The declarations on the paths to calls inside fills of the seam call whose tree holds the place that build the
 			/// filled seam again, which a fill of this place cannot read (see `ReenteringCallDeclaration`), every path's, in the
 			/// order of their declarations. A copy a seam passes up keeps them all.
@@ -1126,8 +1137,13 @@ public struct SeamSignature: Sendable {
 
 		/// The declarations a cycle in the tree of the seam that holds the site hands the site's owner when it builds it
 		/// again, which a fill cannot read, the first of each label.
-		public var cycleReentryDeclarations: [CycleReentryDeclaration] {
-			storage.fields.cycleReentryDeclarations
+		public internal(set) var cycleReentryDeclarations: [CycleReentryDeclaration] {
+			get { storage.fields.cycleReentryDeclarations }
+			set {
+				var fields = storage.fields
+				fields.cycleReentryDeclarations = newValue
+				storage = Storage(fields)
+			}
 		}
 
 		/// The declarations on the paths to calls inside fills of the seam call whose tree holds the place that build the
