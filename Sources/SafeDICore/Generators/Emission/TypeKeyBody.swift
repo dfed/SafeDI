@@ -40,6 +40,28 @@ enum TypeKeyBody {
 		var layout = TypeKeyLayout()
 		layout.declareOuter(outerDeclarations)
 		layout.namesInScope = namesInScope
+		return layOut(rootBody, in: &layout)
+	}
+
+	/// The statements of a root's body laid out from the per-type plan of its cycles, or `nil` where the root keeps the path
+	/// key's body: `rootBody`'s places, and the body of each variant a call place calls, each built once. A call place of a
+	/// cyclic member is a closing record whose target is its variant's index (`ClosingPlaceRecord.targetVariant`), whether or not the
+	/// path key would build the member there, and passes every label the variant's body reads from above as a cycle
+	/// argument read where the call is made. So a variant's function takes as a parameter only what its calls resolve to
+	/// different declarations, captures what they all resolve to the declaration visible where it is declared, and reads
+	/// `nil` where none provides it, by the rules the path key's plan is laid out by; its name is the layout's, claimed as
+	/// every other function's is. A root with a variant whose body reads a label it does not take as a cycle parameter, or a
+	/// call of a variant `variants` does not hold, keeps the path key's body.
+	static func statements(ofRootBody rootBody: [GeneratedCode], variants: [CycleVariantRecord], outerDeclarations: [Property] = [], namesInScope: Set<String> = []) -> [GeneratedCode]? {
+		var layout = TypeKeyLayout()
+		layout.declareOuter(outerDeclarations)
+		layout.namesInScope = namesInScope
+		layout.variants = variants
+		return layOut(rootBody, in: &layout)
+	}
+
+	/// `rootBody` laid out by `layout`, which holds the declarations before it and the variants its call places call.
+	private static func layOut(_ rootBody: [GeneratedCode], in layout: inout TypeKeyLayout) -> [GeneratedCode]? {
 		// The root functions the plan's places call are declared once, before every statement, as the path key declares
 		// them (`RootFunctionHoisting`); a root that keeps one in place keeps the path key's body, since the type key spells
 		// a place written as text without them.
@@ -54,7 +76,7 @@ enum TypeKeyBody {
 		}
 		guard layout.read(rootBody) else { return nil }
 		GenerationWork.record(layout.bodies.count - 1, by: .layingOutTypeKeyViews)
-		guard layout.computeReads() else { return nil }
+		guard layout.computeReads(), layout.variantsReadOnlyTheirCycleParameters() else { return nil }
 		layout.computeClasses()
 		guard layout.computePlacement() else { return nil }
 		layout.computeOutcomes()
@@ -69,6 +91,24 @@ enum TypeKeyBody {
 
 	/// The indentation of a root's statements, which every root body is written after.
 	static let rootStatementIndentation = "        "
+}
+
+/// The body of one variant of the per-type plan of a root's cycles: the record of the variant's one place, whose children
+/// are its body's statements, and whether the body is in the `@Sendable` family.
+struct CycleVariantRecord: Sendable {
+	let record: BuiltPlaceRecord
+	let isInSendableFamily: Bool
+	/// The function's parameters after the forwarded value: one per label the variant's declaration reads from above whose
+	/// answer is a declaration that is not still being built, typed as that declaration, or as its instance where the
+	/// answer is a lazily instantiated declaration's instance. Every call of the variant passes one value for each.
+	let parameters: [Property]
+
+	/// The variant whose body is `record`, whose declaration reads `labels` from above, the body answering them `answers`.
+	init(record: BuiltPlaceRecord, isInSendableFamily: Bool, labels: [String], answers: [Answer]) {
+		self.record = record
+		self.isInSendableFamily = isInSendableFamily
+		parameters = zip(labels, answers).compactMap { label, answer in answer.parameter(labeled: label) }
+	}
 }
 
 /// A declaration of the path key's body: a statement of a body, a forwarded property or a cycle parameter of a place's
@@ -128,7 +168,11 @@ struct TypeKeyLayout {
 		var statements = [Statement]()
 		var positionsByLabel = [String: [Int]]()
 		let forwardedLabels: Set<String>
-		let cycleParameterLabels: Set<String>
+		/// The parameters of the body's function a cycle closes on, or of a variant's function: what its calls pass it.
+		let cycleParameters: [Property]
+		var cycleParameterLabels: Set<String> {
+			Set(cycleParameters.map(\.label))
+		}
 
 		/// The parent body and statement index of each of the view's places.
 		var edges: [(parent: Int, position: Int)] {
@@ -203,6 +247,13 @@ struct TypeKeyLayout {
 	var normalizedCycleParameters = [Int: [String: PathValue]]()
 	var isDecorated = [Bool]()
 	var functionNames = [String]()
+	/// The variants of the per-type plan, which call places name by index; empty where the layout reads the path key's plan
+	/// alone.
+	var variants = [CycleVariantRecord]()
+	/// The body of each variant the walk has reached, by the variant's index.
+	var variantBodiesByIndex = [Int: Int]()
+	/// The bodies of the variants, which have no place of their own: every call of one is a closing statement.
+	var variantBodies = Set<Int>()
 	/// The passed arguments each call of a place's function hands it, keyed by the body and index of the call: the places
 	/// of one view can each hand their own.
 	var passedArgumentsByCall = [[Int]: [PassedArgument]]()

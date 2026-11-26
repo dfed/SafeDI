@@ -150,6 +150,33 @@ struct ClosingPlaceRecord: Sendable {
 	/// Unlike a built place's, these and their count are part of the closer's structural key: the closer's call must match
 	/// the function it closes on.
 	var passedArguments = [PassedArgument]()
+	/// The variant of the per-type plan of the root's cycles the place calls, by its index among the variants the layout is
+	/// handed, or `nil` where the place closes on the enclosing function `closedOnFunctionName` names. The layout names a
+	/// variant's function, so a call of one is never resolved by name.
+	var targetVariant: Int?
+}
+
+extension ClosingPlaceRecord {
+	/// The record of a call place of the per-type plan (`PlanStatement.call`): a call of the function of the variant at
+	/// index `variant`, which builds `property`, handing each of `parameters` (the variant's cycle parameters, one per
+	/// label its declaration reads from above, in that order) what `arguments` answers where the call is made: the nearest
+	/// declaration, the instance of a lazily instantiated one, or `nil` where nothing provides the label or what provides
+	/// it is still being built.
+	init(callingVariant variant: Int, property: Property, isErased: Bool, isExtension: Bool, forwardedProperties: [Property], labels: [String], arguments: [Answer]) {
+		self.init(
+			property: property,
+			isErased: isErased,
+			isExtension: isExtension,
+			closedOnFunctionName: ScopeGenerator.functionName(toBuildPropertyNamed: property.label),
+			forwardedProperties: forwardedProperties,
+			cycleArguments: zip(labels, arguments).compactMap { label, answer in
+				answer.parameter(labeled: label).map { parameter in
+					PlaceRead(argumentLabel: label, label: label, property: parameter, source: answer.argumentSource(labeled: label))
+				}
+			},
+		)
+		targetVariant = variant
+	}
 }
 
 /// A place written as text, as the path key writes it: a rename of a value, or another place whose code the engine copies
@@ -262,4 +289,35 @@ struct RootDeclarationRecord: Sendable {
 	let staysOutsideSendableFunctions: Bool
 	/// The statement, its lines unindented.
 	let text: String
+}
+
+extension Answer {
+	/// The parameter a variant's function takes for `label` under this answer: none where nothing above the call provides
+	/// the label or the declaration is still being built, since the body is built with `nil` for it; the declaration's
+	/// type; or a lazily instantiated declaration's instance type, optional where the wrapper is.
+	func parameter(labeled label: String) -> Property? {
+		switch self {
+		case .none,
+		     .declared(_, isBeingBuilt: true):
+			nil
+		case let .declared(declaration, isBeingBuilt: false):
+			Property(label: label, typeDescription: declaration.typeDescription)
+		case let .instance(of: wrapper):
+			wrapper.typeDescription.unwrapped.lazilyInstantiatedInstanceType.map { instanceType in
+				Property(label: label, typeDescription: wrapper.typeDescription.isOptional ? .optional(instanceType) : instanceType)
+			}
+		}
+	}
+
+	/// What a call passes for `label` under this answer, which takes a parameter: the nearest declaration of the label
+	/// where the call is made, or that wrapper's instance. The one place a call's argument form is decided.
+	func argumentSource(labeled label: String) -> ArgumentSource {
+		switch self {
+		case let .instance(of: wrapper):
+			.lazyInstance(label: label, throughOptional: wrapper.typeDescription.isOptional)
+		case .none,
+		     .declared:
+			.binding(label: label)
+		}
+	}
 }

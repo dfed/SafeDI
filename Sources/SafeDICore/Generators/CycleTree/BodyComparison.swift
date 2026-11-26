@@ -21,7 +21,7 @@
 extension DependencyTreeGenerator {
 	/// Compares each place of a root's tree with a body built from its scope's copy beneath the answers its path gives
 	/// the labels the scope's tree receives (`VariantBodyObservation`), and the bodies today's places take with those the
-	/// root's plan builds with no tree of today's (`PlanBodiesObservation`, `PlanCallsObservation`). Does nothing where no test observes any.
+	/// root's plan builds with no tree of today's (`PlanBodiesObservation`, `PlanCallsObservation`), and the code the type key lays out of that plan (`PlanCodeObservation`). Does nothing where no test observes any.
 	///
 	/// A tree with a label no one parameter can pass is rejected (`validateCycleLabelsArePassable`), and is not compared:
 	/// a body beneath a call's own answers passes a value there that today's parameter cannot carry.
@@ -31,21 +31,24 @@ extension DependencyTreeGenerator {
 	///   - todaysTree: The generator today's build made of `scope`.
 	///   - frozenScopeMap: The frozen map of the world `scope` is of: each body is built against a table of it.
 	///   - cache: The received properties of the scopes of that world.
+	/// - Returns: The bodies of the root's plan, whose code is still to be planned, where a test observes the code the
+	///   type key lays out of them (`PlanCodeObservation`).
 	static func compareBodies(
 		ofRoot scope: Scope,
 		todaysTree: ScopeGenerator,
 		frozenScopeMap: FrozenScopeMap,
 		declaredTypeNames: DeclaredTypeNames,
 		cache: inout ReceivedPropertiesCache,
-	) throws {
+	) throws -> WrittenVariantPlan.Unplanned? {
 		let variantBodyObserver = VariantBodyObservation.observer
 		let planBodiesObserver = PlanBodiesObservation.observer
 		let planCallsObserver = PlanCallsObservation.observer
 		let twinIdentityObserver = TwinIdentityObservation.observer
-		guard variantBodyObserver != nil || planBodiesObserver != nil || planCallsObserver != nil || twinIdentityObserver != nil,
+		let planCodeObserver = PlanCodeObservation.observer
+		guard variantBodyObserver != nil || planBodiesObserver != nil || planCallsObserver != nil || twinIdentityObserver != nil || planCodeObserver != nil,
 		      todaysTree.unpassableCycleLabelsInTree.isEmpty,
 		      let shadow = CallPlaceShadow(root: scope, cache: &cache)
-		else { return }
+		else { return nil }
 		var bodies = VariantBodies(frozenScopeMap: frozenScopeMap, declaredTypeNames: declaredTypeNames)
 		// The calls of each function already compared, each by the answers its call's path gives the labels the
 		// function's tree receives: the places beneath a call answered alike are given the same declarations.
@@ -115,7 +118,9 @@ extension DependencyTreeGenerator {
 		}
 		// The bodies the plan builds with no tree of today's: the root's, then the body of each call place a
 		// body holds, beneath the answers that body's path gives it.
-		if planBodiesObserver != nil || planCallsObserver != nil, let plan = try bodies.plan(ofRoot: scope, shadow: shadow, cache: &cache) {
+		// The bodies whose code is still to be planned, where a test observes it.
+		var unplanned: WrittenVariantPlan.Unplanned?
+		if planBodiesObserver != nil || planCallsObserver != nil || planCodeObserver != nil, let plan = try bodies.plan(ofRoot: scope, shadow: shadow, cache: &cache) {
 			let bodiesOfPlan = plan.calledBodies
 			planCallsObserver?(
 				scope.instantiable.concreteInstantiable.asSource,
@@ -127,6 +132,9 @@ extension DependencyTreeGenerator {
 				todaysBodies.filter { !bodiesOfPlan.contains($0) }.map { bodies.bodies[$0].description },
 				shadow.twinValues.map { "\($0.concreteType.asSource) as \($0.property.asSource)" }.sorted(),
 			)
+			if planCodeObserver != nil {
+				unplanned = WrittenVariantPlan.Unplanned(of: bodies, plan: plan)
+			}
 		}
 		if let twinIdentityObserver, !shadow.twinValues.isEmpty {
 			let (table, record) = frozenScopeMap.freezing(rootScope: scope)
@@ -137,5 +145,6 @@ extension DependencyTreeGenerator {
 				callsOfOtherFunction,
 			)
 		}
+		return unplanned
 	}
 }
