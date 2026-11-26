@@ -22,16 +22,16 @@ extension TypeKeyLayout {
 	// MARK: Classes
 
 	/// The type of a path declaration.
-	func type(of value: PathValue) -> TypeDescription? {
+	func type(of value: PathValue, label readLabel: String) -> TypeDescription? {
 		switch value {
 		case .none:
 			nil
 		case let .statement(body, index):
-			property(of: bodies[body].statements[index])?.typeDescription
+			property(of: bodies[body].statements[index], label: readLabel)?.typeDescription
 		case let .forwarded(body, label):
 			bodies[body].record?.parameterProperties.first(where: { $0.label == label })?.typeDescription
 		case let .cycleParameter(body, label):
-			bodies[body].record?.cycleParameters.first(where: { $0.label == label })?.typeDescription
+			bodies[body].cycleParameters.first(where: { $0.label == label })?.typeDescription
 		}
 	}
 
@@ -56,7 +56,7 @@ extension TypeKeyLayout {
 		var groupedClasses = [[Int]: Int]()
 		var classesWithForms = [Int](repeating: 0, count: count)
 		for body in bodies.indices.dropFirst() {
-			let forms: [String?] = reads[body].map { label in type(of: resolution(of: label, atPlace: body))?.unwrapped.asSource }
+			let forms: [String?] = reads[body].map { label in type(of: resolution(of: label, atPlace: body), label: label)?.unwrapped.asSource }
 			var groups = groupsByClass[refined[body], default: []]
 			var groupIndex = groups.firstIndex { group in
 				zip(group, forms).allSatisfy { $0 == nil || $1 == nil || $0 == $1 }
@@ -90,6 +90,10 @@ extension TypeKeyLayout {
 			classByBody[body] = id
 			membersByClass[id].append(body)
 		}
+		// Every lookup in a class's body asks whether its function is handed a label, so each class's labels are kept once.
+		parameterLabelsByClass = membersByClass.map { members in
+			members.first.flatMap { bodies[$0].record }.map { Set($0.parameterProperties.map(\.label)) } ?? []
+		}
 	}
 
 	func structuralKey(of body: Int, isInSendableFamily: Bool) -> [String] {
@@ -112,12 +116,20 @@ extension TypeKeyLayout {
 		for argument in record.passedArguments {
 			key.append("parameter|\(argument.parameterName)|\(argument.type.asSource)")
 		}
+		// A variant of the per-type plan takes a parameter per label its body's answers declare (`CycleVariantRecord.parameters`):
+		// two variants of one declaration answered apart take other parameters, so they are no class of one, whose outcomes
+		// one member decides (`computeOutcomes`).
+		if variantBodies.contains(body) {
+			for parameter in bodies[body].cycleParameters {
+				key.append("variantParameter|\(parameter.asSource)")
+			}
+		}
 		for (index, statement) in bodies[body].statements.enumerated() {
 			key.append(statementShape(statement))
 			let passedArguments = passedArguments(ofStatementAt: index, inBody: body)
 			key.append("passedArguments|\(passedArguments.count)")
 			if case .closer = statement {
-				key.append(contentsOf: passedArguments.map { $0.closerShape ?? $0.shape })
+				key.append(contentsOf: passedArguments.map(\.closerShape))
 			} else {
 				key.append(contentsOf: passedArguments.map(\.shape))
 			}
@@ -137,7 +149,9 @@ extension TypeKeyLayout {
 			return "inline|\(record.property.asSource)|\(record.concreteType.asSource)|\(record.target.callee)|\(record.isErased)|\(record.isExtension)|\(record.lineEnd)|\(arguments)|\(record.constructionShape.joined(separator: ";"))"
 		case let .alias(record):
 			let reads = record.listedReads.map { "\($0.label):\($0.property.asSource)" }.joined(separator: ",")
-			return "alias|\(record.text)|\(reads)"
+			// Two renames of one text read their value apart where one reads it only if available: the type they read
+			// differs, so the places are no class of one.
+			return "alias|\(record.text)|\(reads)|\(record.readsOnlyIfAvailable)"
 		}
 	}
 

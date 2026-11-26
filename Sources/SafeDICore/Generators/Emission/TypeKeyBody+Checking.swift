@@ -64,6 +64,22 @@ extension TypeKeyLayout {
 	mutating func normalizeCycleParameters() {
 		for body in bodies.indices.dropFirst() {
 			guard let record = bodies[body].record else { continue }
+			if variantBodies.contains(body) {
+				// A variant of the per-type plan is called only by closing statements, each passing every cycle parameter, or
+				// passing nothing for one its function captures, which holds the root's statement every call passes
+				// (`rootStatementsCapturedByVariants()`).
+				for (label, position) in rootStatementsCapturedByVariant[body] ?? [:] {
+					normalizedCycleParameters[body, default: [:]][label] = .statement(body: 0, index: position)
+				}
+				let calls = closersByTarget[body] ?? []
+				for label in bodies[body].cycleParameterLabels.sorted() where rootStatementsCapturedByVariant[body]?[label] == nil {
+					let values = calls.map { normalized(closerValue(of: label, closing: $0, onPlace: body)) }
+					if let first = values.first, values.allSatisfy({ $0 == first }) {
+						normalizedCycleParameters[body, default: [:]][label] = first
+					}
+				}
+				continue
+			}
 			// The call passes each cycle parameter one argument of its label (`ScopeGenerator.cycleParameterReads`).
 			for argument in record.callCycleArguments {
 				let first = normalized(pathValue(of: argument, inBody: bodies[body].parent, before: bodies[body].position))
@@ -120,8 +136,8 @@ extension TypeKeyLayout {
 					let expected = normalized(lookUp(fulfillingProperty.label, inBody: body, before: index))
 					let declaration = typeLookUp(fulfillingProperty.label, inClass: owner, before: index)
 					guard normalized(evaluate(declaration, inBody: body)) == expected,
-					      let typeModeType = type(of: declaration),
-					      let pathType = type(of: expected),
+					      let typeModeType = type(of: declaration, label: fulfillingProperty.label),
+					      let pathType = type(of: expected, label: fulfillingProperty.label),
 					      typeModeType.asSource == pathType.asSource
 					else { return false }
 				case let .built(child):
@@ -198,7 +214,7 @@ extension TypeKeyLayout {
 	/// The types are compared by exact spelling (`any P` and `P`, `Optional<X>` and `X?`, differ), which is what text
 	/// copied as written needs: a looser match would only share more places, never one the copy reads alike.
 	func readsDeclarationOfSameType(_ read: PlaceRead, inBody body: Int, before index: Int, owner: Int) -> Bool {
-		type(of: typeLookUp(read.label, inClass: owner, before: index))?.asSource == type(of: normalized(pathValue(of: read, inBody: body, before: index)))?.asSource
+		type(of: typeLookUp(read.label, inClass: owner, before: index), label: read.label)?.asSource == type(of: normalized(pathValue(of: read, inBody: body, before: index)), label: read.label)?.asSource
 	}
 
 	/// Whether the call of `place`'s function from the statement at `index` of `body` passes each parameter what the path

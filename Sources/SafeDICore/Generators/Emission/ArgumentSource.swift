@@ -144,8 +144,10 @@ extension Initializer {
 	}
 
 	/// `argument` of a generated call, passed `dependency`: `nil` where it is unavailable, the instance of a received
-	/// property held as a `LazilyInstantiated` property's instance, and the property of its label otherwise.
-	private static func argument(
+	/// property held as a `LazilyInstantiated` property's instance, and the property of its label otherwise. It reads the
+	/// argument's labels alone, so a dependency is read alike whichever function's argument it is passed to: the
+	/// initializer's, or a hand-written mock's.
+	static func argument(
 		_ argument: Argument,
 		passing dependency: Dependency,
 		unavailableProperties: Set<Property>?,
