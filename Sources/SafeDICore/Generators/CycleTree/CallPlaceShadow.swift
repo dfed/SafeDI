@@ -213,7 +213,11 @@ extension DependencyTreeGenerator {
 				}
 				childNearestDeclarations.recordRequiredReceives(of: scope.instantiable, publicMockCall: scope.publicMockCall)
 			}
-			for child in generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: place.propertiesGeneratedLater) where scope.propertiesToGenerate.indices.contains(child.index) {
+			let orderedChildren = generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: place.propertiesGeneratedLater)
+			// The members of each child's loop of builders, which a `_received` function passes the child's function.
+			let loopMembersByChildIndex = generator.loopMembersPassedByReceivedFunctions(of: orderedChildren, takingNoCycleParameters: true)
+			for child in orderedChildren where scope.propertiesToGenerate.indices.contains(child.index) {
+				let loopMembers = loopMembersByChildIndex[child.index, default: []]
 				if case let .instantiated(property, childScope, erasedToConcreteExistential) = scope.propertiesToGenerate[child.index] {
 					let childNearestDeclarations = if let promotedChildNearestDeclarations, childNearestDeclarations.isPromotedByMockRoot(property) {
 						promotedChildNearestDeclarations
@@ -240,7 +244,7 @@ extension DependencyTreeGenerator {
 							nearestDeclarations: placeNearestDeclarations,
 							enclosingNearestDeclarations: childNearestDeclarations,
 							lazilyInstantiatedInstanceProperties: childLazilyInstantiatedInstanceProperties,
-							labelsPassedNil: childLabelsPassedNil.union(VariantAnswers.labelsOfCycleParametersPassedNil(by: child)),
+							labelsPassedNil: childLabelsPassedNil.union(VariantAnswers.labelsOfCycleParametersPassedNil(by: child, passedByReceivedFunction: loopMembers)),
 							twinsBeingBuilt: twinsBeingBuilt,
 							orderedUnavailableProperties: function.orderedUnavailableProperties,
 							labelsBuiltAfter: function.labelsBuiltAfter,
@@ -255,7 +259,7 @@ extension DependencyTreeGenerator {
 							builder: scope,
 							erasedToConcreteExistential: erasedToConcreteExistential,
 							orderedUnavailableProperties: child.generator.mockLoweringBodyUnavailableProperties(child.unavailableProperties),
-							labelsBuiltAfter: VariantAnswers.labelsBuiltAfter(child.propertiesGeneratedLater, besides: childLabelsBuiltAfter, reboundBy: child.generator, besidesParameters: parameterLabelsByCallPlace[ObjectIdentifier(childScope), default: []]),
+							labelsBuiltAfter: VariantAnswers.labelsBuiltAfter(child.propertiesGeneratedLater, besides: childLabelsBuiltAfter, reboundBy: child.generator, besidesParameters: parameterLabelsByCallPlace[ObjectIdentifier(childScope), default: []], passedByReceivedFunction: loopMembers),
 							bodyPropertiesGeneratedLater: child.generator.mockLoweringBodyPropertiesGeneratedLater(child.propertiesGeneratedLater),
 						)
 						let isInSendableFamily = VariantAnswers.isInSendableFamily(calledInSendableFunction: place.isInSendableFunction, property: property)
@@ -295,7 +299,7 @@ extension DependencyTreeGenerator {
 						let isInSendableFamily = VariantAnswers.isInSendableFamily(calledInSendableFunction: place.isInSendableFunction, property: property)
 						var context = context(of: function, describedAs: "\(function.generator.scopeData.asDOTNode) \(description)", twinsBeingBuilt: place.twinsBeingBuilt, isInSendableFamily: isInSendableFamily)
 						// The function reads its parameters from this call, and everything else where it is declared.
-						context = context.answeringCall(of: function, by: child, passingOnNilFor: childLabelsBuiltAfter)
+						context = context.answeringCall(of: function, by: child, passingOnNilFor: childLabelsBuiltAfter, passedByReceivedFunction: loopMembers)
 						childPlaces.append((context, Place(
 							generator: function.generator,
 							scope: function.scope,

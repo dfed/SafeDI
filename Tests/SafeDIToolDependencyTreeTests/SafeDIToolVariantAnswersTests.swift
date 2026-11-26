@@ -192,6 +192,94 @@ struct SafeDIToolVariantAnswersTests: ~Copyable {
 		])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsBodyAnsweringLoopMemberBuiltAfterCall_whenFunctionOfLoopMemberRebindsIt() async throws {
+		// `Flow` builds `screenBuilder` and `peerBuilder`, a loop of builders: `Screen` receives `peerBuilder` only if
+		// available and `Peer` requires `screenBuilder`. `Flow` builds `screenBuilder` first, and `Screen`’s function makes
+		// `peerBuilder` again at its top, so `Screen` reads it though `Flow` builds it after the call (base corpus seeds
+		// 575 and 2103).
+		let plans = try await plans(of:
+			"""
+			@Instantiable(isRoot: true) public final class Root: Instantiable {
+			    @Instantiated let flowBuilder: Instantiator<Flow>
+			    public init(flowBuilder: Instantiator<Flow>) { self.flowBuilder = flowBuilder }
+			}
+
+			@Instantiable public final class Screen: Instantiable {
+			    @Received(onlyIfAvailable: true) let peerBuilder: Instantiator<Peer>?
+			    @Instantiated let flowBuilder: Instantiator<Flow>
+			    public init(peerBuilder: Instantiator<Peer>?, flowBuilder: Instantiator<Flow>) { self.peerBuilder = peerBuilder; self.flowBuilder = flowBuilder }
+			}
+
+			@Instantiable public final class Flow: Instantiable {
+			    @Instantiated let screenBuilder: Instantiator<Screen>
+			    @Instantiated let peerBuilder: Instantiator<Peer>
+			    public init(screenBuilder: Instantiator<Screen>, peerBuilder: Instantiator<Peer>) { self.screenBuilder = screenBuilder; self.peerBuilder = peerBuilder }
+			}
+
+			@Instantiable public final class Peer: Instantiable {
+			    @Received let screenBuilder: Instantiator<Screen>
+			    public init(screenBuilder: Instantiator<Screen>) { self.screenBuilder = screenBuilder }
+			}
+			""")
+
+		#expect(plans == [
+			Plan(
+				root: "Root",
+				bodiesOfPlan: [
+					"Flow as flowBuilder: Instantiator<Flow> [flowBuilder = flowBuilder: Instantiator<Flow>, being built]",
+					"Screen as screenBuilder: Instantiator<Screen> [peerBuilder = peerBuilder: Instantiator<Peer>] [screenBuilder = screenBuilder: Instantiator<Screen>, being built]",
+				],
+				todaysBodiesPlanLacks: [],
+			),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsBodyAnsweringLoopMemberBuiltAfterCall_whenFunctionOfLoopMemberTakesItAsParameter() async throws {
+		// As above, but `Root` builds `screenBuilder` and `peerBuilder` too, so the cycle closes on `Screen`’s function, which
+		// takes `peerBuilder` as a parameter: each scope that declares the loop calls it through a function that makes
+		// `peerBuilder` again and passes it, so `Screen` reads it at every call.
+		let plans = try await plans(of:
+			"""
+			@Instantiable(isRoot: true) public final class Root: Instantiable {
+			    @Instantiated let screenBuilder: Instantiator<Screen>
+			    @Instantiated let peerBuilder: Instantiator<Peer>
+			    public init(screenBuilder: Instantiator<Screen>, peerBuilder: Instantiator<Peer>) { self.screenBuilder = screenBuilder; self.peerBuilder = peerBuilder }
+			}
+
+			@Instantiable public final class Screen: Instantiable {
+			    @Received(onlyIfAvailable: true) let peerBuilder: Instantiator<Peer>?
+			    @Instantiated let flowBuilder: Instantiator<Flow>
+			    public init(peerBuilder: Instantiator<Peer>?, flowBuilder: Instantiator<Flow>) { self.peerBuilder = peerBuilder; self.flowBuilder = flowBuilder }
+			}
+
+			@Instantiable public final class Flow: Instantiable {
+			    @Instantiated let screenBuilder: Instantiator<Screen>
+			    @Instantiated let peerBuilder: Instantiator<Peer>
+			    public init(screenBuilder: Instantiator<Screen>, peerBuilder: Instantiator<Peer>) { self.screenBuilder = screenBuilder; self.peerBuilder = peerBuilder }
+			}
+
+			@Instantiable public final class Peer: Instantiable {
+			    @Received let screenBuilder: Instantiator<Screen>
+			    public init(screenBuilder: Instantiator<Screen>) { self.screenBuilder = screenBuilder }
+			}
+			""")
+
+		#expect(plans == [
+			Plan(
+				root: "Root",
+				bodiesOfPlan: [
+					"Screen as screenBuilder: Instantiator<Screen> [peerBuilder = peerBuilder: Instantiator<Peer>] [screenBuilder = screenBuilder: Instantiator<Screen>, being built]",
+					"Flow as flowBuilder: Instantiator<Flow> [flowBuilder = flowBuilder: Instantiator<Flow>, being built]",
+				],
+				todaysBodiesPlanLacks: [],
+			),
+		])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]

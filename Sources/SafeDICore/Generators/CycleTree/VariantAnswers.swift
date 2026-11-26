@@ -45,19 +45,34 @@ extension DependencyTreeGenerator {
 			besides labelsBuiltAfterAbove: Set<String>,
 			reboundBy generator: ScopeGenerator,
 			besidesParameters parameterLabels: Set<String>,
+			passedByReceivedFunction loopMembers: Set<Property>,
 		) -> Set<String> {
 			Set(propertiesGeneratedLater.map(\.label))
 				.union(labelsBuiltAfterAbove)
 				.subtracting(generator.reboundProperties.lazy.map(\.label).filter { !parameterLabels.contains($0) })
+				.subtracting(labelsPassedByReceivedFunction(to: generator, taking: parameterLabels, among: loopMembers))
+		}
+
+		/// The labels of `loopMembers`, the members of the loop of builders `generator` is on, that its function takes as
+		/// parameters a lazy cycle needs (its own `cycleParameters`, or `parameterLabels` for a call place): the scope that
+		/// declares the loop hands the member a function of no such parameters, `__safeDI_<label>_received`, which makes each
+		/// such member's wrapper again and passes it, so the function is passed a value whichever member is built first.
+		static func labelsPassedByReceivedFunction(to generator: ScopeGenerator, taking parameterLabels: Set<String>, among loopMembers: Set<Property>) -> Set<String> {
+			guard !loopMembers.isEmpty else { return [] }
+			let labelsTaken = parameterLabels.union(generator.cycleParameters.map(\.property.label))
+			return Set(loopMembers.lazy.map(\.label).filter(labelsTaken.contains))
 		}
 
 		/// The labels of the parameters of the function a lazy cycle closes on that `child`, the scope that declares the
 		/// function or one that closes the cycle on it, passes `nil`, given the order the scope above it builds its children
 		/// in: those whose declaration is still being built (`labelsOfCycleParametersPassedNil`), and those whose declaration
 		/// is built after the call.
-		static func labelsOfCycleParametersPassedNil(by child: ScopeGenerator.OrderedChild) -> Set<String> {
+		static func labelsOfCycleParametersPassedNil(by child: ScopeGenerator.OrderedChild, passedByReceivedFunction loopMembers: Set<Property>) -> Set<String> {
 			var labels = child.generator.labelsOfCycleParametersPassedNil
-			for parameter in child.generator.cycleParameters where child.unavailableProperties.contains(parameter.property) {
+			let labelsPassedByReceivedFunction = labelsPassedByReceivedFunction(to: child.generator, taking: [], among: loopMembers)
+			for parameter in child.generator.cycleParameters
+				where child.unavailableProperties.contains(parameter.property) && !labelsPassedByReceivedFunction.contains(parameter.property.label)
+			{
 				labels.insert(parameter.property.label)
 			}
 			return labels
@@ -124,6 +139,7 @@ extension DependencyTreeGenerator.PlaceContext {
 		of function: DependencyTreeGenerator.FunctionPlace,
 		by closingScope: ScopeGenerator.OrderedChild,
 		passingOnNilFor labelsPassedNilAboveCall: Set<String>,
+		passedByReceivedFunction loopMembers: Set<Property>,
 	) -> Self {
 		let parameterLabels = Set(function.generator.cycleParameters.map(\.property.label))
 		guard !parameterLabels.isEmpty else { return self }
@@ -132,8 +148,12 @@ extension DependencyTreeGenerator.PlaceContext {
 		for label in parameterLabels.intersection(labelsPassedNilAboveCall) where !labelsPassedNilWhateverTheOrder.contains(label) {
 			labelsBuiltAfter.insert(label)
 		}
+		// A closing scope on a loop of builders calls through a `_received` function, which passes the loop's members.
+		let labelsPassedByReceivedFunction = DependencyTreeGenerator.VariantAnswers.labelsPassedByReceivedFunction(to: closingScope.generator, taking: [], among: loopMembers)
 		for parameter in closingScope.generator.cycleParameters
-			where closingScope.unavailableProperties.contains(parameter.property) && !labelsPassedNilWhateverTheOrder.contains(parameter.property.label)
+			where closingScope.unavailableProperties.contains(parameter.property)
+			&& !labelsPassedNilWhateverTheOrder.contains(parameter.property.label)
+			&& !labelsPassedByReceivedFunction.contains(parameter.property.label)
 		{
 			labelsBuiltAfter.insert(parameter.property.label)
 		}
