@@ -456,13 +456,13 @@ struct SafeDIToolReleaseAcceptanceTests {
 			report.append("problem \(problem)")
 			Issue.record(Comment(rawValue: problem))
 		}
-		report.append("release-acceptance release=\(configuration.release.name) corpus=\(configuration.corpus.rawValue) seeds=\(configuration.seeds.lowerBound)..<\(configuration.seeds.upperBound)")
+		report.append("release-acceptance release=\(configuration.release.name) current=\(configuration.current.name) corpus=\(configuration.corpus.rawValue) seeds=\(configuration.seeds.lowerBound)..<\(configuration.seeds.upperBound)")
 		guard compileVerificationIsEnabled else {
 			reportProblem("Release acceptance compiles generated code. Unset SAFEDI_SKIP_COMPILE_CHECK.")
 			return
 		}
 		let start = Date()
-		let verdicts = try await GraphFuzzerReleaseAcceptance.verdicts(forSeeds: Array(configuration.seeds), of: configuration.corpus, older: configuration.release)
+		let verdicts = try await GraphFuzzerReleaseAcceptance.verdicts(forSeeds: Array(configuration.seeds), of: configuration.corpus, older: configuration.release, current: configuration.current)
 		let listedSeeds = (Self.listedSeedsByRelease[configuration.release.name] ?? []).filter { $0.corpus == configuration.corpus }
 		let listedSeedBySeed = Dictionary(grouping: listedSeeds, by: \.seed).compactMapValues(\.first)
 		var classCounts = [GraphFuzzerReleaseAcceptanceClass: Int]()
@@ -471,6 +471,9 @@ struct SafeDIToolReleaseAcceptanceTests {
 		var skipCounts = [GraphFuzzerReleaseProbeSkip: Int]()
 		var rootProbeCount = 0
 		var mockProbeCount = 0
+		var overrideProbeCount = 0
+		var overriddenPlaceCount = 0
+		var skippedOverridePlaceCount = 0
 		var comparedSeedSum = GraphFuzzerSeedSetSum()
 		var comparedSeedCount = 0
 		for (seed, verdict) in verdicts {
@@ -486,6 +489,9 @@ struct SafeDIToolReleaseAcceptanceTests {
 			}
 			rootProbeCount += verdict.rootProbeCount
 			mockProbeCount += verdict.mockProbeCount
+			overrideProbeCount += verdict.overrideProbeCount
+			overriddenPlaceCount += verdict.overriddenPlaceCount
+			skippedOverridePlaceCount += verdict.skippedOverridePlaceCount
 			if verdict.verdictClass == .valuesAgree || verdict.verdictClass == .valuesDiffer {
 				comparedSeedSum.add(seed)
 				comparedSeedCount += 1
@@ -495,6 +501,9 @@ struct SafeDIToolReleaseAcceptanceTests {
 				line += " annotations=\(verdict.annotations.sorted().map(\.rawValue).joined(separator: ","))"
 			}
 			line += " roots=\(verdict.rootProbeCount) mocks=\(verdict.mockProbeCount)"
+			if verdict.overrideProbeCount > 0 {
+				line += " overrides=\(verdict.overrideProbeCount)/\(verdict.overriddenPlaceCount)"
+			}
 			if !verdict.skippedProbeCounts.isEmpty {
 				line += " skips=\(verdict.skippedProbeCounts.sorted { $0.key < $1.key }.map { "\($0.key.rawValue):\($0.value)" }.joined(separator: ","))"
 			}
@@ -520,6 +529,7 @@ struct SafeDIToolReleaseAcceptanceTests {
 		report.append("rejections " + GraphFuzzerReleaseRejection.allCases.map { "\($0.rawValue)=\(rejectionCounts[$0, default: 0])" }.joined(separator: " "))
 		report.append("annotations " + GraphFuzzerReleaseAnnotation.allCases.map { "\($0.rawValue)=\(annotationCounts[$0, default: 0])" }.joined(separator: " "))
 		report.append("probes roots=\(rootProbeCount) mocks=\(mockProbeCount)")
+		report.append("overrides probes=\(overrideProbeCount) places=\(overriddenPlaceCount) skipped-places=\(skippedOverridePlaceCount)")
 		report.append("skips " + GraphFuzzerReleaseProbeSkip.allCases.map { "\($0.rawValue)=\(skipCounts[$0, default: 0])" }.joined(separator: " "))
 		report.append("compared count=\(comparedSeedCount) sum=\(comparedSeedSum.value)")
 		report.append("cpu wall=\(Int(Date().timeIntervalSince(start).rounded()))")
@@ -550,6 +560,8 @@ struct ReleaseAcceptanceLongRunConfiguration {
 	}
 
 	let release: GraphFuzzerRelease
+	/// The release judged against `release`: this tree, or a built `SafeDITool` another branch's head built.
+	let current: GraphFuzzerRelease
 	let corpus: GraphFuzzerReleaseAcceptanceCorpus
 	let seeds: Range<UInt64>
 	let reportPath: String
@@ -564,7 +576,10 @@ struct ReleaseAcceptanceLongRunConfiguration {
 	/// `SAFEDI_RELEASE_ACCEPTANCE_RUNTIME_SOURCES` (its `Sources/SafeDI`) and `SAFEDI_RELEASE_ACCEPTANCE_REPORT` must
 	/// each be set and exist (the report's directory, for the report); `SAFEDI_RELEASE_ACCEPTANCE_CORPUS`, when set, names
 	/// the corpus (`base`, `seam` or `public-mock`; `base` when unset); `SAFEDI_RELEASE_ACCEPTANCE_SHARD`, when set to
-	/// `<index>/<count>`, runs only that shard of the corpus's seeds.
+	/// `<index>/<count>`, runs only that shard of the corpus's seeds. `SAFEDI_RELEASE_ACCEPTANCE_CURRENT_TOOL`, when set,
+	/// judges that built `SafeDITool` in place of this tree, its generated code compiled against
+	/// `SAFEDI_RELEASE_ACCEPTANCE_CURRENT_MACROS_TOOL` and `SAFEDI_RELEASE_ACCEPTANCE_CURRENT_RUNTIME_SOURCES`, which must
+	/// then be set too, so that a branch's head is judged by its tool alone, whatever test sources it holds.
 	static var current: Result<ReleaseAcceptanceLongRunConfiguration, Problem> {
 		let environment = ProcessInfo.processInfo.environment
 		var problems = [String]()
@@ -609,6 +624,19 @@ struct ReleaseAcceptanceLongRunConfiguration {
 				problems.append("SAFEDI_RELEASE_ACCEPTANCE_SHARD must be `<index>/<count>` naming a shard with at least one seed.")
 			}
 		}
+		var current = GraphFuzzerRelease.currentTree
+		if environment["SAFEDI_RELEASE_ACCEPTANCE_CURRENT_TOOL"] != nil {
+			if let currentTool = existingPath("SAFEDI_RELEASE_ACCEPTANCE_CURRENT_TOOL"),
+			   let currentMacrosTool = existingPath("SAFEDI_RELEASE_ACCEPTANCE_CURRENT_MACROS_TOOL"),
+			   let currentRuntimeSources = existingPath("SAFEDI_RELEASE_ACCEPTANCE_CURRENT_RUNTIME_SOURCES", isDirectory: true)
+			{
+				current = GraphFuzzerRelease(
+					name: environment["SAFEDI_RELEASE_ACCEPTANCE_CURRENT_NAME"] ?? currentTool.path,
+					tool: .executable(currentTool),
+					runtimeSource: DifferentialValueRuntimeSource(runtimeSourcesDirectory: currentRuntimeSources, macrosToolPath: currentMacrosTool),
+				)
+			}
+		}
 		guard problems.isEmpty, let tool, let macrosTool, let runtimeSources else {
 			return .failure(Problem(description: problems.joined(separator: "\n")))
 		}
@@ -618,6 +646,7 @@ struct ReleaseAcceptanceLongRunConfiguration {
 				tool: .executable(tool),
 				runtimeSource: DifferentialValueRuntimeSource(runtimeSourcesDirectory: runtimeSources, macrosToolPath: macrosTool),
 			),
+			current: current,
 			corpus: corpus,
 			seeds: seeds,
 			reportPath: reportPath,

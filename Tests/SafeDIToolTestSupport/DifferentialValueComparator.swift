@@ -1275,6 +1275,31 @@ enum DifferentialValueOracle {
 		return value
 	}
 
+	/// The places of a mock's configuration tree a probe overrides, by the instances each override built, kept alive so
+	/// that no later object takes an identifier; and how many values each place's override built. Only the probe
+	/// executable's main thread reads or writes them.
+	nonisolated(unsafe) private var overriddenObjects = [ObjectIdentifier: (object: AnyObject, place: String)]()
+	nonisolated(unsafe) private var overrideBuildCounts = [String: Int]()
+	nonisolated(unsafe) private var probeOverrides = false
+
+	/// `build`, which builds a mock tree's value at `place` of its configuration tree in place of the mock's own
+	/// construction, counted under `place`; a class instance it builds is described as `<4> T (override <place>)`, and
+	/// the probe's description ends with how many values each place's override built: `overrides built: a ×1; a.b ×2`.
+	/// Both paths evaluate the same expression, so an override one path ignores, applies at another place, or calls
+	/// another number of times is a difference.
+	public func differentialValueOverride<each Argument, Value>(_ place: String, _ build: @escaping @Sendable (repeat each Argument) -> Value) -> @Sendable (repeat each Argument) -> Value {
+		probeOverrides = true
+		return { (argument: repeat each Argument) -> Value in
+			let value = build(repeat each argument)
+			overrideBuildCounts[place, default: 0] += 1
+			if Mirror(reflecting: value).displayStyle == .class {
+				let object = value as AnyObject
+				overriddenObjects[ObjectIdentifier(object)] = (object, place)
+			}
+			return value
+		}
+	}
+
 	/// A value a sample holds in a builder the describer never calls and generated code never reaches, since the
 	/// describer shows a sample without what it holds.
 	public func differentialValueUnreachableSample<V>() -> V {
@@ -1408,6 +1433,8 @@ enum DifferentialValueOracle {
 		public func describe(probe name: String, judgingRetention: Bool = false, value: () -> Any) {
 			alarm(probeTimeLimitInSeconds)
 			probeName = name
+			overrideBuildCounts.removeAll()
+			probeOverrides = false
 			numbersByIdentity.removeAll()
 			numbersGiven = 0
 			isInstantiatedAtFirstMeetingByWrapper.removeAll()
@@ -1419,6 +1446,9 @@ enum DifferentialValueOracle {
 			objectsTheProbesValueHolds = nil
 			describe(probeValue, label: "", owner: "probe", indent: 0)
 			describeDeferredInstances()
+			if probeOverrides {
+				emit("overrides built: " + overrideBuildCounts.sorted { $0.key < $1.key }.map { "\($0.key) ×\($0.value)" }.joined(separator: "; "))
+			}
 			self.probeValue = nil
 			if judgingRetention {
 				describeRetention(of: value)
@@ -1731,10 +1761,11 @@ enum DifferentialValueOracle {
 			switch mirror.displayStyle {
 			case .class, .foreignReference:
 				let (number, isFirstVisit, annotation) = identity(of: value as AnyObject)
+				let overridePlace = overriddenObjects[ObjectIdentifier(value as AnyObject)].map { " (override \($0.place))" } ?? ""
 				if isFirstVisit, Self.isSample(value as AnyObject) {
 					emit("\(prefix)<\(number)> \(typeName)\(annotation)\(note) (sample)")
 				} else if isFirstVisit {
-					emit("\(prefix)<\(number)> \(typeName)\(annotation)\(note)")
+					emit("\(prefix)<\(number)> \(typeName)\(annotation)\(note)\(overridePlace)")
 					describe(children: storedProperties(of: mirror), owner: typeName, indent: indent + 1)
 				} else {
 					emit("\(prefix)<\(number)> \(typeName)\(note) (seen)")

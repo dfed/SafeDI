@@ -214,6 +214,11 @@ struct GraphFuzzerReleaseVerdict: Equatable {
 	var rootProbeCount = 0
 	var mockProbeCount = 0
 	var skippedProbeCounts: [GraphFuzzerReleaseProbeSkip: Int] = [:]
+	/// The mock probes called again with an override at every place of the older release's configuration tree
+	/// (`ReleaseOverrideProbe`), the places they override, and the places they leave to the mock.
+	var overrideProbeCount = 0
+	var overriddenPlaceCount = 0
+	var skippedOverridePlaceCount = 0
 	/// What the verdict rests on: the first diagnostics of a rejection or failed compile, the new warnings, or the
 	/// differing values.
 	var details = ""
@@ -343,6 +348,39 @@ enum GraphFuzzerReleaseAcceptance {
 		return verdict
 	}
 
+	/// `classification` with, when it compares values, a probe for each compared `mock()` that takes no argument, calling
+	/// it with an override at every place of the configuration tree the older release generated
+	/// (`ReleaseOverrideProbe`): an adopter's test is written against that release's `SafeDIOverrides`, so both releases'
+	/// mocks are called with the same overrides, and an override one release ignores, applies at another place, or calls
+	/// another number of times is a difference.
+	static func withOverrideProbes(
+		_ classification: GraphFuzzerReleaseClassification,
+		fixtureFiles: [String],
+		older: GraphFuzzerReleaseRun,
+	) -> GraphFuzzerReleaseClassification {
+		guard case let .comparesValues(verdict, probes) = classification,
+		      case let .compiled(olderGeneratedFiles, _, _) = older.outcome
+		else { return classification }
+		let mockedTypeNames = probes.compactMap { probe -> String? in
+			guard probe.knownRightExpression == nil, probe.expression.hasSuffix(".mock()") else { return nil }
+			let typeName = String(probe.expression.dropLast(".mock()".count))
+			return typeName.allSatisfy { $0.isLetter || $0.isNumber || $0 == "_" || $0 == "." } ? typeName : nil
+		}
+		guard !mockedTypeNames.isEmpty else { return classification }
+		let tree = ReleaseMockConfigurationTree(generatedFiles: olderGeneratedFiles)
+		let constructors = ReleaseOverrideConstructors(fixtureFiles: fixtureFiles)
+		var verdictWithOverrides = verdict
+		var overrideProbes = [DifferentialValueProbe]()
+		for typeName in mockedTypeNames {
+			guard let overrideProbe = ReleaseOverrideProbe.probe(mockedTypeName: typeName, tree: tree, constructors: constructors) else { continue }
+			overrideProbes.append(overrideProbe.probe)
+			verdictWithOverrides.overrideProbeCount += 1
+			verdictWithOverrides.overriddenPlaceCount += overrideProbe.placeCount
+			verdictWithOverrides.skippedOverridePlaceCount += overrideProbe.skippedPlaceCount
+		}
+		return .comparesValues(verdictWithOverrides, probes: probes + overrideProbes)
+	}
+
 	/// Whether a probe calls a generated mock rather than building a root.
 	static func isMockProbe(_ probe: DifferentialValueProbe) -> Bool {
 		probe.expression.contains(".mock(")
@@ -448,7 +486,11 @@ enum GraphFuzzerReleaseAcceptance {
 					let fixture = GraphFuzzerGenerator.releaseAcceptanceFixture(forSeed: seed, features: corpus.features)
 					let olderRun = try await run(older, over: fixture, filesToDelete: &filesToDelete)
 					let currentRun = try await run(current, over: fixture, filesToDelete: &filesToDelete)
-					let classification = classify(older: olderRun, current: currentRun) { fixture.differentialValueProbes(generatedFiles: $0) }
+					let classification = withOverrideProbes(
+						classify(older: olderRun, current: currentRun) { fixture.differentialValueProbes(generatedFiles: $0) },
+						fixtureFiles: fixture.swiftFileContent,
+						older: olderRun,
+					)
 					guard case let .comparesValues(_, probes) = classification,
 					      case let .compiled(olderGeneratedFiles, _, _) = olderRun.outcome,
 					      case let .compiled(currentGeneratedFiles, _, _) = currentRun.outcome
