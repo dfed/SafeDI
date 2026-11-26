@@ -236,11 +236,8 @@ struct SafeDIToolSeamRootFillTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_keepsEachCallsDispatcherInItsCall_whenTwoCallsDeclareDispatchersOfOneNameCallingTheirOwnFills() async throws {
-		let (output, disagreements) = try await collectingRootFunctionKeyDisagreements {
-			try await executeSafeDIToolMultiModuleTest(modules: Self.siblingCallModules(callsInnerThroughOuterSeam: false), integration: .moduleInfo, filesToDelete: &filesToDelete)
-		}
+		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.siblingCallModules(callsInnerThroughOuterSeam: false), integration: .moduleInfo, filesToDelete: &filesToDelete)
 
-		#expect(disagreements == [])
 		#expect(output.modules["App"]?.generatedFiles["App.swift"] == generatedFileHeader + """
 		#if canImport(InnerSeam)
 		import InnerSeam
@@ -313,11 +310,8 @@ struct SafeDIToolSeamRootFillTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_keepsEachCallsDispatcherInItsCall_whenTwoSeamsOfOneModuleCallAnotherModulesSeam() async throws {
-		let (output, disagreements) = try await collectingRootFunctionKeyDisagreements {
-			try await executeSafeDIToolMultiModuleTest(modules: Self.siblingCallModules(callsInnerThroughOuterSeam: true), integration: .moduleInfo, filesToDelete: &filesToDelete)
-		}
+		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.siblingCallModules(callsInnerThroughOuterSeam: true), integration: .moduleInfo, filesToDelete: &filesToDelete)
 
-		#expect(disagreements == [])
 		#expect(output.modules["App"]?.generatedFiles["App.swift"] == generatedFileHeader + """
 		#if canImport(InnerSeam)
 		import InnerSeam

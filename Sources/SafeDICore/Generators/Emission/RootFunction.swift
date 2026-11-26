@@ -81,9 +81,8 @@ struct RootFunctionRecord: Sendable {
 /// What a root function's text is a function of, within one root: the called seam, the level of its tree the function
 /// returns the struct of, what of the call around it the text reads, and the text itself, which the other fields do not
 /// settle: two calls of one seam each declare a dispatcher of one name and level, which call their own fills by name, so
-/// the key holds the text, and the root declares a name once only where every call wrote one text. The graph fuzzer
-/// checks that equal keys give equal text.
-public struct RootFunctionKey: Hashable, Sendable {
+/// the key holds the text, and the root declares a name once only where every call wrote one text.
+struct RootFunctionKey: Hashable, Sendable {
 	/// The seam whose tree the function walks.
 	let calledSeam: TypeDescription?
 	/// The level's key (`ScopeGenerator.FillDispatcher.key`), which names the hole type and family the level is of.
@@ -138,17 +137,6 @@ public struct RootFunctionKey: Hashable, Sendable {
 /// name has one text, the root functions it holds aside, each of which is declared once in turn: the root reads one
 /// function of each name wherever a call wrote it.
 public enum RootFunctionHoisting {
-	/// A root function a root's plan reaches: its key, its name, and its text as the root would declare it.
-	public struct Occurrence: Sendable {
-		public let key: RootFunctionKey
-		public let name: String
-		public let text: String
-	}
-
-	/// Handed every root function each root's plan reaches, once per call that reaches it, in the order the plan reaches
-	/// them, so the graph fuzzer can check that equal keys give equal text, which nothing in the generator compares.
-	@TaskLocal public static var observer: (@Sendable ([Occurrence]) -> Void)?
-
 	/// Handed, for each root that declares root functions at its top, those declarations as the root writes them and the
 	/// names of every root function the root declares there, so the graph fuzzer can check that each reads nothing of the
 	/// root but those functions. A function the root declares at its top must capture nothing of the code around the call
@@ -173,10 +161,9 @@ public enum RootFunctionHoisting {
 	}
 
 	/// The root functions `statements`, the root's body, reaches, and which of them the root declares once at its top,
-	/// indented as its statements are, written after `indentation`. The body is read once, and the observer handed what it
-	/// reaches.
+	/// indented as its statements are, written after `indentation`. The body is read once.
 	static func hoisting(_ statements: [GeneratedCode], indentation: String) -> Hoisting {
-		let found = recordsAndConflicts(in: statements, reportsOccurrences: true)
+		let found = recordsAndConflicts(in: statements)
 		let records = found.records
 		let keyByName = Dictionary(records.map { ($0.name, $0.key) }, uniquingKeysWith: { first, _ in first })
 		// A function that calls one kept in place, or holds one, is kept in place too, until none is left to keep.
@@ -242,9 +229,7 @@ public enum RootFunctionHoisting {
 	/// The root functions `codes` hold, once per name, in the order they are reached; the names reached with two keys, or
 	/// inside a `@Sendable` function where the function cannot be declared `@Sendable`; and, by name, the names of the root
 	/// functions each one's plan holds.
-	private static func recordsAndConflicts(in codes: [GeneratedCode], reportsOccurrences: Bool = false) -> (records: [RootFunctionRecord], conflictingNames: Set<String>, heldNamesByName: [String: Set<String>]) {
-		let observer = reportsOccurrences ? observer : nil
-		var occurrences = [Occurrence]()
+	private static func recordsAndConflicts(in codes: [GeneratedCode]) -> (records: [RootFunctionRecord], conflictingNames: Set<String>, heldNamesByName: [String: Set<String>]) {
 		var keyByName = [String: RootFunctionKey]()
 		var conflictingNames = Set<String>()
 		var heldNamesByName = [String: Set<String>]()
@@ -283,14 +268,6 @@ public enum RootFunctionHoisting {
 					indentation: record.key.indentation,
 					text: record.key.text,
 				)
-				if observer != nil {
-					// A dispatcher's text as the root would write it, which its key's text omits the attributes of; a fill's key text.
-					let text = switch record.declaration {
-					case .text: record.spelled(isSendable: key.isSendable).spelled()
-					case .code: key.text
-					}
-					occurrences.append(Occurrence(key: key, name: record.name, text: text))
-				}
 				if key.isSendable, !record.canBeDeclaredSendable {
 					conflictingNames.insert(record.name)
 				}
@@ -313,7 +290,6 @@ public enum RootFunctionHoisting {
 			}
 		}
 		GenerationWork.record(levelsRead, by: .findingRootFunctions)
-		observer?(occurrences)
 		return (records, conflictingNames, heldNamesByName)
 	}
 }

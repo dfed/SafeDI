@@ -121,7 +121,7 @@ extension TypeKeyLayout {
 			let passedArguments = passedArguments(ofStatementAt: index, inBody: body)
 			key.append("passedArguments|\(passedArguments.count)")
 			if case .closer = statement {
-				key.append(contentsOf: passedArguments.map(\.closerShape))
+				key.append(contentsOf: passedArguments.map { $0.closerShape ?? $0.shape })
 			} else {
 				key.append(contentsOf: passedArguments.map(\.shape))
 			}

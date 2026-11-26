@@ -130,9 +130,6 @@ extension TypeKeyLayout {
 				guard alias.listsItsReads, alias.otherBindings.isEmpty, alias.calledFunctionNames.isEmpty else { return false }
 				label = alias.property.label
 				namesInScope.formUnion(alias.declaredFunctionNames)
-				for name in alias.declaredFunctionNames {
-					bodies[body].positionsByDeclaredFunction[name, default: []].append(position)
-				}
 				statement = .alias(alias)
 			}
 			bodies[body].statements.append(statement)
