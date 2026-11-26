@@ -137,9 +137,11 @@ extension DependencyTreeGenerator {
 			let isInSendableFamily: Bool
 		}
 
-		init(frozenScopeMap: FrozenScopeMap, declaredTypeNames: DeclaredTypeNames) {
+		/// - Parameter forMockGeneration: Whether each body is built as a place of a mock's tree is.
+		init(frozenScopeMap: FrozenScopeMap, declaredTypeNames: DeclaredTypeNames, forMockGeneration: Bool = false) {
 			self.frozenScopeMap = frozenScopeMap
 			self.declaredTypeNames = declaredTypeNames
+			self.forMockGeneration = forMockGeneration
 		}
 
 		private(set) var bodies = [Body]()
@@ -203,6 +205,39 @@ extension DependencyTreeGenerator {
 				beneath: NearestDeclarations(),
 				lazilyInstantiatedInstanceProperties: [],
 			)
+			return try (rootBody, plan(fromRootBody: rootBody, shadow: shadow, isMockRoot: false, cache: &cache))
+		}
+
+		/// Builds a mock root's plan as `plan(ofRoot:shadow:cache:)` builds a production root's: the root's body, built
+		/// beneath the bindings the mock gives its tree (`rootNearestDeclarations`, keyed by their labels, `rootLabels`), its
+		/// declarations joined to them (`PlaceContextWalk`'s `isMockRoot`), then the body of each call place a body holds.
+		/// - Returns: The position of the root's body, and of each body called in the order the plan first calls it, or
+		///   `nil` where `shadow` holds no copy of `scope`.
+		mutating func plan(
+			ofMockRoot scope: Scope,
+			keyedBy rootLabels: [String],
+			beneath rootNearestDeclarations: NearestDeclarations,
+			lazilyInstantiatedInstanceProperties: Set<Property>,
+			shadow: CallPlaceShadow,
+			cache: inout ReceivedPropertiesCache,
+		) throws -> (rootBody: Int, calledBodies: [Int])? {
+			guard let rootCopy = shadow.copy(of: scope) else { return nil }
+			let rootBody = try body(
+				of: rootCopy,
+				as: VariantBodyKey(scope: ObjectIdentifier(scope), property: nil, twinsBeingBuilt: [:]),
+				keyedBy: rootLabels,
+				answering: rootLabels,
+				beneath: rootNearestDeclarations,
+				lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
+			)
+			return try (rootBody, plan(fromRootBody: rootBody, shadow: shadow, isMockRoot: true, cache: &cache))
+		}
+
+		/// The bodies the plan whose root's body is at `rootBody` calls, in the order it first calls each: the body of each
+		/// call place a body holds, beneath the answers that body's path gives it, until no call is answered anew. Keeps
+		/// each body's calls (`calls(of:)`). `isMockRoot` says whether the root's body is a mock root's, whose declarations
+		/// join the bindings it is built beneath.
+		private mutating func plan(fromRootBody rootBody: Int, shadow: CallPlaceShadow, isMockRoot: Bool, cache: inout ReceivedPropertiesCache) throws -> [Int] {
 			var bodiesOfPlan = [Int]()
 			var bodiesToWalk = [rootBody]
 			while let bodyToWalk = bodiesToWalk.popLast() {
@@ -216,6 +251,7 @@ extension DependencyTreeGenerator {
 					twinValues: shadow.twinValues,
 					twinsBeingBuilt: body.key.twinsBeingBuilt,
 					parameterLabelsByCallPlace: shadow.parameterLabelsByCallPlace,
+					isMockRoot: isMockRoot && bodyToWalk == rootBody,
 				)
 				while let (context, _) = bodyWalk.next() {
 					if let calledScope = shadow.scope(calledAt: context.scope), let calledCopy = shadow.copy(of: calledScope) {
@@ -271,7 +307,7 @@ extension DependencyTreeGenerator {
 					}
 				}
 			}
-			return (rootBody, bodiesOfPlan)
+			return bodiesOfPlan
 		}
 
 		/// The position of the body of `copy` built as `key` beneath what `nearestDeclarations` answers `answeredLabels`,
@@ -296,8 +332,15 @@ extension DependencyTreeGenerator {
 				if let builder, let dependency = builder.scope.instantiable.dependencies.first(where: { $0.property == key.property }) {
 					// Built as its property: the one child of a scope that declares nothing else, so the body is built as
 					// a place builds it, and every child on a cycle, a repeat of the body's own declaration included, is a
-					// call place, which closes on nothing.
-					let holder = Scope(instantiable: Self.holderInstantiable(of: builder.scope.instantiable, declaring: dependency))
+					// call place, which closes on nothing. A dependency a mock root promotes is one its type receives,
+					// which the mock instantiates: the holder instantiates it too.
+					let heldDependency = switch dependency.source {
+					case .instantiated:
+						dependency
+					case .received, .forwarded, .aliased:
+						Dependency(property: dependency.property, source: .instantiated(fulfillingTypeDescription: nil, erasedToConcreteExistential: builder.erasedToConcreteExistential), declarationLocation: dependency.declarationLocation)
+					}
+					let holder = Scope(instantiable: Self.holderInstantiable(of: builder.scope.instantiable, declaring: heldDependency))
 					holder.propertiesToGenerate = [.instantiated(dependency.property, copy, erasedToConcreteExistential: builder.erasedToConcreteExistential)]
 					let (table, record) = frozenScopeMap.freezing(rootScope: holder)
 					let holderGenerator = try record.createScopeGenerator(
@@ -305,6 +348,7 @@ extension DependencyTreeGenerator {
 						nearestDeclarations: keptNearestDeclarations,
 						lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
 						erasedToConcreteExistential: false,
+						forMockGeneration: forMockGeneration,
 						declaredTypeNames: declaredTypeNames,
 						constructionMemo: &memo,
 					)
@@ -316,6 +360,7 @@ extension DependencyTreeGenerator {
 						nearestDeclarations: keptNearestDeclarations,
 						lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
 						erasedToConcreteExistential: false,
+						forMockGeneration: forMockGeneration,
 						declaredTypeNames: declaredTypeNames,
 						constructionMemo: &memo,
 					)
@@ -392,6 +437,7 @@ extension DependencyTreeGenerator {
 
 		private let frozenScopeMap: FrozenScopeMap
 		private let declaredTypeNames: DeclaredTypeNames
+		private let forMockGeneration: Bool
 		private var positionsByKey = [VariantBodyKey: [Int]]()
 		private var callsByBody = [Int: [Call]]()
 		private var sendableBodies = Set<Int>()
