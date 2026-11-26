@@ -150,6 +150,9 @@ struct TypeKeyLayout {
 		let isInSendableFamily: Bool
 		let outerView: [String: KeyedDeclaration]
 		let cycleArguments: [KeyedDeclaration]
+		/// The statements of enclosing bodies whose functions the view's closers call, a loop of builders' members, in the order
+		/// of their bodies and positions (`closedOnFunctions(named:from:)`).
+		let closedOnStatements: [ClosedOnStatementKey]
 	}
 
 	/// What a view's key holds of a declaration outside it. Nothing inside a view depends on which body declares a value it
@@ -157,8 +160,8 @@ struct TypeKeyLayout {
 	/// declarations alike in those share a view, wherever the declarations are: each call of the view's function is
 	/// checked where its parent makes it (`checkCall`), and each read the view's function takes from its callers is passed by
 	/// each call (`computeOutcomes` reads every edge). A statement of the root's body stays itself, since a function can
-	/// capture it. A view a closer inside it calls a function above it from keeps the declarations themselves (`absolute`):
-	/// the closer calls the function its own place's path reaches, which a view standing for several paths could not tell.
+	/// capture it. A view whose closers call a function declared outside it keeps the declarations themselves (`absolute`):
+	/// the closer calls the function its own place's path declares, which a view standing for several paths could not tell.
 	enum KeyedDeclaration: Hashable {
 		case absolute(PathValue)
 		case none
@@ -170,6 +173,15 @@ struct TypeKeyLayout {
 			case forwarded
 			case cycleParameter
 		}
+	}
+
+	/// What tells apart two statements of enclosing bodies whose functions a view's closers call: the view key of the place
+	/// the statement is, its outer view over every label the functions called read.
+	struct ClosedOnStatementKey: Hashable {
+		let node: PlanNode
+		let isInSendableFamily: Bool
+		let outerView: [String: PathValue]
+		let cycleArguments: [PathValue]
 	}
 
 	/// A statement of a body: a place built by its own function, a constant built in place, a cycle-closing scope, or a
@@ -193,6 +205,9 @@ struct TypeKeyLayout {
 	var postOrder = [Int]()
 	/// The domain of each plan node the walk reached.
 	var domainsByNode = [PlanNode: Domain]()
+	/// The children of each body the walk has reached, and the index of its first statement among them (the root's follows
+	/// its outer declarations): where a closer's function is resolved (`resolvedFunction(named:from:)`).
+	var childCodesByBody = [Int: (first: Int, children: [GeneratedCode])]()
 	/// The closing statements that call each body's function: their body and their index in it.
 	var closersByTarget = [Int: [(body: Int, index: Int)]]()
 	/// The labels each body's function reads and does not bind, in the order it first reads them.
