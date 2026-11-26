@@ -142,6 +142,33 @@ struct SafeDIToolMockTypeKeyLazyCycleTests: ~Copyable {
 		])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildsWalksValues_whenReceiverIsReachedOnlyThroughSecondCycleClosedInsideFirst() async throws {
+		// `W` and `U` build each other lazily, and `U` and `P` do too, so `P` closes the second cycle inside the first.
+		// Each builder function of the laid-out mock takes the nearest configuration of `W` and `U`; every place reads
+		// the override the walk's place reads, and `V` beneath `P` is handed `P`'s `l`.
+		let fixture = [
+			"Root.swift": seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let l: L", "@Instantiated let wBuilder: Instantiator<W>"])
+				.replacingOccurrences(of: "@Instantiable(isRoot: true)", with: "@Instantiable(isRoot: true, generateMock: true)"),
+			"W.swift": seamFixtureType(named: "W", isFinalClass: true, declarations: ["@Instantiated let uBuilder: Instantiator<U>", "@Instantiated let vBuilder: Instantiator<V>"]),
+			"U.swift": seamFixtureType(named: "U", isFinalClass: true, declarations: ["@Instantiated let pBuilder: Instantiator<P>", "@Instantiated let wBuilder: Instantiator<W>"]),
+			"P.swift": seamFixtureType(named: "P", isFinalClass: true, declarations: ["@Instantiated let l: L", "@Instantiated let uBuilder: Instantiator<U>"]),
+			"V.swift": seamFixtureType(named: "V", isFinalClass: true, declarations: ["@Received let l: L"]),
+			"L.swift": seamFixtureType(named: "L", isFinalClass: true, declarations: []),
+		]
+		let mocks = try await generatedMocks(of: fixture)
+
+		try await expectLaidOutValuesEqualWalks(mocks, fixtureFiles: fixture, probes: [
+			DifferentialValueProbe("{ let l = L(); return Root.mock(safeDIOverrides: .init(l: { l })).wBuilder.instantiate().vBuilder.instantiate().l === l }()"),
+			DifferentialValueProbe("{ let v = V(l: L()); return Root.mock(safeDIOverrides: .init(wBuilder: .init(vBuilder: { _ in v }))).wBuilder.instantiate().vBuilder.instantiate() === v }()"),
+			DifferentialValueProbe("{ let v = V(l: L()); return Root.mock(safeDIOverrides: .init(wBuilder: .init(vBuilder: { _ in v }))).wBuilder.instantiate().uBuilder.instantiate().wBuilder.instantiate().vBuilder.instantiate() === v }()"),
+			DifferentialValueProbe("{ let v = V(l: L()); return Root.mock(safeDIOverrides: .init(wBuilder: .init(vBuilder: { _ in v }))).wBuilder.instantiate().uBuilder.instantiate().pBuilder.instantiate().uBuilder.instantiate().wBuilder.instantiate().vBuilder.instantiate() === v }()"),
+			DifferentialValueProbe("{ let p = Root.mock().wBuilder.instantiate().uBuilder.instantiate().pBuilder.instantiate(); return p.uBuilder.instantiate().wBuilder.instantiate().vBuilder.instantiate().l === p.l }()"),
+			DifferentialValueProbe("{ let l = L(); return Root.mock(safeDIOverrides: .init(l: { l })).wBuilder.instantiate().uBuilder.instantiate().wBuilder.instantiate().vBuilder.instantiate().l === l }()"),
+		])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
