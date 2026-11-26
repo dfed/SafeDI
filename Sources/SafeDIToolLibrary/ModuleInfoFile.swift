@@ -567,6 +567,64 @@ struct UnresolvableModuleReferenceError: Error, CustomStringConvertible {
 	}
 }
 
+/// The blocks a module info file stores as encodings of their own, which a run decodes only when it needs one, and
+/// which threw when a run decoded them. A run that throws after reading a stored block runs again computing everything
+/// (`Generate.generate(buildLog:)`), so a block that never decodes changes no output: only this tells a test that the
+/// run read nothing it stored. Handed to `failureObserver`, which the tests set, never the tool.
+public enum StoredBlockDecodeObservation {
+	/// A kind of stored block.
+	public enum Block: Hashable, Sendable {
+		/// A module's seam signatures (`ModuleSeamSignatures`).
+		case seamSignatures
+		/// A module's public mock plans (`ModulePublicMockPlans`).
+		case publicMockPlans
+	}
+
+	/// Called once for each stored block whose decoding threw, when set: by the tests, never by the tool.
+	@TaskLocal public static var failureObserver: (@Sendable (Block) -> Void)?
+
+	/// Returns what `read` decodes of a stored `block`, and tells `failureObserver` when it throws.
+	static func reading<Value>(_ block: Block, _ read: () throws(BinaryDecodingError) -> Value) throws(BinaryDecodingError) -> Value {
+		do {
+			return try read()
+		} catch {
+			failureObserver?(block)
+			throw error
+		}
+	}
+}
+
+extension ModuleInfoFile {
+	/// A stored block of a file, with the bytes the tool writes of what the block decodes to.
+	public struct StoredBlockEncoding: Sendable {
+		public let block: StoredBlockDecodeObservation.Block
+		/// The encoding the file holds.
+		public let held: [UInt8]
+		/// The encoding of the values `held` decodes to.
+		public let ofDecodedValues: [UInt8]
+	}
+
+	/// Each stored block of this file's own module, decoded and encoded again: the two encodings of a block are the same
+	/// bytes for a file SafeDITool wrote, since one layout writes and reads a block. The tests ask this of every file a
+	/// run writes, with real signatures and plans; the tool never does.
+	public var storedBlockEncodings: [StoredBlockEncoding] {
+		get throws {
+			try [
+				StoredBlockEncoding(
+					block: .seamSignatures,
+					held: seamSignatures.encoding(writingPositionsAsAbsent: true),
+					ofDecodedValues: ModuleSeamSignatures(seamSignatures.decoded).encoding(writingPositionsAsAbsent: true),
+				),
+				StoredBlockEncoding(
+					block: .publicMockPlans,
+					held: publicMockPlans.encoding(writingPositionsAsAbsent: true),
+					ofDecodedValues: ModulePublicMockPlans(publicMockPlans.decoded, compilesGeneratedMocks: publicMockPlans.compilesGeneratedMocks).encoding(writingPositionsAsAbsent: true),
+				),
+			]
+		}
+	}
+}
+
 /// The signatures a module info file holds of its module's seams (`ModuleInfoFile.seamSignatures`): the seams, read with
 /// the file, and their signatures, which the file holds as an encoding of their own (``BinaryWriter/writeEncoding(_:)``)
 /// that a run decodes only when it reaches one of the module's seams. A module's file and every view that copies its
@@ -607,7 +665,7 @@ struct ModuleSeamSignatures: Sendable {
 	/// encoding, so only a SafeDITool that wrote a malformed one makes the read throw, never trap; a run that throws after
 	/// reading a stored signature runs again computing every signature (`Generate.generate(buildLog:)`).
 	var stored: StoredSeamSignatures {
-		StoredSeamSignatures { try decoded }
+		StoredSeamSignatures { try StoredBlockDecodeObservation.reading(.seamSignatures) { () throws(BinaryDecodingError) in try decoded } }
 	}
 
 	/// The encoding the file holds: the bytes read, written back unchanged, or the signatures encoded each type
@@ -713,7 +771,7 @@ struct ModulePublicMockPlans: Sendable {
 	/// the encoding, so only a SafeDITool that wrote a malformed one makes the read throw, never trap; a run that throws
 	/// after it was handed a stored plan runs again computing every plan (`Generate.generate(buildLog:)`).
 	var stored: StoredPublicMockPlans {
-		StoredPublicMockPlans(compilesGeneratedMocks: compilesGeneratedMocks) { try decoded }
+		StoredPublicMockPlans(compilesGeneratedMocks: compilesGeneratedMocks) { try StoredBlockDecodeObservation.reading(.publicMockPlans) { () throws(BinaryDecodingError) in try decoded } }
 	}
 
 	/// The encoding the file holds: the bytes read, written back unchanged, or the plans encoded each type description

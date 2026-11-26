@@ -84,8 +84,10 @@ enum BinaryFile {
 	/// stored type is laid out change ``schemaFingerprint`` instead. Version 2 shares repeated values inside seam signatures,
 	/// and writes the optional and Boolean fields of most other structs as one integer of flags (``BinaryFieldFlags``).
 	/// Version 3 writes each module's seam signatures as an encoding of their own, with its own string table, behind its
-	/// length (``BinaryWriter/writeEncoding(_:)``), so a run decodes only those of the seams it reaches.
-	static let formatVersion: UInt16 = 3
+	/// length (``BinaryWriter/writeEncoding(_:)``), so a run decodes only those of the seams it reaches. Version 4 writes
+	/// the lists a seam signature or a public mock plan holds for each place as differences from one another
+	/// (``BinaryWriter/writeDifference(of:in:)``).
+	static let formatVersion: UInt16 = 4
 
 	/// Every struct and enum a file holds.
 	static var schemaMembers: [any BinarySchemaMember.Type] {
@@ -185,7 +187,7 @@ enum BinaryFile {
 	/// because describing the schema reflects on every member's type, and reflection scans the runtime's
 	/// protocol conformance tables: computing it took most of a small module's `generate`. A test computes it
 	/// and fails, giving the new value, when a stored type's layout changes.
-	static let schemaFingerprint: UInt64 = 0xF199DDE7CF7F55E6
+	static let schemaFingerprint: UInt64 = 0x78869819EFE477C6
 
 	/// The format version and every schema member's layout, one member per line: the name and type of each
 	/// field a struct writes, and the name and payload types of each case an enum writes, in the order written.
