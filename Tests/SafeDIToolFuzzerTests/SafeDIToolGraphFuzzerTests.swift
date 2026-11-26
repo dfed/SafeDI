@@ -2549,9 +2549,14 @@ struct SafeDIToolGraphFuzzerTests {
 		#expect(Self.knownIssueListProblems(Self.seamKnownIssues, corpusSeedCount: Self.seamCorpusSeedCount) == [])
 		// A seed left out of the inherited shapes must be one of theirs, or the entry filters nothing.
 		#expect(Self.seamCorpusSeedsOfOtherShapes.subtracting(Self.knownIssuesBesideReportedIssueShapes.flatMap(\.seeds)) == [])
-		// A seed added to an inherited shape must name a shape, and be one its list lacks, or the entry adds nothing.
+		// A seed added to an inherited shape must name a shape, and be one its list lacks, or the entry adds nothing; one
+		// another inherited shape lists must be left out of that shape, which the first expectation's list check also
+		// requires of it.
 		#expect(Set(Self.seamCorpusSeedsAddedToInheritedShapes.keys).subtracting(Self.knownIssuesBesideReportedIssueShapes.map(\.reason)) == [])
-		#expect(Set(Self.seamCorpusSeedsAddedToInheritedShapes.values.joined()).intersection(Self.knownIssuesBesideReportedIssueShapes.flatMap(\.seeds)) == [])
+		for knownIssue in Self.knownIssuesBesideReportedIssueShapes {
+			#expect(Set(Self.seamCorpusSeedsAddedToInheritedShapes[knownIssue.reason] ?? []).intersection(knownIssue.seeds) == [], "\(knownIssue.reason)")
+		}
+		#expect(Set(Self.seamCorpusSeedsAddedToInheritedShapes.values.joined()).intersection(Self.knownIssuesBesideReportedIssueShapes.flatMap(\.seeds)).subtracting(Self.seamCorpusSeedsOfOtherShapes) == [])
 	}
 
 	@Test
@@ -8994,7 +8999,8 @@ struct SafeDIToolGraphFuzzerTests {
 		7, 14, 21, 27, 35, 45, 51, 107, 114, 116, 157, 167, 204, 264, 265, 272, 281, 300, 309, 323, 338, 342, 364,
 		371, 381, 383, 431, 434, 455, 461, 476, 508, 525, 527, 545, 548, 567, 577, 593, 595, 617, 624, 628, 632, 634,
 		657, 695, 714, 728, 735, 742, 749, 751, 768, 772, 774, 786, 801, 808, 836, 840, 847, 848, 886, 903, 912, 940,
-		948, 953, 993, 1_024, 1_029, 1_035, 1_042, 1_044, 1_051, 1_061, 1_072, 1_073, 1_081, 1_084, 1_092, 1_139, 1_145, 1_147,
+		948, 953, 991, 993, 1_024, 1_029, 1_035, 1_042, 1_044, 1_051, 1_061, 1_072, 1_073, 1_075, 1_081, 1_084, 1_092, 1_139,
+		1_145, 1_147,
 		1_149, 1_163, 1_300, 1_301, 1_322, 1_329, 1_335, 1_352, 1_362, 1_366, 1_369, 1_372, 1_432, 1_433, 1_434, 1_436,
 		1_447, 1_464, 1_483, 1_492, 1_504, 1_521, 1_524, 1_525, 1_531, 1_559, 1_561, 1_563, 1_567, 1_572, 1_580, 1_602,
 		1_633, 1_646, 1_659, 1_664, 1_724, 1_742, 1_758, 1_784, 1_804, 1_805, 1_816, 1_832, 1_857, 1_864, 1_867, 1_896,
@@ -9002,9 +9008,12 @@ struct SafeDIToolGraphFuzzerTests {
 	]
 
 	/// Seeds that `knownIssues` does not list under an inherited shape, whose graphs the seam's draw changes so that
-	/// they fail it, by the shape's reason. Observed, not derived, as `seamCorpusSeedsOfOtherShapes` is.
+	/// they fail it, by the shape's reason. Observed, not derived, as `seamCorpusSeedsOfOtherShapes` is. Seeds 991 and
+	/// 1075, which the base corpus lists under `lazyCycleBackEdgeSharesBuilderFunctionsReason`, change only which
+	/// configuration fields their mocks have here, never the mocks' code, so `seamCorpusSeedsOfOtherShapes` leaves them
+	/// out of that shape and they are listed under the lazy cycle's configuration field.
 	private static let seamCorpusSeedsAddedToInheritedShapes: [String: [UInt64]] = [
-		lazyCycleConfigurationFieldReason: [135, 1_049, 1_215, 1_289, 1_293],
+		lazyCycleConfigurationFieldReason: [135, 991, 1_049, 1_075, 1_215, 1_289, 1_293],
 	]
 
 	/// Seeds whose seam has two or more pass-throughs. They are sorted by label – kept by ruling: a parameter order
