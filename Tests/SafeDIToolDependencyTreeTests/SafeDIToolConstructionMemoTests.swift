@@ -372,7 +372,7 @@ struct SafeDIToolConstructionMemoTests: ~Copyable {
 			}
 			let (stream, continuation) = AsyncStream.makeStream(of: GenerationWork.self)
 			// Today's tree's look-ups: a plan's bodies share a memo of their own.
-			_ = try await RootTreeChoiceObservation.$forcesPerPath.withValue(true) { try await GenerationWork.$observer.withValue({ continuation.yield($0) }) { [fixture] in
+			_ = try await RootTreeChoiceObservation.$scopeGeneratorLimitOverride.withValue(.max) { try await GenerationWork.$observer.withValue({ continuation.yield($0) }) { [fixture] in
 				try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete, skipCompileVerification: true)
 			} }
 			continuation.finish()
@@ -500,7 +500,7 @@ struct SafeDIToolConstructionMemoTests: ~Copyable {
 	private mutating func keyedPlaceCountsInMemo(of fixture: [String]) async throws -> [String: Int] {
 		let (stream, continuation) = AsyncStream.makeStream(of: String.self)
 		// Today's tree's places: a plan's bodies share a memo of their own.
-		_ = try await RootTreeChoiceObservation.$forcesPerPath.withValue(true) { try await ConstructionMemoOracle.$keyedPlaceObserver.withValue({ continuation.yield($0) }) { [fixture] in
+		_ = try await RootTreeChoiceObservation.$scopeGeneratorLimitOverride.withValue(.max) { try await ConstructionMemoOracle.$keyedPlaceObserver.withValue({ continuation.yield($0) }) { [fixture] in
 			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		} }
 		continuation.finish()

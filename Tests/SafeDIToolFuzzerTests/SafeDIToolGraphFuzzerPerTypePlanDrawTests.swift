@@ -53,10 +53,14 @@ struct SafeDIToolGraphFuzzerPerTypePlanDrawTests {
 		for seed in drawnSeeds {
 			let fixture = GraphFuzzerGenerator.fixture(forSeed: seed)
 			let (stream, continuation) = AsyncStream.makeStream(of: (String, RootTreeChoiceObservation.PerPathReason?).self)
-			let outcome = try await RootTreeChoiceObservation.$observer.withValue({ root, perPathReason in
-				continuation.yield((root, perPathReason))
-			}) {
-				try await GraphFuzzerOracle.toolOutcome(of: fixture)
+			// The draw's trees are within the limit the tool ships with, so the limit is set to none: the tool then lays out
+			// from its plan every root it would past the limit.
+			let outcome = try await RootTreeChoiceObservation.$scopeGeneratorLimitOverride.withValue(0) {
+				try await RootTreeChoiceObservation.$observer.withValue({ root, perPathReason in
+					continuation.yield((root, perPathReason))
+				}) {
+					try await GraphFuzzerOracle.toolOutcome(of: fixture)
+				}
 			}
 			continuation.finish()
 			var planRootReasons = [RootTreeChoiceObservation.PerPathReason?]()
