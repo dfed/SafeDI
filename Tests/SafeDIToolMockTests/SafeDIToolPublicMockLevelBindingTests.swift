@@ -417,7 +417,7 @@ struct SafeDIToolPublicMockLevelBindingTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Hub {
 			        let __safeDI_widgetBuilder_flow = __safeDI_widgetBuilder.flow(SafeDIMockScope_Widget.flow_Values(bBuilder: bBuilder))
-			        func __safeDI_flow(__safeDI_Flow_configuration: Flow.SafeDIMockConfiguration) -> Flow {
+			        func __safeDI_flow() -> Flow {
 			            let __safeDI_widgetBuilder_aBuilder = __safeDI_widgetBuilder_flow.aBuilder(SafeDIMockScope_Widget.Flow_Scope.aBuilder_Values())
 			            func __safeDI_aBuilder() -> A {
 			                let bBuilder = Instantiator<B>(__safeDI_bBuilder)

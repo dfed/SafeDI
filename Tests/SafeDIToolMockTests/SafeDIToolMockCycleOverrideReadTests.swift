@@ -704,36 +704,26 @@ struct SafeDIToolMockCycleOverrideReadTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Game {
-		        @Sendable nonisolated func __safeDI_pingBuilder(__safeDI_Ping_configuration: Ping.SafeDIMockConfiguration) -> Ping {
+		        @Sendable nonisolated func __safeDI_pingBuilder(__safeDI_Ping_configuration: Ping.SafeDIMockConfiguration, __safeDI_Pong_configuration_nearest: Pong.SafeDIMockConfiguration?) -> Ping {
 		            let pongBuilder = SendableInstantiator<Pong> {
-		                __safeDI_pongBuilder(__safeDI_Pong_configuration: __safeDI_Ping_configuration.pongBuilder, __safeDI_Ping_configuration_nearest: __safeDI_Ping_configuration)
+		                __safeDI_pongBuilder(__safeDI_Pong_configuration: __safeDI_Pong_configuration_nearest ?? __safeDI_Ping_configuration.pongBuilder, __safeDI_Ping_configuration_nearest: __safeDI_Ping_configuration)
 		            }
 		            return if let safeDIBuilder = __safeDI_Ping_configuration.safeDIBuilder { safeDIBuilder(__safeDI_Ping_configuration.label(), pongBuilder) } else { Ping(label: __safeDI_Ping_configuration.label(), pongBuilder: pongBuilder) }
 		        }
 		        @Sendable nonisolated func __safeDI_pongBuilder(__safeDI_Pong_configuration: Pong.SafeDIMockConfiguration, __safeDI_Ping_configuration_nearest: Ping.SafeDIMockConfiguration?) -> Pong {
 		            let pingBuilder = SendableInstantiator<Ping> {
-		                __safeDI_pingBuilder(__safeDI_Ping_configuration: __safeDI_Ping_configuration_nearest ?? Ping.SafeDIMockConfiguration())
+		                __safeDI_pingBuilder(__safeDI_Ping_configuration: __safeDI_Ping_configuration_nearest ?? Ping.SafeDIMockConfiguration(), __safeDI_Pong_configuration_nearest: __safeDI_Pong_configuration)
 		            }
 		            return if let safeDIBuilder = __safeDI_Pong_configuration.safeDIBuilder { safeDIBuilder(__safeDI_Pong_configuration.label(), pingBuilder) } else { Pong(label: __safeDI_Pong_configuration.label(), pingBuilder: pingBuilder) }
 		        }
 		        let __safeDI_pingBuilder____safeDI_Ping_configuration: Ping.SafeDIMockConfiguration = safeDIOverrides.pingBuilder
 		        let pingBuilder = SendableInstantiator<Ping> {
-		            __safeDI_pingBuilder(__safeDI_Ping_configuration: __safeDI_pingBuilder____safeDI_Ping_configuration)
+		            __safeDI_pingBuilder(__safeDI_Ping_configuration: __safeDI_pingBuilder____safeDI_Ping_configuration, __safeDI_Pong_configuration_nearest: nil)
 		        }
-		        let __safeDI_otherPingBuilder__overrides = safeDIOverrides.otherPingBuilder
-		        @Sendable nonisolated func __safeDI_otherPingBuilder() -> Ping {
-		            @Sendable nonisolated func __safeDI_pongBuilder() -> Pong {
-		                @Sendable nonisolated func __safeDI_pingBuilder() -> Ping {
-		                    let pongBuilder = SendableInstantiator<Pong>(__safeDI_pongBuilder)
-		                    return if let safeDIBuilder = __safeDI_otherPingBuilder__overrides.safeDIBuilder { safeDIBuilder(__safeDI_otherPingBuilder__overrides.label(), pongBuilder) } else { Ping(label: __safeDI_otherPingBuilder__overrides.label(), pongBuilder: pongBuilder) }
-		                }
-		                let pingBuilder = SendableInstantiator<Ping>(__safeDI_pingBuilder)
-		                return if let safeDIBuilder = __safeDI_otherPingBuilder__overrides.pongBuilder.safeDIBuilder { safeDIBuilder(__safeDI_otherPingBuilder__overrides.pongBuilder.label(), pingBuilder) } else { Pong(label: __safeDI_otherPingBuilder__overrides.pongBuilder.label(), pingBuilder: pingBuilder) }
-		            }
-		            let pongBuilder = SendableInstantiator<Pong>(__safeDI_pongBuilder)
-		            return if let safeDIBuilder = __safeDI_otherPingBuilder__overrides.safeDIBuilder { safeDIBuilder(__safeDI_otherPingBuilder__overrides.label(), pongBuilder) } else { Ping(label: __safeDI_otherPingBuilder__overrides.label(), pongBuilder: pongBuilder) }
+		        let __safeDI_pingBuilder____safeDI_Ping_configuration_: Ping.SafeDIMockConfiguration = safeDIOverrides.otherPingBuilder
+		        let otherPingBuilder = SendableInstantiator<Ping> {
+		            __safeDI_pingBuilder(__safeDI_Ping_configuration: __safeDI_pingBuilder____safeDI_Ping_configuration_, __safeDI_Pong_configuration_nearest: nil)
 		        }
-		        let otherPingBuilder = SendableInstantiator<Ping>(__safeDI_otherPingBuilder)
 		        return Game(pingBuilder: pingBuilder, otherPingBuilder: otherPingBuilder)
 		    }
 		}
