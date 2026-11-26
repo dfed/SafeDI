@@ -974,11 +974,11 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Holder {
-		        func __safeDI_screen() -> Screen {
-		            let detail = if let safeDIBuilder = safeDIOverrides.screen.detail { safeDIBuilder() } else { Detail() }
-		            return if let safeDIBuilder = safeDIOverrides.screen.safeDIBuilder { safeDIBuilder(detail) } else { Screen.mock(detail: detail) }
+		        func __safeDI_screen(__safeDI_Screen_mockConfiguration: Screen.SafeDIMockConfiguration) -> Screen {
+		            let detail = if let safeDIBuilder = __safeDI_Screen_mockConfiguration.detail { safeDIBuilder() } else { Detail() }
+		            return if let safeDIBuilder = __safeDI_Screen_mockConfiguration.safeDIBuilder { safeDIBuilder(detail) } else { Screen.mock(detail: detail) }
 		        }
-		        let screen: Screen = __safeDI_screen()
+		        let screen: Screen = __safeDI_screen(__safeDI_Screen_mockConfiguration: safeDIOverrides.screen)
 		        return Holder(screen: screen)
 		    }
 		}

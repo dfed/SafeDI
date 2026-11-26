@@ -224,11 +224,11 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Feature {
-			        func __safeDI_thing() -> AnyThing {
-			            let clock = if let safeDIBuilder = safeDIOverrides.thing.clock { safeDIBuilder() } else { Clock() }
-			            return if let safeDIBuilder = safeDIOverrides.thing.safeDIBuilder { AnyThing(safeDIBuilder(clock)) } else { AnyThing(DefaultThing(clock: clock)) }
+			        func __safeDI_thing(__safeDI_DefaultThing_configuration: DefaultThing.SafeDIMockConfiguration) -> AnyThing {
+			            let clock = if let safeDIBuilder = __safeDI_DefaultThing_configuration.clock { safeDIBuilder() } else { Clock() }
+			            return if let safeDIBuilder = __safeDI_DefaultThing_configuration.safeDIBuilder { AnyThing(safeDIBuilder(clock)) } else { AnyThing(DefaultThing(clock: clock)) }
 			        }
-			        let thing: AnyThing = __safeDI_thing()
+			        let thing: AnyThing = __safeDI_thing(__safeDI_DefaultThing_configuration: safeDIOverrides.thing)
 			        return Feature(thing: thing)
 			    }
 			}
@@ -333,11 +333,11 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Feature {
-			        func __safeDI_thing() -> AnyThing {
-			            let clock = if let safeDIBuilder = safeDIOverrides.thing.clock { safeDIBuilder() } else { Clock() }
-			            return if let safeDIBuilder = safeDIOverrides.thing.safeDIBuilder { AnyThing(safeDIBuilder(clock)) } else { AnyThing(DefaultThing(clock: clock)) }
+			        func __safeDI_thing(__safeDI_DefaultThing_configuration: DefaultThing.SafeDIMockConfiguration) -> AnyThing {
+			            let clock = if let safeDIBuilder = __safeDI_DefaultThing_configuration.clock { safeDIBuilder() } else { Clock() }
+			            return if let safeDIBuilder = __safeDI_DefaultThing_configuration.safeDIBuilder { AnyThing(safeDIBuilder(clock)) } else { AnyThing(DefaultThing(clock: clock)) }
 			        }
-			        let thing: AnyThing = __safeDI_thing()
+			        let thing: AnyThing = __safeDI_thing(__safeDI_DefaultThing_configuration: safeDIOverrides.thing)
 			        return Feature(thing: thing)
 			    }
 			}
@@ -2702,11 +2702,11 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 				    static func mock(
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> SideFeature {
-				        func __safeDI_panel() -> Panel {
-				            let clock = if let safeDIBuilder = safeDIOverrides.panel.clock { safeDIBuilder() } else { Clock() }
-				            return if let safeDIBuilder = safeDIOverrides.panel.safeDIBuilder { safeDIBuilder(clock) } else { Panel(clock: clock) }
+				        func __safeDI_panel(__safeDI_Panel_configuration: Panel.SafeDIMockConfiguration) -> Panel {
+				            let clock = if let safeDIBuilder = __safeDI_Panel_configuration.clock { safeDIBuilder() } else { Clock() }
+				            return if let safeDIBuilder = __safeDI_Panel_configuration.safeDIBuilder { safeDIBuilder(clock) } else { Panel(clock: clock) }
 				        }
-				        let panel: Panel = __safeDI_panel()
+				        let panel: Panel = __safeDI_panel(__safeDI_Panel_configuration: safeDIOverrides.panel)
 				        return SideFeature(panel: panel)
 				    }
 				}
@@ -2829,11 +2829,11 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 				    static func mock(
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> SideFeature {
-				        func __safeDI_panel() -> Panel {
-				            let clock = if let safeDIBuilder = safeDIOverrides.panel.clock { safeDIBuilder() } else { Clock() }
-				            return if let safeDIBuilder = safeDIOverrides.panel.safeDIBuilder { safeDIBuilder(clock) } else { Panel(clock: clock) }
+				        func __safeDI_panel(__safeDI_Panel_configuration: Panel.SafeDIMockConfiguration) -> Panel {
+				            let clock = if let safeDIBuilder = __safeDI_Panel_configuration.clock { safeDIBuilder() } else { Clock() }
+				            return if let safeDIBuilder = __safeDI_Panel_configuration.safeDIBuilder { safeDIBuilder(clock) } else { Panel(clock: clock) }
 				        }
-				        let panel: Panel = __safeDI_panel()
+				        let panel: Panel = __safeDI_panel(__safeDI_Panel_configuration: safeDIOverrides.panel)
 				        return SideFeature(panel: panel)
 				    }
 				}

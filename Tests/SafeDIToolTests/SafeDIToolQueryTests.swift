@@ -167,11 +167,11 @@ struct SafeDIToolQueryTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Feature {
 		        let logger = if let safeDIBuilder = safeDIOverrides.logger { safeDIBuilder() } else { Logger() }
-		        func __safeDI_service() -> Service {
-		            let cache = if let safeDIBuilder = safeDIOverrides.service.cache { safeDIBuilder() } else { Cache() }
-		            return if let safeDIBuilder = safeDIOverrides.service.safeDIBuilder { safeDIBuilder(cache, logger) } else { Service(cache: cache, logger: logger) }
+		        func __safeDI_service(__safeDI_Service_configuration: Service.SafeDIMockConfiguration) -> Service {
+		            let cache = if let safeDIBuilder = __safeDI_Service_configuration.cache { safeDIBuilder() } else { Cache() }
+		            return if let safeDIBuilder = __safeDI_Service_configuration.safeDIBuilder { safeDIBuilder(cache, logger) } else { Service(cache: cache, logger: logger) }
 		        }
-		        let service: Service = __safeDI_service()
+		        let service: Service = __safeDI_service(__safeDI_Service_configuration: safeDIOverrides.service)
 		        return Feature(service: service, logger: logger)
 		    }
 		}
