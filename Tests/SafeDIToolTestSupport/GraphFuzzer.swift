@@ -2924,6 +2924,7 @@ enum GraphFuzzerGenerator {
 			instantiatedOnlyIfAvailableRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.instantiatedOnlyIfAvailableRandomSeedMask)
 			optionalPlaceRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.optionalPlaceRandomSeedMask)
 			nestedCycleRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.nestedCycleRandomSeedMask)
+			sharedSubtreeRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.sharedSubtreeRandomSeedMask)
 			seamDependencyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ GraphFuzzerSeamDependencyDraw.seamRandomSeedMask)
 			prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
 			// One draw decides, so graphs that are not mixed draw exactly what they drew before mixed graphs existed.
@@ -3009,6 +3010,8 @@ enum GraphFuzzerGenerator {
 			finalDeclarations = addingDependencyInstantiatedOnlyIfAvailable(to: finalDeclarations)
 			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
 			finalDeclarations = addingTypeBuiltAgainThroughSecondLazyCycle(to: finalDeclarations)
+			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
+			finalDeclarations = addingSharedSubtreeShapes(to: finalDeclarations)
 			// In a graph split across modules, every file names its module and imports the seam's, so that a type of the
 			// caller can name what the seam's module declares, such as the creation stamps' counter.
 			let isSplit = finalDeclarations.contains { $0.module == .seamModule }
@@ -3486,6 +3489,9 @@ enum GraphFuzzerGenerator {
 		/// Draws only `addingTypeBuiltAgainThroughSecondLazyCycle`'s choices: whether a graph gains `NestRoot`'s tree, and
 		/// every shape of that tree.
 		private var nestedCycleRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only `addingSharedSubtreeShapes`' choices: whether a graph gains `DiamondHost`'s tree, and every shape of that
+		/// tree.
+		private var sharedSubtreeRandom: GraphFuzzerRandomNumberGenerator
 		/// The files `markerFreeFileRandom` moved a declaration into: each named, holding the declaration alone, and in the
 		/// module of the type, `ownerName`, whose file it was drawn in.
 		private var markerFreeFiles = [(ownerName: String, fileName: String, declaration: String)]()
@@ -8362,6 +8368,120 @@ enum GraphFuzzerGenerator {
 		}
 
 		private static let nestedCycleRandomSeedMask: UInt64 = 0x6E657374437963
+
+		// MARK: A subtree a mock meets on several paths
+
+		/// The base corpus's draw, in three graphs of ten, of a type with children that a mock's tree builds beneath two or
+		/// three parents, with no cycle, so that the mock's walk meets one subtree on several paths and shares its work
+		/// (`MockLowering.SubtreeSharing`), which no other draw does in more than a graph in hundreds. `DiamondHost`, whose
+		/// mock is generated, instantiates `DiamondLeft`, `DiamondRight` and now and then `DiamondMiddle`, each by value,
+		/// through an instantiator, or lazily, and each instantiates `DiamondCard`, which builds `DiamondLeaf`, directly or
+		/// through `DiamondRow`, and now and then `DiamondBadge`. The leaf reads nothing, or receives `diamondToken`, required
+		/// or only if available; the host now and then declares the token, before or after its parents, and each parent
+		/// now and then declares its own, before or after its card, so that the card's subtree reads another declaration,
+		/// or `nil`, on another path; where the leaf reads it, half the time the token receives `DiamondFollower` only if
+		/// available, which requires the card and which each parent that declares its own token declares too, so that the
+		/// card's subtree is built with the token generated later on some paths and not others (the key's `ChildContext`).
+		/// Half the time `DiamondRoot`, a root, builds the host. Every run of the tool lowers the
+		/// host's mock again without sharing and compares the two (`MockSubtreeSharingChecks`), so a key that misses a part
+		/// of the walk state the subtree reads fails the graph; the floor of graphs judged is
+		/// `sharedSubtreeSeeds_judgeSubtreeSharing_inGraphsWhoseMocksMeetASubtreeAgain`. `sharedSubtreeRandom` draws only
+		/// for this pass, after every other, and only in the base corpus.
+		private mutating func addingSharedSubtreeShapes(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			guard features.isEmpty, sharedSubtreeRandom.percentChance(30) else { return declarations }
+			var declarations = declarations
+			let parentNames = sharedSubtreeRandom.percentChance(30) ? ["Left", "Middle", "Right"] : ["Left", "Right"]
+			let cardBuildsLeafThroughRow = sharedSubtreeRandom.percentChance(35)
+			let cardBuildsBadge = sharedSubtreeRandom.percentChance(40)
+			let leafReadRoll = sharedSubtreeRandom.integer(in: 0...99)
+			let leafReadsToken = leafReadRoll >= 25
+			let leafRequiresToken = leafReadRoll >= 25 && leafReadRoll < 55
+			let hostDeclaresToken = leafRequiresToken || (leafReadsToken && sharedSubtreeRandom.percentChance(70))
+			let hostDeclaresTokenFirst = sharedSubtreeRandom.percentChance(50)
+			let rootBuildsHost = sharedSubtreeRandom.percentChance(50)
+			// The token receives `DiamondFollower`, which requires the card, only if available, so each parent that declares
+			// its own token and a follower orders its card, token and follower around a cycle of edges only if available,
+			// which leaves the token unavailable to the card's subtree on some paths and not others.
+			let tokenReadsFollower = leafReadsToken && sharedSubtreeRandom.percentChance(50)
+			func append(_ name: String, arguments: [String] = [], _ properties: [PropertyDeclaration]) {
+				declarations.append(TypeDeclaration(
+					name: name,
+					instantiableArguments: arguments,
+					properties: properties,
+					declaresHelperTypes: false,
+					additionalConformances: sendability == .mixed ? ["@unchecked Sendable"] : [],
+				))
+			}
+			let tokenName = "\(prefix)DiamondToken"
+			let leafName = "\(prefix)DiamondLeaf"
+			let rowName = "\(prefix)DiamondRow"
+			let badgeName = "\(prefix)DiamondBadge"
+			let cardName = "\(prefix)DiamondCard"
+			let hostName = "\(prefix)DiamondHost"
+			let instantiatorName = sendability == .sendable ? "SendableInstantiator" : "Instantiator"
+			let lazyName = sendability == .sendable ? "SendableLazilyInstantiated" : "LazilyInstantiated"
+			let token = PropertyDeclaration(attribute: "@Instantiated", label: "diamondToken", type: tokenName)
+			let followerName = "\(prefix)DiamondFollower"
+			if leafReadsToken || hostDeclaresToken {
+				append(tokenName, tokenReadsFollower ? [PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "diamondFollower", type: "\(followerName)?")] : [])
+			}
+			if tokenReadsFollower {
+				append(followerName, [PropertyDeclaration(attribute: "@Received", label: "diamondCard", type: "\(prefix)DiamondCard")])
+			}
+			if !leafReadsToken {
+				append(leafName, [])
+			} else if leafRequiresToken {
+				append(leafName, [PropertyDeclaration(attribute: "@Received", label: "diamondToken", type: tokenName)])
+			} else {
+				append(leafName, [PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "diamondToken", type: "\(tokenName)?")])
+			}
+			var cardProperties = [PropertyDeclaration]()
+			if cardBuildsLeafThroughRow {
+				append(rowName, [PropertyDeclaration(attribute: "@Instantiated", label: "diamondLeaf", type: leafName)])
+				cardProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "diamondRow", type: rowName))
+			} else {
+				cardProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "diamondLeaf", type: leafName))
+			}
+			if cardBuildsBadge {
+				append(badgeName, [])
+				cardProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "diamondBadge", type: badgeName))
+			}
+			append(cardName, cardProperties)
+			let card = PropertyDeclaration(attribute: "@Instantiated", label: "diamondCard", type: cardName)
+			var hostProperties = [PropertyDeclaration]()
+			for parentName in parentNames {
+				let declaresOwnToken = leafReadsToken && sharedSubtreeRandom.percentChance(30)
+				let declaresTokenAfterCard = sharedSubtreeRandom.percentChance(50)
+				let holdRoll = sharedSubtreeRandom.integer(in: 0...99)
+				var parentProperties = [card]
+				if declaresOwnToken {
+					parentProperties.insert(token, at: declaresTokenAfterCard ? 1 : 0)
+					if tokenReadsFollower {
+						parentProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "diamondFollower", type: followerName))
+					}
+				}
+				let typeName = "\(prefix)Diamond\(parentName)"
+				append(typeName, parentProperties)
+				let label = "diamond\(parentName)"
+				if holdRoll < 65 {
+					hostProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: label, type: typeName))
+				} else if holdRoll < 90 {
+					hostProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "\(label)Builder", type: "\(instantiatorName)<\(typeName)>"))
+				} else {
+					hostProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: label, type: "\(lazyName)<\(typeName)>"))
+				}
+			}
+			if hostDeclaresToken {
+				hostProperties.insert(token, at: hostDeclaresTokenFirst ? 0 : hostProperties.count)
+			}
+			append(hostName, arguments: ["generateMock: true"], hostProperties)
+			if rootBuildsHost {
+				append("\(prefix)DiamondRoot", arguments: ["isRoot: true"], [PropertyDeclaration(attribute: "@Instantiated", label: "diamondHost", type: hostName)])
+			}
+			return declarations
+		}
+
+		private static let sharedSubtreeRandomSeedMask: UInt64 = 0x7368617265645374
 
 		// MARK: Cycle parameters
 
