@@ -343,15 +343,11 @@ extension MockLowering.Walk {
 			outerTypes[declaration.label] = declaration.typeDescription
 		}
 		let functionText = unindented[..<bindingIndex].joined(separator: "\n")
-		guard let place = MockLowering.textPlace(functionText, outerTypes: outerTypes) else {
-			unrecordedReasons[path] = "promoted:functionText"
-			return
-		}
-		// A name of SafeDI's the text does not declare is a function around it, unless `mock()` binds it before its tree.
-		guard !place.reads.contains(where: { $0.label.hasPrefix(ReservedName.builderFunctionNamePrefix) && outerTypes[$0.label] == nil }) else {
-			unrecordedReasons[path] = "promoted:namesFunctionAround"
-			return
-		}
+		// A text that binds a value at its top or calls a function of SafeDI's it does not declare leaves the place
+		// unrecorded, so the root keeps the walk's text. Only a promoted dependency whose tree leads to a fill of another
+		// module's public mock writes such text (its payload bindings precede its function), which no test reaches yet: the
+		// fix of that shape owes its guards a failing test.
+		guard let place = MockLowering.textPlace(functionText, outerTypes: outerTypes) else { return }
 		let bindingText = unindented[bindingIndex...].joined(separator: "\n")
 		var reads = place.reads
 		var readNames = Set(reads.map(\.label))
@@ -363,10 +359,6 @@ extension MockLowering.Walk {
 			      MockLowering.namesAValue(token.name, outerTypes: outerTypes),
 			      outerTypes[token.name] != nil || token.name.first?.isLowercase == true
 			else { continue }
-			guard !token.name.hasPrefix(ReservedName.builderFunctionNamePrefix) || outerTypes[token.name] != nil else {
-				unrecordedReasons[path] = "promoted:namesFunctionAround"
-				return
-			}
 			if readNames.insert(token.name).inserted {
 				reads.append(MockLowering.valueRead(token.name, outerTypes: outerTypes))
 			}
