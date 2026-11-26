@@ -6321,7 +6321,8 @@ enum GraphFuzzerGenerator {
 				var shareSeam = instantiable("HoleShareSeam", module: .seamModule, properties: shareSeamProperties)
 				shareSeam.instantiableArguments = ["generateDependencyTree: true"]
 				shareSeam.additionalDeclarations.append("public protocol \(apiName)\(helperTypesAreSendable ? ": Sendable" : "") {}")
-				let part = instantiable("HoleSharePart", module: fillerModule, properties: [PropertyDeclaration(attribute: "@Received", label: "holeShareSecond", type: token.name)])
+				var part = instantiable("HoleSharePart", module: fillerModule, properties: [PropertyDeclaration(attribute: "@Received", label: "holeShareSecond", type: token.name)])
+				part.fillsHole = true
 				var live = instantiable("HoleShareLive", module: fillerModule, properties: [
 					PropertyDeclaration(attribute: "@Received", label: "holeShareFirst", type: token.name),
 					PropertyDeclaration(attribute: "@Received", label: "holeShareSecond", type: token.name),

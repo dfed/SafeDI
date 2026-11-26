@@ -7629,8 +7629,19 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		      cycleClosedOnDeclarations.isEmpty,
 		      fillCallerReads.innerScopeParameters.isEmpty
 		else { return false }
-		let handedLabels = Set((fillBoundFields + handedParameterFields).map(\.property.label))
-		return receivedProperties.allSatisfy { handedLabels.contains($0.label) }
+		// A receive is handed when a field the fill binds gives the form it reads, as `reads(_:)` matches them, or the memo
+		// the fill binds serves it. A receive of another form under a handed field's label (a deferred parameter's wrapper
+		// beside its value) reads the caller's declaration, as does a receive only if available of a label no field gives.
+		let handedFields = fillBoundFields + handedParameterFields
+		func isHanded(_ received: Property) -> Bool {
+			handedFields.contains { field in
+				field.property == received
+					|| field.property.asOptionalProperty == received
+					|| field.property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding.map { $0 == received || $0.asOptionalProperty == received } == true
+			} || fillBoundMemo(servingWrapperRead: received) != nil
+		}
+		return receivedProperties.allSatisfy(isHanded)
+			&& onlyIfAvailableUnwrappedReceivedProperties.allSatisfy { isHanded($0) || isHanded($0.asOptionalProperty) }
 	}
 
 	/// The record of `fill`, a fill of this scope's seam call whose function is `code` indented by `leadingMemberWhitespace`,
@@ -9655,7 +9666,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			} else {
 				"\(scopeParameterName).\(field.memberName(bindingMemo: bindsMemo))"
 			}
-			return (field, read)
+			// A field read as its memo is bound as the memo, which the shared body takes.
+			return (bindsMemo ? field.bindingItsMemo : field, read)
 		}
 		// A fill of an instantiator's place returns the wrapper's builder (`fillReturnsWrapperBuilder`), so no fill here takes
 		// a forwarded value.
