@@ -2763,9 +2763,13 @@ extension DependencyTreeGenerator {
 		if !renamesContradictingOwnProperties.isEmpty {
 			throw DependencyTreeGeneratorError.renamesContradictingOwnProperties(Array(renamesContradictingOwnProperties))
 		}
-		if !unfulfillableProperties.isEmpty {
+		// `query graph` builds the trees of a graph mid-edit around the receives it was told nothing provides.
+		let reportedUnfulfillableProperties = unfulfillableProperties.filter { unfulfillableProperty in
+			unfulfillableProperty.declarationLocation.map(unfulfilledReceiveLocations.contains) != true
+		}
+		if !reportedUnfulfillableProperties.isEmpty {
 			let ownAccessProof = ownAccessProof()
-			throw DependencyTreeGeneratorError.unfulfillableProperties(unfulfillableProperties.map { $0.withForwardingAccess(proof: ownAccessProof.proof) })
+			throw DependencyTreeGeneratorError.unfulfillableProperties(reportedUnfulfillableProperties.map { $0.withForwardingAccess(proof: ownAccessProof.proof) })
 		}
 		if !hiddenReceivedProperties.isEmpty {
 			throw DependencyTreeGeneratorError.hiddenReceivedProperties(Self.reportingEachSeamsChainOnce(hiddenReceivedProperties, seamTypes: generatedSeamTypes))

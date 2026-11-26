@@ -18,8 +18,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-/// A dependency `query graph` sets aside so that the trees build while it cannot be fulfilled: a received dependency or
-/// alias nothing provides, or an instantiated dependency no declaration fulfills.
+/// A dependency `generate` reports cannot be fulfilled, which `query graph` marks: a received dependency or alias nothing
+/// provides, or an instantiated dependency no declaration fulfills.
 public struct UnfulfilledDependency: Hashable, Sendable {
 	public init(declaringType: TypeDescription, label: String) {
 		self.declaringType = declaringType
@@ -33,104 +33,102 @@ public struct UnfulfilledDependency: Hashable, Sendable {
 }
 
 extension DependencyTreeGenerator {
-	/// The declarations of `typeDescriptionToFulfillingInstantiableMap` with each dependency that `error` reports cannot
-	/// be fulfilled set aside, so that the trees can be built again without it: an instantiated one is read as
-	/// instantiated only if available, a received one or an alias as received only if available, each with its type
-	/// made optional, as the macro requires of those spellings. `nil` when `error` reports anything else, or names no
-	/// dependency the map declares. Only `query graph` calls this: `generate` reports the error.
-	///
-	/// With `receivesOf`, the properties of the dependencies set aside before, `error` is one the passes before made:
-	/// each dependency it names must be a required receive or alias of one of those properties, which reads the value
-	/// set aside as optional, or this is `nil` too, since the error is then not one setting aside made.
-	public static func settingAsideUnfulfilledDependencies(
-		reportedBy error: any Error,
+	/// What `query graph` builds the trees of a graph mid-edit from when `error`, which `generate` reports of
+	/// `typeDescriptionToFulfillingInstantiableMap`, names only dependencies that cannot be fulfilled: every declaration
+	/// as written, beside an absent declaration of each type no declaration fulfills, which declares no dependency, and
+	/// where the received dependencies and aliases nothing provides are declared, around which a generator given them
+	/// builds the trees. No declaration is changed, so every receive the error does not name is handed what it is handed
+	/// once the dependencies are fulfilled, as far as the declarations that exist decide it. `nil` when `error` reports
+	/// anything else, or names no dependency the map declares. Only `query graph` calls this: `generate` reports the error.
+	public static func absentDeclarations(
+		ofDependenciesReportedBy error: any Error,
 		in typeDescriptionToFulfillingInstantiableMap: [TypeDescription: Instantiable],
-		receivesOf providingProperties: Set<Property>? = nil,
-	) -> SetAsideDependencies? {
+	) -> AbsentDeclarations? {
 		guard let error = error as? DependencyTreeGeneratorError,
-		      let locations = unfulfilledDependencyLocations(reportedBy: error)
+		      let reported = unfulfilledDependencies(reportedBy: error)
 		else { return nil }
-		var setAside = Set<UnfulfilledDependency>()
-		var properties = Set<Property>()
-		var namesOtherDependency = false
-		let map = typeDescriptionToFulfillingInstantiableMap.mapValues { instantiable in
-			instantiable.mappingDependencies { dependency in
-				guard let location = dependency.declarationLocation, locations.contains(location) else { return dependency }
-				if let providingProperties, !dependency.receivesOne(of: providingProperties) {
-					namesOtherDependency = true
+		var unfulfilledDependencies = Set<UnfulfilledDependency>()
+		var unfulfilledReceiveLocations = Set<Dependency.DeclarationLocation>()
+		for instantiable in typeDescriptionToFulfillingInstantiableMap.values {
+			for dependency in instantiable.dependencies {
+				guard let location = dependency.declarationLocation else { continue }
+				switch dependency.source {
+				case .instantiated:
+					// A dependency instantiated only if available is `nil` by design where no declaration fulfills its
+					// type, though the error lists it beside the required ones.
+					guard reported.instantiatingLocations.contains(location), !dependency.isInstantiatedOnlyIfAvailable else { continue }
+				case .received, .aliased:
+					guard reported.receiveLocations.contains(location) else { continue }
+					unfulfilledReceiveLocations.insert(location)
+				case .forwarded:
+					continue
 				}
-				setAside.insert(UnfulfilledDependency(declaringType: instantiable.concreteInstantiable, label: dependency.property.label))
-				properties.insert(dependency.property)
-				return dependency.readOnlyIfAvailable
+				unfulfilledDependencies.insert(UnfulfilledDependency(declaringType: instantiable.concreteInstantiable, label: dependency.property.label))
 			}
 		}
-		guard !setAside.isEmpty, !namesOtherDependency else { return nil }
+		guard !unfulfilledDependencies.isEmpty else { return nil }
+		var map = typeDescriptionToFulfillingInstantiableMap
+		for typeDescription in reported.typesNoDeclarationFulfills where map[typeDescription] == nil {
+			map[typeDescription] = Instantiable(
+				instantiableType: typeDescription,
+				isRoot: false,
+				initializer: nil,
+				additionalInstantiables: nil,
+				dependencies: [],
+				declarationType: .structType,
+				access: AccessDeclaration(level: .public),
+			)
+		}
 		// The map's values are visited in no fixed order, so the dependencies are listed sorted.
-		return SetAsideDependencies(
+		return AbsentDeclarations(
 			map: map,
-			setAside: setAside.sorted { ($0.declaringType, $0.label) < ($1.declaringType, $1.label) },
-			properties: properties,
+			unfulfilledDependencies: unfulfilledDependencies.sorted { ($0.declaringType, $0.label) < ($1.declaringType, $1.label) },
+			unfulfilledReceiveLocations: unfulfilledReceiveLocations,
 		)
 	}
 
-	/// The declarations with dependencies set aside, the dependencies, and their properties as declared.
-	public struct SetAsideDependencies: Sendable {
+	/// The declarations `query graph` builds the trees of a graph mid-edit from, and the dependencies it marks.
+	public struct AbsentDeclarations: Sendable {
+		/// Every declaration as written, and an absent declaration of each type no declaration fulfills.
 		public let map: [TypeDescription: Instantiable]
-		public let setAside: [UnfulfilledDependency]
-		public let properties: Set<Property>
+		/// The dependencies `generate` reports: each required instantiated dependency no declaration fulfills, and each
+		/// received dependency and alias nothing provides.
+		public let unfulfilledDependencies: [UnfulfilledDependency]
+		/// Where each of those received dependencies and aliases is declared.
+		public let unfulfilledReceiveLocations: Set<Dependency.DeclarationLocation>
 	}
 
-	/// Where each dependency `error` reports cannot be fulfilled is declared, or `nil` when `error` reports anything else.
-	private static func unfulfilledDependencyLocations(reportedBy error: DependencyTreeGeneratorError) -> Set<Dependency.DeclarationLocation>? {
-		var locations = Set<Dependency.DeclarationLocation>()
+	/// What `error` reports cannot be fulfilled, or `nil` when it reports anything else.
+	private static func unfulfilledDependencies(reportedBy error: DependencyTreeGeneratorError) -> ReportedUnfulfilledDependencies? {
+		var reported = ReportedUnfulfilledDependencies()
 		var errors = [error]
 		while let error = errors.popLast() {
 			switch error {
 			case let .independentErrors(independentErrors):
 				errors.append(contentsOf: independentErrors)
-			case let .noInstantiableFound(_, referencedBy, _, _, _):
+			case let .noInstantiableFound(typeDescription, referencedBy, _, _, _):
+				reported.typesNoDeclarationFulfills.insert(typeDescription)
 				for case let location? in referencedBy.map(\.declarationLocation) {
-					locations.insert(location)
+					reported.instantiatingLocations.insert(location)
 				}
 			case let .unfulfillableProperties(unfulfillableProperties):
 				for case let location? in unfulfillableProperties.map(\.declarationLocation) {
-					locations.insert(location)
+					reported.receiveLocations.insert(location)
 				}
 			case .unfilledHoles, .fillFindings, .holesInSeamsOfUnnamedModule, .hiddenReceivedProperties, .renamesContradictingOwnProperties, .forwardedPropertyHiddenInPromotedTree, .receivedPropertyHiddenInMockTree, .unpassableCycleLabel, .instantiableHasForwardedProperty, .constantDependencyCycleDetected, .dependencyReceivedInSameChainItIsInstantiated, .handWrittenMockSharesGeneratedMockName, .handWrittenMockSharesPublicMockName, .publicMockCannotBeGenerated, .nonSendableWrapperCapturedBySendableBuilder, .seamTierOmitsProvidedValue, .publicMockTierOmitsProvidedValue, .publicMockUnderOtherMockCondition, .seamModuleMockConditionDiffers, .configurationBuiltTwoWays, .repeatedDependencyLabels, .rejectedRenames, .unfulfilledMockParameters, .inaccessibleConstructions, .seam, .sourceLocated:
 				return nil
 			}
 		}
-		return locations
-	}
-}
-
-extension Dependency {
-	/// Whether this receives one of `properties`, or is an alias of one. An error of a pass after the first names only a
-	/// required receive or alias: every instantiated dependency no declaration fulfills is reported in the first pass,
-	/// and no error reports a dependency that is only if available, or forwarded.
-	fileprivate func receivesOne(of properties: Set<Property>) -> Bool {
-		properties.contains(source.fulfillingProperty ?? property)
+		return reported
 	}
 
-	/// This dependency read as only if available, its type made optional. An error reports only a dependency that is
-	/// instantiated, received or an alias, none of them only if available, so a forwarded one keeps its source.
-	fileprivate var readOnlyIfAvailable: Dependency {
-		let source: Source = switch self.source {
-		case .instantiated, .forwarded:
-			self.source
-		case .received:
-			.received(onlyIfAvailable: true)
-		case let .aliased(fulfillingProperty, erasedToConcreteExistential, _):
-			.aliased(fulfillingProperty: fulfillingProperty, erasedToConcreteExistential: erasedToConcreteExistential, onlyIfAvailable: true)
-		}
-		let typeDescription = property.typeDescription
-		return Dependency(
-			property: typeDescription.isOptional ? property : property.withUpdatedTypeDescription(.optional(typeDescription)),
-			source: source,
-			declarationLocation: declarationLocation,
-			identifierRange: identifierRange,
-			typeAnnotationRange: typeAnnotationRange,
-			bareAttributeRange: bareAttributeRange,
-		)
+	/// What an error reports cannot be fulfilled.
+	private struct ReportedUnfulfilledDependencies {
+		/// The types no declaration fulfills.
+		var typesNoDeclarationFulfills = Set<TypeDescription>()
+		/// Where each dependency that instantiates one of those types is declared.
+		var instantiatingLocations = Set<Dependency.DeclarationLocation>()
+		/// Where each received dependency and alias nothing provides is declared.
+		var receiveLocations = Set<Dependency.DeclarationLocation>()
 	}
 }

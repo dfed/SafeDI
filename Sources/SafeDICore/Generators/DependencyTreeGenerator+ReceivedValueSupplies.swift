@@ -29,8 +29,17 @@ extension DependencyTreeGenerator {
 		let roots = try await dependencyTrees(unreadTypeComment: nil, ownAccessProof: ownAccessProof()).roots
 		var supplies = [ReceivedValueSupply]()
 		var constructedTypes = [TypeDescription]()
+		var unfulfilledReceiveLabels = Set<String>()
+		if !unfulfilledReceiveLocations.isEmpty {
+			for instantiable in typeDescriptionToFulfillingInstantiableMap.values {
+				for dependency in instantiable.dependencies where dependency.declarationLocation.map(unfulfilledReceiveLocations.contains) == true {
+					unfulfilledReceiveLabels.insert((dependency.source.fulfillingProperty ?? dependency.property).label)
+				}
+			}
+		}
+		let unfulfilledReceives = ScopeGenerator.UnfulfilledReceives(locations: unfulfilledReceiveLocations, labels: unfulfilledReceiveLabels)
 		for root in roots {
-			let tree = await root.scopeGenerator.receivedValueSupplies(ofTreeRootedAt: root.instantiable)
+			let tree = await root.scopeGenerator.receivedValueSupplies(ofTreeRootedAt: root.instantiable, unfulfilledReceives: unfulfilledReceives)
 			supplies.append(contentsOf: tree.supplies)
 			constructedTypes.append(contentsOf: tree.constructedTypes)
 		}
@@ -62,6 +71,10 @@ public struct ReceivedValueSupply: Hashable, Sendable {
 		case declaration(Supplier)
 		/// `nil`, which generated code passes a receive only if available, for the reason given.
 		case passedNil(NilReason)
+		/// Nothing, in trees built around received dependencies nothing provides (`unfulfilledReceiveLocations`): the
+		/// receive is one of them and nothing provides it here, or, with a supplier, it reads the declaration that will
+		/// provide the supplier, a receive of the same value above it that nothing provides.
+		case unfulfilled(Supplier?)
 	}
 
 	/// Why generated code hands a receive `nil`.
@@ -73,7 +86,8 @@ public struct ReceivedValueSupply: Hashable, Sendable {
 		case providerNotYetBuilt
 	}
 
-	/// A declaration a type makes for the scopes it builds: a dependency it instantiates, forwards or aliases.
+	/// A declaration a type makes for the scopes it builds: a dependency it instantiates, forwards or aliases. As what an
+	/// unfulfilled receive reads, a received dependency nothing provides.
 	public struct Supplier: Hashable, Sendable {
 		/// The type that makes the declaration.
 		public let declaringType: TypeDescription
