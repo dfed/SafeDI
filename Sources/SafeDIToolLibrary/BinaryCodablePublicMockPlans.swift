@@ -70,7 +70,8 @@ extension StoredPublicMockPlan: BinarySchemaMember {
 				BinaryLayoutField("receivers", \.receivers),
 				BinaryLayoutField("typesDeclaredEscaping", \.typesDeclaredEscaping),
 			],
-			unwrittenProperties: [],
+			// `places` and `caseIndexByHole` are written once the place graph's coders are wired in (the .safedi lane's change).
+			unwrittenProperties: ["places", "caseIndexByHole"],
 		)
 	}
 

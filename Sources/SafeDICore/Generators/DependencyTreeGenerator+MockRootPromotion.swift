@@ -573,7 +573,7 @@ extension DependencyTreeGenerator {
 		let treeFunctionNames = Self.builderFunctionNamesOfProperties(in: generator, includingHoleSites: false)
 		let rootLevelLabels = Set(rootLevel.parameters.map(\.property.label))
 		func shapedBuilders(namedApartFrom otherParameters: [(label: String, access: AccessLevel)]) -> ShapedBuilders {
-			Self.shapedBuilders(
+			var builders = Self.shapedBuilders(
 				of: instantiable,
 				generator: generator,
 				holes: holes.holes,
@@ -588,6 +588,9 @@ extension DependencyTreeGenerator {
 				bindsReceivesAgain: true,
 				namesApartAtRoot: rootLevel.namesApart,
 			)
+			builders.places = holes.places
+			builders.caseIndexBySite = holes.caseIndexBySite
+			return builders
 		}
 		let builders = shapedBuilders(namedApartFrom: [])
 		holes.handOnObservedPlaceLevels(with: builders)

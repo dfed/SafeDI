@@ -80,6 +80,9 @@ extension DependencyTreeGenerator {
 		var routeStepByEdge = [RouteEdge: SeamSignature.Hole.RouteStep]()
 		/// Each route beside its steps by edge, of every hole type, while the tests observe the seam's places.
 		var routeStepObservations = [SeamRouteStepObservation]()
+		/// A public mock's place graph, and each own place's case in it, which its plan stores beside `holes`.
+		var places = SeamSignature.Places(levels: [], cases: [])
+		var caseIndexBySite = [SeamSignature.Hole.Site: Int]()
 	}
 
 	/// What the scope types a seam or a public mock declares for its builders are named by, and how its builders spell them.
