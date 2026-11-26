@@ -1064,7 +1064,7 @@ struct SafeDIToolQueryGraphTests: ~Copyable {
 		#expect(report.completeness == .partialTrees)
 		#expect(report.errors.map(\.line) == [9])
 		#expect(report.errors.map(\.message).allSatisfy { $0.hasPrefix("No @Instantiable type or extension fulfills `Missing`") })
-		#expect(report.declarations.flatMap(\.dependencies).map(\.isUnfulfilled) == [nil, true, true])
+		#expect(report.declarations.flatMap(\.dependencies).map(\.isUnfulfilled) == [nil, true, nil])
 		#expect(Self.supplies(in: report) == ["App.Service.missing": "unfulfilled(App.Root.missing)"])
 		#expect(report.declarations.map(\.isReachedByRoot) == [true, true])
 	}
@@ -1288,6 +1288,375 @@ struct SafeDIToolQueryGraphTests: ~Copyable {
 		#expect(report.completeness == .partialTrees)
 		#expect(report.declarations.flatMap(\.dependencies).map(\.isUnfulfilled) == [nil, true])
 		#expect(Self.supplies(in: report) == ["App.Screen.user": "unfulfilled"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func graph_namesNoProviderOfUnfulfilledReceive_whenOnlyOptionalDeclarationOfItsLabelIsAbove() async throws {
+		let report = try await graph(of: [
+			"Root.swift": """
+			@Instantiable(isRoot: true)
+			public final class Root: Instantiable {
+			    public init(user: User?, child: Child) {
+			        self.user = user
+			        self.child = child
+			    }
+
+			    @Instantiated(onlyIfAvailable: true) let user: User?
+			    @Instantiated let child: Child
+			}
+			""",
+			"Child.swift": """
+			@Instantiable
+			public final class Child: Instantiable {
+			    public init(user: User) {
+			        self.user = user
+			    }
+
+			    @Received let user: User
+			}
+			""",
+			"User.swift": """
+			@Instantiable
+			public final class User: Instantiable {
+			    public init() {}
+			}
+			""",
+		])
+
+		let child = try #require(report.declarations.first { $0.typeName == "Child" })
+		#expect(report.completeness == .partialTrees)
+		#expect(child.dependencies.map(\.isUnfulfilled) == [true])
+		#expect(Self.supplies(in: report) == ["App.Child.user": "unfulfilled"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func graph_keepsReasonOfNilHandedToUnfulfilledReceive_whenTreeBuiltWithReceiveSetAsideBuildsItsProviderAfterIt() async throws {
+		let report = try await graph(of: [
+			"Alpha.swift": """
+			@Instantiable(isRoot: true)
+			public final class Alpha: Instantiable {
+			    public init(aBuilder: Instantiator<A>, b: B) {
+			        self.aBuilder = aBuilder
+			        self.b = b
+			    }
+
+			    @Instantiated let aBuilder: Instantiator<A>
+			    @Instantiated let b: B
+			}
+			""",
+			"Beta.swift": """
+			@Instantiable(isRoot: true)
+			public final class Beta: Instantiable {
+			    public init(b: B) {
+			        self.b = b
+			    }
+
+			    @Instantiated let b: B
+			}
+			""",
+			"A.swift": """
+			@Instantiable
+			public final class A: Instantiable {
+			    public init(c: C) {
+			        self.c = c
+			    }
+
+			    @Instantiated let c: C
+			}
+			""",
+			"B.swift": """
+			@Instantiable
+			public final class B: Instantiable {
+			    public init(aBuilder: Instantiator<A>) {
+			        self.aBuilder = aBuilder
+			    }
+
+			    @Received let aBuilder: Instantiator<A>
+			}
+			""",
+			"C.swift": """
+			@Instantiable
+			public final class C: Instantiable {
+			    public init(b: B) {
+			        self.b = b
+			    }
+
+			    @Received let b: B
+			}
+			""",
+		])
+
+		#expect(report.completeness == .partialTrees)
+		#expect(Self.supplies(in: report)["App.B.aBuilder"] == "nil(providerNotYetBuilt), unfulfilled")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func graph_marksOnlyDependencyGenerateReports_whenAliasRenamesValueSetAside() async throws {
+		let report = try await graph(of: [
+			"Root.swift": """
+			public final class Missing {}
+
+			@Instantiable(isRoot: true)
+			public final class Root: Instantiable {
+			    public init(missing: Missing, service: Service) {
+			        self.missing = missing
+			        self.service = service
+			    }
+
+			    @Instantiated let missing: Missing
+			    @Instantiated let service: Service
+			}
+			""",
+			"Service.swift": """
+			@Instantiable
+			public final class Service: Instantiable {
+			    public init(renamed: Missing) {
+			        self.renamed = renamed
+			    }
+
+			    @Received(fulfilledByDependencyNamed: "missing", ofType: Missing.self) let renamed: Missing
+			}
+			""",
+		])
+
+		#expect(report.completeness == .partialTrees)
+		#expect(report.declarations.flatMap(\.dependencies).map(\.isUnfulfilled) == [true, nil, nil])
+		#expect(Self.supplies(in: report) == ["App.Service.renamed": "unfulfilled(App.Root.missing)"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func graph_marksEveryReceiveGenerateReports_whenTwoReceivesOfOneRootAreUnfulfilled() async throws {
+		let report = try await graph(of: [
+			"Root.swift": """
+			@Instantiable(isRoot: true)
+			public final class Root: Instantiable {
+			    public init(first: First, second: Second) {
+			        self.first = first
+			        self.second = second
+			    }
+
+			    @Instantiated let first: First
+			    @Instantiated let second: Second
+			}
+			""",
+			"First.swift": """
+			public final class Missing {}
+
+			@Instantiable
+			public final class First: Instantiable {
+			    public init(missing: Missing) {
+			        self.missing = missing
+			    }
+
+			    @Received let missing: Missing
+			}
+			""",
+			"Second.swift": """
+			public final class Absent {}
+
+			@Instantiable
+			public final class Second: Instantiable {
+			    public init(absent: Absent) {
+			        self.absent = absent
+			    }
+
+			    @Received let absent: Absent
+			}
+			""",
+		])
+
+		#expect(report.completeness == .partialTrees)
+		#expect(report.errors.count == 2)
+		#expect(report.declarations.flatMap(\.dependencies).map(\.isUnfulfilled) == [true, nil, nil, true])
+		#expect(Self.supplies(in: report) == ["App.First.missing": "unfulfilled", "App.Second.absent": "unfulfilled"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func graph_reportsNoProvenance_whenTreesBuiltWithUnfulfilledDependencySetAsideReportUnfulfilledReceiveGenerateDoesNot() async throws {
+		let report = try await graph(of: [
+			"Root.swift": """
+			public final class Missing {}
+
+			@Instantiable(isRoot: true)
+			public final class Root: Instantiable {
+			    public init(missing: Missing, service: Service) {
+			        self.missing = missing
+			        self.service = service
+			    }
+
+			    @Instantiated let missing: Missing
+			    @Instantiated let service: Service
+			}
+			""",
+			"Service.swift": """
+			public final class Absent {}
+
+			@Instantiable
+			public final class Service: Instantiable {
+			    public init(absent: Absent) {
+			        self.absent = absent
+			    }
+
+			    @Received let absent: Absent
+			}
+			""",
+		])
+
+		#expect(report.completeness == .fulfillment)
+		#expect(report.errors.count == 1)
+		#expect(report.declarations.flatMap(\.dependencies).map(\.isUnfulfilled) == [nil, nil, nil])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func graph_reportsNoProvenance_whenReceiveOfUnfulfilledDependencyIsHandedNothingUnderAnotherRoot() async throws {
+		let report = try await graph(of: [
+			"Alpha.swift": """
+			public final class Missing {}
+
+			@Instantiable(isRoot: true)
+			public final class Alpha: Instantiable {
+			    public init(missing: Missing, service: Service) {
+			        self.missing = missing
+			        self.service = service
+			    }
+
+			    @Instantiated let missing: Missing
+			    @Instantiated let service: Service
+			}
+			""",
+			"Beta.swift": """
+			@Instantiable(isRoot: true)
+			public final class Beta: Instantiable {
+			    public init(service: Service) {
+			        self.service = service
+			    }
+
+			    @Instantiated let service: Service
+			}
+			""",
+			"Service.swift": """
+			@Instantiable
+			public final class Service: Instantiable {
+			    public init(missing: Missing) {
+			        self.missing = missing
+			    }
+
+			    @Received let missing: Missing
+			}
+			""",
+		])
+
+		#expect(report.completeness == .fulfillment)
+		#expect(report.errors.count == 1)
+		#expect(report.declarations.flatMap(\.dependencies).map(\.isUnfulfilled) == [nil, nil, nil, nil])
+		#expect(Self.supplies(in: report) == [:])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func graph_reportsNoProvenance_whenReceiveOfUnfulfilledDependencyReadsOptionalDeclarationBetween() async throws {
+		let report = try await graph(of: [
+			"Root.swift": """
+			public final class Missing {}
+
+			@Instantiable(isRoot: true)
+			public final class Root: Instantiable {
+			    public init(missing: Missing, middleBuilder: Instantiator<Middle>) {
+			        self.missing = missing
+			        self.middleBuilder = middleBuilder
+			    }
+
+			    @Instantiated let missing: Missing
+			    @Instantiated let middleBuilder: Instantiator<Middle>
+			}
+			""",
+			"Middle.swift": """
+			@Instantiable
+			public final class Middle: Instantiable {
+			    public init(missing: Missing?, service: Service) {
+			        self.missing = missing
+			        self.service = service
+			    }
+
+			    @Forwarded let missing: Missing?
+			    @Instantiated let service: Service
+			}
+			""",
+			"Service.swift": """
+			@Instantiable
+			public final class Service: Instantiable {
+			    public init(missing: Missing) {
+			        self.missing = missing
+			    }
+
+			    @Received let missing: Missing
+			}
+			""",
+		])
+
+		#expect(report.completeness == .fulfillment)
+		#expect(report.errors.count == 1)
+		#expect(report.declarations.flatMap(\.dependencies).map(\.isUnfulfilled) == [nil, nil, nil, nil, nil])
+		#expect(Self.supplies(in: report) == [:])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func graph_reportsNoProvenance_whenTreesBuiltWithUnfulfilledDependencySetAsideHideReceive() async throws {
+		let report = try await graph(of: [
+			"Root.swift": """
+			public protocol Logger {}
+
+			@Instantiable(isRoot: true)
+			public final class Root: Instantiable {
+			    public init(logger: Logger, section: Section) {
+			        self.logger = logger
+			        self.section = section
+			    }
+
+			    @Instantiated(fulfilledByType: "FileLogger") let logger: Logger
+			    @Instantiated let section: Section
+			}
+			""",
+			"Section.swift": """
+			@Instantiable
+			public final class Section: Instantiable {
+			    public init(logger: Logger, row: Row) {
+			        self.logger = logger
+			        self.row = row
+			    }
+
+			    @Instantiated(fulfilledByType: "RemoteLogger") let logger: Logger
+			    @Instantiated let row: Row
+			}
+			""",
+			"Row.swift": """
+			@Instantiable
+			public final class Row: Instantiable {
+			    public init(logger: Logger) {
+			        self.logger = logger
+			    }
+
+			    @Received let logger: Logger
+			}
+			""",
+			"FileLogger.swift": """
+			@Instantiable
+			public final class FileLogger: Instantiable, Logger {
+			    public init() {}
+			}
+			""",
+		])
+
+		#expect(report.completeness == .fulfillment)
+		#expect(report.errors.count == 1)
+		#expect(report.declarations.flatMap(\.dependencies).map(\.isUnfulfilled) == [nil, nil, nil, nil, nil])
 	}
 
 	@Test

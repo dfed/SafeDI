@@ -2518,12 +2518,21 @@ struct SafeDIToolGraphFuzzerTests {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func smokeSeeds_judgeUnfulfilledQueryMarks_inGraphsTheToolRejects() async throws {
-		// The unfulfilled-dependency query oracle judges each rejected graph in one module whose trees `query graph` built
-		// with dependencies set aside, so a change that stops it setting them aside fails here rather than quietly judging
-		// nothing.
-		let judgedCount = try await smokeResults.value.count(where: \.isJudgedByUnfulfilledQueryOracle)
-		#expect(judgedCount >= 10, "Judged \(judgedCount) of \(Self.smokeSeeds.count) graphs")
+	func queryGraph_marksExactlyDependenciesItsErrorsName_inTenBaseCorpusGraphsWithPartialTrees() async throws {
+		// The smoke batch holds too few graphs whose trees `query graph` builds with dependencies set aside for a floor, so
+		// this exports the first base corpus graphs itself, which runs no tool and compiles nothing, and judges each as the
+		// unfulfilled-dependency query oracle does. Only an export with partial trees counts, so a change that stops
+		// `query graph` setting dependencies aside fails here rather than quietly judging nothing.
+		var partialSeeds = [UInt64]()
+		for seed in UInt64(0)..<120 {
+			let fixture = GraphFuzzerGenerator.fixture(forSeed: seed)
+			let export = try await GraphFuzzerUnfulfilledDependencies(exportedJSON: GraphFuzzerQuerySupplies.export(of: fixture))
+			#expect(export.problems == [], "Seed \(seed)")
+			if export.isPartial {
+				partialSeeds.append(seed)
+			}
+		}
+		#expect(partialSeeds.count >= 10, "Judged partial trees of seeds \(partialSeeds)")
 	}
 
 	@Test

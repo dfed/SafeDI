@@ -38,24 +38,46 @@ extension DependencyTreeGenerator {
 	/// instantiated only if available, a received one or an alias as received only if available, each with its type
 	/// made optional, as the macro requires of those spellings. `nil` when `error` reports anything else, or names no
 	/// dependency the map declares. Only `query graph` calls this: `generate` reports the error.
+	///
+	/// With `receivesOf`, the properties of the dependencies set aside before, `error` is one the passes before made:
+	/// each dependency it names must be a required receive or alias of one of those properties, which reads the value
+	/// set aside as optional, or this is `nil` too, since the error is then not one setting aside made.
 	public static func settingAsideUnfulfilledDependencies(
 		reportedBy error: any Error,
 		in typeDescriptionToFulfillingInstantiableMap: [TypeDescription: Instantiable],
-	) -> (map: [TypeDescription: Instantiable], setAside: [UnfulfilledDependency])? {
+		receivesOf providingProperties: Set<Property>? = nil,
+	) -> SetAsideDependencies? {
 		guard let error = error as? DependencyTreeGeneratorError,
 		      let locations = unfulfilledDependencyLocations(reportedBy: error)
 		else { return nil }
 		var setAside = Set<UnfulfilledDependency>()
+		var properties = Set<Property>()
+		var namesOtherDependency = false
 		let map = typeDescriptionToFulfillingInstantiableMap.mapValues { instantiable in
 			instantiable.mappingDependencies { dependency in
 				guard let location = dependency.declarationLocation, locations.contains(location) else { return dependency }
+				if let providingProperties, !dependency.receivesOne(of: providingProperties) {
+					namesOtherDependency = true
+				}
 				setAside.insert(UnfulfilledDependency(declaringType: instantiable.concreteInstantiable, label: dependency.property.label))
+				properties.insert(dependency.property)
 				return dependency.readOnlyIfAvailable
 			}
 		}
-		guard !setAside.isEmpty else { return nil }
+		guard !setAside.isEmpty, !namesOtherDependency else { return nil }
 		// The map's values are visited in no fixed order, so the dependencies are listed sorted.
-		return (map, setAside.sorted { ($0.declaringType, $0.label) < ($1.declaringType, $1.label) })
+		return SetAsideDependencies(
+			map: map,
+			setAside: setAside.sorted { ($0.declaringType, $0.label) < ($1.declaringType, $1.label) },
+			properties: properties,
+		)
+	}
+
+	/// The declarations with dependencies set aside, the dependencies, and their properties as declared.
+	public struct SetAsideDependencies: Sendable {
+		public let map: [TypeDescription: Instantiable]
+		public let setAside: [UnfulfilledDependency]
+		public let properties: Set<Property>
 	}
 
 	/// Where each dependency `error` reports cannot be fulfilled is declared, or `nil` when `error` reports anything else.
@@ -83,6 +105,18 @@ extension DependencyTreeGenerator {
 }
 
 extension Dependency {
+	/// Whether this is a required receive, or a required alias, of one of `properties`.
+	fileprivate func receivesOne(of properties: Set<Property>) -> Bool {
+		switch source {
+		case .received(onlyIfAvailable: false):
+			properties.contains(property)
+		case let .aliased(fulfillingProperty, _, onlyIfAvailable: false):
+			properties.contains(fulfillingProperty)
+		case .received(onlyIfAvailable: true), .aliased(_, _, onlyIfAvailable: true), .instantiated, .forwarded:
+			false
+		}
+	}
+
 	/// This dependency read as only if available, its type made optional. An error reports only a dependency that is
 	/// instantiated, received or an alias, none of them only if available, so a forwarded one keeps its source.
 	fileprivate var readOnlyIfAvailable: Dependency {

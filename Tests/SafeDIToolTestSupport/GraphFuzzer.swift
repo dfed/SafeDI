@@ -13981,8 +13981,9 @@ struct GraphFuzzerFailure: Equatable {
 		/// `query graph` names other suppliers for a receive than the generated code hands it, or the oracle cannot follow
 		/// a read of the generated code (`GraphFuzzerToolRuns.querySuppliersFailure`).
 		case querySuppliersDifferFromGeneratedCode = "query graph names other suppliers for a receive than the generated code hands it"
-		/// `query graph` marks a dependency unfulfilled where the trees it reports are not built with it set aside, or leaves
-		/// an error it reports with no unfulfilled dependency where it is (`GraphFuzzerToolRuns.queryUnfulfilledFailure`).
+		/// `query graph` marks a dependency unfulfilled where it reports no error, or where the trees it reports are not built
+		/// with it set aside, or leaves an error it reports with no unfulfilled dependency where it is
+		/// (`GraphFuzzerToolRuns.queryUnfulfilledFailure`).
 		case queryMarksOtherDependenciesUnfulfilled = "query graph marks other dependencies unfulfilled than the errors it reports name"
 		/// The graph names a type no declaration SafeDI reads declares, and its read twin (`GraphFuzzerFixture.readTwin`),
 		/// which declares that type `public` where SafeDI reads it, gets another verdict, other diagnostics, or other
@@ -14209,7 +14210,6 @@ struct GraphFuzzerResult {
 		isComparedWithRecomputedSignatures: Bool = false,
 		isComparedWithReadTwin: Bool = false,
 		isJudgedByQueryOracle: Bool = false,
-		isJudgedByUnfulfilledQueryOracle: Bool = false,
 		isComparedWithoutSecondHolePlace: Bool = false,
 		isComparedWithoutSecondPath: Bool = false,
 		isComparedWithCleanSubtreeSkipOff: Bool = false,
@@ -14238,7 +14238,6 @@ struct GraphFuzzerResult {
 		self.isComparedWithRecomputedSignatures = isComparedWithRecomputedSignatures
 		self.isComparedWithReadTwin = isComparedWithReadTwin
 		self.isJudgedByQueryOracle = isJudgedByQueryOracle
-		self.isJudgedByUnfulfilledQueryOracle = isJudgedByUnfulfilledQueryOracle
 		self.valueOracle = valueOracle
 	}
 
@@ -14279,9 +14278,6 @@ struct GraphFuzzerResult {
 	/// Whether the query oracle compared the suppliers `query graph` exports with the generated code
 	/// (`GraphFuzzerToolRuns.querySuppliersFailure`): the tool accepts the graph, which is in one module and no public mock's.
 	let isJudgedByQueryOracle: Bool
-	/// Whether the unfulfilled-dependency query oracle judged the export of a graph in one module the tool rejects whose
-	/// trees `query graph` built with dependencies set aside (`GraphFuzzerToolRuns.queryUnfulfilledFailure`).
-	let isJudgedByUnfulfilledQueryOracle: Bool
 	/// Whether the oracle compared the builder labels and case names the tool generates for the graph with those it generates
 	/// for the graph without its second place of a hole (`GraphFuzzerToolRuns.holeNameStabilityFailure`): the tool accepts
 	/// both.
@@ -15804,7 +15800,6 @@ enum GraphFuzzerOracle {
 				isComparedWithRecomputedSignatures: runs.recomputedSignaturesOutcome != nil,
 				isComparedWithReadTwin: runs.readTwinOutcome != nil,
 				isJudgedByQueryOracle: runs.queryExport != nil,
-				isJudgedByUnfulfilledQueryOracle: runs.judgesUnfulfilledDependencies,
 				isComparedWithoutSecondHolePlace: runs.isComparedWithoutSecondHolePlace,
 				isComparedWithoutSecondPath: runs.isComparedWithoutSecondPath,
 				isComparedWithCleanSubtreeSkipOff: runs.cleanSubtreeSkipOffOutcome != nil,

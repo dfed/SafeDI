@@ -422,17 +422,9 @@ extension GraphFuzzerToolRuns {
 
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 extension GraphFuzzerToolRuns {
-	/// Whether `queryUnfulfilledFailure` judges the graph: the tool rejects it and `query graph` exported it. Both
-	/// directions are judged: an export with partial trees must mark every error's dependency, and any other must mark
-	/// none.
-	var judgesUnfulfilledDependencies: Bool {
-		guard let rejectedQueryExport else { return false }
-		return (try? GraphFuzzerUnfulfilledDependencies(exportedJSON: rejectedQueryExport)) != nil
-	}
-
 	/// The failure of a graph in one module the tool rejects whose `query graph` export marks dependencies unfulfilled
-	/// otherwise than its errors say, or `nil`. Where the export reports `partialTrees`, every error it reports is at a
-	/// dependency it marks unfulfilled, and it marks one at least; otherwise it marks none.
+	/// otherwise than its errors say, or `nil`. Where the export reports `partialTrees`, the dependencies it marks
+	/// unfulfilled are exactly those at the errors it reports, one at least; otherwise it marks none.
 	var queryUnfulfilledFailure: GraphFuzzerFailure? {
 		guard let rejectedQueryExport else { return nil }
 		let export: GraphFuzzerUnfulfilledDependencies
@@ -487,6 +479,10 @@ struct GraphFuzzerUnfulfilledDependencies {
 			let marked = Set(markedLocations)
 			for location in errorLocations where !marked.contains(location) {
 				problems.append("The export reports an error at \(location), where it marks no dependency unfulfilled.")
+			}
+			let reported = Set(errorLocations)
+			for location in markedLocations where !reported.contains(location) {
+				problems.append("The export marks the dependency at \(location) unfulfilled, where it reports no error.")
 			}
 		} else {
 			for location in markedLocations {
