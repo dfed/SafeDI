@@ -2411,6 +2411,7 @@ extension DependencyTreeGenerator {
 			}
 			guard !caseIndices.isEmpty, group.allSatisfy({ calledBuilders.ownCaseIndex(ofSite: $0.hole.site) != nil }) else {
 				findings += placeCaseJudgement(of: group, call: call, callerModule: callerModule, compilesGeneratedMocks: compilesGeneratedMocks, seamTreeReceives: &seamTreeReceives)
+				findings += holdingCaseJudgement(of: group, call: call, callerModule: callerModule, compilesGeneratedMocks: compilesGeneratedMocks, seamTreeReceives: &seamTreeReceives)
 				continue
 			}
 			guard let emitting = group.first(where: { $0.fill.fillEmitsCode }) ?? group.first, let child = (emitting.fill.fillJudgementTree ?? emitting.fill).children.first else { continue }
@@ -2555,6 +2556,56 @@ extension DependencyTreeGenerator {
 							findings += findingsOfFill(of: hole, fill: emitting.fill, reads: labelReads, call: call, hidden: hidden, requirement: AccessLevel.required(toConstructFrom: callerModule, declaredIn: hole.scopeSeamModule, isOwnFile: false), callerModule: callerModule, compilesGeneratedMocks: compilesGeneratedMocks, seamTreeReceives: &seamTreeReceives)
 						}
 					}
+				}
+			}
+		}
+		return findings
+	}
+
+	/// EXPERIMENT: what the places of a case the called seam passes up read on the routes of the case in the graph of the seam
+	/// whose tree holds them (`SeamSignature.Places.Query.holdingCase(of:)`) that their passed-up hole, which a passing seam
+	/// makes of one place per case, does not say: a declaration on such a route bound after the place, or outside the
+	/// `@Sendable` function that builds it, which hides the farther declarations of its label. Each such answer is judged once,
+	/// on its least route, at the group's place that sorts first.
+	private static func holdingCaseJudgement(of entries: [CaseJudgementEntry], call: ScopeGenerator, callerModule: ModuleIdentity, compilesGeneratedMocks: Bool, seamTreeReceives: inout SeamTreeReceives) -> [DependencyTreeGeneratorError.FillFinding] {
+		guard let calledBuilders = call.calledBuilders, !calledBuilders.places.cases.isEmpty else { return [] }
+		let query = SeamSignature.Places.Query(of: calledBuilders.places, calledPlaces: { calledBuilders.placesOfSeamsBeneath($0)?.places })
+		var findings = [DependencyTreeGeneratorError.FillFinding]()
+		var judged = Set<String>()
+		for entry in entries {
+			guard let caseIndex = calledBuilders.caseIndexBySite[entry.hole.site],
+			      calledBuilders.places.cases[caseIndex].passedUp != nil,
+			      let holding = query.holdingCase(of: caseIndex),
+			      let child = entry.fill.children.first
+			else { continue }
+			let reads = FillTreeReads(walking: child)
+			var labels = [String]()
+			for read in reads.reads {
+				if case let .receive(receive) = read, !labels.contains(receive.property.label) {
+					labels.append(receive.property.label)
+				}
+			}
+			for label in labels {
+				for variant in holding.query.labelVariants(ofLabel: label, at: holding.caseIndex) {
+					switch variant.answer {
+					case .uncarried, .boundOutsideSendableFunction:
+						break
+					case .field, .callersOwn:
+						continue
+					}
+					guard let declaration = holding.query.uncarriedDeclaration(of: variant.answer, at: holding.caseIndex),
+					      !entry.hole.uncarriedDeclarations.contains(where: { $0.property == declaration.property && $0.declaringType == declaration.declaringType && $0.reason == declaration.reason }),
+					      judged.insert("\(label)|\(variant.answer)").inserted
+					else { continue }
+					let hole = judgedHole(entry.hole, ofLabel: label, as: variant, at: holding.caseIndex, in: holding.query, callerBindsArgument: [:], resolvingBuildability: { declaration, _ in declaration })
+					let labelReads = reads.keeping {
+						if case let .receive(receive) = $0 {
+							receive.property.label == label
+						} else {
+							false
+						}
+					}
+					findings += findingsOfFill(of: hole, fill: entry.fill, reads: labelReads, call: call, hidden: entry.hidden, requirement: AccessLevel.required(toConstructFrom: callerModule, declaredIn: hole.scopeSeamModule, isOwnFile: false), callerModule: callerModule, compilesGeneratedMocks: compilesGeneratedMocks, seamTreeReceives: &seamTreeReceives)
 				}
 			}
 		}
