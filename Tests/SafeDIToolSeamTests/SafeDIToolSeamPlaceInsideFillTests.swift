@@ -1022,9 +1022,6 @@ struct SafeDIToolSeamPlaceInsideFillTests: ~Copyable {
 
 			extension Root {
 			    public init() {
-			        func __safeDI_gadgetBuilder_Outer() -> Outer.SafeDIScope_Gadget.__safeDI_Builder<any Gadget> {
-			            .init(inner_serviceBuilder: { _ in __safeDI_gadgetBuilder_Outer_Inner(session: session) })
-			        }
 			        func __safeDI_gadgetBuilder_Outer_DefaultService_Scope(session: Session) -> Outer.SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget> {
 			            .init(gadget: { _ in
 			                let gadget: any Gadget = LiveGadget(session: session)
@@ -1040,6 +1037,9 @@ struct SafeDIToolSeamPlaceInsideFillTests: ~Copyable {
 			        let session = Session()
 			        func __safeDI_outer() -> Outer {
 			            _ = Outer.__safeDI_Outer_E3A1642416DBF4A5.self // If this line does not compile, compile the code SafeDI generates for module Middle into Middle: under Bazel, add Middle’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            func __safeDI_gadgetBuilder_Outer() -> Outer.SafeDIScope_Gadget.__safeDI_Builder<any Gadget> {
+			                .init(inner_serviceBuilder: { _ in __safeDI_gadgetBuilder_Outer_Inner(session: session) })
+			            }
 			            return Outer(__safeDI_gadgetBuilder: __safeDI_gadgetBuilder_Outer())
 			        }
 			        let outer: Outer = __safeDI_outer()
@@ -1857,9 +1857,6 @@ struct SafeDIToolSeamPlaceInsideFillTests: ~Copyable {
 
 			extension Root {
 			    public init() {
-			        func __safeDI_gadgetBuilder_Outer() -> Outer.SafeDIScope_Gadget.__safeDI_Builder<any Gadget> {
-			            .init(inner_serviceBuilder: { _ in __safeDI_gadgetBuilder_Outer_Inner(session: session) })
-			        }
 			        func __safeDI_gadgetBuilder_Outer_DefaultService_Scope(session: Session) -> Outer.SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget> {
 			            .init(gadget: { _ in
 			                let gadget: any Gadget = LiveGadget(session: session)
@@ -1878,6 +1875,9 @@ struct SafeDIToolSeamPlaceInsideFillTests: ~Copyable {
 			        let session = Session()
 			        func __safeDI_outer() -> Outer {
 			            _ = Outer.__safeDI_Outer_DE81A6D88D2CA239.self // If this line does not compile, compile the code SafeDI generates for module Middle into Middle: under Bazel, add Middle’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            func __safeDI_gadgetBuilder_Outer() -> Outer.SafeDIScope_Gadget.__safeDI_Builder<any Gadget> {
+			                .init(inner_serviceBuilder: { _ in __safeDI_gadgetBuilder_Outer_Inner(session: session) })
+			            }
 			            return Outer(__safeDI_gadgetBuilder: __safeDI_gadgetBuilder_Outer())
 			        }
 			        let outer: Outer = __safeDI_outer()

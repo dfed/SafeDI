@@ -1723,35 +1723,35 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 
 		extension Root {
 		    public init() {
+		        func __safeDI_defaultGadget_GadgetBuilder_Host_DefaultSecond_Scope_gadgetBuilder() -> ErasedInstantiator<Int, any Gadget>.Builder {
+		            func __safeDI_gadgetBuilder(id: Int) -> DefaultGadget {
+		                DefaultGadget(id: id)
+		            }
+		            return { forwarded in __safeDI_gadgetBuilder(id: forwarded) }
+		        }
+		        func __safeDI_defaultGadget_GadgetBuilder_Host() -> Host.SafeDIScope_DefaultGadget_Gadget.__safeDI_Builder<any Gadget> {
+		            .init(top_firstBuilder: { _ in __safeDI_defaultGadget_GadgetBuilder_Host_Top_SafeDICarrierScope_First() }, top_secondBuilder: { _ in __safeDI_defaultGadget_GadgetBuilder_Host_Top_SafeDICarrierScope_Second() })
+		        }
+		        func __safeDI_defaultGadget_GadgetBuilder_Host_DefaultFirst_Scope() -> Host.SafeDIScope_DefaultGadget_Gadget.DefaultFirst_Scope.__safeDI_Builder<any Gadget> {
+		            .init(subB_secondBuilder: { _ in __safeDI_defaultGadget_GadgetBuilder_Host_SubB() })
+		        }
+		        func __safeDI_defaultGadget_GadgetBuilder_Host_DefaultSecond_Scope() -> Host.SafeDIScope_DefaultGadget_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget> {
+		            .init(gadgetBuilder: { _ in __safeDI_defaultGadget_GadgetBuilder_Host_DefaultSecond_Scope_gadgetBuilder() })
+		        }
+		        func __safeDI_defaultGadget_GadgetBuilder_Host_Top_SafeDICarrierScope_First() -> Top.__safeDI_FirstCarrier<Host.SafeDIScope_DefaultGadget_Gadget.DefaultFirst_Scope.__safeDI_Builder<any Gadget>> {
+		            .init(subA: __safeDI_defaultGadget_GadgetBuilder_Host_SubA())
+		        }
+		        func __safeDI_defaultGadget_GadgetBuilder_Host_SubA() -> SubA.__safeDI_FirstCarrier<Host.SafeDIScope_DefaultGadget_Gadget.DefaultFirst_Scope.__safeDI_Builder<any Gadget>> {
+		            .init(first: { __safeDI_defaultGadget_GadgetBuilder_Host_DefaultFirst_Scope() })
+		        }
+		        func __safeDI_defaultGadget_GadgetBuilder_Host_Top_SafeDICarrierScope_Second() -> Top.__safeDI_SecondCarrier<Host.SafeDIScope_DefaultGadget_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>> {
+		            .init(subB: __safeDI_defaultGadget_GadgetBuilder_Host_SubB())
+		        }
+		        func __safeDI_defaultGadget_GadgetBuilder_Host_SubB() -> SubB.__safeDI_SecondCarrier<Host.SafeDIScope_DefaultGadget_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>> {
+		            .init(second: { __safeDI_defaultGadget_GadgetBuilder_Host_DefaultSecond_Scope() })
+		        }
 		        func __safeDI_host() -> Host {
 		            _ = Host.__safeDI_Host_D133371C667165CD.self\(seamCallComment(seam: "Host", module: "Middle"))
-		            func __safeDI_defaultGadget_GadgetBuilder_Host_DefaultSecond_Scope_gadgetBuilder() -> ErasedInstantiator<Int, any Gadget>.Builder {
-		                func __safeDI_gadgetBuilder(id: Int) -> DefaultGadget {
-		                    DefaultGadget(id: id)
-		                }
-		                return { forwarded in __safeDI_gadgetBuilder(id: forwarded) }
-		            }
-		            func __safeDI_defaultGadget_GadgetBuilder_Host() -> Host.SafeDIScope_DefaultGadget_Gadget.__safeDI_Builder<any Gadget> {
-		                .init(top_firstBuilder: { _ in __safeDI_defaultGadget_GadgetBuilder_Host_Top_SafeDICarrierScope_First() }, top_secondBuilder: { _ in __safeDI_defaultGadget_GadgetBuilder_Host_Top_SafeDICarrierScope_Second() })
-		            }
-		            func __safeDI_defaultGadget_GadgetBuilder_Host_DefaultFirst_Scope() -> Host.SafeDIScope_DefaultGadget_Gadget.DefaultFirst_Scope.__safeDI_Builder<any Gadget> {
-		                .init(subB_secondBuilder: { _ in __safeDI_defaultGadget_GadgetBuilder_Host_SubB() })
-		            }
-		            func __safeDI_defaultGadget_GadgetBuilder_Host_DefaultSecond_Scope() -> Host.SafeDIScope_DefaultGadget_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget> {
-		                .init(gadgetBuilder: { _ in __safeDI_defaultGadget_GadgetBuilder_Host_DefaultSecond_Scope_gadgetBuilder() })
-		            }
-		            func __safeDI_defaultGadget_GadgetBuilder_Host_Top_SafeDICarrierScope_First() -> Top.__safeDI_FirstCarrier<Host.SafeDIScope_DefaultGadget_Gadget.DefaultFirst_Scope.__safeDI_Builder<any Gadget>> {
-		                .init(subA: __safeDI_defaultGadget_GadgetBuilder_Host_SubA())
-		            }
-		            func __safeDI_defaultGadget_GadgetBuilder_Host_SubA() -> SubA.__safeDI_FirstCarrier<Host.SafeDIScope_DefaultGadget_Gadget.DefaultFirst_Scope.__safeDI_Builder<any Gadget>> {
-		                .init(first: { __safeDI_defaultGadget_GadgetBuilder_Host_DefaultFirst_Scope() })
-		            }
-		            func __safeDI_defaultGadget_GadgetBuilder_Host_Top_SafeDICarrierScope_Second() -> Top.__safeDI_SecondCarrier<Host.SafeDIScope_DefaultGadget_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>> {
-		                .init(subB: __safeDI_defaultGadget_GadgetBuilder_Host_SubB())
-		            }
-		            func __safeDI_defaultGadget_GadgetBuilder_Host_SubB() -> SubB.__safeDI_SecondCarrier<Host.SafeDIScope_DefaultGadget_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>> {
-		                .init(second: { __safeDI_defaultGadget_GadgetBuilder_Host_DefaultSecond_Scope() })
-		            }
 		            return Host(__safeDI_defaultGadget_GadgetBuilder: __safeDI_defaultGadget_GadgetBuilder_Host())
 		        }
 		        let host: Host = __safeDI_host()
@@ -3290,28 +3290,28 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		extension Host {
 		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public init() {
+		        func __safeDI_firstBuilder_SubA_first() -> any First {
+		            func __safeDI_first() -> DefaultFirst {
+		                let x = X()
+		                func __safeDI_subB() -> SubB {
+		                    _ = SubB.__safeDI_SubB_29925053977349E6.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		                    return SubB(__safeDI_x: x)
+		                }
+		                let subB: SubB = __safeDI_subB()
+		                return DefaultFirst(x: x, subB: subB)
+		            }
+		            let first: any First = __safeDI_first()
+		            return first
+		        }
+		        func __safeDI_firstBuilder_Top() -> Top.__safeDI_FirstCarrier<any First> {
+		            .init(subA: __safeDI_firstBuilder_SubA())
+		        }
+		        func __safeDI_firstBuilder_SubA() -> SubA.__safeDI_FirstCarrier<any First> {
+		            .init(first: { __safeDI_firstBuilder_SubA_first() })
+		        }
 		        let x = X()
 		        func __safeDI_top() -> Top {
 		            _ = Top.__safeDI_Top_F38317630461F2FF.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_firstBuilder_SubA_first() -> any First {
-		                func __safeDI_first() -> DefaultFirst {
-		                    let x = X()
-		                    func __safeDI_subB() -> SubB {
-		                        _ = SubB.__safeDI_SubB_29925053977349E6.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		                        return SubB(__safeDI_x: x)
-		                    }
-		                    let subB: SubB = __safeDI_subB()
-		                    return DefaultFirst(x: x, subB: subB)
-		                }
-		                let first: any First = __safeDI_first()
-		                return first
-		            }
-		            func __safeDI_firstBuilder_Top() -> Top.__safeDI_FirstCarrier<any First> {
-		                .init(subA: __safeDI_firstBuilder_SubA())
-		            }
-		            func __safeDI_firstBuilder_SubA() -> SubA.__safeDI_FirstCarrier<any First> {
-		                .init(first: { __safeDI_firstBuilder_SubA_first() })
-		            }
 		            return Top(__safeDI_x: x, __safeDI_firstBuilder: __safeDI_firstBuilder_Top())
 		        }
 		        let top: Top = __safeDI_top()

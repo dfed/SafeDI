@@ -70,6 +70,9 @@ extension BuiltPlaceRecord {
 		if let constructionValue {
 			shape.append("value|\(constructionValue.value.shape)|\(constructionValue.resultWrapper?.asSource ?? "")")
 		}
+		if let functionReturnType {
+			shape.append("returns|\(functionReturnType.asSource)")
+		}
 		return shape
 	}
 }
@@ -96,6 +99,35 @@ extension ValuePath {
 			value.reads
 		case let .call(_, value, arguments, _):
 			value.reads + arguments
+		case let .spliced(segments):
+			segments.flatMap(\.reads)
+		}
+	}
+
+	/// The functions the path names that a statement before it declares (`ValueSegment.declaredFunction`), in the order
+	/// it is spelled.
+	var declaredFunctionNames: [String] {
+		switch self {
+		case .rootDeclaration,
+		     .read,
+		     .passedArgument,
+		     .emptyInitialization:
+			[]
+		case let .member(_, value),
+		     let .optionalMember(_, value),
+		     let .call(_, value, _, _):
+			value.declaredFunctionNames
+		case let .spliced(segments):
+			segments.flatMap { segment -> [String] in
+				switch segment {
+				case .text:
+					[]
+				case let .value(value):
+					value.declaredFunctionNames
+				case let .declaredFunction(name):
+					[name]
+				}
+			}
 		}
 	}
 
@@ -113,6 +145,11 @@ extension ValuePath {
 			value.passedArgumentNames
 		case let .call(_, value, _, _):
 			value.passedArgumentNames
+		case let .spliced(segments):
+			segments.flatMap { segment -> [String] in
+				guard case let .value(value) = segment else { return [] }
+				return value.passedArgumentNames
+			}
 		}
 	}
 
@@ -133,6 +170,34 @@ extension ValuePath {
 			"\(value.shape).\(name)(\(argumentsWrapper?.asSource ?? "")|\(arguments.map(\.shape).joined(separator: ",")))"
 		case let .emptyInitialization(type):
 			"new:\(type.asSource)"
+		case let .spliced(segments):
+			"spliced[\(segments.map(\.shape).joined(separator: ","))]"
+		}
+	}
+}
+
+extension ValueSegment {
+	/// The reads the segment makes, in the order it is spelled.
+	var reads: [PlaceRead] {
+		switch self {
+		case .text,
+		     .declaredFunction:
+			[]
+		case let .value(value):
+			value.reads
+		}
+	}
+
+	/// The segment for a structural key: its text, its value's shape, or the function's name, each marked apart so no
+	/// two kinds of segment share a key.
+	var shape: String {
+		switch self {
+		case let .text(text):
+			"text:\(text.count):\(text)"
+		case let .value(value):
+			"value:\(value.shape)"
+		case let .declaredFunction(name):
+			"function:\(name)"
 		}
 	}
 }
@@ -147,27 +212,27 @@ extension PlaceRead {
 extension PassedArgument {
 	/// The argument for a caller's structural key: its parameter, its type and the shape of its value.
 	var shape: String {
-		"passed|\(parameterName)|\(type.asSource)|\(value.shape)|\(staysOutsideSendableFunctions)"
+		"passed|\(parameterName)|\(type.asSource)|\(value.shape)|\(staysOutsideSendableFunctions)|\(bindsBeforeCall)"
 	}
 }
 
 extension PassedArgument {
-	/// The argument for a closer's structural key: its parameter, its type and the label it reads, never the declaration
-	/// that resolves to, which `checkEveryRead` proves alike at every member; a new value as itself; `nil` for any other
-	/// value, which keeps the root one per path.
-	var closerShape: String? {
+	/// The argument for a closer's structural key: a read as its parameter, its type and the label it reads, never the
+	/// declaration that resolves to, which `checkEveryRead` proves alike at every member; any other value as a built
+	/// place's call keys it (`shape`), so a closing call and a built call of one function that hand alike values share a
+	/// key. Each value is checked as a built call's is (`checkValuePaths`, `checkSendableMarks`).
+	var closerShape: String {
 		switch value {
 		case let .read(read):
-			"passed|\(parameterName)|\(type.asSource)|read:\(read.label)"
-		case let .passedArgument(name):
-			"passed|\(parameterName)|\(type.asSource)|passed:\(name)"
-		case .emptyInitialization:
-			shape
+			"passed|\(parameterName)|\(type.asSource)|read:\(read.label)|\(bindsBeforeCall)"
 		case .rootDeclaration,
+		     .passedArgument,
 		     .member,
 		     .optionalMember,
-		     .call:
-			nil
+		     .call,
+		     .emptyInitialization,
+		     .spliced:
+			shape
 		}
 	}
 }
@@ -196,7 +261,10 @@ extension TypeKeyLayout {
 			let takenNames = Set(representative(of: owner)?.passedArguments.map(\.parameterName) ?? [])
 			let statements = bodies[body].statements
 			func check(_ path: ValuePath, before index: Int) -> Bool {
-				guard path.passedArgumentNames.allSatisfy(takenNames.contains) else { return false }
+				guard path.passedArgumentNames.allSatisfy(takenNames.contains),
+				      // A function is in scope only where a statement before the value's in its own body declares it.
+				      path.declaredFunctionNames.allSatisfy({ bodies[body].positionsByDeclaredFunction[$0]?.contains(where: { $0 < index }) == true })
+				else { return false }
 				return path.reads.allSatisfy { read in
 					checkRead(read, inBody: body, before: index, owner: owner, isNilAtEveryMember: read.source == .nil)
 				}
@@ -223,9 +291,6 @@ extension TypeKeyLayout {
 				for argument in passedArguments(ofStatementAt: index, inBody: body) {
 					guard check(argument.value, before: index) else { return false }
 				}
-				if case let .closer(record, _) = statements[index] {
-					guard record.passedArguments.allSatisfy({ $0.closerShape != nil }) else { return false }
-				}
 			}
 		}
 		return true
@@ -238,7 +303,8 @@ extension TypeKeyLayout {
 			for member in membersByClass[owner] {
 				guard let record = bodies[member].record,
 				      !record.constructionReads.contains(where: \.staysOutsideSendableFunctions),
-				      !record.passedArguments.contains(where: \.staysOutsideSendableFunctions)
+				      // A value bound before the call is read where the call is made, outside this function.
+				      !record.passedArguments.contains(where: { $0.staysOutsideSendableFunctions && !$0.bindsBeforeCall })
 				else { return false }
 				for (index, statement) in bodies[member].statements.enumerated() {
 					let reads: [PlaceRead] = switch statement {
@@ -289,6 +355,20 @@ extension TypeKeyLayout {
 			} else {
 				return "\(receiver).\(name)(\(joined))"
 			}
+		case let .spliced(segments):
+			var spelled = ""
+			for segment in segments {
+				switch segment {
+				case let .text(text):
+					spelled += text
+				case let .value(value):
+					guard let value = spelledValuePath(value, inClass: owner, before: index) else { return nil }
+					spelled += value
+				case let .declaredFunction(name):
+					spelled += name
+				}
+			}
+			return spelled
 		}
 	}
 

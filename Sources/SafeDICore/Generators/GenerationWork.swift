@@ -63,8 +63,10 @@ public struct GenerationWork: Sendable {
 		/// plan node's places that agree on what they read outside it, is laid out once, so the views count, not the places.
 		case layingOutTypeKeyViews
 		/// Finding the root functions a root's body holds (`RootFunctionHoisting`): each level of the plan the walk reads.
-		/// A place records whether a root function is beneath it, so the walk reads no tree of a place that holds none,
-		/// and its levels do not grow with the paths through the tree.
+		/// A place records whether a root function is beneath it, so the walk reads no tree of a place that holds none.
+		/// A root's body is walked once, and the type key's layout reads that walk's result. Where a root reaches a filled
+		/// seam call along many inline paths, each path's places are code of their own, so the levels grow with the paths
+		/// as the generated code does, and no faster.
 		case findingRootFunctions
 		/// Looking a place up in the construction memo (`ConstructionMemo.reuse(of:in:besideCallGenerators:drawing:)`): each
 		/// candidate of the place's key whose log the lookup asks. The candidates are found by what their reads of the
