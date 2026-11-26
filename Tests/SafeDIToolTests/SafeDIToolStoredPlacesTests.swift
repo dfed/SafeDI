@@ -426,7 +426,7 @@ struct SafeDIToolStoredPlacesTests: ~Copyable {
 		let declaration = try #require(placeRead.uncarriedDeclarations.first)
 		#expect(!passedUp.addition.typesToCall.isEmpty)
 		#expect(!passedUp.addition.route.isEmpty)
-		let chainLength = 10000
+		let chainLength = 10_000
 		func copy(ofRecord record: Int) -> StoredPlace {
 			.passedUp(StoredPassedUpPlace(
 				record: StoredRecordReference(lowerSeam: 0, record: record),
@@ -452,7 +452,7 @@ struct SafeDIToolStoredPlacesTests: ~Copyable {
 				resolver = PlaceResolver(signaturesByModuleName: [:])
 				continuation.resume(returning: read)
 			}
-			thread.stackSize = 512 * 1024
+			thread.stackSize = 512 * 1_024
 			thread.start()
 		}
 		let placesOfTop = try read.get()
