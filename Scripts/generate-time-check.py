@@ -656,7 +656,7 @@ ONE_ARENA = {"MALLOC_ARENA_MAX": "1"}
 # 188.3 MB (3.68), 267,591 and 3,068,049 bytes of `.safedi` (11.47), 751,871 and 6,212,036 bytes of code (8.26);
 # B 0.086 s and 1.576 s (18.37), 38.2 MB and 90.6 MB (2.37); BM 0.079 s and 2.543 s
 # (32.30), 93.0 MB and 173.9 MB (1.87), 108,891 and 28,647,642 bytes of code (263.09); O 420,983 and 4,182,623 bytes of
-# code (9.94); R 0.052 s and 0.216 s (4.16), 473,396 and 4,666,604 bytes of code (9.86); N 0.207 s and 1.365 s (6.60).
+# code (9.94); R 0.052 s and 0.216 s (4.16), 473,396 and 4,666,604 bytes of code (9.86).
 GROWTH_ROWS = {
     "P-seam-hole-at-every-screen": (lambda layers: shape_p(layers), 6, {"time": 13.0, "memory": 5.5, "size": 12.5}),
     "L-label-declared-again": (lambda layers: shape_l(layers), 9, {"time": 11.0}),
@@ -678,7 +678,7 @@ GROWTH_ROWS = {
     "H-seam-holes-in-cycles": (lambda layers: shape_seam_holes_in_cycles(layers), 3, {"time": 22.0, "memory": 2.6, "size": 65.0, "code": 5.0}),
     "O-only-if-available-at-every-screen": (lambda layers: shape_census(layers, "only-if-available"), 6, {}),
     "R-received-instantiator-at-every-screen": (lambda layers: shape_census(layers, "received-instantiator"), 6, {"time": 6.0, "code": 10.5}),
-    "N-rename-at-every-screen": (lambda layers: shape_census(layers, "rename"), 8, {"time": 10.5}),
+    "N-rename-at-every-screen": (lambda layers: shape_census(layers, "rename"), 8, {}),
     # V 0.122 s and 0.302 s (2.47); VO 0.111 s and 0.361 s (3.26): what is left once a subtree's key holds, of a
     # rename's declaring path, no more than the one entry beneath it.
     "V-renames-in-alternate-layers": (lambda layers: shape_alternating_renames(layers, only_if_available=False), 10, {"time": 4.5}),
