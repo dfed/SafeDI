@@ -179,29 +179,11 @@ extension MockLowering.Walk {
 			unrecordedReasons[childIndexPath] = "inlinePlaceBuilder"
 			return
 		}
-		// A node a public mock promotes at its root's level reads its caller's value before its override and its construction
-		// (`ConstantNode.passingPromotedValue(orBuilding:)`), a read no alternative records.
-		guard node.promotedParameterName == nil else {
-			unrecordedReasons[childIndexPath] = "promotedParameter"
-			return
-		}
-		// A public mock builds a configured node by calling its type's construction function, which is handed the override
-		// (`ConstantNode.publicBuilderFunctionEndLines(children:overrideRead:indent:)`): a target and an argument no record
-		// names.
-		guard !buildsPublicMock || !node.hasConfiguration else {
-			unrecordedReasons[childIndexPath] = "publicConstructionFunction"
-			return
-		}
-		// Inside a `@Sendable` builder function a public mock reads an override from a local bound before that function
-		// (`readingOverride(_:localNameSuffix:)`), since its overrides are never `Sendable`: a local no record names, where
-		// the record would read the overrides inside the function.
-		guard !buildsPublicMock || overrideRead.map({ $0.path != nil }) ?? true else {
-			unrecordedReasons[childIndexPath] = "overrideLocal"
-			return
-		}
 		let configuredConstruction = configuredConstruction(of: node, instantiable: instantiable, usesMockInitializer: usesMockInitializer)
 		var alternatives = [ConstructionAlternative]()
-		if let overrideRead {
+		// A public mock's construction function tries the override itself, handed it as its last argument
+		// (`configuring(_:callingConstructionFunctionNamed:…)`).
+		if let overrideRead, configuredConstruction?.constructionFunctionName == nil {
 			// An override read through a local an extractor bound it to is recorded as the read of the configuration the
 			// place's call hands it (`relativeConfiguration(of:…)`), so a place built in a `@Sendable` function records the
 			// read its path names.
@@ -209,6 +191,17 @@ extension MockLowering.Walk {
 				MockLowering.overrideAlternative(reading: overrideRead.path, resultWrapper: node.overrideResultWrapper)
 					?? MockLowering.Walk.internalMockOverrideAlternative(of: node, configuration: overrideRead.configuration),
 			)
+		}
+		// A node a public mock promotes at its root's level reads the value its caller passed first, as
+		// `ConstantNode.passingPromotedValue(orBuilding:)` writes it: the alternative tried before every other.
+		if let promotedParameterName = node.promotedParameterName {
+			alternatives.insert(ConstructionAlternative(
+				closure: .rootDeclaration(promotedParameterName),
+				bindingName: promotedParameterName,
+				requiresAbsent: [],
+				use: .usedAsValue,
+				resultWrapper: nil,
+			), at: 0)
 		}
 		builtPlaceInputs[childIndexPath] = MockLowering.BuiltPlaceInputs(
 			functionName: node.functionName,

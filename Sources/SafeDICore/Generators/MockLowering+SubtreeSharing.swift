@@ -79,7 +79,9 @@ extension MockLowering {
 	/// `recordsReadingConfiguration`): for each concrete type and construction, the first record in walk order not beneath a
 	/// cycle edge, with its struct, its construction's requirements, the modules its fulfillers name, and the types beneath
 	/// a repeated ancestor it nests. A shared subtree records no configuration again, and the walk order of the records
-	/// after it moves, which neither reads. Its `publicConstruction` is never set: a public mock shares nothing.
+	/// after it moves, which neither reads. Of a public mock's constructions it compares what the module's public
+	/// configurations read (`publicConfigurationDeclarations(of:…)`): the types in the order they first appear, those whose
+	/// record describes the configuration first, each construction's first record, and its fulfillers.
 	static func sharingComparison(of result: Result, sendableConfigurationTypeNames: Set<String>) -> String {
 		var text = result.code
 		var seen = Set<String>()
@@ -95,6 +97,18 @@ extension MockLowering {
 			text += "\n// fulfillers: \(record.fulfillers.map { String(describing: $0) }.sorted())"
 			if let beneathRepeatedAncestor = record.beneathRepeatedAncestor {
 				text += "\n// beneath repeated ancestor: \(beneathRepeatedAncestor.nestedChildren.map(\.concreteType.asSource).sorted())"
+			}
+		}
+		var seenConstructions = Set<String>()
+		for describesConfiguration in [true, false] {
+			for record in result.configurations {
+				guard var construction = record.publicConstruction, construction.describesConfiguration == describesConfiguration else { continue }
+				let key = "\(construction.concreteType.asSource) \(construction.usesMockInitializer)"
+				guard seenConstructions.insert(key).inserted else { continue }
+				// A set's order follows how it was built, so the fulfillers are compared sorted.
+				let fulfillers = construction.fulfillers.map { String(describing: $0) }.sorted()
+				construction.fulfillers = []
+				text += "\n// public construction \(describesConfiguration) \(key)\n\(construction)\n// fulfillers: \(fulfillers)"
 			}
 		}
 		return text
@@ -238,10 +252,32 @@ extension MockLowering {
 			let generatorsOnSeveralPaths = Set(pathCounts.lazy.filter { $0.value > 1 }.map(\.key))
 			guard !generatorsOnSeveralPaths.isEmpty else { return nil }
 			self.generatorsOnSeveralPaths = generatorsOnSeveralPaths
+			// Whether each generator's subtree is closed, as its facts would say (`facts(of:children:)`), children first.
+			var closedGenerators = Set<ObjectIdentifier>()
+			for generator in postorder where Self.readsOnlyWhatItsKeyHolds(generator) && generator.orderedChildGenerators.allSatisfy({ closedGenerators.contains(ObjectIdentifier($0)) }) {
+				closedGenerators.insert(ObjectIdentifier(generator))
+			}
+			buildsClosedSubtreeOnSeveralPaths = postorder.contains { generator in
+				!generator.orderedChildGenerators.isEmpty
+					&& generatorsOnSeveralPaths.contains(ObjectIdentifier(generator))
+					&& closedGenerators.contains(ObjectIdentifier(generator))
+			}
+			readsOverridesIntoLocals = postorder.contains { generator in
+				guard case let .property(instantiable, _, _, _, _, _) = generator.scopeData else { return false }
+				return generator.buildsInSendableFunction || instantiable.declarationType == .actorType
+			}
 		}
 
 		/// The generators the root's tree reaches on more than one path, the only ones a later meeting can take.
 		let generatorsOnSeveralPaths: Set<ObjectIdentifier>
+		/// Whether a generator with children whose subtree is closed (`SubtreeFacts.isClosed`) is among
+		/// `generatorsOnSeveralPaths`: only such a node forms a key, so a tree without one shares nothing. A public mock lays
+		/// out by type key only where this holds (`ScopeGenerator.lowerMockRootWithTree(of:context:)`).
+		let buildsClosedSubtreeOnSeveralPaths: Bool
+		/// Whether the tree builds a node in a `@Sendable` builder function or an actor, whose overrides the walk reads into
+		/// locals first. A public mock's configurations are never `Sendable`, so its records cannot hand one to such a
+		/// node's function, and a public mock that holds one keeps its walked body.
+		let readsOverridesIntoLocals: Bool
 		/// The index of each label the facts hold, in the order they first met it.
 		private(set) var labelIndices = [String: Int]()
 		/// The facts of each generator the walk formed a key at, and of those beneath it.
@@ -300,9 +336,31 @@ extension MockLowering {
 			return factsByGenerator[ObjectIdentifier(generator)] ?? facts(of: generator, children: [])
 		}
 
+		/// Whether `generator`'s own node reads no walk state its key does not hold, its subtree's aside: an alias, or a
+		/// property built by no call of a seam or of another module's public mock, no unfulfilled dependency instantiated
+		/// only if available, in no `@Sendable` builder function and for no actor, binding no payload or member of a mock
+		/// root's builders; never a hole or a fill. A cycle parameter and a wrapper made again exist only beneath a closer or a
+		/// loop of builders, whose root shares nothing.
+		static func readsOnlyWhatItsKeyHolds(_ generator: ScopeGenerator) -> Bool {
+			switch generator.scopeData {
+			case .alias:
+				true
+			case let .property(instantiable, _, _, _, _, seamCall):
+				seamCall == nil
+					&& generator.publicMockCall == nil
+					&& !generator.isUnavailableDependency
+					&& !generator.buildsInSendableFunction
+					&& generator.valuesBindingsBeforeBuilderFunction.isEmpty
+					&& generator.memberCallsInsideBuilderFunction.isEmpty
+					&& instantiable.declarationType != .actorType
+			case .root, .hole, .fill:
+				false
+			}
+		}
+
 		/// The facts of `generator`'s subtree, given its children's.
 		private func facts(of generator: ScopeGenerator, children: [SubtreeFacts]) -> SubtreeFacts {
-			var isClosed = true
+			var isClosed = Self.readsOnlyWhatItsKeyHolds(generator)
 			var aliasFulfillingLabels = LabelSet()
 			var receivedLabels = LabelSet()
 			switch generator.scopeData {
@@ -310,21 +368,12 @@ extension MockLowering {
 				aliasFulfillingLabels.insert(labelIndex(of: fulfillingProperty.label))
 				receivedLabels.insert(labelIndex(of: property.label))
 				receivedLabels.insert(labelIndex(of: fulfillingProperty.label))
-			case let .property(instantiable, _, _, _, _, seamCall):
-				// A cycle parameter and a wrapper made again exist only beneath a closer or a loop of builders, whose root
-				// shares nothing.
-				isClosed = seamCall == nil
-					&& generator.publicMockCall == nil
-					&& !generator.isUnavailableDependency
-					&& !generator.buildsInSendableFunction
-					&& generator.valuesBindingsBeforeBuilderFunction.isEmpty
-					&& generator.memberCallsInsideBuilderFunction.isEmpty
-					&& instantiable.declarationType != .actorType
+			case let .property(instantiable, _, _, _, _, _):
 				for dependency in instantiable.dependencies where dependency.source.isReceived {
 					receivedLabels.insert(labelIndex(of: dependency.property.label))
 				}
 			case .root, .hole, .fill:
-				isClosed = false
+				break
 			}
 			for child in children {
 				isClosed = isClosed && child.isClosed
@@ -400,17 +449,13 @@ extension MockLowering.Walk {
 }
 
 extension MockLowering.Walk {
-	/// Whether an internal mock root's walk can share subtrees, decided before the walk from what would make its layout fall
+	/// Whether a mock root's walk can share subtrees, decided before the walk from what would make its layout fall
 	/// back: a place of another module's public mock built inline outside every fill (each is recorded as an inline place,
 	/// `filledCallBuilders.holeBuildersByInlinePlace`, which the type key does not lay out), or a property node of the root's
 	/// level bound under a name apart from its label (the walk's `pathsNamedApart`, which arises only at the root's level,
 	/// where `mock()`'s parameters and promoted siblings can share a label). A root that holds either lays out as before.
-	///
-	/// A public mock's root shares nothing: its places' records read their overrides by the path from the root, since
-	/// `relateConfiguration(ofBuiltPlaceAt:of:)` relates only an internal mock's to the place's own configuration, so a later
-	/// meeting would take the first meeting's path, another place's override.
 	func sharesSubtrees(of orderedChildren: [ScopeGenerator.OrderedChild]) -> Bool {
-		guard !buildsPublicMock, filledCallBuilders.holeBuildersByInlinePlace.isEmpty else { return false }
+		guard filledCallBuilders.holeBuildersByInlinePlace.isEmpty else { return false }
 		let bindingNames = rootLevelBindingNames(of: orderedChildren.map(\.generator))
 		return !zip(orderedChildren, bindingNames).contains { child, bindingName in
 			guard let bindingName, case let .property(_, property, _, _, _, _) = child.generator.scopeData else { return false }

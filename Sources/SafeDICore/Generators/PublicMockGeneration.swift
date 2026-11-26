@@ -76,9 +76,15 @@ struct PublicMockContext: Sendable {
 	/// The name of the module-level function that forwards to `type`'s provider of the default of `label`, which a
 	/// public declaration's default argument can name without naming `type`.
 	func forwarderName(of type: TypeDescription, label: String) -> String {
-		let configurationTypeName = configurationTypeNameByType[type] ?? "\(ReservedName.builderFunctionNamePrefix)\(type.asIdentifier)_MockConfiguration"
+		let configurationTypeName = Self.configurationTypeName(of: type, among: configurationTypeNameByType)
 		let stem = configurationTypeName.dropLast("_MockConfiguration".count)
 		return "\(stem)_mockDefault_\(label)".spelledAsJoinedIdentifier
+	}
+
+	/// The name of `type`'s module-level configuration struct among `names` (`configurationTypeNameByType`), or the name
+	/// the module would give it.
+	static func configurationTypeName(of type: TypeDescription, among names: [TypeDescription: String]) -> String {
+		names[type] ?? "\(ReservedName.builderFunctionNamePrefix)\(type.asIdentifier)_MockConfiguration"
 	}
 
 	/// The name of the static method in a type's extension that evaluates the default of `label` for its configuration.

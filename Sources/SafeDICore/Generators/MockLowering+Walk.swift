@@ -137,6 +137,7 @@ extension ScopeGenerator {
 				publicMockContext: publicMockContext,
 			)
 			walk.promotedParameterNames = plan.promotedParameterNames
+			walk.publicConfigurationTypeNames = publicMockContext.configurationTypeNameByType
 			publicMockRoot = (plan, publicMockContext)
 			// A public mock's calls read each builder under the internal name its plan gives it.
 			if !walk.filledCallBuilders.families.isEmpty {
@@ -182,9 +183,18 @@ extension ScopeGenerator {
 			})
 		}
 		let rootReceiverBindingIndex = bindingLines.endIndex
-		// The type key lays an internal mock's body out as production's, where it can, behind a test's switch, and a public
-		// mock's only behind another (`MockLowering.laysOutPublicMocksWithTypeKey`).
-		let laysOutWithTypeKey = MockLowering.laysOutWithTypeKey && (instantiable.generateMock != .public || MockLowering.laysOutPublicMocksWithTypeKey)
+		// Whether the tree builds a type with children at several places, decided from the generators before any record, so
+		// that a public mock decides its layout before its first walk (`generator-design.md`). Its sharing is decided
+		// whether or not the walk shares (`MockLowering.sharesSubtrees`), so the walk that shares nothing, the shadow's,
+		// lays the same roots out.
+		let subtreeSharing = MockLowering.laysOutWithTypeKey && walk.sharesSubtrees(of: orderedChildren)
+			? MockLowering.SubtreeSharing(sharingBeneath: self)
+			: nil
+		// The type key lays a mock's body out as production's, where it can, behind a test's switch. A public mock is laid
+		// out only where its tree shares a subtree: one that shares nothing keeps its walked body, which one walk writes,
+		// where the layout would walk every path for records and then lay them out.
+		let laysOutWithTypeKey = MockLowering.laysOutWithTypeKey
+			&& (instantiable.generateMock != .public || subtreeSharing.map { $0.buildsClosedSubtreeOnSeveralPaths && !$0.readsOverridesIntoLocals } == true)
 		walk.recordsPlaces = laysOutWithTypeKey
 		// The walk that records places writes no text: the layout writes the body from the records. A root whose layout
 		// falls back is walked again from here for its text, recording nothing, so that walk's body is what a root the type
@@ -195,8 +205,8 @@ extension ScopeGenerator {
 		// The walk that records places shares a built node's subtree between the places that build one generator in one
 		// context (`MockLowering+SubtreeSharing.swift`). A shared meeting writes no text, which that walk writes nowhere
 		// anyway; the walk again for a layout that falls back starts from the copy above, which shares nothing.
-		if laysOutWithTypeKey, MockLowering.sharesSubtrees, walk.sharesSubtrees(of: orderedChildren) {
-			walk.subtreeSharing = MockLowering.SubtreeSharing(sharingBeneath: self)
+		if laysOutWithTypeKey, MockLowering.sharesSubtrees {
+			walk.subtreeSharing = subtreeSharing
 		}
 		var nodes = try await walk.children(
 			of: orderedChildren,
@@ -521,6 +531,9 @@ extension MockLowering {
 		// The names of the parameters the public mock takes for its promoted nodes, as its plan names
 		// them (`PublicMockPlan.promotedParameterNames`).
 		var promotedParameterNames = [Property: String]()
+		// The name of the module-level configuration of each type a public mock configures, which a configured node's
+		// function takes its configuration as (`configurationType(of:)`).
+		var publicConfigurationTypeNames = [TypeDescription: String]()
 		// The extractor of the `@Sendable` builder function the walk is inside, and the names of each
 		// level it is in, from which such a function's locals are claimed (`MockLowering+Wrappers.swift`).
 		var sendableOverrideExtractor: ScopeGenerator.SendableOverrideExtractor?
@@ -741,8 +754,8 @@ extension MockLowering {
 				}
 				writesText = levelWritesText
 				// A child that builds no node is a hole without a site or a fill, which only a public mock's tree holds
-				// (`createMockTypeDescriptionToScopeMapping`'s `buildsHoles`), and a public mock records no places
-				// (`lowerMockRoot`).
+				// (`createMockTypeDescriptionToScopeMapping`'s `buildsHoles`). The construction memo shares no generator in a
+				// tree with holes, so it reaches none on several paths and its root records no places (`lowerMockRootWithTree`).
 				if recordsPlaces, let node {
 					recordBuiltPlace(of: generator, node: node, isLoopMember: membership != nil, unavailableProperties: orderedChildren[index].unavailableProperties)
 					// A node the level binds under a name apart from its label is read by that name, which a record spelled

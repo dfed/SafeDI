@@ -362,6 +362,8 @@ struct ConstructionAlternative: Sendable {
 		case calledWithNoArguments
 		/// Handed to the place's wrapper of this type, which calls it with what it forwards.
 		case wrapped(in: TypeDescription)
+		/// The place's value itself, unwrapped where it is not `nil`: a value the root's caller passed for the place.
+		case usedAsValue
 	}
 }
 

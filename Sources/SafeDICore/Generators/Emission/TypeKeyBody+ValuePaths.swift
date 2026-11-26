@@ -404,6 +404,8 @@ extension TypeKeyLayout {
 				"\(callee)()"
 			case let .wrapped(wrapperType):
 				"\(wrapperType.spelledForConstruction)(\(callee))"
+			case .usedAsValue:
+				callee
 			}
 			let value = alternative.resultWrapper.map { "\($0.asSource)(\(result))" } ?? result
 			if conditions.isEmpty {

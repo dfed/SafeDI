@@ -291,6 +291,12 @@ extension MockLowering.PublicConstructionRecord {
 
 	/// The name of the construction function: `__safeDI_mock` for the hand-written mock, else `__safeDI_init`.
 	var functionName: String {
+		Self.functionName(usesMockInitializer: usesMockInitializer)
+	}
+
+	/// The name of the construction function of a type built with its hand-written mock (`usesMockInitializer`) or its
+	/// initializer.
+	static func functionName(usesMockInitializer: Bool) -> String {
 		usesMockInitializer ? ReservedName.publicMockFunctionName : "\(ReservedName.builderFunctionNamePrefix)init"
 	}
 

@@ -182,12 +182,13 @@ extension MockLowering {
 	/// cycle builds again reads the configuration of the nearest place of its type built the same way, as the path key reads it.
 	static func relativeConfiguration(
 		of node: NodeConfiguration,
+		configurationType: TypeDescription,
 		context: BuiltPlaceConfigurationContext,
 		alternatives: [ConstructionAlternative],
 		hasFunction: Bool,
+		constructionTriesOverride: Bool,
 		sendableConfigurationTypeNames: Set<String>,
 	) -> (passedArguments: [PassedArgument], alternatives: [ConstructionAlternative]) {
-		let configurationType = configurationType(of: node)
 		let parameter = ConfigurationParameter(concreteType: node.instantiable.concreteInstantiable, builtWithHandWrittenMock: node.usesMockInitializer, configurationType: configurationType)
 		let staysOutsideSendableFunctions = if node.hasConfiguration {
 			!sendableConfigurationTypeNames.contains(node.instantiable.concreteInstantiable.asSource)
@@ -205,8 +206,10 @@ extension MockLowering {
 		)
 		let ownRead = ValuePath.passedArgument(parameter.name)
 		let overrideRead: ValuePath = node.hasConfiguration ? .member(ReservedName.configurationBuilderPropertyName, of: ownRead) : ownRead
+		// A value the root's caller passed is no override, and stays the root's own parameter.
 		var relativeAlternatives = alternatives.map { alternative in
-			ConstructionAlternative(
+			guard alternative.use != .usedAsValue else { return alternative }
+			return ConstructionAlternative(
 				closure: overrideRead,
 				bindingName: alternative.bindingName,
 				requiresAbsent: alternative.requiresAbsent,
@@ -221,7 +224,10 @@ extension MockLowering {
 		// parent's body reads what it is handed in place (`readPassedConfigurationInPlace(ofBuiltPlaceAt:)`): its parent's
 		// field, or the configuration of the nearest place of its type, where there is one, else nothing, since `nil` is no
 		// override to try.
-		if relativeAlternatives.isEmpty, hasFunction || context.parentConfiguration != nil || context.nearestIsProvided,
+		// A public mock's construction function tries the override itself (`constructionTriesOverride`).
+		if !constructionTriesOverride,
+		   !relativeAlternatives.contains(where: { $0.use != .usedAsValue }),
+		   hasFunction || context.parentConfiguration != nil || context.nearestIsProvided,
 		   let alternative = overrideAlternative(reading: overrideRead, resultWrapper: node.overrideResultWrapper)
 		{
 			relativeAlternatives.append(alternative)
@@ -232,13 +238,21 @@ extension MockLowering {
 
 extension MockLowering.Walk {
 	/// Puts the built place recorded at the walk's place in the type key's form of its configuration
-	/// (`MockLowering.relativeConfiguration(of:…)`). A public mock's places take another configuration, which its own records hand.
+	/// (`MockLowering.relativeConfiguration(of:…)`). A public mock's place with a configuration is handed its type's
+	/// module-level configuration (`configurationType(of:)`), whose override its construction function tries.
 	mutating func relateConfiguration(ofBuiltPlaceAt path: [Int], of node: MockLowering.NodeConfiguration) {
-		guard !buildsPublicMock,
-		      case var .built(record) = builtRecords[path],
+		guard case var .built(record) = builtRecords[path],
 		      let context = builtPlaceConfigurationContexts[path]
 		else { return }
-		let relative = MockLowering.relativeConfiguration(of: node, context: context, alternatives: record.alternatives, hasFunction: record.hasFunction, sendableConfigurationTypeNames: sendableConfigurationTypeNames)
+		let relative = MockLowering.relativeConfiguration(
+			of: node,
+			configurationType: configurationType(of: node),
+			context: context,
+			alternatives: record.alternatives,
+			hasFunction: record.hasFunction,
+			constructionTriesOverride: buildsPublicMock && node.hasConfiguration,
+			sendableConfigurationTypeNames: sendableConfigurationTypeNames,
+		)
 		record.passedArguments = relative.passedArguments
 		// A place whose `@Sendable` function the walk starts reading overrides into locals for is handed a `Sendable` member
 		// of a configuration that is not, which its call binds before it calls, as the walk binds the locals before the

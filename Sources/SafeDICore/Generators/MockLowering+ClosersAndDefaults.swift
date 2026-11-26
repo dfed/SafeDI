@@ -62,8 +62,8 @@ extension MockLowering.Walk {
 
 	/// Leaves the place `node` is built at, once its configuration is known, and hands each closer beneath that closes on it
 	/// the place's configuration (`MockLowering.passedArguments(ofCloser:…)`): its configuration struct where it has one, else
-	/// its override closure, read where the place reads its override (`readsOverride`). A public mock's places take another
-	/// configuration, which its own records hand.
+	/// its override closure, read where the place reads its override (`readsOverride`). A public mock lays out only where its
+	/// root holds no closer (`SubtreeSharing.init(sharingBeneath:)`), so its places hand nothing on.
 	mutating func leaveClosedOnPlace(of node: MockLowering.ConstantNode, readsOverride: Bool) {
 		guard let place = closedOnPlacesByLabel[node.property.label]?.popLast(), !place.closers.isEmpty, !buildsPublicMock else { return }
 		let configurationType = MockLowering.configurationType(of: node.configuration)
@@ -176,25 +176,38 @@ extension MockLowering {
 	/// What a built place's record holds in place of production's call where its construction reads defaults from its
 	/// configuration or calls its type's hand-written mock: whether it calls the mock, the parameter its function takes its
 	/// configuration through, whose members its defaults read (`defaultArgumentReads(of:…)`), whether or not an override
-	/// reaches the place.
+	/// reaches the place, and, for a public mock's configured place, the construction function it calls
+	/// (`PublicConstructionRecord.functionName`), which tries the place's override itself.
 	struct ConfiguredConstruction: Hashable {
 		let usesMockInitializer: Bool
 		let configurationParameter: ConfigurationParameter
+		let constructionFunctionName: String?
 	}
 }
 
 extension MockLowering.Walk {
+	/// The type of what configures `node` in its parent's configuration (`MockLowering.configurationType(of:)`): for a
+	/// public mock's node with a configuration, its type's module-level configuration struct, which every public mock of
+	/// the module shares.
+	func configurationType(of node: MockLowering.NodeConfiguration) -> TypeDescription {
+		guard buildsPublicMock, node.hasConfiguration else { return MockLowering.configurationType(of: node) }
+		return .simple(name: PublicMockContext.configurationTypeName(of: node.instantiable.concreteInstantiable, among: publicConfigurationTypeNames))
+	}
+
 	/// The construction the record of `node`, a place of `instantiable` built as `usesMockInitializer` says, holds in place
 	/// of production's call, or `nil` where production's record says it: it calls the initializer with dependency reads alone.
+	/// A public mock builds every node with a configuration with its type's construction function.
 	mutating func configuredConstruction(of node: MockLowering.ConstantNode, instantiable: Instantiable, usesMockInitializer: Bool) -> MockLowering.ConfiguredConstruction? {
-		guard usesMockInitializer || constructionReadsConfiguration(of: instantiable, usesMockInitializer: usesMockInitializer) else { return nil }
+		let callsConstructionFunction = buildsPublicMock && node.configuration.hasConfiguration
+		guard callsConstructionFunction || usesMockInitializer || constructionReadsConfiguration(of: instantiable, usesMockInitializer: usesMockInitializer) else { return nil }
 		return MockLowering.ConfiguredConstruction(
 			usesMockInitializer: usesMockInitializer,
 			configurationParameter: MockLowering.ConfigurationParameter(
 				concreteType: instantiable.concreteInstantiable,
 				builtWithHandWrittenMock: usesMockInitializer,
-				configurationType: MockLowering.configurationType(of: node.configuration),
+				configurationType: configurationType(of: node.configuration),
 			),
+			constructionFunctionName: callsConstructionFunction ? MockLowering.PublicConstructionRecord.functionName(usesMockInitializer: usesMockInitializer) : nil,
 		)
 	}
 
@@ -205,6 +218,9 @@ extension MockLowering.Walk {
 	/// does not read, or defaults read from a configuration built afresh.
 	mutating func configuring(_ record: PlaceRecord, with construction: MockLowering.ConfiguredConstruction, instantiable: Instantiable) -> PlaceRecord? {
 		guard case let .built(built) = record else { return record }
+		if let functionName = construction.constructionFunctionName {
+			return configuring(built, callingConstructionFunctionNamed: functionName, with: construction, instantiable: instantiable)
+		}
 		var dependencyReads = [PlaceRead]()
 		let passedDependencies = mockConstruction(of: instantiable, usesMockInitializer: construction.usesMockInitializer).callSiteArguments.compactMap { argument in
 			MockLowering.dependency(passedTo: argument, among: instantiable.dependencies).map { (argument: argument, dependency: $0) }
@@ -248,10 +264,73 @@ extension MockLowering.Walk {
 }
 
 extension MockLowering.Walk {
+	/// `built`, production's record of a public mock's configured place of `instantiable`, calling its type's construction
+	/// function `functionName` as `MockLowering.publicConstructionCall(of:…)` spells it: each argument labeled by its inner
+	/// label, a dependency read as production reads it, a default as the member of its label of the configuration the
+	/// place's function is handed, and last that configuration's `safeDIBuilder`, which the function tries first. `nil`
+	/// where production's record does not read a dependency the construction passes.
+	private mutating func configuring(
+		_ built: BuiltPlaceRecord,
+		callingConstructionFunctionNamed functionName: String,
+		with construction: MockLowering.ConfiguredConstruction,
+		instantiable: Instantiable,
+	) -> PlaceRecord? {
+		let configurationParameter = construction.configurationParameter
+		let configuration = ValuePath.passedArgument(configurationParameter.name)
+		func configurationRead(labeled argumentLabel: String) -> PlaceRead {
+			PlaceRead(
+				argumentLabel: argumentLabel,
+				label: configurationParameter.name,
+				property: Property(label: configurationParameter.name, typeDescription: configurationParameter.type),
+				source: .binding(label: configurationParameter.name),
+			)
+		}
+		// A `@Sendable`-typed configuration stores every default as a `@Sendable` closure, which the read calls
+		// (`publicConstructionArguments`).
+		let storesDefaultsAsClosures = sendableConfigurationTypeNames.contains(instantiable.concreteInstantiable.asSource)
+		var arguments = [PlaceRead]()
+		var argumentValues = [Int: ValuePath]()
+		for argument in mockConstruction(of: instantiable, usesMockInitializer: construction.usesMockInitializer).callSiteArguments {
+			if let dependency = MockLowering.dependency(passedTo: argument, among: instantiable.dependencies) {
+				guard let read = built.arguments.first(where: { $0.property == dependency.property }) else { return nil }
+				arguments.append(PlaceRead(argumentLabel: argument.innerLabel, label: read.label, property: read.property, source: read.source, staysOutsideSendableFunctions: read.staysOutsideSendableFunctions))
+				continue
+			}
+			argumentValues[arguments.count] = storesDefaultsAsClosures
+				? .call(argument.label, of: configuration, arguments: [], argumentsWrapper: nil)
+				: .member(argument.label, of: configuration)
+			arguments.append(configurationRead(labeled: argument.innerLabel))
+		}
+		argumentValues[arguments.count] = .member(ReservedName.configurationBuilderPropertyName, of: configuration)
+		arguments.append(configurationRead(labeled: ReservedName.configurationBuilderPropertyName))
+		var configured = BuiltPlaceRecord(
+			property: built.property,
+			isErased: built.isErased,
+			concreteType: built.concreteType,
+			isExtension: built.isExtension,
+			target: .mock(instantiable.concreteInstantiable, name: functionName),
+			arguments: arguments,
+			forwardedProperties: built.forwardedProperties,
+			cycleParameters: built.cycleParameters,
+			callCycleArguments: built.callCycleArguments,
+			functionName: built.functionName,
+			isSendable: built.isSendable,
+			typesDeclaredEscaping: built.typesDeclaredEscaping,
+			lineEnd: built.lineEnd,
+			hasFunction: built.hasFunction,
+			children: built.children,
+			node: built.node,
+			sharingFields: built.sharingFields,
+		)
+		configured.argumentValues = argumentValues
+		return .built(configured)
+	}
+
 	/// The override alternative of `node` in an internal mock, read at the path of the configuration its path key reads
 	/// (`configuration`, `OverrideRead.configuration`) rather than at the local a `@Sendable` builder function's extractor
 	/// reads it into: the record's form, which `relativeConfiguration(of:…)` reads of the configuration the place's call
-	/// hands its function. A public mock, whose configurations are never `Sendable`, records no places.
+	/// hands its function. A public mock's configurations are never `Sendable`, so a public mock lays out only where no
+	/// node reads its overrides into locals (`SubtreeSharing.readsOverridesIntoLocals`), and never reads this alternative.
 	static func internalMockOverrideAlternative(of node: MockLowering.ConstantNode, configuration: ValuePath) -> ConstructionAlternative {
 		ConstructionAlternative(
 			closure: node.hasConfiguration ? .member(ReservedName.configurationBuilderPropertyName, of: configuration) : configuration,

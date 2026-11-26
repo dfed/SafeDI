@@ -27,13 +27,6 @@ extension MockLowering {
 	/// Whether internal mocks' bodies are laid out by the type key. A test that compares the walk's body sets it off.
 	@TaskLocal static var laysOutWithTypeKey = true
 
-	/// Whether public mocks' bodies are laid out by the type key too. Off, because a public mock's records do not yet carry
-	/// everything its body reads: each place whose record cannot say what the walk writes refuses its root where the record
-	/// is made (`recordInputs(of:…)`), and a public mock's root shares no subtree (`sharesSubtrees(of:)`), so a root that
-	/// reports `laidOut` under this switch is one whose records carried its whole body. Set by the tests of those refusals;
-	/// never by the tool.
-	@TaskLocal static var laysOutPublicMocksWithTypeKey = false
-
 	/// Called, where set, with how many places each check of the reads of a root's laid-out body (`unresolvedRead(in:declaredAtRoot:)`)
 	/// read. Set by the tests that check the check grows with the places of the plan, never with the paths; never by the tool.
 	@TaskLocal public static var unresolvedReadObserver: (@Sendable (_ readPlaces: Int) -> Void)?
@@ -384,8 +377,10 @@ extension MockLowering.Walk {
 				handed.value
 			}
 		}
+		// A value the root's caller passed reads the root's parameter, not the configuration.
 		record.alternatives = record.alternatives.map { alternative in
-			ConstructionAlternative(closure: readInPlace(alternative.closure), bindingName: alternative.bindingName, requiresAbsent: alternative.requiresAbsent, use: alternative.use, resultWrapper: alternative.resultWrapper)
+			guard alternative.use != .usedAsValue else { return alternative }
+			return ConstructionAlternative(closure: readInPlace(alternative.closure), bindingName: alternative.bindingName, requiresAbsent: alternative.requiresAbsent, use: alternative.use, resultWrapper: alternative.resultWrapper)
 		}
 		record.argumentValues = record.argumentValues.mapValues(readInPlace)
 		record.passedArguments = []

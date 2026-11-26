@@ -561,7 +561,8 @@ extension MockLowering.Walk {
 			}
 		}
 		// Only a tree with a mock root's builders makes member calls in a builder function (`SeamHoles`), which is a public
-		// mock's, and a public mock records no places (`lowerMockRoot`), so a recorded call's body holds none.
+		// mock's. The construction memo shares no generator in such a tree (`construction-memo-calls.md`), so it reaches
+		// none on several paths and its root records no places (`lowerMockRootWithTree`), so a recorded call's body holds none.
 		recordPlace(bodyLines: bodyLines)
 		// A call on a loop of builders first rebinds the members its tree receives, and its level binds its wrapper where it
 		// reads it outside the loop (`MockLowering+Loops.swift`).

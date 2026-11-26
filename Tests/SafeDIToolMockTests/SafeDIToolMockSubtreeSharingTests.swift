@@ -111,6 +111,80 @@ struct SafeDIToolMockSubtreeSharingTests: ~Copyable {
 		#expect(meetings == ["Root": 1])
 	}
 
+	/// A public mock whose tree builds a type with children beneath two parents lays its body out by type key and shares
+	/// the subtree: each configured place calls its type's construction function, handed its module-level configuration.
+	@Test
+	mutating func mock_sharesSubtree_whenPublicMockBuildsTypeWithChildrenBeneathTwoParents() async throws {
+		let meetings = try await sharedMeetings(of: Self.screenBeneathTwoParents(screenProperty: "@Instantiated let screen: Screen", rootIsPublicMock: true))
+		#expect(meetings == ["Root": 1])
+	}
+
+	/// A public mock's shared subtree that receives a value the mock promotes to its root reads the root's binding, which
+	/// prefers the value the caller passed (`ConstructionAlternative.Use.usedAsValue`).
+	@Test
+	mutating func mock_sharesSubtree_whenPublicMockSubtreeReceivesValueItPromotes() async throws {
+		let meetings = try await sharedMeetings(of: Self.screenBeneathTwoParents(
+			screenProperty: "@Instantiated let screen: Instantiator<Screen>",
+			rootIsPublicMock: true,
+			modelProperties: ["@Received let token: Token"],
+			extraFiles: [Self.token],
+		))
+		#expect(meetings == ["Root": 1])
+	}
+
+	/// A public mock's shared place whose construction takes a default reads it from the configuration its function is
+	/// handed, as the construction function's argument.
+	@Test
+	mutating func mock_sharesSubtree_whenPublicMockSubtreeTakesDefault() async throws {
+		let meetings = try await sharedMeetings(of: Self.screenBeneathTwoParents(
+			screenProperty: "@Instantiated let screen: Screen",
+			rootIsPublicMock: true,
+			screenDefaultArguments: ["title: String = \"Screen\""],
+		))
+		#expect(meetings == ["Root": 1])
+	}
+
+	/// A public mock that builds no type with children at two places keeps its walked body, which one walk writes: it is
+	/// not laid out, so no sharing is reported.
+	@Test
+	mutating func mock_keepsWalkedBody_whenPublicMockBuildsEachTypeWithChildrenOnce() async throws {
+		let meetings = try await sharedMeetings(of: [
+			Self.type("Root", kind: "final class", publicMock: true, properties: ["@Instantiated let first: First", "@Instantiated let second: Second"]),
+			Self.type("First", kind: "final class", properties: ["@Instantiated let model: Model"]),
+			Self.type("Second", kind: "final class", properties: ["@Instantiated let model: Model"]),
+			Self.type("Model", kind: "final class", properties: []),
+		])
+		#expect(meetings == [:])
+	}
+
+	/// A public mock whose tree builds in a `@Sendable` builder function keeps its walked body: its configurations are never
+	/// `Sendable`, so no record can hand one into the function.
+	@Test
+	mutating func mock_keepsWalkedBody_whenPublicMockHoldsSendableInstantiator() async throws {
+		let meetings = try await sharedMeetings(of: Self.screenBeneathTwoParents(
+			screenProperty: "@Instantiated let screen: Screen",
+			rootIsPublicMock: true,
+			modelProperties: ["@Instantiated let worker: SendableInstantiator<Worker>"],
+			extraFiles: [
+				Self.type("Worker", kind: "final class", conformances: ", Sendable", properties: []),
+			],
+		))
+		#expect(meetings == [:])
+	}
+
+	/// A public mock whose tree builds an actor keeps its walked body: the actor's arguments read their overrides into
+	/// locals, as a `@Sendable` function's do.
+	@Test
+	mutating func mock_keepsWalkedBody_whenPublicMockHoldsActor() async throws {
+		let meetings = try await sharedMeetings(of: Self.screenBeneathTwoParents(
+			screenProperty: "@Instantiated let screen: Screen",
+			rootIsPublicMock: true,
+			modelProperties: ["@Instantiated let store: Store"],
+			extraFiles: [Self.type("Store", kind: "actor", properties: [])],
+		))
+		#expect(meetings == [:])
+	}
+
 	/// A subtree built for an actor's argument reads its overrides into locals, which the key does not hold, so nothing
 	/// beneath an actor is shared.
 	@Test
@@ -141,22 +215,6 @@ struct SafeDIToolMockSubtreeSharingTests: ~Copyable {
 			modelProperties: ["@Instantiated let nextScreen: Instantiator<Screen>"],
 		))
 		#expect(meetings == ["Root": 0])
-	}
-
-	/// A public mock's root shares nothing, also where the type key lays public mocks out
-	/// (`MockLowering.laysOutPublicMocksWithTypeKey`): its places' records read their overrides by the path from the root, so
-	/// the second `Screen` would read the first's override (`MockLowering.Walk.sharesSubtrees(of:)`).
-	@Test
-	mutating func mock_sharesNothing_whenRootIsPublicMock() async throws {
-		let fixture = Self.screenBeneathTwoParents(screenProperty: "@Instantiated let screen: Screen")
-			.map { $0.replacingOccurrences(of: "@Instantiable(generateMock: true)\n", with: "@Instantiable(generateMock: .public)\n") }
-		var filesToDelete = filesToDelete
-		let outcomes = try await MockLowering.$laysOutPublicMocksWithTypeKey.withValue(true) {
-			try await Self.outcomes(of: fixture, filesToDelete: &filesToDelete)
-		}
-		self.filesToDelete = filesToDelete
-		#expect(outcomes.map(\.mockedType) == ["Root"])
-		#expect(outcomes.map(\.sharedMeetings) == [0])
 	}
 
 	/// A root whose tree calls another module's public mock inline shares nothing: the call's fills read the caller's scope
@@ -648,6 +706,24 @@ struct SafeDIToolMockSubtreeSharingTests: ~Copyable {
 	private var filesToDelete: [URL]
 
 	/// The shared meetings each mock's lowering reports, by mocked type.
+	/// A public mock lays out only where a subtree it builds on several paths is closed: `Panel`, built beneath `First` and
+	/// `Second`, calls another module's public mock, so no node forms a key and the mock keeps its walked body.
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_keepsWalkedBody_whenPublicMocksRepeatedSubtreeCallsAnotherModulesPublicMock() async throws {
+		let meetings = try await sharedMeetings(ofModules: Self.publicRootCallingFeature(firstAndSecondBuild: "@Instantiated let panel: Panel", rootBuildsPanel: false))
+		#expect(meetings == [:])
+	}
+
+	/// A public mock whose closed `Screen` subtree repeats beneath `First` and `Second` shares it and lays out, with its call
+	/// of another module's public mock, built beside them, recorded as an internal mock's is.
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_sharesSubtree_whenPublicMockCallsAnotherModulesPublicMockBesideRepeatedSubtree() async throws {
+		let meetings = try await sharedMeetings(ofModules: Self.publicRootCallingFeature(firstAndSecondBuild: "@Instantiated let screen: Screen", rootBuildsPanel: true))
+		#expect(meetings == ["Root": 1])
+	}
+
 	private mutating func sharedMeetings(of swiftFileContent: [String]) async throws -> [String: Int] {
 		var meetings = [String: Int]()
 		for outcome in try await outcomes(of: swiftFileContent) {
@@ -701,21 +777,58 @@ struct SafeDIToolMockSubtreeSharingTests: ~Copyable {
 		return outcomes
 	}
 
+	/// `Feat` declares `Feature`, a public mock whose initializer `App` cannot call; `App`'s public `Root` builds `First` and
+	/// `Second`, each declaring `firstAndSecondBuild`, and `Panel`, which builds `Feature` and a `Model`, where
+	/// `rootBuildsPanel`.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private static func publicRootCallingFeature(firstAndSecondBuild: String, rootBuildsPanel: Bool) -> [ModuleFixture] {
+		[
+			ModuleFixture(name: "Feat", packageName: "Feat", swiftFileContentByFilePath: ["FeatTypes.swift": """
+			import SafeDI
+
+			@Instantiable(generateMock: .public)
+			public final class Feature: Instantiable {
+			    init(gadget: Gadget) {
+			        self.gadget = gadget
+			    }
+
+			    @Instantiated let gadget: Gadget
+			}
+
+			@Instantiable
+			public final class Gadget: Instantiable {
+			    init() {}
+			}
+			"""]),
+			ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: ["AppTypes.swift": "import Feat\nimport SafeDI\n\n" + [
+				seamFixtureType(named: "Model", isFinalClass: true, declarations: []),
+				seamFixtureType(named: "Panel", isFinalClass: true, declarations: ["@Instantiated let feature: Feature", "@Instantiated let model: Model"]),
+				seamFixtureType(named: "Screen", isFinalClass: true, declarations: ["@Instantiated let model: Model"]),
+				seamFixtureType(named: "First", isFinalClass: true, declarations: [firstAndSecondBuild]),
+				seamFixtureType(named: "Second", isFinalClass: true, declarations: [firstAndSecondBuild]),
+				seamFixtureType(named: "Root", isFinalClass: true, declarations: ["@Instantiated let first: First", "@Instantiated let second: Second"] + (rootBuildsPanel ? ["@Instantiated let panel: Panel"] : []))
+					.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(generateMock: .public)\n"),
+			].joined(separator: "\n\n")], dependencies: ["Feat"]),
+		]
+	}
+
 	/// `Root` builds `First` and `Second`, each of which declares `screenProperty`, a `Screen` that builds a `Model`.
 	private static func screenBeneathTwoParents(
 		screenProperty: String,
 		parentKind: String = "final class",
+		rootIsPublicMock: Bool = false,
 		rootProperties: [String] = [],
 		modelProperties: [String] = [],
+		screenDefaultArguments: [String] = [],
 		sendableScreenAndModel: Bool = false,
 		extraFiles: [String] = [],
 	) -> [String] {
 		let sendable = sendableScreenAndModel ? ", Sendable" : ""
 		return [
-			Self.type("Root", kind: "final class", generateMock: true, properties: rootProperties + ["@Instantiated let first: First", "@Instantiated let second: Second"]),
+			Self.type("Root", kind: "final class", generateMock: true, publicMock: rootIsPublicMock, properties: rootProperties + ["@Instantiated let first: First", "@Instantiated let second: Second"]),
 			Self.type("First", kind: parentKind, properties: [screenProperty]),
 			Self.type("Second", kind: parentKind, properties: [screenProperty]),
-			Self.type("Screen", kind: "final class", conformances: sendable, properties: ["@Instantiated let model: Model"]),
+			Self.type("Screen", kind: "final class", conformances: sendable, properties: ["@Instantiated let model: Model"], defaultArguments: screenDefaultArguments),
 			Self.type("Model", kind: "final class", conformances: sendable, properties: modelProperties),
 		] + extraFiles
 	}
@@ -815,17 +928,17 @@ struct SafeDIToolMockSubtreeSharingTests: ~Copyable {
 	}
 
 	/// An `@Instantiable` type whose initializer takes each property in order.
-	private static func type(_ name: String, kind: String, generateMock: Bool = false, conformances: String = "", properties: [String]) -> String {
+	private static func type(_ name: String, kind: String, generateMock: Bool = false, publicMock: Bool = false, conformances: String = "", properties: [String], defaultArguments: [String] = []) -> String {
 		let labelsAndTypes = properties.map { property -> (label: String, type: String) in
 			let declaration = property.components(separatedBy: " let ").last ?? property
 			let parts = declaration.components(separatedBy: ": ")
 			return (parts[0], parts.dropFirst().joined(separator: ": "))
 		}
-		let parameters = labelsAndTypes.map { "\($0.label): \($0.type)" }.joined(separator: ", ")
+		let parameters = (labelsAndTypes.map { "\($0.label): \($0.type)" } + defaultArguments).joined(separator: ", ")
 		let assignments = labelsAndTypes.map { "        self.\($0.label) = \($0.label)" }.joined(separator: "\n")
 		let declarations = properties.map { "    \($0)" }.joined(separator: "\n")
 		return """
-		@Instantiable\(generateMock ? "(generateMock: true)" : "")
+		@Instantiable\(publicMock ? "(generateMock: .public)" : generateMock ? "(generateMock: true)" : "")
 		public \(kind) \(name): Instantiable\(conformances) {
 		    public init(\(parameters)) {
 		\(assignments)
@@ -872,7 +985,7 @@ struct SafeDIToolMockSubtreeSharingTests: ~Copyable {
 		"pendingRenamedFunctionName": nameScope + "set by the level for its next node, inside the subtree.",
 		"renames": keyed + "restricted to the labels the subtree reads.",
 		"lazilyInstantiatedNames": keyed + "restricted to the labels the subtree reads.",
-		"publicMockWrapperParameterNames": rootConstant + "the wrappers a public mock takes; a public mock shares nothing.",
+		"publicMockWrapperParameterNames": rootConstant + "the wrappers a public mock takes, set before the walk; each node prunes its own copy (`functionPublicMockWrapperParameterNames`) by its own declarations.",
 		"rootRenames": rootLevel + "copied from renames at the root's level.",
 		"uncoveredParameterNames": rootConstant + "set from the signature before the walk.",
 		"sendableAutoclosureBindings": rootConstant + "set from the signature before the walk.",
@@ -892,10 +1005,11 @@ struct SafeDIToolMockSubtreeSharingTests: ~Copyable {
 		"configuredNodesEntered": output + "a count of configured nodes, which a later meeting does not enter.",
 		"finishedConfiguredChildren": relative + "pushed and popped around each configured node.",
 		"filledCallBuilders": guarded + "the gate (`MockLowering.Walk.sharesSubtrees(of:)`) refuses a root with an inline public mock's places.",
-		"buildsPublicMock": guarded + "a public mock's walk has no subtree sharing.",
+		"buildsPublicMock": rootConstant + "set before the walk; a public root shares only where its records lay it out.",
 		"enclosingBindingNamesPassedByName": relative + "read only where a node of the subtree renames a receive apart, which reads a flat parameter or override the key's `renames` hold.",
 		"promotedProperties": rootLevel + "read only for the root's own nodes.",
 		"promotedParameterNames": rootLevel + "read only for the root's own nodes.",
+		"publicConfigurationTypeNames": rootConstant + "the module's public configuration names, set before the walk.",
 		"sendableOverrideExtractor": guarded + "the walk shares nothing inside a `@Sendable` builder function's extraction.",
 		"levelNames": guarded + "used only inside an extraction, which the walk shares nothing inside.",
 		"isInsideSendableFunction": guarded + "every `@Sendable` builder function above a node holds an override extractor, which forms no key.",
