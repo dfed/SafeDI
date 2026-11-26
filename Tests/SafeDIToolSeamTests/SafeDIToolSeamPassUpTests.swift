@@ -2961,9 +2961,11 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.twoLevelPassUpModules(), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
 		let signatures = try #require(output.modules["Feature"]?.generateOutput?.seamSignaturesWrittenToModuleInfo)
 		let casePlacesBySeam = Dictionary(signatures.map { ($0.seamType.asSource, $0.signature?.casePlaces ?? []) }, uniquingKeysWith: { first, _ in first })
-		// `Inner`'s `api` is a case of its place graph. `Middle` and `Outer` pass the place up, which is no case of theirs:
-		// a reader takes it as a case of its own.
-		#expect(casePlacesBySeam.mapValues { $0.map(\.caseIndex) } == ["Inner": [0], "Middle": [nil], "Outer": [nil]])
+		// `Inner`'s `api` is a case of its place graph. `Middle` and `Outer` pass the place up: each holds a case of the call
+		// that presents it, which refers to the case of the seam it calls.
+		#expect(casePlacesBySeam.mapValues { $0.map(\.caseIndex) } == ["Inner": [0], "Middle": [0], "Outer": [0]])
+		let references = Dictionary(signatures.map { ($0.seamType.asSource, $0.signature?.places.cases.map { "\($0.passedUp?.seamType.asSource ?? "own") \($0.passedUp?.caseIndex ?? -1)" } ?? []) }, uniquingKeysWith: { first, _ in first })
+		#expect(references == ["Inner": ["own -1"], "Middle": ["Inner 0"], "Outer": ["Middle 0"]])
 		#expect(casePlacesBySeam.mapValues { $0.map { $0.hole.sitePath.map(\.label) } } == ["Inner": [["detailBuilder", "api"]], "Middle": [["detailBuilder", "api"]], "Outer": [["detailBuilder", "api"]]])
 	}
 

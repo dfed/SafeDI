@@ -33,6 +33,16 @@ struct PublicMockPlans: Sendable {
 		try plansByType[type]?.get()
 	}
 
+	/// The place graph of the plan of `type`'s public mock, or `nil` when the run holds no plan of it.
+	func places(of type: TypeDescription) -> SeamSignature.Places? {
+		switch plansByType[type] {
+		case let .success(plan):
+			plan?.places
+		case .failure, .none:
+			nil
+		}
+	}
+
 	mutating func add(plan: StoredPublicMockPlan?, of type: TypeDescription) {
 		plansByType[type] = .success(plan)
 	}
@@ -169,6 +179,8 @@ extension DependencyTreeGenerator {
 		}
 		try await computePublicMockPlans(of: calledTypes, into: &foreignPublicMockPlans, modulesReadByRunOfModule: emittingModule.modulesReadByRunOfModule)
 		var publicMockCalls = [TypeDescription: PublicMockCall]()
+		// The plans a case of a place passed up through two public mocks is resolved in.
+		let plansOfCalledMocks = foreignPublicMockPlans
 		// The first type in type order whose plan its module cannot compute reports its error.
 		for (type, foreignPublicMock) in calledTypes {
 			guard let plan = try foreignPublicMockPlans.plan(of: type) else { continue }
@@ -234,6 +246,7 @@ extension DependencyTreeGenerator {
 					scopeEnums: plan.scopeEnums,
 					places: plan.places,
 					caseIndexByHole: plan.caseIndexByHole,
+					placesOfSeamsBeneath: { plansOfCalledMocks.places(of: $0.seamType) },
 				),
 			)
 		}

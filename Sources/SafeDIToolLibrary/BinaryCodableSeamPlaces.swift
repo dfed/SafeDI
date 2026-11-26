@@ -405,13 +405,13 @@ extension SeamSignature.Places.Level: BinarySchemaMember {
 	}
 }
 
-extension SeamSignature.Places.PassedUpReference: BinarySchemaMember {
+extension SeamSignature.Places.CalledCase: BinarySchemaMember {
 	static var binaryLayout: BinaryLayout<Self> {
 		.structure(
 			fields: [
-				BinaryLayoutField("innerSeamType", \.innerSeamType),
-				BinaryLayoutField("innerIsPublicMock", \.innerIsPublicMock),
-				BinaryLayoutField("innerCaseIndex", \.innerCaseIndex),
+				BinaryLayoutField("seamType", \.seamType),
+				BinaryLayoutField("isPublicMock", \.isPublicMock),
+				BinaryLayoutField("caseIndex", \.caseIndex),
 			],
 			unwrittenProperties: [],
 		)
@@ -419,16 +419,16 @@ extension SeamSignature.Places.PassedUpReference: BinarySchemaMember {
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
 		try self.init(
-			innerSeamType: reader.read(),
-			innerIsPublicMock: reader.read(),
-			innerCaseIndex: reader.read(),
+			seamType: reader.read(),
+			isPublicMock: reader.read(),
+			caseIndex: reader.read(),
 		)
 	}
 
 	func write(to writer: inout BinaryWriter) {
-		writer.write(innerSeamType)
-		writer.write(innerIsPublicMock)
-		writer.write(innerCaseIndex)
+		writer.write(seamType)
+		writer.write(isPublicMock)
+		writer.write(caseIndex)
 	}
 }
 
@@ -459,7 +459,7 @@ extension SeamSignature.Places.Case: BinarySchemaMember {
 			ownerLevel: reader.read(),
 			isBuiltInSendableFunction: fieldFlags.next(),
 			siteOpensSendableFunction: fieldFlags.next(),
-			passedUp: reader.readOptional(flaggedIn: &fieldFlags) as SeamSignature.Places.PassedUpReference?,
+			passedUp: reader.readOptional(flaggedIn: &fieldFlags) as SeamSignature.Places.CalledCase?,
 			isPassedOnSendable: fieldFlags.next(),
 			calledCopyDeclarations: reader.read(),
 			uncarriedReplacedOnPathsToCalls: reader.read(),
