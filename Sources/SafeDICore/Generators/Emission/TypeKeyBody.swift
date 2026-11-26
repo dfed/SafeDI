@@ -58,8 +58,7 @@ enum TypeKeyBody {
 		layout.computeClasses()
 		// A root whose loops of builders the path key writes once each keeps the path key's body, the members' functions
 		// nested as before the type key laid loops out.
-		guard layout.laysOutLoops() else { return nil }
-		guard layout.computePlacement() else { return nil }
+		guard layout.laysOutLoops(), layout.computePlacement() else { return nil }
 		layout.computeOutcomes()
 		guard layout.computeParameterTypes(),
 		      layout.checkEveryRead(),
