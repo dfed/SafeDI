@@ -94,8 +94,13 @@ private final class StreamingEncoder: Encoder {
 	}
 
 	let sink: Sink
-	var codingPath: [any CodingKey] { [] }
-	var userInfo: [CodingUserInfoKey: Any] { [:] }
+	var codingPath: [any CodingKey] {
+		[]
+	}
+
+	var userInfo: [CodingUserInfoKey: Any] {
+		[:]
+	}
 
 	func container<Key: CodingKey>(keyedBy _: Key.Type) -> KeyedEncodingContainer<Key> {
 		sink.write(tag: 0x7B, "")
@@ -113,7 +118,9 @@ private final class StreamingEncoder: Encoder {
 
 	private struct KeyedContainer<Key: CodingKey>: KeyedEncodingContainerProtocol {
 		let encoder: StreamingEncoder
-		var codingPath: [any CodingKey] { [] }
+		var codingPath: [any CodingKey] {
+			[]
+		}
 
 		mutating func encodeNil(forKey key: Key) throws {
 			encoder.sink.write(tag: 0x6B, key.stringValue)
@@ -147,7 +154,10 @@ private final class StreamingEncoder: Encoder {
 
 	private struct UnkeyedContainer: UnkeyedEncodingContainer {
 		let encoder: StreamingEncoder
-		var codingPath: [any CodingKey] { [] }
+		var codingPath: [any CodingKey] {
+			[]
+		}
+
 		var count = 0
 
 		mutating func encodeNil() throws {
@@ -178,7 +188,9 @@ private final class StreamingEncoder: Encoder {
 
 	private struct SingleValueContainer: SingleValueEncodingContainer {
 		let encoder: StreamingEncoder
-		var codingPath: [any CodingKey] { [] }
+		var codingPath: [any CodingKey] {
+			[]
+		}
 
 		mutating func encodeNil() throws {
 			encoder.sink.write(tag: 0x30, "")
