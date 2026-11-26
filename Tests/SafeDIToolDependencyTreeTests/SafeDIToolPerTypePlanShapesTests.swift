@@ -158,6 +158,37 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsRootOnTodaysTree_whenLazilyInstantiatedTwinClosesCycleOnConstant() async throws {
+		// `Root` and `Detail` build `home: Home` and `Panel` builds `home: LazilyInstantiated<Home>`, twins: a path closes
+		// the cycle on whichever of the two it built first, which the layout by type does not write yet.
+		let choices = try await choicesGeneratingTodaysCode(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let home: Home
+		    public init(home: Home) { self.home = home }
+		}
+
+		@Instantiable public final class Home: Instantiable {
+		    @Instantiated let detailBuilder: Instantiator<Detail>
+		    public init(detailBuilder: Instantiator<Detail>) { self.detailBuilder = detailBuilder }
+		}
+
+		@Instantiable public final class Detail: Instantiable {
+		    @Instantiated let panelBuilder: Instantiator<Panel>
+		    @Instantiated let home: Home
+		    public init(panelBuilder: Instantiator<Panel>, home: Home) { self.panelBuilder = panelBuilder; self.home = home }
+		}
+
+		@Instantiable public final class Panel: Instantiable {
+		    @Instantiated let home: LazilyInstantiated<Home>
+		    public init(home: LazilyInstantiated<Home>) { self.home = home }
+		}
+		""")
+
+		#expect(choices == ["Root": .noLayout])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_laysRootOutFromItsPlanWithTodaysCode_whenTypeOnCycleCallsSeamThatTakesNoBuilder() async throws {
 		// A screen on a cycle holds a seam, whose generated initializer its function calls with what the seam receives.
 		let choices = try await choicesGeneratingTodaysCode(of: """
