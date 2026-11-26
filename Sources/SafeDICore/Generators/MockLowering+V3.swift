@@ -346,7 +346,10 @@ extension MockLowering.Walk {
 		// A text that binds a value at its top or calls a function of SafeDI's it does not declare leaves the place
 		// unrecorded, so the root keeps the walk's text. Only a promoted dependency whose tree leads to a fill of another
 		// module's public mock writes such text (its payload bindings precede its function), which no test reaches yet: the
-		// fix of that shape owes its guards a failing test.
+		// fix of that shape owes its guards a failing test. Six shapes were tried and each fill landed inside the function:
+		// a promoted flow filling a called screen's hole, a `.public` mock passing the place up, a loop of promoted
+		// instantiators, a promoted `SendableInstantiator`, one of a flow that calls the screen, and the public mock smoke
+		// seeds.
 		guard let place = MockLowering.textPlace(functionText, outerTypes: outerTypes) else { return }
 		let bindingText = unindented[bindingIndex...].joined(separator: "\n")
 		var reads = place.reads
