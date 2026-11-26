@@ -1805,19 +1805,33 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		return caseFields
 	}
 
-	/// What one fill binds for every place of the case at `caseIndex` of `query`'s place graph, the case whose emitting place
-	/// is `hole`, by the rule `caseFields(of:)` states, read over every route to the case instead of over its places: a
-	/// label's fields are the distinct field answers of its routes (`SeamSignature.Places.Query.answers(ofLabel:at:)`), the
+	/// What one fill binds for every place of the cases at `caseIndices` of `query`'s place graph, the graph's cases of one
+	/// case nested by type (a case of the graph per owner level and family), whose emitting place is `hole`, by the rule
+	/// `caseFields(of:)` states, read over every route to those cases instead of over their places: a label's fields are
+	/// the distinct field answers of its routes (`SeamSignature.Places.Query.answers(ofLabel:at:)`), each case's
 	/// representative route's first, and a label some route answers with no level's field is read from the caller's scope
-	/// there. A route through an inner seam's levels is a route of the graph, so this covers the labels
-	/// `InnerScopeReaders.labelsSomeInnerRouteLacks(of:)` finds. A `nil` case is a place the call passes up, which is no case
-	/// of the graph yet: its fields are its own.
-	static func caseFields(ofCaseAt caseIndex: Int?, hole: SeamSignature.Hole, in query: SeamSignature.Places.Query) -> CaseFields {
-		guard let caseIndex else { return caseFields(of: [hole]) }
+	/// there. The labels are in the order `hole` carries them, then in the order the graph first reaches the others, as
+	/// `caseFields(of:)` takes the first place's first. No case is a place the call passes up, which is no case of the
+	/// graph yet: its fields are its own.
+	static func caseFields(ofCasesAt caseIndices: [Int], hole: SeamSignature.Hole, in query: SeamSignature.Places.Query) -> CaseFields {
+		guard !caseIndices.isEmpty else { return caseFields(of: [hole]) }
 		var caseFields = CaseFields()
 		let payloadLabels = Set((hole.enumPlace?.values ?? []).map(\.property.label))
-		for label in query.labels(reaching: caseIndex) {
-			let answers = query.answers(ofLabel: label, at: caseIndex)
+		var labels = hole.fields.map(\.property.label)
+		var seenLabels = Set(labels)
+		for caseIndex in caseIndices {
+			for label in query.labels(reaching: caseIndex) where seenLabels.insert(label).inserted {
+				labels.append(label)
+			}
+		}
+		for label in labels {
+			var answers = [SeamSignature.Places.Answer]()
+			var seenAnswers = Set<SeamSignature.Places.Answer>()
+			for caseIndex in caseIndices {
+				for answer in query.answers(ofLabel: label, at: caseIndex) where seenAnswers.insert(answer).inserted {
+					answers.append(answer)
+				}
+			}
 			let held = answers.compactMap { answer -> SeamSignature.Hole.Field? in
 				guard case let .field(level, declaration) = answer else { return nil }
 				return query.places.declaration(level: level, declaration: declaration).field

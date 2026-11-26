@@ -1092,22 +1092,28 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 					fields.map { "\($0.property.label): \($0.property.typeDescription.asSource)\($0.isDeferredParameter ? " (deferred)" : "")" }
 				}
 				for (caseKey, places) in placesByCaseKey.sorted(by: { $0.key < $1.key }) {
-					let caseIndices = Set(places.compactMap { calledBuilders.caseIndexBySite[$0.site] })
 					guard let firstPlace = places.first, let perPlace = caseFieldsByCaseKey[caseKey] else { continue }
-					guard caseIndices.count == 1, let caseIndex = caseIndices.first, places.allSatisfy({ calledBuilders.caseIndexBySite[$0.site] != nil }) else {
-						if !caseIndices.isEmpty {
-							mismatches.append("case \(caseKey): its places are of graph cases \(caseIndices.sorted()) and \(places.count(where: { calledBuilders.caseIndexBySite[$0.site] == nil })) passed up")
+					var caseIndices = [Int]()
+					for place in places {
+						if let caseIndex = calledBuilders.caseIndexBySite[place.site], !caseIndices.contains(caseIndex) {
+							caseIndices.append(caseIndex)
 						}
+					}
+					guard !caseIndices.isEmpty else { continue }
+					let passedUpCount = places.count(where: { calledBuilders.caseIndexBySite[$0.site] == nil })
+					guard passedUpCount == 0 else {
+						mismatches.append("case \(caseKey): \(passedUpCount) of its places passed up beside graph cases \(caseIndices)")
 						continue
 					}
-					let byGraph = ScopeGenerator.caseFields(ofCaseAt: caseIndex, hole: firstPlace, in: query)
+					let byGraph = ScopeGenerator.caseFields(ofCasesAt: caseIndices, hole: firstPlace, in: query)
 					if spelled(perPlace.fields).sorted() != spelled(byGraph.fields).sorted() {
 						mismatches.append("case \(caseKey): fields per place \(spelled(perPlace.fields)), by graph \(spelled(byGraph.fields))")
 					} else if spelled(perPlace.fields) != spelled(byGraph.fields) {
 						mismatches.append("case \(caseKey): field order per place \(spelled(perPlace.fields)), by graph \(spelled(byGraph.fields))")
 					}
 					if perPlace.callerReadLabels != byGraph.callerReadLabels {
-						mismatches.append("case \(caseKey): caller-read labels per place \(perPlace.callerReadLabels.sorted()), by graph \(byGraph.callerReadLabels.sorted())")
+						let withoutInnerRoutes = ScopeGenerator.caseFields(of: places).callerReadLabels
+						mismatches.append("case \(caseKey) (graph cases \(caseIndices)): caller-read labels per place \(perPlace.callerReadLabels.sorted()) (\(withoutInnerRoutes.sorted()) without inner routes), by graph \(byGraph.callerReadLabels.sorted())")
 					}
 				}
 				if !mismatches.isEmpty {
