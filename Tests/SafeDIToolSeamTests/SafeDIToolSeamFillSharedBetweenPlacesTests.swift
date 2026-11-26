@@ -356,6 +356,37 @@ struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
 		#expect(fills.last.map { [$0.builtFillCount, $0.placeStoodForCount] } == (buildsFillOfEveryPlace ? [3, 0] : [2, 1]))
 	}
 
+	@Test(arguments: [false, true])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsMismatchAtHoleOnce_whenPlacesOfOneCaseHoldErasedInstantiatorWhoseFirstGenericIsNotFulfillersForwardedProperties(buildsFillOfEveryPlace: Bool) async {
+		// `Home` builds `Panel` beneath `First`, `Second` and `Third`, so `Panel`'s `api` is three places of one case, each
+		// handed the same values. Each holds an `ErasedInstantiator` that forwards an `Int`, while `LiveApi` forwards a
+		// `String`: one declaration, reported once, whichever place's fill is built.
+		let (_, error) = await fillsOfCalls { filesToDelete in
+			_ = try await SeamFillSharing.$buildsFillOfEveryPlace.withValue(buildsFillOfEveryPlace) {
+				try await executeSafeDIToolMultiModuleTest(
+					modules: Self.modules(
+						parentDeclarations: Array(repeating: ["@Instantiated let panel: Panel"], count: 3),
+						panelDeclarations: [#"@Instantiated(fulfilledByType: "LiveApi") let api: ErasedInstantiator<Int, any Api>"#],
+						liveApiDeclarations: ["@Forwarded let name: String"],
+						rowDeclarations: [],
+					),
+					integration: .moduleInfo,
+					filesToDelete: &filesToDelete,
+				)
+			}
+		}
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["Feature"]!["Panel.swift"]):7:5: error: The first generic argument of `api: ErasedInstantiator<Int, any Api>` on `Panel` must be the @Forwarded properties of `LiveApi`, which it builds. Declare it as `ErasedInstantiator<String, any Api>`.
+			"""
+		}) {
+			if let error {
+				throw error
+			}
+		}
+	}
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_buildsFillOfItsOwnForPlace_whenPlacesOfOneCaseHandTheirFillsOtherValues() async {
