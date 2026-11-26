@@ -76,6 +76,10 @@ enum SourceRule: String, CaseIterable {
 	/// and knows no feature, so a feature that needs something of it records a fact in general terms on the place, and
 	/// the layout reads the fact.
 	case engineFeatureName
+	/// `String`, `Property` or `TypeDescription` named in a fold of the per-type facts (`OrderedGraph.swift`, `ReadsFromAbove.swift`, `TypeFactsVariants.swift`, `TypeFactsOutcomes.swift`): a fold
+	/// works on a world's 32-bit IDs and bit sets, and only building the graph, spelling code and wording a message
+	/// touch a model of the source (design section 15), so a fold keeps no reference-counted value in its loops.
+	case typeFactsFoldModelName
 
 	/// Whether the rule applies to the file at `path`, relative to the repository root. SafeDI ships its sources and
 	/// plugins, so neither traps; the Tuist plugin's build script prints SafeDI's errors too, so it spells their
@@ -100,6 +104,13 @@ enum SourceRule: String, CaseIterable {
 			path.hasPrefix("Sources/") || path.hasPrefix("Plugins/")
 		case .engineFeatureName:
 			path.hasPrefix("Sources/SafeDICore/Generators/Emission/TypeKeyBody") || path == "Sources/SafeDICore/Generators/Emission/PlaceRecord.swift"
+		case .typeFactsFoldModelName:
+			[
+				"Sources/SafeDICore/Generators/TypeFacts/OrderedGraph.swift",
+				"Sources/SafeDICore/Generators/TypeFacts/ReadsFromAbove.swift",
+				"Sources/SafeDICore/Generators/TypeFacts/TypeFactsOutcomes.swift",
+				"Sources/SafeDICore/Generators/TypeFacts/TypeFactsVariants.swift",
+			].contains(path)
 		}
 	}
 }
@@ -375,6 +386,9 @@ private final class SourceRuleVisitor: SyntaxVisitor {
 		if let text, let word = Self.featureWords(in: text).first {
 			record(.engineFeatureName, at: token, "the type key and its records name no feature, and `\(text)` names `\(word)`: record the fact in general terms on the place, and read that")
 		}
+		if case let .identifier(text) = token.tokenKind, Self.modelNames.contains(text) {
+			record(.typeFactsFoldModelName, at: token, "a fold of the per-type facts works on IDs and bit sets, and names no `\(text)`: intern the value where the graph is built, and read its ID")
+		}
 		return .visitChildren
 	}
 
@@ -422,6 +436,7 @@ private final class SourceRuleVisitor: SyntaxVisitor {
 	private static let trappingFunctionNames: Set = ["fatalError", "precondition", "preconditionFailure", "assert", "assertionFailure"]
 
 	/// The words that name a feature the type key must not know, each in the forms an identifier spells it.
+	private static let modelNames: Set = ["String", "Property", "TypeDescription"]
 	private static let featureWords: Set = ["mock", "mocks", "mocked", "override", "overrides", "overridden", "configuration", "configurations", "seam", "seams", "hole", "holes", "fill", "fills", "filled"]
 
 	/// The feature words `text` spells, in order: a word is a run of letters that a capital letter begins or follows,
