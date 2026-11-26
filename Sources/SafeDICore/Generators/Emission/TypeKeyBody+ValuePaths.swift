@@ -59,16 +59,21 @@ extension BuiltPlaceRecord {
 
 	/// The shape of what the place's construction does besides calling its target, for a structural key: never a label a
 	/// read names apart from the read itself.
-	var constructionShape: [String] {
+	func constructionShape(shapes: inout StructuralKeyParts) -> [String] {
 		guard sharingFields != nil else { return [] }
-		var shape = alternatives.map { alternative in
-			"alternative|\(alternative.closure.shape)|\(alternative.bindingName ?? "")|\(alternative.requiresAbsent.map(\.shape).joined(separator: ","))|\(alternative.use)|\(alternative.resultWrapper?.asSource ?? "")"
+		var shape = [String]()
+		for alternative in alternatives {
+			var requiresAbsent = [String]()
+			for value in alternative.requiresAbsent {
+				requiresAbsent.append(shapes.shape(of: value))
+			}
+			shape.append("alternative|\(shapes.shape(of: alternative.closure))|\(alternative.bindingName ?? "")|\(requiresAbsent.joined(separator: ","))|\(alternative.use)|\(alternative.resultWrapper?.asSource ?? "")")
 		}
 		for (position, value) in argumentValues.sorted(by: { $0.key < $1.key }) {
-			shape.append("argumentValue|\(position)|\(value.shape)")
+			shape.append("argumentValue|\(position)|\(shapes.shape(of: value))")
 		}
 		if let constructionValue {
-			shape.append("value|\(constructionValue.value.shape)|\(constructionValue.resultWrapper?.asSource ?? "")")
+			shape.append("value|\(shapes.shape(of: constructionValue.value))|\(constructionValue.resultWrapper?.asSource ?? "")")
 		}
 		if let functionReturnType {
 			shape.append("returns|\(functionReturnType.asSource)")
@@ -153,28 +158,6 @@ extension ValuePath {
 			}
 		}
 	}
-
-	/// The path with each read reduced to its argument label, label, property and whether it reads `nil`.
-	var shape: String {
-		switch self {
-		case let .rootDeclaration(name):
-			"root:\(name)"
-		case let .read(read):
-			"read:\(read.shape)"
-		case let .passedArgument(name):
-			"passed:\(name)"
-		case let .memberRead(name, base):
-			"\(base.value.shape).\(name)"
-		case let .optionalMemberRead(name, base):
-			"\(base.value.shape)?.\(name)"
-		case let .call(name, value, arguments, argumentsWrapper):
-			"\(value.shape).\(name)(\(argumentsWrapper?.asSource ?? "")|\(arguments.map(\.shape).joined(separator: ",")))"
-		case let .emptyInitialization(type):
-			"new:\(type.asSource)"
-		case let .spliced(segments):
-			"spliced[\(segments.map(\.shape).joined(separator: ","))]"
-		}
-	}
 }
 
 extension ValueSegment {
@@ -188,19 +171,6 @@ extension ValueSegment {
 			value.reads
 		}
 	}
-
-	/// The segment for a structural key: its text, its value's shape, or the function's name, each marked apart so no
-	/// two kinds of segment share a key.
-	var shape: String {
-		switch self {
-		case let .text(text):
-			"text:\(text.count):\(text)"
-		case let .value(value):
-			"value:\(value.shape)"
-		case let .declaredFunction(name):
-			"function:\(name)"
-		}
-	}
 }
 
 extension PlaceRead {
@@ -212,20 +182,24 @@ extension PlaceRead {
 
 extension PassedArgument {
 	/// The argument for a caller's structural key: its parameter, its type and the shape of its value.
-	var shape: String {
-		"passed|\(parameterName)|\(type.asSource)|\(value.shape)|\(staysOutsideSendableFunctions)|\(bindsBeforeCall)"
+	func part(parts: inout StructuralKeyParts) -> StructuralKeyParts.Part {
+		.passed(
+			parameterName: parameterName,
+			type: type.asSource,
+			value: parts.id(of: value),
+			staysOutsideSendableFunctions: staysOutsideSendableFunctions,
+			bindsBeforeCall: bindsBeforeCall,
+		)
 	}
-}
 
-extension PassedArgument {
 	/// The argument for a closer's structural key: a read as its parameter, its type and the label it reads, never the
 	/// declaration that resolves to, which `checkEveryRead` proves alike at every member; any other value as a built
-	/// place's call keys it (`shape`), so a closing call and a built call of one function that hand alike values share a
-	/// key. Each value is checked as a built call's is (`checkValuePaths`, `checkSendableMarks`).
-	var closerShape: String {
+	/// place's call keys it (`part(parts:)`), so a closing call and a built call of one function that hand alike values
+	/// share a key. Each value is checked as a built call's is (`checkValuePaths`, `checkSendableMarks`).
+	func closerPart(parts: inout StructuralKeyParts) -> StructuralKeyParts.Part {
 		switch value {
 		case let .read(read):
-			"passed|\(parameterName)|\(type.asSource)|read:\(read.label)|\(bindsBeforeCall)"
+			.passedRead(parameterName: parameterName, type: type.asSource, label: read.label, bindsBeforeCall: bindsBeforeCall)
 		case .rootDeclaration,
 		     .passedArgument,
 		     .memberRead,
@@ -233,7 +207,7 @@ extension PassedArgument {
 		     .call,
 		     .emptyInitialization,
 		     .spliced:
-			shape
+			part(parts: &parts)
 		}
 	}
 }
@@ -415,5 +389,140 @@ extension TypeKeyLayout {
 			}
 		}
 		return construction
+	}
+}
+
+/// The parts of the structural keys of one partition of places into classes (`computeClasses`), each an id. A key was a
+/// list of strings, each a part spelled out: a passed argument's type, value and flags spelled into one string, and a
+/// value path spelled out again at each of its member reads. Two parts take one id exactly when they are alike in what
+/// their strings spelled, so two keys are equal exactly when their strings were, and no class moves; a part's value path
+/// is an id too, made of its base's id. Ids are handed out in the order parts are first met and are read only for
+/// equality, never for order. It holds one entry per distinct part and path met, and dies with `computeClasses`.
+struct StructuralKeyParts {
+	/// A part of a structural key. Each case is a kind of string the key held, so no two kinds of part are alike.
+	enum Part: Hashable {
+		/// What the place builds and how, as `structuralKey(of:isInSendableFamily:parts:)` lists it.
+		case header(
+			concreteType: String,
+			callee: String,
+			isExtension: Bool,
+			lineEnd: String,
+			isInSendableFamily: Bool,
+			forwardedProperties: [String],
+			reads: [String],
+		)
+		case argument(argumentLabel: String, label: String, property: String)
+		/// A part spelled as text: what a construction does besides calling its target, or an inline or alias statement.
+		case text(String)
+		case parameter(name: String, type: String)
+		/// A parameter a variant of the per-type plan takes for a label its body's answers declare.
+		case variantParameter(String)
+		/// A call of a built place's function or a closer's.
+		case call(property: String, isErased: Bool, isExtension: Bool)
+		case passedArgumentCount(Int)
+		case passed(parameterName: String, type: String, value: Int, staysOutsideSendableFunctions: Bool, bindsBeforeCall: Bool)
+		case passedRead(parameterName: String, type: String, label: String, bindsBeforeCall: Bool)
+	}
+
+	/// The id of `part`.
+	mutating func id(of part: Part) -> Int {
+		guard let id = idsByPart[part] else {
+			let id = idsByPart.count
+			idsByPart[part] = id
+			return id
+		}
+		return id
+	}
+
+	/// The id of `value`'s shape, spelled for a part spelled as text.
+	mutating func shape(of value: ValuePath) -> String {
+		"v\(id(of: value))"
+	}
+
+	// MARK: Private
+
+	private enum Node: Hashable {
+		case rootDeclaration(String)
+		case read(String)
+		case passedArgument(String)
+		case member(name: String, base: Int, throughOptional: Bool)
+		case call(name: String, value: Int, arguments: [String], argumentsWrapper: String?)
+		case emptyInitialization(String)
+		case spliced([Segment])
+	}
+
+	/// A segment of a spliced path: its text, its value's id, or the function's name, each a case of its own so no two
+	/// kinds of segment are alike.
+	private enum Segment: Hashable {
+		case text(String)
+		case value(Int)
+		case declaredFunction(String)
+	}
+
+	private var idsByPart = [Part: Int]()
+	private var idsByNode = [Node: Int]()
+
+	/// The id of `value`, reached through its member reads without recursing, since a chain of them can be as deep as the
+	/// configurations it reads through.
+	mutating func id(of value: ValuePath) -> Int {
+		var members = [(name: String, throughOptional: Bool)]()
+		var current = value
+		while true {
+			switch current {
+			case let .memberRead(name, base):
+				members.append((name, false))
+				current = base.value
+			case let .optionalMemberRead(name, base):
+				members.append((name, true))
+				current = base.value
+			case let .rootDeclaration(name):
+				return id(of: .rootDeclaration(name), beneath: members)
+			case let .read(read):
+				return id(of: .read(read.shape), beneath: members)
+			case let .passedArgument(name):
+				return id(of: .passedArgument(name), beneath: members)
+			case let .call(name, value, arguments, argumentsWrapper):
+				let node = Node.call(
+					name: name,
+					value: id(of: value),
+					arguments: arguments.map(\.shape),
+					argumentsWrapper: argumentsWrapper?.asSource,
+				)
+				return id(of: node, beneath: members)
+			case let .emptyInitialization(type):
+				return id(of: .emptyInitialization(type.asSource), beneath: members)
+			case let .spliced(segments):
+				var spliced = [Segment]()
+				for segment in segments {
+					switch segment {
+					case let .text(text):
+						spliced.append(.text(text))
+					case let .value(value):
+						spliced.append(.value(id(of: value)))
+					case let .declaredFunction(name):
+						spliced.append(.declaredFunction(name))
+					}
+				}
+				return id(of: .spliced(spliced), beneath: members)
+			}
+		}
+	}
+
+	/// The id of `node` read through `members`, the read nearest the node last.
+	private mutating func id(of node: Node, beneath members: [(name: String, throughOptional: Bool)]) -> Int {
+		var id = id(of: node)
+		for member in members.reversed() {
+			id = self.id(of: .member(name: member.name, base: id, throughOptional: member.throughOptional))
+		}
+		return id
+	}
+
+	private mutating func id(of node: Node) -> Int {
+		guard let id = idsByNode[node] else {
+			let id = idsByNode.count
+			idsByNode[node] = id
+			return id
+		}
+		return id
 	}
 }

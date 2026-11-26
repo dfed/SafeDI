@@ -177,7 +177,7 @@ extension TypeKeyLayout {
 
 	/// Whether the argument at `position` of the inline place at `index` is `nil` in every member of `owner`'s class. Every
 	/// member's statement at `index` is of one kind, since a class's key holds each statement's shape, which names its kind
-	/// (`statementShape`).
+	/// (`statementPart(_:parts:)`).
 	func isNilAtEveryMember(owner: Int, inlineStatement index: Int, argument position: Int) -> Bool {
 		for case let .inline(record) in statements(at: index, ofEveryMemberOf: owner) where record.arguments[position].source != .nil {
 			return false
