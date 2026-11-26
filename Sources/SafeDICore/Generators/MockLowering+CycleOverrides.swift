@@ -175,8 +175,6 @@ extension MockLowering {
 		/// Whether the place, with no field in its parent's configuration, reads the overrides of the nearest place of its
 		/// type around it built the same way.
 		let nearestIsProvided: Bool
-		/// The name of the place's own parameter in the type key's form, where it reads a configuration struct.
-		let ownParameterName: String?
 		/// The configuration the path key's place reads, `safeDIOverrides.<member>…`, or `nil` where it reads none.
 		let pathKeyConfiguration: ValuePath?
 	}
@@ -263,70 +261,5 @@ extension MockLowering.Walk {
 		}
 		record.alternatives = relative.alternatives
 		builtRecords[path] = .built(record)
-	}
-}
-
-extension MockLowering.Walk {
-	/// The override each built place the walk recorded reads in the type key's form, resolved back to the absolute read the
-	/// path key makes (`safeDIOverrides.<member>…`), by the place's path of child indices: each place's configuration is what
-	/// its call hands it (`BuiltPlaceRecord.passedArguments`), read of its parent's configuration, of the nearest place
-	/// around it with the same parameter, or of nothing. A place beneath a place left unrecorded resolves to nothing. What the
-	/// shadow comparison holds the relative form to: it must read what the path key reads, at every place.
-	func absoluteConfigurationReads() -> [[Int]: ValuePath] {
-		var configurationByPath = [[Int]: ValuePath]()
-		for path in placePathsInWalkOrder {
-			guard case let .built(record) = builtRecords[path], let argument = record.passedArguments.first else { continue }
-			if let resolved = resolve(argument.value, at: path) {
-				configurationByPath[path] = resolved
-			}
-		}
-		return configurationByPath
-	}
-
-	/// The absolute read `value`, handed at the place at `path`, resolves to, or `nil` where it reads nothing: a read of a
-	/// parameter is of the nearest place around `path` that takes it, which reads the configuration the path key's place
-	/// reads there, so each place is checked against its ancestors as the path key spells them.
-	private func resolve(_ value: ValuePath, at path: [Int]) -> ValuePath? {
-		switch value {
-		case .rootDeclaration:
-			return value
-		case let .memberRead(member, of: base):
-			return resolve(base.value, at: path).map { .member(member, of: $0) }
-		case let .read(read):
-			guard case .binding = read.source else { return nil }
-			return nearestConfiguration(takingParameterNamed: read.label, around: path)
-		case let .passedArgument(name):
-			return nearestConfiguration(takingParameterNamed: name, around: path)
-		case .optionalMemberRead, .call, .emptyInitialization, .spliced:
-			// A fresh configuration, or anything but a configuration, reads no override.
-			return nil
-		}
-	}
-
-	/// The configuration the path key reads at the nearest place around `path` whose own parameter is named `name`.
-	private func nearestConfiguration(takingParameterNamed name: String, around path: [Int]) -> ValuePath? {
-		var ancestor = path
-		while !ancestor.isEmpty {
-			ancestor.removeLast()
-			if let context = builtPlaceConfigurationContexts[ancestor], context.ownParameterName == name {
-				return context.pathKeyConfiguration
-			}
-		}
-		return nil
-	}
-
-	/// The alternatives of the built place at `path`, with each read of the place's own configuration parameter replaced by
-	/// the absolute read it resolves to (`absoluteConfigurationReads()`).
-	func alternativesReadAbsolutely(at path: [Int], configurationReads: [[Int]: ValuePath]) -> [ConstructionAlternative] {
-		guard case let .built(record) = builtRecords[path] else { return [] }
-		guard let configuration = configurationReads[path] else { return record.passedArguments.isEmpty ? record.alternatives : [] }
-		return record.alternatives.map { alternative in
-			let closure: ValuePath = if case let .memberRead(member, of: _) = alternative.closure {
-				.member(member, of: configuration)
-			} else {
-				configuration
-			}
-			return ConstructionAlternative(closure: closure, bindingName: alternative.bindingName, requiresAbsent: alternative.requiresAbsent, use: alternative.use, resultWrapper: alternative.resultWrapper)
-		}
 	}
 }
