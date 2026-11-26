@@ -146,6 +146,72 @@ struct SafeDIToolVariantBodyTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_listsEachBodysCallsWithTheirAnswers_whenScreensOpenEachOtherBeneathTypeOnNoCycle() async throws {
+		// `Shell` is on no cycle, so `Root`'s body builds it and holds one call, two scopes down, of `screenBuilder`.
+		// `Screen` and `Next` open each other, so each of their bodies holds one call. `Screen`'s tree reads `logger`
+		// through `Root`'s `LazilyInstantiated`, `clock` from `Root`, and `theme`, which nothing declares.
+		var calls = [[String]]()
+		let (stream, continuation) = AsyncStream.makeStream(of: [String].self)
+		try await PlanCallsObservation.$observer.withValue({ root, calls in
+			continuation.yield([root] + calls)
+		}) {
+			_ = try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true) public final class Root: Instantiable {
+					    @Instantiated let logger: LazilyInstantiated<Logger>
+					    @Instantiated let clock: Clock
+					    @Instantiated let shell: Shell
+					    public init(logger: LazilyInstantiated<Logger>, clock: Clock, shell: Shell) { self.logger = logger; self.clock = clock; self.shell = shell }
+					}
+
+					@Instantiable public final class Logger: Instantiable { public init() {} }
+
+					@Instantiable public final class Clock: Instantiable { public init() {} }
+
+					public final class Theme {}
+
+					@Instantiable public final class Shell: Instantiable {
+					    @Instantiated let screenBuilder: Instantiator<Screen>
+					    public init(screenBuilder: Instantiator<Screen>) { self.screenBuilder = screenBuilder }
+					}
+
+					@Instantiable public final class Screen: Instantiable {
+					    @Received let logger: Logger
+					    @Received let clock: Clock
+					    @Received(onlyIfAvailable: true) let theme: Theme?
+					    @Instantiated let nextBuilder: Instantiator<Next>
+					    public init(logger: Logger, clock: Clock, theme: Theme?, nextBuilder: Instantiator<Next>) { self.logger = logger; self.clock = clock; self.theme = theme; self.nextBuilder = nextBuilder }
+					}
+
+					@Instantiable public final class Next: Instantiable {
+					    @Instantiated let screenBuilder: Instantiator<Screen>
+					    public init(screenBuilder: Instantiator<Screen>) { self.screenBuilder = screenBuilder }
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		continuation.finish()
+		for await call in stream where !calls.contains(call) {
+			calls.append(call)
+		}
+
+		// Each line: the calling body's generator and position, the call place's path among `propertiesToGenerate`, the
+		// position of the body called, and that body's answers in the order its function takes them: the label it is built
+		// as, then the labels in the order its tree first receives them.
+		#expect(calls == [[
+			"Root",
+			"Root [5] at [2, 0] calls [3] as screenBuilder: Instantiator<Screen> (screenBuilder: screenBuilder: Instantiator<Screen>, being built; logger: instance of logger: LazilyInstantiated<Logger>; clock: clock: Clock; theme: nil)",
+			"\"screenBuilder: Instantiator<Screen>\" [3] at [0] calls [4] as nextBuilder: Instantiator<Next> (nextBuilder: nextBuilder: Instantiator<Next>, being built; logger: instance of logger: LazilyInstantiated<Logger>; clock: clock: Clock; theme: nil)",
+			"\"nextBuilder: Instantiator<Next>\" [4] at [0] calls [3] as screenBuilder: Instantiator<Screen> (screenBuilder: screenBuilder: Instantiator<Screen>, being built; logger: instance of logger: LazilyInstantiated<Logger>; clock: clock: Clock; theme: nil)",
+		]])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_callsFunctionOfTwinPathIsBuilding_whenLazilyInstantiatedDependencyClosesCycleOnConstant() async throws {
 		// `Root` and `Detail` build `home: Home` and `Panel` builds `home: LazilyInstantiated<Home>`, twins: `Panel`'s
 		// closes the cycle on the function of `Root`'s constant, the twin its path is building. The plan's call there is
