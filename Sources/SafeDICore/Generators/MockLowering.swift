@@ -69,6 +69,17 @@ public enum MockLowering {
 		"\(configurationTypeName).\(ReservedName.configurationReadFunctionName)(\(value))"
 	}
 
+	/// A read of the configuration `value`, else `nearest`, of type `configurationType`, through the configuration's read
+	/// function in the form `.valueOrNearest`.
+	static func configurationRead(_ value: ValuePath, nearest: ValuePath, of configurationType: TypeDescription) -> ValuePath {
+		.spliced([.text("\(configurationType.asSource).\(ReservedName.configurationReadFunctionName)("), .value(value), .text(", "), .value(nearest), .text(")")])
+	}
+
+	/// The same, for values spelled as text, of the configuration named `configurationTypeName`.
+	static func configurationRead(_ value: String, nearest: String, of configurationTypeName: String) -> String {
+		"\(configurationTypeName).\(ReservedName.configurationReadFunctionName)(\(value), \(nearest))"
+	}
+
 	/// A configuration a node of a mock's tree is configured by: what the `SafeDIMockConfiguration` of its concrete type,
 	/// generated from that node, holds. Recorded per node and construction in the order the walk finishes the nodes,
 	/// children first, never keyed by a generator, since one generator can build a type at two places.

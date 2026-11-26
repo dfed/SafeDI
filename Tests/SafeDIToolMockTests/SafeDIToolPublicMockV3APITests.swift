@@ -1385,13 +1385,13 @@ struct SafeDIToolPublicMockV3APITests: ~Copyable {
 		        }
 		        func __safeDI_list(__safeDI_List_configuration: __safeDI_App_List_MockConfiguration, __safeDI_nearestConfigurations: __safeDI_NearestConfigurations) -> List {
 		            let detailBuilder = Instantiator<Detail> {
-		                __safeDI_detailBuilder(__safeDI_Detail_configuration: __safeDI_List_configuration.detailBuilder ?? __safeDI_nearestConfigurations.Detail_configuration ?? .init(), __safeDI_nearestConfigurations: __safeDI_nearestConfigurations.setting_List_configuration(__safeDI_List_configuration))
+		                __safeDI_detailBuilder(__safeDI_Detail_configuration: __safeDI_App_Detail_MockConfiguration.__safeDI_read(__safeDI_List_configuration.detailBuilder, __safeDI_nearestConfigurations.Detail_configuration), __safeDI_nearestConfigurations: __safeDI_nearestConfigurations.setting_List_configuration(__safeDI_List_configuration))
 		            }
 		            return if let safeDIBuilder = __safeDI_List_configuration.safeDIBuilder { safeDIBuilder(detailBuilder) } else { List(detailBuilder: detailBuilder) }
 		        }
 		        func __safeDI_detailBuilder(__safeDI_Detail_configuration: __safeDI_App_Detail_MockConfiguration, __safeDI_nearestConfigurations: __safeDI_NearestConfigurations) -> Detail {
 		            let listBuilder = Instantiator<List> {
-		                __safeDI_list(__safeDI_List_configuration: __safeDI_Detail_configuration.listBuilder ?? __safeDI_nearestConfigurations.List_configuration ?? .init(), __safeDI_nearestConfigurations: __safeDI_nearestConfigurations.setting_Detail_configuration(__safeDI_Detail_configuration))
+		                __safeDI_list(__safeDI_List_configuration: __safeDI_App_List_MockConfiguration.__safeDI_read(__safeDI_Detail_configuration.listBuilder, __safeDI_nearestConfigurations.List_configuration), __safeDI_nearestConfigurations: __safeDI_nearestConfigurations.setting_Detail_configuration(__safeDI_Detail_configuration))
 		            }
 		            return if let safeDIBuilder = __safeDI_Detail_configuration.safeDIBuilder { safeDIBuilder(listBuilder) } else { Detail(listBuilder: listBuilder) }
 		        }
@@ -1459,6 +1459,7 @@ struct SafeDIToolPublicMockV3APITests: ~Copyable {
 		    var safeDIBuilder: ((Instantiator<Detail>) -> List)? { __safeDI_storage.safeDIBuilder }
 
 		    static func __safeDI_read(_ value: Self?) -> Self { value ?? Self() }
+		    static func __safeDI_read(_ value: Self?, _ nearest: Self?) -> Self { value ?? nearest ?? Self() }
 
 		    private let __safeDI_storage: __safeDI_Storage
 
@@ -1495,6 +1496,7 @@ struct SafeDIToolPublicMockV3APITests: ~Copyable {
 		    var safeDIBuilder: ((Instantiator<List>) -> Detail)? { __safeDI_storage.safeDIBuilder }
 
 		    static func __safeDI_read(_ value: Self?) -> Self { value ?? Self() }
+		    static func __safeDI_read(_ value: Self?, _ nearest: Self?) -> Self { value ?? nearest ?? Self() }
 
 		    private let __safeDI_storage: __safeDI_Storage
 
@@ -1931,7 +1933,7 @@ struct SafeDIToolPublicMockV3APITests: ~Copyable {
 		            }
 		        }
 		        @Sendable nonisolated func __safeDI_pongBuilder(__safeDI_Pong_configuration: Pong.SafeDIOverrides, __safeDI_nearestConfigurations: __safeDI_NearestConfigurations) -> Pong {
-		            let __safeDI_pingBuilder____safeDI_Ping_configuration: Ping.SafeDIOverrides = __safeDI_Pong_configuration.pingBuilder ?? __safeDI_nearestConfigurations.Ping_configuration ?? .init()
+		            let __safeDI_pingBuilder____safeDI_Ping_configuration: Ping.SafeDIOverrides = Ping.SafeDIOverrides.__safeDI_read(__safeDI_Pong_configuration.pingBuilder, __safeDI_nearestConfigurations.Ping_configuration)
 		            let pingBuilder = SendableInstantiator<Ping> {
 		                __safeDI_pingBuilder(__safeDI_Ping_configuration: __safeDI_pingBuilder____safeDI_Ping_configuration, __safeDI_nearestConfigurations: __safeDI_nearestConfigurations.setting_Pong_configuration(__safeDI_Pong_configuration))
 		            }
@@ -1939,12 +1941,12 @@ struct SafeDIToolPublicMockV3APITests: ~Copyable {
 		        }
 		        @Sendable nonisolated func __safeDI_pingBuilder(__safeDI_Ping_configuration: Ping.SafeDIOverrides, __safeDI_nearestConfigurations: __safeDI_NearestConfigurations) -> Ping {
 		            let pongBuilder = SendableInstantiator<Pong> {
-		                __safeDI_pongBuilder(__safeDI_Pong_configuration: __safeDI_Ping_configuration.pongBuilder ?? __safeDI_nearestConfigurations.Pong_configuration ?? .init(), __safeDI_nearestConfigurations: __safeDI_nearestConfigurations.setting_Ping_configuration(__safeDI_Ping_configuration))
+		                __safeDI_pongBuilder(__safeDI_Pong_configuration: Pong.SafeDIOverrides.__safeDI_read(__safeDI_Ping_configuration.pongBuilder, __safeDI_nearestConfigurations.Pong_configuration), __safeDI_nearestConfigurations: __safeDI_nearestConfigurations.setting_Ping_configuration(__safeDI_Ping_configuration))
 		            }
 		            return if let safeDIBuilder = __safeDI_Ping_configuration.safeDIBuilder { safeDIBuilder(pongBuilder) } else { Ping(pongBuilder: pongBuilder) }
 		        }
 		        func __safeDI_ping(__safeDI_Ping_configuration: Ping.SafeDIOverrides, __safeDI_nearestConfigurations: __safeDI_NearestConfigurations) -> Ping {
-		            let __safeDI_pongBuilder____safeDI_Pong_configuration: Pong.SafeDIOverrides = __safeDI_Ping_configuration.pongBuilder ?? __safeDI_nearestConfigurations.Pong_configuration ?? .init()
+		            let __safeDI_pongBuilder____safeDI_Pong_configuration: Pong.SafeDIOverrides = Pong.SafeDIOverrides.__safeDI_read(__safeDI_Ping_configuration.pongBuilder, __safeDI_nearestConfigurations.Pong_configuration)
 		            let pongBuilder = SendableInstantiator<Pong> {
 		                __safeDI_pongBuilder(__safeDI_Pong_configuration: __safeDI_pongBuilder____safeDI_Pong_configuration, __safeDI_nearestConfigurations: __safeDI_nearestConfigurations.setting_Ping_configuration(__safeDI_Ping_configuration))
 		            }

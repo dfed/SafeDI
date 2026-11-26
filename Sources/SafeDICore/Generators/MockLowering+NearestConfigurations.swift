@@ -37,6 +37,9 @@ extension MockLowering {
 		/// In `.v3Unstable`, the one value every function takes its nearest configurations through, where it holds any and
 		/// they are all `Sendable` or all not; `nil` where each function takes one parameter per configuration.
 		let oneValue: OneValue?
+		/// In `.v3Unstable`, the concrete type of each configuration struct read through its read function
+		/// (`MockLowering.Walk.readsConfigurationThroughFunction(of:)`), by its parameter's name.
+		let readFunctionTypeByName: [String: TypeDescription]
 
 		/// The value a `.v3Unstable` mock's functions take their nearest configurations through: a local struct with one
 		/// optional field per configuration any function takes, `nil` by default, so a call hands one argument where it
@@ -200,7 +203,7 @@ extension MockLowering {
 					rootNearest(of: closedOn)
 				}
 				guard let nearest else { return nil }
-				return MockLowering.Walk.fieldFirst(parentField, nearest: nearest, nearestIsOptional: nearest == handedNearest(of: closedOn), own: closedOn)
+				return MockLowering.Walk.fieldFirst(parentField, nearest: nearest, nearestIsOptional: nearest == handedNearest(of: closedOn), own: closedOn, readsThroughFunction: readFunctionTypeByName[closedOn.name] != nil)
 			}
 			guard let callerParameter = ownParameterByPath[callerPath] else { return nil }
 			if callerParameter == closedOn {
@@ -223,12 +226,16 @@ extension MockLowering.Walk {
 		var staysOutsideSendableFunctionsByName = [String: Bool]()
 		var firstReachedIndexByName = [String: Int]()
 		var closedOnParameterByPath = [[Int]: MockLowering.ConfigurationParameter]()
+		var readFunctionTypeByName = [String: TypeDescription]()
 		for (index, path) in placePathsInWalkOrder.enumerated() {
 			if let call = builtPlaceCalls[path], call.inputs.hasFunction {
 				let node = call.nodeConfiguration
 				let configurationType = MockLowering.configurationType(of: node)
 				let parameter = MockLowering.ConfigurationParameter(concreteType: node.instantiable.concreteInstantiable, builtWithHandWrittenMock: node.usesMockInitializer, configurationType: configurationType)
 				ownParameterByPath[path] = parameter
+				if parameter.readsConfigurationStruct, readsConfigurationThroughFunction(of: node.instantiable.concreteInstantiable) {
+					readFunctionTypeByName[parameter.name] = node.instantiable.concreteInstantiable
+				}
 				if firstReachedIndexByName[parameter.name] == nil {
 					firstReachedIndexByName[parameter.name] = index
 					staysOutsideSendableFunctionsByName[parameter.name] = node.hasConfiguration ? !sendableConfigurationTypeNames.contains(node.instantiable.concreteInstantiable.asSource) : !node.requiresSendable
@@ -336,6 +343,7 @@ extension MockLowering.Walk {
 			staysOutsideSendableFunctionsByName: staysOutsideSendableFunctionsByName,
 			rootConfigurationName: rootConfigurationName,
 			oneValue: oneValue,
+			readFunctionTypeByName: readFunctionTypeByName,
 		)
 	}
 }

@@ -244,7 +244,11 @@ extension MockLowering.Walk {
 			noteConfigurationRead(of: concreteType, form: .value)
 			return MockLowering.configurationRead(fieldPath, of: v3ConfigurationNames.typeName(of: concreteType))
 		}
-		return nearest.isOptional ? "\(fieldPath) ?? \(nearest.expression) ?? .init()" : "\(fieldPath) ?? \(nearest.expression)"
+		guard readsConfigurationThroughFunction(of: concreteType) else {
+			return nearest.isOptional ? "\(fieldPath) ?? \(nearest.expression) ?? .init()" : "\(fieldPath) ?? \(nearest.expression)"
+		}
+		noteConfigurationRead(of: concreteType, form: .valueOrNearest)
+		return MockLowering.configurationRead(fieldPath, nearest: nearest.expression, of: v3ConfigurationNames.typeName(of: concreteType))
 	}
 
 	/// The name of a cycle target's parameter that holds the nearest configuration of `concreteType` above its pass.
