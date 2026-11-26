@@ -127,6 +127,59 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 		#expect(lookups == [12, 56])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesEachPlaceStoodForOnceInCaptureWalk_whenCallsCasesGrowWithThreePlacesEach() async throws {
+		// `Home` builds n holders of a place of `Api`, a case each, beneath three parents each: the first parent's fill
+		// generates code, and the second's stands for the third's. `Root` names an `Instantiator` and a
+		// `SendableInstantiator`, so the walk for captured wrappers reaches the call, where each fill takes the places
+		// it stands for: n places gathered once and taken once. Each of the three passes over the call also looks a
+		// standing fill up for each of its 3n places and asks the one set of its case for each third place: 14n units
+		// in all. Scanned for by each of the 2n fills, the n places stood for were compared 2n² times.
+		var work = [Int]()
+		for holderCount in [8, 16] {
+			var feature = ["public protocol Api {}"]
+			var homeDeclarations = [String]()
+			for holder in 0..<holderCount {
+				feature.append(seamFixtureType(named: "Holder\(holder)", declarations: ["@Instantiated let api: any Api"]))
+				for parent in ["First", "Second", "Third"] {
+					feature.append(seamFixtureType(named: "\(parent)\(holder)", declarations: ["@Instantiated let holder: Holder\(holder)"]))
+					homeDeclarations.append("@Instantiated let \(parent.lowercased())\(holder): \(parent)\(holder)")
+				}
+			}
+			feature.append(seamFixtureType(named: "Home", isSeam: true, declarations: homeDeclarations))
+			let modules = SafeDIToolSeamBuilderParameterTests.modules(
+				feature: feature,
+				app: [
+					SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "LiveApi", fulfilling: "Api", declarations: []),
+					seamFixtureType(named: "Row", declarations: []),
+					seamFixtureType(named: "Worker", declarations: []).replacingOccurrences(of: ": Instantiable", with: ": Instantiable, Sendable"),
+					seamFixtureType(named: "Root", isRoot: true, declarations: [
+						"@Instantiated let rowBuilder: Instantiator<Row>",
+						"@Instantiated let workerBuilder: SendableInstantiator<Worker>",
+						"@Instantiated let home: Home",
+					]),
+				],
+			)
+			let (stream, continuation) = AsyncStream.makeStream(of: GenerationWork.self)
+			try await GenerationWork.$observer.withValue({ continuation.yield($0) }) {
+				_ = try await executeSafeDIToolMultiModuleTest(
+					modules: modules,
+					integration: .moduleInfo,
+					compileVerification: holderCount == 8 ? .recordingIssues : .skipped,
+					filesToDelete: &filesToDelete,
+				)
+			}
+			continuation.finish()
+			var count = 0
+			for await generationWork in stream where generationWork.step == .findingFillThatStandsForPlace {
+				count += generationWork.elementCount
+			}
+			work.append(count)
+		}
+		#expect(work == [112, 224])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
