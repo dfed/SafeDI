@@ -87,7 +87,9 @@ extension DependencyTreeGenerator {
 		}
 
 		/// `answers`, a called body's, one per label of `labels`, as one call's arguments: a declaration whose label is
-		/// among `labelsMadeAgainAtCall` is passed made again.
+		/// among `labelsMadeAgainAtCall` is passed made again. Such a label never answers a declaration being built: a
+		/// declaration being built is of a scope the call is made inside, and one made again is of a sibling the calling
+		/// scope builds after the call.
 		static func arguments(_ answers: [Answer], of labels: [String], makingAgain labelsMadeAgainAtCall: Set<String>) -> [Answer] {
 			guard !labelsMadeAgainAtCall.isEmpty else { return answers }
 			return zip(labels, answers).map { label, answer in

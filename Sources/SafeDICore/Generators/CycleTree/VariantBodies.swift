@@ -287,6 +287,8 @@ extension DependencyTreeGenerator {
 							path: context.path,
 							property: context.property,
 							calledBody: calledBody,
+							// A deliberate gap while nothing emits from the plan: the layout still spells a member made
+							// again as its binding (`Answer.argumentSource(labeled:)`).
 							arguments: VariantAnswers.arguments(bodies[calledBody].planAnswers, of: labels, makingAgain: context.labelsMadeAgainAtCall),
 							// A label no receive of the walk names keeps its sorted place after the others.
 							argumentOrder: argumentOrder + bodies[calledBody].labels.indices.filter { !argumentOrder.contains($0) },
