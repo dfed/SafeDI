@@ -463,7 +463,8 @@ public struct SeamSignature: Sendable {
 					self.isBuiltBySendableBuilder = isBuiltBySendableBuilder
 				}
 
-				init(_ hole: Hole) {
+				/// The place as the seam that holds `hole` presents it to a call.
+				public init(_ hole: Hole) {
 					seamType = hole.scopeSeamType
 					ownerType = hole.ownerType
 					property = hole.property
@@ -2172,13 +2173,20 @@ extension KeyedEncodingContainer {
 /// The signatures a module info file carries of the seams of one module, read only when a run reaches one of those seams:
 /// a module's file carries those of every seam it declares, and a run reaches the seams of few of the modules it reads.
 public struct StoredSeamSignatures: Sendable {
-	/// - Parameter read: Returns the signatures, as `SafeDITool` decodes them from the module info file.
-	public init(read: @escaping @Sendable () throws -> [StoredSeamSignature]) {
+	/// - Parameters:
+	///   - read: Returns the signatures, as `SafeDITool` decodes them from the module info file.
+	///   - readTogether: Returns the signatures of each of the modules named, in their order, this module's among them.
+	public init(read: @escaping @Sendable () throws -> [StoredSeamSignature], readTogether: @escaping @Sendable (_ moduleNames: [String]) async throws -> [[StoredSeamSignature]]) {
 		self.read = read
+		self.readTogether = readTogether
 	}
 
 	/// The signatures, each of one seam, decoded each time this is called.
 	public let read: @Sendable () throws -> [StoredSeamSignature]
+	/// The signatures of the seams of each of the modules named, decoded each time this is called. Every module's holds
+	/// the same function: a place one module's seam passes up from another's is read from that seam's own, so the modules
+	/// a run reaches are read together, each place once, and side by side where one does not wait for another.
+	public let readTogether: @Sendable (_ moduleNames: [String]) async throws -> [[StoredSeamSignature]]
 }
 
 public struct StoredSeamSignature: Codable, Sendable {

@@ -83,8 +83,11 @@ extension DependencyTreeGenerator {
 	/// generated signature equals its own initializer's (see `computeSeamRoots(foreignSeamRoots:)`), computed once per
 	/// run, before the inlined trees are validated: a module info this run lacks is then reported with its remedy, rather
 	/// than as the dependencies that module's declarations would have fulfilled.
-	func computeForeignSeamRoots() async throws -> [TypeDescription: ScopeGenerator.SeamRoot?] {
+	///
+	/// `seamSignaturesRead` holds each signature a module info carried (`GenerationResults.seamSignaturesRead`).
+	func computeForeignSeamRoots() async throws -> (seamRoots: [TypeDescription: ScopeGenerator.SeamRoot?], seamSignaturesRead: [TypeDescription: SeamSignatureRead]) {
 		var seamRoots = [TypeDescription: ScopeGenerator.SeamRoot?]()
+		var seamSignaturesRead = [TypeDescription: SeamSignatureRead]()
 		var errors = [DependencyTreeGeneratorError]()
 		// Only the foreign seams this module's trees reach are computed, each from what its module sees, and a seam
 		// of a third module that such a module's visible trees reach before it, so the modules are computed in
@@ -116,7 +119,7 @@ extension DependencyTreeGenerator {
 		var expandedModules = Set<String>()
 		var visibleDeclarationsByModuleName = [String: SeamResolution.VisibleDeclarations]()
 		var modulesToCompute = Array(foreignModules(reachedFrom: reachableTypeDescriptions, in: typeDescriptionToFulfillingInstantiableMap, seenBy: nil).reversed())
-		// The stored signatures of the modules this module's trees reach are decoded side by side, each once, before the
+		// The stored signatures of the modules this module's trees reach are decoded together, each once, before the
 		// loop reads them: decoding is most of reading a module info file, and the loop runs one module at a time.
 		let modulesWithStoredSignatures = modulesToCompute.compactMap { module in
 			module.seams.allSatisfy { $0.seam.storedSignatures != nil } ? module.seams[0].seam.storedSignatures.map { (moduleName: module.moduleName, storedSignatures: $0) } : nil
@@ -124,9 +127,7 @@ extension DependencyTreeGenerator {
 		var decodedStoredSignaturesByModuleName = try await Dictionary(
 			zip(
 				modulesWithStoredSignatures.map(\.moduleName),
-				BoundedConcurrency.map(modulesWithStoredSignatures.map(\.storedSignatures), width: ProcessInfo.processInfo.activeProcessorCount) { storedSignatures, _ in
-					try storedSignatures.read()
-				},
+				modulesWithStoredSignatures.first?.storedSignatures.readTogether(modulesWithStoredSignatures.map(\.moduleName)) ?? [],
 			),
 			uniquingKeysWith: { first, _ in first },
 		)
@@ -158,6 +159,9 @@ extension DependencyTreeGenerator {
 				computedModules.insert(module.moduleName)
 				for (seamType, seamRoot) in storedSeamRoots {
 					seamRoots[seamType] = seamRoot
+					if let signature = seamRoot?.signature {
+						seamSignaturesRead[seamType] = SeamSignatureRead(moduleName: module.moduleName, signature: signature)
+					}
 				}
 				continue
 			}
@@ -217,7 +221,7 @@ extension DependencyTreeGenerator {
 		if let error = DependencyTreeGeneratorError.reportingAll(of: errors) {
 			throw error
 		}
-		return seamRoots
+		return (seamRoots, seamSignaturesRead)
 	}
 
 	/// The signature of each seam this module generates or calls, by concrete type, or `nil` for a seam whose

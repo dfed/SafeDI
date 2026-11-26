@@ -62,7 +62,7 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 		// holes share none: `SafeDIToolFulfillerImportTests` counts it on a production root whose places share generators.
 		// Finding the carrier a sibling requires grows with the children of one scope, which shape E does not grow: the test
 		// below counts it on a seam whose own type builds many children.
-		let seamSteps = Set(GenerationWork.Step.allCases).subtracting([.layingOutTypeKeyViews, .findingRootFunctions, .checkingReadsAtEveryMember, .askingMemoCandidates, .filingMemoEntryReads, .collectingTypesOfATree, .findingCarrierASiblingRequires])
+		let seamSteps = Set(GenerationWork.Step.allCases).subtracting([.layingOutTypeKeyViews, .findingRootFunctions, .checkingReadsAtEveryMember, .askingMemoCandidates, .filingMemoEntryReads, .collectingTypesOfATree, .findingCarrierASiblingRequires, .openingStoredPlaces, .resolvingStoredPlaces])
 		var countedSteps = Set<GenerationWork.Step>()
 		for shape in Shape.allCases {
 			var measures = [Measure]()

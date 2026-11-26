@@ -353,6 +353,10 @@ struct MultiModuleFixtureError: Error, CustomStringConvertible {
 ///     custom script may.
 ///   - viewsReferToModules: Under `.moduleInfo`, whether every module that writes a `.safedi` passes
 ///     `--module-info-views-refer-to-modules`, as the Bazel rule does.
+///   - expectsPassedUpPlacesWrittenInFull: Whether a module may write a place its seam passes up in full rather than as
+///     the record of the seam it came from. Otherwise each such place records an issue, unless the modules above compute
+///     every signature (`discardsStoredSeamSignatures`) or read a file another run wrote (`moduleInfoOverrides`), where
+///     a run has read no record to name.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 func executeSafeDIToolMultiModuleTest(
 	modules: [ModuleFixture],
@@ -365,6 +369,7 @@ func executeSafeDIToolMultiModuleTest(
 	writesDOTTrees: Bool = false,
 	modulesBeneath: ((_ moduleNames: [String]) -> [String])? = nil,
 	viewsReferToModules: Bool = false,
+	expectsPassedUpPlacesWrittenInFull: Bool = false,
 	filesToDelete: inout [URL],
 	recordDirectory: URL? = ExpectationRecording.directoryFromEnvironment,
 	sourceLocation: SourceLocation = #_sourceLocation,
@@ -630,6 +635,13 @@ func executeSafeDIToolMultiModuleTest(
 			}
 		}
 
+		// Every place a seam passes up must be written as the record it copies (`StoredPlaceChecks`).
+		StoredPlaceChecks.expectNoPlaceWrittenInFull(
+			counted: generateOutput?.passedUpPlacesWrittenInFull,
+			unless: expectsPassedUpPlacesWrittenInFull || discardsStoredSeamSignatures || !moduleInfoOverrides.isEmpty,
+			byRunOfModuleNamed: moduleName,
+			sourceLocation: sourceLocation,
+		)
 		if let generateOutput {
 			// With the stored blocks it read, the run must not throw where computing everything does not (`StoredBlockDecodeChecks`).
 			StoredBlockDecodeChecks.expectNoDiscardedRun(throwing: generateOutput.errorOfDiscardedRunThatReadStoredBlocks, inRunOfModuleNamed: moduleName, sourceLocation: sourceLocation)

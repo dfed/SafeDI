@@ -85,6 +85,13 @@ public struct GenerationWork: Sendable {
 		/// visits a generator once, so the generators count, not the places that share them; entered at every place, a
 		/// tree of n layers of screens that each build every screen of the next layer was visited once per path.
 		case collectingTypesOfATree
+		/// Reading the places a module info file holds of one module's seams (`PlaceResolver`): one for each module whose
+		/// places a read opens. A read opens a module's places only when it reaches a place of one of its seams, so the count
+		/// is the modules a passed-up place came through, never the modules the files describe.
+		case openingStoredPlaces
+		/// Reading one passed-up place from the record of the seam it was passed up from (`PlaceResolver`): one for each
+		/// record a read resolves, each once however many places name it.
+		case resolvingStoredPlaces
 		/// Finding, for a child a scope on a site's path builds after the property that leads to the site, the first carrier
 		/// among its siblings that it requires (`DependencyTreeGenerator.fields(of:)`): the properties the child
 		/// requires, where they are fewer than the scope's carriers and each is looked up, or else the carriers compared
@@ -107,6 +114,11 @@ public struct GenerationWork: Sendable {
 
 	/// Called with the work of a counted step each time the step runs, when set: by the tests, never by the tool.
 	@TaskLocal public static var observer: (@Sendable (GenerationWork) -> Void)?
+
+	/// Hands `observer`, when set, the work a step of reading or writing a module info file did.
+	public static func recordStoredPlaces(_ elementCount: Int, by step: Step) {
+		record(elementCount, by: step)
+	}
 
 	/// Hands `observer`, when set, the work `step` did, when `step` is not `nil`.
 	static func record(_ elementCount: Int, by step: Step?) {
