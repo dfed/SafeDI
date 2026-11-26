@@ -23,8 +23,11 @@
 // (lanes/per-type-facts/step0-columns-brief.md) or the mock track (lanes/per-type-facts/track-d-columns.md) is declared
 // here with its final type and answers empty until that lane fills it; its doc comment says which. One part is not
 // frozen: `Read` in a mock world, which gains the override read about a concrete type (a `TypeClassID`), not a label
-// (track D, "Settled by the design thread"). Its answer is an optional argument handed down like any answer, and `key`
-// projects every answer of it to one key, as rule 1 does: one body per declaration, never one per set of cycle types.
+// (track D, "Settled by the design thread"). Its answer is still an argument, with one key and one body per declaration
+// (ruling of 2026-11-26, 3:28 PM PT): the places entered above, an optional slot for each of the body's own properties a
+// path can close on, none for a body outside every cycle. A step to a property already on the path returns to that place
+// and forgets the places beneath it, as 2.4.0 does. The slot is keyed as `cycle(of:)` keys a cycle, and the form
+// `nearest ?? parent.field` is withdrawn.
 
 /// A node of a world's graph: a declaration, its position in `OrderedGraph`.
 typealias DeclarationID = Int32

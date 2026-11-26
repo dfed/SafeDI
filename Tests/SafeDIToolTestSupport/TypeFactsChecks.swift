@@ -65,6 +65,8 @@ enum TypeFactsChecks {
 		var worstNode = ""
 		var worstNodeVariantCount = 0
 		var factsVariantCount = 0
+		/// Pairs of places of one variant that check 10 compared after setting aside a read one of them asks, answered none.
+		var check10ExemptedPairs = 0
 		var line = ""
 	}
 
@@ -223,8 +225,18 @@ enum TypeFactsChecks {
 				continue
 			}
 			let declared = places[index].node.map { Set(report.nodes[$0].readsFromAbove) } ?? []
-			let answers = keyedAnswers(of: places[index], declared: declared)
-			let firstAnswers = keyedAnswers(of: places[first], declared: declared)
+			// A read one place's construction asks and the other's does not (a seam leaf or fill asking its hole's own label)
+			// is equal to the other's silence only where its answer is none; any other answer stays a finding.
+			var answers = keyedAnswers(of: places[index], declared: declared)
+			var firstAnswers = keyedAnswers(of: places[first], declared: declared)
+			let askedByBoth = Set(answers.map(readOfAnswer)).intersection(firstAnswers.map(readOfAnswer))
+			let isSilentNone = { (answer: String) in !askedByBoth.contains(readOfAnswer(answer)) && answer.hasSuffix(" = none") }
+			let exempted = answers.filter(isSilentNone).count + firstAnswers.filter(isSilentNone).count
+			answers = answers.filter { !isSilentNone($0) }
+			firstAnswers = firstAnswers.filter { !isSilentNone($0) }
+			if exempted > 0 {
+				result.check10ExemptedPairs += 1
+			}
 			if answers != firstAnswers {
 				add(10, "places \(first) and \(index) of \(nodeDescription(places[index].node)) share variant \(variant) but answer \(answers.symmetricDifference(firstAnswers).sorted()) otherwise")
 			}
@@ -279,6 +291,7 @@ enum TypeFactsChecks {
 		for check in 1...10 {
 			line.append(" check\(check)=\(result.findingsByCheck[check]?.count ?? 0)")
 		}
+		line.append(" check10Exempted=\(result.check10ExemptedPairs)")
 		for check in 1...10 {
 			if let first = result.findingsByCheck[check]?.first {
 				line.append(" first\(check)=«\(first.replacingOccurrences(of: "\n", with: " "))»")
@@ -291,6 +304,11 @@ enum TypeFactsChecks {
 	/// A place's answered reads as a variant's key compares them: a read only if available left out (rule 1), given the
 	/// node's declared reads as the report spells them, and what is
 	/// still being built left out of a read whose declaration is a wrapper (rule 2), which the text shows by its type.
+	/// The read an answered read names, `value(x)` of `value(x) = none`.
+	private static func readOfAnswer(_ answer: String) -> String {
+		String(answer.prefix { $0 != " " })
+	}
+
 	private static func keyedAnswers(of place: TypeFactsReport.Place, declared: Set<String>) -> Set<String> {
 		var answers = Set<String>()
 		for answer in place.answeredReads where !answer.hasPrefix("optional(") {
