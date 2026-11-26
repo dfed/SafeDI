@@ -2402,7 +2402,9 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	/// See `init(scope:property:contextStack:depth:fillPathStackCount:fillCallDepth:…)`.
 	private let fillCallDepth: Int?
 	/// Whether this scope is built inside a fill, whose tree reads the fields of the place it fills.
-	var isInsideFill: Bool { fillCallDepth != nil }
+	var isInsideFill: Bool {
+		fillCallDepth != nil
+	}
 
 	/// The depth a read of the stack or of the cycle parameter contexts is logged at, given `answerDepth`, the depth of the
 	/// scope that put the answer there, or `nil` for a miss. Outside a fill, a miss and the path of a seam whose hole is filled
