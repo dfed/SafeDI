@@ -3192,6 +3192,25 @@ struct SafeDIToolGraphFuzzerTests {
 		#expect(runs.firstOutcome == runs.secondOutcome, "Seed \(seed)’s build of a fill of every place:\n\(runs.secondOutcome)")
 	}
 
+	@Test(arguments: [UInt64(593), 912, 1_187, 1_834])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func toolRuns_rejectRootsCallAtItsProperty_whenRootFillsPlaceWithSeamWhosePlaceNothingFulfills(seed: UInt64) async throws {
+		// `NestedFillRoot` fills `NestedFillHome`'s place of `NestedFillPanel` with `NestedFillPanelImpl`, a seam of the roots'
+		// module that instantiates `NestedFillGadget`, which nothing fulfills, so the fill's own call takes a builder no one
+		// fills. The tool reports it at the root's property, as it reports a place of `NestedFillHome`'s own that no one
+		// fills. With the root's check judging only the places of the call it makes, seed 1187 is accepted and its
+		// generated call passes no builder for the gadget; the other three seeds are then rejected by other errors first.
+		let fixture = GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateDependencyTree])
+		#expect(GraphFuzzerFeature.seamDrawFeatures(of: fixture).contains(.nestedFillHoleUnfilled))
+		let runs = try await GraphFuzzerOracle.toolRuns(of: fixture, renamings: [])
+		guard case let .rejected(diagnostics) = runs.firstOutcome else {
+			Issue.record("Seed \(seed) is not rejected")
+			return
+		}
+		let prefix = fixture.typeNamePrefix
+		#expect(diagnostics.split(separator: "\n").contains { $0.contains("/\(prefix)NestedFillRoot.swift:") && $0.contains(": error: ") && $0.contains("fulfills `\(prefix)NestedFillGadget`") }, "Seed \(seed):\n\(diagnostics)")
+	}
+
 	@Test(arguments: [UInt64(654), 10_921])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func toolRuns_rejectBothBuildsWithEachDeferringSeamsTwoForms_whenCarriedLevelsFillReadsOptionalSendableWrapper(seed: UInt64) async throws {
@@ -7696,7 +7715,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// rejects as it rejects the seam whose own tree receives both forms. Pinned by `seamSmokeAndKnownIssueFixtureHash`.
 	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 24, 31, 68, 78, 84, 92, 93, 151, 153, 164, 180, 215, 227, 273, 277, 304, 309, 347, 468, 594, 605, 705, 743, 850, 881, 892, 934, 969, 1_010, 1_020, 1_450, 1_815, 1_837, 1_890, 1_986, 2_006, 3_575, 4_668]
 
-	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0xFB67C344709C829A
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x2AC4EA103B0B6E82
 
 	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
 	/// so a draw that stops landing, or a change in a shape's share, fails
@@ -8058,6 +8077,10 @@ struct SafeDIToolGraphFuzzerTests {
 		.placesOfOneCaseFillClosesCycleAtTwoDepths: 21,
 		.placesOfOneCaseFillCapturesWrapperOfEveryPlace: 43,
 		.placesOfOneCaseValueBoundAfterOnePlace: 11,
+		.nestedFillHole: 567,
+		.nestedFillHoleBeneathInstantiator: 186,
+		.nestedFillHoleInnerPlaceBeneathInstantiator: 207,
+		.nestedFillHoleUnfilled: 19,
 		.carrierDrawUnequalSiblings: 299,
 		.carrierDrawUnequalSiblingsBeneathChild: 153,
 		.carrierDrawCoincidingLabel: 332,
