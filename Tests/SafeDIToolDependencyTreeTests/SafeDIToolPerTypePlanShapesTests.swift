@@ -436,7 +436,7 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_keepsRootOnTodaysTree_whenTypeOutsideCyclesWithChildrenIsInstantiatedTwice() async throws {
+	mutating func generate_laysRootOutFromItsPlanWithTodaysCode_whenRootAndScreenOnCycleEachHoldTypeOnNoCycleWithChildOfItsOwn() async throws {
 		// The root and a screen each instantiate a type outside every cycle that instantiates a value of its own.
 		let choices = try await choicesGeneratingTodaysCode(of: """
 		@Instantiable(isRoot: true) public final class Root: Instantiable {
@@ -464,7 +464,7 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 		}
 		""")
 
-		#expect(choices == ["Root": .buildsTreeOutsideCyclesTwice])
+		#expect(choices == ["Root": nil])
 	}
 
 	@Test
@@ -870,6 +870,158 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 		@Instantiable public final class X: Instantiable { public init() {} }
 
 		@Instantiable public final class Y: Instantiable { public init() {} }
+		""")
+
+		#expect(choices == ["Root": nil])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysRootOutFromItsPlanWithTodaysCode_whenTwoScreensOnCycleEachOpenTypeOnNoCycleWithChildOfItsOwn() async throws {
+		// Two screens of one cycle each hold an instantiator of a type on no cycle that instantiates a value of its own.
+		let choices = try await choicesGeneratingTodaysCode(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(s0Builder: Instantiator<S0>) { self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class S0: Instantiable {
+		    @Instantiated let boxBuilder: Instantiator<Box>
+		    @Instantiated let s1Builder: Instantiator<S1>
+		    public init(boxBuilder: Instantiator<Box>, s1Builder: Instantiator<S1>) { self.boxBuilder = boxBuilder; self.s1Builder = s1Builder }
+		}
+
+		@Instantiable public final class S1: Instantiable {
+		    @Instantiated let boxBuilder: Instantiator<Box>
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(boxBuilder: Instantiator<Box>, s0Builder: Instantiator<S0>) { self.boxBuilder = boxBuilder; self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class Leaf: Instantiable { public init() {} }
+
+		@Instantiable public final class Box: Instantiable {
+		    @Instantiated let leaf: Leaf
+		    public init(leaf: Leaf) { self.leaf = leaf }
+		}
+		""")
+
+		#expect(choices == ["Root": nil])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysRootOutFromItsPlanWithTodaysCode_whenTypeOnNoCycleBuiltTwiceHoldsChildThatReceivesValueEachPlaceDeclares() async throws {
+		// The root and two screens of a cycle each hold a type on no cycle whose child receives a value the root and a screen declare.
+		let choices = try await choicesGeneratingTodaysCode(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let token: Token
+		    @Instantiated let box: Box
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(token: Token, box: Box, s0Builder: Instantiator<S0>) { self.token = token; self.box = box; self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class S0: Instantiable {
+		    @Instantiated let token: Token
+		    @Instantiated let box: Box
+		    @Instantiated let s1Builder: Instantiator<S1>
+		    public init(token: Token, box: Box, s1Builder: Instantiator<S1>) { self.token = token; self.box = box; self.s1Builder = s1Builder }
+		}
+
+		@Instantiable public final class S1: Instantiable {
+		    @Instantiated let otherBox: Box
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(otherBox: Box, s0Builder: Instantiator<S0>) { self.otherBox = otherBox; self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class Token: Instantiable { public init() {} }
+
+		@Instantiable public final class Leaf: Instantiable {
+		    @Received let token: Token
+		    public init(token: Token) { self.token = token }
+		}
+
+		@Instantiable public final class Box: Instantiable {
+		    @Instantiated let leaf: Leaf
+		    public init(leaf: Leaf) { self.leaf = leaf }
+		}
+		""")
+
+		#expect(choices == ["Root": nil])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysRootOutFromItsPlanWithTodaysCode_whenTwoTypesOnNoCycleEachHoldTypeWithChildrenBesideCycle() async throws {
+		// Two types on no cycle each hold a type that instantiates a chain of its own, beside a cycle of screens.
+		let choices = try await choicesGeneratingTodaysCode(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let first: First
+		    @Instantiated let second: Second
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(first: First, second: Second, s0Builder: Instantiator<S0>) { self.first = first; self.second = second; self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class First: Instantiable {
+		    @Instantiated let box: Box
+		    public init(box: Box) { self.box = box }
+		}
+
+		@Instantiable public final class Second: Instantiable {
+		    @Instantiated let boxBuilder: Instantiator<Box>
+		    public init(boxBuilder: Instantiator<Box>) { self.boxBuilder = boxBuilder }
+		}
+
+		@Instantiable public final class S0: Instantiable {
+		    @Instantiated let s1Builder: Instantiator<S1>
+		    public init(s1Builder: Instantiator<S1>) { self.s1Builder = s1Builder }
+		}
+
+		@Instantiable public final class S1: Instantiable {
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(s0Builder: Instantiator<S0>) { self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class Leaf: Instantiable { public init() {} }
+
+		@Instantiable public final class Middle: Instantiable {
+		    @Instantiated let leaf: Leaf
+		    public init(leaf: Leaf) { self.leaf = leaf }
+		}
+
+		@Instantiable public final class Box: Instantiable {
+		    @Instantiated let middle: Middle
+		    public init(middle: Middle) { self.middle = middle }
+		}
+		""")
+
+		#expect(choices == ["Root": nil])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysRootOutFromItsPlanWithTodaysCode_whenTypeOnNoCycleThatOpensCycleIsBuiltTwice() async throws {
+		// The root holds two values of a type on no cycle that opens a cycle of screens.
+		let choices = try await choicesGeneratingTodaysCode(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let firstBox: Box
+		    @Instantiated let secondBox: Box
+		    public init(firstBox: Box, secondBox: Box) { self.firstBox = firstBox; self.secondBox = secondBox }
+		}
+
+		@Instantiable public final class Box: Instantiable {
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(s0Builder: Instantiator<S0>) { self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class S0: Instantiable {
+		    @Instantiated let s1Builder: Instantiator<S1>
+		    public init(s1Builder: Instantiator<S1>) { self.s1Builder = s1Builder }
+		}
+
+		@Instantiable public final class S1: Instantiable {
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(s0Builder: Instantiator<S0>) { self.s0Builder = s0Builder }
+		}
 		""")
 
 		#expect(choices == ["Root": nil])

@@ -52,7 +52,6 @@ extension DependencyTreeGenerator {
 		let scopes = graph.nodes.compactMap { scopeByIdentifier[$0] }
 		var reason: RootTreeChoiceObservation.PerPathReason?
 		var formsByLabel = [String: Property]()
-		var timesInstantiated = [Int](repeating: 0, count: scopes.count)
 		for (index, scope) in scopes.enumerated() where reason == nil {
 			if scope.instantiable.generatesDependencyTree {
 				reason = .buildsSeam
@@ -70,13 +69,8 @@ extension DependencyTreeGenerator {
 			for case let .instantiated(property, _, erasedToConcreteExistential) in scope.propertiesToGenerate where reason == nil {
 				let target = graph.edges(from: index)[edge]
 				edge += 1
-				timesInstantiated[target] += 1
-				if graph.isOnCycle(target) {
-					if erasedToConcreteExistential || property.propertyType == .erasedInstantiator {
-						reason = .erasesCycleMember
-					}
-				} else if timesInstantiated[target] > 1, !scopes[target].propertiesToGenerate.isEmpty {
-					reason = .buildsTreeOutsideCyclesTwice
+				if graph.isOnCycle(target), erasedToConcreteExistential || property.propertyType == .erasedInstantiator {
+					reason = .erasesCycleMember
 				}
 			}
 		}
