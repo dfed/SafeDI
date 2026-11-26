@@ -7973,7 +7973,7 @@ enum GraphFuzzerGenerator {
 			let badgeValue = "\(badgeName)(repeatBadgeDetail: \(badgeDetailValue))"
 			let screenProtocolName = "\(screenName)Protocol"
 			let badgeProtocolName = "\(badgeName)Protocol"
-			var root = TypeDeclaration(
+			let root = TypeDeclaration(
 				name: rootName,
 				instantiableArguments: ["generateMock: true"],
 				properties: [PropertyDeclaration(attribute: "@Instantiated", label: "repeatScreen", type: screenProtocolName)],
