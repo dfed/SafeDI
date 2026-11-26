@@ -291,12 +291,14 @@ struct SafeDIToolPerTypePlanValueTests: ~Copyable {
 
 	/// Every graph of seeds 0..<23,705 (15,000 laid out from their plans by the long run) whose plan writes other code than
 	/// today's tree and whose probes stay within the batch's limits: 31 graphs, which draw each of `PlanValueGraph.shapes`
-	/// but `renames` and `escapingName` at least four times. Of seeds 0..<3,483, two graphs that draw a rename write other code than today's:
+	/// but `renames`, `escapingName` and `erases` at least four times. Of seeds 0..<3,483, two graphs that draw a rename write other code than today's:
 	/// 1,981, pinned, and 246, which spends the batch's traversals alike on both paths. The other 214 whose code differs
 	/// spend them too, and are left to the long run. Of seeds 0..<1,200, the 12 accepted graphs that forward a closure
-	/// `@escaping` are all laid out from their plans with today's code, so none is pinned.
+	/// `@escaping` are all laid out from their plans with today's code, so none is pinned; 51 graphs that open a screen
+	/// erased are accepted and 50 laid out from their plans, and two write other code than today's, 190 and 211, both
+	/// pinned.
 	private static let pinnedSeeds: [UInt64] = [
-		335, 576, 1_100, 1_321, 1_981, 2_394, 3_074, 3_930, 4_235, 4_574, 4_648, 6_607,
+		190, 211, 335, 576, 1_100, 1_321, 1_981, 2_394, 3_074, 3_930, 4_235, 4_574, 4_648, 6_607,
 		6_798, 8_112, 8_776, 9_172, 9_746, 10_419, 10_499, 11_225, 11_856, 13_584, 14_751, 15_247,
 		15_663, 17_599, 17_996, 18_272, 20_050, 20_842, 22_429,
 	]
@@ -311,7 +313,8 @@ struct SafeDIToolPerTypePlanValueTests: ~Copyable {
 /// some models, forwarding an `Int` about a third of the time and opening one to three screens, and one or two roots
 /// that build every service and open one or two screens, directly or through a type in between. A few graphs draw a
 /// `Sendable` or lazily instantiated wrapper or a value received only if available, which keep their roots on today's
-/// tree, or a rename or a typealiased closure forwarded and received `@escaping`, which the plan lays out. The shape is the one the per-type plan's review drew its graphs from; its types are prefixed by
+/// tree, or a rename, a typealiased closure forwarded and received `@escaping` or a screen opened through an erased
+/// instantiator of a concrete existential, which the plan lays out. The shape is the one the per-type plan's review drew its graphs from; its types are prefixed by
 /// the seed, so that a batch compiles many graphs side by side, and every class stores two counters' values: the
 /// creation stamp the comparator reads (`DifferentialValueCreationStamp`) and `creationOrder`, which it describes.
 struct PlanValueGraph {
@@ -327,8 +330,8 @@ struct PlanValueGraph {
 	/// `someScreens` or `manyScreens` (two or three, four or five, six or seven), `forwards`, `opensItself` (a screen
 	/// opens itself), `declaresModel`, `receivesModel` (a screen receives a model it does not declare), `typeBetween`
 	/// (a root opens its screens through a type in between), `screenByValue` (a root holds a screen by value),
-	/// `twoRoots`, `renames` (a screen renames a service) and `escapingName` (a screen forwards a typealiased closure
-	/// `@escaping`).
+	/// `twoRoots`, `renames` (a screen renames a service) `escapingName` (a screen forwards a typealiased closure
+	/// `@escaping`) and `erases` (a screen opens another through an erased instantiator).
 	let shapes: [String]
 
 	/// A value of each forwarding type's forwarded properties, for the comparator to build its screens with.
@@ -438,6 +441,7 @@ struct PlanValueGraph {
 		var screens = [(String, [Property])]()
 		var receivesModel = false
 		var renames = false
+		var erases = false
 		for screen in 0..<screenCount {
 			var properties = [Property]()
 			if forwardsClosure[screen] {
@@ -462,7 +466,14 @@ struct PlanValueGraph {
 				if odd > 0.94, random.chance(0.2) {
 					wrapper = "LazilyInstantiated"
 				}
-				properties.append(Property(attribute: "@Instantiated", label: wrapper == "LazilyInstantiated" ? "s\(edge)Lazy" : "s\(edge)Builder", type: "\(wrapper)<\(name("S\(edge)"))>"))
+				if odd > 0.77, odd < 0.83, random.chance(0.4) {
+					// A few graphs open a screen through an erased instantiator of a concrete existential.
+					let arguments = forwardsClosure[edge] ? onTap : forwards[edge] ? "Int" : "()"
+					properties.append(Property(attribute: "@Instantiated(fulfilledByType: \"\(name("S\(edge)"))\", erasedToConcreteExistential: true)", label: "s\(edge)Builder", type: "ErasedInstantiator<\(arguments), \(name("AnyScreen"))>"))
+					erases = true
+				} else {
+					properties.append(Property(attribute: "@Instantiated", label: wrapper == "LazilyInstantiated" ? "s\(edge)Lazy" : "s\(edge)Builder", type: "\(wrapper)<\(name("S\(edge)"))>"))
+				}
 			}
 			if odd > 0.4, odd < 0.5, random.chance(0.3) {
 				properties.append(Property(attribute: "@Received(onlyIfAvailable: true)", label: "maybe", type: name("Maybe") + "?"))
@@ -482,6 +493,9 @@ struct PlanValueGraph {
 		}
 		if odd > 0.4, odd < 0.5 {
 			declare("Maybe", [])
+		}
+		if erases {
+			declarations.append("public final class \(name("AnyScreen")) {\n    public init(_ screen: AnyObject) { self.screen = screen }\n    public let screen: AnyObject\n}")
 		}
 		if !closureForwarders.isEmpty {
 			declarations.append("public typealias \(onTap) = (Int) -> Void")
@@ -559,6 +573,9 @@ struct PlanValueGraph {
 		}
 		if !closureForwarders.isEmpty {
 			shapes.append("escapingName")
+		}
+		if erases {
+			shapes.append("erases")
 		}
 		self.shapes = shapes
 	}

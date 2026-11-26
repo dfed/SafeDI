@@ -61,15 +61,6 @@ extension DependencyTreeGenerator {
 			for dependency in scope.instantiable.dependencies where reason == nil {
 				reason = Self.shapeOutsidePerTypePlan(of: dependency)
 			}
-			var edge = 0
-			// The graph's edges are these properties, in this order.
-			for case let .instantiated(property, _, erasedToConcreteExistential) in scope.propertiesToGenerate where reason == nil {
-				let target = graph.edges(from: index)[edge]
-				edge += 1
-				if graph.isOnCycle(target), erasedToConcreteExistential || property.propertyType == .erasedInstantiator {
-					reason = .erasesCycleMember
-				}
-			}
 		}
 		if reason == nil {
 			// Today's function captures each label its tree receives that no scope of its cycle declares. A function of the

@@ -41,8 +41,6 @@ public enum RootTreeChoiceObservation {
 		case holdsValueOnlyIfAvailable
 		/// A type of the root's tree holds a `Sendable` wrapper or a `@Sendable` function.
 		case holdsSendableWrapperOrFunction
-		/// A type on a cycle of the root's tree is instantiated erased.
-		case erasesCycleMember
 		/// A type of the root's tree receives an instantiator, which can close a loop of builders.
 		case receivesInstantiator
 		/// The root's tree builds a type whose dependency tree its own module generates.

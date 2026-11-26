@@ -327,8 +327,9 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_keepsRootOnTodaysTree_whenCycleMemberIsInstantiatedErased() async throws {
-		// A screen instantiates the screen that opened it as an `ErasedInstantiator`.
+	mutating func generate_laysRootOutFromItsPlanWithTodaysCode_whenCycleMemberIsInstantiatedErased() async throws {
+		// A screen instantiates the screen that opened it as an `ErasedInstantiator`, which wraps a call of that screen's
+		// function.
 		let choices = try await choicesGeneratingTodaysCode(of: """
 		@Instantiable(isRoot: true) public final class Root: Instantiable {
 		    @Instantiated let home: Instantiator<S0>
@@ -348,7 +349,99 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 		public protocol Screen {}
 		""")
 
-		#expect(choices == ["Root": .erasesCycleMember])
+		#expect(choices == ["Root": nil])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysRootOutFromItsPlanWithTodaysCode_whenCycleMemberIsInstantiatedErasedToConcreteExistential() async throws {
+		// Screens open one another through erased instantiators of a concrete existential, each forwarding an `id`.
+		let choices = try await choicesGeneratingTodaysCode(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated(fulfilledByType: "S0", erasedToConcreteExistential: true) let home: ErasedInstantiator<Int, AnyScreen>
+		    public init(home: ErasedInstantiator<Int, AnyScreen>) { self.home = home }
+		}
+
+		@Instantiable public final class S0: Instantiable {
+		    @Forwarded let id: Int
+		    @Instantiated(fulfilledByType: "S1", erasedToConcreteExistential: true) let s1Builder: ErasedInstantiator<Int, AnyScreen>
+		    public init(id: Int, s1Builder: ErasedInstantiator<Int, AnyScreen>) { self.id = id; self.s1Builder = s1Builder }
+		}
+
+		@Instantiable public final class S1: Instantiable {
+		    @Forwarded let id: Int
+		    @Instantiated(fulfilledByType: "S0", erasedToConcreteExistential: true) let s0Builder: ErasedInstantiator<Int, AnyScreen>
+		    public init(id: Int, s0Builder: ErasedInstantiator<Int, AnyScreen>) { self.id = id; self.s0Builder = s0Builder }
+		}
+
+		public final class AnyScreen {
+		    public init(_ screen: AnyObject) { self.screen = screen }
+		    public let screen: AnyObject
+		}
+		""")
+
+		#expect(choices == ["Root": nil])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysRootOutFromItsPlanWithTodaysCode_whenErasedCycleMemberReceivesValueItsCycleDeclares() async throws {
+		// A screen declares a model the screen it opens erased receives, and that screen opens the first again by value
+		// of its builder.
+		let choices = try await choicesGeneratingTodaysCode(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(s0Builder: Instantiator<S0>) { self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class S0: Instantiable {
+		    @Instantiated let model: Model
+		    @Instantiated(fulfilledByType: "S1", erasedToConcreteExistential: true) let s1Builder: ErasedInstantiator<(), AnyScreen>
+		    public init(model: Model, s1Builder: ErasedInstantiator<(), AnyScreen>) { self.model = model; self.s1Builder = s1Builder }
+		}
+
+		@Instantiable public final class S1: Instantiable {
+		    @Received let model: Model
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(model: Model, s0Builder: Instantiator<S0>) { self.model = model; self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class Model: Instantiable { public init() {} }
+
+		public final class AnyScreen {
+		    public init(_ screen: AnyObject) { self.screen = screen }
+		    public let screen: AnyObject
+		}
+		""")
+
+		#expect(choices == ["Root": nil])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysRootOutFromItsPlanWithTodaysCode_whenCycleMemberIsBothInstantiatedErasedAndNot() async throws {
+		// One screen opens another both through an `Instantiator` and erased, so the two edges call one function.
+		let choices = try await choicesGeneratingTodaysCode(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(s0Builder: Instantiator<S0>) { self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class S0: Instantiable, Screen {
+		    @Instantiated let s1Builder: Instantiator<S1>
+		    @Instantiated(fulfilledByType: "S1", erasedToConcreteExistential: false) let s1ErasedBuilder: ErasedInstantiator<(), any Screen>
+		    public init(s1Builder: Instantiator<S1>, s1ErasedBuilder: ErasedInstantiator<(), any Screen>) { self.s1Builder = s1Builder; self.s1ErasedBuilder = s1ErasedBuilder }
+		}
+
+		@Instantiable public final class S1: Instantiable, Screen {
+		    @Instantiated(fulfilledByType: "S0", erasedToConcreteExistential: false) let s0Builder: ErasedInstantiator<(), any Screen>
+		    public init(s0Builder: ErasedInstantiator<(), any Screen>) { self.s0Builder = s0Builder }
+		}
+
+		public protocol Screen {}
+		""")
+
+		#expect(choices == ["Root": nil])
 	}
 
 	@Test
