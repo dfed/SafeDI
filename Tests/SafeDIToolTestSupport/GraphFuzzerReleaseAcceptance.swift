@@ -446,6 +446,7 @@ enum GraphFuzzerReleaseAcceptance {
 		of corpus: GraphFuzzerReleaseAcceptanceCorpus = .base,
 		older: GraphFuzzerRelease,
 		current: GraphFuzzerRelease = .currentTree,
+		drawsEveryFeature: Bool = false,
 		batchSize: Int = 25,
 		batchLimits: DifferentialValueLimits = DifferentialValueLimits(),
 	) async throws -> [(seed: UInt64, verdict: GraphFuzzerReleaseVerdict)] {
@@ -455,7 +456,7 @@ enum GraphFuzzerReleaseAcceptance {
 		try await withThrowingTaskGroup(of: [(seed: UInt64, verdict: GraphFuzzerReleaseVerdict)].self) { group in
 			for batch in batches {
 				group.addTask {
-					try await batchVerdicts(forSeeds: batch, of: corpus, older: older, current: current, limits: batchLimits)
+					try await batchVerdicts(forSeeds: batch, of: corpus, older: older, current: current, drawsEveryFeature: drawsEveryFeature, limits: batchLimits)
 				}
 			}
 			for try await batchVerdicts in group {
@@ -471,6 +472,7 @@ enum GraphFuzzerReleaseAcceptance {
 		of corpus: GraphFuzzerReleaseAcceptanceCorpus,
 		older: GraphFuzzerRelease,
 		current: GraphFuzzerRelease,
+		drawsEveryFeature: Bool,
 		limits: DifferentialValueLimits,
 	) async throws -> [(seed: UInt64, verdict: GraphFuzzerReleaseVerdict)] {
 		var filesToDelete = [URL]()
@@ -483,7 +485,7 @@ enum GraphFuzzerReleaseAcceptance {
 			for seed in seeds {
 				group.addTask {
 					var filesToDelete = [URL]()
-					let fixture = GraphFuzzerGenerator.releaseAcceptanceFixture(forSeed: seed, features: corpus.features)
+					let fixture = GraphFuzzerGenerator.releaseAcceptanceFixture(forSeed: seed, features: corpus.features, omitsDrawsOlderReleasesReject: !drawsEveryFeature)
 					let olderRun = try await run(older, over: fixture, filesToDelete: &filesToDelete)
 					let currentRun = try await run(current, over: fixture, filesToDelete: &filesToDelete)
 					let classification = withOverrideProbes(

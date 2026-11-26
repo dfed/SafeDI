@@ -2511,12 +2511,12 @@ enum GraphFuzzerGenerator {
 	/// draws from a stream of its own, so that the rest of the graph is the corpus's. Release acceptance compares a graph
 	/// only where the older release accepts it, so a graph that draws such a feature would compare nothing. Only release
 	/// acceptance draws it, so no corpus pin moves.
-	static func releaseAcceptanceFixture(forSeed seed: UInt64, features: Set<GraphFuzzerGeneratorFeature>) -> GraphFuzzerFixture {
+	static func releaseAcceptanceFixture(forSeed seed: UInt64, features: Set<GraphFuzzerGeneratorFeature>, omitsDrawsOlderReleasesReject: Bool = true) -> GraphFuzzerFixture {
 		guard !features.contains(.generateMockPublic) else {
-			return GraphFuzzerFixture(seed: seed, swiftFileContent: GraphFuzzerPublicMockDraw(seed: seed, omitsDrawsOlderReleasesReject: true).swiftFileContent(storingEveryParameter: true, isKnownRight: false))
+			return GraphFuzzerFixture(seed: seed, swiftFileContent: GraphFuzzerPublicMockDraw(seed: seed, omitsDrawsOlderReleasesReject: omitsDrawsOlderReleasesReject).swiftFileContent(storingEveryParameter: true, isKnownRight: false))
 		}
 		var builder = Builder(seed: seed, features: features, storesEveryParameter: true)
-		builder.omitsDrawsOlderReleasesReject = true
+		builder.omitsDrawsOlderReleasesReject = omitsDrawsOlderReleasesReject
 		return GraphFuzzerFixture.seamCorpusFixture(seed: seed, swiftFileContent: builder.build())
 	}
 

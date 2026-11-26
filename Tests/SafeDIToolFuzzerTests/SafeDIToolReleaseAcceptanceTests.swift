@@ -456,13 +456,13 @@ struct SafeDIToolReleaseAcceptanceTests {
 			report.append("problem \(problem)")
 			Issue.record(Comment(rawValue: problem))
 		}
-		report.append("release-acceptance release=\(configuration.release.name) current=\(configuration.current.name) corpus=\(configuration.corpus.rawValue) seeds=\(configuration.seeds.lowerBound)..<\(configuration.seeds.upperBound)")
+		report.append("release-acceptance release=\(configuration.release.name) current=\(configuration.current.name) draws-every-feature=\(configuration.drawsEveryFeature) corpus=\(configuration.corpus.rawValue) seeds=\(configuration.seeds.lowerBound)..<\(configuration.seeds.upperBound)")
 		guard compileVerificationIsEnabled else {
 			reportProblem("Release acceptance compiles generated code. Unset SAFEDI_SKIP_COMPILE_CHECK.")
 			return
 		}
 		let start = Date()
-		let verdicts = try await GraphFuzzerReleaseAcceptance.verdicts(forSeeds: Array(configuration.seeds), of: configuration.corpus, older: configuration.release, current: configuration.current)
+		let verdicts = try await GraphFuzzerReleaseAcceptance.verdicts(forSeeds: Array(configuration.seeds), of: configuration.corpus, older: configuration.release, current: configuration.current, drawsEveryFeature: configuration.drawsEveryFeature)
 		let listedSeeds = (Self.listedSeedsByRelease[configuration.release.name] ?? []).filter { $0.corpus == configuration.corpus }
 		let listedSeedBySeed = Dictionary(grouping: listedSeeds, by: \.seed).compactMapValues(\.first)
 		var classCounts = [GraphFuzzerReleaseAcceptanceClass: Int]()
@@ -562,6 +562,9 @@ struct ReleaseAcceptanceLongRunConfiguration {
 	let release: GraphFuzzerRelease
 	/// The release judged against `release`: this tree, or a built `SafeDITool` another branch's head built.
 	let current: GraphFuzzerRelease
+	/// Whether each graph is drawn with the features 2.3.0 rejects too (`SAFEDI_RELEASE_ACCEPTANCE_DRAWS_EVERY_FEATURE`),
+	/// for an older release that accepts them.
+	let drawsEveryFeature: Bool
 	let corpus: GraphFuzzerReleaseAcceptanceCorpus
 	let seeds: Range<UInt64>
 	let reportPath: String
@@ -647,6 +650,7 @@ struct ReleaseAcceptanceLongRunConfiguration {
 				runtimeSource: DifferentialValueRuntimeSource(runtimeSourcesDirectory: runtimeSources, macrosToolPath: macrosTool),
 			),
 			current: current,
+			drawsEveryFeature: environment["SAFEDI_RELEASE_ACCEPTANCE_DRAWS_EVERY_FEATURE"] == "1",
 			corpus: corpus,
 			seeds: seeds,
 			reportPath: reportPath,

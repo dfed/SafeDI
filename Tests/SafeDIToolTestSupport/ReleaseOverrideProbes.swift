@@ -66,8 +66,7 @@ struct ReleaseMockConfigurationTree: Equatable {
 				}
 				let isOverrides = line.hasSuffix("struct SafeDIOverrides {")
 				let isConfiguration = line.hasSuffix("struct SafeDIMockConfiguration {")
-				guard isOverrides || isConfiguration, let typeName = extendedTypeName else { continue }
-				guard let initializerStart = lines[index...].firstIndex(where: { $0.hasSuffix("init(") }) else { continue }
+				guard isOverrides || isConfiguration, let typeName = extendedTypeName, let initializerStart = lines[index...].firstIndex(where: { $0.hasSuffix("init(") }) else { continue }
 				var fields = [Field]()
 				var builder: Field.Kind?
 				var parameterIndex = initializerStart + 1
@@ -116,7 +115,7 @@ struct ReleaseMockConfigurationTree: Equatable {
 		}
 		guard type.hasPrefix("("), type.hasSuffix(")?") else { return nil }
 		var closure = Substring(type.dropFirst().dropLast(2))
-		for attribute in ["@Sendable ", "@MainActor "] where closure.hasPrefix(attribute) {
+		for attribute in ["@Sendable ", "@MainActor ", "@Sendable "] where closure.hasPrefix(attribute) {
 			closure = closure.dropFirst(attribute.count)
 		}
 		guard closure.hasPrefix("("), let parametersEnd = matchingParenthesis(in: closure) else { return nil }
@@ -187,7 +186,8 @@ struct ReleaseMockConfigurationTree: Equatable {
 struct ReleaseOverrideConstructors {
 	/// Reads every `@Instantiable` type the fixture's files declare.
 	init(fixtureFiles: [String]) {
-		var constructors = [String: (function: String, parameterTypes: [String])]()
+		var constructors = [String: Constructor]()
+		var typeNamesDeclaredAgain = Set<String>()
 		for contents in fixtureFiles {
 			let visitor = FileVisitor()
 			visitor.walk(Parser.parse(source: contents))
@@ -204,23 +204,49 @@ struct ReleaseOverrideConstructors {
 				      !initializer.hasGenericParameter
 				else { continue }
 				let typeName = instantiable.concreteInstantiable.asSource
-				let function = instantiable.declarationType.isExtension ? "\(typeName).instantiate" : "\(typeName).init"
-				constructors[typeName] = (function, initializer.arguments.map { Self.normalized($0.typeDescription.asSource) })
+				let function = instantiable.declarationType.isExtension ? "\(typeName).instantiate" : typeName
+				guard !typeNamesDeclaredAgain.contains(typeName) else { continue }
+				guard constructors[typeName] == nil else {
+					// Two modules' extensions each declare an `instantiate()`, which a probe cannot name apart.
+					constructors[typeName] = nil
+					typeNamesDeclaredAgain.insert(typeName)
+					continue
+				}
+				constructors[typeName] = Constructor(
+					function: function,
+					labels: initializer.arguments.map { argument in
+						let label = argument.outerLabel ?? argument.innerLabel
+						return label == "_" ? nil : label
+					},
+					parameterTypes: initializer.arguments.map { Self.normalized($0.typeDescription.asSource) },
+				)
 			}
 		}
 		self.constructors = constructors
 	}
 
-	/// The function that builds `typeName` from a builder closure's `parameterTypes`, or `nil` when the type has none
-	/// that takes exactly those.
-	func function(building typeName: String, from parameterTypes: [String]) -> String? {
+	/// A closure that builds `typeName` from a builder closure's `parameterTypes` with the type's own initializer or
+	/// `instantiate(…)`, its value passed through `wrapping` (an expression the value replaces `$value` in), or `nil` when
+	/// the type has none that takes exactly those. The closure calls the initializer itself rather than being an
+	/// unapplied reference, so it takes the isolation of the probe it is written in, as a test's closure does.
+	func closure(building typeName: String, from parameterTypes: [String], wrapping: String) -> String? {
 		guard let constructor = constructors[typeName] ?? constructors[Self.unqualified(typeName)],
 		      constructor.parameterTypes == parameterTypes.map(Self.normalized)
 		else { return nil }
-		return constructor.function
+		let names = constructor.labels.indices.map { "argument\($0)" }
+		let arguments = zip(constructor.labels, names).map { label, name in label.map { "\($0): \(name)" } ?? name }
+		let call = "\(constructor.function)(\(arguments.joined(separator: ", ")))"
+		let body = wrapping.replacingOccurrences(of: "$value", with: call)
+		return names.isEmpty ? "{ \(body) }" : "{ \(names.joined(separator: ", ")) in \(body) }"
 	}
 
-	private let constructors: [String: (function: String, parameterTypes: [String])]
+	private struct Constructor {
+		let function: String
+		let labels: [String?]
+		let parameterTypes: [String]
+	}
+
+	private let constructors: [String: Constructor]
 
 	private static func normalized(_ type: String) -> String {
 		type.replacingOccurrences(of: "@escaping ", with: "").filter { !$0.isWhitespace }
@@ -258,12 +284,12 @@ struct ReleaseOverrideProbe: Equatable {
 
 		func builderExpression(place: String, kind: ReleaseMockConfigurationTree.Field.Kind) -> String? {
 			guard case let .builder(parameterTypes, returnType) = kind else { return nil }
-			guard placeCount < placeLimit, let function = constructors.function(building: returnType, from: parameterTypes) else {
+			guard placeCount < placeLimit, let closure = constructors.closure(building: returnType, from: parameterTypes, wrapping: "differentialValueOverride(\(stringLiteral(place)), $value)") else {
 				skippedPlaceCount += 1
 				return nil
 			}
 			placeCount += 1
-			return "differentialValueOverride(\(stringLiteral(place)), \(function))"
+			return closure
 		}
 
 		func arguments(of fields: [ReleaseMockConfigurationTree.Field], place: String, typesOnPath: [String]) -> [String] {
@@ -294,7 +320,7 @@ struct ReleaseOverrideProbe: Equatable {
 
 		let overrides = arguments(of: fields, place: "", typesOnPath: [mockedTypeName])
 		guard placeCount > 0 else { return nil }
-		let call = "\(mockedTypeName).mock(\((mockArguments + ["safeDIOverrides: .init(\(overrides.joined(separator: ", ")))"]).joined(separator: ", ")))"
+		let call = "differentialValueOverriding { \(mockedTypeName).mock(\((mockArguments + ["safeDIOverrides: .init(\(overrides.joined(separator: ", ")))"]).joined(separator: ", "))) }"
 		return ReleaseOverrideProbe(
 			probe: DifferentialValueProbe(name: "\(mockedTypeName).mock(safeDIOverrides: every place)", expression: call),
 			placeCount: placeCount,

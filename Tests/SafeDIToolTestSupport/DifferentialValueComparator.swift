@@ -1282,22 +1282,24 @@ enum DifferentialValueOracle {
 	nonisolated(unsafe) private var overrideBuildCounts = [String: Int]()
 	nonisolated(unsafe) private var probeOverrides = false
 
-	/// `build`, which builds a mock tree's value at `place` of its configuration tree in place of the mock's own
-	/// construction, counted under `place`; a class instance it builds is described as `<4> T (override <place>)`, and
-	/// the probe's description ends with how many values each place's override built: `overrides built: a ×1; a.b ×2`.
-	/// Both paths evaluate the same expression, so an override one path ignores, applies at another place, or calls
-	/// another number of times is a difference.
-	public func differentialValueOverride<each Argument, Value>(_ place: String, _ build: @escaping @Sendable (repeat each Argument) -> Value) -> @Sendable (repeat each Argument) -> Value {
+	/// The value of a probe that overrides places of a mock's configuration tree, `build`'s, whose description ends with
+	/// how many values each place's override built: `overrides built: a ×1; a.b ×2`.
+	public func differentialValueOverriding<V>(_ build: () -> V) -> V {
 		probeOverrides = true
-		return { (argument: repeat each Argument) -> Value in
-			let value = build(repeat each argument)
-			overrideBuildCounts[place, default: 0] += 1
-			if Mirror(reflecting: value).displayStyle == .class {
-				let object = value as AnyObject
-				overriddenObjects[ObjectIdentifier(object)] = (object, place)
-			}
-			return value
+		return build()
+	}
+
+	/// `value`, which an override built at `place` of a mock's configuration tree in place of the mock's own
+	/// construction, counted under `place`; a class instance is described as `<4> T (override <place>)`. Both paths
+	/// evaluate the same expression, so an override one path ignores, applies at another place, or calls another number
+	/// of times is a difference.
+	public func differentialValueOverride<V>(_ place: String, _ value: V) -> V {
+		overrideBuildCounts[place, default: 0] += 1
+		if Mirror(reflecting: value).displayStyle == .class {
+			let object = value as AnyObject
+			overriddenObjects[ObjectIdentifier(object)] = (object, place)
 		}
+		return value
 	}
 
 	/// A value a sample holds in a builder the describer never calls and generated code never reaches, since the
