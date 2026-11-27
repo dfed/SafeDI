@@ -116,6 +116,7 @@ extension MockLowering {
 	/// Whether `typeDescription`, without `@escaping`, is a `@Sendable` `@autoclosure`.
 	static func isSendableAutoclosure(_ typeDescription: TypeDescription) -> Bool {
 		guard case let .attributed(_, _, attributes) = typeDescription.strippingEscaping else { return false }
+		// safedi-source-rule: allow stringScan — `attributes` is a type’s `[String]` of attributes: membership among a few elements, no scan of text.
 		return attributes.contains("autoclosure") && attributes.contains("Sendable")
 	}
 
