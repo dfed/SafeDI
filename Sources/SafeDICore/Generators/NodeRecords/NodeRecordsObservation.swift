@@ -111,10 +111,22 @@ public enum NodeRecordsObservation {
 		}
 		compare("property", tree.property, nodeRecords.property)
 		compare("fulfillingProperty", tree.fulfillingProperty, nodeRecords.fulfillingProperty)
-		compare("text", tree.text, nodeRecords.text)
+		// Node records leave a call's text to the engine, which spells it from the call (`InPlaceCall`).
+		if nodeRecords.call == nil {
+			compare("text", tree.text, nodeRecords.text)
+		}
 		compare("reads", tree.reads, nodeRecords.reads)
 		compare("otherBindings", tree.otherBindings, nodeRecords.otherBindings)
 		compare("calledFunctionNames", tree.calledFunctionNames, nodeRecords.calledFunctionNames)
+		compare("declaredFunctionNames", tree.declaredFunctionNames, nodeRecords.declaredFunctionNames)
+		compare("calledRootFunctionNames", tree.calledRootFunctionNames, nodeRecords.calledRootFunctionNames)
+		compare("holdsCall", tree.call != nil, nodeRecords.call != nil)
+		if let treeCall = tree.call, let nodeRecordsCall = nodeRecords.call {
+			differences += fieldDifferences(between: treeCall.record, and: nodeRecordsCall.record).map { "call: \($0)" }
+			compare("call: argumentValues", treeCall.record.argumentValues, nodeRecordsCall.record.argumentValues)
+			compare("call: statements before the leading statement", treeCall.statementsBeforeLeadingStatement.count, nodeRecordsCall.statementsBeforeLeadingStatement.count)
+			compare("call: statements after the leading statement", treeCall.statementsAfterLeadingStatement.count, nodeRecordsCall.statementsAfterLeadingStatement.count)
+		}
 		return differences
 	}
 

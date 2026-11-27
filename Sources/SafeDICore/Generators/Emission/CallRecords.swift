@@ -27,10 +27,13 @@ final class CallFields: Sendable {
 	/// What the call hands each builder the seam takes, after `BuiltPlaceRecord.arguments`, in the signature's builder
 	/// order.
 	let closureArguments: [ClosureArgumentEntry]
+	/// The builders the call builds, which a `.built` closure argument names by index (`BuiltClosure`).
+	let builtClosures: [BuiltClosure]
 
-	init(leadingStatement: CallGuard?, closureArguments: [ClosureArgumentEntry]) {
+	init(leadingStatement: CallGuard?, closureArguments: [ClosureArgumentEntry], builtClosures: [BuiltClosure] = []) {
 		self.leadingStatement = leadingStatement
 		self.closureArguments = closureArguments
+		self.builtClosures = builtClosures
 	}
 }
 
@@ -60,10 +63,11 @@ public struct SeamCallRecordObservation: Sendable {
 	/// The call's code.
 	public let text: String
 	/// The names the record says the text reads: its arguments' reads, and each struct it passes a builder up from, by
-	/// the name the tree binds it under.
-	public let readNames: [String]
-	/// The names the record says the text binds, and the functions it declares.
-	public let boundNames: [String]
+	/// the name the tree binds it under. `nil` for a call that fills a builder, whose record does not hold yet what its
+	/// dispatchers and fills read.
+	public let readNames: [String]?
+	/// The names the record says the text binds, and the functions it declares; `nil` where `readNames` is.
+	public let boundNames: [String]?
 	/// The record's guard line and builder arguments, spelled as the engine is to spell them.
 	public let spelledFromRecord: [String]
 	/// The guard line and builder arguments the text writes, in the same order.
@@ -118,6 +122,18 @@ enum PassedOnMember: Hashable, Sendable {
 	case carrierMember
 	/// A member handed its case's values, which hold nothing for the call's own case: `<struct>.<case>(<values>())`.
 	case member(valuesType: TypeDescription)
+
+	/// The read, as a value of the construction whose argument reads `structRead`, the struct the member is called on.
+	func value(reading structRead: PlaceRead, caseName: String) -> ValuePath {
+		switch self {
+		case .carrierChild:
+			.member(caseName, of: .read(structRead))
+		case .carrierMember:
+			.call(caseName, of: .read(structRead), arguments: [], argumentsWrapper: nil)
+		case let .member(valuesType):
+			.call(caseName, of: .read(structRead), arguments: [], argumentsWrapper: valuesType)
+		}
+	}
 
 	/// The read, of the struct bound as `structName`.
 	func spelled(on structName: String, caseName: String) -> String {

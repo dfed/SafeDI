@@ -2133,12 +2133,12 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 					reads.unavailableProperties.insert(form)
 				}
 			}
-			reads.argumentByLabel[label] = callerArgument(reading: parameter.property, of: fill.callerNearestDeclarations, lazilyInstantiatedInstanceProperties: fill.callerLazilyInstantiatedInstanceProperties, log: &log).spelled
+			reads.argumentByLabel[label] = callerArgument(reading: parameter.property, of: fill.callerNearestDeclarations, lazilyInstantiatedInstanceProperties: fill.callerLazilyInstantiatedInstanceProperties, log: &log)
 		}
 		reads.mockRootBindingByLabel = fill.mockRootBindingByLabel
 		for field in fill.fields where fill.labelsHandedAsMemo.contains(field.property.label) && field.bindsMemo && field.deferral == .deferred(isSendable: true) {
 			let memo = field.memoProperty
-			reads.memoArgumentByMemo[memo] = callerArgument(reading: memo, of: fill.callerNearestDeclarations, lazilyInstantiatedInstanceProperties: fill.callerLazilyInstantiatedInstanceProperties, log: &log).spelled
+			reads.memoArgumentByMemo[memo] = callerArgument(reading: memo, of: fill.callerNearestDeclarations, lazilyInstantiatedInstanceProperties: fill.callerLazilyInstantiatedInstanceProperties, log: &log)
 		}
 		return reads
 	}
@@ -2407,16 +2407,19 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			// is handed the struct the case of this seam's enum for the call returns. A call that re-enters an enclosing call's
 			// level function hands it, for each struct it takes, what the member of the call's own case of that struct's level
 			// returns.
-			let upArgument = if let carriedInnerScopes = enclosingFill == nil ? nil : enclosingCarriedInnerScopes[dispatcherKey] {
-				carriedInnerScopes.compactMap { carriedInnerScope in
+			if let carriedInnerScopes = enclosingFill == nil ? nil : enclosingCarriedInnerScopes[dispatcherKey] {
+				let upArgument = carriedInnerScopes.compactMap { carriedInnerScope in
 					seamHoles.carriedStruct(at: sitePath, innerKey: enumKey, carrying: carriedInnerScope.type).map { "\(carriedInnerScope.upName.spelledAsArgumentLabel): \($0)" }
 				}.joined(separator: ", ")
-			} else {
-				(dispatchersOfThisCall.first { $0.key == dispatcherKey }?.carriedInnerScopes ?? []).compactMap { carriedInnerScope in
-					seamHoles.carriedStruct(at: sitePath, innerKey: enumKey, innerScopeName: carriedInnerScope.name).map { "\(carriedInnerScope.upName.spelledAsArgumentLabel): \($0)" }
-				}.joined(separator: ", ")
+				return .init(label: label, value: "\(dispatcher)(\(upArgument))", enclosingFill: enclosingFill, isSendable: enumKey.isSendable)
 			}
-			return .init(label: label, value: "\(dispatcher)(\(upArgument))", enclosingFill: enclosingFill, isSendable: enumKey.isSendable)
+			let carriedStructs = (dispatchersOfThisCall.first { $0.key == dispatcherKey }?.carriedInnerScopes ?? []).compactMap { carriedInnerScope in
+				seamHoles.carriedStruct(at: sitePath, innerKey: enumKey, innerScopeName: carriedInnerScope.name).map {
+					ScopeGenerator.BuilderCallArgument.BuiltCall.CarriedStruct(upName: carriedInnerScope.upName, type: carriedInnerScope.type, name: $0)
+				}
+			}
+			let builtCall = ScopeGenerator.BuilderCallArgument.BuiltCall(dispatcherKey: dispatcherKey, dispatcherName: dispatcher, carriedStructs: carriedStructs)
+			return .init(label: label, value: builtCall.spelled, enclosingFill: enclosingFill, isSendable: enumKey.isSendable, builtCall: enclosingFill == nil ? builtCall : nil)
 		}
 	}
 
