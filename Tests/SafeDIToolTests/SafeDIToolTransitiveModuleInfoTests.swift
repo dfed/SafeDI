@@ -618,7 +618,7 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		// arrives while it is being read: a resolver that reported the failure that arrived first would name a missing file.
 		let directory = try temporaryDirectory()
 		let largeURL = directory.appendingPathComponent("Large.safedi")
-		#expect(FileManager.default.createFile(atPath: largeURL.path, contents: nil))
+		try #require(FileManager.default.createFile(atPath: largeURL.path, contents: nil))
 		let largeFile = try FileHandle(forWritingTo: largeURL)
 		try largeFile.truncate(atOffset: 256 << 20)
 		try largeFile.close()
