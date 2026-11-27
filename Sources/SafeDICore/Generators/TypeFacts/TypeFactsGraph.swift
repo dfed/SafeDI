@@ -835,14 +835,13 @@ struct TypeFactsGraph: Sendable {
 				// identity whichever twin the path entered, which 2.4.0 builds in one function and passes no parameter. The
 				// key names the label alone, not the type and label a cycle identity names elsewhere: a node declares a label
 				// once, and a being-built answer gives no parameter whose type could tell two keys apart.
-				let keyText: String
-				if beingBuilt, isTwin(kind) {
-					keyText = "\(read.channel.name) twin \(bound.label) being built"
+				let keyText: String = if beingBuilt, isTwin(kind) {
+					"\(read.channel.name) twin \(bound.label) being built"
 				} else if kind.isConstant {
-					keyText = text
+					text
 				} else {
 					// Rule 2: a wrapper still being built is passed and made again at the call, so it keys as the wrapper.
-					keyText = "\(read.channel.name) \(declarationForms)"
+					"\(read.channel.name) \(declarationForms)"
 				}
 				return VariantBinding(answer: answer(text: text, beingBuilt: beingBuilt, keyText: keyText, kind: kind, property: property), declaration: Int32(node))
 			},
