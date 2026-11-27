@@ -96,6 +96,8 @@ struct OnlyIfAvailableAnswers: Sendable {
 	///     the parameters of `mock()` and the overrides it binds before its nodes; empty for any other root.
 	init(world: some NodeRecordSources, rootParameters: [Property] = []) throws(NodeRecordRefusal) {
 		var labels = Set<String>()
+		// The labels a rename only if available is fulfilled by.
+		var renamedLabels = Set<String>()
 		for declaration in 0..<Int32(world.declarationCount) where world.kind(of: declaration) != .alias && world.kind(of: declaration) != .hole {
 			for dependency in world.scope(of: declaration).instantiable.dependencies {
 				switch dependency.source {
@@ -103,6 +105,7 @@ struct OnlyIfAvailableAnswers: Sendable {
 					labels.insert(dependency.property.label)
 				case let .aliased(fulfillingProperty, _, onlyIfAvailable: true):
 					labels.insert(fulfillingProperty.label)
+					renamedLabels.insert(fulfillingProperty.label)
 				case .instantiated, .forwarded, .received(onlyIfAvailable: false), .aliased(_, _, onlyIfAvailable: false):
 					break
 				}
@@ -174,11 +177,16 @@ struct OnlyIfAvailableAnswers: Sendable {
 					calleeContext[label] = Self.nearestBindings(bindings, shadowing: contextInside[label])
 				}
 				if let existingContext = contextByVariant[Int(callee)] {
+					let labelsOneCallAnswers = Set(existingContext.keys).symmetricDifference(calleeContext.keys)
+					// A member of a cycle takes what its calls answer as its cycle parameters, whose rows are made per call. A
+					// rename only if available is bound where its scope is built, to the declaration or to `nil`, by one
+					// statement for every call, so a label one fulfills is not taken as a parameter.
+					guard labelsOneCallAnswers.isEmpty || (!world.isOnCycle(world.declaration(of: callee)) && renamedLabels.isDisjoint(with: labelsOneCallAnswers)) else {
+						throw .nodeHasSeveralVariants
+					}
 					let mergedContext = try Self.context(merging: existingContext, with: calleeContext)
 					// A call that answers a label another call does not: the variant, and everything it calls, is read again.
 					guard mergedContext != existingContext else { continue }
-					// A member of a cycle takes what its calls answer as its cycle parameters, whose rows are made per call.
-					guard !world.isOnCycle(world.declaration(of: callee)) else { throw .nodeHasSeveralVariants }
 					contextByVariant[Int(callee)] = mergedContext
 					variantsToVisit.append(callee)
 				} else {
