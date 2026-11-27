@@ -710,7 +710,6 @@ struct SafeDIToolNodeRecordsPublicMockCallTests: ~Copyable {
 		#expect(reports.map(\.refusal) == ["onlyIfAvailable"])
 	}
 
-
 	// MARK: Values
 
 	@Test
