@@ -140,26 +140,6 @@ struct WrittenVariantPlan: TypeKeyVariantPlan {
 			return false
 		}
 
-		/// Why the layout cannot write some call's argument yet, the first such reason among the calls: a member of a
-		/// loop of builders made again at the call (`Answer.declaredMadeAgainAtCall`), whose wrapper the layout does not
-		/// write. The instance of a lazily instantiated declaration (`Answer.instance`) is no reason: the function takes
-		/// the wrapper (`Answer.parameter(labeled:)`) and creates the instance where its body first reads it.
-		var argumentTheLayoutCannotWrite: RootTreeChoiceObservation.PerPathReason? {
-			for callsOfBody in calls {
-				for call in callsOfBody {
-					for argument in call.arguments {
-						switch argument {
-						case .declaredMadeAgainAtCall:
-							return .passesLoopMemberMadeAgainAtCall
-						case .none, .declared, .instance:
-							continue
-						}
-					}
-				}
-			}
-			return nil
-		}
-
 		/// The bodies of `plan` in `bodies`, each call of the body it calls by its position here, and each body's labels,
 		/// with their answers and each call's arguments, in the order its function takes them, which every call of it
 		/// gives (`VariantBodies.Call.argumentOrder`): the label it is built as, then the others as its tree first

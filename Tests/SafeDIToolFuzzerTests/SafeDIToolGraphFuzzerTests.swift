@@ -9246,7 +9246,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// Pinned by `publicMockSmokeAndKnownIssueFixtureHash`.
 	static let publicMockSmokeSeeds: [UInt64] = [0, 7, 10, 23, 37, 43, 46, 59, 98, 142, 151, 189, 197, 208, 215, 253, 551, 555, 836, 1_339, 1_649, 2_687, 2_840]
 
-	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x1CD7FD8119BED8BC
+	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x4630BAEFC2B8DBD1
 
 	/// Seeds in `0..<publicMockCorpusSeedCount` whose graphs fail today, by shape. Every seed is the feature's own: the
 	/// draw shares no graph with the base corpus.
@@ -9254,19 +9254,23 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: publicMockParametersSortedByLabelReason,
 			signatures: [.renamedGraphDiffers(.mockParameterAndFieldOrder)],
-			seeds: [103, 106, 167, 251, 351, 514, 528, 562, 771, 836, 947],
+			seeds: [103, 106, 167, 251, 351, 514, 528, 562, 771, 947],
 		),
 		// The base corpus's shape, in a consumer that builds a `.public` type's tree inline with a fill that closes a lazy
 		// cycle through it, in the gating draw of the shape #702 fixed, a `.public` type that builds itself again through
 		// `SelfStep`, whose two names the move across wrapper names now and then puts on either side of `Instantiator`, and in
 		// the stale-value draw's loop around `T6`'s hole (`HoleHost` and `HoleLoop`), and in the shared-construction draw's
-		// cycle through `ShareService` and `ShareTicker`.
+		// cycle through `ShareService` and `ShareTicker`, and in the twin draw's cycle through `TwinModel` and `TwinSecond`
+		// (`drawTwinsPublicMock`; 474 and 836 are listed with their other reasons below). Release 2.4.1 generates the same
+		// mocks for these graphs. ROADMAP section 0's row 5, which gives every back-edge a slot, removes every seed listed
+		// under this reason.
 		GraphFuzzerKnownIssue(
 			reason: lazyCycleConfigurationFieldReason,
 			signatures: [.renamedGraphDiffers(.mockConfigurationFieldPresence)],
 			seeds: [
-				3, 99, 104, 112, 194, 213, 265, 289, 301, 302, 542, 561, 566, 572, 574, 583, 598, 612, 616, 649, 653,
-				677, 697, 825, 832, 833, 884, 907, 909, 944, 946,
+				3, 99, 104, 112, 194, 213, 265, 289, 301, 302, 542, 551, 561, 566, 572, 574, 583, 595, 598, 612, 616,
+				619, 649, 653, 655, 677, 697, 726, 749, 818, 825, 832, 833, 875, 884, 887, 899, 907, 909, 934, 944,
+				946, 956, 974,
 			],
 		),
 		// A shape the corpus first compiled once SafeDI proved a type's access from its plain declaration (2026-11-03):
@@ -9309,19 +9313,19 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: publicMockFormsNamedApartOrderReason,
 			signatures: [.renamedGraphDiffers(.mockCode)],
-			seeds: [18, 22, 156, 242, 326, 327, 474, 629, 731, 821, 881, 983],
+			seeds: [18, 22, 156, 242, 326, 327, 629, 731, 821, 881, 983],
 		),
 		// The root-level stream's label in two forms in a graph with a lazy cycle whose back-edge the move across wrapper
 		// names moves: `SelfStep`'s, or the stale-value draw's loop around `T6`'s hole (`HoleHost` and `HoleLoop`).
 		GraphFuzzerKnownIssue(
 			reason: "\(lazyCycleConfigurationFieldReason); and \(publicMockFormsNamedApartOrderReason)",
 			signatures: [.renamedGraphDiffers(.mockConfigurationFieldPresence), .renamedGraphDiffers(.mockCode)],
-			seeds: [47, 221, 381, 452, 880, 886],
+			seeds: [47, 221, 381, 452, 474, 880, 886],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "\(publicMockParametersSortedByLabelReason); and \(lazyCycleConfigurationFieldReason)",
 			signatures: [.renamedGraphDiffers(.mockParameterAndFieldOrder), .renamedGraphDiffers(.mockConfigurationFieldPresence)],
-			seeds: [12, 65, 407],
+			seeds: [12, 65, 407, 836],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "\(passedUpBuildersNamedApartReason); and \(lazyCycleConfigurationFieldReason)",
