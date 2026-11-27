@@ -76,8 +76,8 @@ extension NodeRecords {
 	}
 
 	/// The record of `declaration`'s place, a node of kind `builtByInitializer`, whose body builds `children`, whose tree
-	/// declares `typesDeclaredEscaping` `@escaping`, whose construction is passed `nil` for `unavailableProperties`, and whose
-	/// line constructing the type ends with `lineEnd`.
+	/// declares `typesDeclaredEscaping` `@escaping`, whose construction is passed `nil` for `unavailableProperties`, and
+	/// whose line constructing the type ends with `lineEnd`.
 	static func builtByInitializerRecord(
 		of declaration: DeclarationID,
 		variant _: VariantID,
