@@ -223,9 +223,10 @@ extension DependencyTreeGenerator {
 		try LocalFunctionInlining.$isNeverInlined.withValue(true) { () throws -> GeneratedCode? in
 			let declarations = ScopeGenerator.seamRootBodyDeclarations(of: instantiable, seamRoot: seamRoot)
 			guard nodeRecords.rootBody.allSatisfy(\.statementsAreLaidOutByTypeKey),
-			      let statements = TypeKeyBody.statements(ofRootBody: nodeRecords.rootBody, outerDeclarations: declarations.outerDeclarations, namesInScope: declarations.namesInScope)
+			      let statements = TypeKeyBody.statements(ofRootBody: nodeRecords.rootBody, outerDeclarations: declarations.outerDeclarations, namesInScope: declarations.namesInScope, laysOutEveryLoop: true, declaresLoopMembersAsThePathKeyDoes: true)
 			else { return nil }
-			// Node records make no box of a loop's levels: a world with a loop of builders is refused before.
+			// Node records make no box of a loop's levels: a seam's own world that makes a loop member again is refused before
+			// (`NodeRecordRefusal.builderLoopBoxed`).
 			return try .text(ScopeGenerator.seamRootCode(
 				of: instantiable,
 				seamRoot: seamRoot,
