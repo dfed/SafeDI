@@ -363,6 +363,26 @@ struct SafeDIToolTypeFactsUnvalidatedWorldTests {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func unvalidatedWorld_reportsTheSameFindings_whenRunDeclaresInAnotherOrder() async throws {
+		// Inside an answer set the answers are in the order of their IDs, which follow the order a run interns in. What
+		// validation reports must not: the answers each receive is given with the route that witnesses each, and the
+		// error of a graph the walk rejects, here one whose four required receives are each unfulfilled along half of
+		// sixteen routes. The reversed order and six permutations.
+		let types = Self.alternatingRow(layerCount: 4, readerRequiresTokens: true)
+		let expected = await observe(types)
+		let expectedFindings = try expected.firstWorld.receives
+		let expectedError = try Self.textWithoutDirectories(of: #require(expected.error))
+
+		let orders = [ConstructionInternerOrder.reversed] + (1...6).map { ConstructionInternerOrder.permuted(seed: $0) }
+		for order in orders {
+			let observation = await observe(types, order: order)
+			#expect(try observation.firstWorld.receives == expectedFindings, "\(order)")
+			#expect(observation.error.map(Self.textWithoutDirectories) == expectedError, "\(order)")
+		}
+	}
+
 	// MARK: Growth
 
 	@Test
@@ -433,7 +453,7 @@ struct SafeDIToolTypeFactsUnvalidatedWorldTests {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func disagreements_namesEachDifference_whenWorldAndReportAreOfTwoGraphs() async throws {
 		let world = try await observe([
-			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let child: Child"]),
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let childBuilder: Instantiator<Child>"]),
 			seamFixtureType(named: "Child", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let x: X?"]),
 			seamFixtureType(named: "X", isFinalClass: true, declarations: []),
 		]).firstWorld
@@ -447,11 +467,11 @@ struct SafeDIToolTypeFactsUnvalidatedWorldTests {
 		#expect(TypeFactsChecks.disagreements(ofRootAt: 0, in: world, with: report) == [
 			"nodes: 2, not 3",
 			"node 0 Root edges: [1], not [1, 2]",
-			"node 0 Root instantiated edges: 1, not 2",
 			"node 0 Root reads from above: [\"optionalValue(x)\", \"optional(x)\"], not []",
-			"node 1 X as x: X description: Child as child: Child, not X as x: X",
-			"node 1 X as x: X cycle key: child: Child for Child, not x: X for X",
-			"node 1 X as x: X reads from above: [\"value(child)\", \"optionalValue(x)\", \"optional(x)\"], not [\"value(x)\"]",
+			"node 1 X as x: X description: Child as childBuilder: Instantiator<Child>, not X as x: X",
+			"node 1 X as x: X kind: instantiator, not constant",
+			"node 1 X as x: X cycle key: childBuilder: Instantiator<Child> for Child, not x: X for X",
+			"node 1 X as x: X reads from above: [\"value(childBuilder)\", \"optionalValue(x)\", \"optional(x)\"], not [\"value(x)\"]",
 		])
 		#expect(TypeFactsChecks.disagreements(ofRootAt: 1, in: world, with: report) == ["the world has no root 1"])
 	}
@@ -467,9 +487,9 @@ struct SafeDIToolTypeFactsUnvalidatedWorldTests {
 		let large = try await observe(Self.hubMembersRow(memberCount: 8)).firstWorld
 
 		#expect(small.internedForWorldCount == 12)
-		#expect(small.columnElementCount == 1_166)
+		#expect(small.columnElementCount == 1_194)
 		#expect(large.internedForWorldCount == 20)
-		#expect(large.columnElementCount == 3_190)
+		#expect(large.columnElementCount == 3_234)
 	}
 
 	// MARK: Private
@@ -491,9 +511,16 @@ struct SafeDIToolTypeFactsUnvalidatedWorldTests {
 		}
 	}
 
-	private static func alternatingRow(layerCount: Int) -> [String] {
+	/// An error's text with each file path cut to its file name: every run writes its fixtures to a directory of its own.
+	private static func textWithoutDirectories(of error: any Error) -> String {
+		String(describing: error).replacingOccurrences(of: #"/[^\s:]*/"#, with: "", options: .regularExpression)
+	}
+
+	private static func alternatingRow(layerCount: Int, readerRequiresTokens: Bool = false) -> [String] {
 		var types = [seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let left0Builder: Instantiator<Left0>", "@Instantiated let right0Builder: Instantiator<Right0>"])]
-		types.append(seamFixtureType(named: "Reader", isFinalClass: true, declarations: (0..<layerCount).map { "@Received(onlyIfAvailable: true) let token\($0): Token\($0)?" }))
+		types.append(seamFixtureType(named: "Reader", isFinalClass: true, declarations: (0..<layerCount).map {
+			readerRequiresTokens ? "@Received let token\($0): Token\($0)" : "@Received(onlyIfAvailable: true) let token\($0): Token\($0)?"
+		}))
 		for layer in 0..<layerCount {
 			let next = layer == layerCount - 1
 				? ["@Instantiated let reader: Reader"]
@@ -547,7 +574,7 @@ struct SafeDIToolTypeFactsUnvalidatedWorldTests {
 
 	/// Everything `world` says by name or by position in the graph, which no interning order changes.
 	private func nameBasedFacts(of world: TypeFactsRootsReport) -> [String] {
-		var facts = world.nodes.map { "\($0.description) \($0.construction) \($0.cycleKey) \($0.edges) \($0.instantiatedEdgeCount) \($0.isOnCycle) \($0.readsFromAbove) \($0.firstRoute)" }
+		var facts = world.nodes.map { "\($0.description) \($0.kind) \($0.construction) \($0.cycleKey) \($0.edges) \($0.isOnCycle) \($0.readsFromAbove) \($0.firstRoute)" }
 		facts.append("roots \(world.rootVariants) nodes \(world.variantNodes) calls \(world.variantCalls) counts \(world.variantCountsByNode)")
 		facts.append("elements \(world.columnElementCount) interned \(world.internedForWorldCount)")
 		facts += world.receives

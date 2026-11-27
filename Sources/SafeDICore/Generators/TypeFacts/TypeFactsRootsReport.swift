@@ -26,12 +26,13 @@ public struct TypeFactsRootsReport: Sendable {
 		projection = graph.projection
 		world = TypeFactsReport.projection(of: graph) { graph.isFrame(Int($0)) ? " frame" : "" }
 		nodes = graph.graph.nodes.indices.map { index in
-			TypeFactsReport.Node(
+			Node(
 				description: graph.description(ofNode: index),
+				kind: "\(graph.kinds[index])",
 				construction: "\(graph.constructions[index])",
 				cycleKey: graph.cycleKey(ofNode: index),
+				cycleKeyID: Int(graph.cycleIDs[index]),
 				edges: graph.graph.edges(from: index).map(Int.init),
-				instantiatedEdgeCount: Int(graph.instantiatedEdgeCounts[index]),
 				isOnCycle: graph.graph.isOnCycle(index),
 				readsFromAbove: graph.reads.reads(of: index).map(graph.readDescription),
 				firstRoute: graph.graph.firstRoute(to: index),
@@ -49,7 +50,7 @@ public struct TypeFactsRootsReport: Sendable {
 		for index in graph.graph.nodes.indices where !graph.isFrame(index) {
 			let declaration = DeclarationID(index)
 			let reads = graph.reads(of: declaration)
-			let ownReceives = TypeFactsGraph.ownReceives(of: graph.graph.nodes[index].scope.identity)
+			let ownReceives = TypeFactsGraph.ownReceives(of: graph.graph.nodes[index].scope)
 			for (receive, ownReceive) in zip(graph.receives(of: declaration), ownReceives) {
 				var line = "\(graph.description(ofNode: index)): \(receive.isRequired ? "required" : "only if available") \(graph.readDescription(receive.read))"
 				if let alias = ownReceive.alias {
@@ -82,9 +83,31 @@ public struct TypeFactsRootsReport: Sendable {
 	/// each node that stands for no declaration, then a line per variant. It prints the run's IDs, which differ between
 	/// runs that intern in different orders.
 	public let world: String
-	/// Each node as `TypeFactsReport` describes one, by position: node 0, the frames and the declarations. A frame's
-	/// one edge leads to its root's declaration, and nothing above a frame is read.
-	public let nodes: [TypeFactsReport.Node]
+	/// What the world holds of one node, named as `TypeFactsReport.Node` names what a validated world holds of it. It
+	/// has none of what only a validated tree has: no edge facts, bindings, parents or union facts.
+	public struct Node: Sendable {
+		public let description: String
+		/// The node's kind (`TypeFactsKind`).
+		public let kind: String
+		/// How the node's type comes to exist (`TypeFactsConstruction`).
+		public let construction: String
+		/// What a place of the node closes a cycle on, as cycle validation sees its property.
+		public let cycleKey: String
+		/// The node's cycle identity (A4), which two nodes of one `cycleKey` share. A leaf's is its own, as is that of a
+		/// node that stands for no declaration.
+		public let cycleKeyID: Int
+		/// The positions of the nodes its edges lead to, in edge order.
+		public let edges: [Int]
+		public let isOnCycle: Bool
+		/// What the node's subtree reads from above it, as `Read` descriptions.
+		public let readsFromAbove: [String]
+		/// The nodes from node 0 to this one on the first route a walk of the edges in order finds.
+		public let firstRoute: [Int]
+	}
+
+	/// Each node by position: node 0, the frames and the declarations. A frame's one edge leads to its root's
+	/// declaration, and nothing above a frame is read.
+	public let nodes: [Node]
 	/// How many variants each node has, by node position: one per family it is built in, whatever its reads are answered.
 	public let variantCountsByNode: [Int]
 	/// The variant each root's body is, in the roots' order.

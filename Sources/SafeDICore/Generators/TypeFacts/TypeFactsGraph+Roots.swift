@@ -46,45 +46,57 @@ extension TypeFactsGraph {
 	/// node has one variant per family. The forms and the properties that fulfill a receive are named by `intern`'s IDs,
 	/// in `Property` order, so no ID's value orders anything.
 	///
+	/// The world is built before its graph is validated, so it holds what validation reads: the graph, each node's kind,
+	/// construction and cycle identity, the reads, the answers and the receives. The columns that state how a validated
+	/// tree is generated (the order a scope builds its children in, its bindings in that order, the loops of builders,
+	/// the edges' facts, the parents' segments, the fills, the union facts of what a subtree receives and builds, and the
+	/// world's own tables of properties, types, modules and locations) are empty here, and their accessors return
+	/// nothing: an order of children that require each other, which validation rejects, would be no fact.
+	///
 	/// - Parameter intern: The run's ID of a property, given now where the run has none.
 	/// - Returns: `nil` when there is no root, and so no world.
 	init?(roots: [TypeFactsRoot], intern: (Property) -> PropertyID) {
 		guard let firstRoot = roots.first else {
 			return nil
 		}
-		var instantiatedEdgeCounts = [Int32]()
-		let worldRoot = TypeFactsDeclaration(scope: firstRoot.scope, property: nil, propertyID: -1, erasedToConcreteExistential: false, isFill: false, frame: TypeFactsDeclaration.worldRootFrame)
+		// The edges' entries among their scopes' properties and fills, which only the columns of a validated tree read.
+		var edgeEntries = [Int32]()
+		var edgeIsFill = [Bool]()
+		var fillHoles = [(edge: Int32, hole: SeamSignature.Hole)]()
+		let worldRoot = TypeFactsDeclaration(scope: firstRoot.scope, property: nil, propertyID: nil, erasedToConcreteExistential: false, isFill: false, frame: TypeFactsDeclaration.worldRootFrame)
 		let graph = OrderedGraph(root: worldRoot) { declaration in
 			if declaration.key.frame == TypeFactsDeclaration.worldRootFrame {
-				instantiatedEdgeCounts.append(Int32(roots.count))
 				return roots.enumerated().map { frame, root in
-					TypeFactsDeclaration(scope: root.scope, property: nil, propertyID: -1, erasedToConcreteExistential: false, isFill: false, frame: Int32(frame))
+					TypeFactsDeclaration(scope: root.scope, property: nil, propertyID: nil, erasedToConcreteExistential: false, isFill: false, frame: Int32(frame))
 				}
 			} else if declaration.key.frame != TypeFactsDeclaration.noFrame {
-				instantiatedEdgeCounts.append(1)
-				return [TypeFactsDeclaration(scope: declaration.scope, property: nil, propertyID: -1, erasedToConcreteExistential: false, isFill: false)]
+				return [TypeFactsDeclaration(scope: declaration.scope, property: nil, propertyID: nil, erasedToConcreteExistential: false, isFill: false)]
 			} else {
-				return Self.targets(of: declaration, instantiatedEdgeCounts: &instantiatedEdgeCounts)
+				return Self.targets(of: declaration, edgeEntries: &edgeEntries, edgeIsFill: &edgeIsFill, fillHoles: &fillHoles)
 			}
 		}
-		var labels = LabelInterner()
-		var readInterner = ReadInterner()
+		let nodes = graph.nodes
+		var labels = TypeFactsInterner<String>()
+		var readInterner = TypeFactsInterner<Read>()
 		var ownReadsByNode = [[Int32]]()
-		for node in graph.nodes {
+		for node in nodes {
 			guard node.key.frame == TypeFactsDeclaration.noFrame else {
 				ownReadsByNode.append([])
 				continue
 			}
 			// Validation judges no pin of a mock root, so no node reads one (`ReadChannel.mock`).
-			ownReadsByNode.append(Self.ownReads(of: node.scope.identity, builtAs: node.property, forMockGeneration: false, labels: &labels).map { readInterner.id(of: $0) })
+			ownReadsByNode.append(Self.ownReads(of: node, forMockGeneration: false, labels: &labels).map { readInterner.id(of: $0) })
 		}
-		let readTable = readInterner.reads
-		let own = BitRows(rowCount: graph.nodes.count, columnCount: readTable.count) { index, insert in
+		let readTable = readInterner.values
+		let own = BitRows(rowCount: nodes.count, columnCount: readTable.count) { index, insert in
 			ownReadsByNode[index].forEach(insert)
 		}
-		let readsByLabel = readInterner.readsByLabel(labelCount: labels.labels.count)
-		let hidden = BitRows(rowCount: graph.nodes.count, columnCount: readTable.count) { index, insert in
-			let node = graph.nodes[index]
+		var readsByLabel = [[Int32]](repeating: [], count: labels.values.count)
+		for (id, read) in readTable.enumerated() where read.channel.asksAboutLabel {
+			readsByLabel[Int(read.label)].append(Int32(id))
+		}
+		let hidden = BitRows(rowCount: nodes.count, columnCount: readTable.count) { index, insert in
+			let node = nodes[index]
 			if node.key.frame == TypeFactsDeclaration.noFrame {
 				// A label no node reads has no ID, and hides nothing.
 				for label in node.scope.declaredLabels {
@@ -99,15 +111,15 @@ extension TypeFactsGraph {
 			}
 		}
 		let reads = ReadsFromAbove(graph: graph, own: own, hidden: hidden)
-		let readColumns = ReadColumns(of: reads, nodeCount: graph.nodes.count, readTable: readTable, labelCount: labels.labels.count)
+		let readColumns = ReadColumns(of: reads, nodeCount: nodes.count, readTable: readTable, labelCount: labels.values.count)
 		let answers = Self.answersByValue(of: graph, roots: roots, reads: reads, readTable: readTable, readColumns: readColumns, labels: labels, intern: intern)
 		let receives = Self.receiveColumns(of: graph, readInterner: &readInterner, labels: &labels, intern: intern)
 		self.graph = graph
-		self.instantiatedEdgeCounts = instantiatedEdgeCounts
-		constructions = graph.nodes.map(\.construction)
+		kinds = nodes.map(Self.kind(of:))
+		constructions = nodes.map { Self.construction(of: $0, forMockGeneration: false) }
 		self.reads = reads
 		self.readTable = readTable
-		labelTexts = labels.labels
+		labelTexts = labels.values
 		readColumn = readColumns.readColumn
 		readOffsets = readColumns.readOffsets
 		labelColumn = readColumns.labelColumn
@@ -117,7 +129,7 @@ extension TypeFactsGraph {
 		answerKeys = Array(0..<Int32(answers.texts.count))
 		variants = answers.variants
 		outcomes = Self.outcomes(of: answers.variants, isBeingBuilt: answers.isBeingBuilt, readTable: readTable, readColumns: readColumns, graph: graph)
-		cycleIDs = Self.cycleIDs(of: graph.nodes)
+		cycleIDs = Self.cycleIdentities(of: nodes).ids
 		// Node 0's one variant calls each frame's, and each frame's one edge calls its root's body.
 		rootVariants = answers.variants.callees(of: 0).compactMap { answers.variants.callees(of: Int($0)).first }
 		answerForms = answers.forms
@@ -128,6 +140,28 @@ extension TypeFactsGraph {
 		receiveEnds = receives.ends
 		receiveColumn = receives.receives
 		acceptedColumn = receives.accepted
+		// What only a validated tree has, or only its generation reads: each offset column still has an entry per node, so
+		// a node's run is empty.
+		let noRows = BitRows(rowCount: 0, columnCount: 0) { _, _ in }
+		nodeProperties = []
+		builtTypes = []
+		edgeFacts = []
+		bindings = []
+		bindingOffsets = [Int32](repeating: 0, count: nodes.count + 1)
+		twins = []
+		self.receives = TypeFactsReceives(received: noRows, required: noRows, onlyIfAvailableUnwrapped: noRows, requiredAliasFulfilling: noRows)
+		typesBeneath = noRows
+		typesDeclaredEscaping = noRows
+		holesBeneath = noRows
+		parentOffsets = [Int32](repeating: 0, count: nodes.count + 1)
+		parents = []
+		fills = []
+		fillPathEntries = []
+		propertyFacts = TypeFactsPropertyFacts(labels: [], unwrapped: [], isOptional: [], instances: [], isBuilder: [], formsReadOffsets: [], formsRead: [], formsProvidedOffsets: [], formsProvided: [])
+		propertyTable = []
+		typeTable = []
+		moduleNames = []
+		declarationLocations = []
 	}
 
 	/// Whether the node stands for no declaration: node 0 of a world of several roots, or a frame.
@@ -163,7 +197,7 @@ extension TypeFactsGraph {
 		reads: ReadsFromAbove,
 		readTable: [Read],
 		readColumns: ReadColumns,
-		labels: LabelInterner,
+		labels: TypeFactsInterner<String>,
 		intern: (Property) -> PropertyID,
 	) -> AnswersByValue {
 		var formsIDByProperties = [[PropertyID]: Int32]()
@@ -288,17 +322,18 @@ extension TypeFactsGraph {
 
 	/// The receives each node's own type makes, in declaration order, each with the read it makes and the properties that
 	/// fulfill it (`acceptedProperties(of:)`). A record's receives are the same whatever property it is built as, so every
-	/// node of one record shares one run.
+	/// node of one record shares one run. A frame receives nothing, and neither does a leaf, whose scope's own node
+	/// holds the receives (`ownReads(of:forMockGeneration:labels:)`).
 	private static func receiveColumns(
 		of graph: OrderedGraph<TypeFactsDeclaration>,
-		readInterner: inout ReadInterner,
-		labels: inout LabelInterner,
+		readInterner: inout TypeFactsInterner<Read>,
+		labels: inout TypeFactsInterner<String>,
 		intern: (Property) -> PropertyID,
 	) -> ReceiveColumns {
 		var columns = ReceiveColumns()
 		var runByRecord = [ObjectIdentifier: (start: Int32, end: Int32)]()
 		for node in graph.nodes {
-			guard node.key.frame == TypeFactsDeclaration.noFrame else {
+			guard node.key.frame == TypeFactsDeclaration.noFrame, node.key.leaf == .none else {
 				columns.starts.append(0)
 				columns.ends.append(0)
 				continue
@@ -308,7 +343,7 @@ extension TypeFactsGraph {
 				columns.ends.append(run.end)
 			} else {
 				let start = Int32(columns.receives.count)
-				for receive in ownReceives(of: node.scope.identity) {
+				for receive in ownReceives(of: node.scope) {
 					let accepted = acceptedProperties(of: receive)
 					columns.receives.append(TypeFactsReceive(
 						read: readInterner.id(of: Read(receive.onlyIfAvailable ? .optionalValue : .value, label: labels.id(of: receive.property.label))),
