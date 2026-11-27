@@ -26,12 +26,11 @@ extension NodeRecords {
 	/// check of stage 1 still runs on it, so a call that fills a place is still refused as `fill`. It discharges the refusal
 	/// of a receive only if available too: the leaf receives only if available each parameter the seam takes so, which the
 	/// call is passed `nil` for where `OnlyIfAvailableAnswers` finds it unavailable. The engine binds a call in
-	/// place as a built place of its form, a wrapper of its function where the property is one (`InPlaceCall`); a call that
-	/// forwards values, which a wrapper binds inside its function, is refused as `construction`.
+	/// place as a built place of its form, a wrapper of its function where the property is one (`InPlaceCall`), whose
+	/// function takes the values the seam forwards, which the wrapper hands it.
 	static func seamCallClaim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
 		guard !world.isMockWorld, world.construction(of: declaration) == .seamCall else { return nil }
 		let scope = world.scope(of: declaration)
-		let forwardsValues = scope.instantiable.dependencies.contains { $0.source == .forwarded }
 		let passesEveryBuilderUp = scope.holeArguments.allSatisfy { holeArgument in
 			switch holeArgument {
 			case .passUp:
@@ -46,7 +45,6 @@ extension NodeRecords {
 		return NodeRecordClaim(
 			kind: .seamCall,
 			discharges: (passesEveryBuilderUp ? Set<NodeRecordRefusal>([.construction, .fill, .onlyIfAvailable]) : [.construction, .onlyIfAvailable]).union(wrapperDischarges),
-			refusals: forwardsValues ? [.construction] : [],
 		)
 	}
 
@@ -73,7 +71,8 @@ extension NodeRecords {
 		let scope = world.scope(of: declaration)
 		let construction = try builtByInitializerRecord(of: declaration, variant: variant, in: world, unavailableProperties: answers.unavailableProperties(of: variant), lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties, typesDeclaredEscaping: typesDeclaredEscaping, children: [], declaresFunction: true)
 		var arguments = construction.arguments
-		var reads = construction.arguments
+		// A value the call is forwarded is its function's parameter, which no declaration outside it answers.
+		var reads = construction.arguments.filter { read in !construction.forwardedProperties.contains { $0.label == read.label } }
 		var argumentValues = [Int: ValuePath]()
 		var closureArguments = [ClosureArgumentEntry]()
 		// A call that passes nothing up passes no builder: the tier's builders take what the seam's tree builds.
@@ -97,7 +96,7 @@ extension NodeRecords {
 			isExtension: construction.isExtension,
 			target: .initializer(construction.concreteType),
 			arguments: arguments,
-			forwardedProperties: [],
+			forwardedProperties: construction.forwardedProperties,
 			cycleParameters: [],
 			callCycleArguments: [],
 			functionName: construction.functionName,

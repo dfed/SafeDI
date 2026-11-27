@@ -964,6 +964,39 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 		#expect(reports.flatMap(\.differences) == [])
 	}
 
+	@Test
+	mutating func generate_laysOutASeamCallAsTheTreeDoes_whenAnInstantiatorOfTheSeamForwardsItAValue() async throws {
+		// `Screen` forwards `token`, so `Root`'s `Instantiator<Screen>` hands the call the value it is forwarded, which the
+		// call's function takes as a parameter.
+		let files = [
+			seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let screenBuilder: Instantiator<Screen>"]),
+			seamFixtureType(named: "Screen", isSeam: true, declarations: ["@Forwarded let token: Token", "@Instantiated let detail: Detail"]),
+			seamFixtureType(named: "Detail", declarations: ["@Received let token: Token"]),
+			seamFixtureType(named: "Token", declarations: []),
+		]
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: files, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(output.dependencyTreeFiles["Root+SafeDI.swift"] == generatedFileHeader + """
+		extension Root {
+		    public init() {
+		        func __safeDI_screenBuilder(token: Token) -> Screen {
+		            _ = Screen.__safeDI_Screen_1EB503BFA23A82BA.self
+		            return Screen(__safeDI_token: token)
+		        }
+		        let screenBuilder = Instantiator<Screen> {
+		            __safeDI_screenBuilder(token: $0)
+		        }
+		        self.init(screenBuilder: screenBuilder)
+		    }
+		}
+		""")
+		let rootReports = reports.filter { $0.root == "Root" }
+		#expect(rootReports.map(\.refusal) == [nil])
+		#expect(rootReports.map(\.isLaidOutFromNodeRecords) == [true])
+		#expect(reports.flatMap(\.differences) == [])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]

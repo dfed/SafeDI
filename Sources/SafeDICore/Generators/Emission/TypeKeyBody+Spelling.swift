@@ -148,10 +148,11 @@ extension TypeKeyLayout {
 	}
 
 	/// The text of a call written where its place is, at `index` of `owner`'s body: its builder function, then the binding
-	/// of its result. Each argument is read as the declaration visible there, which the function captures.
+	/// of its result. Each argument is read as the declaration visible there, which the function captures, but a value the
+	/// call is forwarded, which the function takes as a parameter.
 	func spelledInPlace(_ call: InPlaceCall, inClass owner: Int, at index: Int) -> String? {
 		let record = call.record
-		guard let argumentValues = spelledArgumentValues(record.arguments, replacedAt: record.argumentValues, inClass: owner, before: index, sourceAtMember: { member, position in
+		guard let argumentValues = spelledArgumentValues(record.arguments, replacedAt: record.argumentValues, inClass: owner, before: index, forwardedProperties: record.forwardedProperties, sourceAtMember: { member, position in
 			guard case let .alias(memberRecord) = bodies[member].statements[index], let memberCall = memberRecord.call else { return nil }
 			return memberCall.record.arguments[position].source
 		}) else { return nil }
@@ -163,7 +164,7 @@ extension TypeKeyLayout {
 		let function = SafeDICore.Statement.function(BuilderNode(
 			name: record.functionName,
 			isSendable: record.isSendable,
-			parameters: [],
+			parameters: record.forwardedProperties,
 			typesDeclaredEscaping: record.typesDeclaredEscaping,
 			returnType: record.concreteType,
 			body: BuilderBody(statements: statements),
@@ -181,8 +182,8 @@ extension TypeKeyLayout {
 		     .erasedInstantiator,
 		     .sendableInstantiator,
 		     .sendableErasedInstantiator:
-			// No forwarded arguments only while the seam call claim refuses a call that forwards values; then they come from the record.
-			.text(ScopeGenerator.instantiatorDeclaration(of: record.property, isExtension: record.isExtension, isErased: record.isErased, handing: record.functionName, forwardedArguments: ""))
+			// The wrapper hands the function the values it is forwarded, as a built place's call does (`spelledCall`).
+			.text(ScopeGenerator.instantiatorDeclaration(of: record.property, isExtension: record.isExtension, isErased: record.isErased, handing: record.functionName, forwardedArguments: spreadForwardedArguments(of: record.forwardedProperties).joined(separator: ", ")))
 		case .lazilyInstantiated,
 		     .sendableLazilyInstantiated:
 			.text("\(BindingDeclaration(property: record.property, rule: .lazilyInstantiated).spelled) = \(ScopeGenerator.lazilyInstantiatedInstantiation(of: record.property, callingFunctionNamed: record.functionName, cycleArguments: "", erasedToConcreteExistential: record.isErased))")
@@ -225,10 +226,7 @@ extension TypeKeyLayout {
 		     .erasedInstantiator,
 		     .sendableInstantiator,
 		     .sendableErasedInstantiator:
-			let isOnly = representative.forwardedProperties.count == 1
-			let forwardedArguments = representative.forwardedProperties.map {
-				CallArgument(label: $0.label, source: .forwardedSpread(label: $0.label, isOnly: isOnly, spreadName: "$0")).spelled
-			}
+			let forwardedArguments = Self.spreadForwardedArguments(of: representative.forwardedProperties)
 			return ScopeGenerator.instantiatorDeclaration(
 				of: property,
 				isExtension: isExtension,
@@ -253,6 +251,14 @@ extension TypeKeyLayout {
 		}
 	}
 
+	/// The arguments a wrapper's closure hands a builder function of `forwardedProperties`, spread from what it is forwarded.
+	private static func spreadForwardedArguments(of forwardedProperties: [Property]) -> [String] {
+		let isOnly = forwardedProperties.count == 1
+		return forwardedProperties.map {
+			CallArgument(label: $0.label, source: .forwardedSpread(label: $0.label, isOnly: isOnly, spreadName: "$0")).spelled
+		}
+	}
+
 	/// What a call made before the statement at `index` of `owner`'s body passes a parameter `label` of type
 	/// `parameterType`: its nearest declaration, `nil`, or a wrapper made of a value where the parameter takes a wrapper.
 	func spelledArgument(_ label: String, passedTo parameterType: TypeDescription, inClass owner: Int, before index: Int) -> String? {
@@ -273,12 +279,18 @@ extension TypeKeyLayout {
 
 	/// The arguments of a construction made before the statement at `index` of `owner`'s body, each read as the receiver
 	/// declares it.
-	func spelledArgumentValues(_ reads: [PlaceRead], replacedAt replacements: [Int: ValuePath], inClass owner: Int, before index: Int, sourceAtMember: (Int, Int) -> ArgumentSource?) -> [String]? {
+	/// `forwardedProperties` are the parameters of the function the values are spelled in, which a read of one of them
+	/// reads by name.
+	func spelledArgumentValues(_ reads: [PlaceRead], replacedAt replacements: [Int: ValuePath], inClass owner: Int, before index: Int, forwardedProperties: [Property] = [], sourceAtMember: (Int, Int) -> ArgumentSource?) -> [String]? {
 		var values = [String]()
 		let members = owner == 0 ? [0] : membersByClass[owner]
 		for (position, read) in reads.enumerated() {
 			let value: String
-			if let path = replacements[position] {
+			if forwardedProperties.contains(read.property) {
+				// The read is of the forwarded property itself, which the parameter declares. A read of another form of its
+				// label, such as its instance or its optional, is spelled from its declaration as any other read is.
+				value = read.label
+			} else if let path = replacements[position] {
 				guard let spelled = spelledValuePath(path, inClass: owner, before: index) else { return nil }
 				value = spelled
 			} else if members.allSatisfy({ sourceAtMember($0, position) == .nil }) {
