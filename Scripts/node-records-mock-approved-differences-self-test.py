@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Self-test of node-records-mock-approved-differences.py: for each rewrite that restructures text (entries 16, 20
-and 21), one real pair the rewrite makes equal, and hand edits of the records' text after each of which the pair
+"""Self-test of node-records-mock-approved-differences.py: for each rewrite that restructures text (entries 16, 20,
+21 and 23), one real pair the rewrite makes equal, and hand edits of the records' text after each of which the pair
 must differ. Prints one line per case and exits 1 when a pair is not equal before an edit or still equal after one.
 
   node-records-mock-approved-differences-self-test.py
@@ -68,6 +68,12 @@ CASES = [
     ('21', 'the closing call names the other type’s function of the same label',
      once('__safeDI_childBuilder(safeDIOverrides: Child.SafeDIMockConfiguration(),',
           '__safeDI_childBuilder_(safeDIOverrides: Child.SafeDIMockConfiguration(),')),
+    ('23', 'a call hands another place’s override',
+     once('let r0: R0 = __safeDI_r0(x0: x0, safeDIOverrides: safeDIOverrides.r0)',
+          'let r0: R0 = __safeDI_r0(x0: x0, safeDIOverrides: safeDIOverrides.r1)')),
+    ('23', 'the override read is dropped',
+     once('return if let safeDIBuilder = safeDIOverrides { safeDIBuilder(r0x0) } else { R0(r0x0: r0x0) }',
+          'return R0(r0x0: r0x0)')),
 ]
 
 

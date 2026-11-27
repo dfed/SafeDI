@@ -348,12 +348,37 @@ def e3(text,walk):
             del lines[i]
             k=i
             while k<len(lines) and (not lines[k].strip() or len(lines[k])-len(lines[k].lstrip())>=indent):
+                again=LOCAL.match(lines[k])
+                if again and again.group(2)==local.group(2):
+                    # a function nested here declares the name again: its lines read its own local
+                    hidden=len(again.group(1));k+=1
+                    while k<len(lines) and (not lines[k].strip() or len(lines[k])-len(lines[k].lstrip())>=hidden): k+=1
+                    continue
                 lines[k]=name.sub(local.group(4),lines[k]);k+=1
         else: i+=1
+    records_names=set(LOCAL.match(l).group(2) for l in lines if LOCAL.match(l))
     for line in walk_lines:
         local=LOCAL.match(line)
-        if not local or not local.group(2).endswith('__overrides'): continue
+        if not local: continue
         indent,_,label,path=local.groups()
+        if not local.group(2).endswith('__overrides'):
+            # entry 23: in a mock whose root is an actor the walk reads a plain node's override into a local
+            # before the node's function, and the records' function reads the field. That the walk does so is
+            # a fact read from the walk's text; the local must find its function here, and the name must be
+            # declared nowhere in the records' text of this mock.
+            if local.group(2) in records_names: continue
+            for i,candidate in enumerate(lines):
+                f=FUNC.match(candidate)
+                if not (f and f.group(1)==indent and f.group(3)=='__safeDI_'+label): continue
+                if i and lines[i-1]==line: continue
+                e=block_end(lines,i)
+                reads=re.compile(re.escape(path)+r'(?![\w.])')
+                if not any(reads.search(b) for b in lines[i+1:e]): continue
+                lines[i+1:e]=[reads.sub(local.group(2),b) for b in lines[i+1:e]]
+                lines.insert(i,line)
+                ALSO_USED.append('23')
+                break
+            continue
         for i,candidate in enumerate(lines):
             f=FUNC.match(candidate)
             if not (f and f.group(1)==indent and f.group(3)=='__safeDI_'+label): continue
@@ -501,7 +526,7 @@ def main():
             else:
                 failures += 1
                 print('%s: %s' % (records_path, failure))
-        for name in [name for name, _ in REWRITES] + ['10', '16', '17']:
+        for name in [name for name, _ in REWRITES] + ['10', '16', '17', '23']:
             print('entry %s: used on %d pairs' % (name, counts[name]))
         print('%d of %d pairs equal after rewrite' % (total - failures, total))
         sys.exit(1 if failures else 0)
