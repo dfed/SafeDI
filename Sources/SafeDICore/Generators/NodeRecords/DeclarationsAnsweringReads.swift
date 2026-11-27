@@ -155,26 +155,34 @@ struct DeclarationsAnsweringReads: Sendable {
 					}
 				}
 				// A variant's record is written from the call that resolved it, so every other call into it must answer each
-				// of its reads as that call did; any that does not refuses the world, whatever order the calls come in.
+				// of its reads as that call did; any that does not refuses the world, whatever order the calls come in. A read
+				// only if available that one call answers and another does not is the exception: the variant takes it as one
+				// optional parameter (`OnlyIfAvailableAnswers`), so it is resolved as the call that answers it does, and read
+				// again, with everything it calls.
+				var calleeAnswers = calleeAnsweringDeclarations
 				if let resolved = answeringDeclarations[Int(callee)] {
-					if !callsAnswerAVariantApart {
-						callsAnswerAVariantApart = !Self.answerAlike(
-							resolved,
-							inSendableFunction: resolvedInSendableFunction[Int(callee)],
-							calleeAnsweringDeclarations,
-							inSendableFunction: opensSendableFunction,
-							reads: calleeReads,
-							in: world,
-						)
+					guard !callsAnswerAVariantApart else { continue }
+					guard let mergedAnswers = Self.answers(
+						merging: resolved,
+						inSendableFunction: resolvedInSendableFunction[Int(callee)],
+						with: calleeAnsweringDeclarations,
+						inSendableFunction: opensSendableFunction,
+						reads: calleeReads,
+						in: world,
+					) else {
+						callsAnswerAVariantApart = true
+						continue
 					}
-					continue
+					guard mergedAnswers != resolved else { continue }
+					calleeAnswers = mergedAnswers
+				} else {
+					resolvedInSendableFunction[Int(callee)] = opensSendableFunction
+					callerByVariant[Int(callee)] = caller
 				}
-				answeringDeclarations[Int(callee)] = calleeAnsweringDeclarations
-				resolvedInSendableFunction[Int(callee)] = opensSendableFunction
-				callerByVariant[Int(callee)] = caller
+				answeringDeclarations[Int(callee)] = calleeAnswers
 				stack.append(callee)
 				guard readsInstancesOrCaptures else { continue }
-				for (answeringDeclaration, readID) in zip(calleeAnsweringDeclarations, calleeReads) {
+				for (answeringDeclaration, readID) in zip(calleeAnswers, calleeReads) {
 					let read = world.read(readID)
 					guard read.channel.asksAboutLabel else { continue }
 					// The scope of the node that answers the read; `nil` where what the root is handed answers it.
@@ -245,32 +253,48 @@ struct DeclarationsAnsweringReads: Sendable {
 		let isCaptured: Bool
 	}
 
-	/// Whether `answers` and `otherAnswers`, the declarations two calls of one variant answer its `reads` with, give each
-	/// read the same `AnswerForm`. A call that answers a read with the declaration the other does differs at most in
-	/// whether it captures it.
-	private static func answerAlike(
-		_ answers: [DeclarationID],
+	/// The declarations that answer `reads`, a variant's, where one call answers them with `answers` and another with
+	/// `otherAnswers`; `nil` where the two do not give each read the same `AnswerForm`. A call that answers a read with
+	/// the declaration the other does differs at most in whether it captures it. A read only if available that one of the
+	/// calls answers with nothing takes the other's answer.
+	private static func answers(
+		merging answers: [DeclarationID],
 		inSendableFunction isCaptured: Bool,
-		_ otherAnswers: [DeclarationID],
+		with otherAnswers: [DeclarationID],
 		inSendableFunction otherIsCaptured: Bool,
 		reads: some Collection<ReadID>,
 		in world: some NodeRecordSources,
-	) -> Bool {
+	) -> [DeclarationID]? {
+		var mergedAnswers = answers
 		for (index, readID) in reads.enumerated() {
 			let answer = answers[index]
 			let otherAnswer = otherAnswers[index]
 			guard answer != otherAnswer || (answer >= 0 && isCaptured != otherIsCaptured) else { continue }
-			guard answer >= 0, otherAnswer >= 0 else { return false }
 			let read = world.read(readID)
+			guard answer >= 0, otherAnswer >= 0 else {
+				guard isReadOnlyIfAvailable(read.channel), isCaptured == otherIsCaptured else { return nil }
+				mergedAnswers[index] = max(answer, otherAnswer)
+				continue
+			}
 			guard read.channel.asksAboutLabel else { continue }
 			let label = world.text(ofLabel: read.label)
 			if answerForm(of: answer, label: label, channel: read.channel, isCaptured: isCaptured, in: world)
 				!= answerForm(of: otherAnswer, label: label, channel: read.channel, isCaptured: otherIsCaptured, in: world)
 			{
-				return false
+				return nil
 			}
 		}
-		return true
+		return mergedAnswers
+	}
+
+	/// Whether a read of `channel` is a read only if available, which a call may answer with nothing.
+	private static func isReadOnlyIfAvailable(_ channel: ReadChannel) -> Bool {
+		switch channel {
+		case .optional, .optionalValue:
+			true
+		case .value, .alias, .madeAgain, .mock, .carrier, .fill, .family, .override:
+			false
+		}
 	}
 
 	/// The form of the answer to `label` that `caller` hands a rename it declares: its own declaration of the label, or the
