@@ -235,7 +235,13 @@ public struct FillFactsObservation: Sendable {
 		var refusals = [FillRefusal]()
 		for declaration in 0..<Int32(world.declarationCount) where world.construction(of: declaration) == .seamCall {
 			let scope = world.scope(of: declaration)
-			guard scope.holeArguments.contains(where: { if case .fill = $0 { true } else { false } }) else { continue }
+			guard scope.holeArguments.contains(where: {
+				if case .fill = $0 {
+					true
+				} else {
+					false
+				}
+			}) else { continue }
 			if let refusal = FillFacts.refusal(ofCall: declaration, in: world, routeCounts: routeCounts) {
 				refusals.append(refusal)
 			} else {

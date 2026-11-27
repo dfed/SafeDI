@@ -96,14 +96,14 @@ enum NodeRecordsChecks {
 		}
 		return try await FillFactsObservation.$observer.withValue(fillFactsObserver) {
 			try await SeamCallRecordObservation.$observer.withValue(seamCallObserver) {
-			try await DispatcherRecordObservation.$observer.withValue(dispatcherObserver) {
-				try await FillSignatureObservation.$observer.withValue(fillObserver) {
-					try await FillEmissionDecisionsObservation.$observer.withValue(decisionsObserver) {
-						try await checkingNodeRecords(laysOutRoots: laysOutRoots, reportPath: reportPath, testName: testName, enclosingObserver: enclosingObserver, body)
+				try await DispatcherRecordObservation.$observer.withValue(dispatcherObserver) {
+					try await FillSignatureObservation.$observer.withValue(fillObserver) {
+						try await FillEmissionDecisionsObservation.$observer.withValue(decisionsObserver) {
+							try await checkingNodeRecords(laysOutRoots: laysOutRoots, reportPath: reportPath, testName: testName, enclosingObserver: enclosingObserver, body)
+						}
 					}
 				}
 			}
-		}
 		}
 	}
 
