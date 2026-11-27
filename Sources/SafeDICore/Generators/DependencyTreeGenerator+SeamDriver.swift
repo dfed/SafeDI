@@ -550,6 +550,12 @@ extension DependencyTreeGenerator {
 			// A test compares the records of a seam's own tree with its tree's places, and no run lays the seam's
 			// initializers out from them: they are written around its tree's body (`ScopeGenerator.generateSeamRootCode`).
 			let (table, record) = seamWorld.frozenScopeMap.freezing(rootScope: seamRootScope)
+			let seamType = seam.concreteInstantiable
+			let makeSeamHoles: (@Sendable () -> SeamHoles)? = if NodeRecordsObservation.observer == nil {
+				nil
+			} else {
+				{ SeamHoles(of: finalSeamRoot, seamType: seamType) }
+			}
 			rootScopeGenerators.append(RootScopeInfo(
 				typeDescription: seam.concreteInstantiable,
 				instantiable: seam,
@@ -560,8 +566,7 @@ extension DependencyTreeGenerator {
 					rootLazilyInstantiatedInstanceProperties: Self.seamRootDeclarations(of: seamRootScope, seamRoot: finalSeamRoot).lazilyInstantiatedInstanceProperties,
 					parameters: finalSeamRoot.signature.parameters.map(\.property),
 					autoclosureLabels: Set(finalSeamRoot.autoclosureCallByLabel(of: seamRootScope.instantiable).keys),
-					seamRoot: finalSeamRoot,
-					seamType: seam.concreteInstantiable,
+					makeSeamHoles: makeSeamHoles,
 				),
 			))
 		}

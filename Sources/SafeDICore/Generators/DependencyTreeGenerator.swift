@@ -606,9 +606,10 @@ public actor DependencyTreeGenerator {
 			/// The labels of the deferred parameters the seam's own rename of the label reads from the autoclosure
 			/// (`ScopeGenerator.SeamRoot.autoclosureCallByLabel(of:)`).
 			let autoclosureLabels: Set<String>
-			/// The seam's root, from which a test makes the seam's holes (`SeamHoles(of:seamType:)`), and the seam's type.
-			let seamRoot: ScopeGenerator.SeamRoot
-			let seamType: TypeDescription
+			/// Makes the seam's holes (`SeamHoles(of:seamType:)`) where a test observes node records, and is `nil` otherwise:
+			/// a run keeps a root's info for every seam, and holding the seam's root in it grew what a run of many seams
+			/// allocates by about 1%.
+			let makeSeamHoles: (@Sendable () -> SeamHoles)?
 		}
 		/// What made this run build the root's tree (`TreeForcer`); empty where it built none.
 		var treeForcers: [TreeForcer] = [.seamWorld]
