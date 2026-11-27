@@ -705,7 +705,7 @@ extension DependencyTreeGenerator {
 	}
 
 	/// What the scopes a walk of a scope's subtree can reach, its own included, do with each label: what tells which parts
-	/// of its path a walk of a subtree that reaches a cycle of instantiators cannot read (`CleanSubtreeKeyLabels`).
+	/// of its path a walk of the subtree cannot read (`CleanSubtreeKeyLabels`).
 	private struct CleanSubtreeLabelFacts {
 		var usesByLabel = [String: CleanSubtreeLabelUses]()
 		/// The properties the scopes forward or receive under each label.
@@ -716,11 +716,15 @@ extension DependencyTreeGenerator {
 		var labelsJudgedInTreesBuiltByInstantiators = Set<String>()
 		/// The concrete types of the scopes.
 		var builtTypes = Set<TypeDescription>()
+		/// Every property a walk of the scopes asks the receivable properties for: each form a receive or a rename is
+		/// fulfilled by (`Dependency.formsAskedOfReceivableProperties`).
+		var propertiesAskedOfReceivableProperties = Set<Property>()
 
 		mutating func record(_ scope: Scope, labelsJudgedInTree: (Scope) -> Set<String>) {
 			builtTypes.insert(scope.instantiable.concreteInstantiable)
 			for dependency in scope.instantiable.dependencies {
 				let label = dependency.property.label
+				propertiesAskedOfReceivableProperties.formUnion(dependency.formsAskedOfReceivableProperties)
 				switch dependency.source {
 				case let .received(onlyIfAvailable):
 					usesByLabel[label, default: []].insert(.read)
@@ -767,14 +771,20 @@ extension DependencyTreeGenerator {
 			declaredLabels.formUnion(other.declaredLabels)
 			labelsJudgedInTreesBuiltByInstantiators.formUnion(other.labelsJudgedInTreesBuiltByInstantiators)
 			builtTypes.formUnion(other.builtTypes)
+			propertiesAskedOfReceivableProperties.formUnion(other.propertiesAskedOfReceivableProperties)
 		}
 	}
 
-	/// The labels the key of a scope holds (`cleanSubtreeKey(of:rootContextIndex:)`): `receivableLabels` for every scope,
-	/// the others only for one that reaches a cycle of instantiators.
+	/// The labels the key of a scope holds (`cleanSubtreeKey(of:rootContextIndex:)`): `receivableLabels`,
+	/// `labelsComparedWithEntries` and `builtTypes` for every scope, `propertiesAskedOfReceivableProperties` only for one
+	/// that reaches no cycle of instantiators, and `labelsOnlyInstantiatorsBuild` and `labelsJudgedInTheirTrees` only for
+	/// one that reaches one.
 	private struct CleanSubtreeKeyLabels {
 		/// The labels whose receivable properties a walk of the subtree looks up.
 		let receivableLabels: Set<String>
+		/// The properties a walk of the subtree asks the receivable properties for
+		/// (`CleanSubtreeLabelFacts.propertiesAskedOfReceivableProperties`).
+		let propertiesAskedOfReceivableProperties: Set<Property>
 		/// The labels a scope beneath receives or renames a property of, whose entries are compared with the property
 		/// received; and those one forwards, kept though no comparison reads them.
 		let labelsComparedWithEntries: Set<String>
@@ -948,7 +958,7 @@ extension DependencyTreeGenerator {
 		var hiddenReceivedProperties = [HiddenReceiveInTree: HiddenReceiveChain]()
 		var renamesContradictingOwnProperties = Set<DependencyTreeGeneratorError.RenameContradictingOwnProperty>()
 		/// How many times a walk recorded something, or met a judgement that reads more of its path than `CleanSubtreeKey`
-		/// holds: a cycle, a receive of a property on the instantiation stack, or a tree a cycle builds again. A subtree whose
+		/// holds: a cycle, a receive of a value on the instantiation stack, or a tree a cycle builds again. A subtree whose
 		/// walk leaves it unchanged is clean (see `cycle-validation.md`, "Clean subtrees"). Any new judgement in the walk must
 		/// read only what the key holds, or add to this count where it fires.
 		var memoBlockingEventCount = 0
@@ -1074,9 +1084,6 @@ extension DependencyTreeGenerator {
 						requiredOnlyIfAvailableAliases: [],
 					)
 				}
-				if childProperty == property {
-					memoBlockingEventCount += 1
-				}
 				guard !receivedPropertyStack.contains(childProperty) else {
 					// We've found a cycle, but it's not our cycle. Bail and let a future loop find this.
 					// The remaining received properties on this scope go unwalked, so a later visit
@@ -1087,7 +1094,11 @@ extension DependencyTreeGenerator {
 				}
 				let memoizedStackPropertiesReliedOn = stackPropertiesReliedOnByWalkedProperty[childProperty]
 				let cycleIndex = instantiationStack.firstIndex(of: childProperty)
-				if cycleIndex != nil {
+				// A receive of an instantiator still being built judges nothing: accepted below where it repeats the entry,
+				// and with no scope to walk where a nearer declaration fulfills it, so a walk that meets one is remembered. A
+				// value on the stack is judged by where the nearest declaration of its label is: the key holds that position,
+				// so this raise too is one of those `cleanSubtreeKeyLabels(of:)` lists as kept with no graph that needs it.
+				if cycleIndex != nil, !ScopeGenerator.isBuilder(childProperty) {
 					memoBlockingEventCount += 1
 				}
 				if let cycleIndex,
@@ -1602,12 +1613,19 @@ extension DependencyTreeGenerator {
 		}
 		/// The labels the key of `scope` holds. A walk of its subtree reads less of its path than
 		/// `labelsDeclaredOrRead(beneath:)` allows for, and what it does not read differs on every path through a cycle, and on
-		/// every path through screens that each declare one label with a type of their own. The first three hold for every
-		/// scope; the last is read only of a scope that reaches a cycle of instantiators:
+		/// every path through screens that each declare one label with a type of their own. The first two and the fourth hold
+		/// for every scope; the third holds only for a scope that reaches no cycle of instantiators, and the last is read
+		/// only of one that reaches one:
 		/// - The receivable properties of a label no scope beneath receives or renames are read by no judgement.
 		/// - Nor are those of a label the scopes beneath only forward and require, as one non-optional property, where every
 		///   receive of it is beneath a scope that forwards it (`labelsReadFromAbove(by:)` holds it not): that scope makes the
 		///   property receivable whatever is above.
+		/// - Of the receivable properties of the labels left, a judgement asks only whether a property a scope beneath
+		///   receives or renames is among them, in a form it reads (`Dependency.formsAskedOfReceivableProperties`). The others
+		///   are read by label only for the suggestions of a receive already reported, which is never remembered, and by
+		///   `validateTreeBuiltAgainByCycle`: so the key of a scope that reaches no cycle of instantiators holds none of them
+		///   (`cleanSubtreeKey(of:rootContextIndex:)`), and screens that each declare one label with a type of their own,
+		///   which a type beneath each receives, no longer give every path beneath them another key.
 		/// - An entry of the instantiation stack is compared with the property a scope receives or renames, by its label, or
 		///   with the property a scope builds a scope for, which closes a cycle only on an entry built for the same concrete
 		///   type (`indexOfEntryClosedOn`). An entry of a label nothing beneath receives or renames, built for a type no scope
@@ -1621,9 +1639,11 @@ extension DependencyTreeGenerator {
 		/// Each condition here and in `cleanSubtreeKey(of:rootContextIndex:)` makes the key hold more, so it can cost a skip
 		/// and never cause a wrong one. A test shows these are needed, failing with the condition left out
 		/// (`SafeDIToolCleanSubtreeTests`, "One graph for each part of the key"): a label a scope beneath reads from above
-		/// keeps its receivable properties; the root's context; and a subtree skipped as found clean beneath a scope still
-		/// being walked hands that scope's depth up. No graph is known for these, each left out by hand over about 43,000
-		/// seeded graphs with no difference between a run that skips and one that skips nothing:
+		/// keeps its receivable properties; of those, each form a scope beneath asks for
+		/// (`Dependency.formsAskedOfReceivableProperties`) but the two named below; the root's context; and a subtree skipped
+		/// as found clean beneath a scope still being walked hands that scope's depth up. No graph is known for these, each
+		/// left out by hand over about 43,000 seeded graphs (the last two over about 20,000) with no difference
+		/// between a run that skips and one that skips nothing:
 		/// - "exactly one property" and "its non-optional form" of a label fulfilled beneath. A second property, or an
 		///   optional form, under a label a scope beneath forwards is received beneath that forwarder, where the walk
 		///   reports it on every path or on none.
@@ -1633,6 +1653,17 @@ extension DependencyTreeGenerator {
 		///   reaches through the cycle, so the first condition appears to cover what the depths do.
 		/// - a cycle that closes above its parent counting as an equal first build only for a label only instantiators
 		///   build; the stack's entries; and the positions of the declarations among them.
+		/// - the unwrapped form of the property a required receive, or a required rename, asks for. A tree validated as
+		///   production reports a required receive of an optional property whose own form is not receivable, whatever else
+		///   is; a mock's tree reads the unwrapped form only of a property still being built, which appears to be receivable
+		///   there only through a declaration nearer than the one being built, which the key holds.
+		/// - a scope that reaches a cycle of instantiators keeping the receivable properties no scope beneath it asks for.
+		///   `validateTreeBuiltAgainByCycle` reads them by label, so they stay; keeping only what is asked for there, as for
+		///   every other scope, made no difference on these graphs.
+		/// - two raises of `memoBlockingEventCount` for a value that repeats an entry of the stack, which no test fails
+		///   without: for an instantiation of it, whose cycle-closing scope appears to raise the count wherever it does,
+		///   and for a receive of it in the received walk, which throws unless a nearer declaration fulfills it, whose
+		///   position the key holds.
 		/// Leaving one out needs an argument that the rest of the key tells apart everything it does, not this search.
 		func cleanSubtreeKeyLabels(of scope: Scope) -> CleanSubtreeKeyLabels {
 			if let cached = cleanSubtreeKeyLabelsByScope[scope] {
@@ -1653,6 +1684,7 @@ extension DependencyTreeGenerator {
 				let judgedLabels = facts.labelsJudgedInTreesBuiltByInstantiators
 				let keyLabels = CleanSubtreeKeyLabels(
 					receivableLabels: receivableLabels,
+					propertiesAskedOfReceivableProperties: facts.propertiesAskedOfReceivableProperties,
 					labelsComparedWithEntries: Set(facts.usesByLabel.lazy.filter { !$0.value.isDisjoint(with: [.read, .readOtherThanByRequiredReceive, .forwarded]) }.map(\.key)),
 					builtTypes: facts.builtTypes,
 					labelsOnlyInstantiatorsBuild: judgedLabels.isDisjoint(with: facts.declaredLabels)
@@ -1670,10 +1702,12 @@ extension DependencyTreeGenerator {
 		/// `onlyIfAvailable` alias bound from a property the tree builds hands the stack to
 		/// `validateNoCycleInReceivedProperties`, which reads its first entry, finds by its first index each entry that
 		/// `propertiesReceivedTransitively(from:)` holds, and reads the entries up to the one it finds: the stack up to the
-		/// farthest entry it holds covers every first index that walk can find, and so decides it. A walk that finds an
-		/// entry raises `memoBlockingEventCount` or throws, but a second receive of the alias along the same stack is spared
-		/// that walk and raises nothing, so a key can be kept from a walk whose check found a builder: an equal key holds
-		/// the entries up to it, and finds it too.
+		/// farthest entry it holds covers every first index that walk can find, and so decides it: no entry past it is
+		/// one the walk finds, so it finds, accepts and throws alike beneath two stacks equal up to there. A walk that
+		/// finds a value raises `memoBlockingEventCount` or throws; one that finds an instantiator still being built judges
+		/// nothing, and a second receive of the alias along the same stack is spared the walk, so neither raises the count
+		/// and the key of a walk whose check found a builder is kept: an equal key holds the entries up to it, and finds
+		/// it too.
 		func declaringStackEntriesReadByFulfillingPropertyWalk(of alias: ReceivableAlias, lastFulfillingProperty: Property) -> [Property] {
 			if alias.onlyIfAvailable, case .built? = alias.binding {
 				let reachableProperties = propertiesReceivedTransitively(from: lastFulfillingProperty)
@@ -1753,11 +1787,21 @@ extension DependencyTreeGenerator {
 					fulfillingSiblingBeingBuilt: formsOnStack(of: lastFulfillingProperty.asValidatedForDependencyCycles).first { $0 == declaringChild },
 				)
 			}
+			// A walk asks the receivable properties only whether they hold a property a scope beneath receives or renames, in a
+			// form it reads, so the others are left out: the scopes above that each declare one label with a type of their own
+			// otherwise give every path another key. A tree a cycle builds again reads them by label
+			// (`validateTreeBuiltAgainByCycle`), so a scope that reaches a cycle of instantiators keeps every property of its
+			// labels; beneath any other scope a cycle-closing scope raises `memoBlockingEventCount`, and the entry it closes
+			// on is in `stack`.
+			let receivablePropertiesOfLabels = scopeToValidate.receivableProperties.properties(labeledAnyOf: keyLabels.receivableLabels)
+			let receivableProperties = cycleKeyLabels == nil
+				? receivablePropertiesOfLabels.filter(keyLabels.propertiesAskedOfReceivableProperties.contains)
+				: receivablePropertiesOfLabels
 			return CleanSubtreeKey(
 				scope: scope,
 				property: scopeToValidate.property,
 				rootContextIndex: rootContextIndex,
-				receivableProperties: scopeToValidate.receivableProperties.properties(labeledAnyOf: keyLabels.receivableLabels),
+				receivableProperties: receivableProperties,
 				closestDeclarations: closestDeclarations,
 				stack: stack,
 				receivableAliases: receivableAliases,
@@ -2693,7 +2737,13 @@ extension DependencyTreeGenerator {
 				) else {
 					continue
 				}
-				memoBlockingEventCount += 1
+				// An instantiation is accepted or not by every property between it and the entry it repeats. The step of its
+				// cycle-closing scope appears to raise the count wherever this does, so this raise is one of those
+				// `cleanSubtreeKeyLabels(of:)` lists as kept with no graph that needs it. A receive is accepted only of an
+				// instantiator still being built, which judges nothing; any other throws.
+				if closingReceive == nil {
+					memoBlockingEventCount += 1
+				}
 				let propertiesInCycle = [propertyForDependency] + childPropertyStack[0...cycleIndex]
 				try throwIfInvalidCycle(
 					propertiesInCycle: propertiesInCycle,
@@ -2912,3 +2962,27 @@ private protocol LabelDeclarations {
 extension [String: DependencyTreeGenerator.DependencyTreeGeneratorError.LabelDeclaration]: LabelDeclarations {}
 
 extension DependencyTreeGenerator.LayeredMap<String, DependencyTreeGenerator.DependencyTreeGeneratorError.LabelDeclaration>: LabelDeclarations {}
+
+extension Dependency {
+	/// The forms of the property this dependency receives or renames that a walk of the scope asks the receivable
+	/// properties for, by membership: a receive, required or only if available, reads its property and that property's
+	/// unwrapped form; a rename reads those of its fulfilling property; a rename only if available reads its fulfilling
+	/// property's `formsReadByOnlyIfAvailableReceive`. Empty for a dependency the scope declares. A new read of the
+	/// receivable properties in `validatePropertiesAreFulfillable(on:…)`, `aliasBinding`, `recordHiddenReceives` or
+	/// `insertProperties` is listed here, or the key of a clean subtree (`CleanSubtreeKey`) no longer holds what the walk
+	/// reads.
+	fileprivate var formsAskedOfReceivableProperties: [Property] {
+		switch source {
+		case .received:
+			[property, property.asUnwrappedProperty]
+		case let .aliased(fulfillingProperty, _, onlyIfAvailable):
+			if onlyIfAvailable {
+				fulfillingProperty.formsReadByOnlyIfAvailableReceive
+			} else {
+				[fulfillingProperty, fulfillingProperty.asUnwrappedProperty]
+			}
+		case .instantiated, .forwarded:
+			[]
+		}
+	}
+}
