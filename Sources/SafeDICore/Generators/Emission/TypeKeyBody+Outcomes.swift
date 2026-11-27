@@ -260,12 +260,15 @@ extension TypeKeyLayout {
 	mutating func computeParameterTypes() -> Bool {
 		parameterTypes = Array(repeating: [:], count: membersByClass.count)
 		// The labels a rename in each class reads, which the class takes as their declarations type them, so that the
-		// rename reads the type the path key binds it from.
+		// rename reads the type the path key binds it from. A cycle parameter is typed as the path key types it, optional
+		// where nothing requires it, whatever reads it.
 		let labelsReadByRenames = membersByClass.map { members in
 			Set(members.flatMap { member in
 				bodies[member].statements.compactMap { statement -> String? in
-					guard case let .alias(record) = statement else { return nil }
-					return record.fulfillingProperty?.label
+					guard case let .alias(record) = statement, let label = record.fulfillingProperty?.label,
+					      !bodies[member].cycleParameterLabels.contains(label)
+					else { return nil }
+					return label
 				}
 			})
 		}
