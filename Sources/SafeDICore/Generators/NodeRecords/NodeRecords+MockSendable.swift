@@ -158,7 +158,7 @@ extension NodeRecords {
 	}
 
 	/// Whether a node of a mock root's world has a configuration, as its record's override type says
-	/// (`mockConstructionRecord(of:variant:in:unavailableProperties:lazilyInstantiatedInstanceProperties:receivesBoundAgain:typesDeclaredEscaping:children:)`):
+	/// (`mockConstructionRecord(of:variant:in:unavailableProperties:lazilyInstantiatedInstanceProperties:receivesBoundAgain:wrapperArgumentNames:typesDeclaredEscaping:children:)`):
 	/// whether it builds a child with an override of its own (`buildsMockChildWithOverride(_:in:)`), or passes its
 	/// construction a field of its configuration (`mockConfigurationFieldArguments(of:in:)`). A node whose children are
 	/// all renames has none, so the local its override is bound to is named as a closure's.

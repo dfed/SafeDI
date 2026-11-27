@@ -72,12 +72,13 @@ extension NodeRecords {
 		unavailableProperties: Set<Property>,
 		lazilyInstantiatedInstanceProperties: Set<Property>,
 		receivesBoundAgain: [MockReceiveBoundAgain],
+		wrapperArgumentNames: [Property: String],
 		typesDeclaredEscaping: Set<TypeDescription>,
 		children: [GeneratedCode],
 	) throws -> BuiltPlaceRecord {
 		let instantiable = world.scope(of: declaration).instantiable
 		// A child of the root's level the mock root names apart is bound, and overridden, under that name, and a type that
-		// receives a value named apart binds it again under its label before its own children (`mockReceivesBoundAgain(in:)`).
+		// receives a value named apart binds it again under its label before its own children (`mockNamesReadApart(in:)`).
 		let nameApart = world.edges(from: 0).contains(declaration) ? world.property(of: declaration).flatMap(world.mockRootNames.nameApart(of:)) : nil
 		let handWrittenMock: (function: Initializer, target: ConstructionTarget)? = if world.construction(of: declaration) == .handWrittenMock, let mockInitializer = instantiable.mockInitializer {
 			(mockInitializer, .mock(instantiable.concreteInstantiable, name: instantiable.customMockName ?? InstantiableVisitor.mockMethodName))
@@ -104,7 +105,9 @@ extension NodeRecords {
 			typeFunctionReturns: boundProperty?.typeDescription.asInstantiatedTypeSpelledAsDeclared,
 			boundProperty: boundProperty,
 			argumentsOfOtherValues: fieldArguments,
-			uncoveredArgumentNames: uncoveredArgumentNames(of: declaration, in: world),
+			// A dependency `mock()` takes is read by the name it takes it under, and a wrapper `mock()` binds around a value it
+			// takes by the name it binds it under (`mockNamesReadApart(in:)`).
+			argumentNamesApart: uncoveredArgumentNames(of: declaration, in: world).merging(wrapperArgumentNames) { uncovered, _ in uncovered },
 			alwaysDeclaresFunction: !fieldArguments.isEmpty,
 			typesDeclaredEscaping: typesDeclaredEscaping,
 			children: receivesBoundAgain.map(\.place) + children,
