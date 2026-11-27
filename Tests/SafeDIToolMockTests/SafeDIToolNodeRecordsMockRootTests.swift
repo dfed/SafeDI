@@ -1360,6 +1360,49 @@ struct SafeDIToolNodeRecordsMockRootTests: ~Copyable {
 	}
 
 	@Test(arguments: [
+		(
+			Self.wrapperNamedApartBesideOtherTypeValueFixture,
+			"Screen",
+			"Screen.mock()",
+			"Screen.mock(safeDIOverrides: .init(analytics_Analytics: { marked(Analytics(), \"analytics\") }, settings: { marked(Settings(analytics: $0), \"settings\") }))",
+			["analytics", "settings"],
+		),
+		(
+			Self.wrapperNamedApartBesideInstantiatorValueFixture,
+			"Root",
+			"Root.mock()",
+			"Root.mock(safeDIOverrides: .init(x_LazilyInstantiated__Xyz: { marked(Xyz(), \"xyz\") }, consumerB: { marked(ConsumerB(x: $0), \"consumerB\") }))",
+			["xyz", "consumerB"],
+		),
+	])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildsTheWalksValues_whenNodeReceivesInstanceOfLazyWrapperMockNamesApart(fixture: [String: String], root: String, plainProbe: String, overriddenProbe: String, markers: [String]) async throws {
+		let walkOutput = try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(reports.filter { $0.isMockRoot && $0.root == root }.map(\.isLaidOutFromNodeRecords) == [true])
+		// The node binds the wrapper the root names apart again under its label and reads its instance, as the walk writes it.
+		#expect(output.generatedFiles == walkOutput.generatedFiles)
+		let comparison = try await DifferentialValueOracle.compare(
+			feature: DifferentialValuePath(fixtureFiles: fixture, generatedFiles: #require(output.generatedFiles)),
+			knownRight: DifferentialValuePath(fixtureFiles: fixture, generatedFiles: #require(walkOutput.generatedFiles)),
+			probes: [
+				DifferentialValueProbe(plainProbe),
+				DifferentialValueProbe(name: "overridden root", expression: overriddenProbe),
+			],
+			filesToDelete: &filesToDelete,
+		)
+		// Nothing is compared where compile verification is off.
+		guard let comparison else { return }
+		#expect(comparison.differences.isEmpty, "\(comparison.report)")
+		// Every override was read: each marks the value it set.
+		for marker in markers {
+			#expect(comparison.featureDescription.contains("\"\(marker)\""), "No value is marked \(marker):\n\(comparison.featureDescription)")
+		}
+	}
+
+	@Test(arguments: [
 		// A configuration some root of the module builds inside a `@Sendable` function stores each field that is no function
 		// as a `@Sendable` closure, which every root's construction calls.
 		(
@@ -2171,6 +2214,143 @@ struct SafeDIToolNodeRecordsMockRootTests: ~Copyable {
 		    public init() {}
 
 		    public var marker = "built"
+		}
+		""",
+	]
+
+	/// A lazy wrapper the mock root names apart beside a value of another type under its label, whose instance a node
+	/// receives by value.
+	private static let wrapperNamedApartBesideOtherTypeValueFixture: [String: String] = [
+		"Marked.swift": """
+		public protocol Marked: AnyObject {
+		    var marker: String { get set }
+		}
+
+		func marked<Value: Marked>(_ value: Value, _ marker: String) -> Value {
+		    value.marker = marker
+		    return value
+		}
+		""",
+		"Screen.swift": """
+		@Instantiable(generateMock: true)
+		public final class Screen: Instantiable {
+		    public init(home: Home, settings: Settings, other: Other) {
+		        self.home = home
+		        self.settings = settings
+		        self.other = other
+		    }
+
+		    @Instantiated let home: Home
+		    @Instantiated let settings: Settings
+		    @Instantiated let other: Other
+		}
+
+		@Instantiable
+		public final class Analytics: Instantiable, Marked {
+		    public init() {}
+
+		    public var marker = "built"
+		}
+
+		@Instantiable
+		public final class Legacy: Instantiable, Marked {
+		    public init() {}
+
+		    public var marker = "built"
+		}
+		""",
+		"Home.swift": """
+		@Instantiable
+		public final class Home: Instantiable {
+		    public init(analytics: LazilyInstantiated<Analytics>) {
+		        self.analytics = analytics
+		    }
+
+		    @Received let analytics: LazilyInstantiated<Analytics>
+		}
+
+		@Instantiable
+		public final class Settings: Instantiable, Marked {
+		    public init(analytics: Analytics) {
+		        self.analytics = analytics
+		    }
+
+		    @Received let analytics: Analytics
+		    public var marker = "built"
+		}
+
+		@Instantiable
+		public final class Other: Instantiable {
+		    public init(analytics: Legacy) {
+		        self.analytics = analytics
+		    }
+
+		    @Received let analytics: Legacy
+		}
+		""",
+	]
+
+	/// A lazy wrapper the mock root names apart beside an `Instantiator` of its instance, whose instance a node receives by
+	/// value.
+	private static let wrapperNamedApartBesideInstantiatorValueFixture: [String: String] = [
+		"Marked.swift": """
+		public protocol Marked: AnyObject {
+		    var marker: String { get set }
+		}
+
+		func marked<Value: Marked>(_ value: Value, _ marker: String) -> Value {
+		    value.marker = marker
+		    return value
+		}
+		""",
+		"Root.swift": """
+		@Instantiable(generateMock: true)
+		public final class Root: Instantiable {
+		    public init(consumerA: ConsumerA, consumerB: ConsumerB, consumerC: ConsumerC) {
+		        self.consumerA = consumerA
+		        self.consumerB = consumerB
+		        self.consumerC = consumerC
+		    }
+
+		    @Instantiated let consumerA: ConsumerA
+		    @Instantiated let consumerB: ConsumerB
+		    @Instantiated let consumerC: ConsumerC
+		}
+
+		@Instantiable
+		public final class Xyz: Instantiable, Marked {
+		    public init() {}
+
+		    public var marker = "built"
+		}
+		""",
+		"Consumers.swift": """
+		@Instantiable
+		public final class ConsumerA: Instantiable {
+		    public init(x: LazilyInstantiated<Xyz>) {
+		        self.x = x
+		    }
+
+		    @Received let x: LazilyInstantiated<Xyz>
+		}
+
+		@Instantiable
+		public final class ConsumerB: Instantiable, Marked {
+		    public init(x: Xyz) {
+		        self.x = x
+		    }
+
+		    @Received let x: Xyz
+		    public var marker = "built"
+		}
+
+		@Instantiable
+		public final class ConsumerC: Instantiable {
+		    public init(x: Instantiator<Xyz>) {
+		        self.x = x
+		    }
+
+		    @Received let x: Instantiator<Xyz>
 		}
 		""",
 	]
