@@ -208,16 +208,17 @@ extension ScopeGenerator {
 		}
 		let builders = (walk.filledCallBuilders.parameters + signature.placeOnlyBuilderDeclarations).sorted { $0.label < $1.label }
 		// Where a test observes node records, an internal mock that binds nothing but its nodes has the statements that build
-		// them laid out from the records of its world (`nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:)`).
+		// them laid out from the records of its world (`nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:rootNames:)`).
 		if let worldRoot {
 			let bindsOnlyNodes = rootReceiverBindingIndex == 0
 				&& linesBoundBesideNodes.isEmpty
 				&& signature.parameters.isEmpty
 				&& signature.onlyIfAvailableOverrides.isEmpty
 				&& builders.isEmpty
-				&& rootRenames.values.allSatisfy(\.isEmpty)
+				// A node the root's level names apart is bound under that name by its record; any other name is no node's.
+				&& rootRenames.values.allSatisfy { $0.values.allSatisfy(walk.rootPropertyNodeBindingNames.contains) }
 				&& rootInstancesReadByValue.isEmpty
-			if let statements = try Self.nodeRecordsMockStatements(of: instantiable, worldRoot: worldRoot, bindsOnlyNodes: bindsOnlyNodes) {
+			if let statements = try Self.nodeRecordsMockStatements(of: instantiable, worldRoot: worldRoot, bindsOnlyNodes: bindsOnlyNodes, rootNames: MockRootNames(namesApart: walk.rootRenames)) {
 				bindingLines = [statements]
 			}
 		}

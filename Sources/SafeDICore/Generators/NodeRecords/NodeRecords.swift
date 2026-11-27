@@ -80,6 +80,8 @@ protocol NodeRecordSources: TypeFactsWorld {
 	func text(ofLabel label: WorldLabelID) -> String
 	/// Whether the world is a mock root's, each of whose nodes reads its override.
 	var isMockWorld: Bool { get }
+	/// What a mock root's lowering names that the records of its world read; empty for a production root's world.
+	var mockRootNames: MockRootNames { get }
 }
 
 extension TypeFactsGraph: NodeRecordSources {

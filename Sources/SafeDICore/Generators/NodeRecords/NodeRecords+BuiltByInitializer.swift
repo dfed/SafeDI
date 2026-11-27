@@ -87,6 +87,8 @@ extension NodeRecords {
 	///   builds a node otherwise than with its type's initializer; `nil` for the initializer.
 	/// - Parameter typeFunctionReturns: What the node's function returns, where it has one and a kind's construction can
 	///   return another type than the concrete one; `nil` for the concrete type.
+	/// - Parameter nameApart: The name a mock root binds the node under where it names the node's label apart for two
+	///   types (`MockRootNames`); `nil` for the property's label.
 	static func builtByInitializerRecord(
 		of declaration: DeclarationID,
 		variant _: VariantID,
@@ -95,6 +97,7 @@ extension NodeRecords {
 		lazilyInstantiatedInstanceProperties: Set<Property>,
 		construction: (function: Initializer, target: ConstructionTarget)? = nil,
 		typeFunctionReturns: TypeDescription? = nil,
+		boundAs nameApart: String? = nil,
 		typesDeclaredEscaping: Set<TypeDescription>,
 		children: [GeneratedCode],
 		lineEnd: String = "",
@@ -102,9 +105,11 @@ extension NodeRecords {
 		let instantiable = world.scope(of: declaration).instantiable
 		// Every node but the root is built as a property, and has an initializer (`refusalsOfBuiltByInitializer(_:in:)`)
 		// or a kind's own construction.
-		guard let property = world.property(of: declaration), let initializer = construction?.function ?? instantiable.initializer else { throw NodeRecordRefusal.noInitializer }
+		guard let declaredProperty = world.property(of: declaration), let initializer = construction?.function ?? instantiable.initializer else { throw NodeRecordRefusal.noInitializer }
 		// Never throws: a type's initializer is one that fulfills its dependencies (`InstantiableVisitor`'s
 		// `canonicalConstructionInitializer`, through `Initializer.isValid(forFulfilling:)`, which makes the same binding).
+		// A mock root binds a child it names apart under that name, which names the child's function too.
+		let property = nameApart.map { Property(label: $0, typeDescription: declaredProperty.typeDescription) } ?? declaredProperty
 		let arguments = try initializer.createInitializerArguments(given: instantiable.dependencies, unavailableProperties: unavailableProperties, lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties)
 		let isExtension = instantiable.declarationType.isExtension
 		// An instantiator or a lazy wrapper is made of its builder function, which is `@Sendable` for a `Sendable` wrapper.

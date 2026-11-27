@@ -30,8 +30,8 @@ extension ScopeGenerator {
 	/// The function awaits nothing and is kept out of the frame of the mock's walk, which every root's lowering holds.
 	/// - Throws: What an initializer's arguments throw, as the mock's walk throws it of the same node.
 	@inline(never)
-	static func nodeRecordsMockStatements(of instantiable: Instantiable, worldRoot: ConstructionScope, bindsOnlyNodes: Bool) throws -> String? {
-		let world = TypeFactsGraph(root: worldRoot, forMockGeneration: true)
+	static func nodeRecordsMockStatements(of instantiable: Instantiable, worldRoot: ConstructionScope, bindsOnlyNodes: Bool, rootNames: MockRootNames) throws -> String? {
+		let world = TypeFactsGraph(root: worldRoot, forMockGeneration: true, mockRootNames: rootNames)
 		func report(refusal: NodeRecordRefusal?, everyRefusal: [NodeRecordRefusal], isLaidOut: Bool, recordCount: Int) {
 			var report = NodeRecordsReport(
 				root: instantiable.concreteInstantiable.asSource,
