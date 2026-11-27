@@ -76,8 +76,8 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 		// from its world's node records and builds no tree, while the seam's own root still builds its tree.
 		let (forcers, _) = try await treeForcers(of: Self.rootCallingOwnSeam(rootDeclarations: []), buildsNoTreeForAcceptedRoots: false, moduleMembershipArguments: ["--module-name", "Feature"])
 		#expect(forcers == """
-		Root	none
-		Screen	seam world
+		Root\tnone
+		Screen\tseam world
 		roots that built a tree: 1 of 2
 
 		""")
@@ -88,8 +88,8 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 	mutating func generate_buildsAppRootsTree_whenModuleHoldsSeamAndRunDrawsDOTGraph() async throws {
 		let (forcers, _) = try await treeForcers(of: Self.rootCallingOwnSeam(rootDeclarations: []), buildDOTFileOutput: true, buildsNoTreeForAcceptedRoots: false, moduleMembershipArguments: ["--module-name", "Feature"])
 		#expect(forcers == """
-		Root	DOT graph
-		Screen	seam world
+		Root\tDOT graph
+		Screen\tseam world
 		roots that built a tree: 2 of 2
 
 		""")
@@ -107,8 +107,8 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 			moduleMembershipArguments: ["--module-name", "Feature"],
 		)
 		#expect(forcers == """
-		Root	kind cycle
-		Screen	seam world
+		Root\tkind cycle
+		Screen\tseam world
 		roots that built a tree: 2 of 2
 
 		""")
@@ -130,8 +130,8 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 			moduleMembershipArguments: ["--module-name", "Feature"],
 		)
 		#expect(forcers == """
-		Root	seam call defers a parameter @Sendable
-		Screen	seam world
+		Root\tseam call defers a parameter @Sendable
+		Screen\tseam world
 		roots that built a tree: 2 of 2
 
 		""")
