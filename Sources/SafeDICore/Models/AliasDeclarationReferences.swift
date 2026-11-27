@@ -97,14 +97,17 @@ public struct AliasDeclarationReferences: Sendable {
 		case comment(filePath: String, line: Int)
 	}
 
-	/// How generated code refers to the declaration at `declarationLocation`.
-	public func reference(to declarationLocation: Dependency.DeclarationLocation) -> Reference {
-		if let directiveFilePath = directiveFilePathByDeclarationFilePath[declarationLocation.filePath] {
-			.sourceLocationDirective(filePath: directiveFilePath, line: declarationLocation.line)
+	/// How generated code refers to the declaration at `declarationLocation`, or `nil` when the run does not know the
+	/// declaration’s line: a declaration read through a view carries no position. A module info file stores the line of
+	/// every aliased dependency with the file, never in its positions file, since the code generated above reads it.
+	public func reference(to declarationLocation: Dependency.DeclarationLocation?) -> Reference? {
+		guard let declarationLocation, case let .here(line, _) = declarationLocation.placement else { return nil }
+		return if let directiveFilePath = directiveFilePathByDeclarationFilePath[declarationLocation.filePath] {
+			.sourceLocationDirective(filePath: directiveFilePath, line: line)
 		} else {
 			.comment(
 				filePath: commentFilePath(declarationLocation.filePath),
-				line: declarationLocation.line,
+				line: line,
 			)
 		}
 	}

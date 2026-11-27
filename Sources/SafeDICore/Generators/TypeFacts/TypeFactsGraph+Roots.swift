@@ -135,6 +135,9 @@ extension TypeFactsGraph {
 		let answers = Self.answersByValue(of: graph, roots: roots, reads: reads, readTable: readTable, readColumns: readColumns, labels: labels, intern: intern)
 		let receives = Self.receiveColumns(of: graph, readInterner: &readInterner, labels: &labels, intern: intern)
 		self.graph = graph
+		// The roots of a validation call can be production's and mocks' together, so the world is no one mock root's: its
+		// reads and constructions are production's, and it owes every fact a producer has yet to state (`owedFacts(of:)`).
+		forMockGeneration = false
 		kinds = nodes.map(Self.kind(of:))
 		constructions = nodes.map { Self.construction(of: $0, forMockGeneration: false) }
 		self.reads = reads

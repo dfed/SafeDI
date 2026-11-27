@@ -89,13 +89,13 @@ struct SafeDIToolSeamFilledCallBesidePlaceTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_serviceBuilder: __safeDI_ServiceCarrier<any Service>) {
-		        func __safeDI_widgetBuilder_Inner() -> Inner.__safeDI_WidgetCarrier<any Widget> {
+		        @inline(never) func __safeDI_widgetBuilder_Inner() -> Inner.__safeDI_WidgetCarrier<any Widget> {
 		            .init(widget: {
 		                let widget: any Widget = DefaultWidget()
 		                return widget
 		            })
 		        }
-		        func __safeDI_inner() -> Inner {
+		        @inline(never) func __safeDI_inner() -> Inner {
 		            _ = Inner.__safeDI_Inner_DF0C971D70DD0421.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Inner(__safeDI_widgetBuilder: __safeDI_widgetBuilder_Inner())
 		        }

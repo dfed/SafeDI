@@ -48,6 +48,7 @@ public struct TypeFactsRootsReport: Sendable {
 				isBuilder: graph.isBuilder(DeclarationID(index)),
 				validatesCycles: graph.checksOfRootsReaching(DeclarationID(index)).contains(.cycles),
 				validatesHiddenProperties: graph.checksOfRootsReaching(DeclarationID(index)).contains(.hiddenProperties),
+				owedFacts: TypeFactsReport.names(of: graph.owedFacts(of: DeclarationID(index))),
 			)
 		}
 		var variantCounts = [Int](repeating: 0, count: graph.declarationCount)
@@ -125,6 +126,9 @@ public struct TypeFactsRootsReport: Sendable {
 		public let validatesCycles: Bool
 		/// Whether a root the call validates for hidden receives reaches the node.
 		public let validatesHiddenProperties: Bool
+		/// The facts producers still owe the node's answers, by name (`TypeFactsOwedFacts`): every one, in a world built
+		/// before validation.
+		public let owedFacts: Set<String>
 	}
 
 	/// Each node by position: node 0, the frames and the declarations. A frame's one edge leads to its root's

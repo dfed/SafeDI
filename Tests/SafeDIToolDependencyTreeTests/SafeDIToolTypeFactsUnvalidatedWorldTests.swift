@@ -565,6 +565,17 @@ struct SafeDIToolTypeFactsUnvalidatedWorldTests {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func unvalidatedWorld_owesEveryFactOfEveryNode_whenWorldIsBuiltBeforeValidation() async throws {
+		let observation = await observe(Self.wrapperKindsRow())
+
+		let world = try observation.firstWorld
+		#expect(observation.error == nil)
+		#expect(world.nodes.count == 8)
+		#expect(world.nodes.allSatisfy { $0.owedFacts == ["fillBeingBuilt", "mockRootPin", "mockRootRecord", "mockRootBinding", "madeAgain"] })
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func unvalidatedWorld_internsOnlyFormsNoDeclarationSpells_whenWorldIsBuiltBeforeTheWalk() async throws {
 		// What the world's build adds to the run's interner, and the 32-bit elements of its columns, for the hub row at
 		// two sizes: the memory a validation over the world costs beyond the records it reads.
