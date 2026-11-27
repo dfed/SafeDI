@@ -786,7 +786,7 @@ struct TypeFactsGraph: Sendable {
 		let mockRootPins = forMockGeneration ? TypeFactsMockRootPins(graph: graph, edgeIsFill: edgeIsFill, labels: labels) : nil
 		self.mockRootPins = mockRootPins
 		let answers = Self.answers(of: graph, reads: reads, readTable: readInterner.values, labels: labels, bindings: bindings, bindingOffsets: bindingOffsets, bindingsBefore: bindingsBefore, properties: properties, madeAgain: madeAgain.map { ($0, madeAgainByNode, loopParentByMember) }, mockRootPins: mockRootPins)
-		mockPinContexts = answers.mockPinContexts
+		mockPinContexts = TypeFactsMockRootPins.ContextColumns(contexts: answers.mockPinContexts, answerCount: answers.texts.count)
 		answerIsBeingBuilt = answers.isBeingBuilt
 		answerIsMadeAgain = answers.isMadeAgain
 		answerTexts = answers.texts
@@ -843,7 +843,7 @@ struct TypeFactsGraph: Sendable {
 	let mockRootPins: TypeFactsMockRootPins?
 
 	/// The context each answer ID of a mock read stands for, which is also its key.
-	let mockPinContexts: [Int32: TypeFactsMockRootPins.Context]
+	let mockPinContexts: TypeFactsMockRootPins.ContextColumns
 
 	/// What each read of each variant comes to in its body.
 	let outcomes: TypeFactsOutcomes
@@ -1167,7 +1167,7 @@ struct TypeFactsGraph: Sendable {
 		guard let mockRootPins, graph.nodes[node].key.leaf == .none else { return [] }
 		var contextByLabel = [String: TypeFactsMockRootPins.Context]()
 		for (read, key) in zip(readColumn[Int(readOffsets[node])..<Int(readOffsets[node + 1])], keys(of: variant)) where readTable[Int(read)].channel == .mock {
-			if let context = mockPinContexts[key] {
+			if let context = mockPinContexts.context(ofAnswer: key) {
 				contextByLabel[labelTexts[Int(readTable[Int(read)].label)]] = context
 			}
 		}

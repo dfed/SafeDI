@@ -218,6 +218,66 @@ struct TypeFactsMockRootPins: Sendable {
 	private let onlyIfAvailableByNode: [[(property: Property, dependency: Dependency)]]
 }
 
+extension TypeFactsMockRootPins {
+	/// The context each answer ID of a mock read stands for, in flat columns by answer ID, for the graph's lifetime: a kind
+	/// per answer and the pinned sets of each root context, a few entries per mock answer.
+	struct ContextColumns: Sendable {
+		/// - Parameters:
+		///   - contexts: The context of each mock answer, by answer ID.
+		///   - answerCount: How many answers the world has; IDs are `0..<answerCount`.
+		init(contexts: [Int32: Context], answerCount: Int) {
+			var kinds = [Kind]()
+			var pinnedAboveOffsets = [Int32]()
+			var pinnedAbove = [Int32]()
+			kinds.reserveCapacity(answerCount)
+			pinnedAboveOffsets.reserveCapacity(answerCount + 1)
+			for answer in 0..<answerCount {
+				pinnedAboveOffsets.append(Int32(pinnedAbove.count))
+				switch contexts[Int32(answer)] {
+				case .none:
+					kinds.append(.none)
+				case .nearer:
+					kinds.append(.nearer)
+				case let .root(pinned):
+					kinds.append(.root)
+					pinnedAbove.append(contentsOf: pinned)
+				}
+			}
+			pinnedAboveOffsets.append(Int32(pinnedAbove.count))
+			self.kinds = kinds
+			self.pinnedAboveOffsets = pinnedAboveOffsets
+			self.pinnedAbove = pinnedAbove
+		}
+
+		/// The context the answer stands for, or `nil` for an answer of no mock read. Every answer ID is one of
+		/// `0..<answerCount`, as every key and answer of the world is.
+		func context(ofAnswer answer: Int32) -> Context? {
+			let index = Int(answer)
+			switch kinds[index] {
+			case .none:
+				return nil
+			case .nearer:
+				return .nearer
+			case .root:
+				return .root(pinnedAbove: Array(pinnedAbove[Int(pinnedAboveOffsets[index])..<Int(pinnedAboveOffsets[index + 1])]))
+			}
+		}
+
+		private enum Kind: UInt8, Sendable {
+			case none
+			case nearer
+			case root
+		}
+
+		/// Each answer's kind of context, by answer ID.
+		private let kinds: [Kind]
+		/// Where each answer's pinned sets start in `pinnedAbove`, with one more entry for the end.
+		private let pinnedAboveOffsets: [Int32]
+		/// The pinned sets of every root context, answer after answer.
+		private let pinnedAbove: [Int32]
+	}
+}
+
 extension [Int32] {
 	fileprivate var sortedDistinct: [Int32] {
 		Array(Set(self)).sorted()
