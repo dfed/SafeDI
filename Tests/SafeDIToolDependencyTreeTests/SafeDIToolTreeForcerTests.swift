@@ -46,7 +46,7 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 	mutating func generate_buildsTreeOnlyForRootNodeRecordsRefuse_whenNothingElseReadsTrees() async throws {
 		let (forcers, heldTaskCounts) = try await treeForcers(of: Self.plainAndLoopingRoots)
 		#expect(forcers == """
-		Looping\tkind cycleReadsLazyWrapper
+		Looping\tkind cycle
 		Plain\tnone
 		roots that built a tree: 1 of 2
 
@@ -60,7 +60,7 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 	mutating func generate_buildsEveryRootsTree_whenRunDrawsDOTGraph() async throws {
 		let (forcers, heldTaskCounts) = try await treeForcers(of: Self.plainAndLoopingRoots, buildDOTFileOutput: true)
 		#expect(forcers == """
-		Looping\tkind cycleReadsLazyWrapper, DOT graph
+		Looping\tkind cycle, DOT graph
 		Plain\tDOT graph
 		roots that built a tree: 2 of 2
 
@@ -90,8 +90,8 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_buildsTree_whenRecordsOfRootCannotBeLaidOut() async throws {
-		// A root with no dependencies has no generated initializer, so the engine lays out nothing from its records.
+	mutating func generate_buildsNoTree_whenRootHasNoDependencies() async throws {
+		// A root with no dependencies is laid out from its records, which hold no place, and builds no tree.
 		let (forcers, _) = try await treeForcers(of: [
 			"""
 			@Instantiable(isRoot: true)
@@ -101,8 +101,8 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 			""",
 		])
 		#expect(forcers == """
-		Root\tkind notLaidOut
-		roots that built a tree: 1 of 1
+		Root\tnone
+		roots that built a tree: 0 of 1
 
 		""")
 	}

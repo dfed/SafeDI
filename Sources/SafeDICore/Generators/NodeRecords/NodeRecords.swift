@@ -65,10 +65,6 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	/// A node on a cycle is built at two places whose trees close the cycle on different places above them, so that one
 	/// place of its variant cannot stand for both.
 	case cycleMemberBuiltTwoWays
-	/// A world with a cycle in which a type receives a `LazilyInstantiated` wrapper or reads one's instance, which a
-	/// function the cycle closes on may take as a cycle parameter read through the wrapper, which these records do not
-	/// write yet.
-	case cycleReadsLazyWrapper
 	/// A place between a place on a cycle and the call that closes the cycle on it declares a label some type receives, and
 	/// the facts give the function the call refers to no parameters (`TypeFactsWorld.parameters(of:)`); or the function
 	/// takes a parameter of a label some declaration holds lazily, which a call can find as the wrapper at its site where
@@ -220,7 +216,7 @@ struct NodeRecords: Sendable {
 		// A world whose edges close a cycle builds each node's children in the order step 0's sibling-order fixed point gives
 		// them (`TypeFactsEdge.buildPosition`), which `NodeBuildOrder` stands in for only off every cycle.
 		let order: NodeBuildOrder? = holdsCycle ? nil : try NodeBuildOrder(world: world)
-		let labelsReceived = holdsCycle ? try Self.labelsReceived(inWorldWithCycle: world) : []
+		let labelsReceived = holdsCycle ? Self.labelsReceived(inWorldWithCycle: world) : []
 		let onlyIfAvailableAnswers = try OnlyIfAvailableAnswers(world: world, rootParameters: seamTree?.parameters ?? [])
 		let answeringDeclarations = DeclarationsAnsweringReads(
 			world: world,
@@ -236,9 +232,6 @@ struct NodeRecords: Sendable {
 		// A rename's record binds it from its fulfilling property's label, or from a wrapper's instance as the tree's rule
 		// reads it, never from an instance read otherwise.
 		guard !answeringDeclarations.renameReadsWrappersInstance else { throw NodeRecordRefusal.lazy }
-		if holdsCycle {
-			try Self.checkReadsNoWrappersInstance(inWorldWithCycle: world, answeringDeclarations: answeringDeclarations, rootLazilyInstantiatedInstanceProperties: rootLazilyInstantiatedInstanceProperties)
-		}
 		func edgeIndices(of declaration: DeclarationID) -> [Int] {
 			order?.edgeIndices(of: declaration) ?? world.edgeFacts(from: declaration).enumerated().sorted { $0.element.buildPosition < $1.element.buildPosition }.map(\.offset)
 		}

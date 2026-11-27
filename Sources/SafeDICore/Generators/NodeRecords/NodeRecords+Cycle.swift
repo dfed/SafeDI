@@ -70,9 +70,8 @@ extension NodeRecords {
 
 	/// The labels the types of `world`, which holds a cycle, receive, plainly, only if available or through a rename: read
 	/// from above wherever they are, a superset of what the function a call closes a cycle on reads from above it.
-	/// - Throws: `cycleReadsLazyWrapper` where a type receives a `LazilyInstantiated` wrapper. A builder a type receives
-	///   is a label like any other: a function a cycle closes on that would take it is refused for its cycle parameters.
-	static func labelsReceived(inWorldWithCycle world: some NodeRecordSources) throws(NodeRecordRefusal) -> Set<String> {
+	/// A builder or a `LazilyInstantiated` wrapper a type receives is a label like any other.
+	static func labelsReceived(inWorldWithCycle world: some NodeRecordSources) -> Set<String> {
 		var labels = Set<String>()
 		for declaration in 0..<Int32(world.declarationCount) {
 			let reads = world.scope(of: declaration).instantiable.dependencies.compactMap { dependency -> Property? in
@@ -86,7 +85,6 @@ extension NodeRecords {
 				}
 			}
 			for read in reads {
-				guard !read.asUnwrappedProperty.propertyType.isLazilyInstantiated else { throw .cycleReadsLazyWrapper }
 				labels.insert(read.label)
 			}
 		}
