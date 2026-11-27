@@ -168,6 +168,10 @@ extension PassedArgument {
 			"passed|\(parameterName)|\(type.asSource)|passed:\(name)"
 		case .emptyInitialization:
 			shape
+		case let .member(_, value) where value.reads.isEmpty:
+			// A member of a value the closer's function is handed, such as a loop member's field of its level's
+			// configuration, reads no declaration.
+			shape
 		case .rootDeclaration,
 		     .member,
 		     .optionalMember,

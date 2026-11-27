@@ -78,7 +78,7 @@ extension ScopeGenerator {
 			report(refusal: nil, everyRefusal: [], isLaidOut: false, recordCount: nodeRecords.recordCount)
 			return nil
 		}
-		let statements = TypeKeyBody.statements(ofRootBody: nodeRecords.rootBody, outerDeclarations: outerDeclarations, namesInScope: Set(outerDeclarations.map(\.label)), rootPassedArgumentNames: [ReservedName.mockOverridesParameterName])
+		let statements = TypeKeyBody.statements(ofRootBody: nodeRecords.rootBody, outerDeclarations: outerDeclarations, namesInScope: Set(outerDeclarations.map(\.label)), rootPassedArgumentNames: [ReservedName.mockOverridesParameterName], laysOutEveryLoop: true)
 		report(refusal: statements == nil ? .notLaidOut : nil, everyRefusal: [], isLaidOut: statements != nil, recordCount: nodeRecords.recordCount)
 		return statements.map { GeneratedCode.lines($0).spelled() }
 	}
