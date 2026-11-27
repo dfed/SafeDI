@@ -112,31 +112,31 @@ struct SafeDIToolQualifiedSpellingTests: ~Copyable {
 		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public init() {
 		        let session = Session()
-		        func __safeDI_screenBuilder() -> Screen {
+		        @inline(never) func __safeDI_screenBuilder() -> Screen {
 		            Screen(session: session)
 		        }
 		        let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
-		        @Sendable nonisolated func __safeDI_sendableScreenBuilder() -> Screen {
+		        @inline(never) @Sendable nonisolated func __safeDI_sendableScreenBuilder() -> Screen {
 		            Screen(session: session)
 		        }
 		        let sendableScreenBuilder = SendableInstantiator<Screen>(__safeDI_sendableScreenBuilder)
-		        func __safeDI_profileBuilder(user: User) -> Profile {
+		        @inline(never) func __safeDI_profileBuilder(user: User) -> Profile {
 		            Profile(user: user)
 		        }
 		        let profileBuilder = ErasedInstantiator<User, AnyObject> {
 		            __safeDI_profileBuilder(user: $0)
 		        }
-		        @Sendable nonisolated func __safeDI_sendableProfileBuilder(user: User) -> Profile {
+		        @inline(never) @Sendable nonisolated func __safeDI_sendableProfileBuilder(user: User) -> Profile {
 		            Profile(user: user)
 		        }
 		        let sendableProfileBuilder = SendableErasedInstantiator<User, Profile> {
 		            __safeDI_sendableProfileBuilder(user: $0)
 		        }
-		        func __safeDI_settings() -> Settings {
+		        @inline(never) func __safeDI_settings() -> Settings {
 		            Settings()
 		        }
 		        let settings = LazilyInstantiated<Settings>(__safeDI_settings)
-		        @Sendable nonisolated func __safeDI_sendableSettings() -> Settings {
+		        @inline(never) @Sendable nonisolated func __safeDI_sendableSettings() -> Settings {
 		            Settings()
 		        }
 		        let sendableSettings = SendableLazilyInstantiated<Settings>(__safeDI_sendableSettings)

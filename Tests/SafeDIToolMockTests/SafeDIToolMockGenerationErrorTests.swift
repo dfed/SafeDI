@@ -291,6 +291,47 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_saysDeclaringReceivedPropertyClosesCycle_whenOptionalFormIsRequiredInTreeOfDeclarationStillBeingBuilt() async {
+		// A mock binds every property its tree receives from above it, so a required receive is unfulfillable there only
+		// where the declaration that would answer its non-optional form is still being built, as `parent: Parent` is where
+		// its tree builds Child.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"\(fixtures["Child.swift"]):4:5: error: @Received property `parent: Parent?` is not @Instantiated or @Forwarded in chain: Screen -> Parent -> Child. Declaring `@Instantiated let parent: Parent` would close a dependency cycle wherever it is declared, because the tree of `Parent` requires `parent`, which is still being built there. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required."
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public final class Screen: Instantiable {
+					    public init(parent: Parent) { self.parent = parent }
+					    @Instantiated let parent: Parent
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Parent: Instantiable {
+					    public init(child: Child) { self.child = child }
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(parent: Parent?) { self.parent = parent }
+					    @Received let parent: Parent?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsError_whenReceivedPropertyIsHiddenByAliasReusingItsLabel() async {
 		await assertThrowsError(
 			diagnostics: { fixtures in
