@@ -61,7 +61,9 @@ extension NodeRecords {
 		typesDeclaredEscaping: Set<TypeDescription>,
 		children: [GeneratedCode],
 	) throws -> BuiltPlaceRecord {
-		var record = try builtByInitializerRecord(of: declaration, variant: variant, in: world, typesDeclaredEscaping: typesDeclaredEscaping, children: children)
+		// A mock world that holds a lazily instantiated property is refused (`refusalsOfBuiltByInitializer(_:in:)`), so no
+		// receive of this node reads a wrapper's instance.
+		var record = try builtByInitializerRecord(of: declaration, variant: variant, in: world, lazilyInstantiatedInstanceProperties: [], typesDeclaredEscaping: typesDeclaredEscaping, children: children)
 		let instantiable = world.scope(of: declaration).instantiable
 		let isConfigured = !children.isEmpty
 		let slotType: TypeDescription = if isConfigured {

@@ -84,6 +84,11 @@ extension HoleSiteRecordObservation {
 			return .visitChildren
 		}
 
+		/// An attribute, such as the `@inline(never)` a seam’s tree declares its local functions with, reads no value.
+		override func visit(_: AttributeSyntax) -> SyntaxVisitorContinueKind {
+			.skipChildren
+		}
+
 		override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
 			declaredNames.insert(node.name.text)
 			return .visitChildren

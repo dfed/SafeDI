@@ -95,42 +95,29 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_refusesNodeForItsOtherKind_whenAKindClaimsIt() async throws {
-		// `Child` is built as a `LazilyInstantiated` and builds a `SendableInstantiator`. A claim that makes lazy nodes
-		// discharges only `lazy`, so the world is still refused for `Child`'s `Sendable` builder.
-		let (_, reports) = try await NodeRecordsObservation.$claimsForTesting.withValue(["Root": ["lazy"], "Child": ["lazy"]]) {
+		// No declaration fulfills `Analytics`, so `Root`'s property is a node that is always `nil` and that no initializer
+		// builds: two kinds stage 1 does not make. A claim that discharges the first leaves the world refused for the second.
+		let (_, reports) = try await NodeRecordsObservation.$claimsForTesting.withValue(["Analytics": ["unavailableOrInlineSeam"]]) {
 			try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
 				try await executeSafeDIToolTest(swiftFileContent: [
 					"""
 					@Instantiable(isRoot: true)
 					public struct Root: Instantiable {
-					    public init(child: LazilyInstantiated<Child>) {
-					        self.child = child
+					    public init(analytics: Analytics?) {
+					        self.analytics = analytics
 					    }
 
-					    @Instantiated let child: LazilyInstantiated<Child>
+					    @Instantiated(onlyIfAvailable: true) let analytics: Analytics?
 					}
 					""",
 					"""
-					@Instantiable
-					public struct Child: Instantiable {
-					    public init(themeBuilder: SendableInstantiator<Theme>) {
-					        self.themeBuilder = themeBuilder
-					    }
-
-					    @Instantiated let themeBuilder: SendableInstantiator<Theme>
-					}
-					""",
-					"""
-					@Instantiable
-					public struct Theme: Instantiable, Sendable {
-					    public init() {}
-					}
+					public struct Analytics {}
 					""",
 				], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 			}
 		}
-		#expect(reports.map(\.refusal) == ["sendable"])
-		#expect(reports.map(\.everyRefusal) == [["sendable"]])
+		#expect(reports.map(\.refusal) == ["noInitializer"])
+		#expect(reports.map(\.everyRefusal) == [["noInitializer"]])
 	}
 
 	@Test

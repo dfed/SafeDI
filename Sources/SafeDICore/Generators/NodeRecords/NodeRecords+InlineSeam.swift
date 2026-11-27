@@ -29,16 +29,26 @@ extension NodeRecords {
 	}
 
 	/// The record of `declaration`'s place, a node of kind `inlineSeam`: `builtByInitializerRecord`'s, with the comment that
-	/// ends the line constructing the type, as the tree writes a seam built inline.
+	/// ends the line constructing the type, as the tree writes a seam built inline. Its type's receives by value read the
+	/// instance of each of `lazilyInstantiatedInstanceProperties` (`DeclarationsAnsweringReads`).
 	static func inlineSeamRecord(
 		of declaration: DeclarationID,
 		variant: VariantID,
 		in world: some NodeRecordSources,
+		lazilyInstantiatedInstanceProperties: Set<Property>,
 		typesDeclaredEscaping: Set<TypeDescription>,
 		children: [GeneratedCode],
 	) throws -> BuiltPlaceRecord {
 		// Never `nil`: the node is of kind `inlineSeam` (`inlineSeamClaim(of:in:)`).
 		let comment = world.scope(of: declaration).builtInlineSeamComment.map { " \($0)" } ?? ""
-		return try builtByInitializerRecord(of: declaration, variant: variant, in: world, typesDeclaredEscaping: typesDeclaredEscaping, children: children, lineEnd: comment)
+		return try builtByInitializerRecord(
+			of: declaration,
+			variant: variant,
+			in: world,
+			lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
+			typesDeclaredEscaping: typesDeclaredEscaping,
+			children: children,
+			lineEnd: comment,
+		)
 	}
 }
