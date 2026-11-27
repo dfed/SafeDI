@@ -29,6 +29,7 @@ filegroup(
             "Models/SeamPlacesBuilder.swift",
             "Models/SeamPlacesObservation.swift",
             "Models/SeamPlacesQuery.swift",
+            "Models/SeamPlacesReentries.swift",
             "Models/SeamSignature.swift",
             "Models/SourceDiagnostic.swift",
             "Models/StoredPublicMockPlan.swift",

@@ -105,6 +105,7 @@ let package = Package(
 				"SafeDICore/Models/SeamPlacesBuilder.swift",
 				"SafeDICore/Models/SeamPlacesObservation.swift",
 				"SafeDICore/Models/SeamPlacesQuery.swift",
+				"SafeDICore/Models/SeamPlacesReentries.swift",
 				"SafeDICore/Models/SeamSignature.swift",
 				"SafeDICore/Models/SourceDiagnostic.swift",
 				"SafeDICore/Models/StoredPublicMockPlan.swift",
