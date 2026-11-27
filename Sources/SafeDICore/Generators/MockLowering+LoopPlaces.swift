@@ -30,8 +30,10 @@
 /// members built in `@Sendable` functions, is the one exception: the closures of their `Sendable` wrappers would capture
 /// it, so each member's function takes the configuration of each member its closers reach instead, each of which is `Sendable`, since a member built in a
 /// `@Sendable` function is configured in a `Sendable` scope (`sendableConfigurationTypeNames(ofMockRootOf:)`). Such a
-/// loop of n members, every one reaching every other, takes n parameters in each of its n functions: a known gap, which
-/// ends where a level's configuration can be read in a `@Sendable` function without capturing what is not `Sendable`.
+/// loop of n members, every one reaching every other, takes n parameters in each of its n functions, and each function
+/// begins with a closer per member it receives, each of which hands n arguments, so the mock's text grows with the cube
+/// of the loop: 4.7 MB at 32 members, where the walk writes 132 KB. A known gap, which ends where a level's
+/// configuration can be read in a `@Sendable` function without capturing what is not `Sendable`.
 /// These are passed arguments, as the nearest configurations a cycle's closers hand are
 /// (`MockLowering.NearestConfigurations`), with two differences: they are never optional, since the level that declares a
 /// loop declares a field for each member, and they never depend on the lap, since every turn hands on what the level
