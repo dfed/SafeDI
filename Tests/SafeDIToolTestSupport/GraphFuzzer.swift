@@ -2970,6 +2970,7 @@ enum GraphFuzzerGenerator {
 			differingPinsRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.differingPinsRandomSeedMask)
 			wrapperKindsRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.wrapperKindsRandomSeedMask)
 			actorArgumentRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.actorArgumentRandomSeedMask)
+			actorClassWrapperRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.actorClassWrapperRandomSeedMask)
 			instantiatedOnlyIfAvailableRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.instantiatedOnlyIfAvailableRandomSeedMask)
 			instantiatedOnlyIfAvailableErasureRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.instantiatedOnlyIfAvailableErasureRandomSeedMask)
 			optionalPlaceRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.optionalPlaceRandomSeedMask)
@@ -3062,6 +3063,8 @@ enum GraphFuzzerGenerator {
 			finalDeclarations = addingTypeBuiltAgainThroughSecondLazyCycle(to: finalDeclarations)
 			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
 			finalDeclarations = addingReadersOfRenamedLazyInstance(to: finalDeclarations)
+			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
+			finalDeclarations = addingActorAndClassBuildingSameWrapper(to: finalDeclarations)
 			// In a graph split across modules, every file names its module and imports the seam's, so that a type of the
 			// caller can name what the seam's module declares, such as the creation stamps' counter.
 			let isSplit = finalDeclarations.contains { $0.module == .seamModule }
@@ -3545,6 +3548,7 @@ enum GraphFuzzerGenerator {
 		/// Draws only `addingActorArgumentShapes`' choices: whether a graph gains `ActorStore`'s tree, and every shape of
 		/// that tree.
 		private var actorArgumentRandom: GraphFuzzerRandomNumberGenerator
+		private var actorClassWrapperRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only `addingDependencyInstantiatedOnlyIfAvailable`'s choices: whether a graph gains `IfAvailableRoot`'s
 		/// tree, and every shape of that tree.
 		private var instantiatedOnlyIfAvailableRandom: GraphFuzzerRandomNumberGenerator
@@ -8323,6 +8327,78 @@ enum GraphFuzzerGenerator {
 		}
 
 		private static let actorArgumentRandomSeedMask: UInt64 = 0x6163746F72417267
+
+		// MARK: An actor and a class building the same wrapper
+
+		/// The base corpus's draw, outside `Sendable` graphs, of an actor and a class that each build the same wrapper of one
+		/// leaf. `ActorClassHost`, whose mock is generated, instantiates `ActorClassStore`, an actor, and
+		/// `ActorClassShelf`, a class, in either order, and each instantiates `actorClassLeafBuilder`: an `Instantiator`, a
+		/// `LazilyInstantiated`, or an `ErasedInstantiator` that erases `ActorClassLeaf` to `AnyActorClassLeaf`, a struct the
+		/// leaf's file declares. The actor is sent the wrapper with its closure, so a mock whose closure reads a field of a
+		/// configuration that is not `Sendable` does not compile. Half the time the leaf takes a default-valued parameter,
+		/// so its configuration has a field; a quarter of the time it receives `actorClassToken`, a `Sendable` class the
+		/// host instantiates before both; three draws in ten also generate the actor's own mock. No root reaches the tree, so the
+		/// compile and the value oracle's mirror of the host judge it. `actorClassWrapperRandom` draws only for this pass,
+		/// after every other, and only in the base corpus.
+		private mutating func addingActorAndClassBuildingSameWrapper(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			guard !omitsDrawsOlderReleasesReject, features.isEmpty, actorClassWrapperRandom.percentChance(12), sendability != .sendable else { return declarations }
+			var declarations = declarations
+			let wrapperKind = actorClassWrapperRandom.integer(in: 0...2)
+			let storeComesFirst = actorClassWrapperRandom.percentChance(50)
+			let leafTakesDefault = actorClassWrapperRandom.percentChance(50)
+			let leafReceivesToken = actorClassWrapperRandom.percentChance(25)
+			let storeGeneratesMock = actorClassWrapperRandom.percentChance(30)
+			func declaration(_ name: String, generatesMock: Bool = false, _ properties: [PropertyDeclaration]) -> TypeDeclaration {
+				TypeDeclaration(
+					name: name,
+					instantiableArguments: generatesMock ? ["generateMock: true"] : [],
+					properties: properties,
+					declaresHelperTypes: false,
+					additionalConformances: [],
+				)
+			}
+			let tokenName = "\(prefix)ActorClassToken"
+			let leafName = "\(prefix)ActorClassLeaf"
+			let erasedLeafName = "\(prefix)AnyActorClassLeaf"
+			let storeName = "\(prefix)ActorClassStore"
+			let shelfName = "\(prefix)ActorClassShelf"
+			let leafBuilder = switch wrapperKind {
+			case 0:
+				PropertyDeclaration(attribute: "@Instantiated", label: "actorClassLeafBuilder", type: "Instantiator<\(leafName)>")
+			case 1:
+				PropertyDeclaration(attribute: "@Instantiated", label: "actorClassLeafBuilder", type: "LazilyInstantiated<\(leafName)>")
+			default:
+				PropertyDeclaration(attribute: "@Instantiated(fulfilledByType: \"\(leafName)\", erasedToConcreteExistential: true)", label: "actorClassLeafBuilder", type: "ErasedInstantiator<(), \(erasedLeafName)>")
+			}
+			var leaf = declaration(leafName, leafReceivesToken ? [PropertyDeclaration(attribute: "@Received", label: "actorClassToken", type: tokenName)] : [])
+			if leafTakesDefault {
+				leaf.defaultValuedParameters = [ParameterDeclaration(name: "name", type: "String", defaultValue: "\"leaf\"")]
+			}
+			if wrapperKind == 2 {
+				leaf.additionalDeclarations.append("public struct \(erasedLeafName) {\n\tpublic init(_ value: \(leafName)) {\n\t\tself.value = value\n\t}\n\n\tpublic let value: \(leafName)\n}")
+			}
+			declarations.append(leaf)
+			var hostProperties = [PropertyDeclaration]()
+			if leafReceivesToken {
+				// A token that is not `Sendable`, captured by the wrapper the actor is sent and held by the host too, is a
+				// data race production reports as a mock does ("sending … risks causing data races"), so it is `Sendable`.
+				var token = declaration(tokenName, [])
+				token.additionalConformances = ["Sendable"]
+				declarations.append(token)
+				hostProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "actorClassToken", type: tokenName))
+			}
+			var store = declaration(storeName, generatesMock: storeGeneratesMock, [leafBuilder])
+			store.isActor = true
+			declarations.append(store)
+			declarations.append(declaration(shelfName, [leafBuilder]))
+			let storeProperty = PropertyDeclaration(attribute: "@Instantiated", label: "actorClassStore", type: storeName)
+			let shelfProperty = PropertyDeclaration(attribute: "@Instantiated", label: "actorClassShelf", type: shelfName)
+			hostProperties.append(contentsOf: storeComesFirst ? [storeProperty, shelfProperty] : [shelfProperty, storeProperty])
+			declarations.append(declaration("\(prefix)ActorClassHost", generatesMock: true, hostProperties))
+			return declarations
+		}
+
+		private static let actorClassWrapperRandomSeedMask: UInt64 = 0x6163744373577270
 
 		// MARK: A dependency instantiated only if available
 
@@ -14077,7 +14153,7 @@ enum GraphFuzzerSourceLine: Equatable {
 			if line.hasPrefix("@Instantiable") {
 				parsedLine = .instantiableAttribute(arguments: String(line.dropFirst("@Instantiable".count)))
 			} else if previousLineWasInstantiableAttribute, let declaration = droppingAccessModifier(from: line), let keyword = ["final class ", "actor "].first(where: { declaration.hasPrefix($0) }) {
-				// Only `addingActorArgumentShapes` draws an actor, so reading one changes no other graph's files or model.
+				// Only `addingActorArgumentShapes` and `addingActorAndClassBuildingSameWrapper` draw an actor, so reading one changes no other graph's files or model.
 				let name = declaration.dropFirst(keyword.count).prefix { $0.isLetter || $0.isNumber || $0 == "_" }
 				parsedLine = .typeDeclaration(name: String(name))
 			} else if previousLineWasInstantiableAttribute, let declaration = droppingAccessModifier(from: line), declaration.hasPrefix("extension ") {
