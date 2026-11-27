@@ -65,9 +65,10 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	/// A node on a cycle is built at two places whose trees close the cycle on different places above them, so that one
 	/// place of its variant cannot stand for both.
 	case cycleMemberBuiltTwoWays
-	/// A world with a cycle in which a type receives a builder, whose call today's tree makes through a function it
-	/// declares for the loop of builders it closes.
-	case cycleReceivesBuilder
+	/// A world with a cycle in which a type receives a `LazilyInstantiated` wrapper or reads one's instance, which a
+	/// function the cycle closes on may take as a cycle parameter read through the wrapper, which these records do not
+	/// write yet.
+	case cycleReadsLazyWrapper
 	/// A place between a place on a cycle and the call that closes the cycle on it declares a label some type receives, so
 	/// that the function the call refers to may take that label's value as a parameter.
 	case cycleTakesParameters
@@ -206,6 +207,9 @@ struct NodeRecords: Sendable {
 		// A rename's record binds it from its fulfilling property's label, or from a wrapper's instance as the tree's rule
 		// reads it, never from an instance read otherwise.
 		guard !answeringDeclarations.renameReadsWrappersInstance else { throw NodeRecordRefusal.lazy }
+		if holdsCycle {
+			try Self.checkReadsNoWrappersInstance(inWorldWithCycle: world, answeringDeclarations: answeringDeclarations, rootLazilyInstantiatedInstanceProperties: rootLazilyInstantiatedInstanceProperties)
+		}
 		func edgeIndices(of declaration: DeclarationID) -> [Int] {
 			order?.edgeIndices(of: declaration) ?? world.edgeFacts(from: declaration).enumerated().sorted { $0.element.buildPosition < $1.element.buildPosition }.map(\.offset)
 		}

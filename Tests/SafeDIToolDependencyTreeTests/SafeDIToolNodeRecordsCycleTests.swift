@@ -439,7 +439,9 @@ struct SafeDIToolNodeRecordsCycleTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_keepsTheTreesLayout_whenTypeReceivesBuilderInWorldWithCycle() async throws {
-		// `Detail` receives `screenBuilder`, which the cycle of `Screen` and `Step` builds.
+		// `Detail` receives `screenBuilder`, which the cycle of `Screen` and `Step` builds. A received builder is a label like
+		// any other: `Step` declares it between the call that closes the cycle and `Screen`, so the records refuse the world
+		// for its cycle parameters until they read the facts' parameters.
 		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -490,7 +492,7 @@ struct SafeDIToolNodeRecordsCycleTests: ~Copyable {
 			}
 			""",
 		])
-		#expect(reports.map(\.refusal) == ["cycleReceivesBuilder"])
+		#expect(reports.map(\.refusal) == ["cycleTakesParameters"])
 	}
 
 	@Test
