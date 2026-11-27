@@ -3009,6 +3009,7 @@ enum GraphFuzzerGenerator {
 			wrapperKindsRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.wrapperKindsRandomSeedMask)
 			actorArgumentRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.actorArgumentRandomSeedMask)
 			instantiatedOnlyIfAvailableRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.instantiatedOnlyIfAvailableRandomSeedMask)
+			instantiatedOnlyIfAvailableErasureRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.instantiatedOnlyIfAvailableErasureRandomSeedMask)
 			optionalPlaceRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.optionalPlaceRandomSeedMask)
 			nestedCycleRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.nestedCycleRandomSeedMask)
 			perTypePlanRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.perTypePlanRandomSeedMask)
@@ -3592,6 +3593,9 @@ enum GraphFuzzerGenerator {
 		/// Draws only `addingDependencyInstantiatedOnlyIfAvailable`'s choices: whether a graph gains `IfAvailableRoot`'s
 		/// tree, and every shape of that tree.
 		private var instantiatedOnlyIfAvailableRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only whether `addingDependencyInstantiatedOnlyIfAvailable`'s fulfilled token is erased, so that every other
+		/// choice of the draw is drawn as before.
+		private var instantiatedOnlyIfAvailableErasureRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only `addingOptionalPlaceShapes`' choices: whether a split graph gains `OptionalPlaceRoot`'s tree, and every
 		/// shape of that tree.
 		private var optionalPlaceRandom: GraphFuzzerRandomNumberGenerator
@@ -8382,9 +8386,12 @@ enum GraphFuzzerGenerator {
 		/// declares, which no declaration fulfills, so production binds the property to `nil` and a mock binds it from an
 		/// override that defaults to `nil`, and takes no parameter, a root's included (`rootMockTakesParameter`). The leaf receives the label in its optional
 		/// form, required or only if available, and where it is only if available the root now and then builds a second
-		/// leaf itself, outside the screen's tree, which is passed `nil`. Now and then the screen's mock is generated. The
-		/// compile and the value oracles judge the tree. `instantiatedOnlyIfAvailableRandom` draws only for this pass, after
-		/// every other, and only in the base corpus.
+		/// leaf itself, outside the screen's tree, which is passed `nil`. Now and then the screen's mock is generated. Half
+		/// the graphs whose token is fulfilled erase it, on a stream of their own (`instantiatedOnlyIfAvailableErasureRandom`):
+		/// the screen instantiates `ifAvailableToken: AnyIfAvailableToken?` with `fulfilledByType:` and
+		/// `erasedToConcreteExistential: true`, which the leaf receives, so a mock wraps the token in the erasing type without
+		/// its optionality, as production does (`AnyT?(…)` does not compile). The compile and the value oracles judge the
+		/// tree. `instantiatedOnlyIfAvailableRandom` draws only for this pass, after every other, and only in the base corpus.
 		private mutating func addingDependencyInstantiatedOnlyIfAvailable(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
 			guard !omitsDrawsOlderReleasesReject, features.isEmpty, instantiatedOnlyIfAvailableRandom.percentChance(16) else { return declarations }
 			var declarations = declarations
@@ -8395,6 +8402,7 @@ enum GraphFuzzerGenerator {
 			let screenGeneratesMock = instantiatedOnlyIfAvailableRandom.percentChance(40)
 			let tokenIsFulfilled = instantiatedOnlyIfAvailableRandom.percentChance(60)
 			let rootBuildsLeaf = rootMayBuildLeaf && !leafRequiresToken
+			let tokenIsErased = tokenIsFulfilled && instantiatedOnlyIfAvailableErasureRandom.percentChance(50)
 			func append(_ name: String, arguments: [String] = [], _ properties: [PropertyDeclaration]) {
 				declarations.append(TypeDeclaration(
 					name: name,
@@ -8407,19 +8415,28 @@ enum GraphFuzzerGenerator {
 			let tokenName = "\(prefix)IfAvailableToken"
 			let leafName = "\(prefix)IfAvailableLeaf"
 			let screenName = "\(prefix)IfAvailableScreen"
+			let erasedTokenName = "\(prefix)AnyIfAvailableToken"
+			let receivedTokenType = tokenIsErased ? erasedTokenName : tokenName
 			if tokenIsFulfilled {
 				append(tokenName, [])
 			}
 			append(leafName, [leafRequiresToken
-					? PropertyDeclaration(attribute: "@Received", label: "ifAvailableToken", type: "\(tokenName)?")
-					: PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "ifAvailableToken", type: "\(tokenName)?")])
-			let token = PropertyDeclaration(attribute: "@Instantiated(onlyIfAvailable: true)", label: "ifAvailableToken", type: "\(tokenName)?")
+					? PropertyDeclaration(attribute: "@Received", label: "ifAvailableToken", type: "\(receivedTokenType)?")
+					: PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "ifAvailableToken", type: "\(receivedTokenType)?")])
+			let token = tokenIsErased
+				? PropertyDeclaration(attribute: "@Instantiated(fulfilledByType: \"\(tokenName)\", erasedToConcreteExistential: true, onlyIfAvailable: true)", label: "ifAvailableToken", type: "\(erasedTokenName)?")
+				: PropertyDeclaration(attribute: "@Instantiated(onlyIfAvailable: true)", label: "ifAvailableToken", type: "\(tokenName)?")
 			let leaf = leafIsBuiltByInstantiator
 				? PropertyDeclaration(attribute: "@Instantiated", label: "ifAvailableLeafBuilder", type: "\(sendability == .sendable ? "SendableInstantiator" : "Instantiator")<\(leafName)>")
 				: PropertyDeclaration(attribute: "@Instantiated", label: "ifAvailableLeaf", type: leafName)
 			append(screenName, arguments: screenGeneratesMock ? ["generateMock: true"] : [], tokenComesFirst ? [token, leaf] : [leaf, token])
 			if !tokenIsFulfilled {
 				declarations[declarations.count - 1].additionalDeclarations.append("public final class \(tokenName): Sendable {}")
+			}
+			if tokenIsErased {
+				declarations[declarations.count - 1].additionalDeclarations.append(
+					"public struct \(erasedTokenName)\(helperTypesAreSendable ? ": Sendable" : "") {\n\tpublic init(_ value: \(tokenName)) {\n\t\tself.value = value\n\t}\n\n\tpublic let value: \(tokenName)\n}",
+				)
 			}
 			var rootProperties = [PropertyDeclaration(attribute: "@Instantiated", label: "ifAvailableScreen", type: screenName)]
 			if rootBuildsLeaf {
@@ -8430,6 +8447,7 @@ enum GraphFuzzerGenerator {
 		}
 
 		private static let instantiatedOnlyIfAvailableRandomSeedMask: UInt64 = 0x4966417661696C21
+		private static let instantiatedOnlyIfAvailableErasureRandomSeedMask: UInt64 = 0x4966417661696C45
 
 		// MARK: A type built again through a second lazy cycle
 

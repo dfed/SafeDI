@@ -30,10 +30,6 @@ public enum NodeRecordsObservation {
 	/// plan before it is turned on for every run, or generate time doubles.
 	@TaskLocal public static var laysOutRoots = false
 
-	/// Whether `generate` lays out a root whose world node records accept from them and builds no tree for it
-	/// (`DependencyTreeGenerator.nodeRecordsLayout`). Off until the switch to node records lands: only a test turns it on.
-	@TaskLocal public static var buildsNoTreeForAcceptedRoots = false
-
 	/// The nodes a test claims as a kind would (`NodeRecords.claim(of:in:)`), by their concrete type's name, each
 	/// with the raw values of the refusals the claim discharges. Only a test sets it.
 	@TaskLocal public static var claimsForTesting = [String: [String]]()
@@ -42,6 +38,11 @@ public enum NodeRecordsObservation {
 	/// rather than written by the mock's walk, where `observer` is set. Off unless a test turns it on: the two write other
 	/// text for a node beneath a function, which is handed its override where the walk's captures the root's.
 	@TaskLocal public static var laysOutMockRoots = false
+
+	/// Handed each mocked type and the root of its mock root's world as the mock root is built, where a test observes node records
+	/// (`DependencyTreeGenerator.createMockRootScopeGenerator`). A task local rather than a parameter: an optional closure
+	/// threaded through the mock roots' construction raised the peak memory of a run that sets none by a fifth on Linux.
+	@TaskLocal static var recordsMockWorldRoot: (@Sendable (TypeDescription, ConstructionScope) -> Void)?
 
 	/// Handed each root's report, where set. Only a test sets it.
 	@TaskLocal public static var observer: (@Sendable (NodeRecordsReport) -> Void)?
