@@ -515,6 +515,51 @@ struct SafeDIToolSeamPassedUpValuesTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_handsEachRouteItsLazyValueOrNone_whenOuterSeamPassesUpPlaceOnTwoRoutesOfOneCaseOnlyOneOfWhichInstantiatesItLazily() async throws {
+		// `Home`'s `wing` holds a place of `Api` under `model` and under `desk.model`, one case, which `Shell` passes up.
+		// Only `Desk` instantiates `token`, and lazily, and `Wing` builds `model` first, so the place a call of `Shell` is
+		// handed for the case is the one no route to which binds the token: only `Home`'s graph holds the wrapper. The
+		// `LiveApi` under `desk` reads that token, and the one under `model` reads none.
+		let modules = [
+			ModuleFixture(name: "Inner", packageName: "Shop", swiftFileContent: [
+				"public protocol Api {}",
+				seamFixtureType(named: "Token", isFinalClass: true, declarations: []),
+				seamFixtureType(named: "Model", isFinalClass: true, declarations: ["@Instantiated public let api: any Api"]),
+				seamFixtureType(named: "Desk", isFinalClass: true, declarations: ["@Instantiated public let token: LazilyInstantiated<Token>", "@Instantiated public let model: Model"]),
+				seamFixtureType(named: "Wing", isFinalClass: true, declarations: ["@Instantiated public let model: Model", "@Instantiated public let desk: Desk"]),
+				seamFixtureType(named: "Home", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let wing: Wing"]),
+				seamFixtureType(named: "Shell", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let home: Home"]),
+			]),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
+				SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "LiveApi", fulfilling: "Api", declarations: ["@Received(onlyIfAvailable: true) public let token: Token?"]),
+				seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated public let shell: Shell"]),
+				"""
+				func eachApiReadsItsRoutesToken() -> [Bool] {
+				    let wing = Root().shell.home.wing
+				    return [(wing.model.api as? LiveApi)?.token == nil, (wing.desk.model.api as? LiveApi)?.token === wing.desk.token.instance]
+				}
+				""",
+			].map { "import Inner\n\n" + $0 }, dependencies: ["Inner"]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		let description = try await DifferentialValueOracle.describe(
+			DifferentialValuePath(output: output, modules: modules),
+			probes: [DifferentialValueProbe("eachApiReadsItsRoutesToken()")],
+			filesToDelete: &filesToDelete,
+		)
+		if compileVerificationIsEnabled {
+			#expect(description == """
+			probe eachApiReadsItsRoutesToken()
+			Array<Bool>
+			  0: Bool true
+			  1: Bool true
+
+			""")
+		}
+	}
+
+	@Test
 	mutating func generate_takesPassedUpBuilderUnderHoleTypesLabel_whenOuterSeamPassesUpPlaceOnTwoRoutesOfOneCase() async throws {
 		// `Home` holds a place of `Api` under `first` and under `second`, one case, and `Shell` passes it up. Both modules
 		// generate plain initializers: `Shell`’s takes the builder as `apiBuilder`, the label of its hole type, whatever

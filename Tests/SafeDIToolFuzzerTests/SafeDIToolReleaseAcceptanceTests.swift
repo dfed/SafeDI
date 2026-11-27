@@ -203,6 +203,9 @@ struct SafeDIToolReleaseAcceptanceTests {
 			ListedSeed(corpus: .seam, seed: 1_954, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
 			ListedSeed(corpus: .seam, seed: 1_986, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
 		],
+		"2.4.1": [
+			ListedSeed(corpus: .seam, seed: 1_849, kind: .exemption, verdictClass: .valuesDiffer, reason: callersNearestDeclarationReason),
+		],
 	]
 
 	/// #892: a mock passes `nil`, as production does, to a receive only if available of the other `LazilyInstantiated`
@@ -220,6 +223,11 @@ struct SafeDIToolReleaseAcceptanceTests {
 	/// 2.3.0 accepted the graph and handed the fill the same values at every level of the nested cycle, so the type the
 	/// cycle builds again was built with the outer declaration of the label; this tree reports the read instead.
 	static let fillReadsLabelNestedCyclesDeclareAgainReason = "#1115, release-noted under Fixes: a seam fill’s read of a label that nested lazy cycles declare again, which 2.3.0 built with the outer declaration, is now an error"
+
+	/// 2.4.1 declared a seam call's root dispatcher, which hands a fill the caller's value, once at the root's top, so a
+	/// fill beneath a type that declares the value again read the root's declaration; this tree reads the nearest, as the
+	/// inline build and 2.3.0 do (`HolePaneScreenA` and `HolePaneScreenB`).
+	static let callersNearestDeclarationReason = "a 2.4.1 defect fixed: a seam call’s fill read the root’s declaration of a value the caller declares again"
 
 	@Test(arguments: GraphFuzzerReleaseAcceptanceCorpus.allCases)
 	func releaseAcceptanceFixture_drawsTheCorpusGraphWithoutFeaturesOlderReleaseRejects_whenDrawnForComparison(corpus: GraphFuzzerReleaseAcceptanceCorpus) {
