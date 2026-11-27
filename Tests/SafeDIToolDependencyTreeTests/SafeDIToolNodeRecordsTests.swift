@@ -1052,6 +1052,74 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 		#expect(reports.flatMap(\.differences) == [])
 	}
 
+	/// A wrapper `Root` builds `Reader` in, while `Reader` receives `token` only if available: the declaration `Root` makes
+	/// of it, and the lines the tree writes for it.
+	struct WrappedOnlyIfAvailableReader: Sendable, CustomTestStringConvertible {
+		let declaration: String
+		let lines: String
+
+		var testDescription: String {
+			declaration
+		}
+
+		static let all = [
+			WrappedOnlyIfAvailableReader(declaration: "@Instantiated let reader: SendableInstantiator<Reader>", lines: """
+			        @Sendable nonisolated func __safeDI_reader() -> Reader {
+			            Reader(token: token)
+			        }
+			        let reader = SendableInstantiator<Reader>(__safeDI_reader)
+			"""),
+			WrappedOnlyIfAvailableReader(declaration: "@Instantiated let reader: LazilyInstantiated<Reader>", lines: """
+			        func __safeDI_reader() -> Reader {
+			            Reader(token: token)
+			        }
+			        let reader = LazilyInstantiated<Reader>(__safeDI_reader)
+			"""),
+			WrappedOnlyIfAvailableReader(declaration: #"@Instantiated(fulfilledByType: "Reader", erasedToConcreteExistential: true) let reader: ErasedInstantiator<Void, AnyReader>"#, lines: """
+			        func __safeDI_reader() -> Reader {
+			            Reader(token: token)
+			        }
+			        let reader = ErasedInstantiator<Void, AnyReader> {
+			            AnyReader(__safeDI_reader())
+			        }
+			"""),
+		]
+	}
+
+	@Test(arguments: WrappedOnlyIfAvailableReader.all)
+	mutating func generate_laysOutRootAsTheTreeDoes_whenAWrapperBuildsATypeThatReceivesAValueOnlyIfAvailable(wrappedReader: WrappedOnlyIfAvailableReader) async throws {
+		// `Reader` receives `token` only if available and is built in the function of the wrapper `reader`, which captures the
+		// `token` `Root` declares beside it.
+		let files = [
+			seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let token: Token", wrappedReader.declaration]),
+			seamFixtureType(named: "Reader", declarations: ["@Received(onlyIfAvailable: true) let token: Token?"], conformances: ", ReaderType, Sendable"),
+			seamFixtureType(named: "Token", declarations: [], conformances: ", Sendable"),
+			"""
+			public protocol ReaderType: Sendable {}
+
+			public struct AnyReader: Sendable {
+			    public init(_ reader: some ReaderType) {}
+			}
+			""",
+		]
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: files, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(output.dependencyTreeFiles["Root+SafeDI.swift"] == generatedFileHeader + """
+		extension Root {
+		    public init() {
+		        let token = Token()
+		\(wrappedReader.lines)
+		        self.init(token: token, reader: reader)
+		    }
+		}
+		""")
+		let rootReports = reports.filter { $0.root == "Root" }
+		#expect(rootReports.map(\.refusal) == [nil])
+		#expect(rootReports.map(\.isLaidOutFromNodeRecords) == [true])
+		#expect(reports.flatMap(\.differences) == [])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]

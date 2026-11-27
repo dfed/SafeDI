@@ -21,7 +21,8 @@
 extension NodeRecords {
 	/// The claim of `declaration` where it is a node whose type receives a property only if available or declares a rename:
 	/// of kind `receivesOnlyIfAvailable`, discharging `onlyIfAvailable` and `renameOrHole`, which it still holds where its
-	/// scope declares a hole or an instantiated dependency it does not build; `nil` for any other node.
+	/// scope declares a hole or an instantiated dependency it does not build, and what the claim of the wrapper it is held
+	/// in discharges; `nil` for any other node.
 	static func receivesOnlyIfAvailableClaim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
 		guard world.kind(of: declaration) != .alias, world.kind(of: declaration) != .hole else { return nil }
 		let scope = world.scope(of: declaration)
@@ -41,7 +42,10 @@ extension NodeRecords {
 			}
 		}
 		let refusals: [NodeRecordRefusal] = declaresHole || !scope.instantiatedDependenciesNotGenerated.isEmpty ? [.renameOrHole] : []
-		return NodeRecordClaim(kind: .receivesOnlyIfAvailable, discharges: [.onlyIfAvailable, .renameOrHole], refusals: refusals)
+		// A node held in a wrapper, erased or not, or built in a `@Sendable` function of its own is built as that form's
+		// claim builds it (`builtByInitializerRecord` reads the form of the node), which discharges what that claim does.
+		let wrapperDischarges = (erasedClaim(of: declaration, in: world) ?? lazyClaim(of: declaration, in: world) ?? sendableClaim(of: declaration, in: world))?.discharges ?? []
+		return NodeRecordClaim(kind: .receivesOnlyIfAvailable, discharges: Set<NodeRecordRefusal>([.onlyIfAvailable, .renameOrHole]).union(wrapperDischarges), refusals: refusals)
 	}
 
 	/// The record of `declaration`'s place in `variant`, a node of kind `receivesOnlyIfAvailable`: a `builtByInitializer`
