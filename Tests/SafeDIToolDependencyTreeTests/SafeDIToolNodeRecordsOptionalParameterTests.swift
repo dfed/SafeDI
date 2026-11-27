@@ -128,6 +128,51 @@ struct SafeDIToolNodeRecordsOptionalParameterTests: ~Copyable {
 		#expect(outcome.approvedEntries == [])
 	}
 
+	/// What the records read where the tree reads `nil` of `mark`, with whether the comparison names the difference an
+	/// optional parameter's.
+	enum RecordsArguments: CaseIterable {
+		case theSame
+		case declarationOfTheLabel
+		case declarationOfAnotherLabel
+		case lazyInstanceOfTheLabel
+		case anotherArgumentLabel
+		case oneArgumentMore
+		case noArgument
+
+		var isOfAnOptionalParameter: Bool {
+			switch self {
+			case .theSame, .declarationOfTheLabel:
+				true
+			case .declarationOfAnotherLabel, .lazyInstanceOfTheLabel, .anotherArgumentLabel, .oneArgumentMore, .noArgument:
+				false
+			}
+		}
+	}
+
+	@Test(arguments: RecordsArguments.allCases)
+	func differOnlyWhereTreeReadsNilOfLabel_namesOnlyTheDeclarationOfTheLabelReadWhereTheTreeReadsNil(recordsArguments: RecordsArguments) {
+		let property = Property(label: "mark", typeDescription: .optional(.simple(name: "Mark")))
+		let unchanged = PlaceRead(argumentLabel: "name", label: "name", property: Property(label: "name", typeDescription: .simple(name: "Name")), source: .binding(label: "name"))
+		let tree = [unchanged, PlaceRead(argumentLabel: "mark", label: "mark", property: property, source: .nil)]
+		let nodeRecords: [PlaceRead] = switch recordsArguments {
+		case .theSame:
+			tree
+		case .declarationOfTheLabel:
+			[unchanged, PlaceRead(argumentLabel: "mark", label: "mark", property: property, source: .binding(label: "mark"))]
+		case .declarationOfAnotherLabel:
+			[unchanged, PlaceRead(argumentLabel: "mark", label: "mark", property: property, source: .binding(label: "name"))]
+		case .lazyInstanceOfTheLabel:
+			[unchanged, PlaceRead(argumentLabel: "mark", label: "mark", property: property, source: .lazyInstance(label: "mark", throughOptional: false))]
+		case .anotherArgumentLabel:
+			[unchanged, PlaceRead(argumentLabel: "other", label: "mark", property: property, source: .binding(label: "mark"))]
+		case .oneArgumentMore:
+			tree + [PlaceRead(argumentLabel: "mark", label: "mark", property: property, source: .binding(label: "mark"))]
+		case .noArgument:
+			[]
+		}
+		#expect(NodeRecordsObservation.differOnlyWhereTreeReadsNilOfLabel(tree, nodeRecords) == recordsArguments.isOfAnOptionalParameter)
+	}
+
 	@Test(arguments: ShapeRefused.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_refusesWorldAsNodeOfSeveralVariants_whenOneOptionalParameterCannotServeEveryCall(shape: ShapeRefused) async throws {
