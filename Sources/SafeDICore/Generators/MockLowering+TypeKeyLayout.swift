@@ -25,14 +25,16 @@ import Foundation
 /// no record, or reads a value the records cannot name, keeps the walk's body.
 extension MockLowering {
 	/// Whether internal mocks' bodies are laid out by the type key. A test that compares the walk's body sets it off.
-	@TaskLocal static var laysOutWithTypeKey = true
+	/// Public, as `laysOutPublicMocksWithTypeKey` is, for the test support's run that inherits no task-local value and
+	/// binds both again.
+	@TaskLocal public static var laysOutWithTypeKey = true
 
 	/// Whether public mocks' bodies are laid out by the type key too. Off, because a public mock's records do not yet carry
 	/// everything its body reads: each place whose record cannot say what the walk writes refuses its root where the record
 	/// is made (`recordInputs(of:…)`), and a public mock's root shares no subtree (`sharesSubtrees(of:)`), so a root that
 	/// reports `laidOut` under this switch is one whose records carried its whole body. Set by the tests of those refusals;
 	/// never by the tool.
-	@TaskLocal static var laysOutPublicMocksWithTypeKey = false
+	@TaskLocal public static var laysOutPublicMocksWithTypeKey = false
 
 	/// Called, where set, with how many places each check of the reads of a root's laid-out body (`unresolvedRead(in:declaredAtRoot:)`)
 	/// read. Set by the tests that check the check grows with the places of the plan, never with the paths; never by the tool.

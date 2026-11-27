@@ -919,10 +919,17 @@ enum SplitPositionsRun {
 			splitArguments.append("--module-info-positions-in-own-file")
 		}
 		// Detached, so the run inherits none of the observers a test sets around its own run, which count each layer and
-		// step of one run.
+		// step of one run. The switches that choose how a mock's body is laid out are bound again, since the two runs'
+		// code is compared.
+		let laysOutWithTypeKey = MockLowering.laysOutWithTypeKey
+		let laysOutPublicMocksWithTypeKey = MockLowering.laysOutPublicMocksWithTypeKey
 		let splitRun: Result<Generate.Output, any Error> = await Task.detached {
 			do {
-				return try await .success(Generate.parse(splitArguments).generate())
+				return try await .success(MockLowering.$laysOutWithTypeKey.withValue(laysOutWithTypeKey) {
+					try await MockLowering.$laysOutPublicMocksWithTypeKey.withValue(laysOutPublicMocksWithTypeKey) {
+						try await Generate.parse(splitArguments).generate()
+					}
+				})
 			} catch {
 				return .failure(error)
 			}
