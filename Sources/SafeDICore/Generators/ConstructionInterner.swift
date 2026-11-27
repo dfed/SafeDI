@@ -526,6 +526,11 @@ final class ConstructionInternerSpace {
 		builder.internDeclarations(of: instantiables)
 	}
 
+	/// How many values the space has interned.
+	var internedCount: Int {
+		builder.internedCount
+	}
+
 	/// The ID of `type`, given now when the space has none.
 	func intern(_ type: TypeDescription) -> TypeID {
 		reportingMiss(of: type.asSource) { $0.intern(type) }
@@ -598,6 +603,9 @@ public enum ConstructionInternerMiss: Sendable {
 	/// By a record the freezes are designed to intern: a root's, whose promotion respells what a mock root receives, and a
 	/// leaf's that calls a seam or another module's public mock, whose instantiable is the call's signature.
 	case internedAtFreeze
+	/// By a world of per-type facts built before its roots are validated (`TypeFactsGraph.init(roots:intern:)`): the
+	/// forms a declaration provides and the properties that fulfill a receive, which no declaration spells.
+	case internedForTypeFacts
 }
 
 /// How the tests order what a generator interns: set by the tests, never by the tool.

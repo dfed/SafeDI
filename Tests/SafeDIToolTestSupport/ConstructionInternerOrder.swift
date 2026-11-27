@@ -94,7 +94,7 @@ public enum ConstructionInternerClosure {
 			switch bucket {
 			case .notExcluded:
 				Issue.record("A freeze interned `\(value)`, which the generator’s declarations did not give its interner, for a place a memo entry can key: a construction site the interner does not cover.")
-			case .excluded, .internedAtFreeze:
+			case .excluded, .internedAtFreeze, .internedForTypeFacts:
 				break
 			}
 			enclosingObserver?(bucket, value)

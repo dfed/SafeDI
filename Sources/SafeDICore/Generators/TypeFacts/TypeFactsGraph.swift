@@ -33,12 +33,21 @@ struct TypeFactsDeclaration: Hashable, Sendable {
 		/// Whether the declaration is a fill a call passes for a hole, which reads the fields of the case it fills, rather
 		/// than a child the record's type instantiates.
 		let isFill: Bool
+		/// Which node of a world of several roots stands for no declaration (`TypeFactsGraph.init(roots:intern:)`): the
+		/// position of the root a frame gives its values to, `worldRootFrame` for the node above every frame, and
+		/// `noFrame` for a declaration.
+		let frame: Int32
 	}
 
-	init(scope: ConstructionScope, property: Property?, propertyID: Int32, erasedToConcreteExistential: Bool, isFill: Bool) {
+	/// `Key.frame` of a declaration.
+	static let noFrame: Int32 = -1
+	/// `Key.frame` of the node above every frame of a world of several roots.
+	static let worldRootFrame: Int32 = -2
+
+	init(scope: ConstructionScope, property: Property?, propertyID: Int32, erasedToConcreteExistential: Bool, isFill: Bool, frame: Int32 = TypeFactsDeclaration.noFrame) {
 		self.scope = scope
 		self.property = property
-		key = Key(record: ObjectIdentifier(scope.identity), property: propertyID, erasedToConcreteExistential: erasedToConcreteExistential, isFill: isFill)
+		key = Key(record: ObjectIdentifier(scope.identity), property: propertyID, erasedToConcreteExistential: erasedToConcreteExistential, isFill: isFill, frame: frame)
 	}
 
 	let key: Key
@@ -103,15 +112,7 @@ struct TypeFactsGraph: Sendable {
 		// walk asks for a node's edges once, when it first reaches the node, so in node order.
 		var instantiatedEdgeCounts = [Int32]()
 		let graph = OrderedGraph(root: TypeFactsDeclaration(scope: root, property: nil, propertyID: -1, erasedToConcreteExistential: false, isFill: false)) { declaration in
-			var targets = [TypeFactsDeclaration]()
-			for case let .instantiated(property, child, erasedToConcreteExistential, propertyID) in declaration.scope.propertiesToGenerate {
-				targets.append(TypeFactsDeclaration(scope: child, property: property, propertyID: propertyID.raw, erasedToConcreteExistential: erasedToConcreteExistential, isFill: false))
-			}
-			instantiatedEdgeCounts.append(Int32(targets.count))
-			for case let .fill(hole, child, fillContext) in declaration.scope.holeArguments {
-				targets.append(TypeFactsDeclaration(scope: child, property: hole.property, propertyID: fillContext.propertyID.raw, erasedToConcreteExistential: false, isFill: true))
-			}
-			return targets
+			Self.targets(of: declaration, instantiatedEdgeCounts: &instantiatedEdgeCounts)
 		}
 		let constructions = graph.nodes.map(\.construction)
 		var labels = LabelInterner()
@@ -137,42 +138,87 @@ struct TypeFactsGraph: Sendable {
 		self.reads = reads
 		readTable = readInterner.reads
 		labelTexts = labels.labels
-		var readColumn = [Int32]()
-		var readOffsets = [Int32]()
-		var labelColumn = [Int32]()
-		var labelOffsets = [Int32]()
-		var labelSeen = [Int32](repeating: -1, count: labels.labels.count)
-		for index in graph.nodes.indices {
-			readOffsets.append(Int32(readColumn.count))
-			labelOffsets.append(Int32(labelColumn.count))
-			reads.rows.forEachColumn(inRow: index) { read, _ in
-				readColumn.append(read)
-				let label = readInterner.reads[Int(read)].label
-				if label >= 0, labelSeen[Int(label)] != Int32(index) {
-					labelSeen[Int(label)] = Int32(index)
-					labelColumn.append(label)
-				}
-			}
-		}
-		readOffsets.append(Int32(readColumn.count))
-		labelOffsets.append(Int32(labelColumn.count))
-		self.readColumn = readColumn
-		self.readOffsets = readOffsets
-		self.labelColumn = labelColumn
-		self.labelOffsets = labelOffsets
+		let readColumns = ReadColumns(of: reads, nodeCount: graph.nodes.count, readTable: readInterner.reads, labelCount: labels.labels.count)
+		readColumn = readColumns.readColumn
+		readOffsets = readColumns.readOffsets
+		labelColumn = readColumns.labelColumn
+		labelOffsets = readColumns.labelOffsets
 		let answers = Self.answers(of: graph, reads: reads, readTable: readInterner.reads, labels: labels)
 		answerIsBeingBuilt = answers.isBeingBuilt
 		answerTexts = answers.texts
 		answerKeys = answers.keys
 		variants = answers.variants
-		let isBeingBuilt = answers.isBeingBuilt
-		let variantsOfAnswers = answers.variants
-		let readsByID = readInterner.reads
-		outcomes = TypeFactsOutcomes(.init(
-			variants: answers.variants,
+		outcomes = Self.outcomes(of: answers.variants, isBeingBuilt: answers.isBeingBuilt, readTable: readInterner.reads, readColumns: readColumns, graph: graph)
+		cycleIDs = Self.cycleIDs(of: graph.nodes)
+		// One root, and no column of a world of several roots: an answer's forms are its key until answers are interned
+		// by ID here too, and no node lists its receives.
+		rootVariants = []
+		answerForms = []
+		formOffsets = []
+		formColumn = []
+		receiveStarts = []
+		receiveEnds = []
+		receiveColumn = []
+		acceptedColumn = []
+	}
+
+	/// The targets of a declaration's edges: the properties its scope instantiates, whose count it appends to
+	/// `instantiatedEdgeCounts`, then the fills it passes. Asked once per node, in node order.
+	static func targets(of declaration: TypeFactsDeclaration, instantiatedEdgeCounts: inout [Int32]) -> [TypeFactsDeclaration] {
+		var targets = [TypeFactsDeclaration]()
+		for case let .instantiated(property, child, erasedToConcreteExistential, propertyID) in declaration.scope.propertiesToGenerate {
+			targets.append(TypeFactsDeclaration(scope: child, property: property, propertyID: propertyID.raw, erasedToConcreteExistential: erasedToConcreteExistential, isFill: false))
+		}
+		instantiatedEdgeCounts.append(Int32(targets.count))
+		for case let .fill(hole, child, fillContext) in declaration.scope.holeArguments {
+			targets.append(TypeFactsDeclaration(scope: child, property: hole.property, propertyID: fillContext.propertyID.raw, erasedToConcreteExistential: false, isFill: true))
+		}
+		return targets
+	}
+
+	/// Each node's reads from above and the labels they ask about, as flat columns with each node's offset.
+	struct ReadColumns {
+		init(of reads: ReadsFromAbove, nodeCount: Int, readTable: [Read], labelCount: Int) {
+			var readColumn = [Int32]()
+			var readOffsets = [Int32]()
+			var labelColumn = [Int32]()
+			var labelOffsets = [Int32]()
+			var labelSeen = [Int32](repeating: -1, count: labelCount)
+			for index in 0..<nodeCount {
+				readOffsets.append(Int32(readColumn.count))
+				labelOffsets.append(Int32(labelColumn.count))
+				reads.rows.forEachColumn(inRow: index) { read, _ in
+					readColumn.append(read)
+					let label = readTable[Int(read)].label
+					if label >= 0, labelSeen[Int(label)] != Int32(index) {
+						labelSeen[Int(label)] = Int32(index)
+						labelColumn.append(label)
+					}
+				}
+			}
+			readOffsets.append(Int32(readColumn.count))
+			labelOffsets.append(Int32(labelColumn.count))
+			self.readColumn = readColumn
+			self.readOffsets = readOffsets
+			self.labelColumn = labelColumn
+			self.labelOffsets = labelOffsets
+		}
+
+		let readColumn: [Int32]
+		let readOffsets: [Int32]
+		let labelColumn: [Int32]
+		let labelOffsets: [Int32]
+	}
+
+	/// What each read of each variant comes to in its body, from the variants and whether each answer is being built.
+	static func outcomes(of variants: TypeFactsVariants, isBeingBuilt: [Bool], readTable: [Read], readColumns: ReadColumns, graph: OrderedGraph<TypeFactsDeclaration>) -> TypeFactsOutcomes {
+		let readColumn = readColumns.readColumn
+		let readOffsets = readColumns.readOffsets
+		return TypeFactsOutcomes(.init(
+			variants: variants,
 			cellRule: { variant, position in
-				let node = Int(variantsOfAnswers.node(of: variant))
-				return .init(channel: readsByID[Int(readColumn[Int(readOffsets[node]) + position])].channel)
+				let node = Int(variants.node(of: variant))
+				return .init(channel: readTable[Int(readColumn[Int(readOffsets[node]) + position])].channel)
 			},
 			isBeingBuilt: { isBeingBuilt[Int($0)] },
 			// No call builds its callee in its caller's body until the edge facts say which edges open no function and the
@@ -180,8 +226,12 @@ struct TypeFactsGraph: Sendable {
 			buildsInCallersBody: { _, _ in false },
 			edgeOffset: { graph.edgeOffset(of: $0) },
 		))
+	}
+
+	/// Each node's cycle identity, interned from its cycle key in first-reach order.
+	static func cycleIDs(of nodes: [TypeFactsDeclaration]) -> [Int32] {
 		var cycleIDByKey = [String: Int32]()
-		cycleIDs = graph.nodes.map { node in
+		return nodes.map { node in
 			let key = Self.cycleKey(of: node)
 			if let id = cycleIDByKey[key] {
 				return id
@@ -191,6 +241,26 @@ struct TypeFactsGraph: Sendable {
 			return id
 		}
 	}
+
+	/// The columns only a world of several roots fills (`init(roots:intern:)`), each empty in a world of one root.
+
+	/// The variant each root's body is, in the roots' order: the variant each frame's one edge calls. A world of one
+	/// root has the one root variant, 0.
+	let rootVariants: [Int32]
+
+	/// Each answer ID's forms: an ID of a run of `formColumn`, at `formOffsets`.
+	let answerForms: [Int32]
+	let formOffsets: [Int32]
+	/// The properties each run of forms holds, in `Property` order, which no ID's order decides.
+	let formColumn: [PropertyID]
+
+	/// The receives each node's own type makes, in declaration order, as a run of `receiveColumn` from `receiveStarts` to
+	/// `receiveEnds` (every node of one record shares its run), and the properties that fulfill each, as runs of
+	/// `acceptedColumn`.
+	let receiveStarts: [Int32]
+	let receiveEnds: [Int32]
+	let receiveColumn: [TypeFactsReceive]
+	let acceptedColumn: [PropertyID]
 
 	/// Each node's cycle identity (A4), interned from its cycle key in first-reach order.
 	let cycleIDs: [Int32]
@@ -357,6 +427,11 @@ struct TypeFactsGraph: Sendable {
 	func description(ofNode index: Int) -> String {
 		let key = graph.nodes[index].key
 		var description = graph.nodes[index].scope.instantiable.concreteInstantiable.asSource
+		if key.frame == TypeFactsDeclaration.worldRootFrame {
+			return "world"
+		} else if key.frame != TypeFactsDeclaration.noFrame {
+			return "frame \(key.frame) of \(description)"
+		}
 		if let property = graph.nodes[index].property {
 			description.append(" as \(property.asSource)")
 		}
@@ -375,7 +450,7 @@ struct TypeFactsGraph: Sendable {
 		Self.cycleKey(of: graph.nodes[index])
 	}
 
-	private static func cycleKey(of node: TypeFactsDeclaration) -> String {
+	static func cycleKey(of node: TypeFactsDeclaration) -> String {
 		"\(node.property?.asValidatedForDependencyCycles.asSource ?? "root") for \(node.scope.instantiable.concreteInstantiable.asSource)"
 	}
 
@@ -384,6 +459,7 @@ struct TypeFactsGraph: Sendable {
 	var columnElementCount: Int {
 		graph.columnElementCount + instantiatedEdgeCounts.count + constructions.count + readTable.count + 2 * reads.rows.wordCount
 			+ cycleIDs.count + readColumn.count + readOffsets.count + labelColumn.count + labelOffsets.count + answerKeys.count + variants.columnElementCount
+			+ rootVariants.count + answerForms.count + formOffsets.count + formColumn.count + receiveStarts.count + receiveEnds.count + 5 * receiveColumn.count + acceptedColumn.count
 	}
 
 	/// The graph as text, a line per node: its position, its declaration, `cycle` where it is on one, what its subtree reads
@@ -412,32 +488,13 @@ struct TypeFactsGraph: Sendable {
 	/// handed a value, and in a mock's world what the mock root pins of it; and the label an alias is fulfilled by, unless
 	/// the type instantiates or forwards a property of that label, which the alias then renames; and, for a call that passes
 	/// fills, each label the fills' trees receive, whose declaration the call hands them.
-	private static func ownReads(of record: ScopeRecord, builtAs property: Property?, forMockGeneration: Bool, labels: inout LabelInterner) -> [Read] {
+	static func ownReads(of record: ScopeRecord, builtAs property: Property?, forMockGeneration: Bool, labels: inout LabelInterner) -> [Read] {
 		var reads = [Read]()
 		if let property {
 			reads.append(Read(.value, label: labels.id(of: property.label)))
 		}
-		let dependencies = record.instantiable.dependencies
-		var createdLabels = Set<String>()
-		for dependency in dependencies {
-			switch dependency.source {
-			case .instantiated, .forwarded:
-				createdLabels.insert(dependency.property.label)
-			case .received, .aliased:
-				break
-			}
-		}
-		for dependency in dependencies {
-			switch dependency.source {
-			case .instantiated, .forwarded:
-				break
-			case let .received(onlyIfAvailable):
-				appendReceiveReads(of: labels.id(of: dependency.property.label), onlyIfAvailable: onlyIfAvailable, forMockGeneration: forMockGeneration, to: &reads)
-			case let .aliased(fulfillingProperty, _, onlyIfAvailable):
-				if !createdLabels.contains(fulfillingProperty.label) {
-					appendReceiveReads(of: labels.id(of: fulfillingProperty.label), onlyIfAvailable: onlyIfAvailable, forMockGeneration: forMockGeneration, to: &reads)
-				}
-			}
+		for receive in ownReceives(of: record) {
+			appendReceiveReads(of: labels.id(of: receive.property.label), onlyIfAvailable: receive.onlyIfAvailable, forMockGeneration: forMockGeneration, to: &reads)
 		}
 		// A call that passes fills hands each the caller's declaration of what the fill's tree receives, in the form the
 		// fill takes (`Scope.callerArgument`), which it reads as a receive only if available reads it.
@@ -449,6 +506,44 @@ struct TypeFactsGraph: Sendable {
 			}
 		}
 		return reads
+	}
+
+	/// One receive a type's dependencies make of what is above its scope.
+	struct OwnReceive {
+		/// The property received: the property an alias is fulfilled by, the declared property otherwise.
+		let property: Property
+		let onlyIfAvailable: Bool
+		/// The alias the receive is read through, `nil` for a direct receive.
+		let alias: Property?
+	}
+
+	/// The receives a record's type makes, in declaration order: each `@Received` dependency, and each alias, unless the
+	/// type instantiates or forwards a property of the label the alias is fulfilled by, which the alias then renames.
+	static func ownReceives(of record: ScopeRecord) -> [OwnReceive] {
+		let dependencies = record.instantiable.dependencies
+		var createdLabels = Set<String>()
+		for dependency in dependencies {
+			switch dependency.source {
+			case .instantiated, .forwarded:
+				createdLabels.insert(dependency.property.label)
+			case .received, .aliased:
+				break
+			}
+		}
+		var receives = [OwnReceive]()
+		for dependency in dependencies {
+			switch dependency.source {
+			case .instantiated, .forwarded:
+				break
+			case let .received(onlyIfAvailable):
+				receives.append(OwnReceive(property: dependency.property, onlyIfAvailable: onlyIfAvailable, alias: nil))
+			case let .aliased(fulfillingProperty, _, onlyIfAvailable):
+				if !createdLabels.contains(fulfillingProperty.label) {
+					receives.append(OwnReceive(property: fulfillingProperty, onlyIfAvailable: onlyIfAvailable, alias: dependency.property))
+				}
+			}
+		}
+		return receives
 	}
 
 	/// A required receive reads the nearest declaration of its label; one only if available reads it as `optionalValue`,
@@ -466,7 +561,7 @@ struct TypeFactsGraph: Sendable {
 	}
 
 	/// A world's labels, by dense ID in the order the graph's build first meets them.
-	private struct LabelInterner {
+	struct LabelInterner {
 		mutating func id(of label: String) -> Int32 {
 			if let id = idByLabel[label] {
 				return id
@@ -486,7 +581,7 @@ struct TypeFactsGraph: Sendable {
 	}
 
 	/// A world's reads, by dense ID in the order the graph's build first meets them.
-	private struct ReadInterner {
+	struct ReadInterner {
 		mutating func id(of read: Read) -> Int32 {
 			if let id = idByRead[read] {
 				return id

@@ -317,28 +317,39 @@ extension TypeFactsGraph: TypeFactsWorld {
 		[]
 	}
 
-	func receives(of _: DeclarationID) -> ArraySlice<TypeFactsReceive> {
-		[]
+	/// Filled in a world of several roots (`init(roots:intern:)`); empty in a world of one root until the table-side
+	/// columns fill it there.
+	func receives(of declaration: DeclarationID) -> ArraySlice<TypeFactsReceive> {
+		guard !receiveStarts.isEmpty else {
+			return []
+		}
+		return receiveColumn[Int(receiveStarts[Int(declaration)])..<Int(receiveEnds[Int(declaration)])]
 	}
 
-	func acceptedProperties(of _: TypeFactsReceive) -> ArraySlice<PropertyID> {
-		[]
+	func acceptedProperties(of receive: TypeFactsReceive) -> ArraySlice<PropertyID> {
+		acceptedColumn[Int(receive.acceptedStart)..<Int(receive.acceptedStart + receive.acceptedCount)]
 	}
 
-	func forms(of _: AnswerID) -> ArraySlice<PropertyID> {
-		[]
+	/// Filled in a world of several roots, whose answers are interned by ID; empty where they are interned by text.
+	func forms(of answer: AnswerID) -> ArraySlice<PropertyID> {
+		guard answer >= 0, !answerForms.isEmpty else {
+			return []
+		}
+		let forms = Int(answerForms[Int(answer)])
+		return formColumn[Int(formOffsets[forms])..<Int(formOffsets[forms + 1])]
 	}
 
-	func provides(_: AnswerID, _: PropertyID) -> Bool {
-		false
+	func provides(_ answer: AnswerID, _ property: PropertyID) -> Bool {
+		forms(of: answer).contains(property)
 	}
 
+	/// The frames of a world of several roots, and 1 otherwise.
 	var rootCount: Int {
-		1
+		rootVariants.isEmpty ? 1 : rootVariants.count
 	}
 
-	func rootVariant(_: Int) -> VariantID {
-		0
+	func rootVariant(_ root: Int) -> VariantID {
+		rootVariants.isEmpty ? 0 : rootVariants[root]
 	}
 
 	func reads(of declaration: DeclarationID) -> ArraySlice<ReadID> {
@@ -383,7 +394,7 @@ extension TypeFactsGraph: TypeFactsWorld {
 			}
 			return TypeFactsAnswer(form: form, forms: -1)
 		}
-		return TypeFactsAnswer(form: answerIsBeingBuilt[Int(answer)] ? .beingBuilt : .declared, forms: answerKeys[Int(answer)])
+		return TypeFactsAnswer(form: answerIsBeingBuilt[Int(answer)] ? .beingBuilt : .declared, forms: answerForms.isEmpty ? answerKeys[Int(answer)] : answerForms[Int(answer)])
 	}
 
 	func calls(of variant: VariantID) -> ArraySlice<VariantID> {

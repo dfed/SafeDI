@@ -58,7 +58,7 @@ public struct TypeFactsReport: Sendable {
 		self.root = root.instantiable.concreteInstantiable.asSource
 		self.forMockGeneration = forMockGeneration
 		projection = graph.projection
-		world = Self.projection(of: graph)
+		world = Self.projection(of: graph) { _ in "" }
 		var variantCounts = [Int](repeating: 0, count: graph.declarationCount)
 		for variant in 0..<graph.variantCount {
 			variantCounts[Int(graph.declaration(of: VariantID(variant)))] += 1
@@ -164,11 +164,12 @@ public struct TypeFactsReport: Sendable {
 	public let variantCalls: [[Int]]
 
 	/// The world read through its interface only, as text: what a consumer of the frozen accessors sees.
-	private static func projection(of world: some TypeFactsWorld) -> String {
+	/// - Parameter mark: What follows a declaration's position: a frame's mark in a world of several roots.
+	static func projection(of world: some TypeFactsWorld, mark: (DeclarationID) -> String) -> String {
 		var lines = [String]()
 		for index in 0..<world.declarationCount {
 			let declaration = DeclarationID(index)
-			var line = "d\(index) \(world.kind(of: declaration)) \(world.construction(of: declaration)) property \(world.propertyID(of: declaration))"
+			var line = "d\(index)\(mark(declaration)) \(world.kind(of: declaration)) \(world.construction(of: declaration)) property \(world.propertyID(of: declaration))"
 			line += " type \(world.builtType(of: declaration).raw) cycle \(world.cycle(of: declaration)) component \(world.component(of: declaration))"
 			line += world.isOnCycle(declaration) ? " on cycle" : ""
 			line += " route \(world.firstRoute(to: declaration)) edges \(Array(world.edges(from: declaration)))"

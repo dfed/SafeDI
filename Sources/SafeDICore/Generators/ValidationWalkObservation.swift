@@ -36,6 +36,11 @@ public enum ValidationWalkObservation: Sendable {
 	/// Called with what the walk did, when set: by the tests, never by the tool.
 	@TaskLocal public static var observer: (@Sendable (ValidationWalkObservation) -> Void)?
 
+	/// Called, when set, before each walk with the world of per-type facts of the roots the walk is about to validate
+	/// (`TypeFactsGraph.init(roots:intern:)`), or `nil` where it has no root: by the tests, never by the tool, which builds
+	/// no such world yet.
+	@TaskLocal public static var unvalidatedWorld: (@Sendable (TypeFactsRootsReport?) -> Void)?
+
 	/// Whether the walk skips a subtree whose walk along an equal context completed and found nothing. `false` only where a
 	/// test, or the graph fuzzer's oracle, compares what the walk reports with and without the skip.
 	@TaskLocal public static var skipsCleanSubtrees = true

@@ -39,6 +39,11 @@ import Testing
 /// 10. Places the world's variants map to one variant (the root place to the root's, each other to the variant its parent's
 ///     variant calls at the edge the place is built for) answer their declared reads alike, but for what a parameter
 ///     carries: a read only if available (rule 1), and whether a wrapper is still being built (rule 2).
+/// 11. The world built before validation (`TypeFactsRootsReport`) holds, beneath each root's frame, the graph the
+///     root's validated world holds: the same nodes in the same first-reach order, with the same constructions, cycle
+///     keys, edges, cycles and reads from above (`disagreements(ofRootAt:in:with:)`). A test asks it of the graphs it
+///     names; it is no part of `check(_:)`, since the two worlds hold one graph only for a production root of an
+///     accepted graph in a module without seams.
 ///
 /// Findings are recorded as issues only where `SAFEDI_TYPE_FACTS_STRICT` is set, until every graph passes; a run that
 /// sets `SAFEDI_TYPE_FACTS_LOG` to a file appends a line per tree to it, with each check's count of findings and its
@@ -286,6 +291,49 @@ enum TypeFactsChecks {
 		}
 		result.line = line + "\n"
 		return result
+	}
+
+	/// Check 11: what the graph beneath the frame of the root at `rootIndex` in `world`, the world of every root built
+	/// before validation, holds otherwise than `report`, that root's validated world: a line per difference, none where
+	/// the two hold one graph. The root's nodes are numbered again in the order a walk of their edges first reaches
+	/// them, as a world of one root numbers them. Not compared: a node's first route, which in `world` runs through its
+	/// root and frame; the variants, which `world` keys by every answer and `report` by what a parameter carries; and
+	/// the worlds' texts, which print the run's IDs.
+	static func disagreements(ofRootAt rootIndex: Int, in world: TypeFactsRootsReport, with report: TypeFactsReport) -> [String] {
+		guard world.rootVariants.indices.contains(rootIndex) else {
+			return ["the world has no root \(rootIndex)"]
+		}
+		let rootNode = world.variantNodes[world.rootVariants[rootIndex]]
+		var positionByNode = [Int: Int]()
+		var nodesInOrder = [Int]()
+		var stack = [rootNode]
+		while let node = stack.popLast() {
+			guard positionByNode[node] == nil else { continue }
+			positionByNode[node] = nodesInOrder.count
+			nodesInOrder.append(node)
+			stack.append(contentsOf: world.nodes[node].edges.reversed())
+		}
+		var lines = [String]()
+		if nodesInOrder.count != report.nodes.count {
+			lines.append("nodes: \(nodesInOrder.count), not \(report.nodes.count)")
+		}
+		for (position, node) in nodesInOrder.enumerated() where position < report.nodes.count {
+			let ours = world.nodes[node]
+			let theirs = report.nodes[position]
+			func compare(_ name: String, _ ourValue: some Equatable & Sendable, _ theirValue: some Equatable & Sendable) {
+				if "\(ourValue)" != "\(theirValue)" {
+					lines.append("node \(position) \(theirs.description) \(name): \(ourValue), not \(theirValue)")
+				}
+			}
+			compare("description", ours.description, theirs.description)
+			compare("construction", ours.construction, theirs.construction)
+			compare("cycle key", ours.cycleKey, theirs.cycleKey)
+			compare("edges", ours.edges.map { positionByNode[$0] ?? -1 }, theirs.edges)
+			compare("instantiated edges", ours.instantiatedEdgeCount, theirs.instantiatedEdgeCount)
+			compare("on cycle", ours.isOnCycle, theirs.isOnCycle)
+			compare("reads from above", ours.readsFromAbove, theirs.readsFromAbove)
+		}
+		return lines
 	}
 
 	/// A place's answered reads as a variant's key compares them: a read only if available left out (rule 1), given the

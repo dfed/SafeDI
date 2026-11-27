@@ -94,7 +94,7 @@ struct SafeDIToolMockPromotionInterningTests: ~Copyable {
 			switch bucket {
 			case .internedAtFreeze:
 				internedAtFreeze.append(value)
-			case .notExcluded, .excluded:
+			case .notExcluded, .excluded, .internedForTypeFacts:
 				break
 			}
 		}
