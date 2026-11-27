@@ -436,15 +436,29 @@ def e5(text,walk):
                 bound.add(lines[k].strip())
     if not bound: return text
     for k in range(1,len(walk_lines)):
-        if not (UNAVAILABLE.match(walk_lines[k]) and walk_lines[k].strip() in bound and FUNC.match(walk_lines[k-1])): continue
+        if not (UNAVAILABLE.match(walk_lines[k]) and walk_lines[k].strip() in bound): continue
+        # the walk binds it where the type declares it: first in the function, or after the line before it there
+        indent=len(walk_lines[k])-len(walk_lines[k].lstrip())
+        head=k-1
+        while head>=0 and not (FUNC.match(walk_lines[head]) and len(FUNC.match(walk_lines[head]).group(1))==indent-4):
+            if walk_lines[head].strip() and len(walk_lines[head])-len(walk_lines[head].lstrip())<indent: head=-1
+            else: head-=1
+        if head<0: continue
         i=0
         while i<len(lines):
-            if lines[i]==walk_lines[k-1] and i+1<len(lines) and lines[i+1]!=walk_lines[k] and not takes_overrides(lines,i):
-                if block_end(lines,i)==i+2:
-                    # the function's one expression becomes its last statement
-                    only=lines[i+1]
-                    lines[i+1]=only[:len(only)-len(only.lstrip())]+'return '+only.lstrip()
-                lines.insert(i+1,walk_lines[k])
+            if lines[i]==walk_lines[head] and not takes_overrides(lines,i):
+                end=block_end(lines,i)
+                if head==k-1:
+                    if i+1<len(lines) and lines[i+1]!=walk_lines[k]:
+                        if end==i+2:
+                            # the function's one expression becomes its last statement
+                            only=lines[i+1]
+                            lines[i+1]=only[:len(only)-len(only.lstrip())]+'return '+only.lstrip()
+                        lines.insert(i+1,walk_lines[k])
+                else:
+                    for at in range(i+1,end):
+                        if lines[at]==walk_lines[k-1] and lines[at+1]!=walk_lines[k]:
+                            lines.insert(at+1,walk_lines[k]); break
             i+=1
     return '\n'.join(lines)
 UNAVAILABLE=re.compile(r'^ +let (\w+): (.+\?) = safeDIOverrides\.(\w+)$')
