@@ -1140,8 +1140,9 @@ GROWTH_ROWS = {
     # feature declares with types of its own. Whether a declaration of such a label can hide a read is asked of each
     # scope once, for every label together: 1.45 s and 2.11 s (1.46), each within a hundredth of a tool that never asks.
     # Asked once for each label and each scope that declares it, over every scope beneath that scope, the shared tree
-    # included, it took 2.26 s and 5.94 s (2.63).
-    "BLS-back-links-with-feature-labels-over-shared-tree": (lambda layers: shape_feature_labels_over_shared_tree(10 * layers - 5), 1, {}),
+    # included, it took 2.26 s and 5.94 s (2.63). Its memory is held to 2.3: with the default arenas, which the growth
+    # rows run with, a run on CI read 110.9 MB and 222.9 MB (2.01, run 45938379663).
+    "BLS-back-links-with-feature-labels-over-shared-tree": (lambda layers: shape_feature_labels_over_shared_tree(10 * layers - 5), 1, {"memory": 2.3}),
     # `F4` of five features and `F9` of ten: twice the features beneath the module on top. Four runs of the row with
     # each of three tools that build the features beneath inline (the 2.4.0 release among them) measured 0.63 to
     # 0.68 s and 1.22 to 1.41 s, 1.79 to 2.17 times, and 3,540,750 and 6,776,238 bytes of code (1.91, and 1.97 with
