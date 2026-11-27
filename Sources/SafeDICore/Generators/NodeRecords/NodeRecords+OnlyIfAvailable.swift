@@ -224,11 +224,9 @@ struct OnlyIfAvailableAnswers: Sendable {
 	/// (`TypeFactsOutcome.parameter`).
 	private static func takesAsParameters(_ labels: Set<String>, _ variant: VariantID, in world: some NodeRecordSources) -> Bool {
 		var labelsTaken = Set<String>()
-		for (read, outcome) in zip(world.reads(of: world.declaration(of: variant)), world.outcomes(of: variant)) {
-			let label = world.text(ofLabel: world.read(read).label)
-			guard labels.contains(label) else { continue }
+		for (read, outcome) in zip(world.reads(of: world.declaration(of: variant)), world.outcomes(of: variant)) where labels.contains(world.text(ofLabel: world.read(read).label)) {
 			guard outcome == .parameter else { return false }
-			labelsTaken.insert(label)
+			labelsTaken.insert(world.text(ofLabel: world.read(read).label))
 		}
 		return labelsTaken == labels
 	}
