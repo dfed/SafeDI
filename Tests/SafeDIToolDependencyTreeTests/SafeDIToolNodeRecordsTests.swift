@@ -95,39 +95,29 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_refusesNodeForItsOtherKind_whenAKindClaimsIt() async throws {
-		// `Child` is built as a `LazilyInstantiated` and receives a value only if available. A claim that makes lazy nodes
-		// discharges only `lazy`, so the world is still refused for `Child`'s receive.
-		let (_, reports) = try await NodeRecordsObservation.$claimsForTesting.withValue(["Root": ["lazy"], "Child": ["lazy"]]) {
+		// No declaration fulfills `Analytics`, so `Root`'s property is a node that is always `nil` and that no initializer
+		// builds: two kinds stage 1 does not make. A claim that discharges the first leaves the world refused for the second.
+		let (_, reports) = try await NodeRecordsObservation.$claimsForTesting.withValue(["Analytics": ["unavailableOrInlineSeam"]]) {
 			try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
 				try await executeSafeDIToolTest(swiftFileContent: [
 					"""
 					@Instantiable(isRoot: true)
 					public struct Root: Instantiable {
-					    public init(child: LazilyInstantiated<Child>) {
-					        self.child = child
+					    public init(analytics: Analytics?) {
+					        self.analytics = analytics
 					    }
 
-					    @Instantiated let child: LazilyInstantiated<Child>
+					    @Instantiated(onlyIfAvailable: true) let analytics: Analytics?
 					}
 					""",
 					"""
-					@Instantiable
-					public struct Child: Instantiable {
-					    public init(theme: Theme?) {
-					        self.theme = theme
-					    }
-
-					    @Received(onlyIfAvailable: true) let theme: Theme?
-					}
-					""",
-					"""
-					public struct Theme {}
+					public struct Analytics {}
 					""",
 				], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 			}
 		}
-		#expect(reports.map(\.refusal) == ["onlyIfAvailable"])
-		#expect(reports.map(\.everyRefusal) == [["onlyIfAvailable"]])
+		#expect(reports.map(\.refusal) == ["noInitializer"])
+		#expect(reports.map(\.everyRefusal) == [["noInitializer"]])
 	}
 
 	@Test
@@ -214,15 +204,94 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysOutASeamBuiltInlineAsTheTreeDoes_whenNoModuleGeneratesItsInitializer() async throws {
+		// A seam in a directory a `#SafeDIConfiguration` adds is in no module's own files, so a tree that reaches it builds
+		// it inline, ending its construction with the comment that says why: node records make it as a node built by its
+		// initializer, with that comment.
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					#SafeDIConfiguration(
+					    additionalDirectoriesToInclude: ["$ADDITIONAL_DIRECTORY"]
+					)
+					""",
+					"""
+					@Instantiable(isRoot: true)
+					public struct Root: Instantiable {
+					    public init(session: Session, screen: Screen) {
+					        self.session = session
+					        self.screen = screen
+					    }
+
+					    @Instantiated let session: Session
+					    @Instantiated let screen: Screen
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Session: Instantiable {
+					    public init() {}
+					}
+					""",
+				],
+				additionalDirectorySwiftFileContent: [
+					"""
+					@Instantiable(generateDependencyTree: true)
+					public struct Screen: Instantiable {
+					    public init(detail: Detail) {
+					        self.detail = detail
+					    }
+
+					    @Instantiated let detail: Detail
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Detail: Instantiable {
+					    public init(session: Session) {
+					        self.session = session
+					    }
+
+					    @Received let session: Session
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		#expect(output.dependencyTreeFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public init() {
+			        let session = Session()
+			        func __safeDI_screen() -> Screen {
+			            let detail = Detail(session: session)
+			            return Screen(detail: detail) // Built inline: SafeDI does not know which module declares `Screen`, so this tree cannot call the initializer SafeDI generates for it.
+			        }
+			        let screen: Screen = __safeDI_screen()
+			        self.init(session: session, screen: screen)
+			    }
+			}
+			""",
+		])
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
+		#expect(reports.flatMap(\.differences) == [])
+	}
+
+	@Test
 	func nodeRecordsFiles_callNoScopeGeneratorAndReadNoText_whenReadAsSource() throws {
 		// Soundness rule 2: a record is made from per-type facts, never from a tree's generator or text it spelled. Only
 		// the static helpers of `ScopeGenerator` listed here are called, until they move: a new one is a decision. The
 		// generator's hook (`DependencyTreeGenerator+NodeRecords.swift`) also calls `rootInitializer(of:)`, and plans the
-		// tree beside the records for the comparison.
+		// tree beside the records for the comparison. A mock world's records (`NodeRecords+MockConstruction.swift`) read two
+		// more, both facts of one type: its default-valued parameters, and the name of the configuration it declares.
 		let directory = URL(fileURLWithPath: #filePath)
 			.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
 			.appendingPathComponent("Sources/SafeDICore/Generators/NodeRecords")
-		let staticHelpers: Set = ["functionName", "standardIndent", "provides"]
+		let staticHelpers: Set = ["functionName", "standardIndent", "provides", "referencingDeclaration", "aliasDeclaration", "isBuilder", "DefaultParameter", "mockConfigurationStructName"]
 		let files = try FileManager.default.contentsOfDirectory(atPath: directory.path).filter { $0.hasSuffix(".swift") && $0 != "DependencyTreeGenerator+NodeRecords.swift" }.sorted()
 		#expect(files.count >= 4)
 		for file in files {

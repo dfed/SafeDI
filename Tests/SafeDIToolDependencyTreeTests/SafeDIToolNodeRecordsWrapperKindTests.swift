@@ -26,9 +26,9 @@ import Testing
 
 /// Node records (`NodeRecords`) of the kinds a wrapper or an erasure makes: a `SendableInstantiator`, an erased constant
 /// or instantiator, and a `LazilyInstantiated` or `SendableLazilyInstantiated` property with the receivers that read its
-/// instance. Each test lays its root out from the records, with nothing that makes the run build the root's tree
-/// (`TreeForcer`), and compares the whole file with what the tree's places wrote; the last shows that a world whose
-/// `@Sendable` function captures a wrapper keeps the tree's error.
+/// instance. Each test compares the whole file with what the tree's places wrote, with its root laid out from the
+/// records and nothing that makes the run build the root's tree (`TreeForcer`) wherever the records accept its world;
+/// the last shows that a world whose `@Sendable` function captures a wrapper keeps the tree's error.
 struct SafeDIToolNodeRecordsWrapperKindTests: ~Copyable {
 	// MARK: Initialization
 
@@ -353,6 +353,82 @@ struct SafeDIToolNodeRecordsWrapperKindTests: ~Copyable {
 		#expect(reports.map(\.refusal) == [nil])
 		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
 		#expect(reports.flatMap(\.treeForcers) == [])
+		#expect(reports.flatMap(\.differences) == [])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_readsTheWrappersInstance_whenATypeBeneathItReceivesTheValueOnlyIfAvailable() async throws {
+		// The wrapper is the nearest declaration of `session`, so a receive only if available of the value is handed its
+		// instance, as a required one is.
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: [
+				seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let session: LazilyInstantiated<Session>", "@Instantiated let reader: Reader"]),
+				seamFixtureType(named: "Session", isFinalClass: true, declarations: []),
+				seamFixtureType(named: "Reader", declarations: ["@Received(onlyIfAvailable: true) let session: Session?"]),
+			], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_session() -> Session {
+			            Session()
+			        }
+			        let session = LazilyInstantiated<Session>(__safeDI_session)
+			        let reader = Reader(session: session.instance)
+			        self.init(session: session, reader: reader)
+			    }
+			}
+			""",
+		])
+		#expect(reports.map(\.refusal) == [nil])
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
+		#expect(reports.flatMap(\.treeForcers) == [])
+		#expect(reports.flatMap(\.differences) == [])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_bindsTheRenameFromTheWrappersInstance_whenARenameIsFulfilledByALazilyInstantiatedProperty() async throws {
+		// `Reader` receives `session` as `store`, and the nearest declaration of `session` is a wrapper, so the rename is
+		// bound from its instance. A rename's record binds from the label alone, so this root is written from its tree.
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: [
+				seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let session: LazilyInstantiated<Session>", "@Instantiated let reader: Reader"]),
+				seamFixtureType(named: "Session", isFinalClass: true, declarations: []),
+				"""
+				@Instantiable
+				public struct Reader: Instantiable {
+				    public init(store: Session) {
+				        self.store = store
+				    }
+
+				    @Received(fulfilledByDependencyNamed: "session", ofType: Session.self) let store: Session
+				}
+				""",
+			], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_session() -> Session {
+			            Session()
+			        }
+			        let session = LazilyInstantiated<Session>(__safeDI_session)
+			        func __safeDI_reader() -> Reader {
+			            #sourceLocation(file: "\(output.fixtures["Reader.swift"])", line: 7)
+			            let store: Session = session.instance
+			            #sourceLocation()
+			            return Reader(store: store)
+			        }
+			        let reader: Reader = __safeDI_reader()
+			        self.init(session: session, reader: reader)
+			    }
+			}
+			""",
+		])
 		#expect(reports.flatMap(\.differences) == [])
 	}
 

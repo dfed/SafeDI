@@ -21,7 +21,7 @@
 extension NodeRecords {
 	/// Claims a node built in a `@Sendable` function of its own: a `SendableInstantiator`, erased or not, or a
 	/// `SendableLazilyInstantiated`. Its record is its type's initializer's
-	/// (`builtByInitializerRecord(of:variant:in:lazilyInstantiatedInstanceProperties:typesDeclaredEscaping:children:)`),
+	/// (`builtByInitializerRecord(of:variant:in:unavailableProperties:lazilyInstantiatedInstanceProperties:typesDeclaredEscaping:children:lineEnd:)`),
 	/// marked `@Sendable`. Only the wrapper's own place carries the mark: a place built inside its function keeps a plain
 	/// record, as the tree's does, and the engine marks the functions the `@Sendable` one captures from where they are
 	/// placed. A production body has one variant per node whatever function encloses it.

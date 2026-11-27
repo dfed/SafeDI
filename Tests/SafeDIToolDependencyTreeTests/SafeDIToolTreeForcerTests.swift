@@ -44,24 +44,24 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_buildsTreeOnlyForRootNodeRecordsRefuse_whenNothingElseReadsTrees() async throws {
-		let (forcers, heldTaskCounts) = try await treeForcers(of: Self.plainAndTolerantRoots)
+		let (forcers, heldTaskCounts) = try await treeForcers(of: Self.plainAndLoopingRoots)
 		#expect(forcers == """
+		Looping\tkind cycle
 		Plain\tnone
-		Tolerant\tkind onlyIfAvailable
 		roots that built a tree: 1 of 2
 
 		""")
-		// A tree's code tasks are counted once its code is planned: only `Tolerant` built one.
+		// A tree's code tasks are counted once its code is planned: only `Looping` built one.
 		#expect(heldTaskCounts == [0])
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_buildsEveryRootsTree_whenRunDrawsDOTGraph() async throws {
-		let (forcers, heldTaskCounts) = try await treeForcers(of: Self.plainAndTolerantRoots, buildDOTFileOutput: true)
+		let (forcers, heldTaskCounts) = try await treeForcers(of: Self.plainAndLoopingRoots, buildDOTFileOutput: true)
 		#expect(forcers == """
+		Looping\tkind cycle, DOT graph
 		Plain\tDOT graph
-		Tolerant\tkind onlyIfAvailable, DOT graph
 		roots that built a tree: 2 of 2
 
 		""")
@@ -79,8 +79,9 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 			],
 			moduleMembershipArguments: ["--module-name", "Feature"],
 		)
+		// The root's world calls the seam, which node records refuse as a construction; the seam's own world they accept.
 		#expect(forcers == """
-		Root\tseam world
+		Root\tseam world, kind construction
 		Screen\tseam world
 		roots that built a tree: 2 of 2
 
@@ -91,12 +92,12 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 
 	private var filesToDelete: [URL]
 
-	/// `Plain`, a root node records lay out, and `Tolerant`, a root they refuse, since a type of its tree receives a
-	/// property only if available.
-	private static let plainAndTolerantRoots = [
+	/// `Plain`, a root node records lay out, and `Looping`, a root they refuse, since a type of its tree builds itself
+	/// again through an `Instantiator`.
+	private static let plainAndLoopingRoots = [
+		seamFixtureType(named: "Looping", isRoot: true, declarations: ["@Instantiated let stepBuilder: Instantiator<Step>"]),
 		seamFixtureType(named: "Plain", isRoot: true, declarations: ["@Instantiated let service: Service"]),
-		seamFixtureType(named: "Tolerant", isRoot: true, declarations: ["@Instantiated let service: Service", "@Instantiated let reader: Reader"]),
-		seamFixtureType(named: "Reader", declarations: ["@Received(onlyIfAvailable: true) let service: Service?"]),
+		seamFixtureType(named: "Step", declarations: ["@Instantiated let stepBuilder: Instantiator<Step>"]),
 		seamFixtureType(named: "Service", declarations: []),
 	]
 

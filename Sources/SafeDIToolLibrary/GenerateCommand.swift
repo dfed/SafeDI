@@ -733,6 +733,7 @@ public struct Generate: AsyncParsableCommand {
 					generatesDependencyTrees: true,
 					mocks: mockRequest,
 					generatesDOTTree: dotFileOutput != nil && listsPassTheirChecks,
+					namesNodeRecordRefusals: treeForcersOutput != nil,
 				))
 				warnings.append(contentsOf: results.warnings)
 				let (additionalMocksToGenerate, dependencyTreeDestinationsBySource) = try listChecks.get()
