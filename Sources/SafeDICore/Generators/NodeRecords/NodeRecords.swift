@@ -24,6 +24,17 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	/// The node is built by anything but its type's initializer or `instantiate()`: a seam's or a public mock's call, a
 	/// hand-written mock, a construction function or a fill.
 	case construction
+	/// The node calls another module's public mock and fills a builder of it: its fills, dispatchers and level functions
+	/// are declared in a builder function of the call's own.
+	case publicMockCallFills
+	/// The node calls another module's public mock and passes a builder up to it, which is bound again under the label the
+	/// leaf receives it as.
+	case publicMockCallPassesUp
+	/// The node calls another module's public mock that takes no `SafeDIOverrides`, so it is configured by an override
+	/// closure, whose arguments read the call's fills.
+	case publicMockCallOverrideClosure
+	/// The node calls another module's public mock and is promoted to the mock's root, which reads the caller's value first.
+	case publicMockCallPromoted
 	/// A mock root's node takes a parameter with a default value, which a mock holds in the type's configuration, or its
 	/// type has a hand-written mock, whose defaults that configuration takes too.
 	case mockDefaultValuedParameter
@@ -70,6 +81,8 @@ protocol NodeRecordSources: TypeFactsWorld {
 	func property(of declaration: DeclarationID) -> Property?
 	/// Whether the world is a mock root's, each of whose nodes reads its override.
 	var isMockWorld: Bool { get }
+	/// The text of the world's label `label` (`Read.label`).
+	func labelText(_ label: Int32) -> String
 }
 
 extension TypeFactsGraph: NodeRecordSources {
@@ -79,6 +92,10 @@ extension TypeFactsGraph: NodeRecordSources {
 
 	func property(of declaration: DeclarationID) -> Property? {
 		graph.nodes[Int(declaration)].property
+	}
+
+	func labelText(_ label: Int32) -> String {
+		labelTexts[Int(label)]
 	}
 }
 
@@ -144,6 +161,8 @@ struct NodeRecords: Sendable {
 				try Self.builtByInitializerRecord(of: declaration, variant: variant, in: world, typesDeclaredEscaping: escaping, children: children)
 			case .mockConstruction:
 				try Self.mockConstructionRecord(of: declaration, variant: variant, in: world, typesDeclaredEscaping: escaping, children: children)
+			case .publicMockCall:
+				try Self.publicMockCallRecord(of: declaration, variant: variant, in: world, typesDeclaredEscaping: escaping, children: children)
 			}
 			typesDeclaredEscaping[Int(variant)] = escaping
 			records[Int(variant)] = record
@@ -219,8 +238,9 @@ struct NodeRecords: Sendable {
 	/// in the order of `NodeRecordKind`'s cases, calling its file's classifier, which returns `nil` for a node not of its
 	/// kind: `if let claim = <kind>Claim(of: declaration, in: world) { return claim }`.
 	private static func claim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
-		// A test claims a node by its type's name (`NodeRecordsObservation.claimsForTesting`).
-		NodeRecordsObservation.claimsForTesting[world.scope(of: declaration).instantiable.concreteInstantiable.asSource].map { discharged in
+		publicMockCallClaim(of: declaration, in: world)
+			// A test claims a node by its type's name (`NodeRecordsObservation.claimsForTesting`).
+			?? NodeRecordsObservation.claimsForTesting[world.scope(of: declaration).instantiable.concreteInstantiable.asSource].map { discharged in
 			NodeRecordClaim(kind: .builtByInitializer, discharges: Set(discharged.compactMap(NodeRecordRefusal.init(rawValue:))))
 		}
 			// Asked last: it claims every node of a mock root's world that no kind before it claimed.
@@ -257,4 +277,7 @@ enum NodeRecordKind: Sendable {
 	/// A node of a mock root's world that stage 1 would make in a production root's, which reads its override before it
 	/// calls its type's initializer (`NodeRecords+MockConstruction.swift`).
 	case mockConstruction
+	/// A constant or an `Instantiator` built by a call of another module's public mock, which passes the called mock its own
+	/// `SafeDIOverrides` and fills no builder (`NodeRecords+PublicMockCall.swift`).
+	case publicMockCall
 }
