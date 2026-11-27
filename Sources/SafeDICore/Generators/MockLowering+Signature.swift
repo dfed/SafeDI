@@ -104,6 +104,8 @@ extension MockLowering {
 			let properties: [Property]
 			/// The parameter's type as `mock()` declares it.
 			let typeSource: String
+			/// The parameter's type.
+			let parameterType: TypeDescription
 			/// The parameter's default: a builder that returns `nil` for a builder of places instantiated only if available,
 			/// whose type is optional, the value production gives a place nothing fulfills.
 			let defaultExpression: String?
@@ -306,6 +308,7 @@ extension ScopeGenerator {
 				internalName: builder.internalName,
 				properties: builder.passedUpProperties,
 				typeSource: builder.parameterType.asSource,
+				parameterType: builder.parameterType,
 				defaultExpression: builder.family.holeType.builtType.isOptional ? ReservedName.nilBuilderSource : nil,
 				places: builder.places,
 				family: builder.family,

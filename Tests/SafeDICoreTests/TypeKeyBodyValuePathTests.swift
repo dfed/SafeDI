@@ -25,6 +25,55 @@ import Testing
 /// handed a read of the body. No walk records one yet, so each test builds the root's places as a walk would.
 struct TypeKeyBodyValuePathTests {
 	@Test
+	func statements_beginsThePlacesFunctionWithItsEnteredPlaceLines_whenItsRecordCarriesAnEnteredPlace() throws {
+		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.rootBody { built in
+			built.callFields = CallFields(leadingStatement: .enteredPlace(EnteredPlace(slot: "b", nearestOfTypeSlot: nil)), closureArguments: [])
+		}))
+		#expect(GeneratedCode.lines(statements).spelled() == """
+		        let id = 1
+		        func __safeDI_b() -> B {
+		            let __safeDI_place = __safeDI_entered.b ?? .init(safeDIOverrides, above: __safeDI_entered)
+		            let safeDIOverrides = __safeDI_place.configuration
+		            let __safeDI_entered = __safeDI_place.enteredAbove.entering(b: __safeDI_place)
+		            return B()
+		        }
+		        let b: B = __safeDI_b()
+		""")
+	}
+
+	@Test
+	func statements_entersANewPlaceWithTheNearestConfigurationOfItsType_whenItsEnteredPlaceNamesANearestOfTypeSlot() throws {
+		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.rootBody { built in
+			built.callFields = CallFields(leadingStatement: .enteredPlace(EnteredPlace(slot: "b", nearestOfTypeSlot: "nearestB")), closureArguments: [])
+		}))
+		#expect(GeneratedCode.lines(statements).spelled() == """
+		        let id = 1
+		        func __safeDI_b() -> B {
+		            let __safeDI_place = __safeDI_entered.b ?? .init(__safeDI_entered.nearestB?.configuration ?? safeDIOverrides, above: __safeDI_entered)
+		            let safeDIOverrides = __safeDI_place.configuration
+		            let __safeDI_entered = __safeDI_place.enteredAbove.entering(b: __safeDI_place)
+		            return B()
+		        }
+		        let b: B = __safeDI_b()
+		""")
+	}
+
+	@Test
+	func statements_beginsThePlacesFunctionByEnteringOnlyTheNearestPlaceOfItsType_whenItsEnteredPlaceHasNoSlot() throws {
+		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.rootBody { built in
+			built.callFields = CallFields(leadingStatement: .enteredPlace(EnteredPlace(slot: nil, nearestOfTypeSlot: "nearestB")), closureArguments: [])
+		}))
+		#expect(GeneratedCode.lines(statements).spelled() == """
+		        let id = 1
+		        func __safeDI_b() -> B {
+		            let __safeDI_entered = __safeDI_entered.entering(nearestB: .init(safeDIOverrides, above: __safeDI_entered))
+		            return B()
+		        }
+		        let b: B = __safeDI_b()
+		""")
+	}
+
+	@Test
 	func statements_spellsMemberCallWithWrappedReads_whenConstructionIsACallOfAValue() throws {
 		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.rootBody { built in
 			built.constructionValue = ConstructionValue(value: .call("member", of: .rootDeclaration("builder"), arguments: [Self.idRead], argumentsWrapper: .simple(name: "Values")), resultWrapper: nil)
@@ -291,8 +340,18 @@ struct TypeKeyBodyValuePathTests {
 	}
 
 	@Test
-	func statements_keepsThePathKeysBody_whenACloserHandsAPassedArgumentAMember() {
-		#expect(TypeKeyBody.statements(ofRootBody: Self.closerBody(handing: PassedArgument(parameterName: "cfg", type: .simple(name: "Cfg"), value: .member("cfg", of: .rootDeclaration("overrides")), staysOutsideSendableFunctions: false))) == nil)
+	func statements_handsTheClosedOnFunctionTheMember_whenACloserHandsAPassedArgumentAMember() throws {
+		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.closerBody(handing: PassedArgument(parameterName: "cfg", type: .simple(name: "Cfg"), value: .member("cfg", of: .rootDeclaration("overrides")), staysOutsideSendableFunctions: false))))
+		#expect(GeneratedCode.lines(statements).spelled() == """
+		        let id = 1
+		        func __safeDI_b(cfg: Cfg) -> B {
+		            let bBuilder = Instantiator<B> {
+		                __safeDI_b(cfg: overrides.cfg)
+		            }
+		            return B(bBuilder: bBuilder)
+		        }
+		        let b: B = __safeDI_b(cfg: Cfg())
+		""")
 	}
 
 	@Test
