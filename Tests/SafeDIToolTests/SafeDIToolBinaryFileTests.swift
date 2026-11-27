@@ -540,7 +540,7 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 			writtenTagsByType[String(reflecting: type(of: value)), default: []].insert(writer.bytes[0])
 		}
 
-		#expect(writtenTagsByType.count == 8)
+		#expect(writtenTagsByType.count == 9)
 		for schemaMember in BinaryFile.schemaMembers where writtenTagsByType[String(reflecting: schemaMember)] != nil {
 			#expect(writtenTagsByType[String(reflecting: schemaMember)] == Set(0..<UInt8(Self.caseCount(of: schemaMember))), "\(schemaMember)")
 		}
@@ -2585,6 +2585,27 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 			    struct SafeDIScope_Kitchen {}
 			}
 			""",
+			"Isolation.swift": """
+			@Instantiable(isRoot: true, generateMock: true, customMockName: "customMock")
+			public final class IsolatedRoot: Instantiable {
+			    @MainActor public init(pantry: Pantry) {
+			        self.pantry = pantry
+			    }
+
+			    @MainActor public static func customMock(pantry: Pantry) -> IsolatedRoot { IsolatedRoot(pantry: pantry) }
+
+			    @Instantiated private let pantry: Pantry
+			}
+
+			@Instantiable(generateDependencyTree: true)
+			public final class IsolatedSeam: Instantiable {
+			    @MainActor public init(pantry: Pantry) {
+			        self.pantry = pantry
+			    }
+
+			    @Instantiated private let pantry: Pantry
+			}
+			""",
 			"Pantry.swift": """
 			@Instantiable(generateMock: .public, customMockName: "customMock")
 			public struct Pantry: Instantiable {
@@ -2929,6 +2950,9 @@ extension SafeDIConfiguration.DefaultIsolation: BinarySample {}
 extension Instantiable: BinarySample {}
 extension Instantiable.DeclarationType: BinarySample {}
 extension Instantiable.DependencyLabelInUnselectedClause: BinarySample {}
+extension Instantiable.UnstatedGlobalActorIsolation: BinarySample {}
+extension Instantiable.UnstatedGlobalActorIsolation.Finding: BinarySample {}
+extension Instantiable.UnstatedGlobalActorIsolation.GeneratedDeclaration: BinarySample {}
 extension PlainTypeDeclaration: BinarySample {}
 extension ReservedTypeNameDeclaration: BinarySample {}
 extension MockGeneration: BinarySample {}

@@ -389,6 +389,13 @@ public struct Generate: AsyncParsableCommand {
 			dependingOn: dependentModuleInfoFiles.map(\.file.moduleName),
 		)
 		.adoptingDeclaredDefaultIsolation(ownConfiguration: sourceConfiguration, membership: membership)
+		let isOwnFile = Self.isOwnFile(ownProjectFilePaths: ownProjectFilePaths, comparisonFilePaths: comparisonFilePaths)
+		// A missing isolation is a mistake in the module's own declarations whatever its trees hold, so it is reported
+		// before any is built, and only by the module's own run, which knows its `defaultIsolation`.
+		let unstatedIsolationDiagnostics = Self.unstatedGlobalActorIsolationDiagnostics(of: module.instantiables, isOwnFile: isOwnFile)
+		guard unstatedIsolationDiagnostics.isEmpty else {
+			throw UnstatedGlobalActorIsolationError(sourceDiagnostics: unstatedIsolationDiagnostics)
+		}
 		// The modules the given module info files describe, and the modules their views carry, each once.
 		let moduleInfoView = try MergedModuleInfoView(
 			directModules: dependentModuleInfoFiles,
@@ -481,7 +488,6 @@ public struct Generate: AsyncParsableCommand {
 		let dependentModuleNames = dependentModuleInfo.map(\.moduleName)
 		let filesWithUnexpectedNodes = dependentModuleInfo.compactMap(\.filesWithUnexpectedNodes).flatMap(\.self) + (module.filesWithUnexpectedNodes ?? [])
 		let instantiableTypeNamesInAnyClause = Set(dependentModuleInfo.flatMap(\.instantiableTypeNamesInAnyClause) + module.instantiableTypeNamesInAnyClause)
-		let isOwnFile = Self.isOwnFile(ownProjectFilePaths: ownProjectFilePaths, comparisonFilePaths: comparisonFilePaths)
 		let generator = DependencyTreeGenerator(
 			importStatements: importingOtherModules(importingModulesReadFromBeneath(dependentModuleInfo.flatMap(\.imports) + viewOnlyDeclarations.flatMap(\.imports) + additionalImportStatements + module.imports)),
 			// A dependent module's mock-only declarations reach this module's mocks, so its mock imports do too.
@@ -1146,6 +1152,24 @@ public struct Generate: AsyncParsableCommand {
 		} else {
 			inputProjectFilePaths()
 		}
+	}
+
+	/// The errors that report, at each of `instantiables` that the module's own files declare, every declaration SafeDI
+	/// generates for it that calls a `@MainActor` declaration while neither the type nor the attribute text it reads states
+	/// an isolation and the module's declared `defaultIsolation` does not fill that text
+	/// (`Instantiable.unstatedGlobalActorIsolation`), in source order.
+	private static func unstatedGlobalActorIsolationDiagnostics(
+		of instantiables: [Instantiable],
+		isOwnFile: (String) -> Bool,
+	) -> [SourceDiagnostic] {
+		SourceDiagnostic.joiningInSourceOrder(instantiables.compactMap { instantiable in
+			guard let isolation = instantiable.unstatedGlobalActorIsolation,
+			      let location = instantiable.declarationLocation,
+			      instantiable.sourceFilePath.map(isOwnFile) == true
+			else { return nil }
+			let reported = isolation.findings.filter { !$0.generatedDeclaration.isFilledByModuleDefaultIsolation(in: instantiable) }
+			return reported.isEmpty ? nil : isolation.sourceDiagnostics(reporting: reported, inFileAt: location.filePath)
+		})
 	}
 
 	/// Whether a file a declaration records is one of the module's own files (see `ownProjectFilePaths`), so that the
@@ -2206,6 +2230,11 @@ struct AdditionalMocksNameMockOnlyDeclarationError: SourceLocatedError {
 /// Types the module's own files declare whose names begin with a prefix SafeDI reserves for the types it generates, which
 /// the `@Instantiable` macro does not see. Each diagnostic is at one declaration's name, in source order.
 struct ReservedTypeNameError: SourceLocatedError {
+	let sourceDiagnostics: [SourceDiagnostic]
+}
+
+/// Declarations SafeDI generates that call a `@MainActor` declaration while nothing states their isolation.
+struct UnstatedGlobalActorIsolationError: SourceLocatedError {
 	let sourceDiagnostics: [SourceDiagnostic]
 }
 
