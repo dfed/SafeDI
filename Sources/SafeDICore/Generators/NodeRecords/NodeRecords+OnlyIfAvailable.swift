@@ -99,6 +99,9 @@ struct OnlyIfAvailableAnswers: Sendable {
 		var labels = Set<String>()
 		// The labels a rename only if available is fulfilled by.
 		var renamedLabels = Set<String>()
+		let holdsHoleOrFill = (0..<Int32(world.declarationCount)).contains { declaration in
+			world.kind(of: declaration) == .hole || world.edgeFacts(from: declaration).contains(where: \.isFill)
+		}
 		for declaration in 0..<Int32(world.declarationCount) where world.kind(of: declaration) != .alias && world.kind(of: declaration) != .hole {
 			for dependency in world.scope(of: declaration).instantiable.dependencies {
 				switch dependency.source {
@@ -182,7 +185,9 @@ struct OnlyIfAvailableAnswers: Sendable {
 					// A member of a cycle takes what its calls answer as its cycle parameters, whose rows are made per call. A
 					// rename only if available is bound where its scope is built, to the declaration or to `nil`, by one
 					// statement for every call, so a label one fulfills is not taken as a parameter.
-					guard labelsOneCallAnswers.isEmpty || (!world.isOnCycle(world.declaration(of: callee)) && renamedLabels.isDisjoint(with: labelsOneCallAnswers)) else {
+					// A world with a hole or a fill writes the places beneath them from its sites' code, which passes `nil` where
+					// one call sees no declaration, so it takes no such parameter either.
+					guard labelsOneCallAnswers.isEmpty || (!holdsHoleOrFill && !world.isOnCycle(world.declaration(of: callee)) && renamedLabels.isDisjoint(with: labelsOneCallAnswers)) else {
 						throw .onlyIfAvailableAnsweredApart
 					}
 					// The facts key `nil` with a lazy wrapper where no answer in the declared form reaches the read (rule A's
