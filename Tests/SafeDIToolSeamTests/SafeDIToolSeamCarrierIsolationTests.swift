@@ -80,10 +80,6 @@ struct SafeDIToolSeamCarrierIsolationTests: ~Copyable {
 		        public init(screenBuilder: __safeDI_ApiCarrier_Screen<__safeDI_Built>) {
 		            self.screenBuilder = screenBuilder
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(screenBuilder: .init(__safeDI_noScope: __safeDI_builder))
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -95,10 +91,6 @@ struct SafeDIToolSeamCarrierIsolationTests: ~Copyable {
 		            self.api = api
 		            self.detailBuilder = detailBuilder
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(api: { _, _ in __safeDI_builder() }, detailBuilder: { _, _, _ in .init(__safeDI_noScope: __safeDI_builder) })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -107,10 +99,6 @@ struct SafeDIToolSeamCarrierIsolationTests: ~Copyable {
 
 		        public init(detailBuilder: @escaping (Int, Model) -> __safeDI_ApiCarrier_Detail<__safeDI_Built>) {
 		            self.detailBuilder = detailBuilder
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(detailBuilder: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
 		    }
 
@@ -121,10 +109,6 @@ struct SafeDIToolSeamCarrierIsolationTests: ~Copyable {
 		        public init(api: @escaping () -> __safeDI_Built) {
 		            self.api = api
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(api: { __safeDI_builder() })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -133,10 +117,6 @@ struct SafeDIToolSeamCarrierIsolationTests: ~Copyable {
 
 		        public init(workBuilder: @escaping @Sendable () -> __safeDI_ApiCarrier_Work<__safeDI_Built>) {
 		            self.workBuilder = workBuilder
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		            self.init(workBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
 		    }
 

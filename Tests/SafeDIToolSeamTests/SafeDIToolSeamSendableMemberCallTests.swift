@@ -58,10 +58,6 @@ struct SafeDIToolSeamSendableMemberCallTests: ~Copyable {
 			            self.rowA = rowA
 			            self.rowB = rowB
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(rowA: .init(__safeDI_noScope: __safeDI_builder), rowB: { _ in .init(__safeDI_noScope: __safeDI_builder) })
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -70,10 +66,6 @@ struct SafeDIToolSeamSendableMemberCallTests: ~Copyable {
 
 			        public init(cell: __safeDI_GadgetCarrier_Cell<__safeDI_Built>) {
 			            self.cell = cell
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(cell: .init(__safeDI_noScope: __safeDI_builder))
 			        }
 			    }
 
@@ -84,10 +76,6 @@ struct SafeDIToolSeamSendableMemberCallTests: ~Copyable {
 			        public init(cell: __safeDI_GadgetCarrier_Cell<__safeDI_Built>) {
 			            self.cell = cell
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(cell: .init(__safeDI_noScope: __safeDI_builder))
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -97,10 +85,6 @@ struct SafeDIToolSeamSendableMemberCallTests: ~Copyable {
 			        public init(gadget: @escaping () -> __safeDI_Built) {
 			            self.gadget = gadget
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(gadget: { __safeDI_builder() })
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -109,10 +93,6 @@ struct SafeDIToolSeamSendableMemberCallTests: ~Copyable {
 
 			        public init(screenBuilder: @escaping @Sendable () -> __safeDI_GadgetCarrier_Screen<__safeDI_Built>) {
 			            self.screenBuilder = screenBuilder
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			            self.init(screenBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
 			    }
 
