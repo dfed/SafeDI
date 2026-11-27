@@ -24,6 +24,17 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	/// The node is built by anything but its type's initializer or `instantiate()`: a seam's or a public mock's call, a
 	/// hand-written mock, a construction function or a fill.
 	case construction
+	/// A mock root's node takes a parameter with a default value, which a mock holds in the type's configuration, or its
+	/// type has a hand-written mock, whose defaults that configuration takes too.
+	case mockDefaultValuedParameter
+	/// A mock root's node is an actor, whose arguments a mock sends it.
+	case mockActor
+	/// A mock root's node whose override is not its parent's field under the node's own label: two children of one node
+	/// share a label, which a mock root names apart.
+	case mockOverrideNotParentField
+	/// A mock root binds a value that is no node of its world before its tree, or names one apart: a parameter of
+	/// `mock()`, an override of a value its tree receives only if available, a builder, a wrapper around an instance.
+	case mockRootBindsOtherThanNodes
 	/// The node is built in a `@Sendable` function of its own: a `SendableInstantiator`, erased or not, or a
 	/// `SendableLazilyInstantiated`.
 	case sendable
@@ -57,6 +68,8 @@ protocol NodeRecordSources: TypeFactsWorld {
 	func scope(of declaration: DeclarationID) -> ConstructionScope
 	/// The property the declaration is built as, `nil` for the root.
 	func property(of declaration: DeclarationID) -> Property?
+	/// Whether the world is a mock root's, each of whose nodes reads its override.
+	var isMockWorld: Bool { get }
 }
 
 extension TypeFactsGraph: NodeRecordSources {
@@ -78,10 +91,12 @@ extension TypeFactsGraph: NodeRecordSources {
 ///
 /// One variant per node is enough here because a stage-1 record reads no answer: each `PlaceRead.source` is the label
 /// `createInitializerArguments` names, and the engine resolves it per view. That holds only while both key projections
-/// are inert: no receive only if available, and no cycle, so nothing is still being built where it is read. The first
-/// stage that admits either reads what each call hands its callee (`TypeFactsWorld.sources(ofCall:of:)`), never a
-/// variant's keys. Records still carry today's `functionName`, which the engine's allocator names apart; the allocation
-/// moves to node records last, at stage 4.
+/// are inert: no receive only if available, and no cycle, so nothing is still being built where it is read. A node that
+/// receives a property only if available (`receivesOnlyIfAvailable`) reads what each call of its variant finds
+/// (`OnlyIfAvailableAnswers`, from the calls and `TypeFactsEdge.buildPosition`, since the world's answers do not model
+/// sibling order), never a variant's keys, and a world whose calls of one variant find different answers is refused.
+/// Records still carry today's `functionName`, which the engine's allocator names apart; the allocation moves to node
+/// records last, at stage 4.
 struct NodeRecords: Sendable {
 	/// - Parameters:
 	///   - world: A production root's world.
@@ -104,10 +119,11 @@ struct NodeRecords: Sendable {
 			variantByDeclaration[declaration] = variant
 		}
 		let order = try NodeBuildOrder(world: world)
+		let onlyIfAvailableAnswers = try OnlyIfAvailableAnswers(world: world)
 		// A node's place holds its children's places, so each is made after its children: a post-order walk from the root,
 		// with a stack, since a tree can be as deep as the module has types.
 		var places = [GeneratedCode?](repeating: nil, count: world.variantCount)
-		var records = [BuiltPlaceRecord?](repeating: nil, count: world.variantCount)
+		var records = [PlaceRecord?](repeating: nil, count: world.variantCount)
 		var typesDeclaredEscaping = [Set<TypeDescription>?](repeating: nil, count: world.variantCount)
 		var stack: [(variant: VariantID, childrenPushed: Bool)] = [(0, false)]
 		while let (variant, childrenPushed) = stack.popLast() {
@@ -130,15 +146,27 @@ struct NodeRecords: Sendable {
 				escaping.formUnion(typesDeclaredEscaping[callee] ?? [])
 				children.append(.indented(places[callee] ?? .empty, by: ScopeGenerator.standardIndent))
 			}
-			let record = switch kinds[Int(declaration)] {
+			let record: PlaceRecord = switch kinds[Int(declaration)] {
 			case .builtByInitializer:
-				try Self.builtByInitializerRecord(of: declaration, variant: variant, in: world, typesDeclaredEscaping: escaping, children: children)
+				try .built(Self.builtByInitializerRecord(of: declaration, variant: variant, in: world, typesDeclaredEscaping: escaping, children: children))
 			case .inlineSeam:
-				try Self.inlineSeamRecord(of: declaration, variant: variant, in: world, typesDeclaredEscaping: escaping, children: children)
+				try .built(Self.inlineSeamRecord(of: declaration, variant: variant, in: world, typesDeclaredEscaping: escaping, children: children))
+			case .receivesOnlyIfAvailable:
+				try .built(Self.receivesOnlyIfAvailableRecord(of: declaration, variant: variant, in: world, answers: onlyIfAvailableAnswers, typesDeclaredEscaping: escaping, children: children))
+			case .rename:
+				try .alias(Self.renameRecord(of: declaration, variant: variant, in: world, answers: onlyIfAvailableAnswers))
+			case .mockConstruction:
+				try .built(Self.mockConstructionRecord(of: declaration, variant: variant, in: world, typesDeclaredEscaping: escaping, children: children))
 			}
 			typesDeclaredEscaping[Int(variant)] = escaping
 			records[Int(variant)] = record
-			places[Int(variant)] = .place(PlacePlan(code: .empty, record: .built(record)))
+			places[Int(variant)] = switch record {
+			case let .alias(aliasRecord):
+				// A place written as text: the engine copies it as written.
+				.place(PlacePlan(code: .text(aliasRecord.text), record: record))
+			case .built, .closer:
+				.place(PlacePlan(code: .empty, record: record))
+			}
 		}
 		let rootCalls = world.calls(of: 0)
 		rootBody = order.edgeIndices(of: 0).map { edgeIndex in
@@ -149,7 +177,7 @@ struct NodeRecords: Sendable {
 	}
 
 	/// The record of `declaration`'s place in `variant`'s body. The root, variant 0, has none.
-	func record(of _: DeclarationID, variant: VariantID) -> BuiltPlaceRecord? {
+	func record(of _: DeclarationID, variant: VariantID) -> PlaceRecord? {
 		records[Int(variant)]
 	}
 
@@ -166,7 +194,7 @@ struct NodeRecords: Sendable {
 	private let declarationByVariant: [DeclarationID]
 
 	/// By variant.
-	private let records: [BuiltPlaceRecord?]
+	private let records: [PlaceRecord?]
 
 	/// Every refusal `world` holds, each once, in the order of `NodeRecordRefusal`'s cases: what a test reports of a world, so
 	/// that each stage counts the worlds it frees.
@@ -186,6 +214,11 @@ struct NodeRecords: Sendable {
 		}
 		do {
 			_ = try NodeBuildOrder(world: world)
+		} catch {
+			refusals.insert(error)
+		}
+		do {
+			_ = try OnlyIfAvailableAnswers(world: world)
 		} catch {
 			refusals.insert(error)
 		}
@@ -231,6 +264,16 @@ struct NodeRecords: Sendable {
 		if let claim = inlineSeamClaim(of: declaration, in: world) {
 			return claim
 		}
+		if let claim = receivesOnlyIfAvailableClaim(of: declaration, in: world) {
+			return claim
+		}
+		if let claim = renameClaim(of: declaration, in: world) {
+			return claim
+		}
+		// Asked after every other kind: it claims every node of a mock root's world that stage 1 makes.
+		if let claim = mockConstructionClaim(of: declaration, in: world) {
+			return claim
+		}
 		// A test claims a node by its type's name (`NodeRecordsObservation.claimsForTesting`).
 		return NodeRecordsObservation.claimsForTesting[world.scope(of: declaration).instantiable.concreteInstantiable.asSource].map { discharged in
 			NodeRecordClaim(kind: .builtByInitializer, discharges: Set(discharged.compactMap(NodeRecordRefusal.init(rawValue:))))
@@ -258,4 +301,13 @@ enum NodeRecordKind: Sendable {
 	/// A seam of another module built inline, because no module SafeDI knows generates its initializer, and otherwise a
 	/// node `builtByInitializer` makes: its line ends with the comment that says why (`NodeRecords+InlineSeam.swift`).
 	case inlineSeam
+	/// A node that would be of kind `builtByInitializer` but that its type receives a property only if available, which its
+	/// construction is passed where the variant's calls find it available, and `nil` where not (`OnlyIfAvailableAnswers`).
+	case receivesOnlyIfAvailable
+	/// A rename a scope declares (`@Received(fulfilledByDependencyNamed:ofType:)`), written as text: bound from its fulfilling
+	/// property, or, only if available, to `nil` where no declaration it reads is available (`NodeRecords+Rename.swift`).
+	case rename
+	/// A node of a mock root's world that stage 1 would make in a production root's, which reads its override before it
+	/// calls its type's initializer (`NodeRecords+MockConstruction.swift`).
+	case mockConstruction
 }

@@ -95,8 +95,8 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_refusesNodeForItsOtherKind_whenAKindClaimsIt() async throws {
-		// `Child` is built as a `LazilyInstantiated` and receives a value only if available. A claim that makes lazy nodes
-		// discharges only `lazy`, so the world is still refused for `Child`'s receive.
+		// `Child` is built as a `LazilyInstantiated` and builds a `SendableInstantiator`. A claim that makes lazy nodes
+		// discharges only `lazy`, so the world is still refused for `Child`'s `Sendable` builder.
 		let (_, reports) = try await NodeRecordsObservation.$claimsForTesting.withValue(["Root": ["lazy"], "Child": ["lazy"]]) {
 			try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
 				try await executeSafeDIToolTest(swiftFileContent: [
@@ -113,21 +113,24 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 					"""
 					@Instantiable
 					public struct Child: Instantiable {
-					    public init(theme: Theme?) {
-					        self.theme = theme
+					    public init(themeBuilder: SendableInstantiator<Theme>) {
+					        self.themeBuilder = themeBuilder
 					    }
 
-					    @Received(onlyIfAvailable: true) let theme: Theme?
+					    @Instantiated let themeBuilder: SendableInstantiator<Theme>
 					}
 					""",
 					"""
-					public struct Theme {}
+					@Instantiable
+					public struct Theme: Instantiable, Sendable {
+					    public init() {}
+					}
 					""",
 				], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 			}
 		}
-		#expect(reports.map(\.refusal) == ["onlyIfAvailable"])
-		#expect(reports.map(\.everyRefusal) == [["onlyIfAvailable"]])
+		#expect(reports.map(\.refusal) == ["sendable"])
+		#expect(reports.map(\.everyRefusal) == [["sendable"]])
 	}
 
 	@Test
@@ -296,11 +299,12 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 		// Soundness rule 2: a record is made from per-type facts, never from a tree's generator or text it spelled. Only
 		// the static helpers of `ScopeGenerator` listed here are called, until they move: a new one is a decision. The
 		// generator's hook (`DependencyTreeGenerator+NodeRecords.swift`) also calls `rootInitializer(of:)`, and plans the
-		// tree beside the records for the comparison.
+		// tree beside the records for the comparison. A mock world's records (`NodeRecords+MockConstruction.swift`) read two
+		// more, both facts of one type: its default-valued parameters, and the name of the configuration it declares.
 		let directory = URL(fileURLWithPath: #filePath)
 			.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
 			.appendingPathComponent("Sources/SafeDICore/Generators/NodeRecords")
-		let staticHelpers: Set = ["functionName", "standardIndent", "provides"]
+		let staticHelpers: Set = ["functionName", "standardIndent", "provides", "referencingDeclaration", "aliasDeclaration", "isBuilder", "DefaultParameter", "mockConfigurationStructName"]
 		let files = try FileManager.default.contentsOfDirectory(atPath: directory.path).filter { $0.hasSuffix(".swift") && $0 != "DependencyTreeGenerator+NodeRecords.swift" }.sorted()
 		#expect(files.count >= 4)
 		for file in files {

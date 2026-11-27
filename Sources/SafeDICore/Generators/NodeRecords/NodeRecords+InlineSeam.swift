@@ -21,9 +21,10 @@
 extension NodeRecords {
 	/// The claim of `declaration` as `inlineSeam` where it is a seam of another module built inline
 	/// (`ConstructionScope.builtInlineSeamComment`), which discharges stage 1's refusal of a seam built inline; `nil` for
-	/// any other node. Every other check of stage 1 still runs on it.
+	/// any other node, and for every node of a mock root's world, which builds every seam inline without the comment. Every
+	/// other check of stage 1 still runs on it.
 	static func inlineSeamClaim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
-		guard world.scope(of: declaration).builtInlineSeamComment != nil else { return nil }
+		guard !world.isMockWorld, world.scope(of: declaration).builtInlineSeamComment != nil else { return nil }
 		return NodeRecordClaim(kind: .inlineSeam, discharges: [.unavailableOrInlineSeam])
 	}
 
