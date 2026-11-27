@@ -76,11 +76,11 @@ enum TypeFactsChecks {
 		var factsVariantCount = 0
 		/// Pairs of places of one variant that check 10 compared after setting aside a read one of them asks, answered none.
 		var check10ExemptedPairs = 0
-		/// Only-if-available reads one place of a pair asks and passes `nil` or the declared form (rule A’s optional parameter), which the other does not ask.
+		/// Only-if-available reads one place of a pair asks and passes `nil` or the declared form, which the other does not ask.
 		var check10SilentNilReads = 0
-		/// Estimates of where rule 1's `nil`, keyed by the form a receive declares, partitions a declaration's places
-		/// otherwise than 2.4.x, which passes `nil` to the function of the first place that passes anything: the declarations
-		/// and reads, those where 2.4.x writes fewer functions, and the places they hold.
+		/// Estimates of where the variants join `nil` to a function other than 2.4.x's, which passes it to the function of the
+		/// first place that passes anything: the declarations' reads, those where 2.4.x writes fewer functions for the read,
+		/// and the places they hold.
 		var nilOrderReads = 0
 		var nilOrderFewerFunctions = 0
 		var nilOrderPlaces = 0
@@ -229,21 +229,6 @@ enum TypeFactsChecks {
 			result.worstNode = report.nodes[worst.key].description
 			result.worstNodeVariantCount = worst.value
 		}
-		// The kind each label's receives only if available declare, world-wide; `nil` where two disagree.
-		var declaredKindByLabel = [String: String?]()
-		for node in report.nodes {
-			for property in node.onlyIfAvailableUnwrapped {
-				let label = String(property.prefix { $0 != ":" })
-				let kind = parameterClass(of: "x = \(property)")
-				if let existing = declaredKindByLabel[label] {
-					if existing != kind {
-						declaredKindByLabel[label] = .some(nil)
-					}
-				} else {
-					declaredKindByLabel[label] = kind
-				}
-			}
-		}
 		// The kind every receive only if available of a label declares in a node's subtree, `nil` where two disagree or none does.
 		var declaredKindsByNode = [Int: [String: String?]]()
 		func declaredKind(of label: String, beneath root: Int) -> String? {
@@ -307,14 +292,16 @@ enum TypeFactsChecks {
 			if exempted > 0 {
 				result.check10ExemptedPairs += 1
 			}
-			// A read only if available compares by the key rule A gives what each place passes: `nil`, a value, and a wrapper
-			// of the form every receive of the label declares share the optional parameter (`declared`); a wrapper answering a
-			// read of another form is a class of its own. The declared form is the one every receive of the label in the callee's
-			// subtree declares, `nil` where two disagree; a binding inside the subtree that hides a deeper receive is not set apart. A read one place asks that the other does not is silent while its class
-			// is `declared` (`check10SilentNilReads`), and a finding otherwise.
+			// A read only if available compares by the key rule A gives what each place passes: a value and a wrapper of the
+			// form every receive of the label in the callee's subtree declares share the optional parameter (`declared`), `nil`
+			// passes through any optional parameter (rule A's second stage keys it with a wrapper where no declared form
+			// reaches), and a wrapper answering a read of another form is a class of its own. The declared form is `nil`
+			// where two receives in the subtree disagree; a binding inside the subtree that hides a deeper receive is not set
+			// apart. A read one place asks that the other does not is silent while its class is `declared` or `nil`
+			// (`check10SilentNilReads`), and a finding otherwise.
 			let keyedClass = { (node: Int?, read: String, passed: String) -> String in
 				let label = String(read.dropFirst("optional(".count).dropLast())
-				return passed == "nil" || passed == "value" || passed == node.flatMap { declaredKind(of: label, beneath: $0) } ? "declared" : passed
+				return passed == "nil" ? "nil" : passed == "value" || passed == node.flatMap { declaredKind(of: label, beneath: $0) } ? "declared" : passed
 			}
 			let classes = passedClasses(of: places[index])
 			let firstClasses = passedClasses(of: places[first])
@@ -323,12 +310,12 @@ enum TypeFactsChecks {
 				let firstKeyed = firstClasses[read].map { keyedClass(places[first].node, read, $0) }
 				switch (keyed, firstKeyed) {
 				case let (.some(passed), .some(firstPassed)):
-					if passed != firstPassed {
+					if passed != "nil", firstPassed != "nil", passed != firstPassed {
 						answers.insert("\(read) passes \(passed)")
 						firstAnswers.insert("\(read) passes \(firstPassed)")
 					}
 				case let (.some(passed), .none), let (.none, .some(passed)):
-					if passed == "declared" {
+					if passed == "declared" || passed == "nil" {
 						result.check10SilentNilReads += 1
 					} else if keyed != nil {
 						answers.insert("\(read) passes \(passed)")
@@ -390,22 +377,34 @@ enum TypeFactsChecks {
 		for formsByLabel in answerFormsByNodeAndLabel.values where formsByLabel.values.count(where: { $0.isSuperset(of: ["v", "s"]) }) >= 2 {
 			result.sendableGapProxyNodes += 1
 		}
-		var classesByNodeAndRead = [Int: [String: [String]]]()
-		for place in places {
+		// Per declaration and read only if available: 2.4.x's functions (one per class a place passes, `nil` joining the
+		// first place's in declaration order) against the variants' (`nil` joining the class its variant's other places
+		// pass, apart where they pass none).
+		var placesByNodeAndRead = [Int: [String: [(variant: Int?, passed: String)]]]()
+		for (index, place) in places.enumerated() {
 			guard let node = place.node else { continue }
 			for (read, passed) in passedClasses(of: place) {
-				classesByNodeAndRead[node, default: [:]][read, default: []].append(passed)
+				let label = String(read.dropFirst("optional(".count).dropLast())
+				let keyed = passed == "nil" ? "nil" : passed == "value" || passed == declaredKind(of: label, beneath: node) ? "declared" : passed
+				placesByNodeAndRead[node, default: [:]][read, default: []].append((factsVariantByPlace[index], keyed))
 			}
 		}
-		for (_, classesByRead) in classesByNodeAndRead {
-			for (read, classes) in classesByRead where classes.contains("nil") {
-				let label = String(read.dropFirst("optional(".count).dropLast())
-				guard let firstPassed = classes.first(where: { $0 != "nil" }) else { continue }
-				let declared = declaredKindByLabel[label] ?? nil
-				guard firstPassed != (declared ?? "value") else { continue }
+		for (_, placesByRead) in placesByNodeAndRead {
+			for (_, readPlaces) in placesByRead where readPlaces.contains(where: { $0.passed == "nil" }) {
+				guard let firstPassed = readPlaces.first(where: { $0.passed != "nil" })?.passed else { continue }
+				var classByVariant = [Int: String]()
+				for place in readPlaces where place.passed != "nil" {
+					if let variant = place.variant {
+						classByVariant[variant] = place.passed
+					}
+				}
+				let joined = readPlaces.map { $0.passed != "nil" ? $0.passed : $0.variant.flatMap { classByVariant[$0] } ?? "nil" }
+				let functions = Set(readPlaces.map(\.passed)).subtracting(["nil"]).count
+				let variantFunctions = Set(joined).count
+				guard zip(readPlaces, joined).contains(where: { $0.passed == "nil" && $1 != firstPassed }) else { continue }
 				result.nilOrderReads += 1
-				result.nilOrderPlaces += classes.count
-				if !classes.contains(declared ?? "value") {
+				result.nilOrderPlaces += readPlaces.count
+				if functions < variantFunctions {
 					result.nilOrderFewerFunctions += 1
 				}
 			}

@@ -76,9 +76,9 @@ struct SafeDIToolTypeFactsVariantKeyTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_keysVariantPerParameterType_whenReceiveOnlyIfAvailableIsAnsweredLazilyUnderOneParentAndNilUnderTheOther() async throws {
-		// `nil` keys apart from a lazy wrapper's answer until rule 3's second stage, which lets a `nil` wrapper parameter
-		// stand for it: this count is the one that stage changes.
+	mutating func generate_keysNilWithTheWrapper_whenReceiveOnlyIfAvailableIsAnsweredLazilyUnderOneParentAndNilUnderTheOther() async throws {
+		// No answer in the declared form reaches `x`, so `nil` keys with the lazy wrapper (rule A's second stage): one optional
+		// wrapper parameter carries both.
 		let report = try await rootReport(of: [
 			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let first: First", "@Instantiated let second: Second"]),
 			seamFixtureType(named: "First", isFinalClass: true, declarations: ["@Instantiated let x: LazilyInstantiated<X>", "@Instantiated let child: Child"]),
@@ -87,7 +87,7 @@ struct SafeDIToolTypeFactsVariantKeyTests: ~Copyable {
 			seamFixtureType(named: "X", isFinalClass: true, declarations: []),
 		])
 
-		#expect(variantCount(ofNodeDeclaring: "Child as child: Child", in: report) == 2, "\(report.world)")
+		#expect(variantCount(ofNodeDeclaring: "Child as child: Child", in: report) == 1, "\(report.world)")
 	}
 
 	@Test
@@ -584,10 +584,10 @@ struct SafeDIToolTypeFactsVariantKeyTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_keysNilApartFromTheWrapper_whenOnlyAWrapperAndNothingAnswerAReceiveOfTheValue() async throws {
-		// `Leaf` receives `theme: Theme?`, which `Second`'s wrapper answers and nothing answers beneath `Third`. Rule 1 keys
-		// `nil` by the form the receive declares, apart from the wrapper: two variants. 2.4.x writes one function, taking the
-		// wrapper as optional, because its first place in declaration order passes the wrapper.
+	mutating func generate_keysNilWithTheWrapper_whenOnlyAWrapperAndNothingAnswerAReceiveOfTheValue() async throws {
+		// `Leaf` receives `theme: Theme?`, which `Second`'s wrapper answers and nothing answers beneath `Third`. No answer in
+		// the declared form reaches the read, so `nil` keys with the wrapper (rule A's second stage): one variant, the one
+		// function 2.4.x writes, taking the wrapper as optional.
 		let (tree, report) = try await generatedTreeAndReport(of: Self.leafFixture(places: [("Second", "LazilyInstantiated<Theme>"), ("Third", nil)]))
 
 		#expect(tree == ["Root+SafeDI.swift": """
@@ -625,16 +625,38 @@ struct SafeDIToolTypeFactsVariantKeyTests: ~Copyable {
 		    }
 		}
 		"""])
-		#expect(variantCount(ofNodeDeclaring: "Leaf as leafBuilder: Instantiator<Leaf>", in: report) == 2, "\(report.world)")
+		#expect(variantCount(ofNodeDeclaring: "Leaf as leafBuilder: Instantiator<Leaf>", in: report) == 1, "\(report.world)")
 		#expect(TypeFactsChecks.findings(of: report).findingsByCheck[10, default: []].isEmpty, "\(TypeFactsChecks.findings(of: report).findingsByCheck[10, default: []])")
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_keysEachWrapperApartAndNilWithTheValue_whenTwoWrappersAndNothingAnswerAReceiveOfTheValueInEitherOrder() async throws {
+	mutating func generate_keysNilWithTheWrapper_whenNilAndTheWrapperReachTheReceiveThroughDifferentDeclarations() async throws {
+		// `nil` is keyed at `Third`'s call of `MidB`, and the wrapper at `Second`'s of `MidA`: the two meet only at `Leaf`,
+		// beneath both. What reaches the read is folded up the calls that bind nothing for it, so `MidB`'s `nil` still keys
+		// with the wrapper and `Leaf` has one variant, as 2.4.x writes one function.
+		let report = try await rootReport(of: [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let second: Second", "@Instantiated let third: Third"]),
+			seamFixtureType(named: "Second", isFinalClass: true, declarations: ["@Instantiated let theme: LazilyInstantiated<Theme>", "@Instantiated let midA: MidA"]),
+			seamFixtureType(named: "Third", isFinalClass: true, declarations: ["@Instantiated let midB: MidB"]),
+			seamFixtureType(named: "MidA", isFinalClass: true, declarations: ["@Instantiated let leafBuilder: Instantiator<Leaf>"]),
+			seamFixtureType(named: "MidB", isFinalClass: true, declarations: ["@Instantiated let leafBuilder: Instantiator<Leaf>"]),
+			seamFixtureType(named: "Leaf", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let theme: Theme?"]),
+			seamFixtureType(named: "Theme", isFinalClass: true, declarations: []),
+		])
+
+		#expect(variantCount(ofNodeDeclaring: "Leaf as leafBuilder: Instantiator<Leaf>", in: report) == 1, "\(report.world)")
+		#expect(TypeFactsChecks.findings(of: report).findingsByCheck[10, default: []].isEmpty, "\(TypeFactsChecks.findings(of: report).findingsByCheck[10, default: []])")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keysEachWrapperApartAndNilWithTheLazyOne_whenTwoWrappersAndNothingAnswerAReceiveOfTheValueInEitherOrder() async throws {
 		// `Leaf` receives `theme: Theme?`, answered by a `SendableLazilyInstantiated` beneath `First`, a `LazilyInstantiated`
-		// beneath `Second`, and nothing beneath `Third`: three variants in either order of the two wrappers. 2.4.x writes two
-		// functions, passing `nil` to the function of whichever wrapper's place it declares first, made optional.
+		// beneath `Second`, and nothing beneath `Third`. No answer in the declared form reaches the read, so `nil` keys with a
+		// wrapper, the lazy one where both reach: two variants in either order. 2.4.x also writes two functions, but passes
+		// `nil` to the function of whichever wrapper's place it declares first, so where the Sendable one is first its
+		// partition differs from these variants'.
 		let sendableFirst = try await generatedTreeAndReport(of: Self.leafFixture(places: [("First", "SendableLazilyInstantiated<Theme>"), ("Second", "LazilyInstantiated<Theme>"), ("Third", nil)], themeIsSendable: true))
 		let lazyFirst = try await generatedTreeAndReport(of: Self.leafFixture(places: [("Second", "LazilyInstantiated<Theme>"), ("First", "SendableLazilyInstantiated<Theme>"), ("Third", nil)], themeIsSendable: true))
 
@@ -742,8 +764,8 @@ struct SafeDIToolTypeFactsVariantKeyTests: ~Copyable {
 		    }
 		}
 		"""])
-		#expect(variantCount(ofNodeDeclaring: "Leaf as leafBuilder: Instantiator<Leaf>", in: sendableFirst.report) == 3, "\(sendableFirst.report.world)")
-		#expect(variantCount(ofNodeDeclaring: "Leaf as leafBuilder: Instantiator<Leaf>", in: lazyFirst.report) == 3, "\(lazyFirst.report.world)")
+		#expect(variantCount(ofNodeDeclaring: "Leaf as leafBuilder: Instantiator<Leaf>", in: sendableFirst.report) == 2, "\(sendableFirst.report.world)")
+		#expect(variantCount(ofNodeDeclaring: "Leaf as leafBuilder: Instantiator<Leaf>", in: lazyFirst.report) == 2, "\(lazyFirst.report.world)")
 		#expect(TypeFactsChecks.findings(of: sendableFirst.report).findingsByCheck[10, default: []].isEmpty)
 		#expect(TypeFactsChecks.findings(of: lazyFirst.report).findingsByCheck[10, default: []].isEmpty)
 	}
