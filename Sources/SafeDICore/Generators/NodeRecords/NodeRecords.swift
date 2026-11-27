@@ -83,15 +83,19 @@ extension TypeFactsGraph: NodeRecordSources {
 /// variant's keys. Records still carry today's `functionName`, which the engine's allocator names apart; the allocation
 /// moves to node records last, at stage 4.
 struct NodeRecords: Sendable {
-	/// - Parameter world: A production root's world.
+	/// - Parameters:
+	///   - world: A production root's world.
+	///   - rootLazilyInstantiatedInstanceProperties: What the root is handed as instances of `LazilyInstantiated` properties:
+	///     a seam's deferred parameters, which its tree reads through their memos. Empty for any other root.
 	/// - Throws: A `NodeRecordRefusal` where the world holds a kind stage 1 does not make, or what an initializer's
 	///   arguments throw.
-	init(world: some NodeRecordSources) throws {
+	init(world: some NodeRecordSources, rootLazilyInstantiatedInstanceProperties: Set<Property> = []) throws {
 		let declarationCount = world.declarationCount
 		var kinds = [NodeRecordKind]()
 		kinds.reserveCapacity(declarationCount)
 		for declaration in 0..<Int32(declarationCount) {
 			try kinds.append(Self.kind(of: declaration, in: world))
+			try Self.checkReadsNoInstance(of: rootLazilyInstantiatedInstanceProperties, declaration, in: world)
 		}
 		var variantByDeclaration = [VariantID](repeating: -1, count: declarationCount)
 		for variant in 0..<Int32(world.variantCount) {
@@ -166,10 +170,11 @@ struct NodeRecords: Sendable {
 
 	/// Every refusal `world` holds, each once, in the order of `NodeRecordRefusal`'s cases: what a test reports of a world, so
 	/// that each stage counts the worlds it frees.
-	static func refusals(in world: some NodeRecordSources) -> [NodeRecordRefusal] {
+	static func refusals(in world: some NodeRecordSources, rootLazilyInstantiatedInstanceProperties: Set<Property> = []) -> [NodeRecordRefusal] {
 		var refusals = Set<NodeRecordRefusal>()
 		for declaration in 0..<Int32(world.declarationCount) {
 			do {
+				try checkReadsNoInstance(of: rootLazilyInstantiatedInstanceProperties, declaration, in: world)
 				// A node a lane's kind claims holds no refusal of the kinds no lane makes yet.
 				if try claimedKind(of: declaration, in: world) == nil {
 					refusals.formUnion(refusalsOfBuiltByInitializer(declaration, in: world))
@@ -188,6 +193,19 @@ struct NodeRecords: Sendable {
 			refusals.insert(error)
 		}
 		return NodeRecordRefusal.allCases.filter(refusals.contains)
+	}
+
+	/// Refuses `declaration`'s world, as the lazy stage's, where its type receives one of `instanceProperties`, the instances
+	/// of `LazilyInstantiated` properties the root is handed, which its tree reads through the wrapper and stage 1 would read
+	/// as a binding of the label.
+	private static func checkReadsNoInstance(of instanceProperties: Set<Property>, _ declaration: DeclarationID, in world: some NodeRecordSources) throws(NodeRecordRefusal) {
+		guard !instanceProperties.isEmpty else { return }
+		// A rename's fulfilling property is a read too, which stage 1 refuses as a rename.
+		let receivesAnInstance = world.scope(of: declaration).instantiable.dependencies.contains { dependency in
+			(dependency.source == .received(onlyIfAvailable: false) || dependency.source == .received(onlyIfAvailable: true))
+				&& instanceProperties.contains(dependency.property.asUnwrappedProperty)
+		}
+		guard !receivesAnInstance else { throw .lazy }
 	}
 
 	/// The kind of record `declaration` is made as, or the refusal of its world: the kind a lane's classifier claims it as,

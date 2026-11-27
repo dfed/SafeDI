@@ -9803,6 +9803,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						fillPlaceBindings: fillPlaceBindings,
 					)
 				}
+				// A test that observes node records compares this body with theirs.
+				NodeRecordsObservation.rootBodyObserver?(generatedProperties)
 				let argumentList = try instantiable.generateArgumentList(
 					unavailableProperties: unavailableProperties,
 				)
