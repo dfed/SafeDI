@@ -18,11 +18,10 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-/// The order each node of a stage-1 world builds its children in, by edge index: a stand-in for the table lane's
-/// `TypeFactsEdge.buildPosition` (`TypeFactsWorld.edgeFacts(from:)`), which replaces it once that column is filled, read
-/// from the same facts that column is made of. Each child follows the siblings its tree requires, depth first in edge
+/// The order each node of a world node records make builds its children in, by edge index, from each edge's
+/// `TypeFactsEdge.buildPosition` (`TypeFactsWorld.edgeFacts(from:)`). Each child follows the siblings its tree requires, depth first in edge
 /// order, as `ScopeGenerator.orderedPropertyToGenerateIndices` orders a scope's children where no child is a loop
-/// member, a carrier, lazily instantiated or received only if available, which stage 1 refuses.
+/// member, a carrier, lazily instantiated or received only if available, which node records refuse until they make it.
 ///
 /// A node's tree receives what its type receives, and what its children's trees receive that the node neither declares
 /// nor forwards (`ScopeGenerator.receives`), made once per node, children first.

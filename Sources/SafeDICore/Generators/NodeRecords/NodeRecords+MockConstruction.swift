@@ -20,9 +20,9 @@
 
 extension NodeRecords {
 	/// The claim of `declaration` in a mock root's world, and `nil` in a production root's: of kind `mockConstruction`, for a
-	/// node stage 1 makes in a production root's world (`refusalsOfBuiltByInitializer(_:in:)`), whose override is the field
-	/// of its parent's configuration under the node's own label, discharging nothing and holding each refusal of a node
-	/// whose override a later stage reads. A node stage 1 refuses is left unclaimed, so its first refusal is stage 1's.
+	/// node `builtByInitializer` makes in a production root's world (`refusalsOfBuiltByInitializer(_:in:)`), whose override
+	/// is the field of its parent's configuration under the node's own label, discharging nothing and holding each refusal
+	/// of a node whose override it does not read yet. Any other node is left unclaimed, so its first refusal is its own.
 	static func mockConstructionClaim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
 		guard world.isMockWorld, refusalsOfBuiltByInitializer(declaration, in: world).isEmpty else { return nil }
 		var refusals = [NodeRecordRefusal]()
@@ -50,7 +50,7 @@ extension NodeRecords {
 		return NodeRecordClaim(kind: .mockConstruction, discharges: [], refusals: refusals)
 	}
 
-	/// The record of `declaration`'s place, a node of kind `mockConstruction`: the record stage 1 makes of it, which
+	/// The record of `declaration`'s place, a node of kind `mockConstruction`: the record `builtByInitializer` makes of it, which
 	/// first tries the closure that overrides it (`mockOverrideSlot(ofNodeLabeled:typed:hasFunction:)`), called with its
 	/// initializer's arguments. A node that builds children is configured: its override is the builder of the
 	/// configuration its function is handed, whose fields its children read.

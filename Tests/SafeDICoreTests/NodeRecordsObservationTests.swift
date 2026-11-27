@@ -98,6 +98,48 @@ struct NodeRecordsObservationTests {
 		#expect(comparison.differences == ["root.aBuilder made again: closedOnFunctionName is __safeDI_aBuilder in the tree, __safeDI_bBuilder by node records"])
 	}
 
+	@Test
+	func differences_areNone_whenAHolesPlacesWriteTheSameText() {
+		let hole = GeneratedCode.sequence([Self.textPlace("binding"), Self.textPlace("site")])
+		let comparison = NodeRecordsObservation.differences(between: [Self.place(Self.record("a", children: [.indented(hole, by: "    ")]))], and: [Self.place(Self.record("a", children: [.indented(hole, by: "    ")]))])
+		#expect(comparison.differences == [])
+		#expect(comparison.treePlaceCount == 3)
+	}
+
+	@Test
+	func differences_nameTheCounts_whenTheTreeBindsAnotherNumberOfPayloadsBeforeAPlace() {
+		let comparison = NodeRecordsObservation.differences(
+			between: [.sequence([Self.textPlace("payload"), Self.textPlace("site")])],
+			and: [Self.textPlace("site")],
+		)
+		#expect(comparison.differences == ["root: the tree builds 2 statements, node records 1"])
+	}
+
+	@Test
+	func differences_nameTheIndentation_whenASequencesPlacesAreIndentedApart() {
+		let comparison = NodeRecordsObservation.differences(
+			between: [.indented(.sequence([Self.textPlace("site")]), by: "    ")],
+			and: [.sequence([.indented(Self.textPlace("site"), by: "        ")])],
+		)
+		#expect(comparison.differences == ["root.site: indented 4 in the tree, 8 by node records"])
+	}
+
+	@Test
+	func differences_nameThePayload_whenAPayloadBoundBeforeAPlaceDiffers() {
+		let comparison = NodeRecordsObservation.differences(
+			between: [.sequence([Self.textPlace("payload", text: "let payload = a"), .place(PlacePlan(code: .empty, record: .built(Self.record("b"))))])],
+			and: [.sequence([Self.textPlace("payload", text: "let payload = c"), .place(PlacePlan(code: .empty, record: .built(Self.record("b"))))])],
+		)
+		#expect(comparison.differences == ["root.payload: text is let payload = a in the tree, let payload = c by node records"])
+	}
+
+	/// A place written as `text`, with a rename's record that binds `label` and reads nothing, as a hole's site and the
+	/// payloads before it are.
+	private static func textPlace(_ label: String, text: String? = nil) -> GeneratedCode {
+		let text = text ?? "let \(label) = \(label)Value"
+		return .place(PlacePlan(code: .text(text), record: .alias(AliasPlaceRecord(property: Property(label: label, typeDescription: .simple(name: "T")), fulfillingProperty: nil, text: text))))
+	}
+
 	/// `record` as a place, indented as a child of a builder function is.
 	private static func place(_ record: BuiltPlaceRecord) -> GeneratedCode {
 		.indented(.place(PlacePlan(code: .empty, record: .built(record))), by: "    ")

@@ -101,6 +101,7 @@ enum GeneratedCodeText {
 					&& haystack[start..<end].elementsEqual(needle)
 			}
 		} else {
+			// safedi-source-rule: allow stringScan — only for code or an identifier with a byte outside ASCII, which the byte search above cannot match as `Character`s do.
 			return code.split(whereSeparator: { !($0.isLetter || $0.isNumber || $0 == "_") }).contains(Substring(identifier))
 		}
 	}
