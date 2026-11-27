@@ -338,92 +338,61 @@ struct PublicMockLevelFunctions: Sendable {
 	/// The declaration of each function, indented by `indent`, `@Sendable` where `sendableKeys` holds its dispatcher's key.
 	/// A member whose fill is in `inlinedFills` holds the fill's body; a fill in `fillsTakingPayloadFields` is handed
 	/// each field of the payload it reads (`fillMemberParameterFieldsByKey`), never the payload.
-	func declarations(
-		indent: String,
+	/// The level functions as records (`LevelFunctionRecords`), which the engine spells, given what the call body decides
+	/// of its fills: `sendableKeys`, the dispatchers built in a `@Sendable` function; `inlinedFills`, by key, each a fill a
+	/// member holds the body of; `fillsTakingPayloadFields`, each a fill handed its payload's fields one by one, which
+	/// `fillMemberParameterFieldsByKey` lists.
+	func records(
 		sendableKeys: Set<String>,
 		inlinedFills: [String: ScopeGenerator.FillDispatcher.InlinedFill],
 		fillsTakingPayloadFields: Set<String>,
 		fillMemberParameterFieldsByKey: [String: [SeamSignature.Hole.Field]],
 		typesDeclaredEscaping: Set<TypeDescription>,
-	) -> [String] {
-		let memberIndent = indent + ScopeGenerator.standardIndent
-		return functions.map { function in
-			let dispatcher = function.dispatcher
-			var names = GeneratedNameAllocator(reserving: Set(function.parameters.map(\.property.label) + function.carriedInnerScopes.map(\.upName)))
-			let valuesName = names.claim("values")
-			let scopeName = names.claim("scope")
-			func argumentText(_ argument: Argument, payloadName: String, caseName: String) -> String {
-				if let carriedUpName = argument.carriedUpName {
-					return "\(argument.label.spelledAsArgumentLabel): \(carriedUpName).\(caseName.spelledAsMemberReference)(\(payloadName))"
-				}
-				let source = argument.readsPayload ? "\(payloadName).\(argument.label.spelledAsMemberReference)" : argument.label
+	) -> LevelFunctionRecords {
+		func record(of argument: Argument) -> LevelArgument {
+			LevelArgument(
+				label: argument.label,
+				readsPayload: argument.readsPayload,
 				// The instance of a `LazilyInstantiated` the routes bind, where the target reads the value: read where the member is
 				// called, which is where the place is built.
-				let value = argument.heldForm == argument.handedForm || argument.handedForm == argument.heldForm.asOptionalProperty
-					? source
-					: "\(source).\(Dependency.lazilyInstantiatedInstancePropertyName)"
-				return "\(argument.label.spelledAsArgumentLabel): \(value)"
-			}
-			var members = [[String]]()
-			for member in function.members {
+				readsInstance: argument.carriedUpName == nil && argument.heldForm != argument.handedForm && argument.handedForm != argument.heldForm.asOptionalProperty,
+				carriedUpName: argument.carriedUpName,
+			)
+		}
+		var fillNames = [String: String]()
+		let records = functions.map { function in
+			let dispatcher = function.dispatcher
+			let members = function.members.map { member -> LevelMember in
 				switch member {
 				case let .fill(caseName, target, arguments, _):
+					fillNames[target.key] = target.name
+					let form: LevelMember.FillForm
 					if let inlinedFill = inlinedFills[target.key] {
-						let binding = inlinedFill.carriesPayload && inlinedFill.readsScope ? "scope" : "_"
-						members.append(["\(caseName.spelledAsArgumentLabel): { \(binding) in"] + inlinedFill.body.map { String($0.dropFirst(memberIndent.count)) } + ["}"])
+						form = .inlined(bindsScope: inlinedFill.carriesPayload && inlinedFill.readsScope)
 					} else if fillsTakingPayloadFields.contains(target.key) {
 						let extraLabels = Set(arguments.map(\.label))
-						let payloadArguments = (fillMemberParameterFieldsByKey[target.key] ?? []).filter { !extraLabels.contains($0.property.label) }.map { field in
-							"\(field.property.label.spelledAsArgumentLabel): \(valuesName).\(field.property.label.spelledAsMemberReference)"
-						}
-						let allArguments = payloadArguments + arguments.map { argumentText($0, payloadName: valuesName, caseName: caseName) }
-						let readsValues = !payloadArguments.isEmpty || arguments.contains { $0.carriedUpName != nil }
-						members.append(["\(caseName.spelledAsArgumentLabel): { \(readsValues ? valuesName : "_") in \(target.name)(\(allArguments.joined(separator: ", "))) }"])
+						form = .takesPayloadFields(payloadLabels: (fillMemberParameterFieldsByKey[target.key] ?? []).map(\.property.label).filter { !extraLabels.contains($0) })
 					} else {
-						let carriesPayload = dispatcher.cases.first { $0.name == caseName }?.carriesPayload ?? false
-						let bound = carriesPayload ? [scopeName] : []
-						let allArguments = bound + arguments.map { argumentText($0, payloadName: scopeName, caseName: caseName) }
-						let readsScope = carriesPayload || arguments.contains { $0.carriedUpName != nil }
-						members.append(["\(caseName.spelledAsArgumentLabel): { \(readsScope ? scopeName : "_") in \(target.name)(\(allArguments.joined(separator: ", "))) }"])
+						form = .called(carriesPayload: dispatcher.cases.first { $0.name == caseName }?.carriesPayload ?? false)
 					}
+					return .fill(caseName: caseName, fillKey: target.key, arguments: arguments.map(record(of:)), form: form)
 				case let .level(caseName, functionIndex, arguments):
-					let child = functions[functionIndex]
-					let allArguments = arguments.map { argumentText($0, payloadName: valuesName, caseName: caseName) }
-					let readsValues = arguments.contains(where: \.readsPayload)
-					members.append(["\(caseName.spelledAsArgumentLabel): { \(readsValues ? valuesName : "_") in \(child.name)(\(allArguments.joined(separator: ", "))) }"])
+					return .level(caseName: caseName, functionIndex: functionIndex, arguments: arguments.map(record(of:)))
 				case let .reentry(caseName, call, carriedArguments):
-					let allArguments = carriedArguments.map { argumentText($0, payloadName: valuesName, caseName: caseName) } + call.arguments
-					members.append(["\(caseName.spelledAsArgumentLabel): { \(carriedArguments.isEmpty ? "_" : valuesName) in \(call.name)(\(allArguments.joined(separator: ", "))) }"])
+					return .reentry(caseName: caseName, functionName: call.name, spelledArguments: call.arguments, carriedArguments: carriedArguments.map(record(of:)))
 				}
 			}
-			let builderType = ReservedName.levelType(ofEnum: dispatcher.enumType, built: dispatcher.returnType)
-			var parameterList = [String]()
-			for carried in function.carriedInnerScopes {
-				let carriedType = ReservedName.levelType(ofEnum: dispatcher.enumType, built: ScopeGenerator.FillDispatcher.carried(carried.type, through: dispatcher.returnType))
-				parameterList.append("\(carried.upName.spelledAsArgumentLabel): \(carriedType.asSource)")
-			}
-			parameterList += function.parameters.map { "\($0.property.label.spelledAsArgumentLabel): \($0.property.typeDescription.asFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping).asSource)" }
-			let isSendable = sendableKeys.contains(dispatcher.key)
-			var lines = ["\(indent)\(ScopeGenerator.localFunctionPrefix(isSendable: isSendable))func \(function.name)(\(parameterList.joined(separator: ", "))) -> \(builderType.asSource) {"]
-			// Laid out as a seam's caller lays out a level function (`FillDispatcher.structDeclaration`).
-			if members.allSatisfy({ $0.count == 1 }) {
-				lines.append("\(memberIndent).init(\(members.map { $0[0] }.joined(separator: ", ")))")
-			} else if members.count == 1 {
-				let memberLines = members[0]
-				lines.append("\(memberIndent).init(\(memberLines[0])")
-				lines += memberLines.dropFirst().dropLast().map { "\(memberIndent)\($0)" }
-				lines.append("\(memberIndent)\(memberLines[memberLines.count - 1]))")
-			} else {
-				lines.append("\(memberIndent).init(")
-				for (index, member) in members.enumerated() {
-					let separator = index == members.count - 1 ? "" : ","
-					lines += member.dropLast().map { "\(memberIndent)\(ScopeGenerator.standardIndent)\($0)" }
-					lines.append("\(memberIndent)\(ScopeGenerator.standardIndent)\(member[member.count - 1])\(separator)")
-				}
-				lines.append("\(memberIndent))")
-			}
-			lines.append("\(indent)}")
-			return lines.joined(separator: "\n")
+			return LevelFunctionRecord(
+				dispatcherKey: dispatcher.key,
+				builderType: ReservedName.levelType(ofEnum: dispatcher.enumType, built: dispatcher.returnType),
+				isSendable: sendableKeys.contains(dispatcher.key),
+				carriedInnerScopes: function.carriedInnerScopes.map { carried in
+					LevelFunctionRecord.Parameter(label: carried.upName, type: ReservedName.levelType(ofEnum: dispatcher.enumType, built: ScopeGenerator.FillDispatcher.carried(carried.type, through: dispatcher.returnType)))
+				},
+				parameters: function.parameters.map { LevelFunctionRecord.Parameter(label: $0.property.label, type: $0.property.typeDescription.asFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping)) },
+				members: members,
+			)
 		}
+		return LevelFunctionRecords(functions: records, functionNames: functions.map(\.name), fillNames: fillNames)
 	}
 }
