@@ -602,21 +602,23 @@ func executeSafeDIToolMultiModuleTest(
 				// Every seam tree made again from its first signature pass must generate what a tree built anew does (`ReusedSeamTreeChecks`).
 				generateOutput = try await HoleSiteRecordObservation.$observer.withValue(HoleSiteRecordObservation.checkingRecords(handingOn: HoleSiteRecordObservation.observer)) {
 					try await SeamPlaceLevels.$observer.withValue(SeamPlaceLevels.checkingPathStructs(handingOn: SeamPlaceLevels.observer)) {
-						try await ConstructionMemoOracle.$observer.withValue(ConstructionMemoChecks.recordingDifferences(handingOn: ConstructionMemoOracle.observer)) {
-							try await SeamSignatureObservation.$confirmsSkippedPasses.withValue(SkippedConfirmingPassChecks.recordingDifferences(handingOn: SeamSignatureObservation.confirmsSkippedPasses)) {
-								// Interned in the order `SAFEDI_INTERNER_ORDER` names, if any: the output must not change (`ConstructionInternerOrder`).
-								// Every value a freeze interns must be one the interner is designed to meet there (`ConstructionInternerClosure`).
-								try await ConstructionInternerObservation.$missObserver.withValue(ConstructionInternerClosure.recordingMissesNotExcluded(handingOn: ConstructionInternerObservation.missObserver)) {
-									try await ConstructionInternerOrder.applying(.fromEnvironment) {
-										try await ReusedSeamTreeChecks.comparing(handingOn: SeamTreeReuseObservation.comparesBuiltTrees) {
-											// Every root’s imports from its union fact must equal the walk of its generator tree’s (`TypeFactsImportsChecks`).
-											try await TypeFactsImportsChecks.comparing(handingOn: TypeFactsImportsObservation.comparesWalk) {
-												// Every root’s received values from its per-type graph must equal the walk of its generator tree’s
-												// (`TypeFactsReceivedValueSuppliesChecks`).
-												try await TypeFactsReceivedValueSuppliesChecks.comparing(handingOn: TypeFactsReceivedValueSuppliesObservation.comparesWalk) {
-													// The fold that decides whether any route is walked must send every graph the walk rejects to the walk (`FulfillmentFoldChecks`).
-													try await ValidationWalkObservation.$foldComparison.withValue(FulfillmentFoldChecks.comparison(handingOn: ValidationWalkObservation.foldComparison)) {
-														try await tool.generate()
+						try await NodeRecordsChecks.checking {
+							try await ConstructionMemoOracle.$observer.withValue(ConstructionMemoChecks.recordingDifferences(handingOn: ConstructionMemoOracle.observer)) {
+								try await SeamSignatureObservation.$confirmsSkippedPasses.withValue(SkippedConfirmingPassChecks.recordingDifferences(handingOn: SeamSignatureObservation.confirmsSkippedPasses)) {
+									// Interned in the order `SAFEDI_INTERNER_ORDER` names, if any: the output must not change (`ConstructionInternerOrder`).
+									// Every value a freeze interns must be one the interner is designed to meet there (`ConstructionInternerClosure`).
+									try await ConstructionInternerObservation.$missObserver.withValue(ConstructionInternerClosure.recordingMissesNotExcluded(handingOn: ConstructionInternerObservation.missObserver)) {
+										try await ConstructionInternerOrder.applying(.fromEnvironment) {
+											try await ReusedSeamTreeChecks.comparing(handingOn: SeamTreeReuseObservation.comparesBuiltTrees) {
+												// Every root’s imports from its union fact must equal the walk of its generator tree’s (`TypeFactsImportsChecks`).
+												try await TypeFactsImportsChecks.comparing(handingOn: TypeFactsImportsObservation.comparesWalk) {
+													// Every root’s received values from its per-type graph must equal the walk of its generator tree’s
+													// (`TypeFactsReceivedValueSuppliesChecks`).
+													try await TypeFactsReceivedValueSuppliesChecks.comparing(handingOn: TypeFactsReceivedValueSuppliesObservation.comparesWalk) {
+														// The fold that decides whether any route is walked must send every graph the walk rejects to the walk (`FulfillmentFoldChecks`).
+														try await ValidationWalkObservation.$foldComparison.withValue(FulfillmentFoldChecks.comparison(handingOn: ValidationWalkObservation.foldComparison)) {
+															try await tool.generate()
+														}
 													}
 												}
 											}
@@ -923,10 +925,27 @@ enum SplitPositionsRun {
 			splitArguments.append("--module-info-positions-in-own-file")
 		}
 		// Detached, so the run inherits none of the observers a test sets around its own run, which count each layer and
-		// step of one run.
+		// step of one run. Whether node records lay a root out is no count but the mode the whole run generated in, a
+		// test's or the sweep's switch's (`NodeRecordsChecks.laysOutMockRoots`), so the split run takes it again; a mock
+		// root has records only where an observer is set, so it is handed one that keeps nothing, and the test sees the
+		// whole run's reports alone.
+		let laysOutRoots = NodeRecordsChecks.laysOutRoots
+		let laysOutMockRoots = NodeRecordsChecks.laysOutMockRoots
+		var nodeRecordsObserver: (@Sendable (NodeRecordsReport) -> Void)?
+		if laysOutMockRoots || NodeRecordsObservation.observer != nil {
+			nodeRecordsObserver = { _ in }
+		}
+		let splitObserver = nodeRecordsObserver
 		let splitRun: Result<Generate.Output, any Error> = await Task.detached {
 			do {
-				return try await .success(Generate.parse(splitArguments).generate())
+				let output: Generate.Output = try await NodeRecordsObservation.$laysOutRoots.withValue(laysOutRoots) {
+					try await NodeRecordsObservation.$laysOutMockRoots.withValue(laysOutMockRoots) {
+						try await NodeRecordsObservation.$observer.withValue(splitObserver) {
+							try await Generate.parse(splitArguments).generate()
+						}
+					}
+				}
+				return .success(output)
 			} catch {
 				return .failure(error)
 			}
