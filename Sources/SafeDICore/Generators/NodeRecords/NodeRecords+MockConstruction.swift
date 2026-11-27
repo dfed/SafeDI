@@ -20,11 +20,12 @@
 
 extension NodeRecords {
 	/// The claim of `declaration` in a mock root's world, and `nil` in a production root's: of kind `mockConstruction`, for a
-	/// node stage 1 makes in a production root's world (`refusalsOfBuiltByInitializer(_:in:)`) and for one its type's
-	/// hand-written mock builds, whose override is the field of its parent's configuration under the node's own label,
-	/// holding each refusal of a node whose override a later stage reads. A node stage 1 refuses for anything a mock kind
-	/// does not make is left unclaimed, so its first refusal is stage 1's. Each mock kind adds its term to `discharges`, the
-	/// stage-1 refusals of the node its record makes, and the node is of the kind whose term discharged one.
+	/// node `builtByInitializer` makes in a production root's world (`refusalsOfBuiltByInitializer(_:in:)`) and for one its
+	/// type's hand-written mock builds, whose override is the field of its parent's configuration under the node's own
+	/// label, holding each refusal of a node whose override it does not read yet. A node `builtByInitializer` refuses for
+	/// anything a mock kind does not make is left unclaimed, so its first refusal is its own. Each mock kind adds its term
+	/// to `discharges`, the refusals of `builtByInitializer` that the node its record makes no longer has, and the node is
+	/// of the kind whose term discharged one.
 	static func mockConstructionClaim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
 		guard world.isMockWorld else { return nil }
 		// A hand-written mock builds its type with or without an initializer: a fake has none.
@@ -64,7 +65,7 @@ extension NodeRecords {
 		return (world.construction(of: declaration) == .handWrittenMock ? instantiable.mockInitializer : nil) ?? instantiable.initializer
 	}
 
-	/// The record of `declaration`'s place, a node of kind `mockConstruction`: the record stage 1 makes of it, built with
+	/// The record of `declaration`'s place, a node of kind `mockConstruction`: the record `builtByInitializer` makes of it, built with
 	/// its type's hand-written mock where the world says so (`TypeFactsConstruction.handWrittenMock`), which first tries
 	/// the closure that overrides it (`mockOverrideSlot(of:labeled:typed:in:hasFunction:handsOverridesToChildren:isSendable:)`),
 	/// called with its

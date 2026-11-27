@@ -19,11 +19,12 @@
 // SOFTWARE.
 
 extension NodeRecords {
-	/// Every kind stage 1 does not make that `declaration` is of, in the order they are checked.
+	/// Every kind `builtByInitializer` does not make that `declaration` is of, in the order they are checked: the refusals
+	/// another kind's claim may discharge.
 	static func refusalsOfBuiltByInitializer(_ declaration: DeclarationID, in world: some NodeRecordSources) -> [NodeRecordRefusal] {
 		var refusals = [NodeRecordRefusal]()
-		// Every other construction is a call of another module's code, a hand-written mock or a fill, which a later stage or
-		// another lane's kind makes.
+		// Every other construction is a call of another module's code, a hand-written mock or a fill, which another kind
+		// makes or node records refuse.
 		if world.construction(of: declaration) != .initializer {
 			refusals.append(.construction)
 		}

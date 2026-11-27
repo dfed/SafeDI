@@ -41,8 +41,6 @@ extension DependencyTreeGenerator {
 	/// - Parameter checksConstructions: Whether an inaccessible construction is an error. A module that computes the plan
 	///   of another module's public mock passes `false` with that module: the declaring module's own run checked its
 	///   constructions, and the plan must promote what that run promoted.
-	/// - Parameter recordingWorldRoot: Handed the root of the mock root's world, which node records are made of
-	///   (`ScopeGenerator.nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:sendableConfigurationTypeNames:)`), where a caller keeps it.
 	func createMockRootScopeGenerator(
 		for instantiable: Instantiable,
 		scope: Scope,
@@ -58,7 +56,6 @@ extension DependencyTreeGenerator {
 		promotedScopesValidatedForHiddenReceives: inout Set<ObjectIdentifier>,
 		scopesWithValidatedDeclarations: inout Set<ObjectIdentifier>,
 		constructionMemo: inout ConstructionMemo,
-		recordingWorldRoot: ((ConstructionScope) -> Void)? = nil,
 	) async throws -> ScopeGenerator {
 		// Recursively collect all transitive received properties from the scope tree
 		// and any promoted scopes' subtrees. Results are cached per Scope identity
@@ -486,7 +483,9 @@ extension DependencyTreeGenerator {
 		// `<label>.instance` when it builds the type that reads it, as production reads a received wrapper's instance.
 		var instancesReadThroughWrapperParameters = Set<Property>()
 		let (mockRootTable, mockRootRecord) = MockRootPlan(mockRootScope: mockRootScope, frozenScopeMap: frozenScopeMap).freezingRoot()
-		recordingWorldRoot?(ConstructionScope(table: mockRootTable, record: mockRootRecord))
+		// The root of the mock root's world, which node records are made of
+		// (`ScopeGenerator.nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:)`), where a test observes them.
+		NodeRecordsObservation.recordsMockWorldRoot?(instantiable.concreteInstantiable, ConstructionScope(table: mockRootTable, record: mockRootRecord))
 		// A public mock's tree built with builders has holes, whose places no memo holds, so only the tree built without
 		// them shares the mock roots' memo.
 		func mockRootGenerator(builders: ShapedBuilders?, constructionMemo: inout ConstructionMemo) throws -> ScopeGenerator {
