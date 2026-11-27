@@ -61,9 +61,9 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	/// The node is on a cycle.
 	case cycle
 	/// The node is built as a `LazilyInstantiated`, which `lazyClaim(of:in:)` discharges: its record is
-	/// `NodeRecordKind.lazy`'s. Also a world whose records read a wrapper's instance where no record does yet: a rename
-	/// fulfilled by one (`DeclarationsAnsweringReads.renameReadsWrappersInstance`), a seam's own root handed one, and a
-	/// mock root's scope that declares or forwards a lazily instantiated property.
+	/// `NodeRecordKind.lazy`'s, and in a mock root's world `mockLazyDischarges(of:in:)` discharges it. Also a world whose
+	/// records read a wrapper's instance where no record does yet: a rename fulfilled by one
+	/// (`DeclarationsAnsweringReads.renameReadsWrappersInstance`) and a seam's own root handed one.
 	case lazy
 	/// The node's type receives a property only if available.
 	case onlyIfAvailable
@@ -211,9 +211,9 @@ struct NodeRecords: Sendable {
 			case .rename:
 				try .alias(Self.renameRecord(of: declaration, variant: variant, in: world, answers: onlyIfAvailableAnswers))
 			case .mockConstruction:
-				try .built(Self.mockConstructionRecord(of: declaration, variant: variant, in: world, unavailableProperties: onlyIfAvailableAnswers.unavailableProperties(of: variant), typesDeclaredEscaping: escaping, children: children))
+				try .built(Self.mockConstructionRecord(of: declaration, variant: variant, in: world, unavailableProperties: onlyIfAvailableAnswers.unavailableProperties(of: variant), lazilyInstantiatedInstanceProperties: instanceProperties, typesDeclaredEscaping: escaping, children: children))
 			case .mockErased:
-				try .built(Self.mockErasedRecord(of: declaration, variant: variant, in: world, unavailableProperties: onlyIfAvailableAnswers.unavailableProperties(of: variant), typesDeclaredEscaping: escaping, children: children))
+				try .built(Self.mockErasedRecord(of: declaration, variant: variant, in: world, unavailableProperties: onlyIfAvailableAnswers.unavailableProperties(of: variant), lazilyInstantiatedInstanceProperties: instanceProperties, typesDeclaredEscaping: escaping, children: children))
 			case .publicMockCall:
 				try .built(Self.publicMockCallRecord(of: declaration, variant: variant, in: world, typesDeclaredEscaping: escaping, children: children))
 			}
@@ -426,7 +426,7 @@ enum NodeRecordKind: Sendable {
 	/// calls its type's initializer (`NodeRecords+MockConstruction.swift`).
 	case mockConstruction
 	/// A node of a mock root's world that would be of kind `mockConstruction` but that it is erased: an `ErasedInstantiator`,
-	/// or a constant or an `Instantiator` erased to its property's type, whose override returns the property's type
+	/// or a constant, an `Instantiator` or a `LazilyInstantiated` erased to its property's type, whose override returns the property's type
 	/// (`NodeRecords+MockErased.swift`).
 	case mockErased
 	/// A constant or an `Instantiator` built by a call of another module's public mock, which passes the called mock its own

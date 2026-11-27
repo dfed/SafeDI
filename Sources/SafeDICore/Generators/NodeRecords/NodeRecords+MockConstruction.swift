@@ -30,11 +30,15 @@ extension NodeRecords {
 		// A hand-written mock builds its type with or without an initializer: a fake has none.
 		let buildsWithHandWrittenMock = world.construction(of: declaration) == .handWrittenMock
 		let erasedDischarges = mockErasedDischarges(of: declaration, in: world)
+		let lazyDischarges = mockLazyDischarges(of: declaration, in: world)
 		var discharges: Set<NodeRecordRefusal> = buildsWithHandWrittenMock ? [.construction, .noInitializer] : []
 		discharges.formUnion(mockOnlyIfAvailableDischarges(of: declaration))
 		discharges.formUnion(erasedDischarges)
+		discharges.formUnion(lazyDischarges)
 		guard refusalsOfBuiltByInitializer(declaration, in: world).allSatisfy(discharges.contains) else { return nil }
-		let kind: NodeRecordKind = erasedDischarges.isEmpty ? .mockConstruction : .mockErased
+		// An erased `LazilyInstantiated`'s override returns the erased type, as an erased node's does, so its record is the
+		// erased kind's (`mockErasedRecord(of:variant:in:unavailableProperties:lazilyInstantiatedInstanceProperties:typesDeclaredEscaping:children:)`).
+		let kind: NodeRecordKind = erasedDischarges.isEmpty && (lazyDischarges.isEmpty || !world.isErased(declaration)) ? .mockConstruction : .mockErased
 		var refusals = [NodeRecordRefusal]()
 		let instantiable = world.scope(of: declaration).instantiable
 		// An actor is claimed as any node is. The closure that overrides it takes each argument `sending`
@@ -78,6 +82,7 @@ extension NodeRecords {
 		variant: VariantID,
 		in world: some NodeRecordSources,
 		unavailableProperties: Set<Property>,
+		lazilyInstantiatedInstanceProperties: Set<Property>,
 		typesDeclaredEscaping: Set<TypeDescription>,
 		children: [GeneratedCode],
 	) throws -> BuiltPlaceRecord {
@@ -88,8 +93,6 @@ extension NodeRecords {
 			nil
 		}
 		let fieldArguments = mockConfigurationFieldArguments(of: declaration, in: world)
-		// A mock world that holds a lazily instantiated property is refused (`refusalsOfBuiltByInitializer(_:in:)`), so no
-		// receive of this node reads a wrapper's instance.
 		// A constant the mock builds for an optional property it promotes is bound as the unwrapped type its function returns,
 		// as every node the mock builds is bound non-optional; the optional receiver takes it through optional promotion.
 		let boundProperty = world.property(of: declaration).map { property in
@@ -100,7 +103,7 @@ extension NodeRecords {
 			variant: variant,
 			in: world,
 			unavailableProperties: unavailableProperties,
-			lazilyInstantiatedInstanceProperties: [],
+			lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
 			construction: handWrittenMock,
 			typeFunctionReturns: boundProperty?.typeDescription.asInstantiatedTypeSpelledAsDeclared,
 			boundProperty: boundProperty,

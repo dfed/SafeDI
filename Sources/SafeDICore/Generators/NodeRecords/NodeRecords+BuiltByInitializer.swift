@@ -62,12 +62,6 @@ extension NodeRecords {
 				refusals.append(.renameOrHole)
 			}
 		}
-		// A mock root's record reads no wrapper's instance yet. A lazy node is refused there as its kind, which no claim
-		// takes in a mock world; a scope that forwards a lazily instantiated property, or cannot build one it instantiates,
-		// has no such node, so it is refused here. In a production root's world `DeclarationsAnsweringReads` answers both.
-		if world.isMockWorld, !scope.declaredLazilyInstantiatedInstanceProperties.isEmpty || !scope.forwardedLazilyInstantiatedInstanceProperties.isEmpty {
-			refusals.append(.lazy)
-		}
 		for dependency in scope.instantiable.dependencies where dependency.source == .received(onlyIfAvailable: true) {
 			refusals.append(.onlyIfAvailable)
 		}
