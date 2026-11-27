@@ -614,7 +614,7 @@ struct SafeDIToolSeamNestedUnfilledHoleTests: ~Copyable {
 		.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(fulfillingAdditionalTypes: [P1.self])\n")
 
 	/// `App`'s type whose internal mock calls `S0`'s public mock.
-	private static let screen = seamFixtureType(named: "Screen", declarations: ["@Instantiated let s: S0"])
+	static let screen = seamFixtureType(named: "Screen", declarations: ["@Instantiated let s: S0"])
 		.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(generateMock: true)\n")
 
 	/// The source of a public final class `name` decorated with `@Instantiable(arguments)`, conforming to
@@ -631,7 +631,7 @@ struct SafeDIToolSeamNestedUnfilledHoleTests: ~Copyable {
 	/// `q: any Q`, which nothing fulfills; with `publicMocks`, each type of the chain is no seam but generates a public
 	/// mock and has an internal initializer, so another module's mock calls it. `App` lists every module and declares
 	/// `app`.
-	private static func modules(depth: Int, innerDeclaration: String? = nil, app: [String], host: Bool = false, withT: Bool = false, publicMocks: Bool = false) -> [ModuleFixture] {
+	static func modules(depth: Int, innerDeclaration: String? = nil, app: [String], host: Bool = false, withT: Bool = false, publicMocks: Bool = false) -> [ModuleFixture] {
 		var base = (0..<depth).map { "public protocol P\($0): AnyObject {}" }
 		if withT {
 			base += ["public protocol Q: AnyObject {}", seamFixtureType(named: "T", isSeam: true, declarations: ["@Instantiated let q: any Q"])]

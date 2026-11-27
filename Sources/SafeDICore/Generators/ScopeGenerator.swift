@@ -88,6 +88,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		previousPassPublicMockLevelReentries: [String: PublicMockLevelFunctions.Reentry] = [:],
 		enclosingLevelCalls: [String: PublicMockLevelFunctions.EnclosingLevelCall] = [:],
 		namesBoundBySeam: Set<String> = [],
+		namesBoundForBuilders: [String] = [],
 		placeHoldingProperties: Set<Property>? = nil,
 		fillsStoodFor: [FillStoodFor] = [],
 		previousPassBuildsFillOfEveryPlace: Bool = false,
@@ -99,6 +100,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		seamAndFillFields.builtInlineSeamComment = builtInlineSeamComment
 		seamAndFillFields.isUnavailableDependency = isUnavailableDependency
 		seamAndFillFields.namesBoundBySeam = namesBoundBySeam
+		seamAndFillFields.namesBoundForBuilders = namesBoundForBuilders
 		self.constructsWithHandWrittenMock = constructsWithHandWrittenMock
 		self.closedOnDeclaration = closedOnDeclaration
 		self.closesCycleOnFillPath = closesCycleOnFillPath
@@ -1461,6 +1463,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		case let .root(instantiable, _):
 			scopeData = .root(instantiable: instantiable, seamRoot: seamRoot)
 			builtInstantiable = instantiable
+			fields.namesBoundForBuilders = seamHoles.namesBoundForBuilders.sorted()
 		case let .property(instantiable, _, _, _, _, _):
 			builtInstantiable = instantiable
 		case .alias, .fill:
@@ -1660,6 +1663,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			"memberCallsInsideFunction": .recomputed,
 			"innerScopesCalledWithForwardedValue": .copied,
 			"namesBoundBySeam": .recomputed,
+			"namesBoundForBuilders": .recomputed,
 			"boxedLoops": .recomputed,
 			"loopLevelsTypesInTree": .recomputed,
 			"builtInlineSeamComment": .copied,
@@ -4852,6 +4856,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var memberCallsInsideFunction: [SeamHoles.ValuesBinding] = []
 		var innerScopesCalledWithForwardedValue: [String] = []
 		var namesBoundBySeam: Set<String> = []
+		/// At a seam's root, the names its generated initializer binds for its builders (`SeamHoles.namesBoundForBuilders`),
+		/// sorted, which every call in its tree reserves; empty at every other scope.
+		var namesBoundForBuilders: [String] = []
 		var boxedLoops: [Int: String] = [:]
 		var loopLevelsTypesInTree: [String: String] = [:]
 		var builtInlineSeamComment: String?
@@ -4896,6 +4903,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				|| !memberCallsInsideFunction.isEmpty
 				|| !innerScopesCalledWithForwardedValue.isEmpty
 				|| !namesBoundBySeam.isEmpty
+				|| !namesBoundForBuilders.isEmpty
 				|| !boxedLoops.isEmpty
 				|| !loopLevelsTypesInTree.isEmpty
 				|| builtInlineSeamComment != nil
@@ -5662,6 +5670,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// `namesReceivedFunctionsAvoid`). Empty outside a seam's tree.
 	nonisolated private var namesBoundBySeam: Set<String> {
 		seamAndFillFieldsStorage?.fields.namesBoundBySeam ?? []
+	}
+
+	/// At a seam's root, the names its generated initializer binds for its builders, sorted, which every call in its tree
+	/// reserves (`SeamHoles.namesBoundForBuilders`); empty at every other scope.
+	nonisolated var namesBoundForBuilders: [String] {
+		seamAndFillFieldsStorage?.fields.namesBoundForBuilders ?? []
 	}
 
 	/// For a scope that calls another module's public mock: what the call passes each builder it fills or hands up through a
@@ -9730,7 +9744,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				labelsReadOrDeclared: labelsReadInFill,
 				returnsBoundValue: property.propertyType.isConstant,
 			)
-			let names = FillNames(reserving: NamesConsultedInTurn([]), fills: [FillNames.Fill(caseKey: Self.fillCaseKey(of: hole), functionNameStem: Self.fillFunctionName(of: hole), labelsReadOrDeclared: labelsReadInFill)], dispatchers: [])
+			let names = FillNames(reserving: [], fills: [FillNames.Fill(caseKey: Self.fillCaseKey(of: hole), functionNameStem: Self.fillFunctionName(of: hole), labelsReadOrDeclared: labelsReadInFill)], dispatchers: [])
 			let scopeParameterNameFromRecord = names.scopeParameterName(ofFill: Self.fillCaseKey(of: hole)) ?? ""
 			observer(FillSignatureObservation(
 				written: written,

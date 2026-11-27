@@ -1319,7 +1319,8 @@ struct ScopeGeneratorUnderConstruction: Sendable {
 				return FillNames.Fill(caseKey: ScopeGenerator.fillCaseKey(of: hole), functionNameStem: ScopeGenerator.fillFunctionName(of: hole), labelsReadOrDeclared: [])
 			}
 			let namesFromRecords = FillNames(
-				reserving: NamesConsultedInTurn([GenerationWork.taking(enclosingFillNames, by: nil), seamHoles.namesBoundForBuilders]),
+				// In the form node records read them: the seam tree's names (`RootScopeInfo.SeamTree.namesBoundForBuilders`).
+				reserving: seamHoles.namesBoundForBuilders.sorted() + GenerationWork.taking(enclosingFillNames, by: nil),
 				fills: fills,
 				dispatchers: dispatchersOfThisCall.map { FillNames.Dispatcher(key: $0.key, functionNameStem: $0.functionNameStem) },
 			)
@@ -2615,6 +2616,7 @@ struct ScopeGeneratorUnderConstruction: Sendable {
 			previousPassPublicMockLevelReentries: previousPassGenerator?.publicMockLevelReentries ?? [:],
 			enclosingLevelCalls: enclosingLevelCalls,
 			namesBoundBySeam: GenerationWork.taking(seamHoles.namesBoundBySeam, by: .joiningNamesBoundBySeam),
+			namesBoundForBuilders: property == nil ? seamHoles.namesBoundForBuilders.sorted() : [],
 			placeHoldingProperties: placeHoldingPropertiesByType.map { $0[scope.instantiable.concreteInstantiable] ?? [] },
 			fillsStoodFor: fillsStoodFor,
 			previousPassBuildsFillOfEveryPlace: previousPassGenerator?.buildsFillOfEveryPlace ?? false,

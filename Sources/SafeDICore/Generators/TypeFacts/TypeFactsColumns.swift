@@ -60,6 +60,18 @@ struct TypeFactsFill: Hashable, Sendable {
 	/// The run of `TypeFactsGraph.fillPathEntries` the fill is built beneath, root first.
 	let stackStart: Int32
 	let stackCount: Int32
+	/// The run of `TypeFactsGraph.fillFields` the fill binds: the fields of the place it fills, in their declared order.
+	let fieldStart: Int32
+	let fieldCount: Int32
+	/// Why the fill channel does not model the fill yet, or `nil` where it does.
+	let refusal: TypeFactsFillRefusal?
+}
+
+/// A field of the place a fill fills, which the fill binds for its tree (`TypeFactsFill.fieldStart`): by the world's IDs.
+struct TypeFactsFillField: Hashable, Sendable {
+	let label: Int32
+	let property: Int32
+	let declaringType: Int32
 }
 
 /// One entry of a fill's path: the property built and the concrete type built for it, by the world's IDs.
