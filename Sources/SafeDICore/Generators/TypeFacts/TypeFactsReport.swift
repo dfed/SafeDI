@@ -186,6 +186,7 @@ public struct TypeFactsReport: Sendable {
 				typesDeclaredEscaping: spelled(graph.typesDeclaredEscaping, of: index, type),
 				typesBeneath: spelled(graph.typesBeneath, of: index, type),
 				holdsHoleBeneath: graph.holesBeneath.contains(0, inRow: index),
+				holdsCaseBeneath: graph.casesBeneath.contains(0, inRow: index),
 				builtType: type(graph.builtTypes[index]),
 				isOnCycle: graph.graph.isOnCycle(index),
 				readsFromAbove: graph.reads.reads(of: index).map(graph.readDescription),
@@ -308,6 +309,8 @@ public struct TypeFactsReport: Sendable {
 		/// The types the node's subtree builds, its own included.
 		public let typesBeneath: [String]
 		public let holdsHoleBeneath: Bool
+		/// In a seam's own tree, whether a hole is beneath the node along every edge, fills included.
+		public let holdsCaseBeneath: Bool
 		public let builtType: String
 		public let isOnCycle: Bool
 		/// What the node's subtree reads from above it, as `Read` descriptions.

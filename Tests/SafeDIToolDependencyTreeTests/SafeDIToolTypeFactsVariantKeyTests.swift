@@ -924,6 +924,49 @@ struct SafeDIToolTypeFactsVariantKeyTests: ~Copyable {
 		#expect(TypeFactsChecks.findings(of: report).findingsByCheck[34] == nil, "\(report.world)")
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_marksConstantTwinBuiltInsideSendableFunction_whenSendableLazilyInstantiatedTwinClosesCycleOnIt() async throws {
+		// `Preview`'s `SendableLazilyInstantiated<Editor>` closes the cycle on the constant `editor`: one `@Sendable` function
+		// serves both twins, whose variants share a key, so the constant's body is marked with the wrapper's.
+		let report = try await rootReport(of: [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let editor: Editor"]),
+			seamFixtureType(named: "Editor", isFinalClass: true, declarations: ["@Instantiated let previewBuilder: SendableInstantiator<Preview>"], conformances: ", Sendable"),
+			seamFixtureType(named: "Preview", isFinalClass: true, declarations: ["@Instantiated let editor: SendableLazilyInstantiated<Editor>"], conformances: ", Sendable"),
+		])
+
+		#expect(marksByDeclaration(in: report) == [
+			"Root": [false],
+			"Editor as editor: Editor": [true],
+			"Preview as previewBuilder: SendableInstantiator<Preview>": [true],
+			"Editor as editor: SendableLazilyInstantiated<Editor>": [true],
+		], "\(report.world)")
+		#expect(TypeFactsChecks.findings(of: report).findingsByCheck[34] == nil, "\(report.world)")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_marksOnlySendableWrapperTwin_whenTwinsOfOneTypeAreBuiltApartOnNoCycle() async throws {
+		// `first` builds `theme` as a `SendableLazilyInstantiated` and `second` as a `LazilyInstantiated`: twins of one
+		// identity that no cycle runs through, each a function of its own, so only the wrapper that opens a `@Sendable`
+		// function is marked.
+		let report = try await rootReport(of: [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let first: First", "@Instantiated let second: Second"]),
+			seamFixtureType(named: "First", isFinalClass: true, declarations: ["@Instantiated let theme: SendableLazilyInstantiated<Theme>"]),
+			seamFixtureType(named: "Second", isFinalClass: true, declarations: ["@Instantiated let theme: LazilyInstantiated<Theme>"]),
+			seamFixtureType(named: "Theme", isFinalClass: true, declarations: [], conformances: ", Sendable"),
+		])
+
+		#expect(marksByDeclaration(in: report) == [
+			"Root": [false],
+			"First as first: First": [false],
+			"Second as second: Second": [false],
+			"Theme as theme: SendableLazilyInstantiated<Theme>": [true],
+			"Theme as theme: LazilyInstantiated<Theme>": [false],
+		], "\(report.world)")
+		#expect(TypeFactsChecks.findings(of: report).findingsByCheck[34] == nil, "\(report.world)")
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]

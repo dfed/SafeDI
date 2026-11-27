@@ -274,6 +274,8 @@ enum TypeFactsChecks {
 		}
 		// Check 10.
 		var factsVariantByPlace = [Int?](repeating: nil, count: places.count)
+		// The edge of its parent's node that each place is built at.
+		var edgeByPlace = [Int?](repeating: nil, count: places.count)
 		if let root = places.first, root.node == 0, !report.variantNodes.isEmpty {
 			factsVariantByPlace[0] = 0
 		}
@@ -284,6 +286,7 @@ enum TypeFactsChecks {
 			for child in children {
 				guard let childNode = places[child].node, let edge = edges[cursor...].firstIndex(of: childNode) else { continue }
 				factsVariantByPlace[child] = report.variantCalls[variant][edge]
+				edgeByPlace[child] = edge
 				cursor = edge + 1
 			}
 		}
@@ -412,7 +415,7 @@ enum TypeFactsChecks {
 		}
 		// Check 33.
 		if !report.forMockGeneration {
-			for (variant, family) in report.variantFamilies.enumerated() where family != "plain" && !(report.holesArePlaces && report.nodes[report.variantNodes[variant]].holdsHoleBeneath) {
+			for (variant, family) in report.variantFamilies.enumerated() where family != "plain" && !(report.holesArePlaces && report.nodes[report.variantNodes[variant]].holdsCaseBeneath) {
 				add(33, "a production variant of a body holding no case keys by family: v\(variant) of \(report.nodes[report.variantNodes[variant]].description)")
 			}
 		}
@@ -466,7 +469,12 @@ enum TypeFactsChecks {
 		// Check 34.
 		var placesMarkByVariant = [Bool?](repeating: nil, count: report.variantNodes.count)
 		for case let (index, variant?) in factsVariantByPlace.enumerated() {
-			let isInsideSendableFunction = path(of: index).contains { places[$0].generator?.buildsInSendableFunction == true }
+			// A fill of a `Sendable` hole is a `@Sendable` closure, which the generator's place does not record: its edge says.
+			let isInsideSendableFunction = path(of: index).contains { place in
+				guard places[place].generator?.buildsInSendableFunction != true else { return true }
+				guard places[place].isFill, let parent = places[place].parent, let parentNode = places[parent].node, let edge = edgeByPlace[place] else { return false }
+				return report.nodes[parentNode].edgeFacts[edge].opens == "otherSendableFunction"
+			}
 			placesMarkByVariant[variant] = (placesMarkByVariant[variant] ?? false) || isInsideSendableFunction
 		}
 		for (variant, mark) in report.variantBuildsInSendableFunction.enumerated() {
@@ -477,7 +485,7 @@ enum TypeFactsChecks {
 					add(34, "v\(variant) of \(node.description) is marked \(mark ? "inside" : "outside") a `@Sendable` function where its places say \(placesMark ? "inside" : "outside")")
 				}
 			}
-			if report.forMockGeneration || (report.holesArePlaces && node.holdsHoleBeneath), mark != (report.variantFamilies[variant] == "sendable") {
+			if report.forMockGeneration || (report.holesArePlaces && node.holdsCaseBeneath), mark != (report.variantFamilies[variant] == "sendable") {
 				add(34, "v\(variant) of \(node.description), keyed \(report.variantFamilies[variant]), is marked \(mark ? "inside" : "outside") a `@Sendable` function")
 			}
 		}
@@ -661,12 +669,14 @@ enum TypeFactsChecks {
 	///     hand-written mock.
 	///
 	/// 33, outside the columns (32 is reserved for the made-again oracle): a production world keys by family only the bodies
-	/// of a seam's tree that hold a hole, which read their cases from the `@Sendable` carrier inside a `@Sendable` function.
+	/// of a seam's tree with a hole beneath, fills included, which read their cases from the `@Sendable` carrier inside a
+	/// `@Sendable` function.
 	/// Every other body serves its places inside and outside a `@Sendable` function, the mark folded over its calls, as
 	/// 2.4.x writes it.
 	///
 	/// 34, outside the columns: a variant is marked built inside a `@Sendable` function exactly when one of its places is,
-	/// itself or a place above it building in one; where the world keys the variant by family, the mark is its family.
+	/// itself or a place above it building in one, a fill of a `Sendable` hole among them; where the world keys the variant
+	/// by family, the mark is its family.
 	private static func columnChecks(
 		of report: TypeFactsReport,
 		subtreeClosesCycle: [Bool],
