@@ -366,6 +366,68 @@ struct SafeDIToolVariantBodyTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsBodyForEachPath_whenTypeReachedLaterBuildsTypeReachedEarlierAboveCycle() async throws {
+		// The root reaches `Flow` before `Detail`, which builds `Flow` again beneath a forwarded `mark`: the plan walks the
+		// path through `Detail` too, so `Screen`'s cycle gets a body that reads `Detail`'s `mark` beside the one that reads `nil`.
+		let (stream, continuation) = AsyncStream.makeStream(of: Plan.self)
+		try await PlanBodiesObservation.$observer.withValue({ root, bodiesOfPlan, todaysBodiesPlanLacks, twinValues in
+			continuation.yield(Plan(root: root, bodiesOfPlan: bodiesOfPlan, todaysBodiesPlanLacks: todaysBodiesPlanLacks, twinValues: twinValues))
+		}) {
+			_ = try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true) public final class Root: Instantiable {
+					    @Instantiated let flow: Flow
+					    @Instantiated let detailBuilder: Instantiator<Detail>
+					    public init(flow: Flow, detailBuilder: Instantiator<Detail>) { self.flow = flow; self.detailBuilder = detailBuilder }
+					}
+
+					@Instantiable public final class Flow: Instantiable {
+					    @Instantiated let screenBuilder: Instantiator<Screen>
+					    public init(screenBuilder: Instantiator<Screen>) { self.screenBuilder = screenBuilder }
+					}
+
+					@Instantiable public final class Screen: Instantiable {
+					    @Received(onlyIfAvailable: true) let mark: Mark?
+					    @Instantiated let nextScreenBuilder: Instantiator<Screen>
+					    public init(mark: Mark?, nextScreenBuilder: Instantiator<Screen>) { self.mark = mark; self.nextScreenBuilder = nextScreenBuilder }
+					}
+
+					@Instantiable public final class Detail: Instantiable {
+					    @Forwarded let mark: Mark
+					    @Instantiated let flowBuilder: Instantiator<Flow>
+					    public init(mark: Mark, flowBuilder: Instantiator<Flow>) { self.mark = mark; self.flowBuilder = flowBuilder }
+					}
+
+					public final class Mark {}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		continuation.finish()
+		var plans = [Plan]()
+		for await plan in stream {
+			plans.append(plan)
+		}
+		#expect(plans == [
+			Plan(
+				root: "Root",
+				bodiesOfPlan: [
+					"Screen as screenBuilder: Instantiator<Screen> [mark = mark: Mark] [screenBuilder = screenBuilder: Instantiator<Screen>, being built]",
+					"Screen as screenBuilder: Instantiator<Screen> [mark = nil] [screenBuilder = screenBuilder: Instantiator<Screen>, being built]",
+					"Screen as nextScreenBuilder: Instantiator<Screen> [mark = nil] [nextScreenBuilder = nextScreenBuilder: Instantiator<Screen>, being built]",
+					"Screen as nextScreenBuilder: Instantiator<Screen> [mark = mark: Mark] [nextScreenBuilder = nextScreenBuilder: Instantiator<Screen>, being built]",
+				],
+				todaysBodiesPlanLacks: [],
+				twinValues: [],
+			),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_buildsPlan_whenBodyCalledBeneathOptionalParameterDeclaresLabelInAnotherForm() async throws {
 		// `Flow` forwards `mark: Mark?` on the cycle, above `Detail`'s receive of `mark: Stamp?` only if available. Hiding is
 		// by label, so `Detail` reads `Flow`'s declaration, which provides no `Stamp?`, and nothing above `Flow` answers a

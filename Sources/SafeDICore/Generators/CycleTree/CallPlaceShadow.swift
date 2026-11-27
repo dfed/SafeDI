@@ -433,12 +433,21 @@ extension DependencyTreeGenerator {
 			}
 			self.copyByIdentifier = copyByIdentifier
 			copies = graph.nodes.compactMap { copyByIdentifier[$0] }
-			// A copy's children are copies or call places, so the copies reach no cycle: each copy is judged once its
-			// children are, in reverse of the order the root reaches them, which puts no copy before a copy it builds.
-			var scopesLeadingToCallPlaces = Set(callPlaceByIdentifier.values.map(ObjectIdentifier.init))
-			for copy in copies.reversed() {
-				for case let .instantiated(_, child, _) in copy.propertiesToGenerate where scopesLeadingToCallPlaces.contains(ObjectIdentifier(child)) {
-					scopesLeadingToCallPlaces.insert(ObjectIdentifier(copy))
+			// A copy's children are copies or call places: a copy leads to a call place where some child does. The order the
+			// root reaches the copies is no order to judge them in, since a copy reached late can build one reached early, as
+			// a builder held beside a value builds the value's type again: each copy that holds a scope found to lead to a
+			// call place is found from that scope.
+			var copiesHoldingChild = [ObjectIdentifier: [ObjectIdentifier]]()
+			for copy in copies {
+				for case let .instantiated(_, child, _) in copy.propertiesToGenerate {
+					copiesHoldingChild[ObjectIdentifier(child), default: []].append(ObjectIdentifier(copy))
+				}
+			}
+			var scopesToJudge = graph.nodes.compactMap { callPlaceByIdentifier[$0].map(ObjectIdentifier.init) }
+			var scopesLeadingToCallPlaces = Set(scopesToJudge)
+			while let scope = scopesToJudge.popLast() {
+				for copy in copiesHoldingChild[scope, default: []] where scopesLeadingToCallPlaces.insert(copy).inserted {
+					scopesToJudge.append(copy)
 				}
 			}
 			self.scopesLeadingToCallPlaces = scopesLeadingToCallPlaces
