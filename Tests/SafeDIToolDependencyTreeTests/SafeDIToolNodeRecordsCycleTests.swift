@@ -954,6 +954,90 @@ struct SafeDIToolNodeRecordsCycleTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsTheTreesLayout_whenSharedPlaceBuildsTwinOfPlaceOnThePath() async throws {
+		// `Root` builds `Second` first, whose `model` is on the cycle through `secondBuilder`. `First`'s lazy `model`, its
+		// twin, then reaches `secondBuilder`'s shared place, where today's tree closes the cycle on the lazy `model`.
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true) public final class Root: Instantiable {
+					    @Instantiated let secondBuilder: Instantiator<Second>
+					    @Instantiated let firstBuilder: Instantiator<First>
+					    public init(secondBuilder: Instantiator<Second>, firstBuilder: Instantiator<First>) {
+					        self.secondBuilder = secondBuilder
+					        self.firstBuilder = firstBuilder
+					    }
+					}
+
+					@Instantiable public final class First: Instantiable {
+					    @Instantiated let theme: Theme
+					    @Instantiated let model: LazilyInstantiated<Model>
+					    public init(theme: Theme, model: LazilyInstantiated<Model>) {
+					        self.theme = theme
+					        self.model = model
+					    }
+					}
+
+					@Instantiable public final class Second: Instantiable {
+					    @Instantiated let theme: Theme
+					    @Instantiated let model: Model
+					    public init(theme: Theme, model: Model) {
+					        self.theme = theme
+					        self.model = model
+					    }
+					}
+
+					@Instantiable public final class Model: Instantiable {
+					    @Received let theme: Theme
+					    @Instantiated let secondBuilder: Instantiator<Second>
+					    public init(theme: Theme, secondBuilder: Instantiator<Second>) {
+					        self.theme = theme
+					        self.secondBuilder = secondBuilder
+					    }
+					}
+
+					@Instantiable public final class Theme: Instantiable {
+					    public init() {}
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_secondBuilder() -> Second {
+			            let theme = Theme()
+			            let model: Model = __safeDI_model(theme: theme)
+			            return Second(theme: theme, model: model)
+			        }
+			        func __safeDI_model(theme: Theme) -> Model {
+			            let secondBuilder = Instantiator<Second>(__safeDI_secondBuilder)
+			            return Model(theme: theme, secondBuilder: secondBuilder)
+			        }
+			        let secondBuilder = Instantiator<Second>(__safeDI_secondBuilder)
+			        func __safeDI_firstBuilder() -> First {
+			            let theme = Theme()
+			            let model = LazilyInstantiated<Model> {
+			                __safeDI_model(theme: theme)
+			            }
+			            return First(theme: theme, model: model)
+			        }
+			        let firstBuilder = Instantiator<First>(__safeDI_firstBuilder)
+			        self.init(secondBuilder: secondBuilder, firstBuilder: firstBuilder)
+			    }
+			}
+			""",
+		])
+		#expect(reports.map(\.refusal) == ["cycleVariantsPartitionApart"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_keepsTheTreesLayout_whenTwoBodiesNameOneVariantsFunctionApart() async throws {
 		// `A`'s body names `Leaf`'s `aBuilder` apart from the root's, which `bBuilder`'s tree closes on, and `Other`'s body
 		// keeps the name of the same variant's function.
