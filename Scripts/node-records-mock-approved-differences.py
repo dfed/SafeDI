@@ -23,7 +23,7 @@ import re
 import sys
 import threading
 GUARD=re.compile(r'^\s*_ = (?:\w+\.)*\w+\.__safeDI_\w+_mock_\w+\.self //')
-GUARDS_MOVED=[]
+ALSO_USED=[]
 FUNC=re.compile(r'^(\s*)((?:@Sendable nonisolated )?func )(__safeDI_\w+|`__safeDI_[^`]+`)\((.*)\)((?: async| throws)* -> .+) \{$')
 TOKEN=re.compile(r'(?<![\w.])safeDIOverrides(?![\w:])')
 def block_end(lines,i):
@@ -109,7 +109,7 @@ def expand(lines,hoisted,base_indent):
         if bm and re.match(r'^\w+$',bm.group(1)) and '__safeDI_'+bm.group(1)!=name and stem(name)!='__safeDI_'+bm.group(1):
             newname='__safeDI_'+bm.group(1)
             newline=re.sub(r'(?<![\w.])'+re.escape(name)+r'(?=\()',newname,newline)
-        if guard and base_indent>8: GUARDS_MOVED.append(guard)
+        if guard and base_indent>8: ALSO_USED.append('10')
         inst=([ind+guard.strip()] if guard else [])+[ind+m.group(2)+newname+'('+params+')'+m.group(5)+' {']
         sub=[ (ind+'    '+b if b else b) for b in (TOKEN.sub(lambda _:expr,x) for x in body)]
         sub=expand(sub,hoisted,base_indent+4)
@@ -214,10 +214,14 @@ def e3(text,walk):
     lines=text.split('\n')
     walk_lines=walk.split('\n')
     walk_locals=set(l.strip() for l in walk_lines if LOCAL.match(l))
+    # entry 17: a local only the records declare is written out as its path only where the walk declares a
+    # local of the same name in this mock, which is where an actor's function builds the same node
+    walk_local_names=set(LOCAL.match(l).group(2) for l in walk_lines if LOCAL.match(l))
     i=0
     while i<len(lines):
         local=LOCAL.match(lines[i])
-        if local and lines[i].strip() not in walk_locals:
+        if local and lines[i].strip() not in walk_locals and local.group(2) in walk_local_names:
+            ALSO_USED.append('17')
             indent=len(local.group(1))
             name=re.compile(r'(?<![\w.])'+re.escape(local.group(2))+r'(?!\w)')
             del lines[i]
@@ -238,6 +242,7 @@ def e3(text,walk):
             if not any(reads.search(b) for b in lines[i+1:e]): continue
             lines[i+1:e]=[reads.sub('__safeDI_'+label+'__overrides',b) for b in lines[i+1:e]]
             lines.insert(i,line)
+            ALSO_USED.append('3')
             break
     return '\n'.join(lines)
 def e11(text,walk):
@@ -256,13 +261,13 @@ REWRITES=[('1+2',unhoist),('11',e11),('3',e3),('8',e8),('9',e9),('6',e6),('4',e4
 def rewritten(text, walk):
     used = []
     for name, rewrite in REWRITES:
-        del GUARDS_MOVED[:]
+        del ALSO_USED[:]
         result = rewrite(text, walk)
-        if result != text:
+        if result != text and name != '3':
             used.append(name)
-            text = result
-        if GUARDS_MOVED:
-            used.append('10')
+        text = result
+        for also in sorted(set(ALSO_USED)):
+            used.append(also)
     return text, used
 
 
@@ -306,7 +311,7 @@ def main():
             else:
                 failures += 1
                 print('%s: %s' % (records_path, failure))
-        for name in [name for name, _ in REWRITES] + ['10']:
+        for name in [name for name, _ in REWRITES] + ['10', '17']:
             print('entry %s: used on %d pairs' % (name, counts[name]))
         print('%d of %d pairs equal after rewrite' % (total - failures, total))
         sys.exit(1 if failures else 0)
