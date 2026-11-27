@@ -380,8 +380,11 @@ struct NodeRecords: Sendable {
 				let calls = world.calls(of: top.variant)
 				let callee = calls[calls.startIndex + top.edgeIndices[top.next]]
 				if isOnPath[Int(callee)] {
+					// The closed-on property's own label is never a parameter of its function: every call is made inside a tree
+					// that builds a declaration of it (`CycleParameter`).
+					let ownLabel = world.property(of: world.declaration(of: callee))?.label
 					if let closedOn = stack.lastIndex(where: { $0.variant == callee }),
-					   stack[(closedOn + 1)...].contains(where: { !labelsReceived.isDisjoint(with: Self.labelsDeclared(by: world.declaration(of: $0.variant), in: world)) }),
+					   stack[(closedOn + 1)...].contains(where: { frame in Self.labelsDeclared(by: world.declaration(of: frame.variant), in: world).contains { $0 != ownLabel && labelsReceived.contains($0) } }),
 					   world.parameters(of: callee).isEmpty
 					{
 						// The function the call refers to may take a parameter the facts do not answer.

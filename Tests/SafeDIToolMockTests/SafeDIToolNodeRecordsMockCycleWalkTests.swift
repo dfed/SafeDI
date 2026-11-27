@@ -211,6 +211,7 @@ struct SafeDIToolNodeRecordsMockCycleWalkTests: ~Copyable {
 				DifferentialValueProbe(name: "overridden.screenBuilder.instantiate().stepBuilder.instantiate().screenBuilder.instantiate().stepBuilder.instantiate().screenBuilder.instantiate()", expression: "Root.mock(safeDIOverrides: .init(session: { marked(Session(), \"session\") }, screenBuilder: .init(stepBuilder: .init(session: { marked(Session(), \"step.session\") }, { marked(Step(session: $0, screenBuilder: $1), \"step\") }), { marked(Screen(session: $0, stepBuilder: $1), \"screen\") }))).screenBuilder.instantiate().stepBuilder.instantiate().screenBuilder.instantiate().stepBuilder.instantiate().screenBuilder.instantiate()"),
 			],
 			markers: ["session", "step.session", "step", "screen"],
+			cycleParameters: ["Screen": [Property(label: "session", typeDescription: .simple(name: "Session"))]],
 		)
 	}
 
@@ -370,6 +371,7 @@ struct SafeDIToolNodeRecordsMockCycleWalkTests: ~Copyable {
 				DifferentialValueProbe(name: "overridden.hubBuilder.instantiate().screenBuilder.instantiate().midBuilder.instantiate().stepBuilder.instantiate().screenBuilder.instantiate().midBuilder.instantiate()", expression: "Root.mock(safeDIOverrides: \(Self.parameterOverrides)).hubBuilder.instantiate().screenBuilder.instantiate().midBuilder.instantiate().stepBuilder.instantiate().screenBuilder.instantiate().midBuilder.instantiate()"),
 			],
 			markers: ["session", "hub.session", "step.session"],
+			cycleParameters: ["Screen": [Property(label: "session", typeDescription: .simple(name: "Session"))]],
 		)
 	}
 
@@ -692,12 +694,16 @@ struct SafeDIToolNodeRecordsMockCycleWalkTests: ~Copyable {
 	/// Generates `fixture` with the walk and with the mock roots laid out from node records, expects the mock root to be
 	/// laid out from them, and compares what each probe builds in the two.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	private mutating func expectWalksValues(fixture: [String: String], probes: [DifferentialValueProbe], markers: [String]) async throws {
+	/// `cycleParameters` is what the facts answer for each function a cycle closes on, by the type it builds, which the
+	/// stand-in for the cycle parameter fact reads (`CycleParametersForTesting`) until that fact lands.
+	private mutating func expectWalksValues(fixture: [String: String], probes: [DifferentialValueProbe], markers: [String], cycleParameters: [String: [Property]] = [:]) async throws {
 		var fixtureFiles = fixture
 		fixtureFiles["Marked.swift"] = Self.markedFile
 		let walkOutput = try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixtureFiles, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
-		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
-			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixtureFiles, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		let (output, reports) = try await CycleParametersForTesting.$byTypeName.withValue(cycleParameters) {
+			try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
+				try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixtureFiles, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+			}
 		}
 		#expect(reports.filter(\.isMockRoot).map(\.everyRefusal) == [[]])
 		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [true])
