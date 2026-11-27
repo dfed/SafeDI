@@ -34,7 +34,8 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	/// parameter with a default value is, which a mock holds in the type's configuration.
 	case mockDefaultValuedParameter
 	/// A mock root's node is a wrapper an actor is sent, whose override is read into a local before it, and another
-	/// node's label or function takes the local's name.
+	/// node's label or function takes the local's name. Also an actor that is sent a value built by a function that is
+	/// handed the places the world's cycles enter (`NodeRecords+MockCycle.swift`).
 	case mockActor
 	/// A mock root's node whose override is not its parent's field under the node's own label: two children of one node
 	/// share a label, which a mock root names apart.
@@ -106,12 +107,15 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	/// Two bodies of a world with a cycle name one variant's function apart, or hand the functions its body refers to
 	/// different names (`CycleFunctionNames`), where its one place cannot stand for both.
 	case cycleBuilderNameShared
+	/// A function of a mock root's world that is handed the places its cycles enter builds a `LazilyInstantiated`
+	/// (`NodeRecords+MockCycle.swift`).
+	case mockCycleLazy
 	/// The node is built as a `LazilyInstantiated`, which `lazyClaim(of:in:)` discharges: its record is
 	/// `NodeRecordKind.lazy`'s, and in a mock root's world production's term joins the record the node's override decorates
-	/// (`joiningProductionMarks(_:to:of:in:)`). Also a world whose
-	/// records read a wrapper's instance where no record does yet: a rename fulfilled by one
-	/// (`DeclarationsAnsweringReads.renameReadsWrappersInstance`) and a rename in a seam's own tree of one its root is
-	/// handed.
+	/// (`joiningProductionMarks(_:to:of:in:)`). Also a world whose records read a wrapper's instance where no record does
+	/// yet: a mock root's scope that declares or forwards a lazily instantiated property, and a rename the tree binds from a
+	/// wrapper's instance on one path to its node only, or reads through an optional wrapper beneath a fill
+	/// (`DeclarationsAnsweringReads.renameReadsWrappersInstance`).
 	case lazy
 	/// The node's type receives a property only if available.
 	case onlyIfAvailable
@@ -157,6 +161,9 @@ protocol NodeRecordSources: TypeFactsWorld {
 	var isMockWorld: Bool { get }
 	/// What a mock root's lowering names that the records of its world read; empty for a production root's world.
 	var mockRootNames: MockRootNames { get }
+	/// The records of `call`, a seam call of a root's tree that fills places of the seam it calls (`FilledCallRecords`), or
+	/// why node records leave the call to the tree.
+	func filledCallRecords(of call: DeclarationID) -> Result<FilledCallRecords, NodeRecordRefusal>
 }
 
 extension TypeFactsGraph: NodeRecordSources {
@@ -174,6 +181,12 @@ extension TypeFactsGraph: NodeRecordSources {
 
 	func text(ofLabel label: WorldLabelID) -> String {
 		labelTexts[Int(label)]
+	}
+
+	func filledCallRecords(of call: DeclarationID) -> Result<FilledCallRecords, NodeRecordRefusal> {
+		// A call of a root's tree is reached on one route (`NodeRecordRefusal.fillCallSeveralVariants`).
+		let variant = (0..<Int32(variantCount)).first { declaration(of: $0) == call } ?? 0
+		return Result { () throws(NodeRecordRefusal) -> FilledCallRecords in try FilledCallRecords.of(call: call, variant: variant, in: self, reservedNames: []) }
 	}
 }
 
@@ -232,7 +245,6 @@ struct NodeRecords: Sendable {
 		kinds.reserveCapacity(declarationCount)
 		for declaration in 0..<Int32(declarationCount) {
 			try kinds.append(Self.kind(of: declaration, in: world))
-			try Self.checkReadsNoSeamRootValue(of: seamTree, declaration, in: world)
 			try Self.checkMakesNoLoopMemberAgain(inSeamTree: seamTree, declaration, in: world)
 			try Self.checkForwardsBuiltTypesProperties(declaration, in: world, declaredTypeNames: declaredTypeNames)
 		}
@@ -241,10 +253,12 @@ struct NodeRecords: Sendable {
 		let bindsHolesPayloads = seamHoles != nil && kinds.contains(.seamHole)
 		let holdsCycle = (0..<Int32(declarationCount)).contains(where: world.isOnCycle)
 		// A world with a cycle makes a record per variant, each read of its own calls; any other world, one per node.
+		// Each node's one variant, off every cycle; read only there.
+		var variantByDeclaration = [VariantID](repeating: 0, count: declarationCount)
 		if holdsCycle {
 			try Self.checkVariantsPartitionAlike(inWorldWithCycle: world)
 		} else {
-			var variantByDeclaration = [VariantID](repeating: -1, count: declarationCount)
+			variantByDeclaration = [VariantID](repeating: -1, count: declarationCount)
 			for variant in 0..<Int32(world.variantCount) {
 				let declaration = Int(world.declaration(of: variant))
 				guard variantByDeclaration[declaration] < 0 else { throw NodeRecordRefusal.nodeHasSeveralVariants }
@@ -255,6 +269,11 @@ struct NodeRecords: Sendable {
 		// them (`TypeFactsEdge.buildPosition`), which `NodeBuildOrder` stands in for only off every cycle.
 		let order: NodeBuildOrder? = holdsCycle ? nil : try NodeBuildOrder(world: world)
 		let labelsReceived = holdsCycle ? try Self.labelsReceived(inWorldWithCycle: world) : []
+		// A mock root's functions on a cycle are handed the places entered above them (`NodeRecords+MockCycle.swift`).
+		let enteredSlots = holdsCycle && world.isMockWorld ? MockEnteredSlots(world: world) : nil
+		if let enteredSlots {
+			try Self.checkMockCycles(in: world, slots: enteredSlots)
+		}
 		let onlyIfAvailableAnswers = try OnlyIfAvailableAnswers(world: world, rootParameters: seamTree?.parameters ?? outerDeclarations)
 		let mockReceivesBoundAgain = Self.mockReceivesBoundAgain(in: world)
 		let answeringDeclarations = DeclarationsAnsweringReads(
@@ -264,13 +283,21 @@ struct NodeRecords: Sendable {
 		)
 		// The tree reports the capture as an error, which the records cannot.
 		guard !answeringDeclarations.sendableFunctionCapturesWrapper else { throw NodeRecordRefusal.sendableFunctionCapturesWrapper }
+		// A cycle's function in the tree takes a by-value read of a lazily instantiated property's instance as a parameter
+		// (`BuiltPlaceRecord.cycleParameters`), which no closing record passes yet.
+		let cycleReadsAnInstance = holdsCycle && (0..<VariantID(world.variantCount)).contains { variant in
+			world.isOnCycle(world.declaration(of: variant)) && answeringDeclarations.lazilyInstantiatedInstanceProperties(readBy: variant).contains { labelsReceived.contains($0.label) }
+		}
+		guard !cycleReadsAnInstance else { throw NodeRecordRefusal.cycleTakesParameters }
 		// A variant's one record is right only where every call into it answers its reads as the call it was written from.
 		// Checked before what the records read of the call that resolved each variant, so that which call that is does not
 		// change the refusal.
 		guard !answeringDeclarations.callsAnswerAVariantApart else { throw NodeRecordRefusal.callsAnswerAVariantApart }
 		// A rename's record binds it from its fulfilling property's label, or from a wrapper's instance as the tree's rule
-		// reads it, never from an instance read otherwise.
+		// reads it, never from an instance read otherwise, nor one way where the tree binds it two ways on two paths.
 		guard !answeringDeclarations.renameReadsWrappersInstance else { throw NodeRecordRefusal.lazy }
+		// The call of each deferred parameter's autoclosure that the seam's own rename keeping its label is bound from.
+		let autoclosureCallByLabel = seamTree?.seamRoot.autoclosureCallByLabel(of: world.scope(of: 0).instantiable) ?? [:]
 		func edgeIndices(of declaration: DeclarationID) -> [Int] {
 			order?.edgeIndices(of: declaration) ?? world.edgeFacts(from: declaration).enumerated().sorted { $0.element.buildPosition < $1.element.buildPosition }.map(\.offset)
 		}
@@ -281,6 +308,7 @@ struct NodeRecords: Sendable {
 			declaration: DeclarationID,
 			children: [GeneratedCode],
 			childrensEscaping: Set<TypeDescription>,
+			childPlaces: [(declaration: DeclarationID, place: GeneratedCode)],
 			functionName: String?,
 			isMadeSendable: Bool,
 		) throws -> (place: GeneratedCode, record: PlaceRecord?, escaping: Set<TypeDescription>) {
@@ -290,14 +318,16 @@ struct NodeRecords: Sendable {
 			}
 			let scope = world.scope(of: declaration)
 			let instantiable = scope.instantiable
-			var escaping = Set(instantiable.initializer?.typesDeclaredEscaping ?? [])
-			escaping.formUnion(instantiable.mockInitializer?.typesDeclaredEscaping ?? [])
+			// The declaration spells its own, a name a non-erased rename hands a receiver that declares it `@escaping` included,
+			// as the tree's scope does (`ScopeGenerator.typesDeclaredEscaping`).
+			var escaping = instantiable.typesDeclaredEscapingByItsDeclaration
 			// A call of a seam spells the builder types its signature declares `@escaping` so, as its tree does.
 			escaping.formUnion(scope.seamCall?.typesDeclaredEscaping ?? [])
 			escaping.formUnion(childrensEscaping)
 			// A member of a loop of builders first makes again the members its tree receives, whatever its kind
 			// (`NodeRecords+Loops.swift`).
-			let children = Self.loopRebindings(of: declaration, in: world) + children
+			// A place of a seam's own mock is bound from its builder before the node's children, which read it.
+			let children = Self.mockPlaceBuilderBindings(of: declaration, in: world).map(\.place) + Self.loopRebindings(of: declaration, in: world) + children
 			// What a receive by value reads as a wrapper's instance, which every record of a construction passes its arguments.
 			let instanceProperties = answeringDeclarations.lazilyInstantiatedInstanceProperties(readBy: variant)
 			let madeRecord: PlaceRecord = switch kinds[Int(declaration)] {
@@ -308,7 +338,11 @@ struct NodeRecords: Sendable {
 			case .inlineSeam:
 				try .built(Self.inlineSeamRecord(of: declaration, variant: variant, in: world, lazilyInstantiatedInstanceProperties: instanceProperties, typesDeclaredEscaping: escaping, children: children))
 			case .seamCall:
-				try .alias(Self.seamCallRecord(of: declaration, variant: variant, in: world, routes: seamCallRoutes, lazilyInstantiatedInstanceProperties: instanceProperties, typesDeclaredEscaping: escaping, children: children))
+				// A filled call's record holds its fills and dispatchers (`filledSeamCallRecord`), in a world with one variant
+				// per node, whose escaping types it reads by declaration; a world with a cycle keeps a filled call's tree.
+				try .alias(Self.fillsAPlace(declaration, in: world)
+					? Self.filledSeamCallRecord(of: declaration, variant: variant, in: world, isInSeamTree: seamTree != nil || holdsCycle, lazilyInstantiatedInstanceProperties: instanceProperties, typesDeclaredEscaping: escaping, childPlaces: childPlaces, typesDeclaredEscapingOf: { typesDeclaredEscaping[Int(variantByDeclaration[Int($0)])] })
+					: Self.seamCallRecord(of: declaration, variant: variant, in: world, routes: seamCallRoutes, answers: onlyIfAvailableAnswers, lazilyInstantiatedInstanceProperties: instanceProperties, typesDeclaredEscaping: escaping, children: children))
 			case .receivesOnlyIfAvailable:
 				try .built(Self.receivesOnlyIfAvailableRecord(
 					of: declaration,
@@ -322,11 +356,19 @@ struct NodeRecords: Sendable {
 			case .unavailableDependency:
 				try .alias(Self.unavailableDependencyRecord(of: declaration, in: world))
 			case .rename:
-				try .alias(Self.renameRecord(of: declaration, variant: variant, in: world, answers: onlyIfAvailableAnswers, readsWrappersInstance: answeringDeclarations.renamesReadingWrappersInstance.contains(variant)))
+				try .alias(Self.renameRecord(
+					of: declaration,
+					variant: variant,
+					in: world,
+					answers: onlyIfAvailableAnswers,
+					readsWrappersInstance: answeringDeclarations.renamesReadingWrappersInstance.contains(variant),
+					// The root declares no rename through a variant of its own, so it is the scope of each rename among its edges.
+					autoclosureCall: world.edges(from: 0).contains(declaration) ? world.property(of: declaration).flatMap { autoclosureCallByLabel[$0.label] } : nil,
+				))
 			case .cycle:
 				try .built(Self.cycleRecord(of: declaration, variant: variant, in: world, lazilyInstantiatedInstanceProperties: instanceProperties, typesDeclaredEscaping: escaping, children: children))
 			case .mockConstruction:
-				try .built(Self.mockDecoratedRecord(of: declaration, variant: variant, in: world, unavailableProperties: onlyIfAvailableAnswers.unavailableProperties(of: variant), lazilyInstantiatedInstanceProperties: instanceProperties, receivesBoundAgain: mockReceivesBoundAgain[Int(variant)], typesDeclaredEscaping: escaping, children: children))
+				try .built(Self.mockDecoratedRecord(of: declaration, variant: variant, in: world, unavailableProperties: onlyIfAvailableAnswers.unavailableProperties(of: variant), lazilyInstantiatedInstanceProperties: instanceProperties, receivesBoundAgain: mockReceivesBoundAgain[Int(variant)], enteredSlots: enteredSlots, typesDeclaredEscaping: escaping, children: children))
 			case .mockUnavailableDependency:
 				try .alias(Self.mockUnavailableDependencyRecord(of: declaration, in: world))
 			case .publicMockCall:
@@ -335,9 +377,20 @@ struct NodeRecords: Sendable {
 			let record = Self.record(madeRecord, functionName: functionName, isMadeSendable: isMadeSendable)
 			let place: GeneratedCode = switch record {
 			case let .alias(aliasRecord):
-				// A place written as text: the engine copies it as written. A property nothing fulfills that `mock()` binds
-				// before its nodes is no place.
-				Self.isBoundBeforeMockNodes(declaration, in: world) ? .sequence([]) : .place(PlacePlan(code: .text(aliasRecord.text), record: record))
+				if Self.isBoundBeforeMockNodes(declaration, in: world) {
+					// A property nothing fulfills that `mock()` binds before its nodes is no place.
+					.sequence([])
+				} else if let call = aliasRecord.call, case let statements = call.statementsBeforeLeadingStatement + call.statementsAfterLeadingStatement, statements.contains(where: \.holdsRootFunction) {
+					// A call written in place whose function declares a root function (a filled call's dispatcher): the place
+					// holds its statements, so the root finds the function to declare once (`RootFunctionHoisting`).
+					.place(PlacePlan(code: .sequence(statements), record: record))
+				} else {
+					// A place written as text: the engine copies it as written.
+					.place(PlacePlan(code: .text(aliasRecord.text), record: record))
+				}
+			case let .built(builtRecord) where builtRecord.children.contains(where: \.holdsRootFunction):
+				// A place whose tree holds a root function holds its children, so the root finds the function to declare once.
+				.place(PlacePlan(code: .sequence(builtRecord.children), record: record))
 			case .built, .closer:
 				.place(PlacePlan(code: .empty, record: record))
 			}
@@ -422,9 +475,11 @@ struct NodeRecords: Sendable {
 		var records = [PlaceRecord?](repeating: nil, count: world.variantCount)
 		var typesDeclaredEscaping = [Set<TypeDescription>](repeating: [], count: world.variantCount)
 		var closedOnFromSendableFunction = [Set<VariantID>](repeating: [], count: world.variantCount)
-		func body(of variant: VariantID) throws -> (children: [GeneratedCode], escaping: Set<TypeDescription>, closedOnFromSendableFunction: Set<VariantID>, closedOn: Set<VariantID>) {
+		func body(of variant: VariantID) throws -> (children: [GeneratedCode], childPlaces: [(declaration: DeclarationID, place: GeneratedCode)], escaping: Set<TypeDescription>, closedOnFromSendableFunction: Set<VariantID>, closedOn: Set<VariantID>) {
 			let indentation = variant == 0 ? TypeKeyBody.rootStatementIndentation : ScopeGenerator.standardIndent
 			var children = [GeneratedCode]()
+			// Each child's declaration and place before it is indented, which a filled call's fills are built from.
+			var childPlaces = [(declaration: DeclarationID, place: GeneratedCode)]()
 			var escaping = Set<TypeDescription>()
 			var fromSendableFunction = Set<VariantID>()
 			var closedOn = Set<VariantID>()
@@ -432,7 +487,7 @@ struct NodeRecords: Sendable {
 				switch entry {
 				case let .closer(closingOn: callee):
 					let closedOnDeclaration = world.declaration(of: callee)
-					let closer = try Self.closingRecord(closingOn: closedOnDeclaration, from: variant, functionName: functionNames?.closedOnFunctionName(of: callee, inBodyOf: variant), in: world)
+					let closer = try Self.closingRecord(closingOn: closedOnDeclaration, from: variant, functionName: functionNames?.closedOnFunctionName(of: callee, inBodyOf: variant), in: world, enteredSlots: enteredSlots)
 					children.append(.indented(.place(PlacePlan(code: .empty, record: closer)), by: indentation))
 					closedOn.insert(callee)
 					// A call that hands a `Sendable` wrapper its function refers to the function it closes on from a
@@ -441,13 +496,15 @@ struct NodeRecords: Sendable {
 						fromSendableFunction.insert(callee)
 					}
 				case let .place(callee):
-					children.append(.indented(places[Int(callee)], by: indentation))
+					let place = Self.mockPlace(places[Int(callee)], record: records[Int(callee)], of: world.declaration(of: callee), builtBy: world.declaration(of: variant), in: world, slots: enteredSlots)
+					children.append(.indented(place, by: indentation))
+					childPlaces.append((world.declaration(of: callee), place))
 					escaping.formUnion(typesDeclaredEscaping[Int(callee)])
 					closedOn.formUnion(variantsClosedOn[Int(callee)])
 					fromSendableFunction.formUnion(closedOnFromSendableFunction[Int(callee)])
 				}
 			}
-			return (children, escaping, fromSendableFunction, closedOn)
+			return (children, childPlaces, escaping, fromSendableFunction, closedOn)
 		}
 		for variant in postOrder {
 			let declaration = world.declaration(of: variant)
@@ -467,6 +524,7 @@ struct NodeRecords: Sendable {
 				declaration: declaration,
 				children: body.children,
 				childrensEscaping: body.escaping,
+				childPlaces: body.childPlaces,
 				functionName: functionNames?.functionName(of: variant),
 				isMadeSendable: isMadeSendable,
 			)
@@ -482,7 +540,9 @@ struct NodeRecords: Sendable {
 		rootBody = root.children
 		// The root's declaration spells its own, as the tree's root does, then every place's.
 		rootTypesDeclaredEscaping = world.scope(of: world.declaration(of: 0)).instantiable.typesDeclaredEscapingByItsDeclaration.union(root.escaping)
+		holdsSeamCallOrHole = kinds.contains(.seamCall) || kinds.contains(.seamHole)
 		self.records = records
+		mockEnteredSlots = enteredSlots?.slots ?? []
 		declarationByVariant = (0..<Int32(world.variantCount)).map(world.declaration(of:))
 	}
 
@@ -498,6 +558,16 @@ struct NodeRecords: Sendable {
 	/// The names the root's tree declares `@escaping`, as the tree's root collects them (`ScopeGenerator.typesDeclaredEscaping`),
 	/// which a seam's own root spells its parameters with.
 	let rootTypesDeclaredEscaping: Set<TypeDescription>
+
+	/// Whether the world holds a call of a seam or a hole, whose checks only a tree answers today
+	/// (`validateNoSeamTierOmitsProvidedValue`, the leaf's `@Sendable` deferred parameter), so a seam's own root that holds
+	/// one keeps its tree (`DependencyTreeGenerator.ownSeamRootLayout`).
+	let holdsSeamCallOrHole: Bool
+
+	/// The slots of the places a mock root's cycles enter, in the order its struct declares them
+	/// (`MockEnteredSlot.mockEnteredPlacesDeclaration(slots:isSendable:)`); empty for a world with no cycle and for a
+	/// production root's.
+	let mockEnteredSlots: [MockEnteredSlot]
 
 	/// How many variants have a record, which is every variant but the root's.
 	var recordCount: Int {
@@ -531,11 +601,6 @@ struct NodeRecords: Sendable {
 			refusals.formUnion(kindAndRefusals(of: declaration, in: world).refusals)
 			if owesFacts(declaration, in: world) {
 				refusals.insert(.readAnsweredTwoWays)
-			}
-			do {
-				try checkReadsNoSeamRootValue(of: seamTree, declaration, in: world)
-			} catch {
-				refusals.insert(error)
 			}
 			do {
 				try checkMakesNoLoopMemberAgain(inSeamTree: seamTree, declaration, in: world)
@@ -594,30 +659,6 @@ struct NodeRecords: Sendable {
 	private static func owesFacts(_ declaration: DeclarationID, in world: some NodeRecordSources) -> Bool {
 		let owedOnlyOutsideTests: TypeFactsOwedFacts = NodeRecordsObservation.laysOutMockRoots ? [.mockRootPin, .mockRootRecord, .mockRootBinding] : []
 		return !world.owedFacts(of: declaration).subtracting(owedOnlyOutsideTests).isEmpty
-	}
-
-	/// Refuses `declaration`'s world where its type reads what a seam's root is handed as node records do not write it: as
-	/// `lazy`, a rename of one of the instances of `LazilyInstantiated` properties the root is handed, which its
-	/// tree binds from the wrapper's instance and a rename's record would bind from the label; as `renameOrHole`, the seam's own
-	/// rename that keeps a deferred parameter's label, which the tree binds from the parameter's autoclosure and writes no
-	/// record of. A receive of such an instance is answered (`DeclarationsAnsweringReads`).
-	private static func checkReadsNoSeamRootValue(of seamTree: DependencyTreeGenerator.RootScopeInfo.SeamTree?, _ declaration: DeclarationID, in world: some NodeRecordSources) throws(NodeRecordRefusal) {
-		guard let seamTree else { return }
-		let renamesAnInstance = world.scope(of: declaration).instantiable.dependencies.contains { dependency in
-			switch dependency.source {
-			case let .aliased(fulfillingProperty, _, _):
-				seamTree.rootLazilyInstantiatedInstanceProperties.contains(fulfillingProperty.asUnwrappedProperty)
-			case .received, .instantiated, .forwarded:
-				false
-			}
-		}
-		guard !renamesAnInstance else { throw .lazy }
-		// The root declares no rename through a variant of its own, so it is the scope of each rename among its edges.
-		guard declaration == 0 else { return }
-		let readsAnAutoclosure = world.edges(from: declaration).contains { edge in
-			world.kind(of: edge) == .alias && world.property(of: edge).map { seamTree.autoclosureLabels.contains($0.label) } == true
-		}
-		guard !readsAnAutoclosure else { throw .renameOrHole }
 	}
 
 	/// Refuses `declaration`'s world as `builderLoopBoxed` where it is a seam's own and `declaration` makes a member of a
@@ -689,6 +730,7 @@ struct NodeRecords: Sendable {
 				?? filledSeamCallClaim(of: declaration, in: world)
 				?? seamCallClaim(of: declaration, in: world)
 			let answerReadingClaim = seamClaim
+				?? fillClaim(of: declaration, in: world)
 				?? unavailableDependencyClaim(of: declaration, in: world)
 				?? receivesOnlyIfAvailableClaim(of: declaration, in: world)
 				?? renameClaim(of: declaration, in: world)

@@ -83,11 +83,7 @@ public struct Generate: AsyncParsableCommand {
 	public func run() async throws {
 		let buildLog = BuildLog()
 		do {
-			// A prototype's switch, for timing a seam world laid out from node records: never part of a release.
-			let laysOutSeamWorldRoots = ProcessInfo.processInfo.environment["SAFEDI_LAY_OUT_SEAM_WORLD_ROOTS"] == "1"
-			let output = try await NodeRecordsObservation.$laysOutSeamWorldRootsInRun.withValue(laysOutSeamWorldRoots) {
-				try await generate(buildLog: buildLog)
-			}
+			let output = try await generate(buildLog: buildLog)
 			if !output.warnings.isEmpty {
 				FileHandle.standardError.write(Data("\(buildLog.formatted(output.warnings))\n".utf8))
 			}

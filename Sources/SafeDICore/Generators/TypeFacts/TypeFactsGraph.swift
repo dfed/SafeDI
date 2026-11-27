@@ -1108,7 +1108,7 @@ struct TypeFactsGraph: Sendable {
 					}
 					// A fill builds its place's property, which it does not declare: its tree reads that label as being built.
 					guard graph.nodes[node].key.isFill, let place = graph.nodes[node].property, labels.existingID(of: place.label) == read.label, let placeID = properties.existingID(of: place) else {
-						return nil
+						return madeAgainAnswer(at: node, for: read)
 					}
 					let text = "\(read.channel.name) \(forms(of: place)) being built"
 					let keyText = if isTwin(place.propertyType) {

@@ -188,19 +188,23 @@ enum NodeRecordsChecks {
 	}
 
 	private static func checkingNodeRecords<Result>(laysOutRoots: Bool, laysOutMockRoots: Bool, reportPath: String?, testName: String, enclosingObserver: (@Sendable (NodeRecordsReport) -> Void)?, _ body: () async throws -> Result) async rethrows -> Result {
-		try await NodeRecordsObservation.$laysOutRoots.withValue(laysOutRoots) {
+		// Where `SAFEDI_NODE_RECORDS_FILLED_CALLS` is `1`, node records make the records of a root's filled seam calls.
+		let recordsFilledCalls = NodeRecordsObservation.recordsFilledCalls || ProcessInfo.processInfo.environment["SAFEDI_NODE_RECORDS_FILLED_CALLS"] == "1"
+		return try await NodeRecordsObservation.$laysOutRoots.withValue(laysOutRoots) {
 			try await NodeRecordsObservation.$laysOutMockRoots.withValue(laysOutMockRoots) {
-				try await NodeRecordsObservation.$observer.withValue({ report in
-					for difference in report.differences {
-						Issue.record(Comment(rawValue: "Node records differ from the tree’s records of root \(report.root): \(difference)"))
+				try await NodeRecordsObservation.$recordsFilledCalls.withValue(recordsFilledCalls) {
+					try await NodeRecordsObservation.$observer.withValue({ report in
+						for difference in report.differences {
+							Issue.record(Comment(rawValue: "Node records differ from the tree’s records of root \(report.root): \(difference)"))
+						}
+						if let reportPath {
+							let outcome = report.isLaidOutFromNodeRecords ? "laid out" : report.refusal ?? "accepted"
+							append("\(testName)\t\(report.root)\t\(outcome)\t\(report.differences.count)\t\(report.everyRefusal.joined(separator: ","))\t\(report.isMockRoot ? "mock" : "")\n", toFileAt: reportPath)
+						}
+						enclosingObserver?(report)
+					}) {
+						try await body()
 					}
-					if let reportPath {
-						let outcome = report.isLaidOutFromNodeRecords ? "laid out" : report.refusal ?? "accepted"
-						append("\(testName)\t\(report.root)\t\(outcome)\t\(report.differences.count)\t\(report.everyRefusal.joined(separator: ","))\t\(report.isMockRoot ? "mock" : "")\n", toFileAt: reportPath)
-					}
-					enclosingObserver?(report)
-				}) {
-					try await body()
 				}
 			}
 		}

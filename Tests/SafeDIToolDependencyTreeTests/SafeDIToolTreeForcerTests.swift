@@ -70,8 +70,8 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_buildsEveryTree_whenModuleHoldsSeam() async throws {
-		let (forcers, _) = try await treeForcers(
+	mutating func generate_buildsNoTreeForSeamsOwnRoot_whenItsNodeRecordsAcceptItsWorld() async throws {
+		let (forcers, heldTaskCounts) = try await treeForcers(
 			of: [
 				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let screen: Screen"]),
 				seamFixtureType(named: "Screen", isSeam: true, declarations: ["@Instantiated let service: Service"]),
@@ -79,7 +79,51 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 			],
 			moduleMembershipArguments: ["--module-name", "Feature"],
 		)
-		// Node records make the records of the root's world, which calls the seam, and of the seam's own world.
+		// The root's world calls the seam, which node records lay out only beside the root's tree; the seam's own world they
+		// lay out without one.
+		#expect(forcers == """
+		Root\tseam world
+		Screen\tnone
+		roots that built a tree: 1 of 2
+
+		""")
+		#expect(heldTaskCounts == [0])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsTreeForSeamsOwnRoot_whenItsWorldCallsAnotherSeam() async throws {
+		let (forcers, _) = try await treeForcers(
+			of: [
+				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let screen: Screen"]),
+				seamFixtureType(named: "Screen", isSeam: true, declarations: ["@Instantiated let panel: Panel"]),
+				seamFixtureType(named: "Panel", isSeam: true, declarations: ["@Instantiated let service: Service"]),
+				seamFixtureType(named: "Service", declarations: []),
+			],
+			moduleMembershipArguments: ["--module-name", "Feature"],
+		)
+		// A call of a seam is checked on the tree of the seam that makes it (`validateNoSeamTierOmitsProvidedValue`).
+		#expect(forcers == """
+		Root\tseam world
+		Panel\tnone
+		Screen\tseam world
+		roots that built a tree: 2 of 3
+
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsSeamsOwnRootsTree_whenRunDrawsDOTGraph() async throws {
+		let (forcers, _) = try await treeForcers(
+			of: [
+				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let screen: Screen"]),
+				seamFixtureType(named: "Screen", isSeam: true, declarations: ["@Instantiated let service: Service"]),
+				seamFixtureType(named: "Service", declarations: []),
+			],
+			buildDOTFileOutput: true,
+			moduleMembershipArguments: ["--module-name", "Feature"],
+		)
 		#expect(forcers == """
 		Root\tseam world
 		Screen\tseam world
