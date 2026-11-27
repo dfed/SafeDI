@@ -37,6 +37,16 @@ extension DependencyTreeGenerator {
 		}
 	}
 
+	/// The kind node records refuse the world of `rootInfo`, a root of a module with seams, with; empty where they make its
+	/// records, or the root is of a module without seams, whose forcers name the kind already.
+	static func nodeRecordRefusal(ofSeamWorldRoot rootInfo: RootScopeInfo) -> [TreeForcer] {
+		guard rootInfo.treeForcers.contains(.seamWorld), let constructionScope = rootInfo.constructionScope else { return [] }
+		let world = TypeFactsGraph(root: constructionScope, forMockGeneration: false)
+		let records = Result { () throws -> NodeRecords in try NodeRecords(world: world, rootLazilyInstantiatedInstanceProperties: rootInfo.seamTree?.rootLazilyInstantiatedInstanceProperties ?? []) }
+		guard case let .failure(error) = records, let refusal = error as? NodeRecordRefusal else { return [] }
+		return [.nodeRecordKind(refusal.rawValue)]
+	}
+
 	/// The plan of `rootInfo`'s code: its node records' layout where nothing forces its tree, and its tree's places
 	/// otherwise. Where a test observes node records (`NodeRecordsObservation`), each root's records are compared with its
 	/// tree's at every place, and a root laid out from them is compared with the tree built beside them: its code, its

@@ -81,14 +81,15 @@ extension NodeRecords {
 		return refusals
 	}
 
-	/// The record of `declaration`'s place, a node of kind `builtByInitializer`, whose body builds `children` and whose
-	/// tree declares `typesDeclaredEscaping` `@escaping`.
+	/// The record of `declaration`'s place, a node of kind `builtByInitializer`, whose body builds `children`, whose tree
+	/// declares `typesDeclaredEscaping` `@escaping`, and whose line constructing the type ends with `lineEnd`.
 	static func builtByInitializerRecord(
 		of declaration: DeclarationID,
 		variant _: VariantID,
 		in world: some NodeRecordSources,
 		typesDeclaredEscaping: Set<TypeDescription>,
 		children: [GeneratedCode],
+		lineEnd: String = "",
 	) throws -> BuiltPlaceRecord {
 		let instantiable = world.scope(of: declaration).instantiable
 		// Every node but the root is built as a property, and has an initializer (`refusalsOfBuiltByInitializer(_:in:)`).
@@ -118,7 +119,7 @@ extension NodeRecords {
 			functionName: ScopeGenerator.functionName(toBuildPropertyNamed: property.label),
 			isSendable: false,
 			typesDeclaredEscaping: typesDeclaredEscaping,
-			lineEnd: "",
+			lineEnd: lineEnd,
 			// An `Instantiator` always declares its builder function; a constant only where its body has a statement.
 			hasFunction: isInstantiator || !children.isEmpty,
 			children: children,

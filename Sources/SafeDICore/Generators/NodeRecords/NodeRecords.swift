@@ -146,6 +146,8 @@ struct NodeRecords: Sendable {
 			// A hole's place is made above, from no record.
 			case .builtByInitializer, .seamHole:
 				try Self.builtByInitializerRecord(of: declaration, variant: variant, in: world, typesDeclaredEscaping: escaping, children: children)
+			case .inlineSeam:
+				try Self.inlineSeamRecord(of: declaration, variant: variant, in: world, typesDeclaredEscaping: escaping, children: children)
 			}
 			typesDeclaredEscaping[Int(variant)] = escaping
 			records[Int(variant)] = record
@@ -244,7 +246,12 @@ struct NodeRecords: Sendable {
 	/// in the order of `NodeRecordKind`'s cases, calling its file's classifier, which returns `nil` for a node not of its
 	/// kind: `if let claim = <kind>Claim(of: declaration, in: world) { return claim }`.
 	private static func claim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
-		if let claim = seamHoleClaim(of: declaration, in: world) { return claim }
+		if let claim = seamHoleClaim(of: declaration, in: world) {
+			return claim
+		}
+		if let claim = inlineSeamClaim(of: declaration, in: world) {
+			return claim
+		}
 		// A test claims a node by its type's name (`NodeRecordsObservation.claimsForTesting`).
 		return NodeRecordsObservation.claimsForTesting[world.scope(of: declaration).instantiable.concreteInstantiable.asSource].map { discharged in
 			NodeRecordClaim(kind: .builtByInitializer, discharges: Set(discharged.compactMap(NodeRecordRefusal.init(rawValue:))))
@@ -272,4 +279,7 @@ enum NodeRecordKind: Sendable {
 	/// A hole a seam's tree declares, whose place is its site's code, or a property passed `nil` in any other world
 	/// (`NodeRecords+SeamHole.swift`).
 	case seamHole
+	/// A seam of another module built inline, because no module SafeDI knows generates its initializer, and otherwise a
+	/// node `builtByInitializer` makes: its line ends with the comment that says why (`NodeRecords+InlineSeam.swift`).
+	case inlineSeam
 }
