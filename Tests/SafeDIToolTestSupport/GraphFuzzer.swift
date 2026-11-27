@@ -1930,6 +1930,19 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// with a place no one fills, which the tool rejects by design at `NestedFillRoot`'s property, as it rejects a place of
 	/// `NestedFillHome`'s own that no one fills.
 	case nestedFillHoleUnfilled
+	/// `addingNestedFillHoleShapes`' fills nested inside fills: `NestedFillDepthOuter`, a seam of the seam's module, fills
+	/// the places of two calls of seams of `FuzzSession` with a type that calls `NestedFillDepthInner`, whose place it fills
+	/// with a type that holds a place the roots' module fills, so that place is inside a fill inside the fills of two calls.
+	case nestedFillHoleTwoDeep
+	/// The inner fill builds `NestedFillDepthDeepest`, whose place it fills too, so the place is three fills deep.
+	case nestedFillHoleThreeDeep
+	/// The two outer fills are of two cases of one call, `NestedFillDepthFirst`'s.
+	case nestedFillHoleTwoDeepUnderOneCallsTwoCases
+	/// `NestedFillDepthSecond` is built beneath `NestedFillDepthShelf`, which binds `nestedFillDepthTag` first.
+	case nestedFillHoleOuterCallBeneathLevel
+	/// The innermost place's fill reads `nestedFillDepthTag` only if available, which only the route beneath the shelf
+	/// holds.
+	case nestedFillHoleInnermostFillReadsLevelValue
 	/// `addingSeamRingShapes`' tree: `RingSeamA` to `RingSeamC`, three seams that each build three panels through
 	/// instantiators, each panel holding a place of `RingService` and building the next seam, so that each seam passes up
 	/// the places of the others in one component of the seam-reaches-seam graph.
@@ -2961,6 +2974,7 @@ enum GraphFuzzerGenerator {
 			placesOfOneCaseRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.placesOfOneCaseRandomSeedMask)
 			placeStoodForRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.placeStoodForRandomSeedMask)
 			nestedFillHoleRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.nestedFillHoleRandomSeedMask)
+			nestedFillDepthRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.nestedFillDepthRandomSeedMask)
 			seamRingRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.seamRingRandomSeedMask)
 			nestedCycleHoleRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.nestedCycleHoleRandomSeedMask)
 			reenteredPlaceFieldRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.reenteredPlaceFieldRandomSeedMask)
@@ -3518,6 +3532,8 @@ enum GraphFuzzerGenerator {
 		private var placeStoodForRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only `addingNestedFillHoleShapes`' choices.
 		private var nestedFillHoleRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only `addingNestedFillHoleShapes`' choices of fills nested inside fills (`nestedFillDepthDeclarations`).
+		private var nestedFillDepthRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only `addingSeamRingShapes`' choices.
 		private var seamRingRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only `addingNestedCycleHoleShapes`' choices: whether a split graph gains `NestHoleHome`'s tree, a place on
@@ -10251,10 +10267,114 @@ enum GraphFuzzerGenerator {
 			}
 			var root = instantiable("NestedFillRoot", module: .samePackageCaller, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "nestedFillHome", type: home.name)])
 			root.instantiableArguments = ["isRoot: true"]
-			return declarations + added + [home] + callerDeclarations + [root]
+			return declarations + added + [home] + callerDeclarations + [root] + nestedFillDepthDeclarations(conformances: conformances, sendableSuffix: sendableSuffix, isFilled: !leavesGadgetUnfilled)
 		}
 
 		private static let nestedFillHoleRandomSeedMask: UInt64 = 0x6E65737446696C6C
+
+		/// Seven in ten of the graphs `addingNestedFillHoleShapes` draws in, where it fills the gadget, also gain a place inside a fill inside a fill of
+		/// one seam's tree, drawn from `nestedFillDepthRandom` alone, so that every graph without it draws as before:
+		/// `NestedFillDepthOuter`, a seam of the seam's module, builds `NestedFillDepthFirst` and `NestedFillDepthSecond`,
+		/// seams of `FuzzSession`, each holding a place of `NestedFillDepthThing`, which `NestedFillDepthThingImpl` fills
+		/// beside the outer seam by building `NestedFillDepthInner`, a seam of `FuzzSession` holding a place of
+		/// `NestedFillDepthService`, which `NestedFillDepthServiceImpl` fills there too, holding a place of
+		/// `NestedFillDepthGizmo` that the outer seam passes up and `NestedFillDepthGizmoImpl`, beside `NestedFillDepthRoot` in
+		/// the roots' module, fills (`nestedFillHoleTwoDeep`). So the place is inside the fill of the inner call, which is
+		/// inside the fills of two other calls, that differ, while everything inside them is equal: the shape whose answers
+		/// the innermost fill alone must decide. Four in ten of those graphs nest the fills three deep
+		/// (`nestedFillHoleThreeDeep`): `NestedFillDepthServiceImpl` builds `NestedFillDepthDeepest`, a seam of `FuzzSession`
+		/// holding a place of `NestedFillDepthPart`, which `NestedFillDepthPartImpl` fills holding the gizmo's place. Three in
+		/// ten put the two outer fills in two cases of one call instead (`nestedFillHoleTwoDeepUnderOneCallsTwoCases`):
+		/// `NestedFillDepthFirst` holds a place of `NestedFillDepthOther` too, which `NestedFillDepthOtherImpl` fills by
+		/// building the inner seam as `NestedFillDepthThingImpl` does. Where the outer fills are of two calls, half the graphs
+		/// build `NestedFillDepthSecond` beneath `NestedFillDepthShelf`, which binds `nestedFillDepthTag` first
+		/// (`nestedFillHoleOuterCallBeneathLevel`), and in six in ten of those the gizmo's fill reads it only if available
+		/// (`nestedFillHoleInnermostFillReadsLevelValue`): inline, the place beneath the first call reads `nil` and the one
+		/// beneath the second the shelf's tag, so a level above the outer fills, never the fills, decides what the place
+		/// reads, which the value comparator judges against the inline and visible builds.
+		private mutating func nestedFillDepthDeclarations(conformances: [String], sendableSuffix: String, isFilled: Bool) -> [TypeDeclaration] {
+			// Every roll is made before any is read, so that each draws as it does whatever the others draw.
+			let drawsDepth = nestedFillDepthRandom.percentChance(70)
+			let threeDeep = nestedFillDepthRandom.percentChance(40)
+			let twoCasesOfOneCall = nestedFillDepthRandom.percentChance(30)
+			let secondBeneathShelf = nestedFillDepthRandom.percentChance(50)
+			let gizmoReadsTag = nestedFillDepthRandom.percentChance(60)
+			// A graph whose gadget no one fills is rejected, which would judge none of these places.
+			guard drawsDepth, isFilled else { return [] }
+			let prefix = prefix
+			func instantiable(_ suffix: String, module: GraphFuzzerModule, properties: [PropertyDeclaration] = []) -> TypeDeclaration {
+				var declaration = TypeDeclaration(name: "\(prefix)NestedFillDepth\(suffix)", instantiableArguments: [], properties: properties, declaresHelperTypes: false, additionalConformances: conformances)
+				declaration.module = module
+				return declaration
+			}
+			func seam(_ suffix: String, module: GraphFuzzerModule, properties: [PropertyDeclaration], protocols: [String] = []) -> TypeDeclaration {
+				var declaration = instantiable(suffix, module: module, properties: properties)
+				declaration.instantiableArguments = ["generateDependencyTree: true"]
+				declaration.additionalDeclarations += protocols.map { "public protocol \(prefix)NestedFillDepth\($0)\(sendableSuffix) {}" }
+				return declaration
+			}
+			func fill(_ suffix: String, fulfilling protocolSuffix: String, module: GraphFuzzerModule, properties: [PropertyDeclaration]) -> TypeDeclaration {
+				let protocolName = "\(prefix)NestedFillDepth\(protocolSuffix)"
+				var declaration = instantiable(suffix, module: module, properties: properties)
+				declaration.instantiableArguments = ["fulfillingAdditionalTypes: [\(protocolName).self]"]
+				declaration.additionalConformances.append(protocolName)
+				return declaration
+			}
+			func place(_ label: String, of protocolSuffix: String) -> PropertyDeclaration {
+				PropertyDeclaration(attribute: "@Instantiated", label: label, type: "any \(prefix)NestedFillDepth\(protocolSuffix)")
+			}
+			func instantiated(_ label: String, _ declaration: TypeDeclaration) -> PropertyDeclaration {
+				PropertyDeclaration(attribute: "@Instantiated", label: label, type: declaration.name)
+			}
+			let gizmoPlace = place("nestedFillDepthGizmo", of: "Gizmo")
+			let inner = seam("Inner", module: .seamDependency, properties: [place("nestedFillDepthService", of: "Service")], protocols: ["Service"])
+			var sessionSeams = [inner]
+			var featureFills = [TypeDeclaration]()
+			if threeDeep {
+				let deepest = seam("Deepest", module: .seamDependency, properties: [place("nestedFillDepthPart", of: "Part")], protocols: ["Part"])
+				sessionSeams.append(deepest)
+				featureFills.append(fill("ServiceImpl", fulfilling: "Service", module: .seamModule, properties: [instantiated("nestedFillDepthDeepest", deepest)]))
+				featureFills.append(fill("PartImpl", fulfilling: "Part", module: .seamModule, properties: [gizmoPlace]))
+			} else {
+				featureFills.append(fill("ServiceImpl", fulfilling: "Service", module: .seamModule, properties: [gizmoPlace]))
+			}
+			featureFills.append(fill("ThingImpl", fulfilling: "Thing", module: .seamModule, properties: [instantiated("nestedFillDepthInner", inner)]))
+			var outerProperties = [PropertyDeclaration]()
+			var levels = [TypeDeclaration]()
+			var tag: TypeDeclaration?
+			if twoCasesOfOneCall {
+				let first = seam("First", module: .seamDependency, properties: [place("nestedFillDepthThing", of: "Thing"), place("nestedFillDepthOther", of: "Other")], protocols: ["Thing", "Other"])
+				sessionSeams.append(first)
+				featureFills.append(fill("OtherImpl", fulfilling: "Other", module: .seamModule, properties: [instantiated("nestedFillDepthInner", inner)]))
+				outerProperties = [instantiated("nestedFillDepthFirst", first)]
+			} else {
+				let first = seam("First", module: .seamDependency, properties: [place("nestedFillDepthThing", of: "Thing")], protocols: ["Thing"])
+				let second = seam("Second", module: .seamDependency, properties: [place("nestedFillDepthThing", of: "Thing")])
+				sessionSeams += [first, second]
+				outerProperties = [instantiated("nestedFillDepthFirst", first)]
+				if secondBeneathShelf {
+					let shelfTag = instantiable("Tag", module: .seamModule)
+					tag = shelfTag
+					let shelf = instantiable("Shelf", module: .seamModule, properties: [instantiated("nestedFillDepthTag", shelfTag), instantiated("nestedFillDepthSecond", second)])
+					levels = [shelfTag, shelf]
+					outerProperties.append(instantiated("nestedFillDepthShelf", shelf))
+				} else {
+					outerProperties.append(instantiated("nestedFillDepthSecond", second))
+				}
+			}
+			let outer = seam("Outer", module: .seamModule, properties: outerProperties, protocols: ["Gizmo"])
+			var gizmoImplementation = fill("GizmoImpl", fulfilling: "Gizmo", module: .samePackageCaller, properties: [])
+			if let tag, gizmoReadsTag {
+				gizmoImplementation.properties.append(PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "nestedFillDepthTag", type: "\(tag.name)?"))
+			}
+			gizmoImplementation.fillsHole = true
+			var root = instantiable("Root", module: .samePackageCaller, properties: [instantiated("nestedFillDepthOuter", outer)])
+			root.instantiableArguments = ["isRoot: true"]
+			return sessionSeams + levels + featureFills + [outer, gizmoImplementation, root]
+		}
+
+		/// "nestDept" in ASCII.
+		private static let nestedFillDepthRandomSeedMask: UInt64 = 0x6E65737444657074
 
 		// MARK: A ring of seams that pass up each other's places
 
@@ -12487,6 +12607,21 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 			}
 			if propertiesByType[prefix + "NestedFillGadgetImpl"] == nil {
 				features.insert(.nestedFillHoleUnfilled)
+			}
+		}
+		if propertiesByType[prefix + "NestedFillDepthOuter"] != nil {
+			features.insert(.nestedFillHoleTwoDeep)
+			if propertiesByType[prefix + "NestedFillDepthDeepest"] != nil {
+				features.insert(.nestedFillHoleThreeDeep)
+			}
+			if propertiesByType[prefix + "NestedFillDepthOtherImpl"] != nil {
+				features.insert(.nestedFillHoleTwoDeepUnderOneCallsTwoCases)
+			}
+			if propertiesByType[prefix + "NestedFillDepthShelf"] != nil {
+				features.insert(.nestedFillHoleOuterCallBeneathLevel)
+			}
+			if propertiesByType[prefix + "NestedFillDepthGizmoImpl"]?.contains(where: { $0.label == "nestedFillDepthTag" }) == true {
+				features.insert(.nestedFillHoleInnermostFillReadsLevelValue)
 			}
 		}
 		if let ringSeamProperties = propertiesByType[prefix + "RingSeamA"] {
