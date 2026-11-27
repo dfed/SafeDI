@@ -351,12 +351,16 @@ struct NodeRecords: Sendable {
 		var entries = [[BodyEntry]](repeating: [], count: world.variantCount)
 		var postOrder = [VariantID]()
 		var isWalked = [Bool](repeating: false, count: world.variantCount)
+		let variantsShareConcreteType = enteredSlots != nil && Self.variantsShareConcreteType(in: world)
 		var variantsClosedOn = [Set<VariantID>](repeating: [], count: world.variantCount)
 		var cycleVariantsBuilt = [Set<VariantID>](repeating: [], count: world.variantCount)
 		var isOnPath = [Bool](repeating: false, count: world.variantCount)
 		// In a mock's world, the labels each variant's function takes for the cycles that close on it, in the order the
 		// walk meets them (`mockCycleParameters`).
 		var cycleParameterLabels = [[String]](repeating: [], count: world.variantCount)
+		// In a mock's world, the variants between each variant's place and a call that closes a cycle on it, whose
+		// functions' parameters it takes too, in the order the walk meets them.
+		var variantsBetweenClosers = [[VariantID]](repeating: [], count: world.variantCount)
 		var twins = TwinsOnPath(world: world, holdsCycle: holdsCycle)
 		var stack = [PlaceFrame(variant: 0, edgeIndices: edgeIndices(of: 0))]
 		isOnPath[0] = true
@@ -379,13 +383,20 @@ struct NodeRecords: Sendable {
 								cycleParameterLabels[Int(callee)].append(label)
 							}
 						}
+						if enteredSlots != nil {
+							for frame in stack[(closedOn + 1)...] where !variantsBetweenClosers[Int(callee)].contains(frame.variant) {
+								variantsBetweenClosers[Int(callee)].append(frame.variant)
+							}
+						}
 					}
 					stack[stack.count - 1].entries.append(.closer(closingOn: callee))
 					stack[stack.count - 1].variantsClosedOn.insert(callee)
 				} else if isWalked[Int(callee)] {
 					// A mock's place serves every place of its variant: whether a call in it returns to a place above or
-					// enters a new one is decided when the mock runs, from the places it is handed (`mockPlace`).
-					guard enteredSlots != nil || variantsClosedOn[Int(callee)].allSatisfy({ isOnPath[Int($0)] }) && !cycleVariantsBuilt[Int(callee)].contains(where: { isOnPath[Int($0)] }) else {
+					// enters a new one is decided when the mock runs, from the places it is handed (`mockPlace`). Where two
+					// variants build one concrete type, the walk reads the override of the nearest place of that type on the
+					// path, which a slot per variant does not tell apart, so the walk writes the mock.
+					guard enteredSlots != nil && !variantsShareConcreteType || variantsClosedOn[Int(callee)].allSatisfy({ isOnPath[Int($0)] }) && !cycleVariantsBuilt[Int(callee)].contains(where: { isOnPath[Int($0)] }) else {
 						throw NodeRecordRefusal.cycleMemberBuiltTwoWays
 					}
 					stack[stack.count - 1].entries.append(.place(callee))
@@ -416,6 +427,22 @@ struct NodeRecords: Sendable {
 			stack[parent].entries.append(.place(top.variant))
 			stack[parent].variantsClosedOn.formUnion(closedOn)
 			stack[parent].cycleVariantsBuilt.formUnion(built)
+		}
+		// A function takes each parameter of a function between it and a call that closes a cycle on it, since that call is
+		// made with the nearest declaration inside the function between, as the walk's nested cycles pass them
+		// (`CycleParameter`).
+		var parametersGrew = !cycleParameterLabels.allSatisfy(\.isEmpty)
+		while parametersGrew {
+			parametersGrew = false
+			for (variant, variantsBetween) in variantsBetweenClosers.enumerated() {
+				let ownLabel = world.property(of: world.declaration(of: VariantID(variant)))?.label
+				for between in variantsBetween {
+					for label in cycleParameterLabels[Int(between)] where label != ownLabel && !cycleParameterLabels[variant].contains(label) {
+						cycleParameterLabels[variant].append(label)
+						parametersGrew = true
+					}
+				}
+			}
 		}
 		let cycleParameters = try Self.mockCycleParameters(labelsByVariant: cycleParameterLabels, in: world, outerDeclarations: outerDeclarations)
 		// The names each body gives the functions it declares and refers to, as today's tree names them.

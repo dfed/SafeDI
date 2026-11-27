@@ -103,6 +103,21 @@ extension NodeRecords {
 	}
 
 	/// The labels `declaration`'s body declares: what it instantiates, what it is forwarded and the names it gives aliases.
+	/// Whether two variants of the world, of two declarations, build one concrete type.
+	static func variantsShareConcreteType(in world: some NodeRecordSources) -> Bool {
+		var declarationByConcreteType = [TypeDescription: DeclarationID]()
+		for variant in 0..<VariantID(world.variantCount) {
+			let declaration = world.declaration(of: variant)
+			let concreteType = world.scope(of: declaration).instantiable.concreteInstantiable
+			if let seen = declarationByConcreteType[concreteType], seen != declaration {
+				return true
+			} else {
+				declarationByConcreteType[concreteType] = declaration
+			}
+		}
+		return false
+	}
+
 	static func labelsDeclared(by declaration: DeclarationID, in world: some NodeRecordSources) -> [String] {
 		world.scope(of: declaration).instantiable.dependencies.compactMap { dependency in
 			switch dependency.source {
