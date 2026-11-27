@@ -175,9 +175,10 @@ struct SafeDIToolTypeFactsParameterTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_typesParameterAsValue_whenLazilyInstantiatedWrappersAnswerRequiredReceiveOfTheValue() async throws {
+	mutating func generate_typesParameterAsWrapper_whenConstantInsideCycleReceivesValueLazilyInstantiatedWrappersAnswer() async throws {
 		// `Toolbar`, inside `A`, receives the theme by value, which `Root` and `B` each declare lazily: each call passes its
-		// wrapper's instance, so the function is `__safeDI_aBuilder(theme: Theme)`, as the tree writes it.
+		// wrapper, so the function is `__safeDI_aBuilder(theme: LazilyInstantiated<Theme>)`, as the tree writes it. The
+		// generator’s own cycle parameter is the value, which check 35 compares the wrapper with.
 		let report = try await rootReport(of: [
 			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let theme: LazilyInstantiated<Theme>", "@Instantiated let aBuilder: Instantiator<A>"]),
 			seamFixtureType(named: "A", isFinalClass: true, declarations: ["@Instantiated let toolbar: Toolbar", "@Instantiated let bBuilder: Instantiator<B>"]),
@@ -186,9 +187,43 @@ struct SafeDIToolTypeFactsParameterTests: ~Copyable {
 			seamFixtureType(named: "Theme", isFinalClass: true, declarations: []),
 		])
 
-		#expect(try parameters(ofVariantsOf: "A ", in: report) == [["theme: Theme"]], "\(report.world)")
+		#expect(try parameters(ofVariantsOf: "A ", in: report) == [["theme: LazilyInstantiated<Theme>"]], "\(report.world)")
 		#expect(TypeFactsChecks.findings(of: report).findingsByCheck[35, default: []].isEmpty)
 		#expect(report.places.contains { $0.generator?.cycleParameters == ["theme: Theme"] })
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_typesParameterAsWrapper_whenFunctionsOwnTypeReceivesValueLazilyInstantiatedWrappersAnswer() async throws {
+		// `T3` itself receives the session by value, which `Root` and `T0` each declare lazily: the tree writes
+		// `__safeDI_t3Builder(session: LazilyInstantiated<Session>)`, and the body reads the wrapper’s instance.
+		let report = try await rootReport(of: [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let session: LazilyInstantiated<Session>", "@Instantiated let t3Builder: Instantiator<T3>"]),
+			seamFixtureType(named: "T3", isFinalClass: true, declarations: ["@Received let session: Session", "@Instantiated let t0Builder: Instantiator<T0>"]),
+			seamFixtureType(named: "T0", isFinalClass: true, declarations: ["@Instantiated let session: LazilyInstantiated<Session>", "@Instantiated let t3Builder: Instantiator<T3>"]),
+			seamFixtureType(named: "Session", isFinalClass: true, declarations: []),
+		])
+
+		#expect(try parameters(ofVariantsOf: "T3 ", in: report) == [["session: LazilyInstantiated<Session>"]], "\(report.world)")
+		#expect(TypeFactsChecks.findings(of: report).findingsByCheck[35, default: []].isEmpty)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_typesParameterAsWrapper_whenBuilderInsideCycleReceivesValueLazilyInstantiatedWrappersAnswer() async throws {
+		// `D`, built by a builder inside `A`, receives `x` by value, which `Root` and `Mid` each declare lazily: the tree
+		// writes `__safeDI_aBuilder(x: LazilyInstantiated<X>)` and `__safeDI_dBuilder(x: LazilyInstantiated<X>)`.
+		let report = try await rootReport(of: [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let x: LazilyInstantiated<X>", "@Instantiated let aBuilder: Instantiator<A>"]),
+			seamFixtureType(named: "A", isFinalClass: true, declarations: ["@Instantiated let midBuilder: Instantiator<Mid>", "@Instantiated let dBuilder: Instantiator<D>"]),
+			seamFixtureType(named: "Mid", isFinalClass: true, declarations: ["@Instantiated let x: LazilyInstantiated<X>", "@Instantiated let aBuilder: Instantiator<A>"]),
+			seamFixtureType(named: "D", isFinalClass: true, declarations: ["@Received let x: X"]),
+			seamFixtureType(named: "X", isFinalClass: true, declarations: []),
+		])
+
+		#expect(try parameters(ofVariantsOf: "A ", in: report) == [["x: LazilyInstantiated<X>"]], "\(report.world)")
+		#expect(try parameters(ofVariantsOf: "D ", in: report) == [["x: LazilyInstantiated<X>"]], "\(report.world)")
+		#expect(TypeFactsChecks.findings(of: report).findingsByCheck[35, default: []].isEmpty)
 	}
 
 	// MARK: Private

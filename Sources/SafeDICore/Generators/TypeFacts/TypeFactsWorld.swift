@@ -523,6 +523,16 @@ extension TypeFactsGraph: TypeFactsWorld {
 				readsInstanceOfWrapper: true,
 			)
 		}
+		// A production function takes the wrapper a lazily instantiated declaration answers a read of its value with, and
+		// its body reads the wrapper’s instance, so the instance is created at first read. A mock’s takes the value, which
+		// each call reads from its wrapper (“Eager instances at a lazy cycle’s calls” in `.claude/rules/cycle-generation.md`).
+		let key = keys[keys.startIndex + (position - reads.startIndex)]
+		if !forMockGeneration, key >= 0 {
+			let declared = propertyTable[Int(answerProperties[Int(key)])]
+			if let instance = declared.asLazilyInstantiatedInstancePropertyOfDeclaredBinding, forms.contains(instance) || forms.contains(instance.asOptionalProperty) {
+				return TypeFactsParameter(property: declared, readsInstanceOfWrapper: true)
+			}
+		}
 		guard let (property, passedForms) = CycleParameter.property(passing: forms, requiredForms: requiredForms.intersection(forms)) else { return nil }
 		let instance = property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding
 		return TypeFactsParameter(

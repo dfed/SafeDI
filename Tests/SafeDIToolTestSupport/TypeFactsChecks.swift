@@ -485,17 +485,27 @@ enum TypeFactsChecks {
 			// The facts' variant takes a parameter for every read its function does not capture, where the tree's function
 			// takes one only for a label declared again inside a cycle that closes on it: the tree's are among the facts',
 			// in the facts' order.
-			var remaining = report.variantParameters[variant][...]
+			// The generator's cycle parameter is the value where a production function takes the wrapper a lazily
+			// instantiated declaration answers it with (`TypeFactsWorld.parameterType(of:_:arrivals:)`), which the facts
+			// give: compared as the value.
+			let factsParameters = report.forMockGeneration ? report.variantParameters[variant] : report.variantParameters[variant].map { parameter in
+				for wrapper in ["SendableLazilyInstantiated<", "LazilyInstantiated<"] {
+					guard let range = parameter.range(of: ": \(wrapper)"), parameter.hasSuffix(">"), !generator.cycleParameters.contains(parameter) else { continue }
+					return parameter[..<range.lowerBound] + ": " + parameter[range.upperBound...].dropLast()
+				}
+				return parameter
+			}
+			var remaining = factsParameters[...]
 			let areAmongTheFacts = generator.cycleParameters.allSatisfy { parameter in
 				guard let position = remaining.firstIndex(of: parameter) else { return false }
 				remaining = remaining[(position + 1)...]
 				return true
 			}
-			if areAmongTheFacts, report.variantParameters[variant].count > generator.cycleParameters.count, variantsWithParametersTheTreeCaptures.insert(variant).inserted {
+			if areAmongTheFacts, factsParameters.count > generator.cycleParameters.count, variantsWithParametersTheTreeCaptures.insert(variant).inserted {
 				var treeParameters = generator.cycleParameters[...]
 				let callCount = report.variantCalls.reduce(0) { $0 + $1.count { $0 == variant } }
-				result.check35CapturedParameterVariants.append((variant, callCount, report.variantParameters[variant].count - generator.cycleParameters.count))
-				for parameter in report.variantParameters[variant] {
+				result.check35CapturedParameterVariants.append((variant, callCount, factsParameters.count - generator.cycleParameters.count))
+				for parameter in factsParameters {
 					guard parameter != treeParameters.first else {
 						treeParameters = treeParameters.dropFirst()
 						continue
@@ -508,15 +518,15 @@ enum TypeFactsChecks {
 			}
 			if !areAmongTheFacts {
 				var treeParameters = generator.cycleParameters[...]
-				let factsAreAmongTheTree = report.variantParameters[variant].allSatisfy { parameter in
+				let factsAreAmongTheTree = factsParameters.allSatisfy { parameter in
 					guard let position = treeParameters.firstIndex(of: parameter) else { return false }
 					treeParameters = treeParameters[(position + 1)...]
 					return true
 				}
-				if factsAreAmongTheTree, generator.cycleParameters.filter({ !report.variantParameters[variant].contains($0) }).allSatisfy({ $0.hasSuffix("?") }) {
+				if factsAreAmongTheTree, generator.cycleParameters.filter({ !factsParameters.contains($0) }).allSatisfy({ $0.hasSuffix("?") }) {
 					result.check35DroppedParameterFunctions.append(nodeDescription(node))
 				}
-				add(35, "the function of \(nodeDescription(node)) takes \(generator.cycleParameters) where the facts give its variant \(report.variantParameters[variant])")
+				add(35, "the function of \(nodeDescription(node)) takes \(generator.cycleParameters) where the facts give its variant \(factsParameters)")
 			}
 		}
 		// Check 33.
