@@ -80,10 +80,12 @@ public struct GenerationWork: Sendable {
 		/// once per class and reads each member once; asked for every member, it read the members of a class of n members
 		/// n² times.
 		case checkingReadsAtEveryMember
-		/// Collecting the types a tree builds, for the imports of its file (`ScopeGenerator.fulfillersOfTree(buildingMock:)`)
-		/// and for the public mocks a mock tree reaches (`concreteTypesOfTree()`): each generator the walk visits. A walk
-		/// visits a generator once, so the generators count, not the places that share them; entered at every place, a
-		/// tree of n layers of screens that each build every screen of the next layer was visited once per path.
+		/// Collecting the types a tree builds: for the imports of a root's file, each declaration its world reaches
+		/// (`TypeFactsImports`); for the imports of a mock's file (`ScopeGenerator.fulfillersOfTree(buildingMock:)`) and the
+		/// public mocks a mock tree reaches (`concreteTypesOfTree()`), each generator the walk visits. A declaration stands
+		/// for every place of it, and a walk visits a generator once, so neither counts the places that share them; entered
+		/// at every place, a tree of n layers of screens that each build every screen of the next layer was visited once per
+		/// path.
 		case collectingTypesOfATree
 		/// Collecting what the scopes of a lazy cycle in a seam's tree declare between the builder function the cycle closes
 		/// on and the scopes that call it again (`DependencyTreeGenerator.declarationsBetween(closedOnScope:closedOnDeclaration:)`):

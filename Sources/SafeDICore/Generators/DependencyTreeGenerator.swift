@@ -430,11 +430,19 @@ public actor DependencyTreeGenerator {
 				for rootInfo in rootScopeGenerators {
 					taskGroup.addTask {
 						let code = try await rootInfo.scopeGenerator.generatePlan()
-						return await PlannedRoot(
+						// The fold's imports, found where the tree was built, are compared with the walk of the tree emitted,
+						// which for a seam whose first signature pass settled is that pass's tree made again.
+						if let observer = TypeFactsImportsObservation.comparesWalk {
+							let walkedFulfillers = await GenerationWork.$observer.withValue(nil) {
+								await rootInfo.scopeGenerator.fulfillersOfTree(buildingMock: false)
+							}
+							observer(TypeFactsImportsComparison(root: rootInfo.typeDescription.asSource, foldedFulfillers: rootInfo.fulfillers, walkedFulfillers: walkedFulfillers))
+						}
+						return PlannedRoot(
 							typeDescription: rootInfo.typeDescription,
 							sourceFilePath: rootInfo.sourceFilePath,
 							code: code,
-							fulfillers: rootInfo.scopeGenerator.fulfillersOfTree(buildingMock: false),
+							fulfillers: rootInfo.fulfillers,
 						)
 					}
 				}
@@ -567,6 +575,10 @@ public actor DependencyTreeGenerator {
 		let typeDescription: TypeDescription
 		let instantiable: Instantiable
 		let sourceFilePath: String?
+		/// The modules the root's file imports for the types its tree builds, the union over the declarations its tree is
+		/// built from (`TypeFactsImports`). Read where the tree is built, so that the table the root's scope is frozen
+		/// into, a copy of the module's frozen map, is freed with the build rather than kept for every root at once.
+		let fulfillers: Set<FulfillerImports.Fulfiller>
 		let scopeGenerator: ScopeGenerator
 	}
 
@@ -709,6 +721,7 @@ public actor DependencyTreeGenerator {
 						typeDescription: typeDescription,
 						instantiable: scope.instantiable,
 						sourceFilePath: typeDescriptionToFulfillingInstantiableMap[typeDescription]?.sourceFilePath,
+						fulfillers: TypeFactsImports(root: ConstructionScope(table: table, record: record)).fulfillers,
 						scopeGenerator: record.createScopeGenerator(
 							in: table,
 							lazilyInstantiatedInstanceProperties: [],
