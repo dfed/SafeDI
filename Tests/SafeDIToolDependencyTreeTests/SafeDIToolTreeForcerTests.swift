@@ -134,25 +134,93 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_buildsTree_whenRenameOfSharedTypeIsFulfilledByWrapperOnFirstPathAndValueOnSecond() async throws {
-		let (forcers, _) = try await treeForcers(of: Self.renameFulfilledByWrapperAndValue(lazyParentFirst: true))
-		// One variant of `Reader`'s rename is called beneath both parents, which answer its `x` as a wrapper's instance and as
-		// a value: its one record would be wrong beneath one of them.
+	mutating func generate_laysOutRoot_whenRootHasNoDependencies() async throws {
+		// A root with no dependencies has no generated initializer, which the engine lays out from its records as the tree
+		// writes it. `generate_buildsTree_whenRenameKeepingItsLabelReadsRenameKeepingItsLabelAbove` is a root the engine
+		// cannot lay out yet.
+		let (forcers, _) = try await treeForcers(of: [
+			"""
+			@Instantiable(isRoot: true)
+			public final class Root: Instantiable {
+			    public init() {}
+			}
+			""",
+		])
 		#expect(forcers == """
-		Root\tkind callsAnswerAVariantApart
-		roots that built a tree: 1 of 1
+		Root\tnone
+		roots that built a tree: 0 of 1
 
 		""")
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_buildsTree_whenRenameOfSharedTypeIsFulfilledByValueOnFirstPathAndWrapperOnSecond() async throws {
-		let (forcers, _) = try await treeForcers(of: Self.renameFulfilledByWrapperAndValue(lazyParentFirst: false))
-		// The same world with the root's properties swapped: the refusal does not follow which parent is declared first.
+	mutating func generate_laysOutRoot_whenRenameOfSharedTypeIsFulfilledByWrapperOnFirstPathAndValueOnSecond() async throws {
+		let (forcers, _) = try await treeForcers(of: Self.renameFulfilledByWrapperAndValue(lazyParentFirst: true))
+		// The rename beneath both parents keys its read of `x` by the form that answers it, so it has a variant beneath each,
+		// and each variant's record binds it as its own key says: `x.instance` beneath `LazyParent`, `x` beneath `Holder`.
+		// Every test compares the records' code with the tree's (`NodeRecordsChecks`).
 		#expect(forcers == """
-		Root\tkind callsAnswerAVariantApart
+		Root\tnone
+		roots that built a tree: 0 of 1
+
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysOutRoot_whenRenameOfSharedTypeIsFulfilledByValueOnFirstPathAndWrapperOnSecond() async throws {
+		let (forcers, _) = try await treeForcers(of: Self.renameFulfilledByWrapperAndValue(lazyParentFirst: false))
+		// The same world with the root's properties swapped: which record each variant gets does not follow which parent is
+		// declared first.
+		#expect(forcers == """
+		Root\tnone
+		roots that built a tree: 0 of 1
+
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysOutRoot_whenRenameKeepingItsLabelReadsInstanceOfLazilyInstantiatedPropertyAbove() async throws {
+		// `Settings` renames `analytics` under its own label, so its scope binds the label the rename reads: the rename's
+		// key names the wrapper above, which its record reads the instance of, as the tree does.
+		let (forcers, _) = try await treeForcers(of: Self.keepLabelRenames(nestedRename: false))
+		#expect(forcers == """
+		Root\tnone
+		roots that built a tree: 0 of 1
+
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsTree_whenRenameKeepingItsLabelReadsRenameKeepingItsLabelAbove() async throws {
+		// `Detail`, beneath `Settings`, renames `analytics` under its own label too: its key names `Settings`' rename, the
+		// nearest declaration, never the wrapper above `Settings`, so its record matches the tree's code
+		// (`NodeRecordsChecks`). The engine does not lay a root out from an erased rename that keeps its label yet.
+		let (forcers, _) = try await treeForcers(of: Self.keepLabelRenames(nestedRename: true))
+		#expect(forcers == """
+		Root\tkind notLaidOut
 		roots that built a tree: 1 of 1
+
+		""")
+	}
+
+	@Test(arguments: [
+		(analyticsType: "Analytics", analyticsFirst: true),
+		(analyticsType: "Analytics", analyticsFirst: false),
+		(analyticsType: "LazilyInstantiated<Analytics>", analyticsFirst: true),
+		(analyticsType: "LazilyInstantiated<Analytics>", analyticsFirst: false),
+	])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysOutRoot_whenRenameKeepingItsLabelOnlyIfAvailableReadsDeclarationAbove(analyticsType: String, analyticsFirst: Bool) async throws {
+		// `Settings` renames `analytics` only if available under its own label: its optional reads of the label reach past
+		// its scope's own binding to the value or the wrapper above, whichever the root declares first, as the tree reads it.
+		let (forcers, _) = try await treeForcers(of: Self.keepLabelRenames(nestedRename: false, analyticsType: analyticsType, analyticsFirst: analyticsFirst, onlyIfAvailable: true))
+		#expect(forcers == """
+		Root\tnone
+		roots that built a tree: 0 of 1
 
 		""")
 	}
@@ -170,6 +238,73 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 		seamFixtureType(named: "Detail", declarations: ["@Received let stepBuilder: Instantiator<Step>"]),
 		seamFixtureType(named: "Service", declarations: []),
 	]
+
+	/// A root that instantiates `analytics` as a `LazilyInstantiated<Analytics>` and builds `Settings`, which renames it under
+	/// its own label as an `EventTracker`; with `nestedRename`, `Settings` builds `Detail`, which renames `Settings`' rename
+	/// under the same label as an `AnyTracker`. `analyticsType` is the type the root instantiates `analytics` as,
+	/// `analyticsFirst` orders the root's two properties, and `onlyIfAvailable` makes `Settings`' rename one only if available.
+	private static func keepLabelRenames(nestedRename: Bool, analyticsType: String = "LazilyInstantiated<Analytics>", analyticsFirst: Bool = true, onlyIfAvailable: Bool = false) -> [String] {
+		let rootProperties = ["@Instantiated let analytics: \(analyticsType)", "@Instantiated let settingsBuilder: Instantiator<Settings>"]
+		var files = [
+			"""
+			@Instantiable(isRoot: true)
+			public final class Root: Instantiable {
+			    public init(analytics: \(analyticsType), settingsBuilder: Instantiator<Settings>) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			    \((analyticsFirst ? rootProperties : rootProperties.reversed()).joined(separator: "\n    "))
+			}
+			""",
+			"""
+			public protocol EventTracker {}
+
+			@Instantiable
+			public final class Analytics: EventTracker, Instantiable {
+			    public init() {}
+			}
+			""",
+		]
+		if nestedRename {
+			files.append("""
+			@Instantiable
+			public final class Settings: Instantiable {
+			    public init(analytics: EventTracker, detail: Detail) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			    @Received(fulfilledByDependencyNamed: "analytics", ofType: Analytics.self) let analytics: EventTracker
+			    @Instantiated let detail: Detail
+			}
+			""")
+			files.append("""
+			public struct AnyTracker: EventTracker {
+			    public init(_ tracker: EventTracker) {}
+			}
+
+			@Instantiable
+			public final class Detail: Instantiable {
+			    public init(analytics: AnyTracker) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			    @Received(fulfilledByDependencyNamed: "analytics", ofType: EventTracker.self, erasedToConcreteExistential: true) let analytics: AnyTracker
+			}
+			""")
+		} else {
+			files.append("""
+			@Instantiable
+			public final class Settings: Instantiable {
+			    public init(analytics: EventTracker\(onlyIfAvailable ? "?" : "")) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			    @Received(fulfilledByDependencyNamed: "analytics", ofType: Analytics.self\(onlyIfAvailable ? ", onlyIfAvailable: true" : "")) let analytics: EventTracker\(onlyIfAvailable ? "?" : "")
+			}
+			""")
+		}
+		return files
+	}
 
 	/// A root whose two parents each build a `Reader` whose rename is fulfilled by `x`: `LazyParent` declares `x` as a
 	/// `LazilyInstantiated<X>` and builds `Reader` through an `Instantiator`, and `ValueParent` declares `x` as an `X`
