@@ -110,6 +110,11 @@ a tenth of it is under the 8 MB, which then decides the shape: S16 peaked at 67 
 failed from about 1.12 times, and at 146.7 MB in CI's container, where the tenth decides. Why the two machines differ
 on that shape is not known.
 
+E24-public-mock is judged on the runs with one arena alone, at MEMORY-LIMIT. Its timed runs' peak moves by more than
+the limit between runs of one tool on one machine: on one commit its base tool's median peak read 186.5 MB and, half
+an hour later, 143.5 MB, and that difference failed a check of a change that had not touched memory, twice. Its timed
+peak is still printed, and is not compared.
+
 Growth: the comparison above holds a change to what main does, so it passes a shape that main already generates in
 time that grows by a factor with each layer of the graph, and such a shape cannot be made large enough to matter
 without taking minutes. The growth rows hold HEAD_TOOL alone to how its work grows. Each row is one shape built at a
@@ -877,6 +882,9 @@ LARGE_MEMORY_SHAPES = frozenset(["S12-mocks", "S16", "E32-inline-mocks", "C1500-
 # How many runs with one allocator arena those shapes take of each tool ("Peak memory" in the header says why).
 LARGE_MEMORY_RUNS = 5
 ONE_ARENA = {"MALLOC_ARENA_MAX": "1"}
+# The shapes whose peak memory is judged only on the runs with one allocator arena, at `--memory-limit` ("Peak memory"
+# in the header says why).
+ONE_ARENA_ONLY_SHAPES = frozenset(["E24-public-mock"])
 
 # The growth rows ("Growth" in the header): name -> (the shape at a number of layers, the smaller number of layers,
 # the limits that differ from `--growth-limit`, by measure: "time", "memory", "size" or "code"). A row with limits of
@@ -1060,14 +1068,16 @@ def generated_code(modules, output):
 # MARK: Comparing
 
 
-def compare(base_tool, head_tool, directory, shapes, runs, limit, memory_limit, size_limit, large_memory_limit=1.1, large_memory_shapes=LARGE_MEMORY_SHAPES, large_memory_runs=LARGE_MEMORY_RUNS, accepted_sizes=ACCEPTED_MODULE_INFO_BYTES):
+def compare(base_tool, head_tool, directory, shapes, runs, limit, memory_limit, size_limit, large_memory_limit=1.1, large_memory_shapes=LARGE_MEMORY_SHAPES, large_memory_runs=LARGE_MEMORY_RUNS, accepted_sizes=ACCEPTED_MODULE_INFO_BYTES, one_arena_only_shapes=ONE_ARENA_ONLY_SHAPES):
     """Returns (the time and memory table's rows, the size table's rows, the failures)."""
     rows = []
     size_rows = []
     failures = []
     for shape in shapes:
         modules = SHAPES[shape]()
-        one_arena_runs = large_memory_runs if shape in large_memory_shapes else 0
+        one_arena_only = shape in one_arena_only_shapes
+        one_arena_runs = large_memory_runs if shape in large_memory_shapes or one_arena_only else 0
+        one_arena_limit = min(memory_limit, large_memory_limit) if shape in large_memory_shapes else memory_limit
         sources = f"{directory}/{shape}/sources"
         for name, _, source in modules:
             write(f"{sources}/{name}/Types.swift", source)
@@ -1110,7 +1120,7 @@ def compare(base_tool, head_tool, directory, shapes, runs, limit, memory_limit, 
         if over:
             failures.append(f"{shape}: `generate` took {ratio:.2f} times as long as the base tool ({median['head'][0]:.3f} s against {median['base'][0]:.3f} s, median wall of {runs}); the limit is {limit:g}")
         memory_ratio = median["head"][2] / median["base"][2]
-        memory_over = memory_ratio >= memory_limit and median["head"][2] - median["base"][2] > MEMORY_NOISE_FLOOR_BYTES
+        memory_over = not one_arena_only and memory_ratio >= memory_limit and median["head"][2] - median["base"][2] > MEMORY_NOISE_FLOOR_BYTES
         if memory_over:
             failures.append(f"{shape}: `generate` needed {memory_ratio:.2f} times the base tool's peak memory ({megabytes(median['head'][2])} against {megabytes(median['base'][2])}, median of {runs}); the limit is {memory_limit:g}")
         one_arena = ""
@@ -1121,10 +1131,10 @@ def compare(base_tool, head_tool, directory, shapes, runs, limit, memory_limit, 
                     peaks[label].append(generate(tools[label], modules, sources, f"{directory}/{shape}/{label}-one-arena-{run}", ONE_ARENA)[2])
             base_peak, head_peak = statistics.median(peaks["base"]), statistics.median(peaks["head"])
             one_arena_ratio = head_peak / base_peak
-            if one_arena_ratio >= min(memory_limit, large_memory_limit) and head_peak - base_peak > MEMORY_NOISE_FLOOR_BYTES:
+            if one_arena_ratio >= one_arena_limit and head_peak - base_peak > MEMORY_NOISE_FLOOR_BYTES:
                 memory_over = True
-                failures.append(f"{shape}: `generate` needed {one_arena_ratio:.2f} times the base tool's peak memory with one allocator arena ({megabytes(head_peak)} against {megabytes(base_peak)}, median of {one_arena_runs}); the limit is {min(memory_limit, large_memory_limit):g}")
-            one_arena = f"; with one arena {megabytes(base_peak)} and {megabytes(head_peak)}, {one_arena_ratio:.2f}"
+                failures.append(f"{shape}: `generate` needed {one_arena_ratio:.2f} times the base tool's peak memory with one allocator arena ({megabytes(head_peak)} against {megabytes(base_peak)}, median of {one_arena_runs}); the limit is {one_arena_limit:g}")
+            one_arena = f"; with one arena {megabytes(base_peak)} and {megabytes(head_peak)}, {one_arena_ratio:.2f}{', the figure compared' if one_arena_only else ''}"
             for label in ("base", "head"):
                 print(f"{shape}: {label}'s peak memory of each run with one arena, lowest first, in MB: {' '.join(f'{peak / 1024 / 1024:.1f}' for peak in sorted(peaks[label]))}", flush=True)
         figure = lambda label: f"{median[label][0]:.3f} s / {median[label][1]:.3f} s"
@@ -1191,7 +1201,7 @@ def grow(head_tool, directory, growth_rows, runs, limit, time_limit=GROWTH_TIME_
 
 
 def report(rows, size_rows, failures, runs, limit, memory_limit, size_limit, summary, large_memory_limit=1.1, large_memory_runs=LARGE_MEMORY_RUNS, growth_rows=[], growth_runs=GROWTH_RUNS, growth_limit=2.0):
-    lines = [f"`generate` time and peak memory, head against base: median of {runs} alternating runs; a shape fails at {limit:g} times the base's wall time or {memory_limit:g} times its peak memory, and {', '.join(sorted(LARGE_MEMORY_SHAPES))} also at {min(memory_limit, large_memory_limit):g} times the base's median peak of {large_memory_runs} more runs with one allocator arena.", "",
+    lines = [f"`generate` time and peak memory, head against base: median of {runs} alternating runs; a shape fails at {limit:g} times the base's wall time or {memory_limit:g} times its peak memory, and {', '.join(sorted(LARGE_MEMORY_SHAPES))} also at {min(memory_limit, large_memory_limit):g} times the base's median peak of {large_memory_runs} more runs with one allocator arena. {', '.join(sorted(ONE_ARENA_ONLY_SHAPES))} is compared at {memory_limit:g} on its runs with one arena alone.", "",
              "| Shape | Runs | Base wall / CPU | Head wall / CPU | Head / base (wall) | Base peak | Head peak | Head / base (peak) | Generated code | Verdict |",
              "|---|---|---|---|---|---|---|---|---|---|"] + rows
     lines += ["", f"`.safedi` size, head against base: a module fails at {size_limit:g} times the base's bytes.", "",
@@ -1241,8 +1251,8 @@ def self_test(directory):
         os.chmod(path, 0o755)
         return path
 
-    def expect(name, base, head, expected_failures, expected_row, expected_size_row=None, memory_limit=1.3, large_memory_shapes=frozenset(), large_memory_runs=3, accepted_sizes={}):
-        rows, size_rows, found = compare(base, head, f"{directory}/{name}", ["E16-seam"], 3, 2.0, memory_limit, 2.0, large_memory_shapes=large_memory_shapes, large_memory_runs=large_memory_runs, accepted_sizes=accepted_sizes)
+    def expect(name, base, head, expected_failures, expected_row, expected_size_row=None, memory_limit=1.3, large_memory_shapes=frozenset(), large_memory_runs=3, accepted_sizes={}, one_arena_only_shapes=frozenset()):
+        rows, size_rows, found = compare(base, head, f"{directory}/{name}", ["E16-seam"], 3, 2.0, memory_limit, 2.0, large_memory_shapes=large_memory_shapes, large_memory_runs=large_memory_runs, accepted_sizes=accepted_sizes, one_arena_only_shapes=one_arena_only_shapes)
         if len(found) != expected_failures or expected_row not in rows[0] or (expected_size_row and expected_size_row not in size_rows[0]):
             failures.append(f"{name}: expected {expected_failures} failure(s), a row with {expected_row!r} and a size row with {expected_size_row!r}, got {found}, {rows} and {size_rows}")
 
@@ -1274,6 +1284,11 @@ def self_test(directory):
     # A large shape's row gives both counts of runs and both figures; an ordinary shape's has neither.
     expect("runs-of-a-large-shape", held, held, 0, "| E16-seam | 3, and 5 with one arena |", large_memory_shapes=frozenset(["E16-seam"]), large_memory_runs=5)
     expect("figures-of-a-large-shape", held, held, 0, "; with one arena ", large_memory_shapes=frozenset(["E16-seam"]))
+    # A shape judged with one arena alone: more in the timed runs alone passes, however much, and more with one arena
+    # fails at the ordinary limit, not the tighter one.
+    expect("twice-the-memory-without-one-arena-of-a-one-arena-shape", held, tool("holds-twice-in-arenas", 0.0, allocates=64 * 1024 * 1024, allocates_without_one_arena=64 * 1024 * 1024), 0, "within the limits", one_arena_only_shapes=frozenset(["E16-seam"]))
+    expect("a-fifth-more-with-one-arena-of-a-one-arena-shape", held, holds_more, 0, ", the figure compared", one_arena_only_shapes=frozenset(["E16-seam"]))
+    expect("half-more-with-one-arena-of-a-one-arena-shape", held, tool("holds-half-more", 0.0, allocates=96 * 1024 * 1024), 1, "**memory over the limit**", one_arena_only_shapes=frozenset(["E16-seam"]))
     expect("runs-of-an-ordinary-shape", held, held, 0, "| E16-seam | 3 |", large_memory_runs=5)
     expect("slower-and-more-memory", fast, tool("slower-and-more-memory", 0.2, allocates=64 * 1024 * 1024), 2, "**time and memory over the limit**")
     expect("head-refuses", fast, tool("head-refuses", 0.0, refuses=True), 1, "**failed**")
@@ -1329,6 +1344,8 @@ def self_test(directory):
             failures.append(f"the accepted sizes name {shape} {sorted(accepted)}, which are not a shape and its modules")
     if not LARGE_MEMORY_SHAPES <= set(SHAPES):
         failures.append(f"the large shapes name {sorted(LARGE_MEMORY_SHAPES - set(SHAPES))}, which are not shapes")
+    if not ONE_ARENA_ONLY_SHAPES <= set(SHAPES):
+        failures.append(f"the shapes judged with one arena alone name {sorted(ONE_ARENA_ONLY_SHAPES - set(SHAPES))}, which are not shapes")
     if SHAPES["S12-mocks"]() != SHAPES["S12-mocks"]():
         failures.append("S12-mocks: two builds of the shape differ, so its seed does not decide it")
     for name, build in SHAPES.items():
