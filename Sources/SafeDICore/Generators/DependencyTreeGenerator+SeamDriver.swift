@@ -501,11 +501,13 @@ extension DependencyTreeGenerator {
 		var rootScopeGenerators = [RootScopeInfo]()
 		for (typeDescription, scope) in rootScopesToGenerate.rootScopes {
 			let (table, record) = seamWorld.frozenScopeMap.freezing(rootScope: scope)
+			let rootScope = ConstructionScope(table: table, record: record)
 			try rootScopeGenerators.append(RootScopeInfo(
 				typeDescription: typeDescription,
 				instantiable: scope.instantiable,
 				sourceFilePath: typeDescriptionToFulfillingInstantiableMap[typeDescription]?.sourceFilePath,
-				fulfillers: TypeFactsImports(root: ConstructionScope(table: table, record: record)).fulfillers,
+				fulfillers: TypeFactsImports(root: rootScope).fulfillers,
+				receivedValueSupplies: TypeFactsReceivedValueSupplies.whereRead(root: rootScope),
 				scopeGenerator: record.createScopeGenerator(
 					in: table,
 					lazilyInstantiatedInstanceProperties: [],
@@ -533,11 +535,13 @@ extension DependencyTreeGenerator {
 			// built here would (`seam-signature-passes.md`); the pass's tree is released once it is.
 			let scopeGenerator: ScopeGenerator
 			let fulfillers: Set<FulfillerImports.Fulfiller>
+			let receivedValueSupplies: ReceivedValueSupplies?
 			if let firstPassTree = firstPassTrees.removeValue(forKey: seam.concreteInstantiable) {
 				scopeGenerator = ScopeGenerator.reseating(treeRootedAt: firstPassTree.generator, of: seam.concreteInstantiable, seamRoot: seamRoot)
 				// The pass's tree holds no seam call or fill (`confirmingPassFindsNothingNew`), so every record it reaches is
 				// the base's, which the seam world's table holds too: its declarations are those of the tree built anew.
 				fulfillers = firstPassTree.fulfillers
+				receivedValueSupplies = firstPassTree.receivedValueSupplies
 				if let observer = SeamTreeReuseObservation.comparesBuiltTrees {
 					let treeBuiltAnew = try builtTree().generator
 					observer(ReusedSeamTree(
@@ -550,12 +554,14 @@ extension DependencyTreeGenerator {
 				let tree = try builtTree()
 				scopeGenerator = tree.generator
 				fulfillers = TypeFactsImports(root: tree.rootScope).fulfillers
+				receivedValueSupplies = TypeFactsReceivedValueSupplies.whereRead(root: tree.rootScope)
 			}
 			rootScopeGenerators.append(RootScopeInfo(
 				typeDescription: seam.concreteInstantiable,
 				instantiable: seam,
 				sourceFilePath: seam.sourceFilePath,
 				fulfillers: fulfillers,
+				receivedValueSupplies: receivedValueSupplies,
 				scopeGenerator: scopeGenerator,
 			))
 		}
@@ -1109,7 +1115,11 @@ extension DependencyTreeGenerator {
 						skipsConfirmingPass = Self.confirmingPassFindsNothingNew(after: seamRoot, startingFrom: initialSeamRoot(of: seam), in: generator)
 						// A seam equal to its own initializer generates no tree, so its pass's tree is released at once.
 						if skipsConfirmingPass, keepsFirstPassTrees, seamRoot != nil {
-							firstPassTree = SeamRootTree(generator: generator, fulfillers: TypeFactsImports(root: tree.rootScope).fulfillers)
+							firstPassTree = SeamRootTree(
+								generator: generator,
+								fulfillers: TypeFactsImports(root: tree.rootScope).fulfillers,
+								receivedValueSupplies: TypeFactsReceivedValueSupplies.whereRead(root: tree.rootScope),
+							)
 						}
 					}
 					seamRoots[seam.concreteInstantiable] = seamRoot
@@ -1685,6 +1695,9 @@ extension DependencyTreeGenerator {
 	struct SeamRootTree: Sendable {
 		let generator: ScopeGenerator
 		let fulfillers: Set<FulfillerImports.Fulfiller>
+		/// The supplies of the tree, read where it is built, or `nil` where nothing reads them
+		/// (`TypeFactsReceivedValueSupplies.whereRead(root:)`).
+		let receivedValueSupplies: ReceivedValueSupplies?
 	}
 
 	/// Every receive in the tree `generator` roots, `seam`'s, that leaves the seam – each `@Received` dependency and
