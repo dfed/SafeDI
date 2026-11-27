@@ -585,6 +585,14 @@ extension DependencyTreeGenerator {
 				receivedValueSupplies = TypeFactsReceivedValueSupplies.whereRead(root: tree.rootScope)
 				rootScope = RootScopeInfo.kept(tree.rootScope)
 			}
+			// EXPERIMENT, removed before merge: the seam's place drafts read off its facts world, beside its stored places.
+			if let observer = SeamPlaceLevels.observer, !finalSeamRoot.signature.places.levels.isEmpty {
+				let places = finalSeamRoot.signature.places
+				let draftRoot = try rootScope ?? builtTree().rootScope
+				var report = SeamPlaceLevels(seamType: seam.concreteInstantiable, places: [])
+				report.placesDraftReport = SeamPlacesDrafts(world: TypeFactsGraph(root: draftRoot, forMockGeneration: false)).levelReport(against: places)
+				observer(report)
+			}
 			// A test compares the records of a seam's own tree with its tree's places, and no run lays the seam's
 			// initializers out from them: they are written around its tree's body (`ScopeGenerator.generateSeamRootCode`).
 			rootScopeGenerators.append(RootScopeInfo(

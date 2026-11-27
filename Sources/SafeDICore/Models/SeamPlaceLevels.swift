@@ -53,9 +53,13 @@ public struct SeamPlaceLevels: Sendable, Equatable {
 	/// observation of the signature alone, which holds no place (`carriesComparisonOnly`). Left out of `==`.
 	public var callShapeFold: CallShapeFold?
 
+	/// Test only, deleted before merge: how a seam's place drafts, read off its facts world (`SeamPlacesDrafts`), compare
+	/// with its stored place graph, as lines of a report, for an observation of the report alone. Left out of `==`.
+	public var placesDraftReport = [String]()
+
 	/// Test only, deleted before merge: whether the value carries one of the comparisons above alone, no seam's levels.
 	public var carriesComparisonOnly: Bool {
-		fillJudgement != nil || !caseFieldsMismatches.isEmpty || callShapeComparison != nil || callShapeFold != nil
+		fillJudgement != nil || !caseFieldsMismatches.isEmpty || callShapeComparison != nil || callShapeFold != nil || !placesDraftReport.isEmpty
 	}
 
 	/// Test only, deleted before merge: a signature's call shape holes (`SeamSignature.callShapeHoles(of:places:caseIndexByHole:)`)
