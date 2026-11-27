@@ -139,6 +139,9 @@ extension NodeRecords {
 			)
 		}
 		record.passedArguments = slot.passedArguments
+		// A wrapper around a call that hands the places entered spells its closure on one line, so a function on a cycle
+		// is no longer than the walk's, whose wrapper is handed the function itself.
+		record.wrapsCallOnOneLine = enteredSlots.map { takesMockEnteredPlaces(declaration, in: $0) } ?? false
 		for (position, argument) in fieldArguments {
 			record.argumentValues[position] = mockConfigurationFieldValue(of: argument, readFrom: slot.value)
 		}

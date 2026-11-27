@@ -106,6 +106,9 @@ struct BuiltPlaceRecord: Sendable {
 	/// builds in a function of its own whatever its body holds (`NodeRecords+MockConstruction.swift`). Every other
 	/// function writes it only after statements (`BuilderBody.returnKeyword`).
 	var functionAlwaysWritesReturn = false
+	/// Whether a wrapper built around a call of the place's function that is handed arguments spells its closure on one
+	/// line, `Instantiator<T> { f(…) }`, rather than the call on a line of its own between the braces.
+	var wrapsCallOnOneLine = false
 
 	/// The statement the place's builder function begins with, before its children.
 	var leadingStatement: CallGuard? {

@@ -224,10 +224,11 @@ extension TypeKeyLayout {
 				isErased: isErased,
 				handing: functionName,
 				forwardedArguments: (forwardedArguments + arguments).joined(separator: ", "),
+				onOneLine: representative.wrapsCallOnOneLine,
 			)
 		case .lazilyInstantiated,
 		     .sendableLazilyInstantiated:
-			return "\(BindingDeclaration(property: property, rule: .lazilyInstantiated).spelled) = \(ScopeGenerator.lazilyInstantiatedInstantiation(of: property, callingFunctionNamed: functionName, cycleArguments: arguments.joined(separator: ", "), erasedToConcreteExistential: isErased))"
+			return "\(BindingDeclaration(property: property, rule: .lazilyInstantiated).spelled) = \(ScopeGenerator.lazilyInstantiatedInstantiation(of: property, callingFunctionNamed: functionName, cycleArguments: arguments.joined(separator: ", "), erasedToConcreteExistential: isErased, onOneLine: representative.wrapsCallOnOneLine))"
 		case .constant:
 			let declaration = BindingDeclaration(
 				property: property,

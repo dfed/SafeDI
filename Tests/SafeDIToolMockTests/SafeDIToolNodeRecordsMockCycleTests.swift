@@ -109,20 +109,14 @@ struct SafeDIToolNodeRecordsMockCycleTests: ~Copyable {
 		        }
 		        let __safeDI_entered = __safeDI_Entered(configuration: ())
 		        func __safeDI_parentBuilder(__safeDI_entered: __safeDI_Entered<Parent.SafeDIMockConfiguration>) -> Parent {
-		            let childBuilder = Instantiator<Child> {
-		                __safeDI_childBuilder(__safeDI_entered: __safeDI_entered.entering("childBuilder", Child.SafeDIMockConfiguration()))
-		            }
+		            let childBuilder = Instantiator<Child> { __safeDI_childBuilder(__safeDI_entered: __safeDI_entered.entering("childBuilder", Child.SafeDIMockConfiguration())) }
 		            return if let safeDIBuilder = __safeDI_entered.configuration.safeDIBuilder { safeDIBuilder(childBuilder) } else { Parent(childBuilder: childBuilder) }
 		        }
 		        func __safeDI_childBuilder(__safeDI_entered: __safeDI_Entered<Child.SafeDIMockConfiguration>) -> Child {
-		            let parentBuilder = Instantiator<Parent> {
-		                __safeDI_parentBuilder(__safeDI_entered: __safeDI_entered.entering("parentBuilder", __safeDI_entered.configuration.parentBuilder))
-		            }
+		            let parentBuilder = Instantiator<Parent> { __safeDI_parentBuilder(__safeDI_entered: __safeDI_entered.entering("parentBuilder", __safeDI_entered.configuration.parentBuilder)) }
 		            return if let safeDIBuilder = __safeDI_entered.configuration.safeDIBuilder { safeDIBuilder(parentBuilder) } else { Child(parentBuilder: parentBuilder) }
 		        }
-		        let parentBuilder = Instantiator<Parent> {
-		            __safeDI_parentBuilder(__safeDI_entered: __safeDI_entered.entering("parentBuilder", safeDIOverrides.parentBuilder))
-		        }
+		        let parentBuilder = Instantiator<Parent> { __safeDI_parentBuilder(__safeDI_entered: __safeDI_entered.entering("parentBuilder", safeDIOverrides.parentBuilder)) }
 		        return Root(parentBuilder: parentBuilder)
 		    }
 		}
