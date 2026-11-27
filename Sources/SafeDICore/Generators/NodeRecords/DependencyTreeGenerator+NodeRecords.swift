@@ -73,7 +73,8 @@ extension DependencyTreeGenerator {
 			// The work of making the records is no run's, so the tests that count a run's work count none of it.
 			let (world, records) = GenerationWork.$observer.withValue(nil) {
 				let world = TypeFactsGraph(root: rootInfo.rootScope, forMockGeneration: false)
-				return (world, Result { () throws -> NodeRecords in try NodeRecords(world: world, seamTree: seamTree, declaredTypeNames: declaredTypeNames) })
+				let seamHoles = seamTree.map { SeamHoles(of: $0.seamRoot, seamType: $0.seamType) }
+				return (world, Result { () throws -> NodeRecords in try NodeRecords(world: world, seamTree: seamTree, seamHoles: seamHoles, declaredTypeNames: declaredTypeNames) })
 			}
 			let nodeRecords: NodeRecords
 			do {
@@ -84,7 +85,7 @@ extension DependencyTreeGenerator {
 				return try await scopeGenerator.generatePlan()
 			}
 			// A seam's own tree is compared and never laid out here: its initializers are written around its body.
-			let laidOutCode: GeneratedCode? = if NodeRecordsObservation.laysOutRoots, rootInfo.seamTree == nil {
+			let laidOutCode: GeneratedCode? = if NodeRecordsObservation.laysOutRoots, rootInfo.ownSeamRoot == nil {
 				try laidOutRootCode(of: rootInfo.instantiable, body: nodeRecords.rootBody)
 			} else {
 				nil
@@ -159,12 +160,14 @@ extension DependencyTreeGenerator {
 	}
 
 	/// The extension that declares `instantiable`'s generated initializer, its body laid out from `body`, node records'
-	/// root body, or `nil` where the engine cannot lay out every statement of it, or the root has nothing to build.
+	/// root body; empty for a root with nothing to build, for which the tree generates nothing too; `nil` where the engine
+	/// cannot lay out every statement of the body.
 	static func laidOutRootCode(of instantiable: Instantiable, body: [GeneratedCode]) throws -> GeneratedCode? {
-		// A statement the engine cannot lay out would be copied as its text, which a node records place does not hold.
+		guard let rootInitializer = try ScopeGenerator.rootInitializer(of: instantiable) else { return .empty }
+		// A statement the engine cannot lay out would be copied as its text, which a node records place does not hold, so
+		// every loop of builders is laid out, as a mock's are, where the tree keeps the path key's body for one written once.
 		guard body.allSatisfy(\.statementsAreLaidOutByTypeKey),
-		      let rootInitializer = try ScopeGenerator.rootInitializer(of: instantiable),
-		      let statements = TypeKeyBody.statements(ofRootBody: body)
+		      let statements = TypeKeyBody.statements(ofRootBody: body, laysOutEveryLoop: true, declaresLoopMembersAsThePathKeyDoes: true)
 		else { return nil }
 		return rootInitializer.spelled(writing: BuilderFunctionGraph(body: statements.map(Statement.verbatim)))
 	}

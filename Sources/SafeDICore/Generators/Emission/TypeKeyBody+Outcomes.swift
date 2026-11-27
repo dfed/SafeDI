@@ -32,10 +32,11 @@ extension TypeKeyLayout {
 		} else if outcomes[owner][label] == .passed {
 			.read(owner: owner, label: label)
 		} else {
-			// Every function is declared in the root's body (`computePlacement`), so a function that captures its read, or
-			// reads none, sees the root's declarations before its own. One that reads none has no declaration there: the
-			// first root statement that reaches it is before the path that resolved the read to none.
-			lastPosition(of: label, inClass: 0, before: placementIndex[owner]).map { .statement(owner: 0, index: $0) } ?? .none
+			// A function that captures its read, or reads none, sees the declarations of the body that declares it
+			// (`computePlacement`) before its own: the root's, or, as the path key nests a loop's, a function's. One that
+			// reads none has no declaration there: the first statement that reaches it is before the path that resolved the
+			// read to none.
+			typeLookUp(label, inClass: placementOwner[owner], before: placementIndex[owner])
 		}
 	}
 
@@ -111,9 +112,10 @@ extension TypeKeyLayout {
 		}
 	}
 
-	/// What each class's function does with each label it reads. Every function is declared in the root's body
-	/// (`computePlacement`), and a cycle parameter is read from the caller, or, where a variant captures it, is the
-	/// root's statement, so the variants' classes are settled first and every other class in one pass after them.
+	/// What each class's function does with each label it reads. A cycle parameter is read from the caller, or, where a
+	/// variant captures it, is the root's statement, so the variants' classes are settled first. Every other class's
+	/// outcomes depend only on those of the functions declaring it (`computePlacement`), so one pass after them, outer
+	/// functions first, settles them.
 	mutating func computeOutcomes() {
 		rootStatementsCapturedByVariant = rootStatementsCapturedByVariants()
 		outcomes = [[String: ReadOutcome]](repeating: [:], count: membersByClass.count)
@@ -137,7 +139,7 @@ extension TypeKeyLayout {
 				}
 			}
 		}
-		for owner in membersByClass.indices.dropFirst() where !membersByClass[owner].contains(where: { variantBodies.contains($0) }) {
+		for owner in membersByClass.indices.dropFirst().sorted(by: { (placementDepth[$0], $0) < (placementDepth[$1], $1) }) where !membersByClass[owner].contains(where: { variantBodies.contains($0) }) {
 			for label in reads[membersByClass[owner][0]] {
 				var declarations = [TypeDeclaration]()
 				for member in membersByClass[owner] {

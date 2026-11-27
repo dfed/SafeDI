@@ -173,18 +173,14 @@ struct TypeFactsDOT {
 	/// Whether `column` is `full` but for fill edges, as a call beneath a fill of its own hole draws, which passes that fill
 	/// on (`unfolded`).
 	private static func column(_ column: Column, isWithoutFillsPassedOnOf full: Column) -> Bool {
-		guard column.node == full.node, column.forwarded == full.forwarded, column.items.count < full.items.count else { return false }
-		var remaining = column.items[...]
-		for item in full.items {
-			if remaining.first == item {
-				remaining = remaining.dropFirst()
-			} else if case .declaration(_, _, true) = item {
-				continue
-			} else {
-				return false
-			}
-		}
-		return remaining.isEmpty
+		column.node == full.node && column.forwarded == full.forwarded && column.items.count < full.items.count
+			&& column.items.elementsEqual(full.items.lazy.filter { item in
+				if case .declaration(_, _, true) = item {
+					false
+				} else {
+					true
+				}
+			})
 	}
 
 	/// The place that draws `generator`'s own edges: a fill draws as its child.
