@@ -789,6 +789,241 @@ struct SafeDIToolQueryGraphTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func graph_handsReaderEachTwinsTheme_whenLazyTwinClosesOnConstantBeneathTypeThatDeclaresSecondLabel() async throws {
+		// `Root` builds `home: Home`, and `Panel`, beneath it, builds `home: LazilyInstantiated<Home>`, which closes the
+		// cycle on the constant twin. Each twin's `Reader` takes the `theme` declared above that twin, and `home` is being
+		// built around it at both.
+		let report = try await graph(of: [
+			"Root.swift": """
+			@Instantiable(isRoot: true)
+			public final class Root: Instantiable {
+			    public init(theme: Theme, home: Home) {
+			        self.theme = theme
+			        self.home = home
+			    }
+
+			    @Instantiated let theme: Theme
+			    @Instantiated let home: Home
+			}
+			""",
+			"Theme.swift": """
+			@Instantiable
+			public final class Theme: Instantiable {
+			    public init() {}
+			}
+			""",
+			"Home.swift": """
+			@Instantiable
+			public final class Home: Instantiable {
+			    public init(reader: Reader, detailBuilder: Instantiator<Detail>) {
+			        self.reader = reader
+			        self.detailBuilder = detailBuilder
+			    }
+
+			    @Instantiated let reader: Reader
+			    @Instantiated let detailBuilder: Instantiator<Detail>
+			}
+			""",
+			"Detail.swift": """
+			@Instantiable
+			public final class Detail: Instantiable {
+			    public init(panelBuilder: Instantiator<Panel>) {
+			        self.panelBuilder = panelBuilder
+			    }
+
+			    @Instantiated let panelBuilder: Instantiator<Panel>
+			}
+			""",
+			"Reader.swift": """
+			@Instantiable
+			public final class Reader: Instantiable {
+			    public init(theme: Theme, home: Home?) {
+			        self.theme = theme
+			        self.home = home
+			    }
+
+			    @Received let theme: Theme
+			    @Received(onlyIfAvailable: true) let home: Home?
+			}
+			""",
+			"Panel.swift": """
+			@Instantiable
+			public final class Panel: Instantiable {
+			    public init(theme: Theme, home: LazilyInstantiated<Home>) {
+			        self.theme = theme
+			        self.home = home
+			    }
+
+			    @Instantiated let theme: Theme
+			    @Instantiated let home: LazilyInstantiated<Home>
+			}
+			""",
+		])
+
+		#expect(Self.supplies(in: report) == [
+			"App.Reader.home": "nil(providerNotYetBuilt)",
+			"App.Reader.theme": "App.Panel.theme, App.Root.theme",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func graph_handsReaderEachTwinsTheme_whenTypeDeclaresSecondLabelAfterLazyTwinReaderTakesOnlyIfAvailable() async throws {
+		// As above, but `Reader` takes `theme` only if available, and `Panel` declares its `theme` after its lazy `home`.
+		// `Home`'s tree receives `theme`, so `Panel` still builds it first, and the call made there hands it.
+		let report = try await graph(of: [
+			"Root.swift": """
+			@Instantiable(isRoot: true)
+			public final class Root: Instantiable {
+			    public init(theme: Theme, home: Home) {
+			        self.theme = theme
+			        self.home = home
+			    }
+
+			    @Instantiated let theme: Theme
+			    @Instantiated let home: Home
+			}
+			""",
+			"Theme.swift": """
+			@Instantiable
+			public final class Theme: Instantiable {
+			    public init() {}
+			}
+			""",
+			"Home.swift": """
+			@Instantiable
+			public final class Home: Instantiable {
+			    public init(reader: Reader, detailBuilder: Instantiator<Detail>) {
+			        self.reader = reader
+			        self.detailBuilder = detailBuilder
+			    }
+
+			    @Instantiated let reader: Reader
+			    @Instantiated let detailBuilder: Instantiator<Detail>
+			}
+			""",
+			"Detail.swift": """
+			@Instantiable
+			public final class Detail: Instantiable {
+			    public init(panelBuilder: Instantiator<Panel>) {
+			        self.panelBuilder = panelBuilder
+			    }
+
+			    @Instantiated let panelBuilder: Instantiator<Panel>
+			}
+			""",
+			"Reader.swift": """
+			@Instantiable
+			public final class Reader: Instantiable {
+			    public init(theme: Theme?, home: Home?) {
+			        self.theme = theme
+			        self.home = home
+			    }
+
+			    @Received(onlyIfAvailable: true) let theme: Theme?
+			    @Received(onlyIfAvailable: true) let home: Home?
+			}
+			""",
+			"Panel.swift": """
+			@Instantiable
+			public final class Panel: Instantiable {
+			    public init(theme: Theme, home: LazilyInstantiated<Home>) {
+			        self.theme = theme
+			        self.home = home
+			    }
+
+			    @Instantiated let home: LazilyInstantiated<Home>
+			    @Instantiated let theme: Theme
+			}
+			""",
+		])
+
+		#expect(Self.supplies(in: report) == [
+			"App.Reader.home": "nil(providerNotYetBuilt)",
+			"App.Reader.theme": "App.Panel.theme, App.Root.theme",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func graph_handsReaderEachTwinsTheme_whenConstantTwinClosesOnLazyTwinBeneathTypeThatDeclaresSecondLabel() async throws {
+		// The twins of the first test the other way round: `Root` builds `home: LazilyInstantiated<Home>`, and the constant
+		// `home: Home` that `Panel` builds closes the cycle on it.
+		let report = try await graph(of: [
+			"Root.swift": """
+			@Instantiable(isRoot: true)
+			public final class Root: Instantiable {
+			    public init(theme: Theme, home: LazilyInstantiated<Home>) {
+			        self.theme = theme
+			        self.home = home
+			    }
+
+			    @Instantiated let theme: Theme
+			    @Instantiated let home: LazilyInstantiated<Home>
+			}
+			""",
+			"Theme.swift": """
+			@Instantiable
+			public final class Theme: Instantiable {
+			    public init() {}
+			}
+			""",
+			"Home.swift": """
+			@Instantiable
+			public final class Home: Instantiable {
+			    public init(reader: Reader, detailBuilder: Instantiator<Detail>) {
+			        self.reader = reader
+			        self.detailBuilder = detailBuilder
+			    }
+
+			    @Instantiated let reader: Reader
+			    @Instantiated let detailBuilder: Instantiator<Detail>
+			}
+			""",
+			"Detail.swift": """
+			@Instantiable
+			public final class Detail: Instantiable {
+			    public init(panelBuilder: Instantiator<Panel>) {
+			        self.panelBuilder = panelBuilder
+			    }
+
+			    @Instantiated let panelBuilder: Instantiator<Panel>
+			}
+			""",
+			"Reader.swift": """
+			@Instantiable
+			public final class Reader: Instantiable {
+			    public init(theme: Theme, home: Home?) {
+			        self.theme = theme
+			        self.home = home
+			    }
+
+			    @Received let theme: Theme
+			    @Received(onlyIfAvailable: true) let home: Home?
+			}
+			""",
+			"Panel.swift": """
+			@Instantiable
+			public final class Panel: Instantiable {
+			    public init(theme: Theme, home: Home) {
+			        self.theme = theme
+			        self.home = home
+			    }
+
+			    @Instantiated let theme: Theme
+			    @Instantiated let home: Home
+			}
+			""",
+		])
+
+		#expect(Self.supplies(in: report) == [
+			"App.Reader.home": "nil(providerNotYetBuilt)",
+			"App.Reader.theme": "App.Panel.theme, App.Root.theme",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func graph_recordsNilProvenance_whenSiblingThatDeclaresReceiveIsBuiltAfterReceiver() async throws {
 		// `c` receives `b`, so `b` is built first, and its receive of `c` only if available is handed `nil`.
 		let report = try await graph(of: [
@@ -3232,6 +3467,72 @@ struct SafeDIToolQueryGraphTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func graph_countsEdgesNotPaths_whenScreensOpenScreensOfTheNextLayer() async throws {
+		// Layers of four screens, each holding instantiators of three screens of the next layer and receiving `service`,
+		// under a root that declares `service` and builds the first layer, so the last layer is reached along
+		// 4 × 3^(layers - 1) paths. The fold reads the per-type graph, where a node stands for every place of its
+		// declaration, so each later layer adds the same work: its 12 edges, the four declarations of `service` (one per
+		// screen of the first layer) that the second and third edge into each of its four screens read, 32, and the four
+		// each screen's receive judges, 16, which is 60. The walk it replaced entered every path: at four and six layers,
+		// 162 and 1,458 visits.
+		let visits = try await supplyVisitsInLayersOfScreens()
+		#expect(visits == [169, 289])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func graph_countsEachDeclarationOnce_whenParentsDeclaringLabelShareChainThatReceivesIt() async throws {
+		// k parents under the root each declare `theme` and build the first of a chain of n links, whose last receives
+		// `theme`. The fold visits each of the 3k + n - 1 edges once and judges the k declarations at the reader, 4k + n - 1
+		// in all: the links share the first link's set of k declarations rather than copying it, which would move n × k.
+		var visits = [Int]()
+		for (parentCount, linkCount) in [(4, 8), (8, 16)] {
+			let (stream, continuation) = AsyncStream.makeStream(of: GenerationWork.self)
+			try await GenerationWork.$observer.withValue({ continuation.yield($0) }) {
+				var types = [Self.fixtureType(named: "Theme", properties: [])]
+				types.append(Self.fixtureType(named: "Root", isRoot: true, properties: (0..<parentCount).map { FixtureProperty("@Instantiated", "parent\($0)", "Parent\($0)") }))
+				for parent in 0..<parentCount {
+					types.append(Self.fixtureType(named: "Parent\(parent)", properties: [FixtureProperty("@Instantiated", "theme", "Theme"), FixtureProperty("@Instantiated", "link0", "Link0")]))
+				}
+				for link in 0..<linkCount {
+					let properties = if link + 1 < linkCount {
+						[FixtureProperty("@Instantiated", "link\(link + 1)", "Link\(link + 1)")]
+					} else {
+						[FixtureProperty("@Received", "theme", "Theme")]
+					}
+					types.append(Self.fixtureType(named: "Link\(link)", properties: properties))
+				}
+				_ = try await graph(of: ["Chain.swift": types.joined(separator: "\n\n")])
+			}
+			continuation.finish()
+			var visitsOfThisSize = 0
+			for await work in stream where work.step == .findingReceivedValueSupplies {
+				visitsOfThisSize += work.elementCount
+			}
+			visits.append(visitsOfThisSize)
+		}
+		#expect(visits == [23, 47])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func graph_handsEveryScreenRootsService_whenScreensOpenScreensOfTheNextLayer() async throws {
+		// The layers of screens above, at four layers: a screen the fold reads once, as one node, still has the value
+		// every place of it is handed.
+		let report = try await graphOfLayersOfScreens(layerCount: 4)
+
+		var expectedSupplies = [String: String]()
+		for layer in 0..<4 {
+			for position in 0..<4 {
+				expectedSupplies["App.Screen\(layer)x\(position).service"] = "App.Root.service"
+			}
+		}
+		#expect(report.completeness == .trees)
+		#expect(Self.supplies(in: report) == expectedSupplies)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func graph_reportsPropertysPlainType_whenInstantiatedDependencyIsFulfilledByAnotherType() async throws {
 		let report = try await graph(of: [
 			"Root.swift": """
@@ -3380,6 +3681,87 @@ struct SafeDIToolQueryGraphTests: ~Copyable {
 		let moduleDirectory = try temporaryDirectory().appendingPathComponent("App")
 		_ = try createSwiftFixtureFiles(atFilePaths: filesByName, in: moduleDirectory, alongside: [])
 		return try await QueryGraph.parse(["--include", moduleDirectory.path]).graph()
+	}
+
+	/// The export of a module of `layerCount` layers of four screens, each holding instantiators of three screens of the
+	/// next layer, with `screenDeclarations` of its layer and position, beside `otherTypes`, under a root that declares
+	/// `rootDeclarations` and an instantiator of each screen of the first layer.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private mutating func graphOfLayersOfScreens(
+		layerCount: Int,
+		rootDeclarations: [FixtureProperty] = [FixtureProperty("@Instantiated", "service", "Service")],
+		screenDeclarations: (_ layer: Int, _ position: Int) -> [FixtureProperty] = { _, _ in [FixtureProperty("@Received", "service", "Service")] },
+		otherTypes: [String] = [Self.fixtureType(named: "Service", properties: [])],
+	) async throws -> QueryGraphReport {
+		var types = otherTypes
+		types.append(Self.fixtureType(
+			named: "Root",
+			isRoot: true,
+			properties: rootDeclarations + (0..<4).map { FixtureProperty("@Instantiated", "screen0x\($0)Builder", "Instantiator<Screen0x\($0)>") },
+		))
+		for layer in 0..<layerCount {
+			for position in 0..<4 {
+				var properties = screenDeclarations(layer, position)
+				if layer + 1 < layerCount {
+					properties += (0..<3).map { offset in
+						FixtureProperty("@Instantiated", "screen\(layer + 1)x\((position + offset) % 4)Builder", "Instantiator<Screen\(layer + 1)x\((position + offset) % 4)>")
+					}
+				}
+				types.append(Self.fixtureType(named: "Screen\(layer)x\(position)", properties: properties))
+			}
+		}
+		return try await graph(of: ["Screens.swift": types.joined(separator: "\n\n")])
+	}
+
+	/// The work of the fold that reads the value each receive is handed (`GenerationWork.Step.findingReceivedValueSupplies`)
+	/// as `query graph` exports `graphOfLayersOfScreens`, at four and at six layers.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private mutating func supplyVisitsInLayersOfScreens(
+		rootDeclarations: [FixtureProperty] = [FixtureProperty("@Instantiated", "service", "Service")],
+		screenDeclarations: (_ layer: Int, _ position: Int) -> [FixtureProperty] = { _, _ in [FixtureProperty("@Received", "service", "Service")] },
+		otherTypes: [String] = [Self.fixtureType(named: "Service", properties: [])],
+	) async throws -> [Int] {
+		var visitsByLayerCount = [Int]()
+		for layerCount in [4, 6] {
+			let (stream, continuation) = AsyncStream.makeStream(of: GenerationWork.self)
+			try await GenerationWork.$observer.withValue({ continuation.yield($0) }) {
+				_ = try await graphOfLayersOfScreens(layerCount: layerCount, rootDeclarations: rootDeclarations, screenDeclarations: screenDeclarations, otherTypes: otherTypes)
+			}
+			continuation.finish()
+			var visits = 0
+			for await work in stream where work.step == .findingReceivedValueSupplies {
+				visits += work.elementCount
+			}
+			visitsByLayerCount.append(visits)
+		}
+		return visitsByLayerCount
+	}
+
+	/// A property of a fixture's type: its macro, as written, its label and its type.
+	private struct FixtureProperty {
+		init(_ attribute: String, _ label: String, _ type: String) {
+			self.attribute = attribute
+			self.label = label
+			self.type = type
+		}
+
+		let attribute: String
+		let label: String
+		let type: String
+	}
+
+	/// The source of an `@Instantiable` class `name` that declares `properties`, with the initializer they need.
+	private static func fixtureType(named name: String, isRoot: Bool = false, properties: [FixtureProperty]) -> String {
+		"""
+		@Instantiable\(isRoot ? "(isRoot: true)" : "")
+		public final class \(name): Instantiable {
+		    public init(\(properties.map { "\($0.label): \($0.type)" }.joined(separator: ", "))) {
+		\(properties.map { "        self.\($0.label) = \($0.label)" }.joined(separator: "\n"))
+		    }
+
+		\(properties.map { "    \($0.attribute) let \($0.label): \($0.type)" }.joined(separator: "\n"))
+		}
+		"""
 	}
 
 	/// The provenance of each received dependency or alias of `report` that has one, by `<declaration id>.<label>`: each

@@ -114,6 +114,63 @@ struct SafeDIToolNodeRecordsOnlyIfAvailableTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysOutRootFromNodeRecords_whenAReceiveOnlyIfAvailableIsDeclaredByAWrapperBuiltAfterIt() async throws {
+		// `Session` requires `reader`, so the root builds `reader` before the wrapper of `session`: the call of `Reader` is
+		// handed no declaration of the label it receives only if available, which its record passes `nil`, as the tree does.
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true)
+				public struct Root: Instantiable {
+				    public init(reader: Reader, session: LazilyInstantiated<Session>) {
+				        self.reader = reader
+				        self.session = session
+				    }
+				    @Instantiated let reader: Reader
+				    @Instantiated let session: LazilyInstantiated<Session>
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Reader: Instantiable {
+				    public init(session: Session?) {
+				        self.session = session
+				    }
+				    @Received(onlyIfAvailable: true) let session: Session?
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Session: Instantiable {
+				    public init(reader: Reader) {
+				        self.reader = reader
+				    }
+				    @Received let reader: Reader
+				}
+				""",
+			], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public init() {
+			        let reader = Reader(session: nil)
+			        func __safeDI_session() -> Session {
+			            Session(reader: reader)
+			        }
+			        let session = LazilyInstantiated<Session>(__safeDI_session)
+			        self.init(reader: reader, session: session)
+			    }
+			}
+			""",
+		])
+		#expect(reports.map(\.refusal) == [nil])
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
+		#expect(reports.flatMap(\.differences) == [])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_refusesWorldAsNodeOfSeveralVariants_whenTwoCallsOfOneTypeFindValueAndNil() async throws {
 		// `Badge` is built inside `first`, before `session`, which requires `first`, and inside `second`, after it: one
 		// variant under rule 1, which one place per variant cannot write as the tree writes each.

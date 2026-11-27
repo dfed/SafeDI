@@ -18,34 +18,31 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-// The interface every track builds against, frozen 2026-11-26 at 9 PM PT. Each ID is a dense 32-bit position in the
-// order the world's walk first reaches it, so nothing sorts by name. A column owed by the table-side columns lane
-// (lanes/per-type-facts/step0-columns-brief.md) or the mock track (lanes/per-type-facts/track-d-columns.md) is declared
-// here with its final type and answers empty until that lane fills it; its doc comment says which. One part is not
-// frozen: `Read` in a mock world, which gains the override read about a concrete type (a `TypeClassID`), not a label
-// (track D, "Settled by the design thread"). Its answer is still an argument, with one key and one body per declaration
-// (ruling of 2026-11-26, 3:28 PM PT): the places entered above, an optional slot for each of the body's own properties a
-// path can close on, none for a body outside every cycle. A step to a property already on the path returns to that place
-// and forgets the places beneath it, as 2.4.0 does. The slot is keyed as `cycle(of:)` keys a cycle, and the form
-// `nearest ?? parent.field` is withdrawn.
+// The interface every reader of a world builds against. Each ID is a dense 32-bit position in the order the world's
+// walk first reaches it, so nothing sorts by name. A column no producer fills yet is declared here with its final type
+// and answers empty; its doc comment says so. One part is not settled: `Read` in a mock world, which gains the override
+// read about a concrete type (a `TypeClassID`), not a label. Its answer is an argument, with one key and one body per
+// declaration: the places entered above, an optional slot for each of the body's own properties a path can close on,
+// none for a body outside every cycle. A step to a property already on the path returns to that place and forgets the
+// places beneath it, as 2.4.0 does. The slot is keyed as `cycle(of:)` keys a cycle.
 //
-// Twins (ruling of 2026-11-26, 3:47 PM PT; designs/per-type-facts.md section 17): `cycle(of:)` is the identity in both
-// worlds, so a value and a `LazilyInstantiated` of one label share it, and plain and `@Sendable` builders do not. Which
-// twin a path builds is an argument, never a key: when the `madeAgain` producer lands, its key projects that choice to
-// one key, as rule 1 does. Owed with the cycles producer: per identity, its declarations in first-reach order; per node,
-// the twinned identities its subtree can close on, a union fact like the reads.
+// Twins: `cycle(of:)` is the identity in both worlds, so a value and a `LazilyInstantiated` of one label share it, and
+// plain and `@Sendable` builders do not. Which twin a path builds is an argument, never a key: the `madeAgain` producer's
+// key projects that choice to one key, as rule 1 does. Owed with the cycles producer: per identity, its declarations in
+// first-reach order; per node, the twinned identities its subtree can close on, a union fact like the reads. A value or
+// wrapper still being built keys once per identity, by its label, on a required channel; on the optional channels it
+// keys as `nil` does, since 2.4.0 passes `nil` to a receive only if available of a declaration not yet built.
 //
-// Rule 3 (ruling of 2026-11-26, 3:56 PM PT; section 17, "Rule 3") is staged, and both keys are planned states. Stage 1,
-// today: an only-if-available read keys a lazy wrapper by its kind (-3, -4) and `nil` apart from it, so a lazy answer
-// beside none is two bodies. Stage 2, required, after track A's replay: where a value and a lazy wrapper both reach one
-// declaration for one read, the parameter is the wrapper and their keys project to one. "Both reach" is a fact per
-// (root, declaration, read): a union over the answers not being built that are bound for that read at every call into
-// the node within one root's tree, since a root's functions are local to its code, so two roots that disagree on it share
-// no variant. It is computed before the variants fold so that `key` can ask it, never decided per call or by arrival
-// order. It projects a value beside a plain wrapper, or wrappers alone; a value beside a `SendableLazilyInstantiated`
-// answering one read of a body in the `@Sendable` family keeps its form in the key, a stated gap (lead, 4:00 PM PT), since
-// no wrapper can carry a value that need not be `Sendable`. Where one form alone reaches, stage 1's key stands. Read
-// neither stage's count of bodies as permanent.
+// Rule 3 is staged, and both keys are planned states. Stage 1, today: an only-if-available read keys a lazy wrapper by
+// its kind (-3, -4) and `nil` apart from it, so a lazy answer beside none is two bodies. Stage 2: where a value and a
+// lazy wrapper both reach one declaration for one read, the parameter is the wrapper and their keys project to one.
+// "Both reach" is a fact per (root, declaration, read): a union over the answers not being built that are bound for that
+// read at every call into the node within one root's tree, since a root's functions are local to its code, so two roots
+// that disagree on it share no variant. It is computed before the variants fold so that `key` can ask it, never decided
+// per call or by arrival order. It projects a value beside a plain wrapper, or wrappers alone; a value beside a
+// `SendableLazilyInstantiated` answering one read of a body in the `@Sendable` family keeps its form in the key, a
+// deliberate gap, since no wrapper can carry a value that need not be `Sendable`. Where one form alone reaches, stage 1's
+// key stands. Read neither stage's count of bodies as permanent.
 
 /// A node of a world's graph: a declaration, its position in `OrderedGraph`.
 typealias DeclarationID = Int32
@@ -67,9 +64,9 @@ typealias ComponentID = Int32
 /// A cycle's identity (A4): the property as cycle validation sees it with the concrete type built.
 typealias CycleID = Int32
 
-/// What one read of a variant comes to in its body (the outcomes fold, `TypeFactsOutcomes`: the outcomes lane fills it;
-/// track D reads it). Track D's `passesNil` is `none` here and its `boundBeforeSendableFunction` is
-/// `readBeforeSendableFunction`; `keysVariant` is a read track D has no outcome for, whose answer keys the variant.
+/// What one read of a variant comes to in its body (the outcomes fold, `TypeFactsOutcomes`), which the mock writer reads:
+/// passing `nil` is `none` here, and a read bound before a `@Sendable` function is `readBeforeSendableFunction`;
+/// `keysVariant` is a read with no outcome of its own, whose answer keys the variant.
 enum TypeFactsOutcome: UInt8, Sendable {
 	/// Nothing answers the read: the body is passed `nil`, or the read has no value.
 	case none
@@ -196,17 +193,18 @@ struct TypeFactsAnswer: Equatable, Sendable {
 struct TypeFactsOwedFacts: OptionSet, Sendable {
 	let rawValue: UInt8
 
-	/// The fill channel (track C): whether a hole's property is still being built inside its own fill. Set on a fill and
+	/// The seam fill producer: whether a hole's property is still being built inside its own fill. Set on a fill and
 	/// on every declaration beneath one.
 	static let fillBeingBuilt = TypeFactsOwedFacts(rawValue: 1 << 0)
-	/// The mock root's pins (track D): whether a mock read is pinned. Set on every declaration of a mock world.
+	/// The mock root's pins: whether a mock read is pinned. Set on every declaration of a mock world.
 	static let mockRootPin = TypeFactsOwedFacts(rawValue: 1 << 1)
-	/// The mock root's required-receive records (track D): what a read finds pinned or read above it. Set on every
+	/// The mock root's required-receive records: what a read finds pinned or read above it. Set on every
 	/// declaration of a mock world.
 	static let mockRootRecord = TypeFactsOwedFacts(rawValue: 1 << 2)
-	/// The mock root's bindings (track D): whether the mock root binds a read. Set on every declaration of a mock world.
+	/// The mock root's bindings: whether the mock root binds a read. Set on every declaration of a mock world.
 	static let mockRootBinding = TypeFactsOwedFacts(rawValue: 1 << 3)
-	/// The `madeAgain` producer: the bindings a builder made again in a loop of builders rebinds. Set on every builder.
+	/// The `madeAgain` producer: the bindings a builder made again in a loop of builders rebinds. Set on every member of
+	/// a loop of builders.
 	static let madeAgain = TypeFactsOwedFacts(rawValue: 1 << 4)
 }
 
@@ -278,6 +276,19 @@ protocol TypeFactsWorld {
 	func boundBefore(of variant: VariantID) -> ArraySlice<Int32>
 	/// The facts producers still owe the declaration's answers (`TypeFactsOwedFacts`).
 	func owedFacts(of declaration: DeclarationID) -> TypeFactsOwedFacts
+	/// Whether the declaration an answer binds provides a form that a receive of the read's label in the declaration's
+	/// subtree reads: where it does not, a call passes the read `nil` (a receive only if available) though the answer is
+	/// bound. A declaration being built provides its own label's reads. `forms(of:)` and `provides(_:_:)` answer the same by the run's property IDs once the world holds them; this
+	/// answers by the world's own, which no `PropertyID` may carry.
+	func providesFormRead(by answer: AnswerID, _ read: ReadID, beneath declaration: DeclarationID) -> Bool
+	/// The labels the declaration's subtree reads from above it (`labels(of:)`) in the order a walk of its body first
+	/// receives each, the order of its builder function's parameters (`ScopeGenerator.inOrderTheBodyFirstReceives`): its
+	/// own type's receives, then each child's subtree depth first, each type's receives before its children's, all in
+	/// declaration order, each declaration visited once; a label first met at a call that closes a cycle comes there, in
+	/// the order the closed-on declaration reads it. The declaration's own label is none. It depends on where labels are
+	/// received, never on their spelling.
+	/// Walked when asked, never while the world is built.
+	func parameterOrder(of declaration: DeclarationID) -> [WorldLabelID]
 }
 
 extension TypeFactsGraph: TypeFactsWorld {
@@ -431,16 +442,79 @@ extension TypeFactsGraph: TypeFactsWorld {
 		outcomes.boundBefore(of: variant)
 	}
 
+	func providesFormRead(by answer: AnswerID, _ read: ReadID, beneath declaration: DeclarationID) -> Bool {
+		guard answer >= 0 else { return false }
+		// A declaration being built is the one its own label's reads beneath it name, around the cycle it closes.
+		guard !answerIsBeingBuilt[Int(answer)] else { return true }
+		let declared = answerProperties[Int(answer)]
+		let label = readTable[Int(read)].label
+		return receives.received.columns(inRow: Int(declaration)).contains { received in
+			propertyFacts.labels[Int(received)] == label && propertyFacts.provides(declared, aFormReadBy: received)
+		}
+	}
+
+	func parameterOrder(of declaration: DeclarationID) -> [WorldLabelID] {
+		// The declaration's own label is no parameter: every call is made where a declaration of it is being built.
+		let ownLabel = graph.nodes[Int(declaration)].property.map(\.label)
+		var unmet = Set(labels(of: declaration).filter { labelTexts[Int($0)] != ownLabel })
+		var order = [WorldLabelID]()
+		func meet(_ label: WorldLabelID) {
+			if unmet.remove(label) != nil {
+				order.append(label)
+			}
+		}
+		var labelIDs = [String: WorldLabelID]()
+		for (index, text) in labelTexts.enumerated() where labelIDs[text] == nil {
+			labelIDs[text] = WorldLabelID(index)
+		}
+		var visited = Set<Int>()
+		var pending = [Int(declaration)]
+		while !unmet.isEmpty, let node = pending.popLast() {
+			guard visited.insert(node).inserted else { continue }
+			let scope = graph.nodes[node].scope
+			if graph.nodes[node].key.leaf == .none {
+				var declaredLabels = Set<String>()
+				for dependency in scope.instantiable.dependencies {
+					switch dependency.source {
+					case .instantiated, .forwarded:
+						declaredLabels.insert(dependency.property.label)
+					case .received, .aliased:
+						break
+					}
+				}
+				for dependency in scope.instantiable.dependencies {
+					switch dependency.source {
+					case .received:
+						labelIDs[dependency.property.label].map(meet)
+					case let .aliased(fulfillingProperty, _, _):
+						// An alias of a property its own type declares reads that declaration: it receives nothing.
+						if !declaredLabels.contains(fulfillingProperty.label) {
+							labelIDs[fulfillingProperty.label].map(meet)
+						}
+					case .instantiated, .forwarded:
+						break
+					}
+				}
+			}
+			let targets = graph.edges(from: node)
+			let facts = edgeFacts(from: Int32(node))
+			for (target, edge) in zip(targets, facts) where edge.isCallEdge && visited.contains(Int(target)) {
+				// A call that closes a cycle receives the closed-on declaration's parameters where its body does.
+				labels(of: target).forEach(meet)
+			}
+			pending.append(contentsOf: targets.reversed().map(Int.init))
+		}
+		return order
+	}
+
 	func owedFacts(of declaration: DeclarationID) -> TypeFactsOwedFacts {
 		var owed: TypeFactsOwedFacts = []
 		if forMockGeneration {
 			owed.formUnion([.mockRootPin, .mockRootRecord, .mockRootBinding])
 		}
-		switch kinds[Int(declaration)] {
-		case .instantiator, .sendableInstantiator, .erasedInstantiator, .sendableErasedInstantiator:
+		// A member of a loop of builders: an edge into it is in a loop.
+		for parent in parents(of: declaration) where edgeFacts(from: parent.parent).contains(where: { $0.child == declaration && $0.loop >= 0 }) {
 			owed.insert(.madeAgain)
-		case .constant, .lazy, .sendableLazy, .alias, .hole:
-			break
 		}
 		// A declaration is beneath a fill where any of its routes enters one: a walk up its parents.
 		var visited: Set = [declaration]
