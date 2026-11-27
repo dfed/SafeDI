@@ -76,7 +76,7 @@ enum SourceRule: String, CaseIterable {
 	/// and knows no feature, so a feature that needs something of it records a fact in general terms on the place, and
 	/// the layout reads the fact.
 	case engineFeatureName
-	/// `String`, `Property` or `TypeDescription` named in a fold of the per-type facts (`OrderedGraph.swift`, `ReadsFromAbove.swift`, `SiblingOrder.swift`, `TypeFactsColumns.swift`, `TypeFactsVariants.swift`, `TypeFactsOutcomes.swift`): a fold
+	/// `String`, `Property` or `TypeDescription` named in a fold of the per-type facts (`OrderedGraph.swift`, `ReadsFromAbove.swift`, `SiblingOrder.swift`, `TypeFactsAnswerSets.swift`, `TypeFactsColumns.swift`, `TypeFactsVariants.swift`, `TypeFactsOutcomes.swift`): a fold
 	/// works on a world's 32-bit IDs and bit sets, and only building the graph, spelling code and wording a message
 	/// touch a model of the source (design section 15), so a fold keeps no reference-counted value in its loops.
 	case typeFactsFoldModelName
@@ -109,6 +109,7 @@ enum SourceRule: String, CaseIterable {
 				"Sources/SafeDICore/Generators/TypeFacts/OrderedGraph.swift",
 				"Sources/SafeDICore/Generators/TypeFacts/ReadsFromAbove.swift",
 				"Sources/SafeDICore/Generators/TypeFacts/SiblingOrder.swift",
+				"Sources/SafeDICore/Generators/TypeFacts/TypeFactsAnswerSets.swift",
 				"Sources/SafeDICore/Generators/TypeFacts/TypeFactsColumns.swift",
 				"Sources/SafeDICore/Generators/TypeFacts/TypeFactsOutcomes.swift",
 				"Sources/SafeDICore/Generators/TypeFacts/TypeFactsVariants.swift",
