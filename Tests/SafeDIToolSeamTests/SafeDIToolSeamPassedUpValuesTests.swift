@@ -473,6 +473,66 @@ struct SafeDIToolSeamPassedUpValuesTests: ~Copyable {
 		}
 	}
 
+	@Test
+	mutating func generate_takesPassedUpBuilderUnderHoleTypesLabel_whenOuterSeamPassesUpPlaceOnTwoRoutesOfOneCase() async throws {
+		// `Home` holds a place of `Api` under `first` and under `second`, one case, and `Shell` passes it up. Both modules
+		// generate plain initializers: `Shell`’s takes the builder as `apiBuilder`, the label of its hole type, whatever
+		// SafeDI names the places apart by inside generated code.
+		let modules = Self.innerAndOuterModules(
+			inner: [
+				seamFixtureType(named: "Token", isFinalClass: true, declarations: ["@Received public let panel: Panel"]),
+				seamFixtureType(named: "Panel", isFinalClass: true, declarations: ["@Instantiated public let api: any Api"]),
+				seamFixtureType(named: "First", isFinalClass: true, declarations: ["@Instantiated public let panel: Panel"]),
+				seamFixtureType(named: "Second", isFinalClass: true, declarations: ["@Instantiated public let panel: Panel", "@Instantiated public let token: Token"]),
+				seamFixtureType(named: "Home", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let first: First", "@Instantiated public let second: Second"]),
+			],
+			outer: [
+				seamFixtureType(named: "Shell", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let home: Home"]),
+			],
+		)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["Outer"]?.generatedFiles == ["Outer.swift": generatedFileHeader + """
+		#if canImport(Inner)
+		import Inner
+		#endif
+
+		extension Shell {
+		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		    nonisolated public final class __safeDI_ApiCarrier<__safeDI_Built> {
+		        public let home: Home.__safeDI_ApiCarrier<__safeDI_Built>
+
+		        public init(home: Home.__safeDI_ApiCarrier<__safeDI_Built>) {
+		            self.home = home
+		        }
+
+		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		            self.init(home: .init(__safeDI_noScope: __safeDI_builder))
+		        }
+		    }
+
+		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
+		    public convenience init(apiBuilder: @escaping () -> any Api) {
+		        self.init(__safeDI_apiBuilder: .init(__safeDI_noScope: apiBuilder))
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// From code you write, call the initializer above instead.
+		    public convenience init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
+		        func __safeDI_home() -> Home {
+		            _ = Home.__safeDI_Home_C01BC793F644CA9D.self // If this line does not compile, compile the code SafeDI generates for module Inner into Inner: under Bazel, add Inner’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return Home(__safeDI_apiBuilder: __safeDI_apiBuilder.home)
+		        }
+		        let home: Home = __safeDI_home()
+		        self.init(home: home)
+		    }
+		}
+
+		extension Shell {
+		    public enum __safeDI_Shell_DAACB8FD775DD84C {}
+		}
+		"""])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
