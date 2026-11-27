@@ -1353,31 +1353,48 @@ jobs:
           retention-days: 3
           overwrite: true
 
-  # The Xcode 26 tests, as one job when most compile checks passed in an
-  # earlier run and as two when few did, which "Choose How the Xcode 26 Tests
-  # Run" decides. A run's time is mostly compile checks when none is skipped:
-  # main's run 44839883136 skipped all 4,260 and tested for 26.5 minutes after
-  # a 16.7-minute build, and run 44843308363, the first of a change to the
-  # sources the macro plugin compiles, compiled all 4,287 and tested for 62.7
-  # after a 26.5-minute build, 91 minutes on the one runner while the Linux
-  # jobs of the same run took 78. Two runners each build, 17 to 27 minutes,
-  # so two jobs spend a second runner to no gain when the checks are skipped,
-  # and macOS runners are what pull requests queue on: only a run that would
-  # compile most checks takes the second.
+  # The Xcode 26 tests, as two jobs, cut where "Choose How the Xcode 26 Tests
+  # Run" decides: by what compiles when few compile checks passed in an
+  # earlier run, and by what runs longest when most did. A run's time is
+  # mostly compile checks when none is skipped: main's run 44839883136
+  # skipped all 4,260 and tested for 26.5 minutes after a 16.7-minute build,
+  # and run 44843308363, the first of a change to the sources the macro
+  # plugin compiles, compiled all 4,287 and tested for 62.7 after a
+  # 26.5-minute build, 91 minutes on the one runner while the Linux jobs of
+  # the same run took 78. The second job costs a second runner's build, 17
+  # to 27 minutes of a macOS runner, and ends the run as many minutes sooner
+  # as its part's tests take.
   #
-  # The two parts are every test of the two targets whose tests compile the
-  # most, and every other test: the second part skips what the first selects,
-  # so no test runs in neither. With every check compiling, Verify's Linux
+  # When few checks have passed, the two parts are every test of the two
+  # targets whose tests compile the most (`seams-and-mocks`), and every
+  # other test (`the-rest`). With every check compiling, Verify's Linux
   # groups took 5.5 minutes for the seams and 5.0 for the mocks, 10.5 of the
   # 19.6 that all seven took (run 43766692766, which verify.yml describes).
-  # No run has measured the parts on macOS yet.
+  #
+  # When most have passed, the time is in the graph fuzzer's test target,
+  # so the cut goes through it: the target without the seam smoke seeds
+  # (`fuzzer-without-seam-smoke`), and the seam smoke seeds with every other
+  # target (`seam-smoke-and-other-targets`). On a 4-core Linux machine, with
+  # the compile checks skipped and without the comparisons the test helpers
+  # make of the tool with itself, the first took 14.6 minutes (995 tests) and
+  # the second 9.4 (6,932 tests), where the one job took 24.4; with those
+  # comparisons the fuzzer's whole target took 23.3 and the rest 5.7, so the
+  # first part is the longer by more. The first is as long as its longest
+  # tests, each about 10.7 minutes, so moving more out of it shortens
+  # nothing. Two other cuts were measured without the comparisons and were
+  # further from even: the graph fuzzer's suite against the rest, 15.2 and
+  # 6.9; the seam smoke seeds against the rest, 6.0 and 15.9. No run has
+  # measured this cut on macOS yet.
+  #
+  # In each cut the second part skips what the first selects, so no test
+  # runs in neither.
   spm-tests:
     name: Build and Test on Xcode 26 (${{ matrix.part }})
     needs: [changes, spm-plan, stack-position]
     # Also runs on every push to main, Markdown-only or not, so the
     # Codecov report behind the README badge always comes from a real
     # test run. It runs when "Choose How the Xcode 26 Tests Run" failed too,
-    # as one job.
+    # as one job, `all`.
     if: ${{ !cancelled() && needs.stack-position.outputs.stacked-under == '' && (needs.changes.outputs.source != 'false' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
     # Runs on macOS because it builds and tests SafeDI with Xcode's Swift,
     # the compiler adopters use, and compiles every test's generated code
@@ -1393,7 +1410,8 @@ jobs:
       # A part that fails says nothing about the other's tests.
       fail-fast: false
       matrix:
-        # `all`, or `seams-and-mocks` and `the-rest`.
+        # `seams-and-mocks` and `the-rest`, or `fuzzer-without-seam-smoke` and
+        # `seam-smoke-and-other-targets`; `all` only when no choice was made.
         part: ${{ fromJSON(needs.spm-plan.outputs.parts || '["all"]') }}
     outputs:
       # The same from every part: they build one commit with one compiler.
@@ -1436,6 +1454,18 @@ jobs:
               ;;
             the-rest)
               selection='--skip ^SafeDIToolSeamTests\. --skip ^SafeDIToolMockTests\.'
+              report_part='2 of 2'
+              ;;
+            fuzzer-without-seam-smoke)
+              selection='--filter ^SafeDIToolFuzzerTests\. --skip ^SafeDIToolFuzzerTests\.SafeDIToolGraphFuzzerTests/seamSmokeSeeds'
+              report_part='1 of 2'
+              ;;
+            # Skips what the first selects: every test of the fuzzer's target
+            # but the seam smoke seeds and the suite that holds them, which
+            # the lookahead leaves in. A skip that named the suite would skip
+            # the seeds with it.
+            seam-smoke-and-other-targets)
+              selection='--skip ^SafeDIToolFuzzerTests\.(?!SafeDIToolGraphFuzzerTests(/seamSmokeSeeds|$))'
               report_part='2 of 2'
               ;;
             *)
@@ -1595,9 +1625,10 @@ jobs:
           xcrun swift build --build-tests $SWIFT_TEST_ARGUMENTS
       # After the build rather than at the job's end, so the cache holds
       # the build alone and a failing test does not lose it.
-      # One part saves it: the two build the same sources, under one key.
+      # One part saves it, the first of either cut: the two build the same
+      # sources, under one key.
       - name: Save Build Directory
-        if: ${{ github.ref == 'refs/heads/main' && steps.build-cache.outputs.cache-hit != 'true' && matrix.part != 'the-rest' }}
+        if: ${{ github.ref == 'refs/heads/main' && steps.build-cache.outputs.cache-hit != 'true' && matrix.part != 'the-rest' && matrix.part != 'seam-smoke-and-other-targets' }}
         uses: actions/cache/save@v6
         with:
           path: .build
@@ -1607,7 +1638,10 @@ jobs:
       # 5 minutes: 32.1 minutes for seams-and-mocks and 30.8 for the-rest
       # (run 45034492743), half each of the 62.7 the one job took then (run
       # 44843308363). One run is thin: set it again from the step lists once
-      # eight two-part runs exist.
+      # eight two-part runs exist. The parts of the other cut, which runs
+      # when most checks are skipped, take the same limit until a run has
+      # measured them on macOS: the one job tested for 26.5 to 34.6 minutes
+      # then, and neither part can take longer than the whole.
       #
       # The one job's limit is from its four runs in which many checks
       # compiled: 51.6 minutes (run 45626612103), 60.5 (45697927258), 75.4
@@ -1624,6 +1658,9 @@ jobs:
           SELECTION: ${{ steps.part.outputs.selection }}
         run: |
           # shellcheck disable=SC2086 # The arguments and the selection are words to split.
+          # A selection is a regular expression, whose `?` and `*` are not
+          # for the shell to match against file names.
+          set -f
           xcrun swift test --skip-build $SWIFT_TEST_ARGUMENTS $SELECTION
       # A run keeps in its branch's cache only the value comparison outputs it
       # read or printed and those the newest artifacts of its identity hold,
@@ -1718,7 +1755,8 @@ jobs:
 
   # Reports the parts of the Xcode 26 tests under the name the one job had,
   # which the required check is, and fails unless every part passed: skipped,
-  # a part would satisfy the check. With two parts it also joins the compile
+  # a part would satisfy the check. With two parts, which every run has whose
+  # choice was made, it also joins the compile
   # checks they passed into the one list other runs read, which cannot fail
   # the job, since sharing only saves compiles. It only reads results and
   # moves lists, so it runs on Linux and needs no container.
@@ -2269,9 +2307,10 @@ jobs:
   # builds 2.3.0 (restored from a cache after its first run on main), the
   # shards of each corpus and the job that combines their reports. No required check.
   # graph-fuzzer.yml's `release_acceptance` input checks a branch by hand.
-  # Chooses whether the Xcode 26 tests run as one job or two, which the comment
-  # on "Build and Test on Xcode 26 (…)" explains: two when few of the suite's
-  # compile checks have passed under this commit's identity.
+  # Chooses where the Xcode 26 tests are cut into two jobs, which the comment
+  # on "Build and Test on Xcode 26 (…)" explains: by what compiles when few
+  # of the suite's compile checks have passed under this commit's identity,
+  # and by how long the tests run otherwise.
   #
   # The macOS jobs' own list of passed checks is keyed on an identity that
   # hashes Xcode's compiler and SDK, so only a macOS runner can look it up,
@@ -2280,11 +2319,11 @@ jobs:
   # Linux" restores it: the two identities hash the same sources, manifest
   # and verifier, so a change that empties one empties the other. They differ
   # after a new Xcode or runner image, which empties only macOS's, and such a
-  # run keeps the one job, as every run did before this one existed.
+  # run is cut by how long the tests run although every check compiles.
   #
   # Both macOS parts and the line coverage check read this one answer, so
   # they cannot disagree about how many reports there are. A failure here
-  # leaves the answer empty, which each reads as one job.
+  # leaves the answer empty, which each reads as one job, `all`.
   spm-plan:
     name: Choose How the Xcode 26 Tests Run
     needs: [changes, stack-position]
@@ -2327,30 +2366,29 @@ jobs:
         uses: ./.github/actions/restore-shared-compile-checks
         with:
           identity: ${{ steps.compile-check-identity.outputs.identity }}
-      # Two jobs below half of what a run skips when every check has passed:
-      # main's run 44839883136 skipped 4,260 on macOS, and the first run of a
-      # change to the macro plugin's sources skipped none (run 44843308363).
-      # A list between the two is a run that was cancelled part way, which
-      # the one job finishes in less than a second runner's build takes once
-      # half the checks are skipped.
-      - name: Choose One Job or Two
+      # Cut by what compiles below half of what a run skips when every check
+      # has passed: main's run 44839883136 skipped 4,260 on macOS, and the
+      # first run of a change to the macro plugin's sources skipped none (run
+      # 44843308363). A list between the two is a run that was cancelled part
+      # way. The first name of either pair is the part that saves the build,
+      # and the line coverage check reads the two by their place in the list.
+      - name: Choose Where to Cut the Tests in Two
         id: choose
         env:
-          FEWEST_PASSED_CHECKS_FOR_ONE_JOB: 2000
+          FEWEST_PASSED_CHECKS_TO_CUT_BY_TEST_TIME: 2000
         run: |
           passed=0
           if [ -f .compile-check-cache/passed.txt ]; then
             passed=$(wc -l < .compile-check-cache/passed.txt)
           fi
-          if [ "$passed" -lt "$FEWEST_PASSED_CHECKS_FOR_ONE_JOB" ]; then
-            echo "$passed compile checks have passed under this identity, fewer than $FEWEST_PASSED_CHECKS_FOR_ONE_JOB: the Xcode 26 tests run as two jobs."
+          if [ "$passed" -lt "$FEWEST_PASSED_CHECKS_TO_CUT_BY_TEST_TIME" ]; then
+            echo "$passed compile checks have passed under this identity, fewer than $FEWEST_PASSED_CHECKS_TO_CUT_BY_TEST_TIME: the Xcode 26 tests are cut by what compiles."
             echo 'parts=["seams-and-mocks","the-rest"]' >> "$GITHUB_OUTPUT"
-            echo "split=true" >> "$GITHUB_OUTPUT"
           else
-            echo "$passed compile checks have passed under this identity: the Xcode 26 tests run as one job."
-            echo 'parts=["all"]' >> "$GITHUB_OUTPUT"
-            echo "split=false" >> "$GITHUB_OUTPUT"
+            echo "$passed compile checks have passed under this identity: the Xcode 26 tests are cut by how long the tests run."
+            echo 'parts=["fuzzer-without-seam-smoke","seam-smoke-and-other-targets"]' >> "$GITHUB_OUTPUT"
           fi
+          echo "split=true" >> "$GITHUB_OUTPUT"
 
   release-acceptance:
     name: Release Acceptance
@@ -3368,20 +3406,22 @@ jobs:
         with:
           name: line-coverage-macos
           path: ${{ runner.temp }}/line-coverage/line-coverage-macos
-      - name: Download the Xcode 26 Coverage Report of the Seams and Mocks Part
+      # By the names "Choose How the Xcode 26 Tests Run" gave the parts, so
+      # that a new cut needs no edit here.
+      - name: Download the Xcode 26 Coverage Report of the First Part
         if: ${{ needs.spm-plan.outputs.split == 'true' }}
         continue-on-error: true
         uses: ./.github/actions/download-artifact
         with:
-          name: line-coverage-macos-seams-and-mocks
-          path: ${{ runner.temp }}/line-coverage/line-coverage-macos-seams-and-mocks
-      - name: Download the Xcode 26 Coverage Report of the Rest
+          name: line-coverage-macos-${{ fromJSON(needs.spm-plan.outputs.parts)[0] }}
+          path: ${{ runner.temp }}/line-coverage/line-coverage-macos-first-part
+      - name: Download the Xcode 26 Coverage Report of the Second Part
         if: ${{ needs.spm-plan.outputs.split == 'true' }}
         continue-on-error: true
         uses: ./.github/actions/download-artifact
         with:
-          name: line-coverage-macos-the-rest
-          path: ${{ runner.temp }}/line-coverage/line-coverage-macos-the-rest
+          name: line-coverage-macos-${{ fromJSON(needs.spm-plan.outputs.parts)[1] }}
+          path: ${{ runner.temp }}/line-coverage/line-coverage-macos-second-part
       # When the Xcode 26 tests ran as two jobs, each uploaded the report of
       # its part, and the script sums the two. It refuses a part without the
       # other, whichever directories this step names, since each report says
@@ -3392,7 +3432,7 @@ jobs:
         run: |
           reports="$RUNNER_TEMP/line-coverage"
           if [ "$XCODE_TESTS_SPLIT" = true ]; then
-            macos=(macos="$reports/line-coverage-macos-seams-and-mocks" macos="$reports/line-coverage-macos-the-rest")
+            macos=(macos="$reports/line-coverage-macos-first-part" macos="$reports/line-coverage-macos-second-part")
           else
             macos=(macos="$reports/line-coverage-macos")
           fi

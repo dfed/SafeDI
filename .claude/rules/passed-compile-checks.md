@@ -17,12 +17,13 @@ paths:
 
 ## When the Xcode 26 tests run as two jobs
 
-"Build and Test on Xcode 26" is a Linux job that reports the macOS jobs named "Build and Test on Xcode 26 (…)": one, `all`, when most compile checks have passed under the commit's identity, and two, `seams-and-mocks` and `the-rest`, when few have, since a run that compiles every check spends most of its time on them. "Choose How the Xcode 26 Tests Run" decides, from Linux's list of passed checks, because only a macOS runner can compute macOS's identity; its comment in `ci.yml` says when the two differ.
+"Build and Test on Xcode 26" is a Linux job that reports the macOS jobs named "Build and Test on Xcode 26 (…)", two on every run. When few compile checks have passed under the commit's identity they are `seams-and-mocks` and `the-rest`, since a run that compiles every check spends most of its time on them; when most have, `fuzzer-without-seam-smoke` and `seam-smoke-and-other-targets`, since the time is then in the graph fuzzer's test target. "Choose How the Xcode 26 Tests Run" decides, from Linux's list of passed checks, because only a macOS runner can compute macOS's identity; its comment in `ci.yml` says when the two differ. One job, `all`, runs only when that job failed. The comment on the macOS jobs holds each cut's measurements: measure a new cut as two separate runs, because a test's time inside a parallel run of the whole suite says little about a part's.
 
-- **The second part skips what the first selects**, so a new test target runs in `the-rest` without an edit. Change the two selections together.
+- **The second part skips what the first selects**, so a new test target runs in the second part of either cut without an edit. Change a cut's two selections together.
+- **The first name of a cut's pair saves the build**, and the line coverage check downloads the two reports by their place in the pair.
 - **Each part's coverage report says which part of how many it is** (`part.txt`), and `Scripts/unexecuted-lines.py` sums the parts and refuses a part without the other.
 - **Each part saves its own cache of passed checks and uploads none to share.** The reporting job joins what the two passed and uploads it under macOS's name (`upload-passed-compile-checks`'s `operating-system`), as "Save Passed Compile Checks of Verify" does for Verify's groups.
-- **A new part needs all four**: the choice's list, the selection step, the coverage step's directories and the reporting job's join.
+- **A new cut needs three**: the choice's list, the selection step, and the condition of "Save Build Directory", which names each cut's second part.
 
 ## What the value comparison's programs printed
 
