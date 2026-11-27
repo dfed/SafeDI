@@ -165,9 +165,9 @@ extension NodeRecords {
 				arguments.append(PlaceRead(argumentLabel: argument.label, label: dependency.property.label, property: dependency.property, source: source))
 			}
 		}
-		// An `Instantiator` declares the builder function it holds, as does a call that binds a builder again; any other
-		// constant call is made where it is bound.
-		let hasFunction = world.kind(of: declaration) == .instantiator || !receivesBoundAgain.isEmpty
+		// An `Instantiator` or an `ErasedInstantiator` declares the builder function it holds, as does a call that binds a
+		// builder again; any other constant call is made where it is bound.
+		let hasFunction = world.kind(of: declaration) == .instantiator || world.kind(of: declaration) == .erasedInstantiator || !receivesBoundAgain.isEmpty
 		let argumentValues: [Int: ValuePath]
 		let alternatives: [ConstructionAlternative]
 		let passedArguments: [PassedArgument]
@@ -207,7 +207,9 @@ extension NodeRecords {
 		}
 		var record = BuiltPlaceRecord(
 			property: property,
-			isErased: false,
+			// Production's erasure, which joins the call's claim (`joiningProductionMarks(_:to:of:in:)`), wraps the call in
+			// the property's type where the node is erased.
+			isErased: world.isErased(declaration),
 			concreteType: calledType,
 			isExtension: false,
 			target: .publicMockCall(calledType, guard: CallGuard(calledType: calledType, guardTypeName: call.guardTypeName, comment: call.comment)),
@@ -224,6 +226,7 @@ extension NodeRecords {
 			node: PlanNode(),
 		)
 		record.sharingFields = PlaceSharingFields(passedArguments: passedArguments, constructionValue: nil, alternatives: alternatives, argumentValues: argumentValues)
-		return record
+		// An erased call's function returns the property's type, as an erased construction's does.
+		return isMockErased(declaration, in: world) ? mockErasedDecoration(of: record) : record
 	}
 }

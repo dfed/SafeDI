@@ -19,14 +19,8 @@
 // SOFTWARE.
 
 extension NodeRecords {
-	/// The claim of `declaration` in a mock root's world where it is a rename: of kind `mockRename`, as production's
-	/// `renameClaim(of:in:)` claims it, since a mock reads no override of a rename. `nil` for any other node.
-	static func mockRenameClaim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
-		renameClaim(of: declaration, in: world).map { NodeRecordClaim(kind: .mockRename, discharges: $0.discharges, refusals: $0.refusals) }
-	}
-
 	/// What a node of a mock root's world whose type declares a rename discharges of stage 1's refusals, and what it
-	/// holds instead: the rename is a node of its own (`mockRenameClaim(of:in:)`), so the node discharges `renameOrHole`,
+	/// holds instead: the rename is a node of its own, production's (`renameClaim(of:in:)`), so the node discharges `renameOrHole`,
 	/// which it still holds where its scope declares an instantiated dependency it does not build, as production's
 	/// `receivesOnlyIfAvailableClaim(of:in:)` holds it. Empty for a node that declares no rename.
 	static func mockRenameDischargesAndRefusals(of declaration: DeclarationID, in world: some NodeRecordSources) -> (discharges: Set<NodeRecordRefusal>, refusals: [NodeRecordRefusal]) {
@@ -47,17 +41,5 @@ extension NodeRecords {
 		}
 		guard declaresRename else { return ([], []) }
 		return ([.renameOrHole], scope.instantiatedDependenciesNotGenerated.isEmpty ? [] : [.renameOrHole])
-	}
-
-	/// The record of `declaration`'s place in `variant`, a rename of a mock root's world: production's record, but that an
-	/// erased rename only if available maps over its fulfilling value wherever it is bound, as the mock's walk binds it,
-	/// whether or not the declaration it reads is optional. A rename reads no override.
-	static func mockRenameRecord(
-		of declaration: DeclarationID,
-		variant: VariantID,
-		in world: some NodeRecordSources,
-		answers: OnlyIfAvailableAnswers,
-	) throws(NodeRecordRefusal) -> AliasPlaceRecord {
-		try renameRecord(of: declaration, variant: variant, in: world, answers: answers, mapsWhereBoundOnlyIfAvailable: true)
 	}
 }
