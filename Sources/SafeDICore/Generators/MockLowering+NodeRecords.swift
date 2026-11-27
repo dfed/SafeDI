@@ -34,9 +34,9 @@ extension ScopeGenerator {
 	/// The function awaits nothing and is kept out of the frame of the mock's walk, which every root's lowering holds.
 	/// Anything the records throw refuses the world (`NodeRecords.refusingWhatRecordsThrow(_:)`), whose walk reports it.
 	@inline(never)
-	static func nodeRecordsMockStatements(of instantiable: Instantiable, worldRoot: ConstructionScope, bindsOnlyNodes: Bool, sendableConfigurationTypeNames: Set<String>, rootNames: MockRootNames, outerDeclarations: [Property]) -> String? {
+	static func nodeRecordsMockStatements(of instantiable: Instantiable, worldRoot: ConstructionScope, mockRootHoles: SeamHoles?, bindsOnlyNodes: Bool, sendableConfigurationTypeNames: Set<String>, rootNames: MockRootNames, outerDeclarations: [Property]) -> String? {
 		let world = TypeFactsGraph(root: worldRoot, forMockGeneration: true, mockRootNames: rootNames)
-		LevelFunctionRecordsObservation.observe(root: instantiable.concreteInstantiable.asSource, world: world)
+		LevelFunctionRecordsObservation.observe(root: instantiable.concreteInstantiable.asSource, world: world, mockRootHoles: mockRootHoles)
 		func report(refusal: NodeRecordRefusal?, everyRefusal: [NodeRecordRefusal], isLaidOut: Bool, recordCount: Int) {
 			var report = NodeRecordsReport(
 				root: instantiable.concreteInstantiable.asSource,

@@ -71,6 +71,9 @@ struct FillFacts: Sendable {
 	/// root's call that holds no call of its own (`NodeRecordRefusal.fillHoldsCall`), since only a seam's own tree holds its
 	/// hole sites.
 	let readsInnerScopes: Bool
+	/// The structs of levels the fill takes on a carried route (`FillCallerReads.innerScopeParameters`), the last of
+	/// `parametersTaken`; empty where it reads none.
+	var innerScopeParameters: [SeamSignature.Hole.Field] = []
 
 	/// The facts of a call's fills, or why node records leave them to the tree.
 	enum OfCall {
@@ -138,17 +141,20 @@ struct FillFacts: Sendable {
 
 	/// The facts of each fill of `call` that generates code, in the order of the call's fill arguments, or why node records
 	/// leave the call's fills to the tree.
-	static func of(call: DeclarationID, in world: TypeFactsGraph) -> OfCall {
+	/// - Parameter levelsOfCallingTree: The call's path from the root of the tree whose holes its fills read the levels of,
+	///   and those holes (`FillInnerScopes.levelsOfCallingTree`): a public mock's tree built with its builders. `nil` where
+	///   the fills read no level, which no fill of a root's accepted call does.
+	static func of(call: DeclarationID, in world: TypeFactsGraph, levelsOfCallingTree: (callPath: [Property], seamHoles: SeamHoles)? = nil) -> OfCall {
 		let scope = world.scope(of: call)
 		var log = ConstructionLog(recording: false)
 		let callFills = ScopeGeneratorUnderConstruction.callFills(
 			of: scope,
 			holeArguments: scope.holeArguments,
-			callPath: [],
+			callPath: levelsOfCallingTree?.callPath ?? [],
 			enclosingFills: [:],
 			enclosingFillNames: .init([]),
 			enclosingCarriedInnerScopes: [:],
-			seamHoles: SeamHoles(),
+			seamHoles: levelsOfCallingTree?.seamHoles ?? SeamHoles(),
 			childNearestDeclarations: NearestDeclarations(),
 			fillLabelsReadOnlyAsPlaceField: { _ in [] },
 			fillSendableWrapperReads: { _ in [:] },
@@ -165,14 +171,42 @@ struct FillFacts: Sendable {
 			// A public mock's root binds a value again in the forms its tree reads, so a level can hold a label in a form the
 			// fill's tree does not read, which the fill then reads from the caller: the forms it reads decide what it binds.
 			let formsRead = scope.publicMockCall == nil ? nil : scope.fillReceivedProperties[fill.hole.site] ?? []
-			allFacts.append(facts(of: fill, node: fillNode, readingForms: formsRead, in: world, log: &log))
+			allFacts.append(facts(of: fill, node: fillNode, readingForms: formsRead, in: world, readsInnerScopes: levelsOfCallingTree != nil && readsInnerScopes(fillNode, in: world), log: &log))
 		}
 		return .facts(allFacts)
 	}
 
-	/// The facts of `fill`, whose node is `node`, whose tree reads `formsRead` where they are known: a field of a label the
-	/// tree reads is received only where the tree reads its form. `nil` reads every field of a label the tree reads.
-	private static func facts(of fill: ScopeGeneratorUnderConstruction.Fill, node: DeclarationID, readingForms formsRead: Set<Property>?, in world: TypeFactsGraph, log: inout ConstructionLog) -> FillFacts {
+	/// Whether the fill whose node is `node` is handed the structs of its own level (`ScopeGenerator.readsFillInnerScopes`):
+	/// its tree holds a site of the calling tree's holes, or a call that passes a place up, and it builds its type in no
+	/// `@Sendable` builder function of the type's own.
+	private static func readsInnerScopes(_ node: DeclarationID, in world: TypeFactsGraph) -> Bool {
+		guard world.property(of: node)?.propertyType.isSendable != true else { return false }
+		var pending = [node]
+		var visited: Set = [node]
+		while let declaration = pending.popLast() {
+			if world.kind(of: declaration) == .hole {
+				return true
+			}
+			let passesUpAPlace = world.scope(of: declaration).holeArguments.contains { argument in
+				switch argument {
+				case .passUp: true
+				case .fill: false
+				}
+			}
+			if declaration != node, passesUpAPlace {
+				return true
+			}
+			for child in world.edges(from: declaration) where visited.insert(child).inserted {
+				pending.append(child)
+			}
+		}
+		return false
+	}
+
+	/// The facts of `fill`, whose node is `node`, which is handed the structs of its own level where `readsInnerScopes`, and
+	/// whose tree reads `formsRead` where they are known: a field of a label the tree reads is received only where the tree
+	/// reads its form. `nil` reads every field of a label the tree reads.
+	private static func facts(of fill: ScopeGeneratorUnderConstruction.Fill, node: DeclarationID, readingForms formsRead: Set<Property>?, in world: TypeFactsGraph, readsInnerScopes: Bool, log: inout ConstructionLog) -> FillFacts {
 		// What the fill's tree reads from above it, by label: required where a read asks for the label's value.
 		var readLabels = Set<String>()
 		var requiredLabels = Set<String>()
@@ -207,7 +241,7 @@ struct FillFacts: Sendable {
 		let treeReads = FillTreeReadFacts(
 			received: received,
 			required: received.filter { requiredLabels.contains($0.label) },
-			readsInnerScopes: false,
+			readsInnerScopes: readsInnerScopes,
 			fieldsCarriedBySites: [],
 		)
 		let callerReads = ScopeGeneratorUnderConstruction.callerReads(of: boundFill, child: treeReads, labelsHandedToReenteredFunctions: [], log: &log)
@@ -226,7 +260,7 @@ struct FillFacts: Sendable {
 			|| !filledScope.propertiesToGenerate.isEmpty
 			|| filledScope.seamCall != nil
 			|| filledScope.publicMockCall != nil
-		return FillFacts(
+		var facts = FillFacts(
 			key: fill.key,
 			declaration: node,
 			functionNameStem: fill.functionNameStem,
@@ -247,6 +281,8 @@ struct FillFacts: Sendable {
 			returnsBoundValue: filledProperty?.propertyType.isConstant ?? false,
 			readsInnerScopes: treeReads.readsInnerScopes,
 		)
+		facts.innerScopeParameters = callerReads.innerScopeParameters
+		return facts
 	}
 }
 

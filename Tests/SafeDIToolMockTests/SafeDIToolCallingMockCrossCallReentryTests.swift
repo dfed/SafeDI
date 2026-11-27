@@ -2114,6 +2114,28 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		try await expectCompilesAndBuildsInlineValues(of: graph, output: output, modules: modules, probes: [Self.pageBinderBuildsProbe])
 	}
 
+	@Test(arguments: [("LazilyInstantiated<Token>", false), ("Token", true)])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_readsWhetherTheCallFillsFromTheGates_whenFillReadingCallersValueReachesCalledTypeAgain(token: String, callFills: Bool) async throws {
+		// The graph below: the fill of `Page`’s place reads the caller’s `token` and reaches `Page` again through `Book`. As a
+		// wrapper, the gates pass the place up whole before any fill is built
+		// (`DependencyTreeGenerator.holeTypesTheFillGatesPassUp(of:in:lazilyHeldValues:)`), and the call’s node in the mock
+		// world holds no fill, so node records claim it as a call that fills none; by value, the call fills the place, which
+		// node records leave to the fills’ records.
+		let graph = Self.graph(caller: .internal, builder: "Instantiator", deferredPlace: false, fillReadsCallersToken: true, token: token, typeBetweenDeclaresToken: true)
+		let (stream, continuation) = AsyncStream.makeStream(of: NodeRecordsReport.self)
+		_ = try await NodeRecordsObservation.$observer.withValue({ continuation.yield($0) }) {
+			try await executeSafeDIToolMultiModuleTest(modules: graph.modules(.mock), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+		}
+		continuation.finish()
+		var refusalsOfMockRoots = [String]()
+		for await report in stream where report.isMockRoot {
+			refusalsOfMockRoots += report.everyRefusal
+		}
+
+		#expect(refusalsOfMockRoots.contains("publicMockCallFills") == callFills, "\(refusalsOfMockRoots)")
+	}
+
 	@Test(arguments: GraphFuzzerCallingMockCell.Caller.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_passesPlaceUpWhole_whenFillReadingCallersLazyValueReachesCalledTypeAgainThroughAnotherPublicMock(caller: GraphFuzzerCallingMockCell.Caller) async throws {

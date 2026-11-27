@@ -89,7 +89,7 @@ extension NodeRecords {
 		// A wrapper the actor builds calls its function in a closure, which would capture the configuration the actor's
 		// function is handed, so its override is read into a local before it (`isWrapperSentToActor(_:in:)`).
 		// The root's own default-valued parameters are parameters of `mock()`, which the root's lowering judges
-		// (`ScopeGenerator.nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:sendableConfigurationTypeNames:rootNames:outerDeclarations:)`).
+		// (`ScopeGenerator.nodeRecordsMockStatements(of:worldRoot:mockRootHoles:bindsOnlyNodes:sendableConfigurationTypeNames:rootNames:outerDeclarations:)`).
 		if declaration != 0, mockConstructionFunction(of: declaration, in: world).map({ passesValueNoRecordMakes($0, given: instantiable.dependencies) }) ?? false {
 			refusals.append(.mockDefaultValuedParameter)
 		}

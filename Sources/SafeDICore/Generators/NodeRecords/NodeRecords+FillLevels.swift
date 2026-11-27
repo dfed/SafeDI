@@ -35,6 +35,12 @@ struct FillInnerScopes: Sendable {
 	/// the structs a call hands its root dispatcher from (`FillDispatchers`); `nil` for a call a root that is no seam makes.
 	fileprivate let callingSeam: (callPath: [Property], seamHoles: SeamHoles)?
 
+	/// The path of the call from the root of the tree whose holes its fills read the levels of, and those holes
+	/// (`callingSeam`), which the facts of the call's fills read (`FillFacts.of(call:in:levelsOfCallingTree:)`).
+	var levelsOfCallingTree: (callPath: [Property], seamHoles: SeamHoles)? {
+		callingSeam
+	}
+
 	struct Fill: Equatable, Sendable {
 		let caseKey: String
 		/// The key of the fill of the case's first place (`ScopeGenerator.fillKey(of:)`), which the dispatchers' cases name.
@@ -55,17 +61,22 @@ struct FillInnerScopes: Sendable {
 		let type: TypeDescription
 	}
 
-	/// The inner scope levels of `call`, a call of another module's public mock in a mock root's world: a mock root is no
-	/// seam, so the call's fills take no struct of its levels, as for a root's seam call (`of(call:in:seamTree:)`).
-	/// - Throws: `NodeRecordRefusal.fill` where the call is inside a fill, which may re-enter an enclosing call's levels.
-	static func ofPublicMockCall(_ call: DeclarationID, in world: some NodeRecordSources) throws(NodeRecordRefusal) -> FillInnerScopes {
-		guard !isInsideFill(call, callers: callers(in: world), in: world) else { throw .fill }
-		var fills = [Fill]()
-		var seenCaseKeys = Set<String>()
-		for case let .fill(hole, _, _) in world.scope(of: call).holeArguments where seenCaseKeys.insert(ScopeGenerator.fillCaseKey(of: hole)).inserted {
-			fills.append(Fill(caseKey: ScopeGenerator.fillCaseKey(of: hole), fillKey: ScopeGenerator.fillKey(of: hole), innerScopeParameters: []))
+	/// The inner scope levels of `call`, a call of another module's public mock in a mock root's world. The struct of each
+	/// level of the mock root's own enums a fill inside the call reads is handed down as a seam's tree hands it
+	/// (`of(call:in:seamTree:)`), where the mock root is a public mock whose tree holds places (`mockRootHoles`); any other
+	/// mock root has no levels, so the call's fills take none, as for a root's seam call.
+	/// - Parameter mockRootHoles: The holes of the mock root, a public mock, by path, made from the builders its tree is
+	///   built with (`ScopeGenerator.mockBuilders`); `nil` where it has none.
+	/// - Throws: `NodeRecordRefusal.fill` where the call is inside a fill, which may re-enter an enclosing call's levels, or is
+	///   reached along several paths from the mock root, each of which may hand its fills other levels.
+	static func ofPublicMockCall(_ call: DeclarationID, in world: some NodeRecordSources, mockRootHoles: SeamHoles?) throws(NodeRecordRefusal) -> FillInnerScopes {
+		let callers = Self.callers(in: world)
+		guard !isInsideFill(call, callers: callers, in: world) else { throw .fill }
+		guard let mockRootHoles else {
+			return Self.levelsTakingNoStruct(of: world.scope(of: call))
 		}
-		return FillInnerScopes(fills: fills, enums: [], callingSeam: nil)
+		guard let callPath = Self.onlyPath(to: call, callers: callers, in: world) else { throw .fill }
+		return Self.levels(of: world.scope(of: call), callPath: callPath, seamHoles: mockRootHoles)
 	}
 
 	/// The inner scope levels of `call`, a node of `world` whose construction fills a builder of the seam it calls.
@@ -75,21 +86,34 @@ struct FillInnerScopes: Sendable {
 	///   paths from the root of a seam's tree, each of which may hand its fills other levels.
 	static func of(call: DeclarationID, in world: some NodeRecordSources, seamTree: DependencyTreeGenerator.RootScopeInfo.SeamTree?) throws(NodeRecordRefusal) -> FillInnerScopes {
 		let scope = world.scope(of: call)
-		// A call inside a fill, which may re-enter an enclosing call's dispatchers, and a call of a public mock, whose caller
-		// declares level functions, are a later step's.
+		// A call inside a fill, which may re-enter an enclosing call's dispatchers, is a later step's, and a call of a public
+		// mock, whose caller declares level functions, is `ofPublicMockCall(_:in:mockRootHoles:)`'s.
 		let callers = Self.callers(in: world)
 		guard scope.publicMockCall == nil, !Self.isInsideFill(call, callers: callers, in: world) else { throw .fill }
-		var fills = [Fill]()
-		var seenCaseKeys = Set<String>()
-		let calledBuilders = scope.seamCall?.calledBuilders
 		guard let seamTree, !seamTree.signature.holes.isEmpty else {
-			for case let .fill(hole, _, _) in scope.holeArguments where seenCaseKeys.insert(ScopeGenerator.fillCaseKey(of: hole)).inserted {
-				fills.append(Fill(caseKey: ScopeGenerator.fillCaseKey(of: hole), fillKey: ScopeGenerator.fillKey(of: hole), innerScopeParameters: []))
-			}
-			return FillInnerScopes(fills: fills, enums: [], callingSeam: nil)
+			return Self.levelsTakingNoStruct(of: scope)
 		}
 		guard let callPath = Self.onlyPath(to: call, callers: callers, in: world) else { throw .fill }
-		let seamHoles = SeamHoles(of: seamTree.seamRoot, seamType: seamTree.seamType)
+		return Self.levels(of: scope, callPath: callPath, seamHoles: SeamHoles(of: seamTree.seamRoot, seamType: seamTree.seamType))
+	}
+
+	/// The levels of the call `scope`, made where the tree of its world's root holds no hole: each fill takes no struct of
+	/// a level, and no enum of the called seam is handed one.
+	private static func levelsTakingNoStruct(of scope: ConstructionScope) -> FillInnerScopes {
+		var fills = [Fill]()
+		var seenCaseKeys = Set<String>()
+		for case let .fill(hole, _, _) in scope.holeArguments where seenCaseKeys.insert(ScopeGenerator.fillCaseKey(of: hole)).inserted {
+			fills.append(Fill(caseKey: ScopeGenerator.fillCaseKey(of: hole), fillKey: ScopeGenerator.fillKey(of: hole), innerScopeParameters: []))
+		}
+		return FillInnerScopes(fills: fills, enums: [], callingSeam: nil)
+	}
+
+	/// The levels of the call `scope`, at `callPath` from the root of a tree whose holes are `seamHoles`: a seam's own tree,
+	/// or a public mock's tree built with its builders.
+	private static func levels(of scope: ConstructionScope, callPath: [Property], seamHoles: SeamHoles) -> FillInnerScopes {
+		var fills = [Fill]()
+		var seenCaseKeys = Set<String>()
+		let calledBuilders = scope.calledBuilders
 		for case let .fill(hole, _, _) in scope.holeArguments where seenCaseKeys.insert(ScopeGenerator.fillCaseKey(of: hole)).inserted {
 			let calledRootKey = calledBuilders?.keyOfFirstBuilderReaching(hole)
 			let innerKey = calledRootKey.flatMap { seamHoles.carriesStruct(at: callPath, innerKey: $0) ? $0 : nil } ?? SeamSignature.ScopeEnum.rootKey(of: hole)
@@ -178,6 +202,10 @@ struct FillDispatchers: Sendable {
 		/// The fills those dispatchers' cases reach, in the order the call declares the dispatchers and their cases.
 		let fillKeys: [String]
 		let carriedStructs: [BuiltClosure.CarriedStructRead]
+		/// The struct the call hands the root dispatcher for each struct of the calling tree's levels it takes, by the name
+		/// the fills take it under, which a public mock's caller passes its root level function
+		/// (`PublicMockLevelFunctions.Root.carriedStructs`).
+		let carriedStructNames: [String: String]
 	}
 
 	/// The dispatchers of `call`, a node of `world` whose construction fills a builder of the seam it calls.
@@ -249,13 +277,16 @@ struct FillDispatchers: Sendable {
 					fillKeys.append(target.key)
 				}
 			}
-			let carriedStructs = (dispatcherByKey[rootDispatcherKey]?.carriedInnerScopes ?? []).compactMap { carriedInnerScope -> BuiltClosure.CarriedStructRead? in
+			var carriedStructs = [BuiltClosure.CarriedStructRead]()
+			var carriedStructNames = [String: String]()
+			for carriedInnerScope in dispatcherByKey[rootDispatcherKey]?.carriedInnerScopes ?? [] {
 				guard let callingSeam = innerScopes.callingSeam,
-				      callingSeam.seamHoles.carriedStruct(at: callingSeam.callPath, innerKey: builder.enumKey, innerScopeName: carriedInnerScope.name) != nil
-				else { return nil }
-				return BuiltClosure.CarriedStructRead(upName: carriedInnerScope.upName, structType: carriedInnerScope.type)
+				      let carriedStruct = callingSeam.seamHoles.carriedStruct(at: callingSeam.callPath, innerKey: builder.enumKey, innerScopeName: carriedInnerScope.name)
+				else { continue }
+				carriedStructs.append(BuiltClosure.CarriedStructRead(upName: carriedInnerScope.upName, structType: carriedInnerScope.type))
+				carriedStructNames[carriedInnerScope.name] = carriedStruct
 			}
-			builtClosures.append(Closure(label: builder.generatedOnlyArgumentLabel, rootDispatcherKey: rootDispatcherKey, dispatcherKeys: dispatcherKeys, fillKeys: fillKeys, carriedStructs: carriedStructs))
+			builtClosures.append(Closure(label: builder.generatedOnlyArgumentLabel, rootDispatcherKey: rootDispatcherKey, dispatcherKeys: dispatcherKeys, fillKeys: fillKeys, carriedStructs: carriedStructs, carriedStructNames: carriedStructNames))
 		}
 		return FillDispatchers(
 			dispatchers: dispatchers.map { DispatcherRecord(dispatcher: $0, parameters: parametersByKey[$0.key, default: []], isSendable: false) },

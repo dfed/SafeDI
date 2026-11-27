@@ -209,13 +209,13 @@ public enum MockLowering {
 extension ScopeGenerator {
 	/// This mock root's code, lowered from its finished generator tree. The walk rethrows what the steps it shares with the
 	/// emitter throw. `worldRoot` is the root of the mock root's world, where a test observes node records
-	/// (`nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:sendableConfigurationTypeNames:rootNames:outerDeclarations:)`).
+	/// (`nodeRecordsMockStatements(of:worldRoot:mockRootHoles:bindsOnlyNodes:sendableConfigurationTypeNames:rootNames:outerDeclarations:)`).
 	func lowerMockRoot(context: MockContext, worldRoot: ConstructionScope? = nil) async throws -> MockLowering.Result {
 		// A mock root's scope is always a root's.
 		guard case let .root(instantiable, _) = scopeData else { return MockLowering.Result(code: "") }
 		if instantiable.generateMock == .public, let publicMockContext = context.publicMockContext {
 			// A public mock's root (`MockLowering+PublicMocks.swift`).
-			return try await lowerPublicMockRoot(of: instantiable, publicMockContext: publicMockContext, context: context)
+			return try await lowerPublicMockRoot(of: instantiable, publicMockContext: publicMockContext, context: context, worldRoot: worldRoot)
 		} else if propertiesToGenerate.isEmpty,
 		          instantiable.dependencies.isEmpty,
 		          (instantiable.mockInitializer ?? instantiable.initializer)?.arguments.contains(where: \.hasDefaultValue) == false
