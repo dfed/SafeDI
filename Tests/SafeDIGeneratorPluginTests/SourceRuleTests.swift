@@ -225,6 +225,29 @@ struct SourceRuleTests {
 		#expect(ErrorReportingSite.problems(ofRegistry: ErrorReportingSite.byErrorType, errorTypes: errorTypes, files: files) == [])
 	}
 
+	// MARK: The place tree
+
+	/// The place tree (`ScopeGenerator`) is being removed: no root's emission should need it. These ceilings fail a
+	/// change that adds a reader of the tree; a change that removes one lowers the ceiling it passes under.
+	@Test
+	func sources_readThePlaceTreeNoMoreThanBefore() throws {
+		let files = try Self.checkedFiles.get().map(\.file).filter { $0.path.hasPrefix("Sources/") || $0.path.hasPrefix("Plugins/") }
+		func occurrences(of text: String, in file: RepositorySwiftFile) -> Int {
+			file.source.components(separatedBy: text).count - 1
+		}
+		let callSites = files.reduce(0) { count, file in
+			count + occurrences(of: "createScopeGenerator(", in: file) - occurrences(of: "func createScopeGenerator(", in: file)
+		}
+		let filesNamingTree = files.filter { $0.source.contains("ScopeGenerator") }.count
+		#expect(callSites <= Self.placeTreeCallSiteCeiling, "\(callSites) calls of `createScopeGenerator`; at most \(Self.placeTreeCallSiteCeiling) may remain")
+		#expect(filesNamingTree <= Self.placeTreeFileCeiling, "\(filesNamingTree) files name `ScopeGenerator`; at most \(Self.placeTreeFileCeiling) may")
+	}
+
+	/// The calls of `createScopeGenerator` under `Sources` and `Plugins`, not counting its declarations.
+	private static let placeTreeCallSiteCeiling = 7
+	/// The files under `Sources` and `Plugins` that name `ScopeGenerator`.
+	private static let placeTreeFileCeiling = 92
+
 	// MARK: Actor state
 
 	@Test
