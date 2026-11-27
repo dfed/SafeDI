@@ -158,11 +158,14 @@ extension NodeRecords {
 				))
 				continue
 			}
-			for (argument, dependency) in try Initializer(arguments: [calledArgument]).createInitializerArguments(given: instantiable.dependencies) {
+			// The leaf declares each argument the called tier takes under the argument's own name, and the walk matches them
+			// by label alone (`MockLowering.Walk.publicMockCallNode`): a type match would miss an argument spelled
+			// `@escaping`, which the leaf's property is not.
+			if let dependency = instantiable.dependencies.first(where: { $0.property.label == calledArgument.innerLabel }) {
 				let source = dependency.source == .received(onlyIfAvailable: true)
 					? try passedOnlyIfAvailable(dependency, by: declaration, variant: variant, in: world)
-					: argument.source
-				arguments.append(PlaceRead(argumentLabel: argument.label, label: dependency.property.label, property: dependency.property, source: source))
+					: ArgumentSource.binding(label: calledArgument.innerLabel)
+				arguments.append(PlaceRead(argumentLabel: calledArgument.label, label: dependency.property.label, property: dependency.property, source: source))
 			}
 		}
 		// An `Instantiator` declares the builder function it holds, as does a call that binds a builder again; any other

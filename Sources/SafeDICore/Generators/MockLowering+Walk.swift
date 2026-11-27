@@ -221,9 +221,11 @@ extension ScopeGenerator {
 			// A builder a call passes up is a parameter of `mock()`, bound again under the name the calls read it by, which the
 			// call's node binds again under its label (`NodeRecords.mockReceivesBoundAgain(in:)`); an adapter of one, a builder
 			// of a seam's own places and a builder of a call's fills are not.
+			// A place of another module's public mock the tree builds inline reads such a builder too, which no record reads.
 			let bindsOnlyPassedUpBuilders = signature.placeOnlyBuilderDeclarations.isEmpty
 				&& walk.filledCallBuilders.builderBindingLines.isEmpty
 				&& signature.passedUpBuilders.allSatisfy(\.adapters.isEmpty)
+				&& walk.filledCallBuilders.holeBuildersByInlinePlace.isEmpty
 			let bindingsBeforeNodes = builderBindingCount + overridesBoundBeforeNodes.count
 			// A parameter or override named apart is a declaration under its name, which the nodes that receive it bind again
 			// under its label (`NodeRecords.mockReceivesBoundAgain(in:)`), and the mocked type's own receive of it is bound

@@ -726,6 +726,293 @@ struct SafeDIToolNodeRecordsPublicMockCallTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_laysOutCallFromNodeRecords_whenCalledMockTakesEscapingClosure() async throws {
+		let (output, reports) = try await mockOfRoot(
+			feed: """
+			import SafeDI
+
+			@Instantiable
+			package final class Analytics: Instantiable {
+			    package init() {}
+			}
+
+			@Instantiable(generateMock: .public)
+			public final class Screen: Instantiable {
+			    package init(analytics: Analytics, onTap: @escaping () -> Void) {
+			        self.analytics = analytics
+			        self.onTap = onTap
+			    }
+
+			    @Instantiated let analytics: Analytics
+			    @Received let onTap: () -> Void
+			}
+			""",
+			app: """
+			@Instantiable(generateMock: true)
+			public final class Root: Instantiable {
+			    public init(screen: Screen) {
+			        self.screen = screen
+			    }
+
+			    @Instantiated let screen: Screen
+			}
+			""",
+		)
+		#expect(output == generatedFileHeader + """
+		#if canImport(Feed)
+		import Feed
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            screen: Screen.SafeDIOverrides = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                screen: screen
+		            )
+		        }
+
+		        var screen: Screen.SafeDIOverrides { __safeDI_storage.screen }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                screen: Screen.SafeDIOverrides
+		            ) {
+		                self.screen = screen
+		            }
+
+		            let screen: Screen.SafeDIOverrides
+		        }
+		    }
+
+		    static func mock(
+		        onTap: @escaping () -> Void,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        _ = Screen.__safeDI_Screen_mock_860690856004ABE7.self // If this line does not compile, compile the code SafeDI generates for module Feed into Feed: under Bazel, add Feed’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        let screen = Screen.__safeDI_mock(onTap: onTap, safeDIOverrides: safeDIOverrides.screen)
+		        return Root(screen: screen)
+		    }
+		}
+		#endif
+		""")
+		#expect(reports.map(\.refusal) == [nil])
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_keepsWalk_whenTreeBuildsPlaceOfPublicMockInlineFromPassedUpBuilder() async throws {
+		let (output, reports) = try await mockOfRoot(
+			feed: """
+			import SafeDI
+
+			public protocol TrackerService: AnyObject {}
+
+			public protocol Navigator: AnyObject {}
+
+			@Instantiable
+			public final class Session: Instantiable, Sendable {
+			    public init() {}
+			}
+
+			@Instantiable
+			public final class Step: Instantiable {
+			    init(trackerService: any TrackerService) {
+			        self.trackerService = trackerService
+			    }
+
+			    @Instantiated public let trackerService: any TrackerService
+			}
+
+			@Instantiable
+			public final class Hub: Instantiable {
+			    init(navigator: any Navigator) {
+			        self.navigator = navigator
+			    }
+
+			    @Instantiated public let navigator: any Navigator
+			}
+
+			@Instantiable(generateMock: .public)
+			public final class Panel: Instantiable {
+			    init(step: Step, hub: Hub) {
+			        self.step = step
+			        self.hub = hub
+			    }
+
+			    @Instantiated public let step: Step
+			    @Instantiated public let hub: Hub
+			}
+
+			@Instantiable(generateMock: .public)
+			public final class Dock: Instantiable {
+			    public init(trackerService: any TrackerService) {
+			        self.trackerService = trackerService
+			    }
+
+			    @Instantiated public let trackerService: any TrackerService
+			}
+			""",
+			app: """
+			@Instantiable(fulfillingAdditionalTypes: [(any TrackerService).self])
+			final class StubTracker: TrackerService, Instantiable {
+			    init(session: Session) {
+			        self.session = session
+			    }
+
+			    @Received let session: Session
+			}
+
+			@Instantiable(fulfillingAdditionalTypes: [(any Navigator).self])
+			final class LiveNavigator: Navigator, Instantiable {
+			    init(panelBuilder: Instantiator<Panel>) {
+			        self.panelBuilder = panelBuilder
+			    }
+
+			    @Instantiated let panelBuilder: Instantiator<Panel>
+			}
+
+			@Instantiable(generateMock: true)
+			public final class Root: Instantiable {
+			    init(session: LazilyInstantiated<Session>, panel: Panel, dock: Dock) {
+			        self.session = session
+			        self.panel = panel
+			        self.dock = dock
+			    }
+
+			    @Instantiated let session: LazilyInstantiated<Session>
+			    @Instantiated let panel: Panel
+			    @Instantiated let dock: Dock
+			}
+			""",
+		)
+		#expect(output == generatedFileHeader + """
+		#if canImport(Feed)
+		import Feed
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            session: (() -> Session)? = nil,
+		            panel: Panel.SafeDIOverrides = .init(),
+		            dock: Dock.SafeDIMockConfiguration = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                session: session,
+		                panel: panel,
+		                dock: dock
+		            )
+		        }
+
+		        var session: (() -> Session)? { __safeDI_storage.session }
+		        var panel: Panel.SafeDIOverrides { __safeDI_storage.panel }
+		        var dock: Dock.SafeDIMockConfiguration { __safeDI_storage.dock }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                session: (() -> Session)?,
+		                panel: Panel.SafeDIOverrides,
+		                dock: Dock.SafeDIMockConfiguration
+		            ) {
+		                self.session = session
+		                self.panel = panel
+		                self.dock = dock
+		            }
+
+		            let session: (() -> Session)?
+		            let panel: Panel.SafeDIOverrides
+		            let dock: Dock.SafeDIMockConfiguration
+		        }
+		    }
+
+		    static func mock(
+		        navigatorBuilder: @escaping () -> any Navigator,
+		        trackerServiceBuilder: @escaping () -> any TrackerService,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        let __safeDI_navigatorBuilder = navigatorBuilder
+		        let __safeDI_trackerServiceBuilder = trackerServiceBuilder
+		        func __safeDI_session() -> Session {
+		            if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session() }
+		        }
+		        let session = LazilyInstantiated<Session>(__safeDI_session)
+		        _ = Panel.__safeDI_Panel_mock_1704C117EB1F879C.self // If this line does not compile, compile the code SafeDI generates for module Feed into Feed: under Bazel, add Feed’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        func __safeDI_panel() -> Panel {
+		            let navigatorBuilder: () -> any Navigator = __safeDI_navigatorBuilder
+		            let trackerServiceBuilder: () -> any TrackerService = __safeDI_trackerServiceBuilder
+		            return Panel.__safeDI_mock(navigatorBuilder: .init(__safeDI_noScope: navigatorBuilder), trackerServiceBuilder: .init(__safeDI_noScope: trackerServiceBuilder), safeDIOverrides: safeDIOverrides.panel)
+		        }
+		        let panel: Panel = __safeDI_panel()
+		        func __safeDI_dock() -> Dock {
+		            let trackerService: any TrackerService = if safeDIOverrides.dock.trackerService == nil { __safeDI_trackerServiceBuilder() } else if let safeDIBuilder = safeDIOverrides.dock.trackerService { safeDIBuilder(session.instance) } else { StubTracker(session: session.instance) }
+		            return if let safeDIBuilder = safeDIOverrides.dock.safeDIBuilder { safeDIBuilder(trackerService) } else { Dock(trackerService: trackerService) }
+		        }
+		        let dock: Dock = __safeDI_dock()
+		        return Root(session: session, panel: panel, dock: dock)
+		    }
+		}
+		#endif
+
+		#if DEBUG
+		extension Dock {
+		    /// Configuration for how this type is constructed within a mock tree.
+		    struct SafeDIMockConfiguration {
+		        init(
+		            trackerService: ((Session) -> any TrackerService)? = nil,
+		            _ safeDIBuilder: ((any TrackerService) -> Dock)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                trackerService: trackerService,
+		                safeDIBuilder: safeDIBuilder
+		            )
+		        }
+
+		        var trackerService: ((Session) -> any TrackerService)? { __safeDI_storage.trackerService }
+		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+		        var safeDIBuilder: ((any TrackerService) -> Dock)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                trackerService: ((Session) -> any TrackerService)?,
+		                safeDIBuilder: ((any TrackerService) -> Dock)?
+		            ) {
+		                self.trackerService = trackerService
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let trackerService: ((Session) -> any TrackerService)?
+		            let safeDIBuilder: ((any TrackerService) -> Dock)?
+		        }
+		    }
+		}
+		#endif
+
+		""")
+		#expect(reports.map(\.refusal) == ["mockRootBindsOtherThanNodes"])
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [false])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_refusesCall_whenCallFillsBuilder() async throws {
 		let (_, reports) = try await mockOfRoot(
 			feed: Self.screen(holdsService: true),
