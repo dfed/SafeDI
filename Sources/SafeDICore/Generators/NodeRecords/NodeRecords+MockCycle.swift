@@ -202,7 +202,7 @@ extension NodeRecords {
 	///   empty configuration such a call hands holds one value of the parameter's default, which every node built of it
 	///   and of the place that keeps it would share, where the walk leaves each construction beneath such an edge to its
 	///   initializer's own default, evaluated again each time.
-	static func checkMockCycles(in world: some NodeRecordSources, slots: MockEnteredSlots) throws(NodeRecordRefusal) {
+	static func checkMockCycles(in world: some NodeRecordSources, slots _: MockEnteredSlots) throws(NodeRecordRefusal) {
 		var builtOfEmptyConfiguration = Set<DeclarationID>()
 		var pending = (1..<Int32(world.declarationCount)).filter { declaration in
 			world.parents(of: declaration).contains { mockConfigurationLeavesOut(declaration, builtBy: $0.parent, in: world) }
