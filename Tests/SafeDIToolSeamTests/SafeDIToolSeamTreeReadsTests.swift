@@ -61,7 +61,7 @@ struct SafeDIToolSeamTreeReadsTests: ~Copyable {
 		var comparisons = [SeamTreeReadsComparison]()
 		try await withKnownIssue {
 			comparisons = try await SeamTreeReadsObservation.$perturbsFactsField.withValue(field) {
-				try await self.observedComparisons(under: integration)
+				try await observedComparisons(under: integration)
 			}
 		}
 		let tree = switch field {
