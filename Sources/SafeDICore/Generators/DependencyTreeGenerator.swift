@@ -424,11 +424,19 @@ public actor DependencyTreeGenerator {
 				for rootInfo in rootScopeGenerators {
 					taskGroup.addTask {
 						let code = try await rootInfo.scopeGenerator.generatePlan()
-						return await PlannedRoot(
+						// The imports are the root's union fact, read from its declarations, not from its generator tree.
+						let fulfillers = TypeFactsImports(root: rootInfo.rootScope).fulfillers
+						if let observer = TypeFactsImportsObservation.comparesWalk {
+							let walkedFulfillers = await GenerationWork.$observer.withValue(nil) {
+								await rootInfo.scopeGenerator.fulfillersOfTree(buildingMock: false)
+							}
+							observer(TypeFactsImportsComparison(root: rootInfo.typeDescription.asSource, foldedFulfillers: fulfillers, walkedFulfillers: walkedFulfillers))
+						}
+						return PlannedRoot(
 							typeDescription: rootInfo.typeDescription,
 							sourceFilePath: rootInfo.sourceFilePath,
 							code: code,
-							fulfillers: rootInfo.scopeGenerator.fulfillersOfTree(buildingMock: false),
+							fulfillers: fulfillers,
 						)
 					}
 				}
@@ -558,6 +566,8 @@ public actor DependencyTreeGenerator {
 		let typeDescription: TypeDescription
 		let instantiable: Instantiable
 		let sourceFilePath: String?
+		/// The root's scope, from which its tree is built, whose declarations the imports read (`TypeFactsImports`).
+		let rootScope: ConstructionScope
 		let scopeGenerator: ScopeGenerator
 	}
 
@@ -701,6 +711,7 @@ public actor DependencyTreeGenerator {
 						typeDescription: typeDescription,
 						instantiable: scope.instantiable,
 						sourceFilePath: typeDescriptionToFulfillingInstantiableMap[typeDescription]?.sourceFilePath,
+						rootScope: ConstructionScope(table: table, record: record),
 						scopeGenerator: record.createScopeGenerator(
 							in: table,
 							lazilyInstantiatedInstanceProperties: [],

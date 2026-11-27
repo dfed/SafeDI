@@ -4108,7 +4108,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// The types the tree rooted at this scope builds that its declarations do not name: through a `fulfilledByType:`
 	/// string or a `fulfillingAdditionalTypes:` entry, or as what a mock promotes for such a property, and, in a mock, by
 	/// calling a hand-written mock another module merges in. The code generated for the tree names each, while no
-	/// declaration of the property does, so no file SafeDI read need import its module.
+	/// declaration of the property does, so no file SafeDI read need import its module. A root's file takes its imports
+	/// from its world's declarations instead (`TypeFactsImports`), which the tests compare with this walk of its tree.
 	/// - Parameter buildingMock: Whether the tree is a mock's, which builds a type with its hand-written mock.
 	func fulfillersOfTree(buildingMock: Bool) async -> Set<FulfillerImports.Fulfiller> {
 		var fulfillers = Set<FulfillerImports.Fulfiller>()

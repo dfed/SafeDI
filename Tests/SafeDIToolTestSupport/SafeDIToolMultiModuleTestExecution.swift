@@ -605,7 +605,10 @@ func executeSafeDIToolMultiModuleTest(
 								try await ConstructionInternerObservation.$missObserver.withValue(ConstructionInternerClosure.recordingMissesNotExcluded(handingOn: ConstructionInternerObservation.missObserver)) {
 									try await ConstructionInternerOrder.applying(.fromEnvironment) {
 										try await ReusedSeamTreeChecks.comparing(handingOn: SeamTreeReuseObservation.comparesBuiltTrees) {
-											try await tool.generate()
+											// Every root’s imports from its union fact must equal the walk of its generator tree’s (`TypeFactsImportsChecks`).
+											try await TypeFactsImportsChecks.comparing(handingOn: TypeFactsImportsObservation.comparesWalk) {
+												try await tool.generate()
+											}
 										}
 									}
 								}

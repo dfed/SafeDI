@@ -99,20 +99,8 @@ struct TypeFactsGraph: Sendable {
 	/// - Parameter forMockGeneration: Whether the world is a mock root's, whose receives only if available read what the
 	///   mock root binds or pins (`ReadChannel.mock`).
 	init(root: ConstructionScope, forMockGeneration: Bool) {
-		// Building the graph is an edge: it reads each record's properties and labels once per node, and interns them. The
-		// walk asks for a node's edges once, when it first reaches the node, so in node order.
-		var instantiatedEdgeCounts = [Int32]()
-		let graph = OrderedGraph(root: TypeFactsDeclaration(scope: root, property: nil, propertyID: -1, erasedToConcreteExistential: false, isFill: false)) { declaration in
-			var targets = [TypeFactsDeclaration]()
-			for case let .instantiated(property, child, erasedToConcreteExistential, propertyID) in declaration.scope.propertiesToGenerate {
-				targets.append(TypeFactsDeclaration(scope: child, property: property, propertyID: propertyID.raw, erasedToConcreteExistential: erasedToConcreteExistential, isFill: false))
-			}
-			instantiatedEdgeCounts.append(Int32(targets.count))
-			for case let .fill(hole, child, fillContext) in declaration.scope.holeArguments {
-				targets.append(TypeFactsDeclaration(scope: child, property: hole.property, propertyID: fillContext.propertyID.raw, erasedToConcreteExistential: false, isFill: true))
-			}
-			return targets
-		}
+		// Building the graph is an edge: it reads each record's properties and labels once per node, and interns them.
+		let (graph, instantiatedEdgeCounts) = Self.declarations(reachedFrom: root)
 		let constructions = graph.nodes.map(\.construction)
 		var labels = LabelInterner()
 		var readInterner = ReadInterner()
@@ -190,6 +178,25 @@ struct TypeFactsGraph: Sendable {
 			cycleIDByKey[key] = id
 			return id
 		}
+	}
+
+	/// The declarations a world rooted at `root` reaches, with their edges: the properties each instantiates, then the
+	/// fills it passes, each in the order its scope builds them; and how many of each node's edges, the first ones, are
+	/// properties it instantiates. The walk asks for a node's edges once, when it first reaches the node, so in node order.
+	static func declarations(reachedFrom root: ConstructionScope) -> (graph: OrderedGraph<TypeFactsDeclaration>, instantiatedEdgeCounts: [Int32]) {
+		var instantiatedEdgeCounts = [Int32]()
+		let graph = OrderedGraph(root: TypeFactsDeclaration(scope: root, property: nil, propertyID: -1, erasedToConcreteExistential: false, isFill: false)) { declaration in
+			var targets = [TypeFactsDeclaration]()
+			for case let .instantiated(property, child, erasedToConcreteExistential, propertyID) in declaration.scope.propertiesToGenerate {
+				targets.append(TypeFactsDeclaration(scope: child, property: property, propertyID: propertyID.raw, erasedToConcreteExistential: erasedToConcreteExistential, isFill: false))
+			}
+			instantiatedEdgeCounts.append(Int32(targets.count))
+			for case let .fill(hole, child, fillContext) in declaration.scope.holeArguments {
+				targets.append(TypeFactsDeclaration(scope: child, property: hole.property, propertyID: fillContext.propertyID.raw, erasedToConcreteExistential: false, isFill: true))
+			}
+			return targets
+		}
+		return (graph, instantiatedEdgeCounts)
 	}
 
 	/// Each node's cycle identity (A4), interned from its cycle key in first-reach order.
