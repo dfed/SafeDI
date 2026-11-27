@@ -79,8 +79,9 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 			],
 			moduleMembershipArguments: ["--module-name", "Feature"],
 		)
+		// The root's world calls the seam, which node records refuse as a construction; the seam's own world they accept.
 		#expect(forcers == """
-		Root\tseam world
+		Root\tseam world, kind construction
 		Screen\tseam world
 		roots that built a tree: 2 of 2
 
