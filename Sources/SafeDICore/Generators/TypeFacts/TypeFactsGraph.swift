@@ -832,6 +832,7 @@ struct TypeFactsGraph: Sendable {
 	var isMockWorld: Bool {
 		forMockGeneration
 	}
+
 	/// How each node's type comes to exist.
 	let constructions: [TypeFactsConstruction]
 	/// The world's ID of the property each node is built as, or -1 for the root.
