@@ -274,6 +274,19 @@ protocol TypeFactsWorld {
 	func boundBefore(of variant: VariantID) -> ArraySlice<Int32>
 	/// The facts producers still owe the declaration's answers (`TypeFactsOwedFacts`).
 	func owedFacts(of declaration: DeclarationID) -> TypeFactsOwedFacts
+	/// Whether the declaration an answer binds provides a form that a receive of the read's label in the declaration's
+	/// subtree reads: where it does not, a call passes the read `nil` (a receive only if available) though the answer is
+	/// bound. A declaration being built provides its own label's reads. `forms(of:)` and `provides(_:_:)` answer the same by the run's property IDs once the world holds them; this
+	/// answers by the world's own, which no `PropertyID` may carry.
+	func providesFormRead(by answer: AnswerID, _ read: ReadID, beneath declaration: DeclarationID) -> Bool
+	/// The labels the declaration's subtree reads from above it (`labels(of:)`) in the order a walk of its body first
+	/// receives each, the order of its builder function's parameters (`ScopeGenerator.inOrderTheBodyFirstReceives`): its
+	/// own type's receives, then each child's subtree depth first, each type's receives before its children's, all in
+	/// declaration order, each declaration visited once; a label first met at a call that closes a cycle comes there, in
+	/// the order the closed-on declaration reads it. The declaration's own label is none. It depends on where labels are
+	/// received, never on their spelling.
+	/// Walked when asked, never while the world is built.
+	func parameterOrder(of declaration: DeclarationID) -> [WorldLabelID]
 }
 
 extension TypeFactsGraph: TypeFactsWorld {
@@ -425,6 +438,71 @@ extension TypeFactsGraph: TypeFactsWorld {
 
 	func boundBefore(of variant: VariantID) -> ArraySlice<Int32> {
 		outcomes.boundBefore(of: variant)
+	}
+
+	func providesFormRead(by answer: AnswerID, _ read: ReadID, beneath declaration: DeclarationID) -> Bool {
+		guard answer >= 0 else { return false }
+		// A declaration being built is the one its own label's reads beneath it name, around the cycle it closes.
+		guard !answerIsBeingBuilt[Int(answer)] else { return true }
+		let declared = answerProperties[Int(answer)]
+		let label = readTable[Int(read)].label
+		return receives.received.columns(inRow: Int(declaration)).contains { received in
+			propertyFacts.labels[Int(received)] == label && propertyFacts.provides(declared, aFormReadBy: received)
+		}
+	}
+
+	func parameterOrder(of declaration: DeclarationID) -> [WorldLabelID] {
+		// The declaration's own label is no parameter: every call is made where a declaration of it is being built.
+		let ownLabel = graph.nodes[Int(declaration)].property.map(\.label)
+		var unmet = Set(labels(of: declaration).filter { labelTexts[Int($0)] != ownLabel })
+		var order = [WorldLabelID]()
+		func meet(_ label: WorldLabelID) {
+			if unmet.remove(label) != nil {
+				order.append(label)
+			}
+		}
+		var labelIDs = [String: WorldLabelID]()
+		for (index, text) in labelTexts.enumerated() where labelIDs[text] == nil {
+			labelIDs[text] = WorldLabelID(index)
+		}
+		var visited = Set<Int>()
+		var pending = [Int(declaration)]
+		while !unmet.isEmpty, let node = pending.popLast() {
+			guard visited.insert(node).inserted else { continue }
+			let scope = graph.nodes[node].scope
+			if graph.nodes[node].key.leaf == .none {
+				var declaredLabels = Set<String>()
+				for dependency in scope.instantiable.dependencies {
+					switch dependency.source {
+					case .instantiated, .forwarded:
+						declaredLabels.insert(dependency.property.label)
+					case .received, .aliased:
+						break
+					}
+				}
+				for dependency in scope.instantiable.dependencies {
+					switch dependency.source {
+					case .received:
+						labelIDs[dependency.property.label].map(meet)
+					case let .aliased(fulfillingProperty, _, _):
+						// An alias of a property its own type declares reads that declaration: it receives nothing.
+						if !declaredLabels.contains(fulfillingProperty.label) {
+							labelIDs[fulfillingProperty.label].map(meet)
+						}
+					case .instantiated, .forwarded:
+						break
+					}
+				}
+			}
+			let targets = graph.edges(from: node)
+			let facts = edgeFacts(from: Int32(node))
+			for (target, edge) in zip(targets, facts) where edge.isCallEdge && visited.contains(Int(target)) {
+				// A call that closes a cycle receives the closed-on declaration's parameters where its body does.
+				labels(of: target).forEach(meet)
+			}
+			pending.append(contentsOf: targets.reversed().map(Int.init))
+		}
+		return order
 	}
 
 	func owedFacts(of declaration: DeclarationID) -> TypeFactsOwedFacts {
