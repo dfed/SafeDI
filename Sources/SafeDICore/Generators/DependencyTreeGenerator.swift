@@ -640,6 +640,7 @@ public actor DependencyTreeGenerator {
 			let seamRoot: ScopeGenerator.SeamRoot
 			let seamType: TypeDescription
 		}
+
 		/// What made this run build the root's tree (`TreeForcer`); empty where it built none.
 		var treeForcers: [TreeForcer] = [.seamWorld]
 
