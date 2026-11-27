@@ -80,11 +80,24 @@ public struct GenerationWork: Sendable {
 		/// once per class and reads each member once; asked for every member, it read the members of a class of n members
 		/// n² times.
 		case checkingReadsAtEveryMember
-		/// Collecting the types a tree builds, for the imports of its file (`ScopeGenerator.fulfillersOfTree(buildingMock:)`)
-		/// and for the public mocks a mock tree reaches (`concreteTypesOfTree()`): each generator the walk visits. A walk
-		/// visits a generator once, so the generators count, not the places that share them; entered at every place, a
-		/// tree of n layers of screens that each build every screen of the next layer was visited once per path.
+		/// Collecting the types a tree builds: for the imports of a root's file, each declaration its world reaches
+		/// (`TypeFactsImports`); for the imports of a mock's file (`ScopeGenerator.fulfillersOfTree(buildingMock:)`) and the
+		/// public mocks a mock tree reaches (`concreteTypesOfTree()`), each generator the walk visits. A declaration stands
+		/// for every place of it, and a walk visits a generator once, so neither counts the places that share them; entered
+		/// at every place, a tree of n layers of screens that each build every screen of the next layer was visited once per
+		/// path.
 		case collectingTypesOfATree
+		/// Finding the value each receive in a root's tree is handed (`TypeFactsReceivedValueSupplies`), for `query graph`:
+		/// each edge into a node, in each pass over its component, for each label a receive reads, and each declaration a
+		/// receive can read. A node stands for every place of its declaration, so a tree of n layers of screens that each
+		/// open screens of the next layer counts its edges, not its paths, which the walk it replaced entered each of.
+		case findingReceivedValueSupplies
+		/// Collecting what the scopes of a lazy cycle in a seam's tree declare between the builder function the cycle closes
+		/// on and the scopes that call it again (`DependencyTreeGenerator.declarationsBetween(closedOnScope:closedOnDeclaration:)`):
+		/// each generator a walk reads. A walk reads a generator once, so the generators count, not the paths through
+		/// them; walked along every path, layers of screens that each build every screen of the next layer were read
+		/// once per path.
+		case collectingDeclarationsOfACycle
 		/// Finding, for a child a scope on a site's path builds after the property that leads to the site, the first carrier
 		/// among its siblings that it requires (`DependencyTreeGenerator.fields(of:)`): the properties the child
 		/// requires, where they are fewer than the scope's carriers and each is looked up, or else the carriers compared
@@ -98,6 +111,19 @@ public struct GenerationWork: Sendable {
 		/// fill then takes. Scanned for, the fills of a case were compared for every place of it, and the places stood
 		/// for for every fill.
 		case findingFillThatStandsForPlace
+		/// Collecting the names of the builder functions of a seam's tree (`DependencyTreeGenerator.builderFunctionNamesOfProperties(in:includingHoleSites:)`):
+		/// each generator the walk visits. A walk visits a generator once, so the generators count, not the places that
+		/// share them.
+		case collectingBuilderFunctionNames
+		/// Finding a seam's receivers and the reads of its parameters (`DependencyTreeGenerator.receivers(in:of:instantiables:)`):
+		/// each place of the seam's tree the walk reaches, a place it then skips included. A place whose generator the walk
+		/// already visited with the same context, as far as the generator's subtree reads it, is skipped and its children
+		/// are not reached, so the generators and the contexts their parents are visited in count, not the paths to them.
+		case findingSeamReceivers
+		/// Finding the values a seam tier a tree calls omits (`ScopeGenerator.seamTierOmissions(ofTreeRootedAt:isOwnFile:)`):
+		/// each place the walk visits. The walk enters no tree that holds no call of a seam tier that omits a parameter, and
+		/// in a tree that holds one only a place whose subtree holds such a call or a scope that closes a lazy cycle.
+		case findingSeamTierOmissions
 	}
 
 	/// The step that did the work.

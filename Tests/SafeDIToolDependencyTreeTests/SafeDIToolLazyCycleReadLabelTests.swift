@@ -967,6 +967,58 @@ struct SafeDIToolLazyCycleReadLabelTests: ~Copyable {
 		])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsHiddenError_whenFeatureDeclaringLabelWithTypeOfItsOwnOpensAgainFeatureThatReceivesRootsDeclaration() async {
+		// `Entry1` declares `state: State1`, which its own screen receives, and that screen opens `Entry0` again, whose
+		// screen receives `Root`'s `state: RootState`. Each declaration is the closest of a read that accepts it on the
+		// tree's first build; only in the tree of `Entry0` built again is `Entry1`'s the closest declaration of `Screen0`'s
+		// read, since `Entry0` declares no state of its own between them.
+		let fixture = [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let state: RootState", "@Instantiated let entry0Builder: Instantiator<Entry0>"]),
+			seamFixtureType(named: "Entry0", isFinalClass: true, declarations: ["@Instantiated let screen0Builder: Instantiator<Screen0>"]),
+			seamFixtureType(named: "Screen0", isFinalClass: true, declarations: ["@Received let state: RootState", "@Instantiated let entry1Builder: Instantiator<Entry1>"]),
+			seamFixtureType(named: "Entry1", isFinalClass: true, declarations: ["@Instantiated let state: State1", "@Instantiated let screen1Builder: Instantiator<Screen1>"]),
+			seamFixtureType(named: "Screen1", isFinalClass: true, declarations: ["@Received let state: State1", "@Instantiated let entry0Builder: Instantiator<Entry0>"]),
+			seamFixtureType(named: "RootState", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "State1", isFinalClass: true, declarations: []),
+		]
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["Screen0.swift"]):8:5: error: @Received property `state: RootState` is hidden in chain: Root -> Instantiator<Entry0> -> Instantiator<Screen0> -> Instantiator<Entry1> -> Instantiator<Screen1> -> Instantiator<Entry0> -> Screen0. `Entry1` declares `state: State1` with the same label, so the types below `Entry1` receive `state: State1` instead. Give `state: State1` on `Entry1` a different label to fix.
+			\(fixtures["Entry1.swift"]):8:5: note: `state: State1` is declared here
+			"""
+		}) {
+			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsHiddenError_whenReadIsReachedBeneathHidingDeclarationBothThroughScopeThatDeclaresLabelAgainAndThroughOneThatDoesNot() async {
+		// `M` declares `x: Y` between `C` and the cycle-closing scope that builds `C` again. `C` reaches `R`, which receives
+		// `x: X`, through `E`, which declares `x: X` again, and through `Q`, which declares nothing: beneath `Q`, `M`'s is
+		// the closest declaration of `R`'s read.
+		let fixture = [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let x: X", "@Instantiated let cBuilder: Instantiator<C>"]),
+			seamFixtureType(named: "C", isFinalClass: true, declarations: ["@Instantiated let mBuilder: Instantiator<M>", "@Instantiated let eBuilder: Instantiator<E>", "@Instantiated let qBuilder: Instantiator<Q>"]),
+			seamFixtureType(named: "M", isFinalClass: true, declarations: ["@Instantiated let x: Y", "@Instantiated let cBuilder: Instantiator<C>"]),
+			seamFixtureType(named: "E", isFinalClass: true, declarations: ["@Instantiated let x: X", "@Instantiated let rBuilder: Instantiator<R>"]),
+			seamFixtureType(named: "Q", isFinalClass: true, declarations: ["@Instantiated let rBuilder: Instantiator<R>"]),
+			seamFixtureType(named: "R", isFinalClass: true, declarations: ["@Received let x: X"]),
+			seamFixtureType(named: "X", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "Y", isFinalClass: true, declarations: []),
+		]
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["R.swift"]):7:5: error: @Received property `x: X` is hidden in chain: Root -> Instantiator<C> -> Instantiator<M> -> Instantiator<C> -> Instantiator<Q> -> R. `M` declares `x: Y` with the same label, so the types below `M` receive `x: Y` instead. Give `x: Y` on `M` a different label to fix.
+			\(fixtures["M.swift"]):8:5: note: `x: Y` is declared here
+			"""
+		}) {
+			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
