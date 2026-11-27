@@ -568,10 +568,9 @@ struct SafeDIToolNodeRecordsMockRenameTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_keepsTheWalksStatements_whenRenameIsFulfilledByWrapperOfValueMockTakes() async throws {
+	mutating func mock_laysOutTheWalksStatements_whenRenameIsFulfilledByWrapperOfValueMockTakes() async throws {
 		// `mock()` takes `session` by value and builds the `Garage` the root receives, binding a `LazilyInstantiated` around
-		// `session` that the walk passes to each receiver by name. `Garage`'s rename reads that wrapper, which a rename's record cannot name, so the root keeps the
-		// walk's statements.
+		// `session` that the walk passes to each receiver by name. `Garage`'s rename reads that wrapper by its name, as the walk does.
 		let fixture = [
 			"""
 			@Instantiable(generateMock: true)
@@ -606,8 +605,8 @@ struct SafeDIToolNodeRecordsMockRenameTests: ~Copyable {
 			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		}
 
-		#expect(reports.filter(\.isMockRoot).map(\.refusal) == ["mockRootBindsOtherThanNodes"])
-		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [false])
+		#expect(reports.filter(\.isMockRoot).map(\.refusal) == [nil])
+		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [true])
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == Self.mockFile(of: "Root", in: walkOutput, withFixturePathsOf: output, fixtureNames: ["Garage.swift"]))
 	}
 

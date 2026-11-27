@@ -73,8 +73,12 @@ extension NodeRecords {
 		in world: some NodeRecordSources,
 		answers: OnlyIfAvailableAnswers,
 		readsWrappersInstance: Bool,
+		wrapperName: String? = nil,
 	) throws(NodeRecordRefusal) -> AliasPlaceRecord {
-		guard let (property, fulfillingProperty, erasedToConcreteExistential, declarationReference) = rename(of: declaration, in: world) else { throw .renameOrHole }
+		guard let (property, renamedProperty, erasedToConcreteExistential, declarationReference) = rename(of: declaration, in: world) else { throw .renameOrHole }
+		// A rename of a wrapper a mock binds around an instance it takes reads the wrapper by name, as the walk reads it
+		// (`mockNamesReadApart(in:)`).
+		let fulfillingProperty = wrapperName.map { Property(label: $0, typeDescription: renamedProperty.typeDescription) } ?? renamedProperty
 		switch answers.renameBinding(of: variant) {
 		case .boundToNil:
 			// A rename only if available is still declared, so that the type declaring it reads it, `nil` included.
