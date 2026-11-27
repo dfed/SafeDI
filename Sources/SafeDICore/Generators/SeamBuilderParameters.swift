@@ -3151,6 +3151,7 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 			case let .sendableWrapperReadBesidePlainMemo(reader, memo, instanceReader, routes):
 				let memoProperty = Property(label: memo.property.label, typeDescription: memo.memoType ?? memo.property.typeDescription)
 				var seams = [String]()
+				// safedi-source-rule: allow stringScan — `seams` is the `[String]` of seam names one error message lists, built only when the error is reported.
 				for route in routes where !seams.contains("`\(route.seamType.asSource)`’s") {
 					seams.append("`\(route.seamType.asSource)`’s")
 				}
@@ -3260,6 +3261,7 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 					/// renaming of the types moves together.
 					func seamsInPlaceOrder(_ orderedPlaces: [SeamSignature.Hole.UncarriedDeclaration.PresentedPlace]) -> [String] {
 						var seams = [String]()
+						// safedi-source-rule: allow stringScan — `seams` is the `[String]` of seam names one error message lists, built only when the error is reported.
 						for place in orderedPlaces where !seams.contains("`\(place.seamType.asSource)`") {
 							seams.append("`\(place.seamType.asSource)`")
 						}

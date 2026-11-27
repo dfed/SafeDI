@@ -2702,10 +2702,12 @@ jobs:
       # the four took 229 seconds where they had taken 207, on a four-core
       # Linux machine comparing a tool with itself; in this container the
       # step took 7.5 minutes (run 45332820533), on a runner whose other
-      # shapes ran a third slower than in run 45110501373. The seventeen
-      # growth rows add about 2.6 minutes on a four-core Linux machine (the
+      # shapes ran a third slower than in run 45110501373. The first seventeen
+      # growth rows added about 2.6 minutes on a four-core Linux machine (the
       # published 2.4.0 tool, four runs of each row at both depths), so about
-      # 10 minutes in all. The limit is about twice the measurement: a head
+      # 10 minutes in all; there are now twenty-nine, whose time in this
+      # container the next run of this step measures, and this comment then
+      # carries. The limit is about twice the measurement: a head
       # tool slow enough to pass it fails the wall-time limit on its shapes
       # first.
       - name: Compare Generate Time
