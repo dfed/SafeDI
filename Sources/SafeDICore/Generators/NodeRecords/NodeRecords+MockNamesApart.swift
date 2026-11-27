@@ -63,7 +63,7 @@ extension NodeRecords {
 	static func mockReceivesBoundAgain(in world: some NodeRecordSources) -> [[MockReceiveBoundAgain]] {
 		var receivesBoundAgain = [[MockReceiveBoundAgain]](repeating: [], count: world.variantCount)
 		let namesBoundAgain = world.mockRootNames.namesBoundAgain
-		guard !namesBoundAgain.isEmpty else { return receivesBoundAgain }
+		guard !namesBoundAgain.isEmpty || world.mockRootNames.namesUncoveredParameterApart else { return receivesBoundAgain }
 		// The names apart each variant's node sees where it is built, by variant.
 		var visibleNamesApart = [[String: [TypeDescription: String]]?](repeating: nil, count: world.variantCount)
 		visibleNamesApart[0] = namesBoundAgain
@@ -88,13 +88,27 @@ extension NodeRecords {
 				if isWrapper {
 					declarations += instantiable.dependencies.filter { $0.source == .forwarded }.map(\.property)
 				}
-				functionNamesApart = MockLowering.removingRenames(hiddenBy: declarations, from: visibleNamesApart[Int(variant)] ?? [:])
+				// A dependency the node's type instantiates that the mock cannot build is declared by the node too, and the
+				// receives beneath read the parameter `mock()` takes for it, under its name apart, as the walk routes them
+				// (`MockLowering.routeReceives(of:toParametersNamed:in:)`).
+				let uncoveredProperties = world.scope(of: declaration).instantiatedDependenciesNotGenerated.map(\.property)
+				declarations += uncoveredProperties
+				var namesApart = MockLowering.removingRenames(hiddenBy: declarations, from: visibleNamesApart[Int(variant)] ?? [:])
+				for property in uncoveredProperties {
+					guard let name = world.mockRootNames.uncoveredParameterName(of: property), name != property.label else { continue }
+					namesApart[property.label, default: [:]][property.typeDescription] = name
+				}
+				functionNamesApart = namesApart
 				for dependency in instantiable.dependencies where dependency.source.isReceived {
+					guard let names = functionNamesApart[dependency.property.label] else { continue }
 					// The receive's own form, or the non-optional form the root binds for its optional one.
-					guard let names = functionNamesApart[dependency.property.label],
-					      let nameApart = [dependency.property.typeDescription, dependency.property.asUnwrappedProperty.typeDescription].lazy.compactMap({ type in names[type].map { Property(label: $0, typeDescription: type) } }).first
-					else { continue }
-					receivesBoundAgain[Int(variant)].append(MockReceiveBoundAgain(property: dependency.property, nameApart: nameApart))
+					if let nameApart = [dependency.property.typeDescription, dependency.property.asUnwrappedProperty.typeDescription].lazy.compactMap({ type in names[type].map { Property(label: $0, typeDescription: type) } }).first {
+						receivesBoundAgain[Int(variant)].append(MockReceiveBoundAgain(property: dependency.property, nameApart: nameApart))
+					} else if let wrapper = Self.lazyWrapperNamedApart(providingInstanceReadBy: dependency.property, among: names) {
+						// A receive by value of a lazy wrapper's instance binds the wrapper named apart again under its label,
+						// whose instance its construction reads, as the walk binds it.
+						receivesBoundAgain[Int(variant)].append(MockReceiveBoundAgain(property: Property(label: dependency.property.label, typeDescription: wrapper.typeDescription), nameApart: wrapper))
+					}
 				}
 			}
 			// A variant's calls all see the names its reads resolve to: a declaration that hides a name apart from one call
@@ -106,5 +120,17 @@ extension NodeRecords {
 			}
 		}
 		return receivesBoundAgain
+	}
+
+	/// The lazy wrapper among `names`, the names apart of one label by type, whose instance a receive of `property` by value
+	/// reads, a `LazilyInstantiated` before a `SendableLazilyInstantiated`, as the walk looks it up, and `nil` where none is
+	/// named apart.
+	private static func lazyWrapperNamedApart(providingInstanceReadBy property: Property, among names: [TypeDescription: String]) -> Property? {
+		let instanceType = property.typeDescription.unwrapped
+		return [Dependency.lazilyInstantiatedType, Dependency.sendableLazilyInstantiatedType]
+			.lazy
+			.map { TypeDescription.simple(name: $0, generics: [instanceType]) }
+			.compactMap { wrapper in names[wrapper].map { Property(label: $0, typeDescription: wrapper) } }
+			.first
 	}
 }

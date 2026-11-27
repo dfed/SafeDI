@@ -69,15 +69,16 @@ struct NodeBuildOrder: Sendable {
 		}
 		var edgeIndicesByDeclaration = [[Int]](repeating: [], count: declarationCount)
 		for declaration in 0..<Int32(declarationCount) {
-			let children = world.edges(from: declaration).map { child in
-				(property: world.property(of: child), received: receivedByDeclaration[Int(child)] ?? [])
-			}
-			try Self.checkNoBuilderLoop(among: children)
+			// A loop of builders step 0 finds among the children, with optional receives too, is rebound in each member's
+			// function (`NodeRecords+Loops.swift`). One the sibling rule finds where step 0 finds none is refused.
 			let edgeFacts = world.edgeFacts(from: declaration)
-			// A member of a loop of builders, which the facts find with optional receives too, is rebound in each member's
-			// function, which node records do not make yet.
-			guard edgeFacts.allSatisfy({ $0.loop < 0 }) else { throw .builderLoop }
-			// The facts' build position, which the sibling-order fixed point gives each edge.
+			if edgeFacts.allSatisfy({ $0.loop < 0 }) {
+				let children = world.edges(from: declaration).map { child in
+					(property: world.property(of: child), received: receivedByDeclaration[Int(child)] ?? [])
+				}
+				try Self.checkNoBuilderLoop(among: children)
+			}
+			// Step 0's build position, which the sibling-order fixed point gives each edge.
 			edgeIndicesByDeclaration[Int(declaration)] = edgeFacts.enumerated()
 				.sorted { $0.element.buildPosition < $1.element.buildPosition }
 				.map(\.offset)

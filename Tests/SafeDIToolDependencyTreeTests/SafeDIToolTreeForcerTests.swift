@@ -46,7 +46,7 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 	mutating func generate_buildsTreeOnlyForRootNodeRecordsRefuse_whenNothingElseReadsTrees() async throws {
 		let (forcers, heldTaskCounts) = try await treeForcers(of: Self.plainAndLoopingRoots)
 		#expect(forcers == """
-		Looping\tkind cycle
+		Looping\tkind cycleReceivesBuilder
 		Plain\tnone
 		roots that built a tree: 1 of 2
 
@@ -60,7 +60,7 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 	mutating func generate_buildsEveryRootsTree_whenRunDrawsDOTGraph() async throws {
 		let (forcers, heldTaskCounts) = try await treeForcers(of: Self.plainAndLoopingRoots, buildDOTFileOutput: true)
 		#expect(forcers == """
-		Looping\tkind cycle, DOT graph
+		Looping\tkind cycleReceivesBuilder, DOT graph
 		Plain\tDOT graph
 		roots that built a tree: 2 of 2
 
@@ -79,11 +79,36 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 			],
 			moduleMembershipArguments: ["--module-name", "Feature"],
 		)
-		// The root's world calls the seam, which node records refuse as a construction; the seam's own world they accept.
+		// Node records make the records of the root's world, which calls the seam, and of the seam's own world.
 		#expect(forcers == """
-		Root\tseam world, kind construction
+		Root\tseam world
 		Screen\tseam world
 		roots that built a tree: 2 of 2
+
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsTree_whenRenameOfSharedTypeIsFulfilledByWrapperOnFirstPathAndValueOnSecond() async throws {
+		let (forcers, _) = try await treeForcers(of: Self.renameFulfilledByWrapperAndValue(lazyParentFirst: true))
+		// One variant of `Reader`'s rename is called beneath both parents, which answer its `x` as a wrapper's instance and as
+		// a value: its one record would be wrong beneath one of them.
+		#expect(forcers == """
+		Root\tkind callsAnswerAVariantApart
+		roots that built a tree: 1 of 1
+
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsTree_whenRenameOfSharedTypeIsFulfilledByValueOnFirstPathAndWrapperOnSecond() async throws {
+		let (forcers, _) = try await treeForcers(of: Self.renameFulfilledByWrapperAndValue(lazyParentFirst: false))
+		// The same world with the root's properties swapped: the refusal does not follow which parent is declared first.
+		#expect(forcers == """
+		Root\tkind callsAnswerAVariantApart
+		roots that built a tree: 1 of 1
 
 		""")
 	}
@@ -93,13 +118,29 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 	private var filesToDelete: [URL]
 
 	/// `Plain`, a root node records lay out, and `Looping`, a root they refuse, since a type of its tree builds itself
-	/// again through an `Instantiator`.
+	/// again through an `Instantiator` that a type beneath it receives.
 	private static let plainAndLoopingRoots = [
 		seamFixtureType(named: "Looping", isRoot: true, declarations: ["@Instantiated let stepBuilder: Instantiator<Step>"]),
 		seamFixtureType(named: "Plain", isRoot: true, declarations: ["@Instantiated let service: Service"]),
-		seamFixtureType(named: "Step", declarations: ["@Instantiated let stepBuilder: Instantiator<Step>"]),
+		seamFixtureType(named: "Step", declarations: ["@Instantiated let stepBuilder: Instantiator<Step>", "@Instantiated let detail: Detail"]),
+		seamFixtureType(named: "Detail", declarations: ["@Received let stepBuilder: Instantiator<Step>"]),
 		seamFixtureType(named: "Service", declarations: []),
 	]
+
+	/// A root whose two parents each build a `Reader` whose rename is fulfilled by `x`: `LazyParent` declares `x` as a
+	/// `LazilyInstantiated<X>` and builds `Reader` through an `Instantiator`, and `ValueParent` declares `x` as an `X`
+	/// and builds `Reader` beneath `Holder`. `lazyParentFirst` orders the root's two properties.
+	private static func renameFulfilledByWrapperAndValue(lazyParentFirst: Bool) -> [String] {
+		let parents = ["@Instantiated let lazyParent: LazyParent", "@Instantiated let valueParent: ValueParent"]
+		return [
+			seamFixtureType(named: "Root", isRoot: true, declarations: lazyParentFirst ? parents : parents.reversed()),
+			seamFixtureType(named: "LazyParent", declarations: ["@Instantiated let readerBuilder: Instantiator<Reader>", "@Instantiated let x: LazilyInstantiated<X>"]),
+			seamFixtureType(named: "ValueParent", declarations: ["@Instantiated let x: X", "@Instantiated let holder: Holder"]),
+			seamFixtureType(named: "Holder", declarations: ["@Instantiated let reader: Reader"]),
+			seamFixtureType(named: "Reader", declarations: [#"@Received(fulfilledByDependencyNamed: "x", ofType: X.self) let renamed: X"#]),
+			seamFixtureType(named: "X", declarations: []),
+		]
+	}
 
 	/// What `--tree-forcers-output` holds once `files` are generated, and the code tasks each tree the run built still
 	/// held once its code was planned, in the order the trees were counted.

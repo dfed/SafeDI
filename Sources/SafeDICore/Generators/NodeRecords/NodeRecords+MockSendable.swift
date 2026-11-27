@@ -26,6 +26,10 @@
 /// A configuration of a type built in a `@Sendable` function takes the `Sendable` form, as does each configuration
 /// beneath it, so the local can cross into the function.
 ///
+/// A wrapper an actor is sent that is not `@Sendable` (an `Instantiator`, erased or not, or a `LazilyInstantiated` the
+/// actor builds) reads its override so too (`isWrapperSentToActor(_:in:)`): its closure is sent with it, so it captures
+/// the local, and hands it to the wrapper's function.
+///
 /// The node's record is `mockConstruction`'s, marked `@Sendable` as the production kind's is
 /// (`NodeRecords+Sendable.swift`); the local is a place of its parent's body, built in place before the node's
 /// (`mockOverridesBindingPlace(of:record:in:)`).
@@ -45,11 +49,27 @@ extension NodeRecords {
 		for child in world.edges(from: declaration) {
 			guard world.parents(of: child).count == 1, !isBuiltInFunctionOfItsOwn(child, in: world) else { return [.sendable] }
 		}
+		guard !overridesLocalNameIsTaken(ofNodeLabeled: label, in: world) else { return [.sendable] }
+		return []
+	}
+
+	/// The shape of a wrapper an actor is sent (`isWrapperSentToActor(_:in:)`) that is not made yet, refused as
+	/// `mockActor`: a local whose name a node's label or function takes, which the walk names apart.
+	static func mockActorWrapperRefusals(of declaration: DeclarationID, in world: some NodeRecordSources) -> [NodeRecordRefusal] {
+		guard isWrapperSentToActor(declaration, in: world),
+		      let label = world.property(of: declaration)?.label,
+		      overridesLocalNameIsTaken(ofNodeLabeled: label, in: world)
+		else { return [] }
+		return [.mockActor]
+	}
+
+	/// Whether a node's label or function takes a name of the local the override of the node labeled `label` is read
+	/// into.
+	private static func overridesLocalNameIsTaken(ofNodeLabeled label: String, in world: some NodeRecordSources) -> Bool {
 		let localNames = Set([true, false].map { mockOverridesLocalName(ofNodeLabeled: label, isConfigured: $0) })
 		// Every node but the root is built as a property.
 		let labels = (1..<Int32(world.declarationCount)).compactMap { world.property(of: $0)?.label }
-		guard !labels.contains(where: { localNames.contains($0) || localNames.contains(ScopeGenerator.functionName(toBuildPropertyNamed: $0)) }) else { return [.sendable] }
-		return []
+		return labels.contains { localNames.contains($0) || localNames.contains(ScopeGenerator.functionName(toBuildPropertyNamed: $0)) }
 	}
 
 	/// Where `declaration`, a mock root's node built in a `@Sendable` function as the property labeled `label`, reads its
@@ -75,10 +95,11 @@ extension NodeRecords {
 		}
 	}
 
-	/// Whether a mock root's node built in a `@Sendable` function captures the local its override is read into: where
-	/// the root's body builds it, and so declares both.
+	/// Whether a mock root's node captures the local its override is read into: a node built in a `@Sendable` function
+	/// where the root's body builds it, and so declares both. A wrapper an actor is sent (`isWrapperSentToActor(_:in:)`)
+	/// is built in a function the root's body declares once, before the local, so it is handed the local.
 	private static func capturesOverridesLocal(_ declaration: DeclarationID, in world: some NodeRecordSources) -> Bool {
-		world.parents(of: declaration).allSatisfy { $0.parent == 0 }
+		!isWrapperSentToActor(declaration, in: world) && world.parents(of: declaration).allSatisfy { $0.parent == 0 }
 	}
 
 	/// Where the children of `parent`, a node of a mock root's world, read their overrides: the local a node built in a
@@ -108,7 +129,7 @@ extension NodeRecords {
 	/// root's node built in one (`mockOverrideSlot(of:labeled:typed:in:hasFunction:handsOverridesToChildren:isSendable:)`),
 	/// and `nil` for any other record: the field of its parent's overrides under its label, built in place.
 	static func mockOverridesBindingPlace(of declaration: DeclarationID, record: PlaceRecord, in world: some NodeRecordSources) -> BuiltPlaceRecord? {
-		guard world.isMockWorld, case let .built(built) = record, built.isSendable else { return nil }
+		guard world.isMockWorld, case let .built(built) = record, built.isSendable || isWrapperSentToActor(declaration, in: world) else { return nil }
 		let instantiable = world.scope(of: declaration).instantiable
 		let isConfigured = isConfigured(declaration, in: world)
 		let usesHandWrittenMock = world.construction(of: declaration) == .handWrittenMock && instantiable.mockInitializer != nil
@@ -154,18 +175,29 @@ extension NodeRecords {
 		"\(ScopeGenerator.functionName(toBuildPropertyNamed: label))__\(isConfigured ? "overrides" : ReservedName.configurationBuilderPropertyName)".spelledAsJoinedIdentifier
 	}
 
-	/// Whether a node of a mock root's world is built in a `@Sendable` function of its own and erased to its property's
-	/// type, whose function returns that type (`mockErasedRecord(of:variant:in:unavailableProperties:lazilyInstantiatedInstanceProperties:receivesBoundAgain:typesDeclaredEscaping:children:)`).
-	static func isErasedSendableWrapper(_ declaration: DeclarationID, in world: some NodeRecordSources) -> Bool {
-		isBuiltInSendableFunction(declaration, in: world) && world.isErased(declaration)
-	}
-
 	/// Whether a node of a mock root's world is built in a `@Sendable` function of its own.
 	private static func isBuiltInSendableFunction(_ declaration: DeclarationID, in world: some NodeRecordSources) -> Bool {
 		switch world.kind(of: declaration) {
 		case .sendableInstantiator, .sendableErasedInstantiator, .sendableLazy:
 			true
 		case .constant, .instantiator, .erasedInstantiator, .lazy, .alias, .hole:
+			false
+		}
+	}
+
+	/// Whether a node of a mock root's world is a wrapper an actor's initializer is sent: an `Instantiator`, erased or
+	/// not, or a `LazilyInstantiated`, built by an actor the mock builds with its initializer. The wrapper's closure would
+	/// capture the overrides the actor's function was handed, which are not `Sendable`, so its override is read into a
+	/// local before it, as a `@Sendable` function's is, and as the walk writes it (`isInsideActorArgument` in
+	/// `MockLowering+Walk.swift`).
+	static func isWrapperSentToActor(_ declaration: DeclarationID, in world: some NodeRecordSources) -> Bool {
+		switch world.kind(of: declaration) {
+		case .instantiator, .erasedInstantiator, .lazy:
+			world.parents(of: declaration).contains { parent in
+				let instantiable = world.scope(of: parent.parent).instantiable
+				return instantiable.declarationType == .actorType && !(world.construction(of: parent.parent) == .handWrittenMock && instantiable.mockInitializer != nil)
+			}
+		case .constant, .sendableInstantiator, .sendableErasedInstantiator, .sendableLazy, .alias, .hole:
 			false
 		}
 	}

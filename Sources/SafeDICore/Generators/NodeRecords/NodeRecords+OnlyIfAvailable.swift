@@ -21,7 +21,8 @@
 extension NodeRecords {
 	/// The claim of `declaration` where it is a node whose type receives a property only if available or declares a rename:
 	/// of kind `receivesOnlyIfAvailable`, discharging `onlyIfAvailable` and `renameOrHole`, which it still holds where its
-	/// scope declares a hole or an instantiated dependency it does not build; `nil` for any other node.
+	/// scope declares a hole, and the refusal of the wrapper it is built in, which its record reads of the node
+	/// (`wrapperRefusalsDischarged(of:in:)`); `nil` for any other node.
 	static func receivesOnlyIfAvailableClaim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
 		guard world.kind(of: declaration) != .alias, world.kind(of: declaration) != .hole else { return nil }
 		let scope = world.scope(of: declaration)
@@ -40,8 +41,8 @@ extension NodeRecords {
 				false
 			}
 		}
-		let refusals: [NodeRecordRefusal] = declaresHole || !scope.instantiatedDependenciesNotGenerated.isEmpty ? [.renameOrHole] : []
-		return NodeRecordClaim(kind: .receivesOnlyIfAvailable, discharges: [.onlyIfAvailable, .renameOrHole], refusals: refusals)
+		let refusals: [NodeRecordRefusal] = declaresHole ? [.renameOrHole] : []
+		return NodeRecordClaim(kind: .receivesOnlyIfAvailable, discharges: wrapperRefusalsDischarged(of: declaration, in: world).union([.onlyIfAvailable, .renameOrHole]), refusals: refusals)
 	}
 
 	/// The record of `declaration`'s place in `variant`, a node of kind `receivesOnlyIfAvailable`: a `builtByInitializer`
@@ -127,11 +128,24 @@ struct OnlyIfAvailableAnswers: Sendable {
 		while let variant = variantsToVisit.popLast() {
 			let declaration = world.declaration(of: variant)
 			// A rename or a hole is a leaf of the scope that declares it, which reads for it (below).
-			guard let context = contextByVariant[Int(variant)], world.kind(of: declaration) != .alias, world.kind(of: declaration) != .hole else { continue }
+			guard let callContext = contextByVariant[Int(variant)], world.kind(of: declaration) != .alias, world.kind(of: declaration) != .hole else { continue }
 			let scope = world.scope(of: declaration)
+			// A member of a loop of builders begins its builder function by binding each member it makes again
+			// (`NodeRecords.loopRebindings(of:in:)`), so its construction and everything inside it read those bindings.
+			var context = callContext
+			for member in world.madeAgain(from: declaration) {
+				if let property = world.property(of: member), labels.contains(property.label) {
+					context[property.label] = [Binding(property: property, state: .available)]
+				}
+			}
 			// Inside the node's builder function, its forwarded properties are the nearest declarations of their labels.
 			var contextInside = context
 			for dependency in scope.instantiable.dependencies where dependency.source == .forwarded && labels.contains(dependency.property.label) {
+				contextInside[dependency.property.label] = [Binding(property: dependency.property, state: .available)]
+			}
+			// So is each dependency its type instantiates that its scope does not build, which a mock is passed as a parameter
+			// of `mock()` before any node is built (`Scope.propertiesToDeclare`); a production root's world holds none.
+			for dependency in scope.instantiatedDependenciesNotGenerated where labels.contains(dependency.property.label) {
 				contextInside[dependency.property.label] = [Binding(property: dependency.property, state: .available)]
 			}
 			let calls = world.calls(of: variant)
