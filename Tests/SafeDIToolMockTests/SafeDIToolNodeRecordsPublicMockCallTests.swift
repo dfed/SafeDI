@@ -521,6 +521,69 @@ struct SafeDIToolNodeRecordsPublicMockCallTests: ~Copyable {
 		#expect(reports.map(\.refusal) == ["publicMockCallOverrideClosure"])
 	}
 
+	// MARK: Values
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildsTheWalksValues_whenEveryPlaceOfCallsBeneathRootAndAnotherNodeIsOverridden() async throws {
+		let modules = [
+			ModuleFixture(name: "Feed", packageName: "feedpkg", swiftFileContentByFilePath: Self.valueFeed),
+			ModuleFixture(name: "App", packageName: "apppkg", swiftFileContentByFilePath: Self.valueApp, dependencies: ["Feed"]),
+		]
+		let walkOutput = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+		let (stream, continuation) = AsyncStream.makeStream(of: NodeRecordsReport.self)
+		var filesMade = [URL]()
+		let output = try await NodeRecordsObservation.$laysOutMockRoots.withValue(true) {
+			try await NodeRecordsObservation.$observer.withValue({ continuation.yield($0) }) {
+				try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesMade)
+			}
+		}
+		filesToDelete += filesMade
+		continuation.finish()
+		var reports = [NodeRecordsReport]()
+		for await report in stream where report.isMockRoot && report.root == "Root" {
+			reports.append(report)
+		}
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
+		// The call beneath `Middle` is written apart from the walk's, so the comparison is of two programs.
+		#expect(output.modules["App"]?.generatedFiles != walkOutput.modules["App"]?.generatedFiles)
+		let overridden = """
+		Root.mock(safeDIOverrides: .init(\
+		session: { marked(Session(), "session") }, \
+		screen: .init(analytics: { marked(Analytics(), "screen.analytics") }), \
+		screenBuilder: .init(analytics: { marked(Analytics(), "screenBuilder.analytics") }), \
+		middleBuilder: .init(screenBuilder: .init(analytics: { marked(Analytics(), "middleBuilder.screenBuilder.analytics") }))\
+		))
+		"""
+		let overriddenMiddle = """
+		Root.mock(safeDIOverrides: .init(\
+		middleBuilder: .init(screenBuilder: .init(analytics: { marked(Analytics(), "unread") }), { marked(Middle(session: $0, screenBuilder: $1), "middleBuilder") })\
+		))
+		"""
+		let comparison = try await DifferentialValueOracle.compare(
+			feature: DifferentialValuePath(output: output, modules: modules),
+			knownRight: DifferentialValuePath(output: walkOutput, modules: modules),
+			probes: [
+				DifferentialValueProbe("Root.mock()"),
+				DifferentialValueProbe("Root.mock().screenBuilder.instantiate(1)"),
+				DifferentialValueProbe("Root.mock().middleBuilder.instantiate().screenBuilder.instantiate(2)"),
+				DifferentialValueProbe(name: "overridden root", expression: overridden),
+				DifferentialValueProbe(name: "overridden screenBuilder", expression: "\(overridden).screenBuilder.instantiate(1)"),
+				DifferentialValueProbe(name: "overridden middleBuilder", expression: "\(overridden).middleBuilder.instantiate()"),
+				DifferentialValueProbe(name: "overridden middleBuilder's screenBuilder", expression: "\(overridden).middleBuilder.instantiate().screenBuilder.instantiate(2)"),
+				DifferentialValueProbe(name: "overridden middle", expression: "\(overriddenMiddle).middleBuilder.instantiate().screenBuilder.instantiate(3)"),
+			],
+			filesToDelete: &filesToDelete,
+		)
+		// Nothing is compared where compile verification is off.
+		guard let comparison else { return }
+		#expect(comparison.differences.isEmpty, "\(comparison.report)")
+		// Every override was read: each marks the value its closure built.
+		for marker in ["session", "screen.analytics", "screenBuilder.analytics", "middleBuilder.screenBuilder.analytics", "middleBuilder"] {
+			#expect(comparison.featureDescription.contains("\"\(marker)\""), "No value is marked \(marker):\n\(comparison.featureDescription)")
+		}
+	}
+
 	// MARK: Fixtures
 
 	/// `Feed`'s `Screen`, whose public mock `App` calls since its initializer is `internal`: it receives `session`, and
@@ -596,6 +659,88 @@ struct SafeDIToolNodeRecordsPublicMockCallTests: ~Copyable {
 		}
 		return (output.modules["App"]?.generatedFiles.values.first, reports)
 	}
+
+	/// `Feed` of the value test: `Screen`, whose public mock `App` calls, forwards `id`, receives `session` and
+	/// instantiates `analytics`. Each type carries a marker an override's closure sets.
+	private static let valueFeed: [String: String] = [
+		"Marked.swift": """
+		public protocol Marked: AnyObject {
+		    var marker: String { get set }
+		}
+
+		public func marked<Value: Marked>(_ value: Value, _ marker: String) -> Value {
+		    value.marker = marker
+		    return value
+		}
+		""",
+		"Screen.swift": """
+		import SafeDI
+
+		@Instantiable
+		public final class Session: Instantiable, Marked {
+		    public init() {}
+
+		    public var marker = "built"
+		}
+
+		@Instantiable
+		public final class Analytics: Instantiable, Marked {
+		    public init() {}
+
+		    public var marker = "built"
+		}
+
+		@Instantiable(generateMock: .public)
+		public final class Screen: Instantiable, Marked {
+		    init(id: Int, session: Session, analytics: Analytics) {
+		        self.id = id
+		        self.session = session
+		        self.analytics = analytics
+		    }
+
+		    @Forwarded let id: Int
+		    @Received let session: Session
+		    @Instantiated let analytics: Analytics
+		    public var marker = "built"
+		}
+		""",
+	]
+
+	/// `App` of the value test: `Root` calls `Screen`'s public mock as a constant, from an `Instantiator`, and from an
+	/// `Instantiator` inside `Middle`'s.
+	private static let valueApp: [String: String] = [
+		"Root.swift": """
+		import Feed
+		import SafeDI
+
+		@Instantiable(generateMock: true)
+		public final class Root: Instantiable {
+		    public init(session: Session, screen: Screen, screenBuilder: Instantiator<Screen>, middleBuilder: Instantiator<Middle>) {
+		        self.session = session
+		        self.screen = screen
+		        self.screenBuilder = screenBuilder
+		        self.middleBuilder = middleBuilder
+		    }
+
+		    @Instantiated let session: Session
+		    @Instantiated let screen: Screen
+		    @Instantiated let screenBuilder: Instantiator<Screen>
+		    @Instantiated let middleBuilder: Instantiator<Middle>
+		}
+
+		@Instantiable
+		public final class Middle: Instantiable, Marked {
+		    public init(session: Session, screenBuilder: Instantiator<Screen>) {
+		        self.session = session
+		        self.screenBuilder = screenBuilder
+		    }
+
+		    @Received let session: Session
+		    @Instantiated let screenBuilder: Instantiator<Screen>
+		    public var marker = "built"
+		}
+		""",
+	]
 
 	private var filesToDelete: [URL]
 }
