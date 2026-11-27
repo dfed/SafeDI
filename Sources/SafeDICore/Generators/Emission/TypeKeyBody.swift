@@ -35,11 +35,19 @@ enum TypeKeyBody {
 	/// root keeps `rootBody`, the path key's statements. `outerDeclarations` are the declarations in scope before the root's
 	/// body that it does not write: a seam's parameters, as its narrowest tier binds them. A read the path key resolves to one
 	/// is resolved to it in the type key's layout too, never to `nil`. No function the layout declares takes a name of
-	/// `namesInScope`, the names bound around the body, such as a seam's parameters' internal names.
-	static func statements(ofRootBody rootBody: [GeneratedCode], outerDeclarations: [Property] = [], namesInScope: Set<String> = []) -> [GeneratedCode]? {
+	/// `namesInScope`, the names bound around the body, such as a seam's parameters' internal names. A value path of the
+	/// root's body may name each of `rootPassedArgumentNames`, the parameters of the function the body is written in that
+	/// its places read as a function's place reads a passed argument; the layout takes each as a name in scope too.
+	static func statements(
+		ofRootBody rootBody: [GeneratedCode],
+		outerDeclarations: [Property] = [],
+		namesInScope: Set<String> = [],
+		rootPassedArgumentNames: Set<String> = [],
+	) -> [GeneratedCode]? {
 		var layout = TypeKeyLayout()
 		layout.declareOuter(outerDeclarations)
-		layout.namesInScope = namesInScope
+		layout.namesInScope = namesInScope.union(rootPassedArgumentNames)
+		layout.rootPassedArgumentNames = rootPassedArgumentNames
 		// The root functions the plan's places call are declared once, before every statement, as the path key declares
 		// them (`RootFunctionHoisting`); a root that keeps one in place keeps the path key's body, since the type key spells
 		// a place written as text without them.
@@ -212,6 +220,9 @@ struct TypeKeyLayout {
 	var rootFunctionNames = Set<String>()
 	/// The names bound around the root's body, which no function the layout declares takes.
 	var namesInScope = Set<String>()
+	/// The parameters of the function the root's body is written in that a value path of the root's body may name as a
+	/// passed argument.
+	var rootPassedArgumentNames = Set<String>()
 	/// The views whose bodies wrap a member of a loop of builders again (`ClosingPlaceRecord.rebindsLoopMember`).
 	var loopRebindingBodies = Set<Int>()
 	/// The views other than the root's in post-order of the view DAG.
