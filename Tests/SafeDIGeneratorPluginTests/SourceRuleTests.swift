@@ -106,6 +106,34 @@ struct SourceRuleTests {
 	}
 
 	@Test
+	func generators_scanNoStringsCharacters_exceptWhereWaived() throws {
+		#expect(try findings(of: [.stringScan]) == [])
+	}
+
+	@Test(arguments: [
+		("_ = code.split(separator: \"\\n\")", "split"),
+		("_ = text.replacingOccurrences(of: \"a\", with: \"b\")", "replacingOccurrences"),
+		("_ = text.components(separatedBy: separator)", "components"),
+		("_ = code.contains(\"public \")", "contains"),
+		("_ = line.split(whereSeparator: { $0 == \" \" })", "split"),
+	])
+	func sourceRuleCheck_findsStringScan_whenAGeneratorScansAString(source: String, name: String) {
+		#expect(findings(in: source, at: "Sources/SafeDICore/Generators/Fixture.swift") == [
+			"Sources/SafeDICore/Generators/Fixture.swift:1: stringScan: `\(name)` reads every character of its text, and a generator’s code runs per place or per node: go over UTF-8 bytes (`GeneratedCodeText`), or waive a site that runs a bounded number of times with why",
+		])
+	}
+
+	@Test
+	func sourceRuleCheck_findsNoStringScan_whenContainsTakesNoLiteralOrTheFileIsNoGenerator() {
+		#expect(findings(in: """
+		_ = names.contains(name)
+		_ = names.contains { $0.isEmpty }
+		// A comment may say code.split(separator: "x").
+		""", at: "Sources/SafeDICore/Generators/Emission/Fixture.swift") == [])
+		#expect(findings(in: "_ = code.split(separator: \"\\n\")", at: "Sources/SafeDICore/Models/Fixture.swift") == [])
+	}
+
+	@Test
 	func sources_returnNoTupleFromATaskGroup() throws {
 		#expect(try findings(of: [.taskGroupTupleElement]) == [])
 	}
@@ -723,7 +751,7 @@ struct SourceRuleTests {
 	func sourceRuleCheck_findsSiteAndWaiver_whenAWaiverNamesNoRule() {
 		#expect(findings(in: "_ = value! // safedi-source-rule: allow forceUnwrapping — `value` is set before this line") == [
 			"Sources/SafeDICore/Models/Fixture.swift:1: forceUnwrap: a force unwrap traps on `nil`",
-			"Sources/SafeDICore/Models/Fixture.swift:1: waiver: a waiver reads `safedi-source-rule: allow <rule> — <reason>`, where the rule is one of `forceUnwrap`, `forceTry`, `forceCast`, `trap`, `uniqueKeysWithValues`, `optionalTry`, `generatedTrap`, `builderFunctionNamePrefix`, `backtick`, `apostrophe`, `testableImport`, `uncheckedConcurrency`, `taskGroupTupleElement`, `engineFeatureName`",
+			"Sources/SafeDICore/Models/Fixture.swift:1: waiver: a waiver reads `safedi-source-rule: allow <rule> — <reason>`, where the rule is one of `forceUnwrap`, `forceTry`, `forceCast`, `trap`, `uniqueKeysWithValues`, `optionalTry`, `generatedTrap`, `builderFunctionNamePrefix`, `backtick`, `apostrophe`, `testableImport`, `uncheckedConcurrency`, `taskGroupTupleElement`, `engineFeatureName`, `stringScan`",
 		])
 	}
 
