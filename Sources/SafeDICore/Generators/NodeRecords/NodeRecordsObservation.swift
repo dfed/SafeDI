@@ -30,6 +30,11 @@ public enum NodeRecordsObservation {
 	/// plan before it is turned on for every run, or generate time doubles.
 	@TaskLocal public static var laysOutRoots = false
 
+	/// Whether a run no test observes lays out each root of a module with seams, a seam's own root included, from its node
+	/// records where they accept its world and the engine lays every statement out, without planning its tree's body. A
+	/// prototype's switch, for timing such a module: off unless the tool's environment turns it on.
+	@TaskLocal public static var laysOutSeamWorldRootsInRun = false
+
 	/// The nodes a test claims as a kind would (`NodeRecords.claim(of:in:)`), by their concrete type's name, each
 	/// with the raw values of the refusals the claim discharges. Only a test sets it.
 	@TaskLocal public static var claimsForTesting = [String: [String]]()
@@ -58,7 +63,11 @@ public enum NodeRecordsObservation {
 		var differences = [String]()
 		var treePlaceCount = 0
 		var pending = [(tree: treeBody, nodeRecords: nodeRecordsBody, path: "root")]
-		while let (tree, nodeRecords, path) = pending.popLast() {
+		while let (treeCodes, nodeRecordsCodes, path) = pending.popLast() {
+			// A hole's place, and a place on the route to one, is a sequence of places: the payloads bound before it, each
+			// a place written as text, then the place itself. Each is compared as a statement of its own.
+			let tree = treeCodes.flatMap(statements(of:))
+			let nodeRecords = nodeRecordsCodes.flatMap(statements(of:))
 			guard tree.count == nodeRecords.count else {
 				differences.append("\(path): the tree builds \(tree.count) statements, node records \(nodeRecords.count)")
 				continue
@@ -110,7 +119,14 @@ public enum NodeRecordsObservation {
 		return (indentation, inner)
 	}
 
-	/// The fields of `nodeRecords`, a rename, that differ from `tree`'s.
+	/// `code`'s statements: each piece of a sequence, indented as the sequence is, or `code` where it is no sequence.
+	private static func statements(of code: GeneratedCode) -> [GeneratedCode] {
+		let (indentation, inner) = unindented(code)
+		guard case let .sequence(pieces) = inner.node else { return [code] }
+		return pieces.flatMap { statements(of: .indented($0, by: indentation)) }
+	}
+
+	/// The fields of `nodeRecords`, a rename or a hole's place, that differ from `tree`'s.
 	private static func fieldDifferences(between tree: AliasPlaceRecord, and nodeRecords: AliasPlaceRecord) -> [String] {
 		var differences = [String]()
 		func compare<Value: Equatable>(_ name: String, _ treeValue: Value, _ nodeRecordsValue: Value) {
@@ -119,10 +135,22 @@ public enum NodeRecordsObservation {
 		}
 		compare("property", tree.property, nodeRecords.property)
 		compare("fulfillingProperty", tree.fulfillingProperty, nodeRecords.fulfillingProperty)
-		compare("text", tree.text, nodeRecords.text)
+		// Node records leave a call's text to the engine, which spells it from the call (`InPlaceCall`).
+		if nodeRecords.call == nil {
+			compare("text", tree.text, nodeRecords.text)
+		}
 		compare("reads", tree.reads, nodeRecords.reads)
 		compare("otherBindings", tree.otherBindings, nodeRecords.otherBindings)
 		compare("calledFunctionNames", tree.calledFunctionNames, nodeRecords.calledFunctionNames)
+		compare("declaredFunctionNames", tree.declaredFunctionNames, nodeRecords.declaredFunctionNames)
+		compare("calledRootFunctionNames", tree.calledRootFunctionNames, nodeRecords.calledRootFunctionNames)
+		compare("holdsCall", tree.call != nil, nodeRecords.call != nil)
+		if let treeCall = tree.call, let nodeRecordsCall = nodeRecords.call {
+			differences += fieldDifferences(between: treeCall.record, and: nodeRecordsCall.record).map { "call: \($0)" }
+			compare("call: argumentValues", treeCall.record.argumentValues, nodeRecordsCall.record.argumentValues)
+			compare("call: statements before the leading statement", treeCall.statementsBeforeLeadingStatement.count, nodeRecordsCall.statementsBeforeLeadingStatement.count)
+			compare("call: statements after the leading statement", treeCall.statementsAfterLeadingStatement.count, nodeRecordsCall.statementsAfterLeadingStatement.count)
+		}
 		return differences
 	}
 

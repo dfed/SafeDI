@@ -147,7 +147,64 @@ extension TypeKeyLayout {
 		case let .closer(record, target):
 			return spelledCall(of: classByBody[target], binding: record.property, isErased: record.isErased, isExtension: record.isExtension, inClass: owner, at: index)
 		case let .alias(record):
-			return record.text
+			guard let call = record.call else { return record.text }
+			return spelledInPlace(call, inClass: owner, at: index)
+		}
+	}
+
+	/// The text of a call written where its place is, at `index` of `owner`'s body: its builder function, then the binding
+	/// of its result. Each argument is read as the declaration visible there, which the function captures.
+	func spelledInPlace(_ call: InPlaceCall, inClass owner: Int, at index: Int) -> String? {
+		let record = call.record
+		guard let argumentValues = spelledArgumentValues(record.arguments, replacedAt: record.argumentValues, inClass: owner, before: index, sourceAtMember: { member, position in
+			guard case let .alias(memberRecord) = bodies[member].statements[index], let memberCall = memberRecord.call else { return nil }
+			return memberCall.record.arguments[position].source
+		}) else { return nil }
+		var statements = call.statementsBeforeLeadingStatement
+		if let leadingStatement = record.leadingStatement {
+			statements.append(.text("\(ScopeGenerator.standardIndent)\(leadingStatement.spelled)"))
+		}
+		statements += call.statementsAfterLeadingStatement
+		let function = SafeDICore.Statement.function(BuilderNode(
+			name: record.functionName,
+			isSendable: record.isSendable,
+			parameters: [],
+			typesDeclaredEscaping: record.typesDeclaredEscaping,
+			returnType: record.concreteType,
+			body: BuilderBody(statements: statements),
+			value: .construction(record.target, arguments: Self.labeled(argumentValues, of: record.arguments)),
+			lineEnd: record.lineEnd,
+		)).spelled
+		return GeneratedCode.sequence([function, Self.bindingOfInPlaceCall(of: record), .text("\n")]).spelled()
+	}
+
+	/// The binding of `record`'s property, a call written where its place is, to its builder function's result: by the rule
+	/// a built place of the property's form binds it with, a wrapper of the function where the property is one.
+	private static func bindingOfInPlaceCall(of record: BuiltPlaceRecord) -> GeneratedCode {
+		switch record.property.propertyType {
+		case .instantiator,
+		     .erasedInstantiator,
+		     .sendableInstantiator,
+		     .sendableErasedInstantiator:
+			// No forwarded arguments only while the seam call claim refuses a call that forwards values; then they come from the record.
+			.text(ScopeGenerator.instantiatorDeclaration(of: record.property, isExtension: record.isExtension, isErased: record.isErased, handing: record.functionName, forwardedArguments: ""))
+		case .lazilyInstantiated,
+		     .sendableLazilyInstantiated:
+			.text("\(BindingDeclaration(property: record.property, rule: .lazilyInstantiated).spelled) = \(ScopeGenerator.lazilyInstantiatedInstantiation(of: record.property, callingFunctionNamed: record.functionName, cycleArguments: "", erasedToConcreteExistential: record.isErased))")
+		case .constant:
+			SafeDICore.Statement.binding(
+				BindingDeclaration(
+					property: record.property,
+					rule: .constant(
+						isErased: record.isErased,
+						constructedTypeIsPropertyType: record.concreteType.asSource == record.property.typeDescription.asSource,
+						hasBuilderFunction: true,
+						isExtension: record.isExtension,
+					),
+				),
+				Expression.call(function: record.functionName, arguments: "").erased(to: record.property.typeDescription.unwrapped, where: record.isErased),
+				lineEnd: "",
+			).spelled
 		}
 	}
 

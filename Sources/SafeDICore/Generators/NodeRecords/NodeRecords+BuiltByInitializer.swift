@@ -39,7 +39,10 @@ extension NodeRecords {
 			refusals.append(.erased)
 		case .lazy:
 			refusals.append(.lazy)
-		case .alias, .hole:
+		case .hole:
+			// A hole's scope is the one that declares it, whose own node is checked for what it holds.
+			return [.renameOrHole]
+		case .alias:
 			refusals.append(.renameOrHole)
 		}
 		if world.isOnCycle(declaration) {
@@ -59,7 +62,10 @@ extension NodeRecords {
 			switch propertyToGenerate {
 			case .instantiated:
 				break
-			case .hole, .aliased:
+			case .hole:
+				// A hole is a node of its own, whose kind is checked there.
+				break
+			case .aliased:
 				refusals.append(.renameOrHole)
 			}
 		}
@@ -104,6 +110,7 @@ extension NodeRecords {
 		typesDeclaredEscaping: Set<TypeDescription>,
 		children: [GeneratedCode],
 		lineEnd: String = "",
+		declaresFunction: Bool = false,
 	) throws -> BuiltPlaceRecord {
 		let instantiable = world.scope(of: declaration).instantiable
 		// Every node but the root is built as a property, and has an initializer (`refusalsOfBuiltByInitializer(_:in:)`)

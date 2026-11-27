@@ -525,6 +525,62 @@ struct SafeDIToolNodeRecordsWrapperKindTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_readsTheInstanceOfWhatTheSeamsRootIsHanded_whenTypesBeneathTheSeamReceiveItsDeferredParameter() async throws {
+		// `Vault`'s initializer holds `database` in a `LazilyInstantiated`, which no node of its tree declares: what the
+		// root is handed answers the reads of `Store` and `Index`, at two depths, as that wrapper's instance, and the seam's
+		// initializers are written around its body laid out from its records.
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: [
+				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let database: Database", "@Instantiated let vault: Vault"]),
+				seamFixtureType(named: "Vault", isSeam: true, declarations: ["@Instantiated let store: Store"]),
+				seamFixtureType(named: "Store", declarations: ["@Received let database: Database", "@Instantiated let index: Index"]),
+				seamFixtureType(named: "Index", declarations: ["@Received let database: Database"]),
+				seamFixtureType(named: "Database", isFinalClass: true, declarations: []),
+			], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public init() {
+			        let database = Database()
+			        func __safeDI_vault() -> Vault {
+			            _ = Vault.__safeDI_Vault_699FBEB932A6412E.self
+			            return Vault(__safeDI_database: database)
+			        }
+			        let vault: Vault = __safeDI_vault()
+			        self.init(database: database, vault: vault)
+			    }
+			}
+			""",
+			"Vault+SafeDI.swift": generatedFileHeader + """
+			extension Vault {
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+			    public init(__safeDI_database: @autoclosure @escaping () -> Database) {
+			        let database = LazilyInstantiated<Database>(__safeDI_database)
+			        @inline(never) func __safeDI_store() -> Store {
+			            let index = Index(database: database.instance)
+			            return Store(database: database.instance, index: index)
+			        }
+			        let store: Store = __safeDI_store()
+			        self.init(store: store)
+			    }
+			}
+
+			extension Vault {
+			    public enum __safeDI_Vault_699FBEB932A6412E {}
+			}
+			""",
+		])
+		let seamReports = reports.filter { $0.root == "Vault" }
+		#expect(seamReports.map(\.refusal) == [nil])
+		#expect(seamReports.map(\.isLaidOutFromNodeRecords) == [true])
+		#expect(seamReports.map(\.everyRefusal) == [[]])
+		#expect(seamReports.flatMap(\.differences) == [])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsTheTreesCaptureError_whenRootsAreLaidOutFromNodeRecordsAndASendableFunctionCapturesAnInstantiator() async {
 		// The records cannot report the capture, so the world is refused (`NodeRecordRefusal.sendableFunctionCapturesWrapper`)
 		// and its root keeps the tree whose check reports it, also where every root node records accept is laid out from

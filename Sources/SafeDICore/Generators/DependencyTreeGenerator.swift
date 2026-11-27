@@ -646,27 +646,44 @@ public actor DependencyTreeGenerator {
 		}
 
 		/// What node records read of a seam's own tree beside its world.
-		struct SeamTree {
+		struct SeamTree: Sendable {
 			/// What the seam's root is handed as instances of `LazilyInstantiated` properties, which its tree reads through
 			/// their wrappers (`DependencyTreeGenerator.seamRootDeclarations(of:seamRoot:)`).
 			let rootLazilyInstantiatedInstanceProperties: Set<Property>
+			/// The labels of what the seam's root is handed in a wrapper that is not `Sendable`, which a `@Sendable` function
+			/// of its tree would capture (`DependencyTreeGenerator.seamRootDeclarations(of:seamRoot:)`).
+			let rootNonSendableWrapperLabels: Set<String>
 			/// The seam's parameters, the nearest declarations of their labels in its tree, in signature order.
 			let parameters: [Property]
 			/// The labels of the deferred parameters the seam's own rename of the label reads from the autoclosure
 			/// (`ScopeGenerator.SeamRoot.autoclosureCallByLabel(of:)`).
 			let autoclosureLabels: Set<String>
+			/// The seam's signature, whose call routes say how its tree passes its builders' structs up to the seams it calls.
+			let signature: SeamSignature
+			/// The seam's root, from which a test makes the seam's holes (`SeamHoles(of:seamType:)`), and the seam's type.
+			let seamRoot: ScopeGenerator.SeamRoot
+			let seamType: TypeDescription
+			/// The names the seam's generated initializer binds for its builders, sorted, which every call in its tree reserves
+			/// (`SeamHoles.namesBoundForBuilders`).
+			let namesBoundForBuilders: [String]
 
-			init(seam: Instantiable, seamRoot: ScopeGenerator.SeamRoot) {
-				rootLazilyInstantiatedInstanceProperties = DependencyTreeGenerator.seamRootDeclarations(of: seam, seamRoot: seamRoot).lazilyInstantiatedInstanceProperties
+			init(seam: Instantiable, seamRoot: ScopeGenerator.SeamRoot, namesBoundForBuilders: [String]) {
+				let declarations = DependencyTreeGenerator.seamRootDeclarations(of: seam, seamRoot: seamRoot)
+				rootLazilyInstantiatedInstanceProperties = declarations.lazilyInstantiatedInstanceProperties
+				rootNonSendableWrapperLabels = declarations.nonSendableWrapperLabels
 				parameters = seamRoot.signature.parameters.map(\.property)
 				autoclosureLabels = Set(seamRoot.autoclosureCallByLabel(of: seam).keys)
+				signature = seamRoot.signature
+				self.seamRoot = seamRoot
+				seamType = seam.concreteInstantiable
+				self.namesBoundForBuilders = namesBoundForBuilders
 			}
 		}
 
 		/// For a seam's own tree, what node records read of it beside its world, worked out only where it is read; `nil` for
-		/// every other root.
+		/// every other root. The names it binds for its builders are its tree's root's (`ScopeGenerator.namesBoundForBuilders`).
 		var seamTree: SeamTree? {
-			ownSeamRoot.map { SeamTree(seam: instantiable, seamRoot: $0) }
+			ownSeamRoot.map { SeamTree(seam: instantiable, seamRoot: $0, namesBoundForBuilders: observedTree?.namesBoundForBuilders ?? []) }
 		}
 
 		/// What made this run build the root's tree (`TreeForcer`); empty where it built none.

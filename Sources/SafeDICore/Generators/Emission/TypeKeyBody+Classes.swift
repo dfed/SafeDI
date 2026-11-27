@@ -145,8 +145,34 @@ extension TypeKeyLayout {
 			return "inline|\(record.property.asSource)|\(record.concreteType.asSource)|\(record.target.callee)|\(record.isErased)|\(record.isExtension)|\(record.lineEnd)|\(arguments)|\(record.constructionShape.joined(separator: ";"))"
 		case let .alias(record):
 			let reads = record.listedReads.map { "\($0.label):\($0.property.asSource)" }.joined(separator: ",")
-			return "alias|\(record.text)|\(reads)"
+			guard let call = record.call else { return "alias|\(record.text)|\(reads)" }
+			return "alias|\(inPlaceCallShape(call))|\(reads)"
 		}
+	}
+
+	/// What tells two calls written where their places are apart: everything the engine spells them from, never their text.
+	func inPlaceCallShape(_ call: InPlaceCall) -> String {
+		let record = call.record
+		var shape = [
+			// The property's form, which decides the wrapper the call is bound in (`bindingOfInPlaceCall(of:)`).
+			"\(record.property.propertyType)",
+			record.property.asSource,
+			record.concreteType.asSource,
+			record.target.callee,
+			"\(record.isErased)",
+			"\(record.isExtension)",
+			"\(record.isSendable)",
+			record.functionName,
+			record.lineEnd,
+			record.typesDeclaredEscaping.map(\.asSource).sorted().joined(separator: ","),
+			record.leadingStatement?.spelled ?? "",
+		]
+		for (position, argument) in record.arguments.enumerated() {
+			shape.append("argument|\(argument.argumentLabel)|\(argument.label)|\(argument.property.asSource)|\(record.argumentValues[position].map { "\($0)" } ?? "")")
+		}
+		shape.append("before|\(call.statementsBeforeLeadingStatement.map { $0.spelled() }.joined())")
+		shape.append("after|\(call.statementsAfterLeadingStatement.map { $0.spelled() }.joined())")
+		return shape.joined(separator: ";")
 	}
 
 	/// `classes` refined until alike places' bodies call alike places: a place's class joins the classes its body's calls
