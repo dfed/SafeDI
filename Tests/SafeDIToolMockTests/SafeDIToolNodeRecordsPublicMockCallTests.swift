@@ -726,6 +726,90 @@ struct SafeDIToolNodeRecordsPublicMockCallTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_laysOutCallFromNodeRecords_whenCalledMockTakesEscapingClosure() async throws {
+		let (output, reports) = try await mockOfRoot(
+			feed: """
+			import SafeDI
+
+			@Instantiable
+			package final class Analytics: Instantiable {
+			    package init() {}
+			}
+
+			@Instantiable(generateMock: .public)
+			public final class Screen: Instantiable {
+			    package init(analytics: Analytics, onTap: @escaping () -> Void) {
+			        self.analytics = analytics
+			        self.onTap = onTap
+			    }
+
+			    @Instantiated let analytics: Analytics
+			    @Received let onTap: () -> Void
+			}
+			""",
+			app: """
+			@Instantiable(generateMock: true)
+			public final class Root: Instantiable {
+			    public init(screen: Screen) {
+			        self.screen = screen
+			    }
+
+			    @Instantiated let screen: Screen
+			}
+			""",
+		)
+		#expect(output == generatedFileHeader + """
+		#if canImport(Feed)
+		import Feed
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            screen: Screen.SafeDIOverrides = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                screen: screen
+		            )
+		        }
+
+		        var screen: Screen.SafeDIOverrides { __safeDI_storage.screen }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                screen: Screen.SafeDIOverrides
+		            ) {
+		                self.screen = screen
+		            }
+
+		            let screen: Screen.SafeDIOverrides
+		        }
+		    }
+
+		    static func mock(
+		        onTap: @escaping () -> Void,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        _ = Screen.__safeDI_Screen_mock_860690856004ABE7.self // If this line does not compile, compile the code SafeDI generates for module Feed into Feed: under Bazel, add Feed’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        let screen = Screen.__safeDI_mock(onTap: onTap, safeDIOverrides: safeDIOverrides.screen)
+		        return Root(screen: screen)
+		    }
+		}
+		#endif
+		""")
+		#expect(reports.map(\.refusal) == [nil])
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_refusesCall_whenCallFillsBuilder() async throws {
 		let (_, reports) = try await mockOfRoot(
 			feed: Self.screen(holdsService: true),
