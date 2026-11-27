@@ -87,7 +87,7 @@ extension TypeKeyLayout {
 				value = .spelledConstruction(construction)
 			}
 			var builderBody = BuilderBody(statements: body)
-			builderBody.alwaysWritesReturn = representative.property.propertyType.isConstant
+			builderBody.alwaysWritesReturn = representative.functionAlwaysWritesReturn
 			functionCode[owner] = BuilderNode(
 				name: functionNames[owner],
 				isSendable: isDecorated[owner],

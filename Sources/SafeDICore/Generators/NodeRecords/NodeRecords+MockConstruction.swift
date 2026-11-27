@@ -109,6 +109,8 @@ extension NodeRecords {
 			typesDeclaredEscaping: typesDeclaredEscaping,
 			children: children,
 		)
+		// A constant built in a function for its configuration's fields writes `return`, as the walk writes it.
+		record.functionAlwaysWritesReturn = !fieldArguments.isEmpty && record.property.propertyType.isConstant
 		let isConfigured = !children.isEmpty || !fieldArguments.isEmpty
 		let slotType: TypeDescription = if isConfigured {
 			.nested(name: ScopeGenerator.mockConfigurationStructName, parentType: instantiable.concreteInstantiable, generics: [])

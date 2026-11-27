@@ -107,6 +107,10 @@ extension TypeKeyLayout {
 		if record.returnsPropertyType {
 			key.append("returns|\(record.property.typeDescription.asSource)|\(record.isErased)")
 		}
+		// A function that writes `return` before a lone value is another function's text.
+		if record.functionAlwaysWritesReturn {
+			key.append("writesReturn")
+		}
 		for argument in record.arguments {
 			key.append("argument|\(argument.argumentLabel)|\(argument.label)|\(argument.property.asSource)")
 		}
