@@ -19,13 +19,30 @@
 // SOFTWARE.
 
 extension NodeRecords {
-	/// The claim of `declaration` where it is a node whose type receives a property only if available: of kind
-	/// `receivesOnlyIfAvailable`, discharging `onlyIfAvailable`; `nil` for any other node.
+	/// The claim of `declaration` where it is a node whose type receives a property only if available or declares a rename:
+	/// of kind `receivesOnlyIfAvailable`, discharging `onlyIfAvailable` and `renameOrHole`, which it still holds where its
+	/// scope declares a hole or an instantiated dependency it does not build; `nil` for any other node.
 	static func receivesOnlyIfAvailableClaim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
-		guard world.kind(of: declaration) != .alias, world.kind(of: declaration) != .hole,
-		      world.scope(of: declaration).instantiable.dependencies.contains(where: { $0.source == .received(onlyIfAvailable: true) })
-		else { return nil }
-		return NodeRecordClaim(kind: .receivesOnlyIfAvailable, discharges: [.onlyIfAvailable])
+		// A mock root's world reads each node's override, which these records do not yet.
+		guard !world.isMockWorld, world.kind(of: declaration) != .alias, world.kind(of: declaration) != .hole else { return nil }
+		let scope = world.scope(of: declaration)
+		let declaresRename = scope.propertiesToGenerate.contains {
+			if case .aliased = $0 {
+				true
+			} else {
+				false
+			}
+		}
+		guard declaresRename || scope.instantiable.dependencies.contains(where: { $0.source == .received(onlyIfAvailable: true) }) else { return nil }
+		let declaresHole = scope.propertiesToGenerate.contains {
+			if case .hole = $0 {
+				true
+			} else {
+				false
+			}
+		}
+		let refusals: [NodeRecordRefusal] = declaresHole || !scope.instantiatedDependenciesNotGenerated.isEmpty ? [.renameOrHole] : []
+		return NodeRecordClaim(kind: .receivesOnlyIfAvailable, discharges: [.onlyIfAvailable, .renameOrHole], refusals: refusals)
 	}
 
 	/// The record of `declaration`'s place in `variant`, a node of kind `receivesOnlyIfAvailable`: a `builtByInitializer`
@@ -66,13 +83,22 @@ struct OnlyIfAvailableAnswers: Sendable {
 	init(world: some NodeRecordSources) throws(NodeRecordRefusal) {
 		var labels = Set<String>()
 		for declaration in 0..<Int32(world.declarationCount) where world.kind(of: declaration) != .alias && world.kind(of: declaration) != .hole {
-			for dependency in world.scope(of: declaration).instantiable.dependencies where dependency.source == .received(onlyIfAvailable: true) {
-				labels.insert(dependency.property.label)
+			for dependency in world.scope(of: declaration).instantiable.dependencies {
+				switch dependency.source {
+				case .received(onlyIfAvailable: true):
+					labels.insert(dependency.property.label)
+				case let .aliased(fulfillingProperty, _, onlyIfAvailable: true):
+					labels.insert(fulfillingProperty.label)
+				case .instantiated, .forwarded, .received(onlyIfAvailable: false), .aliased(_, _, onlyIfAvailable: false):
+					break
+				}
 			}
 		}
 		var unavailablePropertiesByVariant = [Set<Property>](repeating: [], count: world.variantCount)
+		var renameBindingByVariant = [RenameBinding?](repeating: nil, count: world.variantCount)
 		guard !labels.isEmpty else {
 			self.unavailablePropertiesByVariant = unavailablePropertiesByVariant
+			self.renameBindingByVariant = renameBindingByVariant
 			return
 		}
 		// What each variant's construction sees of each followed label: what the call that reaches it sees, with the
@@ -81,8 +107,9 @@ struct OnlyIfAvailableAnswers: Sendable {
 		contextByVariant[0] = [:]
 		var variantsToVisit: [VariantID] = [0]
 		while let variant = variantsToVisit.popLast() {
-			guard let context = contextByVariant[Int(variant)] else { continue }
 			let declaration = world.declaration(of: variant)
+			// A rename or a hole is a leaf of the scope that declares it, which reads for it (below).
+			guard let context = contextByVariant[Int(variant)], world.kind(of: declaration) != .alias, world.kind(of: declaration) != .hole else { continue }
 			let scope = world.scope(of: declaration)
 			// Inside the node's builder function, its forwarded properties are the nearest declarations of their labels.
 			var contextInside = context
@@ -119,19 +146,58 @@ struct OnlyIfAvailableAnswers: Sendable {
 				}
 			}
 			for dependency in scope.instantiable.dependencies where dependency.source == .received(onlyIfAvailable: true) {
-				let providingBindings = (context[dependency.property.label] ?? []).filter { binding in
-					ScopeGenerator.provides(binding.property, aFormReadBy: dependency.property)
-				}
-				let isAvailable = providingBindings.contains { $0.state == .available }
-				// An `Instantiator` still being built, or built after the branch, is given to the receive where its loop of
-				// builders holds only builders (`ReceivedBuilderLoops`), which rebinds it: a loop of builders, refused.
-				guard isAvailable || !providingBindings.contains(where: \.property.propertyType.isInstantiator) else { throw .builderLoop }
-				if !isAvailable {
+				if try Self.binding(reading: dependency.property, in: context) == nil {
 					unavailablePropertiesByVariant[Int(variant)].insert(dependency.property)
+				}
+			}
+			// A rename only if available is bound from a property its scope creates, whatever order it is built in, else from
+			// the nearest declaration above the scope, or to `nil` (`Scope`'s `aliasBindings`).
+			for (callee, renameDeclaration) in zip(calls, edges) where world.kind(of: renameDeclaration) == .alias {
+				for dependency in scope.instantiable.dependencies where dependency.property == world.property(of: renameDeclaration) {
+					guard case let .aliased(fulfillingProperty, _, onlyIfAvailable: true) = dependency.source else { continue }
+					let binding: Property? = if let createdBinding = scope.createdBinding(of: fulfillingProperty) {
+						createdBinding
+					} else {
+						try Self.binding(reading: fulfillingProperty, in: context)
+					}
+					if let binding {
+						renameBindingByVariant[Int(callee)] = .bound(fulfillingBindingIsOptional: binding.typeDescription.isOptional)
+					} else {
+						renameBindingByVariant[Int(callee)] = .boundToNil
+						unavailablePropertiesByVariant[Int(variant)].insert(fulfillingProperty)
+					}
 				}
 			}
 		}
 		self.unavailablePropertiesByVariant = unavailablePropertiesByVariant
+		self.renameBindingByVariant = renameBindingByVariant
+	}
+
+	/// How a rename only if available is bound where its scope is built.
+	enum RenameBinding: Equatable {
+		/// To `nil`: no declaration it reads is available.
+		case boundToNil
+		/// From the declaration it reads, which may be optional.
+		case bound(fulfillingBindingIsOptional: Bool)
+	}
+
+	/// How `variant`, a rename, is bound: `nil` for a required rename, bound from its fulfilling property.
+	func renameBinding(of variant: VariantID) -> RenameBinding? {
+		renameBindingByVariant[Int(variant)]
+	}
+
+	/// The declaration in `context` a read only if available of `property` is passed, or `nil` where none is available.
+	private static func binding(reading property: Property, in context: [String: [Binding]]) throws(NodeRecordRefusal) -> Property? {
+		let providingBindings = (context[property.label] ?? []).filter { binding in
+			ScopeGenerator.provides(binding.property, aFormReadBy: property)
+		}
+		if let available = providingBindings.first(where: { $0.state == .available }) {
+			return available.property
+		}
+		// An `Instantiator` still being built, or built after the branch, is given to the read where its loop of builders
+		// holds only builders (`ReceivedBuilderLoops`), which rebinds it: a loop of builders, refused.
+		guard !providingBindings.contains(where: \.property.propertyType.isInstantiator) else { throw .builderLoop }
+		return nil
 	}
 
 	/// The properties `variant`'s construction is passed `nil` for.
@@ -156,4 +222,6 @@ struct OnlyIfAvailableAnswers: Sendable {
 
 	/// By variant.
 	private let unavailablePropertiesByVariant: [Set<Property>]
+	/// By variant: set for a rename only if available.
+	private let renameBindingByVariant: [RenameBinding?]
 }

@@ -99,8 +99,9 @@ struct NodeRecordsLayout: Sendable {
 		rootBody = nodeRecords.rootBody
 		recordCount = nodeRecords.recordCount
 		var fulfillers = Set<FulfillerImports.Fulfiller>()
-		// The root is built as no property, so it adds none, as the tree's root place adds none.
-		for declaration in 0..<Int32(world.declarationCount) {
+		// The root is built as no property, so it adds none, as the tree's root place adds none; nor does a rename or a hole,
+		// which builds nothing.
+		for declaration in 0..<Int32(world.declarationCount) where world.kind(of: declaration) != .alias && world.kind(of: declaration) != .hole {
 			fulfillers.formUnion(world.property(of: declaration).map { property in
 				FulfillerImports.Fulfiller.fulfillers(
 					building: world.scope(of: declaration).instantiable,
