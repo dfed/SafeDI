@@ -852,9 +852,9 @@ struct SafeDIToolNodeRecordsMockLoopTests: ~Copyable {
 		}
 	}
 
-	/// A member the mock root promotes only because another member's tree receives it stays refused: the walk binds no wrapper of it, which the root's body would bind unread.
+	/// A member the mock root promotes only because another member's tree receives it has its function declared and its wrapper bound nowhere, as the walk writes it.
 	@Test
-	mutating func mock_refusesLoop_whenMockRootPromotesMemberOnlyForItsLoop() async throws {
+	mutating func mock_laysOutLoopAsTheWalkWritesIt_whenMockRootPromotesMemberOnlyForItsLoop() async throws {
 		let fixture = [
 			"""
 			@Instantiable(generateMock: true)
@@ -875,10 +875,12 @@ struct SafeDIToolNodeRecordsMockLoopTests: ~Copyable {
 			}
 			""",
 		]
-		let (_, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
+		let walkOutput = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
 			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		}
-		#expect(reports.filter(\.isMockRoot).map(\.everyRefusal) == [["builderLoop"]])
+		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [true])
+		#expect(output.mockFiles["A+SafeDIMock.swift"] == walkOutput.mockFiles["A+SafeDIMock.swift"])
 	}
 
 	/// A member promoted for an optional receive stays refused: the walk binds it non-optional, which its rebinding would annotate optional.

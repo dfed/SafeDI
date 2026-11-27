@@ -114,6 +114,10 @@ extension TypeKeyLayout {
 			if let function = attachedFunction[site] {
 				code.append(.indented(functionCode[function], by: indentation))
 			}
+			// A place that declares only its function binds nothing.
+			if case let .built(child) = statement, bodies[child].record?.declaresOnlyItsFunction == true {
+				continue
+			}
 			guard let text = spelledStatement(statement, inClass: owner, at: index) else { return nil }
 			code.append(.indented(.text(text), by: indentation))
 		}

@@ -58,13 +58,10 @@ extension NodeRecords {
 	static func mockLoopRefusesNothing(ofMember member: DeclarationID, in world: some NodeRecordSources) -> Bool {
 		let members = mockLoopMembers(atLevelOf: member, in: world)
 		// A member erased to another type is made again of its concrete type's function, whose rebinding these records
-		// do not erase yet; a member promoted for an optional receive is bound non-optional, which its rebinding would
-		// annotate optional; and a member the mock root promotes only for its loop has no binding in the walk
-		// (`ScopeGenerator.loopMembersReadOnlyInsideTheirLoop`), which the root's body here would bind unread.
+		// do not erase yet; and a member promoted for an optional receive is bound non-optional, which its rebinding would
+		// annotate optional.
 		guard !members.contains(where: { member in
-			world.isErased(member)
-				|| world.property(of: member).map { $0.asUnwrappedProperty != $0 } == true
-				|| isPromotedOnlyForItsLoop(member, in: world)
+			world.isErased(member) || world.property(of: member).map { $0.asUnwrappedProperty != $0 } == true
 		}) else { return false }
 		guard !members.allSatisfy({ mockLoopMemberTakesNothing($0, in: world) }) else { return true }
 		// A level on a cycle of the mock is entered again with another configuration, which its members' level argument
@@ -79,15 +76,6 @@ extension NodeRecords {
 			world.property(of: member)?.propertyType.isSendable == false
 				&& world.scope(of: member).publicMockCall == nil
 				&& !buildsUnavailableDependency(beneath: member, in: world)
-		}
-	}
-
-	/// Whether `member`, at a mock root's level, is a property the mocked type neither receives nor instantiates: one
-	/// the root promotes, which the walk may bind nowhere where only its loop reads it.
-	private static func isPromotedOnlyForItsLoop(_ member: DeclarationID, in world: some NodeRecordSources) -> Bool {
-		guard world.parents(of: member).contains(where: { $0.parent == 0 }), let property = world.property(of: member) else { return false }
-		return !world.scope(of: 0).instantiable.dependencies.contains { dependency in
-			dependency.property == property || dependency.property.asUnwrappedProperty == property.asUnwrappedProperty
 		}
 	}
 
