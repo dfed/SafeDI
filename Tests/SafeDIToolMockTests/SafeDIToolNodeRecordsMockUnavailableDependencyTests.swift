@@ -274,6 +274,74 @@ struct SafeDIToolNodeRecordsMockUnavailableDependencyTests: ~Copyable {
 		#expect(output.generatedFiles == walkOutput.generatedFiles)
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_keepsTheWalksStatements_whenTypeThatDeclaresUnavailableDependencyIsNamedApartOnLazyCycle() async throws {
+		// The acceptance case of the kind that lays out a cycle's closer: `Node` declares `token`, which nothing fulfills,
+		// is built again through its own `Instantiator`, and is named apart from the `node` a sibling receives. In this
+		// one position the walk binds `token` to `nil` and `mock()` takes no override of it; the records are to offer the
+		// override there as everywhere else, `nil` by default. Until that kind is made the world is refused for the
+		// cycle, and the walk writes it.
+		let fixture = [
+			"""
+			@Instantiable(generateMock: true)
+			public final class Host: Instantiable {
+			    public init(node: Node, peer: Peer) {
+			        self.node = node
+			        self.peer = peer
+			    }
+
+			    @Instantiated let node: Node
+			    @Received let peer: Peer
+			}
+
+			@Instantiable
+			public final class Node: Instantiable {
+			    public init(loopBuilder: Instantiator<Loop>, token: Token?) {
+			        self.loopBuilder = loopBuilder
+			        self.token = token
+			    }
+
+			    @Instantiated let loopBuilder: Instantiator<Loop>
+			    @Instantiated(onlyIfAvailable: true) let token: Token?
+			}
+
+			@Instantiable
+			public final class Loop: Instantiable {
+			    public init(node: Node) {
+			        self.node = node
+			    }
+
+			    @Instantiated let node: Node
+			}
+
+			@Instantiable
+			public final class Peer: Instantiable {
+			    public init(node: Other) {
+			        self.node = node
+			    }
+
+			    @Received let node: Other
+			}
+
+			@Instantiable
+			public final class Other: Instantiable {
+			    public init() {}
+			}
+
+			public final class Token {}
+			""",
+		]
+		let walkOutput = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+
+		#expect(reports.filter(\.isMockRoot).map(\.everyRefusal) == [["cycle"]])
+		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [false])
+		#expect(output.generatedFiles == walkOutput.generatedFiles)
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
