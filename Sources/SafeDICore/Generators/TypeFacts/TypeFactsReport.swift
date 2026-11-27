@@ -31,6 +31,8 @@ struct TypeFactsPlaces {
 		var closesCycle = false
 		/// What the place's subtree read of the context above it, once the place is finished.
 		var reads = ConstructionLog()
+		/// What the generator built at the place decided, once the place is finished.
+		var generator: TypeFactsGeneratorFacts?
 	}
 
 	private(set) var places = [Place]()
@@ -46,6 +48,65 @@ struct TypeFactsPlaces {
 		places[index].closesCycle = closesCycle
 		places[index].reads = reads
 	}
+
+	/// Records what the generator built at the place at `index` decided.
+	mutating func record(_ index: Int, generator: ScopeGenerator) {
+		places[index].generator = TypeFactsGeneratorFacts(generator)
+	}
+}
+
+/// What one place's generator decided that a node's columns stand for, kept for the checks to compare with the graph.
+struct TypeFactsGeneratorFacts: Sendable {
+	init(_ fillOrGenerator: ScopeGenerator) {
+		// A fill's generator holds one child, the filled property built as declared, which builds the fill's node.
+		let generator = if case .fill = fillOrGenerator.scopeData, let child = fillOrGenerator.propertiesToGenerate.first {
+			child
+		} else {
+			fillOrGenerator
+		}
+		// A call's fills follow the properties its scope lists; a node's fills are edges of their own.
+		let children = generator.propertiesToGenerate.filter { child in
+			if case .fill = child.scopeData {
+				false
+			} else {
+				true
+			}
+		}
+		childCount = children.count
+		orderedIndices = generator.orderedChildGeneratorsWithIndices.map(\.index).filter { $0 < children.count }
+		loopByChildIndex = children.indices.map { generator.receivedBuilderLoops.loopByChildIndex[$0] ?? -1 }
+		// Every child is built as a property: a fill is left out above, and no root is a child.
+		childLabels = children.map { $0.property?.label ?? "" }
+		received = generator.receivedProperties
+		required = generator.requiredReceivedProperties
+		onlyIfAvailableUnwrapped = generator.onlyIfAvailableUnwrappedReceivedProperties
+		requiredAliasFulfilling = generator.requiredAliasFulfillingProperties
+		typesDeclaredEscaping = generator.typesDeclaredEscaping
+		buildsInSendableFunction = generator.buildsInSendableFunction
+		constructsWithHandWrittenMock = generator.constructsWithHandWrittenMock
+		callsSeam = if case let .property(_, _, _, _, _, seamCall) = generator.scopeData {
+			seamCall != nil
+		} else {
+			false
+		}
+		callsPublicMock = generator.publicMockCall != nil
+	}
+
+	let childCount: Int
+	/// The children's indices in the order the generator builds them.
+	let orderedIndices: [Int]
+	/// Each child's loop of builders, named by the index of its first member, or -1.
+	let loopByChildIndex: [Int]
+	let childLabels: [String]
+	let received: Set<Property>
+	let required: Set<Property>
+	let onlyIfAvailableUnwrapped: Set<Property>
+	let requiredAliasFulfilling: Set<Property>
+	let typesDeclaredEscaping: Set<TypeDescription>
+	let buildsInSendableFunction: Bool
+	let constructsWithHandWrittenMock: Bool
+	let callsSeam: Bool
+	let callsPublicMock: Bool
 }
 
 /// A world's graph beside the places one build of its tree made, for a test to compare (`ConstructionMemoOracle`): each
@@ -55,18 +116,74 @@ struct TypeFactsPlaces {
 public struct TypeFactsReport: Sendable {
 	init(root: ConstructionScope, places: TypeFactsPlaces, forMockGeneration: Bool) {
 		let graph = TypeFactsGraph(root: root, forMockGeneration: forMockGeneration)
+		self.graph = graph
 		self.root = root.instantiable.concreteInstantiable.asSource
 		self.forMockGeneration = forMockGeneration
 		projection = graph.projection
+		world = Self.projection(of: graph)
+		var variantCounts = [Int](repeating: 0, count: graph.declarationCount)
+		for variant in 0..<graph.variantCount {
+			variantCounts[Int(graph.declaration(of: VariantID(variant)))] += 1
+		}
+		variantCountsByNode = variantCounts
+		variantNodes = (0..<graph.variantCount).map { Int(graph.declaration(of: VariantID($0))) }
+		variantCalls = (0..<graph.variantCount).map { graph.calls(of: VariantID($0)).map(Int.init) }
 		columnElementCount = graph.columnElementCount
 		edgeCount = graph.graph.edgeCount
+		func spelled(_ row: BitRows, of index: Int, _ spelling: (Int32) -> String) -> [String] {
+			row.columns(inRow: index).map(spelling).sorted()
+		}
+		func property(_ id: Int32) -> String {
+			graph.propertyTable[Int(id)].asSource
+		}
+		// The receive sets intern a property's first spelling, while the generator's keep the most explicit, so both are
+		// spelled as `==` reads them.
+		func propertyWithoutAny(_ id: Int32) -> String {
+			graph.propertyTable[Int(id)].spelledWithoutAny
+		}
+		func type(_ id: Int32) -> String {
+			graph.typeTable[Int(id)].asSource
+		}
 		nodes = graph.graph.nodes.indices.map { index in
-			Node(
+			let edgeFacts = graph.edgeFacts(from: index)
+			return Node(
 				description: graph.description(ofNode: index),
+				kind: "\(graph.kinds[index])",
 				construction: "\(graph.constructions[index])",
+				label: graph.graph.nodes[index].property?.label ?? "",
+				isLeaf: graph.graph.nodes[index].key.leaf != .none,
 				cycleKey: graph.cycleKey(ofNode: index),
+				cycleKeyID: Int(graph.cycleIDs[index]),
+				twin: Int(graph.twins[index]),
 				edges: graph.graph.edges(from: index).map(Int.init),
-				instantiatedEdgeCount: Int(graph.instantiatedEdgeCounts[index]),
+				edgeFacts: edgeFacts.map { edge in
+					Edge(
+						buildPosition: Int(edge.buildPosition),
+						loop: Int(edge.loop),
+						opens: "\(edge.opens)",
+						isFill: edge.isFill,
+						isCallEdge: edge.isCallEdge,
+						bindingsBefore: Int(edge.bindingsBefore),
+					)
+				},
+				instantiatedEdgeCount: edgeFacts.count { !$0.isFill },
+				bindings: graph.worldBindings(of: index).map { binding in
+					"\(graph.labelTexts[Int(binding.label)]): \(property(binding.property))"
+				},
+				bindingModules: graph.worldBindings(of: index).map { binding in
+					binding.declaringModule >= 0 ? graph.moduleNames[Int(binding.declaringModule)] : ""
+				},
+				module: graph.graph.nodes[index].scope.instantiable.moduleName ?? "",
+				parents: graph.parents(of: index).map { Int($0.parent) },
+				fillCount: graph.fills.count { TypeFactsGraph.source(ofEdge: Int($0.edge), in: graph.graph) == index },
+				received: spelled(graph.receives.received, of: index, propertyWithoutAny),
+				required: spelled(graph.receives.required, of: index, propertyWithoutAny),
+				onlyIfAvailableUnwrapped: spelled(graph.receives.onlyIfAvailableUnwrapped, of: index, propertyWithoutAny),
+				requiredAliasFulfilling: spelled(graph.receives.requiredAliasFulfilling, of: index, propertyWithoutAny),
+				typesDeclaredEscaping: spelled(graph.typesDeclaredEscaping, of: index, type),
+				typesBeneath: spelled(graph.typesBeneath, of: index, type),
+				holdsHoleBeneath: graph.holesBeneath.contains(0, inRow: index),
+				builtType: type(graph.builtTypes[index]),
 				isOnCycle: graph.graph.isOnCycle(index),
 				readsFromAbove: graph.reads.reads(of: index).map(graph.readDescription),
 				firstRoute: graph.graph.firstRoute(to: index),
@@ -97,21 +214,97 @@ public struct TypeFactsReport: Sendable {
 				reads: reads,
 				answeredReads: answeredReads.sorted(),
 				cycleReads: cycleReads,
+				builtType: place.declaration.scope.instantiable.concreteInstantiable.asSource,
+				generator: place.generator.map(Generator.init),
 			)
 		}
 	}
 
+	/// An edge's facts (`TypeFactsEdge`), as text where they are an enum.
+	public struct Edge: Sendable {
+		public let buildPosition: Int
+		public let loop: Int
+		public let opens: String
+		public let isFill: Bool
+		public let isCallEdge: Bool
+		public let bindingsBefore: Int
+	}
+
+	/// What the generator built at a place decided (`TypeFactsGeneratorFacts`), properties and types as text.
+	public struct Generator: Sendable {
+		init(_ facts: TypeFactsGeneratorFacts) {
+			childCount = facts.childCount
+			orderedIndices = facts.orderedIndices
+			loopByChildIndex = facts.loopByChildIndex
+			childLabels = facts.childLabels
+			received = facts.received.map(\.spelledWithoutAny).sorted()
+			required = facts.required.map(\.spelledWithoutAny).sorted()
+			onlyIfAvailableUnwrapped = facts.onlyIfAvailableUnwrapped.map(\.spelledWithoutAny).sorted()
+			requiredAliasFulfilling = facts.requiredAliasFulfilling.map(\.spelledWithoutAny).sorted()
+			typesDeclaredEscaping = facts.typesDeclaredEscaping.map(\.asSource).sorted()
+			buildsInSendableFunction = facts.buildsInSendableFunction
+			constructsWithHandWrittenMock = facts.constructsWithHandWrittenMock
+			callsSeam = facts.callsSeam
+			callsPublicMock = facts.callsPublicMock
+		}
+
+		public let childCount: Int
+		public let orderedIndices: [Int]
+		public let loopByChildIndex: [Int]
+		public let childLabels: [String]
+		public let received: [String]
+		public let required: [String]
+		public let onlyIfAvailableUnwrapped: [String]
+		public let requiredAliasFulfilling: [String]
+		public let typesDeclaredEscaping: [String]
+		public let buildsInSendableFunction: Bool
+		public let constructsWithHandWrittenMock: Bool
+		public let callsSeam: Bool
+		public let callsPublicMock: Bool
+	}
+
 	public struct Node: Sendable {
 		public let description: String
-		/// How the node's type is built: `initializer`, `seamCall`, `publicMockCall` or `fill`.
+		/// The node's kind (`TypeFactsKind`).
+		public let kind: String
+		/// How the node's type comes to exist (`TypeFactsConstruction`).
 		public let construction: String
+		/// The label of the property the node is built as, empty for the root.
+		public let label: String
+		/// Whether the node is an alias or a hole its scope declares, which no place builds.
+		public let isLeaf: Bool
 		/// What a place of the node closes a cycle on, as cycle validation sees its property: two nodes of one key close on
 		/// each other, a lazy wrapper and its constant among them.
 		public let cycleKey: String
+		/// The node's cycle identity (A4), which two nodes of one `cycleKey` share, or -1 for a leaf.
+		public let cycleKeyID: Int
+		/// The first other node of its cycle identity, or -1.
+		public let twin: Int
 		/// The positions of the nodes its edges lead to, in edge order.
 		public let edges: [Int]
-		/// How many of `edges`, the first ones, are properties the node's scope instantiates; the rest are fills.
+		/// Each edge's facts, parallel to `edges`.
+		public let edgeFacts: [Edge]
+		/// How many of `edges`, the first ones, are properties the node's scope lists; the rest are fills.
 		public let instantiatedEdgeCount: Int
+		/// The node's bindings in binding order, `label: property`.
+		public let bindings: [String]
+		/// The module declaring each binding, parallel to `bindings`.
+		public let bindingModules: [String]
+		/// The module of the node's type.
+		public let module: String
+		/// The node's parents, in first-reach order.
+		public let parents: [Int]
+		/// How many fills the node's call passes.
+		public let fillCount: Int
+		public let received: [String]
+		public let required: [String]
+		public let onlyIfAvailableUnwrapped: [String]
+		public let requiredAliasFulfilling: [String]
+		public let typesDeclaredEscaping: [String]
+		/// The types the node's subtree builds, its own included.
+		public let typesBeneath: [String]
+		public let holdsHoleBeneath: Bool
+		public let builtType: String
 		public let isOnCycle: Bool
 		/// What the node's subtree reads from above it, as `Read` descriptions.
 		public let readsFromAbove: [String]
@@ -133,8 +326,14 @@ public struct TypeFactsReport: Sendable {
 		public let answeredReads: [String]
 		/// The reads of what a cycle closes on or passes, which no `Read` stands for, each with its answer.
 		public let cycleReads: [String]
+		/// The concrete type the place builds.
+		public let builtType: String
+		/// What the place's generator decided, or `nil` where the walk recorded none.
+		public let generator: Generator?
 	}
 
+	/// The world's graph, which a test of what it holds reads.
+	let graph: TypeFactsGraph
 	/// The concrete type of the world's root.
 	public let root: String
 	/// The 32-bit elements of the graph's columns, which grow with its nodes and edges.
@@ -146,6 +345,44 @@ public struct TypeFactsReport: Sendable {
 	public let nodes: [Node]
 	/// The places in the order the build started them, the root first.
 	public let places: [Place]
+	/// The world as every track reads it (`TypeFactsWorld`), a line per declaration then a line per variant.
+	public let world: String
+	/// How many variants each node has, by node position.
+	public let variantCountsByNode: [Int]
+	/// Each variant's node.
+	public let variantNodes: [Int]
+	/// The variant each edge of a variant's node calls, in edge order.
+	public let variantCalls: [[Int]]
+
+	/// The world read through its interface only, as text: what a consumer of the frozen accessors sees.
+	private static func projection(of world: some TypeFactsWorld) -> String {
+		var lines = [String]()
+		for index in 0..<world.declarationCount {
+			let declaration = DeclarationID(index)
+			var line = "d\(index) \(world.kind(of: declaration)) \(world.construction(of: declaration)) property \(world.propertyID(of: declaration))"
+			line += " type \(world.builtType(of: declaration).raw) cycle \(world.cycle(of: declaration)) component \(world.component(of: declaration))"
+			line += world.isOnCycle(declaration) ? " on cycle" : ""
+			line += " route \(world.firstRoute(to: declaration)) edges \(Array(world.edges(from: declaration)))"
+			line += " facts \(world.edgeFacts(from: declaration).count) bindings \(world.bindings(of: declaration).count)"
+			line += " parents \(world.parents(of: declaration).count) hole \(world.hole(declaration) != nil) received \(world.received(by: declaration).count)"
+			line += " receives \(world.receives(of: declaration).map { world.acceptedProperties(of: $0).count })"
+			line += " reads [\(world.reads(of: declaration).map { "\(world.read($0).channel.name)" }.joined(separator: ", "))]"
+			line += " labels \(Array(world.labels(of: declaration)))"
+			lines.append(line)
+		}
+		lines.append("roots \((0..<world.rootCount).map(world.rootVariant))")
+		for index in 0..<world.variantCount {
+			let variant = VariantID(index)
+			var line = "v\(index) d\(world.declaration(of: variant)) \(world.family(of: variant))"
+			line += " keys [\(world.keys(of: variant).map { "\(world.answer($0).form) \(world.forms(of: $0).count)" }.joined(separator: ", "))]"
+			let calls = world.calls(of: variant)
+			line += " calls \(Array(calls)) sources [\(calls.indices.map { "\(world.sources(ofCall: $0 - calls.startIndex, of: variant).map(\.kind))" }.joined(separator: ", "))]"
+			line += world.isCalledOnce(variant) ? " once" : ""
+			line += " outcomes \(world.outcomes(of: variant).map { "\($0)" }) bound before \(Array(world.boundBefore(of: variant)))"
+			lines.append(line)
+		}
+		return lines.joined(separator: "\n")
+	}
 }
 
 extension ConstructionLog.Read {
@@ -188,5 +425,12 @@ extension ConstructionLog.Answer {
 		case let .cycleParameterContext(parameters):
 			return parameters.map { "\($0.map(\.property.asSource))" } ?? "nil"
 		}
+	}
+}
+
+extension Property {
+	/// The property as `TypeDescription`'s `==` reads it: `any P` as `P`.
+	fileprivate var spelledWithoutAny: String {
+		Property(label: label, typeDescription: typeDescription.withoutAny).asSource
 	}
 }
