@@ -75,6 +75,9 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	case readAnsweredTwoWays
 	/// The engine could not lay the root out from the records.
 	case notLaidOut
+	/// Making the records, or laying the root out from them, threw something other than a refusal
+	/// (`NodeRecords.refusingWhatRecordsThrow(_:)`). The world keeps its tree, which reports whatever it reports.
+	case recordsThrew
 }
 
 /// What one variant's record may read: its declaration's own facts, and the key every call into the variant shares
@@ -157,6 +160,18 @@ extension TypeFactsGraph: NodeRecordSources {
 /// world whose calls of one variant find different answers is refused. Records still carry today's `functionName`, which
 /// the engine's allocator names apart.
 struct NodeRecords: Sendable {
+	/// What `body`, which makes records or lays a root out from them, returns, or the refusal it throws; anything else it
+	/// throws is `NodeRecordRefusal.recordsThrew`. While the tree exists, the records' path never rejects a world: a world
+	/// the records cannot make keeps its tree, which reports the world's errors as it always has. Each call that throws
+	/// is fixed, and this rule goes, once no accepted graph reports `recordsThrew` and the tree goes.
+	static func refusingWhatRecordsThrow<Value>(_ body: () throws -> Value) -> Result<Value, NodeRecordRefusal> {
+		do {
+			return try .success(body())
+		} catch {
+			return .failure(error as? NodeRecordRefusal ?? .recordsThrew)
+		}
+	}
+
 	/// - Parameters:
 	///   - world: A production root's world.
 	///   - seamTree: What a seam's own root is handed: its parameters, the nearest declarations of their labels, and the

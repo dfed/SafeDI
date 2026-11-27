@@ -217,7 +217,7 @@ extension ScopeGenerator {
 				&& builders.isEmpty
 				&& rootRenames.values.allSatisfy(\.isEmpty)
 				&& rootInstancesReadByValue.isEmpty
-			if let statements = try Self.nodeRecordsMockStatements(of: instantiable, worldRoot: worldRoot, bindsOnlyNodes: bindsOnlyNodes) {
+			if let statements = Self.nodeRecordsMockStatements(of: instantiable, worldRoot: worldRoot, bindsOnlyNodes: bindsOnlyNodes) {
 				bindingLines = [statements]
 			}
 		}
