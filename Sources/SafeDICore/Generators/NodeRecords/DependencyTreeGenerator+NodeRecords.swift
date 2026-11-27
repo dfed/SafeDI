@@ -115,7 +115,7 @@ extension DependencyTreeGenerator {
 			let (treeCode, comparisons) = planned
 			// A root whose tree's body holds nothing is compared nowhere.
 			for comparison in comparisons {
-				observer(NodeRecordsReport(
+				var report = NodeRecordsReport(
 					root: root,
 					refusal: laidOutCode == nil && NodeRecordsObservation.laysOutRoots ? NodeRecordRefusal.notLaidOut.rawValue : nil,
 					everyRefusal: [],
@@ -124,7 +124,9 @@ extension DependencyTreeGenerator {
 					recordCount: nodeRecords.recordCount,
 					treePlaceCount: comparison.treePlaceCount,
 					treeForcers: rootInfo.treeForcers,
-				))
+				)
+				report.comparedTexts = laidOutCode.map { NodeRecordsComparedTexts(tree: treeCode.spelled(), nodeRecords: $0.spelled()) }
+				observer(report)
 			}
 			return laidOutCode ?? treeCode
 		}
@@ -142,12 +144,15 @@ extension DependencyTreeGenerator {
 		})
 		let (treeCode, comparisons) = planned
 		let captures = await tree.nonSendableWrapperCaptures(ofTreeRootedAt: instantiable)
+		let texts = NodeRecordsComparedTexts(tree: treeCode.spelled(), nodeRecords: layout.code.spelled())
+		// The texts' difference comes first, and what no text shows after it, which a test that accepts an approved
+		// difference of the texts still reports (`NodeRecordsReport.differencesNoTextShows`).
 		let factsTheRecordsMiss: [(holds: Bool, difference: String)] = [
-			(treeCode.spelled() == layout.code.spelled(), "root: the code laid out from node records differs from the tree’s"),
+			(texts.tree == texts.nodeRecords, "root: the code laid out from node records differs from the tree’s"),
 			(captures.isEmpty, "root: the tree’s @Sendable builder functions capture a wrapper, which node records cannot see"),
 			(tree.unpassableCycleLabelsInTree.isEmpty, "root: the tree holds a label no cycle parameter can pass, which node records cannot see"),
 		]
-		return NodeRecordsReport(
+		var report = NodeRecordsReport(
 			root: instantiable.concreteInstantiable.asSource,
 			refusal: nil,
 			everyRefusal: [],
@@ -157,6 +162,9 @@ extension DependencyTreeGenerator {
 			treePlaceCount: comparisons.map(\.treePlaceCount).reduce(0, +),
 			treeForcers: [],
 		)
+		report.comparedTexts = texts
+		report.differencesNoTextShows = factsTheRecordsMiss.dropFirst().filter { !$0.holds }.map(\.difference)
+		return report
 	}
 
 	/// A tree's planned code, and each comparison of its root body with node records' (`treeCode(of:besideRecordsBody:)`).
