@@ -56,9 +56,19 @@ enum NodeRecordsChecks {
 			}
 			enclosingDispatcherObserver?(dispatcher)
 		}
+		let enclosingFillObserver = FillSignatureObservation.observer
+		// A fill's function, up to its tree, spelled from the fill's record alone, must be the text the tree writes.
+		let fillObserver: @Sendable (FillSignatureObservation) -> Void = { fill in
+			if fill.spelledFromRecord != fill.written {
+				Issue.record(Comment(rawValue: "The record of a fill spells\n\(fill.spelledFromRecord.joined(separator: "\n"))\nwhere the tree writes\n\(fill.written.joined(separator: "\n"))"))
+			}
+			enclosingFillObserver?(fill)
+		}
 		return try await SeamCallRecordObservation.$observer.withValue(seamCallObserver) {
 			try await DispatcherRecordObservation.$observer.withValue(dispatcherObserver) {
-				try await checkingNodeRecords(laysOutRoots: laysOutRoots, reportPath: reportPath, testName: testName, enclosingObserver: enclosingObserver, body)
+				try await FillSignatureObservation.$observer.withValue(fillObserver) {
+					try await checkingNodeRecords(laysOutRoots: laysOutRoots, reportPath: reportPath, testName: testName, enclosingObserver: enclosingObserver, body)
+				}
 			}
 		}
 	}

@@ -80,8 +80,9 @@ struct FillSignature: Sendable {
 		/// after it.
 		case carrierUse(SeamCarrierValues.Use)
 		/// The fill returns the builder the place's wrapper keeps, and takes each field a level function's member hands it,
-		/// binding none.
-		case wrapperBuilder(parameters: [SeamSignature.Hole.Field])
+		/// binding none; of those, each struct of the fill's own level, `innerScopeLabels`, as the function the inner seam's
+		/// member returns for the place.
+		case wrapperBuilder(parameters: [SeamSignature.Hole.Field], innerScopeLabels: Set<String>)
 		/// The fill takes each field of its payload by itself, binding none: an override closure's or a level function
 		/// member's call.
 		case payloadFields(parameters: [SeamSignature.Hole.Field])
@@ -112,6 +113,63 @@ struct FillSignature: Sendable {
 	let labelsReadOrDeclared: Set<String>
 	/// Whether the fill returns the value its body binds (a constant), rather than the wrapper's builder.
 	let returnsBoundValue: Bool
+
+	/// The fill's function's first line, named `functionName`, then each line binding a value of its case, indented by
+	/// `indent`: what precedes the fill's tree.
+	func spelledSignature(functionName: String, indent: String, typesDeclaredEscaping: Set<TypeDescription>) -> [String] {
+		// The parameter is named apart from what the tree reads by name, which it would hide.
+		var scopeParameterName = "scope"
+		while labelsReadOrDeclared.contains(scopeParameterName) {
+			scopeParameterName += "_"
+		}
+		let prefix = ScopeGenerator.localFunctionPrefix(isSendable: isSendable)
+		let caseValues = hole.enumPlace?.values ?? hole.fields
+		var parameterList: [String]
+		var returnType = hole.builtType
+		var bindings = [String]()
+		switch form {
+		case let .wrapperBuilder(parameters, innerScopeLabels):
+			parameterList = parameters.map { field in
+				let type = if innerScopeLabels.contains(field.property.label) {
+					TypeDescription.attributed(
+						DependencyTreeGenerator.erasedBuilderType(
+							forwarding: hole.forwardedType?.strippingEscaping ?? .void(.tuple),
+							returning: field.property.typeDescription,
+							isSendable: hole.enumPlace?.isBuiltBySendableBuilder ?? false,
+						),
+						specifiers: [],
+						attributes: ["escaping"],
+					)
+				} else {
+					field.boundTypeAsFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping)
+				}
+				return "\(field.property.label.spelledAsArgumentLabel): \(type.asSource)"
+			}
+			returnType = .nested(name: Dependency.wrapperBuilderTypeName, parentType: hole.property.typeDescription.unwrapped, generics: [])
+		case let .payloadFields(parameters):
+			parameterList = parameters.map { "\($0.property.label.spelledAsArgumentLabel): \($0.property.typeDescription.asFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping).asSource)" }
+		case let .caseValues(valuesType):
+			parameterList = valuesType.map { ["_ \(scopeParameterName): \($0.asSource)"] } ?? []
+			bindings = bound.map { "\(indent)let \($0.field.property.label) = \(scopeParameterName).\($0.field.memberName(bindingMemo: $0.bindsMemo))" }
+		case .caseArguments:
+			parameterList = caseValues.map { "_ \(SeamHoles.argumentName(of: $0, inPayloadNamed: scopeParameterName)): \(($0.memoType ?? $0.property.typeDescription.asFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping)).asSource)" }
+			bindings = bound.map { "\(indent)let \($0.field.property.label) = \(SeamHoles.argumentRead(of: $0.field, inPayloadNamed: scopeParameterName, bindingMemo: $0.bindsMemo))" }
+		case let .carrierUse(use):
+			parameterList = zip(use.parameterNames(of: caseValues, inPayloadNamed: scopeParameterName), use.parameterTypes(of: caseValues, qualifiedBy: hole.scopeSeamType, typesDeclaredEscaping: typesDeclaredEscaping)).map { "_ \($0): \($1.asSource)" }
+			bindings = bound.map { "\(indent)let \($0.field.property.label) = \(use.read(ofFieldAt: $0.index, of: caseValues, inPayloadNamed: scopeParameterName, bindingMemo: $0.bindsMemo))" }
+		}
+		parameterList += parameters.map { "\($0.property.label.spelledAsArgumentLabel): \($0.boundTypeAsFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping).asSource)" }
+		return ["\(prefix)func \(functionName)(\(parameterList.joined(separator: ", "))) -> \(returnType.asSource) {"] + bindings
+	}
+}
+
+/// A fill's function as the tree writes it up to its tree, beside the same lines spelled from the fill's record alone.
+public struct FillSignatureObservation: Sendable {
+	public let written: [String]
+	public let spelledFromRecord: [String]
+
+	/// Called with each fill as its function is written, when set: by the tests, never by the tool.
+	@TaskLocal public static var observer: (@Sendable (FillSignatureObservation) -> Void)?
 }
 
 /// What a call that fills a builder hands its dispatchers of the caller's scope, shared by every builder it fills.

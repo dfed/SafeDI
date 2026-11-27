@@ -9510,6 +9510,21 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			scopeParameterName += "_"
 		}
 		let indent = Self.standardIndent
+		// Where a test observes fills, the function's lines up to its tree are spelled again from the fill's record alone.
+		func observe(_ written: [String], form: FillSignature.Form, bound: [FillSignature.BoundValue] = [], parameters: [SeamSignature.Hole.Field] = []) {
+			guard let observer = FillSignatureObservation.observer else { return }
+			let record = FillSignature(
+				hole: hole,
+				functionNameStem: Self.fillFunctionName(of: hole),
+				isSendable: isSendable,
+				form: form,
+				bound: bound,
+				parameters: parameters,
+				labelsReadOrDeclared: labelsReadInFill,
+				returnsBoundValue: property.propertyType.isConstant,
+			)
+			observer(FillSignatureObservation(written: written, spelledFromRecord: record.spelledSignature(functionName: functionName, indent: indent, typesDeclaredEscaping: typesDeclaredEscaping)))
+		}
 		let childCode = try await generateProperties(
 			codeGeneration: codeGeneration,
 			propertiesGeneratedLater: fillBodyPropertiesGeneratedLater(propertiesGeneratedLater),
@@ -9547,7 +9562,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				return "\(field.property.label.spelledAsArgumentLabel): \(type.asSource)"
 			}
 			let builderType = TypeDescription.nested(name: Dependency.wrapperBuilderTypeName, parentType: hole.property.typeDescription.unwrapped, generics: [])
-			return (["\(Self.localFunctionPrefix(isSendable: isSendable))func \(functionName)(\(parameters.joined(separator: ", "))) -> \(builderType.asSource) {"]
+			let header = "\(Self.localFunctionPrefix(isSendable: isSendable))func \(functionName)(\(parameters.joined(separator: ", "))) -> \(builderType.asSource) {"
+			observe([header], form: .wrapperBuilder(parameters: fillMemberParameterFields, innerScopeLabels: innerScopeLabels))
+			return ([header]
 				+ body
 				+ ["}"]).joined(separator: "\n")
 		}
@@ -9558,8 +9575,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		guard !takesPayloadFields else {
 			// An override closure of the call calls the fill with the values the call passes the called mock, and a level
 			// function's member with its payload's, each by itself: no other module can make the payload.
-			let parameters = fillMemberParameterFields(takingPayloadFields: true).map { "\($0.property.label.spelledAsArgumentLabel): \($0.property.typeDescription.asFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping).asSource)" }
-			return (["\(Self.localFunctionPrefix(isSendable: isSendable))func \(functionName)(\(parameters.joined(separator: ", "))) -> \(hole.builtType.asSource) {"]
+			let payloadFields = fillMemberParameterFields(takingPayloadFields: true)
+			let parameters = payloadFields.map { "\($0.property.label.spelledAsArgumentLabel): \($0.property.typeDescription.asFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping).asSource)" }
+			let header = "\(Self.localFunctionPrefix(isSendable: isSendable))func \(functionName)(\(parameters.joined(separator: ", "))) -> \(hole.builtType.asSource) {"
+			observe([header], form: .payloadFields(parameters: payloadFields))
+			return ([header]
 				+ body
 				+ ["}"]).joined(separator: "\n")
 		}
@@ -9575,8 +9595,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			false
 		}
 		let caseValues = nestedByTypeValues ?? hole.fields
-		let bindings: [String] = valuesType == nil ? [] : caseValues.enumerated().filter { isRead($0.element) }.map { index, field -> String in
-			let bindsMemo = memoBoundLabels.contains(field.property.label)
+		let boundValues: [FillSignature.BoundValue] = valuesType == nil ? [] : caseValues.enumerated().filter { isRead($0.element) }.map { index, field in
+			FillSignature.BoundValue(index: index, field: field, bindsMemo: memoBoundLabels.contains(field.property.label))
+		}
+		let bindings = boundValues.map { boundValue -> String in
+			let (index, field, bindsMemo) = (boundValue.index, boundValue.field, boundValue.bindsMemo)
 			let read = if let fillCarrierUse, takesValuesAsArguments {
 				// The struct of the run the values end holds the field, unless it is one taken after it.
 				fillCarrierUse.read(ofFieldAt: index, of: caseValues, inPayloadNamed: scopeParameterName, bindingMemo: bindsMemo)
@@ -9597,7 +9620,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			valuesType.map { ["_ \(scopeParameterName): \($0.asSource)"] } ?? []
 		}
 		parameters += fillParameterFields.map { "\($0.property.label.spelledAsArgumentLabel): \($0.boundTypeAsFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping).asSource)" }
-		return (["\(Self.localFunctionPrefix(isSendable: isSendable))func \(functionName)(\(parameters.joined(separator: ", "))) -> \(hole.builtType.asSource) {"]
+		let header = "\(Self.localFunctionPrefix(isSendable: isSendable))func \(functionName)(\(parameters.joined(separator: ", "))) -> \(hole.builtType.asSource) {"
+		let form: FillSignature.Form = if let fillCarrierUse, takesValuesAsArguments {
+			.carrierUse(fillCarrierUse)
+		} else if takesValuesAsArguments {
+			.caseArguments
+		} else {
+			.caseValues(valuesType: valuesType)
+		}
+		observe([header] + bindings, form: form, bound: boundValues, parameters: fillParameterFields)
+		return ([header]
 			+ bindings
 			+ body
 			+ ["}"]).joined(separator: "\n")
