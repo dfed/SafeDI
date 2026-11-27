@@ -624,8 +624,14 @@ struct TypeFactsGraph: Sendable {
 
 		// The reads each node makes itself, and those it hides: each read of a label it binds.
 		var readInterner = TypeFactsInterner<Read>()
+		// The forms each node's own receives only if available declare, by label and kind, as columns of their own.
+		var formInterner = TypeFactsInterner<OnlyIfAvailableForm>()
+		var ownFormsByNode = [[Int32]]()
 		let ownReadsByNode = nodes.map { node in
-			Self.ownReads(of: node, forMockGeneration: forMockGeneration, labels: &labels).map { readInterner.id(of: $0) }
+			var ownForms = [OnlyIfAvailableForm]()
+			let reads = Self.ownReads(of: node, forMockGeneration: forMockGeneration, labels: &labels, formsReadOnlyIfAvailable: &ownForms).map { readInterner.id(of: $0) }
+			ownFormsByNode.append(ownForms.map { formInterner.id(of: $0) })
+			return reads
 		}
 		let own = BitRows(rowCount: nodes.count, columnCount: readInterner.values.count) { index, insert in
 			ownReadsByNode[index].forEach(insert)
@@ -665,6 +671,23 @@ struct TypeFactsGraph: Sendable {
 		declarationLocations = locations.values
 		let reads = ReadsFromAbove(graph: graph, own: own, hidden: hidden)
 		self.reads = reads
+		// The forms of each label each node's subtree reads only if available from above it, the reads its variants'
+		// parameters serve, folded as the reads are.
+		var formsByLabel = [[Int32]](repeating: [], count: labels.values.count)
+		for (id, form) in formInterner.values.enumerated() {
+			formsByLabel[Int(form.label)].append(Int32(id))
+		}
+		let formsReadFromAbove = ReadsFromAbove(
+			graph: graph,
+			own: BitRows(rowCount: nodes.count, columnCount: formInterner.values.count) { index, insert in
+				ownFormsByNode[index].forEach(insert)
+			},
+			hidden: BitRows(rowCount: nodes.count, columnCount: formInterner.values.count) { index, insert in
+				for binding in bindings[Int(bindingOffsets[index])..<Int(bindingOffsets[index + 1])] {
+					formsByLabel[Int(binding.label)].forEach(insert)
+				}
+			},
+		)
 		readTable = readInterner.values
 		labelTexts = labels.values
 		var readColumn = [Int32]()
@@ -690,7 +713,7 @@ struct TypeFactsGraph: Sendable {
 		self.readOffsets = readOffsets
 		self.labelColumn = labelColumn
 		self.labelOffsets = labelOffsets
-		let answers = Self.answers(of: graph, reads: reads, readTable: readInterner.values, labels: labels, bindings: bindings, bindingOffsets: bindingOffsets, bindingsBefore: bindingsBefore, properties: properties)
+		let answers = Self.answers(of: graph, reads: reads, readTable: readInterner.values, labels: labels, bindings: bindings, bindingOffsets: bindingOffsets, bindingsBefore: bindingsBefore, properties: properties, forms: (table: formInterner.values, readFromAbove: formsReadFromAbove))
 		answerIsBeingBuilt = answers.isBeingBuilt
 		answerTexts = answers.texts
 		answerKeys = answers.keys
@@ -776,6 +799,22 @@ struct TypeFactsGraph: Sendable {
 		}
 	}
 
+	/// A form a receive only if available reads its label in: the label, and the kind of the receive's unwrapped type.
+	struct OnlyIfAvailableForm: Hashable, Sendable {
+		init(label: Int32, kind: Property.PropertyType) {
+			self.label = label
+			self.kind = Self.position(of: kind)
+		}
+
+		let label: Int32
+		/// The kind's position among `Property.PropertyType.allCases`, which is not `Sendable`.
+		let kind: Int
+
+		static func position(of kind: Property.PropertyType) -> Int {
+			Property.PropertyType.allCases.firstIndex(of: kind) ?? -1
+		}
+	}
+
 	/// Whether a declaration of this kind is a twin of a cycle identity: a value or a lazy wrapper of its label.
 	private static func isTwin(_ kind: Property.PropertyType) -> Bool {
 		switch kind {
@@ -790,14 +829,16 @@ struct TypeFactsGraph: Sendable {
 	/// bindings of that label bound before the edge (`bindingsBefore`), and the edge's child answers its own label as
 	/// the property it is built as, being built. Interned at the edge, where the graph is built from the table; the
 	/// worklist sees IDs only.
-	private static func answers(of graph: OrderedGraph<TypeFactsDeclaration>, reads: ReadsFromAbove, readTable: [Read], labels: TypeFactsInterner<String>, bindings: [TypeFactsWorldBinding], bindingOffsets: [Int32], bindingsBefore: [Int32], properties: TypeFactsInterner<Property>) -> (variants: TypeFactsVariants, isBeingBuilt: [Bool], texts: [String], keys: [Int32], properties: [Int32]) {
+	private static func answers(of graph: OrderedGraph<TypeFactsDeclaration>, reads: ReadsFromAbove, readTable: [Read], labels: TypeFactsInterner<String>, bindings: [TypeFactsWorldBinding], bindingOffsets: [Int32], bindingsBefore: [Int32], properties: TypeFactsInterner<Property>, forms: (table: [OnlyIfAvailableForm], readFromAbove: ReadsFromAbove)) -> (variants: TypeFactsVariants, isBeingBuilt: [Bool], texts: [String], keys: [Int32], properties: [Int32]) {
 		var answerIDByText = [String: Int32]()
 		var texts = [String]()
 		var isBeingBuilt = [Bool]()
 		var keys = [Int32]()
 		var kinds = [Property.PropertyType]()
 		var answerProperties = [Int32]()
-		func answer(text: String, beingBuilt: Bool, keyText: String, kind: Property.PropertyType, property: Int32) -> Int32 {
+		// Whether a wrapper answering a read only if available is in the one form the callee's subtree reads the label in.
+		var isInReadForm = [Bool]()
+		func answer(text: String, beingBuilt: Bool, keyText: String, kind: Property.PropertyType, property: Int32, inReadForm: Bool = false) -> Int32 {
 			let keyID: Int32
 			if let existing = answerIDByText[keyText] {
 				keyID = existing
@@ -808,6 +849,7 @@ struct TypeFactsGraph: Sendable {
 				// A constant's key text is its full text, so this entry is the answer itself where the texts are equal.
 				isBeingBuilt.append(text == keyText && beingBuilt)
 				kinds.append(kind)
+				isInReadForm.append(inReadForm)
 				keys.append(keyID)
 				answerProperties.append(property)
 			}
@@ -822,6 +864,7 @@ struct TypeFactsGraph: Sendable {
 			texts.append(text)
 			isBeingBuilt.append(beingBuilt)
 			kinds.append(kind)
+			isInReadForm.append(inReadForm)
 			keys.append(keyID)
 			answerProperties.append(property)
 			return id
@@ -872,7 +915,19 @@ struct TypeFactsGraph: Sendable {
 				guard let bound, let declaration = declarationsByLabelByNode[node][read.label]?.first(where: { $0.property == bound }), let property = properties.existingID(of: bound) else { return nil }
 				let kind = declaration.property.propertyType
 				let declarationForms = declaration.forms
-				let text = "\(read.channel.name) \(declarationForms)\(beingBuilt ? " being built" : "")"
+				// Rule 1: a wrapper answering a read only if available passes through the optional parameter `nil` passes
+				// through where every form the callee's subtree reads the label in, from above it, is the wrapper's.
+				let target = Int(edgeTargets[edge])
+				var inReadForm = false
+				if kind.isLazilyInstantiated, read.channel == .optional || read.channel == .optionalValue {
+					inReadForm = true
+					forms.readFromAbove.rows.forEachColumn(inRow: target) { form, _ in
+						if forms.table[Int(form)].label == read.label, forms.table[Int(form)].kind != OnlyIfAvailableForm.position(of: kind) {
+							inReadForm = false
+						}
+					}
+				}
+				let text = "\(read.channel.name) \(declarationForms)\(beingBuilt ? " being built" : "")\(inReadForm ? " in the form read" : "")"
 				// Rule 3, case 2: a value, `LazilyInstantiated` or `SendableLazilyInstantiated` being built is one cycle
 				// identity whichever twin the path entered, which 2.4.0 builds in one function and passes no parameter. The
 				// key names the label alone, not the type and label a cycle identity names elsewhere: a node declares a label
@@ -883,9 +938,9 @@ struct TypeFactsGraph: Sendable {
 					text
 				} else {
 					// Rule 2: a wrapper still being built is passed and made again at the call, so it keys as the wrapper.
-					"\(read.channel.name) \(declarationForms)"
+					"\(read.channel.name) \(declarationForms)\(inReadForm ? " in the form read" : "")"
 				}
-				return VariantBinding(answer: answer(text: text, beingBuilt: beingBuilt, keyText: keyText, kind: kind, property: property), declaration: Int32(node))
+				return VariantBinding(answer: answer(text: text, beingBuilt: beingBuilt, keyText: keyText, kind: kind, property: property, inReadForm: inReadForm), declaration: Int32(node))
 			},
 			// Production bodies have one variant, `@Sendable` a mark folded over call edges; the family a seam's cases,
 			// builders and mock bodies key by is the edge facts' `opens`, which no producer feeds here yet.
@@ -895,12 +950,21 @@ struct TypeFactsGraph: Sendable {
 				case .optional, .optionalValue:
 					// Rule 1, where a value or wrapper still being built is passed `nil`, as a read nothing answers is: whichever
 					// twin the path entered, and wherever else the label is bound (rule 3, case 2).
-					if answer >= 0, !(isBeingBuilt[Int(answer)] && isTwin(kinds[Int(answer)])) {
+					// An answer already in the form every receive of the label declares passes through the one optional
+					// parameter `nil` passes through: only a wrapper answering a read of its value keys apart. The form is the
+					// read's, never a place's, so which places a type has, and their order, decide nothing.
+					if answer >= 0, !(isBeingBuilt[Int(answer)] && isTwin(kinds[Int(answer)])),
+					   !isInReadForm[Int(answer)]
+					{
 						optionalParameterKey(of: kinds[Int(answer)])
 					} else {
 						optionalParameterKey(of: nil)
 					}
-				case .value, .alias, .madeAgain, .mock, .carrier, .fill, .family, .override:
+				case .alias:
+					// An alias's text follows only the form of the declaration it is bound to: the value itself, or a lazy
+					// wrapper's instance.
+					answer < 0 ? answer : optionalParameterKey(of: kinds[Int(answer)])
+				case .value, .madeAgain, .mock, .carrier, .fill, .family, .override:
 					answer < 0 ? answer : keys[Int(answer)]
 				}
 			},
@@ -1350,9 +1414,28 @@ struct TypeFactsGraph: Sendable {
 	/// the type instantiates or forwards a property of that label, which the alias then renames; and, for a call that passes
 	/// fills, each label the fills' trees receive, whose declaration the call hands them. A leaf reads nothing of its own:
 	/// its scope's own dependencies read for it.
-	private static func ownReads(of node: TypeFactsDeclaration, forMockGeneration: Bool, labels: inout TypeFactsInterner<String>) -> [Read] {
+	private static func ownReads(of node: TypeFactsDeclaration, forMockGeneration: Bool, labels: inout TypeFactsInterner<String>, formsReadOnlyIfAvailable: inout [OnlyIfAvailableForm]) -> [Read] {
 		var reads = [Read]()
-		guard node.key.leaf == .none else { return reads }
+		switch node.key.leaf {
+		case .none:
+			break
+		case .alias:
+			// An alias is bound to the nearest declaration of its fulfilling label, whose form decides its text (`x` or
+			// `x.instance`), so it reads that label: a required alias on the alias channel, keyed by the answer's form; one
+			// only if available as a receive of it does, keyed by rule 1.
+			if let fulfillingProperty = node.aliasFulfillingProperty {
+				let label = labels.id(of: fulfillingProperty.label)
+				if node.isOnlyIfAvailableAlias {
+					appendReceiveReads(of: label, onlyIfAvailable: true, forMockGeneration: forMockGeneration, to: &reads)
+					formsReadOnlyIfAvailable.append(OnlyIfAvailableForm(label: label, kind: fulfillingProperty.asUnwrappedProperty.propertyType))
+				} else {
+					reads.append(Read(.alias, label: label))
+				}
+			}
+			return reads
+		case .hole:
+			return reads
+		}
 		let record = node.scope
 		if let property = node.property {
 			reads.append(Read(.value, label: labels.id(of: property.label)))
@@ -1372,10 +1455,18 @@ struct TypeFactsGraph: Sendable {
 			case .instantiated, .forwarded:
 				break
 			case let .received(onlyIfAvailable):
-				appendReceiveReads(of: labels.id(of: dependency.property.label), onlyIfAvailable: onlyIfAvailable, forMockGeneration: forMockGeneration, to: &reads)
+				let label = labels.id(of: dependency.property.label)
+				appendReceiveReads(of: label, onlyIfAvailable: onlyIfAvailable, forMockGeneration: forMockGeneration, to: &reads)
+				if onlyIfAvailable {
+					formsReadOnlyIfAvailable.append(OnlyIfAvailableForm(label: label, kind: dependency.property.asUnwrappedProperty.propertyType))
+				}
 			case let .aliased(fulfillingProperty, _, onlyIfAvailable):
 				if !createdLabels.contains(fulfillingProperty.label) {
-					appendReceiveReads(of: labels.id(of: fulfillingProperty.label), onlyIfAvailable: onlyIfAvailable, forMockGeneration: forMockGeneration, to: &reads)
+					let label = labels.id(of: fulfillingProperty.label)
+					appendReceiveReads(of: label, onlyIfAvailable: onlyIfAvailable, forMockGeneration: forMockGeneration, to: &reads)
+					if onlyIfAvailable {
+						formsReadOnlyIfAvailable.append(OnlyIfAvailableForm(label: label, kind: fulfillingProperty.asUnwrappedProperty.propertyType))
+					}
 				}
 			}
 		}
@@ -1386,6 +1477,7 @@ struct TypeFactsGraph: Sendable {
 				let label = labels.id(of: property.label)
 				reads.append(Read(.optionalValue, label: label))
 				reads.append(Read(.optional, label: label))
+				formsReadOnlyIfAvailable.append(OnlyIfAvailableForm(label: label, kind: property.asUnwrappedProperty.propertyType))
 			}
 		}
 		return reads
