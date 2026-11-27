@@ -19,40 +19,17 @@
 // SOFTWARE.
 
 extension NodeRecords {
-	/// The refusals of stage 1 that the mock kind `mockErased` discharges of `declaration`, a node of a mock root's world:
-	/// `erased` where the production kind's classifier claims the node (`erasedClaim(of:in:)`), and none otherwise. An
-	/// erased `LazilyInstantiated` is discharged by `mockLazyDischarges(of:in:)` and made by this kind's record, and an erased `Sendable` wrapper stays `sendable`'s.
-	static func mockErasedDischarges(of declaration: DeclarationID, in world: some NodeRecordSources) -> Set<NodeRecordRefusal> {
-		erasedClaim(of: declaration, in: world)?.discharges ?? []
+	/// Whether `declaration`, a node of a mock root's world, is erased, so that its override returns the property's type
+	/// (`mockErasedDecoration(of:)`): an `ErasedInstantiator`, which production's term claims, and any node whose value is
+	/// erased to its property's type, a `LazilyInstantiated`, a `Sendable` wrapper and a public mock call included.
+	static func isMockErased(_ declaration: DeclarationID, in world: some NodeRecordSources) -> Bool {
+		erasedClaim(of: declaration, in: world) != nil || world.isErased(declaration)
 	}
 
-	/// The record of `declaration`'s place, a node of kind `mockErased`: `mockConstructionRecord`'s, whose override
-	/// returns the property's type, as a mock's override always does, where the node's type is erased to it or built as
-	/// an `ErasedInstantiator` or a `LazilyInstantiated` of it. So the node's function returns the property's type, its construction erased inside
-	/// where the node is erased, and its call erases nothing. A configured node's builder returns the concrete type, as its
-	/// configuration declares it, which the function erases as it erases its construction.
-	static func mockErasedRecord(
-		of declaration: DeclarationID,
-		variant: VariantID,
-		in world: some NodeRecordSources,
-		unavailableProperties: Set<Property>,
-		lazilyInstantiatedInstanceProperties: Set<Property>,
-		receivesBoundAgain: [MockReceiveBoundAgain],
-		enteredSlots: MockEnteredSlots?,
-		typesDeclaredEscaping: Set<TypeDescription>,
-		children: [GeneratedCode],
-	) throws -> BuiltPlaceRecord {
-		var record = try mockConstructionRecord(
-			of: declaration,
-			variant: variant,
-			in: world,
-			unavailableProperties: unavailableProperties,
-			lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
-			receivesBoundAgain: receivesBoundAgain,
-			enteredSlots: enteredSlots,
-			typesDeclaredEscaping: typesDeclaredEscaping,
-			children: children,
-		)
+	/// `record`, a mock's record of a node erased to its property's type or built as an `ErasedInstantiator` or an erased
+	/// `LazilyInstantiated` of it, whose override returns the property's type.
+	static func mockErasedDecoration(of record: BuiltPlaceRecord) -> BuiltPlaceRecord {
+		var record = record
 		// A constant built in place returns nothing: its construction is erased where it is bound, and its override is read
 		// there as the property's type.
 		guard record.hasFunction else { return record }

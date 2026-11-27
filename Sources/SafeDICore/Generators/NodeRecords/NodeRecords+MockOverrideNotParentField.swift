@@ -25,7 +25,7 @@ struct MockRootNames: Sendable {
 	///   - namesApart: The name the root's level gives each child it names apart, by the child's label and then its
 	///     property's type (`MockLowering.Walk.rootRenames`).
 	///   - unavailableDependencyOverrides: Each property instantiated only if available that nothing fulfills and that
-	///     `mock()` takes an override of, with the override's name, in the order `SafeDIOverrides` declares the overrides
+	///     `mock()` takes an override of, with the override's name
 	///     (`MockLowering.RootSignature.unavailableDependencyOverrideNames`).
 	///   - passedUpBuilderNames: The name `mock()` binds each builder under that a call of another module's public mock passes
 	///     up, by the property the call's leaf receives it as (`MockLowering.RootSignature.passedUpBuilderNames`).
@@ -40,7 +40,6 @@ struct MockRootNames: Sendable {
 		self.edgesConfigurationsLeaveOut = edgesConfigurationsLeaveOut
 		self.passedUpBuilderNames = passedUpBuilderNames
 		self.uncoveredParameterNames = uncoveredParameterNames
-		unavailableDependencyOverrideNamesInOrder = unavailableDependencyOverrides.map(\.name)
 		unavailableDependencyOverrideNames = Dictionary(unavailableDependencyOverrides.map { ($0.property, $0.name) }) { first, _ in first }
 	}
 
@@ -60,9 +59,6 @@ struct MockRootNames: Sendable {
 	func unavailableDependencyOverrideName(of property: Property) -> String? {
 		unavailableDependencyOverrideNames[property]
 	}
-
-	/// The names of the overrides `mock()` takes of properties nothing fulfills, in the order `SafeDIOverrides` declares them.
-	let unavailableDependencyOverrideNamesInOrder: [String]
 
 	/// The edges between two types of a cycle that the module's configurations leave out (`NodeRecords+MockCycle.swift`).
 	let edgesConfigurationsLeaveOut: Set<ScopeGenerator.CycleEdge>

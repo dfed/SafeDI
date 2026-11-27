@@ -62,17 +62,17 @@ extension NodeRecords {
 
 	/// The record of `declaration`'s place in `variant`, a rename: its declaration, bound from its fulfilling property, the
 	/// instance of the wrapper of its label where `readsWrappersInstance` (`DeclarationsAnsweringReads`), or, only if
-	/// available, to `nil` where `answers` finds no declaration it reads available, as the tree writes it.
-	/// - Parameter mapsWhereBoundOnlyIfAvailable: Whether an erased rename only if available maps over its fulfilling
-	///   value wherever it is bound, as a mock's walk binds it (`MockLowering.AliasBinding`), rather than only where the
-	///   declaration it reads is optional, as a production tree binds it.
+	/// available, to `nil` where `answers` finds no declaration it reads available, as the tree writes it. In a mock root's
+	/// world, an erased rename only if available maps over its fulfilling value wherever it is bound, as the mock's walk
+	/// binds it (`MockLowering.AliasBinding`), rather than only where the declaration it reads is optional, as a production
+	/// tree binds it: a fact of the world, which no production world answers. A rename reads no override, so a mock root's
+	/// world decorates its record with nothing.
 	static func renameRecord(
 		of declaration: DeclarationID,
 		variant: VariantID,
 		in world: some NodeRecordSources,
 		answers: OnlyIfAvailableAnswers,
 		readsWrappersInstance: Bool,
-		mapsWhereBoundOnlyIfAvailable: Bool = false,
 	) throws(NodeRecordRefusal) -> AliasPlaceRecord {
 		guard let (property, fulfillingProperty, erasedToConcreteExistential, declarationReference) = rename(of: declaration, in: world) else { throw .renameOrHole }
 		switch answers.renameBinding(of: variant) {
@@ -81,7 +81,7 @@ extension NodeRecords {
 			let text = ScopeGenerator.referencingDeclaration(of: "let \(property.asSource) = nil", by: declarationReference)
 			return AliasPlaceRecord(property: property, fulfillingProperty: nil, text: text, reads: [])
 		case let .bound(fulfillingBindingIsOptional):
-			return renameRecord(of: property, fulfilledBy: fulfillingProperty, readsWrappersInstance: readsWrappersInstance, erasedToConcreteExistential: erasedToConcreteExistential, fulfillingBindingIsOptional: fulfillingBindingIsOptional || mapsWhereBoundOnlyIfAvailable, declarationReference: declarationReference)
+			return renameRecord(of: property, fulfilledBy: fulfillingProperty, readsWrappersInstance: readsWrappersInstance, erasedToConcreteExistential: erasedToConcreteExistential, fulfillingBindingIsOptional: fulfillingBindingIsOptional || world.isMockWorld, declarationReference: declarationReference)
 		case nil:
 			// A required rename is bound from its fulfilling property, which its scope requires.
 			return renameRecord(of: property, fulfilledBy: fulfillingProperty, readsWrappersInstance: readsWrappersInstance, erasedToConcreteExistential: erasedToConcreteExistential, fulfillingBindingIsOptional: false, declarationReference: declarationReference)

@@ -884,7 +884,7 @@ public actor DependencyTreeGenerator {
 							constructionMemo: &memo,
 						)
 					}
-					let (layout, treeForcers) = try Self.nodeRecordsLayout(of: scope.instantiable, constructionScope: constructionScope, declaredTypeNames: declaredTypeNames, readersOfEveryTree: readersOfEveryTree)
+					let (layout, treeForcers) = Self.nodeRecordsLayout(of: scope.instantiable, constructionScope: constructionScope, declaredTypeNames: declaredTypeNames, readersOfEveryTree: readersOfEveryTree)
 					let built: RootScopeInfo.Built = if let layout {
 						// The work of building it is no run's, so the tests that count a run's work count none of it.
 						try .nodeRecords(layout, comparisonTree: NodeRecordsObservation.observer == nil ? nil : GenerationWork.$observer.withValue(nil) { try tree(memo: &comparisonMemo) })
