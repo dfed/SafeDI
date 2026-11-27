@@ -124,4 +124,7 @@ public struct NodeRecordsReport: Sendable {
 	public let recordCount: Int
 	/// How many places the tree's body holds, counted per path, where node records made the root's records.
 	public let treePlaceCount: Int
+	/// What made the run build the root's tree (`TreeForcer`); empty where its code was laid out from node records alone,
+	/// and the tree was built only for the test to compare.
+	public let treeForcers: [TreeForcer]
 }
