@@ -34,21 +34,49 @@ extension NodeRecords {
 		if besideACycle {
 			refusals.append(.cycle)
 		}
-		if !reachesTheRootAlongOnePath(declaration, in: world) {
+		let route = routeFacts(of: declaration, in: world)
+		if !route.isOnePath {
 			refusals.append(.holeOnSeveralPaths)
+		}
+		if route.passesAWrapper {
+			refusals.append(.holeInWrapper)
 		}
 		return NodeRecordClaim(kind: .seamHole, discharges: [.renameOrHole], refusals: refusals)
 	}
 
-	/// Whether every node from `declaration` up to the world's root has one parent.
-	private static func reachesTheRootAlongOnePath(_ declaration: DeclarationID, in world: some NodeRecordSources) -> Bool {
+	/// Whether every node from `declaration`, a hole, up to the world's root has one parent, and whether the hole is held
+	/// in, or that path passes, a wrapper but an `Instantiator`: an erased, lazy or `@Sendable` one, whose builder
+	/// function binds the route's payloads apart.
+	private static func routeFacts(of declaration: DeclarationID, in world: some NodeRecordSources) -> (isOnePath: Bool, passesAWrapper: Bool) {
+		var passesAWrapper = world.property(of: declaration).map { !isPlain($0.propertyType) } ?? false
 		var node = declaration
 		while node != 0 {
 			let parents = world.parents(of: node)
-			guard parents.count == 1, let parent = parents.first else { return false }
+			guard parents.count == 1, let parent = parents.first else { return (false, passesAWrapper) }
 			node = parent.parent
+			if node != 0, world.isErased(node) || !isPlain(world.kind(of: node)) {
+				passesAWrapper = true
+			}
 		}
-		return true
+		return (true, passesAWrapper)
+	}
+
+	private static func isPlain(_ propertyType: Property.PropertyType) -> Bool {
+		switch propertyType {
+		case .constant, .instantiator:
+			true
+		case .erasedInstantiator, .sendableInstantiator, .sendableErasedInstantiator, .lazilyInstantiated, .sendableLazilyInstantiated:
+			false
+		}
+	}
+
+	private static func isPlain(_ kind: TypeFactsKind) -> Bool {
+		switch kind {
+		case .constant, .instantiator:
+			true
+		case .sendableInstantiator, .erasedInstantiator, .sendableErasedInstantiator, .lazy, .sendableLazy, .alias, .hole:
+			false
+		}
 	}
 
 	/// The place of `declaration`, a hole: its site's code, as a seam's tree writes it (`HoleSitePlaces`), from the site and

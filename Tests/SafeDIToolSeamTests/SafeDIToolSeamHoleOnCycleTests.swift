@@ -562,9 +562,9 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			    public init(__safeDI_mark __safeDI_mark_: @autoclosure @escaping () -> Mark?, __safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 			        let mark = LazilyInstantiated<Mark?>(__safeDI_mark_)
 			        let __safeDI_apiBuilder_tBuilder = __safeDI_apiBuilder.tBuilder(mark)
-			        func __safeDI_tBuilder(mark: Mark?) -> T {
+			        @inline(never) func __safeDI_tBuilder(mark: Mark?) -> T {
 			            let reader = MarkReader(mark: mark)
-			            func __safeDI_cBuilder() -> C {
+			            @inline(never) func __safeDI_cBuilder() -> C {
 			                let mark = Mark()
 			                let tBuilder = Instantiator<T> {
 			                    __safeDI_tBuilder(mark: mark)
@@ -579,10 +579,10 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			            __safeDI_tBuilder(mark: mark.instance)
 			        }
 			        let __safeDI_apiBuilder_cBuilder = __safeDI_apiBuilder.cBuilder(mark, tBuilder)
-			        func __safeDI_cBuilder() -> C {
+			        @inline(never) func __safeDI_cBuilder() -> C {
 			            let mark = Mark()
 			            let __safeDI_apiBuilder_tBuilder = __safeDI_apiBuilder_cBuilder.tBuilder(mark)
-			            func __safeDI_tBuilder() -> T {
+			            @inline(never) func __safeDI_tBuilder() -> T {
 			                let reader = MarkReader(mark: mark)
 			                let cBuilder = Instantiator<C>(__safeDI_cBuilder)
 			                let api: any Api = __safeDI_apiBuilder_tBuilder.api(mark, reader, cBuilder)
@@ -711,9 +711,9 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			    public init(__safeDI_mark __safeDI_mark_: @autoclosure @escaping () -> Mark, __safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 			        let mark = LazilyInstantiated<Mark>(__safeDI_mark_)
 			        let __safeDI_apiBuilder_tBuilder = __safeDI_apiBuilder.tBuilder(mark)
-			        func __safeDI_tBuilder(mark: Mark) -> T {
+			        @inline(never) func __safeDI_tBuilder(mark: Mark) -> T {
 			            let reader = MarkReader(mark: mark)
-			            func __safeDI_cBuilder() -> C {
+			            @inline(never) func __safeDI_cBuilder() -> C {
 			                let mark = Mark()
 			                let tBuilder = Instantiator<T> {
 			                    __safeDI_tBuilder(mark: mark)
@@ -728,10 +728,10 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			            __safeDI_tBuilder(mark: mark.instance)
 			        }
 			        let __safeDI_apiBuilder_cBuilder = __safeDI_apiBuilder.cBuilder(mark, tBuilder)
-			        func __safeDI_cBuilder() -> C {
+			        @inline(never) func __safeDI_cBuilder() -> C {
 			            let mark = Mark()
 			            let __safeDI_apiBuilder_tBuilder = __safeDI_apiBuilder_cBuilder.tBuilder(mark)
-			            func __safeDI_tBuilder() -> T {
+			            @inline(never) func __safeDI_tBuilder() -> T {
 			                let reader = MarkReader(mark: mark)
 			                let cBuilder = Instantiator<C>(__safeDI_cBuilder)
 			                let api: any Api = __safeDI_apiBuilder_tBuilder.api(mark, reader, cBuilder)
@@ -742,13 +742,13 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			        }
 			        let cBuilder = Instantiator<C>(__safeDI_cBuilder)
 			        let __safeDI_apiBuilder_t = __safeDI_apiBuilder.t(mark, tBuilder, cBuilder)
-			        func __safeDI_t() -> T {
+			        @inline(never) func __safeDI_t() -> T {
 			            let reader = MarkReader(mark: mark.instance)
 			            let __safeDI_apiBuilder_cBuilder = __safeDI_apiBuilder_t.cBuilder(mark.instance, reader)
-			            func __safeDI_cBuilder() -> C {
+			            @inline(never) func __safeDI_cBuilder() -> C {
 			                let mark = Mark()
 			                let __safeDI_apiBuilder_tBuilder = __safeDI_apiBuilder_cBuilder.tBuilder(mark)
-			                func __safeDI_tBuilder() -> T {
+			                @inline(never) func __safeDI_tBuilder() -> T {
 			                    let reader = MarkReader(mark: mark)
 			                    let cBuilder = Instantiator<C>(__safeDI_cBuilder)
 			                    let api: any Api = __safeDI_apiBuilder_tBuilder.api(mark, reader, cBuilder)
@@ -879,14 +879,14 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
-			        func __safeDI_mark() -> Mark {
+			        @inline(never) func __safeDI_mark() -> Mark {
 			            Mark()
 			        }
 			        let mark = LazilyInstantiated<Mark>(__safeDI_mark)
 			        let __safeDI_apiBuilder_tBuilder = __safeDI_apiBuilder.tBuilder(mark)
-			        func __safeDI_tBuilder(mark: Mark) -> T {
+			        @inline(never) func __safeDI_tBuilder(mark: Mark) -> T {
 			            let reader = MarkReader(mark: mark)
-			            func __safeDI_cBuilder() -> C {
+			            @inline(never) func __safeDI_cBuilder() -> C {
 			                let mark = Mark()
 			                let tBuilder = Instantiator<T> {
 			                    __safeDI_tBuilder(mark: mark)
@@ -901,10 +901,10 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			            __safeDI_tBuilder(mark: mark.instance)
 			        }
 			        let __safeDI_apiBuilder_cBuilder = __safeDI_apiBuilder.cBuilder(mark, tBuilder)
-			        func __safeDI_cBuilder() -> C {
+			        @inline(never) func __safeDI_cBuilder() -> C {
 			            let mark = Mark()
 			            let __safeDI_apiBuilder_tBuilder = __safeDI_apiBuilder_cBuilder.tBuilder(mark)
-			            func __safeDI_tBuilder() -> T {
+			            @inline(never) func __safeDI_tBuilder() -> T {
 			                let reader = MarkReader(mark: mark)
 			                let cBuilder = Instantiator<C>(__safeDI_cBuilder)
 			                let api: any Api = __safeDI_apiBuilder_tBuilder.api(mark, reader, cBuilder)
@@ -915,13 +915,13 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			        }
 			        let cBuilder = Instantiator<C>(__safeDI_cBuilder)
 			        let __safeDI_apiBuilder_t = __safeDI_apiBuilder.t(mark, tBuilder, cBuilder)
-			        func __safeDI_t() -> T {
+			        @inline(never) func __safeDI_t() -> T {
 			            let reader = MarkReader(mark: mark.instance)
 			            let __safeDI_apiBuilder_cBuilder = __safeDI_apiBuilder_t.cBuilder(mark.instance, reader)
-			            func __safeDI_cBuilder() -> C {
+			            @inline(never) func __safeDI_cBuilder() -> C {
 			                let mark = Mark()
 			                let __safeDI_apiBuilder_tBuilder = __safeDI_apiBuilder_cBuilder.tBuilder(mark)
-			                func __safeDI_tBuilder() -> T {
+			                @inline(never) func __safeDI_tBuilder() -> T {
 			                    let reader = MarkReader(mark: mark)
 			                    let cBuilder = Instantiator<C>(__safeDI_cBuilder)
 			                    let api: any Api = __safeDI_apiBuilder_tBuilder.api(mark, reader, cBuilder)
@@ -1178,14 +1178,14 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_apiSendableBuilder: __safeDI_ApiSendableCarrier<any Api>) {
-			        @Sendable nonisolated func __safeDI_a() -> A {
+			        @inline(never) @Sendable nonisolated func __safeDI_a() -> A {
 			            let __safeDI_apiSendableBuilder_a_Sendable = __safeDI_apiSendableBuilder.a_Sendable
 			            let bBuilder = SendableInstantiator<B> {
 			                __safeDI_bBuilder(__safeDI_apiSendableBuilder_a_Sendable: __safeDI_apiSendableBuilder_a_Sendable)
 			            }
 			            return A(bBuilder: bBuilder)
 			        }
-			        @Sendable nonisolated func __safeDI_bBuilder(__safeDI_apiSendableBuilder_a_Sendable: __safeDI_ApiSendableCarrier_A<any Api>) -> B {
+			        @inline(never) @Sendable nonisolated func __safeDI_bBuilder(__safeDI_apiSendableBuilder_a_Sendable: __safeDI_ApiSendableCarrier_A<any Api>) -> B {
 			            let __safeDI_apiSendableBuilder_bBuilder = __safeDI_apiSendableBuilder_a_Sendable.bBuilder()
 			            let a: A = __safeDI_a()
 			            let api: any Api = __safeDI_apiSendableBuilder_bBuilder.api(a)

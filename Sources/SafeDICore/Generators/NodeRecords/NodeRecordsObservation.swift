@@ -33,6 +33,11 @@ public enum NodeRecordsObservation {
 	/// with the raw values of the refusals the claim discharges. Only a test sets it.
 	@TaskLocal public static var claimsForTesting = [String: [String]]()
 
+	/// Whether a mock root whose world node records accept has the statements that build its nodes laid out from them,
+	/// rather than written by the mock's walk, where `observer` is set. Off unless a test turns it on: the two write other
+	/// text for a node beneath a function, which is handed its override where the walk's captures the root's.
+	@TaskLocal public static var laysOutMockRoots = false
+
 	/// Handed each root's report, where set. Only a test sets it.
 	@TaskLocal public static var observer: (@Sendable (NodeRecordsReport) -> Void)?
 
@@ -47,45 +52,45 @@ public enum NodeRecordsObservation {
 		var differences = [String]()
 		var treePlaceCount = 0
 		var pending = [(tree: treeBody, nodeRecords: nodeRecordsBody, path: "root")]
-		while let (tree, nodeRecords, path) = pending.popLast() {
+		while let (treeCodes, nodeRecordsCodes, path) = pending.popLast() {
+			// A hole's place, and a place on the route to one, is a sequence of places: the payloads bound before it, each
+			// a place written as text, then the place itself. Each is compared as a statement of its own.
+			let tree = treeCodes.flatMap(statements(of:))
+			let nodeRecords = nodeRecordsCodes.flatMap(statements(of:))
 			guard tree.count == nodeRecords.count else {
 				differences.append("\(path): the tree builds \(tree.count) statements, node records \(nodeRecords.count)")
 				continue
 			}
 			for (treeCode, nodeRecordsCode) in zip(tree, nodeRecords) {
-				let (treeIndentation, treeStatement) = unindented(treeCode)
-				let (nodeRecordsIndentation, nodeRecordsStatement) = unindented(nodeRecordsCode)
-				// A hole's place is the site's code, written as text, and the payloads bound before it.
-				if let nodeRecordsPlaces = textPlaces(of: nodeRecordsStatement) {
-					let placePath = "\(path).\(nodeRecordsPlaces.first?.record.property.label ?? "hole")"
-					treePlaceCount += 1
-					if treeIndentation != nodeRecordsIndentation {
-						differences.append("\(placePath): indented \(treeIndentation.count) in the tree, \(nodeRecordsIndentation.count) by node records")
-					}
-					differences += textPlaceDifferences(between: textPlaces(of: treeStatement), and: nodeRecordsPlaces).map { "\(placePath): \($0)" }
+				let (treeIndentation, treeInner) = unindented(treeCode)
+				let (nodeRecordsIndentation, nodeRecordsInner) = unindented(nodeRecordsCode)
+				guard case let .place(nodeRecordsPlan) = nodeRecordsInner.node, let nodeRecordsRecord = nodeRecordsPlan.record else {
+					differences.append("\(path): node records made a statement that is no place")
 					continue
 				}
-				// A place on the route to a hole's place follows the payloads bound before it, places written as text.
-				let (treeBindings, treeInner) = splittingBindings(off: treeStatement)
-				let (nodeRecordsBindings, nodeRecordsInner) = splittingBindings(off: nodeRecordsStatement)
-				if !treeBindings.isEmpty || !nodeRecordsBindings.isEmpty {
-					differences += textPlaceDifferences(between: treeBindings, and: nodeRecordsBindings).map { "\(path): before a place, \($0)" }
+				let label = switch nodeRecordsRecord {
+				case let .built(record): record.property.label
+				case let .closer(record): record.property.label
+				case let .alias(record): record.property.label
 				}
-				guard case let .place(nodeRecordsPlan) = nodeRecordsInner.node, case let .built(nodeRecordsRecord)? = nodeRecordsPlan.record else {
-					differences.append("\(path): node records made a statement that is no built place")
-					continue
-				}
-				let placePath = "\(path).\(nodeRecordsRecord.property.label)"
-				guard case let .place(treePlan) = treeInner.node, case let .built(treeRecord)? = treePlan.record else {
-					differences.append("\(placePath): the tree writes no built place’s record")
+				let placePath = "\(path).\(label)"
+				guard case let .place(treePlan) = treeInner.node, let treeRecord = treePlan.record else {
+					differences.append("\(placePath): the tree writes no place’s record")
 					continue
 				}
 				treePlaceCount += 1
 				if treeIndentation != nodeRecordsIndentation {
 					differences.append("\(placePath): indented \(treeIndentation.count) in the tree, \(nodeRecordsIndentation.count) by node records")
 				}
-				differences += fieldDifferences(between: treeRecord, and: nodeRecordsRecord).map { "\(placePath): \($0)" }
-				pending.append((tree: treeRecord.children, nodeRecords: nodeRecordsRecord.children, path: placePath))
+				switch (treeRecord, nodeRecordsRecord) {
+				case let (.built(treeBuilt), .built(nodeRecordsBuilt)):
+					differences += fieldDifferences(between: treeBuilt, and: nodeRecordsBuilt).map { "\(placePath): \($0)" }
+					pending.append((tree: treeBuilt.children, nodeRecords: nodeRecordsBuilt.children, path: placePath))
+				case let (.alias(treeAlias), .alias(nodeRecordsAlias)):
+					differences += fieldDifferences(between: treeAlias, and: nodeRecordsAlias).map { "\(placePath): \($0)" }
+				case (.built, _), (.alias, _), (.closer, _):
+					differences.append("\(placePath): the tree writes another kind of place than node records")
+				}
 			}
 		}
 		return (differences, treePlaceCount)
@@ -101,53 +106,28 @@ public enum NodeRecordsObservation {
 		return (indentation, inner)
 	}
 
-	/// `code`'s leading places written as text and the place after them, where `code` is a sequence that ends in a built
-	/// place; none and `code` otherwise.
-	private static func splittingBindings(off code: GeneratedCode) -> (bindings: [(text: String, record: AliasPlaceRecord)], place: GeneratedCode) {
-		guard case let .sequence(pieces) = code.node, let last = pieces.last, case let .place(plan) = last.node, case .built? = plan.record,
-		      let bindings = textPlaces(of: .sequence(Array(pieces.dropLast())))
-		else { return ([], code) }
-		return (bindings, last)
+	/// `code`'s statements: each piece of a sequence, indented as the sequence is, or `code` where it is no sequence.
+	private static func statements(of code: GeneratedCode) -> [GeneratedCode] {
+		let (indentation, inner) = unindented(code)
+		guard case let .sequence(pieces) = inner.node else { return [code] }
+		return pieces.flatMap { statements(of: .indented($0, by: indentation)) }
 	}
 
-	/// The places `code` is made of where each is written as text with a rename's record (`AliasPlaceRecord`): one, or a
-	/// sequence of them; `nil` for any other code.
-	private static func textPlaces(of code: GeneratedCode) -> [(text: String, record: AliasPlaceRecord)]? {
-		switch code.node {
-		case let .place(plan):
-			guard case let .text(text) = plan.code.node, case let .alias(record)? = plan.record else { return nil }
-			return [(text, record)]
-		case let .sequence(pieces):
-			var places = [(text: String, record: AliasPlaceRecord)]()
-			for piece in pieces {
-				guard let piecePlaces = textPlaces(of: piece) else { return nil }
-				places += piecePlaces
-			}
-			return places
-		case .text, .lines, .indented, .rootFunction, .sendableFunction, .omittingRootFunctions:
-			return nil
-		}
-	}
-
-	/// How `nodeRecords`, places written as text, differ from `tree`'s.
-	private static func textPlaceDifferences(between tree: [(text: String, record: AliasPlaceRecord)]?, and nodeRecords: [(text: String, record: AliasPlaceRecord)]) -> [String] {
-		guard let tree, tree.count == nodeRecords.count else { return ["the tree writes \(tree?.count ?? 0) places as text, node records \(nodeRecords.count)"] }
+	/// The fields of `nodeRecords`, a rename or a hole's place, that differ from `tree`'s.
+	private static func fieldDifferences(between tree: AliasPlaceRecord, and nodeRecords: AliasPlaceRecord) -> [String] {
 		var differences = [String]()
-		for (treePlace, nodeRecordsPlace) in zip(tree, nodeRecords) {
-			func compare<Value: Equatable>(_ name: String, _ treeValue: Value, _ nodeRecordsValue: Value) {
-				guard treeValue != nodeRecordsValue else { return }
-				differences.append("\(name) is \(treeValue) in the tree, \(nodeRecordsValue) by node records")
-			}
-			compare("text", treePlace.text, nodeRecordsPlace.text)
-			compare("property", treePlace.record.property, nodeRecordsPlace.record.property)
-			compare("fulfillingProperty", treePlace.record.fulfillingProperty, nodeRecordsPlace.record.fulfillingProperty)
-			compare("recordText", treePlace.record.text, nodeRecordsPlace.record.text)
-			compare("reads", treePlace.record.reads, nodeRecordsPlace.record.reads)
-			compare("otherBindings", treePlace.record.otherBindings, nodeRecordsPlace.record.otherBindings)
-			compare("calledFunctionNames", treePlace.record.calledFunctionNames, nodeRecordsPlace.record.calledFunctionNames)
-			compare("declaredFunctionNames", treePlace.record.declaredFunctionNames, nodeRecordsPlace.record.declaredFunctionNames)
-			compare("calledRootFunctionNames", treePlace.record.calledRootFunctionNames, nodeRecordsPlace.record.calledRootFunctionNames)
+		func compare<Value: Equatable>(_ name: String, _ treeValue: Value, _ nodeRecordsValue: Value) {
+			guard treeValue != nodeRecordsValue else { return }
+			differences.append("\(name) is \(treeValue) in the tree, \(nodeRecordsValue) by node records")
 		}
+		compare("property", tree.property, nodeRecords.property)
+		compare("fulfillingProperty", tree.fulfillingProperty, nodeRecords.fulfillingProperty)
+		compare("text", tree.text, nodeRecords.text)
+		compare("reads", tree.reads, nodeRecords.reads)
+		compare("otherBindings", tree.otherBindings, nodeRecords.otherBindings)
+		compare("calledFunctionNames", tree.calledFunctionNames, nodeRecords.calledFunctionNames)
+		compare("declaredFunctionNames", tree.declaredFunctionNames, nodeRecords.declaredFunctionNames)
+		compare("calledRootFunctionNames", tree.calledRootFunctionNames, nodeRecords.calledRootFunctionNames)
 		return differences
 	}
 
@@ -199,4 +179,7 @@ public struct NodeRecordsReport: Sendable {
 	/// What made the run build the root's tree (`TreeForcer`); empty where its code was laid out from node records alone,
 	/// and the tree was built only for the test to compare.
 	public let treeForcers: [TreeForcer]
+	/// Whether the root is a mock's: its records are compared with no tree's, so `differences` is empty, and a test
+	/// compares the code laid out from them, or the values that code builds, with the mock's walk's.
+	public var isMockRoot = false
 }

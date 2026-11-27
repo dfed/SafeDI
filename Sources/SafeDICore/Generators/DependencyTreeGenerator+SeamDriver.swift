@@ -437,10 +437,7 @@ extension DependencyTreeGenerator {
 	/// line, then column, with a declaration whose location is unknown – which none read from a file is – after every
 	/// known one.
 	private static func declarationPrecedes(_ leftLocation: Dependency.DeclarationLocation?, _ rightLocation: Dependency.DeclarationLocation?) -> Bool {
-		func sortKey(of location: Dependency.DeclarationLocation?) -> (unknownLocationsLast: Int, filePath: String, line: Int, column: Int) {
-			(location == nil ? 1 : 0, location?.filePath ?? "", location?.line ?? 0, location?.column ?? 0)
-		}
-		return sortKey(of: leftLocation) < sortKey(of: rightLocation)
+		Dependency.DeclarationLocation.precedesInSourceOrder(leftLocation, rightLocation)
 	}
 
 	/// The generators of the trees this module generates, in a world where every reach of a seam calls its generated
@@ -561,6 +558,8 @@ extension DependencyTreeGenerator {
 				constructionScope: ConstructionScope(table: table, record: record),
 				seamTree: RootScopeInfo.SeamTree(
 					rootLazilyInstantiatedInstanceProperties: Self.seamRootDeclarations(of: seamRootScope, seamRoot: finalSeamRoot).lazilyInstantiatedInstanceProperties,
+					parameters: finalSeamRoot.signature.parameters.map(\.property),
+					autoclosureLabels: Set(finalSeamRoot.autoclosureCallByLabel(of: seamRootScope.instantiable).keys),
 					seamRoot: finalSeamRoot,
 					seamType: seam.concreteInstantiable,
 				),
@@ -1180,8 +1179,7 @@ extension DependencyTreeGenerator {
 		if !settled {
 			// A component holds at least one seam, so the first by location exists.
 			if let firstSeam = componentSeams.min(by: { left, right in
-				guard let left = left.declarationLocation, let right = right.declarationLocation else { return left.declarationLocation != nil }
-				return (left.filePath, left.line, left.column) < (right.filePath, right.line, right.column)
+				Dependency.DeclarationLocation.precedesInSourceOrder(left.declarationLocation, right.declarationLocation)
 			}) {
 				errorsOfLastPass = [.seam(.init(seam: firstSeam, kind: .signaturesDidNotSettle(seams: component.sorted())))]
 			}
@@ -1604,7 +1602,7 @@ extension DependencyTreeGenerator {
 					fulfilledBy: fulfillingProperty,
 					erasedToConcreteExistential: erasedToConcreteExistential,
 					onlyIfAvailable: onlyIfAvailable,
-					declarationReference: dependency.declarationLocation.map(aliasDeclarationReferences.reference(to:)),
+					declarationReference: aliasDeclarationReferences.reference(to: dependency.declarationLocation),
 				))
 			case .forwarded, .received:
 				continue

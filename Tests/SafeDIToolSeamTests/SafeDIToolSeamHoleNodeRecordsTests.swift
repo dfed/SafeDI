@@ -24,7 +24,7 @@ import Testing
 @testable import SafeDIToolLibrary
 @testable import SafeDIToolTestSupport
 
-/// A hole's place made from a seam's world (`NodeRecords+Hole.swift`), with no tree of places: every test compares it with
+/// A hole's place made from a seam's world (`NodeRecords+SeamHole.swift`), with no tree of places: every test compares it with
 /// the tree's place (`NodeRecordsChecks`); these show which seam trees node records make, and which they refuse.
 struct SafeDIToolSeamHoleNodeRecordsTests: ~Copyable {
 	// MARK: Initialization
@@ -47,8 +47,8 @@ struct SafeDIToolSeamHoleNodeRecordsTests: ~Copyable {
 		let reports = try await reportsOfOffice(officeDeclarations: ["@Instantiated let panel: Panel", "@Instantiated let panelBuilder: Instantiator<Other>"])
 		#expect(reports.map(\.refusal) == [nil])
 		#expect(reports.map(\.differences) == [[]])
-		// `panel`, `panelBuilder`, and the hole beneath each.
-		#expect(reports.map(\.treePlaceCount) == [4])
+		// `panel`, `panelBuilder`, the hole beneath each, and the payload the tree binds before each, a place of its own.
+		#expect(reports.map(\.treePlaceCount) == [6])
 	}
 
 	@Test
@@ -65,6 +65,14 @@ struct SafeDIToolSeamHoleNodeRecordsTests: ~Copyable {
 		// `api` is declared before `childBuilder`, whose node is on the cycle through `Grand`, so the hole is classified first.
 		let reports = try await reportsOfOffice(officeDeclarations: ["@Instantiated let looping: Looping"])
 		#expect(reports.map(\.refusal) == ["cycle"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_refusesSeamsWorld_whenItReachesAHoleThroughALazyWrapper() async throws {
+		// `panel`'s builder function binds what its hole's site reads apart.
+		let reports = try await reportsOfOffice(officeDeclarations: ["@Instantiated let panel: LazilyInstantiated<Panel>"])
+		#expect(reports.map(\.refusal) == ["holeInWrapper"])
 	}
 
 	// MARK: Private

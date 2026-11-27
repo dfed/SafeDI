@@ -41,8 +41,24 @@ extension TypeKeyLayout {
 
 	/// The position of the last statement of `owner`'s body before `index` that declares `label`.
 	func lastPosition(of label: String, inClass owner: Int, before index: Int) -> Int? {
-		let statements = statements(ofClass: owner)
-		return stride(from: min(index, statements.count) - 1, through: 0, by: -1).first { self.label(of: statements[$0]) == label }
+		Self.lastPosition(in: bodies[owner == 0 ? 0 : membersByClass[owner][0]].positionsByLabel[label], before: index)
+	}
+
+	/// The last of `positions`, which ascend, before `index`: a binary search, since a look-up reads it for every label at
+	/// every place, so a body of many statements costs a look-up no more than a few.
+	static func lastPosition(in positions: [Int]?, before index: Int) -> Int? {
+		guard let positions else { return nil }
+		var lower = 0
+		var upper = positions.count
+		while lower < upper {
+			let middle = (lower + upper) / 2
+			if positions[middle] < index {
+				lower = middle + 1
+			} else {
+				upper = middle
+			}
+		}
+		return lower > 0 ? positions[lower - 1] : nil
 	}
 
 	/// The type key's declaration for a path declaration.

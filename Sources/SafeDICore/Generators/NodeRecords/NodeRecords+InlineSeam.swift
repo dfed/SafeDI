@@ -21,23 +21,34 @@
 extension NodeRecords {
 	/// The claim of `declaration` as `inlineSeam` where it is a seam of another module built inline
 	/// (`ConstructionScope.builtInlineSeamComment`), which discharges stage 1's refusal of a seam built inline; `nil` for
-	/// any other node. Every other check of stage 1 still runs on it.
+	/// any other node, and for every node of a mock root's world, which builds every seam inline without the comment. Every
+	/// other check of stage 1 still runs on it.
 	static func inlineSeamClaim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
-		guard world.scope(of: declaration).builtInlineSeamComment != nil else { return nil }
+		guard !world.isMockWorld, world.scope(of: declaration).builtInlineSeamComment != nil else { return nil }
 		return NodeRecordClaim(kind: .inlineSeam, discharges: [.unavailableOrInlineSeam])
 	}
 
 	/// The record of `declaration`'s place, a node of kind `inlineSeam`: `builtByInitializerRecord`'s, with the comment that
-	/// ends the line constructing the type, as the tree writes a seam built inline.
+	/// ends the line constructing the type, as the tree writes a seam built inline. Its type's receives by value read the
+	/// instance of each of `lazilyInstantiatedInstanceProperties` (`DeclarationsAnsweringReads`).
 	static func inlineSeamRecord(
 		of declaration: DeclarationID,
 		variant: VariantID,
 		in world: some NodeRecordSources,
+		lazilyInstantiatedInstanceProperties: Set<Property>,
 		typesDeclaredEscaping: Set<TypeDescription>,
 		children: [GeneratedCode],
 	) throws -> BuiltPlaceRecord {
 		// Never `nil`: the node is of kind `inlineSeam` (`inlineSeamClaim(of:in:)`).
 		let comment = world.scope(of: declaration).builtInlineSeamComment.map { " \($0)" } ?? ""
-		return try builtByInitializerRecord(of: declaration, variant: variant, in: world, typesDeclaredEscaping: typesDeclaredEscaping, children: children, lineEnd: comment)
+		return try builtByInitializerRecord(
+			of: declaration,
+			variant: variant,
+			in: world,
+			lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
+			typesDeclaredEscaping: typesDeclaredEscaping,
+			children: children,
+			lineEnd: comment,
+		)
 	}
 }
