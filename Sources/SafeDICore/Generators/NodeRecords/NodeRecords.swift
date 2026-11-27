@@ -235,8 +235,10 @@ struct NodeRecords: Sendable {
 			escaping.formUnion(scope.seamCall?.typesDeclaredEscaping ?? [])
 			escaping.formUnion(childrensEscaping)
 			// A member of a loop of builders first makes again the members its tree receives, whatever its kind
-			// (`NodeRecords+Loops.swift`).
-			let children = Self.loopRebindings(of: declaration, in: world) + children
+			// (`NodeRecords+Loops.swift`): a call of a seam, before its guard.
+			let loopRebindings = Self.loopRebindings(of: declaration, in: world)
+			let calleeChildren = children
+			let children = loopRebindings + children
 			// What a receive by value reads as a wrapper's instance, which every record of a construction passes its arguments.
 			let instanceProperties = answeringDeclarations.lazilyInstantiatedInstanceProperties(readBy: variant)
 			let madeRecord: PlaceRecord = switch kinds[Int(declaration)] {
@@ -247,7 +249,7 @@ struct NodeRecords: Sendable {
 			case .inlineSeam:
 				try .built(Self.inlineSeamRecord(of: declaration, variant: variant, in: world, lazilyInstantiatedInstanceProperties: instanceProperties, typesDeclaredEscaping: escaping, children: children))
 			case .seamCall:
-				try .alias(Self.seamCallRecord(of: declaration, variant: variant, in: world, routes: seamCallRoutes, lazilyInstantiatedInstanceProperties: instanceProperties, typesDeclaredEscaping: escaping, children: children))
+				try .alias(Self.seamCallRecord(of: declaration, variant: variant, in: world, routes: seamCallRoutes, lazilyInstantiatedInstanceProperties: instanceProperties, typesDeclaredEscaping: escaping, loopRebindings: loopRebindings, children: calleeChildren))
 			case .receivesOnlyIfAvailable:
 				try .built(Self.receivesOnlyIfAvailableRecord(
 					of: declaration,
@@ -293,14 +295,22 @@ struct NodeRecords: Sendable {
 		var variantsClosedOn = [Set<VariantID>](repeating: [], count: world.variantCount)
 		var cycleVariantsBuilt = [Set<VariantID>](repeating: [], count: world.variantCount)
 		var isOnPath = [Bool](repeating: false, count: world.variantCount)
+		// How many places of each node are on the path, whatever their variants.
+		var placesOnPath = [Int32](repeating: 0, count: declarationCount)
 		var twins = TwinsOnPath(world: world, holdsCycle: holdsCycle)
 		var stack = [PlaceFrame(variant: 0, edgeIndices: edgeIndices(of: 0))]
 		isOnPath[0] = true
+		placesOnPath[0] = 1
 		while let top = stack.last {
 			if top.next < top.edgeIndices.count {
 				stack[stack.count - 1].next += 1
 				let calls = world.calls(of: top.variant)
 				let callee = calls[calls.startIndex + top.edgeIndices[top.next]]
+				// A call of a node a place on the path builds under another variant, which reads another answer: the tree
+				// closes on that place's function, which takes the answer as a parameter.
+				guard isOnPath[Int(callee)] || placesOnPath[Int(world.declaration(of: callee))] == 0 else {
+					throw NodeRecordRefusal.cycleTakesParameters
+				}
 				if isOnPath[Int(callee)] {
 					if let closedOn = stack.lastIndex(where: { $0.variant == callee }),
 					   stack[(closedOn + 1)...].contains(where: { !labelsReceived.isDisjoint(with: Self.labelsDeclared(by: world.declaration(of: $0.variant), in: world)) })
@@ -319,12 +329,14 @@ struct NodeRecords: Sendable {
 				} else {
 					try twins.enter(world.declaration(of: callee))
 					isOnPath[Int(callee)] = true
+					placesOnPath[Int(world.declaration(of: callee))] += 1
 					stack.append(PlaceFrame(variant: callee, edgeIndices: edgeIndices(of: world.declaration(of: callee))))
 				}
 				continue
 			}
 			stack.removeLast()
 			isOnPath[Int(top.variant)] = false
+			placesOnPath[Int(world.declaration(of: top.variant))] -= 1
 			twins.leave(world.declaration(of: top.variant))
 			entries[Int(top.variant)] = top.entries
 			guard let parent = stack.indices.last else { continue }
