@@ -756,7 +756,9 @@ struct TypeFactsGraph: Sendable {
 		answerKeys = answers.keys
 		answerProperties = answers.properties
 		variants = answers.variants
-		variantBuildsInSendableFunction = Self.sendableMarks(of: answers.variants, graph: graph, edgeOpens: edgeOpens, oneFunctionGroups: forMockGeneration ? [] : Self.twinGroups(of: answers.variants, cycleIDs: cycleIDs, twins: twins, isOnCycle: graph.isOnCycle))
+		let oneFunctionGroups = Self.twinGroups(of: answers.variants, cycleIDs: cycleIDs, twins: twins, isOnCycle: graph.isOnCycle, readColumn: readColumn, readOffsets: readOffsets)
+		self.oneFunctionGroups = oneFunctionGroups
+		variantBuildsInSendableFunction = Self.sendableMarks(of: answers.variants, graph: graph, edgeOpens: edgeOpens, oneFunctionGroups: oneFunctionGroups)
 		let isBeingBuilt = answers.isBeingBuilt
 		let variantsOfAnswers = answers.variants
 		let readsByID = readInterner.values
@@ -803,7 +805,10 @@ struct TypeFactsGraph: Sendable {
 	/// The variants of the world's bodies, answered by what each node binds at its edges (`answers(of:reads:…)`).
 	let variants: TypeFactsVariants
 
-	/// Per variant, whether a call builds its body inside a `@Sendable` function (`sendableMarks(of:graph:edgeOpens:)`).
+	/// The variants one function serves, twins' bodies of one key (`twinGroups(of:cycleIDs:twins:isOnCycle:readColumn:readOffsets:)`).
+	let oneFunctionGroups: [[Int]]
+
+	/// Per variant, whether a call builds its body inside a `@Sendable` function (`sendableMarks(of:graph:edgeOpens:oneFunctionGroups:)`).
 	let variantBuildsInSendableFunction: [Bool]
 
 	/// What each read of each variant comes to in its body.
@@ -1500,10 +1505,12 @@ struct TypeFactsGraph: Sendable {
 	/// and outside one carries, folded over every call into it, so that its function is `@Sendable` once any call needs
 	/// it. A call opens such a function by `familyOfCall(opening:callerFamily:)`'s rule, and a call from a marked body
 	/// hands the mark on. Where a world keys a body by family (a mock's, and a seam's that holds a hole), the mark is its
-	/// family; elsewhere it is the one fact that tells a production body's places inside and outside the function apart.
+	/// family, except in a group below; elsewhere it is the one fact that tells a body's places inside and outside the
+	/// function apart.
 	///
-	/// `oneFunctionGroups` are the variants one function serves: a production body and its twins of one key, the
-	/// `Sendable` wrapper's and the constant's (the lead's ruling for one `@Sendable` function), which share the mark.
+	/// `oneFunctionGroups` are the variants one function serves: a body and its twins of one key, the `Sendable`
+	/// wrapper's and the constant's (the lead's ruling for one `@Sendable` function), which share the mark, of any
+	/// family.
 	static func sendableMarks(of variants: TypeFactsVariants, graph: OrderedGraph<TypeFactsDeclaration>, edgeOpens: [TypeFactsFunctionOpened], oneFunctionGroups: [[Int]]) -> [Bool] {
 		var marks = [Bool](repeating: false, count: variants.count)
 		var groupOfVariant = [Int](repeating: -1, count: variants.count)
@@ -1532,10 +1539,12 @@ struct TypeFactsGraph: Sendable {
 		return marks
 	}
 
-	/// The variants of twin declarations, one cycle identity's, that share a key, each group of two or more in variant
-	/// order, where a twin of the identity is on a cycle, as one that closes it on the other is: one function serves each
-	/// group. Twins of an identity no cycle runs through are siblings built apart, a function each.
-	static func twinGroups(of variants: TypeFactsVariants, cycleIDs: [CycleID], twins: [Int32], isOnCycle: (Int) -> Bool) -> [[Int]] {
+	/// The variants of twin declarations, one cycle identity's, that read the same values from above and share a key,
+	/// each group of two or more in variant order, where a twin of the identity is on a cycle, as one that closes it on
+	/// the other is: one function serves each group, in a mock's world as in production's (mocks behave like
+	/// production), so the group ignores family. Twins of an identity no cycle runs through are siblings built apart, a
+	/// function each.
+	static func twinGroups(of variants: TypeFactsVariants, cycleIDs: [CycleID], twins: [Int32], isOnCycle: (Int) -> Bool, readColumn: [Int32], readOffsets: [Int32]) -> [[Int]] {
 		var identitiesOnCycles = Set<CycleID>()
 		for (node, identity) in cycleIDs.enumerated() where twins[node] >= 0 && isOnCycle(node) {
 			identitiesOnCycles.insert(identity)
@@ -1543,7 +1552,8 @@ struct TypeFactsGraph: Sendable {
 		var groupByBody = [TwinBody: Int]()
 		var groups = [[Int]]()
 		for variant in 0..<variants.count where identitiesOnCycles.contains(cycleIDs[Int(variants.node(of: variant))]) {
-			let body = TwinBody(identity: cycleIDs[Int(variants.node(of: variant))], keys: Array(variants.keys(of: variant)))
+			let node = Int(variants.node(of: variant))
+			let body = TwinBody(identity: cycleIDs[node], reads: Array(readColumn[Int(readOffsets[node])..<Int(readOffsets[node + 1])]), keys: Array(variants.keys(of: variant)))
 			if let group = groupByBody[body] {
 				groups[group].append(variant)
 			} else {
@@ -1554,9 +1564,13 @@ struct TypeFactsGraph: Sendable {
 		return groups.filter { $0.count > 1 }
 	}
 
-	/// A body twin declarations share: their cycle identity and the variant's key.
+	/// A body twin declarations share: their cycle identity, the values they read from above, and the variant's key.
+	/// A key is positional over its node's reads, so two twins' keys mean the same only over the same reads. Twins of
+	/// one identity whose reads differ may be a shape SafeDI cannot build; the reads keep such twins apart rather than
+	/// let equal positions merge bodies that differ.
 	private struct TwinBody: Hashable {
 		let identity: CycleID
+		let reads: [Int32]
 		let keys: [Int32]
 	}
 

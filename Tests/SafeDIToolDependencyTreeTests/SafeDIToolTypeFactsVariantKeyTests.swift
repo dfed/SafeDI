@@ -1395,6 +1395,26 @@ struct SafeDIToolTypeFactsVariantKeyTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_marksConstantTwinBuiltInsideSendableFunction_whenSendableLazilyInstantiatedTwinClosesCycleOnIt() async throws {
+		// The mock of the fixture above: a mock keys `Editor`'s twins by family, the constant plain and the wrapper
+		// `Sendable`, yet one `@Sendable` function serves both as in production, so the plain variant carries the mark.
+		let report = try await rootReport(of: [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let editor: Editor"]).replacingOccurrences(of: "@Instantiable(isRoot: true)", with: "@Instantiable(isRoot: true, generateMock: true)"),
+			seamFixtureType(named: "Editor", isFinalClass: true, declarations: ["@Instantiated let previewBuilder: SendableInstantiator<Preview>"], conformances: ", Sendable"),
+			seamFixtureType(named: "Preview", isFinalClass: true, declarations: ["@Instantiated let editor: SendableLazilyInstantiated<Editor>"], conformances: ", Sendable"),
+		], forMockGeneration: true)
+
+		#expect(marksByDeclaration(in: report) == [
+			"Root": [false],
+			"Editor as editor: Editor": [true],
+			"Preview as previewBuilder: SendableInstantiator<Preview>": [true],
+			"Editor as editor: SendableLazilyInstantiated<Editor>": [true],
+		], "\(report.world)")
+		#expect(TypeFactsChecks.findings(of: report).findingsByCheck[34] == nil, "\(report.world)")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_marksOnlySendableWrapperTwin_whenTwinsOfOneTypeAreBuiltApartOnNoCycle() async throws {
 		// `first` builds `theme` as a `SendableLazilyInstantiated` and `second` as a `LazilyInstantiated`: twins of one
 		// identity that no cycle runs through, each a function of its own, so only the wrapper that opens a `@Sendable`
