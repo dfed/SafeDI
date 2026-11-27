@@ -5714,7 +5714,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	/// Whether this scope, in the tree of a fill a mock declares for another module's public mock, builds its type with
 	/// its hand-written mock, as the mock's tree built inline would (`Scope.createScopeGenerator`).
-	private let constructsWithHandWrittenMock: Bool
+	let constructsWithHandWrittenMock: Bool
 	/// How a mock tree calls the public mock another module generated for this scope's type, or `nil` for a scope
 	/// that builds its type (see `Scope.publicMockCall`).
 	nonisolated var publicMockCall: PublicMockCall? {
