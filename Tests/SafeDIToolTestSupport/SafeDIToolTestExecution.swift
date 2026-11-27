@@ -363,7 +363,10 @@ func executeSafeDIToolTest(
 												// Every root’s received values from its per-type graph must equal the walk of its generator tree’s
 												// (`TypeFactsReceivedValueSuppliesChecks`).
 												try await TypeFactsReceivedValueSuppliesChecks.comparing(handingOn: TypeFactsReceivedValueSuppliesObservation.comparesWalk) {
-													try await tool.generate()
+													// The fold that decides whether any route is walked must send every graph the walk rejects to the walk (`FulfillmentFoldChecks`).
+													try await ValidationWalkObservation.$foldComparison.withValue(FulfillmentFoldChecks.comparison(handingOn: ValidationWalkObservation.foldComparison)) {
+														try await tool.generate()
+													}
 												}
 											}
 										}
