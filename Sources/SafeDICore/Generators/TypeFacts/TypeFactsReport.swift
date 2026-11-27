@@ -130,6 +130,13 @@ public struct TypeFactsReport: Sendable {
 		variantNodes = (0..<graph.variantCount).map { Int(graph.declaration(of: VariantID($0))) }
 		variantFamilies = (0..<graph.variantCount).map { "\(graph.family(of: VariantID($0)))" }
 		variantBuildsInSendableFunction = (0..<graph.variantCount).map { graph.buildsInSendableFunction(VariantID($0)) }
+		var variantOneFunctionGroups = [Int?](repeating: nil, count: graph.variantCount)
+		for (group, members) in graph.oneFunctionGroups.enumerated() {
+			for member in members {
+				variantOneFunctionGroups[member] = group
+			}
+		}
+		self.variantOneFunctionGroups = variantOneFunctionGroups
 		variantCalls = (0..<graph.variantCount).map { graph.calls(of: VariantID($0)).map(Int.init) }
 		columnElementCount = graph.columnElementCount
 		edgeCount = graph.graph.edgeCount
@@ -377,6 +384,8 @@ public struct TypeFactsReport: Sendable {
 	public let variantFamilies: [String]
 	/// Per variant, whether a call builds its body inside a `@Sendable` function, folded over every call into it.
 	public let variantBuildsInSendableFunction: [Bool]
+	/// Per variant, the group of twins' variants one function serves that it is in, which share the mark of any family.
+	public let variantOneFunctionGroups: [Int?]
 	/// The variant each edge of a variant's node calls, in edge order.
 	public let variantCalls: [[Int]]
 
