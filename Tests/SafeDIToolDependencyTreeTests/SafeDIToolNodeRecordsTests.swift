@@ -78,15 +78,18 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_laysOutRootFromNodeRecords_whenTheRootBuildsNothing() async throws {
-		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
-			try await executeSafeDIToolTest(swiftFileContent: [
-				"""
-				@Instantiable(isRoot: true)
-				public struct Root: Instantiable {
-				    public init() {}
-				}
-				""",
-			], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		// A root whose tree's body holds nothing is compared at no place, so only a run that builds no tree for it reports it.
+		let (output, reports) = try await NodeRecordsObservation.$buildsNoTreeForAcceptedRoots.withValue(true) {
+			try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+				try await executeSafeDIToolTest(swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public struct Root: Instantiable {
+					    public init() {}
+					}
+					""",
+				], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+			}
 		}
 		#expect(output.generatedFiles == ["Root+SafeDI.swift": generatedFileHeader])
 		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
