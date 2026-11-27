@@ -258,6 +258,22 @@ struct TypeFactsReceivedValueSupplies: Sendable {
 
 	/// The element of a node's contexts that stands for no declaration of the label above it.
 	private static let noDeclaration: Int32 = -1
+
+	/// Whether the trees a call builds read their roots' supplies where each is built, set by
+	/// `DependencyTreeGenerator.receivedValueSupplies()` around the trees it reads.
+	@TaskLocal static var readsWhereTreesAreBuilt = false
+
+	/// The supplies of the tree `root` roots, read where the tree is built, so that the table its scope is frozen into is
+	/// freed with the build rather than kept for every root at once; `nil` where nothing reads them. Two readers do:
+	/// `DependencyTreeGenerator.receivedValueSupplies()` (`readsWhereTreesAreBuilt`), and the tests' comparison with the
+	/// walk (`TypeFactsReceivedValueSuppliesObservation.comparesWalk`), which `GenerationWork` does not count.
+	static func whereRead(root: ConstructionScope) -> ReceivedValueSupplies? {
+		guard readsWhereTreesAreBuilt || TypeFactsReceivedValueSuppliesObservation.comparesWalk != nil else { return nil }
+		let tree = GenerationWork.$observer.withValue(readsWhereTreesAreBuilt ? GenerationWork.observer : nil) {
+			TypeFactsReceivedValueSupplies(root: root)
+		}
+		return ReceivedValueSupplies(supplies: tree.supplies, constructedTypes: tree.constructedTypes)
+	}
 }
 
 /// The supplies of each root the fold finds beside those the walk of its generator tree finds
