@@ -18,6 +18,12 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+/// A mock root's generator tree, with which of the checks of it can find anything in it (`MockRootTreeChecks`).
+struct MockRootTree {
+	let generator: ScopeGenerator
+	let treeChecks: MockRootTreeChecks
+}
+
 extension DependencyTreeGenerator {
 	/// Creates a mock-root ScopeGenerator using the production Scope tree.
 	/// Unsatisfied received dependencies are promoted as root-level children
@@ -56,7 +62,7 @@ extension DependencyTreeGenerator {
 		promotedScopesValidatedForHiddenReceives: inout Set<ObjectIdentifier>,
 		scopesWithValidatedDeclarations: inout Set<ObjectIdentifier>,
 		constructionMemo: inout ConstructionMemo,
-	) async throws -> ScopeGenerator {
+	) async throws -> MockRootTree {
 		// Recursively collect all transitive received properties from the scope tree
 		// and any promoted scopes' subtrees. Results are cached per Scope identity
 		// (via ObjectIdentifier) so each scope outside a cycle is visited at most once.
@@ -281,6 +287,8 @@ extension DependencyTreeGenerator {
 			walkingFrom: scope,
 			scopesBuiltForRequiredProperties: scopesBuiltForRequiredProperties,
 		)
+		// Which of the checks of the mock root's tree can find anything in it, read from its scopes, which are complete.
+		let treeChecks = MockRootTreeChecks(mockRootScope: mockRootScope, isPublicMock: instantiable.generateMock == .public)
 
 		// The mock's tree builds the type of each scope the mock root's scope reaches. Each constant or lazily instantiated
 		// `@Instantiated` dependency it builds, at any depth – beneath the mocked type's own children, beneath a promoted
@@ -529,7 +537,10 @@ extension DependencyTreeGenerator {
 				generator = try mockRootGenerator(builders: nil, constructionMemo: &constructionMemo)
 			}
 		}
-		try Self.validateCycleLabelsArePassable(inTreesRootedAt: [generator])
+		// A tree whose scopes declare no label they receive in two forms holds no unpassable label (`MockRootTreeChecks`).
+		if treeChecks.needsTree(.cycleLabels) {
+			try Self.validateCycleLabelsArePassable(inTreesRootedAt: [generator])
+		}
 		// An internal mock takes one builder for the places of one hole type and family its calls of other modules' public
 		// mocks pass up, as its production tree's initializer does (`ScopeGenerator.seamMockBuilders`), so those places must
 		// forward one value, as that initializer's places must.
@@ -554,7 +565,7 @@ extension DependencyTreeGenerator {
 		// another module's public mock passes up the places it cannot fill: `mock()` takes builders for them, shaped as a
 		// seam's are. The sites' fields are what is in scope there, read from the tree as a seam's are, and the tree is built
 		// again so that each site calls its builder, and each call hands its builders up.
-		guard instantiable.generateMock == .public, let publicMockContext, generator.containsBuildSite || generator.passesUpBuilder else { return generator }
+		guard instantiable.generateMock == .public, let publicMockContext, generator.containsBuildSite || generator.passesUpBuilder else { return MockRootTree(generator: generator, treeChecks: treeChecks) }
 		// The root level holds what `mock()` binds under its bare label before its tree, as a seam's holds its parameters; the
 		// builders do not change what it binds, so the generator built without them gives it.
 		let rootLevel = await Self.publicMockRootLevel(
@@ -614,8 +625,8 @@ extension DependencyTreeGenerator {
 		if let error = DependencyTreeGeneratorError.reportingAll(of: errors) {
 			throw error
 		}
-		guard buildersNamedApart.builders.map(SeamSignature.CallShape.Builder.init) != builders.builders.map(SeamSignature.CallShape.Builder.init) else { return builtGenerator }
-		return try mockRootGeneratorWithHoles(builders: buildersNamedApart)
+		guard buildersNamedApart.builders.map(SeamSignature.CallShape.Builder.init) != builders.builders.map(SeamSignature.CallShape.Builder.init) else { return MockRootTree(generator: builtGenerator, treeChecks: treeChecks) }
+		return try MockRootTree(generator: mockRootGeneratorWithHoles(builders: buildersNamedApart), treeChecks: treeChecks)
 	}
 
 	/// What a public mock's root level holds beside the root's children: the payload of every case of its root enums, and the

@@ -617,7 +617,10 @@ func executeSafeDIToolMultiModuleTest(
 													try await TypeFactsReceivedValueSuppliesChecks.comparing(handingOn: TypeFactsReceivedValueSuppliesObservation.comparesWalk) {
 														// The fold that decides whether any route is walked must send every graph the walk rejects to the walk (`FulfillmentFoldChecks`).
 														try await ValidationWalkObservation.$foldComparison.withValue(FulfillmentFoldChecks.comparison(handingOn: ValidationWalkObservation.foldComparison)) {
-															try await tool.generate()
+															// A mock root's tree check its scopes left out must find nothing in its tree (`MockRootTreeChecksOracle`).
+															try await MockRootTreeChecksOracle.comparing(handingOn: MockRootTreeChecksObservation.comparesTree) {
+																try await tool.generate()
+															}
 														}
 													}
 												}
