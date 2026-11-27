@@ -79,6 +79,7 @@ extension DependencyTreeGenerator {
 		)
 		walk.walk(from: generator)
 		walk.addCallsCases()
+		walk.addClosingCalls(from: generator)
 		return (walk.builder, walk.sites, walk.calls)
 	}
 
@@ -279,6 +280,82 @@ extension DependencyTreeGenerator {
 		private var frames = [Frame]()
 
 		mutating func walk(from root: ScopeGenerator) {
+			pushRoot(root)
+			while let frame = frames.last {
+				guard frame.nextPosition < frame.orderedChildren.count else {
+					pop()
+					continue
+				}
+				frames[frames.count - 1].nextPosition += 1
+				let position = frame.nextPosition
+				let child = frame.orderedChildren[position]
+				if let holeSite = child.generator.holeSite {
+					visitSite(holeSite.property)
+				} else if child.generator.fillEmitsCode {
+					// A fill whose code another fill of its case generates builds no site of its own and makes no call.
+					if frame.isOnPathToCalls, child.generator.passesUpBuilder {
+						meetCall(child)
+					}
+					if child.generator.containsBuildSite || child.generator.passesUpBuilder {
+						push(child: child, of: frame)
+						if let walk = reusableWalk() {
+							replay(walk)
+							pop()
+						}
+					} else {
+						noteUnwalked(child.generator)
+					}
+				} else {
+					noteUnwalked(child.generator)
+				}
+			}
+		}
+
+		/// Adds, after every place's and call's, the levels of the path to each call that closes a cycle on a scope on its
+		/// path, in the order the generated code makes them, the last with the entry it closes on: a walk of the subtrees that
+		/// hold a cycle-closing scope, which keeps no walk for reuse.
+		mutating func addClosingCalls(from root: ScopeGenerator) {
+			builder.beginClosingCalls()
+			isAddingClosingCalls = true
+			pushRoot(root)
+			while let frame = frames.last {
+				guard frame.nextPosition < frame.orderedChildren.count else {
+					pop()
+					continue
+				}
+				frames[frames.count - 1].nextPosition += 1
+				let child = frame.orderedChildren[frame.nextPosition]
+				guard child.generator.holdsCycleClosingScope, child.generator.fillEmitsCode else { continue }
+				if child.generator.closesPropertyCycle, let declaration = child.generator.closedOnDeclaration {
+					// A call that closes on a scope above the seam's tree, or above a fill's, re-enters no level of this graph.
+					if frames.contains(where: { $0.generator.declaration == declaration }) {
+						_ = materializeRoute(throughFrameAt: frames.count - 1, closingOn: SeamSignature.Places.StackEntry(property: declaration.property, concreteType: declaration.concreteType))
+					}
+				} else {
+					push(child: child, of: frame)
+				}
+			}
+			isAddingClosingCalls = false
+		}
+
+		/// Whether the walk adds the paths to the calls that close cycles (`addClosingCalls(from:)`).
+		private var isAddingClosingCalls = false
+
+		/// Enters `child`, a child of `frame`, the innermost scope.
+		private mutating func push(child: ScopeGenerator.OrderedChild, of frame: Frame) {
+			push(
+				child.generator,
+				orderedChildren: child.generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: child.propertiesGeneratedLater),
+				parent: frame,
+				childIndex: child.index,
+				fillIsSendable: frame.generator.buildsInSendableFunction(ofFill: child.generator),
+				inheritedDeclarations: [],
+				nearestAbove: frame.nearestDeclarations,
+			)
+		}
+
+		/// Enters the seam's root, which declares the seam's parameters.
+		private mutating func pushRoot(_ root: ScopeGenerator) {
 			var rootDeclarations = [PathDeclaration]()
 			for parameter in parameters {
 				rootDeclarations.append(parameterDeclaration(of: parameter))
@@ -298,43 +375,6 @@ extension DependencyTreeGenerator {
 				inheritedDeclarations: rootDeclarations,
 				nearestAbove: nearest,
 			)
-			while let frame = frames.last {
-				guard frame.nextPosition < frame.orderedChildren.count else {
-					pop()
-					continue
-				}
-				frames[frames.count - 1].nextPosition += 1
-				let position = frame.nextPosition
-				let child = frame.orderedChildren[position]
-				if let holeSite = child.generator.holeSite {
-					visitSite(holeSite.property)
-				} else if child.generator.fillEmitsCode {
-					// A fill whose code another fill of its case generates builds no site of its own and makes no call.
-					if frame.isOnPathToCalls, child.generator.passesUpBuilder {
-						meetCall(child)
-					}
-					if child.generator.containsBuildSite || child.generator.passesUpBuilder {
-						let fillIsSendable = frame.generator.buildsInSendableFunction(ofFill: child.generator)
-						push(
-							child.generator,
-							orderedChildren: child.generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: child.propertiesGeneratedLater),
-							parent: frame,
-							childIndex: child.index,
-							fillIsSendable: fillIsSendable,
-							inheritedDeclarations: [],
-							nearestAbove: frame.nearestDeclarations,
-						)
-						if let walk = reusableWalk() {
-							replay(walk)
-							pop()
-						}
-					} else {
-						noteUnwalked(child.generator)
-					}
-				} else {
-					noteUnwalked(child.generator)
-				}
-			}
 		}
 
 		// MARK: Frames
@@ -684,6 +724,7 @@ extension DependencyTreeGenerator {
 			if let declaration = frame.generator.declaration {
 				declarationsOnPath[declaration, default: 0] -= 1
 			}
+			guard !isAddingClosingCalls else { return }
 			guard let key = frame.subtreeKey, !frame.holdsUnwalkedCycleClosing else {
 				if frame.holdsUnwalkedCycleClosing, !frames.isEmpty {
 					frames[frames.count - 1].holdsUnwalkedCycleClosing = true
@@ -828,15 +869,16 @@ extension DependencyTreeGenerator {
 
 		/// The level indices of the path to the frame at `frameIndex`, each added to the graph for its frame's current position
 		/// where it is not yet, root first.
-		private mutating func materializeRoute(throughFrameAt frameIndex: Int) -> [Int] {
+		private mutating func materializeRoute(throughFrameAt frameIndex: Int, closingOn closesOn: SeamSignature.Places.StackEntry? = nil) -> [Int] {
 			var route = [Int]()
+			let lastLevelFrame = frames[...frameIndex].lastIndex(where: \.endsLevel)
 			for index in 0...frameIndex where frames[index].endsLevel {
 				let position = frames[index].nextPosition - 1
 				if let added = frames[index].addedLevel, added.position == position {
 					route.append(added.index)
 					continue
 				}
-				let level = addLevel(ofFrameAt: index, position: position, parent: route.last)
+				let level = addLevel(ofFrameAt: index, position: position, parent: route.last, closingOn: index == lastLevelFrame ? closesOn : nil)
 				frames[index].addedLevel = (position, level)
 				route.append(level)
 			}
@@ -845,7 +887,7 @@ extension DependencyTreeGenerator {
 
 		/// Adds the level of the frame at `frameIndex` whose next property is that of its child at `position`, beneath
 		/// `parent`, and returns its index.
-		private mutating func addLevel(ofFrameAt frameIndex: Int, position: Int, parent: Int?) -> Int {
+		private mutating func addLevel(ofFrameAt frameIndex: Int, position: Int, parent: Int?, closingOn closesOn: SeamSignature.Places.StackEntry? = nil) -> Int {
 			let drafted = drafted(ofFrameAt: frameIndex)
 			let frame = frames[frameIndex]
 			let next = frame.orderedChildren[position]
@@ -868,6 +910,7 @@ extension DependencyTreeGenerator {
 				declaredSegment: drafted.draft.declaredSegment,
 				nextPosition: frame.instantiable != nil ? position : nil,
 				nextLoop: frame.instantiable != nil ? frame.generator.receivedBuilderLoops.loopByChildIndex[next.index] : nil,
+				closesOn: closesOn,
 			)
 			let index = builder.addLevel(draft, listProjection: drafted.listProjection, parent: parent)
 			// A declaration's tree holds the places of every route through the level, since a place's family, and so its case,
