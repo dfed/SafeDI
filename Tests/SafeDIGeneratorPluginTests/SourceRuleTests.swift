@@ -74,6 +74,28 @@ struct SourceRuleTests {
 		#expect(try findings(of: [.engineFeatureName]) == [])
 	}
 
+	@Test
+	func typeFactsFolds_nameNoModelOfTheSource() throws {
+		#expect(try findings(of: [.typeFactsFoldModelName]) == [])
+	}
+
+	@Test(arguments: [
+		("let label: String", "String"),
+		("_ = Property.self", "Property"),
+		("func spell(_ type: TypeDescription) {}", "TypeDescription"),
+	])
+	func sourceRuleCheck_findsTypeFactsFoldModelName_whenAFoldNamesAModel(source: String, name: String) {
+		#expect(findings(in: source, at: "Sources/SafeDICore/Generators/TypeFacts/TypeFactsOutcomes.swift") == [
+			"Sources/SafeDICore/Generators/TypeFacts/TypeFactsOutcomes.swift:1: typeFactsFoldModelName: a fold of the per-type facts works on IDs and bit sets, and names no `\(name)`: intern the value where the graph is built, and read its ID",
+		])
+	}
+
+	@Test
+	func sourceRuleCheck_findsNoTypeFactsFoldModelName_whenAWordOnlyContainsAModelsNameOrAnotherFileNamesIt() {
+		#expect(findings(in: "let properties = 1 // a String", at: "Sources/SafeDICore/Generators/TypeFacts/TypeFactsOutcomes.swift") == [])
+		#expect(findings(in: "let label: String", at: "Sources/SafeDICore/Generators/TypeFacts/Read.swift") == [])
+	}
+
 	@Test(arguments: [
 		("let mockDefaults = 1", "mockDefaults", "mock"),
 		("_ = record.seamRoot", "seamRoot", "seam"),
@@ -759,7 +781,7 @@ struct SourceRuleTests {
 	func sourceRuleCheck_findsSiteAndWaiver_whenAWaiverNamesNoRule() {
 		#expect(findings(in: "_ = value! // safedi-source-rule: allow forceUnwrapping — `value` is set before this line") == [
 			"Sources/SafeDICore/Models/Fixture.swift:1: forceUnwrap: a force unwrap traps on `nil`",
-			"Sources/SafeDICore/Models/Fixture.swift:1: waiver: a waiver reads `safedi-source-rule: allow <rule> — <reason>`, where the rule is one of `forceUnwrap`, `forceTry`, `forceCast`, `trap`, `uniqueKeysWithValues`, `optionalTry`, `generatedTrap`, `builderFunctionNamePrefix`, `backtick`, `apostrophe`, `testableImport`, `uncheckedConcurrency`, `taskGroupTupleElement`, `engineFeatureName`, `stringScan`",
+			"Sources/SafeDICore/Models/Fixture.swift:1: waiver: a waiver reads `safedi-source-rule: allow <rule> — <reason>`, where the rule is one of `forceUnwrap`, `forceTry`, `forceCast`, `trap`, `uniqueKeysWithValues`, `optionalTry`, `generatedTrap`, `builderFunctionNamePrefix`, `backtick`, `apostrophe`, `testableImport`, `uncheckedConcurrency`, `taskGroupTupleElement`, `engineFeatureName`, `typeFactsFoldModelName`, `stringScan`",
 		])
 	}
 
