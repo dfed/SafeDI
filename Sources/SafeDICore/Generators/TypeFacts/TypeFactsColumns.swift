@@ -24,7 +24,7 @@
 /// One binding a declaration makes, by the world's IDs (`TypeFactsBinding` names the run's, which the graph cannot look
 /// up yet), in the order its scope binds them: the forwarded properties, then each child as it is built. A seam's own
 /// parameters are no binding yet: the graph's reads take them from above its root, as its caller hands them, so
-/// `isSeamParameter` is set by no step 0 binding. Trivially copyable.
+/// `isSeamParameter` is set by no binding yet. Trivially copyable.
 struct TypeFactsWorldBinding: Hashable, Sendable {
 	let label: Int32
 	/// The world's ID of the property bound.
@@ -33,8 +33,8 @@ struct TypeFactsWorldBinding: Hashable, Sendable {
 	let declaringType: Int32
 	/// The index of the declaration's location in `TypeFactsGraph.declarationLocations`, or -1 for none.
 	let declarationLocation: Int32
-	/// The type whose builder function takes the binding as a parameter, or -1: step 0 binds no cycle parameter, since
-	/// every reference to a member of a cycle is a call (design section 4).
+	/// The type whose builder function takes the binding as a parameter, or -1: the graph binds no cycle parameter, since
+	/// every reference to a member of a cycle is a call, never a binding.
 	let parameterTakingType: Int32
 	/// The world's ID of the declaring type's module, or -1 where SafeDI knows none.
 	let declaringModule: Int32

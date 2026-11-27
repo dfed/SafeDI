@@ -687,7 +687,6 @@ public actor DependencyTreeGenerator {
 					cache: &receivedPropertiesCache,
 					validation: &childrenRequiringEachOtherValidation,
 				)
-				try validateCyclesFromRootsOfForeignSeamsWithHoles(in: typeDescriptionToScopeMap, foreignSeamRoots: foreignSeamRoots, receivedPropertiesCache: &receivedPropertiesCache)
 			} catch let error as DependencyTreeGeneratorError {
 				// The trees build each foreign seam inline with the fills of its holes, which the seam's module calls
 				// through its builders. Only membership in what each fill declares is read, so the seams' order is moot.

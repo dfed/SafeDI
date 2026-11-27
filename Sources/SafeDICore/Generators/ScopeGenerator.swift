@@ -7908,6 +7908,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		else { return nil }
 		let body = lines[1..<(lines.count - 1)].map { Self.standardIndent + $0 }
 		// The fill binds the fields its tree reads first, each from the scope; nothing after them reads the scope.
+		// safedi-source-rule: allow stringScan — reads the first line of one inlined fill, once per fill.
 		let readsScope = carriesPayload && lines[1].hasPrefix(leadingMemberWhitespace + Self.standardIndent + "let ") && (lines[1].contains(" = scope.") || (argumentFields != nil && lines[1].contains(" = scope_")))
 		let builtProperty = fill.propertiesToGenerate.first?.property
 		let forwardedValueName = fill.fillHole?.forwardedType == nil ? nil : builtProperty.map(Self.forwardedValueParameterName(forBuilding:))
@@ -12457,6 +12458,7 @@ extension TypeDescription {
 	// D1 lane hook (lane D): the mock lowering takes the parameter so too.
 	var autoclosureTakenWithoutThrowing: TypeDescription {
 		guard case let .attributed(.closure(arguments, isAsync, true, _, returnType), specifiers, attributes) = self,
+		      // safedi-source-rule: allow stringScan — `attributes` is a type’s `[String]` of attributes: membership among a few elements, no scan of text.
 		      attributes.contains("autoclosure")
 		else { return self }
 		return .attributed(.closure(arguments: arguments, isAsync: isAsync, doesThrow: false, thrownType: nil, returnType: returnType), specifiers: specifiers, attributes: attributes)
