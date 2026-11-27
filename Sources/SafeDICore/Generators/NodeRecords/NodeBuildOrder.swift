@@ -30,17 +30,23 @@ struct NodeBuildOrder: Sendable {
 	init(world: some NodeRecordSources) throws(NodeRecordRefusal) {
 		let declarationCount = world.declarationCount
 		var receivedByDeclaration = [Set<Property>?](repeating: nil, count: declarationCount)
+		// A child on the path is not pushed again, so that a world whose edges close a cycle, which
+		// `NodeRecords.refusals(in:)` orders too, is walked once: the child reads as receiving nothing there, and the world
+		// is refused as a cycle.
+		var state = [VisitState](repeating: .unvisited, count: declarationCount)
 		var stack: [(declaration: DeclarationID, childrenPushed: Bool)] = [(0, false)]
 		while let (declaration, childrenPushed) = stack.popLast() {
 			let edges = world.edges(from: declaration)
 			guard childrenPushed else {
+				guard state[Int(declaration)] == .unvisited else { continue }
+				state[Int(declaration)] = .onPath
 				stack.append((declaration, true))
-				for child in edges.reversed() where receivedByDeclaration[Int(child)] == nil {
+				for child in edges.reversed() where state[Int(child)] == .unvisited {
 					stack.append((child, false))
 				}
 				continue
 			}
-			guard receivedByDeclaration[Int(declaration)] == nil else { continue }
+			state[Int(declaration)] = .ordered
 			let scope = world.scope(of: declaration)
 			let forwardedProperties = Set(scope.instantiable.dependencies.filter { $0.source == .forwarded }.map(\.property))
 			var received = Set<Property>()
