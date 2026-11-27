@@ -15,8 +15,9 @@ wrapper's binding states its type), 6 (an unlabeled argument written "_: value")
 states its type), 9 (a keyword member in backticks), 10 (a public mock’s guard line once in the root’s body:
 written again before each nested copy of the function it stands before).
 3 (an actor's override local, placed where the walk's text declares it) and 11 (a function named apart with a
-trailing underscore) read one fact from the walk's text. Not rewritten, so such a pair fails: 12 and the
-unavailable-dependency read.
+trailing underscore) read one fact from the walk's text. 5 as ruled 17:35Z (a dependency nothing fulfills, bound once by mock() in the records and first in each
+function that declares it in the walk) and 17 (a local only the records read) read one too. Not rewritten, so
+such a pair fails: 12, 16 and the cycle kind's entered places.
 """
 import collections
 import re
@@ -206,7 +207,7 @@ def per_mock(rewrite):
         return '\n'.join(rewrite(a,b) for a,b in zip(ours,theirs))
     return whole
 MOCK=re.compile(r'^    (?:public )?(?:@\w+ )*static func mock\(')
-LOCAL=re.compile(r'^( *)let (__safeDI_(\w+?)__overrides) = (safeDIOverrides(?:\.\w+)+)$')
+LOCAL=re.compile(r'^( *)let (__safeDI_(\w+?)__(?:overrides|safeDIBuilder)) = (safeDIOverrides(?:\.\w+)+)$')
 def e3(text,walk):
     # entry 3: the walk reads an actor's overrides into a local before the actor's function, and the records
     # read a local wherever a function is handed its overrides in a closure. Which places the walk gives a
@@ -231,7 +232,7 @@ def e3(text,walk):
         else: i+=1
     for line in walk_lines:
         local=LOCAL.match(line)
-        if not local: continue
+        if not local or not local.group(2).endswith('__overrides'): continue
         indent,_,label,path=local.groups()
         for i,candidate in enumerate(lines):
             f=FUNC.match(candidate)
@@ -253,9 +254,45 @@ def e11(text,walk):
         if not re.search(r'(?<!\w)'+re.escape(name)+r'\(',walk):
             text=re.sub(r'(?<![\w.])'+re.escape(name)+r'(?=[(),\n])',name[:-1],text)
     return text
+def e5(text,walk):
+    # entry 5 as ruled 17:35Z: a dependency nothing fulfills is an ordinary read, which the records bind once in
+    # mock() before its nodes and the walk binds first in each function of a type that declares it. Which
+    # functions those are is a fact read from the walk's text of the same mock.
+    lines=text.split('\n')
+    walk_lines=walk.split('\n')
+    walk_at_root=set(l for l in walk_lines if UNAVAILABLE.match(l) and l.startswith('        l'))
+    bound=set()
+    for i in range(len(lines)-1,-1,-1):
+        binding=UNAVAILABLE.match(lines[i])
+        if not (binding and lines[i].startswith('        l')): continue
+        bound.add(lines[i].strip())
+        if lines[i] in walk_at_root: continue
+        del lines[i]
+        if binding.group(1)!=binding.group(2): continue
+        # a binding named apart: the function that declares the label reads it under the label
+        for k in range(len(lines)):
+            renamed=re.match(r'^( +let \w+: .+\? = )'+re.escape(binding.group(1))+'$',lines[k])
+            if renamed:
+                lines[k]=renamed.group(1)+'safeDIOverrides.'+binding.group(1)
+                bound.add(lines[k].strip())
+    if not bound: return text
+    for k in range(1,len(walk_lines)):
+        if not (UNAVAILABLE.match(walk_lines[k]) and walk_lines[k].strip() in bound and FUNC.match(walk_lines[k-1])): continue
+        i=0
+        while i<len(lines):
+            if lines[i]==walk_lines[k-1] and lines[i+1]!=walk_lines[k]:
+                if block_end(lines,i)==i+2:
+                    # the function's one expression becomes its last statement
+                    only=lines[i+1]
+                    lines[i+1]=only[:len(only)-len(only.lstrip())]+'return '+only.lstrip()
+                lines.insert(i+1,walk_lines[k])
+            i+=1
+    return '\n'.join(lines)
+UNAVAILABLE=re.compile(r'^ +let (\w+): .+\? = safeDIOverrides\.(\w+)$')
 e3=per_mock(e3)
+e5=per_mock(e5)
 e11=per_mock(e11)
-REWRITES=[('1+2',unhoist),('11',e11),('3',e3),('8',e8),('9',e9),('6',e6),('4',e4)]
+REWRITES=[('1+2',unhoist),('11',e11),('5',e5),('3',e3),('8',e8),('9',e9),('6',e6),('4',e4)]
 
 
 def rewritten(text, walk):
