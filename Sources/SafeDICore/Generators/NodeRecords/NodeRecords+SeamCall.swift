@@ -23,8 +23,9 @@ extension NodeRecords {
 	/// discharges stage 1's refusal of a construction other than an initializer, and its refusal of a call that passes
 	/// builders where the call passes each builder up from the seam whose tree makes it (`ConstructionScope.HoleArgument.passUp`);
 	/// `nil` for any other node, and for every node of a mock root's world, which builds every seam inline. Every other
-	/// check of stage 1 still runs on it, so a call that fills a place is still refused as `fill`. A call that forwards values
-	/// binds them inside its text, which no record lists yet: refused as `construction`.
+	/// check of stage 1 still runs on it, so a call that fills a place is still refused as `fill`. The engine spells a call
+	/// in place only as a constant (`InPlaceCall`): any other call, and one that forwards values, which it binds inside its
+	/// function, are refused as `construction`.
 	static func seamCallClaim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
 		guard !world.isMockWorld, world.construction(of: declaration) == .seamCall else { return nil }
 		let scope = world.scope(of: declaration)
@@ -37,13 +38,18 @@ extension NodeRecords {
 				false
 			}
 		}
-		return NodeRecordClaim(kind: .seamCall, discharges: passesEveryBuilderUp ? [.construction, .fill] : [.construction], refusals: forwardsValues ? [.construction] : [])
+		return NodeRecordClaim(
+			kind: .seamCall,
+			discharges: passesEveryBuilderUp ? [.construction, .fill] : [.construction],
+			refusals: forwardsValues || world.kind(of: declaration) != .constant ? [.construction] : [],
+		)
 	}
 
-	/// The record of `declaration`'s place, a node of kind `seamCall`: `builtByInitializerRecord`'s, with the seam's tier's
-	/// initializer as its target (the scope's instantiable is the seam's leaf), a builder function always declared, the
-	/// guard line that function begins with (`CallFields.leadingStatement`), and, where the call passes builders up, the
-	/// read of the struct it passes each (`SeamCallRoutes`).
+	/// The record of `declaration`'s place, a node of kind `seamCall`, a constant: a call the engine spells where its place is
+	/// written (`InPlaceCall`), whose function begins with the call's guard line (`CallFields.leadingStatement`) and builds
+	/// `children` after it, and whose construction calls the seam's tier's initializer (the scope's instantiable is the
+	/// seam's leaf) with `builtByInitializerRecord`'s arguments and, where the call passes builders up, the member of the
+	/// struct it passes each (`SeamCallRoutes`). Its `text` is empty: the engine spells the call from the record.
 	/// - Throws: `NodeRecordRefusal.fill` where the call passes a builder up that `routes` holds no one read for.
 	static func seamCallRecord(
 		of declaration: DeclarationID,
@@ -52,18 +58,54 @@ extension NodeRecords {
 		routes: SeamCallRoutes,
 		typesDeclaredEscaping: Set<TypeDescription>,
 		children: [GeneratedCode],
-	) throws -> BuiltPlaceRecord {
+	) throws -> AliasPlaceRecord {
 		let scope = world.scope(of: declaration)
-		var record = try builtByInitializerRecord(of: declaration, variant: variant, in: world, typesDeclaredEscaping: typesDeclaredEscaping, children: children, declaresFunction: true)
-		// Never `nil`: the node is of kind `seamCall` (`seamCallClaim(of:in:)`), whose construction is a call of the seam.
-		guard let seamCall = scope.seamCall else { return record }
+		let construction = try builtByInitializerRecord(of: declaration, variant: variant, in: world, typesDeclaredEscaping: typesDeclaredEscaping, children: [], declaresFunction: true)
+		var arguments = construction.arguments
+		var reads = construction.arguments
+		var argumentValues = [Int: ValuePath]()
+		var closureArguments = [ClosureArgumentEntry]()
 		// A call that passes nothing up passes no builder: the tier's builders take what the seam's tree builds.
-		let closureArguments = try scope.holeArguments.isEmpty ? [] : seamCall.calledBuilders.builders.map { builder throws(NodeRecordRefusal) -> ClosureArgumentEntry in
-			guard let read = routes.read(passedUpBy: declaration, to: builder) else { throw .fill }
-			return ClosureArgumentEntry(label: builder.generatedOnlyArgumentLabel, value: .passedOn(read))
+		for builder in scope.holeArguments.isEmpty ? [] : scope.seamCall?.calledBuilders.builders ?? [] {
+			guard let passedUp = routes.read(passedUpBy: declaration, to: builder) else { throw NodeRecordRefusal.fill }
+			let label = builder.generatedOnlyArgumentLabel
+			let structProperty = Property(label: passedUp.structName, typeDescription: passedUp.read.structType)
+			// SafeDI cannot tell the struct is `Sendable`, as for a hole site's read of it.
+			let structRead = PlaceRead(argumentLabel: label, label: passedUp.structName, property: structProperty, source: .binding(label: passedUp.structName), staysOutsideSendableFunctions: true)
+			argumentValues[arguments.count] = passedUp.read.member.value(reading: structRead, caseName: passedUp.read.caseName)
+			arguments.append(structRead)
+			closureArguments.append(ClosureArgumentEntry(label: label, value: .passedOn(passedUp.read)))
+			if !reads.contains(where: { $0.label == passedUp.structName }) {
+				reads.append(PlaceRead(argumentLabel: passedUp.structName, label: passedUp.structName, property: structProperty, source: .binding(label: passedUp.structName), staysOutsideSendableFunctions: true))
+			}
 		}
-		record.callFields = CallFields(leadingStatement: seamCall.callGuard(for: scope.instantiable.concreteInstantiable), closureArguments: closureArguments)
-		return record
+		var record = BuiltPlaceRecord(
+			property: construction.property,
+			isErased: false,
+			concreteType: construction.concreteType,
+			isExtension: construction.isExtension,
+			target: .initializer(construction.concreteType),
+			arguments: arguments,
+			forwardedProperties: [],
+			cycleParameters: [],
+			callCycleArguments: [],
+			functionName: construction.functionName,
+			isSendable: false,
+			typesDeclaredEscaping: typesDeclaredEscaping,
+			lineEnd: "",
+			hasFunction: true,
+			children: [],
+			node: PlanNode(),
+		)
+		if !argumentValues.isEmpty {
+			record.argumentValues = argumentValues
+		}
+		// Never `nil`: the node is of kind `seamCall` (`seamCallClaim(of:in:)`), whose construction is a call of the seam.
+		record.callFields = CallFields(leadingStatement: scope.seamCall?.callGuard(for: construction.concreteType), closureArguments: closureArguments)
+		var alias = AliasPlaceRecord(property: construction.property, fulfillingProperty: nil, text: "", reads: reads)
+		alias.declaredFunctionNames = [construction.functionName]
+		alias.call = InPlaceCall(record: record, statementsBeforeLeadingStatement: [], statementsAfterLeadingStatement: children)
+		return alias
 	}
 }
 
@@ -82,7 +124,7 @@ struct SeamCallRoutes: Sendable {
 			return
 		}
 		let seamHoles = SeamHoles(seamType: signature.seamType, holes: signature.holes, builders: signature.builders, parameters: signature.parameters, callRoutes: signature.callRoutes, scopeEnums: signature.scopeEnums, holdsLoopPayloadsInBoxes: true)
-		var routesByCall = [Call: (read: PassedOnRead?, count: Int)]()
+		var routesByCall = [Call: (read: PassedUp?, count: Int)]()
 		for callRoute in signature.callRoutes where !callRoute.reentersEnclosingFill {
 			// The node at the end of the route's path: each step the child of the step before built as the step's property. A
 			// path into a fill names no edge's property, and leaves its call without a read.
@@ -101,7 +143,10 @@ struct SeamCallRoutes: Sendable {
 			// to it, which no record of this kind holds; one inside a fill hands the fill's struct. Neither has a read here.
 			let writesOnlyTheCall = callRoute.route.isEmpty && !callRoute.handsFillLevelStruct
 			let read = !writesOnlyTheCall ? nil : seamHoles.routeCase(at: callRoute.sitePath, innerKey: callRoute.innerKey)?.passedUpStruct.map { passedUpStruct in
-				PassedOnRead(calledType: world.scope(of: declaration).instantiable.concreteInstantiable, builderLabel: calledBuilder.label, structType: passedUpStruct.type, caseName: passedUpStruct.caseName, member: passedUpStruct.member)
+				PassedUp(
+					read: PassedOnRead(calledType: world.scope(of: declaration).instantiable.concreteInstantiable, builderLabel: calledBuilder.label, structType: passedUpStruct.type, caseName: passedUpStruct.caseName, member: passedUpStruct.member),
+					structName: passedUpStruct.name,
+				)
 			}
 			let call = Call(declaration: declaration, innerKey: callRoute.innerKey)
 			if let (knownRead, count) = routesByCall[call] {
@@ -120,7 +165,7 @@ struct SeamCallRoutes: Sendable {
 
 	/// The read of the struct `declaration`'s call passes `builder` of the seam it calls, or `nil` where no one read stands for
 	/// every path to the node.
-	func read(passedUpBy declaration: DeclarationID, to builder: SeamSignature.Builder) -> PassedOnRead? {
+	func read(passedUpBy declaration: DeclarationID, to builder: SeamSignature.Builder) -> PassedUp? {
 		readsByCall[Call(declaration: declaration, innerKey: builder.enumKey)]
 	}
 
@@ -129,7 +174,13 @@ struct SeamCallRoutes: Sendable {
 		let innerKey: SeamSignature.ScopeEnum.Key
 	}
 
-	private let readsByCall: [Call: PassedOnRead]
+	/// The member a call passes up, and the name the seam's tree binds the struct it is called on under.
+	struct PassedUp: Equatable, Sendable {
+		let read: PassedOnRead
+		let structName: String
+	}
+
+	private let readsByCall: [Call: PassedUp]
 
 	/// How many paths reach each declaration from the root, counting each up to `Int.max`: every declaration's parents
 	/// are counted before it.

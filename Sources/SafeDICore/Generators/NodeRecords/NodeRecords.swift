@@ -158,7 +158,7 @@ struct NodeRecords: Sendable {
 			case .inlineSeam:
 				try .built(Self.inlineSeamRecord(of: declaration, variant: variant, in: world, typesDeclaredEscaping: escaping, children: children))
 			case .seamCall:
-				try .built(Self.seamCallRecord(of: declaration, variant: variant, in: world, routes: seamCallRoutes, typesDeclaredEscaping: escaping, children: children))
+				try .alias(Self.seamCallRecord(of: declaration, variant: variant, in: world, routes: seamCallRoutes, typesDeclaredEscaping: escaping, children: children))
 			case .receivesOnlyIfAvailable:
 				try .built(Self.receivesOnlyIfAvailableRecord(of: declaration, variant: variant, in: world, answers: onlyIfAvailableAnswers, typesDeclaredEscaping: escaping, children: children))
 			case .unavailableDependency:
@@ -170,7 +170,7 @@ struct NodeRecords: Sendable {
 			}
 			typesDeclaredEscaping[Int(variant)] = escaping
 			records[Int(variant)] = record
-			if case let .built(builtRecord) = record, builtRecord.callFields != nil {
+			if case let .alias(aliasRecord) = record, aliasRecord.call != nil {
 				holdsCallFields = true
 			}
 			places[Int(variant)] = switch record {
@@ -199,8 +199,8 @@ struct NodeRecords: Sendable {
 	/// statements are.
 	let rootBody: [GeneratedCode]
 
-	/// Whether a record holds fields of a call of another module's code (`CallFields`), which the engine does not spell yet:
-	/// such a root's records are compared with its tree's, and its code is not laid out from them.
+	/// Whether a record is a call the engine spells in place (`InPlaceCall`), whose `text` node records leave empty, which
+	/// the engine still keys by: such a root's records are compared with its tree's, and its code is not laid out from them.
 	let holdsCallFields: Bool
 
 	/// How many variants have a record, which is every variant but the root's.
