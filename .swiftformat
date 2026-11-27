@@ -7,8 +7,9 @@
 # check what each call returns (`let _: Screen = …`), and a released copy must never change.
 --exclude Scripts/release-checks/written-calls
 # The value harness's production-root probes are written by Scripts/value-harness/production-root-probes.py, whose
-# property lines its fixture reader reads one to a line.
---exclude Scripts/value-harness/production-root-probes
+# property lines its fixture reader reads one to a line, and the mock kinds’ acceptance scripts, whose Swift files are
+# fixtures and a test file’s opening lines.
+--exclude Scripts/value-harness/production-root-probes,Scripts/value-harness/kinds-acceptance
 
 # format options
 --indent tab
