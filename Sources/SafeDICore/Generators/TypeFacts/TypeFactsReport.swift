@@ -135,6 +135,7 @@ public struct TypeFactsReport: Sendable {
 		variantCountsByNode = variantCounts
 		variantNodes = (0..<graph.variantCount).map { Int(graph.declaration(of: VariantID($0))) }
 		variantFamilies = (0..<graph.variantCount).map { "\(graph.family(of: VariantID($0)))" }
+		variantBuildsInSendableFunction = (0..<graph.variantCount).map { graph.buildsInSendableFunction(VariantID($0)) }
 		variantCalls = (0..<graph.variantCount).map { graph.calls(of: VariantID($0)).map(Int.init) }
 		columnElementCount = graph.columnElementCount
 		edgeCount = graph.graph.edgeCount
@@ -191,6 +192,7 @@ public struct TypeFactsReport: Sendable {
 				typesDeclaredEscaping: spelled(graph.typesDeclaredEscaping, of: index, type),
 				typesBeneath: spelled(graph.typesBeneath, of: index, type),
 				holdsHoleBeneath: graph.holesBeneath.contains(0, inRow: index),
+				holdsCaseBeneath: graph.casesBeneath.contains(0, inRow: index),
 				builtType: type(graph.builtTypes[index]),
 				isOnCycle: graph.graph.isOnCycle(index),
 				readsFromAbove: graph.reads.reads(of: index).map(graph.readDescription),
@@ -313,6 +315,8 @@ public struct TypeFactsReport: Sendable {
 		/// The types the node's subtree builds, its own included.
 		public let typesBeneath: [String]
 		public let holdsHoleBeneath: Bool
+		/// In a seam's own tree, whether a hole is beneath the node along every edge, fills included.
+		public let holdsCaseBeneath: Bool
 		public let builtType: String
 		public let isOnCycle: Bool
 		/// What the node's subtree reads from above it, as `Read` descriptions.
@@ -389,6 +393,8 @@ public struct TypeFactsReport: Sendable {
 	public let variantNodes: [Int]
 	/// Each variant's family (`VariantFamily`), spelled as its case.
 	public let variantFamilies: [String]
+	/// Per variant, whether a call builds its body inside a `@Sendable` function, folded over every call into it.
+	public let variantBuildsInSendableFunction: [Bool]
 	/// The variant each edge of a variant's node calls, in edge order.
 	public let variantCalls: [[Int]]
 

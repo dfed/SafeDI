@@ -1509,6 +1509,31 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keysFillHoldingPlaceByFamily_whenFillOfInnerSeamIsHandedInsideSendableInstantiator() async throws {
+		// `Outer`'s tree calls `Inner` in `innerBuilder`'s `@Sendable` function and hands it `DefaultService` as a fill, which
+		// holds `Outer`'s place `gadget`: the call holds no hole along its own edges, but the fill reads the case from the
+		// `@Sendable` carrier, so the per-type facts key the fill `@Sendable` and mark it built inside that function.
+		let (stream, continuation) = AsyncStream.makeStream(of: TypeFactsReport.self)
+		try await ConstructionMemoOracle.$observer.withValue({ _, _, report in continuation.yield(report) }) {
+			_ = try await executeSafeDIToolMultiModuleTest(modules: Self.carriedModules(isSendable: true), integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
+		}
+		continuation.finish()
+		var reports = [TypeFactsReport]()
+		for await report in stream where report.root == "Outer" && !report.forMockGeneration {
+			reports.append(report)
+		}
+		let report = try #require(reports.last)
+
+		let fill = try #require(report.nodes.firstIndex { $0.description.hasPrefix("DefaultService as service") }, "\(report.world)")
+		let variants = report.variantNodes.indices.filter { report.variantNodes[$0] == fill }
+		#expect(variants.map { report.variantFamilies[$0] } == ["sendable"], "\(report.world)")
+		#expect(variants.map { report.variantBuildsInSendableFunction[$0] } == [true], "\(report.world)")
+		let findings = TypeFactsChecks.findings(of: report).findingsByCheck
+		#expect(findings[33] == nil && findings[34] == nil, "\(findings)")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_carriesInnerSeamsSendableStruct_whenFillOfInnerSeamHeldInSendableInstantiatorHoldsPlace() async throws {
 		try await expectOutput(
 			of: Self.carriedModules(isSendable: true),
