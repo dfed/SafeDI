@@ -35,6 +35,9 @@ struct TypeFactsPropertyFacts: Sendable {
 	let formsProvidedOffsets: [Int32]
 	let formsProvided: [Int32]
 
+	/// The facts of no property, which a graph's facts extend.
+	static let empty = TypeFactsPropertyFacts(labels: [], unwrapped: [], isOptional: [], instances: [], isBuilder: [], formsReadOffsets: [0], formsRead: [], formsProvidedOffsets: [0], formsProvided: [])
+
 	func formsRead(by property: Int32) -> ArraySlice<Int32> {
 		formsRead[Int(formsReadOffsets[Int(property)])..<Int(formsReadOffsets[Int(property) + 1])]
 	}
