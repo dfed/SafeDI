@@ -350,6 +350,7 @@ extension DependencyTreeGenerator {
 		// While a test observes the place graph: a case for each call that presents places and each case of the called seam's
 		// it presents, owned by the level that declares the call, which the same pass drafts that drafts a site's levels.
 		var passedUpCaseBySite = [SeamSignature.Hole.Site: (caseIndex: Int, route: SeamSignature.Places.Route)]()
+		var laterRoutesOfPassedUpCases = [(caseIndex: Int, route: SeamSignature.Places.Route)]()
 		// The one walk adds the same calls' cases, in the same order.
 		var walkedPassedUpCaseBySite = [SeamSignature.Hole.Site: (caseIndex: Int, route: SeamSignature.Places.Route)]()
 		let walkedCalls = walkedOnce?.calls ?? []
@@ -414,9 +415,12 @@ extension DependencyTreeGenerator {
 					reenteringPlaceFields: place.reenteringPlaceFields,
 					access: accessOfBuilder(passingUp: place.hole),
 				)
-				// The per-site hole of a place several calls present is the first call's.
+				// The per-site hole of a place several calls present is the first call's; the later calls' routes are kept for the
+				// checks that evaluate a case route by route.
 				if passedUpCaseBySite[place.hole.site] == nil {
 					passedUpCaseBySite[place.hole.site] = (caseIndex, route)
+				} else {
+					laterRoutesOfPassedUpCases.append((caseIndex, route))
 				}
 			}
 			for (place, walkedCaseIndex) in zip(presentation.places, walkedCall?.caseIndices ?? []) {
@@ -510,6 +514,7 @@ extension DependencyTreeGenerator {
 			siteHoles: sortedHoles,
 			caseIndexBySite: order.map { caseIndexByHole[$0] },
 			routeBySite: order.map { routeByHole[$0] },
+			laterRoutesOfPassedUpCases: laterRoutesOfPassedUpCases,
 			calledPlaces: calledPlaces,
 			walkedOnce: walkedOnce.map { walkedOnce in
 				// Named as the fed graph names its cases: by the first place of each in builder-label order.

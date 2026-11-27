@@ -60,13 +60,14 @@ extension SeamSignature.Places {
 			called(of: reference)?.places
 		}
 
-		public init(seamType: TypeDescription, places: SeamSignature.Places, siteHoles: [SeamSignature.Hole], caseIndexBySite: [Int], routeBySite: [Route], calledPlaces: [CalledPlaces] = [], walkedOnce: WalkedOnce? = nil) {
+		public init(seamType: TypeDescription, places: SeamSignature.Places, siteHoles: [SeamSignature.Hole], caseIndexBySite: [Int], routeBySite: [Route], laterRoutesOfPassedUpCases: [(caseIndex: Int, route: Route)] = [], calledPlaces: [CalledPlaces] = [], walkedOnce: WalkedOnce? = nil) {
 			self.calledPlaces = calledPlaces
 			self.seamType = seamType
 			self.places = places
 			self.siteHoles = siteHoles
 			self.caseIndexBySite = caseIndexBySite
 			self.routeBySite = routeBySite
+			self.laterRoutesOfPassedUpCases = laterRoutesOfPassedUpCases
 			self.walkedOnce = walkedOnce
 		}
 
@@ -103,6 +104,8 @@ extension SeamSignature.Places {
 		/// For each of `siteHoles`, the levels the walk that built the graph took to the site's owner, root first; empty for a
 		/// place a call passes up.
 		public let routeBySite: [Route]
+		/// For a place several calls present, the case and route of each call after the first, whose route `routeBySite` holds.
+		public let laterRoutesOfPassedUpCases: [(caseIndex: Int, route: Route)]
 		/// The graphs of the seams and public mocks whose places a call in the tree presents, one per such call.
 		public let calledPlaces: [CalledPlaces]
 	}

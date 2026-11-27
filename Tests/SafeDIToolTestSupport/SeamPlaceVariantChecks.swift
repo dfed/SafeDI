@@ -42,6 +42,10 @@ enum SeamPlaceVariantChecks {
 		for (caseIndex, route) in zip(observation.caseIndexBySite, observation.routeBySite) where caseIndex >= 0 {
 			routesByCase[caseIndex, default: []].append(route)
 		}
+		// A place several calls present is held by one site, at the first call's route; each other call's route reads too.
+		for (caseIndex, route) in observation.laterRoutesOfPassedUpCases where !(routesByCase[caseIndex] ?? []).contains(route) {
+			routesByCase[caseIndex, default: []].append(route)
+		}
 		var mismatches = [String]()
 		for caseIndex in routesByCase.keys.sorted() {
 			let routes = routesByCase[caseIndex] ?? []
