@@ -84,7 +84,7 @@ extension ScopeGenerator {
 			MockEnteredSlot.mockEnteredPlacesDeclaration(slots: enteredSlots, isSendable: false)
 				+ ["let \(ReservedName.mockEnteredPlacesParameterName) = \(ReservedName.mockEnteredPlacesTypeName)()"]
 		).map { .text("\(TypeKeyBody.rootStatementIndentation)\($0)") }
-		let statements = TypeKeyBody.statements(ofRootBody: nodeRecords.rootBody, outerDeclarations: outerDeclarations, namesInScope: Set(outerDeclarations.map(\.label)), rootPassedArgumentNames: [ReservedName.mockOverridesParameterName])
+		let statements = TypeKeyBody.statements(ofRootBody: nodeRecords.rootBody, outerDeclarations: outerDeclarations, namesInScope: Set(outerDeclarations.map(\.label)), rootPassedArgumentNames: [ReservedName.mockOverridesParameterName], laysOutEveryLoop: true)
 		report(refusal: statements == nil ? .notLaidOut : nil, everyRefusal: [], isLaidOut: statements != nil, recordCount: nodeRecords.recordCount)
 		return statements.map { GeneratedCode.lines(enteredPlaces + $0).spelled() }
 	}
