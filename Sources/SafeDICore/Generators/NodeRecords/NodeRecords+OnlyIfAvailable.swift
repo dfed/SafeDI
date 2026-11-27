@@ -217,13 +217,17 @@ struct OnlyIfAvailableAnswers: Sendable {
 		self.renameBindingByVariant = renameBindingByVariant
 	}
 
-	/// Whether `variant`'s function takes each of `labels` as a parameter (`TypeFactsOutcome.parameter`) for every read of
-	/// it from above.
+	/// Whether `variant`'s tree reads each of `labels` from above, and its function takes every such read as a parameter
+	/// (`TypeFactsOutcome.parameter`).
 	private static func takesAsParameters(_ labels: Set<String>, _ variant: VariantID, in world: some NodeRecordSources) -> Bool {
-		let outcomes = world.outcomes(of: variant)
-		return zip(world.reads(of: world.declaration(of: variant)), outcomes).allSatisfy { read, outcome in
-			!labels.contains(world.text(ofLabel: world.read(read).label)) || outcome == .parameter
+		var labelsTaken = Set<String>()
+		for (read, outcome) in zip(world.reads(of: world.declaration(of: variant)), world.outcomes(of: variant)) {
+			let label = world.text(ofLabel: world.read(read).label)
+			guard labels.contains(label) else { continue }
+			guard outcome == .parameter else { return false }
+			labelsTaken.insert(label)
 		}
+		return labelsTaken == labels
 	}
 
 	/// How a rename only if available is bound where its scope is built.
