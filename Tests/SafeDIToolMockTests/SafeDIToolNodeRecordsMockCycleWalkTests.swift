@@ -507,7 +507,7 @@ struct SafeDIToolNodeRecordsMockCycleWalkTests: ~Copyable {
 	/// identity built both ways, a twin (`cycleVariantsPartitionApart`).
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_buildsTheWalksValues_whenCycleIdentityIsBuiltLazilyAndByValue() async throws {
+	mutating func mock_buildsTheWalksValues_whenCycleIdentityIsBuiltLazilyAndByValue() async {
 		// The mock cycle refusals lane lifts this refusal in a mock world; until then the walk writes the mock.
 		await withKnownIssue("refused as cycleVariantsPartitionApart: one cycle identity built lazily and by value") {
 			try await expectWalksValues(
@@ -553,7 +553,7 @@ struct SafeDIToolNodeRecordsMockCycleWalkTests: ~Copyable {
 	/// places a lap enters are handed through a `@Sendable` function.
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_buildsTheWalksValues_whenCycleClosesInsideSendableFunction() async throws {
+	mutating func mock_buildsTheWalksValues_whenCycleClosesInsideSendableFunction() async {
 		// The mock writer lifts this refusal; until then the walk writes the mock.
 		await withKnownIssue("refused as sendable: the places a lap enters are not yet handed through a @Sendable function") {
 			try await expectWalksValues(
