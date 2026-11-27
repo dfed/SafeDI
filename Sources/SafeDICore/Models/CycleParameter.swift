@@ -99,6 +99,32 @@ struct CycleParameter: Hashable, Sendable {
 		return forms
 	}
 
+	/// The property one parameter takes to pass `forms`, the forms of one label a function's body receives from the
+	/// scopes enclosing it, of which some receiver requires `requiredForms`, with the forms it passes; or `nil` where no
+	/// one parameter can pass them (see `parameters(firstReceives:…)`, which states the rule). It reads the forms alone,
+	/// so the per-type facts type a function's parameter by it too (`TypeFactsWorld.parameterType(of:_:)`).
+	static func property(passing forms: Set<Property>, requiredForms: Set<Property>) -> (property: Property, passedForms: Set<Property>)? {
+		// The forms the parameter must provide: those a receiver requires, or every form where none is required.
+		let formsToProvide = requiredForms.isEmpty ? forms : requiredForms
+		// A parameter no receiver requires is made optional, since a scope that calls the function may then have nothing
+		// to pass.
+		let property = formsToProvide.sorted()
+			.first { formsToProvide.isSubset(of: Self.forms(providedBy: $0)) }
+			.map { requiredForms.isEmpty && !$0.typeDescription.isOptional ? $0.asOptionalProperty : $0 }
+		let passedForms = property.map { forms.intersection(Self.forms(providedBy: $0, receivedForms: forms)) } ?? []
+		let unpassedForms = forms.subtracting(passedForms)
+		let passesEveryFormACallCanProvide = if requiredForms.isEmpty {
+			// An optional wrapper offers no instance, so a parameter made optional can provide fewer forms than the form
+			// it was made from.
+			unpassedForms.isEmpty
+		} else {
+			// A form is passed `nil` only where no declaration that provides the required forms could provide it too.
+			!unpassedForms.contains { requiredForms.isSubset(of: Self.forms(providedBy: $0.asUnwrappedProperty)) }
+		}
+		guard let property, passesEveryFormACallCanProvide else { return nil }
+		return (property, passedForms)
+	}
+
 	/// The parameters of the builder function of a scope whose tree receives `receivedProperties` from the scopes
 	/// enclosing it, for each label of `firstReceives` – those a scope between it and one of its cycle-closing scopes
 	/// declares that the tree receives, each with its first receive and that declaration – in that order, and the labels
@@ -134,24 +160,7 @@ struct CycleParameter: Hashable, Sendable {
 		for (label, receiver, redeclaration) in firstReceives {
 			let forms = formsByLabel[label, default: []]
 			let requiredForms = forms.intersection(requiredReceivedProperties)
-			// The forms the parameter must provide: those a receiver requires, or every form where none is required.
-			let formsToProvide = requiredForms.isEmpty ? forms : requiredForms
-			// A parameter no receiver requires is made optional, since a scope that calls the function may then have nothing
-			// to pass.
-			let property = formsToProvide.sorted()
-				.first { formsToProvide.isSubset(of: Self.forms(providedBy: $0)) }
-				.map { requiredForms.isEmpty && !$0.typeDescription.isOptional ? $0.asOptionalProperty : $0 }
-			let passedForms = property.map { forms.intersection(Self.forms(providedBy: $0, receivedForms: forms)) } ?? []
-			let unpassedForms = forms.subtracting(passedForms)
-			let passesEveryFormACallCanProvide = if requiredForms.isEmpty {
-				// An optional wrapper offers no instance, so a parameter made optional can provide fewer forms than the form
-				// it was made from.
-				unpassedForms.isEmpty
-			} else {
-				// A form is passed `nil` only where no declaration that provides the required forms could provide it too.
-				!unpassedForms.contains { requiredForms.isSubset(of: Self.forms(providedBy: $0.asUnwrappedProperty)) }
-			}
-			guard let property, passesEveryFormACallCanProvide else {
+			guard let (property, passedForms) = Self.property(passing: forms, requiredForms: requiredForms) else {
 				unpassableLabels.append(UnpassableCycleLabel(builtType: builtType, receiver: receiver, forms: forms.sorted(), redeclaration: redeclaration))
 				continue
 			}

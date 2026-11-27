@@ -285,6 +285,30 @@ protocol TypeFactsWorld {
 	/// received, never on their spelling.
 	/// Walked when asked, never while the world is built.
 	func parameterOrder(of declaration: DeclarationID) -> [WorldLabelID]
+	/// The parameter the variant's function takes for a read its subtree makes from above, were the read a parameter,
+	/// or `nil` where it takes none: the read has no answer, its answer is still being built where the function is
+	/// called (a call that closes a cycle on it, a twin being built), it asks about no value of a label, or no one
+	/// parameter can pass the forms of its label the subtree receives (`CycleParameter.property(passing:requiredForms:)`).
+	/// A function takes one parameter per label, so every read of a label is typed alike: by the forms of the label
+	/// the declaration's subtree receives from above and those some receiver requires, as the function a lazy cycle
+	/// closes on types its parameter today. Whether the function takes the read as a parameter at all is the outcomes
+	/// fold's answer (`outcomes(of:)`), which `parameters(of:)` joins with this.
+	/// Computed when asked, never while the world is built.
+	func parameterType(of variant: VariantID, _ read: ReadID) -> TypeFactsParameter?
+	/// Exactly the parameters the variant's function takes: each label one of whose reads comes to a parameter
+	/// (`outcomes(of:)`), in the order of `parameterOrder(of:)` for its declaration, typed by `parameterType(of:_:)`.
+	/// Computed when asked, never while the world is built.
+	func parameters(of variant: VariantID) -> [TypeFactsParameter]
+}
+
+/// A parameter of a variant's function: what it takes for one label its subtree reads from above.
+struct TypeFactsParameter: Hashable, Sendable {
+	/// The parameter as the function declares it: the label, and the form of it that provides every form the body
+	/// receives, optional where no receiver requires the label.
+	let property: Property
+	/// Whether a receive by value in the body reads the parameter through its wrapper's `instance`: the parameter is a
+	/// lazily instantiated wrapper, and the body receives the instance it creates.
+	let readsInstanceOfWrapper: Bool
 }
 
 extension TypeFactsGraph: TypeFactsWorld {
@@ -443,6 +467,51 @@ extension TypeFactsGraph: TypeFactsWorld {
 
 	func parameterOrder(of declaration: DeclarationID) -> [WorldLabelID] {
 		parameterOrder(of: declaration, walking: [])
+	}
+
+	func parameterType(of variant: VariantID, _ read: ReadID) -> TypeFactsParameter? {
+		let declaration = declaration(of: variant)
+		let reads = reads(of: declaration)
+		let label = readTable[Int(read)].label
+		guard let position = reads.firstIndex(of: read) else { return nil }
+		switch readTable[Int(read)].channel {
+		case .value, .optional, .optionalValue:
+			break
+		case .alias, .madeAgain, .mock, .carrier, .fill, .family, .override:
+			return nil
+		}
+		let keys = keys(of: variant)
+		switch answer(keys[keys.startIndex + (position - reads.startIndex)]).form {
+		case .none, .beingBuilt:
+			return nil
+		case .declared, .optionalParameter, .optionalLazilyInstantiatedParameter, .optionalSendableLazilyInstantiatedParameter:
+			break
+		}
+		var forms = Set<Property>()
+		for received in receives.received.columns(inRow: Int(declaration)) where propertyFacts.labels[Int(received)] == label {
+			forms.insert(propertyTable[Int(received)])
+		}
+		var requiredForms = Set<Property>()
+		for required in receives.required.columns(inRow: Int(declaration)) where propertyFacts.labels[Int(required)] == label {
+			requiredForms.insert(propertyTable[Int(required)])
+		}
+		guard let (property, passedForms) = CycleParameter.property(passing: forms, requiredForms: requiredForms.intersection(forms)) else { return nil }
+		let instance = property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding
+		return TypeFactsParameter(
+			property: property,
+			readsInstanceOfWrapper: instance.map { passedForms.contains($0) || passedForms.contains($0.asOptionalProperty) } ?? false,
+		)
+	}
+
+	func parameters(of variant: VariantID) -> [TypeFactsParameter] {
+		let declaration = declaration(of: variant)
+		let reads = reads(of: declaration)
+		let outcomes = outcomes(of: variant)
+		return parameterOrder(of: declaration).compactMap { label in
+			reads.indices
+				.first { readTable[Int(reads[$0])].label == label && outcomes[outcomes.startIndex + ($0 - reads.startIndex)] == .parameter }
+				.flatMap { parameterType(of: variant, reads[$0]) }
+		}
 	}
 
 	/// `parameterOrder(of:)`, inside the walks of `walking`, whose orders a call that closes on one of them meets in
