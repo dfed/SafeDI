@@ -261,7 +261,7 @@ struct NodeRecords: Sendable {
 		if let enteredSlots {
 			try Self.checkMockCycles(in: world, slots: enteredSlots)
 		}
-		let onlyIfAvailableAnswers = try OnlyIfAvailableAnswers(world: world, rootParameters: seamTree?.parameters ?? outerDeclarations)
+		let onlyIfAvailableAnswers = try OnlyIfAvailableAnswers(world: world, rootParameters: seamTree?.parameters ?? outerDeclarations + Self.mockWrapperDeclarations(in: world))
 		let mockNamesReadApart = Self.mockNamesReadApart(in: world)
 		let answeringDeclarations = DeclarationsAnsweringReads(
 			world: world,
@@ -302,8 +302,8 @@ struct NodeRecords: Sendable {
 			// What a receive by value reads as a wrapper's instance, which every record of a construction passes its arguments.
 			let instanceProperties = Self.lazilyInstantiatedInstanceProperties(of: declaration, variant: variant, in: world)
 			// A wrapper `mock()` binds around a value it takes is passed to each receiver by a name apart from its label, which
-			// neither a rename's record nor a public mock's call reads (`mockNamesReadApart(in:)`).
-			guard !world.isMockWorld || kinds[Int(declaration)] != .rename || !mockNamesReadApart.renamesOfWrappersPassedByName.contains(variant), kinds[Int(declaration)] != .publicMockCall || mockNamesReadApart.wrapperArgumentNames[Int(variant)].isEmpty else { throw NodeRecordRefusal.mockRootBindsOtherThanNodes }
+			// a public mock's call does not read (`mockNamesReadApart(in:)`).
+			guard kinds[Int(declaration)] != .publicMockCall || mockNamesReadApart.wrapperArgumentNames[Int(variant)].isEmpty else { throw NodeRecordRefusal.mockRootBindsOtherThanNodes }
 			let madeRecord: PlaceRecord = switch kinds[Int(declaration)] {
 			// A hole's place is made above, from no record.
 			case .builtByInitializer, .erased, .lazy, .sendable, .seamHole:
@@ -326,7 +326,7 @@ struct NodeRecords: Sendable {
 			case .unavailableDependency:
 				try .alias(Self.unavailableDependencyRecord(of: declaration, in: world))
 			case .rename:
-				try .alias(Self.renameRecord(of: declaration, variant: variant, in: world, answers: onlyIfAvailableAnswers))
+				try .alias(Self.renameRecord(of: declaration, variant: variant, in: world, answers: onlyIfAvailableAnswers, wrapperName: mockNamesReadApart.wrapperNamesReadByRenames[variant]))
 			case .cycle:
 				try .built(Self.cycleRecord(of: declaration, variant: variant, in: world, lazilyInstantiatedInstanceProperties: instanceProperties, typesDeclaredEscaping: escaping, children: children))
 			case .mockConstruction:
@@ -628,7 +628,7 @@ struct NodeRecords: Sendable {
 			}
 		}
 		do {
-			_ = try OnlyIfAvailableAnswers(world: world, rootParameters: seamTree?.parameters ?? outerDeclarations)
+			_ = try OnlyIfAvailableAnswers(world: world, rootParameters: seamTree?.parameters ?? outerDeclarations + Self.mockWrapperDeclarations(in: world))
 		} catch {
 			refusals.insert(error)
 		}

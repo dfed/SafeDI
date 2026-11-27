@@ -57,8 +57,8 @@ extension NodeRecords {
 		/// (`MockRootNames.wrapperBindingName(of:)`), by the receive's property, as the walk passes it by name, never bound
 		/// again under its label, which would hide the instance from the receives by value beside it.
 		var wrapperArgumentNames: [[Property: String]]
-		/// The variants that are renames of such a wrapper, which the walk passes the wrapper's name and no record writes yet.
-		var renamesOfWrappersPassedByName: Set<VariantID>
+		/// The name of the wrapper each variant that is a rename of such a wrapper reads, as the walk reads it by name.
+		var wrapperNamesReadByRenames: [VariantID: String]
 	}
 
 	/// What each variant of a mock root's world reads under a name the mock root binds apart, read from the names the mock
@@ -78,7 +78,7 @@ extension NodeRecords {
 		var namesRead = MockNamesReadApart(
 			receivesBoundAgain: [[MockReceiveBoundAgain]](repeating: [], count: world.variantCount),
 			wrapperArgumentNames: [[Property: String]](repeating: [:], count: world.variantCount),
-			renamesOfWrappersPassedByName: [],
+			wrapperNamesReadByRenames: [:],
 		)
 		let namesBoundAgain = world.mockRootNames.namesBoundAgain
 		let wrapperBindingNames = world.mockRootNames.wrapperBindingNames
@@ -99,8 +99,8 @@ extension NodeRecords {
 				// A rename is a leaf, which reads its fulfilling property where its scope binds it.
 				functionNames = ([:], [:])
 				let visible = visibleNames[Int(variant)]?.wrapperNames ?? [:]
-				if let fulfillingProperty = renamedProperty(of: declaration, in: world), Self.name(of: fulfillingProperty, among: visible) != nil {
-					namesRead.renamesOfWrappersPassedByName.insert(variant)
+				if let fulfillingProperty = renamedProperty(of: declaration, in: world), let name = Self.name(of: fulfillingProperty, among: visible) {
+					namesRead.wrapperNamesReadByRenames[variant] = name
 				}
 			} else {
 				let instantiable = world.scope(of: declaration).instantiable
@@ -153,6 +153,13 @@ extension NodeRecords {
 			}
 		}
 		return namesRead
+	}
+
+	/// The wrappers a mock root binds around the instances it takes, each under the label of the receives that read it, in
+	/// label and then type order: a receive only if available of that label finds the wrapper available from the root, as
+	/// the walk finds it, beside any value the root binds under the label.
+	static func mockWrapperDeclarations(in world: some NodeRecordSources) -> [Property] {
+		world.mockRootNames.wrapperBindingNames.flatMap { label, names in names.keys.map { Property(label: label, typeDescription: $0) } }.sorted()
 	}
 
 	/// The name among `names`, by label and then type, of `property` or of its unwrapped form, which a non-optional wrapper
