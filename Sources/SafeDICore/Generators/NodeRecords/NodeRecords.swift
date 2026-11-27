@@ -320,21 +320,22 @@ struct NodeRecords: Sendable {
 	}
 
 	/// What a lane's kind claims of `declaration`, or `nil` where none does. Each production lane adds one term to the
-	/// production chain, above the test's, in the order of `NodeRecordKind`'s cases, calling its file's classifier, which
+	/// production chain, after the test's, in the order of `NodeRecordKind`'s cases, calling its file's classifier, which
 	/// returns `nil` for a node not of its kind: `?? <kind>Claim(of: declaration, in: world)`. A mock world's nodes are the
 	/// mock writer's alone, so no production kind's record, which reads no override, is made of one.
 	private static func claim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
+		// A test's claim comes first, so that it can claim a node a lane's kind would.
 		guard !world.isMockWorld else {
-			return mockConstructionClaim(of: declaration, in: world) ?? testClaim(of: declaration, in: world)
+			return testClaim(of: declaration, in: world) ?? mockConstructionClaim(of: declaration, in: world)
 		}
-		return inlineSeamClaim(of: declaration, in: world)
+		return testClaim(of: declaration, in: world)
+			?? inlineSeamClaim(of: declaration, in: world)
 			?? unavailableDependencyClaim(of: declaration, in: world)
 			?? receivesOnlyIfAvailableClaim(of: declaration, in: world)
 			?? renameClaim(of: declaration, in: world)
 			?? erasedClaim(of: declaration, in: world)
 			?? lazyClaim(of: declaration, in: world)
 			?? sendableClaim(of: declaration, in: world)
-			?? testClaim(of: declaration, in: world)
 	}
 
 	/// The claim a test makes of `declaration` by its type's name (`NodeRecordsObservation.claimsForTesting`).
