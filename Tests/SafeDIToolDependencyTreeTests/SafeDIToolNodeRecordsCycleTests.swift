@@ -495,8 +495,10 @@ struct SafeDIToolNodeRecordsCycleTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_keepsTheTreesLayout_whenBuilderOfAnotherTypeSharesCycleMembersLabel() async throws {
-		// `Other`'s `aBuilder` builds `Leaf`, and the root's `aBuilder` builds `A`, on the cycle of `A` and `B`.
+	mutating func generate_laysOutRootAsTheTreeDoes_whenBuilderOfAnotherTypeSharesCycleMembersLabel() async throws {
+		// `Other`'s `aBuilder` builds `Leaf`, and the root's `aBuilder` builds `A`, on the cycle of `A` and `B`. No call
+		// that closes the cycle is beneath `Other`, so its body keeps the name, and the root's functions are named apart
+		// where they are laid out.
 		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -557,7 +559,268 @@ struct SafeDIToolNodeRecordsCycleTests: ~Copyable {
 			}
 			""",
 		])
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysOutRootAsTheTreeDoes_whenBodyBetweenCycleMemberAndCloserDeclaresBuilderOfItsName() async throws {
+		// `A`'s body declares `aBuilder` for `Leaf` beside `bBuilder`, whose tree closes the cycle on the root's `aBuilder`,
+		// so `A`'s body names `Leaf`'s function apart.
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true) public final class Root: Instantiable {
+					    @Instantiated let aBuilder: Instantiator<A>
+					    public init(aBuilder: Instantiator<A>) { self.aBuilder = aBuilder }
+					}
+
+					@Instantiable public final class A: Instantiable {
+					    @Instantiated let bBuilder: Instantiator<B>
+					    @Instantiated let aBuilder: Instantiator<Leaf>
+					    public init(bBuilder: Instantiator<B>, aBuilder: Instantiator<Leaf>) {
+					        self.bBuilder = bBuilder
+					        self.aBuilder = aBuilder
+					    }
+					}
+
+					@Instantiable public final class B: Instantiable {
+					    @Instantiated let aBuilder: Instantiator<A>
+					    public init(aBuilder: Instantiator<A>) { self.aBuilder = aBuilder }
+					}
+
+					@Instantiable public final class Leaf: Instantiable {
+					    public init() {}
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_aBuilder() -> A {
+			            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			            let aBuilder = Instantiator<Leaf>(__safeDI_aBuilder_)
+			            return A(bBuilder: bBuilder, aBuilder: aBuilder)
+			        }
+			        func __safeDI_bBuilder() -> B {
+			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			            return B(aBuilder: aBuilder)
+			        }
+			        func __safeDI_aBuilder_() -> Leaf {
+			            Leaf()
+			        }
+			        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			        self.init(aBuilder: aBuilder)
+			    }
+			}
+			""",
+		])
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysOutRootAsTheTreeDoes_whenCallClosesCycleOnFunctionItsBodyRenamed() async throws {
+		// `A`'s body names `C`'s `aBuilder` apart from the root's, which `bBuilder`'s tree closes on, and `D` closes the
+		// cycle of `C` and `D` on `C`'s function by its new name.
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true) public final class Root: Instantiable {
+					    @Instantiated let aBuilder: Instantiator<A>
+					    public init(aBuilder: Instantiator<A>) { self.aBuilder = aBuilder }
+					}
+
+					@Instantiable public final class A: Instantiable {
+					    @Instantiated let bBuilder: Instantiator<B>
+					    @Instantiated let aBuilder: Instantiator<C>
+					    public init(bBuilder: Instantiator<B>, aBuilder: Instantiator<C>) {
+					        self.bBuilder = bBuilder
+					        self.aBuilder = aBuilder
+					    }
+					}
+
+					@Instantiable public final class B: Instantiable {
+					    @Instantiated let aBuilder: Instantiator<A>
+					    public init(aBuilder: Instantiator<A>) { self.aBuilder = aBuilder }
+					}
+
+					@Instantiable public final class C: Instantiable {
+					    @Instantiated let dBuilder: Instantiator<D>
+					    public init(dBuilder: Instantiator<D>) { self.dBuilder = dBuilder }
+					}
+
+					@Instantiable public final class D: Instantiable {
+					    @Instantiated let aBuilder: Instantiator<C>
+					    public init(aBuilder: Instantiator<C>) { self.aBuilder = aBuilder }
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_aBuilder() -> A {
+			            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			            let aBuilder = Instantiator<C>(__safeDI_aBuilder_)
+			            return A(bBuilder: bBuilder, aBuilder: aBuilder)
+			        }
+			        func __safeDI_bBuilder() -> B {
+			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			            return B(aBuilder: aBuilder)
+			        }
+			        func __safeDI_aBuilder_() -> C {
+			            let dBuilder = Instantiator<D>(__safeDI_dBuilder)
+			            return C(dBuilder: dBuilder)
+			        }
+			        func __safeDI_dBuilder() -> D {
+			            let aBuilder = Instantiator<C>(__safeDI_aBuilder_)
+			            return D(aBuilder: aBuilder)
+			        }
+			        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			        self.init(aBuilder: aBuilder)
+			    }
+			}
+			""",
+		])
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsTheTreesLayout_whenTwoBodiesNameOneVariantsFunctionApart() async throws {
+		// `A`'s body names `Leaf`'s `aBuilder` apart from the root's, which `bBuilder`'s tree closes on, and `Other`'s body
+		// keeps the name of the same variant's function.
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true) public final class Root: Instantiable {
+					    @Instantiated let aBuilder: Instantiator<A>
+					    @Instantiated let other: Other
+					    public init(aBuilder: Instantiator<A>, other: Other) {
+					        self.aBuilder = aBuilder
+					        self.other = other
+					    }
+					}
+
+					@Instantiable public final class A: Instantiable {
+					    @Instantiated let bBuilder: Instantiator<B>
+					    @Instantiated let aBuilder: Instantiator<Leaf>
+					    public init(bBuilder: Instantiator<B>, aBuilder: Instantiator<Leaf>) {
+					        self.bBuilder = bBuilder
+					        self.aBuilder = aBuilder
+					    }
+					}
+
+					@Instantiable public final class B: Instantiable {
+					    @Instantiated let aBuilder: Instantiator<A>
+					    public init(aBuilder: Instantiator<A>) { self.aBuilder = aBuilder }
+					}
+
+					@Instantiable public final class Other: Instantiable {
+					    @Instantiated let aBuilder: Instantiator<Leaf>
+					    public init(aBuilder: Instantiator<Leaf>) { self.aBuilder = aBuilder }
+					}
+
+					@Instantiable public final class Leaf: Instantiable {
+					    public init() {}
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_aBuilder() -> A {
+			            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			            let aBuilder = Instantiator<Leaf>(__safeDI_aBuilder_)
+			            return A(bBuilder: bBuilder, aBuilder: aBuilder)
+			        }
+			        func __safeDI_bBuilder() -> B {
+			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			            return B(aBuilder: aBuilder)
+			        }
+			        func __safeDI_aBuilder_() -> Leaf {
+			            Leaf()
+			        }
+			        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			        func __safeDI_other() -> Other {
+			            let aBuilder = Instantiator<Leaf>(__safeDI_aBuilder_)
+			            return Other(aBuilder: aBuilder)
+			        }
+			        let other: Other = __safeDI_other()
+			        self.init(aBuilder: aBuilder, other: other)
+			    }
+			}
+			""",
+		])
 		#expect(reports.map(\.refusal) == ["cycleBuilderNameShared"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysOutRootAsTheTreeDoes_whenCycleClosesInsideSendableFunction() async throws {
+		// `B` is built in a `@Sendable` function, from which the call that closes the cycle refers to `A`'s function, which
+		// is `@Sendable` too.
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true) public final class Root: Instantiable {
+					    @Instantiated let aBuilder: Instantiator<A>
+					    public init(aBuilder: Instantiator<A>) { self.aBuilder = aBuilder }
+					}
+
+					@Instantiable public final class A: Instantiable {
+					    @Instantiated let bBuilder: SendableInstantiator<B>
+					    public init(bBuilder: SendableInstantiator<B>) { self.bBuilder = bBuilder }
+					}
+
+					@Instantiable public final class B: Instantiable {
+					    @Instantiated let aBuilder: Instantiator<A>
+					    public init(aBuilder: Instantiator<A>) { self.aBuilder = aBuilder }
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        @Sendable nonisolated func __safeDI_aBuilder() -> A {
+			            let bBuilder = SendableInstantiator<B>(__safeDI_bBuilder)
+			            return A(bBuilder: bBuilder)
+			        }
+			        @Sendable nonisolated func __safeDI_bBuilder() -> B {
+			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			            return B(aBuilder: aBuilder)
+			        }
+			        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			        self.init(aBuilder: aBuilder)
+			    }
+			}
+			""",
+		])
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
 	}
 
 	@Test
