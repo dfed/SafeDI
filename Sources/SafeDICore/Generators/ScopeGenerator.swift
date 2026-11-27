@@ -7165,7 +7165,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// The root declares the root functions the call reaches, which its text leaves out.
 		let (text, rootFunctionNames) = code.spelledWithoutRootFunctions()
 		// A member of a loop of builders makes its rebindings again in the call's body, which the loop stage records.
-		if let observer = SeamCallRecordObservation.observer, reboundProperties.isEmpty {
+		let callObserver = SeamCallRecordObservation.observer
+		let isComparedWithNodeRecords = NodeRecordsObservation.observer != nil
+		var callRecord: CallRecordBox?
+		if callObserver != nil || isComparedWithNodeRecords, reboundProperties.isEmpty {
 			// Every builder argument passes a struct up (the guard above), in the order the seam's builders are taken.
 			let passedOn = zip(seamCall.calledBuilders.builders, builderCallArguments).compactMap { builder, builderCallArgument in
 				builderCallArgument.passedUpStruct.map { passedUpStruct in
@@ -7200,7 +7203,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				leadingStatement: seamCall.callGuard(for: instantiable.concreteInstantiable),
 				closureArguments: passedOn.map { ClosureArgumentEntry(label: $0.label, value: .passedOn($0.read)) },
 			)
-			observer(SeamCallRecordObservation(
+			if isComparedWithNodeRecords {
+				callRecord = CallRecordBox(record: record)
+			}
+			callObserver?(SeamCallRecordObservation(
 				text: text,
 				readNames: record.arguments.filter { $0.source != .nil }.map(\.label) + passedOn.map(\.structName),
 				boundNames: [property.label] + (declaredFunctionName.map { [$0] } ?? []),
@@ -7211,6 +7217,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var record = AliasPlaceRecord(property: property, fulfillingProperty: nil, text: text, reads: reads)
 		record.declaredFunctionNames = declaredFunctionName.map { [$0] } ?? []
 		record.calledRootFunctionNames = rootFunctionNames
+		record.callRecord = callRecord
 		return .alias(record)
 	}
 

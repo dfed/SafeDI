@@ -296,6 +296,88 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_makesTheRecordOfASeamCallAsTheTreeDoes_whenTheCallPassesNoBuilder() async throws {
+		// `App`'s `Root` reaches `Feature`'s seam `Screen`, which it calls through the initializer SafeDI generates for it,
+		// after the guard line: node records make the call's record, guard line included, as the tree records it beside its
+		// text, and lay nothing out, since the engine spells no guard line yet.
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(name: "Feature", packageName: "App", swiftFileContent: [
+						"""
+						@Instantiable
+						public struct Session: Instantiable {
+						    public init() {}
+						}
+						""",
+						"""
+						@Instantiable(generateDependencyTree: true)
+						public struct Screen: Instantiable {
+						    public init(detail: Detail) {
+						        self.detail = detail
+						    }
+
+						    @Instantiated let detail: Detail
+						}
+						""",
+						"""
+						@Instantiable
+						public struct Detail: Instantiable {
+						    public init(session: Session) {
+						        self.session = session
+						    }
+
+						    @Received let session: Session
+						}
+						""",
+					], dependencies: []),
+					ModuleFixture(name: "App", packageName: "App", swiftFileContent: [
+						"""
+						import Feature
+
+						@Instantiable(isRoot: true)
+						public struct Root: Instantiable {
+						    public init(session: Session, screen: Screen) {
+						        self.session = session
+						        self.screen = screen
+						    }
+
+						    @Instantiated let session: Session
+						    @Instantiated let screen: Screen
+						}
+						""",
+					], dependencies: ["Feature"]),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+
+		extension Root {
+		    public init() {
+		        let session = Session()
+		        func __safeDI_screen() -> Screen {
+		            _ = Screen.__safeDI_Screen_1E2B55CC1D77755A.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return Screen(__safeDI_session: session)
+		        }
+		        let screen: Screen = __safeDI_screen()
+		        self.init(session: session, screen: screen)
+		    }
+		}
+		"""])
+		// `Screen`'s own tree reads its deferred parameter through its memo, which node records refuse as lazy.
+		#expect(reports.map(\.root) == ["Screen", "Root"])
+		#expect(reports.map(\.refusal) == ["lazy", "notLaidOut"])
+		#expect(reports.map(\.recordCount) == [0, 2])
+		#expect(reports.flatMap(\.differences) == [])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_laysOutAnUnavailableDependencyAsTheTreeDoes_whenNoDeclarationFulfillsItsType() async throws {
 		// Nothing fulfills `any Analytics`, so `Screen`'s property instantiated only if available is bound to `nil`, which node
 		// records write as the tree does.

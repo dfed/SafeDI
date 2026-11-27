@@ -125,6 +125,7 @@ struct NodeRecords: Sendable {
 		var places = [GeneratedCode?](repeating: nil, count: world.variantCount)
 		var records = [PlaceRecord?](repeating: nil, count: world.variantCount)
 		var typesDeclaredEscaping = [Set<TypeDescription>?](repeating: nil, count: world.variantCount)
+		var holdsCallFields = false
 		var stack: [(variant: VariantID, childrenPushed: Bool)] = [(0, false)]
 		while let (variant, childrenPushed) = stack.popLast() {
 			let calls = world.calls(of: variant)
@@ -137,9 +138,12 @@ struct NodeRecords: Sendable {
 			}
 			guard variant != 0, places[Int(variant)] == nil else { continue }
 			let declaration = world.declaration(of: variant)
-			let instantiable = world.scope(of: declaration).instantiable
+			let scope = world.scope(of: declaration)
+			let instantiable = scope.instantiable
 			var escaping = Set(instantiable.initializer?.typesDeclaredEscaping ?? [])
 			escaping.formUnion(instantiable.mockInitializer?.typesDeclaredEscaping ?? [])
+			// A call of a seam spells the builder types its signature declares `@escaping` so, as its tree does.
+			escaping.formUnion(scope.seamCall?.typesDeclaredEscaping ?? [])
 			var children = [GeneratedCode]()
 			for edgeIndex in order.edgeIndices(of: declaration) {
 				let callee = Int(calls[calls.startIndex + edgeIndex])
@@ -151,6 +155,8 @@ struct NodeRecords: Sendable {
 				try .built(Self.builtByInitializerRecord(of: declaration, variant: variant, in: world, typesDeclaredEscaping: escaping, children: children))
 			case .inlineSeam:
 				try .built(Self.inlineSeamRecord(of: declaration, variant: variant, in: world, typesDeclaredEscaping: escaping, children: children))
+			case .seamCall:
+				try .built(Self.seamCallRecord(of: declaration, variant: variant, in: world, typesDeclaredEscaping: escaping, children: children))
 			case .receivesOnlyIfAvailable:
 				try .built(Self.receivesOnlyIfAvailableRecord(of: declaration, variant: variant, in: world, answers: onlyIfAvailableAnswers, typesDeclaredEscaping: escaping, children: children))
 			case .unavailableDependency:
@@ -162,6 +168,9 @@ struct NodeRecords: Sendable {
 			}
 			typesDeclaredEscaping[Int(variant)] = escaping
 			records[Int(variant)] = record
+			if case let .built(builtRecord) = record, builtRecord.callFields != nil {
+				holdsCallFields = true
+			}
 			places[Int(variant)] = switch record {
 			case let .alias(aliasRecord):
 				// A place written as text: the engine copies it as written.
@@ -175,6 +184,7 @@ struct NodeRecords: Sendable {
 			.indented(places[Int(rootCalls[rootCalls.startIndex + edgeIndex])] ?? .empty, by: TypeKeyBody.rootStatementIndentation)
 		}
 		self.records = records
+		self.holdsCallFields = holdsCallFields
 		declarationByVariant = (0..<Int32(world.variantCount)).map(world.declaration(of:))
 	}
 
@@ -186,6 +196,10 @@ struct NodeRecords: Sendable {
 	/// The root's body: a place for each of the root's children, in the order the root builds them, indented as a root's
 	/// statements are.
 	let rootBody: [GeneratedCode]
+
+	/// Whether a record holds fields of a call of another module's code (`CallFields`), which the engine does not spell yet:
+	/// such a root's records are compared with its tree's, and its code is not laid out from them.
+	let holdsCallFields: Bool
 
 	/// How many variants have a record, which is every variant but the root's.
 	var recordCount: Int {
@@ -266,6 +280,9 @@ struct NodeRecords: Sendable {
 		if let claim = inlineSeamClaim(of: declaration, in: world) {
 			return claim
 		}
+		if let claim = seamCallClaim(of: declaration, in: world) {
+			return claim
+		}
 		if let claim = unavailableDependencyClaim(of: declaration, in: world) {
 			return claim
 		}
@@ -306,6 +323,9 @@ enum NodeRecordKind: Sendable {
 	/// A seam of another module built inline, because no module SafeDI knows generates its initializer, and otherwise a
 	/// node `builtByInitializer` makes: its line ends with the comment that says why (`NodeRecords+InlineSeam.swift`).
 	case inlineSeam
+	/// A call of another module's seam that passes it no builder, made as a node `builtByInitializer` makes the seam's leaf,
+	/// whose builder function begins with the call's guard line (`NodeRecords+SeamCall.swift`).
+	case seamCall
 	/// A property instantiated only if available that no declaration fulfills, bound to `nil` and written as text
 	/// (`NodeRecords+UnavailableDependency.swift`).
 	case unavailableDependency

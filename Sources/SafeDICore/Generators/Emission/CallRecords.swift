@@ -34,6 +34,17 @@ final class CallFields: Sendable {
 	}
 }
 
+/// The record a tree's call of another module's seam would be laid out from once the engine spells `CallFields`, kept beside
+/// the call's text (`AliasPlaceRecord.callRecord`) only where a test compares the tree's records with node records', which
+/// make the record and not the text.
+final class CallRecordBox: Sendable {
+	let record: BuiltPlaceRecord
+
+	init(record: BuiltPlaceRecord) {
+		self.record = record
+	}
+}
+
 /// The line before a call of a seam's generated initializer: `_ = <calledType>.<guardTypeName>.self`, with the call's
 /// comment, so that a call generated from another signature fails to compile there rather than pass `nil` where the
 /// initializer expects a value (today `SeamCall.guardLine(for:)`).

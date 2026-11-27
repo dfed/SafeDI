@@ -205,6 +205,9 @@ struct AliasPlaceRecord: Sendable {
 	/// The names of the root functions the text calls (`RootFunctionRecord`), which the text does not declare: the root
 	/// declares them, from the place's plan, and nothing renames them, so none is among `calledFunctionNames`.
 	var calledRootFunctionNames = [String]()
+	/// The record of a built place the engine is to lay the text out from once it spells `CallFields`, where a test compares
+	/// it with the record node records make (`CallRecordBox`); `nil` otherwise.
+	var callRecord: CallRecordBox?
 }
 
 /// A value reached from a declaration by members and calls: what a passed argument, an alternative or a construction

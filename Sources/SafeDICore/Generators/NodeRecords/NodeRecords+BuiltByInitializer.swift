@@ -76,8 +76,8 @@ extension NodeRecords {
 	}
 
 	/// The record of `declaration`'s place, a node of kind `builtByInitializer`, whose body builds `children`, whose tree
-	/// declares `typesDeclaredEscaping` `@escaping`, whose construction is passed `nil` for `unavailableProperties`, and
-	/// whose line constructing the type ends with `lineEnd`.
+	/// declares `typesDeclaredEscaping` `@escaping`, whose construction is passed `nil` for `unavailableProperties`,
+	/// whose line constructing the type ends with `lineEnd`, and which declares its builder function where `declaresFunction`.
 	static func builtByInitializerRecord(
 		of declaration: DeclarationID,
 		variant _: VariantID,
@@ -86,6 +86,7 @@ extension NodeRecords {
 		typesDeclaredEscaping: Set<TypeDescription>,
 		children: [GeneratedCode],
 		lineEnd: String = "",
+		declaresFunction: Bool = false,
 	) throws -> BuiltPlaceRecord {
 		let instantiable = world.scope(of: declaration).instantiable
 		// Every node but the root is built as a property, and has an initializer (`refusalsOfBuiltByInitializer(_:in:)`).
@@ -116,8 +117,9 @@ extension NodeRecords {
 			isSendable: false,
 			typesDeclaredEscaping: typesDeclaredEscaping,
 			lineEnd: lineEnd,
-			// An `Instantiator` always declares its builder function; a constant only where its body has a statement.
-			hasFunction: isInstantiator || !children.isEmpty,
+			// An `Instantiator` always declares its builder function; a constant only where its body has a statement, or where
+			// the caller's kind begins it with one (`declaresFunction`).
+			hasFunction: declaresFunction || isInstantiator || !children.isEmpty,
 			children: children,
 			node: PlanNode(),
 		)
