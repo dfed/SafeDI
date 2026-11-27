@@ -430,17 +430,16 @@ public actor DependencyTreeGenerator {
 				for rootInfo in rootScopeGenerators {
 					taskGroup.addTask {
 						let code = try await rootInfo.scopeGenerator.generatePlan()
-						// The imports are the root's union fact, read from its declarations, not from its generator tree.
-						let fulfillers = TypeFactsImports(root: rootInfo.rootScope).fulfillers
+						// The fold's imports, found where the tree was built, are compared with the walk of the tree emitted,
+						// which for a seam whose first signature pass settled is that pass's tree made again.
 						if let observer = TypeFactsImportsObservation.comparesWalk {
 							let walkedFulfillers = await GenerationWork.$observer.withValue(nil) {
 								await rootInfo.scopeGenerator.fulfillersOfTree(buildingMock: false)
 							}
-							observer(TypeFactsImportsComparison(root: rootInfo.typeDescription.asSource, foldedFulfillers: fulfillers, walkedFulfillers: walkedFulfillers))
+							observer(TypeFactsImportsComparison(root: rootInfo.typeDescription.asSource, foldedFulfillers: rootInfo.fulfillers, walkedFulfillers: walkedFulfillers))
 						}
-						if let observer = TypeFactsReceivedValueSuppliesObservation.comparesWalk {
+						if let observer = TypeFactsReceivedValueSuppliesObservation.comparesWalk, let folded = rootInfo.receivedValueSupplies {
 							await GenerationWork.$observer.withValue(nil) {
-								let folded = TypeFactsReceivedValueSupplies(root: rootInfo.rootScope)
 								// A tree `generate` plans is built around no receive nothing provides, which the walk always judges.
 								let walked = await rootInfo.scopeGenerator.receivedValueSupplies(
 									ofTreeRootedAt: rootInfo.instantiable,
@@ -448,7 +447,7 @@ public actor DependencyTreeGenerator {
 								)
 								observer(TypeFactsReceivedValueSuppliesComparison(
 									root: rootInfo.typeDescription.asSource,
-									folded: ReceivedValueSupplies(supplies: folded.supplies, constructedTypes: folded.constructedTypes),
+									folded: folded,
 									walked: walked.map { ReceivedValueSupplies(supplies: $0.supplies.uniqued(), constructedTypes: $0.constructedTypes.uniqued()) },
 								))
 							}
@@ -457,7 +456,7 @@ public actor DependencyTreeGenerator {
 							typeDescription: rootInfo.typeDescription,
 							sourceFilePath: rootInfo.sourceFilePath,
 							code: code,
-							fulfillers: fulfillers,
+							fulfillers: rootInfo.fulfillers,
 						)
 					}
 				}
@@ -590,8 +589,13 @@ public actor DependencyTreeGenerator {
 		let typeDescription: TypeDescription
 		let instantiable: Instantiable
 		let sourceFilePath: String?
-		/// The root's scope, from which its tree is built, whose declarations the imports read (`TypeFactsImports`).
-		let rootScope: ConstructionScope
+		/// The modules the root's file imports for the types its tree builds, the union over the declarations its tree is
+		/// built from (`TypeFactsImports`). Read where the tree is built, so that the table the root's scope is frozen
+		/// into, a copy of the module's frozen map, is freed with the build rather than kept for every root at once.
+		let fulfillers: Set<FulfillerImports.Fulfiller>
+		/// The supplies of the root's tree, read where the tree is built for the same reason, or `nil` where nothing reads
+		/// them (`TypeFactsReceivedValueSupplies.whereRead(root:)`).
+		let receivedValueSupplies: ReceivedValueSupplies?
 		let scopeGenerator: ScopeGenerator
 	}
 
@@ -730,11 +734,13 @@ public actor DependencyTreeGenerator {
 				var roots = [RootScopeInfo]()
 				for (typeDescription, scope) in rootScopesToGenerate.rootScopes {
 					let (table, record) = validatedWorld.frozenScopeMap.freezing(rootScope: scope)
+					let rootScope = ConstructionScope(table: table, record: record)
 					try roots.append(RootScopeInfo(
 						typeDescription: typeDescription,
 						instantiable: scope.instantiable,
 						sourceFilePath: typeDescriptionToFulfillingInstantiableMap[typeDescription]?.sourceFilePath,
-						rootScope: ConstructionScope(table: table, record: record),
+						fulfillers: TypeFactsImports(root: rootScope).fulfillers,
+						receivedValueSupplies: TypeFactsReceivedValueSupplies.whereRead(root: rootScope),
 						scopeGenerator: record.createScopeGenerator(
 							in: table,
 							lazilyInstantiatedInstanceProperties: [],
