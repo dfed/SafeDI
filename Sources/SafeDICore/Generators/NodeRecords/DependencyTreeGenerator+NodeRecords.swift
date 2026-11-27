@@ -28,11 +28,12 @@ extension DependencyTreeGenerator {
 			return try await rootInfo.scopeGenerator.generatePlan()
 		}
 		let root = rootInfo.instantiable.concreteInstantiable.asSource
+		let world = TypeFactsGraph(root: constructionScope, forMockGeneration: false)
 		let nodeRecords: NodeRecords
 		do {
-			nodeRecords = try NodeRecords(world: TypeFactsGraph(root: constructionScope, forMockGeneration: false))
+			nodeRecords = try NodeRecords(world: world)
 		} catch let refusal as NodeRecordRefusal {
-			observer(NodeRecordsReport(root: root, refusal: refusal.rawValue, isLaidOutFromNodeRecords: false, differences: [], recordCount: 0, treePlaceCount: 0))
+			observer(NodeRecordsReport(root: root, refusal: refusal.rawValue, everyRefusal: NodeRecords.refusals(in: world).map(\.rawValue), isLaidOutFromNodeRecords: false, differences: [], recordCount: 0, treePlaceCount: 0))
 			return try await rootInfo.scopeGenerator.generatePlan()
 		}
 		let laidOutCode: GeneratedCode? = if NodeRecordsObservation.laysOutRoots {
@@ -49,6 +50,7 @@ extension DependencyTreeGenerator {
 			observer(NodeRecordsReport(
 				root: root,
 				refusal: laidOutCode == nil && NodeRecordsObservation.laysOutRoots ? NodeRecordRefusal.notLaidOut.rawValue : nil,
+				everyRefusal: [],
 				isLaidOutFromNodeRecords: laidOutCode != nil,
 				differences: comparison.differences,
 				recordCount: recordCount,
