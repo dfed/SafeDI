@@ -82,7 +82,20 @@ struct NodeRecordsObservationTests {
 			between: [Self.place(Self.renameRecord(text: "let a = b")), Self.place(Self.record("a"))],
 			and: [Self.place(Self.record("a")), .indented(.place(PlacePlan(code: .empty, record: .closer(closer))), by: "    ")],
 		)
-		#expect(comparison.differences == ["root.a: the tree writes another kind of place than node records", "root.a: the tree writes another kind of place than node records"])
+		#expect(comparison.differences == ["root.a: the tree writes another kind of place than node records", "root.a made again: the tree writes another kind of place than node records"])
+	}
+
+	@Test
+	func differences_areNone_whenEachRebindingRecordsTheSameFields() {
+		let comparison = NodeRecordsObservation.differences(between: [Self.rebinding(callingFunctionNamed: "__safeDI_aBuilder")], and: [Self.rebinding(callingFunctionNamed: "__safeDI_aBuilder")])
+		#expect(comparison.differences == [])
+		#expect(comparison.treePlaceCount == 1)
+	}
+
+	@Test
+	func differences_nameTheField_whenARebindingCallsAnotherFunction() {
+		let comparison = NodeRecordsObservation.differences(between: [Self.rebinding(callingFunctionNamed: "__safeDI_aBuilder")], and: [Self.rebinding(callingFunctionNamed: "__safeDI_bBuilder")])
+		#expect(comparison.differences == ["root.aBuilder made again: closedOnFunctionName is __safeDI_aBuilder in the tree, __safeDI_bBuilder by node records"])
 	}
 
 	@Test
@@ -135,6 +148,20 @@ struct NodeRecordsObservationTests {
 	/// `record` as a place, indented as a child of a builder function is.
 	private static func place(_ record: AliasPlaceRecord) -> GeneratedCode {
 		.indented(.place(PlacePlan(code: .text(record.text), record: .alias(record))), by: "    ")
+	}
+
+	/// A loop member's rebinding of `aBuilder: Instantiator<A>`, calling `functionName`, indented as a child of a builder
+	/// function is.
+	private static func rebinding(callingFunctionNamed functionName: String) -> GeneratedCode {
+		.indented(.place(PlacePlan(code: .empty, record: .closer(ClosingPlaceRecord(
+			property: Property(label: "aBuilder", typeDescription: .simple(name: "Instantiator", generics: [.simple(name: "A")])),
+			isErased: false,
+			isExtension: false,
+			closedOnFunctionName: functionName,
+			forwardedProperties: [],
+			cycleArguments: [],
+			rebindsLoopMember: true,
+		)))), by: "    ")
 	}
 
 	/// A rename of `a: A` as `b: A`, written as `text`.

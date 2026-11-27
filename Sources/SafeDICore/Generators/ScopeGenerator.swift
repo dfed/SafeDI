@@ -2945,6 +2945,35 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 	}
 
+	/// The receives a type's own `dependencies` make from above its builder function, in declaration order, each with the
+	/// dependency that makes it: a received property, and the property an alias binds against where the type does not
+	/// declare it. An alias of a property its own type declares reads that declaration, also where a cycle-closing scope
+	/// calls the type's builder function, which binds its own: it receives nothing.
+	nonisolated static func receivesFromAbove(ofOwnDependencies dependencies: [Dependency]) -> [(property: Property, dependency: Dependency)] {
+		var receives = [(property: Property, dependency: Dependency)]()
+		// Read only for a type with an alias, which few are.
+		var ownDeclaredProperties: Set<Property>?
+		for dependency in dependencies {
+			switch dependency.source {
+			case .received:
+				receives.append((dependency.property, dependency))
+			case let .aliased(fulfillingProperty, _, onlyIfAvailable):
+				let declaredProperties = ownDeclaredProperties ?? propertiesDeclared(byOwnDependencies: dependencies)
+				ownDeclaredProperties = declaredProperties
+				guard !declaresFulfillingProperty(
+					of: fulfillingProperty,
+					onlyIfAvailable: onlyIfAvailable,
+					declaredProperties: declaredProperties,
+					forwardedProperties: [],
+				) else { continue }
+				receives.append((fulfillingProperty, dependency))
+			case .instantiated, .forwarded:
+				continue
+			}
+		}
+		return receives
+	}
+
 	/// The properties `dependencies`, a type's own, declare for the scopes the type builds: those it instantiates and
 	/// those it forwards, each lazily instantiated one followed by the property that receives its instance by value. An
 	/// alias of one of them is bound inside the type's builder function, and receives nothing from above it.
@@ -6711,27 +6740,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		/// Meets the receives among `dependencies`, those of the type at `index` in `visitedTypes`.
 		func meet(_ dependencies: [Dependency], ofTypeAt index: Int) {
-			// Read only for a type with an alias, which few are.
-			var ownDeclaredProperties: Set<Property>?
-			for dependency in dependencies {
-				switch dependency.source {
-				case .received:
-					meet(dependency.property.label, receiver: .init(property: dependency.property, declarationLocation: dependency.declarationLocation, chain: chain(endingAt: index)))
-				case let .aliased(fulfillingProperty, _, onlyIfAvailable):
-					// An alias of a property its own type declares reads that declaration, also where a cycle-closing scope
-					// calls the type's builder function, which binds its own: it receives nothing.
-					let declaredProperties = ownDeclaredProperties ?? propertiesDeclared(byOwnDependencies: dependencies)
-					ownDeclaredProperties = declaredProperties
-					guard !declaresFulfillingProperty(
-						of: fulfillingProperty,
-						onlyIfAvailable: onlyIfAvailable,
-						declaredProperties: declaredProperties,
-						forwardedProperties: [],
-					) else { continue }
-					meet(fulfillingProperty.label, receiver: .init(property: fulfillingProperty, declarationLocation: dependency.declarationLocation, chain: chain(endingAt: index)))
-				case .instantiated, .forwarded:
-					continue
-				}
+			for (property, dependency) in receivesFromAbove(ofOwnDependencies: dependencies) {
+				meet(property.label, receiver: .init(property: property, declarationLocation: dependency.declarationLocation, chain: chain(endingAt: index)))
 			}
 		}
 		meet(ownDependencies, ofTypeAt: 0)
@@ -7757,6 +7767,23 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// the text written here.
 		let dispatcherObserver = DispatcherRecordObservation.observer
 		let filledCallFields = FilledCallFields(callerArguments: body.callerArgumentByParameter, callerMemoArguments: body.callerMemoArgumentByMemo, labelsHiddenByReenteringCalls: labelsHiddenByReenteringCalls)
+		// Where a test observes them, the inner scope levels and dispatchers of the call, beside node records' (`FillLevelsObservation`).
+		if let fillLevelsObserver = FillLevelsObservation.observer, !body.callDispatchers.isEmpty, let property {
+			fillLevelsObserver(FillLevelsObservation(
+				call: property,
+				fills: body.orderedChildren.compactMap { child in
+					guard let fillKey = child.generator.fillKey, child.generator.fillEmitsCode, let hole = child.generator.fillCaseHoles.first else { return nil }
+					return FillInnerScopes.Fill(caseKey: Self.fillCaseKey(of: hole), fillKey: fillKey, innerScopeParameters: child.generator.fillCallerReads.innerScopeParameters.map { FillInnerScopes.Field(label: $0.property.label, type: $0.property.typeDescription) })
+				},
+				// What a fill builds reads the levels it is offered (`Scope.callerReads(of:child:labelsHandedToReenteredFunctions:log:)`).
+				fillKeysReadingInnerScopes: Set(body.orderedChildren.compactMap { $0.generator.propertiesToGenerate.first?.readsFillInnerScopes == true ? $0.generator.fillKey : nil }),
+				fillParameters: body.fillParametersByKey.sorted { $0.key < $1.key }.map { (fillKey: $0.key, parameters: $0.value) },
+				dispatchers: body.callDispatchers.map { FillLevelsObservation.projection(of: $0, parameters: body.parametersByKey[$0.key, default: []]) },
+				builtClosures: builderCallArguments.compactMap { argument in
+					argument.builtCall.map { FillLevelsObservation.Closure(label: argument.label, rootDispatcherKey: $0.dispatcherKey, carriedStructs: $0.carriedStructs.map { BuiltClosure.CarriedStructRead(upName: $0.upName, structType: $0.type) }) }
+				},
+			))
+		}
 		let dispatcherRecords = dispatcherObserver == nil ? [] : body.callDispatchers.map { dispatcher in
 			DispatcherRecord(dispatcher: dispatcher, parameters: body.parametersByKey[dispatcher.key, default: []], isSendable: sendableFillKeys.contains(dispatcher.key))
 		}
