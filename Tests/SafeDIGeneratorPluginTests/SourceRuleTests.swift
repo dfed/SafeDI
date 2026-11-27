@@ -134,6 +134,14 @@ struct SourceRuleTests {
 	}
 
 	@Test
+	func sourceRuleCheck_findsNoStringScan_whenTheScanGoesOverUTF8Bytes() {
+		#expect(findings(in: """
+		_ = code.utf8.split(separator: UInt8(ascii: "\\n"))
+		_ = code.utf8.split(whereSeparator: { $0 == UInt8(ascii: " ") })
+		""", at: "Sources/SafeDICore/Generators/Fixture.swift") == [])
+	}
+
+	@Test
 	func sources_returnNoTupleFromATaskGroup() throws {
 		#expect(try findings(of: [.taskGroupTupleElement]) == [])
 	}

@@ -1117,9 +1117,11 @@ GROWTH_ROWS = {
     # another of the three); peak memory 64 to 69 MB and 89 to 103 MB (1.33 to 1.60). A tool whose mock of each
     # feature's seam instead calls the public mock of the feature before it measured 0.67 to 0.68 s and 1.67 to
     # 1.95 s, 2.47 to 2.92 times, in four runs: the features beneath then cost the module on top more each than they
-    # cost built inline. The time limit is between the two, so that change lands only once a feature beneath costs no
-    # more than it does today.
-    "LP-lifelike-chain-under-the-plugin": (lambda features: shape_lifelike_chain(features), (5, 10), {"time": 2.4, "code": 2.2}, lambda features: f"F{features - 1}"),
+    # cost built inline. In CI's container a tool that builds them inline measured 0.497 s and 1.013 s (2.04 times),
+    # 66.1 MB and 101.1 MB, and 3,542,265 and 6,777,708 bytes of code (1.91), in three runs (run 45938379663). The
+    # time limit is that reading plus 15% for noise: this row is the acceptance test of a mock that calls the public
+    # mock of the feature beneath, since no feature's plan may be worked out again in the module above it.
+    "LP-lifelike-chain-under-the-plugin": (lambda features: shape_lifelike_chain(features), (5, 10), {"time": 2.35, "code": 2.2}, lambda features: f"F{features - 1}"),
 }
 GROWTH_STEP = 2
 GROWTH_RUNS = 3
