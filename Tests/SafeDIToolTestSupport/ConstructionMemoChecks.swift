@@ -39,6 +39,7 @@ enum ConstructionMemoChecks {
 				Issue.record(Comment(rawValue: difference))
 			}
 			TypeFactsChecks.check(typeFacts)
+			TypeFactsDOTChecks.check(typeFacts)
 			enclosingObserver?(treeBuiltWithMemo, treeBuiltWithoutMemo, typeFacts)
 		}
 	}
