@@ -123,6 +123,66 @@ struct SafeDIToolCallPlaceOrderTests: ~Copyable {
 		])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_ordersChildrenOfSeamCallAsToday_whenCallPassesFill() async throws {
+		// `Core`'s seam `Feature` takes builders of `any Service` and `any Store`, which `App` fills, so `Root`'s call of
+		// `Feature` holds the two fills. The copy of the call keeps its fills, so it orders them as today's call does;
+		// without them the copy has no child (seam corpus seed 71).
+		let (stream, continuation) = AsyncStream.makeStream(of: Orders.self)
+		try await CallPlaceOrderObservation.$observer.withValue({ scope, todaysOrder, callPlaceOrder in
+			continuation.yield(Orders(scope: scope, todaysOrder: todaysOrder, callPlaceOrder: callPlaceOrder))
+		}) {
+			_ = try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(
+						name: "Core",
+						packageName: "Shop",
+						swiftFileContent: [
+							"public protocol Service: AnyObject {}",
+							"public protocol Store: AnyObject {}",
+							seamFixtureType(named: "Feature", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let service: any Service", "@Instantiated public let store: any Store"]),
+						],
+					),
+					ModuleFixture(
+						name: "App",
+						packageName: "Shop",
+						swiftFileContent: [
+							"""
+							import Core
+
+							@Instantiable(fulfillingAdditionalTypes: [Service.self])
+							public final class DefaultService: Instantiable, Service {
+							    public init() {}
+							}
+
+							@Instantiable(fulfillingAdditionalTypes: [Store.self])
+							public final class DefaultStore: Instantiable, Store {
+							    public init() {}
+							}
+							""",
+							seamFixtureType(named: "Screen", isFinalClass: true, declarations: ["@Instantiated public let screenBuilder: Instantiator<Screen>"]),
+							"import Core\n\n" + seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated public let feature: Feature", "@Instantiated public let screenBuilder: Instantiator<Screen>"]),
+						],
+						dependencies: ["Core"],
+					),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		continuation.finish()
+		var orders = [Orders]()
+		for await order in stream where !orders.contains(order) {
+			orders.append(order)
+		}
+
+		#expect(orders == [
+			Orders(scope: "Root", todaysOrder: [0, 1], callPlaceOrder: [0, 1]),
+			Orders(scope: "\"feature: Feature\"", todaysOrder: [0, 1], callPlaceOrder: [0, 1]),
+		])
+	}
+
 	// MARK: Private
 
 	private struct Orders: Equatable {

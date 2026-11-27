@@ -416,6 +416,9 @@ extension DependencyTreeGenerator {
 			var propertiesByTwinValue = [TwinValue: Set<Property>]()
 			for identifier in graph.nodes {
 				if let scope = scopeByIdentifier[identifier], let copy = copyByIdentifier[identifier] {
+					// A call that passes builders keeps its fills, whose trees are today's: such a call keeps its root per
+					// path (`buildsSeam`), and a comparison with today's tree builds the place as today's is.
+					copy.holeArguments = scope.holeArguments
 					for propertyToGenerate in scope.propertiesToGenerate {
 						switch propertyToGenerate {
 						case let .instantiated(property, childScope, erasedToConcreteExistential):
