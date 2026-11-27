@@ -93,6 +93,11 @@ struct NodeRecordsLayout: Sendable {
 		guard let code = try DependencyTreeGenerator.laidOutRootCode(of: instantiable, body: nodeRecords.rootBody) else {
 			throw NodeRecordRefusal.notLaidOut
 		}
+		self.init(code: code, nodeRecords: nodeRecords)
+	}
+
+	/// The layout `code` writes, of a root whose records are `nodeRecords`.
+	init(code: GeneratedCode, nodeRecords: NodeRecords) {
 		self.code = code
 		rootBody = nodeRecords.rootBody
 		recordCount = nodeRecords.recordCount
