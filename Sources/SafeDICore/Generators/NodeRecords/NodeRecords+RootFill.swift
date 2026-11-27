@@ -424,13 +424,13 @@ extension NodeRecords {
 	/// where the call's records do not assemble.
 	private static func fillRefusals(ofCall declaration: DeclarationID, in world: some NodeRecordSources, routeCount: Int) -> [NodeRecordRefusal] {
 		if let refusal = FillFacts.refusal(ofCall: declaration, in: world, routeCount: routeCount) {
-			return [refusal]
+			[refusal]
 		} else if NodeRecordsObservation.recordsFilledCalls, case let .success(records) = world.filledCallRecords(of: declaration) {
 			// A fill of a wrapper returns what the wrapper's builder function builds, or the builder itself, where its place
 			// would bind the wrapper: no record spells that return yet.
-			return records.fills.allSatisfy(\.facts.returnsBoundValue) ? [] : [.fill]
+			records.fills.allSatisfy(\.facts.returnsBoundValue) ? [] : [.fill]
 		} else {
-			return [.fill]
+			[.fill]
 		}
 	}
 
