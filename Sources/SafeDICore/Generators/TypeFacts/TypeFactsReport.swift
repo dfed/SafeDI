@@ -90,6 +90,7 @@ struct TypeFactsGeneratorFacts: Sendable {
 			false
 		}
 		callsPublicMock = generator.publicMockCall != nil
+		cycleParameters = generator.cycleParameters.map(\.property)
 	}
 
 	let childCount: Int
@@ -107,6 +108,8 @@ struct TypeFactsGeneratorFacts: Sendable {
 	let constructsWithHandWrittenMock: Bool
 	let callsSeam: Bool
 	let callsPublicMock: Bool
+	/// The parameters of the place's builder function that a cycle closing on it passes, in the function's order.
+	let cycleParameters: [Property]
 }
 
 /// A world's graph beside the places one build of its tree made, for a test to compare (`ConstructionMemoOracle`): each
@@ -157,6 +160,7 @@ public struct TypeFactsReport: Sendable {
 			}
 		}
 		loopMembersSharedApart = graph.loopMembersSharedApart.map(Int.init)
+		variantParameters = (0..<graph.variantCount).map { graph.parameters(of: VariantID($0)).map(\.property.spelledWithoutAny) }
 		columnElementCount = graph.columnElementCount
 		edgeCount = graph.graph.edgeCount
 		func spelled(_ row: BitRows, of index: Int, _ spelling: (Int32) -> String) -> [String] {
@@ -278,6 +282,7 @@ public struct TypeFactsReport: Sendable {
 			constructsWithHandWrittenMock = facts.constructsWithHandWrittenMock
 			callsSeam = facts.callsSeam
 			callsPublicMock = facts.callsPublicMock
+			cycleParameters = facts.cycleParameters.map(\.spelledWithoutAny)
 		}
 
 		public let childCount: Int
@@ -293,6 +298,7 @@ public struct TypeFactsReport: Sendable {
 		public let constructsWithHandWrittenMock: Bool
 		public let callsSeam: Bool
 		public let callsPublicMock: Bool
+		public let cycleParameters: [String]
 	}
 
 	public struct Node: Sendable {
@@ -424,6 +430,8 @@ public struct TypeFactsReport: Sendable {
 	public let variantMadeAgainCallSources: [[[String]]]
 	/// The loop members whose parents' loops make different members again.
 	public let loopMembersSharedApart: [Int]
+	/// The parameters each variant's function takes for what its subtree reads from above (`TypeFactsWorld.parameters(of:)`).
+	public let variantParameters: [[String]]
 
 	/// The world read through its interface only, as text: what a consumer of the frozen accessors sees.
 	private static func projection(of world: some TypeFactsWorld) -> String {
@@ -496,7 +504,7 @@ extension ConstructionLog.Read {
 			"\(ReadChannel.optional.name)(\(property.label))"
 		case let .passesNil(property, _, _):
 			"\(ReadChannel.mock.name)(\(property.label))"
-		case .declarationClosedOn, .cycleParameterContext:
+		case .declarationClosedOn, .cycleParameterContext, .cycleArgumentBinding:
 			nil
 		}
 	}
