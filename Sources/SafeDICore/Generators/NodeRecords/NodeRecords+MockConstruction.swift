@@ -37,7 +37,7 @@ extension NodeRecords {
 			refusals.append(.mockActor)
 		}
 		// The root's own such parameters are parameters of `mock()`, which the root's lowering judges
-		// (`ScopeGenerator.nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:rootBindings:outerDeclarations:)`). A type's
+		// (`ScopeGenerator.nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:rootBindings:namesApart:outerDeclarations:)`). A type's
 		// configuration takes the defaults of its initializer and of its hand-written mock, whichever of the two builds a node.
 		if declaration != 0 {
 			let (construction, otherConstruction) = buildsWithHandWrittenMock ? (instantiable.mockInitializer, instantiable.initializer) : (instantiable.initializer, instantiable.mockInitializer)
@@ -79,6 +79,7 @@ extension NodeRecords {
 		variant: VariantID,
 		in world: some NodeRecordSources,
 		typesDeclaredEscaping: Set<TypeDescription>,
+		receivesBoundAgain: [MockReceiveBoundAgain],
 		children: [GeneratedCode],
 	) throws -> BuiltPlaceRecord {
 		let instantiable = world.scope(of: declaration).instantiable
@@ -97,7 +98,8 @@ extension NodeRecords {
 			construction: handWrittenMock,
 			typeFunctionReturns: world.property(of: declaration)?.typeDescription.asInstantiatedTypeSpelledAsDeclared,
 			typesDeclaredEscaping: typesDeclaredEscaping,
-			children: children,
+			// Each receive named apart is bound again under its label first, which makes the node's builder function.
+			children: receivesBoundAgain.map(\.place) + children,
 		)
 		let isConfigured = !children.isEmpty
 		let slotType: TypeDescription = if isConfigured {

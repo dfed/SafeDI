@@ -131,7 +131,7 @@ struct NodeRecords: Sendable {
 	///     `nil` for a mock root's world, where no kind claims an erased instantiator and the mock's own tree reports it.
 	/// - Throws: A `NodeRecordRefusal` where the world holds a kind stage 1 does not make, or what an initializer's
 	///   arguments throw.
-	init(world: some NodeRecordSources, seamTree: DependencyTreeGenerator.RootScopeInfo.SeamTree? = nil, declaredTypeNames: DeclaredTypeNames?) throws {
+	init(world: some NodeRecordSources, seamTree: DependencyTreeGenerator.RootScopeInfo.SeamTree? = nil, declaredTypeNames: DeclaredTypeNames?, mockNamesApart: [String: [TypeDescription: String]] = [:]) throws {
 		let declarationCount = world.declarationCount
 		var kinds = [NodeRecordKind]()
 		kinds.reserveCapacity(declarationCount)
@@ -147,6 +147,7 @@ struct NodeRecords: Sendable {
 			variantByDeclaration[declaration] = variant
 		}
 		let order = try NodeBuildOrder(world: world)
+		let mockReceivesBoundAgain = Self.mockReceivesBoundAgain(in: world, namesApart: mockNamesApart)
 		let onlyIfAvailableAnswers = try OnlyIfAvailableAnswers(world: world, rootParameters: seamTree?.parameters ?? [])
 		let answeringDeclarations = DeclarationsAnsweringReads(world: world)
 		// The tree reports the capture as an error, which the records cannot.
@@ -202,7 +203,7 @@ struct NodeRecords: Sendable {
 			case .rename:
 				try .alias(Self.renameRecord(of: declaration, variant: variant, in: world, answers: onlyIfAvailableAnswers))
 			case .mockConstruction:
-				try .built(Self.mockConstructionRecord(of: declaration, variant: variant, in: world, typesDeclaredEscaping: escaping, children: children))
+				try .built(Self.mockConstructionRecord(of: declaration, variant: variant, in: world, typesDeclaredEscaping: escaping, receivesBoundAgain: mockReceivesBoundAgain[Int(variant)], children: children))
 			}
 			typesDeclaredEscaping[Int(variant)] = escaping
 			records[Int(variant)] = record
