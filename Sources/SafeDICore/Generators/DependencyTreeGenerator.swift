@@ -1004,7 +1004,7 @@ public actor DependencyTreeGenerator {
 			var treeForcers: [TreeForcer] = [.seamWorld]
 			var nodeRecordsLayout: NodeRecordsLayout?
 			if let readersOfEveryTree {
-				(nodeRecordsLayout, treeForcers) = try Self.nodeRecordsLayout(of: scope.instantiable, constructionScope: constructionScope, declaredTypeNames: declaredTypeNames, readersOfEveryTree: readersOfEveryTree)
+				(nodeRecordsLayout, treeForcers) = Self.nodeRecordsLayout(of: scope.instantiable, constructionScope: constructionScope, declaredTypeNames: declaredTypeNames, readersOfEveryTree: readersOfEveryTree)
 			}
 			if let nodeRecordsLayout {
 				// The work of building the tree a test compares is no run's, so the tests that count a run's work count
