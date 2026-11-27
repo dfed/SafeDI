@@ -700,9 +700,9 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 	private var filesToDelete: [URL]
 
 	/// The reports of the mock worlds' table `body`'s runs hand the observer.
-	private static func tableReports<Output>(
+	private static func tableReports(
 		filesToDelete: inout [URL],
-		_ body: (inout [URL]) async throws -> Output,
+		_ body: (inout [URL]) async throws -> some Any,
 	) async throws -> [MockWorldsTableReport] {
 		let (stream, continuation) = AsyncStream.makeStream(of: MockWorldsTableReport.self)
 		var filesMade = [URL]()
