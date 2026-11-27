@@ -171,7 +171,7 @@ struct MockWorlds: Sendable {
 			}
 			let differingFacts = worldFacts.differingFacts(from: sharedFacts)
 			if !differingFacts.isEmpty {
-				differences.append("the shared graph's facts of declaration \(declaration) differ from the world's: \(differingFacts.joined(separator: ", "))")
+				differences.append("the shared graph’s facts of declaration \(declaration) differ from the world’s: \(differingFacts.joined(separator: ", "))")
 			}
 		}
 		return differences
