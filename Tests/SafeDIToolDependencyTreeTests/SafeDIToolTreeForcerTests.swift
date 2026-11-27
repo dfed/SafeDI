@@ -90,8 +90,9 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_buildsTree_whenRecordsOfRootCannotBeLaidOut() async throws {
-		// A root with no dependencies has no generated initializer, so the engine lays out nothing from its records.
+	mutating func generate_buildsNoTree_whenRootBuildsNothing() async throws {
+		// A root with no dependencies has no generated initializer: its node records lay it out as nothing, as its tree
+		// would write it, so nothing forces its tree.
 		let (forcers, _) = try await treeForcers(of: [
 			"""
 			@Instantiable(isRoot: true)
@@ -101,8 +102,8 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 			""",
 		])
 		#expect(forcers == """
-		Root\tkind notLaidOut
-		roots that built a tree: 1 of 1
+		Root\tnone
+		roots that built a tree: 0 of 1
 
 		""")
 	}
