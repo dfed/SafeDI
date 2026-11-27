@@ -436,6 +436,102 @@ struct SafeDIToolNodeRecordsMockCycleTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_keepsTheWalksStatements_whenTypeBuiltAlongEdgeConfigurationsLeaveOutTakesDefaultValuedParameter() async throws {
+		// A parent’s configuration has no field for its child, so the walk builds each child of the ring with its
+		// initializer’s own default, a new `State` each time. An empty configuration would hold one `State`, which every
+		// child built of the place that keeps it would share.
+		let fixture = Self.ringFixture.merging([
+			"Child.swift": """
+			public final class State {
+			    public init() {}
+			}
+
+			@Instantiable
+			public final class Child: Instantiable, Marked {
+			    public init(parentBuilder: Instantiator<Parent>, state: State = State()) {
+			        self.parentBuilder = parentBuilder
+			        self.state = state
+			    }
+
+			    @Instantiated let parentBuilder: Instantiator<Parent>
+			    let state: State
+			    public var marker = ""
+			}
+			""",
+		]) { _, replacement in replacement }
+		let walkOutput = try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(reports.filter(\.isMockRoot).map(\.refusal) == ["mockDefaultValuedParameter"])
+		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [false])
+		#expect(output.generatedFiles == walkOutput.generatedFiles)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildsTheWalksValues_whenTypeOffTheCycleTakesDefaultValuedParameter() async throws {
+		let fixture = Self.ringFixture.merging([
+			"Root.swift": """
+			public final class State {
+			    public init() {}
+			}
+
+			@Instantiable(generateMock: true)
+			public final class Root: Instantiable {
+			    public init(parentBuilder: Instantiator<Parent>, settingsBuilder: Instantiator<Settings>) {
+			        self.parentBuilder = parentBuilder
+			        self.settingsBuilder = settingsBuilder
+			    }
+
+			    @Instantiated let parentBuilder: Instantiator<Parent>
+			    @Instantiated let settingsBuilder: Instantiator<Settings>
+			}
+
+			@Instantiable
+			public final class Settings: Instantiable, Marked {
+			    public init(state: State = State()) {
+			        self.state = state
+			    }
+
+			    let state: State
+			    public var marker = ""
+			}
+			""",
+		]) { _, replacement in replacement }
+		let walkOutput = try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		// The settings are built by the root alone, of the root’s own overrides, which hold one `State` as the walk’s do.
+		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [true])
+		let overridden = """
+		Root.mock(safeDIOverrides: .init(\
+		parentBuilder: .init({ marked(Parent(childBuilder: $0), "parent") }), \
+		settingsBuilder: .init({ marked(Settings(state: $0), "settings") })))
+		"""
+		let comparison = try await DifferentialValueOracle.compare(
+			feature: DifferentialValuePath(fixtureFiles: fixture, generatedFiles: #require(output.generatedFiles)),
+			knownRight: DifferentialValuePath(fixtureFiles: fixture, generatedFiles: #require(walkOutput.generatedFiles)),
+			probes: [
+				DifferentialValueProbe("Root.mock().settingsBuilder.instantiate()"),
+				DifferentialValueProbe(name: "one state for a mock", expression: "[Root.mock()].map { $0.settingsBuilder.instantiate().state === $0.settingsBuilder.instantiate().state }"),
+				DifferentialValueProbe(name: "overridden settings", expression: "\(overridden).settingsBuilder.instantiate()"),
+				DifferentialValueProbe(name: "overridden lap", expression: "\(overridden).parentBuilder.instantiate().childBuilder.instantiate().parentBuilder.instantiate()"),
+			],
+			filesToDelete: &filesToDelete,
+		)
+		// Nothing is compared where compile verification is off.
+		guard let comparison else { return }
+		#expect(comparison.differences.isEmpty, "\(comparison.report)")
+		// Each override was read: it marks the value its closure built.
+		for marker in ["parent", "settings"] {
+			#expect(comparison.featureDescription.contains("\"\(marker)\""), "No value is marked \(marker):\n\(comparison.featureDescription)")
+		}
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]

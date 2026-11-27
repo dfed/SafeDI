@@ -116,8 +116,21 @@ extension NodeRecords {
 	/// - Throws: `mockCycleLazy` where a function that takes the places entered builds a `LazilyInstantiated`, whose
 	///   closing is the lazy kind's to add; `mockActor` where an actor is sent a value such a function builds, which is
 	///   built of the places the function was handed and so cannot be sent, where the walk builds the value of what the
-	///   actor's own function captures.
+	///   actor's own function captures; `mockDefaultValuedParameter` where a node built along an edge the
+	///   configurations leave out, or beneath one, reads a field of its configuration for a default-valued parameter. The
+	///   empty configuration such a call hands holds one value of the parameter's default, which every node built of it
+	///   and of the place that keeps it would share, where the walk leaves each construction beneath such an edge to its
+	///   initializer's own default, evaluated again each time.
 	static func checkMockCycles(in world: some NodeRecordSources, slots: MockEnteredSlots) throws(NodeRecordRefusal) {
+		var builtOfEmptyConfiguration = Set<DeclarationID>()
+		var pending = (1..<Int32(world.declarationCount)).filter { declaration in
+			world.parents(of: declaration).contains { mockConfigurationLeavesOut(declaration, builtBy: $0.parent, in: world) }
+		}
+		while let declaration = pending.popLast() {
+			guard builtOfEmptyConfiguration.insert(declaration).inserted else { continue }
+			pending.append(contentsOf: world.edges(from: declaration))
+		}
+		guard builtOfEmptyConfiguration.allSatisfy({ mockConfigurationFieldArguments(of: $0, in: world).isEmpty }) else { throw .mockDefaultValuedParameter }
 		for declaration in 1..<Int32(world.declarationCount) where takesMockEnteredPlaces(declaration, in: slots) {
 			switch world.kind(of: declaration) {
 			case .lazy, .sendableLazy:
