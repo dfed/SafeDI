@@ -20,6 +20,7 @@
 
 import Foundation
 import SafeDICore
+import SafeDIToolLibrary
 import Testing
 
 // MARK: - Random number generator
@@ -131,6 +132,19 @@ struct GraphFuzzerFixture: Equatable {
 			Self.markedFileName(in: content)
 				?? GraphFuzzerSourceLine.lines(of: content).lazy.compactMap(\.declaredTypeName).first.map { "\($0).swift" }
 		}
+	}
+
+	/// The first line of a file the harness writes to a directory the module's `#SafeDIConfiguration` adds
+	/// (`additionalDirectoriesToInclude`), which the target graph it hands the tool lists no file of
+	/// (`GraphFuzzerOracle.toolRunOfGraph`): `addingCallersViewShapes`' `AddedLeaf`.
+	static let additionalDirectoryMarker = "// additional-directory"
+
+	/// What a configuration names the added directory by, which the harness replaces with the directory it writes.
+	static let additionalDirectoryPlaceholder = "$ADDITIONAL_DIRECTORY"
+
+	/// Whether `content` is a file of the added directory (`additionalDirectoryMarker`).
+	static func isInAdditionalDirectory(_ content: String) -> Bool {
+		content.hasPrefix(additionalDirectoryMarker + "\n")
 	}
 
 	/// What precedes a file's name on one of its first lines, for a file whose name is not its first `@Instantiable`
@@ -1940,6 +1954,24 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	case seamRingWithoutRootValues
 	/// The ring's seams build one panel each, and a root of `FuzzApp` builds the ring and fills its place.
 	case seamRingRooted
+	/// `addingCallersViewShapes`' added directory: a graph in one module whose `#SafeDIConfiguration` adds a directory that
+	/// declares `AddedLeaf`, which the target graph lists no file of, so the tool computes each seam's signature as its
+	/// callers see the module too.
+	case callersView
+	/// Nothing reaches `AddedLeaf`.
+	case callersViewDeclarationUnreached
+	/// Every root instantiates `addedLeaf` beside the seam, whose tree does not reach it.
+	case callersViewDeclarationBesideSeam
+	/// The seam receives `addedLeaf`, which every root instantiates.
+	case callersViewDeclarationReceivedBySeam
+	/// The seam receives `addedLeaf`, a `package` `AddedLeaf`, which the callers count as `public`: rejected where the
+	/// seam's tiers are wider than `package`.
+	case callersViewPackageDeclarationReceivedBySeam
+	/// The seam receives `addedToken`, which an own file declares in an extension of `AddedSpace`, a `package` enum the
+	/// added directory declares, which the callers do not see: rejected where the seam's tiers are wider than `package`.
+	case callersViewTypeInExtensionOfAddedPlainDeclaration
+	/// The seam instantiates `addedPart`, an `AddedLeaf`, which the callers see no declaration of: rejected by design.
+	case callersViewDeclarationInstantiatedBySeam
 	/// `addingCarrierShapes`' sibling places with unequal read sets: `UnequalHome`, a seam, binds `unequalFirst` and
 	/// `unequalSecond` and then holds places of `Unequal1Api1` and `Unequal1Api2`, whose fills read one value each, so each
 	/// carrier member captures only what its own fill reads.
@@ -2139,6 +2171,22 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// declarations and chains: `seamDependencyReadThroughView` and `seamDependencyChainReadThroughView`.
 	var isReadThroughViewShape: Bool {
 		self == .seamDependencyReadThroughView || self == .seamDependencyChainReadThroughView
+	}
+
+	/// Whether `addingCallersViewShapes` draws this shape, whose count in accepted graphs the seam corpus pins
+	/// (`acceptedDrawFeatureCounts`): every one but `callersViewDeclarationInstantiatedBySeam`, which the tool rejects by
+	/// design. Every graph the draw lands in computes the callers' view of each seam it generates, which the executors'
+	/// callers' view oracle (`SeamCallersViewChecks`) computes again, so an accepted graph is one that oracle judged; the
+	/// shapes accepted whatever the seam's tiers are, the draw itself included, are floored at ten
+	/// (`isFlooredCallersViewShape`).
+	var isCallersViewShape: Bool {
+		rawValue.hasPrefix("callersView") && self != .callersViewDeclarationInstantiatedBySeam
+	}
+
+	/// Whether this is a callers' view shape the tool accepts whatever the seam's tiers are (`isCallersViewShape`), floored
+	/// at ten accepted graphs: the draw, and the declaration unreached, beside the seam, and received by it.
+	var isFlooredCallersViewShape: Bool {
+		self == .callersView || self == .callersViewDeclarationUnreached || self == .callersViewDeclarationBesideSeam || self == .callersViewDeclarationReceivedBySeam
 	}
 
 	/// Whether the shape is one of a place in a screen whose value a fill building the seam again reads, whose accepted
@@ -2975,6 +3023,7 @@ enum GraphFuzzerGenerator {
 			optionalPlaceRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.optionalPlaceRandomSeedMask)
 			nestedCycleRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.nestedCycleRandomSeedMask)
 			renamedLazyReaderRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.renamedLazyReaderRandomSeedMask)
+			callersViewRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.callersViewRandomSeedMask)
 			seamDependencyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ GraphFuzzerSeamDependencyDraw.seamRandomSeedMask)
 			prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
 			// One draw decides, so graphs that are not mixed draw exactly what they drew before mixed graphs existed.
@@ -3112,6 +3161,10 @@ enum GraphFuzzerGenerator {
 					finalDeclarations = addingSeamRingShapes(to: finalDeclarations)
 				}
 				presentModules = Set(finalDeclarations.compactMap(\.module))
+			} else {
+				// Drawn only in a graph in one module, after every other pass, from a stream of its own, so that every other
+				// graph, and every other draw of a graph it draws in, is drawn as before.
+				finalDeclarations = addingCallersViewShapes(to: finalDeclarations)
 			}
 			// Left out after every draw, so that the graph without its second place is drawn, and split, as the graph with it.
 			if omitsSecondHolePlace, let secondHolePlace, let index = finalDeclarations.firstIndex(where: { $0.name == secondHolePlace.typeName }) {
@@ -3560,6 +3613,9 @@ enum GraphFuzzerGenerator {
 		/// Draws only `addingReadersOfRenamedLazyInstance`'s choices: whether a graph gains `RenamedLazyTop`'s tree, and
 		/// every shape of that tree.
 		private var renamedLazyReaderRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only `addingCallersViewShapes`' choices: whether a graph in one module gains a declaration in a directory its
+		/// `#SafeDIConfiguration` adds, and how its seam's tree reaches it.
+		private var callersViewRandom: GraphFuzzerRandomNumberGenerator
 		/// The files `markerFreeFileRandom` moved a declaration into: each named, holding the declaration alone, and in the
 		/// module of the type, `ownerName`, whose file it was drawn in.
 		private var markerFreeFiles = [(ownerName: String, fileName: String, declaration: String)]()
@@ -8502,6 +8558,112 @@ enum GraphFuzzerGenerator {
 
 		private static let renamedLazyReaderRandomSeedMask: UInt64 = 0x52656E4C617A79
 
+		// MARK: The callers' view
+
+		/// How `addingCallersViewShapes` has a graph reach the declaration it adds in a directory the module's
+		/// `#SafeDIConfiguration` adds.
+		private enum CallersViewShape {
+			/// Nothing reaches `AddedLeaf`.
+			case unreached
+			/// Every root instantiates `addedLeaf` beside the seam, whose tree does not reach it.
+			case besideSeam
+			/// Every root instantiates `addedLeaf`, which the seam receives.
+			case receivedBySeam
+			/// As `receivedBySeam`, with `AddedLeaf` and its initializer `package`.
+			case packageDeclarationReceivedBySeam
+			/// Every root instantiates `addedToken`, an `AddedToken` that an own file declares in an extension of
+			/// `AddedSpace`, a `package` enum the added directory declares, and the seam receives it.
+			case typeInExtensionOfAddedPlainDeclaration
+			/// The seam instantiates `addedPart`, an `AddedLeaf`.
+			case instantiatedBySeam
+		}
+
+		/// The seam corpus's draw, in two graphs in five of those in one module with a seam that is no root, of a declaration
+		/// in a directory the module's `#SafeDIConfiguration` adds (`additionalDirectoriesToInclude`), which the files the
+		/// target graph lists do not hold: `AddedLeaf`, a public class in a file whose first line is
+		/// `GraphFuzzerFixture.additionalDirectoryMarker`, so the harness writes it to the added directory and hands the tool
+		/// a target graph (`toolRunOfGraph`). A declaration whose module SafeDI does not know makes the tool compute each seam
+		/// it generates a second time, as its callers see the module (`SeamResolution.callersVisibleInstantiables`), and
+		/// reject a seam whose call shape the callers compute otherwise (`treeReachesDeclarationCallersCannotSee`,
+		/// `treeReachesPlainDeclarationCallersCannotSee`), so every graph it draws in judges that second computation. The
+		/// seam's tree reaches the declaration as `CallersViewShape` says: not at all, beside the seam, received by it, as a
+		/// `package` type it receives (rejected where the seam's tiers are wider than `package`), as a type an own file
+		/// declares in an extension of a `package` enum the directory declares (rejected so too), or instantiated in the
+		/// seam's tree (rejected by design: the callers see a type no declaration fulfills). `callersViewRandom` draws only
+		/// for this pass, after every other, and only in the seam corpus.
+		private mutating func addingCallersViewShapes(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			guard features.contains(.generateDependencyTree) else { return declarations }
+			// `addingUncreatedAliasShapes`' seam is left out: its oracle (`seamRejectedWhereInlineAcceptsFailure`) requires
+			// that the tool accept every graph inline accepts with an error about that seam, which a rejection by design here
+			// would break.
+			let aliasSeamName = "\(prefix)AliasSeam"
+			let seamIndices = declarations.indices.filter {
+				declarations[$0].instantiableArguments.contains("generateDependencyTree: true") && !declarations[$0].instantiableArguments.contains("isRoot: true") && declarations[$0].name != aliasSeamName
+			}
+			guard !seamIndices.isEmpty, callersViewRandom.percentChance(40) else { return declarations }
+			var declarations = declarations
+			let seamIndex = callersViewRandom.element(of: seamIndices)
+			let shapeRoll = callersViewRandom.integer(in: 0...99)
+			let shape: CallersViewShape = if shapeRoll < 15 {
+				.unreached
+			} else if shapeRoll < 30 {
+				.besideSeam
+			} else if shapeRoll < 55 {
+				.receivedBySeam
+			} else if shapeRoll < 70 {
+				.packageDeclarationReceivedBySeam
+			} else if shapeRoll < 85 {
+				.typeInExtensionOfAddedPlainDeclaration
+			} else {
+				.instantiatedBySeam
+			}
+			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
+			let leafName = "\(prefix)AddedLeaf"
+			var leaf = TypeDeclaration(name: leafName, instantiableArguments: [], properties: [], declaresHelperTypes: false, additionalConformances: conformances)
+			leaf.precedingDeclarations = [GraphFuzzerFixture.additionalDirectoryMarker]
+			let rootIndices = declarations.indices.filter { declarations[$0].instantiableArguments.contains("isRoot: true") }
+			/// Gives every root, then the seam, a property of `label` and `type`.
+			func declare(_ label: String, ofType type: String, onSeamAs seamAttribute: String?) {
+				for rootIndex in rootIndices {
+					declarations[rootIndex].properties.append(PropertyDeclaration(attribute: "@Instantiated", label: label, type: type))
+				}
+				if let seamAttribute {
+					declarations[seamIndex].properties.append(PropertyDeclaration(attribute: seamAttribute, label: label, type: type))
+				}
+			}
+			switch shape {
+			case .unreached:
+				break
+			case .besideSeam:
+				declare("addedLeaf", ofType: leafName, onSeamAs: nil)
+			case .receivedBySeam:
+				declare("addedLeaf", ofType: leafName, onSeamAs: "@Received")
+			case .packageDeclarationReceivedBySeam:
+				leaf.access = .package
+				proofTypeAccess[leafName] = .package
+				declare("addedLeaf", ofType: leafName, onSeamAs: "@Received")
+			case .typeInExtensionOfAddedPlainDeclaration:
+				let spaceName = "\(prefix)AddedSpace"
+				var token = TypeDeclaration(name: "\(prefix)AddedToken", instantiableArguments: [], properties: [], declaresHelperTypes: false, additionalConformances: conformances)
+				token.enclosingExtension = "extension \(spaceName)"
+				token.enclosingTypeAccess = .package
+				let tokenType = "\(spaceName).\(token.name)"
+				proofTypeAccess[spaceName] = .package
+				proofTypeAccess[tokenType] = .package
+				leaf.additionalDeclarations.append("package enum \(spaceName) {}")
+				declarations.append(token)
+				declare("addedToken", ofType: tokenType, onSeamAs: "@Received")
+			case .instantiatedBySeam:
+				declarations[seamIndex].properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "addedPart", type: leafName))
+			}
+			// The module's one configuration, which `GraphFuzzerFixture.seamCorpusFixture` adds the plain initializers to.
+			declarations[seamIndex].additionalDeclarations.append("#SafeDIConfiguration(additionalDirectoriesToInclude: [\"\(GraphFuzzerFixture.additionalDirectoryPlaceholder)\"])")
+			declarations.append(leaf)
+			return declarations
+		}
+
+		private static let callersViewRandomSeedMask: UInt64 = 0x43616C6C56696577
+
 		// MARK: Cycle parameters
 
 		/// How a property of `addingCycleParameterShapes`' cycle builds its type.
@@ -12449,6 +12611,7 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		return features.union(accessProofDrawFeatures(of: fixture)).union(holeDrawFeatures(of: fixture)).union(cycleParameterDrawFeatures(of: fixture))
 			.union(forwardedLabelAcrossSeamCallDrawFeatures(of: fixture)).union(retentionDrawFeatures(of: fixture)).union(fixedSeamCallDefectDrawFeatures(of: fixture)).union(carrierDrawFeatures(of: fixture))
 			.union(optionalPlaceDrawFeatures(of: fixture))
+			.union(callersViewDrawFeatures(of: fixture))
 	}
 
 	/// The shapes `addingFillCallShapes`, `addingCarriedLevelShapes`, `addingPassingUpCopyShapes` and `addingReenteredFillShapes` draw, read from the
@@ -12662,6 +12825,27 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 	}
 
 	/// The shapes `addingOptionalPlaceShapes` draws, read from the types and properties the fixture declares.
+	/// The shapes `addingCallersViewShapes` draws, read from the added directory's file and the properties the fixture
+	/// declares.
+	private static func callersViewDrawFeatures(of fixture: GraphFuzzerFixture) -> Set<GraphFuzzerSeamDrawFeature> {
+		guard let addedFile = fixture.swiftFileContent.first(where: GraphFuzzerFixture.isInAdditionalDirectory) else { return [] }
+		let prefix = fixture.typeNamePrefix
+		let properties = declaredProperties(of: fixture).propertiesByType.values.flatMap(\.self)
+		var features: Set<GraphFuzzerSeamDrawFeature> = [.callersView]
+		if properties.contains(where: { $0.label == "addedPart" }) {
+			features.insert(.callersViewDeclarationInstantiatedBySeam)
+		} else if properties.contains(where: { $0.label == "addedToken" && $0.attribute == "@Received" }) {
+			features.insert(.callersViewTypeInExtensionOfAddedPlainDeclaration)
+		} else if properties.contains(where: { $0.label == "addedLeaf" && $0.attribute == "@Received" }) {
+			features.insert(addedFile.contains("package final class \(prefix)AddedLeaf") ? .callersViewPackageDeclarationReceivedBySeam : .callersViewDeclarationReceivedBySeam)
+		} else if properties.contains(where: { $0.label == "addedLeaf" }) {
+			features.insert(.callersViewDeclarationBesideSeam)
+		} else {
+			features.insert(.callersViewDeclarationUnreached)
+		}
+		return features
+	}
+
 	private static func optionalPlaceDrawFeatures(of fixture: GraphFuzzerFixture) -> Set<GraphFuzzerSeamDrawFeature> {
 		let prefix = fixture.typeNamePrefix
 		let (propertiesByType, mockedTypeNames) = declaredProperties(of: fixture)
@@ -17609,27 +17793,54 @@ enum GraphFuzzerOracle {
 				try? FileManager.default.removeItem(at: fileToDelete)
 			}
 		}
+		// The files of a directory the module's `#SafeDIConfiguration` adds (`addingCallersViewShapes`) are written there,
+		// and the tool is handed a target graph that lists every other file as the module's, as the SwiftPM plugin hands it
+		// one: so SafeDI knows no module of the added files, and computes each seam's signature as its callers see it too.
+		let ownFileIndices = fixture.swiftFileContent.indices.filter { !GraphFuzzerFixture.isInAdditionalDirectory(fixture.swiftFileContent[$0]) }
+		let ownContent = ownFileIndices.map { fixture.swiftFileContent[$0] }
+		let addedContent = fixture.swiftFileContent.filter(GraphFuzzerFixture.isInAdditionalDirectory)
+		let ownFileNames = fileNames.map { fileNames in ownFileIndices.map { fileNames[$0] } }
+		let ownFixtureFileNames = ownFileNames ?? (addedContent.isEmpty ? fixture.fileNames : GraphFuzzerFixture(seed: fixture.seed, swiftFileContent: ownContent).fileNames)
+		let addedFileNames = GraphFuzzerFixture(seed: fixture.seed, swiftFileContent: addedContent).fileNames.map { "AdditionalDirectory/\($0)" }
+		/// Reduces each path to the fixture directory and to the added directory, `<fixture-directory>` and
+		/// `<additional-directory>`, as `normalizer(fixtureDirectory:)` does.
+		func normalizer(of fixtures: FixturePaths) throws -> (fixtureDirectory: URL, additionalDirectory: URL?, normalize: (String) -> String) {
+			let directory = try fixtureDirectory(of: ownFixtureFileNames, in: fixtures, seed: fixture.seed)
+			let additionalDirectory = try addedFileNames.isEmpty ? nil : fixtureDirectory(of: addedFileNames, in: fixtures, seed: fixture.seed)
+			let normalizeFixtureDirectory = Self.normalizer(fixtureDirectory: directory.path)
+			let normalizeAdditionalDirectory = additionalDirectory.map { Self.normalizer(fixtureDirectory: $0.path, placeholder: "<additional-directory>") } ?? { $0 }
+			return (directory, additionalDirectory, { normalizeAdditionalDirectory(normalizeFixtureDirectory($0)) })
+		}
 		do {
 			let output = try await executeSafeDIToolTest(
-				swiftFileContent: fileNames == nil ? fixture.swiftFileContent : [],
-				swiftFileContentByFilePath: fileNames.map { Dictionary(uniqueKeysWithValues: zip($0, fixture.swiftFileContent)) } ?? [:],
+				swiftFileContent: ownFileNames == nil ? ownContent : [],
+				swiftFileContentByFilePath: ownFileNames.map { Dictionary(uniqueKeysWithValues: zip($0, ownContent)) } ?? [:],
+				additionalDirectorySwiftFileContent: addedContent,
 				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 				skipCompileVerification: true,
 				activeCompilationConditions: fixture.activeCompilationConditions,
+				pluginTargetGraph: addedContent.isEmpty ? nil : { inputSwiftFilePaths in
+					PluginTargetGraph(
+						target: PluginTargetGraph.Target(moduleName: GraphFuzzerModule.seamModule.name, packageID: GraphFuzzerModule.seamModule.packageName, sourceFilePaths: inputSwiftFilePaths, dependencyModuleNames: []),
+						dependencyTargets: [],
+					)
+				},
 				// The fuzzer's graphs are no test's expectations, so a record run never writes them.
 				recordDirectory: nil,
 			)
-			let normalize = try normalizer(fixtureDirectory: fixtureDirectory(of: fileNames ?? fixture.fileNames, in: output.fixtures, seed: fixture.seed).path)
+			let normalize = try normalizer(of: output.fixtures).normalize
 			return (.accepted(
 				generatedFiles: addingSeamCallers(to: (output.generatedFiles ?? [:]).mapValues(normalize), seamTypeAccess: fixture.seamTypeAccess),
 				warnings: output.warnings.map { normalize("\($0)") },
 			), nil)
 		} catch let error as SafeDIToolTestError {
-			let directory = try fixtureDirectory(of: fileNames ?? fixture.fileNames, in: error.fixtures, seed: fixture.seed)
-			// `executeSafeDIToolTest` schedules the fixture directory for deletion only when `generate` succeeds.
+			let (directory, additionalDirectory, normalize) = try normalizer(of: error.fixtures)
+			// `executeSafeDIToolTest` schedules the fixture directory, and the added directory, for deletion only when
+			// `generate` succeeds.
 			filesToDelete.append(directory)
-			return (.rejected(diagnostics: normalizer(fixtureDirectory: directory.path)("\(error.underlyingError)")), nil)
+			filesToDelete += [additionalDirectory].compactMap(\.self)
+			return (.rejected(diagnostics: normalize("\(error.underlyingError)")), nil)
 		} catch {
 			// `executeSafeDIToolTest` wraps every error `generate` throws, so this is the harness failing, such as a
 			// fixture it could not write: not the tool rejecting the graph.
@@ -18385,12 +18596,12 @@ enum GraphFuzzerOracle {
 	}
 
 	/// Replaces each path to the fixture directory, from the path's start through the directory's last component, a fresh
-	/// UUID each run, with `<fixture-directory>`, however the path is spelled: as the harness wrote it, resolved, or with or
+	/// UUID each run, with `placeholder` (`<fixture-directory>`, or `<additional-directory>` for an added directory), however the path is spelled: as the harness wrote it, resolved, or with or
 	/// without a leading `/private`, since every spelling ends in that component. The directories above it are no part of
 	/// what the oracle compares, and a renaming must not rewrite them when it is undone: a macOS runner's temporary
 	/// directory, `/var/folders/h5/t85nd…/T`, holds `t8`, which undoing a label reversal reads as a label.
 	/// The path appears in generated code only in `#sourceLocation` paths and comments, so the code still compiles.
-	static func normalizer(fixtureDirectory: String) -> (String) -> String {
+	static func normalizer(fixtureDirectory: String, placeholder: String = "<fixture-directory>") -> (String) -> String {
 		let uniqueComponent = (fixtureDirectory as NSString).lastPathComponent
 		guard !uniqueComponent.isEmpty else { return { $0 } }
 		// A path starts after whitespace, a quote, a backtick or an opening parenthesis, as the tool's diagnostics and
@@ -18398,7 +18609,7 @@ enum GraphFuzzerOracle {
 		let pattern = #"(?:[^\s"'`(]*/)?"# + NSRegularExpression.escapedPattern(for: uniqueComponent)
 		return { text in
 			guard text.contains(uniqueComponent) else { return text }
-			return text.replacingOccurrences(of: pattern, with: "<fixture-directory>", options: .regularExpression)
+			return text.replacingOccurrences(of: pattern, with: placeholder, options: .regularExpression)
 		}
 	}
 

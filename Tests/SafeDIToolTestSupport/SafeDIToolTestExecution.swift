@@ -130,7 +130,7 @@ func executeSafeDIToolTest(
 		in: swiftFixtureDirectory,
 	)
 	let pathNamedSwiftFiles = try createSwiftFixtureFiles(
-		atFilePaths: swiftFileContentByFilePath,
+		atFilePaths: swiftFileContentByFilePath.mapValues(resolvingDirectoryPlaceholders(in:)),
 		in: swiftFixtureDirectory,
 		alongside: contentNamedSwiftFiles,
 	)
@@ -365,7 +365,10 @@ func executeSafeDIToolTest(
 												try await TypeFactsReceivedValueSuppliesChecks.comparing(handingOn: TypeFactsReceivedValueSuppliesObservation.comparesWalk) {
 													// The fold that decides whether any route is walked must send every graph the walk rejects to the walk (`FulfillmentFoldChecks`).
 													try await ValidationWalkObservation.$foldComparison.withValue(FulfillmentFoldChecks.comparison(handingOn: ValidationWalkObservation.foldComparison)) {
-														try await tool.generate()
+														// Every callers’ view a run computes must decide alike when computed again (`SeamCallersViewChecks`).
+														try await SeamCallersViewChecks.comparing(handingOn: SeamCallersViewObservation.comparesProducers) {
+															try await tool.generate()
+														}
 													}
 												}
 											}

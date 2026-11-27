@@ -1318,6 +1318,16 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
+	func acceptedDrawFeatureCounts_holdAtLeastTenGraphs_forEachCallersViewShapeTheToolAlwaysAccepts() {
+		// The callers' view oracle (`SeamCallersViewChecks`) judges a graph only where the tool computes the callers' view,
+		// which only `addingCallersViewShapes`' added directory makes it do; it judges the draw's shapes only while each
+		// lands in at least ten graphs the tool accepts, which the corpus runs pin exactly.
+		for feature in GraphFuzzerSeamDrawFeature.allCases where feature.isFlooredCallersViewShape {
+			#expect(Self.seamCorpusAcceptedDrawFeatureCounts[feature, default: 0] >= Self.gatingDrawJudgedGraphFloor, "\(feature.rawValue) is pinned in fewer than ten accepted graphs")
+		}
+	}
+
+	@Test
 	func seamCorpus_acceptsTenGraphsOfEachScreenPlaceNeighbour_whenPinsAreRead() {
 		// A screen's place whose fill reads the screen's value stands in for the unit tests of the neighbours the tool must
 		// accept beside the shape it rejects (`fieldOfReenteringPlace`) only while the corpus accepts enough of each.
@@ -7461,7 +7471,7 @@ struct SafeDIToolGraphFuzzerTests {
 		omittedValueGraphCount: seamCorpusOmittedValueGraphCount,
 		errorMarkers: seamCorpusErrorMarkers,
 		errorGraphCounts: seamCorpusErrorGraphCounts,
-		drawFeaturesCountedWhenAccepted: Set(GraphFuzzerSeamDrawFeature.allCases.filter { $0.isAliasSpellingRollShape || $0.isCycleParameterShape || $0.isForwardedLabelAcrossSeamCallShape || $0.isRetentionShape || $0.isErasurePlaceShape || $0.isForwardingPlaceShape || $0.isPassedUpPlaceReadingPassingSeamsValueShape || $0.isFixedSeamCallDefectShape || $0.isOptionalPlaceShape || $0.isReadThroughViewShape || $0.isScreenPlaceShape || $0.isLazyRouteShape }),
+		drawFeaturesCountedWhenAccepted: Set(GraphFuzzerSeamDrawFeature.allCases.filter { $0.isAliasSpellingRollShape || $0.isCycleParameterShape || $0.isForwardedLabelAcrossSeamCallShape || $0.isRetentionShape || $0.isErasurePlaceShape || $0.isForwardingPlaceShape || $0.isPassedUpPlaceReadingPassingSeamsValueShape || $0.isFixedSeamCallDefectShape || $0.isOptionalPlaceShape || $0.isReadThroughViewShape || $0.isScreenPlaceShape || $0.isLazyRouteShape || $0.isCallersViewShape }),
 		acceptedDrawFeatureCounts: seamCorpusAcceptedDrawFeatureCounts,
 		readTwinGraphCount: seamCorpusReadTwinGraphCount,
 		retentionCounts: seamCorpusRetentionCounts,
@@ -7523,7 +7533,7 @@ struct SafeDIToolGraphFuzzerTests {
 	static let publicMockCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 693, judgedDrawingRetentionShape: 131, judgedThroughHandWrittenBuilder: 92, unpairedExperiments: 0)
 
 	static let seamCorpusSeedCount = 2_000
-	static let seamCorpusFixtureHash: UInt64 = 0x1313E68FFFFF5176
+	static let seamCorpusFixtureHash: UInt64 = 0x83B4C644BEF3D77E
 	static let seamCorpusAcceptedSeedCount = 609
 	static let seamCorpusAcceptedSeedsSum: UInt64 = 0x38D97AC726E69107
 	/// How many of the seam corpus's graphs the tool accepts with their seams and without them, which the value
@@ -7800,7 +7810,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// rejects as it rejects the seam whose own tree receives both forms. Pinned by `seamSmokeAndKnownIssueFixtureHash`.
 	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 24, 31, 68, 78, 84, 92, 93, 151, 153, 164, 180, 215, 227, 273, 277, 304, 309, 347, 468, 594, 605, 705, 743, 850, 881, 892, 934, 969, 1_010, 1_020, 1_450, 1_815, 1_837, 1_890, 1_986, 2_006, 3_575, 4_668]
 
-	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x89196AB0BDCA7106
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x62873013FDA3F83C
 
 	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
 	/// so a draw that stops landing, or a change in a shape's share, fails
@@ -7887,7 +7897,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.mockInInstantiableExtension: 62,
 		.typeInExtensionOfSeam: 81,
 		.typeInExtensionOfNarrowerRecordedType: 71,
-		.valueDeclaredAfterSeam: 138,
+		.valueDeclaredAfterSeam: 139,
 		.moduleSplit: 935,
 		.otherPackageCaller: 430,
 		.samePackageCallerRunWithoutPackageName: 116,
@@ -8178,6 +8188,13 @@ struct SafeDIToolGraphFuzzerTests {
 		.seamRingOfSendableInstantiators: 71,
 		.seamRingWithoutRootValues: 101,
 		.seamRingRooted: 135,
+		.callersView: 392,
+		.callersViewDeclarationUnreached: 59,
+		.callersViewDeclarationBesideSeam: 65,
+		.callersViewDeclarationReceivedBySeam: 98,
+		.callersViewPackageDeclarationReceivedBySeam: 48,
+		.callersViewTypeInExtensionOfAddedPlainDeclaration: 55,
+		.callersViewDeclarationInstantiatedBySeam: 67,
 		.carrierDrawUnequalSiblings: 299,
 		.carrierDrawUnequalSiblingsBeneathChild: 153,
 		.carrierDrawCoincidingLabel: 332,

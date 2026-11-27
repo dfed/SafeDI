@@ -257,60 +257,36 @@ extension DependencyTreeGenerator {
 		// whatever its tree reaches, and a seam this run could not compute is reported with its own error alone.
 		// `reportingAll` orders the errors by source location.
 		if let callersVisibleInstantiables = seams.callersVisibleInstantiables, let ownProof = ownComputation.proof {
-			let unseenDeclarations = Set(typeDescriptionToFulfillingInstantiableMap.values.map(\.concreteInstantiable))
-				.subtracting(callersVisibleInstantiables.values.map(\.concreteInstantiable))
-			GenerationLayerObservation.record(.seamSignatures(ofModule: seams.currentModule.moduleName, inCallersView: true), inRunOf: seams.currentModule.moduleName)
-			let callersComputation = try await Self.seamSignatures(
-				forSeams: generatedSeamTypes,
-				construction: .ownSeams(validatedWorld.passed),
-				in: callersVisibleInstantiables,
-				plainTypeDeclarations: seams.callersVisiblePlainTypeDeclarations,
+			let callersView = CallersView(
+				seamTypes: generatedSeamTypes,
+				passed: validatedWorld.passed,
+				instantiables: typeDescriptionToFulfillingInstantiableMap,
+				callersVisibleInstantiables: callersVisibleInstantiables,
 				aliasDeclarationReferences: aliasDeclarationReferences,
 				fixedSignatures: seamRoots.compactMapValues(\.self),
-				callerModule: seams.currentModule,
 				seams: seams,
 				checkingModule: emittingModuleToCheck,
-				proof: {
-					GenerationLayerObservation.record(.accessProof(ofModule: seams.currentModule.moduleName, inCallersView: true), inRunOf: seams.currentModule.moduleName)
-					return TypeAccessProof(
-						instantiables: callersVisibleInstantiables,
-						plainTypeDeclarations: seams.callersVisiblePlainTypeDeclarations,
-						isOwnFile: emittingModule?.isOwnFile,
-						reach: Self.moduleReach(viewedFrom: seams.currentModule, instantiables: callersVisibleInstantiables, plainTypeDeclarations: seams.callersVisiblePlainTypeDeclarations, modulesReadByRunOfModule: emittingModule?.modulesReadByRunOfModule),
-					)
-				},
-				internerSpace: internerSpace,
+				emittingModule: emittingModule,
+				ownFailedSeams: ownComputation.failedSeams,
+				ownSeamRoots: ownComputation.seamRoots,
+				ownProof: ownProof,
 			)
-			for seamType in generatedSeamTypes.sorted() {
-				guard let seam = typeDescriptionToFulfillingInstantiableMap[seamType],
-				      !ownComputation.failedSeams.contains(seamType),
-				      let ownSeamRoot = ownComputation.seamRoots[seamType]
-				else { continue }
-				let ownSignature = ownSeamRoot?.signature
-				let callersFailed = callersComputation.failedSeams.contains(seamType)
-				let callersSignature: SeamSignature? = callersFailed ? nil : (callersComputation.seamRoots[seamType] ?? nil)?.signature
-				guard callersFailed || ownSignature?.callShape != callersSignature?.callShape else { continue }
-				let labelsCallersFailedOn = callersFailed ? Self.parameterLabels(namedBy: callersComputation.errors, about: seam) : nil
-				if let declaration = Self.unseenDeclarationToName(
-					for: seam,
-					ownSignature: ownSignature,
-					callersSignature: callersSignature,
-					labelsCallersFailedOn: labelsCallersFailedOn,
-					unseenDeclarations: unseenDeclarations,
-					in: typeDescriptionToFulfillingInstantiableMap,
-					proof: ownProof,
-				) {
-					errors.append(.seam(.init(seam: seam, kind: .treeReachesDeclarationCallersCannotSee(declaration: declaration))))
-				} else if let plainDeclaration = Self.unseenPlainDeclarationToName(
-					ownSignature: ownSignature,
-					callersSignature: callersSignature,
-					labelsCallersFailedOn: labelsCallersFailedOn,
-				) {
-					errors.append(.seam(.init(
-						seam: seam,
-						kind: .treeReachesPlainDeclarationCallersCannotSee(declaration: plainDeclaration),
-					)))
-				}
+			GenerationLayerObservation.record(.seamSignatures(ofModule: seams.currentModule.moduleName, inCallersView: true), inRunOf: seams.currentModule.moduleName)
+			let verdicts = try await callersView.verdicts(interningIn: internerSpace)
+			errors.append(contentsOf: verdicts.compactMap { $0.error })
+			if let comparesProducers = SeamCallersViewObservation.comparesProducers {
+				// Computed again for the test that compares two producers of the callers' view, as no layer of the run, in a
+				// space of its own that starts from this one's IDs, since only this run's serial code holds this one.
+				let builder = internerSpace.copyOfBuilder()
+				comparesProducers(SeamCallersView(
+					moduleName: seams.currentModule.moduleName,
+					verdicts: verdicts.map { $0.observed },
+					recomputed: {
+						try await GenerationLayerObservation.$observer.withValue(nil) {
+							try await callersView.verdicts(interningIn: ConstructionInternerSpace(copying: builder)).map { $0.observed }
+						}
+					},
+				))
 			}
 		}
 		if let error = DependencyTreeGeneratorError.reportingAll(of: errors) {
@@ -320,6 +296,113 @@ extension DependencyTreeGenerator {
 			seamRoots[seamType] = seamRoot
 		}
 		return (seamRoots, ownComputation.firstPassTrees)
+	}
+
+	/// The computation of the seams this module generates over the declarations their callers see, and of what this
+	/// run reports of each from it: everything the computation reads, held so that a test can compute it again under
+	/// another producer (`SeamCallersViewObservation.comparesProducers`). It holds what the run's own computation found
+	/// of each seam, not that computation's trees, for as long as `computeSeamRoots` runs, or a test keeps it.
+	private struct CallersView: Sendable {
+		let seamTypes: Set<TypeDescription>
+		let passed: DependencyTreeGenerator.ValidationPassed
+		let instantiables: [TypeDescription: Instantiable]
+		let callersVisibleInstantiables: [TypeDescription: Instantiable]
+		let aliasDeclarationReferences: AliasDeclarationReferences
+		let fixedSignatures: [TypeDescription: ScopeGenerator.SeamRoot]
+		let seams: SeamResolution
+		let checkingModule: EmittingModule?
+		let emittingModule: EmittingModule?
+		let ownFailedSeams: Set<TypeDescription>
+		let ownSeamRoots: [TypeDescription: ScopeGenerator.SeamRoot?]
+		let ownProof: TypeAccessProof
+
+		/// What the run decides of one seam from the callers' view.
+		struct Verdict {
+			let seamType: TypeDescription
+			let callersFailed: Bool
+			let callersSignature: SeamSignature?
+			/// The error reported at the seam: `nil` where the callers compute its call shape as this run does, or where
+			/// no declaration they cannot see explains the difference.
+			let error: DependencyTreeGeneratorError?
+
+			var observed: SeamCallersVerdict {
+				SeamCallersVerdict(
+					seamType: seamType,
+					callersSignature: StoredSeamSignature(seamType: seamType, signature: callersSignature),
+					callersFailed: callersFailed,
+					diagnostics: error?.sourceDiagnostics ?? [],
+				)
+			}
+		}
+
+		/// A verdict for each seam this run computed, in seam order, the computation freezing its scopes in `internerSpace`.
+		func verdicts(interningIn internerSpace: ConstructionInternerSpace, isolation _: isolated (any Actor)? = #isolation) async throws -> [Verdict] {
+			let unseenDeclarations = Set(instantiables.values.map(\.concreteInstantiable))
+				.subtracting(callersVisibleInstantiables.values.map(\.concreteInstantiable))
+			let callersComputation = try await DependencyTreeGenerator.seamSignatures(
+				forSeams: seamTypes,
+				construction: .ownSeams(passed),
+				in: callersVisibleInstantiables,
+				plainTypeDeclarations: seams.callersVisiblePlainTypeDeclarations,
+				aliasDeclarationReferences: aliasDeclarationReferences,
+				fixedSignatures: fixedSignatures,
+				callerModule: seams.currentModule,
+				seams: seams,
+				checkingModule: checkingModule,
+				proof: {
+					GenerationLayerObservation.record(.accessProof(ofModule: seams.currentModule.moduleName, inCallersView: true), inRunOf: seams.currentModule.moduleName)
+					return TypeAccessProof(
+						instantiables: callersVisibleInstantiables,
+						plainTypeDeclarations: seams.callersVisiblePlainTypeDeclarations,
+						isOwnFile: emittingModule?.isOwnFile,
+						reach: DependencyTreeGenerator.moduleReach(viewedFrom: seams.currentModule, instantiables: callersVisibleInstantiables, plainTypeDeclarations: seams.callersVisiblePlainTypeDeclarations, modulesReadByRunOfModule: emittingModule?.modulesReadByRunOfModule),
+					)
+				},
+				internerSpace: internerSpace,
+			)
+			var verdicts = [Verdict]()
+			for seamType in seamTypes.sorted() {
+				guard let seam = instantiables[seamType],
+				      !ownFailedSeams.contains(seamType),
+				      let ownSeamRoot = ownSeamRoots[seamType]
+				else { continue }
+				let ownSignature = ownSeamRoot?.signature
+				let callersFailed = callersComputation.failedSeams.contains(seamType)
+				let callersSeamRoot: ScopeGenerator.SeamRoot? = callersComputation.seamRoots[seamType] ?? nil
+				let callersSignature: SeamSignature? = callersFailed ? nil : callersSeamRoot?.signature
+				verdicts.append(Verdict(
+					seamType: seamType,
+					callersFailed: callersFailed,
+					callersSignature: callersSignature,
+					error: error(of: seam, ownSignature: ownSignature, callersSignature: callersSignature, callersFailed: callersFailed, callersErrors: callersComputation.errors, unseenDeclarations: unseenDeclarations),
+				))
+			}
+			return verdicts
+		}
+
+		private func error(of seam: Instantiable, ownSignature: SeamSignature?, callersSignature: SeamSignature?, callersFailed: Bool, callersErrors: [DependencyTreeGeneratorError], unseenDeclarations: Set<TypeDescription>) -> DependencyTreeGeneratorError? {
+			guard callersFailed || ownSignature?.callShape != callersSignature?.callShape else { return nil }
+			let labelsCallersFailedOn = callersFailed ? DependencyTreeGenerator.parameterLabels(namedBy: callersErrors, about: seam) : nil
+			if let declaration = DependencyTreeGenerator.unseenDeclarationToName(
+				for: seam,
+				ownSignature: ownSignature,
+				callersSignature: callersSignature,
+				labelsCallersFailedOn: labelsCallersFailedOn,
+				unseenDeclarations: unseenDeclarations,
+				in: instantiables,
+				proof: ownProof,
+			) {
+				return .seam(.init(seam: seam, kind: .treeReachesDeclarationCallersCannotSee(declaration: declaration)))
+			} else if let plainDeclaration = DependencyTreeGenerator.unseenPlainDeclarationToName(
+				ownSignature: ownSignature,
+				callersSignature: callersSignature,
+				labelsCallersFailedOn: labelsCallersFailedOn,
+			) {
+				return .seam(.init(seam: seam, kind: .treeReachesPlainDeclarationCallersCannotSee(declaration: plainDeclaration)))
+			} else {
+				return nil
+			}
+		}
 	}
 
 	/// The parameters of `ownSignature` a seam's callers would not pass as this run declares them: those
@@ -2589,6 +2672,36 @@ public enum SeamSignatureObservation {
 	@TaskLocal public static var width: Int?
 	/// Called, when set, for each level of a module's seam components, in level order, with how many tasks settle it.
 	@TaskLocal public static var observesLevels: (@Sendable (SeamSignatureLevel) -> Void)?
+}
+
+/// The test hook of the seam callers' view: test only.
+public enum SeamCallersViewObservation {
+	/// Called, when set, for each run that computes the signatures of the seams it generates over the declarations their
+	/// callers see (`computeSeamRoots`), with what the run decided of each seam from them and a function that computes
+	/// it again, which a test calls under another producer of the callers' view: the two must decide alike.
+	@TaskLocal public static var comparesProducers: (@Sendable (SeamCallersView) -> Void)?
+}
+
+/// What one run decided of the seams it generates from the declarations their callers see, as
+/// `SeamCallersViewObservation.comparesProducers` hands it to a test.
+public struct SeamCallersView: Sendable {
+	/// The name of the module the run generates.
+	public let moduleName: String?
+	/// A verdict for each seam the run computed, in seam order.
+	public let verdicts: [SeamCallersVerdict]
+	/// Computes the verdicts again, from the same declarations, under whatever producer the caller selects.
+	public let recomputed: @Sendable () async throws -> [SeamCallersVerdict]
+}
+
+/// What a run decided of one seam it generates from the declarations its callers see.
+public struct SeamCallersVerdict: Sendable {
+	public let seamType: TypeDescription
+	/// The seam's signature as its callers compute it: none where they cannot (`callersFailed`) or the seam is trivial.
+	public let callersSignature: StoredSeamSignature
+	public let callersFailed: Bool
+	/// The diagnostics of the error the run reports at the seam: none where the callers compute its call shape as the
+	/// run does, or no declaration they cannot see explains the difference.
+	public let diagnostics: [SourceDiagnostic]
 }
 
 /// One level of a module's seam components, as `seamSignatures` settles it.
