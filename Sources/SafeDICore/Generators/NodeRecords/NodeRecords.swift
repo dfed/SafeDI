@@ -134,6 +134,7 @@ struct NodeRecords: Sendable {
 			.indented(places[Int(rootCalls[rootCalls.startIndex + edgeIndex])] ?? .empty, by: TypeKeyBody.rootStatementIndentation)
 		}
 		self.records = records
+		declarationByVariant = (0..<Int32(world.variantCount)).map(world.declaration(of:))
 	}
 
 	/// The record of `declaration`'s place in `variant`'s body. The root, variant 0, has none.
@@ -145,10 +146,13 @@ struct NodeRecords: Sendable {
 	/// statements are.
 	let rootBody: [GeneratedCode]
 
-	/// How many records were made: one per variant but the root's.
+	/// How many variants have a record, which is every variant but the root's.
 	var recordCount: Int {
-		records.count - 1
+		declarationByVariant.indices.dropFirst().count { record(of: declarationByVariant[$0], variant: VariantID($0)) != nil }
 	}
+
+	/// Each variant's declaration.
+	private let declarationByVariant: [DeclarationID]
 
 	/// By variant.
 	private let records: [BuiltPlaceRecord?]

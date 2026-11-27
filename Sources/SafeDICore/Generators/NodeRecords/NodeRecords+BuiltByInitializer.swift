@@ -21,12 +21,9 @@
 extension NodeRecords {
 	/// Refuses `declaration`'s world with the first kind stage 1 does not make that the node is of.
 	static func checkBuiltByInitializer(_ declaration: DeclarationID, in world: some NodeRecordSources) throws(NodeRecordRefusal) {
-		switch world.construction(of: declaration) {
-		case .initializer:
-			break
-		case .handWrittenMock, .seamCall, .publicMockCall, .constructionFunction, .fill:
-			throw .construction
-		}
+		// Every other construction is a call of another module's code, a hand-written mock or a fill, which a later stage or
+		// another lane's kind makes.
+		guard world.construction(of: declaration) == .initializer else { throw .construction }
 		switch world.kind(of: declaration) {
 		case .constant, .instantiator:
 			break
@@ -49,12 +46,12 @@ extension NodeRecords {
 		guard scope.declaredLazilyInstantiatedInstanceProperties.isEmpty, scope.forwardedLazilyInstantiatedInstanceProperties.isEmpty else { throw .onlyIfAvailable }
 		for dependency in scope.instantiable.dependencies {
 			switch dependency.source {
-			case .instantiated, .forwarded, .received(onlyIfAvailable: false):
+			case .instantiated, .forwarded, .received(onlyIfAvailable: false),
+			     // A rename is among the scope's properties to generate, refused above.
+			     .aliased:
 				break
 			case .received(onlyIfAvailable: true):
 				throw .onlyIfAvailable
-			case .aliased:
-				throw .renameOrHole
 			}
 		}
 		guard declaration == 0 || scope.instantiable.initializer != nil else { throw .noInitializer }
