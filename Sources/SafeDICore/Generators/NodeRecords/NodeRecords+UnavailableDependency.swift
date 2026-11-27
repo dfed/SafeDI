@@ -23,14 +23,14 @@ extension NodeRecords {
 	/// that no declaration fulfills (`ConstructionScope.isUnavailableDependency`): it discharges the refusal of an
 	/// unavailable dependency, and of a type with no initializer, since the node builds nothing. `nil` for any other node,
 	/// and for every node of a mock root's world, which reads each node's override.
-	static func unavailableDependencyClaim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
+	static func unavailableDependencyClaim(of declaration: DeclarationID, in world: some NodeRecordVariantFacts) -> NodeRecordClaim? {
 		guard !world.isMockWorld, world.scope(of: declaration).isUnavailableDependency else { return nil }
 		return NodeRecordClaim(kind: .unavailableDependency, discharges: [.unavailableOrInlineSeam, .noInitializer])
 	}
 
 	/// The record of `declaration`'s place, a node of kind `unavailableDependency`: its property bound to `nil`, which reads
 	/// nothing, so the engine copies it as written.
-	static func unavailableDependencyRecord(of declaration: DeclarationID, in world: some NodeRecordSources) throws(NodeRecordRefusal) -> AliasPlaceRecord {
+	static func unavailableDependencyRecord(of declaration: DeclarationID, in world: some NodeRecordVariantFacts) throws(NodeRecordRefusal) -> AliasPlaceRecord {
 		// Never thrown: every node but the root is built as a property, and the root is no unavailable dependency.
 		guard let property = world.property(of: declaration) else { throw .noInitializer }
 		return AliasPlaceRecord(property: property, fulfillingProperty: nil, text: "let \(property.asSource) = nil", reads: [])

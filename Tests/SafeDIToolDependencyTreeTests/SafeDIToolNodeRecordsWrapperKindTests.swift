@@ -527,8 +527,9 @@ struct SafeDIToolNodeRecordsWrapperKindTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_readsTheInstanceOfWhatTheSeamsRootIsHanded_whenTypesBeneathTheSeamReceiveItsDeferredParameter() async throws {
 		// `Vault`'s initializer holds `database` in a `LazilyInstantiated`, which no node of its tree declares: what the
-		// root is handed answers the reads of `Store` and `Index`, at two depths, as that wrapper's instance. A seam's own
-		// root is compared with its tree and never laid out, which its report calls `notLaidOut`.
+		// root is handed answers the reads of `Store` and `Index`, at two depths, as that wrapper's instance. A record reads
+		// its variant's key alone, and a seam's root's keys are not yet seeded from its parameters, so the receives refuse
+		// the world as `lazy` until they are; the tree writes it meanwhile.
 		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
 			try await executeSafeDIToolTest(swiftFileContent: [
 				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let database: Database", "@Instantiated let vault: Vault"]),
@@ -573,8 +574,8 @@ struct SafeDIToolNodeRecordsWrapperKindTests: ~Copyable {
 			""",
 		])
 		let seamReports = reports.filter { $0.root == "Vault" }
-		#expect(seamReports.map(\.refusal) == ["notLaidOut"])
-		#expect(seamReports.map(\.everyRefusal) == [[]])
+		#expect(seamReports.map(\.refusal) == ["lazy"])
+		#expect(seamReports.map(\.everyRefusal) == [["lazy"]])
 		#expect(seamReports.flatMap(\.differences) == [])
 	}
 

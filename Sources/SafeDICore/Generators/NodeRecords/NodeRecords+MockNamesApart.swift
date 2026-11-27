@@ -145,8 +145,8 @@ extension NodeRecords {
 				}
 			}
 			// A variant's calls all see the names its reads resolve to: a declaration that hides a name apart from one call
-			// answers the read otherwise, which makes another variant (`NodeRecordRefusal.nodeHasSeveralVariants`), so the
-			// first call's names stand for every call's.
+			// answers the read otherwise, which makes another variant with a record of its own, so the first call's names
+			// stand for every call's.
 			for callee in calls where visibleNames[Int(callee)] == nil {
 				visibleNames[Int(callee)] = functionNames
 				variantsToVisit.append(callee)

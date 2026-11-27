@@ -679,6 +679,55 @@ struct SafeDIToolNodeRecordsMockLoopTests: ~Copyable {
 		""")
 	}
 
+	/// A member that takes its level’s overrides and is built at two levels stays refused: its one function would take
+	/// one level’s type, and the other level would hand it its own configuration.
+	@Test
+	mutating func mock_refusesLoop_whenMemberTakingItsLevelsOverridesIsBuiltAtTwoLevels() async throws {
+		let fixture = [
+			"""
+			@Instantiable(generateMock: true)
+			public final class Root: Instantiable {
+			    public init(holder: Holder, loopBuilder: Instantiator<Loop>) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+			    @Instantiated let holder: Holder
+			    @Instantiated let loopBuilder: Instantiator<Loop>
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Holder: Instantiable {
+			    public init(loopBuilder: Instantiator<Loop>) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+			    @Instantiated let loopBuilder: Instantiator<Loop>
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Loop: Instantiable {
+			    public init(loopBuilder: Instantiator<Loop>, leaf: Leaf) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+			    @Received let loopBuilder: Instantiator<Loop>
+			    @Instantiated let leaf: Leaf
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Leaf: Instantiable {
+			    public init() {}
+			}
+			""",
+		]
+		let walkOutput = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(reports.filter(\.isMockRoot).map(\.everyRefusal) == [["builderLoop"]])
+		#expect(output.generatedFiles == walkOutput.generatedFiles)
+	}
+
 	/// A loop of `@Sendable` builders below the root stays refused: its members' functions could capture no configuration that is not `Sendable`.
 	@Test
 	mutating func mock_refusesLoop_whenSendableMembersWouldTakeTheirLevelsConfiguration() async throws {
