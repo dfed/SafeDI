@@ -21,8 +21,8 @@
 extension NodeRecords {
 	/// The claim of `declaration` where it is a node whose type receives a property only if available or declares a rename:
 	/// of kind `receivesOnlyIfAvailable`, discharging `onlyIfAvailable` and `renameOrHole`, which it still holds where its
-	/// scope declares a hole or an instantiated dependency it does not build, and the refusal of the wrapper it is built in,
-	/// which its record reads of the node (`wrapperRefusalsDischarged(of:in:)`); `nil` for any other node.
+	/// scope declares a hole, and the refusal of the wrapper it is built in, which its record reads of the node
+	/// (`wrapperRefusalsDischarged(of:in:)`); `nil` for any other node.
 	static func receivesOnlyIfAvailableClaim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
 		guard world.kind(of: declaration) != .alias, world.kind(of: declaration) != .hole else { return nil }
 		let scope = world.scope(of: declaration)
@@ -41,7 +41,7 @@ extension NodeRecords {
 				false
 			}
 		}
-		let refusals: [NodeRecordRefusal] = declaresHole || !scope.instantiatedDependenciesNotGenerated.isEmpty ? [.renameOrHole] : []
+		let refusals: [NodeRecordRefusal] = declaresHole ? [.renameOrHole] : []
 		return NodeRecordClaim(kind: .receivesOnlyIfAvailable, discharges: wrapperRefusalsDischarged(of: declaration, in: world).union([.onlyIfAvailable, .renameOrHole]), refusals: refusals)
 	}
 
@@ -141,6 +141,11 @@ struct OnlyIfAvailableAnswers: Sendable {
 			// Inside the node's builder function, its forwarded properties are the nearest declarations of their labels.
 			var contextInside = context
 			for dependency in scope.instantiable.dependencies where dependency.source == .forwarded && labels.contains(dependency.property.label) {
+				contextInside[dependency.property.label] = [Binding(property: dependency.property, state: .available)]
+			}
+			// So is each dependency its type instantiates that its scope does not build, which a mock is passed as a parameter
+			// of `mock()` before any node is built (`Scope.propertiesToDeclare`); a production root's world holds none.
+			for dependency in scope.instantiatedDependenciesNotGenerated where labels.contains(dependency.property.label) {
 				contextInside[dependency.property.label] = [Binding(property: dependency.property, state: .available)]
 			}
 			let calls = world.calls(of: variant)

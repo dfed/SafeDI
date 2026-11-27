@@ -27,8 +27,8 @@ extension NodeRecords {
 
 	/// What a node of a mock root's world whose type declares a rename discharges of stage 1's refusals, and what it
 	/// holds instead: the rename is a node of its own (`mockRenameClaim(of:in:)`), so the node discharges `renameOrHole`,
-	/// which it still holds where its scope declares an instantiated dependency it does not build, as production's
-	/// `receivesOnlyIfAvailableClaim(of:in:)` holds it. Empty for a node that declares no rename.
+	/// and holds nothing in its place: an instantiated dependency its scope does not build is `uncoveredDependency`
+	/// (`mockUncoveredDependencyDischarges(of:in:)`). Empty for a node that declares no rename.
 	static func mockRenameDischargesAndRefusals(of declaration: DeclarationID, in world: some NodeRecordSources) -> (discharges: Set<NodeRecordRefusal>, refusals: [NodeRecordRefusal]) {
 		let scope = world.scope(of: declaration)
 		var declaresRename = false
@@ -46,7 +46,7 @@ extension NodeRecords {
 			}
 		}
 		guard declaresRename else { return ([], []) }
-		return ([.renameOrHole], scope.instantiatedDependenciesNotGenerated.isEmpty ? [] : [.renameOrHole])
+		return ([.renameOrHole], [])
 	}
 
 	/// The record of `declaration`'s place in `variant`, a rename of a mock root's world: production's record, but that an

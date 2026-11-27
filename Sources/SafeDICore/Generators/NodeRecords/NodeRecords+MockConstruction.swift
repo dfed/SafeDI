@@ -46,6 +46,9 @@ extension NodeRecords {
 		// A node built in a `@Sendable` function of its own reads its override from a local bound before the function
 		// (`NodeRecords+MockSendable.swift`).
 		discharges.formUnion(mockSendableDischarges(of: declaration, in: world))
+		// A dependency the mock cannot build is a parameter of `mock()`, which the node's construction reads
+		// (`NodeRecords+MockUncoveredDependency.swift`).
+		discharges.formUnion(mockUncoveredDependencyDischarges(of: declaration, in: world))
 		guard refusalsOfBuiltByInitializer(declaration, in: world).allSatisfy(discharges.contains) else { return nil }
 		// A `Sendable` wrapper erased to its property's type is made as `mockErased` makes an erased node:
 		// `builtByInitializer` refuses it as `sendable` alone. An erased `LazilyInstantiated`'s override returns the erased
@@ -150,6 +153,7 @@ extension NodeRecords {
 			typeFunctionReturns: boundProperty?.typeDescription.asInstantiatedTypeSpelledAsDeclared,
 			boundProperty: boundProperty,
 			argumentsOfOtherValues: fieldArguments,
+			uncoveredArgumentNames: uncoveredArgumentNames(of: declaration, in: world),
 			alwaysDeclaresFunction: !fieldArguments.isEmpty,
 			typesDeclaredEscaping: typesDeclaredEscaping,
 			children: receivesBoundAgain.map(\.place) + children,

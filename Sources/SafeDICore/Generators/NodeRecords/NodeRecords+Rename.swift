@@ -30,6 +30,7 @@ extension NodeRecords {
 		.cycle,
 		.unavailableOrInlineSeam,
 		.fill,
+		.uncoveredDependency,
 		.onlyIfAvailable,
 		.noInitializer,
 	]

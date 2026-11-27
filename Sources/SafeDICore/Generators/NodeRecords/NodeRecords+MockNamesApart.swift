@@ -63,7 +63,7 @@ extension NodeRecords {
 	static func mockReceivesBoundAgain(in world: some NodeRecordSources) -> [[MockReceiveBoundAgain]] {
 		var receivesBoundAgain = [[MockReceiveBoundAgain]](repeating: [], count: world.variantCount)
 		let namesBoundAgain = world.mockRootNames.namesBoundAgain
-		guard !namesBoundAgain.isEmpty else { return receivesBoundAgain }
+		guard !namesBoundAgain.isEmpty || world.mockRootNames.namesUncoveredParameterApart else { return receivesBoundAgain }
 		// The names apart each variant's node sees where it is built, by variant.
 		var visibleNamesApart = [[String: [TypeDescription: String]]?](repeating: nil, count: world.variantCount)
 		visibleNamesApart[0] = namesBoundAgain
@@ -88,7 +88,17 @@ extension NodeRecords {
 				if isWrapper {
 					declarations += instantiable.dependencies.filter { $0.source == .forwarded }.map(\.property)
 				}
-				functionNamesApart = MockLowering.removingRenames(hiddenBy: declarations, from: visibleNamesApart[Int(variant)] ?? [:])
+				// A dependency the node's type instantiates that the mock cannot build is declared by the node too, and the
+				// receives beneath read the parameter `mock()` takes for it, under its name apart, as the walk routes them
+				// (`MockLowering.routeReceives(of:toParametersNamed:in:)`).
+				let uncoveredProperties = world.scope(of: declaration).instantiatedDependenciesNotGenerated.map(\.property)
+				declarations += uncoveredProperties
+				var namesApart = MockLowering.removingRenames(hiddenBy: declarations, from: visibleNamesApart[Int(variant)] ?? [:])
+				for property in uncoveredProperties {
+					guard let name = world.mockRootNames.uncoveredParameterName(of: property), name != property.label else { continue }
+					namesApart[property.label, default: [:]][property.typeDescription] = name
+				}
+				functionNamesApart = namesApart
 				for dependency in instantiable.dependencies where dependency.source.isReceived {
 					guard let names = functionNamesApart[dependency.property.label] else { continue }
 					// The receive's own form, or the non-optional form the root binds for its optional one.

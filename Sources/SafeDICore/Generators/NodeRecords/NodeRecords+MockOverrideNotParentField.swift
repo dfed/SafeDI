@@ -29,9 +29,13 @@ struct MockRootNames: Sendable {
 	///     (`MockLowering.RootSignature.unavailableDependencyOverrideNames`).
 	///   - passedUpBuilderNames: The name `mock()` binds each builder under that a call of another module's public mock passes
 	///     up, by the property the call's leaf receives it as (`MockLowering.RootSignature.passedUpBuilderNames`).
-	init(namesApart: [String: [TypeDescription: String]] = [:], unavailableDependencyOverrides: [(property: Property, name: String)] = [], passedUpBuilderNames: [Property: String] = [:]) {
+	///   - uncoveredParameterNames: The name of the parameter `mock()` takes as a plain value for each dependency a type of the
+	///     tree instantiates that the mock cannot build, by the dependency's property, its label where it is not named apart
+	///     (`MockLowering.RootSignature.uncoveredParameters`); a `@Sendable` autoclosure parameter is none.
+	init(namesApart: [String: [TypeDescription: String]] = [:], unavailableDependencyOverrides: [(property: Property, name: String)] = [], passedUpBuilderNames: [Property: String] = [:], uncoveredParameterNames: [Property: String] = [:]) {
 		self.namesApart = namesApart
 		self.passedUpBuilderNames = passedUpBuilderNames
+		self.uncoveredParameterNames = uncoveredParameterNames
 		unavailableDependencyOverrideNamesInOrder = unavailableDependencyOverrides.map(\.name)
 		unavailableDependencyOverrideNames = Dictionary(unavailableDependencyOverrides.map { ($0.property, $0.name) }) { first, _ in first }
 	}
@@ -75,6 +79,19 @@ struct MockRootNames: Sendable {
 
 	/// The name the root gives each value of its level it names apart, by label and then type.
 	let namesApart: [String: [TypeDescription: String]]
+
+	/// The name of the parameter `mock()` takes as a plain value for `property`, a dependency a type of the tree instantiates
+	/// that the mock cannot build, and `nil` where it takes none so.
+	func uncoveredParameterName(of property: Property) -> String? {
+		uncoveredParameterNames[property]
+	}
+
+	/// Whether `mock()` names a parameter it takes for an uncovered dependency apart from the dependency's label.
+	var namesUncoveredParameterApart: Bool {
+		uncoveredParameterNames.contains { $0.key.label != $0.value }
+	}
+
+	private let uncoveredParameterNames: [Property: String]
 
 	private let passedUpBuilderNames: [Property: String]
 	private let unavailableDependencyOverrideNames: [Property: String]
