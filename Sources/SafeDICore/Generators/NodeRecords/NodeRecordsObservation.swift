@@ -24,7 +24,9 @@
 public enum NodeRecordsObservation {
 	/// Whether a root whose world node records accept is laid out from them, rather than from its tree's places, where
 	/// `observer` is set. Off unless a test turns it on; the tree's places are laid out where the engine cannot lay the
-	/// records out.
+	/// records out. The tree is still planned and laid out beside the records, for the comparison, so the engine lays each
+	/// such root out twice: a test that counts the engine's views sees each count twice, and the mode must drop the tree's
+	/// plan before it is turned on for every run, or generate time doubles.
 	@TaskLocal public static var laysOutRoots = false
 
 	/// Handed each root's report, where set. Only a test sets it.
