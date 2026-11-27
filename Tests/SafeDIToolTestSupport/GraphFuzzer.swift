@@ -8459,9 +8459,9 @@ enum GraphFuzzerGenerator {
 		/// the instance under every one of them, in an order drawn apart from the labels'. So creating `RenamedLazyTop`
 		/// creates the value, and the warning that says so names the reader's receive declared first
 		/// (`InstantiationAnalysis`' `recordReads(whileCreating:)`), never the first label. The multi-module partition
-		/// puts the reader in a module beneath the root's when it splits the tree, where a run over module info files that
-		/// store positions apart reads the receives' places by their order in the reader's file alone, and must name the
-		/// same one (`SplitPositionsRun`). `renamedLazyReaderRandom` draws only for this pass, after every other, and only
+		/// puts the reader in a module beneath the root's when it splits the tree, where a run over module info files, which
+		/// store no line or column, reads the receives' places by their rank in the reader's file alone, and must name the
+		/// same one. `renamedLazyReaderRandom` draws only for this pass, after every other, and only
 		/// in the base corpus.
 		private mutating func addingReadersOfRenamedLazyInstance(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
 			guard features.isEmpty, renamedLazyReaderRandom.percentChance(12) else { return declarations }
@@ -15585,6 +15585,8 @@ struct GraphFuzzerSecondPathRun {
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 struct GraphFuzzerToolRuns {
 	/// - Parameters:
+	///   - firstRejectingModuleName: The module whose `generate` rejected a graph split across modules in the run of
+	///     `firstOutcome`.
 	///   - renamedOutcomes: The outcome of the graph renamed by each renaming, with the renaming undone.
 	///   - inlineOutcome: The outcome of the graph with no seam, when the graph declares one.
 	///   - visibleOutcome: The outcome of the graph's visible build (`GraphFuzzerFixture.withoutHoles`), when the graph
@@ -15629,6 +15631,7 @@ struct GraphFuzzerToolRuns {
 	init(
 		fixture: GraphFuzzerFixture,
 		firstOutcome: GraphFuzzerToolOutcome,
+		firstRejectingModuleName: String? = nil,
 		secondOutcome: GraphFuzzerToolOutcome,
 		cleanSubtreeSkipOffOutcome: GraphFuzzerToolOutcome? = nil,
 		renamedOutcomes: [(renaming: GraphFuzzerRenaming, outcome: GraphFuzzerToolOutcome)] = [],
@@ -15673,6 +15676,7 @@ struct GraphFuzzerToolRuns {
 		self.remedyRuns = remedyRuns
 		self.fixture = fixture
 		self.firstOutcome = firstOutcome
+		self.firstRejectingModuleName = firstRejectingModuleName
 		self.secondOutcome = secondOutcome
 		self.cleanSubtreeSkipOffOutcome = cleanSubtreeSkipOffOutcome
 		self.renamedOutcomes = renamedOutcomes
@@ -15692,6 +15696,8 @@ struct GraphFuzzerToolRuns {
 
 	let fixture: GraphFuzzerFixture
 	let firstOutcome: GraphFuzzerToolOutcome
+	/// The module whose `generate` rejected a graph split across modules in the run of `firstOutcome`, or `nil`.
+	let firstRejectingModuleName: String?
 	let secondOutcome: GraphFuzzerToolOutcome
 	/// The outcome of a run that skips no clean subtree in the validation walk, when the first run skipped one.
 	let cleanSubtreeSkipOffOutcome: GraphFuzzerToolOutcome?
@@ -16013,12 +16019,15 @@ struct GraphFuzzerToolRuns {
 	/// verdict, other diagnostics, or other generated declarations (`GraphFuzzerOracle.integrationComparedBlocks(of:)`),
 	/// but for the plugin flow's assertions of decisions about blocks in a dependency's files
 	/// (`GraphFuzzerOracle.firstDeclarationOneIntegrationGenerates`), or `nil`. Both flows lay a module's files out at the
-	/// same paths, so their diagnostics are compared as they are.
+	/// same paths, so their diagnostics are compared as they are, but for the plugin's positions in other files than the
+	/// rejecting module's, which that module's run reads from `.safedi` files (`GraphFuzzerModuleInfoLocations`).
 	var integrationsDisagreeFailure: GraphFuzzerFailure? {
 		guard let pluginOutcome else { return nil }
 		let difference: String? = switch (firstOutcome, pluginOutcome) {
 		case let (.rejected(moduleInfoDiagnostics), .rejected(pluginDiagnostics)):
-			moduleInfoDiagnostics == pluginDiagnostics ? nil : "The two flows report other diagnostics."
+			moduleInfoDiagnostics == firstRejectingModuleName.map { GraphFuzzerModuleInfoLocations.diagnostics(pluginDiagnostics, locatedByRunOfModuleNamed: $0) } ?? pluginDiagnostics
+				? nil
+				: "The two flows report other diagnostics."
 		case let (.accepted(moduleInfoFiles, _), .accepted(pluginFiles, _)):
 			GraphFuzzerOracle.firstDeclarationOneIntegrationGenerates(moduleInfoFiles: moduleInfoFiles, pluginFiles: pluginFiles, conditionsSpelledOnlyInDependencies: fixture.conditionsSpelledOnlyInDependencies)
 		case (.accepted, .rejected):
@@ -17554,6 +17563,7 @@ enum GraphFuzzerOracle {
 		return try await GraphFuzzerToolRuns(
 			fixture: fixture,
 			firstOutcome: firstOutcome,
+			firstRejectingModuleName: firstRun.rejectingModuleName,
 			// The second run creates the mock roots in reverse order, so that a construction memo shared between them
 			// carries other roots' generators to each, and shares generators between places by a schedule of its seed
 			// (`ConstructionSharingSchedule.sharingOracleSchedule(forGraphSeed:)`), and interns in another order, reversed or

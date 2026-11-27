@@ -50,9 +50,9 @@ struct SafeDIToolSeamRepeatedFillFindingTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `rBuilder: Instantiator<R>?`, which `P` builds only after `Home`’s tree calls the builder for `P`’s `api: any Api` (`api` of `apiSendableBuilder`), so SafeDI does not hand it to that builder. Instantiate `rBuilder` on a type above `Home`, and receive it on `P` in place of its @Instantiated declaration, so that the caller’s tree builds it, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feature"]!["P.swift"]):9:5: note: `P` declares `rBuilder: Instantiator<R>` here.
+			\(fixtures["Feature"]!["P.swift"]): note: `P` declares `rBuilder: Instantiator<R>` here.
 			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `rBuilder: Instantiator<R>?`, which `Home`’s tree is building where it calls the builder for `R`’s `api: any Api` (`api` of `apiSendableBuilder`). Inline, `LiveApi` can get an instantiator of its own, made from the function `Home`’s initializer declares for `rBuilder`, which code generated outside module `Feature` cannot refer to. Instantiate `rBuilder` on a type above `Home`, and receive it on `P` in place of its @Instantiated declaration, so that the caller’s tree builds it, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feature"]!["P.swift"]):9:5: note: `P` instantiates `rBuilder: Instantiator<R>` here.
+			\(fixtures["Feature"]!["P.swift"]): note: `P` instantiates `rBuilder: Instantiator<R>` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(

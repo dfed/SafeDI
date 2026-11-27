@@ -1267,7 +1267,7 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 			inModule: "App",
 			diagnostics: { fixtures in
 				["Alpha", "Zulu"].map { moduleName in
-					"\(fixtures[moduleName]!["DefaultThing.swift"]):3:1: error: `DefaultThing` is declared in modules `Alpha` and `Zulu`. SafeDI tells apart by name the @Instantiable types a module can name. Rename one."
+					"\(fixtures[moduleName]!["DefaultThing.swift"]): error: `DefaultThing` is declared in modules `Alpha` and `Zulu`. SafeDI tells apart by name the @Instantiable types a module can name. Rename one."
 				}.joined(separator: "\n")
 			},
 			block: {

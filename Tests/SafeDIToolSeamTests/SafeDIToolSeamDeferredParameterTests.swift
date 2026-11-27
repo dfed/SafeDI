@@ -792,10 +792,18 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 					NormalizedFilePath(fixtures[moduleName]!.compilerPath(of: fileName)).path
 				}
 			}
-			return """
-			\(path(of: "Screen.swift", inModule: "Feature")):1:1: error: @Received property `user: User` cannot be received inside a `@Sendable` function in chain: Outer -> Screen. `Screen`’s generated initializer takes `user` as a `@Sendable` closure, because a `@Sendable` function inside `Screen`’s tree reads it, and that closure cannot capture `user: LazilyInstantiated<User>` on `Outer`, because `LazilyInstantiated<User>` is not `Sendable`. Declare `user` on `Outer` as `SendableLazilyInstantiated<User>` to fix. A `SendableLazilyInstantiated` requires its instance type, `User`, to be `Sendable`.
-			\(path(of: "Outer.swift", inModule: "App")):10:5: note: `user: LazilyInstantiated<User>` is declared here
-			"""
+			return switch integration {
+			case .moduleInfo:
+				"""
+				\(path(of: "Screen.swift", inModule: "Feature")): error: @Received property `user: User` cannot be received inside a `@Sendable` function in chain: Outer -> Screen. `Screen`’s generated initializer takes `user` as a `@Sendable` closure, because a `@Sendable` function inside `Screen`’s tree reads it, and that closure cannot capture `user: LazilyInstantiated<User>` on `Outer`, because `LazilyInstantiated<User>` is not `Sendable`. Declare `user` on `Outer` as `SendableLazilyInstantiated<User>` to fix. A `SendableLazilyInstantiated` requires its instance type, `User`, to be `Sendable`.
+				\(path(of: "Outer.swift", inModule: "App")):10:5: note: `user: LazilyInstantiated<User>` is declared here
+				"""
+			case .swiftPackagePlugin:
+				"""
+				\(path(of: "Screen.swift", inModule: "Feature")):1:1: error: @Received property `user: User` cannot be received inside a `@Sendable` function in chain: Outer -> Screen. `Screen`’s generated initializer takes `user` as a `@Sendable` closure, because a `@Sendable` function inside `Screen`’s tree reads it, and that closure cannot capture `user: LazilyInstantiated<User>` on `Outer`, because `LazilyInstantiated<User>` is not `Sendable`. Declare `user` on `Outer` as `SendableLazilyInstantiated<User>` to fix. A `SendableLazilyInstantiated` requires its instance type, `User`, to be `Sendable`.
+				\(path(of: "Outer.swift", inModule: "App")):10:5: note: `user: LazilyInstantiated<User>` is declared here
+				"""
+			}
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [

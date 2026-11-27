@@ -49,7 +49,7 @@ struct SafeDIToolSeamFillRemedyTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["Live.swift"]):11:5: error: `Live` receives `db: Db?`, which `Feature` builds where it calls `Inner`, but `Feature` passes the builder for `Inner`’s `api: any Api` (`api` of `apiBuilder`) on from its own caller, which cannot hand it `Feature`’s values. Declare `@Received(onlyIfAvailable: true) let db: Db?` on `Inner`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies, so `Feature` fills the builder itself.
-			\(fixtures["Feature"]!["Feature.swift"]):11:5: note: `Feature` declares `db: Db` here.
+			\(fixtures["Feature"]!["Feature.swift"]): note: `Feature` declares `db: Db` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(modules: Self.innerSeamModules(innerDeclarations: []), integration: .moduleInfo, filesToDelete: &filesToDelete)
@@ -72,7 +72,7 @@ struct SafeDIToolSeamFillRemedyTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["Live.swift"]):9:5: error: `Live` receives `cache: Cache?`, which `Home`’s tree builds where it instantiates `Home` again, but that call passes the builder `Home` takes for `Home`’s `api: any Api` on unchanged, so the caller that fills it cannot hand it those values. Declare `@Received(onlyIfAvailable: true) let cache: Cache?` on `Home`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies, so `Home` fills the builder itself.
-			\(fixtures["Feature"]!["Step.swift"]):8:5: note: `Step` declares `cache: Cache` here.
+			\(fixtures["Feature"]!["Step.swift"]): note: `Step` declares `cache: Cache` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(modules: Self.homeBuiltAgainModules(homeDeclarations: []), integration: .moduleInfo, filesToDelete: &filesToDelete)
@@ -109,7 +109,7 @@ struct SafeDIToolSeamFillRemedyTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["B.swift"]):9:5: error: `B` receives `aBuilder: ErasedInstantiator<(), any AScreen>`, which `SignedIn`’s tree builds only after it calls the builder for `SignedIn`’s `bBuilder: ErasedInstantiator<(), any BScreen>` (`bBuilder` of `b_BScreenBuilder`), so SafeDI does not hand it to that builder. Declare `aBuilder` and `bBuilder` on one type of module `App` instead, and have `SignedIn` instantiate a protocol that type fulfills in their place, so that type’s tree builds both, or declare an @Instantiable type that fulfills `B` in module `Feature` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feature"]!["SignedIn.swift"]):10:5: note: `SignedIn` declares `aBuilder: ErasedInstantiator<(), any AScreen>` here.
+			\(fixtures["Feature"]!["SignedIn.swift"]): note: `SignedIn` declares `aBuilder: ErasedInstantiator<(), any AScreen>` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -166,7 +166,7 @@ struct SafeDIToolSeamFillRemedyTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `screenBuilder: Instantiator<Screen>`, which `Home`’s tree is building where it calls the builder for `Screen`’s `api: any Api` (`api` of `apiBuilder`). Inline, `LiveApi` can get an instantiator of its own, made from the function `Home`’s initializer declares for `screenBuilder`, which code generated outside module `Feature` cannot refer to. Declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feature"]!["Home.swift"]):9:5: note: `Home` instantiates `screenBuilder: Instantiator<Screen>` here.
+			\(fixtures["Feature"]!["Home.swift"]): note: `Home` instantiates `screenBuilder: Instantiator<Screen>` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -227,7 +227,7 @@ struct SafeDIToolSeamFillRemedyTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["DefaultDetail.swift"]):9:5: error: `DefaultDetail` receives `settingsBuilder: ErasedInstantiator<(), any Settings>`, which `Screen`’s tree builds only after it calls the builder for `Screen`’s `detailBuilder: ErasedInstantiator<(), any Detail>` (`detailBuilder` of `defaultDetail_DetailBuilder`), so SafeDI does not hand it to that builder. Instantiate `settingsBuilder` on a type above `Screen`, and receive it on `Screen` in place of its @Instantiated declaration, so that the caller’s tree builds it, or declare an @Instantiable type that fulfills `DefaultDetail` in module `Feature` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feature"]!["Screen.swift"]):9:5: note: `Screen` declares `settingsBuilder: ErasedInstantiator<(), any Settings>` here.
+			\(fixtures["Feature"]!["Screen.swift"]): note: `Screen` declares `settingsBuilder: ErasedInstantiator<(), any Settings>` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -288,7 +288,7 @@ struct SafeDIToolSeamFillRemedyTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["DefaultDetail.swift"]):10:5: error: `DefaultDetail` receives `settingsBuilder: ErasedInstantiator<(), any Settings>`, which `Screen`’s tree builds only after it calls the builder for `Screen`’s `detailBuilder: ErasedInstantiator<(), any Detail>` (`detailBuilder` of `defaultDetail_DetailBuilder`), so SafeDI does not hand it to that builder. Declare an @Instantiable type that fulfills `DefaultDetail` in module `Feature` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feature"]!["Screen.swift"]):9:5: note: `Screen` declares `settingsBuilder: ErasedInstantiator<(), any Settings>` here.
+			\(fixtures["Feature"]!["Screen.swift"]): note: `Screen` declares `settingsBuilder: ErasedInstantiator<(), any Settings>` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -323,7 +323,7 @@ struct SafeDIToolSeamFillRemedyTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["Live.swift"]):9:5: error: `Live` receives `cache: Cache`, which `Screen` declares between where `Screen` instantiates `stepBuilder: Instantiator<Step>` and where `Screen` instantiates it again. Inline, the `Step` built again receives `Screen`’s `cache`, but SafeDI hands the builder for `Step`’s `api: any Api` (`api` of `apiBuilder`) the same values at every level of that cycle. Declare `@Received let cache: Cache` on `Step`, so each `Step` receives the `cache` of its own level and hands it on, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feature"]!["Screen.swift"]):8:5: note: `Screen` declares `cache: Cache` here.
+			\(fixtures["Feature"]!["Screen.swift"]): note: `Screen` declares `cache: Cache` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(modules: Self.screenCycleModules(stepDeclarations: ["@Instantiated public let api: any Api"]), integration: .moduleInfo, filesToDelete: &filesToDelete)
@@ -345,7 +345,7 @@ struct SafeDIToolSeamFillRemedyTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["Live.swift"]):9:5: error: `Live` receives `cache: Cache`, which `Screen` declares between where `Screen` instantiates `stepBuilder: Instantiator<Step>` and where `Screen` instantiates it again. Inline, the `Step` built again receives `Screen`’s `cache`, but SafeDI hands the builder for `Panel`’s `api: any Api` (`api` of `apiBuilder`) the same values at every level of that cycle. Declare `@Received let cache: Cache` on `Step`, so each `Step` receives the `cache` of its own level and hands it on, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feature"]!["Screen.swift"]):8:5: note: `Screen` declares `cache: Cache` here.
+			\(fixtures["Feature"]!["Screen.swift"]): note: `Screen` declares `cache: Cache` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(modules: Self.screenCycleModules(stepDeclarations: ["@Instantiated public let panel: Panel"]), integration: .moduleInfo, filesToDelete: &filesToDelete)
@@ -409,7 +409,7 @@ struct SafeDIToolSeamFillRemedyTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["LiveApi.swift"]):11:5: error: `LiveApi` receives `count: Int?`, which `B` declares between where `Hub` instantiates `aBuilder: Instantiator<A>` and where `B` instantiates it again. Inline, the `A` built again receives `B`’s `count`, but SafeDI hands the builder for `A`’s `api: any Api` (`api` of `apiBuilder`) the same values at every level of that cycle. Declare `@Received(onlyIfAvailable: true) let count: Int?` on `A`, so each `A` receives the `count` of its own level and hands it on, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feature"]!["B.swift"]):8:5: note: `B` declares `count: Int` here.
+			\(fixtures["Feature"]!["B.swift"]): note: `B` declares `count: Int` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(modules: Self.hubCycleModules(aDeclarations: []), integration: .moduleInfo, filesToDelete: &filesToDelete)
@@ -422,7 +422,7 @@ struct SafeDIToolSeamFillRemedyTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `count: Int?`, which `B`’s builder function takes as a parameter between where `Hub` instantiates `aBuilder: Instantiator<A>` and where `B` instantiates it again, because a cycle inside `B`’s tree passes it (`C` declares `count: Int`). Inline, the `A` built again receives the `count` that parameter is passed, but SafeDI hands the builder for `A`’s `api: any Api` (`api` of `apiBuilder`) the same values at every level of that cycle. Declare `@Received(onlyIfAvailable: true) let count: Int?` on `A`, so each `A` receives the `count` of its own level and hands it on, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feature"]!["C.swift"]):8:5: note: `C` declares `count: Int` here.
+			\(fixtures["Feature"]!["C.swift"]): note: `C` declares `count: Int` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(modules: Self.nestedCycleModules(aDeclarations: []), integration: .moduleInfo, filesToDelete: &filesToDelete)
@@ -436,7 +436,7 @@ struct SafeDIToolSeamFillRemedyTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["Live.swift"]):9:5: error: `Live` receives `cache: Cache`, which `Screen` declares between where `Screen` instantiates `stepBuilder: ErasedInstantiator<(), any StepScreen>` and where `Screen` instantiates it again. Inline, the `Step` built again receives `Screen`’s `cache`, but SafeDI hands the builder for `Step`’s `api: any Api` (`api` of `apiBuilder`) the same values at every level of that cycle. Declare `@Received let cache: Cache` on `Step`, so each `Step` receives the `cache` of its own level and hands it on, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feature"]!["Screen.swift"]):8:5: note: `Screen` declares `cache: Cache` here.
+			\(fixtures["Feature"]!["Screen.swift"]): note: `Screen` declares `cache: Cache` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(modules: Self.screenCycleModules(stepBuilder: Self.erasedStepBuilder, stepDeclarations: ["@Instantiated public let api: any Api"]), integration: .moduleInfo, filesToDelete: &filesToDelete)
@@ -461,7 +461,7 @@ struct SafeDIToolSeamFillRemedyTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["Live.swift"]):9:5: error: `Live` receives `n: Int`, which `Mid` forwards outside the `@Sendable` function that builds `k: SendableLazilyInstantiated<K>`, and SafeDI hands the builder for `K`’s `api: any Api` (`api` of `apiSendableBuilder`) only what that function binds. Declare `@Forwarded let n: Int` on `K` too, and `k` as `SendableInstantiator<K>`, so that function binds it, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feature"]!["Mid.swift"]):8:5: note: `Mid` declares `n: Int` here.
+			\(fixtures["Feature"]!["Mid.swift"]): note: `Mid` declares `n: Int` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -496,7 +496,7 @@ struct SafeDIToolSeamFillRemedyTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["Live.swift"]):9:5: error: `Live` receives `u: U`, which `Mid` declares outside the `@Sendable` function that builds `k: SendableInstantiator<K>`, and SafeDI hands the builder for `K`’s `api: any Api` (`api` of `apiSendableBuilder`) only what that function binds. Declare `@Forwarded let u: U` on `K`, so that function binds it, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feature"]!["Mid.swift"]):10:5: note: `Mid` declares `u: U` here.
+			\(fixtures["Feature"]!["Mid.swift"]): note: `Mid` declares `u: U` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -595,7 +595,7 @@ struct SafeDIToolSeamFillRemedyTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["Live.swift"]):9:5: error: `Live` receives `u: U`, which `Mid` declares outside the `@Sendable` function that builds `k: SendableLazilyInstantiated<K>`, and SafeDI hands the builder for `K`’s `api: any Api` (`api` of `apiSendableBuilder`) only what that function binds. Declare `@Forwarded let u: U` on `K`, and `k` as `SendableInstantiator<K>`, so that function binds it, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feature"]!["Mid.swift"]):10:5: note: `Mid` declares `u: U` here.
+			\(fixtures["Feature"]!["Mid.swift"]): note: `Mid` declares `u: U` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -618,7 +618,7 @@ struct SafeDIToolSeamFillRemedyTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["Live.swift"]):9:5: error: `Live` receives `usage: any Usage`, which `Mid` declares outside the `@Sendable` function that builds `k: SendableInstantiator<K>`, and SafeDI hands the builder for `K`’s `api: any Api` (`api` of `apiSendableBuilder`) only what that function binds. Declare `@Forwarded let usage: any Usage` on `K`, so that function binds it, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feature"]!["Mid.swift"]):10:5: note: `Mid` declares `usage: any Usage` here.
+			\(fixtures["Feature"]!["Mid.swift"]): note: `Mid` declares `usage: any Usage` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -642,7 +642,7 @@ struct SafeDIToolSeamFillRemedyTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["Live.swift"]):9:5: error: `Live` receives `n: Int`, which `Mid` forwards outside the `@Sendable` function that builds `k: K`, and SafeDI hands the builder for `K`’s `api: any Api` (`api` of `apiSendableBuilder`) only what that function binds. Declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feature"]!["Mid.swift"]):8:5: note: `Mid` declares `n: Int` here.
+			\(fixtures["Feature"]!["Mid.swift"]): note: `Mid` declares `n: Int` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(

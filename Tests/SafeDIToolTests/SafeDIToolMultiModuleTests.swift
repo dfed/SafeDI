@@ -117,7 +117,7 @@ struct SafeDIToolMultiModuleTests: ~Copyable {
 		// the run's integration.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Middle"]!["Pump.swift"]):8:5: error: No @Instantiable type or extension fulfills `Engine`, which @Instantiated property `engine: Engine` instantiates. Decorate `Engine`, or an extension of it, with @Instantiable, or list `Engine` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it. \(fulfillingDeclarationInModuleNotReadRemedy(for: "Engine", integration: .moduleInfo))
+			\(fixtures["Middle"]!["Pump.swift"]): error: No @Instantiable type or extension fulfills `Engine`, which @Instantiated property `engine: Engine` instantiates. Decorate `Engine`, or an extension of it, with @Instantiable, or list `Engine` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it. \(fulfillingDeclarationInModuleNotReadRemedy(for: "Engine", integration: .moduleInfo))
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -144,7 +144,7 @@ struct SafeDIToolMultiModuleTests: ~Copyable {
 		// what the file that instantiates `Engine` imports, and must not advise decorating `Engine` alone.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Middle"]!["Pump.swift"]):8:5: error: No @Instantiable type or extension fulfills `Engine`, which @Instantiated property `engine: Engine` instantiates. Decorate `Engine`, or an extension of it, with @Instantiable, or list `Engine` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it. \(fulfillingDeclarationInModuleNotReadRemedy(for: "Engine", integration: .moduleInfo))
+			\(fixtures["Middle"]!["Pump.swift"]): error: No @Instantiable type or extension fulfills `Engine`, which @Instantiated property `engine: Engine` instantiates. Decorate `Engine`, or an extension of it, with @Instantiable, or list `Engine` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it. \(fulfillingDeclarationInModuleNotReadRemedy(for: "Engine", integration: .moduleInfo))
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -988,10 +988,18 @@ struct SafeDIToolMultiModuleTests: ~Copyable {
 				"error: `Haptics` is declared in modules `App` and `Core`. SafeDI tells apart by name the @Instantiable types a module can name. Rename one."
 			}
 			let line = declaresInPlatformBlocks ? 2 : 1
-			return """
-			\(path(of: "Haptics.swift", in: "App")):\(line):1: \(message)
-			\(path(of: "Haptics.swift", in: "Core")):\(line):1: \(message)
-			"""
+			return switch integration {
+			case .moduleInfo:
+				"""
+				\(path(of: "Haptics.swift", in: "App")):\(line):1: \(message)
+				\(path(of: "Haptics.swift", in: "Core")): \(message)
+				"""
+			case .swiftPackagePlugin:
+				"""
+				\(path(of: "Haptics.swift", in: "App")):\(line):1: \(message)
+				\(path(of: "Haptics.swift", in: "Core")):\(line):1: \(message)
+				"""
+			}
 		}) {
 			func haptics(inBlockOf condition: String) -> String {
 				let declaration = """

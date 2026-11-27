@@ -5296,7 +5296,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		} catch let error as MultipleConfigurationsError {
 			// `scan` throws before the harness records the fixture paths, so the diagnostics are compared by file name.
 			let diagnostics = error.sourceDiagnostics.map {
-				"\($0.location.map { "\(($0.filePath as NSString).lastPathComponent):\($0.lineAndColumn?.line ?? 0):\($0.lineAndColumn?.column ?? 0)" } ?? "nil"): \($0.severity.rawValue): \($0.message)"
+				"\($0.location.map { "\(($0.filePath as NSString).lastPathComponent):\($0.position?.line ?? 0):\($0.position?.column ?? 0)" } ?? "nil"): \($0.severity.rawValue): \($0.message)"
 			}
 			#expect(diagnostics == [
 				"File.swift:1:1: error: This module declares #SafeDIConfiguration 2 times, but a module can declare it at most once. Keep one and remove the others.",

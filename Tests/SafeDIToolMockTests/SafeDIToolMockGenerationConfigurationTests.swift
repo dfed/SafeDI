@@ -1462,9 +1462,7 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		    ) -> Top {
 		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        func __safeDI_mid() -> Mid {
-		            #sourceLocation(file: "\(crossModuleOutput.fixtures["Mid.swift"])", line: 4)
 		            let analytics: EventTracker = analytics
-		            #sourceLocation()
 		            let child = if let safeDIBuilder = safeDIOverrides.mid.child { safeDIBuilder(analytics) } else { Child(analytics: analytics) }
 		            return if let safeDIBuilder = safeDIOverrides.mid.safeDIBuilder { safeDIBuilder(analytics, child) } else { Mid(analytics: analytics, child: child) }
 		        }

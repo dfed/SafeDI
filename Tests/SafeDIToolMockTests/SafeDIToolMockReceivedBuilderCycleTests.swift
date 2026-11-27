@@ -3661,7 +3661,6 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 			moduleMembershipArguments: ["--module-name", "DependentModule", "--package-name", "Example"],
 		)
-		let dependentModuleFixtures = dependentModuleOutput.fixtures
 
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -3717,15 +3716,11 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			    ) -> Node {
 			        func __safeDI_nodeBuilder() -> Node {
 			            let nodeBuilder = Instantiator<Node>(__safeDI_nodeBuilder)
-			            #sourceLocation(file: "\(dependentModuleFixtures["Node.swift"])", line: 4)
 			            let childBuilder: Instantiator<Node> = nodeBuilder
-			            #sourceLocation()
 			            return if let safeDIBuilder = safeDIOverrides.nodeBuilder { safeDIBuilder(childBuilder) } else { Node(childBuilder: childBuilder) }
 			        }
 			        let nodeBuilder = Instantiator<Node>(__safeDI_nodeBuilder)
-			        #sourceLocation(file: "\(dependentModuleFixtures["Node.swift"])", line: 4)
 			        let childBuilder: Instantiator<Node> = nodeBuilder
-			        #sourceLocation()
 			        return Node(childBuilder: childBuilder)
 			    }
 			}

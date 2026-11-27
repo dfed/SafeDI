@@ -5840,7 +5840,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 			"""
 			\(fixtures["Top"]!["ThingImpl.swift"]):20:2: error: `WrapperReader` receives `chainToken: SendableLazilyInstantiated<ChainToken>`, which SafeDI hands the builder for `Worker`’s `thing: any ThingService` (`thing` of `thingServiceBuilder`) only as `chainToken: LazilyInstantiated<ChainToken>`, since `Seam`’s tree reads `chainToken` outside a `@Sendable` function and `ThingImpl` receives its instance, `chainToken: ChainToken`. Receive `chainToken: ChainToken` on `WrapperReader`, or receive `chainToken: SendableLazilyInstantiated<ChainToken>` wherever that builder’s tree receives `chainToken: ChainToken`.
 			\(fixtures["Top"]!["ThingImpl.swift"]):13:2: note: `ThingImpl` receives `chainToken: ChainToken` here.
-			\(fixtures["Core"]!["ChainToken.swift"]):13:2: note: `ChainLeaf` receives `chainToken: ChainToken` here.
+			\(fixtures["Core"]!["ChainToken.swift"]): note: `ChainLeaf` receives `chainToken: ChainToken` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(modules: Self.chainTokenModules(thingImpl: Self.thingImplReadingValueAndSendableWrapper, topChainToken: Self.rootSendableChainToken), integration: .moduleInfo, filesToDelete: &filesToDelete)
@@ -5855,7 +5855,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 			"""
 			\(fixtures["Top"]!["ThingImpl.swift"]):20:2: error: `WrapperReader` receives `chainToken: SendableLazilyInstantiated<ChainToken>`, which SafeDI hands the builder for `Worker`’s `thing: any ThingService` (`thing` of `thingServiceBuilder`) only as `chainToken: LazilyInstantiated<ChainToken>`, since `Seam`’s tree reads `chainToken` outside a `@Sendable` function and `ThingImpl` receives its instance, `chainToken: ChainToken`. Receive `chainToken: ChainToken` on `WrapperReader`, or receive `chainToken: SendableLazilyInstantiated<ChainToken>` wherever that builder’s tree receives `chainToken: ChainToken`.
 			\(fixtures["Top"]!["ThingImpl.swift"]):13:2: note: `ThingImpl` receives `chainToken: ChainToken` here.
-			\(fixtures["Core"]!["ChainToken.swift"]):13:2: note: `ChainLeaf` receives `chainToken: ChainToken` here.
+			\(fixtures["Core"]!["ChainToken.swift"]): note: `ChainLeaf` receives `chainToken: ChainToken` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(modules: Self.chainTokenModules(thingImpl: Self.thingImplReadingValueAndSendableWrapper, topChainToken: Self.rootSendableChainToken, outerHoldsSeamB: true), integration: .moduleInfo, filesToDelete: &filesToDelete)
@@ -5871,7 +5871,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 			"""
 			\(fixtures["Top"]!["ThingImpl.swift"]):20:2: error: `WrapperReader` receives `chainToken: SendableLazilyInstantiated<ChainToken>`, which SafeDI hands the builder for `Worker`’s `thing: any ThingService` (`thing` of `thingServiceBuilder`) only as `chainToken: LazilyInstantiated<ChainToken>`, since `Seam`’s and `SeamB`’s trees read `chainToken` outside a `@Sendable` function and `ThingImpl` receives its instance, `chainToken: ChainToken`. Receive `chainToken: ChainToken` on `WrapperReader`, or receive `chainToken: SendableLazilyInstantiated<ChainToken>` wherever those builders’ trees receive `chainToken: ChainToken`.
 			\(fixtures["Top"]!["ThingImpl.swift"]):13:2: note: `ThingImpl` receives `chainToken: ChainToken` here.
-			\(fixtures["Core"]!["ChainToken.swift"]):13:2: note: `ChainLeaf` receives `chainToken: ChainToken` here.
+			\(fixtures["Core"]!["ChainToken.swift"]): note: `ChainLeaf` receives `chainToken: ChainToken` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(modules: Self.chainTokenModules(thingImpl: Self.thingImplReadingValueAndSendableWrapper, topChainToken: Self.rootSendableChainToken, outerHoldsSeamB: true, seamBLeafBuilder: "Instantiator"), integration: .moduleInfo, filesToDelete: &filesToDelete)
@@ -5888,8 +5888,8 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		// (the cell below), so `Top` reports that error, at `Seam`.
 		await assertThrowsMultiModuleError(inModule: "Top", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Seam.swift"]):4:1: error: SafeDI cannot generate the dependency tree of `Seam`: its tree receives `chainToken` as `chainToken: ChainToken` on `ChainLeaf` and `chainToken: ChainToken` on `ThingImpl` and `chainToken: SendableLazilyInstantiated<ChainToken>?` on `WrapperReader`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `chainToken` the same way in every type of the tree, or declare it on `Seam` as the form that provides the others: `@Received let chainToken: SendableLazilyInstantiated<ChainToken>`.
-			\(fixtures["Core"]!["ChainToken.swift"]):13:2: note: `ChainLeaf` receives `chainToken: ChainToken` here.
+			\(fixtures["Feature"]!["Seam.swift"]): error: SafeDI cannot generate the dependency tree of `Seam`: its tree receives `chainToken` as `chainToken: ChainToken` on `ChainLeaf` and `chainToken: ChainToken` on `ThingImpl` and `chainToken: SendableLazilyInstantiated<ChainToken>?` on `WrapperReader`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `chainToken` the same way in every type of the tree, or declare it on `Seam` as the form that provides the others: `@Received let chainToken: SendableLazilyInstantiated<ChainToken>`.
+			\(fixtures["Core"]!["ChainToken.swift"]): note: `ChainLeaf` receives `chainToken: ChainToken` here.
 			\(fixtures["Top"]!["ThingImpl.swift"]):13:2: note: `ThingImpl` receives `chainToken: ChainToken` here.
 			\(fixtures["Top"]!["ThingImpl.swift"]):20:2: note: `WrapperReader` receives `chainToken: SendableLazilyInstantiated<ChainToken>?` here.
 			"""
@@ -5921,8 +5921,8 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		// `WrapperReader` `nil` where inline passes `TopRoot`'s wrapper.
 		await assertThrowsMultiModuleError(inModule: "Top", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Seam.swift"]):4:1: error: SafeDI cannot generate the dependency tree of `Seam`: its tree receives `chainToken` as `chainToken: ChainToken` on `ChainLeaf` and `chainToken: SendableLazilyInstantiated<ChainToken>?` on `WrapperReader`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `chainToken` the same way in every type of the tree, or declare it on `Seam` as the form that provides the others: `@Received let chainToken: SendableLazilyInstantiated<ChainToken>`.
-			\(fixtures["Core"]!["ChainToken.swift"]):13:2: note: `ChainLeaf` receives `chainToken: ChainToken` here.
+			\(fixtures["Feature"]!["Seam.swift"]): error: SafeDI cannot generate the dependency tree of `Seam`: its tree receives `chainToken` as `chainToken: ChainToken` on `ChainLeaf` and `chainToken: SendableLazilyInstantiated<ChainToken>?` on `WrapperReader`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `chainToken` the same way in every type of the tree, or declare it on `Seam` as the form that provides the others: `@Received let chainToken: SendableLazilyInstantiated<ChainToken>`.
+			\(fixtures["Core"]!["ChainToken.swift"]): note: `ChainLeaf` receives `chainToken: ChainToken` here.
 			\(fixtures["Top"]!["ThingImpl.swift"]):15:2: note: `WrapperReader` receives `chainToken: SendableLazilyInstantiated<ChainToken>?` here.
 			"""
 		}) {
@@ -5937,12 +5937,12 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		// receives it in two forms, so each is reported, as one module reports each.
 		await assertThrowsMultiModuleError(inModule: "Top", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Seam.swift"]):4:1: error: SafeDI cannot generate the dependency tree of `Seam`: its tree receives `chainToken` as `chainToken: ChainToken` on `ChainLeaf` and `chainToken: ChainToken` on `ThingImpl` and `chainToken: SendableLazilyInstantiated<ChainToken>?` on `WrapperReader`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `chainToken` the same way in every type of the tree, or declare it on `Seam` as the form that provides the others: `@Received let chainToken: SendableLazilyInstantiated<ChainToken>`.
-			\(fixtures["Core"]!["ChainToken.swift"]):13:2: note: `ChainLeaf` receives `chainToken: ChainToken` here.
+			\(fixtures["Feature"]!["Seam.swift"]): error: SafeDI cannot generate the dependency tree of `Seam`: its tree receives `chainToken` as `chainToken: ChainToken` on `ChainLeaf` and `chainToken: ChainToken` on `ThingImpl` and `chainToken: SendableLazilyInstantiated<ChainToken>?` on `WrapperReader`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `chainToken` the same way in every type of the tree, or declare it on `Seam` as the form that provides the others: `@Received let chainToken: SendableLazilyInstantiated<ChainToken>`.
+			\(fixtures["Core"]!["ChainToken.swift"]): note: `ChainLeaf` receives `chainToken: ChainToken` here.
 			\(fixtures["Top"]!["ThingImpl.swift"]):13:2: note: `ThingImpl` receives `chainToken: ChainToken` here.
 			\(fixtures["Top"]!["ThingImpl.swift"]):20:2: note: `WrapperReader` receives `chainToken: SendableLazilyInstantiated<ChainToken>?` here.
-			\(fixtures["Feature"]!["Seam.swift"]):22:1: error: SafeDI cannot generate the dependency tree of `SeamB`: its tree receives `chainToken` as `chainToken: ChainToken` on `ChainLeaf` and `chainToken: ChainToken` on `ThingImpl` and `chainToken: SendableLazilyInstantiated<ChainToken>?` on `WrapperReader`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `chainToken` the same way in every type of the tree, or declare it on `SeamB` as the form that provides the others: `@Received let chainToken: SendableLazilyInstantiated<ChainToken>`.
-			\(fixtures["Core"]!["ChainToken.swift"]):13:2: note: `ChainLeaf` receives `chainToken: ChainToken` here.
+			\(fixtures["Feature"]!["Seam.swift"]): error: SafeDI cannot generate the dependency tree of `SeamB`: its tree receives `chainToken` as `chainToken: ChainToken` on `ChainLeaf` and `chainToken: ChainToken` on `ThingImpl` and `chainToken: SendableLazilyInstantiated<ChainToken>?` on `WrapperReader`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `chainToken` the same way in every type of the tree, or declare it on `SeamB` as the form that provides the others: `@Received let chainToken: SendableLazilyInstantiated<ChainToken>`.
+			\(fixtures["Core"]!["ChainToken.swift"]): note: `ChainLeaf` receives `chainToken: ChainToken` here.
 			\(fixtures["Top"]!["ThingImpl.swift"]):13:2: note: `ThingImpl` receives `chainToken: ChainToken` here.
 			\(fixtures["Top"]!["ThingImpl.swift"]):20:2: note: `WrapperReader` receives `chainToken: SendableLazilyInstantiated<ChainToken>?` here.
 			"""
@@ -5961,12 +5961,12 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		// those words, not once per fill.
 		await assertThrowsMultiModuleError(inModule: "Top", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Seam.swift"]):4:1: error: SafeDI cannot generate the dependency tree of `Seam`: its tree receives `chainToken` as `chainToken: ChainToken` on `ChainLeaf` and `chainToken: ChainToken` on `ThingImpl` and `chainToken: SendableLazilyInstantiated<ChainToken>?` on `WrapperReader`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `chainToken` the same way in every type of the tree, or declare it on `Seam` as the form that provides the others: `@Received let chainToken: SendableLazilyInstantiated<ChainToken>`.
-			\(fixtures["Core"]!["ChainToken.swift"]):16:2: note: `ChainLeaf` receives `chainToken: ChainToken` here.
+			\(fixtures["Feature"]!["Seam.swift"]): error: SafeDI cannot generate the dependency tree of `Seam`: its tree receives `chainToken` as `chainToken: ChainToken` on `ChainLeaf` and `chainToken: ChainToken` on `ThingImpl` and `chainToken: SendableLazilyInstantiated<ChainToken>?` on `WrapperReader`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `chainToken` the same way in every type of the tree, or declare it on `Seam` as the form that provides the others: `@Received let chainToken: SendableLazilyInstantiated<ChainToken>`.
+			\(fixtures["Core"]!["ChainToken.swift"]): note: `ChainLeaf` receives `chainToken: ChainToken` here.
 			\(fixtures["Top"]!["ThingImpl.swift"]):9:2: note: `ThingImpl` receives `chainToken: ChainToken` here.
 			\(fixtures["Top"]!["ThingImpl.swift"]):16:2: note: `WrapperReader` receives `chainToken: SendableLazilyInstantiated<ChainToken>?` here.
-			\(fixtures["Feature"]!["Seam.swift"]):18:1: error: SafeDI cannot generate the dependency tree of `SeamB`: its tree receives `chainToken` as `chainToken: ChainToken` on `ChainLeaf` and `chainToken: ChainToken` on `ThingImpl` and `chainToken: SendableLazilyInstantiated<ChainToken>?` on `WrapperReader`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `chainToken` the same way in every type of the tree, or declare it on `SeamB` as the form that provides the others: `@Received let chainToken: SendableLazilyInstantiated<ChainToken>`.
-			\(fixtures["Core"]!["ChainToken.swift"]):16:2: note: `ChainLeaf` receives `chainToken: ChainToken` here.
+			\(fixtures["Feature"]!["Seam.swift"]): error: SafeDI cannot generate the dependency tree of `SeamB`: its tree receives `chainToken` as `chainToken: ChainToken` on `ChainLeaf` and `chainToken: ChainToken` on `ThingImpl` and `chainToken: SendableLazilyInstantiated<ChainToken>?` on `WrapperReader`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `chainToken` the same way in every type of the tree, or declare it on `SeamB` as the form that provides the others: `@Received let chainToken: SendableLazilyInstantiated<ChainToken>`.
+			\(fixtures["Core"]!["ChainToken.swift"]): note: `ChainLeaf` receives `chainToken: ChainToken` here.
 			\(fixtures["Top"]!["ThingImpl.swift"]):9:2: note: `ThingImpl` receives `chainToken: ChainToken` here.
 			\(fixtures["Top"]!["ThingImpl.swift"]):16:2: note: `WrapperReader` receives `chainToken: SendableLazilyInstantiated<ChainToken>?` here.
 			"""
@@ -6004,8 +6004,8 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		// reports it once in those words, not once per fill.
 		await assertThrowsMultiModuleError(inModule: "Top", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Seam.swift"]):4:1: error: SafeDI cannot generate the dependency tree of `Seam`: its tree receives `chainToken` as `chainToken: ChainToken` on `ChainLeaf` and `chainToken: ChainToken` on `HoleImpl` and `chainToken: SendableLazilyInstantiated<ChainToken>?` on `WrapperReader`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `chainToken` the same way in every type of the tree, or declare it on `Seam` as the form that provides the others: `@Received let chainToken: SendableLazilyInstantiated<ChainToken>`.
-			\(fixtures["Core"]!["ChainToken.swift"]):16:2: note: `ChainLeaf` receives `chainToken: ChainToken` here.
+			\(fixtures["Feature"]!["Seam.swift"]): error: SafeDI cannot generate the dependency tree of `Seam`: its tree receives `chainToken` as `chainToken: ChainToken` on `ChainLeaf` and `chainToken: ChainToken` on `HoleImpl` and `chainToken: SendableLazilyInstantiated<ChainToken>?` on `WrapperReader`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `chainToken` the same way in every type of the tree, or declare it on `Seam` as the form that provides the others: `@Received let chainToken: SendableLazilyInstantiated<ChainToken>`.
+			\(fixtures["Core"]!["ChainToken.swift"]): note: `ChainLeaf` receives `chainToken: ChainToken` here.
 			\(fixtures["Top"]!["HoleImpl.swift"]):8:2: note: `HoleImpl` receives `chainToken: ChainToken` here.
 			\(fixtures["Top"]!["HoleImpl.swift"]):15:2: note: `WrapperReader` receives `chainToken: SendableLazilyInstantiated<ChainToken>?` here.
 			"""
@@ -6053,8 +6053,8 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		// while one module reports `Seam`'s two forms in these words.
 		await assertThrowsMultiModuleError(inModule: "Top", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Seam.swift"]):4:1: error: SafeDI cannot generate the dependency tree of `Seam`: its tree receives `chainToken` as `chainToken: ChainToken` on `ChainLeaf` and `chainToken: ChainToken` on `ThingImpl` and `chainToken: LazilyInstantiated<ChainToken>?` on `WrapperReader`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `chainToken` the same way in every type of the tree, or declare it on `Seam` as the form that provides the others: `@Received let chainToken: LazilyInstantiated<ChainToken>`.
-			\(fixtures["Core"]!["ChainToken.swift"]):13:2: note: `ChainLeaf` receives `chainToken: ChainToken` here.
+			\(fixtures["Feature"]!["Seam.swift"]): error: SafeDI cannot generate the dependency tree of `Seam`: its tree receives `chainToken` as `chainToken: ChainToken` on `ChainLeaf` and `chainToken: ChainToken` on `ThingImpl` and `chainToken: LazilyInstantiated<ChainToken>?` on `WrapperReader`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `chainToken` the same way in every type of the tree, or declare it on `Seam` as the form that provides the others: `@Received let chainToken: LazilyInstantiated<ChainToken>`.
+			\(fixtures["Core"]!["ChainToken.swift"]): note: `ChainLeaf` receives `chainToken: ChainToken` here.
 			\(fixtures["Top"]!["ThingImpl.swift"]):13:2: note: `ThingImpl` receives `chainToken: ChainToken` here.
 			\(fixtures["Top"]!["ThingImpl.swift"]):20:2: note: `WrapperReader` receives `chainToken: LazilyInstantiated<ChainToken>?` here.
 			"""
@@ -6069,8 +6069,8 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		// The optional wrapper spelled `Optional<…>`, which one module reports in these words too.
 		await assertThrowsMultiModuleError(inModule: "Top", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Seam.swift"]):4:1: error: SafeDI cannot generate the dependency tree of `Seam`: its tree receives `chainToken` as `chainToken: ChainToken` on `ChainLeaf` and `chainToken: ChainToken` on `ThingImpl` and `chainToken: Optional<SendableLazilyInstantiated<ChainToken>>` on `WrapperReader`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Rename one of the properties, or @Instantiated one of them inside the tree.
-			\(fixtures["Core"]!["ChainToken.swift"]):13:2: note: `ChainLeaf` receives `chainToken: ChainToken` here.
+			\(fixtures["Feature"]!["Seam.swift"]): error: SafeDI cannot generate the dependency tree of `Seam`: its tree receives `chainToken` as `chainToken: ChainToken` on `ChainLeaf` and `chainToken: ChainToken` on `ThingImpl` and `chainToken: Optional<SendableLazilyInstantiated<ChainToken>>` on `WrapperReader`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Rename one of the properties, or @Instantiated one of them inside the tree.
+			\(fixtures["Core"]!["ChainToken.swift"]): note: `ChainLeaf` receives `chainToken: ChainToken` here.
 			\(fixtures["Top"]!["ThingImpl.swift"]):13:2: note: `ThingImpl` receives `chainToken: ChainToken` here.
 			\(fixtures["Top"]!["ThingImpl.swift"]):20:2: note: `WrapperReader` receives `chainToken: Optional<SendableLazilyInstantiated<ChainToken>>` here.
 			"""
@@ -6086,8 +6086,8 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		// error still names the receives as the seam names its own tree's, as one module does.
 		await assertThrowsMultiModuleError(inModule: "Top", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Seam.swift"]):4:1: error: SafeDI cannot generate the dependency tree of `Seam`: its tree receives `chainToken` as `chainToken: ChainToken` on `ChainLeaf` and `chainToken: ChainToken` on `ThingImpl` and `chainToken: SendableLazilyInstantiated<ChainToken>?` on `WrapperReader`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `chainToken` the same way in every type of the tree, or declare it on `Seam` as the form that provides the others: `@Received let chainToken: SendableLazilyInstantiated<ChainToken>`.
-			\(fixtures["Core"]!["ChainToken.swift"]):13:2: note: `ChainLeaf` receives `chainToken: ChainToken` here.
+			\(fixtures["Feature"]!["Seam.swift"]): error: SafeDI cannot generate the dependency tree of `Seam`: its tree receives `chainToken` as `chainToken: ChainToken` on `ChainLeaf` and `chainToken: ChainToken` on `ThingImpl` and `chainToken: SendableLazilyInstantiated<ChainToken>?` on `WrapperReader`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `chainToken` the same way in every type of the tree, or declare it on `Seam` as the form that provides the others: `@Received let chainToken: SendableLazilyInstantiated<ChainToken>`.
+			\(fixtures["Core"]!["ChainToken.swift"]): note: `ChainLeaf` receives `chainToken: ChainToken` here.
 			\(fixtures["Top"]!["ThingImpl.swift"]):14:2: note: `ThingImpl` receives `chainToken: ChainToken` here.
 			\(fixtures["Top"]!["ThingImpl.swift"]):20:2: note: `WrapperReader` receives `chainToken: SendableLazilyInstantiated<ChainToken>?` here.
 			"""
@@ -6103,8 +6103,8 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		// `Seam`'s tree still receives `chainToken` in two forms, and so does it as `Top` fills it.
 		await assertThrowsMultiModuleError(inModule: "Top", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Seam.swift"]):4:1: error: SafeDI cannot generate the dependency tree of `Seam`: its tree receives `chainToken` as `chainToken: ChainToken` on `ChainLeaf` and `chainToken: ChainToken` on `ThingImpl` and `chainToken: SendableLazilyInstantiated<ChainToken>?` on `WrapperReader`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `chainToken` the same way in every type of the tree, or declare it on `Seam` as the form that provides the others: `@Received let chainToken: SendableLazilyInstantiated<ChainToken>`.
-			\(fixtures["Core"]!["ChainToken.swift"]):13:2: note: `ChainLeaf` receives `chainToken: ChainToken` here.
+			\(fixtures["Feature"]!["Seam.swift"]): error: SafeDI cannot generate the dependency tree of `Seam`: its tree receives `chainToken` as `chainToken: ChainToken` on `ChainLeaf` and `chainToken: ChainToken` on `ThingImpl` and `chainToken: SendableLazilyInstantiated<ChainToken>?` on `WrapperReader`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `chainToken` the same way in every type of the tree, or declare it on `Seam` as the form that provides the others: `@Received let chainToken: SendableLazilyInstantiated<ChainToken>`.
+			\(fixtures["Core"]!["ChainToken.swift"]): note: `ChainLeaf` receives `chainToken: ChainToken` here.
 			\(fixtures["Top"]!["ThingImpl.swift"]):13:2: note: `ThingImpl` receives `chainToken: ChainToken` here.
 			\(fixtures["Top"]!["ThingImpl.swift"]):20:2: note: `WrapperReader` receives `chainToken: SendableLazilyInstantiated<ChainToken>?` here.
 			"""
@@ -8009,7 +8009,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 			"""
 			\(fixtures["Top"]!["ThingImpl.swift"]):20:2: error: `WrapperReader` receives `chainToken: SendableLazilyInstantiated<ChainToken>`, which SafeDI hands the builder for `Worker`’s `thing: any ThingService` (`thing` of `thingServiceBuilder`) only as `chainToken: LazilyInstantiated<ChainToken>`, since `Seam`’s tree reads `chainToken` outside a `@Sendable` function and `ThingImpl` receives its instance, `chainToken: ChainToken`. Receive `chainToken: SendableLazilyInstantiated<ChainToken>` wherever that builder’s tree receives `chainToken: ChainToken`.
 			\(fixtures["Top"]!["ThingImpl.swift"]):13:2: note: `ThingImpl` receives `chainToken: ChainToken` here.
-			\(fixtures["Core"]!["ChainToken.swift"]):13:2: note: `ChainLeaf` receives `chainToken: ChainToken` here.
+			\(fixtures["Core"]!["ChainToken.swift"]): note: `ChainLeaf` receives `chainToken: ChainToken` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(modules: Self.chainTokenModules(thingImpl: Self.thingImplReadingSendableWrapperInside(holder: "SendableInstantiator", readsReader: "instantiate()"), topChainToken: Self.rootSendableChainToken), integration: .moduleInfo, filesToDelete: &filesToDelete)
@@ -8024,7 +8024,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 			"""
 			\(fixtures["Top"]!["ThingImpl.swift"]):20:2: error: `WrapperReader` receives `chainToken: SendableLazilyInstantiated<ChainToken>`, which SafeDI hands the builder for `Worker`’s `thing: any ThingService` (`thing` of `thingServiceBuilder`) only as `chainToken: LazilyInstantiated<ChainToken>`, since `Seam`’s tree reads `chainToken` outside a `@Sendable` function and `ThingImpl` receives its instance, `chainToken: ChainToken`. Receive `chainToken: SendableLazilyInstantiated<ChainToken>` wherever that builder’s tree receives `chainToken: ChainToken`.
 			\(fixtures["Top"]!["ThingImpl.swift"]):13:2: note: `ThingImpl` receives `chainToken: ChainToken` here.
-			\(fixtures["Core"]!["ChainToken.swift"]):13:2: note: `ChainLeaf` receives `chainToken: ChainToken` here.
+			\(fixtures["Core"]!["ChainToken.swift"]): note: `ChainLeaf` receives `chainToken: ChainToken` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(modules: Self.chainTokenModules(thingImpl: Self.thingImplReadingSendableWrapperInside(holder: "SendableLazilyInstantiated", readsReader: "instance"), topChainToken: Self.rootSendableChainToken), integration: .moduleInfo, filesToDelete: &filesToDelete)
@@ -8039,7 +8039,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "Top", diagnostics: { fixtures in
 			"""
 			\(fixtures["Top"]!["ThingImpl.swift"]):21:2: error: `WrapperReader` receives `chainToken: SendableLazilyInstantiated<ChainToken>`, which SafeDI hands the builder for `Worker`’s `thing: any ThingService` (`thing` of `thingServiceBuilder`) only as `chainToken: LazilyInstantiated<ChainToken>`, since `Seam`’s tree reads `chainToken` outside a `@Sendable` function and `ChainLeaf` receives its instance, `chainToken: ChainToken`. Receive `chainToken: SendableLazilyInstantiated<ChainToken>` wherever that builder’s tree receives `chainToken: ChainToken`.
-			\(fixtures["Core"]!["ChainToken.swift"]):13:2: note: `ChainLeaf` receives `chainToken: ChainToken` here.
+			\(fixtures["Core"]!["ChainToken.swift"]): note: `ChainLeaf` receives `chainToken: ChainToken` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(modules: Self.chainTokenModules(thingImpl: Self.thingImplReadingValueInsideSendableInstantiatorBesideSendableWrapper, topChainToken: Self.rootSendableChainToken), integration: .moduleInfo, filesToDelete: &filesToDelete)
@@ -8054,7 +8054,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 			"""
 			\(fixtures["Top"]!["ThingImpl.swift"]):16:2: error: `WrapperReader` receives `chainToken: SendableLazilyInstantiated<ChainToken>`, which SafeDI hands the builder for `Worker`’s `thing: any ThingService` (`thing` of `thingServiceBuilder`) only as `chainToken: LazilyInstantiated<ChainToken>`, since `Seam`’s tree reads `chainToken` outside a `@Sendable` function and `ThingImpl` receives its instance, `chainToken: ChainToken`. Receive `chainToken: ChainToken` on `WrapperReader`, or receive `chainToken: SendableLazilyInstantiated<ChainToken>` wherever that builder’s tree receives `chainToken: ChainToken`.
 			\(fixtures["Top"]!["ThingImpl.swift"]):9:2: note: `ThingImpl` receives `chainToken: ChainToken` here.
-			\(fixtures["Core"]!["ChainToken.swift"]):13:2: note: `ChainLeaf` receives `chainToken: ChainToken` here.
+			\(fixtures["Core"]!["ChainToken.swift"]): note: `ChainLeaf` receives `chainToken: ChainToken` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(modules: Self.chainTokenModules(thingImpl: Self.thingImplReadingThroughAlias(tokenType: "ChainToken", readerType: "SendableLazilyInstantiated<ChainToken>"), topChainToken: Self.rootSendableChainToken), integration: .moduleInfo, filesToDelete: &filesToDelete)
@@ -9071,7 +9071,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "Top", diagnostics: { fixtures in
 			"""
 			\(fixtures["Top"]!["ThingImpl.swift"]):15:2: error: `WrapperReader` receives `chainToken: SendableLazilyInstantiated<ChainToken>`, which `Outer` builds where it calls `Seam`, but SafeDI hands the builder for `Worker`’s `thing: any ThingService` (`thing` of `thingServiceBuilder`) only its instance, `chainToken: ChainToken`, which `Seam`’s tree receives. Declare `@Received let chainToken: SendableLazilyInstantiated<ChainToken>` on `Seam`, so SafeDI hands it to the builder.
-			\(fixtures["Feature"]!["Seam.swift"]):18:2: note: `Outer` declares `chainToken: SendableLazilyInstantiated<ChainToken>` here.
+			\(fixtures["Feature"]!["Seam.swift"]): note: `Outer` declares `chainToken: SendableLazilyInstantiated<ChainToken>` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(modules: Self.chainTokenModules(thingImpl: Self.thingImplReadingOnlySendableWrapper, outerDeclaresChainToken: true, outerChainToken: "SendableLazilyInstantiated<ChainToken>"), integration: .moduleInfo, filesToDelete: &filesToDelete)
@@ -9085,7 +9085,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "Top", diagnostics: { fixtures in
 			"""
 			\(fixtures["Top"]!["ThingImpl.swift"]):15:2: error: `WrapperReader` receives `chainToken: SendableLazilyInstantiated<ChainToken>`, which `Outer` builds where it calls `Seam`, but SafeDI hands the builder for `Worker`’s `thing: any ThingService` (`thing` of `thingServiceBuilder`) only its instance, `chainToken: ChainToken`, which `Seam`’s tree receives. Declare `@Received let chainToken: SendableLazilyInstantiated<ChainToken>` on `Seam`, so SafeDI hands it to the builder.
-			\(fixtures["Feature"]!["Seam.swift"]):18:2: note: `Outer` declares `chainToken: SendableLazilyInstantiated<ChainToken>` here.
+			\(fixtures["Feature"]!["Seam.swift"]): note: `Outer` declares `chainToken: SendableLazilyInstantiated<ChainToken>` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(modules: Self.chainTokenModules(thingImpl: Self.thingImplReadingOnlySendableWrapper, topChainToken: Self.rootSendableChainToken, outerDeclaresChainToken: true, outerChainToken: "SendableLazilyInstantiated<ChainToken>", rootDeclaresChainTokenToo: true, midDirectLeaf: true), integration: .moduleInfo, filesToDelete: &filesToDelete)
@@ -9099,7 +9099,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "Top", diagnostics: { fixtures in
 			"""
 			\(fixtures["Top"]!["ThingImpl.swift"]):15:2: error: `WrapperReader` receives `chainToken: LazilyInstantiated<ChainToken>`, which `Outer` builds where it calls `Seam`, but SafeDI hands the builder for `Worker`’s `thing: any ThingService` (`thing` of `thingServiceBuilder`) only its instance, `chainToken: ChainToken`, which `Seam`’s tree receives. Declare `@Received let chainToken: LazilyInstantiated<ChainToken>` on `Seam`, so SafeDI hands it to the builder.
-			\(fixtures["Feature"]!["Seam.swift"]):18:2: note: `Outer` declares `chainToken: LazilyInstantiated<ChainToken>` here.
+			\(fixtures["Feature"]!["Seam.swift"]): note: `Outer` declares `chainToken: LazilyInstantiated<ChainToken>` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(modules: Self.chainTokenModules(thingImpl: Self.thingImplReadingOnlyLazyWrapper, outerDeclaresChainToken: true, rootDeclaresChainTokenToo: true), integration: .moduleInfo, filesToDelete: &filesToDelete)
@@ -9113,7 +9113,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "Top", diagnostics: { fixtures in
 			"""
 			\(fixtures["Top"]!["ThingImpl.swift"]):15:2: error: `WrapperReader` receives `chainToken: SendableLazilyInstantiated<ChainToken>`, which `Mid` builds where it calls `Outer`, but SafeDI hands the builder for `Worker`’s `thing: any ThingService` (`thing` of `thingServiceBuilder`) only its instance, `chainToken: ChainToken`, which `Seam`’s tree receives. Declare `@Received let chainToken: SendableLazilyInstantiated<ChainToken>` on `Seam`, so SafeDI hands it to the builder.
-			\(fixtures["Other"]!["Worker.swift"]):20:2: note: `Mid` declares `chainToken: SendableLazilyInstantiated<ChainToken>` here.
+			\(fixtures["Other"]!["Worker.swift"]): note: `Mid` declares `chainToken: SendableLazilyInstantiated<ChainToken>` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(modules: Self.chainTokenModules(thingImpl: Self.thingImplReadingOnlySendableWrapper, midChainToken: "SendableLazilyInstantiated<ChainToken>"), integration: .moduleInfo, filesToDelete: &filesToDelete)
@@ -9127,7 +9127,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "Top", diagnostics: { fixtures in
 			"""
 			\(fixtures["Top"]!["ThingImpl.swift"]):20:2: error: `WrapperReader` receives `chainToken: SendableLazilyInstantiated<ChainToken>`, which `Outer` builds where it calls `Seam`, but SafeDI hands the builder for `Worker`’s `thing: any ThingService` (`thing` of `thingServiceBuilder`) only its instance, `chainToken: ChainToken`, which `Seam`’s tree receives. Declare `@Received let chainToken: SendableLazilyInstantiated<ChainToken>` on `Seam`, so SafeDI hands it to the builder.
-			\(fixtures["Feature"]!["Seam.swift"]):18:2: note: `Outer` declares `chainToken: SendableLazilyInstantiated<ChainToken>` here.
+			\(fixtures["Feature"]!["Seam.swift"]): note: `Outer` declares `chainToken: SendableLazilyInstantiated<ChainToken>` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(modules: Self.chainTokenModules(thingImpl: Self.thingImplReadingValueAndSendableWrapper, outerDeclaresChainToken: true, outerChainToken: "SendableLazilyInstantiated<ChainToken>"), integration: .moduleInfo, filesToDelete: &filesToDelete)
@@ -9141,7 +9141,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "Top", diagnostics: { fixtures in
 			"""
 			\(fixtures["Top"]!["ThingImpl.swift"]):20:2: error: `WrapperReader` receives `chainToken: SendableLazilyInstantiated<ChainToken>`, which `Outer` builds where it calls `Seam`, but SafeDI hands the builder for `Worker`’s `thing: any ThingService` (`thing` of `thingServiceBuilder`) only its instance, `chainToken: ChainToken`, which `Seam`’s tree receives. Declare `@Received let chainToken: SendableLazilyInstantiated<ChainToken>` on `Seam`, so SafeDI hands it to the builder.
-			\(fixtures["Feature"]!["Seam.swift"]):18:2: note: `Outer` declares `chainToken: SendableLazilyInstantiated<ChainToken>` here.
+			\(fixtures["Feature"]!["Seam.swift"]): note: `Outer` declares `chainToken: SendableLazilyInstantiated<ChainToken>` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(modules: Self.chainTokenModules(thingImpl: Self.thingImplReadingValueAndSendableWrapper, topChainToken: Self.rootSendableChainToken, outerDeclaresChainToken: true, outerChainToken: "SendableLazilyInstantiated<ChainToken>", rootDeclaresChainTokenToo: true, midDirectLeaf: true), integration: .moduleInfo, filesToDelete: &filesToDelete)
@@ -9156,7 +9156,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "Top", diagnostics: { fixtures in
 			"""
 			\(fixtures["Top"]!["ThingImpl.swift"]):15:2: error: `WrapperReader` receives `chainToken: SendableLazilyInstantiated<ChainToken>`, which `Outer` builds where it calls `Seam`, but SafeDI hands the builder for `Worker`’s `thing: any ThingService` (`thing` of `thingServiceBuilder`) only its instance, `chainToken: ChainToken`, which `Seam`’s tree receives. Declare `@Received let chainToken: SendableLazilyInstantiated<ChainToken>` on `Seam`, so SafeDI hands it to the builder.
-			\(fixtures["Feature"]!["Seam.swift"]):18:2: note: `Outer` declares `chainToken: SendableLazilyInstantiated<ChainToken>` here.
+			\(fixtures["Feature"]!["Seam.swift"]): note: `Outer` declares `chainToken: SendableLazilyInstantiated<ChainToken>` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(modules: Self.chainTokenModules(thingImpl: Self.thingImplReadingOnlySendableWrapper, outerDeclaresChainToken: true, outerChainToken: "SendableLazilyInstantiated<ChainToken>", featureFillsHoleService: true), integration: .moduleInfo, filesToDelete: &filesToDelete)
@@ -9408,7 +9408,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "Top", diagnostics: { fixtures in
 			"""
 			\(fixtures["Top"]!["ThingImpl.swift"]):15:2: error: `WrapperReader` receives `chainToken: SendableLazilyInstantiated<ChainToken>?`, which `Outer` builds where it calls `Seam`, but SafeDI hands the builder for `Worker`’s `thing: any ThingService` (`thing` of `thingServiceBuilder`) only its instance, `chainToken: ChainToken`, which `Seam`’s tree receives. Declare `@Received let chainToken: SendableLazilyInstantiated<ChainToken>` on `Seam`, so SafeDI hands it to the builder.
-			\(fixtures["Feature"]!["Seam.swift"]):18:2: note: `Outer` declares `chainToken: SendableLazilyInstantiated<ChainToken>` here.
+			\(fixtures["Feature"]!["Seam.swift"]): note: `Outer` declares `chainToken: SendableLazilyInstantiated<ChainToken>` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(modules: Self.chainTokenModules(thingImpl: Self.thingImplReadingOnlySendableWrapperOnlyIfAvailable, outerDeclaresChainToken: true, outerChainToken: "SendableLazilyInstantiated<ChainToken>"), integration: .moduleInfo, filesToDelete: &filesToDelete)

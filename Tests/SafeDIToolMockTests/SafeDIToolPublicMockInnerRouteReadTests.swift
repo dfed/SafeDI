@@ -75,7 +75,7 @@ struct SafeDIToolPublicMockInnerRouteReadTests: ~Copyable {
 		let diagnostics = { (fixtures: [String: FixturePaths]) in
 			"""
 			\(fixtures["App"]!["LiveGadget.swift"]):10:5: error: @Received property `token: Token` is hidden in chain: Root -> Outer -> Wrapper -> Inner -> Model -> any Service -> LiveGadget. `Outer` declares `token: Receipt` with the same label, so the types below `Outer` receive `token: Receipt` instead. Give `token: Receipt` on `Outer` a different label to fix.
-			\(fixtures["Middle"]!["Outer.swift"]):11:5: note: `token: Receipt` is declared here
+			\(fixtures["Middle"]!["Outer.swift"]): note: `token: Receipt` is declared here
 			"""
 		}
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: diagnostics) {

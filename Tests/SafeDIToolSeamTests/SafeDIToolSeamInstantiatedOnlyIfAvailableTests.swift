@@ -400,7 +400,7 @@ struct SafeDIToolSeamInstantiatedOnlyIfAvailableTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["Root.swift"]):9:5: error: No @Instantiable type or extension that module `App` can see fulfills `Analytics`, which @Instantiated property `requiredAnalytics: Analytics` instantiates in chain: Root -> Screen -> Banner. `Screen` generates its dependency tree in module `Feature`, which cannot see one either, so the initializer SafeDI generated for it takes `analyticsBuilder`, whose member `requiredAnalytics` builds `requiredAnalytics`, and the root `Root` must fill it. Decorate `Analytics`, or an extension of it, with @Instantiable; list `Analytics` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; or, if such a declaration is in another module, make that module one SafeDI reads for this target: add its target to this target’s `dependencies` in `Package.swift`, declare that module with `safedi_swift_library` (or a `safedi_compile` rule) and list its `<name>_safedi` target in this target’s `safedi_deps` under Bazel, or give its target `SafeDI.preCompileScript` and list its module in the `dependencies:` of this target’s `SafeDI.preCompileScript` under Tuist.
-			\(fixtures["Feature"]!["Banner.swift"]):7:5: note: `Banner` instantiates `requiredAnalytics: Analytics` here.
+			\(fixtures["Feature"]!["Banner.swift"]): note: `Banner` instantiates `requiredAnalytics: Analytics` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -422,7 +422,7 @@ struct SafeDIToolSeamInstantiatedOnlyIfAvailableTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["Root.swift"]):9:5: error: No @Instantiable type or extension that module `App` can see fulfills `Tracker`, which @Instantiated property `tracker: Tracker` instantiates in chain: Root -> Screen -> Banner. `Screen` generates its dependency tree in module `Feature`, which cannot see one either, so the initializer SafeDI generated for it takes `trackerBuilder`, whose member `tracker` builds `tracker`, and the root `Root` must fill it. Decorate `Tracker`, or an extension of it, with @Instantiable; list `Tracker` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; or, if such a declaration is in another module, make that module one SafeDI reads for this target: add its target to this target’s `dependencies` in `Package.swift`, declare that module with `safedi_swift_library` (or a `safedi_compile` rule) and list its `<name>_safedi` target in this target’s `safedi_deps` under Bazel, or give its target `SafeDI.preCompileScript` and list its module in the `dependencies:` of this target’s `SafeDI.preCompileScript` under Tuist.
-			\(fixtures["Feature"]!["Banner.swift"]):7:5: note: `Banner` instantiates `tracker: Tracker` here.
+			\(fixtures["Feature"]!["Banner.swift"]): note: `Banner` instantiates `tracker: Tracker` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(

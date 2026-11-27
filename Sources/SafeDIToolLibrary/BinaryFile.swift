@@ -49,9 +49,6 @@ enum BinaryFile {
 		case scanCache
 		/// The `.safedi` file `generate` writes for dependent modules, which holds a ``ModuleInfoFile``.
 		case moduleInfo
-		/// The positions file `generate` writes beside a `.safedi` file under `--module-info-positions-in-own-file`, which
-		/// holds the lines and columns that file stores elsewhere (``ModulePositionsFile``).
-		case modulePositions
 
 		/// The bytes that begin every file of this kind.
 		var magic: [UInt8] {
@@ -60,8 +57,6 @@ enum BinaryFile {
 				Array("SDSC".utf8)
 			case .moduleInfo:
 				Array("SDMI".utf8)
-			case .modulePositions:
-				Array("SDIP".utf8)
 			}
 		}
 
@@ -72,8 +67,6 @@ enum BinaryFile {
 				"scan cache"
 			case .moduleInfo:
 				"module info file"
-			case .modulePositions:
-				"module positions file"
 			}
 		}
 
@@ -194,7 +187,7 @@ enum BinaryFile {
 	/// because describing the schema reflects on every member's type, and reflection scans the runtime's
 	/// protocol conformance tables: computing it took most of a small module's `generate`. A test computes it
 	/// and fails, giving the new value, when a stored type's layout changes.
-	static let schemaFingerprint: UInt64 = 0x15455D4B73F41716
+	static let schemaFingerprint: UInt64 = 0x843CADF97CA05C67
 
 	/// The format version and every schema member's layout, one member per line: the name and type of each
 	/// field a struct writes, and the name and payload types of each case an enum writes, in the order written.
@@ -260,13 +253,6 @@ enum BinaryFile {
 		} catch {
 			throw BinaryFileReadError(kind: kind, reason: error)
 		}
-	}
-
-	/// The checksum of the body that the header of the file `data` holds records, or `nil` where `data` is shorter than
-	/// a header.
-	static func recordedBodyChecksum(of data: Data) -> UInt64? {
-		guard data.count >= headerLength else { return nil }
-		return data.withUnsafeBytes { UInt64(littleEndian: $0.loadUnaligned(fromByteOffset: 22, as: UInt64.self)) }
 	}
 
 	/// Whether `data` begins as a file of `kind` does.
@@ -388,6 +374,8 @@ public struct BinaryFileReadError: Error, Equatable, CustomStringConvertible {
 			"The \(name)’s body continues past its end at byte \(offset)."
 		case let .malformedBody(.unreadFieldFlags(offset)):
 			"The \(name)’s body holds a field flag at byte \(offset) that no field reads."
+		case let .malformedBody(.rangeWithoutOwner(offset)):
+			"The \(name)’s body holds a source range without its lines and columns at byte \(offset), outside every declaration whose location it could belong to."
 		}
 	}
 

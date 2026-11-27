@@ -6516,6 +6516,49 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
+	func diagnostics_dropsPositionsAndFixItsInOtherModulesFiles_whenLocatedAsRunOfModule() {
+		let diagnostics = """
+		<fixture-directory>/Graph/Sources/Beta/S12_T1.swift:8:2: error: one
+		<fixture-directory>/Graph/Sources/Beta/S12_T1.swift:8:2-8:8: fixit: public
+		<fixture-directory>/Graph/Sources/Alpha/S12_T0.swift:3:5: note: two: error: three
+		<fixture-directory>/Graph/Sources/Alpha/S12_T0.swift:3:5-3:11: fixit: public
+		<fixture-directory>/Graph/Sources/Alpha/S12_T0.swift:4:1: warning: four
+		<fixture-directory>/Graph/Sources/Alpha/S12_T0.swift: note: five
+		chain: S12_Root0 -> S12_T1 at <fixture-directory>/Graph/Sources/Alpha/S12_T0.swift:3:5
+		"""
+
+		#expect(GraphFuzzerModuleInfoLocations.diagnostics(diagnostics, locatedByRunOfModuleNamed: "Beta") == """
+		<fixture-directory>/Graph/Sources/Beta/S12_T1.swift:8:2: error: one
+		<fixture-directory>/Graph/Sources/Beta/S12_T1.swift:8:2-8:8: fixit: public
+		<fixture-directory>/Graph/Sources/Alpha/S12_T0.swift: note: two: error: three
+		<fixture-directory>/Graph/Sources/Alpha/S12_T0.swift: warning: four
+		<fixture-directory>/Graph/Sources/Alpha/S12_T0.swift: note: five
+		chain: S12_Root0 -> S12_T1 at <fixture-directory>/Graph/Sources/Alpha/S12_T0.swift:3:5
+		""")
+	}
+
+	@Test
+	func generatedCode_dropsSourceLocationDirectivesIntoOtherModulesFiles_whenLocatedAsRunOfModule() {
+		let code = """
+		        let a = b
+		        #sourceLocation(file: "<fixture-directory>/Graph/Sources/Alpha/S12_T0.swift", line: 11)
+		        let c = d
+		        #sourceLocation()
+		        #sourceLocation(file: "<fixture-directory>/Graph/Sources/Beta/S12_T1.swift", line: 4)
+		        let e = f
+		        #sourceLocation()
+		"""
+
+		#expect(GraphFuzzerModuleInfoLocations.generatedCode(code, locatedByRunOfModuleNamed: "Beta") == """
+		        let a = b
+		        let c = d
+		        #sourceLocation(file: "<fixture-directory>/Graph/Sources/Beta/S12_T1.swift", line: 4)
+		        let e = f
+		        #sourceLocation()
+		""")
+	}
+
+	@Test
 	func finding_isKnownIssue_whenIntegrationsDifferAsDocumented() {
 		let knownIssue = GraphFuzzerKnownIssue(
 			reason: "A shape whose mock differs between the integrations",

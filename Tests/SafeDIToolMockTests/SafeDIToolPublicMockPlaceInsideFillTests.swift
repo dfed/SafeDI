@@ -691,7 +691,7 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 		let diagnostics = { (fixtures: [String: FixturePaths]) in
 			"""
 			\(fixtures["App"]!["LiveGadget.swift"]):10:5: error: @Received property `id: Code` is hidden in chain: Root -> Outer -> Inner -> Instantiator<Screen> -> any Service -> LiveGadget. `Screen` declares `id: String` with the same label, so the types below `Screen` receive `id: String` instead. Give `id: String` on `Screen` a different label to fix.
-			\(fixtures["Feature"]!["Screen.swift"]):8:5: note: `id: String` is declared here
+			\(fixtures["Feature"]!["Screen.swift"]): note: `id: String` is declared here
 			"""
 		}
 		await expectTwinsError(
@@ -934,7 +934,7 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 		let diagnostics = { (fixtures: [String: FixturePaths]) in
 			"""
 			\(fixtures["App"]!["LiveGadget.swift"]):10:5: error: `LiveGadget` receives `tag: Tag`, which `Outer` declares outside the `@Sendable` function that builds `service: any Service`, and SafeDI hands the builder for `DefaultService`’s `gadget: any Gadget` (`gadget` of `gadgetSendableBuilder`) only what that function binds. Instantiate `tag` outside `Outer` and declare `@Received let tag: Tag` on `Outer`, so the builder’s caller reads its own, or declare an @Instantiable type that fulfills `Gadget` in module `Middle` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Middle"]!["Outer.swift"]):10:5: note: `Outer` declares `tag: Tag` here.
+			\(fixtures["Middle"]!["Outer.swift"]): note: `Outer` declares `tag: Tag` here.
 			"""
 		}
 		await expectTwinsError(
@@ -961,7 +961,7 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 		let diagnostics = { (fixtures: [String: FixturePaths]) in
 			"""
 			\(fixtures["App"]!["LiveGadget.swift"]):10:5: error: `LiveGadget` receives `tag: Tag`, which `Outer` declares outside the `@Sendable` function that builds `service: any Service`, and SafeDI hands the builder for `DefaultService`’s `gadget: any Gadget` (`gadget` of `gadgetSendableBuilder`) only what that function binds. Instantiate `tag` outside `Outer` and declare `@Received let tag: Tag` on `Outer`, so the builder’s caller reads its own, or declare an @Instantiable type that fulfills `Gadget` in module `Middle` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Middle"]!["Outer.swift"]):10:5: note: `Outer` declares `tag: Tag` here.
+			\(fixtures["Middle"]!["Outer.swift"]): note: `Outer` declares `tag: Tag` here.
 			"""
 		}
 		await expectTwinsError(
@@ -989,7 +989,7 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 		let diagnostics = { (fixtures: [String: FixturePaths]) in
 			"""
 			\(fixtures["App"]!["LiveGadget.swift"]):10:5: error: `LiveGadget` receives `tag: Tag`, which `Outer` declares outside the `@Sendable` function that builds `service: any Service`, and SafeDI hands the builder for `DefaultService`’s `gadget: any Gadget` (`gadget` of `gadgetSendableBuilder`) only what that function binds. Declare an @Instantiable type that fulfills `Gadget` in module `Middle` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Middle"]!["Outer.swift"]):12:5: note: `Outer` declares `tag: Tag` here.
+			\(fixtures["Middle"]!["Outer.swift"]): note: `Outer` declares `tag: Tag` here.
 			"""
 		}
 		await expectTwinsError(
@@ -1016,7 +1016,7 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 		let diagnostics = { (fixtures: [String: FixturePaths]) in
 			"""
 			\(fixtures["App"]!["LiveGadget.swift"]):10:5: error: `LiveGadget` receives `tag: Tag`, which `Holder` forwards outside the `@Sendable` function that builds `service: any Service`, and SafeDI hands the builder for `DefaultService`’s `gadget: any Gadget` (`gadget` of `gadgetSendableBuilder`) only what that function binds. Declare an @Instantiable type that fulfills `Gadget` in module `Middle` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Middle"]!["Holder.swift"]):10:5: note: `Holder` declares `tag: Tag` here.
+			\(fixtures["Middle"]!["Holder.swift"]): note: `Holder` declares `tag: Tag` here.
 			"""
 		}
 		await expectTwinsError(

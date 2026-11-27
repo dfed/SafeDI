@@ -50,7 +50,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		let diagnostics = { (fixtures: [String: FixturePaths]) in
 			"""
 			\(fixtures["App"]!["AppTypes.swift"]):11:5: error: `LivePaymentService` receives `cart: Cart`, which `StoreScreen` builds where it calls `CheckoutScreen`, but `StoreScreen` passes the builder for `CheckoutScreen`’s `payments: any PaymentService` (`payments` of `paymentServiceBuilder`) on from its own caller, which cannot hand it `StoreScreen`’s values. Declare `@Received let cart: Cart` on `CheckoutScreen`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `PaymentService` in module `Store` or a module it lists among its SafeDI dependencies, so `StoreScreen` fills the builder itself.
-			\(fixtures["Store"]!["StoreTypes.swift"]):16:5: note: `StoreScreen` declares `cart: Cart` here.
+			\(fixtures["Store"]!["StoreTypes.swift"]): note: `StoreScreen` declares `cart: Cart` here.
 			"""
 		}
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: diagnostics) {
@@ -86,7 +86,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		let diagnostics = { (fixtures: [String: FixturePaths]) in
 			"""
 			\(fixtures["App"]!["AppTypes.swift"]):12:5: error: `LivePaymentService` receives `cart: Cart`, which `OrderScreen` builds where it calls `CheckoutScreen`, but `OrderScreen` passes the builder for `CheckoutScreen`’s `payments: any PaymentService` (`payments` of `paymentServiceBuilder`) on from its own caller, which cannot hand it `OrderScreen`’s values. Declare `@Received let cart: Cart` on `CheckoutScreen`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `PaymentService` in module `Order` or a module it lists among its SafeDI dependencies, so `OrderScreen` fills the builder itself.
-			\(fixtures["Order"]!["OrderTypes.swift"]):16:5: note: `OrderScreen` declares `cart: Cart` here.
+			\(fixtures["Order"]!["OrderTypes.swift"]): note: `OrderScreen` declares `cart: Cart` here.
 			"""
 		}
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: diagnostics) {
@@ -106,7 +106,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		let diagnostics = { (fixtures: [String: FixturePaths]) in
 			"""
 			\(fixtures["App"]!["AppTypes.swift"]):11:5: error: `LivePaymentService` receives `cart: Cart`, which `OrderScreen` builds on the path where `StoreScreen` calls `CheckoutScreen`, but `StoreScreen` passes the builder for `CheckoutScreen`’s `payments: any PaymentService` (`payments` of `paymentServiceBuilder`) on from its own caller, which cannot hand it that value. Declare `@Received let cart: Cart` on `CheckoutScreen`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `PaymentService` in module `Store` or a module it lists among its SafeDI dependencies, so `StoreScreen` fills the builder itself.
-			\(fixtures["Store"]!["StoreTypes.swift"]):16:5: note: `OrderScreen` declares `cart: Cart` here.
+			\(fixtures["Store"]!["StoreTypes.swift"]): note: `OrderScreen` declares `cart: Cart` here.
 			"""
 		}
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: diagnostics) {
@@ -123,7 +123,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		let diagnostics = { (fixtures: [String: FixturePaths]) in
 			"""
 			\(fixtures["App"]!["AppTypes.swift"]):11:5: error: `LivePaymentService` receives `cart: Cart?`, which `StoreScreen` builds where it calls `CheckoutScreen`, but `StoreScreen` passes the builder for `CheckoutScreen`’s `payments: any PaymentService` (`payments` of `paymentServiceBuilder`) on from its own caller, which cannot hand it `StoreScreen`’s values. Declare `@Received(onlyIfAvailable: true) let cart: Cart?` on `CheckoutScreen`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `PaymentService` in module `Store` or a module it lists among its SafeDI dependencies, so `StoreScreen` fills the builder itself.
-			\(fixtures["Store"]!["StoreTypes.swift"]):16:5: note: `StoreScreen` declares `cart: Cart` here.
+			\(fixtures["Store"]!["StoreTypes.swift"]): note: `StoreScreen` declares `cart: Cart` here.
 			"""
 		}
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: diagnostics) {
@@ -140,7 +140,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		let diagnostics = { (fixtures: [String: FixturePaths]) in
 			"""
 			\(fixtures["App"]!["AppTypes.swift"]):11:5: error: `LivePaymentService` receives `cart: Cart`, which `Page` builds on the path where `StoreScreen` calls `CheckoutScreen`, but `StoreScreen` passes the builder for `CheckoutScreen`’s `payments: any PaymentService` (`payments` of `paymentServiceBuilder`) on from its own caller, which cannot hand it that value. Declare `@Received let cart: Cart` on `CheckoutScreen`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `PaymentService` in module `Store` or a module it lists among its SafeDI dependencies, so `StoreScreen` fills the builder itself.
-			\(fixtures["Store"]!["StoreTypes.swift"]):17:5: note: `Page` declares `cart: Cart` here.
+			\(fixtures["Store"]!["StoreTypes.swift"]): note: `Page` declares `cart: Cart` here.
 			"""
 		}
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: diagnostics) {
@@ -157,7 +157,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		let diagnostics = { (fixtures: [String: FixturePaths]) in
 			"""
 			\(fixtures["App"]!["AppTypes.swift"]):10:5: error: `AppSettings` receives `feedBuilder: ErasedInstantiator<(), any FeedPage>`, which `SignedIn`’s tree builds only after it calls the builder for `SignedIn`’s `settingsBuilder: ErasedInstantiator<(), any SettingsPage>` (`settingsBuilder` of `appSettings_SettingsPageBuilder`), so SafeDI does not hand it to that builder. Declare `feedBuilder` and `settingsBuilder` on one type of module `App` instead, and have `SignedIn` instantiate a protocol that type fulfills in their place, so that type’s tree builds both, or declare an @Instantiable type that fulfills `AppSettings` in module `Feature` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feature"]!["FeatureTypes.swift"]):35:5: note: `SignedIn` declares `feedBuilder: ErasedInstantiator<(), any FeedPage>` here.
+			\(fixtures["Feature"]!["FeatureTypes.swift"]): note: `SignedIn` declares `feedBuilder: ErasedInstantiator<(), any FeedPage>` here.
 			"""
 		}
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: diagnostics) {
@@ -196,7 +196,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["AppTypes.swift"]):10:5: error: `LiveApi` receives `logger: Logger`, which `Home`’s tree builds where it instantiates `Home` again, but that call passes the builder `Home` takes for `Home`’s `api: any Api` on unchanged, so the caller that fills it cannot hand it those values. Declare `@Received let logger: Logger` on `Home`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies, so `Home` fills the builder itself.
-			\(fixtures["Feature"]!["FeatureTypes.swift"]):22:5: note: `Loop` declares `logger: Logger` here.
+			\(fixtures["Feature"]!["FeatureTypes.swift"]): note: `Loop` declares `logger: Logger` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(modules: Self.seamBuiltAgainModules(caller: Self.twinCaller, callee: Self.twinCalledTypes), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
@@ -269,7 +269,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 	mutating func generate_reportsTwinsCycle_whenCallingMocksFillReceivesSiblingThatReceivesInnerCalledTypesBuilder(caller: CallingMockCaller, calledTypes: CalledTypeDeclaration) async {
 		let diagnostics = { (fixtures: [String: FixturePaths]) in
 			"""
-			\(fixtures["FeatureModule"]!["FeatureModuleTypes.swift"]):14:5: error: Dependency cycle: @Instantiated `innerBuilder: Instantiator<Inner>` -> @Received `sibling: Sibling` -> @Received `innerBuilder: Instantiator<Inner>`. `innerBuilder: Instantiator<Inner>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+			\(fixtures["FeatureModule"]!["FeatureModuleTypes.swift"]): error: Dependency cycle: @Instantiated `innerBuilder: Instantiator<Inner>` -> @Received `sibling: Sibling` -> @Received `innerBuilder: Instantiator<Inner>`. `innerBuilder: Instantiator<Inner>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 			"""
 		}
 		await assertThrowsMultiModuleError(inModule: "Tests", diagnostics: diagnostics) {
@@ -289,7 +289,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 			"""
 			\(fixtures["App"]!["AppTypes.swift"]):10:5: error: Dependency cycle: `Session` -> `SignedIn` -> `any SettingsPage` -> `Session`. `AppSettings` receives `session: Session`, which is still being built when `AppSettings` is built. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 			\(fixtures["App"]!["AppTypes.swift"]):13:1: note: `Session` is part of the cycle
-			\(fixtures["Feature"]!["FeatureTypes.swift"]):5:1: note: `SignedIn` is part of the cycle
+			\(fixtures["Feature"]!["FeatureTypes.swift"]): note: `SignedIn` is part of the cycle
 			\(fixtures["App"]!["AppTypes.swift"]):4:1: note: `SettingsPage` is part of the cycle
 			"""
 		}
@@ -469,7 +469,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		let w4Diagnostics = { (fixtures: [String: FixturePaths]) in
 			"""
 			\(fixtures["App"]!["AppTypes.swift"]):10:5: error: `AppSettings` receives `feedBuilder: ErasedInstantiator<(), any FeedPage>?`, which `SignedIn`’s tree builds only after it calls the builder for `SignedIn`’s `settings: any SettingsPage` (`settings` of `settingsPageBuilder`), so SafeDI does not hand it to that builder. Declare `feedBuilder` and `settings` on one type of module `App` instead, and have `SignedIn` instantiate a protocol that type fulfills in their place, so that type’s tree builds both, or declare an @Instantiable type that fulfills `SettingsPage` in module `Feature` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feature"]!["FeatureTypes.swift"]):35:5: note: `SignedIn` declares `feedBuilder: ErasedInstantiator<(), any FeedPage>` here.
+			\(fixtures["Feature"]!["FeatureTypes.swift"]): note: `SignedIn` declares `feedBuilder: ErasedInstantiator<(), any FeedPage>` here.
 			"""
 		}
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: w4Diagnostics) {
@@ -485,20 +485,16 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		// declarations in a build that tells the tool `DEBUG`, the mock condition.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["FeatureTypes.swift"]):16:1: error: `Feed` is `internal`, so the mock of `Root`, generated in module `App`, in another package, cannot construct it in the code SafeDI generates. Make `Feed` `public` to fix.
-			\(fixtures["Feature"]!["FeatureTypes.swift"]):16:1-16:1: fixit: public\(" ")
-			\(fixtures["Feature"]!["FeatureTypes.swift"]):17:5: error: `Feed`’s initializer is `internal`, so the mock of `Root`, generated in module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix.
-			\(fixtures["Feature"]!["FeatureTypes.swift"]):17:5-17:5: fixit: public\(" ")
+			\(fixtures["Feature"]!["FeatureTypes.swift"]): error: `Feed` is `internal`, so the mock of `Root`, generated in module `App`, in another package, cannot construct it in the code SafeDI generates. Make `Feed` `public` to fix.
+			\(fixtures["Feature"]!["FeatureTypes.swift"]): error: `Feed`’s initializer is `internal`, so the mock of `Root`, generated in module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(modules: Self.w4ConstantCycleOptionalRestructuredModules(caller: caller.attribute, callee: calledTypes.attribute, feedIsPublic: false, appActiveCompilationConditions: ["DEBUG"]), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
 		}
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["FeatureTypes.swift"]):16:1: error: `Feed` is `internal`, so module `App`, in another package, cannot construct it in the code SafeDI generates. Make `Feed` `public` to fix.
-			\(fixtures["Feature"]!["FeatureTypes.swift"]):16:1-16:1: fixit: public\(" ")
-			\(fixtures["Feature"]!["FeatureTypes.swift"]):17:5: error: `Feed`’s initializer is `internal`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix.
-			\(fixtures["Feature"]!["FeatureTypes.swift"]):17:5-17:5: fixit: public\(" ")
+			\(fixtures["Feature"]!["FeatureTypes.swift"]): error: `Feed` is `internal`, so module `App`, in another package, cannot construct it in the code SafeDI generates. Make `Feed` `public` to fix.
+			\(fixtures["Feature"]!["FeatureTypes.swift"]): error: `Feed`’s initializer is `internal`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(modules: Self.w4ConstantCycleOptionalRestructuredModules(caller: Self.twinCaller, callee: Self.twinCalledTypes, feedIsPublic: false), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)

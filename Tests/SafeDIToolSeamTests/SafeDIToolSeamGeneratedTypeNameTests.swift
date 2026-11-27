@@ -599,7 +599,7 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]?["Home.swift"] ?? ""):3:1: \(message)
-			\(fixtures["Feature"]?["Home.swift"] ?? ""):1:1: \(message)
+			\(fixtures["Feature"]?["Home.swift"] ?? ""): \(message)
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(

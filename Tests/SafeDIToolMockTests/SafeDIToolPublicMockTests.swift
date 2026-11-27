@@ -5153,9 +5153,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		let diagnostics = { (fixtures: [String: FixturePaths]) in
 			"""
 			\(fixtures["App"]!["LiveApi.swift"]):10:5: error: `LiveApi` receives `user: User`, which `Hub` declares outside the `@Sendable` function that builds `bBuilder: SendableInstantiator<B>`, and SafeDI hands the builder for `B`’s `api: any Api` (`api` of `apiSendableBuilder`) only what that function binds. Instantiate `user` outside `Hub` and declare `@Received let user: User` on `Hub`, so the builder’s caller reads its own, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feature"]!["Hub.swift"]):8:5: note: `Hub` declares `user: User` here.
+			\(fixtures["Feature"]!["Hub.swift"]): note: `Hub` declares `user: User` here.
 			\(fixtures["App"]!["LiveApi.swift"]):11:5: error: `LiveApi` receives `dep: Dep`, which `A` declares outside the `@Sendable` function that builds `bBuilder: SendableInstantiator<B>`, and SafeDI hands the builder for `B`’s `api: any Api` (`api` of `apiSendableBuilder`) only what that function binds. Declare `@Forwarded let dep: Dep` on `B`, so that function binds it, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feature"]!["A.swift"]):8:5: note: `A` declares `dep: Dep` here.
+			\(fixtures["Feature"]!["A.swift"]): note: `A` declares `dep: Dep` here.
 			"""
 		}
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: diagnostics) {
@@ -12671,7 +12671,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["Screen.swift"]):11:5: error: `Screen` provides `filter: [3 of Int]`, but the `public` mock SafeDI generated for `Service` in module `Core`, the narrowest one module `App` can call, does not take it: `Service.mock` takes `filter` only on its `package` tier, so this call would pass `nil` to `TokenCache`, which the inline mock would hand `filter`. `[3 of Int]` is `package` as far as SafeDI can tell: SafeDI cannot read its spelling, and every initializer, `instantiate(…)` and mock method that mentions it in module `Core` or on a type that receives it is `package` (`TokenCache.init(filter:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `TokenCache.init(filter:)` to `public`; mention `[3 of Int]` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; or stop providing `filter` on this path.
-			\(fixtures["Core"]!["Service.swift"]):9:5: note: `TokenCache` receives `filter: [3 of Int]?` here.
+			\(fixtures["Core"]!["Service.swift"]): note: `TokenCache` receives `filter: [3 of Int]?` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -12727,7 +12727,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["Screen.swift"]):11:5: error: `Screen` provides `filter: [3 of Int]`, but the `public` mock SafeDI generated for `Service` in module `Core`, the narrowest one module `App` can call, does not take it: `Service.mock` takes `filter` only on its `package` tier, so this call would pass `nil` to `TokenCache`, which the inline mock would hand `filter`. `[3 of Int]` is `package` as far as SafeDI can tell: SafeDI cannot read its spelling, and every initializer, `instantiate(…)` and mock method that mentions it in module `Core` or on a type that receives it is `package` (`TokenCache.init(filter:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `TokenCache.init(filter:)` to `public`; mention `[3 of Int]` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; or stop providing `filter` on this path.
-			\(fixtures["Core"]!["Service.swift"]):9:5: note: `TokenCache` receives `filter: [3 of Int]?` here.
+			\(fixtures["Core"]!["Service.swift"]): note: `TokenCache` receives `filter: [3 of Int]?` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -12784,7 +12784,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["Screen.swift"]):11:5: error: `Screen` provides `filter: [3 of Int]`, but the `public` mock SafeDI generated for `Service` in module `Core`, the narrowest one module `App` can call, does not take it: `Service.mock` takes `filter` only on its `internal` tier, so this call would pass `nil` to `TokenCache`, which the inline mock would hand `filter`. `[3 of Int]` is `internal` as far as SafeDI can tell: SafeDI cannot read its spelling, and every initializer, `instantiate(…)` and mock method that mentions it in module `Core` or on a type that receives it is `internal` (`TokenCache.init(filter:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `TokenCache.init(filter:)` to `public`; mention `[3 of Int]` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; or stop providing `filter` on this path.
-			\(fixtures["Core"]!["Service.swift"]):9:5: note: `TokenCache` receives `filter: [3 of Int]?` here.
+			\(fixtures["Core"]!["Service.swift"]): note: `TokenCache` receives `filter: [3 of Int]?` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -12840,7 +12840,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["Screen.swift"]):11:5: error: `Screen` provides `filter: [3 of Int]`, but the `public` mock SafeDI generated for `Service` in module `Core`, the narrowest one module `App` can call, does not take it: `Service.mock` takes `filter` only on its `package` tier, so this call would pass `nil` to `TokenCache`, which the inline mock would hand `filter`. `[3 of Int]` is `package` as far as SafeDI can tell: SafeDI cannot read its spelling, and every initializer, `instantiate(…)` and mock method that mentions it in module `Core` or on a type that receives it is `package` (`TokenCache.init(filter:)`); a mention on any other declaration matches it by name alone, so it does not count. Give module `App` the package name of module `Core` (`SWIFT_PACKAGE_NAME` under Tuist, `package_name` on `safedi_swift_library` under Bazel, `--package-name` in a custom build) if the two are in one package; widen `TokenCache.init(filter:)` to `public`; mention `[3 of Int]` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; or stop providing `filter` on this path.
-			\(fixtures["Core"]!["Service.swift"]):9:5: note: `TokenCache` receives `filter: [3 of Int]?` here.
+			\(fixtures["Core"]!["Service.swift"]): note: `TokenCache` receives `filter: [3 of Int]?` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -12964,7 +12964,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["Screen.swift"]):13:5: error: `Screen` provides `filter: Hub.Filter`, but the `public` mock SafeDI generated for `Service` in module `Core`, the narrowest one module `App` can call, does not take it: `Service.mock` takes `filter` only on its `package` tier, so this call would pass `nil` to `TokenCache`, which the inline mock would hand `filter`. `Hub.Filter` is `package` as far as SafeDI can tell: it is declared inside an extension of `Hub`, and every initializer, `instantiate(…)` and mock method SafeDI records that mentions it is `package` (`TokenCache.init(filter:)`). If `Hub` can be `public`, spell the extension’s access level (`public extension Hub { … }`, dropping the modifier on `Filter` that Swift then reports as redundant; the compiler rejects a level wider than `Hub`’s), or declare `Filter` in `Hub`’s body or at top level; mention `Hub.Filter` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; or stop providing `filter` on this path.
-			\(fixtures["Core"]!["Service.swift"]):10:5: note: `TokenCache` receives `filter: Hub.Filter?` here.
+			\(fixtures["Core"]!["Service.swift"]): note: `TokenCache` receives `filter: Hub.Filter?` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -13409,7 +13409,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["AppRoot.swift"]):12:5: error: `AppRoot` provides `filter: [3 of Int]`, but no mock SafeDI generated for `Outer` takes it: `Outer`’s mock tree calls the `public` mock SafeDI generated for `Service` in module `Core`, the narrowest one module `Mid` can call, which takes `filter` only on its `package` tier, so calling it would pass `nil` to `TokenCache`, which the inline mock would hand `filter`. `[3 of Int]` is `package` as far as SafeDI can tell: SafeDI cannot read its spelling, and every initializer, `instantiate(…)` and mock method that mentions it in module `Core` or on a type that receives it is `package` (`TokenCache.init(filter:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `TokenCache.init(filter:)` to `public`; mention `[3 of Int]` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; or stop providing `filter` on this path.
-			\(fixtures["Core"]!["Service.swift"]):9:5: note: `TokenCache` receives `filter: [3 of Int]?` here.
+			\(fixtures["Core"]!["Service.swift"]): note: `TokenCache` receives `filter: [3 of Int]?` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -13557,8 +13557,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		// M8.6: `Service` has no public mock, and `App` cannot construct `TokenCache` in its tree.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Core"]!["Service.swift"]):5:5: error: `TokenCache`’s initializer is `package`, so the mock of `Screen`, generated in module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix, or give `Service` a public mock: `generateMock: .public`, or a hand-written public `mock`.
-			\(fixtures["Core"]!["Service.swift"]):5:5-5:12: fixit: public
+			\(fixtures["Core"]!["Service.swift"]): error: `TokenCache`’s initializer is `package`, so the mock of `Screen`, generated in module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix, or give `Service` a public mock: `generateMock: .public`, or a hand-written public `mock`.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(

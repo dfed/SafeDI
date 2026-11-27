@@ -1133,9 +1133,9 @@ struct SafeDIToolCallingMockInstantiatedOnlyIfAvailableTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["Home.swift"]):18:5: error: Dependency cycle: `Screen` -> `Middle` -> `Child` -> `(any Analytics)?` -> `Screen`. SafeDI accepts a dependency cycle when one of the dependencies that instantiate along it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change one of `screen: Screen`, `middle: Middle`, `child: Child`, `analytics: (any Analytics)?` to an instantiator.
-			\(fixtures["Feature"]!["Screen.swift"]):5:1: note: `Screen` is part of the cycle
-			\(fixtures["Feature"]!["Screen.swift"]):14:1: note: `Middle` is part of the cycle
-			\(fixtures["Feature"]!["Screen.swift"]):23:1: note: `Child` is part of the cycle
+			\(fixtures["Feature"]!["Screen.swift"]): note: `Screen` is part of the cycle
+			\(fixtures["Feature"]!["Screen.swift"]): note: `Middle` is part of the cycle
+			\(fixtures["Feature"]!["Screen.swift"]): note: `Child` is part of the cycle
 			\(fixtures["App"]!["Home.swift"]):12:1: note: `Analytics` is part of the cycle
 			"""
 		}) {

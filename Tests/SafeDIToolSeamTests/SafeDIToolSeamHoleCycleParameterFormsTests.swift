@@ -51,10 +51,10 @@ struct SafeDIToolSeamHoleCycleParameterFormsTests: ~Copyable {
 		await expectRejectedAsInline(
 			readerReceive: "@Received(onlyIfAvailable: true) public let tag: LazilyInstantiated<Tag>?",
 			liveApiReceive: "@Received(onlyIfAvailable: true) public let tag: Tag?",
-		) { fixtures in
+		) { featureDeclaration, fixtures in
 			"""
-			\(fixtures["Feature"]!["Reader.swift"]):7:5: error: @Received property `tag: LazilyInstantiated<Tag>?` is received in chain: A -> Reader. A dependency cycle builds `A` again beneath `B`, which declares `tag: LazilyInstantiated<Tag>` with the same label, and SafeDI hands each `A` one value of `tag`. `A` and the types it builds receive `tag` as `tag: LazilyInstantiated<Tag>?` and `tag: Tag?`, which one value cannot carry together. Receive `tag: LazilyInstantiated<Tag>?` and `tag: Tag?` under different labels to fix.
-			\(fixtures["Feature"]!["B.swift"]):8:5: note: `tag: LazilyInstantiated<Tag>` is declared here
+			\(featureDeclaration("Reader.swift", 7, 5)): error: @Received property `tag: LazilyInstantiated<Tag>?` is received in chain: A -> Reader. A dependency cycle builds `A` again beneath `B`, which declares `tag: LazilyInstantiated<Tag>` with the same label, and SafeDI hands each `A` one value of `tag`. `A` and the types it builds receive `tag` as `tag: LazilyInstantiated<Tag>?` and `tag: Tag?`, which one value cannot carry together. Receive `tag: LazilyInstantiated<Tag>?` and `tag: Tag?` under different labels to fix.
+			\(featureDeclaration("B.swift", 8, 5)): note: `tag: LazilyInstantiated<Tag>` is declared here
 			"""
 		}
 	}
@@ -67,10 +67,10 @@ struct SafeDIToolSeamHoleCycleParameterFormsTests: ~Copyable {
 		await expectRejectedAsInline(
 			readerReceive: "@Received public let tag: Tag",
 			liveApiReceive: "@Received(onlyIfAvailable: true) public let tag: LazilyInstantiated<Tag>?",
-		) { fixtures in
+		) { featureDeclaration, fixtures in
 			"""
-			\(fixtures["Feature"]!["Reader.swift"]):7:5: error: @Received property `tag: Tag` is received in chain: A -> Reader. A dependency cycle builds `A` again beneath `B`, which declares `tag: LazilyInstantiated<Tag>` with the same label, and SafeDI hands each `A` one value of `tag`. `A` and the types it builds receive `tag` as `tag: LazilyInstantiated<Tag>?` and `tag: Tag`, which one value cannot carry together. Receive `tag: LazilyInstantiated<Tag>?` and `tag: Tag` under different labels to fix.
-			\(fixtures["Feature"]!["B.swift"]):8:5: note: `tag: LazilyInstantiated<Tag>` is declared here
+			\(featureDeclaration("Reader.swift", 7, 5)): error: @Received property `tag: Tag` is received in chain: A -> Reader. A dependency cycle builds `A` again beneath `B`, which declares `tag: LazilyInstantiated<Tag>` with the same label, and SafeDI hands each `A` one value of `tag`. `A` and the types it builds receive `tag` as `tag: LazilyInstantiated<Tag>?` and `tag: Tag`, which one value cannot carry together. Receive `tag: LazilyInstantiated<Tag>?` and `tag: Tag` under different labels to fix.
+			\(featureDeclaration("B.swift", 8, 5)): note: `tag: LazilyInstantiated<Tag>` is declared here
 			"""
 		}
 	}
@@ -83,10 +83,10 @@ struct SafeDIToolSeamHoleCycleParameterFormsTests: ~Copyable {
 		await expectRejectedAsInline(
 			readerReceive: "@Received(onlyIfAvailable: true) public let tag: LazilyInstantiated<Tag>?",
 			liveApiReceive: "@Received public let tag: Tag",
-		) { fixtures in
+		) { featureDeclaration, fixtures in
 			"""
-			\(fixtures["Feature"]!["Reader.swift"]):7:5: error: @Received property `tag: LazilyInstantiated<Tag>?` is received in chain: A -> Reader. A dependency cycle builds `A` again beneath `B`, which declares `tag: LazilyInstantiated<Tag>` with the same label, and SafeDI hands each `A` one value of `tag`. `A` and the types it builds receive `tag` as `tag: LazilyInstantiated<Tag>?` and `tag: Tag`, which one value cannot carry together. Receive `tag: LazilyInstantiated<Tag>?` and `tag: Tag` under different labels to fix.
-			\(fixtures["Feature"]!["B.swift"]):8:5: note: `tag: LazilyInstantiated<Tag>` is declared here
+			\(featureDeclaration("Reader.swift", 7, 5)): error: @Received property `tag: LazilyInstantiated<Tag>?` is received in chain: A -> Reader. A dependency cycle builds `A` again beneath `B`, which declares `tag: LazilyInstantiated<Tag>` with the same label, and SafeDI hands each `A` one value of `tag`. `A` and the types it builds receive `tag` as `tag: LazilyInstantiated<Tag>?` and `tag: Tag`, which one value cannot carry together. Receive `tag: LazilyInstantiated<Tag>?` and `tag: Tag` under different labels to fix.
+			\(featureDeclaration("B.swift", 8, 5)): note: `tag: LazilyInstantiated<Tag>` is declared here
 			"""
 		}
 	}
@@ -99,10 +99,10 @@ struct SafeDIToolSeamHoleCycleParameterFormsTests: ~Copyable {
 		await expectRejectedAsInline(
 			readerReceive: "@Received public let tag: Tag",
 			liveApiReceive: "@Received(fulfilledByDependencyNamed: \"tag\", ofType: LazilyInstantiated<Tag>.self, onlyIfAvailable: true) public let lazyTag: LazilyInstantiated<Tag>?",
-		) { fixtures in
+		) { featureDeclaration, fixtures in
 			"""
-			\(fixtures["Feature"]!["Reader.swift"]):7:5: error: @Received property `tag: Tag` is received in chain: A -> Reader. A dependency cycle builds `A` again beneath `B`, which declares `tag: LazilyInstantiated<Tag>` with the same label, and SafeDI hands each `A` one value of `tag`. `A` and the types it builds receive `tag` as `tag: LazilyInstantiated<Tag>` and `tag: Tag`, which one value cannot carry together. Receive `tag: LazilyInstantiated<Tag>` and `tag: Tag` under different labels to fix.
-			\(fixtures["Feature"]!["B.swift"]):8:5: note: `tag: LazilyInstantiated<Tag>` is declared here
+			\(featureDeclaration("Reader.swift", 7, 5)): error: @Received property `tag: Tag` is received in chain: A -> Reader. A dependency cycle builds `A` again beneath `B`, which declares `tag: LazilyInstantiated<Tag>` with the same label, and SafeDI hands each `A` one value of `tag`. `A` and the types it builds receive `tag` as `tag: LazilyInstantiated<Tag>` and `tag: Tag`, which one value cannot carry together. Receive `tag: LazilyInstantiated<Tag>` and `tag: Tag` under different labels to fix.
+			\(featureDeclaration("B.swift", 8, 5)): note: `tag: LazilyInstantiated<Tag>` is declared here
 			"""
 		}
 	}
@@ -446,10 +446,13 @@ struct SafeDIToolSeamHoleCycleParameterFormsTests: ~Copyable {
 		readerReceive: String,
 		liveApiReceive: String,
 		sourceLocation: SourceLocation = #_sourceLocation,
-		diagnostics: (_ fixtures: [String: FixturePaths]) -> String,
+		diagnostics: (_ featureDeclaration: (_ fileName: String, _ line: Int, _ column: Int) -> String, _ fixtures: [String: FixturePaths]) -> String,
 	) async {
 		for fulfillerInFeature in [false, true] {
-			await assertThrowsMultiModuleError(inModule: fulfillerInFeature ? "Feature" : "App", diagnostics: diagnostics, sourceLocation: sourceLocation) {
+			// `Feature`’s own run locates its declarations; `App`’s reads them from `Feature`’s `.safedi`, which keeps no line.
+			await assertThrowsMultiModuleError(inModule: fulfillerInFeature ? "Feature" : "App", diagnostics: { fixtures in
+				diagnostics({ fileName, line, column in fulfillerInFeature ? "\(fixtures["Feature"]![fileName]):\(line):\(column)" : fixtures["Feature"]![fileName] }, fixtures)
+			}, sourceLocation: sourceLocation) {
 				try await executeSafeDIToolMultiModuleTest(
 					modules: Self.modules(readerReceive: readerReceive, liveApiReceive: liveApiReceive, fulfillerInFeature: fulfillerInFeature),
 					integration: .moduleInfo,

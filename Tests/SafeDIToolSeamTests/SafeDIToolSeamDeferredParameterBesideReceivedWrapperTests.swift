@@ -53,8 +53,8 @@ struct SafeDIToolSeamDeferredParameterBesideReceivedWrapperTests: ~Copyable {
 		// module, `Inner`'s tree receives `token` in two forms (the twin below), so `App` reports that error, at `Inner`.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Core"]!["Token.swift"]):16:1: error: SafeDI cannot generate the dependency tree of `Inner`: its tree receives `token` as `token: Token` on `Leaf` and `token: Token` on `GizmoImpl` and `token: SendableLazilyInstantiated<Token>?` on `WrapperReader`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `token` the same way in every type of the tree, or declare it on `Inner` as the form that provides the others: `@Received let token: SendableLazilyInstantiated<Token>`.
-			\(fixtures["Core"]!["Token.swift"]):11:2: note: `Leaf` receives `token: Token` here.
+			\(fixtures["Core"]!["Token.swift"]): error: SafeDI cannot generate the dependency tree of `Inner`: its tree receives `token` as `token: Token` on `Leaf` and `token: Token` on `GizmoImpl` and `token: SendableLazilyInstantiated<Token>?` on `WrapperReader`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `token` the same way in every type of the tree, or declare it on `Inner` as the form that provides the others: `@Received let token: SendableLazilyInstantiated<Token>`.
+			\(fixtures["Core"]!["Token.swift"]): note: `Leaf` receives `token: Token` here.
 			\(fixtures["App"]!["WrapperReader.swift"]):14:2: note: `GizmoImpl` receives `token: Token` here.
 			\(fixtures["App"]!["WrapperReader.swift"]):8:2: note: `WrapperReader` receives `token: SendableLazilyInstantiated<Token>?` here.
 			"""
@@ -86,8 +86,8 @@ struct SafeDIToolSeamDeferredParameterBesideReceivedWrapperTests: ~Copyable {
 		// `SendableLazilyInstantiated`; the fill still gave `WrapperReader`'s optional read `nil`.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Core"]!["Token.swift"]):16:1: error: SafeDI cannot generate the dependency tree of `Inner`: its tree receives `token` as `token: Token` on `Leaf` and `token: Token` on `GizmoImpl` and `token: SendableLazilyInstantiated<Token>?` on `WrapperReader`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `token` the same way in every type of the tree, or declare it on `Inner` as the form that provides the others: `@Received let token: SendableLazilyInstantiated<Token>`.
-			\(fixtures["Core"]!["Token.swift"]):11:2: note: `Leaf` receives `token: Token` here.
+			\(fixtures["Core"]!["Token.swift"]): error: SafeDI cannot generate the dependency tree of `Inner`: its tree receives `token` as `token: Token` on `Leaf` and `token: Token` on `GizmoImpl` and `token: SendableLazilyInstantiated<Token>?` on `WrapperReader`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `token` the same way in every type of the tree, or declare it on `Inner` as the form that provides the others: `@Received let token: SendableLazilyInstantiated<Token>`.
+			\(fixtures["Core"]!["Token.swift"]): note: `Leaf` receives `token: Token` here.
 			\(fixtures["App"]!["WrapperReader.swift"]):14:2: note: `GizmoImpl` receives `token: Token` here.
 			\(fixtures["App"]!["WrapperReader.swift"]):8:2: note: `WrapperReader` receives `token: SendableLazilyInstantiated<Token>?` here.
 			"""
@@ -118,8 +118,8 @@ struct SafeDIToolSeamDeferredParameterBesideReceivedWrapperTests: ~Copyable {
 		// `Inner` builds `Leaf` in an `Instantiator`: the same memo as by value, and the same error.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Core"]!["Token.swift"]):16:1: error: SafeDI cannot generate the dependency tree of `Inner`: its tree receives `token` as `token: Token` on `Leaf` and `token: Token` on `GizmoImpl` and `token: SendableLazilyInstantiated<Token>?` on `WrapperReader`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `token` the same way in every type of the tree, or declare it on `Inner` as the form that provides the others: `@Received let token: SendableLazilyInstantiated<Token>`.
-			\(fixtures["Core"]!["Token.swift"]):11:2: note: `Leaf` receives `token: Token` here.
+			\(fixtures["Core"]!["Token.swift"]): error: SafeDI cannot generate the dependency tree of `Inner`: its tree receives `token` as `token: Token` on `Leaf` and `token: Token` on `GizmoImpl` and `token: SendableLazilyInstantiated<Token>?` on `WrapperReader`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `token` the same way in every type of the tree, or declare it on `Inner` as the form that provides the others: `@Received let token: SendableLazilyInstantiated<Token>`.
+			\(fixtures["Core"]!["Token.swift"]): note: `Leaf` receives `token: Token` here.
 			\(fixtures["App"]!["WrapperReader.swift"]):14:2: note: `GizmoImpl` receives `token: Token` here.
 			\(fixtures["App"]!["WrapperReader.swift"]):8:2: note: `WrapperReader` receives `token: SendableLazilyInstantiated<Token>?` here.
 			"""
@@ -135,8 +135,8 @@ struct SafeDIToolSeamDeferredParameterBesideReceivedWrapperTests: ~Copyable {
 		// kind, which the fill still gave the reader as `nil`.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Core"]!["Token.swift"]):16:1: error: SafeDI cannot generate the dependency tree of `Inner`: its tree receives `token` as `token: Token` on `Leaf` and `token: Token` on `GizmoImpl` and `token: LazilyInstantiated<Token>?` on `WrapperReader`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `token` the same way in every type of the tree, or declare it on `Inner` as the form that provides the others: `@Received let token: LazilyInstantiated<Token>`.
-			\(fixtures["Core"]!["Token.swift"]):11:2: note: `Leaf` receives `token: Token` here.
+			\(fixtures["Core"]!["Token.swift"]): error: SafeDI cannot generate the dependency tree of `Inner`: its tree receives `token` as `token: Token` on `Leaf` and `token: Token` on `GizmoImpl` and `token: LazilyInstantiated<Token>?` on `WrapperReader`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `token` the same way in every type of the tree, or declare it on `Inner` as the form that provides the others: `@Received let token: LazilyInstantiated<Token>`.
+			\(fixtures["Core"]!["Token.swift"]): note: `Leaf` receives `token: Token` here.
 			\(fixtures["App"]!["WrapperReader.swift"]):14:2: note: `GizmoImpl` receives `token: Token` here.
 			\(fixtures["App"]!["WrapperReader.swift"]):8:2: note: `WrapperReader` receives `token: LazilyInstantiated<Token>?` here.
 			"""
@@ -153,8 +153,8 @@ struct SafeDIToolSeamDeferredParameterBesideReceivedWrapperTests: ~Copyable {
 		// `Inner` is reported, as one module reports it, not `Outer`, whose own tree receives it in one.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Core"]!["Token.swift"]):16:1: error: SafeDI cannot generate the dependency tree of `Inner`: its tree receives `token` as `token: Token` on `Leaf` and `token: Token` on `GizmoImpl` and `token: SendableLazilyInstantiated<Token>?` on `WrapperReader`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `token` the same way in every type of the tree, or declare it on `Inner` as the form that provides the others: `@Received let token: SendableLazilyInstantiated<Token>`.
-			\(fixtures["Core"]!["Token.swift"]):11:2: note: `Leaf` receives `token: Token` here.
+			\(fixtures["Core"]!["Token.swift"]): error: SafeDI cannot generate the dependency tree of `Inner`: its tree receives `token` as `token: Token` on `Leaf` and `token: Token` on `GizmoImpl` and `token: SendableLazilyInstantiated<Token>?` on `WrapperReader`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `token` the same way in every type of the tree, or declare it on `Inner` as the form that provides the others: `@Received let token: SendableLazilyInstantiated<Token>`.
+			\(fixtures["Core"]!["Token.swift"]): note: `Leaf` receives `token: Token` here.
 			\(fixtures["App"]!["WrapperReader.swift"]):15:2: note: `GizmoImpl` receives `token: Token` here.
 			\(fixtures["App"]!["WrapperReader.swift"]):9:2: note: `WrapperReader` receives `token: SendableLazilyInstantiated<Token>?` here.
 			"""
@@ -186,8 +186,8 @@ struct SafeDIToolSeamDeferredParameterBesideReceivedWrapperTests: ~Copyable {
 		// for `Inner`, naming both readers, as one module names every receive of its tree.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Core"]!["Token.swift"]):16:1: error: SafeDI cannot generate the dependency tree of `Inner`: its tree receives `token` as `token: Token` on `Leaf` and `token: Token` on `GizmoImpl` and `token: SendableLazilyInstantiated<Token>?` on `WrapperReader` and `token: SendableLazilyInstantiated<Token>?` on `SecondWrapperReader`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `token` the same way in every type of the tree, or declare it on `Inner` as the form that provides the others: `@Received let token: SendableLazilyInstantiated<Token>`.
-			\(fixtures["Core"]!["Token.swift"]):11:2: note: `Leaf` receives `token: Token` here.
+			\(fixtures["Core"]!["Token.swift"]): error: SafeDI cannot generate the dependency tree of `Inner`: its tree receives `token` as `token: Token` on `Leaf` and `token: Token` on `GizmoImpl` and `token: SendableLazilyInstantiated<Token>?` on `WrapperReader` and `token: SendableLazilyInstantiated<Token>?` on `SecondWrapperReader`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `token` the same way in every type of the tree, or declare it on `Inner` as the form that provides the others: `@Received let token: SendableLazilyInstantiated<Token>`.
+			\(fixtures["Core"]!["Token.swift"]): note: `Leaf` receives `token: Token` here.
 			\(fixtures["App"]!["WrapperReader.swift"]):20:2: note: `GizmoImpl` receives `token: Token` here.
 			\(fixtures["App"]!["WrapperReader.swift"]):8:2: note: `WrapperReader` receives `token: SendableLazilyInstantiated<Token>?` here.
 			\(fixtures["App"]!["WrapperReader.swift"]):14:2: note: `SecondWrapperReader` receives `token: SendableLazilyInstantiated<Token>?` here.
@@ -222,12 +222,12 @@ struct SafeDIToolSeamDeferredParameterBesideReceivedWrapperTests: ~Copyable {
 		// each seam's tree receives `token` in two forms, so each is reported, as one module reports each.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Core"]!["Token.swift"]):16:1: error: SafeDI cannot generate the dependency tree of `Inner`: its tree receives `token` as `token: Token` on `Leaf` and `token: Token` on `GizmoImpl` and `token: SendableLazilyInstantiated<Token>?` on `WrapperReader`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `token` the same way in every type of the tree, or declare it on `Inner` as the form that provides the others: `@Received let token: SendableLazilyInstantiated<Token>`.
-			\(fixtures["Core"]!["Token.swift"]):11:2: note: `Leaf` receives `token: Token` here.
+			\(fixtures["Core"]!["Token.swift"]): error: SafeDI cannot generate the dependency tree of `Inner`: its tree receives `token` as `token: Token` on `Leaf` and `token: Token` on `GizmoImpl` and `token: SendableLazilyInstantiated<Token>?` on `WrapperReader`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `token` the same way in every type of the tree, or declare it on `Inner` as the form that provides the others: `@Received let token: SendableLazilyInstantiated<Token>`.
+			\(fixtures["Core"]!["Token.swift"]): note: `Leaf` receives `token: Token` here.
 			\(fixtures["App"]!["WrapperReader.swift"]):14:2: note: `GizmoImpl` receives `token: Token` here.
 			\(fixtures["App"]!["WrapperReader.swift"]):8:2: note: `WrapperReader` receives `token: SendableLazilyInstantiated<Token>?` here.
-			\(fixtures["Core"]!["Token.swift"]):23:1: error: SafeDI cannot generate the dependency tree of `InnerB`: its tree receives `token` as `token: Token` on `Leaf` and `token: Token` on `GizmoImpl` and `token: SendableLazilyInstantiated<Token>?` on `WrapperReader`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `token` the same way in every type of the tree, or declare it on `InnerB` as the form that provides the others: `@Received let token: SendableLazilyInstantiated<Token>`.
-			\(fixtures["Core"]!["Token.swift"]):11:2: note: `Leaf` receives `token: Token` here.
+			\(fixtures["Core"]!["Token.swift"]): error: SafeDI cannot generate the dependency tree of `InnerB`: its tree receives `token` as `token: Token` on `Leaf` and `token: Token` on `GizmoImpl` and `token: SendableLazilyInstantiated<Token>?` on `WrapperReader`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `token` the same way in every type of the tree, or declare it on `InnerB` as the form that provides the others: `@Received let token: SendableLazilyInstantiated<Token>`.
+			\(fixtures["Core"]!["Token.swift"]): note: `Leaf` receives `token: Token` here.
 			\(fixtures["App"]!["WrapperReader.swift"]):14:2: note: `GizmoImpl` receives `token: Token` here.
 			\(fixtures["App"]!["WrapperReader.swift"]):8:2: note: `WrapperReader` receives `token: SendableLazilyInstantiated<Token>?` here.
 			"""
@@ -268,8 +268,8 @@ struct SafeDIToolSeamDeferredParameterBesideReceivedWrapperTests: ~Copyable {
 		_ = try await executeSafeDIToolMultiModuleTest(modules: Self.oneModule(of: modules), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Core"]!["Token.swift"]):16:1: error: SafeDI cannot generate the dependency tree of `Inner`: its tree receives `token` as `token: Token` on `Leaf` and `token: Token` on `GizmoImpl` and `token: SendableLazilyInstantiated<Token>?` on `WrapperReader` and `token: SendableLazilyInstantiated<Token>` on `RequiredReader`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `token` the same way in every type of the tree, or declare it on `Inner` as the form that provides the others: `@Received let token: SendableLazilyInstantiated<Token>`.
-			\(fixtures["Core"]!["Token.swift"]):11:2: note: `Leaf` receives `token: Token` here.
+			\(fixtures["Core"]!["Token.swift"]): error: SafeDI cannot generate the dependency tree of `Inner`: its tree receives `token` as `token: Token` on `Leaf` and `token: Token` on `GizmoImpl` and `token: SendableLazilyInstantiated<Token>?` on `WrapperReader` and `token: SendableLazilyInstantiated<Token>` on `RequiredReader`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `token` the same way in every type of the tree, or declare it on `Inner` as the form that provides the others: `@Received let token: SendableLazilyInstantiated<Token>`.
+			\(fixtures["Core"]!["Token.swift"]): note: `Leaf` receives `token: Token` here.
 			\(fixtures["App"]!["WrapperReader.swift"]):20:2: note: `GizmoImpl` receives `token: Token` here.
 			\(fixtures["App"]!["WrapperReader.swift"]):8:2: note: `WrapperReader` receives `token: SendableLazilyInstantiated<Token>?` here.
 			\(fixtures["App"]!["WrapperReader.swift"]):14:2: note: `RequiredReader` receives `token: SendableLazilyInstantiated<Token>` here.

@@ -150,7 +150,7 @@ struct SafeDIToolSeamFillCycleEntryTests: ~Copyable {
 			diagnostics: [
 				("App", ":16:5: error: Dependency cycle: `X` -> `S` -> `any P` -> `X`. SafeDI accepts a dependency cycle when one of the dependencies that instantiate along it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change one of `x: X`, `s: S`, `p: any P` to an instantiator."),
 				("App", ":8:1: note: `X` is part of the cycle"),
-				("Feature", ":3:1: note: `S` is part of the cycle"),
+				("Feature", ": note: `S` is part of the cycle"),
 				("App", ":13:1: note: `P` is part of the cycle"),
 			],
 		),
@@ -179,7 +179,7 @@ struct SafeDIToolSeamFillCycleEntryTests: ~Copyable {
 			diagnostics: [
 				("App", ":16:5: error: Dependency cycle: `X` -> `S` -> `any P` -> `X`. SafeDI accepts a dependency cycle when one of the dependencies that instantiate along it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change one of `x: X`, `s: S`, `p: any P` to an instantiator. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `x: LazilyInstantiated<X>` is validated as `x: X`."),
 				("App", ":8:1: note: `X` is part of the cycle"),
-				("Feature", ":3:1: note: `S` is part of the cycle"),
+				("Feature", ": note: `S` is part of the cycle"),
 				("App", ":13:1: note: `P` is part of the cycle"),
 			],
 		),
@@ -207,7 +207,7 @@ struct SafeDIToolSeamFillCycleEntryTests: ~Copyable {
 			""",
 			diagnostics: [
 				("App", ":11:5: error: Dependency cycle: `S` -> `any P` -> `X` -> `S`. SafeDI accepts a dependency cycle when one of the dependencies that instantiate along it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change one of `s: S`, `p: any P`, `x: X` to an instantiator."),
-				("Feature", ":3:1: note: `S` is part of the cycle"),
+				("Feature", ": note: `S` is part of the cycle"),
 				("App", ":13:1: note: `P` is part of the cycle"),
 				("App", ":8:1: note: `X` is part of the cycle"),
 			],
@@ -248,7 +248,7 @@ struct SafeDIToolSeamFillCycleEntryTests: ~Copyable {
 			diagnostics: [
 				("App", ":27:5: error: Dependency cycle: `X` -> `S` -> `any P` -> `X`. SafeDI accepts a dependency cycle when one of the dependencies that instantiate along it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change one of `x: X`, `s: S`, `p: any P` to an instantiator. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `x: LazilyInstantiated<X>` is validated as `x: X`."),
 				("App", ":19:1: note: `X` is part of the cycle"),
-				("Feature", ":3:1: note: `S` is part of the cycle"),
+				("Feature", ": note: `S` is part of the cycle"),
 				("App", ":24:1: note: `P` is part of the cycle"),
 			],
 		),
@@ -278,7 +278,7 @@ struct SafeDIToolSeamFillCycleEntryTests: ~Copyable {
 			diagnostics: [
 				("App", ":17:5: error: Dependency cycle: `X` -> `S` -> `any P` -> `X`. `PImpl` receives `x: X`, which is still being built when `PImpl` is built. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `x: LazilyInstantiated<X>` is validated as `x: X`."),
 				("App", ":9:1: note: `X` is part of the cycle"),
-				("Feature", ":3:1: note: `S` is part of the cycle"),
+				("Feature", ": note: `S` is part of the cycle"),
 				("App", ":14:1: note: `P` is part of the cycle"),
 			],
 		),
@@ -301,9 +301,9 @@ struct SafeDIToolSeamFillCycleEntryTests: ~Copyable {
 			}
 			""",
 			diagnostics: [
-				("Feature", ":6:5: error: Dependency cycle: `any P` -> `S` -> `any P`. SafeDI accepts a dependency cycle when one of the dependencies that instantiate along it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change one of `p: any P`, `s: S` to an instantiator. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `p: LazilyInstantiated<any P>` is validated as `p: any P`."),
+				("Feature", ": error: Dependency cycle: `any P` -> `S` -> `any P`. SafeDI accepts a dependency cycle when one of the dependencies that instantiate along it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change one of `p: any P`, `s: S` to an instantiator. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `p: LazilyInstantiated<any P>` is validated as `p: any P`."),
 				("App", ":9:1: note: `P` is part of the cycle"),
-				("Feature", ":3:1: note: `S` is part of the cycle"),
+				("Feature", ": note: `S` is part of the cycle"),
 			],
 		),
 		Graph(
@@ -325,7 +325,7 @@ struct SafeDIToolSeamFillCycleEntryTests: ~Copyable {
 			""",
 			diagnostics: [
 				("App", ":11:5: error: Dependency cycle: `S` -> `any P` -> `S`. SafeDI accepts a dependency cycle when one of the dependencies that instantiate along it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change one of `s: S`, `p: any P` to an instantiator. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `s: LazilyInstantiated<S>` is validated as `s: S`."),
-				("Feature", ":3:1: note: `S` is part of the cycle"),
+				("Feature", ": note: `S` is part of the cycle"),
 				("App", ":8:1: note: `P` is part of the cycle"),
 			],
 		),
@@ -347,9 +347,9 @@ struct SafeDIToolSeamFillCycleEntryTests: ~Copyable {
 			}
 			""",
 			diagnostics: [
-				("Feature", ":6:5: error: Dependency cycle: `any P` -> `S` -> `any P`. SafeDI accepts a dependency cycle when one of the dependencies that instantiate along it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change one of `p: any P`, `s: S` to an instantiator."),
+				("Feature", ": error: Dependency cycle: `any P` -> `S` -> `any P`. SafeDI accepts a dependency cycle when one of the dependencies that instantiate along it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change one of `p: any P`, `s: S` to an instantiator."),
 				("App", ":8:1: note: `P` is part of the cycle"),
-				("Feature", ":3:1: note: `S` is part of the cycle"),
+				("Feature", ": note: `S` is part of the cycle"),
 			],
 		),
 		Graph(
@@ -377,7 +377,7 @@ struct SafeDIToolSeamFillCycleEntryTests: ~Copyable {
 			diagnostics: [
 				("App", ":16:5: error: Dependency cycle: `X` -> `S` -> `any P` -> `X`. `PImpl` receives `x: X`, which is still being built when `PImpl` is built. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required."),
 				("App", ":8:1: note: `X` is part of the cycle"),
-				("Feature", ":3:1: note: `S` is part of the cycle"),
+				("Feature", ": note: `S` is part of the cycle"),
 				("App", ":13:1: note: `P` is part of the cycle"),
 			],
 		),
@@ -400,7 +400,7 @@ struct SafeDIToolSeamFillCycleEntryTests: ~Copyable {
 			""",
 			diagnostics: [
 				("App", ":11:5: error: SafeDI cannot fill the builder for `Row`’s `widget: any Widget` (`widget` of `widgetBuilder`) in `Inner`’s dependency tree: `DefaultWidget`, which fills it, instantiates `rowMaker: Instantiator<Row>`, which `Inner`’s tree is building where it builds `widget` (Inner -> rowMaker -> Row -> widget -> DefaultWidget -> rowMaker). Code generated outside module `Feature` cannot refer to the function `Inner`’s initializer builds `Row` with, and building it again would hand it other values than `Inner`’s tree holds. Instantiate `Inner` where `DefaultWidget` builds `Row` (`@Instantiated let innerBuilder: Instantiator<Inner>`), so the cycle re-enters through the initializer SafeDI generates for `Inner`; declare an @Instantiable type that fulfills `Widget` in module `Feature` or a module it lists among its SafeDI dependencies; or give `rowMaker` on `DefaultWidget` another label, so the cycle closes at `widget` itself."),
-				("Feature", ":12:5: note: `Inner` instantiates `rowMaker: Instantiator<Row>` here."),
+				("Feature", ": note: `Inner` instantiates `rowMaker: Instantiator<Row>` here."),
 			],
 		),
 		Graph(

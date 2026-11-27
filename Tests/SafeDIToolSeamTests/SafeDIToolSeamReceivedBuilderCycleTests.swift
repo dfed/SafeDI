@@ -1449,7 +1449,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["DefaultDetail.swift"]):9:5: error: `DefaultDetail` receives `\(property)`, which `Screen`’s tree is building where it calls the builder for `Screen`’s `detailBuilder: ErasedInstantiator<(), any Detail>` (`detailBuilder` of `defaultDetail_DetailBuilder`). Inline, `DefaultDetail` can get an instantiator of its own, made from the function `Screen`’s initializer declares for `detailBuilder`, which code generated outside module `Feature` cannot refer to. Instantiate `detailBuilder` on a type above `Screen`, and receive it on `Screen` in place of its @Instantiated declaration, so that the caller’s tree builds it, or declare an @Instantiable type that fulfills `DefaultDetail` in module `Feature` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feature"]!["Screen.swift"]):7:5: note: `Screen` instantiates `detailBuilder: ErasedInstantiator<(), any Detail>` here.
+			\(fixtures["Feature"]!["Screen.swift"]): note: `Screen` instantiates `detailBuilder: ErasedInstantiator<(), any Detail>` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -1480,7 +1480,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["DefaultWidget.swift"]):9:5: error: `DefaultWidget` receives `\(property)`, which `Flow`’s tree is building where it calls the builder for `A`’s `widget: any Widget` (`widget` of `widgetBuilder`). Inline, `DefaultWidget` can get an instantiator of its own, made from the function `Flow`’s initializer declares for `aBuilder`, which code generated outside module `Feature` cannot refer to. Instantiate `aBuilder` on a type above `Flow`, and receive it on `Flow` in place of its @Instantiated declaration, so that the caller’s tree builds it, or declare an @Instantiable type that fulfills `Widget` in module `Feature` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feature"]!["Flow.swift"]):7:5: note: `Flow` instantiates `aBuilder: Instantiator<A>` here.
+			\(fixtures["Feature"]!["Flow.swift"]): note: `Flow` instantiates `aBuilder: Instantiator<A>` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -1516,7 +1516,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["DefaultDetail.swift"]):9:5: error: `DefaultDetail` receives `\(property)`, which `Screen`’s tree builds only after it calls the builder for `Screen`’s `detailBuilder: ErasedInstantiator<(), any Detail>` (`detailBuilder` of `defaultDetail_DetailBuilder`), so SafeDI does not hand it to that builder. Declare `settingsBuilder` and `detailBuilder` on one type of module `App` instead, and have `Screen` instantiate a protocol that type fulfills in their place, so that type’s tree builds both, or declare an @Instantiable type that fulfills `DefaultDetail` in module `Feature` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feature"]!["Screen.swift"]):9:5: note: `Screen` declares `settingsBuilder: ErasedInstantiator<(), any Settings>` here.
+			\(fixtures["Feature"]!["Screen.swift"]): note: `Screen` declares `settingsBuilder: ErasedInstantiator<(), any Settings>` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(

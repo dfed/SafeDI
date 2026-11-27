@@ -112,10 +112,8 @@ struct SafeDIToolSeamAccessTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let servicePath = fixtures["Feature"]!["Service.swift"]
 			return """
-			\(servicePath):2:1: error: `Service` is `package`, so module `App`, which SafeDI is not told is in the same package, cannot construct it in the code SafeDI generates. Give modules `App` and `Feature` the same package name (`SWIFT_PACKAGE_NAME` under Tuist, `package_name` on `safedi_swift_library` under Bazel, `--package-name` in a custom build) if they are in one package, or make `Service` `public` to fix.
-			\(servicePath):2:1-2:8: fixit: public
-			\(servicePath):3:5: error: `Service`’s initializer is `package`, so module `App`, which SafeDI is not told is in the same package, cannot call it in the code SafeDI generates. Give modules `App` and `Feature` the same package name (`SWIFT_PACKAGE_NAME` under Tuist, `package_name` on `safedi_swift_library` under Bazel, `--package-name` in a custom build) if they are in one package, or make the initializer `public` to fix.
-			\(servicePath):3:5-3:12: fixit: public
+			\(servicePath): error: `Service` is `package`, so module `App`, which SafeDI is not told is in the same package, cannot construct it in the code SafeDI generates. Give modules `App` and `Feature` the same package name (`SWIFT_PACKAGE_NAME` under Tuist, `package_name` on `safedi_swift_library` under Bazel, `--package-name` in a custom build) if they are in one package, or make `Service` `public` to fix.
+			\(servicePath): error: `Service`’s initializer is `package`, so module `App`, which SafeDI is not told is in the same package, cannot call it in the code SafeDI generates. Give modules `App` and `Feature` the same package name (`SWIFT_PACKAGE_NAME` under Tuist, `package_name` on `safedi_swift_library` under Bazel, `--package-name` in a custom build) if they are in one package, or make the initializer `public` to fix.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -155,22 +153,15 @@ struct SafeDIToolSeamAccessTests: ~Copyable {
 			let servicePath = fixtures["Feature"]!["Service.swift"]
 			return seam
 				? """
-				\(panelPath):2:1: error: `Panel` is `package`, so module `App`, which SafeDI is not told is in the same package, cannot construct it in the code SafeDI generates. Give modules `App` and `Feature` the same package name (`SWIFT_PACKAGE_NAME` under Tuist, `package_name` on `safedi_swift_library` under Bazel, `--package-name` in a custom build) if they are in one package, or make `Panel` `public` to fix.
-				\(panelPath):2:1-2:8: fixit: public
-				\(servicePath):2:1: error: `Service` is `package`, so module `App`, which SafeDI is not told is in the same package, cannot construct it in the code SafeDI generates. Give modules `App` and `Feature` the same package name (`SWIFT_PACKAGE_NAME` under Tuist, `package_name` on `safedi_swift_library` under Bazel, `--package-name` in a custom build) if they are in one package, or make `Service` `public` to fix.
-				\(servicePath):2:1-2:8: fixit: public
-				\(servicePath):3:5: error: `Service`’s initializer is `package`, so module `App`, which SafeDI is not told is in the same package, cannot call it in the code SafeDI generates. Give modules `App` and `Feature` the same package name (`SWIFT_PACKAGE_NAME` under Tuist, `package_name` on `safedi_swift_library` under Bazel, `--package-name` in a custom build) if they are in one package, or make the initializer `public` to fix.
-				\(servicePath):3:5-3:12: fixit: public
+				\(panelPath): error: `Panel` is `package`, so module `App`, which SafeDI is not told is in the same package, cannot construct it in the code SafeDI generates. Give modules `App` and `Feature` the same package name (`SWIFT_PACKAGE_NAME` under Tuist, `package_name` on `safedi_swift_library` under Bazel, `--package-name` in a custom build) if they are in one package, or make `Panel` `public` to fix.
+				\(servicePath): error: `Service` is `package`, so module `App`, which SafeDI is not told is in the same package, cannot construct it in the code SafeDI generates. Give modules `App` and `Feature` the same package name (`SWIFT_PACKAGE_NAME` under Tuist, `package_name` on `safedi_swift_library` under Bazel, `--package-name` in a custom build) if they are in one package, or make `Service` `public` to fix.
+				\(servicePath): error: `Service`’s initializer is `package`, so module `App`, which SafeDI is not told is in the same package, cannot call it in the code SafeDI generates. Give modules `App` and `Feature` the same package name (`SWIFT_PACKAGE_NAME` under Tuist, `package_name` on `safedi_swift_library` under Bazel, `--package-name` in a custom build) if they are in one package, or make the initializer `public` to fix.
 				"""
 				: """
-				\(panelPath):2:1: error: `Panel` is `package`, so module `App`, which SafeDI is not told is in the same package, cannot construct it in the code SafeDI generates. Give modules `App` and `Feature` the same package name (`SWIFT_PACKAGE_NAME` under Tuist, `package_name` on `safedi_swift_library` under Bazel, `--package-name` in a custom build) if they are in one package, or make `Panel` `public` to fix.
-				\(panelPath):2:1-2:8: fixit: public
-				\(panelPath):3:5: error: `Panel`’s initializer is `package`, so module `App`, which SafeDI is not told is in the same package, cannot call it in the code SafeDI generates. Give modules `App` and `Feature` the same package name (`SWIFT_PACKAGE_NAME` under Tuist, `package_name` on `safedi_swift_library` under Bazel, `--package-name` in a custom build) if they are in one package, or make the initializer `public` to fix, or declare `Panel` with `generateDependencyTree: true`, so that module `Feature` generates its tree and this module calls the initializer it generates.
-				\(panelPath):3:5-3:12: fixit: public
-				\(servicePath):2:1: error: `Service` is `package`, so module `App`, which SafeDI is not told is in the same package, cannot construct it in the code SafeDI generates. Give modules `App` and `Feature` the same package name (`SWIFT_PACKAGE_NAME` under Tuist, `package_name` on `safedi_swift_library` under Bazel, `--package-name` in a custom build) if they are in one package, or make `Service` `public` to fix.
-				\(servicePath):2:1-2:8: fixit: public
-				\(servicePath):3:5: error: `Service`’s initializer is `package`, so module `App`, which SafeDI is not told is in the same package, cannot call it in the code SafeDI generates. Give modules `App` and `Feature` the same package name (`SWIFT_PACKAGE_NAME` under Tuist, `package_name` on `safedi_swift_library` under Bazel, `--package-name` in a custom build) if they are in one package, or make the initializer `public` to fix.
-				\(servicePath):3:5-3:12: fixit: public
+				\(panelPath): error: `Panel` is `package`, so module `App`, which SafeDI is not told is in the same package, cannot construct it in the code SafeDI generates. Give modules `App` and `Feature` the same package name (`SWIFT_PACKAGE_NAME` under Tuist, `package_name` on `safedi_swift_library` under Bazel, `--package-name` in a custom build) if they are in one package, or make `Panel` `public` to fix.
+				\(panelPath): error: `Panel`’s initializer is `package`, so module `App`, which SafeDI is not told is in the same package, cannot call it in the code SafeDI generates. Give modules `App` and `Feature` the same package name (`SWIFT_PACKAGE_NAME` under Tuist, `package_name` on `safedi_swift_library` under Bazel, `--package-name` in a custom build) if they are in one package, or make the initializer `public` to fix, or declare `Panel` with `generateDependencyTree: true`, so that module `Feature` generates its tree and this module calls the initializer it generates.
+				\(servicePath): error: `Service` is `package`, so module `App`, which SafeDI is not told is in the same package, cannot construct it in the code SafeDI generates. Give modules `App` and `Feature` the same package name (`SWIFT_PACKAGE_NAME` under Tuist, `package_name` on `safedi_swift_library` under Bazel, `--package-name` in a custom build) if they are in one package, or make `Service` `public` to fix.
+				\(servicePath): error: `Service`’s initializer is `package`, so module `App`, which SafeDI is not told is in the same package, cannot call it in the code SafeDI generates. Give modules `App` and `Feature` the same package name (`SWIFT_PACKAGE_NAME` under Tuist, `package_name` on `safedi_swift_library` under Bazel, `--package-name` in a custom build) if they are in one package, or make the initializer `public` to fix.
 				"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -221,9 +212,8 @@ struct SafeDIToolSeamAccessTests: ~Copyable {
 			let themePath = fixtures["Feature"]!["Theme.swift"]
 			return """
 			\(fixtures["App"]!["Shell.swift"]):10:5: error: `Shell` provides `theme: Theme`, but the `public` initializer SafeDI generated for `Service` in module `Feature`, the narrowest one module `App` can call, does not take it: `Service` takes `theme` only on its `package` initializer, so this call would pass `nil` to `Badge`, which the tree would hand `theme` were it built inline. `Theme` is declared `package`. Give module `App` the package name of module `Feature` (`SWIFT_PACKAGE_NAME` under Tuist, `package_name` on `safedi_swift_library` under Bazel, `--package-name` in a custom build) if the two are in one package; declare `Theme` `public`; or stop providing `theme` on this path.
-			\(themePath):1:1: note: `Theme` is declared `package` here.
-			\(themePath):1:1-1:8: fixit: public
-			\(fixtures["Feature"]!["Badge.swift"]):7:5: note: `Badge` receives `theme: Theme?` here.
+			\(themePath): note: `Theme` is declared `package` here.
+			\(fixtures["Feature"]!["Badge.swift"]): note: `Badge` receives `theme: Theme?` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -290,10 +280,17 @@ struct SafeDIToolSeamAccessTests: ~Copyable {
 		// (`generate_callsPublicTier_whenSeamsOwnInitializerIsNarrowerThanCallerCanCall`), which the error offers.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let screenPath = Self.declarationPath(of: "Screen.swift", in: "Feature", fixtures: fixtures, under: integration)
-			return """
-			\(screenPath):3:5: error: `Screen`’s initializer is `internal`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix, or declare `Screen` with `generateDependencyTree: true`, so that module `Feature` generates its tree and this module calls the initializer it generates.
-			\(screenPath):3:5-3:5: fixit: public\(" ")
-			"""
+			return switch integration {
+			case .moduleInfo:
+				"""
+				\(screenPath): error: `Screen`’s initializer is `internal`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix, or declare `Screen` with `generateDependencyTree: true`, so that module `Feature` generates its tree and this module calls the initializer it generates.
+				"""
+			case .swiftPackagePlugin:
+				"""
+				\(screenPath):3:5: error: `Screen`’s initializer is `internal`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix, or declare `Screen` with `generateDependencyTree: true`, so that module `Feature` generates its tree and this module calls the initializer it generates.
+				\(screenPath):3:5-3:5: fixit: public\(" ")
+				"""
+			}
 		}) {
 			try await executeSafeDIToolMultiModuleTest(modules: Self.screenModules(seam: false, screenInitializer: "init(detail: Detail)", declarations: ["@Instantiated let detail: Detail"], appDeclarations: ["@Instantiated let screen: Screen"]), integration: integration, filesToDelete: &filesToDelete)
 		}
@@ -346,12 +343,20 @@ struct SafeDIToolSeamAccessTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let readerPath = Self.declarationPath(of: "Reader.swift", in: "Feature", fixtures: fixtures, under: integration)
 			let screenPath = Self.declarationPath(of: "Screen.swift", in: "Feature", fixtures: fixtures, under: integration)
-			return """
-			\(readerPath):3:5: error: `Reader`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix, or declare `Screen` with `generateDependencyTree: true`, so that module `Feature` generates its tree and this module calls the initializer it generates.
-			\(readerPath):3:5-3:12: fixit: public
-			\(screenPath):3:5: error: `Screen`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix, or declare `Screen` with `generateDependencyTree: true`, so that module `Feature` generates its tree and this module calls the initializer it generates.
-			\(screenPath):3:5-3:12: fixit: public
-			"""
+			return switch integration {
+			case .moduleInfo:
+				"""
+				\(readerPath): error: `Reader`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix, or declare `Screen` with `generateDependencyTree: true`, so that module `Feature` generates its tree and this module calls the initializer it generates.
+				\(screenPath): error: `Screen`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix, or declare `Screen` with `generateDependencyTree: true`, so that module `Feature` generates its tree and this module calls the initializer it generates.
+				"""
+			case .swiftPackagePlugin:
+				"""
+				\(readerPath):3:5: error: `Reader`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix, or declare `Screen` with `generateDependencyTree: true`, so that module `Feature` generates its tree and this module calls the initializer it generates.
+				\(readerPath):3:5-3:12: fixit: public
+				\(screenPath):3:5: error: `Screen`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix, or declare `Screen` with `generateDependencyTree: true`, so that module `Feature` generates its tree and this module calls the initializer it generates.
+				\(screenPath):3:5-3:12: fixit: public
+				"""
+			}
 		}) {
 			try await executeSafeDIToolMultiModuleTest(modules: Self.screenModules(seam: false, screenInitializer: "package init(reader: Reader)", declarations: ["@Instantiated let reader: Reader"], appDeclarations: ["@Instantiated let token: Token", "@Instantiated let screen: Screen"]), integration: integration, filesToDelete: &filesToDelete)
 		}

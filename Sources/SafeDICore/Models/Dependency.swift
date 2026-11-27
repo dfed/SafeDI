@@ -89,136 +89,172 @@ public struct Dependency: Codable, Hashable, Sendable {
 	/// The range carries no file path of its own: every dependency records three ranges, and module info is
 	/// serialized and read back on every build, so repeating the path in each one is measurable.
 	///
-	/// A module info file the Bazel rule writes stores a range’s lines and columns in a positions file of their own
-	/// (`--module-info-positions-in-own-file`), which a dependent opens only to report a diagnostic, so a line moved in a
-	/// module leaves the module info file its dependents read unchanged. Read without that file, the range is
-	/// ``Placement-swift.enum/storedElsewhere``: only a diagnostic prints a range, and a run that would print one reads the
-	/// positions files and runs again.
+	/// A range a module records in its `.safedi` file is stored without its lines and columns, as every location there is
+	/// (``DeclarationLocation``), so a line moved in a module leaves the file its dependents read unchanged. Read back, it
+	/// is ``Span-swift.enum/unlocated(owner:part:)``: the declaration it belongs to and which part of that declaration it
+	/// spans, which a run that reads the owner's file again can find.
 	public struct SourceRange: Codable, Hashable, Sendable {
 		public init(startLine: Int, startColumn: Int, endLine: Int, endColumn: Int) {
-			placement = .here(startLine: startLine, startColumn: startColumn, endLine: endLine, endColumn: endColumn)
+			span = .located(startLine: startLine, startColumn: startColumn, endLine: endLine, endColumn: endColumn)
 		}
 
-		public init(placement: Placement) {
-			self.placement = placement
+		/// The range of `part` of the declaration at `owner`, read without its lines and columns.
+		public init(owner: DeclarationLocation, part: Part) {
+			span = .unlocated(owner: owner, part: part)
 		}
 
 		/// The empty range where `location` begins, which an insertion replaces.
 		public static func insertionPoint(at location: DeclarationLocation) -> SourceRange {
-			switch location.placement {
-			case let .here(line, column):
-				SourceRange(startLine: line, startColumn: column, endLine: line, endColumn: column)
-			case .storedElsewhere:
-				SourceRange(placement: .storedElsewhere)
+			if let position = location.position {
+				SourceRange(startLine: position.line, startColumn: position.column, endLine: position.line, endColumn: position.column)
+			} else {
+				SourceRange(owner: location, part: .insertionPoint)
 			}
 		}
 
-		/// Where the range’s lines and columns are.
-		public enum Placement: Codable, Hashable, Sendable {
+		/// Where the range is.
+		public enum Span: Hashable, Sendable {
 			/// The one-based line and column of the range’s first character, and those of the character after its last one,
 			/// so the end column is exclusive.
-			case here(startLine: Int, startColumn: Int, endLine: Int, endColumn: Int)
-			/// In the positions file of the module info file the range was read from, which the run did not read.
-			case storedElsewhere
+			case located(startLine: Int, startColumn: Int, endLine: Int, endColumn: Int)
+			/// Read from another module’s `.safedi` file, which stores no line or column: `part` of the declaration that
+			/// begins at `owner`, a location ranked in its file.
+			case unlocated(owner: DeclarationLocation, part: Part)
 		}
 
-		public let placement: Placement
+		/// The part of its declaration an unlocated range spans: what a run that reads the declaration’s file again finds
+		/// the range of.
+		public enum Part: String, Codable, Hashable, Sendable, CaseIterable {
+			/// The dependency’s identifier (`Dependency.identifierRange`).
+			case identifier
+			/// The dependency’s type annotation (`Dependency.typeAnnotationRange`).
+			case typeAnnotation
+			/// The dependency’s attribute, written without arguments (`Dependency.bareAttributeRange`).
+			case bareAttribute
+			/// The declaration’s access modifier (`AccessDeclaration.modifierRange`).
+			case accessModifier
+			/// The value of the `@Instantiable` macro’s `generateMock:` argument (`Instantiable.mockGenerationArgumentRange`).
+			case mockGenerationArgument
+			/// The empty range where the declaration begins (``SourceRange/insertionPoint(at:)``).
+			case insertionPoint
+		}
 
-		/// Coded as `startLine`, `startColumn`, `endLine` and `endColumn`, as before ranges could be stored elsewhere, and
-		/// as nothing where they are, so `dump` prints a module info file that stores its positions with it as it always has.
+		public let span: Span
+
+		/// Coded as `startLine`, `startColumn`, `endLine` and `endColumn` where the range holds them, and otherwise as the
+		/// `owner` and `part` it was read with, so `dump` prints either.
 		private enum CodingKeys: String, CodingKey {
 			case startLine
 			case startColumn
 			case endLine
 			case endColumn
+			case owner
+			case part
 		}
 
 		public init(from decoder: any Decoder) throws {
 			let container = try decoder.container(keyedBy: CodingKeys.self)
-			placement = if let startLine = try container.decodeIfPresent(Int.self, forKey: .startLine) {
-				try .here(
+			span = if let startLine = try container.decodeIfPresent(Int.self, forKey: .startLine) {
+				try .located(
 					startLine: startLine,
 					startColumn: container.decode(Int.self, forKey: .startColumn),
 					endLine: container.decode(Int.self, forKey: .endLine),
 					endColumn: container.decode(Int.self, forKey: .endColumn),
 				)
 			} else {
-				.storedElsewhere
+				try .unlocated(
+					owner: container.decode(DeclarationLocation.self, forKey: .owner),
+					part: container.decode(Part.self, forKey: .part),
+				)
 			}
 		}
 
 		public func encode(to encoder: any Encoder) throws {
 			var container = encoder.container(keyedBy: CodingKeys.self)
-			if case let .here(startLine, startColumn, endLine, endColumn) = placement {
+			switch span {
+			case let .located(startLine, startColumn, endLine, endColumn):
 				try container.encode(startLine, forKey: .startLine)
 				try container.encode(startColumn, forKey: .startColumn)
 				try container.encode(endLine, forKey: .endLine)
 				try container.encode(endColumn, forKey: .endColumn)
+			case let .unlocated(owner, part):
+				try container.encode(owner, forKey: .owner)
+				try container.encode(part, forKey: .part)
 			}
 		}
 	}
 
 	/// The file, line, and column at which a declaration begins.
 	///
-	/// Read from a module info file the Bazel rule writes, a location keeps its file and its ``order`` there, and its line
-	/// and column are ``Placement-swift.enum/storedElsewhere``, in the file’s positions file (``SourceRange`` says why).
-	/// Two locations compare and equate by their file and their line and column when both hold them, and otherwise by
-	/// their file and their order, which ranks the location among every location the module recorded in its file: the
-	/// two agree, so every comparison a run makes comes out as it would with every position read. Ranks agree with
-	/// positions only among the locations of one module info file. A source file compiled into two modules is ranked in
-	/// each, so its ranks from two modules, or a rank beside the run’s own unranked location of that file, say nothing
-	/// about which comes first. No successful run is known to compare them: each type is declared by one module, and
-	/// two modules that declare one name fail the run, which then reads every position.
+	/// Read from a module’s `.safedi` file, a location keeps its file and its ``order`` there, and no ``position``: the
+	/// file stores no line or column, so a line moved in a module changes no file its dependents read. Two locations
+	/// compare and equate by their file and their position when both hold one, and otherwise by their file and their
+	/// order, which ranks the location among every location the module recorded in its file: the two agree, so every
+	/// comparison a run makes comes out as it would with every position read. Ranks agree with positions only among the
+	/// locations of one module’s file. A source file compiled into two modules is ranked in each, so its ranks from two
+	/// modules, or a rank beside the run’s own location of that file, say nothing about which comes first. No successful
+	/// run is known to compare them: each type is declared by one module, and two modules that declare one name fail the
+	/// run.
 	public struct DeclarationLocation: Codable, Hashable, Sendable {
 		public init(filePath: String, line: Int, column: Int) {
-			self.filePath = filePath
-			order = 0
-			placement = .here(line: line, column: column)
+			self.init(filePath: filePath, order: 0, position: Position(line: line, column: column))
 		}
 
-		public init(filePath: String, order: Int, placement: Placement) {
+		/// A location read from a module’s `.safedi` file, ranked `order` among those the module recorded in its file.
+		public init(filePath: String, order: Int) {
+			self.init(filePath: filePath, order: order, position: nil)
+		}
+
+		private init(filePath: String, order: Int, position: Position?) {
 			self.filePath = filePath
 			self.order = order
-			self.placement = placement
+			self.position = position
 		}
 
-		/// Where the location’s line and column are.
-		public enum Placement: Codable, Hashable, Sendable {
-			/// The one-based line on which the declaration begins (its first attribute), and the one-based column.
-			case here(line: Int, column: Int)
-			/// In the positions file of the module info file the location was read from, which the run did not read.
-			case storedElsewhere
+		/// A line and column in a file.
+		public struct Position: Codable, Hashable, Sendable, Comparable {
+			public init(line: Int, column: Int) {
+				self.line = line
+				self.column = column
+			}
+
+			/// The one-based line on which the declaration begins (its first attribute).
+			public let line: Int
+			/// The one-based column.
+			public let column: Int
+
+			public static func < (lhs: Position, rhs: Position) -> Bool {
+				(lhs.line, lhs.column) < (rhs.line, rhs.column)
+			}
 		}
 
 		/// The path to the file containing the declaration, exactly as it was provided to the parser.
 		public let filePath: String
 		/// The location’s rank, from 1, among the distinct locations its module recorded in its file, in source order, where
-		/// a module info file stores positions in a positions file of their own; 0 where nothing ranked it.
+		/// it was read from a `.safedi` file; 0 where nothing ranked it.
 		public let order: Int
-		/// Where the location’s line and column are.
-		public let placement: Placement
+		/// The line and column, or `nil` for a location read from a `.safedi` file, which stores none.
+		public let position: Position?
 
 		/// This location with its file path respelled by `spelling`.
 		public func respellingFilePath(_ spelling: (String) -> String) -> DeclarationLocation {
-			DeclarationLocation(filePath: spelling(filePath), order: order, placement: placement)
+			DeclarationLocation(filePath: spelling(filePath), order: order, position: position)
 		}
 
-		/// Whether the two are one location: by line and column where both hold them, and otherwise by order. A module info
-		/// file writes each location it ranks either with its line and column or without them, never both, so two locations
-		/// that equate by order are never one with them and one without.
+		/// Whether the two are one location: by position where both hold one, and otherwise by order. A location holds a
+		/// position or a rank, never both, so two locations that equate by order are never one with a position and one
+		/// without.
 		public static func == (lhs: DeclarationLocation, rhs: DeclarationLocation) -> Bool {
 			guard lhs.filePath == rhs.filePath else { return false }
-			return switch (lhs.placement, rhs.placement) {
-			case (.here, .here):
-				lhs.placement == rhs.placement
-			case (.here, .storedElsewhere), (.storedElsewhere, .here), (.storedElsewhere, .storedElsewhere):
+			return if let lhsPosition = lhs.position, let rhsPosition = rhs.position {
+				lhsPosition == rhsPosition
+			} else {
 				lhs.order == rhs.order
 			}
 		}
 
-		/// Coded as `filePath`, `line` and `column`, as before locations were ranked, with `order` only where a module info
-		/// file ranked the location, and without `line` and `column` where they are stored elsewhere, so `dump` prints a
-		/// module info file that stores its positions with it as it always has.
+		/// Coded as `filePath`, `line` and `column`, as before locations were ranked, with `order` only where the location
+		/// is ranked, and without `line` and `column` where it holds no position.
 		private enum CodingKeys: String, CodingKey {
 			case filePath
 			case line
@@ -230,10 +266,10 @@ public struct Dependency: Codable, Hashable, Sendable {
 			let container = try decoder.container(keyedBy: CodingKeys.self)
 			filePath = try container.decode(String.self, forKey: .filePath)
 			order = try container.decodeIfPresent(Int.self, forKey: .order) ?? 0
-			placement = if let line = try container.decodeIfPresent(Int.self, forKey: .line) {
-				try .here(line: line, column: container.decode(Int.self, forKey: .column))
+			position = if let line = try container.decodeIfPresent(Int.self, forKey: .line) {
+				try Position(line: line, column: container.decode(Int.self, forKey: .column))
 			} else {
-				.storedElsewhere
+				nil
 			}
 		}
 
@@ -243,39 +279,39 @@ public struct Dependency: Codable, Hashable, Sendable {
 			if order != 0 {
 				try container.encode(order, forKey: .order)
 			}
-			if case let .here(line, column) = placement {
-				try container.encode(line, forKey: .line)
-				try container.encode(column, forKey: .column)
+			if let position {
+				try container.encode(position.line, forKey: .line)
+				try container.encode(position.column, forKey: .column)
 			}
 		}
 
 		/// Hashes what `==` compares.
 		public func hash(into hasher: inout Hasher) {
 			hasher.combine(filePath)
-			switch placement {
-			case .here:
-				hasher.combine(placement)
-			case .storedElsewhere:
+			if let position {
+				hasher.combine(position)
+			} else {
 				hasher.combine(order)
 			}
 		}
 
-		/// The line and column, or `nil` where they are stored elsewhere, which only a run that did not read another
-		/// module’s positions file sees.
-		public var lineAndColumn: (line: Int, column: Int)? {
-			if case let .here(line, column) = placement {
-				(line, column)
-			} else {
-				nil
-			}
+		/// The position as `AliasDeclarationReferences` reads it. A bridge for that file alone, which the rewrite of alias
+		/// bindings deletes: remove this with it, and read ``position`` everywhere else.
+		public var placement: AliasReferencePlacement {
+			position.map { .here(line: $0.line, column: $0.column) } ?? .unlocated
+		}
+
+		/// See ``placement``.
+		public enum AliasReferencePlacement: Sendable {
+			case here(line: Int, column: Int)
+			case unlocated
 		}
 
 		/// A string that two locations share exactly when they are equal.
 		public var identity: String {
-			switch placement {
-			case let .here(line, column):
-				"\(filePath):\(line):\(column)"
-			case .storedElsewhere:
+			if let position {
+				"\(filePath):\(position.line):\(position.column)"
+			} else {
 				"\(filePath)#\(order)"
 			}
 		}

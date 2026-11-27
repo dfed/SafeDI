@@ -2345,7 +2345,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["Screen.swift"]):12:5: error: `Panel`’s mock hands this fill `filter: [3 of Int]`, but the `public` mock SafeDI generated for `DefaultService` in module `Impl`, the narrowest one module `App` can call, does not take it: `DefaultService.mock` takes `filter` only on its `package` tier, so this call would pass `nil` to `TokenCache`, which the inline mock would hand `filter`. `[3 of Int]` is `package` as far as SafeDI can tell: SafeDI cannot read its spelling, and every initializer, `instantiate(…)` and mock method that mentions it in module `Impl` or on a type that receives it is `package` (`TokenCache.init(filter:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `TokenCache.init(filter:)` to `public`; mention `[3 of Int]` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; or stop providing `filter` on this path.
-			\(fixtures["Impl"]!["TokenCache.swift"]):10:5: note: `TokenCache` receives `filter: [3 of Int]?` here.
+			\(fixtures["Impl"]!["TokenCache.swift"]): note: `TokenCache` receives `filter: [3 of Int]?` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -2384,7 +2384,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["Screen.swift"]):12:5: error: `Screen` provides `filter: [3 of Int]`, but no mock SafeDI generated for `Board` takes it: `Board`’s mock tree calls the `public` mock SafeDI generated for `DefaultService` in module `Impl`, the narrowest one module `Mid` can call, which takes `filter` only on its `package` tier, so calling it would pass `nil` to `TokenCache`, which the inline mock would hand `filter`. `[3 of Int]` is `package` as far as SafeDI can tell: SafeDI cannot read its spelling, and every initializer, `instantiate(…)` and mock method that mentions it in module `Impl` or on a type that receives it is `package` (`TokenCache.init(filter:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `TokenCache.init(filter:)` to `public`; mention `[3 of Int]` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; or stop providing `filter` on this path.
-			\(fixtures["Impl"]!["TokenCache.swift"]):10:5: note: `TokenCache` receives `filter: [3 of Int]?` here.
+			\(fixtures["Impl"]!["TokenCache.swift"]): note: `TokenCache` receives `filter: [3 of Int]?` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -6215,7 +6215,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		await expectTwinsError(core: [Self.hubWithBench], app: [Self.hubScreen, Self.defaultServiceReceivingToken]) { fixtures in
 			"""
 			\(fixtures["App"]!["DefaultService.swift"]):10:5: error: @Received property `token: Token` is hidden in chain: HubScreen -> Hub -> Model -> Bench -> DefaultService. `Bench` declares `token: Badge` with the same label, so the types below `Bench` receive `token: Badge` instead. Give `token: Badge` on `Bench` a different label to fix.
-			\(fixtures["Core"]!["Badge.swift"]):15:5: note: `token: Badge` is declared here
+			\(fixtures["Core"]!["Badge.swift"]): note: `token: Badge` is declared here
 			"""
 		}
 	}
@@ -6628,7 +6628,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		await expectTwinsError(core: [Self.officeWithDesk(laterLabel: "token")], app: [Self.officeScreen, Self.defaultServiceReceivingToken]) { fixtures in
 			"""
 			\(fixtures["App"]!["DefaultService.swift"]):10:5: error: @Received property `token: Token` is hidden in chain: OfficeScreen -> Office -> Desk -> Model -> DefaultService. `Desk` declares `token: Stamp` with the same label, so the types below `Desk` receive `token: Stamp` instead. Give `token: Stamp` on `Desk` a different label to fix.
-			\(fixtures["Core"]!["Model.swift"]):29:5: note: `token: Stamp` is declared here
+			\(fixtures["Core"]!["Model.swift"]): note: `token: Stamp` is declared here
 			"""
 		}
 	}
@@ -6642,7 +6642,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		await expectTwinsError(core: [Self.officeWithBench], app: [Self.officeScreen, Self.defaultServiceReceivingToken]) { fixtures in
 			"""
 			\(fixtures["App"]!["DefaultService.swift"]):10:5: error: @Received property `token: Token` is hidden in chain: OfficeScreen -> Office -> Bench -> Model -> DefaultService. `Bench` declares `token: Badge` with the same label, so the types below `Bench` receive `token: Badge` instead. Give `token: Badge` on `Bench` a different label to fix.
-			\(fixtures["Core"]!["Model.swift"]):24:5: note: `token: Badge` is declared here
+			\(fixtures["Core"]!["Model.swift"]): note: `token: Badge` is declared here
 			"""
 		}
 	}

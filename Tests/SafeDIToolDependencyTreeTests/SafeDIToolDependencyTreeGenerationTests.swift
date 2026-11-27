@@ -6306,10 +6306,17 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		// against `Feature`, as a root's tree is: `Core`'s internal `Service` cannot be constructed there.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			let servicePath = Self.declarationPath(of: "Service.swift", in: "Core", fixtures: fixtures, under: integration)
-			return """
-			\(servicePath):2:1: error: `Service` is `internal`, so module `Feature`, another module of the same package, cannot construct it in the code SafeDI generates. Make `Service` `package` to fix.
-			\(servicePath):2:1-2:9: fixit: package
-			"""
+			return switch integration {
+			case .moduleInfo:
+				"""
+				\(servicePath): error: `Service` is `internal`, so module `Feature`, another module of the same package, cannot construct it in the code SafeDI generates. Make `Service` `package` to fix.
+				"""
+			case .swiftPackagePlugin:
+				"""
+				\(servicePath):2:1: error: `Service` is `internal`, so module `Feature`, another module of the same package, cannot construct it in the code SafeDI generates. Make `Service` `package` to fix.
+				\(servicePath):2:1-2:9: fixit: package
+				"""
+			}
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [

@@ -1494,7 +1494,7 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["Live.swift"]):10:5: error: `Live` receives `cache: Cache`, which `Screen` declares between where `Screen` instantiates `stepBuilder: Instantiator<Step>` and where `Screen` instantiates it again. Inline, the `Step` built again receives `Screen`’s `cache`, but SafeDI hands the builder for `Step`’s `api: any Api` (`api` of `apiBuilder`) the same values at every level of that cycle. Declare `@Received let cache: Cache` on `Step`, so each `Step` receives the `cache` of its own level and hands it on, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feature"]!["Screen.swift"]):9:5: note: `Screen` declares `cache: Cache` here.
+			\(fixtures["Feature"]!["Screen.swift"]): note: `Screen` declares `cache: Cache` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(modules: Self.fixtures["mark"] ?? [], integration: .moduleInfo, filesToDelete: &filesToDelete)

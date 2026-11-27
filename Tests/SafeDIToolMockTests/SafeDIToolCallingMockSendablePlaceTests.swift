@@ -398,7 +398,7 @@ struct SafeDIToolCallingMockSendablePlaceTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["AppTypes.swift"]):10:5: error: `Live` receives `db: Db?`, which `F`’s public mock binds from the `db` its caller passes, outside the `@Sendable` function that builds `k: SendableInstantiator<K>`, and SafeDI hands the builder for `K`’s `api: any Api` (`api` of `apiSendableBuilder`) only what that function binds. Its caller passes no `db: Db` of its own, so the mock may build its own. Instantiate `db` above the call of `F`’s public mock, so the call passes it and the builder’s caller reads it, or declare an @Instantiable type that fulfills `Api` in module `Feat` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feat"]!["FeatTypes.swift"]):17:5: note: `F` receives `db: Db` here.
+			\(fixtures["Feat"]!["FeatTypes.swift"]): note: `F` receives `db: Db` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(modules: graph.modules(.mock), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)

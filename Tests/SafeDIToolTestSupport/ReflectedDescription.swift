@@ -44,7 +44,8 @@ private func reflectedText(of value: Any) -> String {
 	let children = mirror.children.map { child in
 		"\(child.label.map { "\($0): " } ?? "")\(reflectedText(of: child.value))"
 	}
-	return if mirror.displayStyle == .set {
+	// A set's or a dictionary's order follows its hashing and its history, never its contents, so it is described sorted.
+	return if mirror.displayStyle == .set || mirror.displayStyle == .dictionary {
 		"\(type(of: value))[\(children.sorted { $0.utf8.lexicographicallyPrecedes($1.utf8) }.joined(separator: ", "))]"
 	} else if children.isEmpty {
 		// A leaf such as a string, a number, or an enum case without a payload.

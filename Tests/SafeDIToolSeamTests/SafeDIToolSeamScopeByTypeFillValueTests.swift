@@ -487,7 +487,7 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["DefaultApi.swift"]):11:5: error: `DefaultApi` receives `theme: Theme`, which `Outer` builds where it calls `Inner`, but `Outer` passes the builder for `Panel`’s `api: any Api` (`api` of `apiBuilder`) on from its own caller, which cannot hand it `Outer`’s values. Declare `@Received let theme: Theme` on `Inner`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies, so `Outer` fills the builder itself.
-			\(fixtures["Feature"]!["Outer.swift"]):8:5: note: `Outer` declares `theme: Theme` here.
+			\(fixtures["Feature"]!["Outer.swift"]): note: `Outer` declares `theme: Theme` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -511,8 +511,8 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 		// value, but one fill fills both, and no one parameter takes a `LazilyInstantiated<Session>` and a `Session`.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Home.swift"]):8:5: error: SafeDI fills every place of the builder for `Avatar`’s `userService: any UserService` (`userService` of `userServiceBuilder`) with one function, which reads `session`, but the types on the routes to those places declare it in forms one value cannot carry: `session: LazilyInstantiated<Session>` (`Home`) and `session: Session` (`Settings`). Declare `session: LazilyInstantiated<Session>` on each, or declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feature"]!["Settings.swift"]):8:5: note: `Settings` declares `session: Session` here.
+			\(fixtures["Feature"]!["Home.swift"]): error: SafeDI fills every place of the builder for `Avatar`’s `userService: any UserService` (`userService` of `userServiceBuilder`) with one function, which reads `session`, but the types on the routes to those places declare it in forms one value cannot carry: `session: LazilyInstantiated<Session>` (`Home`) and `session: Session` (`Settings`). Declare `session: LazilyInstantiated<Session>` on each, or declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Feature"]!["Settings.swift"]): note: `Settings` declares `session: Session` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(

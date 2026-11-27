@@ -413,7 +413,7 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		let diagnostics = { (fixtures: [String: FixturePaths]) in
 			"""
 			\(fixtures["App"]!["LiveGadget.swift"]):10:5: error: @Received property `id: Code` is hidden in chain: Root -> Outer -> Inner -> Instantiator<Screen> -> any Service -> LiveGadget. `Screen` declares `id: String` with the same label, so the types below `Screen` receive `id: String` instead. Give `id: String` on `Screen` a different label to fix.
-			\(fixtures["Feature"]!["Screen.swift"]):8:5: note: `id: String` is declared here
+			\(fixtures["Feature"]!["Screen.swift"]): note: `id: String` is declared here
 			"""
 		}
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: diagnostics) {

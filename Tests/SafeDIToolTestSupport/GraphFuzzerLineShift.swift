@@ -62,9 +62,16 @@ enum GraphFuzzerLineShift {
 
 	/// A `.safedi` file's bytes as text that compares as the bytes do, one character per byte, with each occurrence of
 	/// `fixtureRoot`, the directory a run writes its fixtures under, replaced by `<fixture-root>`: two runs' roots differ
-	/// only in a UUID, so every length the file stores agrees.
+	/// only in a UUID, so every length the file stores agrees. The header's checksum (bytes 22 to 30, `BinaryFile`) is
+	/// left out: it covers the body's bytes, the root among them, so it differs between two runs whose bodies are the same
+	/// once the root is replaced, and says nothing the body does not.
 	static func moduleInfoText(_ data: Data, fixtureRoot: String) -> String {
-		(String(data: data, encoding: .isoLatin1) ?? "").replacingOccurrences(of: fixtureRoot, with: "<fixture-root>")
+		var bytes = data
+		let checksumRange = (bytes.startIndex + 22)..<(bytes.startIndex + 30)
+		if bytes.count >= 30 {
+			bytes.replaceSubrange(checksumRange, with: Data(count: checksumRange.count))
+		}
+		return (String(data: bytes, encoding: .isoLatin1) ?? "").replacingOccurrences(of: fixtureRoot, with: "<fixture-root>")
 	}
 
 	/// Each module's `.safedi` text (`moduleInfoText(_:fixtureRoot:)`), by module name, of every module a run of the

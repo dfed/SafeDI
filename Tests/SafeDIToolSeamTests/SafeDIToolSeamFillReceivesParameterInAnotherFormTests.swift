@@ -51,8 +51,8 @@ struct SafeDIToolSeamFillReceivesParameterInAnotherFormTests: ~Copyable {
 		// instance of `Root`'s `tag`; the fill would get `nil`.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Home.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Home`: its tree receives `tag` as `tag: LazilyInstantiated<Tag>?` on `Reader` and `tag: Tag?` on `Impl`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `tag` the same way in every type of the tree, or declare it on `Home` as the form that provides the others: `@Received let tag: LazilyInstantiated<Tag>`.
-			\(fixtures["Feature"]!["Reader.swift"]):7:5: note: `Reader` receives `tag: LazilyInstantiated<Tag>?` here.
+			\(fixtures["Feature"]!["Home.swift"]): error: SafeDI cannot generate the dependency tree of `Home`: its tree receives `tag` as `tag: LazilyInstantiated<Tag>?` on `Reader` and `tag: Tag?` on `Impl`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `tag` the same way in every type of the tree, or declare it on `Home` as the form that provides the others: `@Received let tag: LazilyInstantiated<Tag>`.
+			\(fixtures["Feature"]!["Reader.swift"]): note: `Reader` receives `tag: LazilyInstantiated<Tag>?` here.
 			\(fixtures["App"]!["Impl.swift"]):9:5: note: `Impl` receives `tag: Tag?` here.
 			"""
 		}) {
@@ -124,8 +124,8 @@ struct SafeDIToolSeamFillReceivesParameterInAnotherFormTests: ~Copyable {
 	mutating func generate_throwsParametersShareLabel_whenFillRequiresValueOfOptionalWrapperPassThrough() async {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Home.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Home`: its tree receives `tag` as `tag: LazilyInstantiated<Tag>?` on `Reader` and `tag: Tag` on `Impl`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `tag` the same way in every type of the tree, or declare it on `Home` as the form that provides the others: `@Received let tag: LazilyInstantiated<Tag>`.
-			\(fixtures["Feature"]!["Reader.swift"]):7:5: note: `Reader` receives `tag: LazilyInstantiated<Tag>?` here.
+			\(fixtures["Feature"]!["Home.swift"]): error: SafeDI cannot generate the dependency tree of `Home`: its tree receives `tag` as `tag: LazilyInstantiated<Tag>?` on `Reader` and `tag: Tag` on `Impl`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `tag` the same way in every type of the tree, or declare it on `Home` as the form that provides the others: `@Received let tag: LazilyInstantiated<Tag>`.
+			\(fixtures["Feature"]!["Reader.swift"]): note: `Reader` receives `tag: LazilyInstantiated<Tag>?` here.
 			\(fixtures["App"]!["Impl.swift"]):9:5: note: `Impl` receives `tag: Tag` here.
 			"""
 		}) {
@@ -150,8 +150,8 @@ struct SafeDIToolSeamFillReceivesParameterInAnotherFormTests: ~Copyable {
 		// value, which no wrapper form provides: the remedy is to receive `tag` the same way, as the seam's own tree is told.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Home.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Home`: its tree receives `tag` as `tag: Tag?` on `Reader` and `tag: LazilyInstantiated<Tag>?` on `Impl`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `tag` the same way in every type of the tree.
-			\(fixtures["Feature"]!["Reader.swift"]):7:5: note: `Reader` receives `tag: Tag?` here.
+			\(fixtures["Feature"]!["Home.swift"]): error: SafeDI cannot generate the dependency tree of `Home`: its tree receives `tag` as `tag: Tag?` on `Reader` and `tag: LazilyInstantiated<Tag>?` on `Impl`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `tag` the same way in every type of the tree.
+			\(fixtures["Feature"]!["Reader.swift"]): note: `Reader` receives `tag: Tag?` here.
 			\(fixtures["App"]!["Impl.swift"]):9:5: note: `Impl` receives `tag: LazilyInstantiated<Tag>?` here.
 			"""
 		}) {
@@ -175,8 +175,8 @@ struct SafeDIToolSeamFillReceivesParameterInAnotherFormTests: ~Copyable {
 	mutating func generate_throwsParametersShareLabel_whenTypeBeneathFillReceivesValueOfOptionalWrapperPassThrough() async {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Home.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Home`: its tree receives `tag` as `tag: LazilyInstantiated<Tag>?` on `Reader` and `tag: Tag?` on `ImplDetail`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `tag` the same way in every type of the tree, or declare it on `Home` as the form that provides the others: `@Received let tag: LazilyInstantiated<Tag>`.
-			\(fixtures["Feature"]!["Reader.swift"]):7:5: note: `Reader` receives `tag: LazilyInstantiated<Tag>?` here.
+			\(fixtures["Feature"]!["Home.swift"]): error: SafeDI cannot generate the dependency tree of `Home`: its tree receives `tag` as `tag: LazilyInstantiated<Tag>?` on `Reader` and `tag: Tag?` on `ImplDetail`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `tag` the same way in every type of the tree, or declare it on `Home` as the form that provides the others: `@Received let tag: LazilyInstantiated<Tag>`.
+			\(fixtures["Feature"]!["Reader.swift"]): note: `Reader` receives `tag: LazilyInstantiated<Tag>?` here.
 			\(fixtures["App"]!["ImplDetail.swift"]):9:5: note: `ImplDetail` receives `tag: Tag?` here.
 			"""
 		}) {
@@ -202,8 +202,8 @@ struct SafeDIToolSeamFillReceivesParameterInAnotherFormTests: ~Copyable {
 		// provides only itself.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Home.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Home`: its tree receives `tag` as `tag: LazilyInstantiated<Tag>?` on `Home` and `tag: Tag?` on `Impl`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `tag` the same way in every type of the tree, or declare it on `Home` as the form that provides the others: `@Received let tag: LazilyInstantiated<Tag>`.
-			\(fixtures["Feature"]!["Home.swift"]):8:5: note: `Home` receives `tag: LazilyInstantiated<Tag>?` here.
+			\(fixtures["Feature"]!["Home.swift"]): error: SafeDI cannot generate the dependency tree of `Home`: its tree receives `tag` as `tag: LazilyInstantiated<Tag>?` on `Home` and `tag: Tag?` on `Impl`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `tag` the same way in every type of the tree, or declare it on `Home` as the form that provides the others: `@Received let tag: LazilyInstantiated<Tag>`.
+			\(fixtures["Feature"]!["Home.swift"]): note: `Home` receives `tag: LazilyInstantiated<Tag>?` here.
 			\(fixtures["App"]!["Impl.swift"]):9:5: note: `Impl` receives `tag: Tag?` here.
 			"""
 		}) {
@@ -230,8 +230,8 @@ struct SafeDIToolSeamFillReceivesParameterInAnotherFormTests: ~Copyable {
 	mutating func generate_throwsParametersShareLabel_whenFillReceivesOtherTypeUnderPassThroughsLabel() async {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Home.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Home`: its tree receives `tag` as `tag: Tag?` on `Reader` and `tag: Label?` on `Impl`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Rename one of the properties, or @Instantiated one of them inside the tree.
-			\(fixtures["Feature"]!["Reader.swift"]):7:5: note: `Reader` receives `tag: Tag?` here.
+			\(fixtures["Feature"]!["Home.swift"]): error: SafeDI cannot generate the dependency tree of `Home`: its tree receives `tag` as `tag: Tag?` on `Reader` and `tag: Label?` on `Impl`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Rename one of the properties, or @Instantiated one of them inside the tree.
+			\(fixtures["Feature"]!["Reader.swift"]): note: `Reader` receives `tag: Tag?` here.
 			\(fixtures["App"]!["Impl.swift"]):9:5: note: `Impl` receives `tag: Label?` here.
 			"""
 		}) {
@@ -346,11 +346,11 @@ struct SafeDIToolSeamFillReceivesParameterInAnotherFormTests: ~Copyable {
 		// Both errors are at `Home`, ordered by their notes: `Reader` receives `tag` first.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Home.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Home`: its tree receives `tag` as `tag: LazilyInstantiated<Tag>?` on `Reader` and `tag: Tag?` on `Impl`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `tag` the same way in every type of the tree, or declare it on `Home` as the form that provides the others: `@Received let tag: LazilyInstantiated<Tag>`.
-			\(fixtures["Feature"]!["Reader.swift"]):8:5: note: `Reader` receives `tag: LazilyInstantiated<Tag>?` here.
+			\(fixtures["Feature"]!["Home.swift"]): error: SafeDI cannot generate the dependency tree of `Home`: its tree receives `tag` as `tag: LazilyInstantiated<Tag>?` on `Reader` and `tag: Tag?` on `Impl`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `tag` the same way in every type of the tree, or declare it on `Home` as the form that provides the others: `@Received let tag: LazilyInstantiated<Tag>`.
+			\(fixtures["Feature"]!["Reader.swift"]): note: `Reader` receives `tag: LazilyInstantiated<Tag>?` here.
 			\(fixtures["App"]!["Impl.swift"]):10:5: note: `Impl` receives `tag: Tag?` here.
-			\(fixtures["Feature"]!["Home.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Home`: its tree receives `mark` as `mark: LazilyInstantiated<Mark>?` on `Reader` and `mark: Mark?` on `Impl`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `mark` the same way in every type of the tree, or declare it on `Home` as the form that provides the others: `@Received let mark: LazilyInstantiated<Mark>`.
-			\(fixtures["Feature"]!["Reader.swift"]):9:5: note: `Reader` receives `mark: LazilyInstantiated<Mark>?` here.
+			\(fixtures["Feature"]!["Home.swift"]): error: SafeDI cannot generate the dependency tree of `Home`: its tree receives `mark` as `mark: LazilyInstantiated<Mark>?` on `Reader` and `mark: Mark?` on `Impl`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `mark` the same way in every type of the tree, or declare it on `Home` as the form that provides the others: `@Received let mark: LazilyInstantiated<Mark>`.
+			\(fixtures["Feature"]!["Reader.swift"]): note: `Reader` receives `mark: LazilyInstantiated<Mark>?` here.
 			\(fixtures["App"]!["Impl.swift"]):11:5: note: `Impl` receives `mark: Mark?` here.
 			"""
 		}) {

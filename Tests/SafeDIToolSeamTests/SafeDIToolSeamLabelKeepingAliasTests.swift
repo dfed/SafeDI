@@ -2049,44 +2049,83 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.threeModules(files), integration: integration, filesToDelete: &filesToDelete)
 		let detailPath = try #require(output.modules["Core"]).fixtures.compilerPath(of: "Detail.swift")
 		let readerPath = try #require(output.modules["Core"]).fixtures.compilerPath(of: "Reader.swift")
-		#expect(try #require(output.modules["Feature"]).generatedFiles == [
-			integration == .moduleInfo ? "Feature.swift" : "Screen+SafeDI.swift": generatedFileHeader + """
-			#if canImport(Core)
-			import Core
-			#endif
+		let expectedFeatureFiles: [String: String] = switch integration {
+		case .moduleInfo:
+			[
+				"Feature.swift": generatedFileHeader + """
+				#if canImport(Core)
+				import Core
+				#endif
 
-			extension Screen {
-			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
-			        let token = LazilyInstantiated<Secret?>(__safeDI_token)
-			        @inline(never) func __safeDI_left() -> Left {
-			            @inline(never) func __safeDI_detail() -> Detail {
-			                #sourceLocation(file: "\(detailPath)", line: 8)
-			                let authToken: Secret? = token.instance
-			                #sourceLocation()
-			                @inline(never) func __safeDI_reader() -> Reader {
-			                    #sourceLocation(file: "\(readerPath)", line: 7)
-			                    let authToken: (any Auth)? = authToken
-			                    #sourceLocation()
-			                    return Reader(authToken: authToken)
-			                }
-			                let reader: Reader = __safeDI_reader()
-			                return Detail(authToken: authToken, reader: reader)
-			            }
-			            let detail: Detail = __safeDI_detail()
-			            return Left(detail: detail)
-			        }
-			        let left: Left = __safeDI_left()
-			        self.init(left: left)
-			    }
-			}
+				extension Screen {
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+				    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
+				        let token = LazilyInstantiated<Secret?>(__safeDI_token)
+				        @inline(never) func __safeDI_left() -> Left {
+				            @inline(never) func __safeDI_detail() -> Detail {
+				                let authToken: Secret? = token.instance
+				                @inline(never) func __safeDI_reader() -> Reader {
+				                    let authToken: (any Auth)? = authToken
+				                    return Reader(authToken: authToken)
+				                }
+				                let reader: Reader = __safeDI_reader()
+				                return Detail(authToken: authToken, reader: reader)
+				            }
+				            let detail: Detail = __safeDI_detail()
+				            return Left(detail: detail)
+				        }
+				        let left: Left = __safeDI_left()
+				        self.init(left: left)
+				    }
+				}
 
-			extension Screen {
-			    public enum __safeDI_Screen_8763BEDE3E51EBC4 {}
-			}
-			""",
-		])
+				extension Screen {
+				    public enum __safeDI_Screen_8763BEDE3E51EBC4 {}
+				}
+				""",
+			]
+		case .swiftPackagePlugin:
+			[
+				"Screen+SafeDI.swift": generatedFileHeader + """
+				#if canImport(Core)
+				import Core
+				#endif
+
+				extension Screen {
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+				    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
+				        let token = LazilyInstantiated<Secret?>(__safeDI_token)
+				        @inline(never) func __safeDI_left() -> Left {
+				            @inline(never) func __safeDI_detail() -> Detail {
+				                #sourceLocation(file: "\(detailPath)", line: 8)
+				                let authToken: Secret? = token.instance
+				                #sourceLocation()
+				                @inline(never) func __safeDI_reader() -> Reader {
+				                    #sourceLocation(file: "\(readerPath)", line: 7)
+				                    let authToken: (any Auth)? = authToken
+				                    #sourceLocation()
+				                    return Reader(authToken: authToken)
+				                }
+				                let reader: Reader = __safeDI_reader()
+				                return Detail(authToken: authToken, reader: reader)
+				            }
+				            let detail: Detail = __safeDI_detail()
+				            return Left(detail: detail)
+				        }
+				        let left: Left = __safeDI_left()
+				        self.init(left: left)
+				    }
+				}
+
+				extension Screen {
+				    public enum __safeDI_Screen_8763BEDE3E51EBC4 {}
+				}
+				""",
+			]
+		}
+		#expect(try #require(output.modules["Feature"]).generatedFiles == expectedFeatureFiles)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
