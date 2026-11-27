@@ -574,9 +574,19 @@ public actor DependencyTreeGenerator {
 		let instantiable: Instantiable
 		let sourceFilePath: String?
 		let built: Built
-		/// The root's scope, frozen, where node records may lay its code out (`NodeRecords`): a production root of a module
-		/// without seams.
+		/// The root's scope, frozen, where node records may lay its code out (`NodeRecords`): a production root, of a module
+		/// with seams or without, or a seam's own root, whose records a test only compares.
 		var constructionScope: ConstructionScope?
+		/// For a seam's own tree, what node records read of it beside its world; `nil` for every other root.
+		var seamTree: SeamTree?
+
+		/// What node records read of a seam's own tree beside its world.
+		struct SeamTree {
+			/// What the seam's root is handed as instances of `LazilyInstantiated` properties, which its tree reads through
+			/// their wrappers (`DependencyTreeGenerator.seamRootDeclarations(of:seamRoot:)`).
+			let rootLazilyInstantiatedInstanceProperties: Set<Property>
+		}
+
 		/// What made this run build the root's tree (`TreeForcer`); empty where it built none.
 		var treeForcers: [TreeForcer] = [.seamWorld]
 
@@ -584,12 +594,13 @@ public actor DependencyTreeGenerator {
 			self.init(typeDescription: typeDescription, instantiable: instantiable, sourceFilePath: sourceFilePath, built: .tree(scopeGenerator))
 		}
 
-		init(typeDescription: TypeDescription, instantiable: Instantiable, sourceFilePath: String?, built: Built, constructionScope: ConstructionScope? = nil, treeForcers: [TreeForcer] = [.seamWorld]) {
+		init(typeDescription: TypeDescription, instantiable: Instantiable, sourceFilePath: String?, built: Built, constructionScope: ConstructionScope? = nil, seamTree: SeamTree? = nil, treeForcers: [TreeForcer] = [.seamWorld]) {
 			self.typeDescription = typeDescription
 			self.instantiable = instantiable
 			self.sourceFilePath = sourceFilePath
 			self.built = built
 			self.constructionScope = constructionScope
+			self.seamTree = seamTree
 			self.treeForcers = treeForcers
 		}
 
