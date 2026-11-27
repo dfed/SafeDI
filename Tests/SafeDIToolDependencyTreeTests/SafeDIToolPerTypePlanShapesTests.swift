@@ -829,6 +829,152 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsTodaysCaptureError_whenSendableBuilderOnCycleCapturesInstantiatorRootDeclares() async {
+		// `S1`, on the cycle, builds `W` in the `@Sendable` builder function of `wBuilder`, and `W` receives the `Instantiator` the root
+		// declares, which that function cannot capture.
+		let choices = await choicesThrowingTodaysError(
+			of: [
+				"""
+				@Instantiable(isRoot: true) public final class Root: Instantiable {
+				    @Instantiated let leafBuilder: Instantiator<Leaf>
+				    @Instantiated let s0Builder: Instantiator<S0>
+				    public init(leafBuilder: Instantiator<Leaf>, s0Builder: Instantiator<S0>) { self.leafBuilder = leafBuilder; self.s0Builder = s0Builder }
+				}
+				""",
+				"""
+				@Instantiable public final class S0: Instantiable {
+				    @Instantiated let s1Builder: Instantiator<S1>
+				    public init(s1Builder: Instantiator<S1>) { self.s1Builder = s1Builder }
+				}
+				""",
+				"""
+				@Instantiable public final class S1: Instantiable {
+				    @Instantiated let s0Builder: Instantiator<S0>
+				    @Instantiated let wBuilder: SendableInstantiator<W>
+				    public init(s0Builder: Instantiator<S0>, wBuilder: SendableInstantiator<W>) { self.s0Builder = s0Builder; self.wBuilder = wBuilder }
+				}
+				""",
+				"""
+				@Instantiable public final class W: Instantiable {
+				    @Received let leafBuilder: Instantiator<Leaf>
+				    public init(leafBuilder: Instantiator<Leaf>) { self.leafBuilder = leafBuilder }
+				}
+				""",
+				"""
+				@Instantiable public final class Leaf: Instantiable { public init() {} }
+				""",
+			],
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["W.swift"]):2:5: error: @Received property `leafBuilder: Instantiator<Leaf>` cannot be received inside a `@Sendable` function in chain: Root -> S0 -> S1 -> W. SafeDI builds `wBuilder: SendableInstantiator<W>` on `S1` in a `@Sendable` function, which cannot capture `leafBuilder: Instantiator<Leaf>` on `Root`, because `Instantiator<Leaf>` is not `Sendable`. Declare `leafBuilder` on `Root`, and this property, as `SendableInstantiator<Leaf>` to fix. `SendableInstantiator<Leaf>` builds `Leaf` in a `@Sendable` function, so what the tree of `Leaf` receives from outside that function must be `Sendable` too.
+				\(fixtures["Root.swift"]):2:5: note: `leafBuilder: Instantiator<Leaf>` is declared here
+				"""
+			},
+		)
+
+		#expect(choices == ["Root": .mayCaptureNonSendableWrapper])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsTodaysCaptureError_whenSendableBuilderOnCycleCapturesRenameOfInstantiatorRootDeclares() async {
+		// `W`, built in the `@Sendable` builder function of `wBuilder` on the cycle, renames the `Instantiator` the root declares as a
+		// value of another type, a receive of the builder that function cannot capture.
+		let choices = await choicesThrowingTodaysError(
+			of: [
+				"""
+				@Instantiable(isRoot: true) public final class Root: Instantiable {
+				    @Instantiated let leafBuilder: Instantiator<Leaf>
+				    @Instantiated let s0Builder: Instantiator<S0>
+				    public init(leafBuilder: Instantiator<Leaf>, s0Builder: Instantiator<S0>) { self.leafBuilder = leafBuilder; self.s0Builder = s0Builder }
+				}
+				""",
+				"""
+				@Instantiable public final class S0: Instantiable {
+				    @Instantiated let s1Builder: Instantiator<S1>
+				    public init(s1Builder: Instantiator<S1>) { self.s1Builder = s1Builder }
+				}
+				""",
+				"""
+				@Instantiable public final class S1: Instantiable {
+				    @Instantiated let s0Builder: Instantiator<S0>
+				    @Instantiated let wBuilder: SendableInstantiator<W>
+				    public init(s0Builder: Instantiator<S0>, wBuilder: SendableInstantiator<W>) { self.s0Builder = s0Builder; self.wBuilder = wBuilder }
+				}
+				""",
+				"""
+				@Instantiable public final class W: Instantiable {
+				    @Received(fulfilledByDependencyNamed: "leafBuilder", ofType: Instantiator<Leaf>.self) let other: Any
+				    public init(other: Any) { self.other = other }
+				}
+				""",
+				"""
+				@Instantiable public final class Leaf: Instantiable { public init() {} }
+				""",
+			],
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["W.swift"]):2:5: error: @Received property `leafBuilder: Instantiator<Leaf>` cannot be received inside a `@Sendable` function in chain: Root -> S0 -> S1 -> W. SafeDI builds `wBuilder: SendableInstantiator<W>` on `S1` in a `@Sendable` function, which cannot capture `leafBuilder: Instantiator<Leaf>` on `Root`, because `Instantiator<Leaf>` is not `Sendable`. Declare `leafBuilder` on `Root`, and this property, as `SendableInstantiator<Leaf>` to fix. `SendableInstantiator<Leaf>` builds `Leaf` in a `@Sendable` function, so what the tree of `Leaf` receives from outside that function must be `Sendable` too.
+				\(fixtures["Root.swift"]):2:5: note: `leafBuilder: Instantiator<Leaf>` is declared here
+				"""
+			},
+		)
+
+		#expect(choices == ["Root": .mayCaptureNonSendableWrapper])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsTodaysCaptureError_whenSendableBuilderOnCycleCapturesErasedInstantiatorRootDeclares() async {
+		// `W`, built in the `@Sendable` builder function of `wBuilder` on the cycle, receives the erased builder the root declares,
+		// which that function cannot capture.
+		let choices = await choicesThrowingTodaysError(
+			of: [
+				"""
+				@Instantiable(isRoot: true) public final class Root: Instantiable {
+				    @Instantiated(fulfilledByType: "Row", erasedToConcreteExistential: false) let rowBuilder: ErasedInstantiator<(), any Rowish>
+				    @Instantiated let s0Builder: Instantiator<S0>
+				    public init(rowBuilder: ErasedInstantiator<(), any Rowish>, s0Builder: Instantiator<S0>) { self.rowBuilder = rowBuilder; self.s0Builder = s0Builder }
+				}
+				""",
+				"""
+				@Instantiable public final class S0: Instantiable {
+				    @Instantiated let s1Builder: Instantiator<S1>
+				    public init(s1Builder: Instantiator<S1>) { self.s1Builder = s1Builder }
+				}
+				""",
+				"""
+				@Instantiable public final class S1: Instantiable {
+				    @Instantiated let s0Builder: Instantiator<S0>
+				    @Instantiated let wBuilder: SendableInstantiator<W>
+				    public init(s0Builder: Instantiator<S0>, wBuilder: SendableInstantiator<W>) { self.s0Builder = s0Builder; self.wBuilder = wBuilder }
+				}
+				""",
+				"""
+				@Instantiable public final class W: Instantiable {
+				    @Received let rowBuilder: ErasedInstantiator<(), any Rowish>
+				    public init(rowBuilder: ErasedInstantiator<(), any Rowish>) { self.rowBuilder = rowBuilder }
+				}
+				""",
+				"""
+				@Instantiable public final class Row: Instantiable, Rowish { public init() {} }
+
+				public protocol Rowish {}
+				""",
+			],
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["W.swift"]):2:5: error: @Received property `rowBuilder: ErasedInstantiator<(), any Rowish>` cannot be received inside a `@Sendable` function in chain: Root -> S0 -> S1 -> W. SafeDI builds `wBuilder: SendableInstantiator<W>` on `S1` in a `@Sendable` function, which cannot capture `rowBuilder: ErasedInstantiator<(), any Rowish>` on `Root`, because `ErasedInstantiator<(), any Rowish>` is not `Sendable`. Declare `rowBuilder` on `Root`, and this property, as `SendableErasedInstantiator<(), any Rowish>` to fix. `SendableErasedInstantiator<(), any Rowish>` builds `any Rowish` in a `@Sendable` function, so what the tree of `any Rowish` receives from outside that function must be `Sendable` too.
+				\(fixtures["Root.swift"]):2:5: note: `rowBuilder: ErasedInstantiator<(), any Rowish>` is declared here
+				"""
+			},
+		)
+
+		#expect(choices == ["Root": .mayCaptureNonSendableWrapper])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_reportsTodaysCaptureError_whenSendableBuilderOnCycleCapturesInstanceOfLazilyInstantiatedDeclaredAboveIt() async {
 		// `S0`, on the cycle, declares `leaf` as a `LazilyInstantiated`; `S1` builds `W` in the `@Sendable` builder function of
 		// `wBuilder`, and `W` reads the instance, which that function cannot capture.
