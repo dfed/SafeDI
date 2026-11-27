@@ -392,7 +392,14 @@ public struct TypeFactsReport: Sendable {
 			var line = "v\(index) d\(world.declaration(of: variant)) \(world.family(of: variant))"
 			line += " keys [\(world.keys(of: variant).map { "\(world.answer($0).form) \(world.forms(of: $0).count)" }.joined(separator: ", "))]"
 			let calls = world.calls(of: variant)
-			line += " calls \(Array(calls)) sources [\(calls.indices.map { "\(world.sources(ofCall: $0 - calls.startIndex, of: variant).map { Self.description(of: $0, in: world) })" }.joined(separator: ", "))]"
+			let sources = calls.indices.map { index in
+				let callee = world.declaration(of: calls[index])
+				let described = zip(world.sources(ofCall: index - calls.startIndex, of: variant), world.reads(of: callee)).map { source, read in
+					Self.description(of: source, read: read, beneath: callee, in: world)
+				}
+				return "\(described)"
+			}
+			line += " calls \(Array(calls)) sources [\(sources.joined(separator: ", "))]"
 			line += world.isCalledOnce(variant) ? " once" : ""
 			line += " outcomes \(world.outcomes(of: variant).map { "\($0)" }) bound before \(Array(world.boundBefore(of: variant)))"
 			lines.append(line)
@@ -400,13 +407,14 @@ public struct TypeFactsReport: Sendable {
 		return lines.joined(separator: "\n")
 	}
 
-	/// A call's source as the projection spells it: its kind, and for a bound answer its form.
-	private static func description(of source: AnswerSource, in world: some TypeFactsWorld) -> String {
+	/// A call's source as the projection spells it: its kind, and for a bound answer its form, and whether it provides a
+	/// form the callee's subtree reads where it does not.
+	private static func description(of source: AnswerSource, read: ReadID, beneath callee: DeclarationID, in world: some TypeFactsWorld) -> String {
 		switch source.kind {
 		case .none, .passedThrough:
 			"\(source.kind)"
 		case .bound:
-			"bound \(world.answer(source.answer).form)"
+			"bound \(world.answer(source.answer).form)\(world.providesFormRead(by: source.answer, read, beneath: callee) ? "" : " not provided")"
 		}
 	}
 }
