@@ -26,9 +26,9 @@ enum ConstructionTarget: Hashable, Sendable {
 	case instantiate(TypeDescription)
 	/// A mock method of `Concrete`, by name: `mock`, a `customMockName`, or the function of a public mock's tier.
 	case mock(TypeDescription, name: String)
-	/// `Concrete.__safeDI_mock(…)`: a call of another module's public mock, made on the line after `guardLine`, which names
+	/// `Concrete.__safeDI_mock(…)`: a call of another module's public mock, made on the line after its guard, which names
 	/// the called mock's guard enum (`PublicMockCall.guardLine(for:)`).
-	case publicMockCall(TypeDescription, guardLine: String)
+	case publicMockCall(TypeDescription, guard: CallGuard)
 	/// Nothing: an `@Instantiated(onlyIfAvailable: true)` property no production declaration fulfills, which is `nil`.
 	case unavailable
 
@@ -53,8 +53,8 @@ enum ConstructionTarget: Hashable, Sendable {
 	/// line. `nil` for every other target.
 	var leadingLine: String? {
 		switch self {
-		case let .publicMockCall(_, guardLine):
-			guardLine
+		case let .publicMockCall(_, callGuard):
+			callGuard.spelled
 		case .initializer, .instantiate, .mock, .unavailable:
 			nil
 		}

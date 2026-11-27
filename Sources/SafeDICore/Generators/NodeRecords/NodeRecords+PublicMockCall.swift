@@ -93,7 +93,8 @@ extension NodeRecords {
 	/// declaration. A variant's keys leave that answer out (rule 1), so it is read from what each call hands its callee
 	/// (`TypeFactsWorld.sources(ofCall:of:)`), followed up through each call that passes its caller's answer through. A
 	/// declaration still being built, a lazy or optional form, or no declaration at all (where a mock binds its own
-	/// override of the value, which the root's body answers) is a shape this stage does not make.
+	/// override of the value, which the root's body answers) is a shape this stage does not make. Calls that disagree are
+	/// among these, since every call that does not hand a declaration refuses, so none is `nodeHasSeveralVariants`.
 	private static func passedOnlyIfAvailable(
 		_ dependency: Dependency,
 		by declaration: DeclarationID,
@@ -172,7 +173,7 @@ extension NodeRecords {
 			isErased: false,
 			concreteType: calledType,
 			isExtension: false,
-			target: .publicMockCall(calledType, guardLine: call.guardLine(for: calledType)),
+			target: .publicMockCall(calledType, guard: CallGuard(calledType: calledType, guardTypeName: call.guardTypeName, comment: call.comment)),
 			arguments: arguments,
 			forwardedProperties: instantiable.dependencies.filter { $0.source == .forwarded }.map(\.property).sorted(),
 			cycleParameters: [],

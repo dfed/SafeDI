@@ -45,6 +45,11 @@ struct CallGuard: Hashable, Sendable {
 	let guardTypeName: String
 	/// What the line's comment says to do when the line does not compile.
 	let comment: SeamCallComment
+
+	/// The line, as `SeamCall.guardLine(for:)` and `PublicMockCall.guardLine(for:)` spell it.
+	var spelled: String {
+		"_ = \(calledType.asSource).\(guardTypeName).self\(comment.lineEnd(for: calledType))"
+	}
 }
 
 /// One builder a call hands the seam it calls, under the builder's label in the tier called.
