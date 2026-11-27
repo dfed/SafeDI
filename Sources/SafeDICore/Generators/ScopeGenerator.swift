@@ -7124,7 +7124,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			node: PlanNode(),
 		)
 		record.callFields = CallFields(
-			leadingStatement: seamCall.callGuard(for: instantiable.concreteInstantiable),
+			leadingStatement: .callGuard(seamCall.callGuard(for: instantiable.concreteInstantiable)),
 			closureArguments: closureArguments,
 			builtClosures: builtClosures,
 		)
@@ -7133,7 +7133,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// The text declares the call's dispatchers and fills, whose names and reads the record does not hold yet.
 			readNames: nil,
 			boundNames: nil,
-			spelledFromRecord: (record.leadingStatement.map { [$0.spelled] } ?? []) + spelledArguments,
+			spelledFromRecord: (record.leadingStatement?.spelledLines ?? []) + spelledArguments,
 			written: [seamCall.guardLine(for: instantiable.concreteInstantiable)] + builderCallArguments.map { "\($0.label): \($0.value)" },
 		))
 	}
@@ -7215,14 +7215,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				node: PlanNode(),
 			)
 			record.callFields = CallFields(
-				leadingStatement: seamCall.callGuard(for: instantiable.concreteInstantiable),
+				leadingStatement: .callGuard(seamCall.callGuard(for: instantiable.concreteInstantiable)),
 				closureArguments: passedOn.map { ClosureArgumentEntry(label: $0.label, value: .passedOn($0.read)) },
 			)
 			observer(SeamCallRecordObservation(
 				text: text,
 				readNames: record.arguments.filter { $0.source != .nil }.map(\.label) + passedOn.map(\.structName),
 				boundNames: [property.label] + (declaredFunctionName.map { [$0] } ?? []),
-				spelledFromRecord: (record.leadingStatement.map { [$0.spelled] } ?? []) + passedOn.map { "\($0.label): \($0.read.member.spelled(on: $0.structName, caseName: $0.read.caseName))" },
+				spelledFromRecord: (record.leadingStatement?.spelledLines ?? []) + passedOn.map { "\($0.label): \($0.read.member.spelled(on: $0.structName, caseName: $0.read.caseName))" },
 				written: [seamCall.guardLine(for: instantiable.concreteInstantiable)] + passedOn.map(\.written),
 			))
 		}
@@ -7276,7 +7276,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				callRecord.argumentValues = argumentValues
 			}
 			callRecord.callFields = CallFields(
-				leadingStatement: seamCall.callGuard(for: instantiable.concreteInstantiable),
+				leadingStatement: .callGuard(seamCall.callGuard(for: instantiable.concreteInstantiable)),
 				closureArguments: closureArguments,
 			)
 			record.call = InPlaceCall(
@@ -7962,14 +7962,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			generatedProperties.append(.rootFunction(record))
 		}
 		if let publicMockLevelFunctions {
-			generatedProperties += publicMockLevelFunctions.declarations(
-				indent: leadingMemberWhitespace,
+			generatedProperties += publicMockLevelFunctions.records(
 				sendableKeys: sendableFillKeys,
 				inlinedFills: body.inlinedFills,
 				fillsTakingPayloadFields: body.fillsTakingPayloadFields,
 				fillMemberParameterFieldsByKey: body.fillParametersByKey,
 				typesDeclaredEscaping: typesDeclaredEscaping,
-			).map(GeneratedCode.text)
+			).declarations(indent: leadingMemberWhitespace, inlinedFillBodies: body.inlinedFills.mapValues(\.body)).map(GeneratedCode.text)
 		}
 		return generatedProperties
 	}

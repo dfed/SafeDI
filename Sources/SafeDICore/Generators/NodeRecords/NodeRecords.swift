@@ -34,7 +34,8 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	/// parameter with a default value is, which a mock holds in the type's configuration.
 	case mockDefaultValuedParameter
 	/// A mock root's node is a wrapper an actor is sent, whose override is read into a local before it, and another
-	/// node's label or function takes the local's name.
+	/// node's label or function takes the local's name. Also an actor that is sent a value built by a function that is
+	/// handed the places the world's cycles enter (`NodeRecords+MockCycle.swift`).
 	case mockActor
 	/// A mock root's node whose override is not its parent's field under the node's own label: two children of one node
 	/// share a label, which a mock root names apart.
@@ -98,6 +99,9 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	/// Two bodies of a world with a cycle name one variant's function apart, or hand the functions its body refers to
 	/// different names (`CycleFunctionNames`), where its one place cannot stand for both.
 	case cycleBuilderNameShared
+	/// A function of a mock root's world that is handed the places its cycles enter builds a `LazilyInstantiated`
+	/// (`NodeRecords+MockCycle.swift`).
+	case mockCycleLazy
 	/// The node is built as a `LazilyInstantiated`, which `lazyClaim(of:in:)` discharges: its record is
 	/// `NodeRecordKind.lazy`'s, and in a mock root's world production's term joins the record the node's override decorates
 	/// (`joiningProductionMarks(_:to:of:in:)`). Also a world whose
@@ -247,6 +251,11 @@ struct NodeRecords: Sendable {
 		// them (`TypeFactsEdge.buildPosition`), which `NodeBuildOrder` stands in for only off every cycle.
 		let order: NodeBuildOrder? = holdsCycle ? nil : try NodeBuildOrder(world: world)
 		let labelsReceived = holdsCycle ? try Self.labelsReceived(inWorldWithCycle: world) : []
+		// A mock root's functions on a cycle are handed the places entered above them (`NodeRecords+MockCycle.swift`).
+		let enteredSlots = holdsCycle && world.isMockWorld ? MockEnteredSlots(world: world) : nil
+		if let enteredSlots {
+			try Self.checkMockCycles(in: world, slots: enteredSlots)
+		}
 		let onlyIfAvailableAnswers = try OnlyIfAvailableAnswers(world: world, rootParameters: seamTree?.parameters ?? outerDeclarations)
 		let mockReceivesBoundAgain = Self.mockReceivesBoundAgain(in: world)
 		let answeringDeclarations = DeclarationsAnsweringReads(
@@ -289,7 +298,8 @@ struct NodeRecords: Sendable {
 			escaping.formUnion(childrensEscaping)
 			// A member of a loop of builders first makes again the members its tree receives, whatever its kind
 			// (`NodeRecords+Loops.swift`).
-			let children = Self.loopRebindings(of: declaration, in: world) + children
+			// A place of a seam's own mock is bound from its builder before the node's children, which read it.
+			let children = Self.mockPlaceBuilderBindings(of: declaration, in: world).map(\.place) + Self.loopRebindings(of: declaration, in: world) + children
 			// What a receive by value reads as a wrapper's instance, which every record of a construction passes its arguments.
 			let instanceProperties = answeringDeclarations.lazilyInstantiatedInstanceProperties(readBy: variant)
 			let madeRecord: PlaceRecord = switch kinds[Int(declaration)] {
@@ -318,7 +328,7 @@ struct NodeRecords: Sendable {
 			case .cycle:
 				try .built(Self.cycleRecord(of: declaration, variant: variant, in: world, lazilyInstantiatedInstanceProperties: instanceProperties, typesDeclaredEscaping: escaping, children: children))
 			case .mockConstruction:
-				try .built(Self.mockDecoratedRecord(of: declaration, variant: variant, in: world, unavailableProperties: onlyIfAvailableAnswers.unavailableProperties(of: variant), lazilyInstantiatedInstanceProperties: instanceProperties, receivesBoundAgain: mockReceivesBoundAgain[Int(variant)], typesDeclaredEscaping: escaping, children: children))
+				try .built(Self.mockDecoratedRecord(of: declaration, variant: variant, in: world, unavailableProperties: onlyIfAvailableAnswers.unavailableProperties(of: variant), lazilyInstantiatedInstanceProperties: instanceProperties, receivesBoundAgain: mockReceivesBoundAgain[Int(variant)], enteredSlots: enteredSlots, typesDeclaredEscaping: escaping, children: children))
 			case .mockUnavailableDependency:
 				try .alias(Self.mockUnavailableDependencyRecord(of: declaration, in: world))
 			case .publicMockCall:
@@ -424,7 +434,7 @@ struct NodeRecords: Sendable {
 				switch entry {
 				case let .closer(closingOn: callee):
 					let closedOnDeclaration = world.declaration(of: callee)
-					let closer = try Self.closingRecord(closingOn: closedOnDeclaration, from: variant, functionName: functionNames?.closedOnFunctionName(of: callee, inBodyOf: variant), in: world)
+					let closer = try Self.closingRecord(closingOn: closedOnDeclaration, from: variant, functionName: functionNames?.closedOnFunctionName(of: callee, inBodyOf: variant), in: world, enteredSlots: enteredSlots)
 					children.append(.indented(.place(PlacePlan(code: .empty, record: closer)), by: indentation))
 					closedOn.insert(callee)
 					// A call that hands a `Sendable` wrapper its function refers to the function it closes on from a
@@ -433,7 +443,8 @@ struct NodeRecords: Sendable {
 						fromSendableFunction.insert(callee)
 					}
 				case let .place(callee):
-					children.append(.indented(places[Int(callee)], by: indentation))
+					let place = Self.mockPlace(places[Int(callee)], record: records[Int(callee)], of: world.declaration(of: callee), builtBy: world.declaration(of: variant), in: world, slots: enteredSlots)
+					children.append(.indented(place, by: indentation))
 					escaping.formUnion(typesDeclaredEscaping[Int(callee)])
 					closedOn.formUnion(variantsClosedOn[Int(callee)])
 					fromSendableFunction.formUnion(closedOnFromSendableFunction[Int(callee)])
@@ -476,6 +487,7 @@ struct NodeRecords: Sendable {
 		rootTypesDeclaredEscaping = world.scope(of: world.declaration(of: 0)).instantiable.typesDeclaredEscapingByItsDeclaration.union(root.escaping)
 		holdsSeamCallOrHole = kinds.contains(.seamCall) || kinds.contains(.seamHole)
 		self.records = records
+		mockEnteredSlots = enteredSlots?.slots ?? []
 		declarationByVariant = (0..<Int32(world.variantCount)).map(world.declaration(of:))
 	}
 
@@ -496,6 +508,11 @@ struct NodeRecords: Sendable {
 	/// (`validateNoSeamTierOmitsProvidedValue`, the leaf's `@Sendable` deferred parameter), so a seam's own root that holds
 	/// one keeps its tree (`DependencyTreeGenerator.ownSeamRootLayout`).
 	let holdsSeamCallOrHole: Bool
+
+	/// The slots of the places a mock root's cycles enter, in the order its struct declares them
+	/// (`MockEnteredSlot.mockEnteredPlacesDeclaration(slots:isSendable:)`); empty for a world with no cycle and for a
+	/// production root's.
+	let mockEnteredSlots: [MockEnteredSlot]
 
 	/// How many variants have a record, which is every variant but the root's.
 	var recordCount: Int {

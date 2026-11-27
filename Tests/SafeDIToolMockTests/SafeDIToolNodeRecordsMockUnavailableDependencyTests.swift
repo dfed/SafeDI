@@ -587,8 +587,9 @@ struct SafeDIToolNodeRecordsMockUnavailableDependencyTests: ~Copyable {
 		// The acceptance case of the kind that lays out a cycle's closer: `Node` declares `token`, which nothing fulfills,
 		// is built again through its own `Instantiator`, and is named apart from the `node` a sibling receives. In this
 		// one position the walk binds `token` to `nil` and `mock()` takes no override of it; the records are to offer the
-		// override there as everywhere else, `nil` by default. Until that kind is made the world is refused for the
-		// cycle, and the walk writes it.
+		// override there as everywhere else, `nil` by default. The function the cycle closes on would take the `node` a
+		// sibling receives as a parameter, which the walk of the records refuses in every world for now, so the walk
+		// writes it.
 		let fixture = [
 			"""
 			@Instantiable(generateMock: true)
@@ -644,7 +645,7 @@ struct SafeDIToolNodeRecordsMockUnavailableDependencyTests: ~Copyable {
 			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		}
 
-		#expect(reports.filter(\.isMockRoot).map(\.everyRefusal) == [["cycle"]])
+		#expect(reports.filter(\.isMockRoot).map(\.everyRefusal) == [["cycleTakesParameters"]])
 		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [false])
 		#expect(output.generatedFiles == walkOutput.generatedFiles)
 	}

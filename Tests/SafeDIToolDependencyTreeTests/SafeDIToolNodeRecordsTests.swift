@@ -1056,11 +1056,13 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 		// more, both facts of one type: its default-valued parameters, and the name of the configuration it declares. A seam
 		// call's fills (`NodeRecords+FillLevels.swift`) are keyed as the tree keys them (`fillKey(of:)`, `fillCaseKey(of:)`)
 		// and its dispatchers made by `FillDispatcher`'s statics, as step 3's interface allows. A world with a cycle names a
-		// body's functions apart as the tree does (`identifierSafeNames`), from the labels and types of the places the body holds.
+		// body's functions apart as the tree does (`identifierSafeNames`), from the labels and types of the places the body holds. A
+		// mock world with a cycle asks which edges its module's configurations leave out (`CycleEdge`), a fact of the module's
+		// types together that the world is made with until an edge fact holds it.
 		let directory = URL(fileURLWithPath: #filePath)
 			.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
 			.appendingPathComponent("Sources/SafeDICore/Generators/NodeRecords")
-		let staticHelpers: Set = ["functionName", "standardIndent", "provides", "referencingDeclaration", "aliasDeclaration", "isBuilder", "DefaultParameter", "mockConfigurationStructName", "fillKey", "fillCaseKey", "FillDispatcher", "FillFieldSelection", "identifierSafeNames"]
+		let staticHelpers: Set = ["functionName", "standardIndent", "provides", "referencingDeclaration", "aliasDeclaration", "isBuilder", "DefaultParameter", "mockConfigurationStructName", "fillKey", "fillCaseKey", "FillDispatcher", "FillFieldSelection", "identifierSafeNames", "CycleEdge"]
 		let files = try FileManager.default.contentsOfDirectory(atPath: directory.path).filter { $0.hasSuffix(".swift") && $0 != "DependencyTreeGenerator+NodeRecords.swift" }.sorted()
 		#expect(files.count >= 4)
 		for file in files {

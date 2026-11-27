@@ -65,6 +65,8 @@ extension NodeRecords {
 	/// binds before its nodes, so a node whose children are all of those two kinds and whose construction takes no
 	/// field is not configured. The closure of a node that is not configured returns the property's type, so every node's
 	/// function does, as the walk's does.
+	/// - Parameter enteredSlots: The slots of the places the world's cycles enter, and which nodes take them; `nil` for a
+	///   world with no cycle.
 	static func mockConstructionRecord(
 		of declaration: DeclarationID,
 		variant: VariantID,
@@ -72,6 +74,7 @@ extension NodeRecords {
 		unavailableProperties: Set<Property>,
 		lazilyInstantiatedInstanceProperties: Set<Property>,
 		receivesBoundAgain: [MockReceiveBoundAgain],
+		enteredSlots: MockEnteredSlots?,
 		typesDeclaredEscaping: Set<TypeDescription>,
 		children: [GeneratedCode],
 	) throws -> BuiltPlaceRecord {
@@ -116,15 +119,27 @@ extension NodeRecords {
 		// configuration; its function is still handed the overrides.
 		let isConfigured = buildsMockChildWithOverride(declaration, in: world) || !fieldArguments.isEmpty
 		let slotType = mockOverrideType(of: record, usesHandWrittenMock: handWrittenMock != nil, isConfigured: isConfigured, instantiable: instantiable)
-		let slot = mockOverrideSlot(
-			of: declaration,
-			labeled: record.property.label,
-			typed: slotType,
-			in: world,
-			hasFunction: record.hasFunction,
-			handsOverridesToChildren: isConfiguredForChildren,
-			isSendable: record.isSendable,
-		)
+		// A function that takes the places its world's cycles enter is handed its overrides beside them by every call, a
+		// call that closes a cycle on it included, and begins by entering its place where it has one
+		// (`NodeRecords+MockCycle.swift`).
+		let slot: (value: ValuePath, passedArguments: [PassedArgument])
+		if let enteredSlots, takesMockEnteredPlaces(declaration, in: enteredSlots) {
+			slot = (
+				.passedArgument(ReservedName.mockOverridesParameterName),
+				mockArgumentsHanded(to: declaration, labeled: record.property.label, by: world.parents(of: declaration).first?.parent ?? 0, in: world, slots: enteredSlots),
+			)
+			record.callFields = mockEnteredPlace(of: declaration, in: enteredSlots).map { CallFields(leadingStatement: .enteredPlace($0), closureArguments: []) }
+		} else {
+			slot = mockOverrideSlot(
+				of: declaration,
+				labeled: record.property.label,
+				typed: slotType,
+				in: world,
+				hasFunction: record.hasFunction,
+				handsOverridesToChildren: isConfiguredForChildren,
+				isSendable: record.isSendable,
+			)
+		}
 		record.passedArguments = slot.passedArguments
 		for (position, argument) in fieldArguments {
 			record.argumentValues[position] = mockConfigurationFieldValue(of: argument, readFrom: slot.value)
