@@ -272,7 +272,9 @@ struct DeclarationsAnsweringReads: Sendable {
 			guard answer != otherAnswer || (answer >= 0 && isCaptured != otherIsCaptured) else { continue }
 			let read = world.read(readID)
 			guard answer >= 0, otherAnswer >= 0 else {
-				guard isReadOnlyIfAvailable(read.channel), isCaptured == otherIsCaptured else { return nil }
+				// A read only if available, which a call may answer with nothing; a read of any other channel that only one
+				// call answers keeps the two apart, as before.
+				guard read.channel == .optional || read.channel == .optionalValue, isCaptured == otherIsCaptured else { return nil }
 				mergedAnswers[index] = max(answer, otherAnswer)
 				continue
 			}
@@ -285,16 +287,6 @@ struct DeclarationsAnsweringReads: Sendable {
 			}
 		}
 		return mergedAnswers
-	}
-
-	/// Whether a read of `channel` is a read only if available, which a call may answer with nothing.
-	private static func isReadOnlyIfAvailable(_ channel: ReadChannel) -> Bool {
-		switch channel {
-		case .optional, .optionalValue:
-			true
-		case .value, .alias, .madeAgain, .mock, .carrier, .fill, .family, .override:
-			false
-		}
 	}
 
 	/// The form of the answer to `label` that `caller` hands a rename it declares: its own declaration of the label, or the
