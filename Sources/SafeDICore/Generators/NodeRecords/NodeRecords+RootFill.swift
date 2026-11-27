@@ -55,10 +55,21 @@ struct FillFacts: Sendable {
 	let declaration: DeclarationID
 	/// The stem the fill's function is named from, which `FillNames` claims a name from.
 	let functionNameStem: String
+	/// The place the fill fills, its case's first.
+	let hole: SeamSignature.Hole
+	/// How a member of the seam's carrier takes the case's values, where it does.
+	let carrierUse: SeamCarrierValues.Use?
+	/// Whether the fill takes each field of its payload by itself: one that returns its wrapper's builder.
+	let takesPayloadFields: Bool
+	/// The labels of the fields the fill binds before its tree, read or not.
+	let boundLabels: [String]
 	/// The labels of the fields the fill binds, in field order.
 	let bound: [String]
 	/// What the fill takes after its case's values, in order (`ScopeGenerator.fillParameterFields`).
 	let parametersTaken: [SeamSignature.Hole.Field]
+	/// What a level function's member hands the fill (`ScopeGenerator.fillMemberParameterFields(takingPayloadFields:)`):
+	/// the payload's fields first where `takesPayloadFields`, then `parametersTaken`.
+	let memberParameters: [SeamSignature.Hole.Field]
 	/// What the fill reads of the caller's scope, by label, in label order.
 	let callerReads: [CallerRead]
 	/// The parameter the fill takes for each of `callerReads`, in their order.
@@ -89,6 +100,8 @@ struct FillFacts: Sendable {
 		[
 			"bound: \(bound.joined(separator: ", "))",
 			"parameters: \(parametersTaken.map(\.property.asSource).joined(separator: ", "))",
+			"member parameters: \(memberParameters.map(\.property.asSource).joined(separator: ", ")), takes payload fields: \(takesPayloadFields), carrier use: \(carrierUse.map { "\($0)" } ?? "none")",
+			"bound labels: \(boundLabels.joined(separator: ", "))",
 			"caller reads: \(callerReads.map { "\($0.label)\($0.isRequired ? "" : "?")" }.joined(separator: ", "))",
 			"reads: \(readLabels.joined(separator: ", "))",
 			"reads or declares: \(labelsReadOrDeclared.joined(separator: ", "))",
@@ -202,7 +215,9 @@ struct FillFacts: Sendable {
 		)
 		let callerReads = ScopeGeneratorUnderConstruction.callerReads(of: boundFill, child: treeReads, labelsHandedToReenteredFunctions: [], log: &log)
 		var parametersTaken = [SeamSignature.Hole.Field]()
+		var payloadFields = [SeamSignature.Hole.Field]()
 		if let selection = ScopeGenerator.FillFieldSelection(hole: boundFill.hole, boundLabels: boundFill.boundLabels, fields: boundFill.fields, treeReads: treeReads) {
+			payloadFields = selection.payloadFieldIndices.map { boundFill.fields[$0] }
 			for index in selection.parameterFieldIndices {
 				let field = boundFill.fields[index]
 				parametersTaken.append(callerReads.parameterByLabel[field.property.label] ?? field)
@@ -218,8 +233,13 @@ struct FillFacts: Sendable {
 			key: fill.key,
 			declaration: node,
 			functionNameStem: fill.functionNameStem,
+			hole: boundFill.hole,
+			carrierUse: fill.carrierUse,
+			takesPayloadFields: fill.returnsWrapperBuilder,
+			boundLabels: boundFill.fields.map(\.property.label).filter(boundFill.boundLabels.contains),
 			bound: boundFill.fields.filter { boundFill.boundLabels.contains($0.property.label) && treeReads.reads($0.property) }.map(\.property.label),
 			parametersTaken: parametersTaken,
+			memberParameters: (fill.returnsWrapperBuilder ? payloadFields : []) + parametersTaken,
 			callerReads: callerReads.parameterByLabel.keys.sorted().map { CallerRead(label: $0, isRequired: requiredLabels.contains($0)) },
 			parametersTakenOfCallerReads: callerReads.parameterByLabel.sorted { $0.key < $1.key }.map(\.value.property),
 			readLabels: readLabels.sorted(),

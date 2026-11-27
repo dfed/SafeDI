@@ -8016,15 +8016,20 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					pending.append(child)
 					continue
 				}
-				guard child.fillEmitsCode, generator.publicMockLevelFunctions == nil, let filled = child.propertiesToGenerate.first else { continue }
+				guard child.fillEmitsCode, generator.publicMockLevelFunctions == nil, let filled = child.propertiesToGenerate.first, let hole = child.fillHole else { continue }
 				let treeReads = filled.fillTreeReads
 				let readLabels = Set(filled.receivedProperties.map(\.label))
 				projections[key] = FillFacts(
 					key: key,
 					declaration: -1,
 					functionNameStem: "",
+					hole: hole,
+					carrierUse: child.fillCarrierUse,
+					takesPayloadFields: child.fillReturnsWrapperBuilder,
+					boundLabels: child.fillFields.map(\.property.label).filter(child.fillStructBoundLabels.contains),
 					bound: child.fillFields.filter { child.fillStructBoundLabels.contains($0.property.label) && (treeReads.reads($0.property) || treeReads.fieldsCarriedBySites.contains($0.property)) }.map(\.property.label),
 					parametersTaken: child.fillParameterFields,
+					memberParameters: child.fillMemberParameterFields(takingPayloadFields: child.fillReturnsWrapperBuilder),
 					callerReads: child.fillCallerReads.parameterByLabel.keys.sorted().map { label in
 						FillFacts.CallerRead(label: label, isRequired: treeReads.required.contains { $0.label == label })
 					},
