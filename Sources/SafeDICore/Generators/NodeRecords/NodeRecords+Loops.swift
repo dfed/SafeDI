@@ -201,8 +201,8 @@ extension NodeRecords {
 
 	/// The places `declaration`'s builder function begins with, before every child: a wrapper made again of each member of
 	/// its loop it rebinds, in the order it rebinds them, each a call of that member's builder function
-	/// (`ClosingPlaceRecord.rebindsLoopMember`). A production world has one variant per node (`nodeHasSeveralVariants`), which is the one
-	/// the parent's body calls (oracle B, check 32 of the per-type facts' checks).
+	/// (`ClosingPlaceRecord.rebindsLoopMember`). The rebinding names only the member's declaration, its label and type, so
+	/// every variant of `declaration` rebinds alike (oracle B, check 32 of the per-type facts' checks).
 	static func loopRebindings(of declaration: DeclarationID, in world: some NodeRecordSources, mockLoopLevels: MockLoopLevels = MockLoopLevels()) -> [GeneratedCode] {
 		// In a mock, each rebinding hands the member's function what the member's level hands it.
 		let level = mockLoopLevelArgument(of: declaration, in: world, levels: mockLoopLevels)
