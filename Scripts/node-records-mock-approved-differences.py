@@ -12,12 +12,18 @@ Each rewrite is one named entry and changes the records' text only. A text that 
 rewrite that applies fails; no rewrite ignores a root. Entries: 1+2 (a function handed its overrides, declared
 once in the root's body: instantiated again at each call, nested, reading safeDIOverrides directly), 4 (a
 wrapper's binding states its type), 6 (an unlabeled argument written "_: value"), 8 (a constant's binding
-states its type), 9 (a keyword member in backticks), 10 (a public mock's guard line once in the root's body).
-Not rewritten, so such a pair fails: 3 (an actor's override local), 11, 12 and the unavailable-dependency read.
+states its type), 9 (a keyword member in backticks), 10 (a public mock’s guard line once in the root’s body:
+written again before each nested copy of the function it stands before).
+3 (an actor's override local, placed where the walk's text declares it) and 11 (a function named apart with a
+trailing underscore) read one fact from the walk's text. Not rewritten, so such a pair fails: 12 and the
+unavailable-dependency read.
 """
 import collections
 import re
 import sys
+import threading
+GUARD=re.compile(r'^\s*_ = (?:\w+\.)*\w+\.__safeDI_\w+_mock_\w+\.self //')
+GUARDS_MOVED=[]
 FUNC=re.compile(r'^(\s*)((?:@Sendable nonisolated )?func )(__safeDI_\w+|`__safeDI_[^`]+`)\((.*)\)((?: async| throws)* -> .+) \{$')
 TOKEN=re.compile(r'(?<![\w.])safeDIOverrides(?![\w:])')
 def block_end(lines,i):
@@ -75,7 +81,7 @@ def expand(lines,hoisted,base_indent):
         name,s,e,expr=hit
         newline=line[:s]+line[e:]
         # instantiate
-        sig,body=hoisted[name]
+        sig,body,guard=hoisted[name]
         m=FUNC.match(sig)
         params=re.sub(r'(^|, )safeDIOverrides: .*$','',m.group(4))
         # a parameter every call hands the value of its own name was a capture
@@ -103,7 +109,8 @@ def expand(lines,hoisted,base_indent):
         if bm and re.match(r'^\w+$',bm.group(1)) and '__safeDI_'+bm.group(1)!=name and stem(name)!='__safeDI_'+bm.group(1):
             newname='__safeDI_'+bm.group(1)
             newline=re.sub(r'(?<![\w.])'+re.escape(name)+r'(?=\()',newname,newline)
-        inst=[ind+m.group(2)+newname+'('+params+')'+m.group(5)+' {']
+        if guard and base_indent>8: GUARDS_MOVED.append(guard)
+        inst=([ind+guard.strip()] if guard else [])+[ind+m.group(2)+newname+'('+params+')'+m.group(5)+' {']
         sub=[ (ind+'    '+b if b else b) for b in (TOKEN.sub(lambda _:expr,x) for x in body)]
         sub=expand(sub,hoisted,base_indent+4)
         inst+=sub+[ind+'}']
@@ -125,7 +132,7 @@ def expand(lines,hoisted,base_indent):
         # re-scan same line for more calls
         continue
     return out
-def unhoist(text):
+def unhoist(text,walk=None):
     lines=text.split('\n')
     res=[];i=0
     while i<len(lines):
@@ -140,7 +147,9 @@ def unhoist(text):
                 m=FUNC.match(body[k])
                 if m and len(m.group(1))==8 and re.search(r'(^|, )safeDIOverrides: ',m.group(4)):
                     e=block_end(body,k)
-                    hoisted[m.group(3)]=(body[k],[b[12:] if b else b for b in body[k+1:e]])
+                    # entry 10: a public mock's guard line stands before the function that calls the mock
+                    guard=rest.pop() if rest and GUARD.match(rest[-1]) else None
+                    hoisted[m.group(3)]=(body[k],[b[12:] if b else b for b in body[k+1:e]],guard)
                     k=e+1
                 else:
                     rest.append(body[k]);k+=1
@@ -149,41 +158,54 @@ def unhoist(text):
         else:
             res.append(lines[i]);i+=1
     return '\n'.join(res)
-def e8(text):
+def e8(text,walk=None):
     # a binding whose value is built by a static method of the stated type
     def f(m):
         return m.group(1)+' = '+m.group(3) if re.search(r'else \{ (?:try |await )*'+re.escape(m.group(2))+r'\.[a-z_]\w*\(',m.group(0)+m.string[m.end():m.string.find('\n',m.end())]) else m.group(0)
     return re.sub(r'^(\s*let \w+): (.+?) = (if let safeDIBuilder = )',f,text,flags=re.M)
-def e9(text):
+def e9(text,walk=None):
     return re.sub(r'(safeDIOverrides(?:\.\w+)*)\.`(Type|Protocol)`',r'\1.\2',text)
-def e10(text):
-    lines=text.split('\n');out=list(lines)
-    for i,l in enumerate(lines):
-        m=re.match(r'^        _ = ((?:\w+\.)*\w+)\.__safeDI_\w+_mock_\w+\.self //',l)
-        if not m: continue
-        T=m.group(1)
-        for j in range(i+1,len(lines)):
-            f=FUNC.match(lines[j])
-            if lines[j]=='    }': break
-            if f and f.group(5).endswith('-> '+T) and len(f.group(1))>8:
-                ind=f.group(1)
-                out=lines[:i]+lines[i+1:j]+[ind+l.strip()]+lines[j:]
-                return e10('\n'.join(out))
-    return text
-def e6(text):
+def e6(text,walk=None):
     return re.sub(r'([(,] ?)_: ',r'\1',text)
-def e4(text):
+def e4(text,walk=None):
     return re.sub(r'^(\s*let \w+): ((?:Sendable)?(?:Erased)?Instantiator<.*>|(?:Sendable)?LazilyInstantiated<.*>) = \2',r'\1 = \2',text,flags=re.M)
-REWRITES=[('1+2',unhoist),('8',e8),('9',e9),('10',e10),('6',e6),('4',e4)]
+def e3(text,walk):
+    # entry 3: the walk reads an actor's overrides into a local before the actor's function; which functions
+    # are an actor's is a fact read from the walk's text, and each local must find its function here
+    lines=text.split('\n')
+    for local in re.finditer(r'^( *)let __safeDI_(\w+?)__overrides = (safeDIOverrides(?:\.\w+)+)$',walk,flags=re.M):
+        indent,label,path=local.groups()
+        for i,line in enumerate(lines):
+            f=FUNC.match(line)
+            if not (f and f.group(1)==indent and f.group(3)=='__safeDI_'+label): continue
+            if i and lines[i-1]==local.group(0): continue
+            e=block_end(lines,i)
+            reads=re.compile(re.escape(path)+r'(?=\.)')
+            if not any(reads.search(b) for b in lines[i+1:e]): continue
+            lines[i+1:e]=[reads.sub('__safeDI_'+label+'__overrides',b) for b in lines[i+1:e]]
+            lines.insert(i,local.group(0))
+            break
+    return '\n'.join(lines)
+def e11(text,walk):
+    # entry 11: a function the records name apart with a trailing underscore, where the walk's nested
+    # function of the same name hides the outer one
+    for name in sorted(set(re.findall(r'func (__safeDI_\w+?_)\(',text))):
+        if not re.search(r'(?<!\w)'+re.escape(name)+r'\(',walk):
+            text=re.sub(r'(?<![\w.])'+re.escape(name)+r'(?=[(),\n])',name[:-1],text)
+    return text
+REWRITES=[('1+2',unhoist),('11',e11),('3',e3),('8',e8),('9',e9),('6',e6),('4',e4)]
 
 
-def rewritten(text):
+def rewritten(text, walk):
     used = []
     for name, rewrite in REWRITES:
-        result = rewrite(text)
+        del GUARDS_MOVED[:]
+        result = rewrite(text, walk)
         if result != text:
             used.append(name)
             text = result
+        if GUARDS_MOVED:
+            used.append('10')
     return text, used
 
 
@@ -191,7 +213,7 @@ def compare(records_path, walk_path):
     records = open(records_path).read()
     walk = open(walk_path).read()
     try:
-        text, used = rewritten(records)
+        text, used = rewritten(records, walk)
     except Exception as error:  # a shape no rewrite expects fails closed
         return used_none, 'rewrite failed: ' + repr(error)
     if text == walk:
@@ -209,7 +231,7 @@ def compare(records_path, walk_path):
 
 used_none = []
 
-if __name__ == '__main__':
+def main():
     arguments = sys.argv[1:]
     if len(arguments) == 2 and arguments[0] == '--pairs':
         counts = collections.Counter()
@@ -227,7 +249,7 @@ if __name__ == '__main__':
             else:
                 failures += 1
                 print('%s: %s' % (records_path, failure))
-        for name, _ in REWRITES:
+        for name in [name for name, _ in REWRITES] + ['10']:
             print('entry %s: used on %d pairs' % (name, counts[name]))
         print('%d of %d pairs equal after rewrite' % (total - failures, total))
         sys.exit(1 if failures else 0)
@@ -242,3 +264,12 @@ if __name__ == '__main__':
     else:
         print(__doc__)
         sys.exit(2)
+
+
+if __name__ == '__main__':
+    # a chain of functions nests as deep as the tree
+    sys.setrecursionlimit(1000000)
+    threading.stack_size(1024 * 1024 * 1024)
+    thread = threading.Thread(target=main)
+    thread.start()
+    thread.join()
