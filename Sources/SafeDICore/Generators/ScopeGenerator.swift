@@ -3834,7 +3834,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// type is constructed, in the order the tree's code is generated, or `nil` where generation passes `nil`
 	/// (`unavailableProperties`). Where that declaration is a parameter of a builder function a lazy cycle closes on, the
 	/// value is the one each call of the function passes (see `OmissionFindings`). Also returns the concrete type of each
-	/// scope the tree constructs, in the order the walk meets them.
+	/// scope the tree constructs, in the order the walk meets them. `query graph` runs it only for trees built around
+	/// received dependencies nothing provides, which the fold that replaced it does not read yet, and otherwise only the
+	/// fold's oracle runs it (`TypeFactsReceivedValueSuppliesObservation`), since it enters every path of the tree.
 	///
 	/// A receive `unfulfilledReceives` holds is one the tree was built around although nothing provides it in some place
 	/// (`DependencyTreeGenerator.unfulfilledReceiveLocations`). Where nothing provides it, it is handed nothing, and an
@@ -4322,7 +4324,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// The types the tree rooted at this scope builds that its declarations do not name: through a `fulfilledByType:`
 	/// string or a `fulfillingAdditionalTypes:` entry, or as what a mock promotes for such a property, and, in a mock, by
 	/// calling a hand-written mock another module merges in. The code generated for the tree names each, while no
-	/// declaration of the property does, so no file SafeDI read need import its module.
+	/// declaration of the property does, so no file SafeDI read need import its module. A root's file takes its imports
+	/// from its world's declarations instead (`TypeFactsImports`), which the tests compare with this walk of its tree.
 	/// - Parameter buildingMock: Whether the tree is a mock's, which builds a type with its hand-written mock.
 	func fulfillersOfTree(buildingMock: Bool) async -> Set<FulfillerImports.Fulfiller> {
 		var fulfillers = Set<FulfillerImports.Fulfiller>()
@@ -8068,6 +8071,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		else { return nil }
 		let body = lines[1..<(lines.count - 1)].map { Self.standardIndent + $0 }
 		// The fill binds the fields its tree reads first, each from the scope; nothing after them reads the scope.
+		// safedi-source-rule: allow stringScan — reads the first line of one inlined fill, once per fill.
 		let readsScope = carriesPayload && lines[1].hasPrefix(leadingMemberWhitespace + Self.standardIndent + "let ") && (lines[1].contains(" = scope.") || (argumentFields != nil && lines[1].contains(" = scope_")))
 		let builtProperty = fill.propertiesToGenerate.first?.property
 		let forwardedValueName = fill.fillHole?.forwardedType == nil ? nil : builtProperty.map(Self.forwardedValueParameterName(forBuilding:))
@@ -12625,6 +12629,7 @@ extension TypeDescription {
 	// D1 lane hook (lane D): the mock lowering takes the parameter so too.
 	var autoclosureTakenWithoutThrowing: TypeDescription {
 		guard case let .attributed(.closure(arguments, isAsync, true, _, returnType), specifiers, attributes) = self,
+		      // safedi-source-rule: allow stringScan — `attributes` is a type’s `[String]` of attributes: membership among a few elements, no scan of text.
 		      attributes.contains("autoclosure")
 		else { return self }
 		return .attributed(.closure(arguments: arguments, isAsync: isAsync, doesThrow: false, thrownType: nil, returnType: returnType), specifiers: specifiers, attributes: attributes)
