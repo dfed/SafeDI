@@ -7940,14 +7940,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			generatedProperties.append(.rootFunction(record))
 		}
 		if let publicMockLevelFunctions {
-			generatedProperties += publicMockLevelFunctions.declarations(
-				indent: leadingMemberWhitespace,
+			generatedProperties += publicMockLevelFunctions.records(
 				sendableKeys: sendableFillKeys,
 				inlinedFills: body.inlinedFills,
 				fillsTakingPayloadFields: body.fillsTakingPayloadFields,
 				fillMemberParameterFieldsByKey: body.fillParametersByKey,
 				typesDeclaredEscaping: typesDeclaredEscaping,
-			).map(GeneratedCode.text)
+			).declarations(indent: leadingMemberWhitespace, inlinedFillBodies: body.inlinedFills.mapValues(\.body)).map(GeneratedCode.text)
 		}
 		return generatedProperties
 	}
