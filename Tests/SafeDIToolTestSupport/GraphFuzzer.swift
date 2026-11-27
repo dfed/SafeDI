@@ -2971,9 +2971,11 @@ enum GraphFuzzerGenerator {
 			wrapperKindsRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.wrapperKindsRandomSeedMask)
 			actorArgumentRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.actorArgumentRandomSeedMask)
 			instantiatedOnlyIfAvailableRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.instantiatedOnlyIfAvailableRandomSeedMask)
+			instantiatedOnlyIfAvailableErasureRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.instantiatedOnlyIfAvailableErasureRandomSeedMask)
 			optionalPlaceRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.optionalPlaceRandomSeedMask)
 			nestedCycleRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.nestedCycleRandomSeedMask)
 			renamedLazyReaderRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.renamedLazyReaderRandomSeedMask)
+			renameSplitRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.renameSplitRandomSeedMask)
 			seamDependencyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ GraphFuzzerSeamDependencyDraw.seamRandomSeedMask)
 			prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
 			// One draw decides, so graphs that are not mixed draw exactly what they drew before mixed graphs existed.
@@ -3061,6 +3063,8 @@ enum GraphFuzzerGenerator {
 			finalDeclarations = addingTypeBuiltAgainThroughSecondLazyCycle(to: finalDeclarations)
 			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
 			finalDeclarations = addingReadersOfRenamedLazyInstance(to: finalDeclarations)
+			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
+			finalDeclarations = addingRenameFulfilledByValueAndWrapper(to: finalDeclarations)
 			// In a graph split across modules, every file names its module and imports the seam's, so that a type of the
 			// caller can name what the seam's module declares, such as the creation stamps' counter.
 			let isSplit = finalDeclarations.contains { $0.module == .seamModule }
@@ -3547,6 +3551,9 @@ enum GraphFuzzerGenerator {
 		/// Draws only `addingDependencyInstantiatedOnlyIfAvailable`'s choices: whether a graph gains `IfAvailableRoot`'s
 		/// tree, and every shape of that tree.
 		private var instantiatedOnlyIfAvailableRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only whether `addingDependencyInstantiatedOnlyIfAvailable`'s fulfilled token is erased, so that every other
+		/// choice of the draw is drawn as before.
+		private var instantiatedOnlyIfAvailableErasureRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only `addingOptionalPlaceShapes`' choices: whether a split graph gains `OptionalPlaceRoot`'s tree, and every
 		/// shape of that tree.
 		private var optionalPlaceRandom: GraphFuzzerRandomNumberGenerator
@@ -3556,6 +3563,9 @@ enum GraphFuzzerGenerator {
 		/// Draws only `addingReadersOfRenamedLazyInstance`'s choices: whether a graph gains `RenamedLazyTop`'s tree, and
 		/// every shape of that tree.
 		private var renamedLazyReaderRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only `addingRenameFulfilledByValueAndWrapper`'s choices: whether a graph gains `RenameSplitRoot`'s tree, and
+		/// every shape of that tree.
+		private var renameSplitRandom: GraphFuzzerRandomNumberGenerator
 		/// The files `markerFreeFileRandom` moved a declaration into: each named, holding the declaration alone, and in the
 		/// module of the type, `ownerName`, whose file it was drawn in.
 		private var markerFreeFiles = [(ownerName: String, fileName: String, declaration: String)]()
@@ -8329,9 +8339,12 @@ enum GraphFuzzerGenerator {
 		/// declares, which no declaration fulfills, so production binds the property to `nil` and a mock binds it from an
 		/// override that defaults to `nil`, and takes no parameter, a root's included (`rootMockTakesParameter`). The leaf receives the label in its optional
 		/// form, required or only if available, and where it is only if available the root now and then builds a second
-		/// leaf itself, outside the screen's tree, which is passed `nil`. Now and then the screen's mock is generated. The
-		/// compile and the value oracles judge the tree. `instantiatedOnlyIfAvailableRandom` draws only for this pass, after
-		/// every other, and only in the base corpus.
+		/// leaf itself, outside the screen's tree, which is passed `nil`. Now and then the screen's mock is generated. Half
+		/// the graphs whose token is fulfilled erase it, on a stream of their own (`instantiatedOnlyIfAvailableErasureRandom`):
+		/// the screen instantiates `ifAvailableToken: AnyIfAvailableToken?` with `fulfilledByType:` and
+		/// `erasedToConcreteExistential: true`, which the leaf receives, so a mock wraps the token in the erasing type without
+		/// its optionality, as production does (`AnyT?(…)` does not compile). The compile and the value oracles judge the
+		/// tree. `instantiatedOnlyIfAvailableRandom` draws only for this pass, after every other, and only in the base corpus.
 		private mutating func addingDependencyInstantiatedOnlyIfAvailable(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
 			guard !omitsDrawsOlderReleasesReject, features.isEmpty, instantiatedOnlyIfAvailableRandom.percentChance(16) else { return declarations }
 			var declarations = declarations
@@ -8342,6 +8355,7 @@ enum GraphFuzzerGenerator {
 			let screenGeneratesMock = instantiatedOnlyIfAvailableRandom.percentChance(40)
 			let tokenIsFulfilled = instantiatedOnlyIfAvailableRandom.percentChance(60)
 			let rootBuildsLeaf = rootMayBuildLeaf && !leafRequiresToken
+			let tokenIsErased = tokenIsFulfilled && instantiatedOnlyIfAvailableErasureRandom.percentChance(50)
 			func append(_ name: String, arguments: [String] = [], _ properties: [PropertyDeclaration]) {
 				declarations.append(TypeDeclaration(
 					name: name,
@@ -8354,19 +8368,28 @@ enum GraphFuzzerGenerator {
 			let tokenName = "\(prefix)IfAvailableToken"
 			let leafName = "\(prefix)IfAvailableLeaf"
 			let screenName = "\(prefix)IfAvailableScreen"
+			let erasedTokenName = "\(prefix)AnyIfAvailableToken"
+			let receivedTokenType = tokenIsErased ? erasedTokenName : tokenName
 			if tokenIsFulfilled {
 				append(tokenName, [])
 			}
 			append(leafName, [leafRequiresToken
-					? PropertyDeclaration(attribute: "@Received", label: "ifAvailableToken", type: "\(tokenName)?")
-					: PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "ifAvailableToken", type: "\(tokenName)?")])
-			let token = PropertyDeclaration(attribute: "@Instantiated(onlyIfAvailable: true)", label: "ifAvailableToken", type: "\(tokenName)?")
+					? PropertyDeclaration(attribute: "@Received", label: "ifAvailableToken", type: "\(receivedTokenType)?")
+					: PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "ifAvailableToken", type: "\(receivedTokenType)?")])
+			let token = tokenIsErased
+				? PropertyDeclaration(attribute: "@Instantiated(fulfilledByType: \"\(tokenName)\", erasedToConcreteExistential: true, onlyIfAvailable: true)", label: "ifAvailableToken", type: "\(erasedTokenName)?")
+				: PropertyDeclaration(attribute: "@Instantiated(onlyIfAvailable: true)", label: "ifAvailableToken", type: "\(tokenName)?")
 			let leaf = leafIsBuiltByInstantiator
 				? PropertyDeclaration(attribute: "@Instantiated", label: "ifAvailableLeafBuilder", type: "\(sendability == .sendable ? "SendableInstantiator" : "Instantiator")<\(leafName)>")
 				: PropertyDeclaration(attribute: "@Instantiated", label: "ifAvailableLeaf", type: leafName)
 			append(screenName, arguments: screenGeneratesMock ? ["generateMock: true"] : [], tokenComesFirst ? [token, leaf] : [leaf, token])
 			if !tokenIsFulfilled {
 				declarations[declarations.count - 1].additionalDeclarations.append("public final class \(tokenName): Sendable {}")
+			}
+			if tokenIsErased {
+				declarations[declarations.count - 1].additionalDeclarations.append(
+					"public struct \(erasedTokenName)\(helperTypesAreSendable ? ": Sendable" : "") {\n\tpublic init(_ value: \(tokenName)) {\n\t\tself.value = value\n\t}\n\n\tpublic let value: \(tokenName)\n}",
+				)
 			}
 			var rootProperties = [PropertyDeclaration(attribute: "@Instantiated", label: "ifAvailableScreen", type: screenName)]
 			if rootBuildsLeaf {
@@ -8377,6 +8400,7 @@ enum GraphFuzzerGenerator {
 		}
 
 		private static let instantiatedOnlyIfAvailableRandomSeedMask: UInt64 = 0x4966417661696C21
+		private static let instantiatedOnlyIfAvailableErasureRandomSeedMask: UInt64 = 0x4966417661696C45
 
 		// MARK: A type built again through a second lazy cycle
 
@@ -8483,6 +8507,66 @@ enum GraphFuzzerGenerator {
 		}
 
 		private static let renamedLazyReaderRandomSeedMask: UInt64 = 0x52656E4C617A79
+
+		// MARK: A rename fulfilled by a value and by a wrapper
+
+		/// The base corpus's draw, in one graph of sixteen, of one type whose rename is fulfilled by a label one parent
+		/// declares as a value and another as a lazily instantiated wrapper of it. `RenameSplitRoot`, a root, instantiates
+		/// `RenameSplitLazyParent` and `RenameSplitValueParent`, in either order. The lazy parent declares
+		/// `renameSplitValue` as a `LazilyInstantiated<RenameSplitValue>` (or its `Sendable` kind in a `Sendable` graph) and
+		/// builds `RenameSplitReader` through an `Instantiator`, directly, or beneath `RenameSplitHolder`; the value parent
+		/// declares the label as a `RenameSplitValue` and builds the reader directly or beneath the holder. The reader
+		/// renames the label, `@Received(fulfilledByDependencyNamed: "renameSplitValue", ofType: RenameSplitValue.self)`, so
+		/// beneath the lazy parent its rename reads the wrapper's instance and beneath the value parent the value itself.
+		/// The two paths can share the reader's node records, whose key does not tell the forms apart, so a layout that
+		/// judged only the first path met wrote the value's spelling beneath the wrapper too, which does not compile.
+		/// `renameSplitRandom` draws only for this pass, after every other, and only in the base corpus.
+		private mutating func addingRenameFulfilledByValueAndWrapper(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			guard features.isEmpty, renameSplitRandom.percentChance(6) else { return declarations }
+			var declarations = declarations
+			let lazyParentComesFirst = renameSplitRandom.percentChance(50)
+			// 0: through an `Instantiator`; 1: directly; 2: beneath the holder.
+			let lazyPath = renameSplitRandom.integer(in: 0...2)
+			let valuePathUsesHolder = renameSplitRandom.percentChance(50)
+			let instantiator = sendability == .sendable ? "SendableInstantiator" : "Instantiator"
+			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
+			func append(_ name: String, isRoot: Bool = false, _ properties: [PropertyDeclaration]) {
+				declarations.append(TypeDeclaration(
+					name: name,
+					instantiableArguments: isRoot ? ["isRoot: true"] : [],
+					properties: properties,
+					declaresHelperTypes: false,
+					additionalConformances: conformances,
+				))
+			}
+			let valueName = "\(prefix)RenameSplitValue"
+			let readerName = "\(prefix)RenameSplitReader"
+			let holderName = "\(prefix)RenameSplitHolder"
+			let wrapped = "\(lazilyInstantiatedWrapper(isSendable: sendability == .sendable))<\(valueName)>"
+			let reader = PropertyDeclaration(attribute: "@Instantiated", label: "renameSplitReader", type: readerName)
+			let holder = PropertyDeclaration(attribute: "@Instantiated", label: "renameSplitHolder", type: holderName)
+			append(valueName, [])
+			append(readerName, [PropertyDeclaration(attribute: "@Received(fulfilledByDependencyNamed: \"renameSplitValue\", ofType: \(valueName).self)", label: "renameSplitRenamed", type: valueName)])
+			if lazyPath == 2 || valuePathUsesHolder {
+				append(holderName, [reader])
+			}
+			let lazyParentReach = switch lazyPath {
+			case 0:
+				PropertyDeclaration(attribute: "@Instantiated", label: "renameSplitReaderBuilder", type: "\(instantiator)<\(readerName)>")
+			case 1:
+				reader
+			default:
+				holder
+			}
+			append("\(prefix)RenameSplitLazyParent", [lazyParentReach, PropertyDeclaration(attribute: "@Instantiated", label: "renameSplitValue", type: wrapped)])
+			append("\(prefix)RenameSplitValueParent", [PropertyDeclaration(attribute: "@Instantiated", label: "renameSplitValue", type: valueName), valuePathUsesHolder ? holder : reader])
+			let lazyParent = PropertyDeclaration(attribute: "@Instantiated", label: "renameSplitLazyParent", type: "\(prefix)RenameSplitLazyParent")
+			let valueParent = PropertyDeclaration(attribute: "@Instantiated", label: "renameSplitValueParent", type: "\(prefix)RenameSplitValueParent")
+			append("\(prefix)RenameSplitRoot", isRoot: true, lazyParentComesFirst ? [lazyParent, valueParent] : [valueParent, lazyParent])
+			return declarations
+		}
+
+		private static let renameSplitRandomSeedMask: UInt64 = 0x52656E53706C6974
 
 		// MARK: Cycle parameters
 
