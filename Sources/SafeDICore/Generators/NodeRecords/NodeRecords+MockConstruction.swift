@@ -29,15 +29,20 @@ extension NodeRecords {
 		guard world.isMockWorld else { return nil }
 		// A property nothing fulfills builds nothing, so it is no construction (`NodeRecords+MockUnavailableDependency.swift`).
 		guard !world.scope(of: declaration).isUnavailableDependency else { return mockUnavailableDependencyClaim(of: declaration, in: world) }
+		// A rename is a node of its own kind, which reads no override.
+		let renameClaim = mockRenameClaim(of: declaration, in: world)
+		guard renameClaim == nil else { return renameClaim }
 		// A hand-written mock builds its type with or without an initializer: a fake has none.
 		let buildsWithHandWrittenMock = world.construction(of: declaration) == .handWrittenMock
 		let erasedDischarges = mockErasedDischarges(of: declaration, in: world)
+		let rename = mockRenameDischargesAndRefusals(of: declaration, in: world)
 		var discharges: Set<NodeRecordRefusal> = buildsWithHandWrittenMock ? [.construction, .noInitializer] : []
 		discharges.formUnion(mockOnlyIfAvailableDischarges(of: declaration))
 		discharges.formUnion(erasedDischarges)
+		discharges.formUnion(rename.discharges)
 		guard refusalsOfBuiltByInitializer(declaration, in: world).allSatisfy(discharges.contains) else { return nil }
 		let kind: NodeRecordKind = erasedDischarges.isEmpty ? .mockConstruction : .mockErased
-		var refusals = [NodeRecordRefusal]()
+		var refusals = rename.refusals
 		let instantiable = world.scope(of: declaration).instantiable
 		// An actor is claimed as any node is. The closure that overrides it takes each argument `sending`
 		// (`MockLowering.BuilderParameters`), and what it is sent is built by functions that are each handed their
@@ -64,15 +69,24 @@ extension NodeRecords {
 		return (world.construction(of: declaration) == .handWrittenMock ? instantiable.mockInitializer : nil) ?? instantiable.initializer
 	}
 
+	/// Whether `declaration`, a node of a mock root's world, is handed its overrides for its children: it builds a child
+	/// other than a rename, which reads its override from what the node's function is handed. A rename reads no override,
+	/// so children that are all renames hand nothing on.
+	static func isConfiguredMockNode(_ declaration: DeclarationID, in world: some NodeRecordSources) -> Bool {
+		world.edges(from: declaration).contains { world.kind(of: $0) != .alias }
+	}
+
 	/// The record of `declaration`'s place, a node of kind `mockConstruction`: the record stage 1 makes of it, built with
 	/// its type's hand-written mock where the world says so (`TypeFactsConstruction.handWrittenMock`), which first tries
 	/// the closure that overrides it (`mockOverrideSlot(of:labeled:typed:in:hasFunction:handsOverridesToChildren:isSendable:)`),
-	/// called with its
-	/// construction's arguments. A node that builds children, or whose construction takes a field of its configuration
+	/// called with its construction's arguments. A node that builds a child with an override of its own (neither a rename
+	/// nor a property nothing fulfills), or whose construction takes a field of its configuration
 	/// (`mockConfigurationFieldArguments(of:in:)`), is configured: its override is the builder of the configuration its
-	/// function is handed, whose fields its children and its own construction read, a field of an `@autoclosure`
-	/// parameter called once where the node is built. The closure of a node that is not configured returns the
-	/// property's type, so every node's function does, as the walk's does.
+	/// function is handed, whose fields its children and its own construction read, a field of an `@autoclosure` parameter
+	/// called once where the node is built. A rename reads no override, and a property nothing fulfills reads one the root
+	/// hands down beside the node's, so a node whose children are all of those two kinds and whose construction takes no
+	/// field is not configured. The closure of a node that is not configured returns the property's type, so every node's
+	/// function does, as the walk's does.
 	static func mockConstructionRecord(
 		of declaration: DeclarationID,
 		variant: VariantID,
@@ -119,8 +133,11 @@ extension NodeRecords {
 		)
 		// A constant built in a function for its configuration's fields writes `return`, as the walk writes it.
 		record.functionAlwaysWritesReturn = !fieldArguments.isEmpty && record.property.propertyType.isConstant
-		// A property nothing fulfills is a child with no override of its own, so it makes its type no configuration.
-		let isConfigured = world.edges(from: declaration).contains { !world.scope(of: $0).isUnavailableDependency } || !fieldArguments.isEmpty
+		let isConfiguredForChildren = isConfiguredMockNode(declaration, in: world)
+		// A property nothing fulfills is a child with no override of its own, as a rename is, so neither makes its type a
+		// configuration; its function is still handed the overrides, beside which it takes that property’s.
+		let buildsChildWithOverride = world.edges(from: declaration).contains { world.kind(of: $0) != .alias && !world.scope(of: $0).isUnavailableDependency }
+		let isConfigured = buildsChildWithOverride || !fieldArguments.isEmpty
 		let slotType: TypeDescription = if isConfigured {
 			.nested(name: ScopeGenerator.mockConfigurationStructName, parentType: instantiable.concreteInstantiable, generics: [])
 		} else {
@@ -133,7 +150,7 @@ extension NodeRecords {
 			typed: slotType,
 			in: world,
 			hasFunction: record.hasFunction,
-			handsOverridesToChildren: !children.isEmpty,
+			handsOverridesToChildren: isConfiguredForChildren,
 			isSendable: record.isSendable,
 		)
 		// The override `mock()` takes of a property nothing fulfills is handed down to the function of the type that

@@ -163,14 +163,26 @@ struct OnlyIfAvailableAnswers: Sendable {
 				}
 			}
 			// A rename only if available is bound from a property its scope creates, whatever order it is built in, else from
-			// the nearest declaration above the scope, or to `nil` (`Scope`'s `aliasBindings`).
-			for (callee, renameDeclaration) in zip(calls, edges) where world.kind(of: renameDeclaration) == .alias {
+			// a child its node builds that its scope does not create, a dependency a mock root promotes, where that child is
+			// built before the rename, else from the nearest declaration above the scope, or to `nil` (`Scope`'s
+			// `aliasBindings`).
+			for (edgeIndex, (callee, renameDeclaration)) in zip(calls, edges).enumerated() where world.kind(of: renameDeclaration) == .alias {
 				for dependency in scope.instantiable.dependencies where dependency.property == world.property(of: renameDeclaration) {
 					guard case let .aliased(fulfillingProperty, _, onlyIfAvailable: true) = dependency.source else { continue }
-					let binding: Property? = if let createdBinding = scope.createdBinding(of: fulfillingProperty) {
-						createdBinding
+					let binding: Property?
+					if let createdBinding = scope.createdBinding(of: fulfillingProperty) {
+						binding = createdBinding
 					} else {
-						try Self.binding(reading: fulfillingProperty, in: context)
+						// A rename that keeps its label is no declaration of it where its own value is read.
+						let childBindings = edges.indices.compactMap { siblingEdgeIndex -> Binding? in
+							guard world.kind(of: edges[siblingEdgeIndex]) != .alias, let property = world.property(of: edges[siblingEdgeIndex]), property.label == fulfillingProperty.label else { return nil }
+							return Binding(property: property, state: positionByEdgeIndex[siblingEdgeIndex] < positionByEdgeIndex[edgeIndex] ? .available : .builtLater)
+						}
+						var renameContext = context
+						if !childBindings.isEmpty {
+							renameContext[fulfillingProperty.label] = childBindings
+						}
+						binding = try Self.binding(reading: fulfillingProperty, in: renameContext)
 					}
 					if let binding {
 						renameBindingByVariant[Int(callee)] = .bound(fulfillingBindingIsOptional: binding.typeDescription.isOptional)
