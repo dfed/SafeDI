@@ -311,7 +311,10 @@ extension DependencyTreeGenerator {
 					memberBindingKeysByLabel[label(of: holeType, isSendable: isSendable), default: []].formUnion(byType.memberBindingKeysByFamily[isSendable, default: []])
 				}
 				callRoutes += byType.callRoutes
-				routeMembersBySite.merge(byType.routeMembersBySite) { first, _ in first }
+				// A site is one hole type's, so no two types name it; as its enum place below, a site's members are the last given.
+				for (site, members) in byType.routeMembersBySite {
+					routeMembersBySite[site] = members
+				}
 				for (site, enumPlace) in byType.enumPlaceBySite {
 					holesBySite[site]?.enumPlace = enumPlace
 					holesBySite[site]?.scopeTypeName = enumPlace.enumTypeName
