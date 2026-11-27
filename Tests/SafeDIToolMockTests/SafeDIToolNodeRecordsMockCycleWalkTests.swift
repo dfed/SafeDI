@@ -105,6 +105,52 @@ struct SafeDIToolNodeRecordsMockCycleWalkTests: ~Copyable {
 		)
 	}
 
+	/// `Root` enters the ring of `Parent` and `Child` at each of them: each entry's places read the overrides they were
+	/// entered with, around every lap.
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildsTheWalksValues_whenRootEntersCycleAtTwoPlaces() async throws {
+		try await expectWalksValues(
+			fixture: [
+				"Root.swift": """
+				@Instantiable(generateMock: true)
+				public final class Root: Instantiable, Marked {
+				    public init(parentBuilder: Instantiator<Parent>, childBuilder: Instantiator<Child>) {
+				        self.parentBuilder = parentBuilder
+				        self.childBuilder = childBuilder
+				    }
+				    @Instantiated let parentBuilder: Instantiator<Parent>
+				    @Instantiated let childBuilder: Instantiator<Child>
+				    public var marker = ""
+				}
+				""",
+				"Parent.swift": """
+				@Instantiable
+				public final class Parent: Instantiable, Marked {
+				    public init(childBuilder: Instantiator<Child>) { self.childBuilder = childBuilder }
+				    @Instantiated let childBuilder: Instantiator<Child>
+				    public var marker = ""
+				}
+				""",
+				"Child.swift": """
+				@Instantiable
+				public final class Child: Instantiable, Marked {
+				    public init(parentBuilder: Instantiator<Parent>) { self.parentBuilder = parentBuilder }
+				    @Instantiated let parentBuilder: Instantiator<Parent>
+				    public var marker = ""
+				}
+				""",
+			],
+			probes: [
+				DifferentialValueProbe("Root.mock().parentBuilder.instantiate().childBuilder.instantiate().parentBuilder.instantiate().childBuilder.instantiate()"),
+				DifferentialValueProbe("Root.mock().childBuilder.instantiate().parentBuilder.instantiate().childBuilder.instantiate().parentBuilder.instantiate()"),
+				DifferentialValueProbe(name: "overridden.parentBuilder.instantiate().childBuilder.instantiate().parentBuilder.instantiate().childBuilder.instantiate()", expression: "Root.mock(safeDIOverrides: \(Self.ringOverrides)).parentBuilder.instantiate().childBuilder.instantiate().parentBuilder.instantiate().childBuilder.instantiate()"),
+				DifferentialValueProbe(name: "overridden.childBuilder.instantiate().parentBuilder.instantiate().childBuilder.instantiate().parentBuilder.instantiate()", expression: "Root.mock(safeDIOverrides: \(Self.ringOverrides)).childBuilder.instantiate().parentBuilder.instantiate().childBuilder.instantiate().parentBuilder.instantiate()"),
+			],
+			markers: ["parent", "child", "child.parent"],
+		)
+	}
+
 	/// `Step`, between `Screen`'s place and the call that closes the cycle on it, declares `session`, which `Screen`
 	/// receives (`cycleTakesParameters`): each lap's `Screen` holds the `session` its own `Step` built.
 	@Test
@@ -384,6 +430,9 @@ struct SafeDIToolNodeRecordsMockCycleWalkTests: ~Copyable {
 	// MARK: Private
 
 	private var filesToDelete: [URL]
+
+	/// Overrides of each of the three places of the ring two entries give `Root`'s mock.
+	private static let ringOverrides = ".init(parentBuilder: .init({ marked(Parent(childBuilder: $0), \"parent\") }), childBuilder: .init(parentBuilder: .init({ marked(Parent(childBuilder: $0), \"child.parent\") }), { marked(Child(parentBuilder: $0), \"child\") }))"
 
 	private static let markedFile = """
 	public protocol Marked: AnyObject {

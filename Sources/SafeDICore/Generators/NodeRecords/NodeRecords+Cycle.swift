@@ -255,6 +255,7 @@ extension NodeRecords {
 			enclosingFunctionNames = Array(repeating: [:], count: world.variantCount)
 			var isNamed = [Bool](repeating: false, count: world.variantCount)
 			isNamed[0] = true
+			let isMockWorld = world.isMockWorld
 			func closedOn(_ entry: BodyEntry) -> Set<VariantID> {
 				switch entry {
 				case let .closer(closingOn: callee):
@@ -273,15 +274,18 @@ extension NodeRecords {
 			while let variant = bodies.popLast() {
 				let enclosing = enclosingFunctionNames[Int(variant)]
 				let body = entries[Int(variant)]
-				// The functions enclosing the body that a call in it closes a cycle on, by the names the body sees them by.
-				var referencedNames = Set<String>()
+				// The functions a call in the body closes a cycle on, by the names the body sees them by, each with the variants
+				// it names: those enclosing the body, and, in a mock's world, the place of the body itself that a call beneath a
+				// place of another variant closes on (`mockPlace`), which no function of the body shadows.
+				var variantsByReferencedName = [String: Set<VariantID>]()
 				for entry in body {
 					for closedOnVariant in closedOn(entry) {
 						if let property = world.property(of: world.declaration(of: closedOnVariant)) {
-							referencedNames.insert(enclosing[closedOnVariant] ?? ScopeGenerator.functionName(toBuildPropertyNamed: property.label))
+							variantsByReferencedName[enclosing[closedOnVariant] ?? ScopeGenerator.functionName(toBuildPropertyNamed: property.label), default: []].insert(closedOnVariant)
 						}
 					}
 				}
+				let referencedNames = Set(variantsByReferencedName.keys)
 				// Every entry built as a property declares or calls a function by its label: an alias or a hole has none.
 				var candidates = [(index: Int, property: Property, name: String)]()
 				for (index, entry) in body.enumerated() {
@@ -298,8 +302,8 @@ extension NodeRecords {
 				// A call that closes a cycle declares no function.
 				let renamed = candidates.filter { candidate in
 					switch body[candidate.index] {
-					case .place:
-						referencedNames.contains(candidate.name)
+					case let .place(callee):
+						variantsByReferencedName[candidate.name].map { $0 != [callee] } ?? false
 					case .closer:
 						false
 					}
@@ -322,7 +326,7 @@ extension NodeRecords {
 						childEnclosing[child] = functionName
 					}
 					if isNamed[Int(child)] {
-						guard functionNames[Int(child)] == functionName, enclosingFunctionNames[Int(child)] == childEnclosing else {
+						guard isMockWorld || functionNames[Int(child)] == functionName, enclosingFunctionNames[Int(child)] == childEnclosing else {
 							throw .cycleBuilderNameShared
 						}
 					} else {

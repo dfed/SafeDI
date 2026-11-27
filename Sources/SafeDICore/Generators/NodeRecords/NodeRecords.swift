@@ -347,7 +347,9 @@ struct NodeRecords: Sendable {
 					stack[stack.count - 1].entries.append(.closer(closingOn: callee))
 					stack[stack.count - 1].variantsClosedOn.insert(callee)
 				} else if isWalked[Int(callee)] {
-					guard variantsClosedOn[Int(callee)].allSatisfy({ isOnPath[Int($0)] }), !cycleVariantsBuilt[Int(callee)].contains(where: { isOnPath[Int($0)] }) else {
+					// A mock's place serves every place of its variant: whether a call in it returns to a place above or
+					// enters a new one is decided when the mock runs, from the places it is handed (`mockPlace`).
+					guard enteredSlots != nil || variantsClosedOn[Int(callee)].allSatisfy({ isOnPath[Int($0)] }) && !cycleVariantsBuilt[Int(callee)].contains(where: { isOnPath[Int($0)] }) else {
 						throw NodeRecordRefusal.cycleMemberBuiltTwoWays
 					}
 					stack[stack.count - 1].entries.append(.place(callee))
