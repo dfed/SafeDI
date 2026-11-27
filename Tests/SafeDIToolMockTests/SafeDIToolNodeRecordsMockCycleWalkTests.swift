@@ -504,49 +504,46 @@ struct SafeDIToolNodeRecordsMockCycleWalkTests: ~Copyable {
 	}
 
 	/// `Root` builds `b` by value, and `A`, on the cycle `b` closes, builds it again as a `LazilyInstantiated`: one cycle
-	/// identity built both ways, a twin (`cycleVariantsPartitionApart`).
+	/// identity built both ways, whose lazy call closes the cycle on the place by value above it, as today’s tree closes it.
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_buildsTheWalksValues_whenCycleIdentityIsBuiltLazilyAndByValue() async {
-		// The mock cycle refusals lane lifts this refusal in a mock world; until then the walk writes the mock.
-		await withKnownIssue("refused as cycleVariantsPartitionApart: one cycle identity built lazily and by value") {
-			try await expectWalksValues(
-				fixture: [
-					"Root.swift": """
-					@Instantiable(generateMock: true)
-					public final class Root: Instantiable, Marked {
-					    public init(b: B) { self.b = b }
-					    @Instantiated let b: B
-					    public var marker = ""
-					}
-					""",
-					"A.swift": """
-					@Instantiable
-					public final class A: Instantiable, Marked {
-					    public init(b: LazilyInstantiated<B>) { self.b = b }
-					    @Instantiated let b: LazilyInstantiated<B>
-					    public var marker = ""
-					}
-					""",
-					"B.swift": """
-					@Instantiable
-					public final class B: Instantiable, Marked {
-					    public init(aBuilder: Instantiator<A>) { self.aBuilder = aBuilder }
-					    @Instantiated let aBuilder: Instantiator<A>
-					    public var marker = ""
-					}
-					""",
-				],
-				probes: [
-					DifferentialValueProbe("Root.mock().b.aBuilder.instantiate()"),
-					DifferentialValueProbe("Root.mock().b.aBuilder.instantiate().b.instance.aBuilder.instantiate()"),
-					DifferentialValueProbe("Root.mock().b.aBuilder.instantiate().b.instance.aBuilder.instantiate().b.instance.aBuilder.instantiate()"),
-					DifferentialValueProbe(name: "overridden.b.aBuilder.instantiate().b.instance.aBuilder.instantiate()", expression: "Root.mock(safeDIOverrides: .init(b: .init({ marked(B(aBuilder: $0), \"b\") }))).b.aBuilder.instantiate().b.instance.aBuilder.instantiate()"),
-					DifferentialValueProbe(name: "overridden.b.aBuilder.instantiate().b.instance.aBuilder.instantiate().b.instance.aBuilder.instantiate()", expression: "Root.mock(safeDIOverrides: .init(b: .init({ marked(B(aBuilder: $0), \"b\") }))).b.aBuilder.instantiate().b.instance.aBuilder.instantiate().b.instance.aBuilder.instantiate()"),
-				],
-				markers: ["b"],
-			)
-		}
+	mutating func mock_buildsTheWalksValues_whenCycleIdentityIsBuiltLazilyAndByValue() async throws {
+		try await expectWalksValues(
+			fixture: [
+				"Root.swift": """
+				@Instantiable(generateMock: true)
+				public final class Root: Instantiable, Marked {
+				    public init(b: B) { self.b = b }
+				    @Instantiated let b: B
+				    public var marker = ""
+				}
+				""",
+				"A.swift": """
+				@Instantiable
+				public final class A: Instantiable, Marked {
+				    public init(b: LazilyInstantiated<B>) { self.b = b }
+				    @Instantiated let b: LazilyInstantiated<B>
+				    public var marker = ""
+				}
+				""",
+				"B.swift": """
+				@Instantiable
+				public final class B: Instantiable, Marked {
+				    public init(aBuilder: Instantiator<A>) { self.aBuilder = aBuilder }
+				    @Instantiated let aBuilder: Instantiator<A>
+				    public var marker = ""
+				}
+				""",
+			],
+			probes: [
+				DifferentialValueProbe("Root.mock().b.aBuilder.instantiate()"),
+				DifferentialValueProbe("Root.mock().b.aBuilder.instantiate().b.instance.aBuilder.instantiate()"),
+				DifferentialValueProbe("Root.mock().b.aBuilder.instantiate().b.instance.aBuilder.instantiate().b.instance.aBuilder.instantiate()"),
+				DifferentialValueProbe(name: "overridden.b.aBuilder.instantiate().b.instance.aBuilder.instantiate()", expression: "Root.mock(safeDIOverrides: .init(b: .init({ marked(B(aBuilder: $0), \"b\") }))).b.aBuilder.instantiate().b.instance.aBuilder.instantiate()"),
+				DifferentialValueProbe(name: "overridden.b.aBuilder.instantiate().b.instance.aBuilder.instantiate().b.instance.aBuilder.instantiate()", expression: "Root.mock(safeDIOverrides: .init(b: .init({ marked(B(aBuilder: $0), \"b\") }))).b.aBuilder.instantiate().b.instance.aBuilder.instantiate().b.instance.aBuilder.instantiate()"),
+			],
+			markers: ["b"],
+		)
 	}
 
 	/// `B` is built in a `@Sendable` function, from which the call that closes the cycle refers to `A`'s function, so the
