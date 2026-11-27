@@ -1,0 +1,159 @@
+// Distributed under the MIT License
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+extension NodeRecords {
+	/// The claim of `declaration` where it is a node whose type receives a property only if available: of kind
+	/// `receivesOnlyIfAvailable`, discharging `onlyIfAvailable`; `nil` for any other node.
+	static func receivesOnlyIfAvailableClaim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
+		guard world.kind(of: declaration) != .alias, world.kind(of: declaration) != .hole,
+		      world.scope(of: declaration).instantiable.dependencies.contains(where: { $0.source == .received(onlyIfAvailable: true) })
+		else { return nil }
+		return NodeRecordClaim(kind: .receivesOnlyIfAvailable, discharges: [.onlyIfAvailable])
+	}
+
+	/// The record of `declaration`'s place in `variant`, a node of kind `receivesOnlyIfAvailable`: a `builtByInitializer`
+	/// record whose construction is passed `nil` for each receive only if available `answers` finds unavailable there.
+	static func receivesOnlyIfAvailableRecord(
+		of declaration: DeclarationID,
+		variant: VariantID,
+		in world: some NodeRecordSources,
+		answers: OnlyIfAvailableAnswers,
+		typesDeclaredEscaping: Set<TypeDescription>,
+		children: [GeneratedCode],
+	) throws -> BuiltPlaceRecord {
+		try builtByInitializerRecord(
+			of: declaration,
+			variant: variant,
+			in: world,
+			unavailableProperties: answers.unavailableProperties(of: variant),
+			typesDeclaredEscaping: typesDeclaredEscaping,
+			children: children,
+		)
+	}
+}
+
+/// Which receives only if available each variant of a world is passed `nil` for: those whose label's nearest declaration
+/// on the variant's path provides no form the receive reads, is still being built there, or is built after the branch
+/// that leads to the variant (`TypeFactsEdge.buildPosition`), as `NearestDeclarations.resolvingBinding(of:)` and the
+/// `propertiesGeneratedLater` a scope's children are generated with find them for today's tree.
+///
+/// Rule 1 of the per-type facts keys a read only if available alike whether it is `nil` or a value, so one variant can be
+/// called where the read is `nil` and where it is a value, while each place of today's tree writes the one it reads. A
+/// world in which two calls of one variant find different answers is refused (`nodeHasSeveralVariants`) until its places
+/// are made per call. Only the labels some receive only if available reads are followed, so a world without one costs
+/// nothing.
+///
+/// Holds, per variant, the set of the properties it is passed `nil` for, for as long as the world's records are made.
+struct OnlyIfAvailableAnswers: Sendable {
+	/// - Parameter world: A world each of whose nodes is of a kind `NodeRecords` makes, off every cycle.
+	init(world: some NodeRecordSources) throws(NodeRecordRefusal) {
+		var labels = Set<String>()
+		for declaration in 0..<Int32(world.declarationCount) where world.kind(of: declaration) != .alias && world.kind(of: declaration) != .hole {
+			for dependency in world.scope(of: declaration).instantiable.dependencies where dependency.source == .received(onlyIfAvailable: true) {
+				labels.insert(dependency.property.label)
+			}
+		}
+		var unavailablePropertiesByVariant = [Set<Property>](repeating: [], count: world.variantCount)
+		guard !labels.isEmpty else {
+			self.unavailablePropertiesByVariant = unavailablePropertiesByVariant
+			return
+		}
+		// What each variant's construction sees of each followed label: what the call that reaches it sees, with the
+		// declarations of the node that calls it, in the order that node builds its children.
+		var contextByVariant = [[String: [Binding]]?](repeating: nil, count: world.variantCount)
+		contextByVariant[0] = [:]
+		var variantsToVisit: [VariantID] = [0]
+		while let variant = variantsToVisit.popLast() {
+			guard let context = contextByVariant[Int(variant)] else { continue }
+			let declaration = world.declaration(of: variant)
+			let scope = world.scope(of: declaration)
+			// Inside the node's builder function, its forwarded properties are the nearest declarations of their labels.
+			var contextInside = context
+			for dependency in scope.instantiable.dependencies where dependency.source == .forwarded && labels.contains(dependency.property.label) {
+				contextInside[dependency.property.label] = [Binding(property: dependency.property, state: .available)]
+			}
+			let calls = world.calls(of: variant)
+			let edges = world.edges(from: declaration)
+			let positionByEdgeIndex = world.edgeFacts(from: declaration).map(\.buildPosition)
+			for (edgeIndex, callee) in calls.enumerated() {
+				var calleeContext = contextInside
+				// The node's children are the nearest declarations of their labels, each built before, during or after the
+				// call's branch.
+				var childBindingsByLabel = [String: [Binding]]()
+				for (siblingEdgeIndex, sibling) in edges.enumerated() {
+					guard let property = world.property(of: sibling), labels.contains(property.label) else { continue }
+					let state: Binding.State = if siblingEdgeIndex == edgeIndex {
+						.beingBuilt
+					} else if positionByEdgeIndex[siblingEdgeIndex] < positionByEdgeIndex[edgeIndex] {
+						.available
+					} else {
+						.builtLater
+					}
+					childBindingsByLabel[property.label, default: []].append(Binding(property: property, state: state))
+				}
+				for (label, bindings) in childBindingsByLabel {
+					calleeContext[label] = bindings
+				}
+				if let existingContext = contextByVariant[Int(callee)] {
+					guard existingContext == calleeContext else { throw .nodeHasSeveralVariants }
+				} else {
+					contextByVariant[Int(callee)] = calleeContext
+					variantsToVisit.append(callee)
+				}
+			}
+			for dependency in scope.instantiable.dependencies where dependency.source == .received(onlyIfAvailable: true) {
+				let providingBindings = (context[dependency.property.label] ?? []).filter { binding in
+					ScopeGenerator.provides(binding.property, aFormReadBy: dependency.property)
+				}
+				let isAvailable = providingBindings.contains { $0.state == .available }
+				// An `Instantiator` still being built, or built after the branch, is given to the receive where its loop of
+				// builders holds only builders (`ReceivedBuilderLoops`), which rebinds it: a loop of builders, refused.
+				guard isAvailable || !providingBindings.contains(where: \.property.propertyType.isInstantiator) else { throw .builderLoop }
+				if !isAvailable {
+					unavailablePropertiesByVariant[Int(variant)].insert(dependency.property)
+				}
+			}
+		}
+		self.unavailablePropertiesByVariant = unavailablePropertiesByVariant
+	}
+
+	/// The properties `variant`'s construction is passed `nil` for.
+	func unavailableProperties(of variant: VariantID) -> Set<Property> {
+		unavailablePropertiesByVariant[Int(variant)]
+	}
+
+	/// A declaration of a followed label that a call sees, and whether it is built where the call reads it.
+	private struct Binding: Hashable {
+		enum State: Hashable {
+			/// Built before the call's branch, or forwarded.
+			case available
+			/// The property the call's branch builds, or a property of a scope it is built inside.
+			case beingBuilt
+			/// Built after the call's branch.
+			case builtLater
+		}
+
+		let property: Property
+		let state: State
+	}
+
+	/// By variant.
+	private let unavailablePropertiesByVariant: [Set<Property>]
+}
