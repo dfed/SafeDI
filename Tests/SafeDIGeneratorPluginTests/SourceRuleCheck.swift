@@ -78,7 +78,9 @@ enum SourceRule: String, CaseIterable {
 	case engineFeatureName
 	/// `String`, `Property` or `TypeDescription` named in a fold of the per-type facts (`OrderedGraph.swift`, `ReadsFromAbove.swift`, `SiblingOrder.swift`, `TypeFactsColumns.swift`, `TypeFactsVariants.swift`, `TypeFactsOutcomes.swift`): a fold
 	/// works on a world's 32-bit IDs and bit sets, and only building the graph, spelling code and wording a message
-	/// touch a model of the source so a fold keeps no reference-counted value in its loops.
+	/// touch a model of the source so a fold keeps no reference-counted value in its loops. A reader fold that still reads
+	/// a declaration's `Property` is left out until the graph answers what it reads: `TypeFactsImports.swift`, which hands
+	/// each declaration's type to `FulfillerImports`, until the frozen table holds each declaration's fulfiller modules.
 	case typeFactsFoldModelName
 	/// A scan of a string's characters in a generator: `split`, `replacingOccurrences` or `components(separatedBy:)`
 	/// called on anything, or `contains` given a string literal. A generator's code runs per place or per node, and such
