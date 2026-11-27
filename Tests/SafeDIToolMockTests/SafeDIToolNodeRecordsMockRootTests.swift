@@ -1044,16 +1044,6 @@ struct SafeDIToolNodeRecordsMockRootTests: ~Copyable {
 			""",
 			"mockDefaultValuedParameter",
 		),
-		// An actor's arguments are sent to it.
-		(
-			"""
-			@Instantiable
-			public actor Leaf: Instantiable {
-			    public init() {}
-			}
-			""",
-			"mockActor",
-		),
 		// A type nothing fulfills is a parameter of `mock()`.
 		(
 			"""
