@@ -77,19 +77,77 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_keepsTheTreesLayout_whenTheRootBuildsNothing() async throws {
+	mutating func generate_laysOutRootFromNodeRecords_whenTheRootBuildsNothing() async throws {
+		// A root whose tree's body holds nothing is compared at no place, so only a run that builds no tree for it reports it.
+		let (output, reports) = try await NodeRecordsObservation.$buildsNoTreeForAcceptedRoots.withValue(true) {
+			try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+				try await executeSafeDIToolTest(swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public struct Root: Instantiable {
+					    public init() {}
+					}
+					""",
+				], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+			}
+		}
+		#expect(output.generatedFiles == ["Root+SafeDI.swift": generatedFileHeader])
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysOutRootFromNodeRecords_whenTypeRenamesLazilyInstantiatedPropertyAboveItOnlyIfAvailable() async throws {
 		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
 			try await executeSafeDIToolTest(swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
-				public struct Root: Instantiable {
+				public final class Root: Instantiable {
+				    public init(analytics: LazilyInstantiated<Analytics>, child: Child) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Instantiated let analytics: LazilyInstantiated<Analytics>
+				    @Instantiated let child: Child
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Child: Instantiable {
+				    public init(tracker: LazilyInstantiated<Analytics>?) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Received(fulfilledByDependencyNamed: "analytics", ofType: LazilyInstantiated<Analytics>.self, onlyIfAvailable: true) let tracker: LazilyInstantiated<Analytics>?
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Analytics: Instantiable {
 				    public init() {}
 				}
 				""",
 			], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		}
-		#expect(output.generatedFiles == ["Root+SafeDI.swift": generatedFileHeader])
-		#expect(reports.isEmpty)
+		#expect(try #require(output.generatedFiles?["Root+SafeDI.swift"]) == generatedFileHeader + """
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_analytics() -> Analytics {
+		            Analytics()
+		        }
+		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
+		        func __safeDI_child() -> Child {
+		            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 7)
+		            let tracker: LazilyInstantiated<Analytics>? = analytics
+		            #sourceLocation()
+		            return Child(tracker: tracker)
+		        }
+		        let child: Child = __safeDI_child()
+		        self.init(analytics: analytics, child: child)
+		    }
+		}
+		""")
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
 	}
 
 	@Test
@@ -963,9 +1021,10 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 	}
 
 	@Test
-	mutating func generate_laysOutASeamCallAsTheTreeDoes_whenAnInstantiatorOfTheSeamForwardsItAValue() async throws {
+	mutating func generate_refusesASeamCallAsConstruction_whenAnInstantiatorOfTheSeamForwardsItAValue() async throws {
 		// `Screen` forwards `token`, so `Root`'s `Instantiator<Screen>` hands the call the value it is forwarded, which the
-		// call's function takes as a parameter.
+		// call's function takes as a parameter. The tree writes no record of such a call yet, so node records refuse it and
+		// the root keeps the tree's text.
 		let files = [
 			seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let screenBuilder: Instantiator<Screen>"]),
 			seamFixtureType(named: "Screen", isSeam: true, declarations: ["@Forwarded let token: Token", "@Instantiated let detail: Detail"]),
@@ -990,8 +1049,8 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 		}
 		""")
 		let rootReports = reports.filter { $0.root == "Root" }
-		#expect(rootReports.map(\.refusal) == [nil])
-		#expect(rootReports.map(\.isLaidOutFromNodeRecords) == [true])
+		#expect(rootReports.map(\.refusal) == ["construction"])
+		#expect(rootReports.map(\.isLaidOutFromNodeRecords) == [false])
 		#expect(reports.flatMap(\.differences) == [])
 	}
 
