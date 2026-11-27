@@ -29,11 +29,17 @@ enum MockRootTreeChecksOracle {
 	/// `enclosingObserver` too, and records an issue for each check the scopes left out that finds something in the tree.
 	static func comparing<Result>(handingOn enclosingObserver: (@Sendable (MockRootTreeChecksComparison) -> Void)?, _ operation: () async throws -> Result) async throws -> Result {
 		let (comparisons, continuation) = AsyncStream.makeStream(of: MockRootTreeChecksComparison.self)
-		let result = try await MockRootTreeChecksObservation.$comparesTree.withValue({ comparison in
-			continuation.yield(comparison)
-			enclosingObserver?(comparison)
-		}) {
-			try await operation()
+		// A run that throws is compared too: the comparisons are made before any mock root's tree is validated.
+		let result: Swift.Result<Result, any Error>
+		do {
+			result = try await .success(MockRootTreeChecksObservation.$comparesTree.withValue({ comparison in
+				continuation.yield(comparison)
+				enclosingObserver?(comparison)
+			}) {
+				try await operation()
+			})
+		} catch {
+			result = .failure(error)
 		}
 		continuation.finish()
 		for await comparison in comparisons where !comparison.findingInTreeWithoutNeed.isEmpty {
@@ -42,6 +48,6 @@ enum MockRootTreeChecksOracle {
 			\(comparison.findingInTreeWithoutNeed.map(\.rawValue).sorted())
 			"""))
 		}
-		return result
+		return try result.get()
 	}
 }
