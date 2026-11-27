@@ -1149,9 +1149,14 @@ struct TypeFactsGraph: Sendable {
 	/// path's type (`Hole.fillPropertyStack`, `Hole.fillConcreteTypeStack`), by label and type, wider than cycle validation:
 	/// such a scope closes a cycle on the path of the seam the fill fills.
 	private static func closesCycleOnItsPath(fillAt edge: Int, hole: SeamSignature.Hole, in graph: OrderedGraph<TypeFactsDeclaration>) -> Bool {
-		var pathEntries = Set<String>()
+		/// A property of the path and the type built as it, as spelled.
+		struct PathEntry: Hashable {
+			let label: String
+			let concreteType: TypeDescription
+		}
+		var pathEntries = Set<PathEntry>()
 		for (property, concreteType) in zip(hole.fillPropertyStack, hole.fillConcreteTypeStack) {
-			pathEntries.insert("\(property.label) \(concreteType.asSource)")
+			pathEntries.insert(PathEntry(label: property.label, concreteType: concreteType))
 		}
 		guard !pathEntries.isEmpty else { return false }
 		let fill = Int(graph.edgeTargets[edge])
@@ -1159,7 +1164,7 @@ struct TypeFactsGraph: Sendable {
 		var pending = [fill]
 		while let node = pending.popLast() {
 			let declaration = graph.nodes[node]
-			if declaration.key.leaf == .none, let property = declaration.property, pathEntries.contains("\(property.label) \(declaration.scope.instantiable.concreteInstantiable.asSource)") {
+			if declaration.key.leaf == .none, let property = declaration.property, pathEntries.contains(PathEntry(label: property.label, concreteType: declaration.scope.instantiable.concreteInstantiable)) {
 				return true
 			}
 			for target in graph.edges(from: node) where visited.insert(Int(target)).inserted {
