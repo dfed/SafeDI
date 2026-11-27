@@ -224,17 +224,15 @@ struct NodeRecords: Sendable {
 		return (claim?.kind ?? .builtByInitializer, refusals)
 	}
 
-	/// What a lane's kind claims of `declaration`, or `nil` where none does. Each lane adds one line here, above the test's,
-	/// in the order of `NodeRecordKind`'s cases, calling its file's classifier, which returns `nil` for a node not of its
-	/// kind: `if let claim = <kind>Claim(of: declaration, in: world) { return claim }`.
+	/// What a lane's kind claims of `declaration`, or `nil` where none does. Each lane adds one term to this chain, above
+	/// the test's, in the order of `NodeRecordKind`'s cases, calling its file's classifier, which returns `nil` for a node
+	/// not of its kind: `?? <kind>Claim(of: declaration, in: world)`.
 	private static func claim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
-		if let claim = inlineSeamClaim(of: declaration, in: world) {
-			return claim
-		}
-		// A test claims a node by its type's name (`NodeRecordsObservation.claimsForTesting`).
-		return NodeRecordsObservation.claimsForTesting[world.scope(of: declaration).instantiable.concreteInstantiable.asSource].map { discharged in
-			NodeRecordClaim(kind: .builtByInitializer, discharges: Set(discharged.compactMap(NodeRecordRefusal.init(rawValue:))))
-		}
+		inlineSeamClaim(of: declaration, in: world)
+			// A test claims a node by its type's name (`NodeRecordsObservation.claimsForTesting`).
+			?? NodeRecordsObservation.claimsForTesting[world.scope(of: declaration).instantiable.concreteInstantiable.asSource].map { discharged in
+				NodeRecordClaim(kind: .builtByInitializer, discharges: Set(discharged.compactMap(NodeRecordRefusal.init(rawValue:))))
+			}
 	}
 }
 
