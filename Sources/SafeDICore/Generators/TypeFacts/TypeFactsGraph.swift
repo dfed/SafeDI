@@ -253,7 +253,7 @@ struct TypeFactsGraph: Sendable {
 			let aliasFulfilling = node.isOnlyIfAvailableAlias ? node.aliasFulfillingProperty.map { properties.id(of: $0) } ?? -1 : -1
 			return (instance, aliasFulfilling)
 		}
-		let propertyFacts = Self.propertyFacts(of: &properties, labels: &labels)
+		let propertyFactsOfNodes = Self.propertyFacts(of: &properties, labels: &labels, extending: .empty)
 
 		// The masks of what each node provides: a property it declares or forwards, the optional form of one, and, for a
 		// receive only if available, each form it reads.
@@ -261,11 +261,11 @@ struct TypeFactsGraph: Sendable {
 		var propertiesByFormRead = [Int32: [Int32]]()
 		var propertiesByLabel = [Int32: [Int32]]()
 		for property in 0..<Int32(properties.values.count) {
-			propertiesByUnwrapped[propertyFacts.unwrapped[Int(property)], default: []].append(property)
-			for form in propertyFacts.formsRead(by: property) {
+			propertiesByUnwrapped[propertyFactsOfNodes.unwrapped[Int(property)], default: []].append(property)
+			for form in propertyFactsOfNodes.formsRead(by: property) {
 				propertiesByFormRead[form, default: []].append(property)
 			}
-			propertiesByLabel[propertyFacts.labels[Int(property)], default: []].append(property)
+			propertiesByLabel[propertyFactsOfNodes.labels[Int(property)], default: []].append(property)
 		}
 		let propertyCount = properties.values.count
 		func provided(by node: Int, _ insert: (Int32) -> Void) {
@@ -308,7 +308,7 @@ struct TypeFactsGraph: Sendable {
 			onlyIfAvailableRows.columns(inRow: node).forEach(insert)
 		}
 		let onlyIfAvailableUnwrapped = BitRows(rowCount: nodes.count, columnCount: propertyCount) { node, insert in
-			let requiredUnwrapped = Set(requiredRows.columns(inRow: node).map { propertyFacts.unwrapped[Int($0)] })
+			let requiredUnwrapped = Set(requiredRows.columns(inRow: node).map { propertyFactsOfNodes.unwrapped[Int($0)] })
 			for property in onlyIfAvailableUnwrappedIncludingRequired.columns(inRow: node) where !requiredUnwrapped.contains(property) {
 				insert(property)
 			}
@@ -319,7 +319,7 @@ struct TypeFactsGraph: Sendable {
 		// what the children require through aliases, so the rows are found again until no alias joins them.
 		let hiddenByDeclaredLabels = BitRows(rowCount: nodes.count, columnCount: propertyCount) { node, insert in
 			for property in declared[node] {
-				propertiesByLabel[propertyFacts.labels[Int(property)]]?.forEach(insert)
+				propertiesByLabel[propertyFactsOfNodes.labels[Int(property)]]?.forEach(insert)
 			}
 		}
 		func requiredAliasFulfillingRows() -> BitRows {
@@ -349,7 +349,7 @@ struct TypeFactsGraph: Sendable {
 					let isRequired = children.contains { child in
 						requiredRows.contains(aliasProperty, inRow: child)
 							|| requiredAliasFulfilling.columns(inRow: child).contains { property in
-								propertyFacts.labels[Int(property)] == propertyFacts.labels[Int(aliasProperty)] && propertyFacts.provides(aliasProperty, aFormReadBy: property)
+								propertyFactsOfNodes.labels[Int(property)] == propertyFactsOfNodes.labels[Int(aliasProperty)] && propertyFactsOfNodes.provides(aliasProperty, aFormReadBy: property)
 							}
 					}
 					if isRequired {
@@ -417,7 +417,7 @@ struct TypeFactsGraph: Sendable {
 					isCarrier: carrierEdges.contains(edge),
 				)
 			}
-			let order = SiblingOrder.order(of: children, receives: receives, facts: propertyFacts)
+			let order = SiblingOrder.order(of: children, receives: receives, facts: propertyFactsOfNodes)
 			for (position, child) in order.orderedIndices.enumerated() {
 				positions[childEdges[child]] = Int32(position)
 			}
@@ -495,7 +495,7 @@ struct TypeFactsGraph: Sendable {
 		}
 		bindingOffsets.append(Int32(bindings.count))
 
-		// Each node's cycle identity (A4): the property as cycle validation sees it, by the run's ID, and the concrete type
+		// Each node's cycle identity: the property as cycle validation sees it, by the run's ID, and the concrete type
 		// built, in first-reach order. A leaf builds no scope and closes no cycle, so its identity is its own.
 		var cycleIdentities = TypeFactsInterner<CycleIdentity>()
 		let cycleIDs = nodes.enumerated().map { index, node -> Int32 in
@@ -584,6 +584,9 @@ struct TypeFactsGraph: Sendable {
 				stackCount: Int32(fillPathEntries.count) - stackStart,
 			))
 		}
+
+		// The bindings and fills intern properties no node holds, whose facts an answer's provided forms read.
+		let propertyFacts = Self.propertyFacts(of: &properties, labels: &labels, extending: propertyFactsOfNodes)
 
 		// The reads each node makes itself, and those it hides: each read of a label it binds.
 		var readInterner = TypeFactsInterner<Read>()
@@ -677,7 +680,7 @@ struct TypeFactsGraph: Sendable {
 		self.cycleIDs = cycleIDs
 	}
 
-	/// Each node's cycle identity (A4), dense in first-reach order: the property as cycle validation sees it and the
+	/// Each node's cycle identity, dense in first-reach order: the property as cycle validation sees it and the
 	/// concrete type built, by the run's IDs, so two nodes of one identity close cycles on each other. A leaf's is its own.
 	let cycleIDs: [CycleID]
 
@@ -894,7 +897,7 @@ struct TypeFactsGraph: Sendable {
 	/// Every node's bindings, each node's in a run starting at its offset; the last offset is the count.
 	let bindings: [TypeFactsWorldBinding]
 	let bindingOffsets: [Int32]
-	/// Each node's twin (A5), the first other node of its cycle identity, or -1.
+	/// Each node's twin, the first other node of its cycle identity, or -1.
 	let twins: [Int32]
 	/// What each node's subtree receives from above it.
 	let receives: TypeFactsReceives
@@ -1254,18 +1257,22 @@ struct TypeFactsGraph: Sendable {
 		return typesDeclaredEscaping.sorted()
 	}
 
-	/// The facts of every property `properties` holds, interning the forms they name, each of which gets facts too.
-	private static func propertyFacts(of properties: inout TypeFactsInterner<Property>, labels: inout TypeFactsInterner<String>) -> TypeFactsPropertyFacts {
-		var labelIDs = [Int32]()
-		var unwrapped = [Int32]()
-		var isOptional = [Bool]()
-		var instances = [Int32]()
-		var isBuilder = [Bool]()
-		var formsReadOffsets = [Int32]()
-		var formsRead = [Int32]()
-		var formsProvidedOffsets = [Int32]()
-		var formsProvided = [Int32]()
-		var index = 0
+	/// The facts of every property `properties` holds, interning the forms they name, each of which gets facts too:
+	/// `existing`'s, then those of each property interned since.
+	private static func propertyFacts(of properties: inout TypeFactsInterner<Property>, labels: inout TypeFactsInterner<String>, extending existing: TypeFactsPropertyFacts) -> TypeFactsPropertyFacts {
+		var labelIDs = existing.labels
+		var unwrapped = existing.unwrapped
+		var isOptional = existing.isOptional
+		var instances = existing.instances
+		var isBuilder = existing.isBuilder
+		// The last offset ends the last run, and the runs go on past it.
+		var formsReadOffsets = existing.formsReadOffsets
+		formsReadOffsets.removeLast()
+		var formsRead = existing.formsRead
+		var formsProvidedOffsets = existing.formsProvidedOffsets
+		formsProvidedOffsets.removeLast()
+		var formsProvided = existing.formsProvided
+		var index = existing.labels.count
 		while index < properties.values.count {
 			let property = properties.values[index]
 			labelIDs.append(labels.id(of: property.label))
