@@ -5755,7 +5755,7 @@ struct SafeDIToolMockKindsCycleValueTests: ~Copyable {
 			DifferentialValueProbe("walks(seeds: 6 ..< 7, depth: 8)"),
 			DifferentialValueProbe("walks(seeds: 7 ..< 8, depth: 8)"),
 			DifferentialValueProbe("walkDigest(seeds: 0 ..< 400, depth: 8)"),
-			DifferentialValueProbe("{ let p0 = Profile.mock(); let p1 = p0.followers.instantiate().profileBuilder.instantiate(); let p2 = p1.followers.instantiate().profileBuilder.instantiate(); return [p0.settingsBuilder.instantiate().state === p1.settingsBuilder.instantiate().state, p1.settingsBuilder.instantiate().state === p2.settingsBuilder.instantiate().state, p2.settingsBuilder.instantiate().state === p2.settingsBuilder.instantiate().state] }()"),
+			DifferentialValueProbe("{ let p0 = Profile.mock(); let p1 = p0.followers.instance.profileBuilder.instantiate(); let p2 = p1.followers.instance.profileBuilder.instantiate(); return [p0.settingsBuilder.instantiate().state === p1.settingsBuilder.instantiate().state, p1.settingsBuilder.instantiate().state === p2.settingsBuilder.instantiate().state, p2.settingsBuilder.instantiate().state === p2.settingsBuilder.instantiate().state] }()"),
 		], filesToDelete: &filesToDelete)
 	}
 
