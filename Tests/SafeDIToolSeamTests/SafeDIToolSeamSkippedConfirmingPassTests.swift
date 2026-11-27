@@ -90,7 +90,7 @@ struct SafeDIToolSeamSkippedConfirmingPassTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
-		        func __safeDI_featureBuilder() -> Feature {
+		        @inline(never) func __safeDI_featureBuilder() -> Feature {
 		            _ = Feature.__safeDI_Feature_57C4DCF55CDC41B4.self
 		            return Feature(__safeDI_apiBuilder: __safeDI_apiBuilder.featureBuilder())
 		        }
