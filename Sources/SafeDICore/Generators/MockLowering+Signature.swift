@@ -68,8 +68,9 @@ extension MockLowering {
 		/// The names the constructions of the root's tree declare `@escaping`, which the parameters spell so.
 		let typesDeclaredEscaping: Set<TypeDescription>
 		// The wrappers an internal mock binds around the instances it is passed of the
-		// `LazilyInstantiated` values its tree receives and cannot build, each name and value, in property order.
-		let lazilyInstantiatedBindings: [(name: String, value: String)]
+		// `LazilyInstantiated` values its tree receives and cannot build, each name, value and type, optional where the
+		// instance is, in property order.
+		let lazilyInstantiatedBindings: [(name: String, value: String, boundType: TypeDescription)]
 		/// The name each receive of such a wrapper, by label and type, is passed by, never bound again under its label.
 		let lazilyInstantiatedBindingNamesByLabelAndType: [String: [TypeDescription: String]]
 		// The labels the builder functions of the root's tree declare, which a root alias named apart
@@ -386,23 +387,23 @@ extension ScopeGenerator {
 		// `mock()` binds each wrapper around the instance it is passed, under a name apart from its label, which the types that
 		// receive the wrapper, the mocked type included, are passed by name (`mockRootTopLevelNames`).
 		let topLevelNames = Self.mockRootTopLevelNames(of: parameters, parameterNames: parameterNames)
-		var lazilyInstantiatedBindings = [(name: String, value: String)]()
+		var lazilyInstantiatedBindings = [(name: String, value: String, boundType: TypeDescription)]()
 		for (property, bindingName) in zip(topLevelNames.lazilyInstantiatedPropertiesToBind, topLevelNames.lazilyInstantiatedBindingNames) where !wrappersTakenAsParameters.contains(property) {
 			let instanceProperty = property.asValidatedForDependencyCycles
 			let wrapperTypeSource = property.typeDescription.asSource
 			// The parameter may be named apart from its label; an optional instance, or an override, is mapped.
 			if let index = flatReceivedProperties.firstIndex(of: instanceProperty) {
-				lazilyInstantiatedBindings.append((bindingName, "\(wrapperTypeSource) { \(flatReceivedNames[index]) }"))
+				lazilyInstantiatedBindings.append((bindingName, "\(wrapperTypeSource) { \(flatReceivedNames[index]) }", property.typeDescription))
 			} else if tree.mockedTypeUncoveredProperties.contains(instanceProperty),
 			          let parameter = flatUncoveredParameters.first(where: { $0.property == instanceProperty })
 			{
 				// The instance is the parameter of a dependency the mocked type instantiates, which is always passed.
-				lazilyInstantiatedBindings.append((bindingName, "\(wrapperTypeSource) { \(parameter.label) }"))
+				lazilyInstantiatedBindings.append((bindingName, "\(wrapperTypeSource) { \(parameter.label) }", property.typeDescription))
 			} else if let index = flatReceivedProperties.firstIndex(of: Property(label: instanceProperty.label, typeDescription: .optional(instanceProperty.typeDescription))) {
-				lazilyInstantiatedBindings.append((bindingName, "\(flatReceivedNames[index]).map { instance in \(wrapperTypeSource) { instance } }"))
+				lazilyInstantiatedBindings.append((bindingName, "\(flatReceivedNames[index]).map { instance in \(wrapperTypeSource) { instance } }", .optional(property.typeDescription)))
 			} else {
 				let instanceName = onlyIfAvailableOverrides.first { $0.receivedProperty.asUnwrappedProperty == instanceProperty }?.name ?? instanceProperty.label
-				lazilyInstantiatedBindings.append((bindingName, "\(instanceName).map { instance in \(wrapperTypeSource) { instance } }"))
+				lazilyInstantiatedBindings.append((bindingName, "\(instanceName).map { instance in \(wrapperTypeSource) { instance } }", .optional(property.typeDescription)))
 			}
 		}
 		let lazilyInstantiatedBindingNamesByLabelAndType = topLevelNames.lazilyInstantiatedBindingNameMap

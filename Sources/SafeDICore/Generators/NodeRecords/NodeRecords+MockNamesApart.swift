@@ -49,33 +49,59 @@ extension NodeRecords {
 		}
 	}
 
-	/// The receives each variant of a mock root's world binds again, by variant, read from the names the mock root binds
-	/// apart (`MockRootNames.namesBoundAgain`). A node reads a name apart where no node above it, below the root, declares its
+	/// What each variant of a mock root's world reads under a name the mock root binds apart, by variant.
+	struct MockNamesReadApart {
+		/// The receives each variant binds again under their labels at the top of its builder function.
+		var receivesBoundAgain: [[MockReceiveBoundAgain]]
+		/// The name each variant's construction passes a receive of a lazy wrapper `mock()` makes of an instance it takes
+		/// (`MockRootNames.wrapperBindingName(of:)`), by the receive's property, as the walk passes it by name, never bound
+		/// again under its label, which would hide the instance from the receives by value beside it.
+		var wrapperArgumentNames: [[Property: String]]
+		/// The variants that are renames of such a wrapper, which the walk passes the wrapper's name and no record writes yet.
+		var renamesOfWrappersPassedByName: Set<VariantID>
+	}
+
+	/// What each variant of a mock root's world reads under a name the mock root binds apart, read from the names the mock
+	/// root binds apart (`MockRootNames.namesBoundAgain`) and the lazy wrappers `mock()` makes of the instances it takes
+	/// (`MockRootNames.wrapperBindingNames`). A node reads a name apart where no node above it, below the root, declares its
 	/// label, as the walk prunes them (`MockLowering.removingRenames(hiddenBy:from:)`): each node's own children and, for a
 	/// wrapper, its forwarded properties hide the label from the scopes beneath. A receive named apart is bound again under
 	/// its label at the top of the node's builder function, in the order its type declares the receives, as the walk binds
-	/// it; it reads the name of its own form, else of its unwrapped form, which a non-optional node or parameter provides.
+	/// it; it reads the name of its own form, else of its unwrapped form, which a non-optional node or parameter provides. A
+	/// receive of a wrapper `mock()` makes is passed the wrapper's name instead, as the walk passes it.
 	///
 	/// The walk hands a node the name instead where a receive beneath it reads the label by name
 	/// (`ScopeGenerator.receivedBindingNamesPassedByName`): a receive of another form of the label beneath a required one is
 	/// hidden, which validation rejects, unless it is received only if available, which keeps the walk
 	/// (`refusalOfNamingApart(_:in:)`).
-	static func mockReceivesBoundAgain(in world: some NodeRecordSources) -> [[MockReceiveBoundAgain]] {
-		var receivesBoundAgain = [[MockReceiveBoundAgain]](repeating: [], count: world.variantCount)
+	static func mockNamesReadApart(in world: some NodeRecordSources) -> MockNamesReadApart {
+		var namesRead = MockNamesReadApart(
+			receivesBoundAgain: [[MockReceiveBoundAgain]](repeating: [], count: world.variantCount),
+			wrapperArgumentNames: [[Property: String]](repeating: [:], count: world.variantCount),
+			renamesOfWrappersPassedByName: [],
+		)
 		let namesBoundAgain = world.mockRootNames.namesBoundAgain
-		guard !namesBoundAgain.isEmpty || world.mockRootNames.namesUncoveredParameterApart else { return receivesBoundAgain }
-		// The names apart each variant's node sees where it is built, by variant.
-		var visibleNamesApart = [[String: [TypeDescription: String]]?](repeating: nil, count: world.variantCount)
-		visibleNamesApart[0] = namesBoundAgain
+		let wrapperBindingNames = world.mockRootNames.wrapperBindingNames
+		guard !namesBoundAgain.isEmpty || !wrapperBindingNames.isEmpty || world.mockRootNames.namesUncoveredParameterApart else { return namesRead }
+		// The names apart and the wrappers' names each variant's node sees where it is built, by variant.
+		var visibleNames = [(namesApart: [String: [TypeDescription: String]], wrapperNames: [String: [TypeDescription: String]])?](repeating: nil, count: world.variantCount)
+		visibleNames[0] = (namesBoundAgain, wrapperBindingNames)
 		// The root's calls come first and every variant is reached from the root, so a variant's names are set before its calls.
 		var variantsToVisit: [VariantID] = [0]
 		while let variant = variantsToVisit.popLast() {
 			let declaration = world.declaration(of: variant)
 			let calls = world.calls(of: variant)
 			// The names a node's builder function sees: those above it, less those its own declarations hide.
-			let functionNamesApart: [String: [TypeDescription: String]]
+			let functionNames: (namesApart: [String: [TypeDescription: String]], wrapperNames: [String: [TypeDescription: String]])
 			if variant == 0 {
-				functionNamesApart = namesBoundAgain
+				functionNames = (namesBoundAgain, wrapperBindingNames)
+			} else if world.kind(of: declaration) == .alias {
+				// A rename is a leaf, which reads its fulfilling property where its scope binds it.
+				functionNames = ([:], [:])
+				let visible = visibleNames[Int(variant)]?.wrapperNames ?? [:]
+				if let fulfillingProperty = renamedProperty(of: declaration, in: world), Self.name(of: fulfillingProperty, among: visible) != nil {
+					namesRead.renamesOfWrappersPassedByName.insert(variant)
+				}
 			} else {
 				let instantiable = world.scope(of: declaration).instantiable
 				let isWrapper = switch world.kind(of: declaration) {
@@ -93,33 +119,57 @@ extension NodeRecords {
 				// (`MockLowering.routeReceives(of:toParametersNamed:in:)`).
 				let uncoveredProperties = world.scope(of: declaration).instantiatedDependenciesNotGenerated.map(\.property)
 				declarations += uncoveredProperties
-				var namesApart = MockLowering.removingRenames(hiddenBy: declarations, from: visibleNamesApart[Int(variant)] ?? [:])
+				let visible = visibleNames[Int(variant)] ?? ([:], [:])
+				var namesApart = MockLowering.removingRenames(hiddenBy: declarations, from: visible.namesApart)
 				for property in uncoveredProperties {
 					guard let name = world.mockRootNames.uncoveredParameterName(of: property), name != property.label else { continue }
 					namesApart[property.label, default: [:]][property.typeDescription] = name
 				}
-				functionNamesApart = namesApart
+				let wrapperNames = MockLowering.removingRenames(hiddenBy: declarations, from: visible.wrapperNames)
+				functionNames = (namesApart, wrapperNames)
 				for dependency in instantiable.dependencies where dependency.source.isReceived {
-					guard let names = functionNamesApart[dependency.property.label] else { continue }
+					if let name = Self.name(of: dependency.property, among: wrapperNames) {
+						// A receive of a wrapper `mock()` makes of an instance it takes is passed the wrapper by name.
+						namesRead.wrapperArgumentNames[Int(variant)][dependency.property] = name
+						continue
+					}
+					guard let names = namesApart[dependency.property.label] else { continue }
 					// The receive's own form, or the non-optional form the root binds for its optional one.
 					if let nameApart = [dependency.property.typeDescription, dependency.property.asUnwrappedProperty.typeDescription].lazy.compactMap({ type in names[type].map { Property(label: $0, typeDescription: type) } }).first {
-						receivesBoundAgain[Int(variant)].append(MockReceiveBoundAgain(property: dependency.property, nameApart: nameApart))
+						namesRead.receivesBoundAgain[Int(variant)].append(MockReceiveBoundAgain(property: dependency.property, nameApart: nameApart))
 					} else if let wrapper = Self.lazyWrapperNamedApart(providingInstanceReadBy: dependency.property, among: names) {
 						// A receive by value of a lazy wrapper's instance binds the wrapper named apart again under its label,
 						// whose instance its construction reads, as the walk binds it.
-						receivesBoundAgain[Int(variant)].append(MockReceiveBoundAgain(property: Property(label: dependency.property.label, typeDescription: wrapper.typeDescription), nameApart: wrapper))
+						namesRead.receivesBoundAgain[Int(variant)].append(MockReceiveBoundAgain(property: Property(label: dependency.property.label, typeDescription: wrapper.typeDescription), nameApart: wrapper))
 					}
 				}
 			}
 			// A variant's calls all see the names its reads resolve to: a declaration that hides a name apart from one call
 			// answers the read otherwise, which makes another variant with a record of its own, so the first call's names
 			// stand for every call's.
-			for callee in calls where visibleNamesApart[Int(callee)] == nil {
-				visibleNamesApart[Int(callee)] = functionNamesApart
+			for callee in calls where visibleNames[Int(callee)] == nil {
+				visibleNames[Int(callee)] = functionNames
 				variantsToVisit.append(callee)
 			}
 		}
-		return receivesBoundAgain
+		return namesRead
+	}
+
+	/// The name among `names`, by label and then type, of `property` or of its unwrapped form, which a non-optional wrapper
+	/// gives an optional receive of it; `nil` where neither is named.
+	private static func name(of property: Property, among names: [String: [TypeDescription: String]]) -> String? {
+		names[property.label].flatMap { $0[property.typeDescription] ?? $0[property.asUnwrappedProperty.typeDescription] }
+	}
+
+	/// The property the rename `declaration` reads, as its scope declares it.
+	private static func renamedProperty(of declaration: DeclarationID, in world: some NodeRecordSources) -> Property? {
+		world.scope(of: declaration).propertiesToGenerate.lazy.compactMap { propertyToGenerate in
+			if case let .aliased(property, fulfillingProperty, _, _, _) = propertyToGenerate, property == world.property(of: declaration) {
+				fulfillingProperty
+			} else {
+				nil
+			}
+		}.first
 	}
 
 	/// The lazy wrapper among `names`, the names apart of one label by type, whose instance a receive of `property` by value
