@@ -148,7 +148,7 @@ extension DependencyTreeGenerator {
 					storedSignatureBySeam[stored.seamType] = stored
 				}
 				storedSeamRoots = module.seams.compactMap { seam in
-					storedSignatureBySeam[seam.type].map { (type: seam.type, seamRoot: $0.signature.map { ScopeGenerator.SeamRoot(signature: $0, callRoutes: []) }) }
+					storedSignatureBySeam[seam.type].map { (type: seam.type, seamRoot: $0.signature.map { ScopeGenerator.SeamRoot(signature: $0, callRoutes: [], routeMembersBySite: [:]) }) }
 				}
 			} else {
 				storedSeamRoots = []
@@ -777,6 +777,7 @@ extension DependencyTreeGenerator {
 			return ScopeGenerator.SeamRoot(
 				signature: SeamSignature(seamType: seam.concreteInstantiable, parameters: parameters, tiers: Self.tiers(of: seam, parameters: parameters)),
 				callRoutes: [],
+				routeMembersBySite: [:],
 			)
 		}
 		// Until a seam's signature is computed, a tree that reaches it calls an initializer taking the seam's own
@@ -968,6 +969,7 @@ extension DependencyTreeGenerator {
 			return ScopeGenerator.SeamRoot(
 				signature: SeamSignature(seamType: seam.concreteInstantiable, parameters: parameters, tiers: DependencyTreeGenerator.tiers(of: seam, parameters: parameters)),
 				callRoutes: [],
+				routeMembersBySite: [:],
 			)
 		}
 	}
@@ -2344,6 +2346,7 @@ extension DependencyTreeGenerator {
 				typesDeclaredEscaping: generator.typesDeclaredEscaping.intersection(parameters.map(\.property.typeDescription)),
 			),
 			callRoutes: shapedBuilders.callRoutes,
+			routeMembersBySite: shapedBuilders.routeMembersBySite,
 		)
 	}
 
