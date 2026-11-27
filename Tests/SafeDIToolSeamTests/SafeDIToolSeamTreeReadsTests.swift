@@ -72,13 +72,72 @@ struct SafeDIToolSeamTreeReadsTests: ~Copyable {
 			["token: Token"]
 		case .typesDeclaredEscaping:
 			["OnTap"]
+		case .builderFunctionNames:
+			[
+				"with hole sites: __safeDI_authToken",
+				"with hole sites: __safeDI_badge",
+				"with hole sites: __safeDI_child",
+				"with hole sites: __safeDI_detail",
+				"with hole sites: __safeDI_panel",
+				"with hole sites: __safeDI_pollerBuilder",
+				"with hole sites: __safeDI_reader",
+				"without hole sites: __safeDI_authToken",
+				"without hole sites: __safeDI_badge",
+				"without hole sites: __safeDI_child",
+				"without hole sites: __safeDI_detail",
+				"without hole sites: __safeDI_panel",
+				"without hole sites: __safeDI_pollerBuilder",
+				"without hole sites: __safeDI_reader",
+			]
 		}
-		// `Panel`'s tree holds no alias and no escaping type.
+		// `Panel`'s tree holds no alias and no escaping type; its builder function names are checked by the cells below.
 		let screenComparisons = comparisons.filter { $0.seam == "Screen" }
 		#expect(!screenComparisons.isEmpty)
 		for comparison in screenComparisons {
 			#expect(comparison.differences.map(\.field) == [field.rawValue])
 			#expect(comparison.differences.map(\.tree) == [tree])
+			#expect(comparison.differences.map(\.facts) == [[]])
+		}
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsNoDifference_whenSeamsTreeHoldsHoleSiteAndFillOfSeamCall(integration: MultiModuleIntegration) async throws {
+		let comparisons = try await observedComparisons(of: Self.holeAndFillModules, under: integration)
+		#expect(Set(comparisons.map(\.seam)) == ["Inner", "Top"])
+		#expect(comparisons.flatMap(\.differences).isEmpty)
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsTreesNamesWithAndWithoutHoleSites_whenBuilderFunctionNamesOfSeamsWithHoleSiteAndFillArePerturbed(integration: MultiModuleIntegration) async throws {
+		// `Inner`'s hole site `service` names a function only with hole sites; the fill `Top`'s call of `Inner` passes, built
+		// as `service` by `ServiceImpl`, which instantiates `helper`, names both in `Top`'s tree, with hole sites or without.
+		var comparisons = [SeamTreeReadsComparison]()
+		try await withKnownIssue {
+			comparisons = try await SeamTreeReadsObservation.$perturbsFactsField.withValue(.builderFunctionNames) {
+				try await observedComparisons(of: Self.holeAndFillModules, under: integration)
+			}
+		}
+		let expectedTreeNamesBySeam = [
+			"Inner": [
+				"with hole sites: __safeDI_leaf",
+				"with hole sites: __safeDI_service",
+				"without hole sites: __safeDI_leaf",
+			],
+			"Top": [
+				"with hole sites: __safeDI_helper",
+				"with hole sites: __safeDI_inner",
+				"with hole sites: __safeDI_service",
+				"without hole sites: __safeDI_helper",
+				"without hole sites: __safeDI_inner",
+				"without hole sites: __safeDI_service",
+			],
+		]
+		#expect(Set(comparisons.map(\.seam)) == ["Inner", "Top"])
+		for comparison in comparisons {
+			#expect(comparison.differences.map(\.field) == [SeamTreeReadsObservation.FactsField.builderFunctionNames.rawValue])
+			#expect(comparison.differences.map(\.tree) == [expectedTreeNamesBySeam[comparison.seam] ?? []])
 			#expect(comparison.differences.map(\.facts) == [[]])
 		}
 	}
@@ -150,13 +209,13 @@ struct SafeDIToolSeamTreeReadsTests: ~Copyable {
 		return (signatures, code)
 	}
 
-	/// Every comparison the oracle makes while `App` and `Feature` generate.
+	/// Every comparison the oracle makes while `modules`, `App` and `Feature` by default, generate.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	private mutating func observedComparisons(under integration: MultiModuleIntegration) async throws -> [SeamTreeReadsComparison] {
+	private mutating func observedComparisons(of modules: [ModuleFixture] = Self.modules, under integration: MultiModuleIntegration) async throws -> [SeamTreeReadsComparison] {
 		let (stream, continuation) = AsyncStream.makeStream(of: SeamTreeReadsComparison.self)
 		try await SeamTreeReadsObservation.$comparesFacts.withValue({ continuation.yield($0) }) {
 			_ = try await executeSafeDIToolMultiModuleTest(
-				modules: Self.modules,
+				modules: modules,
 				integration: integration,
 				filesToDelete: &filesToDelete,
 			)
@@ -292,6 +351,49 @@ struct SafeDIToolSeamTreeReadsTests: ~Copyable {
 			}
 			""",
 		], dependencies: ["Feature"]),
+	]
+
+	/// `Inner`, a seam of `Core`, builds `leaf` and takes a builder for `service`, a hole site of its tree; `Top`, a seam of
+	/// `Feature`, calls `Inner` and fills the place with `ServiceImpl`, which instantiates `helper`.
+	private static let holeAndFillModules = [
+		ModuleFixture(name: "Core", packageName: "Hub", swiftFileContent: ["""
+		import SafeDI
+
+		public protocol Service {}
+
+		@Instantiable
+		public final class Leaf: Instantiable {
+		    public init() {}
+		}
+
+		@Instantiable(generateDependencyTree: true)
+		public final class Inner: Instantiable {
+		    public init(leaf: Leaf, service: any Service) { self.leaf = leaf; self.service = service }
+		    @Instantiated public let leaf: Leaf
+		    @Instantiated public let service: any Service
+		}
+		"""]),
+		ModuleFixture(name: "Feature", packageName: "Hub", swiftFileContent: ["""
+		import Core
+		import SafeDI
+
+		@Instantiable
+		public final class Helper: Instantiable {
+		    public init() {}
+		}
+
+		@Instantiable(fulfillingAdditionalTypes: [Service.self])
+		public final class ServiceImpl: Instantiable, Service {
+		    public init(helper: Helper) { self.helper = helper }
+		    @Instantiated public let helper: Helper
+		}
+
+		@Instantiable(generateDependencyTree: true)
+		public final class Top: Instantiable {
+		    public init(inner: Inner) { self.inner = inner }
+		    @Instantiated public let inner: Inner
+		}
+		"""], dependencies: ["Core"]),
 	]
 
 	/// `Inner`, a seam of `Core`, takes a builder for `service`; `Outer`, a seam of `Session`, declares `token` and calls
