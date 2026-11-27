@@ -141,7 +141,10 @@ struct TypeFactsGraph: Sendable {
 		let graph = OrderedGraph(root: TypeFactsDeclaration(scope: root, property: nil, propertyID: nil, erasedToConcreteExistential: false, isFill: false)) { declaration in
 			guard declaration.key.leaf == .none else { return [] }
 			var targets = [TypeFactsDeclaration]()
-			for (index, propertyToGenerate) in declaration.scope.propertiesToGenerate.enumerated() {
+			// A mock root can list a property again, where a promoted scope receives one it instantiates, and the tree
+			// generates only the first child listing it (`ScopeGenerator.siblingGraph`), so the graph holds only that one.
+			var listedProperties = Set<Property>()
+			for (index, propertyToGenerate) in declaration.scope.propertiesToGenerate.enumerated() where listedProperties.insert(propertyToGenerate.listedProperty).inserted {
 				switch propertyToGenerate {
 				case let .instantiated(property, child, erasedToConcreteExistential, propertyID):
 					targets.append(TypeFactsDeclaration(scope: child, property: property, propertyID: propertyID, erasedToConcreteExistential: erasedToConcreteExistential, isFill: false))

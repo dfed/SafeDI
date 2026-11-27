@@ -122,6 +122,14 @@ struct ConstructionScope: Sendable {
 			onlyIfAvailable: Bool,
 			declarationReference: AliasDeclarationReferences.Reference?,
 		)
+
+		/// The property the scope lists the child under.
+		var listedProperty: Property {
+			switch self {
+			case let .instantiated(property, _, _, _), let .hole(property, _), let .aliased(property, _, _, _, _):
+				property
+			}
+		}
 	}
 
 	var propertiesToGenerate: [PropertyToGenerate] {
