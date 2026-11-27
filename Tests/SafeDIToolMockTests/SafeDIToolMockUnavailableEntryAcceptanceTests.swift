@@ -30,6 +30,10 @@ import Testing
 /// the dependency. Each comparison runs the generated code: across modules against the same types built in one
 /// module, and in one module against the value production holds.
 ///
+/// A mock another module generates hands a called public mock the `nil` it holds, which the called mock binds, as
+/// production hands the called type `nil`; a test's own call of a public mock keeps its default, where `nil` builds
+/// the value.
+///
 /// A test marked with a known issue names the change that closes it. "Row 5" is the mock writer's rewrite of the
 /// contract between a calling and a called mock, which writes the entry once, at every position, and takes these
 /// tests as its acceptance.
@@ -101,8 +105,9 @@ struct SafeDIToolMockUnavailableEntryAcceptanceTests: ~Copyable {
 			}
 		}
 
-		/// Whether the calling mock hands the called mock `nil`, which the called mock reads as "build it", where
-		/// production hands the called type `nil`: every required receive. Row 5 closes it.
+		/// Whether the called mock reads the `nil` its calling mock holds as "build it", where production hands the
+		/// called type `nil`: every required receive, which today's public mock takes as `T? = nil`. Row 5 closes it by
+		/// having the calling mock hand `nil` down through `__safeDI_mock`, which binds it.
 		var isKnownIssue: Bool {
 			switch self {
 			case .requiredOptional, .requiredRename, .requiredOptionalThroughInstantiator:
@@ -120,7 +125,7 @@ struct SafeDIToolMockUnavailableEntryAcceptanceTests: ~Copyable {
 		// module's type whose internal initializer only its public mock calls, which receives `p`. With the entry
 		// `true`, production’s value is `nil` in `Screen` and in `Closed` alike.
 		let modules = [
-			ModuleFixture(name: "Core", packageName: "core", swiftFileContentByFilePath: ["Core.swift": """
+			ModuleFixture(name: "Core", packageName: "core", swiftFileContentByFilePath: ["Closed.swift": """
 			import SafeDI
 
 			public protocol P {}
@@ -172,6 +177,101 @@ struct SafeDIToolMockUnavailableEntryAcceptanceTests: ~Copyable {
 		} when: {
 			receive.isKnownIssue
 		}
+	}
+
+	@Test(arguments: CalledTypeReceive.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_handsCalledPublicMockNil_whenCallingMockForwardsNil(receive: CalledTypeReceive) async throws {
+		// `Screen` forwards `p: (any P)?` and instantiates `Closed`, another module's type whose internal initializer
+		// only its public mock calls, which receives `p`. `Screen.mock(p: nil)` holds `nil`, which production hands
+		// `Closed`, so the calling mock hands the called mock `nil` too, which binds it.
+		let modules = [
+			ModuleFixture(name: "Core", packageName: "core", swiftFileContentByFilePath: ["Closed.swift": """
+			import SafeDI
+
+			public protocol P {}
+
+			@Instantiable(fulfillingAdditionalTypes: [P.self])
+			public final class Impl: P, Instantiable {
+			    public init() {}
+			}
+
+			@Instantiable
+			final class Hidden: Instantiable {
+			    init() {}
+			}
+
+			@Instantiable(generateMock: .public)
+			public final class Closed: Instantiable {
+			    init(\(receive.label): (any P)?, hidden: Hidden) {
+			        self.\(receive.label) = \(receive.label)
+			        self.hidden = hidden
+			    }
+
+			    \(receive.receive)
+			    @Instantiated let hidden: Hidden
+			}
+
+			"""]),
+			ModuleFixture(name: "App", packageName: "app", swiftFileContentByFilePath: ["Screen.swift": """
+			import Core
+			import SafeDI
+
+			@Instantiable(generateMock: true)
+			public final class Screen: Instantiable {
+			    public init(p: (any P)?, closed: \(receive.callerPropertyType)) {
+			        self.p = p
+			        self.closed = closed
+			    }
+
+			    @Forwarded let p: (any P)?
+			    \(receive.callerProperty)
+			}
+
+			"""], dependencies: ["Core"]),
+		]
+		try await withKnownIssue("Row 5: a called public mock reads nil as “build it”", isIntermittent: false) {
+			let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+			try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [
+				DifferentialValueProbe("Screen.mock(p: nil)"),
+			])
+		} when: {
+			receive.isKnownIssue
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildsReceivedDependency_whenTestPassesPublicMockNil() async throws {
+		// A test's own call of a public mock keeps the documented default: `nil` builds the dependency. Only a calling
+		// mock, which hands down the `nil` it holds, binds `nil`.
+		let modules = [
+			ModuleFixture(name: "Core", packageName: "core", swiftFileContentByFilePath: ["Core.swift": """
+			import SafeDI
+
+			public protocol P {}
+
+			@Instantiable(fulfillingAdditionalTypes: [P.self])
+			public final class Impl: P, Instantiable {
+			    public init() {}
+			}
+
+			@Instantiable(generateMock: .public)
+			public final class Closed: Instantiable {
+			    init(p: (any P)?) {
+			        self.p = p
+			    }
+
+			    @Received public let p: (any P)?
+			}
+
+			"""]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		try await expectProbesHold(of: modules, output: output, probes: [
+			"Closed.mock(p: nil).p != nil",
+			"Closed.mock().p != nil",
+		])
 	}
 
 	// MARK: Tests – A dependency a called public mock builds
