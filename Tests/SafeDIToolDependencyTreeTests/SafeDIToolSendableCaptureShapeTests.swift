@@ -234,6 +234,129 @@ struct SafeDIToolSendableCaptureShapeTests: ~Copyable {
 		])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_reportsEachSendableBuilder_whenTwoSendableBuildersOfOneTypeInOneTreeCaptureOneDeclaration() async {
+		// `Root` builds `Settings` in two `@Sendable` functions, under `otherSettingsBuilder` and `settingsBuilder`, and
+		// each captures `Root`'s one `childBuilder`: today two errors with the same remedy, one per builder. Both
+		// builders are one declaration's body, so the fold's pull request makes this one error, by the ruling that a
+		// capture is reported once per capturing function, and changes this expectation.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Settings.swift"]):7:5: error: @Received property `childBuilder: Instantiator<Child>` cannot be received inside a `@Sendable` function in chain: Root -> Settings. SafeDI builds `otherSettingsBuilder: SendableInstantiator<Settings>` on `Root` in a `@Sendable` function, which cannot capture `childBuilder: Instantiator<Child>` on `Root`, because `Instantiator<Child>` is not `Sendable`. Declare `childBuilder` on `Root`, and this property, as `SendableInstantiator<Child>` to fix. `SendableInstantiator<Child>` builds `Child` in a `@Sendable` function, so what the tree of `Child` receives from outside that function must be `Sendable` too.
+				\(fixtures["Root.swift"]):7:5: note: `childBuilder: Instantiator<Child>` is declared here
+				\(fixtures["Settings.swift"]):7:5: error: @Received property `childBuilder: Instantiator<Child>` cannot be received inside a `@Sendable` function in chain: Root -> Settings. SafeDI builds `settingsBuilder: SendableInstantiator<Settings>` on `Root` in a `@Sendable` function, which cannot capture `childBuilder: Instantiator<Child>` on `Root`, because `Instantiator<Child>` is not `Sendable`. Declare `childBuilder` on `Root`, and this property, as `SendableInstantiator<Child>` to fix. `SendableInstantiator<Child>` builds `Child` in a `@Sendable` function, so what the tree of `Child` receives from outside that function must be `Sendable` too.
+				\(fixtures["Root.swift"]):7:5: note: `childBuilder: Instantiator<Child>` is declared here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(childBuilder: Instantiator<Child>, otherSettingsBuilder: SendableInstantiator<Settings>, settingsBuilder: SendableInstantiator<Settings>) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated let childBuilder: Instantiator<Child>
+					    @Instantiated let otherSettingsBuilder: SendableInstantiator<Settings>
+					    @Instantiated let settingsBuilder: SendableInstantiator<Settings>
+					}
+					""",
+					Self.child,
+					Self.settings,
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_reportsEachOutermostSendableBuilderOnce_whenLayersOfScreensUnderSendableInstantiatorsReachOneCapture() async {
+		// Four layers of screens, each built under two `SendableInstantiator`s of the layer above, so 16 chains reach
+		// `Layer4`, whose receive of `Root`'s `childBuilder` each chain captures. Today the capture is reported once per
+		// outermost `@Sendable` builder, `layer1LeftBuilder` and `layer1RightBuilder`: two errors, not one per chain. The
+		// fold must not grow the count with the chains; whether it makes the two builders of `Layer1` one error, as for
+		// two builders of `Settings`, is the fold's to state here.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Layer4.swift"]):7:5: error: @Received property `childBuilder: Instantiator<Child>` cannot be received inside a `@Sendable` function in chain: Root -> Layer1 -> Layer2 -> Layer3 -> Layer4. SafeDI builds `layer1LeftBuilder: SendableInstantiator<Layer1>` on `Root` in a `@Sendable` function, which cannot capture `childBuilder: Instantiator<Child>` on `Root`, because `Instantiator<Child>` is not `Sendable`. Declare `childBuilder` on `Root`, and this property, as `SendableInstantiator<Child>` to fix. `SendableInstantiator<Child>` builds `Child` in a `@Sendable` function, so what the tree of `Child` receives from outside that function must be `Sendable` too.
+				\(fixtures["Root.swift"]):7:5: note: `childBuilder: Instantiator<Child>` is declared here
+				\(fixtures["Layer4.swift"]):7:5: error: @Received property `childBuilder: Instantiator<Child>` cannot be received inside a `@Sendable` function in chain: Root -> Layer1 -> Layer2 -> Layer3 -> Layer4. SafeDI builds `layer1RightBuilder: SendableInstantiator<Layer1>` on `Root` in a `@Sendable` function, which cannot capture `childBuilder: Instantiator<Child>` on `Root`, because `Instantiator<Child>` is not `Sendable`. Declare `childBuilder` on `Root`, and this property, as `SendableInstantiator<Child>` to fix. `SendableInstantiator<Child>` builds `Child` in a `@Sendable` function, so what the tree of `Child` receives from outside that function must be `Sendable` too.
+				\(fixtures["Root.swift"]):7:5: note: `childBuilder: Instantiator<Child>` is declared here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(childBuilder: Instantiator<Child>, layer1LeftBuilder: SendableInstantiator<Layer1>, layer1RightBuilder: SendableInstantiator<Layer1>) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated let childBuilder: Instantiator<Child>
+					    @Instantiated let layer1LeftBuilder: SendableInstantiator<Layer1>
+					    @Instantiated let layer1RightBuilder: SendableInstantiator<Layer1>
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Layer1: Instantiable {
+					    public init(layer2LeftBuilder: SendableInstantiator<Layer2>, layer2RightBuilder: SendableInstantiator<Layer2>) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated let layer2LeftBuilder: SendableInstantiator<Layer2>
+					    @Instantiated let layer2RightBuilder: SendableInstantiator<Layer2>
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Layer2: Instantiable {
+					    public init(layer3LeftBuilder: SendableInstantiator<Layer3>, layer3RightBuilder: SendableInstantiator<Layer3>) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated let layer3LeftBuilder: SendableInstantiator<Layer3>
+					    @Instantiated let layer3RightBuilder: SendableInstantiator<Layer3>
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Layer3: Instantiable {
+					    public init(layer4LeftBuilder: SendableInstantiator<Layer4>, layer4RightBuilder: SendableInstantiator<Layer4>) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated let layer4LeftBuilder: SendableInstantiator<Layer4>
+					    @Instantiated let layer4RightBuilder: SendableInstantiator<Layer4>
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Layer4: Instantiable {
+					    public init(childBuilder: Instantiator<Child>) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received let childBuilder: Instantiator<Child>
+					}
+					""",
+					Self.child,
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
