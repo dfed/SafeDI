@@ -74,4 +74,43 @@ struct ReadsFromAboveTests {
 
 		#expect(graph.nodes.indices.map { reads.reads(of: $0) } == [[0], [], [0], [0, 1]])
 	}
+
+	@Test
+	func reads_hidesAlongOneEdgeOnly_whenEdgeHidesWhatItsSourceDoesNot() {
+		// 0 builds 1 and 2, and 1 builds 2, which reads 0 and 1. 1 hides 0, and the edge from 0 to 2 hides 0 too, so 0 reaches
+		// the root along neither; 2 still reads both.
+		let graph = OrderedGraph(root: 0) { node in
+			[0: [1, 2], 1: [2]][node, default: []]
+		}
+		let own = BitRows(rowCount: 3, columnCount: 2) { row, insert in
+			[[], [], [0, 1]][row].forEach(insert)
+		}
+		let hidden = BitRows(rowCount: 3, columnCount: 2) { row, insert in
+			[[], [0], []][row].forEach(insert)
+		}
+		let hiddenAtEdge = BitRows(rowCount: graph.edgeCount, columnCount: 2) { edge, insert in
+			[[], [0], []][edge].forEach(insert)
+		}
+		let reads = ReadsFromAbove(graph: graph, own: own, hidden: hidden, hiddenAtEdge: hiddenAtEdge)
+
+		#expect(graph.nodes.indices.map { reads.reads(of: $0) } == [[1], [1], [0, 1]])
+	}
+
+	@Test
+	func reads_hidesAlongOneEdgeOfCycle_whenEdgeToMemberAndEdgeOutOfCycleHide() {
+		// 1 and 2 form a cycle beneath the root, and 2 builds 3, which reads 0. 1 reads 1. The edge from 2 back to 1 hides
+		// 1, and the edge from 2 to 3 hides 0, so 2 reads nothing and the cycle reads only 1's own read.
+		let graph = OrderedGraph(root: 0) { node in
+			[0: [1], 1: [2], 2: [1, 3]][node, default: []]
+		}
+		let own = BitRows(rowCount: 4, columnCount: 2) { row, insert in
+			[[], [1], [], [0]][row].forEach(insert)
+		}
+		let hiddenAtEdge = BitRows(rowCount: graph.edgeCount, columnCount: 2) { edge, insert in
+			[[], [], [1], [0]][edge].forEach(insert)
+		}
+		let reads = ReadsFromAbove(graph: graph, own: own, hidden: BitRows(rowCount: 4, columnCount: 2) { _, _ in }, hiddenAtEdge: hiddenAtEdge)
+
+		#expect(graph.nodes.indices.map { reads.reads(of: $0) } == [[1], [1], [], [0]])
+	}
 }

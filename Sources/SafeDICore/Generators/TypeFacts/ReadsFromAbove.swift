@@ -223,11 +223,15 @@ struct ReadsFromAbove: Sendable {
 	///   - hidden: The reads each node hides from the nodes above it, of the same shape.
 	///   - followsEdge: Whether a node takes what the target of an edge, by its position among the graph's edges, reads:
 	///     every edge, unless a fold says otherwise.
-	init(graph: OrderedGraph<some Hashable & Sendable>, own: BitRows, hidden: BitRows, followsEdge: (_ edgeIndex: Int) -> Bool = { _ in true }) {
+	///   - hiddenAtEdge: The reads each edge, a row per edge by its position, hides from its source beside what the source
+	///     hides: what a fill's scope struct hands the fill along the call's fill edge. `nil` where no edge hides any.
+	init(graph: OrderedGraph<some Hashable & Sendable>, own: BitRows, hidden: BitRows, followsEdge: (_ edgeIndex: Int) -> Bool = { _ in true }, hiddenAtEdge: BitRows? = nil) {
 		var rows = BitRows(columnCount: own.columnCount)
 		rows.reserveRows(graph.nodes.count)
 		var accumulator = RowAccumulator(columnCount: own.columnCount)
 		var mask = RowAccumulator(columnCount: own.columnCount)
+		// The source's mask with an edge's own hidings, for an edge that hides reads its source does not.
+		var edgeMask = RowAccumulator(columnCount: own.columnCount)
 		var nodesByComponent = [Int32](repeating: 0, count: graph.nodes.count)
 		var componentStarts = [Int32](repeating: 0, count: graph.componentCount + 1)
 		for index in graph.nodes.indices {
@@ -257,7 +261,14 @@ struct ReadsFromAbove: Sendable {
 				for edgeIndex in graph.edgeIndices(from: index) where followsEdge(edgeIndex) {
 					let target = graph.edgeTargets[edgeIndex]
 					work += rows.wordCount(ofRow: Int(target))
-					_ = rows.add(row: Int(target), to: &accumulator, excluding: mask)
+					if let hiddenAtEdge, hiddenAtEdge.wordCount(ofRow: edgeIndex) > 0 {
+						edgeMask.load(row: index, of: hidden)
+						edgeMask.load(row: edgeIndex, of: hiddenAtEdge)
+						_ = rows.add(row: Int(target), to: &accumulator, excluding: edgeMask)
+						edgeMask.drain { _, _ in }
+					} else {
+						_ = rows.add(row: Int(target), to: &accumulator, excluding: mask)
+					}
 				}
 				mask.drain { _, _ in }
 				rows.appendWords(ofRow: index, from: &accumulator)
@@ -280,16 +291,17 @@ struct ReadsFromAbove: Sendable {
 						for edgeIndex in graph.edgeIndices(from: Int(index)) where followsEdge(edgeIndex) {
 							let target = graph.edgeTargets[edgeIndex]
 							let targetSlot = memberSlotByNode[Int(target)]
-							if targetSlot >= 0 {
-								work += previousPass.wordCount(ofRow: Int(targetSlot))
-								if previousPass.add(row: Int(targetSlot), to: &accumulator, excluding: mask) {
+							let (targetRows, targetRow) = targetSlot >= 0 ? (previousPass, Int(targetSlot)) : (rows, Int(target))
+							work += targetRows.wordCount(ofRow: targetRow)
+							if let hiddenAtEdge, hiddenAtEdge.wordCount(ofRow: edgeIndex) > 0 {
+								edgeMask.load(row: Int(index), of: hidden)
+								edgeMask.load(row: edgeIndex, of: hiddenAtEdge)
+								if targetRows.add(row: targetRow, to: &accumulator, excluding: edgeMask) {
 									changed = true
 								}
-							} else {
-								work += rows.wordCount(ofRow: Int(target))
-								if rows.add(row: Int(target), to: &accumulator, excluding: mask) {
-									changed = true
-								}
+								edgeMask.drain { _, _ in }
+							} else if targetRows.add(row: targetRow, to: &accumulator, excluding: mask) {
+								changed = true
 							}
 						}
 						mask.drain { _, _ in }

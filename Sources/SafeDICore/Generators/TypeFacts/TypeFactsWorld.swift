@@ -442,6 +442,12 @@ extension TypeFactsGraph: TypeFactsWorld {
 	}
 
 	func parameterOrder(of declaration: DeclarationID) -> [WorldLabelID] {
+		parameterOrder(of: declaration, walking: [])
+	}
+
+	/// `parameterOrder(of:)`, inside the walks of `walking`, whose orders a call that closes on one of them meets in
+	/// `labels(of:)` order instead.
+	private func parameterOrder(of declaration: DeclarationID, walking: Set<DeclarationID>) -> [WorldLabelID] {
 		// The declaration's own label is no parameter: every call is made where a declaration of it is being built.
 		let ownLabel = graph.nodes[Int(declaration)].property.map(\.label)
 		var unmet = Set(labels(of: declaration).filter { labelTexts[Int($0)] != ownLabel })
@@ -455,10 +461,25 @@ extension TypeFactsGraph: TypeFactsWorld {
 		for (index, text) in labelTexts.enumerated() where labelIDs[text] == nil {
 			labelIDs[text] = WorldLabelID(index)
 		}
+		let walking = walking.union([declaration])
 		var visited = Set<Int>()
-		var pending = [Int(declaration)]
-		while !unmet.isEmpty, let node = pending.popLast() {
-			guard visited.insert(node).inserted else { continue }
+		// Each node with whether a call reaches it. The node visited next is the last on the stack, so the first child goes
+		// last: a call that closes a cycle is met where the walk reaches it among its siblings, after the earlier siblings'
+		// subtrees, as the plan meets a closing scope.
+		var pending = [(node: Int(declaration), isCall: false)]
+		while !unmet.isEmpty, let (node, isCall) = pending.popLast() {
+			guard visited.insert(node).inserted else {
+				// A call that closes a cycle receives the closed-on declaration's parameters, in their order, where its body does.
+				if isCall {
+					let closedOn = Int32(node)
+					if walking.contains(closedOn) {
+						labels(of: closedOn).forEach(meet)
+					} else {
+						parameterOrder(of: closedOn, walking: walking).forEach(meet)
+					}
+				}
+				continue
+			}
 			let scope = graph.nodes[node].scope
 			if graph.nodes[node].key.leaf == .none {
 				var declaredLabels = Set<String>()
@@ -486,11 +507,7 @@ extension TypeFactsGraph: TypeFactsWorld {
 			}
 			let targets = graph.edges(from: node)
 			let facts = edgeFacts(from: Int32(node))
-			for (target, edge) in zip(targets, facts) where edge.isCallEdge && visited.contains(Int(target)) {
-				// A call that closes a cycle receives the closed-on declaration's parameters where its body does.
-				labels(of: target).forEach(meet)
-			}
-			pending.append(contentsOf: targets.reversed().map(Int.init))
+			pending.append(contentsOf: zip(targets, facts).reversed().map { (node: Int($0.0), isCall: $0.1.isCallEdge) })
 		}
 		return order
 	}

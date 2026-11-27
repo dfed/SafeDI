@@ -162,7 +162,7 @@ public struct TypeFactsReport: Sendable {
 				cycleKeyID: Int(graph.cycleIDs[index]),
 				twin: Int(graph.twins[index]),
 				edges: graph.graph.edges(from: index).map(Int.init),
-				edgeFacts: edgeFacts.map { edge in
+				edgeFacts: zip(graph.graph.edgeIndices(from: index), edgeFacts).map { edgeIndex, edge in
 					Edge(
 						buildPosition: Int(edge.buildPosition),
 						loop: Int(edge.loop),
@@ -170,6 +170,7 @@ public struct TypeFactsReport: Sendable {
 						isFill: edge.isFill,
 						isCallEdge: edge.isCallEdge,
 						bindingsBefore: Int(edge.bindingsBefore),
+						boundFromScopeStruct: graph.receives.boundFromScopeStruct(atEdge: edgeIndex).map(propertyWithoutAny).sorted(),
 					)
 				},
 				instantiatedEdgeCount: edgeFacts.count { !$0.isFill },
@@ -184,6 +185,7 @@ public struct TypeFactsReport: Sendable {
 				fillCount: graph.fills.count { TypeFactsGraph.source(ofEdge: Int($0.edge), in: graph.graph) == index },
 				received: spelled(graph.receives.received, of: index, propertyWithoutAny),
 				required: spelled(graph.receives.required, of: index, propertyWithoutAny),
+				requiredIncludingFills: spelled(graph.receives.requiredIncludingFills, of: index, propertyWithoutAny),
 				onlyIfAvailableUnwrapped: spelled(graph.receives.onlyIfAvailableUnwrapped, of: index, propertyWithoutAny),
 				requiredAliasFulfilling: spelled(graph.receives.requiredAliasFulfilling, of: index, propertyWithoutAny),
 				typesDeclaredEscaping: spelled(graph.typesDeclaredEscaping, of: index, type),
@@ -235,6 +237,8 @@ public struct TypeFactsReport: Sendable {
 		public let isFill: Bool
 		public let isCallEdge: Bool
 		public let bindingsBefore: Int
+		/// What a fill binds from its site's scope struct along the edge (`TypeFactsReceives.boundFromScopeStruct(atEdge:)`).
+		public let boundFromScopeStruct: [String]
 	}
 
 	/// What the generator built at a place decided (`TypeFactsGeneratorFacts`), properties and types as text.
@@ -305,6 +309,8 @@ public struct TypeFactsReport: Sendable {
 		public let fillCount: Int
 		public let received: [String]
 		public let required: [String]
+		/// `required` with the receives inside fills counted (`TypeFactsReceives.requiredIncludingFills`).
+		public let requiredIncludingFills: [String]
 		public let onlyIfAvailableUnwrapped: [String]
 		public let requiredAliasFulfilling: [String]
 		public let typesDeclaredEscaping: [String]

@@ -1200,14 +1200,7 @@ extension DependencyTreeGenerator {
 			if scope.publicMockCall != nil || walksSeamCallFills && scope.seamCall != nil {
 				let innerScopeReaders = scope.calledBuilders.map { InnerScopeReaders(enumsByKey: $0.enumsByKey) }
 				for case let .fill(hole, fillScope) in scope.holeArguments {
-					// A public mock takes no deferred parameter, so its fill binds every field, but one that a level of an inner
-					// seam's enum holds on some route to the place and not on another, which the fill reads of the caller's scope
-					// on that other route (`InnerScopeReaders.labelsSomeInnerRouteLacks(of:)`). A seam's fill reads a field bound
-					// from a deferred parameter of the caller's scope too (`fillUnderConstruction`).
-					let labelsSomeInnerRouteLacks = innerScopeReaders?.labelsSomeInnerRouteLacks(of: hole) ?? []
-					let boundLabels = Set(hole.fields.filter { scope.publicMockCall != nil || !$0.isDeferredParameter }.map(\.property.label))
-					// The fill declares the property it builds too (`ScopeGenerator.propertiesBeingBuilt(byFillOf:)`).
-					fills.append((fillScope, ScopeGenerator.fieldForms(of: hole, boundLabels: boundLabels.subtracting(labelsSomeInnerRouteLacks)).union(ScopeGenerator.propertiesBeingBuilt(byFillOf: hole))))
+					fills.append((fillScope, ScopeGenerator.propertiesDeclared(byFillOf: hole, passedByPublicMockCall: scope.publicMockCall != nil, innerScopeReaders: innerScopeReaders)))
 				}
 			}
 			self.fills = fills
