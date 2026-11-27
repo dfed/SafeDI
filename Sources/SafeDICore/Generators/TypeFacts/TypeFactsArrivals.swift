@@ -18,7 +18,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-
 /// What can arrive at a read of a variant over every path of calls into it: `nil`, an answer a declaration gives, or
 /// both.
 struct TypeFactsArrivals: OptionSet, Hashable, Sendable {
