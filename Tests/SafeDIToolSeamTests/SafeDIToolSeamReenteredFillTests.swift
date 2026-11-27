@@ -5816,7 +5816,7 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 	/// depends on it; with `upperTypes`, `Upper` (package `Up`), which depends on both; and `App` (package `Other`), which
 	/// depends on every module before it. Each type of the graph conforms to `Sendable` when
 	/// `isSendable`. `X` is a final class when `xIsFinalClass`, so the value comparison tells two instances apart.
-	private struct Fixture {
+	struct Fixture {
 		init(
 			isSendable: Bool = false,
 			xIsFinalClass: Bool = false,

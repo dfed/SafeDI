@@ -47,8 +47,21 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	case erased
 	/// The node's type declares a rename, a hole, or an instantiated dependency its scope does not build.
 	case renameOrHole
-	/// The node's call passes fills.
+	/// The node's call passes fills, which no record makes yet.
 	case fill
+	/// The node's call fills a place of another module's public mock.
+	case fillPublicMockCall
+	/// The node's call fills a place, and a fill encloses it.
+	case fillInsideFill
+	/// The node's call fills a place, and is on a cycle.
+	case fillCycleMember
+	/// The node's call fills a place, and is reached on more than one route, whose caller's declarations may differ.
+	case fillCallSeveralVariants
+	/// A fill of the node's call makes a call of a seam or a public mock, which may re-enter the call's levels.
+	case fillHoldsCall
+	/// A dispatcher of the node's call carries a seam's deferred fields, so a fill may take a memo in a form only the forms
+	/// its tree reads decide, which the world's reads, by label, do not hold.
+	case fillHandedMemo
 	/// The node is a hole of a seam's tree, or on the route to one, that the tree reaches along more than one path: the names
 	/// a route binds follow its path, so one variant per node cannot hold the place.
 	case holeOnSeveralPaths
@@ -295,6 +308,12 @@ struct NodeRecords: Sendable {
 		rootBody = order.edgeIndices(of: 0).map { edgeIndex in
 			.indented(places[Int(rootCalls[rootCalls.startIndex + edgeIndex])] ?? .empty, by: TypeKeyBody.rootStatementIndentation)
 		}
+		// The root's declaration spells its own, as the tree's root does, then every place's.
+		var rootEscaping = world.scope(of: world.declaration(of: 0)).instantiable.typesDeclaredEscapingByItsDeclaration
+		for callee in rootCalls {
+			rootEscaping.formUnion(typesDeclaredEscaping[Int(callee)] ?? [])
+		}
+		rootTypesDeclaredEscaping = rootEscaping
 		self.records = records
 		declarationByVariant = (0..<Int32(world.variantCount)).map(world.declaration(of:))
 	}
@@ -307,6 +326,10 @@ struct NodeRecords: Sendable {
 	/// The root's body: a place for each of the root's children, in the order the root builds them, indented as a root's
 	/// statements are.
 	let rootBody: [GeneratedCode]
+
+	/// The names the root's tree declares `@escaping`, as the tree's root collects them (`ScopeGenerator.typesDeclaredEscaping`),
+	/// which a seam's own root spells its parameters with.
+	let rootTypesDeclaredEscaping: Set<TypeDescription>
 
 	/// How many variants have a record, which is every variant but the root's.
 	var recordCount: Int {
@@ -442,7 +465,7 @@ struct NodeRecords: Sendable {
 	/// The kind `declaration` is made as, and every refusal it holds: those of the claim a kind makes of it, and
 	/// every check of `builtByInitializer` the claim does not discharge (`refusalsOfBuiltByInitializer(_:in:)`). A node of two kinds,
 	/// one claimed, is still refused for the other.
-	private static func kindAndRefusals(of declaration: DeclarationID, in world: some NodeRecordSources) -> (kind: NodeRecordKind, refusals: [NodeRecordRefusal]) {
+	static func kindAndRefusals(of declaration: DeclarationID, in world: some NodeRecordSources) -> (kind: NodeRecordKind, refusals: [NodeRecordRefusal]) {
 		let claim = claim(of: declaration, in: world)
 		let discharged = claim?.discharges ?? []
 		let refusals = (claim?.refusals ?? []) + refusalsOfBuiltByInitializer(declaration, in: world).filter { !discharged.contains($0) } + loopRefusals(of: declaration, in: world)
@@ -461,6 +484,7 @@ struct NodeRecords: Sendable {
 		// A hole is claimed apart from the chains below, which the compiler cannot type-check as one.
 		guard let claim = testClaim(of: declaration, in: world) ?? seamHoleClaim(of: declaration, in: world) else {
 			let seamClaim = inlineSeamClaim(of: declaration, in: world)
+				?? filledSeamCallClaim(of: declaration, in: world)
 				?? seamCallClaim(of: declaration, in: world)
 			return seamClaim
 				?? unavailableDependencyClaim(of: declaration, in: world)

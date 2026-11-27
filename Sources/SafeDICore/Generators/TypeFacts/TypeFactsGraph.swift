@@ -637,23 +637,46 @@ struct TypeFactsGraph: Sendable {
 			}
 		}
 
-		// The fills each call passes, with their fill paths.
+		// The fills each call passes, with their fill paths, the fields each binds, and why the fill channel does not model
+		// one yet.
 		var fills = [TypeFactsFill]()
 		var fillPathEntries = [TypeFactsFillPathEntry]()
+		var fillFields = [TypeFactsFillField]()
 		for (edge, hole) in fillHoles {
 			let source = Self.source(ofEdge: Int(edge), in: graph)
+			let isPublicMock = nodes[source].scope.publicMockCall != nil
 			let stackStart = Int32(fillPathEntries.count)
 			for (property, concreteType) in zip(hole.fillPropertyStack, hole.fillConcreteTypeStack) {
 				fillPathEntries.append(TypeFactsFillPathEntry(property: properties.id(of: property), concreteType: types.id(of: concreteType)))
 			}
+			// A fill binds each field of its place but one bound from a parameter the seam defers, which it reads from the
+			// caller's scope as inline does, unless the place is passed up from a seam the seam calls, whose memo it reads
+			// from the struct (`ScopeGeneratorUnderConstruction.fillUnderConstruction`).
+			let bindsDeferredFields = hole.innerSeamType != nil && !isPublicMock
+			let fieldStart = Int32(fillFields.count)
+			for field in hole.fields where !field.isDeferredParameter || bindsDeferredFields {
+				fillFields.append(TypeFactsFillField(label: labels.id(of: field.property.label), property: properties.id(of: field.property), declaringType: types.id(of: field.declaringType)))
+			}
+			let refusal: TypeFactsFillRefusal? = if forMockGeneration {
+				.mockWorld
+			} else if Self.closesCycleOnItsPath(fillAt: Int(edge), hole: hole, in: graph) {
+				.closer
+			} else if !hole.cycleReentryDeclarations.isEmpty || !hole.reenteringCallDeclarations.isEmpty || !hole.reenteringPlaceFields.isEmpty || Self.callsItsSeamAgain(fillAt: Int(edge), calledType: builtTypes[source], builtTypes: builtTypes, in: graph) {
+				.cycleReentry
+			} else {
+				nil
+			}
 			fills.append(TypeFactsFill(
 				edge: edge,
 				calledType: builtTypes[source],
-				isPublicMock: nodes[source].scope.publicMockCall != nil,
+				isPublicMock: isPublicMock,
 				holeIndex: edgeEntries[Int(edge)],
 				filledHoleOwnerType: types.id(of: hole.ownerType),
 				stackStart: stackStart,
 				stackCount: Int32(fillPathEntries.count) - stackStart,
+				fieldStart: fieldStart,
+				fieldCount: Int32(fillFields.count) - fieldStart,
+				refusal: refusal,
 			))
 		}
 
@@ -672,9 +695,25 @@ struct TypeFactsGraph: Sendable {
 		for (id, read) in readInterner.values.enumerated() where read.channel.asksAboutLabel {
 			readsByLabel[Int(read.label)].append(Int32(id))
 		}
+		// A fill builds its place's property: its tree beneath it reads that label as still being built, and its own read is
+		// the caller's (`Scope`'s fill, which builds the property past the caller's declarations).
 		let hidden = BitRows(rowCount: nodes.count, columnCount: readInterner.values.count) { index, insert in
 			for binding in bindings[Int(bindingOffsets[index])..<Int(bindingOffsets[index + 1])] {
 				readsByLabel[Int(binding.label)].forEach(insert)
+			}
+			if nodes[index].key.isFill, let property = nodes[index].property, let label = labels.existingID(of: property.label) {
+				readsByLabel[Int(label)].forEach(insert)
+			}
+		}
+		// A call's edge to a fill hides what the fill binds as fields, which the call's other fills do not.
+		var fillIndexByEdge = [Int32: Int]()
+		for (index, fill) in fills.enumerated() {
+			fillIndexByEdge[fill.edge] = index
+		}
+		let hiddenAtEdge = BitRows(rowCount: graph.edgeCount, columnCount: readInterner.values.count) { edge, insert in
+			guard let fill = fillIndexByEdge[Int32(edge)].map({ fills[$0] }) else { return }
+			for field in fillFields[Int(fill.fieldStart)..<Int(fill.fieldStart + fill.fieldCount)] {
+				readsByLabel[Int(field.label)].forEach(insert)
 			}
 		}
 		// A node shared apart makes nothing again, and a stage that writes from nodes refuses its world.
@@ -748,12 +787,14 @@ struct TypeFactsGraph: Sendable {
 		self.parents = parents
 		self.fills = fills
 		self.fillPathEntries = fillPathEntries
+		self.fillFields = fillFields
+		refusedFillDeclarations = Array(Set(fills.compactMap { $0.refusal == nil ? nil : graph.edgeTargets[Int($0.edge)] })).sorted()
 		self.propertyFacts = propertyFacts
 		propertyTable = properties.values
 		typeTable = types.values
 		moduleNames = modules.values
 		declarationLocations = locations.values
-		let reads = ReadsFromAbove(graph: graph, own: readsOwn, hidden: readsHidden, madeAgain: madeAgain)
+		let reads = ReadsFromAbove(graph: graph, own: readsOwn, hidden: readsHidden, hiddenAtEdge: hiddenAtEdge, madeAgain: madeAgain)
 		self.reads = reads
 		readTable = readInterner.values
 		labelTexts = labels.values
@@ -780,7 +821,7 @@ struct TypeFactsGraph: Sendable {
 		self.readOffsets = readOffsets
 		self.labelColumn = labelColumn
 		self.labelOffsets = labelOffsets
-		let answers = Self.answers(of: graph, reads: reads, readTable: readInterner.values, labels: labels, bindings: bindings, bindingOffsets: bindingOffsets, bindingsBefore: bindingsBefore, properties: properties, madeAgain: madeAgain.map { ($0, madeAgainByNode, loopParentByMember) })
+		let answers = Self.answers(of: graph, reads: reads, readTable: readInterner.values, labels: labels, bindings: bindings, bindingOffsets: bindingOffsets, bindingsBefore: bindingsBefore, properties: properties, fills: fills, fillFields: fillFields, madeAgain: madeAgain.map { ($0, madeAgainByNode, loopParentByMember) })
 		answerIsBeingBuilt = answers.isBeingBuilt
 		answerIsMadeAgain = answers.isMadeAgain
 		answerTexts = answers.texts
@@ -920,6 +961,9 @@ struct TypeFactsGraph: Sendable {
 	/// the property it is built as, being built. Interned at the edge, where the graph is built from the table; the
 	/// worklist sees IDs only.
 	///
+	/// A call's edge to a fill answers a read of a field the fill binds with that field, and a fill's edges answer a read of
+	/// its place's label, which the fill does not declare, as that property still being built.
+	///
 	/// A member of a loop of builders binds each member it makes again at the top of its body, before every edge and at
 	/// each made-again call, with the forms its parent declares that member with, made again: an answer that keys as the
 	/// wrapper alone, as one being built does (rule 2), so a member made again keys as its parent's call of it does.
@@ -932,6 +976,8 @@ struct TypeFactsGraph: Sendable {
 		bindingOffsets: [Int32],
 		bindingsBefore: [Int32],
 		properties: TypeFactsInterner<Property>,
+		fills: [TypeFactsFill],
+		fillFields: [TypeFactsFillField],
 		madeAgain: (edges: MadeAgainEdges, targetsByNode: [[LoopTarget]], parentByMember: [Int32])?,
 	) -> (variants: TypeFactsVariants, isBeingBuilt: [Bool], isMadeAgain: [Bool], texts: [String], keys: [Int32], properties: [Int32]) {
 		var answerIDByText = [String: Int32]()
@@ -1014,6 +1060,18 @@ struct TypeFactsGraph: Sendable {
 			let keyText = "\(read.channel.name) \(declaration.forms)"
 			return VariantBinding(answer: answer(text: "\(keyText) made again", beingBuilt: false, madeAgain: true, keyText: keyText, kind: declaration.kind, property: declaration.property), declaration: Int32(node))
 		}
+		/// The forms `property` provides, as an answer's text spells them.
+		func forms(of property: Property) -> String {
+			CycleParameter.forms(providedBy: property).sorted().map(\.asSource).joined(separator: ", ")
+		}
+		var fieldsByEdge = [Int: [Int32: (property: Property, id: Int32)]]()
+		for fill in fills {
+			var fields = [Int32: (property: Property, id: Int32)]()
+			for field in fillFields[Int(fill.fieldStart)..<Int(fill.fieldStart + fill.fieldCount)] where fields[field.label] == nil {
+				fields[field.label] = (properties.values[Int(field.property)], field.property)
+			}
+			fieldsByEdge[Int(fill.edge)] = fields
+		}
 		let variants = TypeFactsVariants(
 			graph: graph,
 			reads: reads,
@@ -1022,6 +1080,10 @@ struct TypeFactsGraph: Sendable {
 				// Every read the graph interns asks about a label: `ownReads` makes only value, optional and mock reads.
 				let read = readTable[Int(readID)]
 				let node = Int(sourceByEdge[edge])
+				if let field = fieldsByEdge[edge]?[read.label] {
+					let text = "\(read.channel.name) fill field \(forms(of: field.property))"
+					return VariantBinding(answer: answer(text: text, beingBuilt: false, keyText: text, kind: field.property.propertyType, property: field.id), declaration: Int32(node))
+				}
 				let child = graph.nodes[Int(edgeTargets[edge])]
 				// A child answers its own label's read as the declaration being built, by the property it is built as; any
 				// other label by the last of its parent's bindings bound before the edge, so a declaration bound after the
@@ -1039,7 +1101,18 @@ struct TypeFactsGraph: Sendable {
 					beingBuilt = false
 				}
 				guard let bound, let declaration = declarationsByLabelByNode[node][read.label]?.first(where: { $0.property == bound }), let property = properties.existingID(of: bound) else {
-					return madeAgainAnswer(at: node, for: read)
+					// A fill builds its place's property, which it does not declare: its tree reads that label as being built.
+					guard graph.nodes[node].key.isFill, let place = graph.nodes[node].property, labels.existingID(of: place.label) == read.label, let placeID = properties.existingID(of: place) else {
+						return madeAgainAnswer(at: node, for: read)
+					}
+					let text = "\(read.channel.name) \(forms(of: place)) being built"
+					let keyText = if isTwin(place.propertyType) {
+						"\(read.channel.name) twin \(place.label) being built"
+					} else {
+						// Rule 2, as for a declaration being built at its own edge.
+						"\(read.channel.name) \(forms(of: place))"
+					}
+					return VariantBinding(answer: answer(text: text, beingBuilt: true, keyText: keyText, kind: place.propertyType, property: placeID), declaration: Int32(node))
 				}
 				let kind = declaration.property.propertyType
 				let declarationForms = declaration.forms
@@ -1127,6 +1200,11 @@ struct TypeFactsGraph: Sendable {
 	let fills: [TypeFactsFill]
 	/// Every fill's path, each fill's in a run.
 	let fillPathEntries: [TypeFactsFillPathEntry]
+	/// The fields every fill binds, each fill's in a run, in their declared order.
+	let fillFields: [TypeFactsFillField]
+	/// The fill declarations an edge the fill channel refuses leads to (`TypeFactsFill.refusal`), whose trees' answers stay
+	/// owed, sorted.
+	let refusedFillDeclarations: [DeclarationID]
 	let propertyFacts: TypeFactsPropertyFacts
 
 	/// Each read ID's read.
@@ -1205,7 +1283,7 @@ struct TypeFactsGraph: Sendable {
 		var count = graph.columnElementCount + kinds.count + constructions.count + nodeProperties.count + builtTypes.count
 		count += 8 * edgeFacts.count + 11 * bindings.count + bindingOffsets.count
 		count += cycleIDs.count + twins.count + parentOffsets.count + 3 * parents.count
-		count += 7 * fills.count + 2 * fillPathEntries.count + propertyFacts.columnElementCount + readTable.count
+		count += 10 * fills.count + 2 * fillPathEntries.count + 3 * fillFields.count + refusedFillDeclarations.count + propertyFacts.columnElementCount + readTable.count
 		count += readColumn.count + readOffsets.count + labelColumn.count + labelOffsets.count + answerKeys.count + variants.columnElementCount
 		count += 2 * (reads.rows.wordCount + receives.wordCount + typesBeneath.wordCount + typesDeclaredEscaping.wordCount + holesBeneath.wordCount)
 		count += madeAgain?.columnElementCount ?? 0
@@ -1241,6 +1319,50 @@ struct TypeFactsGraph: Sendable {
 	private struct CycleIdentity: Hashable, Sendable {
 		let property: Int32
 		let concreteType: Int32
+	}
+
+	/// Whether a scope of the tree of the fill at `edge` builds a property of the path the fill is built beneath for that
+	/// path's type (`Hole.fillPropertyStack`, `Hole.fillConcreteTypeStack`), by label and type, wider than cycle validation:
+	/// such a scope closes a cycle on the path of the seam the fill fills.
+	private static func closesCycleOnItsPath(fillAt edge: Int, hole: SeamSignature.Hole, in graph: OrderedGraph<TypeFactsDeclaration>) -> Bool {
+		/// A property of the path and the type built as it, as spelled.
+		struct PathEntry: Hashable {
+			let label: String
+			let concreteType: TypeDescription
+		}
+		var pathEntries = Set<PathEntry>()
+		for (property, concreteType) in zip(hole.fillPropertyStack, hole.fillConcreteTypeStack) {
+			pathEntries.insert(PathEntry(label: property.label, concreteType: concreteType))
+		}
+		guard !pathEntries.isEmpty else { return false }
+		let fill = Int(graph.edgeTargets[edge])
+		var visited: Set = [fill]
+		var pending = [fill]
+		while let node = pending.popLast() {
+			let declaration = graph.nodes[node]
+			if declaration.key.leaf == .none, let property = declaration.property, pathEntries.contains(PathEntry(label: property.label, concreteType: declaration.scope.instantiable.concreteInstantiable)) {
+				return true
+			}
+			for target in graph.edges(from: node) where visited.insert(Int(target)).inserted {
+				pending.append(Int(target))
+			}
+		}
+		return false
+	}
+
+	/// Whether a scope of the tree of the fill at `edge` builds `calledType`, the seam whose place the fill fills: that call
+	/// re-enters the seam inside its own fill, where the tree passes the fill on or fills the place again by the path.
+	private static func callsItsSeamAgain(fillAt edge: Int, calledType: Int32, builtTypes: [Int32], in graph: OrderedGraph<TypeFactsDeclaration>) -> Bool {
+		let fill = Int(graph.edgeTargets[edge])
+		var visited: Set = [fill]
+		var pending = [fill]
+		while let node = pending.popLast() {
+			guard builtTypes[node] != calledType else { return true }
+			for target in graph.edges(from: node) where visited.insert(Int(target)).inserted {
+				pending.append(Int(target))
+			}
+		}
+		return false
 	}
 
 	/// The node an edge leaves.
@@ -1582,4 +1704,17 @@ struct TypeFactsGraph: Sendable {
 			reads.append(Read(.mock, label: label))
 		}
 	}
+}
+
+/// Why the fill channel does not model a fill yet, so that the answers of its tree stay owed
+/// (`TypeFactsOwedFacts.fillBeingBuilt`): the first that applies, in this order. Each is counted by its name.
+enum TypeFactsFillRefusal: String, CaseIterable, Sendable {
+	/// A mock root's world, whose fills bind what the mock root binds too.
+	case mockWorld
+	/// A scope of the fill's tree builds a property and type of the path the fill is built beneath: it closes a cycle on
+	/// the path of the seam it fills, and builds what the place it closes on builds.
+	case closer
+	/// The place is built again where a cycle re-enters a scope on its path, or a call inside the fill re-enters it: what
+	/// the fill reads there is handed by the cycle.
+	case cycleReentry
 }

@@ -611,6 +611,201 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_namesDispatcherLikeBuilderFunction_whenSeamHoldsPropertyNamedLikeDispatcher() async throws {
+		// `Home`, a seam with a place, holds `Detail` in `serviceBuilder_Other`, whose builder function is
+		// `__safeDI_serviceBuilder_Other`, and calls `Other`, a seam of `Lib` whose place `Home` fills with `LiveService`. The
+		// call's dispatcher of `Other`'s `serviceBuilder` takes the same name in the same scope: the call's names are claimed
+		// apart from the names enclosing the call and those the seam binds for its builders, not from the functions its scope
+		// declares. The code compiles because the two functions return different types, so Swift overloads them. This test
+		// states today's outcome for the change that names every function of a scope apart.
+		let lib = [
+			"public protocol Service: AnyObject {}",
+			seamFixtureType(named: "Gadget", isFinalClass: true, declarations: ["@Instantiated public let service: any Service"]),
+			seamFixtureType(named: "Other", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let gadgetBuilder: Instantiator<Gadget>"]),
+		]
+		let feature = [
+			"public protocol Api: AnyObject {}",
+			seamFixtureType(named: "LiveService", isFinalClass: true, declarations: [], conformances: ", Service")
+				.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(fulfillingAdditionalTypes: [Service.self])\n"),
+			seamFixtureType(named: "Detail", isFinalClass: true, declarations: ["@Instantiated public let api: any Api"]),
+			seamFixtureType(named: "Home", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let serviceBuilder_Other: Instantiator<Detail>", "@Instantiated public let other: Other"]),
+		]
+		let app = [
+			seamFixtureType(named: "LiveApi", isFinalClass: true, declarations: [], conformances: ", Api")
+				.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(fulfillingAdditionalTypes: [Api.self])\n"),
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated public let home: Home"]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: [
+			ModuleFixture(name: "Lib", packageName: "Shop", swiftFileContent: lib),
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: feature.map { "import Lib\n\n" + $0 }, dependencies: ["Lib"]),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: app.map { "import Feature\nimport Lib\n\n" + $0 }, dependencies: ["Feature", "Lib"]),
+		], integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
+
+		#expect(output.modules["Feature"]?.generatedFiles["Feature.swift"] == generatedFileHeader + """
+		#if canImport(Lib)
+		import Lib
+		#endif
+
+		extension Home {
+		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		    nonisolated public final class __safeDI_ApiCarrier<__safeDI_Built> {
+		        public let serviceBuilder_Other: (Other) -> __safeDI_ApiCarrier_Detail<__safeDI_Built>
+
+		        public init(serviceBuilder_Other: @escaping (Other) -> __safeDI_ApiCarrier_Detail<__safeDI_Built>) {
+		            self.serviceBuilder_Other = serviceBuilder_Other
+		        }
+
+		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		            self.init(serviceBuilder_Other: { _ in .init(__safeDI_noScope: __safeDI_builder) })
+		        }
+		    }
+
+		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		    nonisolated public final class __safeDI_ApiCarrier_Detail<__safeDI_Built> {
+		        public let api: () -> __safeDI_Built
+
+		        public init(api: @escaping () -> __safeDI_Built) {
+		            self.api = api
+		        }
+
+		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		            self.init(api: { __safeDI_builder() })
+		        }
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public convenience init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
+		        @inline(never) func __safeDI_serviceBuilder_Other() -> Other.__safeDI_ServiceCarrier<any Service> {
+		            .init(gadgetBuilder: __safeDI_serviceBuilder_Other_Gadget_Scope())
+		        }
+		        @inline(never) func __safeDI_serviceBuilder_Other_Gadget_Scope() -> Other.__safeDI_ServiceCarrier_Gadget<any Service> {
+		            .init(service: {
+		                let service: any Service = LiveService()
+		                return service
+		            })
+		        }
+		        @inline(never) func __safeDI_other() -> Other {
+		            _ = Other.__safeDI_Other_A0298DBB0B47435B.self // If this line does not compile, compile the code SafeDI generates for module Lib into Lib: under Bazel, add Lib’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return Other(__safeDI_serviceBuilder: __safeDI_serviceBuilder_Other())
+		        }
+		        let other: Other = __safeDI_other()
+		        let __safeDI_apiBuilder_serviceBuilder_Other = __safeDI_apiBuilder.serviceBuilder_Other(other)
+		        @inline(never) func __safeDI_serviceBuilder_Other() -> Detail {
+		            let api: any Api = __safeDI_apiBuilder_serviceBuilder_Other.api()
+		            return Detail(api: api)
+		        }
+		        let serviceBuilder_Other = Instantiator<Detail>(__safeDI_serviceBuilder_Other)
+		        self.init(serviceBuilder_Other: serviceBuilder_Other, other: other)
+		    }
+		}
+
+		extension Home {
+		    public enum __safeDI_Home_6BD423EEED951EF8 {}
+		}
+		""")
+		try Self.expectCompiles(output)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_namesDispatcherApart_whenSeamBindsValuesNamedLikeIt() async throws {
+		// `Home`, a seam whose place is of `service`, holds `Detail` in `Other_Gadget_Scope`, so it binds the values its
+		// builder hands that level as `__safeDI_serviceBuilder_Other_Gadget_Scope`, and calls `Other`, a seam of `Lib` whose
+		// place of `Service` `Home` fills with `LiveService`. The call's dispatcher of `Other`'s `Gadget` level would take
+		// that name in the same scope, which declares the binding, so it takes `_`: a call's names are claimed apart from
+		// the names the seam whose tree holds it binds for its builders.
+		let lib = [
+			"public protocol Service: AnyObject {}",
+			seamFixtureType(named: "Gadget", isFinalClass: true, declarations: ["@Instantiated public let service: any Service"]),
+			seamFixtureType(named: "Other", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let gadgetBuilder: Instantiator<Gadget>"]),
+		]
+		let feature = [
+			"public protocol service: AnyObject {}",
+			seamFixtureType(named: "LiveService", isFinalClass: true, declarations: [], conformances: ", Service")
+				.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(fulfillingAdditionalTypes: [Service.self])\n"),
+			seamFixtureType(named: "Detail", isFinalClass: true, declarations: ["@Instantiated public let api: any service"]),
+			seamFixtureType(named: "Home", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let Other_Gadget_Scope: Instantiator<Detail>", "@Instantiated public let other: Other"]),
+		]
+		let app = [
+			seamFixtureType(named: "LiveApi", isFinalClass: true, declarations: [], conformances: ", service")
+				.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(fulfillingAdditionalTypes: [service.self])\n"),
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated public let home: Home"]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: [
+			ModuleFixture(name: "Lib", packageName: "Shop", swiftFileContent: lib),
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: feature.map { "import Lib\n\n" + $0 }, dependencies: ["Lib"]),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: app.map { "import Feature\nimport Lib\n\n" + $0 }, dependencies: ["Feature", "Lib"]),
+		], integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
+
+		#expect(output.modules["Feature"]?.generatedFiles["Feature.swift"] == generatedFileHeader + """
+		#if canImport(Lib)
+		import Lib
+		#endif
+
+		extension Home {
+		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		    nonisolated public final class __safeDI_serviceCarrier<__safeDI_Built> {
+		        public let Other_Gadget_Scope: (Other) -> __safeDI_serviceCarrier_Detail<__safeDI_Built>
+
+		        public init(Other_Gadget_Scope: @escaping (Other) -> __safeDI_serviceCarrier_Detail<__safeDI_Built>) {
+		            self.Other_Gadget_Scope = Other_Gadget_Scope
+		        }
+
+		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		            self.init(Other_Gadget_Scope: { _ in .init(__safeDI_noScope: __safeDI_builder) })
+		        }
+		    }
+
+		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		    nonisolated public final class __safeDI_serviceCarrier_Detail<__safeDI_Built> {
+		        public let api: () -> __safeDI_Built
+
+		        public init(api: @escaping () -> __safeDI_Built) {
+		            self.api = api
+		        }
+
+		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		            self.init(api: { __safeDI_builder() })
+		        }
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public convenience init(__safeDI_serviceBuilder: __safeDI_serviceCarrier<any service>) {
+		        @inline(never) func __safeDI_serviceBuilder_Other() -> Other.__safeDI_ServiceCarrier<any Service> {
+		            .init(gadgetBuilder: __safeDI_serviceBuilder_Other_Gadget_Scope_())
+		        }
+		        @inline(never) func __safeDI_serviceBuilder_Other_Gadget_Scope_() -> Other.__safeDI_ServiceCarrier_Gadget<any Service> {
+		            .init(service: {
+		                let service: any Service = LiveService()
+		                return service
+		            })
+		        }
+		        @inline(never) func __safeDI_other() -> Other {
+		            _ = Other.__safeDI_Other_A0298DBB0B47435B.self // If this line does not compile, compile the code SafeDI generates for module Lib into Lib: under Bazel, add Lib’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return Other(__safeDI_serviceBuilder: __safeDI_serviceBuilder_Other())
+		        }
+		        let other: Other = __safeDI_other()
+		        let __safeDI_serviceBuilder_Other_Gadget_Scope = __safeDI_serviceBuilder.Other_Gadget_Scope(other)
+		        @inline(never) func __safeDI_Other_Gadget_Scope() -> Detail {
+		            let api: any service = __safeDI_serviceBuilder_Other_Gadget_Scope.api()
+		            return Detail(api: api)
+		        }
+		        let Other_Gadget_Scope = Instantiator<Detail>(__safeDI_Other_Gadget_Scope)
+		        self.init(Other_Gadget_Scope: Other_Gadget_Scope, other: other)
+		    }
+		}
+
+		extension Home {
+		    public enum __safeDI_Home_A4844F28C2D59E46 {}
+		}
+		""")
+		try Self.expectCompiles(output)
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
