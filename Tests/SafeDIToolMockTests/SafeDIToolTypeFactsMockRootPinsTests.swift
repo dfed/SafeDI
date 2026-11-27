@@ -259,6 +259,22 @@ struct SafeDIToolTypeFactsMockRootPinsTests: ~Copyable {
 		expectPlacesPassNilAsTheirVariants(in: report)
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mockRootPins_leaveTheRingToTheWalk_whenRequiredReceiveOnLazyCycleIsAboveTheReceiveOnlyOnTheSecondLap() async throws {
+		// The ring's `token: Token?` override is named apart from `B`'s `token: Instantiator<Token>` (`token_Token`), which the
+		// node records do not lay out yet, so the mock keeps the walk's code: lap two's `Leaf` reads lap one's override, as
+		// production reads the one declaration above both.
+		let fixture = Self.secondLapRingFixture
+		let walkOutput = try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+
+		#expect(reports.filter(\.isMockRoot).map(\.refusal) == ["mockOverrideNotParentField"])
+		#expect(output.generatedFiles == walkOutput.generatedFiles)
+	}
+
 	@Test(arguments: [false, true])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mockRootPins_pinEveryLabel_whenTwentyRequiredReceivesPinTwentyLabels(reversed: Bool) async throws {
@@ -303,6 +319,81 @@ struct SafeDIToolTypeFactsMockRootPinsTests: ~Copyable {
 	// MARK: Private
 
 	private var filesToDelete: [URL]
+
+	/// Runs `body` with mock roots laid out from their worlds' node records, and returns what it returns with the report of
+	/// each root.
+	private static func layingOutMockRoots<Output>(
+		filesToDelete: inout [URL],
+		_ body: (inout [URL]) async throws -> Output,
+	) async throws -> (Output, [NodeRecordsReport]) {
+		let (stream, continuation) = AsyncStream.makeStream(of: NodeRecordsReport.self)
+		var filesMade = [URL]()
+		defer { filesToDelete += filesMade }
+		let output = try await NodeRecordsObservation.$laysOutMockRoots.withValue(true) {
+			try await NodeRecordsObservation.$observer.withValue({ continuation.yield($0) }) {
+				try await body(&filesMade)
+			}
+		}
+		continuation.finish()
+		var reports = [NodeRecordsReport]()
+		for await report in stream {
+			reports.append(report)
+		}
+		return (output, reports.sorted { $0.root < $1.root })
+	}
+
+	private static let secondLapRingFixture: [String: String] = [
+		"Root.swift": """
+		@Instantiable(generateMock: true)
+		public final class Root: Instantiable {
+		    public init(aBuilder: Instantiator<A>) {
+		        self.aBuilder = aBuilder
+		    }
+
+		    @Instantiated let aBuilder: Instantiator<A>
+		}
+		""",
+		"A.swift": """
+		@Instantiable
+		public final class A: Instantiable {
+		    public init(leaf: Leaf, b: B) {
+		        self.leaf = leaf
+		        self.b = b
+		    }
+
+		    @Instantiated let leaf: Leaf
+		    @Instantiated let b: B
+		}
+		""",
+		"B.swift": """
+		@Instantiable
+		public final class B: Instantiable {
+		    public init(token: Instantiator<Token>, aBuilder: Instantiator<A>) {
+		        self.token = token
+		        self.aBuilder = aBuilder
+		    }
+
+		    @Received let token: Instantiator<Token>
+		    @Instantiated let aBuilder: Instantiator<A>
+		}
+		""",
+		"Leaf.swift": """
+		@Instantiable
+		public final class Leaf: Instantiable {
+		    public init(token: Token?) {
+		        self.token = token
+		    }
+
+		    @Received(onlyIfAvailable: true) let token: Token?
+		}
+		""",
+		"Token.swift": """
+		@Instantiable
+		public final class Token: Instantiable {
+		    public init() {}
+		}
+		""",
+	]
 
 	/// The report of the last mock tree of `Root`.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
