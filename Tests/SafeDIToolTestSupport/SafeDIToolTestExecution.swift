@@ -364,8 +364,11 @@ func executeSafeDIToolTest(
 												// (`TypeFactsReceivedValueSuppliesChecks`).
 												try await TypeFactsReceivedValueSuppliesChecks.comparing(handingOn: TypeFactsReceivedValueSuppliesObservation.comparesWalk) {
 													// The fold that decides whether any route is walked must send every graph the walk rejects to the walk (`FulfillmentFoldChecks`).
-													try await ValidationWalkObservation.$foldComparison.withValue(FulfillmentFoldChecks.comparison(handingOn: ValidationWalkObservation.foldComparison)) {
-														try await tool.generate()
+													// Every seam's reads its facts produce must equal its tree's (`SeamTreeReadsChecks`).
+													try await SeamTreeReadsChecks.comparing(handingOn: SeamTreeReadsObservation.comparesFacts) {
+														try await ValidationWalkObservation.$foldComparison.withValue(FulfillmentFoldChecks.comparison(handingOn: ValidationWalkObservation.foldComparison)) {
+															try await tool.generate()
+														}
 													}
 												}
 											}
