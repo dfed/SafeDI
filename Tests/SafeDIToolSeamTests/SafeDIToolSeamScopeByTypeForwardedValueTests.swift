@@ -116,7 +116,7 @@ struct SafeDIToolSeamScopeByTypeForwardedValueTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_namedGadget_AnyGadgetBuilder: __safeDI_NamedGadget_AnyGadgetCarrier<AnyGadget>) {
 		        let __safeDI_namedGadget_AnyGadgetBuilder_panel = __safeDI_namedGadget_AnyGadgetBuilder.panel
-		        func __safeDI_panel() -> Panel {
+		        @inline(never) func __safeDI_panel() -> Panel {
 		            let scope = Value()
 		            let maker = ErasedInstantiator<Name, AnyGadget>(__safeDI_namedGadget_AnyGadgetBuilder_panel.maker(scope))
 		            return Panel(scope: scope, maker: maker)

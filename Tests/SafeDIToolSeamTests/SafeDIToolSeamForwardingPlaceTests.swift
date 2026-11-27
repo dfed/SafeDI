@@ -221,11 +221,11 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		        let navigator = Navigator()
 		        let theme = Theme()
 		        let __safeDI_liveGadget_AnyGadgetBuilder_shell = __safeDI_liveGadget_AnyGadgetBuilder.shell(navigator, theme)
-		        func __safeDI_toolbar(__safeDI_liveGadget_AnyGadgetBuilder_toolbar: __safeDI_LiveGadget_AnyGadgetCarrier_Toolbar<AnyGadget>) -> Toolbar {
+		        @inline(never) func __safeDI_toolbar(__safeDI_liveGadget_AnyGadgetBuilder_toolbar: __safeDI_LiveGadget_AnyGadgetCarrier_Toolbar<AnyGadget>) -> Toolbar {
 		            let panelBuilder = ErasedInstantiator<String, AnyGadget>(__safeDI_liveGadget_AnyGadgetBuilder_toolbar.panelBuilder())
 		            return Toolbar(panelBuilder: panelBuilder)
 		        }
-		        func __safeDI_shell() -> Shell {
+		        @inline(never) func __safeDI_shell() -> Shell {
 		            let style = Style()
 		            let __safeDI_liveGadget_AnyGadgetBuilder_toolbar = __safeDI_liveGadget_AnyGadgetBuilder_shell.toolbar(style)
 		            let toolbar: Toolbar = __safeDI_toolbar(__safeDI_liveGadget_AnyGadgetBuilder_toolbar: __safeDI_liveGadget_AnyGadgetBuilder_toolbar)
@@ -491,7 +491,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		    public convenience init(__safeDI_analytics analytics: Analytics, __safeDI_panelSendableBuilder: __safeDI_PanelSendableCarrier<Panel>) {
 		        let navigator = Navigator()
 		        let held = SendableInstantiator<Panel>(__safeDI_panelSendableBuilder.held())
-		        @Sendable nonisolated func __safeDI_ownerBuilder() -> Owner {
+		        @inline(never) @Sendable nonisolated func __safeDI_ownerBuilder() -> Owner {
 		            let __safeDI_panelSendableBuilder_ownerBuilder = __safeDI_panelSendableBuilder.ownerBuilder()
 		            let held = Instantiator<Panel>(__safeDI_panelSendableBuilder_ownerBuilder.held())
 		            return Owner(held: held)
@@ -824,19 +824,19 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		    /// From code you write, call the initializer above instead.
 		    public convenience init(__safeDI_intGadget_GadgetBuilder: __safeDI_IntGadget_GadgetCarrier<any Gadget>) {
 		        let __safeDI_intGadget_GadgetBuilder_a = __safeDI_intGadget_GadgetBuilder.a
-		        func __safeDI_a() -> A {
+		        @inline(never) func __safeDI_a() -> A {
 		            let place = ErasedInstantiator<Int, any Gadget>(__safeDI_intGadget_GadgetBuilder_a.place())
 		            return A(place: place)
 		        }
 		        let a: A = __safeDI_a()
 		        let __safeDI_intGadget_GadgetBuilder_b = __safeDI_intGadget_GadgetBuilder.b(a)
-		        func __safeDI_b() -> B {
+		        @inline(never) func __safeDI_b() -> B {
 		            let place = ErasedInstantiator<Int, any Gadget>(__safeDI_intGadget_GadgetBuilder_b.place())
 		            return B(place: place)
 		        }
 		        let b: B = __safeDI_b()
 		        let __safeDI_intGadget_GadgetBuilder_c = __safeDI_intGadget_GadgetBuilder.c(a, b)
-		        func __safeDI_c() -> C {
+		        @inline(never) func __safeDI_c() -> C {
 		            let place = ErasedInstantiator<Swift.Int, any Gadget>(__safeDI_intGadget_GadgetBuilder_c.place())
 		            return C(place: place)
 		        }
@@ -939,19 +939,19 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		    /// From code you write, call the initializer above instead.
 		    public convenience init(__safeDI_intGadget_GadgetBuilder: __safeDI_IntGadget_GadgetCarrier<any Gadget>) {
 		        let __safeDI_intGadget_GadgetBuilder_a = __safeDI_intGadget_GadgetBuilder.a
-		        func __safeDI_a() -> A {
+		        @inline(never) func __safeDI_a() -> A {
 		            let place = ErasedInstantiator<Int, any Gadget>(__safeDI_intGadget_GadgetBuilder_a.place())
 		            return A(place: place)
 		        }
 		        let a: A = __safeDI_a()
 		        let __safeDI_intGadget_GadgetBuilder_b = __safeDI_intGadget_GadgetBuilder.b(a)
-		        func __safeDI_b() -> B {
+		        @inline(never) func __safeDI_b() -> B {
 		            let place = ErasedInstantiator<Int, any Gadget>(__safeDI_intGadget_GadgetBuilder_b.place())
 		            return B(place: place)
 		        }
 		        let b: B = __safeDI_b()
 		        let __safeDI_intGadget_GadgetBuilder_c = __safeDI_intGadget_GadgetBuilder.c(a, b)
-		        func __safeDI_c() -> C {
+		        @inline(never) func __safeDI_c() -> C {
 		            let place = ErasedInstantiator<Swift.Int, any Gadget>(__safeDI_intGadget_GadgetBuilder_c.place())
 		            return C(place: place)
 		        }
@@ -1009,7 +1009,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		        let navigator = Navigator()
 		        let analytics = Analytics()
 		        let now: any Gadget = __safeDI_defaultGadget_GadgetBuilder.now(navigator, analytics)
-		        func __safeDI_lazy() -> any Gadget {
+		        @inline(never) func __safeDI_lazy() -> any Gadget {
 		            __safeDI_defaultGadget_GadgetBuilder.lazy(navigator, analytics, now)
 		        }
 		        let lazy = LazilyInstantiated<any Gadget>(__safeDI_lazy)
@@ -1711,7 +1711,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		    public convenience init(__safeDI_analytics: @autoclosure @escaping () -> Analytics, __safeDI_panelBuilder: __safeDI_PanelCarrier<Panel>, __safeDI_panelSendableBuilder: __safeDI_PanelSendableCarrier<Panel>) {
 		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
 		        let navigator = Navigator()
-		        func __safeDI_inner() -> Inner {
+		        @inline(never) func __safeDI_inner() -> Inner {
 		            _ = Inner.__safeDI_Inner_8561866D0B8BB04F.self
 		            return Inner(__safeDI_analytics: analytics.instance, __safeDI_panelBuilder: __safeDI_panelBuilder.inner, __safeDI_panelSendableBuilder: __safeDI_panelSendableBuilder.inner_Sendable)
 		        }
@@ -1871,7 +1871,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		    public convenience init(__safeDI_analytics: @autoclosure @escaping () -> Analytics, __safeDI_defaultGadget_GadgetBuilder: __safeDI_DefaultGadget_GadgetCarrier<any Gadget>, __safeDI_defaultGadget_GadgetSendableBuilder: __safeDI_DefaultGadget_GadgetSendableCarrier<any Gadget>) {
 		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
 		        let navigator = Navigator()
-		        func __safeDI_inner() -> Inner {
+		        @inline(never) func __safeDI_inner() -> Inner {
 		            _ = Inner.__safeDI_Inner_7C21330034BD4506.self
 		            return Inner(__safeDI_analytics: analytics.instance, __safeDI_defaultGadget_GadgetBuilder: __safeDI_defaultGadget_GadgetBuilder.inner, __safeDI_defaultGadget_GadgetSendableBuilder: __safeDI_defaultGadget_GadgetSendableBuilder.inner_Sendable)
 		        }
@@ -1995,20 +1995,20 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_analytics: @autoclosure @escaping () -> Analytics, __safeDI_serviceBuilder: __safeDI_ServiceCarrier<any Service>) {
 		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
-		        func __safeDI_panelBuilder_Inner_part(analytics: Analytics) -> Instantiator<Panel>.Builder {
-		            return __safeDI_fillBody_BEA678126FB96713(analytics: analytics)
+		        @inline(never) func __safeDI_panelBuilder_Inner_part(analytics: Analytics) -> Instantiator<Panel>.Builder {
+		            return __safeDI_fillBody_B318A30E2E009621(analytics: analytics)
 		        }
-		        func __safeDI_fillBody_BEA678126FB96713(analytics: Analytics) -> Instantiator<Panel>.Builder {
-		            func __safeDI_part(name: String) -> DefaultPanel {
+		        @inline(never) func __safeDI_fillBody_B318A30E2E009621(analytics: Analytics) -> Instantiator<Panel>.Builder {
+		            @inline(never) func __safeDI_part(name: String) -> DefaultPanel {
 		                DefaultPanel(name: name, analytics: analytics)
 		            }
 		            return { forwarded in __safeDI_part(name: forwarded) }
 		        }
-		        func __safeDI_panelBuilder_Inner() -> Inner.__safeDI_PanelCarrier<Panel> {
+		        @inline(never) func __safeDI_panelBuilder_Inner() -> Inner.__safeDI_PanelCarrier<Panel> {
 		            .init(part: { values_analytics, values_service in __safeDI_panelBuilder_Inner_part(analytics: values_analytics) })
 		        }
 		        let navigator = Navigator()
-		        func __safeDI_inner() -> Inner {
+		        @inline(never) func __safeDI_inner() -> Inner {
 		            _ = Inner.__safeDI_Inner_00C173140CDE351A.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Inner(__safeDI_analytics: analytics.instance, __safeDI_panelBuilder: __safeDI_panelBuilder_Inner(), __safeDI_serviceBuilder: __safeDI_serviceBuilder.inner)
 		        }
@@ -2075,14 +2075,14 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		    /// From code you write, call the initializer above instead.
 		    public convenience init(__safeDI_liveGadget_GadgetBuilder: __safeDI_LiveGadget_GadgetCarrier<any Gadget>) {
 		        let __safeDI_liveGadget_GadgetBuilder_screenBuilder = __safeDI_liveGadget_GadgetBuilder.screenBuilder
-		        func __safeDI_next(id: Int, __safeDI_liveGadget_GadgetBuilder_next: __safeDI_LiveGadget_GadgetCarrier_Screen<any Gadget>) -> Screen {
+		        @inline(never) func __safeDI_next(id: Int, __safeDI_liveGadget_GadgetBuilder_next: __safeDI_LiveGadget_GadgetCarrier_Screen<any Gadget>) -> Screen {
 		            let panel = ErasedInstantiator<String, any Gadget>(__safeDI_liveGadget_GadgetBuilder_next.panel(id))
 		            let next = Instantiator<Screen> {
 		                __safeDI_next(id: $0, __safeDI_liveGadget_GadgetBuilder_next: __safeDI_liveGadget_GadgetBuilder_next)
 		            }
 		            return Screen(id: id, panel: panel, next: next)
 		        }
-		        func __safeDI_screenBuilder(id: Int) -> Screen {
+		        @inline(never) func __safeDI_screenBuilder(id: Int) -> Screen {
 		            let panel = ErasedInstantiator<String, any Gadget>(__safeDI_liveGadget_GadgetBuilder_screenBuilder.panel(id))
 		            let __safeDI_liveGadget_GadgetBuilder_next = __safeDI_liveGadget_GadgetBuilder_screenBuilder.next(id, panel)
 		            let next = Instantiator<Screen> {
@@ -2187,14 +2187,14 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		    /// From code you write, call the initializer above instead.
 		    public convenience init(__safeDI_liveGadget_GadgetBuilder: __safeDI_LiveGadget_GadgetCarrier<any Gadget>) {
 		        let __safeDI_liveGadget_GadgetBuilder_screenBuilder = __safeDI_liveGadget_GadgetBuilder.screenBuilder
-		        func __safeDI_next(id: Int, __safeDI_liveGadget_GadgetBuilder_next: __safeDI_LiveGadget_GadgetCarrier_Screen<any Gadget>) -> Screen {
+		        @inline(never) func __safeDI_next(id: Int, __safeDI_liveGadget_GadgetBuilder_next: __safeDI_LiveGadget_GadgetCarrier_Screen<any Gadget>) -> Screen {
 		            let panel = ErasedInstantiator<String, any Gadget>(__safeDI_liveGadget_GadgetBuilder_next.panel(id))
 		            let next = Instantiator<Screen> {
 		                __safeDI_next(id: $0, __safeDI_liveGadget_GadgetBuilder_next: __safeDI_liveGadget_GadgetBuilder_next)
 		            }
 		            return Screen(id: id, panel: panel, next: next)
 		        }
-		        func __safeDI_screenBuilder(id: Int) -> Screen {
+		        @inline(never) func __safeDI_screenBuilder(id: Int) -> Screen {
 		            let panel = ErasedInstantiator<String, any Gadget>(__safeDI_liveGadget_GadgetBuilder_screenBuilder.panel(id))
 		            let __safeDI_liveGadget_GadgetBuilder_next = __safeDI_liveGadget_GadgetBuilder_screenBuilder.next(id, panel)
 		            let next = Instantiator<Screen> {
@@ -2235,7 +2235,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// From code you write, call the initializer above instead.
 		    public convenience init(__safeDI_liveGadget_GadgetBuilder: __safeDI_LiveGadget_GadgetCarrier<any Gadget>) {
-		        func __safeDI_home() -> Home {
+		        @inline(never) func __safeDI_home() -> Home {
 		            _ = Home.__safeDI_Home_FA2271C05D02DC50.self
 		            return Home(__safeDI_liveGadget_GadgetBuilder: __safeDI_liveGadget_GadgetBuilder.home)
 		        }
@@ -2651,7 +2651,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// From code you write, call the initializer above instead.
 		    public convenience init(__safeDI_themedGadget_GadgetBuilder: __safeDI_ThemedGadget_GadgetCarrier<any Gadget>) {
-		        func __safeDI_theme() -> Theme {
+		        @inline(never) func __safeDI_theme() -> Theme {
 		            Theme()
 		        }
 		        let theme = LazilyInstantiated<Theme>(__safeDI_theme)
@@ -2765,12 +2765,12 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		    public convenience init(__safeDI_analytics analytics: Analytics, __safeDI_emptyPanelBuilder: __safeDI_EmptyPanelCarrier<EmptyPanel>, __safeDI_emptyPanelSendableBuilder: __safeDI_EmptyPanelSendableCarrier<EmptyPanel>) {
 		        let now: EmptyPanel = __safeDI_emptyPanelBuilder.now(analytics)
 		        let __safeDI_emptyPanelBuilder_owner = __safeDI_emptyPanelBuilder.owner(analytics, now)
-		        func __safeDI_owner() -> Owner {
+		        @inline(never) func __safeDI_owner() -> Owner {
 		            let held = Instantiator<EmptyPanel>(__safeDI_emptyPanelBuilder_owner.held())
 		            return Owner(held: held)
 		        }
 		        let owner: Owner = __safeDI_owner()
-		        @Sendable nonisolated func __safeDI_ownerBuilder() -> Owner {
+		        @inline(never) @Sendable nonisolated func __safeDI_ownerBuilder() -> Owner {
 		            let __safeDI_emptyPanelSendableBuilder_ownerBuilder = __safeDI_emptyPanelSendableBuilder.ownerBuilder()
 		            let held = Instantiator<EmptyPanel>(__safeDI_emptyPanelSendableBuilder_ownerBuilder.held())
 		            return Owner(held: held)
@@ -2891,7 +2891,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		        let later = ErasedInstantiator<(), StringPanel>(__safeDI_stringPanelBuilder.later())
 		        let same = ErasedInstantiator<StringPanel.ForwardedProperties, StringPanel>(__safeDI_stringPanelBuilder.same(later))
 		        let __safeDI_stringPanelBuilder_owner = __safeDI_stringPanelBuilder.owner(later, same)
-		        func __safeDI_owner() -> Owner {
+		        @inline(never) func __safeDI_owner() -> Owner {
 		            let held = Instantiator<StringPanel>(__safeDI_stringPanelBuilder_owner.held())
 		            return Owner(held: held)
 		        }
@@ -3008,7 +3008,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		    /// From code you write, call the initializer above instead.
 		    public convenience init(__safeDI_stringPanelSendableBuilder: __safeDI_StringPanelSendableCarrier<StringPanel>) {
 		        let later = SendableErasedInstantiator<(), StringPanel>(__safeDI_stringPanelSendableBuilder.later())
-		        @Sendable nonisolated func __safeDI_ownerBuilder() -> Owner {
+		        @inline(never) @Sendable nonisolated func __safeDI_ownerBuilder() -> Owner {
 		            let __safeDI_stringPanelSendableBuilder_ownerBuilder = __safeDI_stringPanelSendableBuilder.ownerBuilder()
 		            let held = Instantiator<StringPanel>(__safeDI_stringPanelSendableBuilder_ownerBuilder.held())
 		            return Owner(held: held)
@@ -3415,7 +3415,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		    public convenience init(__safeDI_panelBuilder: __safeDI_PanelCarrier<Panel>) {
 		        let analytics = Analytics()
 		        let __safeDI_panelBuilder_owner = __safeDI_panelBuilder.owner(analytics)
-		        func __safeDI_owner() -> Owner {
+		        @inline(never) func __safeDI_owner() -> Owner {
 		            let held = Instantiator<Panel>(__safeDI_panelBuilder_owner.held())
 		            return Owner(held: held)
 		        }

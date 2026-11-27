@@ -39,8 +39,15 @@ struct Dump: ParsableCommand {
 		let encoder = JSONEncoder()
 		encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
 		// The header, not the file's extension, decides how to read it: a scan cache can be named anything.
+		// A module info file that stores its positions in a file of its own prints them from the positions file beside
+		// it, and prints each location's rank alone where that file is missing or does not pair.
 		let json = if BinaryFile.data(data, beginsAs: .moduleInfo) {
-			try encoder.encode(ModuleInfoFile(moduleInfoData: data))
+			try encoder.encode(ModuleInfoFile.reading(
+				moduleInfoData: data,
+				readingView: true,
+				positionsData: try? Data(contentsOf: ModuleInfoFile.positionsFilePath(ofModuleInfoAt: file).asFileURL),
+				reattachesPositions: true,
+			).file)
 		} else if BinaryFile.data(data, beginsAs: .scanCache) {
 			try encoder.encode(CachedScannedModuleInfo(scanCacheData: data))
 		} else {

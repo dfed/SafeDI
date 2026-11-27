@@ -41,21 +41,24 @@ extension TypeKeyLayout {
 
 	/// The position of the last statement of `owner`'s body before `index` that declares `label`.
 	func lastPosition(of label: String, inClass owner: Int, before index: Int) -> Int? {
-		// The body `statements(ofClass:)` reads, whose positions of each label are indexed in order: a lookup in the root's
-		// long body stays logarithmic.
-		let body = owner == 0 ? 0 : membersByClass[owner][0]
-		guard let positions = bodies[body].positionsByLabel[label] else { return nil }
-		var low = 0
-		var high = positions.count
-		while low < high {
-			let middle = (low + high) / 2
+		Self.lastPosition(in: bodies[owner == 0 ? 0 : membersByClass[owner][0]].positionsByLabel[label], before: index)
+	}
+
+	/// The last of `positions`, which ascend, before `index`: a binary search, since a look-up reads it for every label at
+	/// every place, so a body of many statements costs a look-up no more than a few.
+	static func lastPosition(in positions: [Int]?, before index: Int) -> Int? {
+		guard let positions else { return nil }
+		var lower = 0
+		var upper = positions.count
+		while lower < upper {
+			let middle = (lower + upper) / 2
 			if positions[middle] < index {
-				low = middle + 1
+				lower = middle + 1
 			} else {
-				high = middle
+				upper = middle
 			}
 		}
-		return low == 0 ? nil : positions[low - 1]
+		return lower > 0 ? positions[lower - 1] : nil
 	}
 
 	/// The type key's declaration for a path declaration.
@@ -84,7 +87,11 @@ extension TypeKeyLayout {
 			for label in reads[membersByClass[owner][0]] {
 				var declarations = [TypeDeclaration]()
 				for member in membersByClass[owner] {
-					declarations.append(typeDeclaration(for: resolution(of: label, atPlace: member)))
+					// A view's places can resolve a label to other declarations outside it, alike in kind and type, each of
+					// which its call passes.
+					for edge in bodies[member].edges {
+						declarations.append(typeDeclaration(for: resolution(of: label, atPlace: member, edge: edge)))
+					}
 					for closer in closersByTarget[member] ?? [] {
 						declarations.append(typeDeclaration(for: closerValue(of: label, closing: closer, onPlace: member)))
 					}

@@ -73,12 +73,12 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public convenience init(__safeDI_t1Builder t1Builder: Instantiator<T1>) {
-			        func __safeDI_t1Builder_() -> T1 {
+			        @inline(never) func __safeDI_t1Builder_() -> T1 {
 			            T1()
 			        }
-			        func __safeDI_t0Builder() -> T0 {
+			        @inline(never) func __safeDI_t0Builder() -> T0 {
 			            let t1Builder = Instantiator<T1>(__safeDI_t1Builder_)
-			            func __safeDI_t3Builder() -> T3 {
+			            @inline(never) func __safeDI_t3Builder() -> T3 {
 			                _ = T3.__safeDI_T3_637A336A650792AD.self
 			                return T3(__safeDI_t1Builder: t1Builder)
 			            }
@@ -192,8 +192,8 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public convenience init(__safeDI_x __safeDI_x_: @autoclosure @escaping () -> X?) {
 			        let x = LazilyInstantiated<X?>(__safeDI_x_)
-			        func __safeDI_aBuilder(x: X?) -> A {
-			            func __safeDI_midBuilder() -> Mid {
+			        @inline(never) func __safeDI_aBuilder(x: X?) -> A {
+			            @inline(never) func __safeDI_midBuilder() -> Mid {
 			                let x = X()
 			                let aBuilder = Instantiator<A> {
 			                    __safeDI_aBuilder(x: x)
@@ -269,8 +269,8 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 			        #sourceLocation(file: "\(output.fixtures["Mid.swift"])", line: 10)
 			        let renamed: X? = x
 			        #sourceLocation()
-			        func __safeDI_aBuilder() -> A {
-			            func __safeDI_midBuilder() -> Mid {
+			        @inline(never) func __safeDI_aBuilder() -> A {
+			            @inline(never) func __safeDI_midBuilder() -> Mid {
 			                _ = Mid.__safeDI_Mid_CBF29CE484222325.self
 			                return Mid()
 			            }
@@ -590,12 +590,12 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public convenience init(__safeDI_t1Builder t1Builder: Instantiator<T1>) {
-			        func __safeDI_t1Builder_() -> T1 {
+			        @inline(never) func __safeDI_t1Builder_() -> T1 {
 			            T1()
 			        }
-			        func __safeDI_t0Builder() -> T0 {
+			        @inline(never) func __safeDI_t0Builder() -> T0 {
 			            let t1Builder = Instantiator<T1>(__safeDI_t1Builder_)
-			            func __safeDI_t3() -> T3 {
+			            @inline(never) func __safeDI_t3() -> T3 {
 			                _ = T3.__safeDI_T3_637A336A650792AD.self
 			                return T3(__safeDI_t1Builder: t1Builder)
 			            }
@@ -676,24 +676,24 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 			extension S {
 			    /// Code you write and code SafeDI generates can both call this initializer.
 			    public convenience init() {
-			        func __safeDI_a() -> A {
+			        @inline(never) func __safeDI_a() -> A {
 			            let b: B = __safeDI_b()
 			            return A(b: b)
 			        }
-			        func __safeDI_b() -> B {
+			        @inline(never) func __safeDI_b() -> B {
 			            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
 			            return B(cBuilder: cBuilder)
 			        }
-			        func __safeDI_cBuilder() -> C {
+			        @inline(never) func __safeDI_cBuilder() -> C {
 			            let a: A = __safeDI_a()
 			            return C(a: a)
 			        }
 			        let a: A = __safeDI_a()
-			        func __safeDI_d() -> D {
+			        @inline(never) func __safeDI_d() -> D {
 			            let eBuilder = Instantiator<E>(__safeDI_eBuilder)
 			            return D(eBuilder: eBuilder)
 			        }
-			        func __safeDI_eBuilder() -> E {
+			        @inline(never) func __safeDI_eBuilder() -> E {
 			            let d = LazilyInstantiated<D>(__safeDI_d)
 			            return E(d: d)
 			        }

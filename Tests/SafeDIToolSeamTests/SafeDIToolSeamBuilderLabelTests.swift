@@ -336,7 +336,7 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		    public init(__safeDI_impl_ApiBuilder: __safeDI_Impl_ApiCarrier<any Api>, __safeDI_impl_OtherBuilder: __safeDI_Impl_OtherCarrier<any Other>) {
 		        let a = ErasedInstantiator<Int, any Api>(__safeDI_impl_ApiBuilder.a())
 		        let __safeDI_impl_OtherBuilder_child = __safeDI_impl_OtherBuilder.child(a)
-		        func __safeDI_child() -> Child {
+		        @inline(never) func __safeDI_child() -> Child {
 		            let o = ErasedInstantiator<Int, any Other>(__safeDI_impl_OtherBuilder_child.o())
 		            return Child(o: o)
 		        }
@@ -582,7 +582,7 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// From code you write, call the initializer above instead.
 		    public init(__safeDI_impl_ApiBuilder: __safeDI_Impl_ApiCarrier<any Api>, __safeDI_impl_OtherBuilder: __safeDI_Impl_OtherCarrier<any Other>) {
-		        func __safeDI_inner() -> Inner {
+		        @inline(never) func __safeDI_inner() -> Inner {
 		            _ = Inner.__safeDI_Inner_137C551F8A2B7513.self // If this line does not compile, compile the code SafeDI generates for module Lib into Lib: under Bazel, add Lib’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Inner(__safeDI_impl_OtherBuilder: __safeDI_impl_OtherBuilder.inner)
 		        }
@@ -860,7 +860,7 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		    /// From code you write, call the initializer above instead.
 		    public convenience init(__safeDI_apiBuilder apiBuilder: Int, __safeDI_apiBuilder_: __safeDI_ApiCarrier<any Api>, __safeDI_apiSendableBuilder: __safeDI_ApiSendableCarrier<any Api>) {
 		        let api: any Api = __safeDI_apiBuilder_.api(apiBuilder)
-		        @Sendable nonisolated func __safeDI_workerBuilder() -> Worker {
+		        @inline(never) @Sendable nonisolated func __safeDI_workerBuilder() -> Worker {
 		            let __safeDI_apiSendableBuilder_workerBuilder = __safeDI_apiSendableBuilder.workerBuilder()
 		            let api: any Api = __safeDI_apiSendableBuilder_workerBuilder.api()
 		            return Worker(api: api)
@@ -932,7 +932,7 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		    /// From code you write, call the initializer above instead.
 		    public convenience init(__safeDI_apiSendableBuilder apiSendableBuilder: Int, __safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>, __safeDI_apiSendableBuilder_: __safeDI_ApiSendableCarrier<any Api>) {
 		        let api: any Api = __safeDI_apiBuilder.api(apiSendableBuilder)
-		        @Sendable nonisolated func __safeDI_workerBuilder() -> Worker {
+		        @inline(never) @Sendable nonisolated func __safeDI_workerBuilder() -> Worker {
 		            let __safeDI_apiSendableBuilder__workerBuilder = __safeDI_apiSendableBuilder_.workerBuilder()
 		            let api: any Api = __safeDI_apiSendableBuilder__workerBuilder.api()
 		            return Worker(api: api)

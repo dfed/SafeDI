@@ -65,6 +65,116 @@ struct GeneratedCodeTextTests {
 	}
 
 	@Test
+	func lines_keepsEmptyLinesAndCarriageReturnLineFeeds_whenCodeHasBoth() {
+		#expect(GeneratedCodeText.lines(of: "a\r\nb\n\nc\n") == ["a\r\nb", "", "c", ""])
+		#expect(GeneratedCodeText.lines(of: "") == [""])
+	}
+
+	@Test
+	func lines_returnsWhatSplittingOnNewlinesKeepingEmptyLinesReturns_forEveryStringOfUpToSixTokens() {
+		let codes = Self.strings(of: Self.lineTokens, upToLength: 6)
+		let mismatches = codes.filter { code in
+			let expected = code.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+			return GeneratedCodeText.lines(of: code).map { Array($0.utf8) } != expected.map { Array($0.utf8) }
+		}
+		#expect(codes.count == 55_987)
+		#expect(mismatches.map { Array($0.unicodeScalars) } == [])
+	}
+
+	@Test
+	func indentingLines_indentsEveryLineAndKeepsEmptyLines_whenCodeHasBlankLines() {
+		#expect(GeneratedCodeText.indentingLines(of: "\nfunc build() {\n\n}\n", by: "\t") == "\t\n\tfunc build() {\n\t\n\t}\n\t")
+	}
+
+	@Test
+	func indentingLines_returnsWhatSplittingOnNewlinesKeepingEmptyLinesReturns_forEveryStringOfUpToSixTokens() {
+		let codes = Self.strings(of: Self.lineTokens, upToLength: 6)
+		let mismatches = codes.filter { code in
+			let expected = code
+				.split(separator: "\n", omittingEmptySubsequences: false)
+				.map { "\t\t" + $0 }
+				.joined(separator: "\n")
+			return Array(GeneratedCodeText.indentingLines(of: code, by: "\t\t").utf8) != Array(expected.utf8)
+		}
+		#expect(codes.count == 55_987)
+		#expect(mismatches.map { Array($0.unicodeScalars) } == [])
+	}
+
+	@Test
+	func containsIdentifier_findsOnlyWholeRuns_whenIdentifierIsPartOfALongerName() {
+		#expect(GeneratedCodeText.containsIdentifier("value", in: "let x = build(value)"))
+		#expect(!GeneratedCodeText.containsIdentifier("value", in: "let x = build(values)"))
+		#expect(!GeneratedCodeText.containsIdentifier("", in: "let x"))
+		#expect(!GeneratedCodeText.containsIdentifier("value", in: "val"))
+	}
+
+	@Test
+	func containsIdentifier_returnsWhatSplittingIntoIdentifiersReturns_forEveryStringOfUpToFiveTokens() {
+		// A combining accent after the identifier forms one `Character` with its last letter, which then is no run equal
+		// to it, though its bytes are there; a non-ASCII letter or digit beside it joins the run.
+		let tokens = ["ab", "a", "b", " ", "_", "\u{301}", "é", "٣"]
+		let codes = Self.strings(of: tokens, upToLength: 5)
+		let mismatches = codes.filter { code in
+			let expected = code.split(whereSeparator: { !($0.isLetter || $0.isNumber || $0 == "_") }).contains(Substring("ab"))
+			return GeneratedCodeText.containsIdentifier("ab", in: code) != expected
+		}
+		#expect(codes.count == 37_449)
+		#expect(mismatches.map { Array($0.unicodeScalars) } == [])
+	}
+
+	@Test
+	func containsIdentifier_findsCanonicallyEquivalentSpelling_whenIdentifierOrCodeIsNotASCII() {
+		#expect(GeneratedCodeText.containsIdentifier("caf\u{E9}", in: "let x = cafe\u{301}"))
+		#expect(GeneratedCodeText.containsIdentifier("cafe\u{301}", in: "build(caf\u{E9})"))
+		#expect(GeneratedCodeText.containsIdentifier("Kind", in: "let x = \u{212A}ind"))
+		#expect(GeneratedCodeText.containsIdentifier("\u{212A}ind", in: "let x = Kind"))
+		#expect(!GeneratedCodeText.containsIdentifier("`ab`", in: "let x = `ab`"))
+	}
+
+	@Test
+	func containsIdentifier_returnsWhatSplittingIntoIdentifiersReturns_forEveryStringOfUpToFourTokensSpellingIdentifiersOutsideASCII() {
+		// Precomposed and decomposed accents, the Kelvin sign and `K`, and the Greek varia and a backtick are each
+		// canonically equivalent, so `Character`s equate them though their bytes differ; a raw identifier's backticks are
+		// no letters, so no run holds them.
+		let tokens = ["ab", "a", " ", "_", "\u{301}", "\u{E9}", "e", "\u{663}", "`", "K", "\u{212A}", "\u{3C0}", "\r", "\n", "\u{1FEF}"]
+		let identifiers = ["ab", "\u{E9}", "e\u{301}", "K", "\u{212A}", "\u{3C0}", "`ab`", "a b", "\u{1FEF}ab", "`", ""]
+		let codes = Self.strings(of: tokens, upToLength: 4)
+		let mismatches = codes.flatMap { code in
+			identifiers.filter { identifier in
+				let expected = code.split(whereSeparator: { !($0.isLetter || $0.isNumber || $0 == "_") }).contains(Substring(identifier))
+				return GeneratedCodeText.containsIdentifier(identifier, in: code) != expected
+			}.map { [$0, code] }
+		}
+		#expect(codes.count == 54_241)
+		#expect(mismatches.map { $0.map { Array($0.unicodeScalars) } } == [])
+	}
+
+	@Test
+	func lines_returnsWhatSplittingOnNewlinesKeepingEmptyLinesReturns_forEveryStringOfUpToFiveTokensSpellingIdentifiersOutsideASCII() {
+		let codes = Self.strings(of: Self.identifierLineTokens, upToLength: 5)
+		let mismatches = codes.filter { code in
+			let expected = code.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+			return GeneratedCodeText.lines(of: code).map { Array($0.utf8) } != expected.map { Array($0.utf8) }
+		}
+		#expect(codes.count == 66_430)
+		#expect(mismatches.map { Array($0.unicodeScalars) } == [])
+	}
+
+	@Test
+	func indentingLines_returnsWhatSplittingOnNewlinesKeepingEmptyLinesReturns_forEveryStringOfUpToFiveTokensSpellingIdentifiersOutsideASCII() {
+		let codes = Self.strings(of: Self.identifierLineTokens, upToLength: 5)
+		let mismatches = codes.filter { code in
+			let expected = code
+				.split(separator: "\n", omittingEmptySubsequences: false)
+				.map { "\t\t" + $0 }
+				.joined(separator: "\n")
+			return Array(GeneratedCodeText.indentingLines(of: code, by: "\t\t").utf8) != Array(expected.utf8)
+		}
+		#expect(codes.count == 66_430)
+		#expect(mismatches.map { Array($0.unicodeScalars) } == [])
+	}
+
+	@Test
 	func overrideRelativePath_dropsOverridesPrefixAndJoinsLabelsWithUnderscores_whenPathIsNested() {
 		#expect(GeneratedCodeText.overrideRelativePath(of: "safeDIOverrides.child.grandchild") == "child_grandchild")
 	}
@@ -137,6 +247,15 @@ struct GeneratedCodeTextTests {
 			return String(code[..<directive.upperBound] + path[(path.lastIndex(of: "/").map { path.index(after: $0) } ?? path.startIndex)...] + code[closing.lowerBound...])
 		}.joined(separator: "\n")
 	}
+
+	/// A line feed, a carriage return that forms `"\r\n"` with a line feed beside it, a multi-byte character, a combining
+	/// accent that extends the character before it, and plain text.
+	private static let lineTokens = ["x", "\n", "\r", "é", "\u{301}", " "]
+
+	/// A line feed, a carriage return, a raw identifier's backtick, a decomposed and a precomposed accent, a non-ASCII
+	/// letter, the Kelvin sign, the Greek varia, which is canonically equivalent to a backtick, and an emoji joined by a
+	/// zero-width joiner.
+	private static let identifierLineTokens = ["\n", "\r", "`", "e\u{301}", "\u{3C0}", "\u{212A}", "\u{1FEF}", "\u{1F468}\u{200D}", "\u{E9}"]
 
 	/// Every concatenation of up to `length` of `tokens`, the empty string first.
 	private static func strings(of tokens: [String], upToLength length: Int) -> [String] {

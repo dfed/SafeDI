@@ -3200,7 +3200,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_liveService_ServiceSendableBuilder: __safeDI_LiveService_ServiceSendableCarrier<any Service>) {
-		        @Sendable nonisolated func __safeDI_panel() -> Panel {
+		        @inline(never) @Sendable nonisolated func __safeDI_panel() -> Panel {
 		            _ = Panel.__safeDI_Panel_9FEE5F70C886577B.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Panel(__safeDI_liveService_ServiceBuilder: __safeDI_liveService_ServiceSendableBuilder.panel())
 		        }

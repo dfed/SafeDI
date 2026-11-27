@@ -219,7 +219,7 @@ struct SafeDIToolSeamPassedUpValuesTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// From code you write, call the initializer above instead.
 		    public init(__safeDI_id id: Int, __safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
-		        func __safeDI_detailBuilder(id: Int) -> Detail {
+		        @inline(never) func __safeDI_detailBuilder(id: Int) -> Detail {
 		            _ = Detail.__safeDI_Detail_5BF800DF64AF87BC.self // If this line does not compile, compile the code SafeDI generates for module Inner into Inner: under Bazel, add Inner’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Detail(__safeDI_id: id, __safeDI_apiBuilder: __safeDI_apiBuilder.detailBuilder)
 		        }
@@ -307,7 +307,7 @@ struct SafeDIToolSeamPassedUpValuesTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// From code you write, call the initializer above instead.
 		    public convenience init(__safeDI_id id: Int, __safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
-		        func __safeDI_nextBuilder(id: Int) -> Node {
+		        @inline(never) func __safeDI_nextBuilder(id: Int) -> Node {
 		            _ = Node.__safeDI_Node_E5AA19DA80BC605E.self
 		            return Node(__safeDI_id: id, __safeDI_apiBuilder: __safeDI_apiBuilder.nextBuilder())
 		        }
@@ -559,7 +559,7 @@ struct SafeDIToolSeamPassedUpValuesTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// From code you write, call the initializer above instead.
 		    public convenience init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
-		        func __safeDI_home() -> Home {
+		        @inline(never) func __safeDI_home() -> Home {
 		            _ = Home.__safeDI_Home_C01BC793F644CA9D.self // If this line does not compile, compile the code SafeDI generates for module Inner into Inner: under Bazel, add Inner’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Home(__safeDI_apiBuilder: __safeDI_apiBuilder.home)
 		        }

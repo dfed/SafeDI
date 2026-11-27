@@ -79,7 +79,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			    /// From code you write, call the initializer above instead.
 			    public init(__safeDI_exportService: @autoclosure @escaping () -> ExportService, __safeDI_uploaderBuilder: __safeDI_UploaderCarrier<any Uploader>) {
 			        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
-			        func __safeDI_screenBuilder() -> ExportScreen {
+			        @inline(never) func __safeDI_screenBuilder() -> ExportScreen {
 			            ExportScreen(exportService: exportService.instance)
 			        }
 			        let screenBuilder = Instantiator<ExportScreen>(__safeDI_screenBuilder)
@@ -215,11 +215,11 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_exportService: @autoclosure @escaping () -> ExportService, __safeDI_uploaderSendableBuilder: __safeDI_UploaderSendableCarrier<any Uploader>) {
 			        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
-			        func __safeDI_screenBuilder() -> ExportScreen {
+			        @inline(never) func __safeDI_screenBuilder() -> ExportScreen {
 			            ExportScreen(exportService: exportService.instance)
 			        }
 			        let screenBuilder = Instantiator<ExportScreen>(__safeDI_screenBuilder)
-			        @Sendable nonisolated func __safeDI_panelBuilder() -> Panel {
+			        @inline(never) @Sendable nonisolated func __safeDI_panelBuilder() -> Panel {
 			            let __safeDI_uploaderSendableBuilder_panelBuilder = __safeDI_uploaderSendableBuilder.panelBuilder()
 			            let uploader: any Uploader = __safeDI_uploaderSendableBuilder_panelBuilder.uploader()
 			            return Panel(uploader: uploader)
@@ -408,7 +408,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
 			        let logger = LazilyInstantiated<Logger>(__safeDI_logger)
 			        let analytics = Analytics()
-			        func __safeDI_screenBuilder() -> ExportScreen {
+			        @inline(never) func __safeDI_screenBuilder() -> ExportScreen {
 			            ExportScreen(exportService: exportService.instance, logger: logger.instance)
 			        }
 			        let screenBuilder = Instantiator<ExportScreen>(__safeDI_screenBuilder)
@@ -503,7 +503,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			    public init(__safeDI_exportService: @autoclosure @escaping () -> ExportService, __safeDI_logger: @autoclosure @escaping () -> Logger?, __safeDI_uploaderBuilder: __safeDI_UploaderCarrier<any Uploader>) {
 			        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
 			        let logger = LazilyInstantiated<Logger?>(__safeDI_logger)
-			        func __safeDI_screenBuilder() -> ExportScreen {
+			        @inline(never) func __safeDI_screenBuilder() -> ExportScreen {
 			            ExportScreen(exportService: exportService.instance, logger: logger.instance)
 			        }
 			        let screenBuilder = Instantiator<ExportScreen>(__safeDI_screenBuilder)
@@ -704,7 +704,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_exportService: @autoclosure @escaping () -> ExportService, __safeDI_reportBuilder reportBuilder: Instantiator<Report>, __safeDI_uploaderBuilder: __safeDI_UploaderCarrier<any Uploader>) {
 			        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
-			        func __safeDI_screenBuilder() -> ExportScreen {
+			        @inline(never) func __safeDI_screenBuilder() -> ExportScreen {
 			            ExportScreen(exportService: exportService.instance, reportBuilder: reportBuilder)
 			        }
 			        let screenBuilder = Instantiator<ExportScreen>(__safeDI_screenBuilder)
@@ -795,7 +795,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_exportService: @autoclosure @escaping () -> ExportService, __safeDI_uploaderBuilder: __safeDI_UploaderCarrier<any Uploader>) {
 			        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
-			        func __safeDI_screenBuilder() -> ExportScreen {
+			        @inline(never) func __safeDI_screenBuilder() -> ExportScreen {
 			            ExportScreen(exportService: exportService.instance)
 			        }
 			        let screenBuilder = Instantiator<ExportScreen>(__safeDI_screenBuilder)
@@ -883,7 +883,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 		        #sourceLocation(file: "\(seamPath)", line: 9)
 		        let exportService: any Exporting = __safeDI_exportService_()
 		        #sourceLocation()
-		        func __safeDI_screenBuilder() -> ExportScreen {
+		        @inline(never) func __safeDI_screenBuilder() -> ExportScreen {
 		            ExportScreen(exportService: exportService)
 		        }
 		        let screenBuilder = Instantiator<ExportScreen>(__safeDI_screenBuilder)
@@ -970,7 +970,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_exportService: @autoclosure @escaping () -> ExportService, __safeDI_uploaderBuilder: __safeDI_UploaderCarrier<any Uploader>) {
 		        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
-		        func __safeDI_screenBuilder() -> ExportScreen {
+		        @inline(never) func __safeDI_screenBuilder() -> ExportScreen {
 		            ExportScreen(exportService: exportService.instance)
 		        }
 		        let screenBuilder = Instantiator<ExportScreen>(__safeDI_screenBuilder)
@@ -1001,11 +1001,11 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_exportService: @autoclosure @escaping () -> ExportService, __safeDI_uploaderBuilder: __safeDI_UploaderCarrier<any Uploader>) {
 		        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
-		        func __safeDI_headerBuilder() -> Header {
+		        @inline(never) func __safeDI_headerBuilder() -> Header {
 		            Header(exportService: exportService.instance)
 		        }
 		        let headerBuilder = Instantiator<Header>(__safeDI_headerBuilder)
-		        func __safeDI_exportFeature() -> ExportFeature {
+		        @inline(never) func __safeDI_exportFeature() -> ExportFeature {
 		            _ = ExportFeature.__safeDI_ExportFeature_FF2BE1522AF7694B.self
 		            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder.exportFeature)
 		        }
@@ -1036,7 +1036,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_exportService: @autoclosure @escaping () -> ExportService, __safeDI_uploaderBuilder: __safeDI_UploaderCarrier<any Uploader>) {
 		        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
-		        func __safeDI_screenBuilder() -> ExportScreen {
+		        @inline(never) func __safeDI_screenBuilder() -> ExportScreen {
 		            ExportScreen(exportService: exportService.instance)
 		        }
 		        let screenBuilder = Instantiator<ExportScreen>(__safeDI_screenBuilder)
@@ -1067,11 +1067,11 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_exportService: @autoclosure @escaping () -> ExportService, __safeDI_uploaderBuilder: __safeDI_UploaderCarrier<any Uploader>) {
 		        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
-		        func __safeDI_headerBuilder() -> Header {
+		        @inline(never) func __safeDI_headerBuilder() -> Header {
 		            Header(exportService: exportService.instance)
 		        }
 		        let headerBuilder = Instantiator<Header>(__safeDI_headerBuilder)
-		        func __safeDI_exportFeature() -> ExportFeature {
+		        @inline(never) func __safeDI_exportFeature() -> ExportFeature {
 		            _ = ExportFeature.__safeDI_ExportFeature_FF2BE1522AF7694B.self
 		            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder.exportFeature)
 		        }
@@ -1157,7 +1157,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_exportService: @autoclosure @escaping () -> ExportService, __safeDI_uploaderBuilder: __safeDI_UploaderCarrier<any Uploader>) {
 			        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
-			        func __safeDI_screenBuilder() -> ExportScreen {
+			        @inline(never) func __safeDI_screenBuilder() -> ExportScreen {
 			            ExportScreen(exportService: exportService.instance)
 			        }
 			        let screenBuilder = Instantiator<ExportScreen>(__safeDI_screenBuilder)
@@ -1272,7 +1272,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_exportService: @autoclosure @escaping () -> ExportService, __safeDI_uploaderBuilder: __safeDI_UploaderCarrier<any Uploader>) {
 			        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
-			        func __safeDI_screenBuilder() -> ExportScreen {
+			        @inline(never) func __safeDI_screenBuilder() -> ExportScreen {
 			            ExportScreen(exportService: exportService.instance)
 			        }
 			        let screenBuilder = Instantiator<ExportScreen>(__safeDI_screenBuilder)

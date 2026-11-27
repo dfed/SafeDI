@@ -1043,7 +1043,7 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		        let log = LazilyInstantiated<Log>(__safeDI_log)
 		        let z = Z(log: log.instance)
 		        let __safeDI_apiBuilder_a = __safeDI_apiBuilder.a(log, z)
-		        func __safeDI_a() -> A {
+		        @inline(never) func __safeDI_a() -> A {
 		            let api: any Api = __safeDI_apiBuilder_a.api()
 		            return A(api: api)
 		        }
@@ -1373,7 +1373,7 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		        let log = LazilyInstantiated<Log>(__safeDI_log)
 		        let z = Z(log: log.instance)
 		        let __safeDI_apiBuilder_a = __safeDI_apiBuilder.a(log, z)
-		        func __safeDI_a() -> A {
+		        @inline(never) func __safeDI_a() -> A {
 		            let api: any Api = __safeDI_apiBuilder_a.api()
 		            return A(api: api)
 		        }
@@ -1701,7 +1701,7 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		        let log = LazilyInstantiated<Log>(__safeDI_log)
 		        let z = Z(log: log.instance)
 		        let __safeDI_apiBuilder_a = __safeDI_apiBuilder.a(log, z)
-		        func __safeDI_a() -> A {
+		        @inline(never) func __safeDI_a() -> A {
 		            let api: any Api = __safeDI_apiBuilder_a.api()
 		            return A(api: api)
 		        }

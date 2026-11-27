@@ -118,6 +118,82 @@ jobs:
           echo "integrations=$integrations" >> "$GITHUB_OUTPUT"
           echo "source=$source docc=$docc integrations=$integrations"
 
+  # A stack of pull requests is checked at its top: the top's merge holds every branch below it, so the heavy jobs
+  # of a branch another open pull request is based on repeat work the top's run does. Those runs were cancelled
+  # by hand, when someone got to them: 423 Linux and 65 macOS runner hours went to runs later cancelled between
+  # 2026-11-21 and 2026-11-25. So a pull request's run asks two things: whether another open pull request of this
+  # repository names its branch as base, and whether its own base is a branch other than the default one. When
+  # both hold, it is in the middle of a stack, this job's output names the pull requests above it, and every job
+  # that builds or tests is skipped: each has `needs.stack-position.outputs.stacked-under == ''` in its `if:`.
+  # The quick jobs (the version checks, the Markdown and skill script checks, lint) run as always.
+  #
+  # A pull request into the default branch always runs everything, whatever is based on it: when the row below
+  # lands, the next one takes main as its base and is pushed ("retarget first, then push"), and that run is
+  # complete. So a stack costs two full runs, its top and its bottom, where it cost one per branch.
+  #
+  # A skipped job satisfies a required check, and a skipped matrix job reports only its unexpanded name, so a
+  # required check a matrix reports stays unreported. Neither matters here and no stand-in is needed: required
+  # checks protect only the default branch, and no pull request into it is skipped. Whoever lands a stack still
+  # requires a green run, with nothing skipped but for a Markdown-only change, on the head being landed.
+  #
+  # A pull request labelled `run-all-checks` runs everything wherever it is in a stack, for a check in the
+  # middle. The label and the base are read as they are now, not as the event carried them, so label first, then
+  # push.
+  #
+  # Any doubt runs everything: a pull request from a fork, or one whose pull requests cannot be listed, gets an
+  # empty output. On a push to main and on the schedule the job is skipped, its output is empty, and every job
+  # runs. A full run pays for it with the seconds a Linux runner takes to start and answer; the macOS build jobs
+  # already wait that long for "Bazel Source Archive Check". No container, since it only calls GitHub.
+  stack-position:
+    name: Decide Whether This Pull Request Runs the Heavy Jobs
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    permissions:
+      # To list the open pull requests based on this one's branch, and to read this one's labels and base.
+      pull-requests: read
+    outputs:
+      stacked-under: ${{ steps.find.outputs.stacked-under }}
+    steps:
+      # Twice the longest it should take, and then some: the two kinds of call "Find Builds a Pull Request Passed
+      # on This Tree" makes took 1 second. Not yet measured on a runner; set it from the first runs.
+      - name: Find the Pull Requests Based on This Branch
+        id: find
+        continue-on-error: true
+        timeout-minutes: 2
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const pullRequest = context.payload.pull_request
+            if (pullRequest.head.repo.id !== pullRequest.base.repo.id) {
+              core.info('A pull request from a fork: every job runs.')
+              return
+            }
+            let above
+            try {
+              const { data: live } = await github.rest.pulls.get({ ...context.repo, pull_number: pullRequest.number })
+              if (live.labels.some(label => label.name === 'run-all-checks')) {
+                core.info('Labelled run-all-checks: every job runs.')
+                return
+              }
+              if (live.base.ref === context.payload.repository.default_branch) {
+                core.info(`Based on ${live.base.ref}: every job runs.`)
+                return
+              }
+              const open = await github.paginate(github.rest.pulls.list, { ...context.repo, state: 'open', base: pullRequest.head.ref, per_page: 100 })
+              above = open.filter(other => other.number !== pullRequest.number && other.base.repo.id === pullRequest.base.repo.id).map(other => `#${other.number}`)
+            } catch (error) {
+              core.warning(`Could not tell whether a pull request is based on this branch (${error.message}): every job runs.`)
+              return
+            }
+            if (above.length === 0) {
+              core.info('No open pull request is based on this branch: every job runs.')
+              return
+            }
+            const message = `Skipped: stacked under ${above.join(', ')}; checks run on the top of the stack and on the pull request into ${context.payload.repository.default_branch}.`
+            core.notice(message)
+            await core.summary.addRaw(message).write()
+            core.setOutput('stacked-under', above.join(', '))
+
   version-consistency-check:
     name: Version Consistency Check
     # Checks that each SwiftPM dependency Package.resolved pins has the
@@ -316,7 +392,28 @@ jobs:
     # leaves no record, main's job then runs, and it saves the caches as before. The job names below are the two
     # jobs' `name:`; when one is renamed and this is not, no record is found and main runs the job.
     #
-    # Nothing here fails a run: whatever goes wrong, the outputs are empty and both jobs run. It runs on every
+    # The same holds for the Linux checks that only judge the tree and save nothing a later run restores: the
+    # fuzzer's shards and "Check Graph Fuzzer Corpus on Linux", the four repeat passes, Release Acceptance, "Build
+    # Release SafeDITool on Linux" and "Check Function Compile Time on Linux". They took 370 of the 519 Linux
+    # runner minutes of a push to main (the mean of 41 runs, 2026-11-21 to 2026-11-25), on a tree the pull
+    # request's run had passed minutes before. "Record the Linux Checks That Passed on This Tree" uploads one
+    # record for each of them that passed in a pull request's run, and a push to main skips each one this job
+    # finds a record for. A record counts only when every job of its check concluded in success in the run that
+    # uploaded it: for a matrix, every job whose name starts as the matrix's does, and at least one.
+    #
+    # What a record proves: it is named for the tree of the commit the pull request's run checked out (the merge
+    # of the pull request with its base, which is what the merge leaves on main when the head held main's tip),
+    # and the workflow files, the scripts and Package.resolved are part of that tree, so the same tree means the
+    # same jobs, matrices and dependencies. What it does not prove is that the runner image or the container has
+    # not moved in between, which is why a record lasts three days and the weekly scheduled run skips nothing.
+    #
+    # Every job that saves a cache another run restores, or makes a coverage report, still runs on every push to
+    # main: "Build Tests on Linux", "Build and Test on Linux" (the build cache, the passed compile checks, and
+    # with "Build and Test on Xcode 26" the coverage behind the README badge), "Check Generate Time on Linux"
+    # (the tool the next change is measured against) and "Build and Test on Latest Swift". So main's run still
+    # builds and tests every commit, and its badge still says so.
+    #
+    # Nothing here fails a run: whatever goes wrong, the outputs are empty and every job runs. It runs on every
     # event, in seconds, so that a pull request exercises it; only a push to main reads its answers. No
     # container, since it only reads, as "Check Line Coverage on Linux" does.
     name: Find Builds a Pull Request Passed on This Tree
@@ -329,6 +426,11 @@ jobs:
       tree: ${{ steps.tree.outputs.tree }}
       apple-platforms: ${{ steps.find.outputs.apple-platforms }}
       example-integrations: ${{ steps.find.outputs.example-integrations }}
+      graph-fuzzer: ${{ steps.find.outputs.graph-fuzzer }}
+      linux-repeat: ${{ steps.find.outputs.linux-repeat }}
+      release-acceptance: ${{ steps.find.outputs.release-acceptance }}
+      linux-release-build: ${{ steps.find.outputs.linux-release-build }}
+      function-compile-time: ${{ steps.find.outputs.function-compile-time }}
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v7
@@ -351,29 +453,61 @@ jobs:
           TREE: ${{ steps.tree.outputs.tree }}
         with:
           script: |
-            const jobNames = {
-              'apple-platforms': 'Build for Apple Platforms, DocC and Xcode Projects on Xcode 26',
-              'example-integrations': 'Build Package, Tuist and Bazel Integrations on Xcode 26',
+            // For each check: the jobs that must have concluded in success in the run that uploaded the record,
+            // by whole name, and by the start of a matrix's or a called workflow's names (at least one such job,
+            // and every one of them in success). A job named under `skipped` is one the called workflow never
+            // runs when this workflow calls it, so its "skipped" counts as nothing.
+            const checks = {
+              'apple-platforms': { names: ['Build for Apple Platforms, DocC and Xcode Projects on Xcode 26'], prefixes: [] },
+              'example-integrations': { names: ['Build Package, Tuist and Bazel Integrations on Xcode 26'], prefixes: [] },
+              'graph-fuzzer': { names: ['Check Graph Fuzzer Corpus on Linux'], prefixes: ['Fuzz Dependency Graphs on Linux ('] },
+              'linux-repeat': { names: ['Repeat Tests on Linux'], prefixes: ['Repeat Tests on Linux (pass '] },
+              'release-acceptance': { names: ['Release Acceptance / Check Release Acceptance on Linux'], prefixes: ['Release Acceptance / '], skipped: ['Release Acceptance / Build for Release Acceptance on Linux'] },
+              'linux-release-build': { names: ['Build Release SafeDITool on Linux'], prefixes: [] },
+              'function-compile-time': { names: ['Check Function Compile Time on Linux'], prefixes: [] },
             }
-            for (const [key, jobName] of Object.entries(jobNames)) {
+            const runsById = new Map()
+            const jobsByRunId = new Map()
+            for (const [key, check] of Object.entries(checks)) {
               const name = `passed-${key}-${process.env.TREE}`
-              const { data } = await github.rest.actions.listArtifactsForRepo({ ...context.repo, name, per_page: 20 })
               let passed = false
-              for (const artifact of data.artifacts) {
-                if (artifact.expired || !artifact.workflow_run) { continue }
-                const { data: run } = await github.rest.actions.getWorkflowRun({ ...context.repo, run_id: artifact.workflow_run.id })
-                if (run.path !== '.github/workflows/ci.yml' || run.event !== 'pull_request' || !run.head_repository || run.head_repository.id !== run.repository.id) {
-                  core.info(`${name}: run ${run.id} is not a pull request's run of this workflow in this repository.`)
-                  continue
+              try {
+                const { data } = await github.rest.actions.listArtifactsForRepo({ ...context.repo, name, per_page: 20 })
+                for (const artifact of data.artifacts) {
+                  if (artifact.expired || !artifact.workflow_run) { continue }
+                  const runId = artifact.workflow_run.id
+                  if (!runsById.has(runId)) {
+                    runsById.set(runId, (await github.rest.actions.getWorkflowRun({ ...context.repo, run_id: runId })).data)
+                  }
+                  const run = runsById.get(runId)
+                  if (run.path !== '.github/workflows/ci.yml' || run.event !== 'pull_request' || !run.head_repository || run.head_repository.id !== run.repository.id) {
+                    core.info(`${name}: run ${run.id} is not a pull request's run of this workflow in this repository.`)
+                    continue
+                  }
+                  if (!jobsByRunId.has(runId)) {
+                    jobsByRunId.set(runId, await github.paginate(github.rest.actions.listJobsForWorkflowRun, { ...context.repo, run_id: runId, filter: 'latest', per_page: 100 }))
+                  }
+                  const jobs = jobsByRunId.get(runId)
+                  const missing = check.names.find(jobName => !jobs.some(job => job.name === jobName && job.conclusion === 'success'))
+                  if (missing !== undefined) {
+                    core.info(`${name}: "${missing}" did not conclude in success in run ${run.id}.`)
+                    continue
+                  }
+                  const incomplete = check.prefixes.find(prefix => {
+                    const matching = jobs.filter(job => job.name.startsWith(prefix) && !(job.conclusion === 'skipped' && (check.skipped || []).includes(job.name)))
+                    return matching.length === 0 || matching.some(job => job.conclusion !== 'success')
+                  })
+                  if (incomplete !== undefined) {
+                    core.info(`${name}: not every "${incomplete}…" job concluded in success in run ${run.id}.`)
+                    continue
+                  }
+                  core.info(`${name}: passed in run ${run.id}.`)
+                  passed = true
+                  break
                 }
-                const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, { ...context.repo, run_id: run.id, filter: 'latest', per_page: 100 })
-                if (!jobs.some(job => job.name === jobName && job.conclusion === 'success')) {
-                  core.info(`${name}: "${jobName}" did not conclude in success in run ${run.id}.`)
-                  continue
-                }
-                core.info(`${name}: passed in run ${run.id}.`)
-                passed = true
-                break
+              } catch (error) {
+                core.info(`${name}: could not be looked up (${error.message}); the check runs.`)
+                passed = false
               }
               if (!passed) { core.info(`${name}: no record.`) }
               core.setOutput(key, String(passed))
@@ -403,13 +537,13 @@ jobs:
     name: Build for Apple Platforms, DocC and Xcode Projects on Xcode 26
     # Every macOS job but "Build and Test on Xcode 26" also waits for a Linux job that takes seconds, so that the
     # run's longest job queues for the few macOS runners first and the run ends when it does, not 30 minutes later.
-    needs: &after-the-long-macos-job-queues [changes, bazel-source-archive-check, passed-on-this-tree]
+    needs: &after-the-long-macos-job-queues [changes, bazel-source-archive-check, passed-on-this-tree, stack-position]
     # DocC articles under `*.docc/` are Markdown, so this job also runs
     # when only those changed, and then only its DocC steps do. It skips
     # when the change feeds nothing it builds ("Detect Changed Files"), and
     # on main when a pull request's run passed it on the same tree ("Find
     # Builds a Pull Request Passed on This Tree").
-    if: ${{ !cancelled() && !(github.event_name == 'push' && needs.passed-on-this-tree.outputs.apple-platforms == 'true') && ((needs.changes.outputs.source != 'false' && needs.changes.outputs.integrations != 'false') || needs.changes.outputs.docc == 'true') }}
+    if: ${{ !cancelled() && needs.stack-position.outputs.stacked-under == '' && !(github.event_name == 'push' && needs.passed-on-this-tree.outputs.apple-platforms == 'true') && ((needs.changes.outputs.source != 'false' && needs.changes.outputs.integrations != 'false') || needs.changes.outputs.docc == 'true') }}
     runs-on: macos-26
     permissions:
       contents: read
@@ -684,7 +818,7 @@ jobs:
     needs: *after-the-long-macos-job-queues
     # Skips when the change feeds nothing it builds ("Detect Changed Files"), and on main when a pull request's
     # run passed it on the same tree ("Find Builds a Pull Request Passed on This Tree").
-    if: ${{ !cancelled() && !(github.event_name == 'push' && needs.passed-on-this-tree.outputs.example-integrations == 'true') && needs.changes.outputs.source != 'false' && needs.changes.outputs.integrations != 'false' }}
+    if: ${{ !cancelled() && needs.stack-position.outputs.stacked-under == '' && !(github.event_name == 'push' && needs.passed-on-this-tree.outputs.example-integrations == 'true') && needs.changes.outputs.source != 'false' && needs.changes.outputs.integrations != 'false' }}
     runs-on: macos-26
     permissions:
       contents: read
@@ -1122,16 +1256,19 @@ jobs:
       # subdirectory of the workspace, as a user may. No target outputs a
       # `.safedi` file at the top level, so Bazel writes one to bazel-bin
       # from the disk cache only when `--remote_download_regex` asks for
-      # it. Kept out of the retry wrapper: the build above fetched
-      # everything this runs.
+      # it, with the positions file beside it that `query` and `dump`
+      # read lines from. Kept out of the retry wrapper: the build above
+      # fetched everything this runs.
       - name: Run SafeDITool through bazel run with a relative path
         timeout-minutes: 5
         id: bazel-5
         if: ${{ !cancelled() && steps.bazel-4.outcome == 'success' }}
         working-directory: Examples/ExampleBazelIntegration/Subproject
         run: |
-          bazelisk build --disk_cache="$HOME/.cache/bazel-disk" --repository_cache="$HOME/.cache/bazel-repository" '--remote_download_regex=.*\.safedi$' //Subproject:Subproject
+          bazelisk build --disk_cache="$HOME/.cache/bazel-disk" --repository_cache="$HOME/.cache/bazel-repository" '--remote_download_regex=.*\.safedi(positions)?$' //Subproject:Subproject
+          test -f ../bazel-bin/Subproject/Subproject_safedi.safedipositions
           bazelisk run --disk_cache="$HOME/.cache/bazel-disk" --repository_cache="$HOME/.cache/bazel-repository" @safedi//:SafeDITool -- dump ../bazel-bin/Subproject/Subproject_safedi.safedi > /dev/null
+          bazelisk run --disk_cache="$HOME/.cache/bazel-disk" --repository_cache="$HOME/.cache/bazel-repository" @safedi//:SafeDITool -- query needs TitleFormatter --module-info ../bazel-bin/Subproject/Subproject_safedi.safedi > /dev/null
       # Optimized builds define `NDEBUG` and no `DEBUG`, so the rule must report the
       # former, withhold the latter, and SafeDI must wire the example's
       # `#elseif NDEBUG` logger. The `_safedi` target is listed so
@@ -1157,6 +1294,29 @@ jobs:
         id: bazel-7
         if: ${{ !cancelled() && steps.bazel-6.outcome == 'success' }}
         run: grep -q "DisabledEventLogger()" Examples/ExampleBazelIntegration/bazel-bin/ExampleBazelIntegration/ExampleBazelIntegration_safedi.swift
+      # A line moved in a lower module, keeping every declaration's order in
+      # its file, changes only that module's positions file, which the
+      # root's SafeDI action lists as unused, so Bazel's local action cache
+      # reruns Subproject's SafeDI action and no other. Each local action
+      # cache hit is left out of the execution log; a disk cache hit is in
+      # it. Kept out of the retry wrapper: an extra action is deterministic.
+      - name: Verify a moved line in Subproject reruns no SafeDI action above it
+        timeout-minutes: 10
+        id: bazel-8
+        if: ${{ !cancelled() && steps.bazel-7.outcome == 'success' }}
+        working-directory: Examples/ExampleBazelIntegration
+        run: |
+          bazelisk build --disk_cache="$HOME/.cache/bazel-disk" --repository_cache="$HOME/.cache/bazel-repository" //ExampleBazelIntegration:ExampleBazelIntegration_safedi
+          cp Subproject/TitleFormatter.swift "$RUNNER_TEMP/TitleFormatter.swift"
+          { echo; cat "$RUNNER_TEMP/TitleFormatter.swift"; } > Subproject/TitleFormatter.swift
+          bazelisk build --disk_cache="$HOME/.cache/bazel-disk" --repository_cache="$HOME/.cache/bazel-repository" --execution_log_json_file="$RUNNER_TEMP/moved-line.json" //ExampleBazelIntegration:ExampleBazelIntegration_safedi
+          cp "$RUNNER_TEMP/TitleFormatter.swift" Subproject/TitleFormatter.swift
+          ran=$(jq -r 'select(.mnemonic == "SafeDI") | .targetLabel' "$RUNNER_TEMP/moved-line.json" | sort -u)
+          echo "SafeDI actions the moved line ran: $ran"
+          if [ "$ran" != "//Subproject:Subproject_safedi" ]; then
+            echo "::error::A line moved in Subproject ran SafeDI actions other than Subproject's own."
+            exit 1
+          fi
       # For main's run after the merge, which skips this job when it finds the record ("Find Builds a Pull Request
       # Passed on This Tree"). Only when every step passed and every cache restored was an exact hit, so that a
       # run with a stale cache leaves main to run the job and save it. A one-line file: uploads of files this
@@ -1200,12 +1360,12 @@ jobs:
   # No run has measured the parts on macOS yet.
   spm-tests:
     name: Build and Test on Xcode 26 (${{ matrix.part }})
-    needs: [changes, spm-plan]
+    needs: [changes, spm-plan, stack-position]
     # Also runs on every push to main, Markdown-only or not, so the
     # Codecov report behind the README badge always comes from a real
     # test run. It runs when "Choose How the Xcode 26 Tests Run" failed too,
     # as one job.
-    if: ${{ !cancelled() && (needs.changes.outputs.source != 'false' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
+    if: ${{ !cancelled() && needs.stack-position.outputs.stacked-under == '' && (needs.changes.outputs.source != 'false' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
     # Runs on macOS because it builds and tests SafeDI with Xcode's Swift,
     # the compiler adopters use, and compiles every test's generated code
     # with it: Xcode's Swift 6.2 and Linux's have disagreed about the same
@@ -1413,9 +1573,8 @@ jobs:
       # (main's run 43721724778). The build's limit is twice 23.5, rounded
       # up to 55. The tests' longest is not measured: at most the combined
       # step's 55.1 less the shortest build, 14.1, so 41.0, when no compile
-      # check had passed before; the limit is twice that, 85. Each run's
-      # step list now gives both durations: set the limits from those
-      # once there are eight.
+      # check had passed before; the limit was twice that, 85, until the
+      # step lists gave the durations beside "Test Framework" below.
       - name: Build Framework and Tests
         timeout-minutes: 55
         run: |
@@ -1435,10 +1594,18 @@ jobs:
       # 5 minutes: 32.1 minutes for seams-and-mocks and 30.8 for the-rest
       # (run 45034492743), half each of the 62.7 the one job took then (run
       # 44843308363). One run is thin: set it again from the step lists once
-      # eight two-part runs exist. The one job keeps the whole suite's limit.
+      # eight two-part runs exist.
+      #
+      # The one job's limit is from its four runs in which many checks
+      # compiled: 51.6 minutes (run 45626612103), 60.5 (45697927258), 75.4
+      # (45743295805) and 48.6 (45766677692), where a run whose checks had
+      # all passed before takes 26.5 to 34.6. Twice the longest would be
+      # 150; 110 is about twice their median, 56, and leaves the longest 35
+      # minutes, since each further minute is one a stalled test holds a
+      # macOS runner.
       - name: Test Framework
         id: tests
-        timeout-minutes: ${{ matrix.part == 'all' && 85 || 65 }}
+        timeout-minutes: ${{ matrix.part == 'all' && 110 || 65 }}
         env:
           SAFEDI_COMPILE_CHECK_PASSED_CACHE: ${{ github.workspace }}/.compile-check-cache/passed.txt
           SELECTION: ${{ steps.part.outputs.selection }}
@@ -1544,8 +1711,8 @@ jobs:
   # moves lists, so it runs on Linux and needs no container.
   spm:
     name: Build and Test on Xcode 26
-    needs: [changes, spm-plan, spm-tests]
-    if: ${{ !cancelled() && (needs.changes.outputs.source != 'false' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
+    needs: [changes, spm-plan, spm-tests, stack-position]
+    if: ${{ !cancelled() && needs.stack-position.outputs.stacked-under == '' && (needs.changes.outputs.source != 'false' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -1579,7 +1746,7 @@ jobs:
           parts=$(find part-compile-checks -name "passed-in-run-$GITHUB_RUN_ID.txt" 2>/dev/null | wc -l)
           if [ "$parts" -gt 0 ]; then
             find part-compile-checks -name "passed-in-run-$GITHUB_RUN_ID.txt" -exec cat {} + | LC_ALL=C sort -u > ".compile-check-cache/passed-in-run-$GITHUB_RUN_ID.txt"
-            find part-compile-checks -path '*/value-outputs/*' -type f -exec cp -t .compile-check-cache/value-outputs/ {} +
+            .github/scripts/join-value-outputs.sh part-compile-checks .compile-check-cache
             find part-compile-checks -name "value-outputs-written-in-run-$GITHUB_RUN_ID.txt" -exec cat {} + | LC_ALL=C sort -u > ".compile-check-cache/value-outputs-written-in-run-$GITHUB_RUN_ID.txt"
             echo "Passed compile checks of $parts parts: $(wc -l < ".compile-check-cache/passed-in-run-$GITHUB_RUN_ID.txt") passed in this run."
           else
@@ -1604,10 +1771,10 @@ jobs:
   # to 17.8 (runs 43760851366, 43721724778, 43755152593, 43671437925).
   linux-build:
     name: Build Tests on Linux
-    needs: changes
+    needs: [changes, stack-position]
     # Also runs on every push to main, Markdown-only or not, for the reason
     # "Build and Test on Linux" gives.
-    if: ${{ !cancelled() && (needs.changes.outputs.source != 'false' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
+    if: ${{ !cancelled() && needs.stack-position.outputs.stacked-under == '' && (needs.changes.outputs.source != 'false' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
     runs-on: ubuntu-latest
     container: swift:6.2
     permissions:
@@ -1714,8 +1881,8 @@ jobs:
   # leaves the builds for the next run or for eviction.
   prune-build-caches:
     name: Delete Older Build Directories
-    needs: [spm, linux-build, linux-latest-swift-group, generate-time, example-integrations]
-    if: ${{ !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    needs: [spm, linux-build, linux-latest-swift-group, generate-time, example-integrations, stack-position]
+    if: ${{ !cancelled() && needs.stack-position.outputs.stacked-under == '' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     permissions:
       actions: write
@@ -1900,12 +2067,12 @@ jobs:
   # built, which is the name of a required check.
   linux:
     name: Build and Test on Linux
-    needs: [changes, linux-build]
+    needs: [changes, linux-build, stack-position]
     # Also runs on every push to main, Markdown-only or not, so the
     # Codecov report behind the README badge always comes from a real
     # test run. It runs when the build failed too, and fails in its first
     # step: a skipped job would satisfy the required check.
-    if: ${{ !cancelled() && (needs.changes.outputs.source != 'false' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
+    if: ${{ !cancelled() && needs.stack-position.outputs.stacked-under == '' && (needs.changes.outputs.source != 'false' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
     runs-on: ubuntu-latest
     container: swift:6.2
     permissions:
@@ -2105,8 +2272,8 @@ jobs:
   # leaves the answer empty, which each reads as one job.
   spm-plan:
     name: Choose How the Xcode 26 Tests Run
-    needs: changes
-    if: ${{ !cancelled() && (needs.changes.outputs.source != 'false' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
+    needs: [changes, stack-position]
+    if: ${{ !cancelled() && needs.stack-position.outputs.stacked-under == '' && (needs.changes.outputs.source != 'false' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
     runs-on: ubuntu-latest
     container: swift:6.2
     # About twice what its steps take: the checkout, the two restores, of
@@ -2172,8 +2339,10 @@ jobs:
 
   release-acceptance:
     name: Release Acceptance
-    needs: [changes, linux-build]
-    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' && needs.linux-build.result == 'success' }}
+    # On main it skips when a pull request's run passed every one of its jobs on the same tree ("Find Builds a
+    # Pull Request Passed on This Tree").
+    needs: [changes, linux-build, passed-on-this-tree, stack-position]
+    if: ${{ !cancelled() && needs.stack-position.outputs.stacked-under == '' && !(github.event_name == 'push' && needs.passed-on-this-tree.outputs.release-acceptance == 'true') && needs.changes.outputs.source != 'false' && needs.linux-build.result == 'success' }}
     permissions:
       contents: read
     uses: ./.github/workflows/release-acceptance.yml
@@ -2194,8 +2363,8 @@ jobs:
   # `.claude/rules/releases-and-packaging.md` says.
   written-calls:
     name: Check Written Calls on Linux
-    needs: [changes, linux-build]
-    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' && needs.linux-build.result == 'success' }}
+    needs: [changes, linux-build, stack-position]
+    if: ${{ !cancelled() && needs.stack-position.outputs.stacked-under == '' && needs.changes.outputs.source != 'false' && needs.linux-build.result == 'success' }}
     runs-on: ubuntu-latest
     container: swift:6.2
     permissions:
@@ -2238,8 +2407,10 @@ jobs:
 
   linux-repeat-pass:
     name: Repeat Tests on Linux (pass ${{ matrix.pass }})
-    needs: [changes, linux-build]
-    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' && needs.linux-build.result == 'success' }}
+    # On main it skips when a pull request's run passed the four passes on the same tree ("Find Builds a Pull
+    # Request Passed on This Tree").
+    needs: [changes, linux-build, passed-on-this-tree, stack-position]
+    if: ${{ !cancelled() && needs.stack-position.outputs.stacked-under == '' && !(github.event_name == 'push' && needs.passed-on-this-tree.outputs.linux-repeat == 'true') && needs.changes.outputs.source != 'false' && needs.linux-build.result == 'success' }}
     runs-on: ubuntu-latest
     container: swift:6.2
     permissions:
@@ -2276,8 +2447,9 @@ jobs:
   # satisfy a required check.
   linux-repeat:
     name: Repeat Tests on Linux
-    needs: [changes, linux-repeat-pass]
-    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
+    # Skips on main when the passes do, since it would have no result to require.
+    needs: [changes, linux-repeat-pass, passed-on-this-tree, stack-position]
+    if: ${{ !cancelled() && needs.stack-position.outputs.stacked-under == '' && !(github.event_name == 'push' && needs.passed-on-this-tree.outputs.linux-repeat == 'true') && needs.changes.outputs.source != 'false' }}
     runs-on: ubuntu-latest
     permissions: {}
     steps:
@@ -2313,8 +2485,10 @@ jobs:
   # here.
   linux-release-build:
     name: Build Release SafeDITool on Linux
-    needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
+    # On main it skips when a pull request's run passed it on the same tree ("Find Builds a Pull Request Passed
+    # on This Tree").
+    needs: [changes, passed-on-this-tree, stack-position]
+    if: ${{ !cancelled() && needs.stack-position.outputs.stacked-under == '' && !(github.event_name == 'push' && needs.passed-on-this-tree.outputs.linux-release-build == 'true') && needs.changes.outputs.source != 'false' }}
     runs-on: ubuntu-latest
     container: swift:6.3
     permissions:
@@ -2379,8 +2553,8 @@ jobs:
   # what differs.
   generate-time:
     name: Check Generate Time on Linux
-    needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
+    needs: [changes, stack-position]
+    if: ${{ !cancelled() && needs.stack-position.outputs.stacked-under == '' && needs.changes.outputs.source != 'false' }}
     runs-on: ubuntu-latest
     container: swift:6.2
     permissions:
@@ -2507,11 +2681,14 @@ jobs:
       # the four took 229 seconds where they had taken 207, on a four-core
       # Linux machine comparing a tool with itself; in this container the
       # step took 7.5 minutes (run 45332820533), on a runner whose other
-      # shapes ran a third slower than in run 45110501373. The limit is about
-      # twice the measurement: a head tool slow enough to pass it fails the
-      # wall-time limit on its shapes first.
+      # shapes ran a third slower than in run 45110501373. The seventeen
+      # growth rows add about 2.6 minutes on a four-core Linux machine (the
+      # published 2.4.0 tool, four runs of each row at both depths), so about
+      # 10 minutes in all. The limit is about twice the measurement: a head
+      # tool slow enough to pass it fails the wall-time limit on its shapes
+      # first.
       - name: Compare Generate Time
-        timeout-minutes: 12
+        timeout-minutes: 20
         run: |
           python3 -I Scripts/generate-time-check.py --summary "$GITHUB_STEP_SUMMARY" \
             .generate-time/base/SafeDITool .generate-time/head/SafeDITool "$RUNNER_TEMP/generate-time"
@@ -2553,8 +2730,13 @@ jobs:
   # than keep both in the tree to compare them. See
   # .claude/rules/fuzzer-base-comparison.md.
   #
-  # The base is `github.event.pull_request.base.sha`: the tip of the branch
-  # beneath a stacked pull request, or of main. ci.yml's jobs otherwise
+  # The base is the first parent of the merge commit this run checks out
+  # (`github.sha`): the tip of the branch beneath a stacked pull request, or
+  # of main, as it was when GitHub made the merge the shards build. It is not
+  # `github.event.pull_request.base.sha`, which can name an older tip when
+  # the base branch moved just before the run was queued; a comparison with
+  # that commit reports what landed on the base as this pull request's
+  # change. ci.yml's jobs otherwise
   # build `github.sha` alone, to keep a cache from holding a build of a
   # commit nobody reviewed; the base is always a commit of this repository,
   # and the one cache this job saves holds only the tool, under a key made
@@ -2569,8 +2751,8 @@ jobs:
   # lines left out), as information that fails nothing.
   base-tool:
     name: Build the Base SafeDITool on Linux
-    needs: changes
-    if: ${{ !cancelled() && github.event_name == 'pull_request' && needs.changes.outputs.source != 'false' }}
+    needs: [changes, stack-position]
+    if: ${{ !cancelled() && needs.stack-position.outputs.stacked-under == '' && github.event_name == 'pull_request' && needs.changes.outputs.source != 'false' }}
     runs-on: ubuntu-latest
     container: swift:6.2
     # A cold build is the job's long pole: 8.6 minutes locally, and 10 to 11
@@ -2580,21 +2762,31 @@ jobs:
     timeout-minutes: 35
     permissions:
       contents: read
+    outputs:
+      base: ${{ steps.parents.outputs.base }}
     defaults:
       run:
         shell: bash
     env:
-      BASE: ${{ github.event.pull_request.base.sha }}
-      HEAD: ${{ github.event.pull_request.head.sha }}
+      EVENT_BASE: ${{ github.event.pull_request.base.sha }}
     steps:
-      # This commit, for its scripts and its retry action; the base and the
-      # head beside it, for their trees.
+      # This commit, for its scripts and its retry action; its two parents,
+      # the base and the head, beside it for their trees.
       - name: Checkout Repo
         uses: actions/checkout@v7
       - name: Fetch the Base and the Head
+        id: parents
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          git fetch --no-tags --depth=1 origin "$BASE" "$HEAD"
+          git fetch --no-tags --depth=2 origin "$GITHUB_SHA"
+          base=$(git rev-parse --verify "$GITHUB_SHA^1")
+          head=$(git rev-parse --verify "$GITHUB_SHA^2")
+          if [ "$base" != "$EVENT_BASE" ]; then
+            echo "::notice::The merge commit $GITHUB_SHA was made from the base $base, not from $EVENT_BASE, which the event names: the base branch moved before this run was queued. The base tool is built from $base."
+          fi
+          echo "BASE=$base" >> "$GITHUB_ENV"
+          echo "HEAD=$head" >> "$GITHUB_ENV"
+          echo "base=$base" >> "$GITHUB_OUTPUT"
       - name: Count Generator Lines
         run: |
           base_lines=$(.github/scripts/count-generator-lines.sh "$BASE")
@@ -2635,7 +2827,7 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: .generate-time/cached
-          key: generate-time-tool-${{ runner.os }}-swift-6.2-${{ github.event.pull_request.base.sha }}
+          key: generate-time-tool-${{ runner.os }}-swift-6.2-${{ steps.parents.outputs.base }}
       - name: Check Out the Base
         if: ${{ steps.cache.outputs.cache-hit != 'true' && steps.main-cache.outputs.cache-hit != 'true' }}
         run: git worktree add --detach base "$BASE"
@@ -2686,8 +2878,10 @@ jobs:
   # times: SafeDICore's sources, the package manifest or the check itself.
   function-compile-time:
     name: Check Function Compile Time on Linux
-    needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
+    # On main it skips when a pull request's run passed it on the same tree ("Find Builds a Pull Request Passed
+    # on This Tree").
+    needs: [changes, passed-on-this-tree, stack-position]
+    if: ${{ !cancelled() && needs.stack-position.outputs.stacked-under == '' && !(github.event_name == 'push' && needs.passed-on-this-tree.outputs.function-compile-time == 'true') && needs.changes.outputs.source != 'false' }}
     runs-on: ubuntu-latest
     container: swift:6.2
     permissions:
@@ -2771,8 +2965,10 @@ jobs:
     # The base tool, which only a pull request builds, is waited for but not
     # required: a shard runs whatever its build's result, and compares with
     # the base only when it built.
-    needs: [changes, linux-build, base-tool]
-    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' && needs.linux-build.result == 'success' }}
+    # On main it skips when a pull request's run passed every shard and the corpus check on the same tree
+    # ("Find Builds a Pull Request Passed on This Tree").
+    needs: [changes, linux-build, base-tool, passed-on-this-tree, stack-position]
+    if: ${{ !cancelled() && needs.stack-position.outputs.stacked-under == '' && !(github.event_name == 'push' && needs.passed-on-this-tree.outputs.graph-fuzzer == 'true') && needs.changes.outputs.source != 'false' && needs.linux-build.result == 'success' }}
     runs-on: ubuntu-latest
     container: swift:6.2
     # Above the fuzzer's and the base comparison's limits together by more
@@ -2986,8 +3182,9 @@ jobs:
   # This is the one check to require for the fuzzer.
   graph-fuzzer-corpus:
     name: Check Graph Fuzzer Corpus on Linux
-    needs: [changes, graph-fuzzer, base-tool]
-    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
+    # Skips on main when the shards do, since it would have no report to read.
+    needs: [changes, graph-fuzzer, base-tool, passed-on-this-tree, stack-position]
+    if: ${{ !cancelled() && needs.stack-position.outputs.stacked-under == '' && !(github.event_name == 'push' && needs.passed-on-this-tree.outputs.graph-fuzzer == 'true') && needs.changes.outputs.source != 'false' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -3018,11 +3215,23 @@ jobs:
         if: ${{ !cancelled() }}
         env:
           BASE_TOOL_RESULT: ${{ needs.base-tool.result }}
+          COMPARED_BASE: ${{ needs.base-tool.outputs.base }}
           GH_TOKEN: ${{ github.token }}
           PULL_REQUEST: ${{ github.event.pull_request.number }}
           EVENT_PULL_REQUEST_BODY: ${{ github.event.pull_request.body }}
         run: |
           python3 -I .github/scripts/combine-base-comparison-reports.py --self-test
+          # A comparison with any commit but the one this run's merge was
+          # made from says nothing about the pull request, whichever way it
+          # comes out, so it fails here and names both.
+          if [ "$BASE_TOOL_RESULT" = "success" ]; then
+            git fetch --no-tags --depth=2 origin "$GITHUB_SHA"
+            merge_base=$(git rev-parse --verify "$GITHUB_SHA^1")
+            if [ "$COMPARED_BASE" != "$merge_base" ]; then
+              echo "::error::The base tool was built from '$COMPARED_BASE', but the merge commit $GITHUB_SHA this run tests was made from the base $merge_base, so the comparison says nothing about this pull request."
+              exit 1
+            fi
+          fi
           PULL_REQUEST_BODY="$EVENT_PULL_REQUEST_BODY"
           if [ -n "$PULL_REQUEST" ]; then
             if live_body=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PULL_REQUEST" --jq '.body // ""'); then
@@ -3032,7 +3241,13 @@ jobs:
             fi
           fi
           export PULL_REQUEST_BODY
-          python3 -I .github/scripts/combine-base-comparison-reports.py reports >> "$GITHUB_STEP_SUMMARY"
+          # The summary goes to the log too, for a session that can read a
+          # job's log but not its summary page.
+          result=0
+          python3 -I .github/scripts/combine-base-comparison-reports.py reports > base-comparison-summary.md || result=$?
+          cat base-comparison-summary.md
+          cat base-comparison-summary.md >> "$GITHUB_STEP_SUMMARY"
+          exit "$result"
       # Prints what the shards' reports say the pins should be, for a session
       # that cannot download this run's artifacts: the analysis's report, then
       # its pins.json as lines that
@@ -3062,8 +3277,8 @@ jobs:
   # Fuzzer Corpus on Linux" does, so it runs on Linux with no container.
   line-coverage:
     name: Check Line Coverage on Linux
-    needs: [changes, spm-plan, spm, linux]
-    if: ${{ !cancelled() && (needs.changes.outputs.source != 'false' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
+    needs: [changes, spm-plan, spm, linux, stack-position]
+    if: ${{ !cancelled() && needs.stack-position.outputs.stacked-under == '' && (needs.changes.outputs.source != 'false' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -3101,6 +3316,12 @@ jobs:
       # tests did not run to their end.
       - name: Check the Value Comparison Outputs Script Against Its Fixtures
         run: .github/scripts/keep-value-outputs-used-in-run.sh --self-test "$RUNNER_TEMP/keep-value-outputs-self-test"
+      # .github/scripts/join-value-outputs.sh joins the outputs the parts or
+      # groups of a split test job used, so it proves on fixtures that an
+      # output two groups hold is kept once and that one they disagree on is
+      # not kept.
+      - name: Check the Value Comparison Outputs Join Against Its Fixtures
+        run: .github/scripts/join-value-outputs.sh --self-test "$RUNNER_TEMP/join-value-outputs-self-test"
       # A test job that failed, was cancelled or could not export uploads no
       # report, and "Find Lines No Test Executes" names the report that is
       # missing, so a download that finds nothing is not its step's failure.
@@ -3168,8 +3389,9 @@ jobs:
   # .claude/rules/fuzzer-corpora.md.
   graph-fuzzer-coverage:
     name: Report Changed Lines No Fuzzer Graph Executed on Linux
-    needs: [changes, linux, graph-fuzzer]
-    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' && needs.linux.result == 'success' }}
+    # Skips on main when the shards do, since it would have no report to read.
+    needs: [changes, linux, graph-fuzzer, passed-on-this-tree, stack-position]
+    if: ${{ !cancelled() && needs.stack-position.outputs.stacked-under == '' && !(github.event_name == 'push' && needs.passed-on-this-tree.outputs.graph-fuzzer == 'true') && needs.changes.outputs.source != 'false' && needs.linux.result == 'success' }}
     runs-on: ubuntu-latest
     container: swift:6.2
     timeout-minutes: 15
@@ -3244,8 +3466,8 @@ jobs:
   # groups under the one name the job had.
   linux-latest-swift-group:
     name: Build and Test on Latest Swift (${{ matrix.group }})
-    needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
+    needs: [changes, stack-position]
+    if: ${{ !cancelled() && needs.stack-position.outputs.stacked-under == '' && needs.changes.outputs.source != 'false' }}
     runs-on: ubuntu-latest
     # `swift:latest` floats to the newest Swift release so this job
     # catches toolchain changes (e.g. SwiftPM's `swiftbuild` build
@@ -3409,8 +3631,8 @@ jobs:
   # skipped, it would satisfy a required check.
   linux-latest-swift:
     name: Build and Test on Latest Swift
-    needs: [changes, linux-latest-swift-group]
-    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
+    needs: [changes, linux-latest-swift-group, stack-position]
+    if: ${{ !cancelled() && needs.stack-position.outputs.stacked-under == '' && needs.changes.outputs.source != 'false' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     # To check out the download action.
@@ -3451,6 +3673,80 @@ jobs:
           echo "The $groups groups ran $sum tests; the build lists $every_test."
           test "$groups" -eq "$EXPECTED_GROUPS"
           test "$sum" -eq "$every_test"
+  # Uploads, for each Linux check a push to main may skip, the record that it passed on this tree in this pull
+  # request's run ("Find Builds a Pull Request Passed on This Tree" says what a record proves and which jobs
+  # read it). A check gets a record only when its job, and for a matrix every one of its jobs, ended in success:
+  # a failed, cancelled or skipped check leaves none, and main then runs it. The job first checks that the
+  # commit it checked out has the tree the records are named for. Nothing here fails a pull request: a record
+  # that is not uploaded only means main runs the check. No container, since it only uploads.
+  record-passed-on-this-tree:
+    name: Record the Linux Checks That Passed on This Tree
+    needs: [changes, passed-on-this-tree, graph-fuzzer, graph-fuzzer-corpus, linux-repeat-pass, linux-repeat, release-acceptance, linux-release-build, function-compile-time, stack-position]
+    if: ${{ !cancelled() && needs.stack-position.outputs.stacked-under == '' && github.event_name == 'pull_request' && needs.passed-on-this-tree.outputs.tree != '' && needs.changes.outputs.source != 'false' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v7
+      - name: Check That This Commit Has the Recorded Tree
+        id: tree
+        continue-on-error: true
+        env:
+          TREE: ${{ needs.passed-on-this-tree.outputs.tree }}
+        run: |
+          test "$(git rev-parse 'HEAD^{tree}')" = "$TREE"
+          printf '%s\n' "$TREE" > "$RUNNER_TEMP/passed-tree.txt"
+      - name: Upload the Record That the Fuzzer's Corpora Passed
+        if: ${{ steps.tree.outcome == 'success' && needs.graph-fuzzer.result == 'success' && needs.graph-fuzzer-corpus.result == 'success' }}
+        continue-on-error: true
+        timeout-minutes: 1
+        uses: actions/upload-artifact@v7
+        with:
+          name: passed-graph-fuzzer-${{ needs.passed-on-this-tree.outputs.tree }}
+          path: ${{ runner.temp }}/passed-tree.txt
+          retention-days: 3
+          overwrite: true
+      - name: Upload the Record That the Repeat Passes Passed
+        if: ${{ steps.tree.outcome == 'success' && needs.linux-repeat-pass.result == 'success' && needs.linux-repeat.result == 'success' }}
+        continue-on-error: true
+        timeout-minutes: 1
+        uses: actions/upload-artifact@v7
+        with:
+          name: passed-linux-repeat-${{ needs.passed-on-this-tree.outputs.tree }}
+          path: ${{ runner.temp }}/passed-tree.txt
+          retention-days: 3
+          overwrite: true
+      - name: Upload the Record That Release Acceptance Passed
+        if: ${{ steps.tree.outcome == 'success' && needs.release-acceptance.result == 'success' }}
+        continue-on-error: true
+        timeout-minutes: 1
+        uses: actions/upload-artifact@v7
+        with:
+          name: passed-release-acceptance-${{ needs.passed-on-this-tree.outputs.tree }}
+          path: ${{ runner.temp }}/passed-tree.txt
+          retention-days: 3
+          overwrite: true
+      - name: Upload the Record That the Release SafeDITool Built
+        if: ${{ steps.tree.outcome == 'success' && needs.linux-release-build.result == 'success' }}
+        continue-on-error: true
+        timeout-minutes: 1
+        uses: actions/upload-artifact@v7
+        with:
+          name: passed-linux-release-build-${{ needs.passed-on-this-tree.outputs.tree }}
+          path: ${{ runner.temp }}/passed-tree.txt
+          retention-days: 3
+          overwrite: true
+      - name: Upload the Record That the Function Compile Time Check Passed
+        if: ${{ steps.tree.outcome == 'success' && needs.function-compile-time.result == 'success' }}
+        continue-on-error: true
+        timeout-minutes: 1
+        uses: actions/upload-artifact@v7
+        with:
+          name: passed-function-compile-time-${{ needs.passed-on-this-tree.outputs.tree }}
+          path: ${{ runner.temp }}/passed-tree.txt
+          retention-days: 3
+          overwrite: true
 
   readme-validation:
     name: Check Markdown links

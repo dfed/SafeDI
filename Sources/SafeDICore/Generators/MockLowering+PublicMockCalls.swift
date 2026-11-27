@@ -511,8 +511,8 @@ extension MockLowering.Walk {
 		var bodyLines = [String]()
 		// The members a `@Sendable` family's places inside the fills read, which the call's builder function calls at its top.
 		bodyLines.append(contentsOf: generator.memberCallsInsideBuilderFunction.map { $0.line(bindingNamesPassedByName: enclosingBindingNamesPassedByName, lazilyInstantiatedBindingNames: [:]) })
-		for line in fillCode.split(separator: "\n", omittingEmptySubsequences: false) where !fillCode.isEmpty {
-			bodyLines.append(String(line))
+		if !fillCode.isEmpty {
+			bodyLines.append(contentsOf: GeneratedCodeText.lines(of: fillCode))
 		}
 		bodyLines.append(publicMockCall.guardLine(for: instantiable.concreteInstantiable))
 		// Each receive of the call's leaf the mock names apart is bound again under its label (`emitReceiverBindings`), a
@@ -709,7 +709,7 @@ extension MockLowering {
 			let wrapperLines = MockLowering.wrapperBindingLines(of: typeDescription, named: bindingName, handing: functionName, forwardedProperties: forwardedProperties, cycleParameterArguments: cycleParameterArguments, indent: indent)
 			let construction = String(MockLowering.joinedLines(wrapperLines).dropFirst(bindingPrefix.count))
 			let value = builder.inlinePlaceValue(construction: construction, overrideExpression: overrideRead, wrappingBuilderIn: unwrappedType.spelledForConstruction)
-			return "\(bindingPrefix)\(value)".split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+			return GeneratedCodeText.lines(of: "\(bindingPrefix)\(value)")
 		}
 	}
 }

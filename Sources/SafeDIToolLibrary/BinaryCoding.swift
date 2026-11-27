@@ -18,6 +18,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+import SafeDICore
+
 /// A value that SafeDITool writes in its compact binary format and reads back.
 ///
 /// The format is written and read by hand rather than through `Codable`: most of the time `Codable` takes to
@@ -235,6 +237,73 @@ struct BinaryWriter {
 		writesPositionsAsAbsent = true
 		write(&self)
 		writesPositionsAsAbsent = wasWritingPositionsAsAbsent
+	}
+
+	/// The positions of the module's own declarations, collected inside ``collectingPositions(_:)`` to rank them before
+	/// they are written to a file that stores them elsewhere.
+	private(set) var collectedPositions: CollectedPositions?
+
+	/// Where ``positionsStoredElsewhere`` is set, how positions are written: each location with its file and its rank,
+	/// and its line and column in the stream of the positions file, but an aliased dependency's location with its line
+	/// and column too, since the code generated above reads it; each range in that stream alone.
+	var positionsStoredElsewhere: PositionsStoredElsewhere?
+
+	/// Runs `write`, which writes nothing anyone reads, and returns the positions it wrote.
+	static func collectingPositions(_ write: (inout BinaryWriter) -> Void) -> CollectedPositions {
+		var writer = BinaryWriter()
+		writer.collectedPositions = CollectedPositions()
+		write(&writer)
+		return writer.collectedPositions ?? CollectedPositions()
+	}
+
+	/// Notes that `location` is where an aliased dependency is declared, which a file that stores positions elsewhere
+	/// keeps with its line and column, since the code generated above reads its line.
+	mutating func noteAliasDeclaration(at location: Dependency.DeclarationLocation?) {
+		guard let location, collectedPositions != nil else { return }
+		collectedPositions?.aliasDeclarationLocations.insert(location)
+	}
+
+	/// Writes `location` as it is, or, where positions are stored elsewhere, ranked.
+	mutating func writeLocation(_ location: Dependency.DeclarationLocation) {
+		collectedPositions?.locations.insert(location)
+		guard let ranked = positionsStoredElsewhere?.ranked(location) else {
+			return writeLocationFields(of: location)
+		}
+		if ranked.placement == .storedElsewhere, case let .here(line, column) = location.placement {
+			positionsStoredElsewhere?.append(line: line, column: column)
+		}
+		writeLocationFields(of: ranked)
+	}
+
+	/// Writes `range` as it is, or, where positions are stored elsewhere, as stored there.
+	mutating func writeRange(_ range: Dependency.SourceRange) {
+		guard positionsStoredElsewhere != nil, case let .here(startLine, startColumn, endLine, endColumn) = range.placement else {
+			return writeRangeFields(of: range)
+		}
+		positionsStoredElsewhere?.append(startLine: startLine, startColumn: startColumn, endLine: endLine, endColumn: endColumn)
+		writeRangeFields(of: Dependency.SourceRange(placement: .storedElsewhere))
+	}
+
+	/// The file, then the line or the order (`Dependency.DeclarationLocation.binaryLineOrOrder`), then, where the location
+	/// holds them, the column, after the line where the location is ranked: so a location that is not ranked is written
+	/// as its file, line and column, as it was before locations were ranked.
+	private mutating func writeLocationFields(of location: Dependency.DeclarationLocation) {
+		write(location.filePath)
+		write(location.binaryLineOrOrder)
+		guard case let .here(line, column) = location.placement else { return }
+		if location.order != 0 {
+			write(line)
+		}
+		write(column)
+	}
+
+	/// The start line, or `-1` where the range is stored elsewhere, and then the start column, end line and end column.
+	private mutating func writeRangeFields(of range: Dependency.SourceRange) {
+		write(range.binaryStartLine)
+		guard case .here = range.placement else { return }
+		write(range.binaryStartColumn)
+		write(range.binaryEndLine)
+		write(range.binaryEndColumn)
 	}
 
 	mutating func writeTag(_ tag: some BinaryTag) {
@@ -983,6 +1052,51 @@ struct BinaryReader {
 			throw .countExceedsRemainingBytes(count: count, offset: countOffset)
 		}
 		return Int(count)
+	}
+
+	/// The lines and columns of the positions file of the file being read, with which a location or range the file
+	/// stores elsewhere is read; `nil` reads one as stored elsewhere.
+	var reattachedPositions: ReattachedPositions?
+	/// Whether the reader read a location or range as stored elsewhere, which it does only without ``reattachedPositions``.
+	private(set) var readsPositionStoredElsewhere = false
+	/// The files of the locations the reader read as stored elsewhere, collected only where it is not `nil`.
+	var storedElsewhereFilePaths: Set<String>?
+
+	/// A location as `BinaryWriter.writeLocation(_:)` writes it.
+	mutating func readLocation() throws(BinaryDecodingError) -> Dependency.DeclarationLocation {
+		let filePath: String = try read()
+		let lineOrOrder: Int = try read()
+		guard lineOrOrder < 0 else {
+			return try Dependency.DeclarationLocation(filePath: filePath, line: lineOrOrder, column: read())
+		}
+		// Wrapping: a crafted body may hold any value here, and an order nothing pairs with only fails to compare.
+		let order = (1 &- lineOrOrder) / 2
+		guard lineOrOrder % 2 != 0 else {
+			return try Dependency.DeclarationLocation(filePath: filePath, order: order, placement: .here(line: read(), column: read()))
+		}
+		guard var positions = reattachedPositions else {
+			readsPositionStoredElsewhere = true
+			storedElsewhereFilePaths?.insert(filePath)
+			return Dependency.DeclarationLocation(filePath: filePath, order: order, placement: .storedElsewhere)
+		}
+		let placement = positions.nextLocation()
+		reattachedPositions = positions
+		return Dependency.DeclarationLocation(filePath: filePath, order: order, placement: placement)
+	}
+
+	/// A range as `BinaryWriter.writeRange(_:)` writes it.
+	mutating func readRange() throws(BinaryDecodingError) -> Dependency.SourceRange {
+		let startLine: Int = try read()
+		guard startLine < 0 else {
+			return try Dependency.SourceRange(startLine: startLine, startColumn: read(), endLine: read(), endColumn: read())
+		}
+		guard var positions = reattachedPositions else {
+			readsPositionStoredElsewhere = true
+			return Dependency.SourceRange(placement: .storedElsewhere)
+		}
+		let range = positions.nextRange()
+		reattachedPositions = positions
+		return range
 	}
 
 	mutating func readString() throws(BinaryDecodingError) -> String {

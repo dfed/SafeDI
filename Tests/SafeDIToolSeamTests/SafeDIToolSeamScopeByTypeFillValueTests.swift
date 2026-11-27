@@ -1094,18 +1094,18 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_token token: Token?) {
-			        func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.__safeDI_UserServiceCarrier_Desk<any UserService> {
+			        @inline(never) func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.__safeDI_UserServiceCarrier_Desk<any UserService> {
 			            .init(model: { values_token in __safeDI_userServiceBuilder_Office_Model_Scope(token: values_token) })
 			        }
-			        func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>?) -> Office.__safeDI_UserServiceCarrier_Model<any UserService> {
+			        @inline(never) func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>?) -> Office.__safeDI_UserServiceCarrier_Model<any UserService> {
 			            .init(userService: {
 			                let userService: any UserService = DefaultUserService(token: token?.instance)
 			                return userService
 			            })
 			        }
-			        func __safeDI_office() -> Office {
+			        @inline(never) func __safeDI_office() -> Office {
 			            _ = Office.__safeDI_Office_B2DE8228FC9538C0.self // \(Self.moduleInfoComment)
-			            func __safeDI_userServiceBuilder_Office() -> Office.__safeDI_UserServiceCarrier<any UserService> {
+			            @inline(never) func __safeDI_userServiceBuilder_Office() -> Office.__safeDI_UserServiceCarrier<any UserService> {
 			                .init(desk: __safeDI_userServiceBuilder_Office_Desk_Scope(), model: { values_desk in __safeDI_userServiceBuilder_Office_Model_Scope(token: token.map { value in LazilyInstantiated<Token>({ value }) }) })
 			            }
 			            return Office(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Office())

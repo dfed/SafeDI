@@ -165,11 +165,11 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		        let navigator = Navigator()
 		        let logger = Logger()
 		        let __safeDI_apiBuilder_detailBuilder = __safeDI_apiBuilder.detailBuilder(navigator, logger)
-		        func __safeDI_leafBuilder(__safeDI_apiBuilder_leafBuilder: __safeDI_ApiCarrier_Leaf<any Api>) -> Leaf {
+		        @inline(never) func __safeDI_leafBuilder(__safeDI_apiBuilder_leafBuilder: __safeDI_ApiCarrier_Leaf<any Api>) -> Leaf {
 		            let api: any Api = __safeDI_apiBuilder_leafBuilder.api()
 		            return Leaf(api: api)
 		        }
-		        func __safeDI_detailBuilder() -> Detail {
+		        @inline(never) func __safeDI_detailBuilder() -> Detail {
 		            let __safeDI_apiBuilder_leafBuilder = __safeDI_apiBuilder_detailBuilder.leafBuilder
 		            let leafBuilder = Instantiator<Leaf> {
 		                __safeDI_leafBuilder(__safeDI_apiBuilder_leafBuilder: __safeDI_apiBuilder_leafBuilder)
@@ -281,11 +281,11 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// From code you write, call the initializer above instead.
 		    public convenience init(__safeDI_apiSendableBuilder: __safeDI_ApiSendableCarrier<any Api>) {
-		        @Sendable nonisolated func __safeDI_detail(__safeDI_apiSendableBuilder_detail: __safeDI_ApiCarrier_Detail<any Api>) -> Detail {
+		        @inline(never) @Sendable nonisolated func __safeDI_detail(__safeDI_apiSendableBuilder_detail: __safeDI_ApiCarrier_Detail<any Api>) -> Detail {
 		            let api: any Api = __safeDI_apiSendableBuilder_detail.api()
 		            return Detail(api: api)
 		        }
-		        @Sendable nonisolated func __safeDI_workerBuilder() -> Worker {
+		        @inline(never) @Sendable nonisolated func __safeDI_workerBuilder() -> Worker {
 		            let __safeDI_apiSendableBuilder_workerBuilder = __safeDI_apiSendableBuilder.workerBuilder()
 		            let logger = Logger()
 		            let __safeDI_apiSendableBuilder_detail = __safeDI_apiSendableBuilder_workerBuilder.detail(logger)
@@ -398,17 +398,17 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// From code you write, call the initializer above instead.
 		    public convenience init(__safeDI_apiSendableBuilder: __safeDI_ApiSendableCarrier<any Api>) {
-		        @Sendable nonisolated func __safeDI_innerBuilder(__safeDI_apiSendableBuilder_outerBuilder_Sendable: __safeDI_ApiSendableCarrier_Outer<any Api>) -> Inner {
+		        @inline(never) @Sendable nonisolated func __safeDI_innerBuilder(__safeDI_apiSendableBuilder_outerBuilder_Sendable: __safeDI_ApiSendableCarrier_Outer<any Api>) -> Inner {
 		            let __safeDI_apiSendableBuilder_innerBuilder = __safeDI_apiSendableBuilder_outerBuilder_Sendable.innerBuilder()
 		            let __safeDI_apiSendableBuilder_detail = __safeDI_apiSendableBuilder_innerBuilder.detail
 		            let detail: Detail = __safeDI_detail(__safeDI_apiSendableBuilder_detail: __safeDI_apiSendableBuilder_detail)
 		            return Inner(detail: detail)
 		        }
-		        @Sendable nonisolated func __safeDI_detail(__safeDI_apiSendableBuilder_detail: __safeDI_ApiCarrier_Detail<any Api>) -> Detail {
+		        @inline(never) @Sendable nonisolated func __safeDI_detail(__safeDI_apiSendableBuilder_detail: __safeDI_ApiCarrier_Detail<any Api>) -> Detail {
 		            let api: any Api = __safeDI_apiSendableBuilder_detail.api()
 		            return Detail(api: api)
 		        }
-		        @Sendable nonisolated func __safeDI_outerBuilder() -> Outer {
+		        @inline(never) @Sendable nonisolated func __safeDI_outerBuilder() -> Outer {
 		            let __safeDI_apiSendableBuilder_outerBuilder_Sendable = __safeDI_apiSendableBuilder.outerBuilder_Sendable
 		            let innerBuilder = SendableInstantiator<Inner> {
 		                __safeDI_innerBuilder(__safeDI_apiSendableBuilder_outerBuilder_Sendable: __safeDI_apiSendableBuilder_outerBuilder_Sendable)
@@ -485,7 +485,7 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_serviceBuilder: __safeDI_ServiceCarrier<any Service>) {
 		        let navigator = Navigator()
-		        func __safeDI_innermost() -> Innermost {
+		        @inline(never) func __safeDI_innermost() -> Innermost {
 		            _ = Innermost.__safeDI_Innermost_E286A5310BB7EA4E.self
 		            return Innermost(__safeDI_serviceBuilder: __safeDI_serviceBuilder.innermost)
 		        }
@@ -530,7 +530,7 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		    public convenience init(__safeDI_serviceBuilder: __safeDI_ServiceCarrier<any Service>) {
 		        let logger = Logger()
 		        let __safeDI_serviceBuilder_detailBuilder = __safeDI_serviceBuilder.detailBuilder(logger)
-		        func __safeDI_detailBuilder() -> Detail {
+		        @inline(never) func __safeDI_detailBuilder() -> Detail {
 		            let service: any Service = __safeDI_serviceBuilder_detailBuilder.service()
 		            return Detail(service: service)
 		        }
@@ -622,7 +622,7 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_mark: @autoclosure @escaping () -> Mark?, __safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 		        let mark = LazilyInstantiated<Mark?>(__safeDI_mark)
-		        func __safeDI_hub() -> Hub {
+		        @inline(never) func __safeDI_hub() -> Hub {
 		            _ = Hub.__safeDI_Hub_FA5369582812EEA1.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Hub(__safeDI_mark: mark.instance, __safeDI_apiBuilder: __safeDI_apiBuilder.hub)
 		        }
@@ -685,9 +685,9 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		    public init(__safeDI_mark __safeDI_mark_: @autoclosure @escaping () -> Mark?, __safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 		        let mark = LazilyInstantiated<Mark?>(__safeDI_mark_)
 		        let __safeDI_apiBuilder_tBuilder = __safeDI_apiBuilder.tBuilder(mark)
-		        func __safeDI_tBuilder(mark: Mark?) -> T {
+		        @inline(never) func __safeDI_tBuilder(mark: Mark?) -> T {
 		            let reader = MarkReader(mark: mark)
-		            func __safeDI_cBuilder() -> C {
+		            @inline(never) func __safeDI_cBuilder() -> C {
 		                let mark = Mark()
 		                let tBuilder = Instantiator<T> {
 		                    __safeDI_tBuilder(mark: mark)
@@ -702,10 +702,10 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		            __safeDI_tBuilder(mark: mark.instance)
 		        }
 		        let __safeDI_apiBuilder_cBuilder = __safeDI_apiBuilder.cBuilder(mark, tBuilder)
-		        func __safeDI_cBuilder() -> C {
+		        @inline(never) func __safeDI_cBuilder() -> C {
 		            let mark = Mark()
 		            let __safeDI_apiBuilder_tBuilder = __safeDI_apiBuilder_cBuilder.tBuilder(mark)
-		            func __safeDI_tBuilder() -> T {
+		            @inline(never) func __safeDI_tBuilder() -> T {
 		                let reader = MarkReader(mark: mark)
 		                let cBuilder = Instantiator<C>(__safeDI_cBuilder)
 		                let api: any Api = __safeDI_apiBuilder_tBuilder.api(mark, reader, cBuilder)
@@ -840,28 +840,28 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		    public init(__safeDI_gadgetBuilder: SafeDIScope_Gadget.__safeDI_Builder<any Gadget>) {
 		        let tag = Tag()
 		        let __safeDI_gadgetBuilder_inner_serviceBuilder = __safeDI_gadgetBuilder.inner_serviceBuilder(SafeDIScope_Gadget.inner_serviceBuilder_Values(tag: tag))
-		        func __safeDI_inner() -> Inner {
+		        @inline(never) func __safeDI_inner() -> Inner {
 		            _ = Inner.__safeDI_Inner_C5CF4A1EC903198D.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_serviceBuilder_Inner_service(_ scope_screenBuilder: Instantiator<Screen>, __safeDI_inner_serviceBuilder: SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>) -> any Service {
-		                func __safeDI_service() -> DefaultService {
+		            @inline(never) func __safeDI_serviceBuilder_Inner_service(_ scope_screenBuilder: Instantiator<Screen>, __safeDI_inner_serviceBuilder: SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>) -> any Service {
+		                @inline(never) func __safeDI_service() -> DefaultService {
 		                    let gadget: any Gadget = __safeDI_inner_serviceBuilder.gadget(SafeDIScope_Gadget.DefaultService_Scope.gadget_Values())
 		                    return DefaultService(gadget: gadget)
 		                }
 		                let service: any Service = __safeDI_service()
 		                return service
 		            }
-		            func __safeDI_serviceBuilder_Inner_Screen_Scope_service(_ scope_id: Int, __safeDI_inner_serviceBuilder: SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>) -> any Service {
-		                func __safeDI_service() -> DefaultService {
+		            @inline(never) func __safeDI_serviceBuilder_Inner_Screen_Scope_service(_ scope_id: Int, __safeDI_inner_serviceBuilder: SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>) -> any Service {
+		                @inline(never) func __safeDI_service() -> DefaultService {
 		                    let gadget: any Gadget = __safeDI_inner_serviceBuilder.gadget(SafeDIScope_Gadget.DefaultService_Scope.gadget_Values())
 		                    return DefaultService(gadget: gadget)
 		                }
 		                let service: any Service = __safeDI_service()
 		                return service
 		            }
-		            func __safeDI_serviceBuilder_Inner(up: Inner.__safeDI_ServiceCarrier<SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>>) -> Inner.__safeDI_ServiceCarrier<any Service> {
+		            @inline(never) func __safeDI_serviceBuilder_Inner(up: Inner.__safeDI_ServiceCarrier<SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>>) -> Inner.__safeDI_ServiceCarrier<any Service> {
 		                .init(screenBuilder: __safeDI_serviceBuilder_Inner_Screen_Scope(up: up.screenBuilder), service: { scope_screenBuilder in __safeDI_serviceBuilder_Inner_service(scope_screenBuilder, __safeDI_inner_serviceBuilder: up.service(scope_screenBuilder)) })
 		            }
-		            func __safeDI_serviceBuilder_Inner_Screen_Scope(up: Inner.__safeDI_ServiceCarrier_Screen<SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>>) -> Inner.__safeDI_ServiceCarrier_Screen<any Service> {
+		            @inline(never) func __safeDI_serviceBuilder_Inner_Screen_Scope(up: Inner.__safeDI_ServiceCarrier_Screen<SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>>) -> Inner.__safeDI_ServiceCarrier_Screen<any Service> {
 		                .init(service: { scope_id in __safeDI_serviceBuilder_Inner_Screen_Scope_service(scope_id, __safeDI_inner_serviceBuilder: up.service(scope_id)) })
 		            }
 		            return Inner(__safeDI_serviceBuilder: __safeDI_serviceBuilder_Inner(up: __safeDI_gadgetBuilder_inner_serviceBuilder))
@@ -909,7 +909,7 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_serviceBuilder: __safeDI_ServiceCarrier<any Service>) {
 		        let __safeDI_serviceBuilder_screenBuilder = __safeDI_serviceBuilder.screenBuilder
-		        func __safeDI_screenBuilder(id: Int) -> Screen {
+		        @inline(never) func __safeDI_screenBuilder(id: Int) -> Screen {
 		            let service: any Service = __safeDI_serviceBuilder_screenBuilder.service(id)
 		            return Screen(id: id, service: service)
 		        }
@@ -1016,7 +1016,7 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		    /// From code you write, call the initializer above instead.
 		    public init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 		        let __safeDI_apiBuilder_builder = __safeDI_apiBuilder.builder
-		        func __safeDI_builder() -> Part {
+		        @inline(never) func __safeDI_builder() -> Part {
 		            let api: any Api = __safeDI_apiBuilder_builder.api()
 		            return Part(api: api)
 		        }
@@ -1185,12 +1185,12 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// From code you write, call the initializer above instead.
 		    public init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
-		        func __safeDI_logger() -> Logger {
+		        @inline(never) func __safeDI_logger() -> Logger {
 		            Logger()
 		        }
 		        let logger = LazilyInstantiated<Logger>(__safeDI_logger)
 		        let __safeDI_apiBuilder_detail = __safeDI_apiBuilder.detail(logger)
-		        func __safeDI_detail() -> Detail {
+		        @inline(never) func __safeDI_detail() -> Detail {
 		            let api: any Api = __safeDI_apiBuilder_detail.api()
 		            return Detail(api: api)
 		        }
@@ -1302,11 +1302,11 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		    /// From code you write, call the initializer above instead.
 		    public init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 		        let __safeDI_apiBuilder_aBuilder = __safeDI_apiBuilder.aBuilder
-		        func __safeDI_detailBuilder(__safeDI_apiBuilder_detailBuilder: __safeDI_ApiCarrier_Detail<any Api>) -> Detail {
+		        @inline(never) func __safeDI_detailBuilder(__safeDI_apiBuilder_detailBuilder: __safeDI_ApiCarrier_Detail<any Api>) -> Detail {
 		            let api: any Api = __safeDI_apiBuilder_detailBuilder.api()
 		            return Detail(api: api)
 		        }
-		        func __safeDI_aBuilder() -> A {
+		        @inline(never) func __safeDI_aBuilder() -> A {
 		            let logger = Logger()
 		            let tag = Tag()
 		            let __safeDI_apiBuilder_detailBuilder = __safeDI_apiBuilder_aBuilder.detailBuilder(logger, tag)
@@ -1317,7 +1317,7 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		        }
 		        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
 		        let __safeDI_apiBuilder_bBuilder = __safeDI_apiBuilder.bBuilder(aBuilder)
-		        func __safeDI_bBuilder() -> B {
+		        @inline(never) func __safeDI_bBuilder() -> B {
 		            let logger = Logger()
 		            let __safeDI_apiBuilder_detailBuilder = __safeDI_apiBuilder_bBuilder.detailBuilder(logger)
 		            let detailBuilder = Instantiator<Detail> {
@@ -1416,14 +1416,14 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		    /// From code you write, call the initializer above instead.
 		    public convenience init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 		        let __safeDI_apiBuilder_screenBuilder = __safeDI_apiBuilder.screenBuilder
-		        func __safeDI_next(id: Int, __safeDI_apiBuilder_next: __safeDI_ApiCarrier_Screen<any Api>) -> Screen {
+		        @inline(never) func __safeDI_next(id: Int, __safeDI_apiBuilder_next: __safeDI_ApiCarrier_Screen<any Api>) -> Screen {
 		            let api: any Api = __safeDI_apiBuilder_next.api(id)
 		            let next = Instantiator<Screen> {
 		                __safeDI_next(id: $0, __safeDI_apiBuilder_next: __safeDI_apiBuilder_next)
 		            }
 		            return Screen(id: id, api: api, next: next)
 		        }
-		        func __safeDI_screenBuilder(id: Int) -> Screen {
+		        @inline(never) func __safeDI_screenBuilder(id: Int) -> Screen {
 		            let api: any Api = __safeDI_apiBuilder_screenBuilder.api(id)
 		            let __safeDI_apiBuilder_next = __safeDI_apiBuilder_screenBuilder.next(id, api)
 		            let next = Instantiator<Screen> {
@@ -1565,7 +1565,7 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		    /// From code you write, call the initializer above instead.
 		    public init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 		        let __safeDI_apiBuilder_screenBuilder = __safeDI_apiBuilder.screenBuilder
-		        func __safeDI_stepBuilder(__safeDI_apiBuilder_stepBuilder: __safeDI_ApiCarrier_Step<any Api>) -> Step {
+		        @inline(never) func __safeDI_stepBuilder(__safeDI_apiBuilder_stepBuilder: __safeDI_ApiCarrier_Step<any Api>) -> Step {
 		            let mark = Mark()
 		            let api: any Api = __safeDI_apiBuilder_stepBuilder.api(mark)
 		            let __safeDI_apiBuilder_next = __safeDI_apiBuilder_stepBuilder.next(mark, api)
@@ -1574,7 +1574,7 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		            }
 		            return Step(api: api, mark: mark, next: next)
 		        }
-		        func __safeDI_next(__safeDI_apiBuilder_next: __safeDI_ApiCarrier_Screen<any Api>, __safeDI_apiBuilder_stepBuilder: __safeDI_ApiCarrier_Step<any Api>) -> Screen {
+		        @inline(never) func __safeDI_next(__safeDI_apiBuilder_next: __safeDI_ApiCarrier_Screen<any Api>, __safeDI_apiBuilder_stepBuilder: __safeDI_ApiCarrier_Step<any Api>) -> Screen {
 		            let cache = Cache()
 		            let monitor: any Api = __safeDI_apiBuilder_next.monitor(cache)
 		            let stepBuilder = Instantiator<Step> {
@@ -1582,7 +1582,7 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		            }
 		            return Screen(cache: cache, monitor: monitor, stepBuilder: stepBuilder)
 		        }
-		        func __safeDI_screenBuilder() -> Screen {
+		        @inline(never) func __safeDI_screenBuilder() -> Screen {
 		            let cache = Cache()
 		            let monitor: any Api = __safeDI_apiBuilder_screenBuilder.monitor(cache)
 		            let __safeDI_apiBuilder_stepBuilder = __safeDI_apiBuilder_screenBuilder.stepBuilder(cache, monitor)
@@ -1686,7 +1686,7 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// From code you write, call the initializer above instead.
 		    public init(__safeDI_holeServiceBuilder: __safeDI_HoleServiceCarrier<any HoleService>) {
-		        func __safeDI_holeSeamBuilder() -> HoleSeam {
+		        @inline(never) func __safeDI_holeSeamBuilder() -> HoleSeam {
 		            _ = HoleSeam.__safeDI_HoleSeam_5FD372FEB0CFA415.self
 		            return HoleSeam(__safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.holeSeamBuilder)
 		        }
@@ -1736,7 +1736,7 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		    public init(__safeDI_holeServiceBuilder: __safeDI_HoleServiceCarrier<any HoleService>) {
 		        let holeAnalytics = HoleAnalytics()
 		        let __safeDI_holeServiceBuilder_holeOwnerBuilder = __safeDI_holeServiceBuilder.holeOwnerBuilder(holeAnalytics)
-		        func __safeDI_holeOwnerBuilder() -> HoleOwner {
+		        @inline(never) func __safeDI_holeOwnerBuilder() -> HoleOwner {
 		            let holeService: any HoleService = __safeDI_holeServiceBuilder_holeOwnerBuilder.holeService()
 		            return HoleOwner(holeAnalytics: holeAnalytics, holeService: holeService)
 		        }
@@ -1819,7 +1819,7 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_serviceBuilder: __safeDI_ServiceCarrier<any Service>) {
-		        func __safeDI_innermost() -> Innermost {
+		        @inline(never) func __safeDI_innermost() -> Innermost {
 		            _ = Innermost.__safeDI_Innermost_13A9D22DA12214A5.self
 		            return Innermost(__safeDI_serviceBuilder: __safeDI_serviceBuilder.innermost)
 		        }
@@ -1877,11 +1877,11 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		    public convenience init(__safeDI_serviceBuilder: __safeDI_ServiceCarrier<any Service>) {
 		        let tag = Tag()
 		        let __safeDI_serviceBuilder_child = __safeDI_serviceBuilder.child(tag)
-		        func __safeDI_child_(__safeDI_serviceBuilder_child_: __safeDI_ServiceCarrier_Y<any Service>) -> Y {
+		        @inline(never) func __safeDI_child_(__safeDI_serviceBuilder_child_: __safeDI_ServiceCarrier_Y<any Service>) -> Y {
 		            let service: any Service = __safeDI_serviceBuilder_child_.service()
 		            return Y(service: service)
 		        }
-		        func __safeDI_child() -> X {
+		        @inline(never) func __safeDI_child() -> X {
 		            let logger = Logger()
 		            let __safeDI_serviceBuilder_child_ = __safeDI_serviceBuilder_child.child(logger)
 		            let child = Instantiator<Y> {
@@ -1958,7 +1958,7 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_serviceBuilder: __safeDI_ServiceCarrier<any Service>) {
-		        func __safeDI_innermost() -> Innermost {
+		        @inline(never) func __safeDI_innermost() -> Innermost {
 		            _ = Innermost.__safeDI_Innermost_06F72FABB8D87C2D.self
 		            return Innermost(__safeDI_serviceBuilder: __safeDI_serviceBuilder.innermost)
 		        }
@@ -2058,7 +2058,7 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_mark: @autoclosure @escaping () -> Mark?, __safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 		        let mark = LazilyInstantiated<Mark?>(__safeDI_mark)
-		        func __safeDI_hub() -> Hub {
+		        @inline(never) func __safeDI_hub() -> Hub {
 		            _ = Hub.__safeDI_Hub_CE9C38978D2626F3.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Hub(__safeDI_mark: mark.instance, __safeDI_apiBuilder: __safeDI_apiBuilder.hub)
 		        }
@@ -2121,9 +2121,9 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		    public init(__safeDI_mark __safeDI_mark_: @autoclosure @escaping () -> Mark?, __safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 		        let mark = LazilyInstantiated<Mark?>(__safeDI_mark_)
 		        let __safeDI_apiBuilder_tBuilder = __safeDI_apiBuilder.tBuilder(mark)
-		        func __safeDI_tBuilder(mark: Mark?) -> T {
+		        @inline(never) func __safeDI_tBuilder(mark: Mark?) -> T {
 		            let reader = MarkReader(mark: mark)
-		            func __safeDI_cBuilder() -> C {
+		            @inline(never) func __safeDI_cBuilder() -> C {
 		                let mark = Mark()
 		                let tBuilder = Instantiator<T> {
 		                    __safeDI_tBuilder(mark: mark)
@@ -2138,10 +2138,10 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		            __safeDI_tBuilder(mark: mark.instance)
 		        }
 		        let __safeDI_apiBuilder_cBuilder = __safeDI_apiBuilder.cBuilder(mark, tBuilder)
-		        func __safeDI_cBuilder() -> C {
+		        @inline(never) func __safeDI_cBuilder() -> C {
 		            let mark = Mark()
 		            let __safeDI_apiBuilder_tBuilder = __safeDI_apiBuilder_cBuilder.tBuilder(mark)
-		            func __safeDI_tBuilder() -> T {
+		            @inline(never) func __safeDI_tBuilder() -> T {
 		                let reader = MarkReader(mark: mark)
 		                let cBuilder = Instantiator<C>(__safeDI_cBuilder)
 		                let `my leaf`: any Api = __safeDI_apiBuilder_tBuilder.`my leaf`(mark, reader, cBuilder)
@@ -2231,7 +2231,7 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_mark: @autoclosure @escaping () -> Mark?, __safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 		        let mark = LazilyInstantiated<Mark?>(__safeDI_mark)
-		        func __safeDI_hub() -> `My Hub` {
+		        @inline(never) func __safeDI_hub() -> `My Hub` {
 		            _ = `My Hub`.`__safeDI_My Hub_FCDA760FC244EE71`.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return `My Hub`(__safeDI_mark: mark.instance, __safeDI_apiBuilder: __safeDI_apiBuilder.hub)
 		        }
@@ -2294,9 +2294,9 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		    public init(__safeDI_mark __safeDI_mark_: @autoclosure @escaping () -> Mark?, __safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 		        let mark = LazilyInstantiated<Mark?>(__safeDI_mark_)
 		        let __safeDI_apiBuilder_tBuilder = __safeDI_apiBuilder.tBuilder(mark)
-		        func __safeDI_tBuilder(mark: Mark?) -> T {
+		        @inline(never) func __safeDI_tBuilder(mark: Mark?) -> T {
 		            let reader = MarkReader(mark: mark)
-		            func __safeDI_cBuilder() -> C {
+		            @inline(never) func __safeDI_cBuilder() -> C {
 		                let mark = Mark()
 		                let tBuilder = Instantiator<T> {
 		                    __safeDI_tBuilder(mark: mark)
@@ -2311,10 +2311,10 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		            __safeDI_tBuilder(mark: mark.instance)
 		        }
 		        let __safeDI_apiBuilder_cBuilder = __safeDI_apiBuilder.cBuilder(mark, tBuilder)
-		        func __safeDI_cBuilder() -> C {
+		        @inline(never) func __safeDI_cBuilder() -> C {
 		            let mark = Mark()
 		            let __safeDI_apiBuilder_tBuilder = __safeDI_apiBuilder_cBuilder.tBuilder(mark)
-		            func __safeDI_tBuilder() -> T {
+		            @inline(never) func __safeDI_tBuilder() -> T {
 		                let reader = MarkReader(mark: mark)
 		                let cBuilder = Instantiator<C>(__safeDI_cBuilder)
 		                let api: any Api = __safeDI_apiBuilder_tBuilder.api(mark, reader, cBuilder)
