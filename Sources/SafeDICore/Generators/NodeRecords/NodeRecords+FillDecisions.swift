@@ -22,8 +22,8 @@
 /// `lanes/node-records-fills/step3-interface.md`): which are `@Sendable`, which fills a dispatcher's case holds in place of
 /// calling the fill's function, which dispatchers capture the caller's declarations, and which the root may declare once
 /// for every call. Each is keyed by fill or dispatcher key, never by a name. Made from the fills' facts and the call's
-/// dispatchers, as the tree decides them in `ScopeGenerator.statements(of:leadingMemberWhitespace:)`; only for a call no
-/// fill encloses, whose fills refer to no fill by name, as every call a root makes is.
+/// dispatchers, as the tree decides them in `ScopeGenerator.statements(of:leadingMemberWhitespace:)`, with what the calls
+/// inside its fills refer to of them by name (`FillReferences`); only for a call no fill encloses.
 struct FillEmissionDecisions: Sendable, Equatable {
 	/// The fills and dispatchers whose function is `@Sendable`.
 	let sendableKeys: Set<String>
@@ -60,15 +60,17 @@ struct FillEmissionDecisions: Sendable, Equatable {
 	}
 
 	/// The decisions of a call whose fills are `fills`, whose dispatchers are `dispatchers` (each with what it takes,
-	/// `DispatcherRecord.parameters`; its `isSendable` is not read), and whose root dispatcher hands its targets
-	/// `callerArguments` and `callerMemoArguments` of the caller's scope (`FilledCallFields`).
+	/// `DispatcherRecord.parameters`; its `isSendable` is not read), whose root dispatcher hands its targets
+	/// `callerArguments` and `callerMemoArguments` of the caller's scope (`FilledCallFields`), and of whose fills and
+	/// dispatchers the calls inside its fills refer to `references`.
 	static func of(
 		fills: [Fill],
 		dispatchers: [DispatcherRecord],
 		callerArguments: [Property: ArgumentSource],
 		callerMemoArguments: [Property: ArgumentSource],
+		references: FillReferences = FillReferences(),
 	) -> FillEmissionDecisions {
-		let sendableKeys = sendableKeys(fills: fills, dispatchers: dispatchers)
+		let sendableKeys = sendableKeys(fills: fills, dispatchers: dispatchers, references: references)
 		var parametersByKey = [String: [SeamSignature.Hole.Field]]()
 		for fill in fills {
 			parametersByKey[fill.key] = fill.parameters
@@ -76,7 +78,7 @@ struct FillEmissionDecisions: Sendable, Equatable {
 		for dispatcher in dispatchers {
 			parametersByKey[dispatcher.key] = parametersByKey[dispatcher.key] ?? dispatcher.parameters
 		}
-		let inlinedFills = inlinedFills(of: fills, dispatchers: dispatchers, sendableKeys: sendableKeys)
+		let inlinedFills = inlinedFills(of: fills, dispatchers: dispatchers, sendableKeys: sendableKeys, namedKeys: references.namedKeys)
 		// A fill held in place that reads a value neither its case nor its parameters hand it reads the caller's
 		// declaration, which the dispatcher holding it captures.
 		let inlinedFillKeysCapturingNothing = Set(inlinedFills.filter { fill in
@@ -103,28 +105,30 @@ struct FillEmissionDecisions: Sendable, Equatable {
 	}
 
 	/// The fills and dispatchers that are `@Sendable`: each a `@Sendable`-family argument of the call reaches – a fill of a
-	/// `@Sendable` builder, a dispatcher of a `@Sendable` family – and each such a dispatcher's case leads to. No fill of a
-	/// root's call refers to another by name, so nothing else makes one `@Sendable`.
-	private static func sendableKeys(fills: [Fill], dispatchers: [DispatcherRecord]) -> Set<String> {
-		var keys = Set(fills.filter(\.hole.isSendable).map(\.key))
-		var dispatchersToVisit = dispatchers.filter(\.dispatcher.isSendableFamily)
-		let dispatcherByKey = Dictionary(dispatchers.map { ($0.key, $0) }) { first, _ in first }
-		keys.formUnion(dispatchersToVisit.map(\.key))
-		while let dispatcher = dispatchersToVisit.popLast() {
-			for target in dispatcher.dispatcher.cases.compactMap(\.target) where keys.insert(target.key).inserted {
-				if let targetDispatcher = dispatcherByKey[target.key] {
-					dispatchersToVisit.append(targetDispatcher)
-				}
+	/// `@Sendable` builder, a dispatcher of a `@Sendable` family –, each a `@Sendable` function inside a fill refers to by
+	/// name (`FillReferences.referencedFromSendableFunctions`), and each such a dispatcher's case leads to or such a fill's
+	/// tree refers to, as `ScopeGenerator`'s `sendableFills(of:referencedFromSendableFunctions:)` walks them.
+	private static func sendableKeys(fills: [Fill], dispatchers: [DispatcherRecord], references: FillReferences) -> Set<String> {
+		var referencesByKey = references.referencesByFillKey.mapValues(Array.init)
+		for dispatcher in dispatchers {
+			referencesByKey[dispatcher.key] = dispatcher.dispatcher.cases.compactMap(\.target?.key)
+		}
+		var keysToVisit = fills.filter { $0.hole.isSendable || references.referencedFromSendableFunctions.contains($0.key) }.map(\.key)
+			+ dispatchers.filter { $0.dispatcher.isSendableFamily || references.referencedFromSendableFunctions.contains($0.key) }.map(\.key)
+		var keys = Set(keysToVisit)
+		while let key = keysToVisit.popLast() {
+			for target in referencesByKey[key] ?? [] where keys.insert(target).inserted {
+				keysToVisit.append(target)
 			}
 		}
 		return keys
 	}
 
 	/// The fills a dispatcher's case holds in place of calling the fill's function, in the order of `fills`: each one case
-	/// of one dispatcher calls, where the dispatcher takes no `passUp`, the fill takes no struct of a carried level, the fill
+	/// of one dispatcher calls and no call inside a fill names (`FillReferences.namedKeys`), where the dispatcher takes no `passUp`, the fill takes no struct of a carried level, the fill
 	/// and its dispatcher are alike `@Sendable` or not, the fill's function takes the case's values under the name the case
 	/// binds them, and a builder struct's member, inside which no function is declared, holds no body that declares one.
-	private static func inlinedFills(of fills: [Fill], dispatchers: [DispatcherRecord], sendableKeys: Set<String>) -> [Fill] {
+	private static func inlinedFills(of fills: [Fill], dispatchers: [DispatcherRecord], sendableKeys: Set<String>, namedKeys: Set<String>) -> [Fill] {
 		var caseCountByTargetKey = [String: Int]()
 		var dispatcherByTargetKey = [String: ScopeGenerator.FillDispatcher]()
 		for dispatcher in dispatchers {
@@ -134,7 +138,7 @@ struct FillEmissionDecisions: Sendable, Equatable {
 			}
 		}
 		return fills.filter { fill in
-			guard caseCountByTargetKey[fill.key] == 1, let dispatcher = dispatcherByTargetKey[fill.key] else { return false }
+			guard caseCountByTargetKey[fill.key] == 1, !namedKeys.contains(fill.key), let dispatcher = dispatcherByTargetKey[fill.key] else { return false }
 			return !dispatcher.takesPassUp
 				&& (dispatcher.carriedInnerScopes.isEmpty || fill.innerScopeParameters.isEmpty)
 				&& sendableKeys.contains(fill.key) == sendableKeys.contains(dispatcher.key)

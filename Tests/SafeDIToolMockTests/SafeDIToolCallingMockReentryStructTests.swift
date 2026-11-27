@@ -96,6 +96,54 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_makesSendableLevelFunctionFromRecords_whenReenteringBuilderIsSendableInstantiator() async throws {
+		// `DefaultService`, the fill of `Page`’s place, builds `Book`, whose call re-enters `Page`’s level function from the
+		// `@Sendable` function of `Book`’s builder, which makes it `@Sendable`: node records make `Screen`’s call’s level
+		// functions with it so, as the tree does, where they read what the call inside the fill refers to
+		// (`FillReferences`). The fill builds nothing else, so no place of `Screen`’s own is inside it.
+		let modules = [
+			ModuleFixture(name: "Core", packageName: "Core", swiftFileContent: [ReenteringFillFixtures.core(of: .fillInstantiatesIt, attribute: ReenteringFillFixtures.publicMock)]),
+			ModuleFixture(name: "Mid", packageName: "Mid", swiftFileContent: [ReenteringFillFixtures.mid(of: .fillInstantiatesIt, attribute: ReenteringFillFixtures.publicMock, builder: .sendableInstantiator)], dependencies: ["Core"]),
+			ModuleFixture(name: "App", packageName: "App", swiftFileContent: ["""
+			import Core
+			import Mid
+			import SafeDI
+
+			@Instantiable(fulfillingAdditionalTypes: [(any Service).self])
+			final class DefaultService: Service, Instantiable {
+			    init(book: Book) { self.book = book }
+			    @Instantiated let book: Book
+			}
+
+			@Instantiable(generateMock: true)
+			final class Screen: Instantiable {
+			    init(page: Page) { self.page = page }
+			    @Instantiated let page: Page
+			}
+			"""], dependencies: ["Core", "Mid"]),
+		]
+		let (stream, continuation) = AsyncStream.makeStream(of: LevelFunctionRecordsObservation.self)
+		_ = try await LevelFunctionRecordsObservation.$observer.withValue({ continuation.yield($0) }) {
+			try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+		}
+		continuation.finish()
+		var treeProjections = Set<String>()
+		var recordsProjections = [String]()
+		for await observation in stream {
+			if observation.root == "Screen" {
+				recordsProjections.append(observation.projection)
+			} else if observation.root == nil {
+				treeProjections.insert(observation.projection)
+			}
+		}
+
+		let sendablePageLevel = "dispatcherKey: \"dispatcher Page Service Service plain\", builderType: SafeDICore.TypeDescription.nested(name: \"__safeDI_Builder\", parentType: SafeDICore.TypeDescription.nested(name: \"SafeDIMockScope_Service\", parentType: SafeDICore.TypeDescription.simple(name: \"Page\", generics: []), generics: []), generics: [SafeDICore.TypeDescription.any(SafeDICore.TypeDescription.simple(name: \"Service\", generics: []))]), isSendable: true"
+		#expect(recordsProjections.count == 1)
+		#expect(recordsProjections.allSatisfy { treeProjections.contains($0) && $0.contains(sendablePageLevel) }, "\(recordsProjections)")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_buildsInlineValuesThroughCallersLevelFunctions_whenAnotherModuleCallsPublicMockWhoseReenteringFillReachesTypeNothingFulfills() async throws {
 		// `Top`’s `Root` builds `Screen`, whose `.public` mock takes `analyticsBuilder`, the `split` layout’s, and `Top`’s
 		// `LiveAnalytics` fulfills `Analytics`, so `Root`’s mock fills it: its level functions implement each route of

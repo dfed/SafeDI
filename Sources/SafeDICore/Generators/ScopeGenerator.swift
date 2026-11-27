@@ -8135,6 +8135,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					declaresFunction: child.fillDeclaresFunction(fillPlaceBindings: FillPlaceBindings(bindingsByGenerator: [:])),
 					returnsBoundValue: filled.property?.propertyType.isConstant ?? false,
 					readsInnerScopes: treeReads.readsInnerScopes,
+					innerScopeParameters: child.fillCallerReads.innerScopeParameters,
 				).projection + "; sources: " + child.fillCallerReads.parameterByLabel.keys.sorted().map { "\($0) \((child.fillCallerReads.argumentByLabel[$0] ?? .nil).spelled)" }.joined(separator: ", ")
 			}
 		}

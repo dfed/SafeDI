@@ -87,9 +87,6 @@ extension LevelFunctionRecordsObservation {
 	/// `variant`, as the tree records them (`PublicMockLevelFunctions.records`), made from the world alone.
 	/// - Throws: The refusal of a call whose fills' facts node records leave to the tree, or that a fill encloses.
 	static func levelFunctionRecords(of call: DeclarationID, variant: VariantID, in world: TypeFactsGraph, mockRootHoles: SeamHoles?) throws(NodeRecordRefusal) -> LevelFunctionRecords {
-		// A call inside a fill refers to the call's fills and level functions by name, which makes them `@Sendable` or keeps
-		// them out of their cases (`ScopeGenerator`'s `fillReferences`); node records leave such a call to the tree.
-		guard !FillFacts.fillsHoldCall(call, in: world) else { throw .fillHoldsCall }
 		let innerScopes = try FillInnerScopes.ofPublicMockCall(call, in: world, mockRootHoles: mockRootHoles)
 		let allFacts: [FillFacts]
 		switch FillFacts.of(call: call, in: world, levelsOfCallingTree: innerScopes.levelsOfCallingTree) {
@@ -128,6 +125,14 @@ extension LevelFunctionRecordsObservation {
 			dispatchers: unnamedLevels.dispatchers.map { FillNames.Dispatcher(key: $0.key, functionNameStem: $0.dispatcher.functionNameStem) },
 		)
 		let levels = FillDispatchers.of(call: call, in: world, fillParameters: fillParameters, innerScopes: innerScopes, names: names)
+		// A call inside a fill refers to the call's fills and level functions by name, which makes them `@Sendable` or keeps
+		// them out of their cases.
+		let references = try FillReferences.of(
+			fills: allFacts.map { (key: $0.key, node: $0.declaration, payloadLabels: Set($0.hole.enumPlace?.values.map(\.property.label) ?? [])) },
+			dispatchers: levels.dispatchers.map(\.dispatcher),
+			in: world,
+			callingTreeHoldsHoles: mockRootHoles != nil,
+		)
 		let decisions = FillEmissionDecisions.of(
 			fills: allFacts.map { facts in
 				FillEmissionDecisions.Fill(
@@ -146,6 +151,7 @@ extension LevelFunctionRecordsObservation {
 			dispatchers: levels.dispatchers,
 			callerArguments: callerArguments,
 			callerMemoArguments: [:],
+			references: references,
 		)
 		var fillParametersByKey = [String: [SeamSignature.Hole.Field]]()
 		for facts in allFacts {

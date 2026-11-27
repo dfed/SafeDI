@@ -73,7 +73,7 @@ struct FillFacts: Sendable {
 	let readsInnerScopes: Bool
 	/// The structs of levels the fill takes on a carried route (`FillCallerReads.innerScopeParameters`), the last of
 	/// `parametersTaken`; empty where it reads none.
-	var innerScopeParameters: [SeamSignature.Hole.Field] = []
+	let innerScopeParameters: [SeamSignature.Hole.Field]
 
 	/// The facts of a call's fills, or why node records leave them to the tree.
 	enum OfCall {
@@ -117,8 +117,13 @@ struct FillFacts: Sendable {
 
 	/// Whether a fill `call` passes builds, somewhere in its tree, a call of a seam or a public mock.
 	static func fillsHoldCall(_ call: DeclarationID, in world: some NodeRecordSources) -> Bool {
+		treesHoldCall(Array(world.edges(from: call).filter { world.construction(of: $0) == .fill }), in: world)
+	}
+
+	/// Whether the tree of a fill whose node is one of `fillNodes` builds a call of a seam or a public mock.
+	static func treesHoldCall(_ fillNodes: [DeclarationID], in world: some NodeRecordSources) -> Bool {
 		// A fill's node is built as its call builds it, a call of a seam or a public mock too, which its scope says.
-		var pending = world.edges(from: call).filter { world.construction(of: $0) == .fill }
+		var pending = fillNodes
 		var visited = Set(pending)
 		while let declaration = pending.popLast() {
 			let scope = world.scope(of: declaration)
@@ -260,7 +265,7 @@ struct FillFacts: Sendable {
 			|| !filledScope.propertiesToGenerate.isEmpty
 			|| filledScope.seamCall != nil
 			|| filledScope.publicMockCall != nil
-		var facts = FillFacts(
+		return FillFacts(
 			key: fill.key,
 			declaration: node,
 			functionNameStem: fill.functionNameStem,
@@ -280,9 +285,8 @@ struct FillFacts: Sendable {
 			declaresFunction: declaresFunction,
 			returnsBoundValue: filledProperty?.propertyType.isConstant ?? false,
 			readsInnerScopes: treeReads.readsInnerScopes,
+			innerScopeParameters: callerReads.innerScopeParameters,
 		)
-		facts.innerScopeParameters = callerReads.innerScopeParameters
-		return facts
 	}
 }
 
