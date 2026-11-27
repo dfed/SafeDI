@@ -47,13 +47,15 @@ struct SafeDIToolCodeTaskTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_holdsNoFinishedCodeTask_whenSeveralRootsBuildTreesOfSeveralLevels() async throws {
 		// Two roots, each building four levels of three types, the two deepest through instantiators: 121 scopes each.
-		// With the release reverted, the trees hold one task for each scope, 121 each.
+		// With the release reverted, the trees hold one task for each scope, 121 each. Node records lay the two seams out
+		// without their trees, so the run draws the DOT graph, which reads every tree, to build them.
 		let fixture = Self.ternaryTree(depth: 4, beneath: ["FirstRoot", "SecondRoot"], rootDeclarations: [], instantiatesLayer: 3)
 		let (stream, continuation) = AsyncStream.makeStream(of: Int.self)
 		_ = try await HeldCodeTasks.$observer.withValue({ continuation.yield($0) }) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: fixture,
 				buildSwiftOutputDirectory: true,
+				buildDOTFileOutput: true,
 				filesToDelete: &filesToDelete,
 				// The trees' code is what every other test of their shapes compares; this one counts how it is generated.
 				skipCompileVerification: true,

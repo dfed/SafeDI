@@ -150,3 +150,33 @@ extension NodeRecords {
 		return (path.reversed(), lazilyInstantiatedInstanceProperties)
 	}
 }
+
+extension NodeRecords {
+	/// The label of each hole of `world` that its root reaches along more than one route of calls, sorted: empty wherever
+	/// node records accept the world, which refuses a hole on several paths (`NodeRecordRefusal.holeOnSeveralPaths`). A
+	/// hole's leaf reads nothing (`TypeFactsDeclaration.Leaf.hole`), so one variant of it, or of a node above it, could
+	/// stand for routes whose places hand its fill different forms; a single route is what lets the hole's one record stand
+	/// for its place. A test checks it of every world node records accept (`NodeRecordsObservation`).
+	static func holesReachedOnSeveralRoutes(in world: some NodeRecordSources) -> [String] {
+		// Each variant's count of calls into it, and one caller: a variant is reached on one route where it and every
+		// variant above it is called once.
+		var callCounts = [Int](repeating: 0, count: world.variantCount)
+		var callers = [VariantID](repeating: -1, count: world.variantCount)
+		for caller in 0..<VariantID(world.variantCount) {
+			for callee in world.calls(of: caller) + world.madeAgainCalls(of: caller) {
+				callCounts[Int(callee)] += 1
+				callers[Int(callee)] = caller
+			}
+		}
+		let root = world.rootVariant(0)
+		return (0..<VariantID(world.variantCount)).filter { variant in
+			guard world.kind(of: world.declaration(of: variant)) == .hole else { return false }
+			// At most one step a variant: a cycle of variants each called once is reached from no root.
+			var node = variant
+			for _ in 0..<world.variantCount where node != root && node >= 0 && callCounts[Int(node)] == 1 {
+				node = callers[Int(node)]
+			}
+			return node != root
+		}.compactMap { world.property(of: world.declaration(of: $0))?.label }.sorted()
+	}
+}

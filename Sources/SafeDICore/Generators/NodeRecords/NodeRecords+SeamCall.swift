@@ -23,9 +23,11 @@ extension NodeRecords {
 	/// discharges stage 1's refusal of a construction other than an initializer, and its refusal of a call that passes
 	/// builders where the call passes each builder up from the seam whose tree makes it (`ConstructionScope.HoleArgument.passUp`);
 	/// `nil` for any other node, and for every node of a mock root's world, which builds every seam inline. Every other
-	/// check of stage 1 still runs on it. A call that fills a place is claimed above it (`filledSeamCallClaim(of:in:)`). The engine binds a call in
-	/// place as a built place of its form, a wrapper of its function where the property is one (`InPlaceCall`); a call that
-	/// forwards values, which a wrapper binds inside its function, is refused as `construction`.
+	/// check of stage 1 still runs on it. A call that fills a place is claimed above it (`filledSeamCallClaim(of:in:)`). It
+	/// discharges the refusal of a receive only if available too: the leaf receives only if available each parameter the
+	/// seam takes so, which the call is passed `nil` for where `OnlyIfAvailableAnswers` finds it unavailable. The engine binds
+	/// a call in place as a built place of its form, a wrapper of its function where the property is one (`InPlaceCall`); a
+	/// call that forwards values, which a wrapper binds inside its function, is refused as `construction`.
 	static func seamCallClaim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
 		guard !world.isMockWorld, world.construction(of: declaration) == .seamCall else { return nil }
 		let scope = world.scope(of: declaration)
@@ -33,11 +35,14 @@ extension NodeRecords {
 		// A call held in a wrapper, erased or not, or in a `@Sendable` function is bound as a built place of its form is, which
 		// discharges what that form's claim does.
 		let wrapperDischarges = (erasedClaim(of: declaration, in: world) ?? lazyClaim(of: declaration, in: world) ?? sendableClaim(of: declaration, in: world))?.discharges ?? []
+		// A call that makes a member of a loop of builders again rebinds it in the call's body, which the tree writes as text
+		// rather than spelling the call where its place is (`ScopeGenerator`'s `seamCallRecord`), and no record holds yet.
+		let rebindsLoopMember = !world.madeAgain(from: declaration).isEmpty
 		return NodeRecordClaim(
 			kind: .seamCall,
 			// Every builder the call passes is passed up: a call that fills a place is claimed above (`filledSeamCallClaim(of:in:)`).
-			discharges: Set<NodeRecordRefusal>([.construction, .fill]).union(wrapperDischarges),
-			refusals: forwardsValues ? [.construction] : [],
+			discharges: Set<NodeRecordRefusal>([.construction, .fill, .onlyIfAvailable]).union(wrapperDischarges),
+			refusals: (forwardsValues ? [.construction] : []) + (rebindsLoopMember ? [.builderLoop] : []),
 		)
 	}
 
@@ -46,22 +51,26 @@ extension NodeRecords {
 	/// `children` after it, and whose construction calls the seam's tier's initializer (the scope's instantiable is the
 	/// seam's leaf) with `builtByInitializerRecord`'s arguments and, where the call passes builders up, the member of the
 	/// struct it passes each (`SeamCallRoutes`). Its `text` is empty: the engine spells the call from the record.
-	/// - Parameter lazilyInstantiatedInstanceProperties: The by-value properties the call passes as the instance of a lazily
-	///   instantiated property declared above it.
+	/// - Parameters:
+	///   - answers: Which of the parameters the call's leaf receives only if available the call is passed `nil` for.
+	///   - lazilyInstantiatedInstanceProperties: The by-value properties the call passes as the instance of a lazily
+	///     instantiated property declared above it.
 	/// - Throws: `NodeRecordRefusal.fill` where the call passes a builder up that `routes` holds no one read for.
 	static func seamCallRecord(
 		of declaration: DeclarationID,
 		variant: VariantID,
 		in world: some NodeRecordSources,
 		routes: SeamCallRoutes,
+		answers: OnlyIfAvailableAnswers,
 		lazilyInstantiatedInstanceProperties: Set<Property>,
 		typesDeclaredEscaping: Set<TypeDescription>,
 		children: [GeneratedCode],
 	) throws -> AliasPlaceRecord {
 		let scope = world.scope(of: declaration)
-		let construction = try builtByInitializerRecord(of: declaration, variant: variant, in: world, lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties, typesDeclaredEscaping: typesDeclaredEscaping, children: [], declaresFunction: true)
+		let construction = try builtByInitializerRecord(of: declaration, variant: variant, in: world, unavailableProperties: answers.unavailableProperties(of: variant), lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties, alwaysDeclaresFunction: true, typesDeclaredEscaping: typesDeclaredEscaping, children: [])
 		var arguments = construction.arguments
-		var reads = construction.arguments
+		// A value the call is forwarded is its function's parameter, which no declaration outside it answers.
+		var reads = construction.arguments.filter { read in !construction.forwardedProperties.contains { $0.label == read.label } }
 		var argumentValues = [Int: ValuePath]()
 		var closureArguments = [ClosureArgumentEntry]()
 		// A call that passes nothing up passes no builder: the tier's builders take what the seam's tree builds.
@@ -85,7 +94,7 @@ extension NodeRecords {
 			isExtension: construction.isExtension,
 			target: .initializer(construction.concreteType),
 			arguments: arguments,
-			forwardedProperties: [],
+			forwardedProperties: construction.forwardedProperties,
 			cycleParameters: [],
 			callCycleArguments: [],
 			functionName: construction.functionName,
@@ -100,7 +109,7 @@ extension NodeRecords {
 			record.argumentValues = argumentValues
 		}
 		// Never `nil`: the node is of kind `seamCall` (`seamCallClaim(of:in:)`), whose construction is a call of the seam.
-		record.callFields = CallFields(leadingStatement: scope.seamCall?.callGuard(for: construction.concreteType), closureArguments: closureArguments)
+		record.callFields = CallFields(leadingStatement: scope.seamCall.map { .callGuard($0.callGuard(for: construction.concreteType)) }, closureArguments: closureArguments)
 		var alias = AliasPlaceRecord(property: construction.property, fulfillingProperty: nil, text: "", reads: reads)
 		alias.declaredFunctionNames = [construction.functionName]
 		alias.call = InPlaceCall(record: record, statementsBeforeLeadingStatement: [], statementsAfterLeadingStatement: children)

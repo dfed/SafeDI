@@ -68,6 +68,10 @@ final class ScopeRecord: Sendable {
 	let builtInlineSeamComment: String?
 	/// See `Scope.isUnavailableDependency`.
 	let isUnavailableDependency: Bool
+	/// See `Scope.isCallPlace`.
+	let isCallPlace: Bool
+	/// See `Scope.callPlaceRequiredAliasFulfillingProperties`.
+	let callPlaceRequiredAliasFulfillingProperties: Set<Property>
 	/// See `Scope.seamCall`.
 	let seamCall: SeamCall?
 	/// See `Scope.publicMockCall`.
@@ -119,6 +123,8 @@ final class ScopeRecord: Sendable {
 		self.concreteTypeID = concreteTypeID
 		builtInlineSeamComment = scope.builtInlineSeamComment
 		isUnavailableDependency = scope.isUnavailableDependency
+		isCallPlace = scope.isCallPlace
+		callPlaceRequiredAliasFulfillingProperties = scope.callPlaceRequiredAliasFulfillingProperties
 		seamCall = scope.seamCall
 		publicMockCall = scope.publicMockCall
 		self.propertiesToGenerate = propertiesToGenerate
@@ -376,6 +382,18 @@ struct FrozenScopeMap {
 			}
 		}
 		return reached
+	}
+
+	/// This map with `scopes` and every scope they reach frozen in it, in the order given: every tree frozen from the map
+	/// it returns names each of them by one record, so a construction memo shared by those trees reuses their places.
+	func freezing(scopes: [Scope]) -> FrozenScopeMap {
+		var frozenScopeMap = self
+		for scope in scopes {
+			_ = frozenScopeMap.id(of: scope)
+		}
+		frozenScopeMap.freezePendingScopes()
+		frozenScopeMap.table.interner = internerSpace.snapshot()
+		return frozenScopeMap
 	}
 
 	/// The record of `scope` – a mock root's or a seam's root, which is in no map, or a root the map holds – frozen against

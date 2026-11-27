@@ -348,6 +348,15 @@ enum FillCallerSources {
 
 	/// The nearest declaration of `label` in the scopes that enclose `variant`'s declaration: a property one of them builds, else
 	/// one its type receives or forwards.
+	/// The declaration visible where `call`, reached as `variant`, declares the fill `facts` are of, of each label the fill's
+	/// tree reads from above it, in label order: one of the call's own children, else the caller's nearest declaration.
+	static func visibleDeclarations(facts: FillFacts, call: DeclarationID, variant: VariantID, in world: TypeFactsGraph) -> [Property] {
+		facts.readLabels.compactMap { label in
+			world.edges(from: call).lazy.filter { world.construction(of: $0) != .fill }.compactMap { world.property(of: $0) }.first { $0.label == label }
+				?? nearestDeclaration(of: label, above: variant, in: world)
+		}
+	}
+
 	private static func nearestDeclaration(of label: String, above variant: VariantID, in world: TypeFactsGraph) -> Property? {
 		var variant = variant
 		while let (caller, _) = caller(of: variant, in: world) {
@@ -446,17 +455,8 @@ extension NodeRecords {
 	/// does but `fill`, and refuses the call with why node records leave it to the tree (`FillFacts.refusal(ofCall:in:routeCount:)`),
 	/// or `fill` where no reason holds, until the call's record is assembled.
 	static func filledSeamCallClaim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
-		guard !world.isMockWorld, world.construction(of: declaration) == .seamCall else { return nil }
+		guard !world.isMockWorld, world.construction(of: declaration) == .seamCall, fillsAPlace(declaration, in: world) else { return nil }
 		let scope = world.scope(of: declaration)
-		let fillsAPlace = scope.holeArguments.contains { holeArgument in
-			switch holeArgument {
-			case .fill:
-				true
-			case .passUp:
-				false
-			}
-		}
-		guard fillsAPlace else { return nil }
 		let forwardsValues = scope.instantiable.dependencies.contains { $0.source == .forwarded }
 		let routeCount = (0..<Int32(world.variantCount)).count(where: { world.declaration(of: $0) == declaration })
 		// A call held in a wrapper, erased or not, or in a `@Sendable` function is bound as a built place of its form is, which
@@ -464,8 +464,35 @@ extension NodeRecords {
 		let wrapperDischarges = (erasedClaim(of: declaration, in: world) ?? lazyClaim(of: declaration, in: world) ?? sendableClaim(of: declaration, in: world))?.discharges ?? []
 		return NodeRecordClaim(
 			kind: .seamCall,
-			discharges: Set<NodeRecordRefusal>([.construction]).union(wrapperDischarges),
-			refusals: (forwardsValues ? [.construction] : []) + [FillFacts.refusal(ofCall: declaration, in: world, routeCount: routeCount) ?? .fill],
+			discharges: Set<NodeRecordRefusal>([.construction, .fill]).union(wrapperDischarges),
+			refusals: (forwardsValues ? [.construction] : []) + fillRefusals(ofCall: declaration, in: world, routeCount: routeCount),
 		)
+	}
+
+	/// Why node records leave `declaration`, a filled seam call, to the tree: what `FillFacts.refusal(ofCall:in:routeCount:)`
+	/// says, else `fill` until a test turns on records of filled calls (`NodeRecordsObservation.recordsFilledCalls`), and then
+	/// where the call's records do not assemble.
+	private static func fillRefusals(ofCall declaration: DeclarationID, in world: some NodeRecordSources, routeCount: Int) -> [NodeRecordRefusal] {
+		if let refusal = FillFacts.refusal(ofCall: declaration, in: world, routeCount: routeCount) {
+			[refusal]
+		} else if NodeRecordsObservation.recordsFilledCalls, case let .success(records) = world.filledCallRecords(of: declaration) {
+			// A fill of a wrapper returns what the wrapper's builder function builds, or the builder itself, where its place
+			// would bind the wrapper: no record spells that return yet.
+			records.fills.allSatisfy(\.facts.returnsBoundValue) ? [] : [.fill]
+		} else {
+			[.fill]
+		}
+	}
+
+	/// Whether `declaration`'s call fills a place of the seam it calls.
+	static func fillsAPlace(_ declaration: DeclarationID, in world: some NodeRecordSources) -> Bool {
+		world.scope(of: declaration).holeArguments.contains { holeArgument in
+			switch holeArgument {
+			case .fill:
+				true
+			case .passUp:
+				false
+			}
+		}
 	}
 }

@@ -120,18 +120,24 @@ extension NodeRecords {
 	/// could take a parameter for the cycle (`cycleTakesParameters`), so the function takes none
 	/// (`BuiltPlaceRecord.cycleParameters`), and the call passes none. `caller` is the variant whose body holds the call,
 	/// which a production closer reads nothing of; a mock's closer, which passes what its caller binds, takes this site.
-	static func closingRecord(closingOn declaration: DeclarationID, from _: VariantID, functionName: String? = nil, in world: some NodeRecordSources) throws(NodeRecordRefusal) -> PlaceRecord {
+	static func closingRecord(closingOn declaration: DeclarationID, from caller: VariantID, functionName: String? = nil, in world: some NodeRecordSources, enteredSlots: MockEnteredSlots? = nil) throws(NodeRecordRefusal) -> PlaceRecord {
 		// Every node a call reaches is built as a property: the root is called by none.
 		guard let property = world.property(of: declaration) else { throw .noInitializer }
 		let instantiable = world.scope(of: declaration).instantiable
-		return .closer(ClosingPlaceRecord(
+		var closer = ClosingPlaceRecord(
 			property: property,
 			isErased: world.isErased(declaration),
 			isExtension: instantiable.declarationType.isExtension,
 			closedOnFunctionName: functionName ?? ScopeGenerator.functionName(toBuildPropertyNamed: property.label),
 			forwardedProperties: instantiable.dependencies.filter { $0.source == .forwarded }.map(\.property).sorted(),
 			cycleArguments: [],
-		))
+		)
+		// A mock's function on a cycle is handed its overrides and the places entered by every call, as its own place hands
+		// them (`mockArgumentsHanded(to:labeled:by:in:slots:)`).
+		if let enteredSlots {
+			closer.passedArguments = mockArgumentsHanded(to: declaration, labeled: property.label, by: world.declaration(of: caller), in: world, slots: enteredSlots)
+		}
+		return .closer(closer)
 	}
 
 	/// `record`, a place's record as its kind makes it, with its function named `functionName` where its body renames it
