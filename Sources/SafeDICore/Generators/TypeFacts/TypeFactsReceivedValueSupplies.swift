@@ -208,29 +208,25 @@ struct TypeFactsReceivedValueSupplies: Sendable {
 		}
 		for (index, node) in nodes.enumerated() where isBuiltOutsideFills[index] {
 			let receivingType = facts.typeTable[Int(facts.builtTypes[index])]
-			switch node.key.leaf {
-			case .none:
-				for dependency in node.scope.instantiable.dependencies where dependency.source.isReceived {
-					let label = labelID(of: dependency.property.label)
-					recordSupplies(handedBy: contexts(ofLabel: label)[index], label: label, receivingType: receivingType, receivedProperty: dependency.property, labelText: dependency.property.label)
-				}
-			case .alias:
-				guard let property = node.property, let fulfillingProperty = node.aliasFulfillingProperty else { continue }
+			if let alias = node.alias {
 				// The alias is bound in its declaring scope, where its fulfilling property is read: the scope's own binding
 				// of that label, then what the scope reads. One that keeps its label is not in scope where it is read.
-				let label = labelID(of: fulfillingProperty.label)
+				let label = labelID(of: alias.fulfillingProperty.label)
 				for edge in edgesInto[index] {
 					let source = Int(sourceByEdge[Int(edge)])
 					let declaringType = facts.typeTable[Int(facts.builtTypes[source])]
-					let edges: Set<Int32> = if fulfillingProperty.label != property.label, facts.worldBindings(of: source).contains(where: { $0.label == label }) {
+					let edges: Set<Int32> = if alias.fulfillingProperty.label != alias.property.label, facts.worldBindings(of: source).contains(where: { $0.label == label }) {
 						[edge]
 					} else {
 						contexts(ofLabel: label)[source]
 					}
-					recordSupplies(handedBy: edges, label: label, receivingType: declaringType, receivedProperty: fulfillingProperty, labelText: property.label)
+					recordSupplies(handedBy: edges, label: label, receivingType: declaringType, receivedProperty: alias.fulfillingProperty, labelText: alias.property.label)
 				}
-			case .hole:
-				continue
+			} else if node.key.leaf == .none {
+				for dependency in node.scope.instantiable.dependencies where dependency.source.isReceived {
+					let label = labelID(of: dependency.property.label)
+					recordSupplies(handedBy: contexts(ofLabel: label)[index], label: label, receivingType: receivingType, receivedProperty: dependency.property, labelText: dependency.property.label)
+				}
 			}
 		}
 
