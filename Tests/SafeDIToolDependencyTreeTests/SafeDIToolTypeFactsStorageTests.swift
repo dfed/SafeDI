@@ -152,7 +152,11 @@ struct SafeDIToolTypeFactsStorageTests: ~Copyable {
 	/// records, their lookup, the spellings, which text alone reads, and the names a mock root's lowering hands the node
 	/// records of its world, which no fact reads, hold more.
 	private static func expectFlatColumns(of graph: TypeFactsGraph) throws {
-		let spellings: Set = ["graph.nodes", "graph.indexByNode", "readTable", "labelTexts", "propertyTable", "typeTable", "moduleNames", "declarationLocations", "mockRootNames"]
+		let spellings: Set = [
+			"graph.nodes", "graph.indexByNode", "readTable", "labelTexts", "propertyTable", "typeTable", "moduleNames", "declarationLocations",
+			// A per-root map that no fold reads.
+			"mockRootNames",
+		]
 		var columnCount = 0
 		var stack: [(path: String, value: Any)] = Mirror(reflecting: graph).children.map { ($0.label ?? "", $0.value) }
 		while let (path, value) = stack.popLast() {
