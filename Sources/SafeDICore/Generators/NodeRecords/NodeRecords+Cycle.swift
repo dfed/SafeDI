@@ -29,7 +29,7 @@ extension NodeRecords {
 
 	/// The record of `declaration`'s place, a node of kind `cycle`: built by its initializer as a stage-1 node is, its
 	/// children's places among which a call back to a place being built above it is that call's closing place
-	/// (`closingRecord(closingOn:from:functionName:in:)`).
+	/// (`closingRecord(closingOn:from:functionName:cycleArguments:in:)`).
 	static func cycleRecord(
 		of declaration: DeclarationID,
 		variant: VariantID,
@@ -116,11 +116,11 @@ extension NodeRecords {
 
 	/// The record of the place at which a call closes a cycle on `declaration`, whose place is being built above the call:
 	/// a call of the function that place declares, named `functionName` where the bodies between rename it
-	/// (`CycleFunctionNames`), which forwards what that place's wrapper forwards. The walk refuses a cycle whose function
-	/// could take a parameter for the cycle (`cycleTakesParameters`), so the function takes none
-	/// (`BuiltPlaceRecord.cycleParameters`), and the call passes none. `caller` is the variant whose body holds the call,
+	/// (`CycleFunctionNames`), which forwards what that place's wrapper forwards, and passes the function's parameters
+	/// `cycleArguments` (`cycleArguments(of:unavailableProperties:lazilyInstantiatedInstanceProperties:)`). `caller` is the
+	/// variant whose body holds the call,
 	/// which a production closer reads nothing of; a mock's closer, which passes what its caller binds, takes this site.
-	static func closingRecord(closingOn declaration: DeclarationID, from _: VariantID, functionName: String? = nil, in world: some NodeRecordSources) throws(NodeRecordRefusal) -> PlaceRecord {
+	static func closingRecord(closingOn declaration: DeclarationID, from _: VariantID, functionName: String? = nil, cycleArguments: [PlaceRead] = [], in world: some NodeRecordSources) throws(NodeRecordRefusal) -> PlaceRecord {
 		// Every node a call reaches is built as a property: the root is called by none.
 		guard let property = world.property(of: declaration) else { throw .noInitializer }
 		let instantiable = world.scope(of: declaration).instantiable
@@ -130,18 +130,25 @@ extension NodeRecords {
 			isExtension: instantiable.declarationType.isExtension,
 			closedOnFunctionName: functionName ?? ScopeGenerator.functionName(toBuildPropertyNamed: property.label),
 			forwardedProperties: instantiable.dependencies.filter { $0.source == .forwarded }.map(\.property).sorted(),
-			cycleArguments: [],
+			cycleArguments: cycleArguments,
 		))
 	}
 
 	/// `record`, a place's record as its kind makes it, with its function named `functionName` where its body renames it
-	/// (`CycleFunctionNames`), and `@Sendable` where a call beneath it that closes a cycle on it refers to it from a
-	/// `@Sendable` function (`isMadeSendable`), as today's tree makes it (`ScopeGenerator.cycleClosings`). A place written
-	/// as text keeps its text.
-	static func record(_ record: PlaceRecord, functionName: String?, isMadeSendable: Bool) -> PlaceRecord {
+	/// (`CycleFunctionNames`), `@Sendable` where a call beneath it that closes a cycle on it refers to it from a
+	/// `@Sendable` function (`isMadeSendable`), as today's tree makes it (`ScopeGenerator.cycleClosings`), and taking
+	/// `cycleParameters`, which its binding passes `callCycleArguments`, where a cycle closes on it. A place written as text
+	/// keeps its text.
+	static func record(
+		_ record: PlaceRecord,
+		functionName: String?,
+		isMadeSendable: Bool,
+		cycleParameters: [Property],
+		callCycleArguments: [PlaceRead],
+	) -> PlaceRecord {
 		switch record {
 		case let .built(built):
-			guard functionName != nil || (isMadeSendable && !built.isSendable) else { return record }
+			guard functionName != nil || (isMadeSendable && !built.isSendable) || !cycleParameters.isEmpty else { return record }
 			var named = BuiltPlaceRecord(
 				property: built.property,
 				isErased: built.isErased,
@@ -150,8 +157,8 @@ extension NodeRecords {
 				target: built.target,
 				arguments: built.arguments,
 				forwardedProperties: built.forwardedProperties,
-				cycleParameters: built.cycleParameters,
-				callCycleArguments: built.callCycleArguments,
+				cycleParameters: cycleParameters.isEmpty ? built.cycleParameters : cycleParameters,
+				callCycleArguments: cycleParameters.isEmpty ? built.callCycleArguments : callCycleArguments,
 				functionName: functionName ?? built.functionName,
 				isSendable: built.isSendable || isMadeSendable,
 				typesDeclaredEscaping: built.typesDeclaredEscaping,
