@@ -127,6 +127,12 @@ jobs:
   # that builds or tests is skipped: each has `needs.stack-position.outputs.stacked-under == ''` in its `if:`.
   # The quick jobs (the version checks, the Markdown and skill script checks, lint) run as always.
   #
+  # One build still runs in the middle of a stack: "Build for Apple Platforms, DocC and Xcode Projects on Xcode
+  # 26" resolves the package and runs its "Build Framework (platform=macOS)" step alone, so a branch whose
+  # sources Xcode 26's compiler rejects, though Linux's accepts them, says so on its own pull request and not
+  # only in the top's run, which cannot say which branch beneath it broke the build. Its other steps have the
+  # condition the other jobs have.
+  #
   # A pull request into the default branch always runs everything, whatever is based on it: when the row below
   # lands, the next one takes main as its base and is pushed ("retarget first, then push"), and that run is
   # complete. So a stack costs two full runs, its top and its bottom, where it cost one per branch.
@@ -543,7 +549,12 @@ jobs:
     # when the change feeds nothing it builds ("Detect Changed Files"), and
     # on main when a pull request's run passed it on the same tree ("Find
     # Builds a Pull Request Passed on This Tree").
-    if: ${{ !cancelled() && needs.stack-position.outputs.stacked-under == '' && !(github.event_name == 'push' && needs.passed-on-this-tree.outputs.apple-platforms == 'true') && ((needs.changes.outputs.source != 'false' && needs.changes.outputs.integrations != 'false') || needs.changes.outputs.docc == 'true') }}
+    #
+    # In the middle of a stack it runs for the macOS build alone ("Decide Whether This Pull Request Runs the
+    # Heavy Jobs" says why), so not for a change to DocC articles only: every step but the checkout, the Xcode
+    # selection, the package resolve and "Build Framework (platform=macOS)" then skips, the record that the tree
+    # passed among them.
+    if: ${{ !cancelled() && !(github.event_name == 'push' && needs.passed-on-this-tree.outputs.apple-platforms == 'true') && ((needs.changes.outputs.source != 'false' && needs.changes.outputs.integrations != 'false') || (needs.changes.outputs.docc == 'true' && needs.stack-position.outputs.stacked-under == '')) }}
     runs-on: macos-26
     permissions:
       contents: read
@@ -569,6 +580,7 @@ jobs:
       # Xcode 26" gives at its own cache key.
       - name: Cache Build Directory
         id: docc-cache
+        if: ${{ needs.stack-position.outputs.stacked-under == '' }}
         uses: actions/cache/restore@v6
         with:
           path: .build
@@ -578,6 +590,7 @@ jobs:
             spm-debug-${{ runner.os }}-xcode-26.0-
       - name: Build DocC
         id: docc
+        if: ${{ needs.stack-position.outputs.stacked-under == '' }}
         timeout-minutes: 25
         uses: ./.github/actions/retry
         with:
@@ -586,7 +599,7 @@ jobs:
       # Only from main, for the reason "Build and Test on Xcode 26" gives
       # at its own cache.
       - name: Save Build Directory Cache
-        if: ${{ !cancelled() && github.ref == 'refs/heads/main' && steps.docc-cache.outputs.cache-hit != 'true' && steps.docc.outcome == 'success' }}
+        if: ${{ !cancelled() && needs.stack-position.outputs.stacked-under == '' && github.ref == 'refs/heads/main' && steps.docc-cache.outputs.cache-hit != 'true' && steps.docc.outcome == 'success' }}
         uses: actions/cache/save@v6
         with:
           path: .build
@@ -643,7 +656,7 @@ jobs:
       # Each Xcode builds into a DerivedData directory of its own: products of one compiler are not read by another.
       - name: Select Xcode 26.2
         id: xcode-26-2
-        if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
+        if: ${{ !cancelled() && needs.stack-position.outputs.stacked-under == '' && needs.changes.outputs.source != 'false' }}
         run: sudo xcode-select --switch /Applications/Xcode_26.2.app/Contents/Developer
       - name: Resolve Package Dependencies with Xcode 26.2
         timeout-minutes: 15
@@ -725,7 +738,7 @@ jobs:
       # 26.4, the first Xcode that surfaces traits in the project file, so their steps select it and come last.
       - name: Select Xcode 26.4
         id: xcode-26-4
-        if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
+        if: ${{ !cancelled() && needs.stack-position.outputs.stacked-under == '' && needs.changes.outputs.source != 'false' }}
         run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
       - name: Resolve Project Integration Package Dependencies
         timeout-minutes: 15
@@ -779,7 +792,7 @@ jobs:
       # fail the job.
       - name: Record That This Tree Passed
         id: passed-record
-        if: ${{ success() && github.event_name == 'pull_request' && needs.passed-on-this-tree.outputs.tree != '' && needs.changes.outputs.source != 'false' && steps.docc-cache.outputs.cache-hit == 'true' && steps.packages-cache.outputs.cache-hit == 'true' }}
+        if: ${{ success() && needs.stack-position.outputs.stacked-under == '' && github.event_name == 'pull_request' && needs.passed-on-this-tree.outputs.tree != '' && needs.changes.outputs.source != 'false' && steps.docc-cache.outputs.cache-hit == 'true' && steps.packages-cache.outputs.cache-hit == 'true' }}
         continue-on-error: true
         env:
           TREE: ${{ needs.passed-on-this-tree.outputs.tree }}
