@@ -181,6 +181,7 @@ extension TypeKeyLayout {
 		     .erasedInstantiator,
 		     .sendableInstantiator,
 		     .sendableErasedInstantiator:
+			// No forwarded arguments only while the seam call claim refuses a call that forwards values; then they come from the record.
 			.text(ScopeGenerator.instantiatorDeclaration(of: record.property, isExtension: record.isExtension, isErased: record.isErased, handing: record.functionName, forwardedArguments: ""))
 		case .lazilyInstantiated,
 		     .sendableLazilyInstantiated:
