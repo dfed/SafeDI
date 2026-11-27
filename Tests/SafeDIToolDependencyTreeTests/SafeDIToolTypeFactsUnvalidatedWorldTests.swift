@@ -320,7 +320,7 @@ struct SafeDIToolTypeFactsUnvalidatedWorldTests {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func unvalidatedWorld_isNil_whenValidationCallHasNoRoot() async throws {
+	func unvalidatedWorld_isNil_whenValidationCallHasNoRoot() async {
 		let observation = await observe([
 			seamFixtureType(named: "X", isFinalClass: true, declarations: []),
 		])
@@ -340,7 +340,8 @@ struct SafeDIToolTypeFactsUnvalidatedWorldTests {
 		let types = Self.alternatingRow(layerCount: 4)
 		let expected = try await nameBasedFacts(of: observe(types).firstWorld)
 
-		for order in [ConstructionInternerOrder.reversed] + (1...6).map { .permuted(seed: $0) } {
+		let orders = [ConstructionInternerOrder.reversed] + (1...6).map { ConstructionInternerOrder.permuted(seed: $0) }
+		for order in orders {
 			let facts = try await nameBasedFacts(of: observe(types, order: order).firstWorld)
 			#expect(facts == expected, "\(order)")
 		}
@@ -513,7 +514,7 @@ struct SafeDIToolTypeFactsUnvalidatedWorldTests {
 		let large = try await observe(Self.hubMembersRow(memberCount: 8)).firstWorld
 
 		#expect(small.internedForWorldCount == 12)
-		#expect(small.columnElementCount == 4278)
+		#expect(small.columnElementCount == 4_278)
 		#expect(large.internedForWorldCount == 20)
 		#expect(large.columnElementCount == 200_382)
 	}
