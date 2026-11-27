@@ -559,7 +559,11 @@ extension DependencyTreeGenerator {
 				sourceFilePath: seam.sourceFilePath,
 				built: .tree(scopeGenerator),
 				constructionScope: ConstructionScope(table: table, record: record),
-				seamTree: RootScopeInfo.SeamTree(rootLazilyInstantiatedInstanceProperties: Self.seamRootDeclarations(of: seamRootScope, seamRoot: finalSeamRoot).lazilyInstantiatedInstanceProperties),
+				seamTree: RootScopeInfo.SeamTree(
+					rootLazilyInstantiatedInstanceProperties: Self.seamRootDeclarations(of: seamRootScope, seamRoot: finalSeamRoot).lazilyInstantiatedInstanceProperties,
+					parameters: finalSeamRoot.signature.parameters.map(\.property),
+					autoclosureLabels: Set(finalSeamRoot.autoclosureCallByLabel(of: seamRootScope.instantiable).keys),
+				),
 			))
 		}
 		// The signature of each seam this module generates, sorted by seam, which its module info carries for the modules
