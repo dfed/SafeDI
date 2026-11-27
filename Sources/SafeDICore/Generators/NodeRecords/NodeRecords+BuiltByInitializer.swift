@@ -95,10 +95,10 @@ extension NodeRecords {
 	///   property; `nil` for the world's.
 	/// - Parameter argumentsOfOtherValues: The construction's arguments no dependency fulfills whose values a kind sets
 	///   (`BuiltPlaceRecord.argumentValues`), each with its position among the arguments the call passes.
-	/// - Parameter uncoveredArgumentNames: The name each dependency the node's type instantiates that its scope does not
-	///   build is read by, by its label, where a mock names the parameter it takes for it apart from the label.
-	/// - Parameter wrapperArgumentNames: The name of the wrapper a mock binds around an instance it takes that each receive
-	///   of the node's type reads, by the receive's label (`mockWrapperArgumentNames(of:among:in:)`).
+	/// - Parameter argumentNamesApart: The name each dependency of the node's type is read by, by its property, where a mock
+	///   binds the value under another name than its label and passes it by that name: a dependency the type instantiates
+	///   that its scope does not build, whose parameter of `mock()` is named apart, or a receive of a lazy wrapper `mock()`
+	///   makes of an instance it takes.
 	/// - Parameter alwaysDeclaresFunction: Whether a kind builds the node in a function of its own whatever its body holds.
 	/// - Parameter declaresFunction: Whether the caller's kind begins the builder function with a statement of its own, so
 	///   that a constant declares it too.
@@ -112,8 +112,7 @@ extension NodeRecords {
 		typeFunctionReturns: TypeDescription? = nil,
 		boundProperty: Property? = nil,
 		argumentsOfOtherValues: [(position: Int, argument: Initializer.Argument)] = [],
-		uncoveredArgumentNames: [String: String] = [:],
-		wrapperArgumentNames: [String: String] = [:],
+		argumentNamesApart: [Property: String] = [:],
 		alwaysDeclaresFunction: Bool = false,
 		typesDeclaredEscaping: Set<TypeDescription>,
 		children: [GeneratedCode],
@@ -138,11 +137,8 @@ extension NodeRecords {
 			(false, false)
 		}
 		var reads = arguments.map { argument, dependency in
-			if case .instantiated = dependency.source, let name = uncoveredArgumentNames[dependency.property.label] {
-				// A dependency the mock cannot build reads the parameter `mock()` takes for it under its name apart.
-				PlaceRead(argumentLabel: argument.label, label: name, property: Property(label: name, typeDescription: dependency.property.typeDescription), source: .binding(label: name))
-			} else if dependency.source.isReceived, let name = wrapperArgumentNames[dependency.property.label] {
-				// A receive of a wrapper a mock binds around an instance it takes reads the wrapper by name.
+			if let name = argumentNamesApart[dependency.property] {
+				// The value `mock()` binds under its name apart.
 				PlaceRead(argumentLabel: argument.label, label: name, property: Property(label: name, typeDescription: dependency.property.typeDescription), source: .binding(label: name))
 			} else {
 				PlaceRead(argumentLabel: argument.label, label: dependency.property.label, property: dependency.property, source: argument.source)

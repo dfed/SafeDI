@@ -115,7 +115,7 @@ extension NodeRecords {
 		unavailableProperties: Set<Property>,
 		lazilyInstantiatedInstanceProperties: Set<Property>,
 		receivesBoundAgain: [MockReceiveBoundAgain],
-		wrapperArgumentNames: [String: String] = [:],
+		wrapperArgumentNames: [Property: String],
 		typesDeclaredEscaping: Set<TypeDescription>,
 		children: [GeneratedCode],
 	) throws -> BuiltPlaceRecord {

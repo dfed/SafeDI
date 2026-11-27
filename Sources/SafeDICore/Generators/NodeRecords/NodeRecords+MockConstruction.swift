@@ -61,8 +61,8 @@ extension NodeRecords {
 	/// nor a property nothing fulfills), or whose construction takes a field of its configuration
 	/// (`mockConfigurationFieldArguments(of:in:)`), is configured: its override is the builder of the configuration its
 	/// function is handed, whose fields its children and its own construction read, a field of an `@autoclosure` parameter
-	/// called once where the node is built. A rename reads no override, and a property nothing fulfills reads one the root
-	/// hands down beside the node's, so a node whose children are all of those two kinds and whose construction takes no
+	/// called once where the node is built. A rename reads no override, and a property nothing fulfills reads one `mock()`
+	/// binds before its nodes, so a node whose children are all of those two kinds and whose construction takes no
 	/// field is not configured. The closure of a node that is not configured returns the property's type, so every node's
 	/// function does, as the walk's does.
 	static func mockConstructionRecord(
@@ -72,13 +72,13 @@ extension NodeRecords {
 		unavailableProperties: Set<Property>,
 		lazilyInstantiatedInstanceProperties: Set<Property>,
 		receivesBoundAgain: [MockReceiveBoundAgain],
-		wrapperArgumentNames: [String: String] = [:],
+		wrapperArgumentNames: [Property: String],
 		typesDeclaredEscaping: Set<TypeDescription>,
 		children: [GeneratedCode],
 	) throws -> BuiltPlaceRecord {
 		let instantiable = world.scope(of: declaration).instantiable
 		// A child of the root's level the mock root names apart is bound, and overridden, under that name, and a type that
-		// receives a value named apart binds it again under its label before its own children (`mockReceivesBoundAgain(in:)`).
+		// receives a value named apart binds it again under its label before its own children (`mockNamesReadApart(in:)`).
 		let nameApart = world.edges(from: 0).contains(declaration) ? world.property(of: declaration).flatMap(world.mockRootNames.nameApart(of:)) : nil
 		let handWrittenMock: (function: Initializer, target: ConstructionTarget)? = if world.construction(of: declaration) == .handWrittenMock, let mockInitializer = instantiable.mockInitializer {
 			(mockInitializer, .mock(instantiable.concreteInstantiable, name: instantiable.customMockName ?? InstantiableVisitor.mockMethodName))
@@ -105,8 +105,9 @@ extension NodeRecords {
 			typeFunctionReturns: boundProperty?.typeDescription.asInstantiatedTypeSpelledAsDeclared,
 			boundProperty: boundProperty,
 			argumentsOfOtherValues: fieldArguments,
-			uncoveredArgumentNames: uncoveredArgumentNames(of: declaration, in: world),
-			wrapperArgumentNames: wrapperArgumentNames,
+			// A dependency `mock()` takes is read by the name it takes it under, and a wrapper `mock()` binds around a value it
+			// takes by the name it binds it under (`mockNamesReadApart(in:)`).
+			argumentNamesApart: uncoveredArgumentNames(of: declaration, in: world).merging(wrapperArgumentNames) { uncovered, _ in uncovered },
 			alwaysDeclaresFunction: !fieldArguments.isEmpty,
 			typesDeclaredEscaping: typesDeclaredEscaping,
 			children: receivesBoundAgain.map(\.place) + children,
@@ -115,7 +116,7 @@ extension NodeRecords {
 		record.functionAlwaysWritesReturn = !fieldArguments.isEmpty && record.property.propertyType.isConstant
 		let isConfiguredForChildren = isConfiguredMockNode(declaration, in: world)
 		// A property nothing fulfills is a child with no override of its own, as a rename is, so neither makes its type a
-		// configuration; its function is still handed the overrides, beside which it takes that property’s.
+		// configuration; its function is still handed the overrides.
 		let isConfigured = buildsMockChildWithOverride(declaration, in: world) || !fieldArguments.isEmpty
 		let slotType = mockOverrideType(of: record, usesHandWrittenMock: handWrittenMock != nil, isConfigured: isConfigured, instantiable: instantiable)
 		let slot = mockOverrideSlot(
@@ -127,9 +128,7 @@ extension NodeRecords {
 			handsOverridesToChildren: isConfiguredForChildren,
 			isSendable: record.isSendable,
 		)
-		// The override `mock()` takes of a property nothing fulfills is handed down to the function of the type that
-		// declares the property (`NodeRecords+MockUnavailableDependency.swift`).
-		record.passedArguments = try slot.passedArguments + unavailableDependencyOverrideArguments(of: declaration, in: world, children: children, isSendable: record.isSendable)
+		record.passedArguments = slot.passedArguments
 		for (position, argument) in fieldArguments {
 			record.argumentValues[position] = mockConfigurationFieldValue(of: argument, readFrom: slot.value)
 		}

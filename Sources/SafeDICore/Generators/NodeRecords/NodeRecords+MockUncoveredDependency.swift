@@ -22,7 +22,7 @@ extension NodeRecords {
 	/// does not build (`Scope.instantiatedDependenciesNotGenerated`): `uncoveredDependency` where `mock()` takes each as a
 	/// plain value (`MockRootNames.uncoveredParameterName(of:)`), which the node's construction reads by the parameter's
 	/// name (`uncoveredArgumentNames(of:in:)`) and every receive beneath reads as the walk routes it
-	/// (`mockReceivesBoundAgain(in:)`). A dependency `mock()` takes as a `@Sendable` autoclosure, which the node binds
+	/// (`mockNamesReadApart(in:)`). A dependency `mock()` takes as a `@Sendable` autoclosure, which the node binds
 	/// from it at the top of its function, keeps the refusal, as does a place a seam's own mock builds from its builder.
 	static func mockUncoveredDependencyDischarges(of declaration: DeclarationID, in world: some NodeRecordSources) -> Set<NodeRecordRefusal> {
 		let uncoveredDependencies = world.scope(of: declaration).instantiatedDependenciesNotGenerated
@@ -31,13 +31,13 @@ extension NodeRecords {
 	}
 
 	/// The name of the parameter of `mock()` each dependency `declaration`'s type instantiates that its scope does not build
-	/// is read by, by the dependency's label, where it is named apart from that label, as the walk passes it
+	/// is read by, by the dependency's property, where it is named apart from its label, as the walk passes it
 	/// (`MockLowering.argumentValues(of:given:lazilyInstantiatedInstanceProperties:unavailableProperties:bindingNamesPassedByName:uncoveredParameterNames:)`).
-	static func uncoveredArgumentNames(of declaration: DeclarationID, in world: some NodeRecordSources) -> [String: String] {
-		var names = [String: String]()
+	static func uncoveredArgumentNames(of declaration: DeclarationID, in world: some NodeRecordSources) -> [Property: String] {
+		var names = [Property: String]()
 		for dependency in world.scope(of: declaration).instantiatedDependenciesNotGenerated {
 			guard let name = world.mockRootNames.uncoveredParameterName(of: dependency.property), name != dependency.property.label else { continue }
-			names[dependency.property.label] = name
+			names[dependency.property] = name
 		}
 		return names
 	}
