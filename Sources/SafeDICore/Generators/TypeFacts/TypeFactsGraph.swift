@@ -605,6 +605,7 @@ struct TypeFactsGraph: Sendable {
 		}
 
 		self.graph = graph
+		self.forMockGeneration = forMockGeneration
 		self.constructions = constructions
 		self.kinds = kinds
 		self.nodeProperties = nodeProperties
@@ -746,7 +747,8 @@ struct TypeFactsGraph: Sendable {
 				keyID = Int32(texts.count)
 				answerIDByText[keyText] = keyID
 				texts.append(keyText)
-				isBeingBuilt.append(false)
+				// A constant's key text is its full text, so this entry is the answer itself where the texts are equal.
+				isBeingBuilt.append(text == keyText && beingBuilt)
 				kinds.append(kind)
 				keys.append(keyID)
 			}
@@ -818,11 +820,19 @@ struct TypeFactsGraph: Sendable {
 	/// and property only for the graph's build and for text: the folds read its position.
 	let graph: OrderedGraph<TypeFactsDeclaration>
 
+	/// Whether the world is a mock root's.
+	let forMockGeneration: Bool
+
 	/// What each node's subtree reads from above it, by read ID.
 	let reads: ReadsFromAbove
 
 	/// Each node's kind: the form of the property it is built as.
 	let kinds: [TypeFactsKind]
+	/// Whether the world is a mock root's (`forMockGeneration`).
+	var isMockWorld: Bool {
+		forMockGeneration
+	}
+
 	/// How each node's type comes to exist.
 	let constructions: [TypeFactsConstruction]
 	/// The world's ID of the property each node is built as, or -1 for the root.

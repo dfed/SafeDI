@@ -39,15 +39,15 @@ struct NodeRecordsObservationTests {
 	}
 
 	@Test
-	func differences_nameTheStatement_whenNodeRecordsMakeOneThatIsNoBuiltPlace() {
+	func differences_nameTheStatement_whenNodeRecordsMakeOneThatIsNoPlace() {
 		let comparison = NodeRecordsObservation.differences(between: [Self.place(Self.record("a"))], and: [.text("let a = A()")])
-		#expect(comparison.differences == ["root: node records made a statement that is no built place"])
+		#expect(comparison.differences == ["root: node records made a statement that is no place"])
 	}
 
 	@Test
 	func differences_nameThePlace_whenTheTreeWritesTextThere() {
 		let comparison = NodeRecordsObservation.differences(between: [.indented(.text("let a = A()"), by: "    ")], and: [Self.place(Self.record("a"))])
-		#expect(comparison.differences == ["root.a: the tree writes no built place’s record"])
+		#expect(comparison.differences == ["root.a: the tree writes no place’s record"])
 	}
 
 	@Test
@@ -63,27 +63,37 @@ struct NodeRecordsObservationTests {
 	}
 
 	@Test
-	func differences_nameTheKinds_whenTheTreeClosesACycleWhereNodeRecordsBuildThePlace() {
-		let comparison = NodeRecordsObservation.differences(between: [Self.closingPlace(Self.closingRecord("a"))], and: [Self.place(Self.record("a"))])
-		#expect(comparison.differences == ["root.a: the tree closes a cycle where node records build the place"])
-	}
-
-	@Test
-	func differences_nameTheField_whenTheClosingPlacesDiffer() {
-		let comparison = NodeRecordsObservation.differences(between: [Self.closingPlace(Self.closingRecord("a", closedOnFunctionName: "__safeDI_a_"))], and: [Self.closingPlace(Self.closingRecord("a"))])
-		#expect(comparison.differences == ["root.a: closedOnFunctionName is __safeDI_a_ in the tree, __safeDI_a by node records"])
+	func differences_areNone_whenEachRenameRecordsTheSameFields() {
+		let comparison = NodeRecordsObservation.differences(between: [Self.place(Self.renameRecord(text: "let b = a"))], and: [Self.place(Self.renameRecord(text: "let b = a"))])
+		#expect(comparison.differences == [])
 		#expect(comparison.treePlaceCount == 1)
 	}
 
 	@Test
-	func differences_nameThePlace_whenTheTreeWritesAnAliasWhereNodeRecordsBuildThePlace() {
-		let alias = AliasPlaceRecord(property: Property(label: "a", typeDescription: .simple(name: "A")), fulfillingProperty: Property(label: "b", typeDescription: .simple(name: "A")), text: "let a = b")
-		let comparison = NodeRecordsObservation.differences(between: [.indented(.place(PlacePlan(code: .empty, record: .alias(alias))), by: "    ")], and: [Self.place(Self.record("a"))])
-		#expect(comparison.differences == ["root.a: the tree writes no built place’s record"])
+	func differences_nameTheField_whenARenamesRecordDiffers() {
+		let comparison = NodeRecordsObservation.differences(between: [Self.place(Self.renameRecord(text: "let b: A? = a"))], and: [Self.place(Self.renameRecord(text: "let b = a"))])
+		#expect(comparison.differences == ["root.b: text is let b: A? = a in the tree, let b = a by node records"])
 	}
 
-	/// `record` as a place that closes a cycle, indented as a child of a builder function is.
-	private static func closingPlace(_ record: ClosingPlaceRecord) -> GeneratedCode {
+	@Test
+	func differences_nameThePlace_whenTheTreeWritesAnotherKindOfPlace() {
+		let closer = ClosingPlaceRecord(property: Property(label: "a", typeDescription: .simple(name: "A")), isErased: false, isExtension: false, closedOnFunctionName: "__safeDI_a", forwardedProperties: [], cycleArguments: [])
+		let comparison = NodeRecordsObservation.differences(
+			between: [Self.place(Self.renameRecord(text: "let a = b")), Self.place(Self.record("a"))],
+			and: [Self.place(Self.record("a")), .indented(.place(PlacePlan(code: .empty, record: .closer(closer))), by: "    ")],
+		)
+		#expect(comparison.differences == ["root.a: the tree writes another kind of place than node records", "root.a: the tree writes another kind of place than node records"])
+	}
+
+	@Test
+	func differences_nameTheField_whenTheClosingPlacesDiffer() {
+		let comparison = NodeRecordsObservation.differences(between: [Self.place(Self.closingRecord("a", closedOnFunctionName: "__safeDI_a_"))], and: [Self.place(Self.closingRecord("a"))])
+		#expect(comparison.differences == ["root.a: closedOnFunctionName is __safeDI_a_ in the tree, __safeDI_a by node records"])
+		#expect(comparison.treePlaceCount == 1)
+	}
+
+	/// `record` as a place, indented as a child of a builder function is.
+	private static func place(_ record: ClosingPlaceRecord) -> GeneratedCode {
 		.indented(.place(PlacePlan(code: .empty, record: .closer(record))), by: "    ")
 	}
 
@@ -102,6 +112,17 @@ struct NodeRecordsObservationTests {
 	/// `record` as a place, indented as a child of a builder function is.
 	private static func place(_ record: BuiltPlaceRecord) -> GeneratedCode {
 		.indented(.place(PlacePlan(code: .empty, record: .built(record))), by: "    ")
+	}
+
+	/// `record` as a place, indented as a child of a builder function is.
+	private static func place(_ record: AliasPlaceRecord) -> GeneratedCode {
+		.indented(.place(PlacePlan(code: .text(record.text), record: .alias(record))), by: "    ")
+	}
+
+	/// A rename of `a: A` as `b: A`, written as `text`.
+	private static func renameRecord(text: String) -> AliasPlaceRecord {
+		let type = TypeDescription.simple(name: "A")
+		return AliasPlaceRecord(property: Property(label: "b", typeDescription: type), fulfillingProperty: Property(label: "a", typeDescription: type), text: text)
 	}
 
 	/// A place that builds `<label>: <Label>`, with `children`.

@@ -24,18 +24,37 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	/// The node is built by anything but its type's initializer or `instantiate()`: a seam's or a public mock's call, a
 	/// hand-written mock, a construction function or a fill.
 	case construction
+	/// A mock root's node takes a parameter with a default value, which a mock holds in the type's configuration, or its
+	/// type has a hand-written mock, whose defaults that configuration takes too.
+	case mockDefaultValuedParameter
+	/// A mock root's node is an actor, whose arguments a mock sends it.
+	case mockActor
+	/// A mock root's node whose override is not its parent's field under the node's own label: two children of one node
+	/// share a label, which a mock root names apart.
+	case mockOverrideNotParentField
+	/// A mock root binds a value that is no node of its world before its tree, or names one apart: a parameter of
+	/// `mock()`, an override of a value its tree receives only if available, a builder, a wrapper around an instance.
+	case mockRootBindsOtherThanNodes
 	/// The node is built in a `@Sendable` function of its own: a `SendableInstantiator`, erased or not, or a
-	/// `SendableLazilyInstantiated`.
+	/// `SendableLazilyInstantiated`, which `sendableClaim(of:in:)` discharges: its record is `NodeRecordKind.sendable`'s.
 	case sendable
-	/// The node is built as an `ErasedInstantiator`, or as a constant erased to its property's type.
+	/// A `@Sendable` function of the world reads, from outside it, a wrapper that is not `Sendable`
+	/// (`DeclarationsAnsweringReads.sendableFunctionCapturesWrapper`): an error the tree reports, which the records
+	/// cannot, so the world keeps its tree.
+	case sendableFunctionCapturesWrapper
+	/// The node is built as an `ErasedInstantiator`, or as a constant or an `Instantiator` erased to its property's type,
+	/// which `erasedClaim(of:in:)` discharges: its record is `NodeRecordKind.erased`'s.
 	case erased
-	/// The node is built as a `LazilyInstantiated`, or its scope declares or forwards one.
 	/// The node's type declares a rename, a hole, or an instantiated dependency its scope does not build.
 	case renameOrHole
 	/// The node's call passes fills.
 	case fill
-	/// The node is on a cycle.
+	/// The node is on a cycle, and no kind that makes a node on a cycle claims it (`cycleClaim(of:in:)`), or the world's
+	/// edges close a cycle that `NodeBuildOrder` meets.
 	case cycle
+	/// A world with a cycle holds a node of a kind other than `builtByInitializer` or `cycle`, whose records inside a world
+	/// with a cycle no comparison has covered yet.
+	case cycleWorldHoldsLaterKind
 	/// A node on a cycle is built at two places whose trees close the cycle on different places above them, so that one
 	/// place of its variant cannot stand for both.
 	case cycleMemberBuiltTwoWays
@@ -48,6 +67,10 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	/// Two places of a world with a cycle are bound to one label, and one of them is on a cycle or a builder, so that today's
 	/// tree may name one's function apart.
 	case cycleBuilderNameShared
+	/// The node is built as a `LazilyInstantiated`, which `lazyClaim(of:in:)` discharges: its record is
+	/// `NodeRecordKind.lazy`'s. Also a world whose records read a wrapper's instance where no record does yet: a rename
+	/// fulfilled by one (`DeclarationsAnsweringReads.renameReadsWrappersInstance`), a seam's own root handed one, and a
+	/// mock root's scope that declares or forwards a lazily instantiated property.
 	case lazy
 	/// The node's type receives a property only if available.
 	case onlyIfAvailable
@@ -69,6 +92,12 @@ protocol NodeRecordSources: TypeFactsWorld {
 	func scope(of declaration: DeclarationID) -> ConstructionScope
 	/// The property the declaration is built as, `nil` for the root.
 	func property(of declaration: DeclarationID) -> Property?
+	/// Whether the declaration's built value is erased to its property's type (`erasedToConcreteExistential`).
+	func isErased(_ declaration: DeclarationID) -> Bool
+	/// The text of a label a read asks about (`Read.label`).
+	func text(ofLabel label: WorldLabelID) -> String
+	/// Whether the world is a mock root's, each of whose nodes reads its override.
+	var isMockWorld: Bool { get }
 }
 
 extension TypeFactsGraph: NodeRecordSources {
@@ -79,31 +108,53 @@ extension TypeFactsGraph: NodeRecordSources {
 	func property(of declaration: DeclarationID) -> Property? {
 		graph.nodes[Int(declaration)].property
 	}
+
+	func isErased(_ declaration: DeclarationID) -> Bool {
+		graph.nodes[Int(declaration)].key.erasedToConcreteExistential
+	}
+
+	func text(ofLabel label: WorldLabelID) -> String {
+		labelTexts[Int(label)]
+	}
 }
 
 /// The records of one world's places, made from its per-type facts (`TypeFactsWorld`) with no `ScopeGenerator`: one
 /// `BuiltPlaceRecord` per variant, and the root's body as the places it builds, in order. A variant's place is made once
 /// and shared by every call of it, so the engine reads it once per view (`TypeKeyLayout.read(_:)`).
 ///
-/// Stage 1 makes records only for a world each of whose nodes is a constant or an `Instantiator`, built by its type's
-/// initializer, off every cycle, with one variant; any other world is refused with the first kind it holds.
+/// Records are made only for a world each of whose nodes is built by its type's initializer, off every cycle, with one
+/// variant, as a constant or in any of SafeDI's wrappers, erased or not (`NodeRecordKind`); any other world is refused
+/// with the first kind it holds, and so is a world the tree reports an error of that the records cannot: a `@Sendable`
+/// function that captures a wrapper that is not `Sendable` (`NodeRecordRefusal.sendableFunctionCapturesWrapper`).
 ///
-/// One variant per node is enough here because a stage-1 record reads no answer: each `PlaceRead.source` is the label
-/// `createInitializerArguments` names, and the engine resolves it per view. That holds only while both key projections
-/// are inert: no receive only if available, and no cycle, so nothing is still being built where it is read. The first
-/// stage that admits either reads what each call hands its callee (`TypeFactsWorld.sources(ofCall:of:)`), never a
-/// variant's keys. Records still carry today's `functionName`, which the engine's allocator names apart; the allocation
-/// moves to node records last, at stage 4.
+/// One variant per node is enough here because a record reads only answers every call into a variant gives alike. Each
+/// `PlaceRead.source` is the label `createInitializerArguments` names, which the engine resolves per view, or the
+/// instance of a lazily instantiated property declared above the node, which a receive by value reads
+/// (`DeclarationsAnsweringReads`). That holds only while both key projections are inert: no receive only if available,
+/// and no cycle, so nothing is still being built where it is read. A node that receives a property only if available
+/// (`receivesOnlyIfAvailable`) reads what each call of its variant finds (`OnlyIfAvailableAnswers`, from the calls and
+/// `TypeFactsEdge.buildPosition`, since the world's answers do not model sibling order), never a variant's keys, and a
+/// world whose calls of one variant find different answers is refused. Records still carry today's `functionName`, which
+/// the engine's allocator names apart; the allocation moves to node records last, at stage 4.
 struct NodeRecords: Sendable {
-	/// - Parameter world: A production root's world.
+	/// - Parameters:
+	///   - world: A production root's world.
+	///   - seamTree: What a seam's own root is handed: its parameters, the nearest declarations of their labels, and the
+	///     instances of `LazilyInstantiated` properties among them, a deferred parameter's memo included, which its tree
+	///     reads through their wrappers. `nil` for any other root.
+	///   - declaredTypeNames: The names the modules SafeDI read declare types by at file scope, which the check of an erased
+	///     instantiator's first generic argument reads (`checkForwardsBuiltTypesProperties(_:in:declaredTypeNames:)`).
+	///     `nil` for a mock root's world, where no kind claims an erased instantiator and the mock's own tree reports it.
 	/// - Throws: A `NodeRecordRefusal` where the world holds a kind stage 1 does not make, or what an initializer's
 	///   arguments throw.
-	init(world: some NodeRecordSources) throws {
+	init(world: some NodeRecordSources, seamTree: DependencyTreeGenerator.RootScopeInfo.SeamTree? = nil, declaredTypeNames: DeclaredTypeNames?) throws {
 		let declarationCount = world.declarationCount
 		var kinds = [NodeRecordKind]()
 		kinds.reserveCapacity(declarationCount)
 		for declaration in 0..<Int32(declarationCount) {
 			try kinds.append(Self.kind(of: declaration, in: world))
+			try Self.checkReadsNoSeamRootValue(of: seamTree, declaration, in: world)
+			try Self.checkForwardsBuiltTypesProperties(declaration, in: world, declaredTypeNames: declaredTypeNames)
 		}
 		var variantByDeclaration = [VariantID](repeating: -1, count: declarationCount)
 		for variant in 0..<Int32(world.variantCount) {
@@ -115,8 +166,13 @@ struct NodeRecords: Sendable {
 		// them (`TypeFactsEdge.buildPosition`), which `NodeBuildOrder` stands in for only off every cycle.
 		let holdsCycle = (0..<Int32(declarationCount)).contains(where: world.isOnCycle)
 		let order: NodeBuildOrder? = holdsCycle ? nil : try NodeBuildOrder(world: world)
-		let labelsReceived = holdsCycle ? try Self.labelsReceived(inWorldWithCycle: world) : []
-		var bindingOfLabel = [String: (variant: VariantID, namesFunction: Bool)]()
+		let labelsReceived = holdsCycle ? try Self.labelsReceived(inWorldWithCycle: world, kinds: kinds) : []
+		let onlyIfAvailableAnswers = try OnlyIfAvailableAnswers(world: world, rootParameters: seamTree?.parameters ?? [])
+		let answeringDeclarations = DeclarationsAnsweringReads(world: world)
+		// The tree reports the capture as an error, which the records cannot.
+		guard !answeringDeclarations.sendableFunctionCapturesWrapper else { throw NodeRecordRefusal.sendableFunctionCapturesWrapper }
+		// A rename's record binds it from its fulfilling property's label, never from a wrapper's instance.
+		guard !answeringDeclarations.renameReadsWrappersInstance else { throw NodeRecordRefusal.lazy }
 		func edgeIndices(of declaration: DeclarationID) -> [Int] {
 			order?.edgeIndices(of: declaration) ?? world.edgeFacts(from: declaration).enumerated().sorted { $0.element.buildPosition < $1.element.buildPosition }.map(\.offset)
 		}
@@ -132,6 +188,7 @@ struct NodeRecords: Sendable {
 		var variantsClosedOn = [Set<VariantID>](repeating: [], count: world.variantCount)
 		var cycleVariantsBuilt = [Set<VariantID>](repeating: [], count: world.variantCount)
 		var isOnPath = [Bool](repeating: false, count: world.variantCount)
+		var bindingOfLabel = [String: (variant: VariantID, namesFunction: Bool)]()
 		func frame(of variant: VariantID) -> PlaceFrame {
 			let declaration = world.declaration(of: variant)
 			let instantiable = world.scope(of: declaration).instantiable
@@ -188,26 +245,56 @@ struct NodeRecords: Sendable {
 				continue
 			}
 			let declaration = world.declaration(of: top.variant)
-			let record = switch kinds[Int(declaration)] {
-			case .builtByInitializer:
-				try PlaceRecord.built(Self.builtByInitializerRecord(of: declaration, variant: top.variant, in: world, typesDeclaredEscaping: top.typesDeclaredEscaping, children: top.children))
+			let variant = top.variant
+			let escaping = top.typesDeclaredEscaping
+			let children = top.children
+			// What a receive by value reads as a wrapper's instance, which every record of a construction passes its arguments.
+			let instanceProperties = answeringDeclarations.lazilyInstantiatedInstanceProperties(readBy: variant)
+			let record: PlaceRecord = switch kinds[Int(declaration)] {
+			case .builtByInitializer, .erased, .lazy, .sendable:
+				// One record serves the four: what tells them apart, it reads of the node.
+				try .built(Self.builtByInitializerRecord(of: declaration, variant: variant, in: world, lazilyInstantiatedInstanceProperties: instanceProperties, typesDeclaredEscaping: escaping, children: children))
+			case .inlineSeam:
+				try .built(Self.inlineSeamRecord(of: declaration, variant: variant, in: world, lazilyInstantiatedInstanceProperties: instanceProperties, typesDeclaredEscaping: escaping, children: children))
+			case .receivesOnlyIfAvailable:
+				try .built(Self.receivesOnlyIfAvailableRecord(
+					of: declaration,
+					variant: variant,
+					in: world,
+					answers: onlyIfAvailableAnswers,
+					lazilyInstantiatedInstanceProperties: instanceProperties,
+					typesDeclaredEscaping: escaping,
+					children: children,
+				))
+			case .unavailableDependency:
+				try .alias(Self.unavailableDependencyRecord(of: declaration, in: world))
+			case .rename:
+				try .alias(Self.renameRecord(of: declaration, variant: variant, in: world, answers: onlyIfAvailableAnswers))
 			case .cycle:
-				try Self.cycleRecord(of: declaration, variant: top.variant, in: world, typesDeclaredEscaping: top.typesDeclaredEscaping, children: top.children)
+				try .built(Self.cycleRecord(of: declaration, variant: variant, in: world, lazilyInstantiatedInstanceProperties: instanceProperties, typesDeclaredEscaping: escaping, children: children))
+			case .mockConstruction:
+				try .built(Self.mockConstructionRecord(of: declaration, variant: variant, in: world, typesDeclaredEscaping: escaping, children: children))
 			}
-			let place = GeneratedCode.place(PlacePlan(code: .empty, record: record))
-			records[Int(top.variant)] = record
-			places[Int(top.variant)] = place
-			typesDeclaredEscaping[Int(top.variant)] = top.typesDeclaredEscaping
+			let place: GeneratedCode = switch record {
+			case let .alias(aliasRecord):
+				// A place written as text: the engine copies it as written.
+				.place(PlacePlan(code: .text(aliasRecord.text), record: record))
+			case .built, .closer:
+				.place(PlacePlan(code: .empty, record: record))
+			}
+			records[Int(variant)] = record
+			places[Int(variant)] = place
+			typesDeclaredEscaping[Int(variant)] = escaping
 			var closedOn = top.variantsClosedOn
-			closedOn.remove(top.variant)
-			variantsClosedOn[Int(top.variant)] = closedOn
+			closedOn.remove(variant)
+			variantsClosedOn[Int(variant)] = closedOn
 			var built = top.cycleVariantsBuilt
 			if world.isOnCycle(declaration) {
-				built.insert(top.variant)
+				built.insert(variant)
 			}
-			cycleVariantsBuilt[Int(top.variant)] = built
+			cycleVariantsBuilt[Int(variant)] = built
 			stack[parent].children.append(.indented(place, by: parent == 0 ? TypeKeyBody.rootStatementIndentation : ScopeGenerator.standardIndent))
-			stack[parent].typesDeclaredEscaping.formUnion(top.typesDeclaredEscaping)
+			stack[parent].typesDeclaredEscaping.formUnion(escaping)
 			stack[parent].variantsClosedOn.formUnion(closedOn)
 			stack[parent].cycleVariantsBuilt.formUnion(built)
 		}
@@ -236,8 +323,8 @@ struct NodeRecords: Sendable {
 	/// By variant.
 	private let records: [PlaceRecord?]
 
-	/// A place `init(world:)`'s walk is making: its variant, its node's edges in build order and the next to walk, and
-	/// what the places made beneath it so far hand it.
+	/// A place `init(world:seamTree:declaredTypeNames:)`'s walk is making: its variant, its node's edges in build order and
+	/// the next to walk, and what the places made beneath it so far hand it.
 	private struct PlaceFrame {
 		let variant: VariantID
 		let edgeIndices: [Int]
@@ -252,14 +339,17 @@ struct NodeRecords: Sendable {
 
 	/// Every refusal `world` holds, each once, in the order of `NodeRecordRefusal`'s cases: what a test reports of a world, so
 	/// that each stage counts the worlds it frees.
-	static func refusals(in world: some NodeRecordSources) -> [NodeRecordRefusal] {
+	static func refusals(in world: some NodeRecordSources, seamTree: DependencyTreeGenerator.RootScopeInfo.SeamTree? = nil, declaredTypeNames: DeclaredTypeNames?) -> [NodeRecordRefusal] {
 		var refusals = Set<NodeRecordRefusal>()
 		for declaration in 0..<Int32(world.declarationCount) {
+			refusals.formUnion(kindAndRefusals(of: declaration, in: world).refusals)
 			do {
-				// A node a lane's kind claims holds no refusal of the kinds no lane makes yet.
-				if try claimedKind(of: declaration, in: world) == nil {
-					refusals.formUnion(refusalsOfBuiltByInitializer(declaration, in: world))
-				}
+				try checkReadsNoSeamRootValue(of: seamTree, declaration, in: world)
+			} catch {
+				refusals.insert(error)
+			}
+			do {
+				try checkForwardsBuiltTypesProperties(declaration, in: world, declaredTypeNames: declaredTypeNames)
 			} catch {
 				refusals.insert(error)
 			}
@@ -270,7 +360,7 @@ struct NodeRecords: Sendable {
 		}
 		if (0..<Int32(world.declarationCount)).contains(where: world.isOnCycle) {
 			// A world with a cycle is built in step 0's order, and its walk refuses what its places' closing needs.
-			if refusals.isEmpty, case let .failure(refusal as NodeRecordRefusal) = Result(catching: { try NodeRecords(world: world) }) {
+			if refusals.isEmpty, case let .failure(refusal as NodeRecordRefusal) = Result(catching: { try NodeRecords(world: world, seamTree: seamTree, declaredTypeNames: declaredTypeNames) }) {
 				refusals.insert(refusal)
 			}
 		} else {
@@ -280,28 +370,119 @@ struct NodeRecords: Sendable {
 				refusals.insert(error)
 			}
 		}
+		do {
+			_ = try OnlyIfAvailableAnswers(world: world, rootParameters: seamTree?.parameters ?? [])
+		} catch {
+			refusals.insert(error)
+		}
+		let answeringDeclarations = DeclarationsAnsweringReads(world: world)
+		if answeringDeclarations.sendableFunctionCapturesWrapper {
+			refusals.insert(.sendableFunctionCapturesWrapper)
+		}
+		if answeringDeclarations.renameReadsWrappersInstance {
+			refusals.insert(.lazy)
+		}
 		return NodeRecordRefusal.allCases.filter(refusals.contains)
 	}
 
-	/// The kind of record `declaration` is made as, or the refusal of its world: the kind a lane's classifier claims it as,
-	/// and otherwise a node built by its initializer, where it holds none of the kinds no lane makes yet
-	/// (`checkBuiltByInitializer(_:in:)`).
+	/// Refuses `declaration`'s world where its type reads what a seam's root is handed as stage 1 does not write it: as
+	/// the lazy stage's, a receive or a rename of one of the instances of `LazilyInstantiated` properties the root is
+	/// handed, which its tree reads through the wrapper and stage 1 would read as a binding of the label; as a rename's,
+	/// the seam's own rename that keeps a deferred parameter's label, which the tree binds from the parameter's
+	/// autoclosure and writes no record of.
+	private static func checkReadsNoSeamRootValue(of seamTree: DependencyTreeGenerator.RootScopeInfo.SeamTree?, _ declaration: DeclarationID, in world: some NodeRecordSources) throws(NodeRecordRefusal) {
+		guard let seamTree else { return }
+		let readsAnInstance = world.scope(of: declaration).instantiable.dependencies.contains { dependency in
+			switch dependency.source {
+			case .received:
+				seamTree.rootLazilyInstantiatedInstanceProperties.contains(dependency.property.asUnwrappedProperty)
+			case let .aliased(fulfillingProperty, _, _):
+				seamTree.rootLazilyInstantiatedInstanceProperties.contains(fulfillingProperty.asUnwrappedProperty)
+			case .instantiated, .forwarded:
+				false
+			}
+		}
+		guard !readsAnInstance else { throw .lazy }
+		// The root declares no rename through a variant of its own, so it is the scope of each rename among its edges.
+		guard declaration == 0 else { return }
+		let readsAnAutoclosure = world.edges(from: declaration).contains { edge in
+			world.kind(of: edge) == .alias && world.property(of: edge).map { seamTree.autoclosureLabels.contains($0.label) } == true
+		}
+		guard !readsAnAutoclosure else { throw .renameOrHole }
+	}
+
+	/// Refuses `declaration`'s world where it is an `ErasedInstantiator` or a `SendableErasedInstantiator` whose first
+	/// generic argument is not the `@Forwarded` properties of the type it builds: an error the tree reports where it builds
+	/// the place (`ErasedInstantiatorForwardedPropertiesMismatchError`), which the records cannot, so the world keeps its
+	/// tree, in a run no test observes too, which builds no tree beside a root's records. A fill's place, which the tree
+	/// checks seeing through its hole's modules, is checked here without them: its world is refused as a fill's already.
+	private static func checkForwardsBuiltTypesProperties(_ declaration: DeclarationID, in world: some NodeRecordSources, declaredTypeNames: DeclaredTypeNames?) throws(NodeRecordRefusal) {
+		switch world.kind(of: declaration) {
+		case .erasedInstantiator, .sendableErasedInstantiator:
+			guard let declaredTypeNames, let property = world.property(of: declaration) else { return }
+			let forwardsBuiltTypesProperties = property.firstGenericMatchesForwardedProperties(of: world.scope(of: declaration).instantiable, declaringModuleNames: [], declaredTypeNames: declaredTypeNames)
+			guard forwardsBuiltTypesProperties else { throw .erased }
+		case .constant, .instantiator, .sendableInstantiator, .lazy, .sendableLazy, .alias, .hole:
+			break
+		}
+	}
+
+	/// The kind of record `declaration` is made as, or the first refusal it holds (`kindAndRefusals(of:in:)`).
 	private static func kind(of declaration: DeclarationID, in world: some NodeRecordSources) throws(NodeRecordRefusal) -> NodeRecordKind {
-		guard let kind = try claimedKind(of: declaration, in: world) else {
-			try checkBuiltByInitializer(declaration, in: world)
-			return .builtByInitializer
+		let (kind, refusals) = kindAndRefusals(of: declaration, in: world)
+		if let refusal = refusals.first {
+			throw refusal
 		}
 		return kind
 	}
 
-	/// The kind a lane's classifier claims `declaration` as, or `nil` where none does. Each lane adds one line here, in
-	/// the order of `NodeRecordKind`'s cases, calling its file's classifier, `<kind>Kind(of:in:)`, which returns `nil` for
-	/// a node not of its kind and throws a refusal for a node of its kind it cannot make:
-	/// `if let kind = try <kind>Kind(of: declaration, in: world) { return kind }`, with the last lane's answer returned in the
-	/// final `else`. While the cycle lane's is the only classifier, its answer is returned.
-	private static func claimedKind(of declaration: DeclarationID, in world: some NodeRecordSources) throws(NodeRecordRefusal) -> NodeRecordKind? {
-		try cycleKind(of: declaration, in: world)
+	/// The kind `declaration` is made as, and every refusal it holds: those of the claim a lane's kind makes of it, and
+	/// every check of stage 1 the claim does not discharge (`refusalsOfBuiltByInitializer(_:in:)`). A node of two kinds,
+	/// one claimed, is still refused for the other.
+	private static func kindAndRefusals(of declaration: DeclarationID, in world: some NodeRecordSources) -> (kind: NodeRecordKind, refusals: [NodeRecordRefusal]) {
+		let claim = claim(of: declaration, in: world)
+		let discharged = claim?.discharges ?? []
+		let refusals = (claim?.refusals ?? []) + refusalsOfBuiltByInitializer(declaration, in: world).filter { !discharged.contains($0) }
+		return (claim?.kind ?? .builtByInitializer, refusals)
 	}
+
+	/// What a lane's kind claims of `declaration`, or `nil` where none does. Each production lane adds one term to the
+	/// production chain, after the test's, in the order of `NodeRecordKind`'s cases, calling its file's classifier, which
+	/// returns `nil` for a node not of its kind: `?? <kind>Claim(of: declaration, in: world)`. A mock world's nodes are the
+	/// mock writer's alone, so no production kind's record, which reads no override, is made of one.
+	private static func claim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
+		// A test's claim comes first, so that it can claim a node a lane's kind would.
+		guard !world.isMockWorld else {
+			return testClaim(of: declaration, in: world) ?? mockConstructionClaim(of: declaration, in: world)
+		}
+		// Two chains, since one of nine terms is more than the type checker settles in reasonable time.
+		let claimOfAnswerReadingKind = testClaim(of: declaration, in: world)
+			?? inlineSeamClaim(of: declaration, in: world)
+			?? unavailableDependencyClaim(of: declaration, in: world)
+			?? receivesOnlyIfAvailableClaim(of: declaration, in: world)
+			?? renameClaim(of: declaration, in: world)
+		return claimOfAnswerReadingKind
+			?? erasedClaim(of: declaration, in: world)
+			?? lazyClaim(of: declaration, in: world)
+			?? sendableClaim(of: declaration, in: world)
+			?? cycleClaim(of: declaration, in: world)
+	}
+
+	/// The claim a test makes of `declaration` by its type's name (`NodeRecordsObservation.claimsForTesting`).
+	private static func testClaim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
+		NodeRecordsObservation.claimsForTesting[world.scope(of: declaration).instantiable.concreteInstantiable.asSource].map { discharged in
+			NodeRecordClaim(kind: .builtByInitializer, discharges: Set(discharged.compactMap(NodeRecordRefusal.init(rawValue:))))
+		}
+	}
+}
+
+/// What a lane's kind claims of a node (`NodeRecords.claim(of:in:)`): the kind its record is made as, the refusals of
+/// stage 1's checks the kind discharges, which are the kinds it makes, and any refusal of its own the node holds, of its
+/// kind but a shape it does not make yet.
+struct NodeRecordClaim: Sendable {
+	let kind: NodeRecordKind
+	let discharges: Set<NodeRecordRefusal>
+	var refusals = [NodeRecordRefusal]()
 }
 
 /// The kinds of node `NodeRecords` makes a record of. Each is made by one file of this folder, `NodeRecords+<Kind>.swift`,
@@ -310,9 +491,30 @@ struct NodeRecords: Sendable {
 /// order; loops of received builders and mock construction kinds are other lanes', handed to this folder.
 enum NodeRecordKind: Sendable {
 	/// A constant or an `Instantiator` built by its type's initializer or `instantiate()`, off every cycle, with nothing
-	/// erased, lazy, `@Sendable`, received only if available, renamed or filled in its scope (stage 1).
+	/// received only if available, renamed or filled in its scope (stage 1).
 	case builtByInitializer
+	/// A seam of another module built inline, because no module SafeDI knows generates its initializer, and otherwise a
+	/// node `builtByInitializer` makes: its line ends with the comment that says why (`NodeRecords+InlineSeam.swift`).
+	case inlineSeam
+	/// A property instantiated only if available that no declaration fulfills, bound to `nil` and written as text
+	/// (`NodeRecords+UnavailableDependency.swift`).
+	case unavailableDependency
+	/// A node that would be of kind `builtByInitializer` but that its type receives a property only if available, which its
+	/// construction is passed where the variant's calls find it available, and `nil` where not (`OnlyIfAvailableAnswers`).
+	case receivesOnlyIfAvailable
+	/// A rename a scope declares (`@Received(fulfilledByDependencyNamed:ofType:)`), written as text: bound from its fulfilling
+	/// property, or, only if available, to `nil` where no declaration it reads is available (`NodeRecords+Rename.swift`).
+	case rename
+	/// An `ErasedInstantiator`, or a constant or an `Instantiator` erased to its property's type (`NodeRecords+Erased.swift`).
+	case erased
+	/// A `LazilyInstantiated`, erased or not (`NodeRecords+Lazy.swift`).
+	case lazy
+	/// A `SendableInstantiator`, erased or not, or a `SendableLazilyInstantiated` (`NodeRecords+Sendable.swift`).
+	case sendable
 	/// A node on a cycle, otherwise of stage 1's kinds, whose children's places include the closing place of each call back
 	/// to a place being built above it (`NodeRecords+Cycle.swift`).
 	case cycle
+	/// A node of a mock root's world that stage 1 would make in a production root's, which reads its override before it
+	/// calls its type's initializer (`NodeRecords+MockConstruction.swift`).
+	case mockConstruction
 }

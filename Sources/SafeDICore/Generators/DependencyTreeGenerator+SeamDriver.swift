@@ -437,10 +437,7 @@ extension DependencyTreeGenerator {
 	/// line, then column, with a declaration whose location is unknown – which none read from a file is – after every
 	/// known one.
 	private static func declarationPrecedes(_ leftLocation: Dependency.DeclarationLocation?, _ rightLocation: Dependency.DeclarationLocation?) -> Bool {
-		func sortKey(of location: Dependency.DeclarationLocation?) -> (unknownLocationsLast: Int, filePath: String, line: Int, column: Int) {
-			(location == nil ? 1 : 0, location?.filePath ?? "", location?.line ?? 0, location?.column ?? 0)
-		}
-		return sortKey(of: leftLocation) < sortKey(of: rightLocation)
+		Dependency.DeclarationLocation.precedesInSourceOrder(leftLocation, rightLocation)
 	}
 
 	/// The generators of the trees this module generates, in a world where every reach of a seam calls its generated
@@ -508,13 +505,16 @@ extension DependencyTreeGenerator {
 				typeDescription: typeDescription,
 				instantiable: scope.instantiable,
 				sourceFilePath: typeDescriptionToFulfillingInstantiableMap[typeDescription]?.sourceFilePath,
-				scopeGenerator: record.createScopeGenerator(
+				built: .tree(record.createScopeGenerator(
 					in: table,
 					lazilyInstantiatedInstanceProperties: [],
 					erasedToConcreteExistential: false,
 					declaredTypeNames: declaredTypeNames,
 					constructionMemo: &constructionMemo,
-				),
+				)),
+				// A test compares the records of a seam world's production root with its tree's places, and no run lays it
+				// out from them until node records make a seam call (`NodeRecords`).
+				constructionScope: ConstructionScope(table: table, record: record),
 			))
 		}
 		for (seam, seamRoot, seamRootScope) in generatedSeams {
@@ -547,11 +547,20 @@ extension DependencyTreeGenerator {
 			} else {
 				scopeGenerator = try builtTree()
 			}
+			// A test compares the records of a seam's own tree with its tree's places, and no run lays the seam's
+			// initializers out from them: they are written around its tree's body (`ScopeGenerator.generateSeamRootCode`).
+			let (table, record) = seamWorld.frozenScopeMap.freezing(rootScope: seamRootScope)
 			rootScopeGenerators.append(RootScopeInfo(
 				typeDescription: seam.concreteInstantiable,
 				instantiable: seam,
 				sourceFilePath: seam.sourceFilePath,
-				scopeGenerator: scopeGenerator,
+				built: .tree(scopeGenerator),
+				constructionScope: ConstructionScope(table: table, record: record),
+				seamTree: RootScopeInfo.SeamTree(
+					rootLazilyInstantiatedInstanceProperties: Self.seamRootDeclarations(of: seamRootScope, seamRoot: finalSeamRoot).lazilyInstantiatedInstanceProperties,
+					parameters: finalSeamRoot.signature.parameters.map(\.property),
+					autoclosureLabels: Set(finalSeamRoot.autoclosureCallByLabel(of: seamRootScope.instantiable).keys),
+				),
 			))
 		}
 		// The signature of each seam this module generates, sorted by seam, which its module info carries for the modules
@@ -1168,8 +1177,7 @@ extension DependencyTreeGenerator {
 		if !settled {
 			// A component holds at least one seam, so the first by location exists.
 			if let firstSeam = componentSeams.min(by: { left, right in
-				guard let left = left.declarationLocation, let right = right.declarationLocation else { return left.declarationLocation != nil }
-				return (left.filePath, left.line, left.column) < (right.filePath, right.line, right.column)
+				Dependency.DeclarationLocation.precedesInSourceOrder(left.declarationLocation, right.declarationLocation)
 			}) {
 				errorsOfLastPass = [.seam(.init(seam: firstSeam, kind: .signaturesDidNotSettle(seams: component.sorted())))]
 			}
@@ -1592,7 +1600,7 @@ extension DependencyTreeGenerator {
 					fulfilledBy: fulfillingProperty,
 					erasedToConcreteExistential: erasedToConcreteExistential,
 					onlyIfAvailable: onlyIfAvailable,
-					declarationReference: dependency.declarationLocation.map(aliasDeclarationReferences.reference(to:)),
+					declarationReference: aliasDeclarationReferences.reference(to: dependency.declarationLocation),
 				))
 			case .forwarded, .received:
 				continue
@@ -1634,6 +1642,25 @@ extension DependencyTreeGenerator {
 		seamRoot: ScopeGenerator.SeamRoot,
 		declaredTypeNames: DeclaredTypeNames,
 	) throws -> ScopeGenerator {
+		let (nearestDeclarations, lazilyInstantiatedInstanceProperties) = seamRootDeclarations(of: rootScope, seamRoot: seamRoot)
+		// A seam's tree reads its own `SeamHoles`, constant within the tree but not across trees, so it keeps a memo of its
+		// own, for one pass: a seam without holes reuses its places within a pass, and one with holes stores none.
+		var constructionMemo = ConstructionMemo()
+		let (table, rootRecord) = world.frozenScopeMap.freezing(rootScope: rootScope)
+		return try rootRecord.createScopeGenerator(
+			in: table,
+			nearestDeclarations: nearestDeclarations,
+			lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
+			seamRoot: seamRoot,
+			erasedToConcreteExistential: false,
+			declaredTypeNames: declaredTypeNames,
+			constructionMemo: &constructionMemo,
+		)
+	}
+
+	/// What a seam's root is handed (`seamRootGenerator`): its parameters, as the nearest declarations of their labels, and
+	/// the instances of `LazilyInstantiated` properties among them, a deferred parameter's memo included.
+	private static func seamRootDeclarations(of rootScope: Scope, seamRoot: ScopeGenerator.SeamRoot) -> (nearestDeclarations: NearestDeclarations, lazilyInstantiatedInstanceProperties: Set<Property>) {
 		var nearestDeclarations = NearestDeclarations()
 		var lazilyInstantiatedInstanceProperties = Set<Property>()
 		let autoclosureCallByLabel = seamRoot.autoclosureCallByLabel(of: rootScope.instantiable)
@@ -1655,19 +1682,7 @@ extension DependencyTreeGenerator {
 				lazilyInstantiatedInstanceProperties.insert(property.asUnwrappedProperty)
 			}
 		}
-		// A seam's tree reads its own `SeamHoles`, constant within the tree but not across trees, so it keeps a memo of its
-		// own, for one pass: a seam without holes reuses its places within a pass, and one with holes stores none.
-		var constructionMemo = ConstructionMemo()
-		let (table, rootRecord) = world.frozenScopeMap.freezing(rootScope: rootScope)
-		return try rootRecord.createScopeGenerator(
-			in: table,
-			nearestDeclarations: nearestDeclarations,
-			lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
-			seamRoot: seamRoot,
-			erasedToConcreteExistential: false,
-			declaredTypeNames: declaredTypeNames,
-			constructionMemo: &constructionMemo,
-		)
+		return (nearestDeclarations, lazilyInstantiatedInstanceProperties)
 	}
 
 	/// Every receive in the tree `generator` roots, `seam`'s, that leaves the seam – each `@Received` dependency and

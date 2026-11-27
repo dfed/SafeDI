@@ -19,14 +19,11 @@
 // SOFTWARE.
 
 extension NodeRecords {
-	/// `.cycle` where `declaration` is on a cycle and holds no kind a later stage makes, `nil` where it is on none.
-	/// - Throws: The first kind stage 1 does not make, other than the cycle itself, that a node on a cycle is of.
-	static func cycleKind(of declaration: DeclarationID, in world: some NodeRecordSources) throws(NodeRecordRefusal) -> NodeRecordKind? {
+	/// The claim of `declaration` as a node on a cycle, which discharges the refusal of the cycle, or `nil` where it is on
+	/// none. A node on a cycle another kind claims first keeps the refusal.
+	static func cycleClaim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
 		guard world.isOnCycle(declaration) else { return nil }
-		if let refusal = refusalsOfBuiltByInitializer(declaration, in: world).first(where: { $0 != .cycle }) {
-			throw refusal
-		}
-		return .cycle
+		return NodeRecordClaim(kind: .cycle, discharges: [.cycle])
 	}
 
 	/// The record of `declaration`'s place, a node of kind `cycle`: built by its initializer as a stage-1 node is, its
@@ -36,18 +33,35 @@ extension NodeRecords {
 		of declaration: DeclarationID,
 		variant: VariantID,
 		in world: some NodeRecordSources,
+		lazilyInstantiatedInstanceProperties: Set<Property>,
 		typesDeclaredEscaping: Set<TypeDescription>,
 		children: [GeneratedCode],
-	) throws -> PlaceRecord {
-		try .built(builtByInitializerRecord(of: declaration, variant: variant, in: world, typesDeclaredEscaping: typesDeclaredEscaping, children: children))
+	) throws -> BuiltPlaceRecord {
+		try builtByInitializerRecord(
+			of: declaration,
+			variant: variant,
+			in: world,
+			lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
+			typesDeclaredEscaping: typesDeclaredEscaping,
+			children: children,
+		)
 	}
 
 	/// The labels the types of `world`, which holds a cycle, receive: read from above wherever they are, a superset of what
-	/// the function a call closes a cycle on reads from above it. Every alias is a node of kind `alias`, and every value
-	/// received only if available is the `onlyIfAvailable` of the node receiving it, which the kinds `init(world:)` reads
-	/// first refuse (`refusalsOfBuiltByInitializer(_:in:)`), so the world reads from above only what it receives plainly.
-	/// - Throws: `cycleReceivesBuilder` where a type receives a builder.
-	static func labelsReceived(inWorldWithCycle world: some NodeRecordSources) throws(NodeRecordRefusal) -> Set<String> {
+	/// the function a call closes a cycle on reads from above it. Every node of `world` is of kind `builtByInitializer` or
+	/// `cycle`, so no type renames a value or receives one only if available: it reads from above only what it receives
+	/// plainly.
+	/// - Throws: `cycleWorldHoldsLaterKind` where a node of `kinds` is of another kind, and `cycleReceivesBuilder` where a
+	///   type receives a builder.
+	static func labelsReceived(inWorldWithCycle world: some NodeRecordSources, kinds: [NodeRecordKind]) throws(NodeRecordRefusal) -> Set<String> {
+		for kind in kinds {
+			switch kind {
+			case .builtByInitializer, .cycle:
+				break
+			case .inlineSeam, .unavailableDependency, .receivesOnlyIfAvailable, .rename, .erased, .lazy, .sendable, .mockConstruction:
+				throw .cycleWorldHoldsLaterKind
+			}
+		}
 		var labels = Set<String>()
 		for declaration in 0..<Int32(world.declarationCount) {
 			for dependency in world.scope(of: declaration).instantiable.dependencies where dependency.source == .received(onlyIfAvailable: false) {
