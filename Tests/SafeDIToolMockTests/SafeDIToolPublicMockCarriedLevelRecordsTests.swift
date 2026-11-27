@@ -80,6 +80,41 @@ struct SafeDIToolPublicMockCarriedLevelRecordsTests: ~Copyable {
 		#expect(recordsProjections.filter { carryingTreeProjections.contains($0) }.count == 1)
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_makesLevelFunctionsFillingInPlaceFromRecords_whenPublicMocksCallPassesUpBuilderItDoesNotFill() async throws {
+		// `Screen`'s public mock calls `Detail`'s, fills its place of `Store` and passes its place of `Api` up as a builder of
+		// its own: a public mock's body holds only the struct its caller built, so the call hands no override closure a
+		// function over the fill of `store`, which its level function then holds in place, as the tree's does.
+		let modules = [
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+				"public protocol Store {}\npublic protocol Api {}",
+				Self.publicMockType(named: "Detail", declarations: ["@Instantiated public let store: any Store", "@Instantiated public let api: any Api"]),
+			]),
+			ModuleFixture(name: "Other", packageName: "Mid", swiftFileContent: [
+				Self.fulfillingType(named: "LiveStore", fulfilling: "Store", declarations: []),
+				Self.publicMockType(named: "Screen", declarations: ["@Instantiated public let detail: Detail"]),
+			].map { "import Feature\n\n" + $0 }, dependencies: ["Feature"]),
+		]
+		let (stream, continuation) = AsyncStream.makeStream(of: LevelFunctionRecordsObservation.self)
+		_ = try await LevelFunctionRecordsObservation.$observer.withValue({ continuation.yield($0) }) {
+			try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+		}
+		continuation.finish()
+		var treeProjections = Set<String>()
+		var recordsProjections = [String]()
+		for await observation in stream {
+			if observation.root == "Screen" {
+				recordsProjections.append(observation.projection)
+			} else if observation.root == nil {
+				treeProjections.insert(observation.projection)
+			}
+		}
+
+		#expect(recordsProjections.count == 1)
+		#expect(recordsProjections.allSatisfy { treeProjections.contains($0) && $0.contains("form: SafeDICore.LevelMember.FillForm.inlined(") }, "\(recordsProjections)")
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
