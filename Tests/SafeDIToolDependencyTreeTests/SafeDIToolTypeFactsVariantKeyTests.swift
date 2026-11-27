@@ -964,7 +964,8 @@ struct SafeDIToolTypeFactsVariantKeyTests: ~Copyable {
 		for await report in stream where report.root == root && report.forMockGeneration == forMockGeneration {
 			reports.append(report)
 		}
-		return try #require(reports.last)
+		// The root's own tree reports first: a cycle's body writer reports a holder's tree for each body it writes after it.
+		return try #require(reports.first)
 	}
 
 	/// `Leaf` receives `theme` only if available, as `leafTheme`, and builds itself again through `leafBuilder`, so 2.4.x

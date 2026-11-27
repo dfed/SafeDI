@@ -623,7 +623,7 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 			#expect(reports.map(\.refusal) == ["nodeHasSeveralVariants"])
 			everyRefusal += reports.map(\.everyRefusal)
 		}
-		#expect(everyRefusal == [["lazy", "nodeHasSeveralVariants"], ["lazy", "nodeHasSeveralVariants"]])
+		#expect(everyRefusal == [["nodeHasSeveralVariants"], ["nodeHasSeveralVariants"]])
 	}
 
 	@Test
