@@ -52,9 +52,8 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	/// The node is on a cycle.
 	case cycle
 	/// The node is built as a `LazilyInstantiated`, which `lazyClaim(of:in:)` discharges: its record is
-	/// `NodeRecordKind.lazy`'s. Also a world whose records read a wrapper's instance where no record does yet: a rename
-	/// fulfilled by one (`DeclarationsAnsweringReads.renameReadsWrappersInstance`), a seam's memo of a deferred parameter
-	/// included, and a mock root's scope that declares or forwards a lazily instantiated property.
+	/// `NodeRecordKind.lazy`'s. Also a mock root's scope that declares or forwards a lazily instantiated property, whose
+	/// instance no record reads yet.
 	case lazy
 	/// The node's type receives a property only if available.
 	case onlyIfAvailable
@@ -151,8 +150,6 @@ struct NodeRecords: Sendable {
 		let answeringDeclarations = DeclarationsAnsweringReads(world: world, rootInstanceProperties: seamTree?.rootLazilyInstantiatedInstanceProperties ?? [])
 		// The tree reports the capture as an error, which the records cannot.
 		guard !answeringDeclarations.sendableFunctionCapturesWrapper else { throw NodeRecordRefusal.sendableFunctionCapturesWrapper }
-		// A rename's record binds it from its fulfilling property's label, never from a wrapper's instance.
-		guard !answeringDeclarations.renameReadsWrappersInstance else { throw NodeRecordRefusal.lazy }
 		// A node's place holds its children's places, so each is made after its children: a post-order walk from the root,
 		// with a stack, since a tree can be as deep as the module has types.
 		var places = [GeneratedCode?](repeating: nil, count: world.variantCount)
@@ -206,7 +203,7 @@ struct NodeRecords: Sendable {
 			case .unavailableDependency:
 				try .alias(Self.unavailableDependencyRecord(of: declaration, in: world))
 			case .rename:
-				try .alias(Self.renameRecord(of: declaration, variant: variant, in: world, answers: onlyIfAvailableAnswers))
+				try .alias(Self.renameRecord(of: declaration, variant: variant, in: world, answers: onlyIfAvailableAnswers, readsWrappersInstance: answeringDeclarations.renameReadsWrappersInstance(variant)))
 			case .mockConstruction:
 				try .built(Self.mockConstructionRecord(of: declaration, variant: variant, in: world, typesDeclaredEscaping: escaping, children: children))
 			}
@@ -292,9 +289,6 @@ struct NodeRecords: Sendable {
 		let answeringDeclarations = DeclarationsAnsweringReads(world: world, rootInstanceProperties: seamTree?.rootLazilyInstantiatedInstanceProperties ?? [])
 		if answeringDeclarations.sendableFunctionCapturesWrapper {
 			refusals.insert(.sendableFunctionCapturesWrapper)
-		}
-		if answeringDeclarations.renameReadsWrappersInstance {
-			refusals.insert(.lazy)
 		}
 		return NodeRecordRefusal.allCases.filter(refusals.contains)
 	}

@@ -738,6 +738,78 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 		#expect(reports.flatMap(\.differences) == [])
 	}
 
+	@Test
+	mutating func generate_laysOutRenamesOfAWrappersInstanceAsTheTreeDoes_whenTheyRenameAMemoOrALazilyInstantiatedValue() async throws {
+		// `Screen` renames its deferred parameter `user`, and so does `Header` beneath it; `Profile`, beneath `Root`, renames the
+		// instance of `Root`'s own `LazilyInstantiated`. The tree binds each rename from the wrapper's instance, and so do the
+		// node records, so both roots are laid out from them.
+		let files = [
+			seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let user: LazilyInstantiated<User>", "@Instantiated let screen: Screen", "@Instantiated let profile: Profile"]),
+			seamFixtureType(named: "Screen", isSeam: true, declarations: ["@Received(fulfilledByDependencyNamed: \"user\", ofType: User.self) let account: User", "@Instantiated let header: Header"]),
+			seamFixtureType(named: "Header", declarations: ["@Received(fulfilledByDependencyNamed: \"user\", ofType: User.self) let owner: User"]),
+			seamFixtureType(named: "Profile", declarations: ["@Received(fulfilledByDependencyNamed: \"user\", ofType: User.self) let owner: User"]),
+			"""
+			@Instantiable
+			public final class User: Instantiable, Sendable {
+			    public init() {}
+			}
+			""",
+		]
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: files, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
+		extension Screen {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public init(__safeDI_user: @autoclosure @escaping () -> User) {
+		        let user = LazilyInstantiated<User>(__safeDI_user)
+		        #sourceLocation(file: "\(output.fixtures["Screen.swift"])", line: 8)
+		        let account: User = user.instance
+		        #sourceLocation()
+		        @inline(never) func __safeDI_header() -> Header {
+		            #sourceLocation(file: "\(output.fixtures["Header.swift"])", line: 7)
+		            let owner: User = user.instance
+		            #sourceLocation()
+		            return Header(owner: owner)
+		        }
+		        let header: Header = __safeDI_header()
+		        self.init(account: account, header: header)
+		    }
+		}
+
+		extension Screen {
+		    public enum __safeDI_Screen_08AA1A656B91D4BA {}
+		}
+		""")
+		#expect(output.dependencyTreeFiles["Root+SafeDI.swift"] == generatedFileHeader + """
+		extension Root {
+		    public init() {
+		        func __safeDI_user() -> User {
+		            User()
+		        }
+		        let user = LazilyInstantiated<User>(__safeDI_user)
+		        func __safeDI_screen() -> Screen {
+		            _ = Screen.__safeDI_Screen_08AA1A656B91D4BA.self
+		            return Screen(__safeDI_user: user.instance)
+		        }
+		        let screen: Screen = __safeDI_screen()
+		        func __safeDI_profile() -> Profile {
+		            #sourceLocation(file: "\(output.fixtures["Profile.swift"])", line: 7)
+		            let owner: User = user.instance
+		            #sourceLocation()
+		            return Profile(owner: owner)
+		        }
+		        let profile: Profile = __safeDI_profile()
+		        self.init(user: user, screen: screen, profile: profile)
+		    }
+		}
+		""")
+		#expect(reports.filter { $0.root == "Screen" || $0.root == "Root" }.map(\.refusal) == [nil, nil])
+		#expect(reports.filter { $0.root == "Screen" || $0.root == "Root" }.map(\.isLaidOutFromNodeRecords) == [true, true])
+		#expect(reports.flatMap(\.differences) == [])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
