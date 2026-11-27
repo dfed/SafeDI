@@ -268,16 +268,26 @@ struct SafeDIToolNodeRecordsMockSharedSlotTests: ~Copyable {
 		// Node records refuse a mock that sends an actor a value a cycle's function builds, so the walk writes it: with
 		// every type of the cycle mocked, what the other mocks share must leave it compiling.
 		let fixtureFiles = [
-			"Alpha.swift": Self.type("Alpha", building: ["Bravo"], wrapper: "SendableInstantiator"),
-			"Bravo.swift": Self.type("Bravo", building: ["Charlie"], wrapper: "SendableInstantiator", kind: "actor"),
-			"Charlie.swift": Self.type("Charlie", building: ["Alpha"], wrapper: "SendableInstantiator"),
+			"Marked.swift": Self.markedFile,
+			"Alpha.swift": """
+			@Instantiable(generateMock: true)
+			public actor Alpha: Instantiable {
+			    public init(bravo: Bravo) {
+			        self.bravo = bravo
+			    }
+
+			    @Instantiated let bravo: Bravo
+			}
+			""",
+			"Bravo.swift": Self.type("Bravo", building: ["Alpha"]),
 		]
 		let walkOutput = try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixtureFiles, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
 			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixtureFiles, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		}
 
-		#expect(reports.filter(\.isMockRoot).map(\.root) == ["Alpha", "Bravo", "Charlie"])
+		#expect(reports.filter(\.isMockRoot).map(\.root) == ["Alpha", "Bravo"])
+		#expect(reports.filter(\.isMockRoot).map(\.everyRefusal) == [["mockActor"], ["mockActor"]])
 		#expect(output.generatedFiles == walkOutput.generatedFiles)
 	}
 
@@ -538,6 +548,33 @@ struct SafeDIToolNodeRecordsMockSharedSlotTests: ~Copyable {
 		}
 		#endif
 		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildsWalksValuesFromEveryRoot_whenCycleIsEnteredFromInsideSendableBuilder() async throws {
+		// `Alpha` holds a `SendableInstantiator` of `Bravo`, so `Bravo`'s function is `@Sendable` and is handed the places
+		// from inside it; `Bravo` holds an `Instantiator` of `Alpha`.
+		let fixtureFiles = [
+			"Marked.swift": Self.markedFile,
+			"Alpha.swift": Self.type("Alpha", building: ["Bravo"], wrapper: "SendableInstantiator"),
+			"Bravo.swift": Self.type("Bravo", building: ["Alpha"]),
+		]
+		try await MockKindsAcceptance.expectLaidOutValuesEqualWalks(
+			fixtureFiles: fixtureFiles,
+			probes: Self.probes(from: "Alpha", path: ["Bravo", "Alpha", "Bravo", "Alpha", "Bravo"])
+				+ Self.probes(from: "Bravo", path: ["Alpha", "Bravo", "Alpha", "Bravo", "Alpha"]),
+			filesToDelete: &filesToDelete,
+		)
+		// Node records refuse both mocks today, so the walk writes them.
+		let walkOutput = try await NodeRecordsObservation.$laysOutMockRoots.withValue(false) {
+			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixtureFiles, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete, skipCompileVerification: true)
+		}
+		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixtureFiles, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete, skipCompileVerification: true)
+		}
+		#expect(reports.filter(\.isMockRoot).map(\.everyRefusal) == [["sendable"], ["sendable"]])
+		#expect(output.generatedFiles == walkOutput.generatedFiles)
 	}
 
 	// MARK: Private
