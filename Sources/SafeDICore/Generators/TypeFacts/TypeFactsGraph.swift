@@ -893,12 +893,12 @@ struct TypeFactsGraph: Sendable {
 			key: { readID, answer in
 				switch readTable[Int(readID)].channel {
 				case .optional, .optionalValue:
-					if answer >= 0, isBeingBuilt[Int(answer)], isTwin(kinds[Int(answer)]) {
-						// Rule 3, case 2: rule 1 keys only answers that are not being built.
-						keys[Int(answer)]
+					// Rule 1, where a value or wrapper still being built is passed `nil`, as a read nothing answers is: whichever
+					// twin the path entered, and wherever else the label is bound (rule 3, case 2).
+					if answer >= 0, !(isBeingBuilt[Int(answer)] && isTwin(kinds[Int(answer)])) {
+						optionalParameterKey(of: kinds[Int(answer)])
 					} else {
-						// Rule 1.
-						optionalParameterKey(of: answer < 0 ? nil : kinds[Int(answer)])
+						optionalParameterKey(of: nil)
 					}
 				case .value, .alias, .madeAgain, .mock, .carrier, .fill, .family, .override:
 					answer < 0 ? answer : keys[Int(answer)]
