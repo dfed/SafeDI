@@ -119,7 +119,7 @@ extension DependencyTreeGenerator {
 		case .tree:
 			return treeReads
 		case .facts:
-			return factsReads
+			return factsReads.emptying(.requiredAliasFulfillingProperties).emptying(.typesDeclaredEscaping) // HAND MUTATION
 		}
 	}
 
