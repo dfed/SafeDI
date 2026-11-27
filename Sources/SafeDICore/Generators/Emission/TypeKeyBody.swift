@@ -35,12 +35,14 @@ enum TypeKeyBody {
 	/// root keeps `rootBody`, the path key's statements. `outerDeclarations` are the declarations in scope before the root's
 	/// body that it does not write: a seam's parameters, as its narrowest tier binds them. A read the path key resolves to one
 	/// is resolved to it in the type key's layout too, never to `nil`. No function the layout declares takes a name of
-	/// `namesInScope`, the names bound around the body, such as a seam's parameters' internal names.
-	static func statements(ofRootBody rootBody: [GeneratedCode], outerDeclarations: [Property] = [], namesInScope: Set<String> = []) -> [GeneratedCode]? {
+	/// `namesInScope`, the names bound around the body, such as a seam's parameters' internal names. A mock, whose body the
+	/// type key's layout replaces whatever it holds, lays out every loop of builders (`laysOutEveryLoop`); production keeps
+	/// the path key's body where it writes each member's function once.
+	static func statements(ofRootBody rootBody: [GeneratedCode], outerDeclarations: [Property] = [], namesInScope: Set<String> = [], laysOutEveryLoop: Bool = false) -> [GeneratedCode]? {
 		var layout = TypeKeyLayout()
 		layout.declareOuter(outerDeclarations)
 		layout.namesInScope = namesInScope
-		guard case let .success(statements) = layOut(rootBody, in: &layout) else { return nil }
+		guard case let .success(statements) = layOut(rootBody, in: &layout, laysOutEveryLoop: laysOutEveryLoop) else { return nil }
 		return statements
 	}
 
@@ -69,8 +71,9 @@ enum TypeKeyBody {
 	}
 
 	/// `rootBody` laid out by `layout`, which holds the declarations before it and the variants its call places call, or
-	/// the stage of the layout that kept the path key's body.
-	private static func layOut(_ rootBody: [GeneratedCode], in layout: inout TypeKeyLayout) -> Result<[GeneratedCode], TypeKeyRefusal> {
+	/// the stage of the layout that kept the path key's body. Where `laysOutEveryLoop` holds, a loop of builders the path key
+	/// writes once is laid out too.
+	private static func layOut(_ rootBody: [GeneratedCode], in layout: inout TypeKeyLayout, laysOutEveryLoop: Bool = false) -> Result<[GeneratedCode], TypeKeyRefusal> {
 		// The root functions the plan's places call are declared once, before every statement, as the path key declares
 		// them (`RootFunctionHoisting`); a root that keeps one in place keeps the path key's body, since the type key spells
 		// a place written as text without them.
@@ -90,7 +93,7 @@ enum TypeKeyBody {
 		layout.computeClasses()
 		// A root whose loops of builders the path key writes once each keeps the path key's body, the members' functions
 		// nested as before the type key laid loops out.
-		guard layout.laysOutLoops() else { return .failure(.loopWrittenOnce) }
+		guard laysOutEveryLoop || layout.laysOutLoops() else { return .failure(.loopWrittenOnce) }
 		guard layout.computePlacement() else { return .failure(.functionNotPlaced) }
 		layout.computeOutcomes()
 		guard layout.computeParameterTypes() else { return .failure(.parameterHasNoType) }
