@@ -87,6 +87,12 @@ def split_top(t):
         else: cur+=c
     if cur.strip(): parts.append(cur.strip())
     return parts
+def declares_again(body,label):
+    """whether a function's body declares its parameter's name again: a binding, a closure's parameter, or a
+    nested function's parameter of that name"""
+    name=re.escape(label.strip('`'))
+    again=re.compile(r'\b(?:let|var) `?'+name+r'`?\b|\{ *(?:[\w`, ]*, *)?`?'+name+r'`?(?: *,[\w`, ]*)? in\b|\bfunc [^(]+\((?:.*, )?(?:\w+ )?`?'+name+r'`?: ')
+    return any(again.search(line) for line in body)
 def expand(lines,hoisted,base_indent,entered={},nearest={},visible=frozenset(),referenced=None):
     """lines: body of one function (or root) at base_indent. returns new lines."""
     out=[]
@@ -173,10 +179,12 @@ def expand(lines,hoisted,base_indent,entered={},nearest={},visible=frozenset(),r
                 absent=lab.strip('`')+': nil'
                 if ident in alist: alist.remove(ident)
                 elif bare in alist: alist.remove(bare)
-                elif absent in alist and pp.rstrip().endswith('?'):
+                elif absent in alist and pp.rstrip().endswith('?') and not declares_again(body,lab):
                     # entry 13's channel in a mock: one function with an optional parameter serves a place that
                     # hands a value and a place that hands nothing; the walk's copy for the place that hands
-                    # nothing has no parameter and writes nil where the parameter was read
+                    # nothing has no parameter and writes nil where the parameter was read. The nil is the
+                    # literal argument of the call; a body that declares the name again is not rewritten; a read
+                    # handed on to a nested call is that call's "label: nil", which goes through this rule there
                     alist.remove(absent)
                     read=re.compile(r'(?<![\w.`])'+re.escape(lab)+r'(?![\w:`])')
                     body=[read.sub('nil',x) for x in body]

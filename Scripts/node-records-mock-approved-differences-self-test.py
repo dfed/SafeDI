@@ -77,6 +77,9 @@ CASES = [
     ('13', 'the place that hands nothing hands a value of that name',
      once('__safeDI_model(token: nil, safeDIOverrides: safeDIOverrides.model)',
           '__safeDI_model(token: token, safeDIOverrides: safeDIOverrides.model)')),
+    ('13', 'the function declares the parameter’s name again and reads that',
+     once('            let api: any Api = if let safeDIBuilder = safeDIOverrides.api { safeDIBuilder(token) }',
+          '            let token: Token? = nil\n            let api: any Api = if let safeDIBuilder = safeDIOverrides.api { safeDIBuilder(token) }')),
     ('13', 'the function writes nil where it read its parameter',
      once('LiveApi(token: token)', 'LiveApi(token: nil)')),
 ]
