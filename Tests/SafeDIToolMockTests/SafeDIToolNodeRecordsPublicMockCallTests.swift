@@ -1210,9 +1210,10 @@ struct SafeDIToolNodeRecordsPublicMockCallTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_refusesCall_whenRootNamesApartLabelCalledMockReceives() async throws {
-		// `Root`’s mock promotes `session` as a `Session` and as a `Token` and names the two apart, so the walk binds the
-		// `Session` under its label in the call’s function before the call passes it, which no record of a call makes.
+	mutating func mock_laysOutCall_whenRootNamesApartLabelCalledMockReceives() async throws {
+		// `Root`’s mock promotes `session` as a `Session` and as a `Token` and names the two apart, so the call’s function
+		// binds the `Session` under its label before the call passes it, as the receive of any node named apart is bound
+		// again (`mockReceivesBoundAgain(in:)`).
 		let (_, reports) = try await mockOfRoot(
 			feed: Self.screen(),
 			app: """
@@ -1253,7 +1254,8 @@ struct SafeDIToolNodeRecordsPublicMockCallTests: ~Copyable {
 			}
 			""",
 		)
-		#expect(reports.map(\.refusal) == ["mockOverrideNotParentField"])
+		#expect(reports.map(\.refusal) == [nil])
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
 	}
 
 	// MARK: Values
