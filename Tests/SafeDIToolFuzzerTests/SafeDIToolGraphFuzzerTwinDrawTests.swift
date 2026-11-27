@@ -131,8 +131,8 @@ struct TwinSeed: CustomTestStringConvertible, Sendable {
 	}
 
 	static let all: [TwinSeed] = [
-		TwinSeed(corpus: .base, seed: 2449, shapes: [.drawn, .firstThroughInstantiator, .screenBuildsPanel, .screenReceivesOnlyIfAvailable, .themeInSameForm, .topOpensSecond, .wrapperFirst]),
-		TwinSeed(corpus: .base, seed: 3698, shapes: [.drawn, .screenBuildsPanel, .sendableWrapper, .themeInMixedForms, .themeInMixedFormsInsideSendableBuilder, .valueFirst]),
+		TwinSeed(corpus: .base, seed: 2_449, shapes: [.drawn, .firstThroughInstantiator, .screenBuildsPanel, .screenReceivesOnlyIfAvailable, .themeInSameForm, .topOpensSecond, .wrapperFirst]),
+		TwinSeed(corpus: .base, seed: 3_698, shapes: [.drawn, .screenBuildsPanel, .sendableWrapper, .themeInMixedForms, .themeInMixedFormsInsideSendableBuilder, .valueFirst]),
 		TwinSeed(corpus: .seam, seed: 62, shapes: [.drawn, .inSeam, .themeInSameForm, .wrapperFirst]),
 		TwinSeed(corpus: .seam, seed: 98, shapes: [.drawn, .firstThroughInstantiator, .inSeam, .screenBuildsPanel, .screenReceivesOnlyIfAvailable, .wrapperFirst]),
 		TwinSeed(corpus: .seam, seed: 897, shapes: [.drawn, .firstThroughInstantiator, .inSeam, .sendableWrapper, .themeInMixedForms, .themeInMixedFormsInsideSendableBuilder, .topOpensSecond, .valueFirst]),
