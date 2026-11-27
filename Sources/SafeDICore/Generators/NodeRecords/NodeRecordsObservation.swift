@@ -84,10 +84,6 @@ public enum NodeRecordsObservation {
 					pending.append((tree: treeBuilt.children, nodeRecords: nodeRecordsBuilt.children, path: placePath))
 				case let (.alias(treeAlias), .alias(nodeRecordsAlias)):
 					differences += fieldDifferences(between: treeAlias, and: nodeRecordsAlias).map { "\(placePath): \($0)" }
-				case let (.alias(treeAlias), .built(nodeRecordsBuilt)) where treeAlias.callRecord != nil:
-					// The tree writes a call of a seam as text, beside the record the engine is to lay it out from, which node records
-					// make. A call builds no child in the caller's tree.
-					differences += fieldDifferences(between: treeAlias.callRecord?.record ?? nodeRecordsBuilt, and: nodeRecordsBuilt).map { "\(placePath): \($0)" }
 				case (.built, _), (.alias, _), (.closer, _):
 					differences.append("\(placePath): the tree writes another kind of place than node records")
 				}
