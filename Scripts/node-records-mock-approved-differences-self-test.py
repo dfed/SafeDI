@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Self-test of node-records-mock-approved-differences.py: for each rewrite that restructures text (entries 16, 20,
-21 and 23), one real pair the rewrite makes equal, and hand edits of the records' text after each of which the pair
+"""Self-test of node-records-mock-approved-differences.py: for each rewrite that restructures text (entries 13, 16,
+20, 21 and 23), one real pair the rewrite makes equal, and hand edits of the records' text after each of which the pair
 must differ. Prints one line per case and exits 1 when a pair is not equal before an edit or still equal after one.
 
   node-records-mock-approved-differences-self-test.py
@@ -74,6 +74,11 @@ CASES = [
     ('23', 'the override read is dropped',
      once('return if let safeDIBuilder = safeDIOverrides { safeDIBuilder(r0x0) } else { R0(r0x0: r0x0) }',
           'return R0(r0x0: r0x0)')),
+    ('13', 'the place that hands nothing hands a value of that name',
+     once('__safeDI_model(token: nil, safeDIOverrides: safeDIOverrides.model)',
+          '__safeDI_model(token: token, safeDIOverrides: safeDIOverrides.model)')),
+    ('13', 'the function writes nil where it read its parameter',
+     once('LiveApi(token: token)', 'LiveApi(token: nil)')),
 ]
 
 

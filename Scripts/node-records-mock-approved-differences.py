@@ -170,8 +170,17 @@ def expand(lines,hoisted,base_indent,entered={},nearest={},visible=frozenset(),r
                 lab=pp.split(':')[0]
                 ident=lab+': '+lab
                 bare=lab.strip('`')+': '+lab
+                absent=lab.strip('`')+': nil'
                 if ident in alist: alist.remove(ident)
                 elif bare in alist: alist.remove(bare)
+                elif absent in alist and pp.rstrip().endswith('?'):
+                    # entry 13's channel in a mock: one function with an optional parameter serves a place that
+                    # hands a value and a place that hands nothing; the walk's copy for the place that hands
+                    # nothing has no parameter and writes nil where the parameter was read
+                    alist.remove(absent)
+                    read=re.compile(r'(?<![\w.`])'+re.escape(lab)+r'(?![\w:`])')
+                    body=[read.sub('nil',x) for x in body]
+                    ALSO_USED.append('13')
                 else: keep_p.append(pp)
             if len(keep_p)!=len(plist):
                 params=', '.join(keep_p)
@@ -540,7 +549,7 @@ def main():
             else:
                 failures += 1
                 print('%s: %s' % (records_path, failure))
-        for name in [name for name, _ in REWRITES] + ['10', '16', '17', '23']:
+        for name in [name for name, _ in REWRITES] + ['10', '13', '16', '17', '23']:
             print('entry %s: used on %d pairs' % (name, counts[name]))
         print('%d of %d pairs equal after rewrite' % (total - failures, total))
         sys.exit(1 if failures else 0)
