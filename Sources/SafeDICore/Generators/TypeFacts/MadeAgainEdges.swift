@@ -32,10 +32,11 @@
 struct MadeAgainEdges: Sendable {
 	/// - Parameters:
 	///   - targetsByNode: The members each node makes again, in the order its body rebinds them.
+	///   - labelsByNode: For each of those, the label the node rebinds it as, by the world's label IDs.
 	///   - parentEdgesByNode: For each of those, the edge of the loop's parent that builds the member (its position among
 	///     every node's edges), whose family the member is built in wherever it is made again.
 	///   - rebound: The reads of the labels each node rebinds, a row per node, read IDs as the reads closure takes them.
-	init(graph: OrderedGraph<some Hashable & Sendable>, targetsByNode: [[Int32]], parentEdgesByNode: [[Int32]], rebound: BitRows) {
+	init(graph: OrderedGraph<some Hashable & Sendable>, targetsByNode: [[Int32]], labelsByNode: [[Int32]], parentEdgesByNode: [[Int32]], rebound: BitRows) {
 		var offsets = [Int32]()
 		offsets.reserveCapacity(targetsByNode.count + 1)
 		var targets = [Int32]()
@@ -46,6 +47,7 @@ struct MadeAgainEdges: Sendable {
 		offsets.append(Int32(targets.count))
 		self.offsets = offsets
 		self.targets = targets
+		labels = Array(labelsByNode.joined())
 		parentEdges = Array(parentEdgesByNode.joined())
 		self.rebound = rebound
 		// Tarjan's strongly connected components over both columns, on an explicit stack: a node's edges are its graph
@@ -119,6 +121,11 @@ struct MadeAgainEdges: Sendable {
 		targets[Int(offsets[index])..<Int(offsets[index + 1])]
 	}
 
+	/// For each member the node makes again, the label it rebinds the member as.
+	func labels(of index: Int) -> ArraySlice<Int32> {
+		labels[Int(offsets[index])..<Int(offsets[index + 1])]
+	}
+
 	/// For each member the node makes again, the edge of the loop's parent that builds it.
 	func parentEdges(of index: Int) -> ArraySlice<Int32> {
 		parentEdges[Int(offsets[index])..<Int(offsets[index + 1])]
@@ -141,11 +148,12 @@ struct MadeAgainEdges: Sendable {
 
 	/// The 32-bit elements of the column (each 64-bit word of a bit set counts two).
 	var columnElementCount: Int {
-		offsets.count + targets.count + parentEdges.count + componentByNode.count + componentSizes.count + isOnReadCycle.count + 2 * rebound.wordCount
+		offsets.count + targets.count + labels.count + parentEdges.count + componentByNode.count + componentSizes.count + isOnReadCycle.count + 2 * rebound.wordCount
 	}
 
 	private let offsets: [Int32]
 	private let targets: [Int32]
+	private let labels: [Int32]
 	private let parentEdges: [Int32]
 	private let componentSizes: [Int32]
 }

@@ -404,7 +404,9 @@ struct TypeFactsGraph: Sendable {
 		var positions = [Int32](repeating: -1, count: graph.edgeCount)
 		var loops = [Int32](repeating: -1, count: graph.edgeCount)
 		// What each node makes again as a member of a loop of builders, under the first parent that builds it, and whether
-		// another parent's loop makes other members of it again (or none).
+		// another parent's loop makes other members of it again (or none). Where two parents make the same members again,
+		// the first parent's edges stand for both: a node's key holds the property it is built as, so each parent's edge
+		// to a member declares that one property, in one wrapper, and so gives the call one family.
 		var madeAgainUnderParent = [[LoopTarget]?](repeating: nil, count: nodes.count)
 		var loopParentByMember = [Int32](repeating: -1, count: nodes.count)
 		var isSharedApart = [Bool](repeating: false, count: nodes.count)
@@ -677,6 +679,7 @@ struct TypeFactsGraph: Sendable {
 			madeAgain = MadeAgainEdges(
 				graph: graph,
 				targetsByNode: madeAgainByNode.map { $0.map(\.node) },
+				labelsByNode: madeAgainByNode.map { $0.map(\.label) },
 				parentEdgesByNode: madeAgainByNode.map { $0.map(\.parentEdge) },
 				rebound: BitRows(rowCount: nodes.count, columnCount: readInterner.values.count, columnsOfRow: reboundReads),
 			)
@@ -895,13 +898,17 @@ struct TypeFactsGraph: Sendable {
 		for index in graph.nodes.indices {
 			edgeTargets.append(contentsOf: graph.edges(from: index))
 		}
-		// Each member's rebound labels, with the forms its parent declares them with: the parent declares each member it
-		// builds.
+		// Each member's rebound labels, with the forms its parent declares the member's own property with: a mock's root can
+		// declare one label in two forms, and the member rebinds the one it is built as.
 		var reboundByLabelByNode = [[Int32: (forms: String, kind: Property.PropertyType)]](repeating: [:], count: madeAgain == nil ? 0 : graph.nodes.count)
 		if let madeAgain {
-			for (index, targets) in madeAgain.targetsByNode.enumerated() {
+			for (index, targets) in madeAgain.targetsByNode.enumerated() where !targets.isEmpty {
+				let parentForms = graph.nodes[Int(madeAgain.parentByMember[index])].scope.sortedDeclaredPropertyForms
 				for target in targets {
-					reboundByLabelByNode[index][target.label] = declarationByLabelByNode[Int(madeAgain.parentByMember[index])][target.label]
+					let property = graph.nodes[Int(target.node)].property
+					if let declared = parentForms.first(where: { $0.property == property }) {
+						reboundByLabelByNode[index][target.label] = (declared.forms.sorted().map(\.asSource).joined(separator: ", "), declared.property.propertyType)
+					}
 				}
 			}
 		}

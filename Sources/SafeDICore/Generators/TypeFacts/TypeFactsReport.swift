@@ -191,6 +191,7 @@ public struct TypeFactsReport: Sendable {
 				},
 				instantiatedEdgeCount: edgeFacts.count { !$0.isFill },
 				madeAgain: graph.madeAgain(from: DeclarationID(index)).map(Int.init),
+				madeAgainLabels: graph.madeAgainLabels(from: DeclarationID(index)).map { graph.labelTexts[Int($0)] },
 				bindings: graph.worldBindings(of: index).map { binding in
 					"\(graph.labelTexts[Int(binding.label)]): \(property(binding.property))"
 				},
@@ -312,6 +313,8 @@ public struct TypeFactsReport: Sendable {
 		public let instantiatedEdgeCount: Int
 		/// The positions of the members of loops of builders its body makes again, in the order it rebinds them.
 		public let madeAgain: [Int]
+		/// The label its body rebinds each of those as, which its own argument for that label always passes.
+		public let madeAgainLabels: [String]
 		/// The node's bindings in binding order, `label: property`.
 		public let bindings: [String]
 		/// The module declaring each binding, parallel to `bindings`.
@@ -408,7 +411,7 @@ public struct TypeFactsReport: Sendable {
 			lines.append(line)
 			let madeAgain = world.madeAgain(from: declaration)
 			if !madeAgain.isEmpty {
-				lines.append("d\(index) makes again \(Array(madeAgain))")
+				lines.append("d\(index) makes again \(Array(madeAgain)) as labels \(Array(world.madeAgainLabels(from: declaration)))")
 			}
 		}
 		if !world.loopMembersSharedApart.isEmpty {

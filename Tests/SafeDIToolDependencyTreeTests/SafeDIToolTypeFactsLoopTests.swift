@@ -55,6 +55,8 @@ struct SafeDIToolTypeFactsLoopTests: ~Copyable {
 
 		#expect(report.nodes[a].madeAgain == [b], "\(report.world)")
 		#expect(report.nodes[b].madeAgain == [a], "\(report.world)")
+		// What a writer reads for each member's own argument: the label it rebinds, whose argument is the rebinding.
+		#expect(report.nodes[a].madeAgainLabels == ["bBuilder"] && report.nodes[b].madeAgainLabels == ["aBuilder"], "\(report.world)")
 		#expect(!report.nodes[a].isOnCycle && !report.nodes[b].isOnCycle, "\(report.world)")
 		#expect(report.variantCountsByNode[a] == 1 && report.variantCountsByNode[b] == 1, "\(report.world)")
 		expectMadeAgainCallsNameTheParentsCalls(in: report)
@@ -108,6 +110,59 @@ struct SafeDIToolTypeFactsLoopTests: ~Copyable {
 		// `S1` reads `s0Builder`, then its own label, which `S0` declares.
 		#expect(report.nodes[s1].readsFromAbove == ["value(s0Builder)", "value(s1)"], "\(report.world)")
 		#expect(callOfS1.first == "bound madeAgain", "\(report.world)")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesItsOwnRebindingForItsOwnLabel_whenMemberReceivesItsOwnBuilder() async throws {
+		// A loop of one whose member's own type receives its label: that receive and the read of the label it is built as
+		// are one read, which still reaches above, answered by the root's declaration being built, while the argument a
+		// writer passes is the rebinding at the member's top, which `madeAgainLabels` names.
+		let (report, output) = try await rootReportAndOutput(of: [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let aBuilder: Instantiator<A>"]),
+			seamFixtureType(named: "A", isFinalClass: true, declarations: ["@Received let aBuilder: Instantiator<A>"]),
+		])
+		let a = try node(declaring: "A as aBuilder: Instantiator<A>", in: report)
+
+		#expect(report.nodes[a].madeAgain == [a] && report.nodes[a].madeAgainLabels == ["aBuilder"], "\(report.world)")
+		#expect(report.nodes[a].readsFromAbove == ["value(aBuilder)"], "\(report.world)")
+		#expect(report.variantCountsByNode[a] == 1, "\(report.world)")
+		expectMadeAgainCallsNameTheParentsCalls(in: report)
+		#expect(output.generatedFiles?["Root+SafeDI.swift"] == generatedFileHeader + """
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_aBuilder() -> A {
+		            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+		            return A(aBuilder: aBuilder)
+		        }
+		        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+		        self.init(aBuilder: aBuilder)
+		    }
+		}
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_makesSendableMembersAgain_whenTwoSendableBuildersReceiveEachOther() async throws {
+		// A loop of `SendableInstantiator` members, in production and in the mock: each made-again call keys as the
+		// root's call of the member, family included. A loop that mixes a plain member with a `Sendable` one is rejected
+		// in both directions (`SafeDIToolReceivedBuilderCycleTests`), since a ring that steps from one to the other steps
+		// back too, so this is every family a loop can hold beside the plain one.
+		let types = [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let aBuilder: SendableInstantiator<A>", "@Instantiated let bBuilder: SendableInstantiator<B>"])
+				.replacingOccurrences(of: "@Instantiable(isRoot: true)", with: "@Instantiable(isRoot: true, generateMock: true)"),
+			seamFixtureType(named: "A", isFinalClass: true, declarations: ["@Received let bBuilder: SendableInstantiator<B>"], conformances: ", Sendable"),
+			seamFixtureType(named: "B", isFinalClass: true, declarations: ["@Received let aBuilder: SendableInstantiator<A>"], conformances: ", Sendable"),
+		]
+		for forMockGeneration in [false, true] {
+			let report = try await rootReportAndOutput(of: types, forMockGeneration: forMockGeneration).report
+			let a = try node(declaring: "A as aBuilder: SendableInstantiator<A>", in: report)
+			let b = try node(declaring: "B as bBuilder: SendableInstantiator<B>", in: report)
+
+			#expect(report.nodes[a].madeAgain == [b] && report.nodes[b].madeAgain == [a], "\(report.world)")
+			expectMadeAgainCallsNameTheParentsCalls(in: report)
+		}
 	}
 
 	@Test
@@ -239,7 +294,7 @@ struct SafeDIToolTypeFactsLoopTests: ~Copyable {
 	}
 
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	private func rootReportAndOutput(of types: [String], skipCompileVerification: Bool = false) async throws -> (report: TypeFactsReport, output: TestOutput) {
+	private func rootReportAndOutput(of types: [String], skipCompileVerification: Bool = false, forMockGeneration: Bool = false) async throws -> (report: TypeFactsReport, output: TestOutput) {
 		let (stream, continuation) = AsyncStream.makeStream(of: TypeFactsReport.self)
 		let output = try await ConstructionMemoOracle.$observer.withValue({ _, _, report in continuation.yield(report) }) {
 			var filesToDelete = [URL]()
@@ -252,7 +307,7 @@ struct SafeDIToolTypeFactsLoopTests: ~Copyable {
 		}
 		continuation.finish()
 		var reports = [TypeFactsReport]()
-		for await report in stream where report.root == "Root" && !report.forMockGeneration {
+		for await report in stream where report.root == "Root" && report.forMockGeneration == forMockGeneration {
 			reports.append(report)
 		}
 		return try (#require(reports.last), output)
@@ -267,22 +322,11 @@ struct SafeDIToolTypeFactsLoopTests: ~Copyable {
 		try #require(report.variantNodes.firstIndex(of: node), "\(report.world)")
 	}
 
-	/// Oracle B of the loop rule: each made-again call names the variant its caller's parent calls for the member, at the
-	/// parent's edge to it. Every variant here is called from its parent, so the parent's variant is the one that calls the
-	/// caller's.
+	/// Oracle B of the loop rule, as check 32 runs it on every tree: each made-again call names the variant its caller's
+	/// parent calls for the member, at the parent's edge to it.
 	private func expectMadeAgainCallsNameTheParentsCalls(in report: TypeFactsReport) {
-		for (caller, calls) in report.variantMadeAgainCalls.enumerated() {
-			let callerNode = report.variantNodes[caller]
-			for (index, callee) in calls.enumerated() {
-				let member = report.nodes[callerNode].madeAgain[index]
-				let parents = report.variantCalls.indices.filter { report.variantCalls[$0].contains(caller) }
-				for parent in parents {
-					let edges = report.nodes[report.variantNodes[parent]].edges
-					guard let edge = edges.firstIndex(of: member) else { continue }
-					#expect(report.variantCalls[parent][edge] == callee, "v\(caller) makes again v\(callee), where its parent v\(parent) calls v\(report.variantCalls[parent][edge]): \(report.world)")
-				}
-				#expect(!parents.isEmpty, "v\(caller) has no parent: \(report.world)")
-			}
-		}
+		let result = TypeFactsChecks.findings(of: report)
+		#expect(result.comparedByCheck[32, default: 0] == report.variantMadeAgainCalls.joined().count, "\(report.world)")
+		#expect(result.findingsByCheck[32] == nil, "\(result.findingsByCheck[32] ?? []): \(report.world)")
 	}
 }

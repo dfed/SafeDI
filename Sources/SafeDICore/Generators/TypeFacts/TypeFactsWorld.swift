@@ -210,7 +210,14 @@ protocol TypeFactsWorld {
 	/// The members of loops of builders the declaration's body makes again at its top, in the order it rebinds them: a
 	/// column of its own beside `edges(from:)`, which the reads closure and the variants read and the build order,
 	/// `isOnCycle` and `firstRoute` do not.
+	///
+	/// A writer reads the member's own arguments from here too: its argument for a label of `madeAgainLabels(from:)` is
+	/// always that label's rebinding, whatever source its read's answer names. The rebinding shadows the member's own
+	/// receives of the labels it makes again, so those reads leave its row, but for one: the read of the label it is built
+	/// as, which a loop of one makes again too and still reaches above, answered as its parent's declaration being built.
 	func madeAgain(from declaration: DeclarationID) -> ArraySlice<Int32>
+	/// The label the declaration rebinds each member of `madeAgain(from:)` as, in that order.
+	func madeAgainLabels(from declaration: DeclarationID) -> ArraySlice<WorldLabelID>
 	/// The loop members whose parents' loops make different members again, which a stage that writes from nodes refuses.
 	var loopMembersSharedApart: [Int32] { get }
 	func edgeFacts(from declaration: DeclarationID) -> ArraySlice<TypeFactsEdge>
@@ -316,6 +323,10 @@ extension TypeFactsGraph: TypeFactsWorld {
 
 	func madeAgain(from declaration: DeclarationID) -> ArraySlice<Int32> {
 		madeAgain?.targets(of: Int(declaration)) ?? []
+	}
+
+	func madeAgainLabels(from declaration: DeclarationID) -> ArraySlice<WorldLabelID> {
+		madeAgain?.labels(of: Int(declaration)) ?? []
 	}
 
 	func edgeFacts(from declaration: DeclarationID) -> ArraySlice<TypeFactsEdge> {

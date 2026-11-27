@@ -374,7 +374,7 @@ enum TypeFactsChecks {
 		return reads
 	}
 
-	static let lastCheck = 31
+	static let lastCheck = 32
 
 	/// Checks 11 to 31: each column of the graph against what the generator decided at each place.
 	///
@@ -400,6 +400,9 @@ enum TypeFactsChecks {
 	/// 30. A node holds a hole beneath exactly when a hole is reachable from it along edges that are not fills.
 	/// 31. How the place is constructed: a seam call, a call of another module's public mock, a type built with its
 	///     hand-written mock.
+	/// 32. Oracle B: each member a variant makes again is called as the variant that each body calling the maker calls for
+	///     that member at its own edge, and the maker has such a body. It reads the variants alone, so it runs on every tree
+	///     with a loop of builders, refused or not.
 	private static func columnChecks(
 		of report: TypeFactsReport,
 		subtreeClosesCycle: [Bool],
@@ -603,6 +606,30 @@ enum TypeFactsChecks {
 			count(30)
 			if node.holdsHoleBeneath != holdsHole[index] {
 				add(30, "node \(index) \(node.description) holds a hole beneath \(node.holdsHoleBeneath) where its edges reach one \(holdsHole[index])")
+			}
+		}
+		// Check 32.
+		guard report.variantMadeAgainCalls.contains(where: { !$0.isEmpty }) else { return }
+		var edgeCallersByVariant = [[Int]](repeating: [], count: report.variantCalls.count)
+		for (caller, calls) in report.variantCalls.enumerated() {
+			for callee in calls {
+				edgeCallersByVariant[callee].append(caller)
+			}
+		}
+		for (maker, calls) in report.variantMadeAgainCalls.enumerated() {
+			let makerNode = nodes[report.variantNodes[maker]]
+			for (member, callee) in zip(makerNode.madeAgain, calls) {
+				count(32)
+				let parents = edgeCallersByVariant[maker]
+				if parents.isEmpty {
+					add(32, "v\(maker) of \(makerNode.description) makes again v\(callee) and no body calls it at an edge")
+				}
+				for parent in parents {
+					let parentNode = nodes[report.variantNodes[parent]]
+					for (edge, target) in parentNode.edges.enumerated() where target == member && report.variantCalls[parent][edge] != callee {
+						add(32, "v\(maker) of \(makerNode.description) makes again v\(callee) of node \(member), where its parent v\(parent) calls v\(report.variantCalls[parent][edge])")
+					}
+				}
 			}
 		}
 	}
