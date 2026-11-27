@@ -315,12 +315,14 @@ protocol TypeFactsWorld {
 	/// the declaration's subtree receives from above and those some receiver requires, as the function a lazy cycle
 	/// closes on types its parameter today. Whether the function takes the read as a parameter at all is the outcomes
 	/// fold's answer (`outcomes(of:)`), which `parameters(of:)` joins with this.
+	/// Where a lazily instantiated wrapper answers the read's unwrapped value (rule 3), the parameter is the wrapper, read
+	/// through its `instance`, and optional where some call of the variant passes `nil` (`arrivals`, built once per world).
 	/// Computed when asked, never while the world is built.
-	func parameterType(of variant: VariantID, _ read: ReadID) -> TypeFactsParameter?
+	func parameterType(of variant: VariantID, _ read: ReadID, arrivals: TypeFactsReadArrivals) -> TypeFactsParameter?
 	/// Exactly the parameters the variant's function takes: each label one of whose reads comes to a parameter
 	/// (`outcomes(of:)`), in the order of `parameterOrder(of:)` for its declaration, typed by `parameterType(of:_:)`.
 	/// Computed when asked, never while the world is built.
-	func parameters(of variant: VariantID) -> [TypeFactsParameter]
+	func parameters(of variant: VariantID, arrivals: TypeFactsReadArrivals) -> [TypeFactsParameter]
 }
 
 /// A parameter of a variant's function: what it takes for one label its subtree reads from above.
@@ -519,7 +521,7 @@ extension TypeFactsGraph: TypeFactsWorld {
 		parameterOrder(of: declaration, walking: [])
 	}
 
-	func parameterType(of variant: VariantID, _ read: ReadID) -> TypeFactsParameter? {
+	func parameterType(of variant: VariantID, _ read: ReadID, arrivals: TypeFactsReadArrivals) -> TypeFactsParameter? {
 		let declaration = declaration(of: variant)
 		let reads = reads(of: declaration)
 		let label = readTable[Int(read)].label
@@ -531,11 +533,17 @@ extension TypeFactsGraph: TypeFactsWorld {
 			return nil
 		}
 		let keys = keys(of: variant)
+		// The wrapper that answers the read's unwrapped value, where the variant is keyed by one.
+		let wrapperName: String?
 		switch answer(keys[keys.startIndex + (position - reads.startIndex)]).form {
 		case .none, .beingBuilt, .madeAgain:
 			return nil
-		case .declared, .optionalParameter, .optionalLazilyInstantiatedParameter, .optionalSendableLazilyInstantiatedParameter:
-			break
+		case .declared, .optionalParameter:
+			wrapperName = nil
+		case .optionalLazilyInstantiatedParameter:
+			wrapperName = Dependency.lazilyInstantiatedType
+		case .optionalSendableLazilyInstantiatedParameter:
+			wrapperName = Dependency.sendableLazilyInstantiatedType
 		}
 		var forms = Set<Property>()
 		for received in receives.received.columns(inRow: Int(declaration)) where propertyFacts.labels[Int(received)] == label {
@@ -546,6 +554,13 @@ extension TypeFactsGraph: TypeFactsWorld {
 			requiredForms.insert(propertyTable[Int(required)])
 		}
 		guard let (property, passedForms) = CycleParameter.property(passing: forms, requiredForms: requiredForms.intersection(forms)) else { return nil }
+		if let wrapperName {
+			let wrapper = Property(label: property.label, typeDescription: .simple(name: wrapperName, generics: [property.typeDescription.unwrapped]))
+			return TypeFactsParameter(
+				property: arrivals.nilArrives(at: position - reads.startIndex, of: variant) ? wrapper.asOptionalProperty : wrapper,
+				readsInstanceOfWrapper: true,
+			)
+		}
 		let instance = property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding
 		return TypeFactsParameter(
 			property: property,
@@ -553,14 +568,28 @@ extension TypeFactsGraph: TypeFactsWorld {
 		)
 	}
 
-	func parameters(of variant: VariantID) -> [TypeFactsParameter] {
+	func parameters(of variant: VariantID, arrivals: TypeFactsReadArrivals) -> [TypeFactsParameter] {
 		let declaration = declaration(of: variant)
 		let reads = reads(of: declaration)
+		let keys = keys(of: variant)
 		let outcomes = outcomes(of: variant)
+		// One pass over the reads: for each label, its first read that comes to a parameter, or the first of those a
+		// wrapper answers, since a function takes one parameter per label and the wrapper serves every read of it.
+		var readByLabel = [WorldLabelID: (read: ReadID, isAnsweredByWrapper: Bool)]()
+		for offset in 0..<reads.count where outcomes[outcomes.startIndex + offset] == .parameter {
+			let read = reads[reads.startIndex + offset]
+			let isAnsweredByWrapper = switch answer(keys[keys.startIndex + offset]).form {
+			case .optionalLazilyInstantiatedParameter, .optionalSendableLazilyInstantiatedParameter:
+				true
+			case .none, .declared, .beingBuilt, .optionalParameter:
+				false
+			}
+			let label = readTable[Int(read)].label
+			guard readByLabel[label].map({ isAnsweredByWrapper && !$0.isAnsweredByWrapper }) ?? true else { continue }
+			readByLabel[label] = (read, isAnsweredByWrapper)
+		}
 		return parameterOrder(of: declaration).compactMap { label in
-			reads.indices
-				.first { readTable[Int(reads[$0])].label == label && outcomes[outcomes.startIndex + ($0 - reads.startIndex)] == .parameter }
-				.flatMap { parameterType(of: variant, reads[$0]) }
+			readByLabel[label].flatMap { parameterType(of: variant, $0.read, arrivals: arrivals) }
 		}
 	}
 
