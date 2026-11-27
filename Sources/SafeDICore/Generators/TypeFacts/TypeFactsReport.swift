@@ -66,6 +66,28 @@ public struct TypeFactsReport: Sendable {
 		variantCountsByNode = variantCounts
 		variantNodes = (0..<graph.variantCount).map { Int(graph.declaration(of: VariantID($0))) }
 		variantCalls = (0..<graph.variantCount).map { graph.calls(of: VariantID($0)).map(Int.init) }
+		variantMadeAgainCalls = (0..<graph.variantCount).map { graph.madeAgainCalls(of: VariantID($0)).map(Int.init) }
+		func sourceDescriptions(_ sources: ArraySlice<AnswerSource>) -> [String] {
+			sources.map { source in
+				switch source.kind {
+				case .none, .passedThrough:
+					"\(source.kind)"
+				case .bound:
+					"bound \(graph.answer(source.answer).form)"
+				}
+			}
+		}
+		variantCallSources = (0..<graph.variantCount).map { variant in
+			graph.calls(of: VariantID(variant)).indices.map { call in
+				sourceDescriptions(graph.sources(ofCall: call - graph.calls(of: VariantID(variant)).startIndex, of: VariantID(variant)))
+			}
+		}
+		variantMadeAgainCallSources = (0..<graph.variantCount).map { variant in
+			graph.madeAgainCalls(of: VariantID(variant)).indices.map { call in
+				sourceDescriptions(graph.sources(ofMadeAgainCall: call - graph.madeAgainCalls(of: VariantID(variant)).startIndex, of: VariantID(variant)))
+			}
+		}
+		loopMembersSharedApart = graph.loopMembersSharedApart.map(Int.init)
 		columnElementCount = graph.columnElementCount
 		edgeCount = graph.graph.edgeCount
 		nodes = graph.graph.nodes.indices.map { index in
@@ -74,6 +96,7 @@ public struct TypeFactsReport: Sendable {
 				construction: "\(graph.constructions[index])",
 				cycleKey: graph.cycleKey(ofNode: index),
 				edges: graph.graph.edges(from: index).map(Int.init),
+				madeAgain: graph.madeAgain(from: DeclarationID(index)).map(Int.init),
 				instantiatedEdgeCount: Int(graph.instantiatedEdgeCounts[index]),
 				isOnCycle: graph.graph.isOnCycle(index),
 				readsFromAbove: graph.reads.reads(of: index).map(graph.readDescription),
@@ -118,6 +141,8 @@ public struct TypeFactsReport: Sendable {
 		public let cycleKey: String
 		/// The positions of the nodes its edges lead to, in edge order.
 		public let edges: [Int]
+		/// The positions of the members of loops of builders its body makes again, in the order it rebinds them.
+		public let madeAgain: [Int]
 		/// How many of `edges`, the first ones, are properties the node's scope instantiates; the rest are fills.
 		public let instantiatedEdgeCount: Int
 		public let isOnCycle: Bool
@@ -162,6 +187,15 @@ public struct TypeFactsReport: Sendable {
 	public let variantNodes: [Int]
 	/// The variant each edge of a variant's node calls, in edge order.
 	public let variantCalls: [[Int]]
+	/// The variant each made-again call of a variant calls, in the order its node rebinds the members.
+	public let variantMadeAgainCalls: [[Int]]
+	/// For each call of each variant, in edge order, where each answer it hands comes from: `none`, `passedThrough`, or
+	/// `bound` with the answer's form.
+	public let variantCallSources: [[[String]]]
+	/// As `variantCallSources`, for each made-again call.
+	public let variantMadeAgainCallSources: [[[String]]]
+	/// The loop members whose parents' loops make different members again.
+	public let loopMembersSharedApart: [Int]
 
 	/// The world read through its interface only, as text: what a consumer of the frozen accessors sees.
 	private static func projection(of world: some TypeFactsWorld) -> String {
@@ -178,6 +212,13 @@ public struct TypeFactsReport: Sendable {
 			line += " reads [\(world.reads(of: declaration).map { "\(world.read($0).channel.name)" }.joined(separator: ", "))]"
 			line += " labels \(Array(world.labels(of: declaration)))"
 			lines.append(line)
+			let madeAgain = world.madeAgain(from: declaration)
+			if !madeAgain.isEmpty {
+				lines.append("d\(index) makes again \(Array(madeAgain))")
+			}
+		}
+		if !world.loopMembersSharedApart.isEmpty {
+			lines.append("loop members shared apart \(world.loopMembersSharedApart)")
 		}
 		lines.append("roots \((0..<world.rootCount).map(world.rootVariant))")
 		for index in 0..<world.variantCount {
@@ -189,6 +230,10 @@ public struct TypeFactsReport: Sendable {
 			line += world.isCalledOnce(variant) ? " once" : ""
 			line += " outcomes \(world.outcomes(of: variant).map { "\($0)" }) bound before \(Array(world.boundBefore(of: variant)))"
 			lines.append(line)
+			let madeAgainCalls = world.madeAgainCalls(of: variant)
+			if !madeAgainCalls.isEmpty {
+				lines.append("v\(index) makes again \(Array(madeAgainCalls)) sources [\(madeAgainCalls.indices.map { "\(world.sources(ofMadeAgainCall: $0 - madeAgainCalls.startIndex, of: variant).map(\.kind))" }.joined(separator: ", "))]")
+			}
 		}
 		return lines.joined(separator: "\n")
 	}

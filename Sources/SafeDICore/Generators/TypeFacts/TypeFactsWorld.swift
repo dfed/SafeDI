@@ -161,6 +161,9 @@ struct TypeFactsAnswer: Equatable, Sendable {
 		case optionalLazilyInstantiatedParameter
 		/// As `optionalParameter`, answered by a `SendableLazilyInstantiated`, which the parameter is.
 		case optionalSendableLazilyInstantiatedParameter
+		/// A member of a loop of builders, which the node answering rebinds at the top of its body: made again from the
+		/// member's one function, never being built.
+		case madeAgain
 	}
 
 	let form: Form
@@ -183,6 +186,12 @@ protocol TypeFactsWorld {
 	func firstRoute(to declaration: DeclarationID) -> [DeclarationID]
 
 	func edges(from declaration: DeclarationID) -> ArraySlice<Int32>
+	/// The members of loops of builders the declaration's body makes again at its top, in the order it rebinds them: a
+	/// column of its own beside `edges(from:)`, which the reads closure and the variants read and the build order,
+	/// `isOnCycle` and `firstRoute` do not.
+	func madeAgain(from declaration: DeclarationID) -> ArraySlice<Int32>
+	/// The loop members whose parents' loops make different members again, which a stage that writes from nodes refuses.
+	var loopMembersSharedApart: [Int32] { get }
 	/// Owed by the table-side columns.
 	func edgeFacts(from declaration: DeclarationID) -> ArraySlice<TypeFactsEdge>
 	/// Owed by the table-side columns.
@@ -227,6 +236,12 @@ protocol TypeFactsWorld {
 	func calls(of variant: VariantID) -> ArraySlice<VariantID>
 	/// Where each answer a call hands its callee comes from, in the callee's read order.
 	func sources(ofCall edgeIndex: Int, of variant: VariantID) -> ArraySlice<AnswerSource>
+	/// The variant each member the variant's declaration makes again calls, in `madeAgain(from:)`'s order: a call from the
+	/// top of the declaration's body, handed its answers there.
+	func madeAgainCalls(of variant: VariantID) -> ArraySlice<VariantID>
+	/// Where each answer a made-again call hands its callee comes from, in the callee's read order: `bound` by the caller
+	/// for a label it rebinds, else passed through from the caller's own answers.
+	func sources(ofMadeAgainCall index: Int, of variant: VariantID) -> ArraySlice<AnswerSource>
 	/// Called by exactly one call and off every cycle; not whether the body is a function (`BuiltPlaceRecord.hasFunction`).
 	func isCalledOnce(_ variant: VariantID) -> Bool
 	/// What each read of the variant comes to, parallel to `keys(of:)` (the outcomes fold).
@@ -295,6 +310,10 @@ extension TypeFactsGraph: TypeFactsWorld {
 
 	func edges(from declaration: DeclarationID) -> ArraySlice<Int32> {
 		graph.edges(from: Int(declaration))
+	}
+
+	func madeAgain(from declaration: DeclarationID) -> ArraySlice<Int32> {
+		madeAgain?.targets(of: Int(declaration)) ?? []
 	}
 
 	func edgeFacts(from _: DeclarationID) -> ArraySlice<TypeFactsEdge> {
@@ -383,7 +402,14 @@ extension TypeFactsGraph: TypeFactsWorld {
 			}
 			return TypeFactsAnswer(form: form, forms: -1)
 		}
-		return TypeFactsAnswer(form: answerIsBeingBuilt[Int(answer)] ? .beingBuilt : .declared, forms: answerKeys[Int(answer)])
+		let form: TypeFactsAnswer.Form = if answerIsMadeAgain[Int(answer)] {
+			.madeAgain
+		} else if answerIsBeingBuilt[Int(answer)] {
+			.beingBuilt
+		} else {
+			.declared
+		}
+		return TypeFactsAnswer(form: form, forms: answerKeys[Int(answer)])
 	}
 
 	func calls(of variant: VariantID) -> ArraySlice<VariantID> {
@@ -392,6 +418,14 @@ extension TypeFactsGraph: TypeFactsWorld {
 
 	func sources(ofCall edgeIndex: Int, of variant: VariantID) -> ArraySlice<AnswerSource> {
 		variants.sources(ofCall: variants.callOffset(of: Int(variant)) + edgeIndex)
+	}
+
+	func madeAgainCalls(of variant: VariantID) -> ArraySlice<VariantID> {
+		variants.madeAgainCallees(of: Int(variant))
+	}
+
+	func sources(ofMadeAgainCall index: Int, of variant: VariantID) -> ArraySlice<AnswerSource> {
+		variants.sources(ofCall: variants.madeAgainCallOffset(of: Int(variant)) + index)
 	}
 
 	func isCalledOnce(_ variant: VariantID) -> Bool {

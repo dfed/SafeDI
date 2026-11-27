@@ -220,7 +220,9 @@ private struct RowAccumulator {
 /// For each node of a graph, what its subtree reads from above it, as a row of read IDs: what the node reads itself, and
 /// each read of a node it has an edge to that the node does not hide, which a node does for each read it binds what is
 /// asked for. The least sets that satisfy that rule, so a node on a cycle reads what every node of its cycle reads and
-/// none between hides.
+/// none between hides. A world with loops of builders adds its made-again calls (`MadeAgainEdges`) as edges of the
+/// closure: a node reads what each member it makes again reads, but for the labels it rebinds, and its components are
+/// those of both columns.
 ///
 /// Computed once, a component at a time, each after every component it reaches; a component on a cycle in passes over its
 /// nodes in position order until a pass adds nothing. It works on IDs and bit sets only: a read is the caller's dense ID,
@@ -230,22 +232,25 @@ struct ReadsFromAbove: Sendable {
 	/// - Parameters:
 	///   - own: The reads each node makes itself, a row per node in position order.
 	///   - hidden: The reads each node hides from the nodes above it, of the same shape.
-	init(graph: OrderedGraph<some Hashable & Sendable>, own: BitRows, hidden: BitRows) {
+	///   - madeAgain: The world's made-again calls, or `nil` for a world with no loop of builders.
+	init(graph: OrderedGraph<some Hashable & Sendable>, own: BitRows, hidden: BitRows, madeAgain: MadeAgainEdges? = nil) {
 		var rows = BitRows(columnCount: own.columnCount)
 		rows.reserveRows(graph.nodes.count)
 		var accumulator = RowAccumulator(columnCount: own.columnCount)
 		var mask = RowAccumulator(columnCount: own.columnCount)
+		let componentByNode = madeAgain?.componentByNode ?? graph.componentByNode
+		let componentCount = madeAgain?.componentCount ?? graph.componentCount
 		var nodesByComponent = [Int32](repeating: 0, count: graph.nodes.count)
-		var componentStarts = [Int32](repeating: 0, count: graph.componentCount + 1)
+		var componentStarts = [Int32](repeating: 0, count: componentCount + 1)
 		for index in graph.nodes.indices {
-			componentStarts[Int(graph.componentByNode[index]) + 1] += 1
+			componentStarts[Int(componentByNode[index]) + 1] += 1
 		}
-		for component in 0..<graph.componentCount {
+		for component in 0..<componentCount {
 			componentStarts[component + 1] += componentStarts[component]
 		}
 		var nextSlotByComponent = componentStarts
 		for index in graph.nodes.indices {
-			let component = Int(graph.componentByNode[index])
+			let component = Int(componentByNode[index])
 			nodesByComponent[Int(nextSlotByComponent[component])] = Int32(index)
 			nextSlotByComponent[component] += 1
 		}
@@ -256,9 +261,9 @@ struct ReadsFromAbove: Sendable {
 		var work = 0
 		// A component's number is lower than that of every component that reaches it, so every target outside the
 		// component is complete when the component starts.
-		for component in 0..<graph.componentCount {
+		for component in 0..<componentCount {
 			let members = nodesByComponent[Int(componentStarts[component])..<Int(componentStarts[component + 1])]
-			if members.count == 1, let index = members.first.map(Int.init), !graph.isOnCycle(index) {
+			if members.count == 1, let index = members.first.map(Int.init), !(madeAgain?.isOnReadCycle[index] ?? graph.isOnCycle(index)) {
 				mask.load(row: index, of: hidden)
 				own.add(row: index, to: &accumulator)
 				for target in graph.edges(from: index) {
@@ -266,6 +271,16 @@ struct ReadsFromAbove: Sendable {
 					_ = rows.add(row: Int(target), to: &accumulator, excluding: mask)
 				}
 				mask.drain { _, _ in }
+				if let madeAgain {
+					// A member made again reads from above its caller's top, where only the labels the caller rebinds are
+					// bound: the caller's own declarations come after.
+					mask.load(row: index, of: madeAgain.rebound)
+					for target in madeAgain.targets(of: index) {
+						work += rows.wordCount(ofRow: Int(target))
+						_ = rows.add(row: Int(target), to: &accumulator, excluding: mask)
+					}
+					mask.drain { _, _ in }
+				}
 				rows.appendWords(ofRow: index, from: &accumulator)
 			} else {
 				previousPass.reserveRows(members.count)
@@ -280,24 +295,35 @@ struct ReadsFromAbove: Sendable {
 					changed = false
 					pass.reserveRows(members.count)
 					pass.removeAllWords()
+					/// Adds the row of `target`, a member's from the pass before or a finished one's, without what `mask` holds.
+					func add(rowOf target: Int32) {
+						let targetSlot = memberSlotByNode[Int(target)]
+						if targetSlot >= 0 {
+							work += previousPass.wordCount(ofRow: Int(targetSlot))
+							if previousPass.add(row: Int(targetSlot), to: &accumulator, excluding: mask) {
+								changed = true
+							}
+						} else {
+							work += rows.wordCount(ofRow: Int(target))
+							if rows.add(row: Int(target), to: &accumulator, excluding: mask) {
+								changed = true
+							}
+						}
+					}
 					for (slot, index) in members.enumerated() {
 						mask.load(row: Int(index), of: hidden)
 						previousPass.add(row: slot, to: &accumulator)
 						for target in graph.edges(from: Int(index)) {
-							let targetSlot = memberSlotByNode[Int(target)]
-							if targetSlot >= 0 {
-								work += previousPass.wordCount(ofRow: Int(targetSlot))
-								if previousPass.add(row: Int(targetSlot), to: &accumulator, excluding: mask) {
-									changed = true
-								}
-							} else {
-								work += rows.wordCount(ofRow: Int(target))
-								if rows.add(row: Int(target), to: &accumulator, excluding: mask) {
-									changed = true
-								}
-							}
+							add(rowOf: target)
 						}
 						mask.drain { _, _ in }
+						if let madeAgain {
+							mask.load(row: Int(index), of: madeAgain.rebound)
+							for target in madeAgain.targets(of: Int(index)) {
+								add(rowOf: target)
+							}
+							mask.drain { _, _ in }
+						}
 						pass.appendWords(ofRow: slot, from: &accumulator)
 					}
 					swap(&previousPass, &pass)
