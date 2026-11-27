@@ -2168,8 +2168,8 @@ extension DependencyTreeGenerator {
 	/// by what generation found (`ScopeGenerator.closesCycleOnFillPath`), so only against the stack it was built
 	/// with: the walk goes on into a fill nested in this one, whose receives fall through to this fill's fields, but a closer
 	/// beneath it is that fill's, which `validateFills` reaches itself. This generator tree holds a seam the fill calls as a
-	/// leaf, so a property re-entered through such a call is never judged here; the cycle walk of
-	/// `validateCyclesFromRootsOfForeignSeamsWithHoles`, which inlines every seam, judges those.
+	/// leaf, so a property re-entered through such a call is never judged here; the validation walk of the module's roots
+	/// (`validatePropertiesAreFulfillable(typeDescriptionToScopeMap:)`), which inlines every seam, judges those.
 	/// - Parameters:
 	///   - fill: The fill's generator, whose fields say which memos it binds.
 	///   - call: The seam call that declares this fill, whose fills decide whether a type above the seam can
@@ -3151,6 +3151,7 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 			case let .sendableWrapperReadBesidePlainMemo(reader, memo, instanceReader, routes):
 				let memoProperty = Property(label: memo.property.label, typeDescription: memo.memoType ?? memo.property.typeDescription)
 				var seams = [String]()
+				// safedi-source-rule: allow stringScan — `seams` is the `[String]` of seam names one error message lists, built only when the error is reported.
 				for route in routes where !seams.contains("`\(route.seamType.asSource)`’s") {
 					seams.append("`\(route.seamType.asSource)`’s")
 				}
@@ -3260,6 +3261,7 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 					/// renaming of the types moves together.
 					func seamsInPlaceOrder(_ orderedPlaces: [SeamSignature.Hole.UncarriedDeclaration.PresentedPlace]) -> [String] {
 						var seams = [String]()
+						// safedi-source-rule: allow stringScan — `seams` is the `[String]` of seam names one error message lists, built only when the error is reported.
 						for place in orderedPlaces where !seams.contains("`\(place.seamType.asSource)`") {
 							seams.append("`\(place.seamType.asSource)`")
 						}

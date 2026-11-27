@@ -50,7 +50,7 @@ struct TypeFactsDeclaration: Hashable, Sendable {
 		self.scope = scope
 		self.property = property
 		self.propertyID = propertyID
-		aliasFulfillingProperty = nil
+		alias = nil
 		isOnlyIfAvailableAlias = false
 		key = Key(record: ObjectIdentifier(scope.identity), property: propertyID?.raw ?? -1, erasedToConcreteExistential: erasedToConcreteExistential, isFill: isFill, leaf: .none, leafIndex: -1)
 	}
@@ -60,7 +60,7 @@ struct TypeFactsDeclaration: Hashable, Sendable {
 		self.scope = scope
 		self.property = property
 		propertyID = nil
-		aliasFulfillingProperty = fulfillingProperty
+		alias = fulfillingProperty.map { Alias(property: property, fulfillingProperty: $0) }
 		isOnlyIfAvailableAlias = onlyIfAvailable
 		key = Key(record: ObjectIdentifier(scope.identity), property: -1, erasedToConcreteExistential: erasedToConcreteExistential, isFill: false, leaf: fulfillingProperty == nil ? .hole : .alias, leafIndex: Int32(index))
 	}
@@ -72,9 +72,20 @@ struct TypeFactsDeclaration: Hashable, Sendable {
 	let property: Property?
 	/// The run's ID of the property built, `nil` for a world's root and a leaf.
 	let propertyID: PropertyID?
+	/// For an alias, its own property and the property it is fulfilled by.
+	let alias: Alias?
 	/// For an alias, the property it is fulfilled by.
-	let aliasFulfillingProperty: Property?
+	var aliasFulfillingProperty: Property? {
+		alias?.fulfillingProperty
+	}
+
 	let isOnlyIfAvailableAlias: Bool
+
+	/// An alias leaf's two properties, which every alias has.
+	struct Alias {
+		let property: Property
+		let fulfillingProperty: Property
+	}
 
 	static func == (lhs: Self, rhs: Self) -> Bool {
 		lhs.key == rhs.key
@@ -88,9 +99,8 @@ struct TypeFactsDeclaration: Hashable, Sendable {
 /// How a declaration's type comes to exist, beside its kind (the property's form), which varies apart from it: an
 /// `Instantiator<T>` whose `T` a hand-written mock builds is kind `instantiator`, construction `handWrittenMock`. Read
 /// from the record: a call of another module's seam or public mock, a fill, or the type's own initializer. In a mock
-/// world it is part of the declaration, and the mock track's column decides `handWrittenMock` and
-/// `constructionFunction` per declaration (lanes/per-type-facts/track-d-columns.md, section 1); until then no node holds
-/// either.
+/// world it is part of the declaration, and the mock writer's column decides `handWrittenMock` and
+/// `constructionFunction` per declaration; until it lands no node holds either.
 enum TypeFactsConstruction: UInt8, Sendable {
 	case initializer
 	case handWrittenMock
@@ -677,10 +687,11 @@ struct TypeFactsGraph: Sendable {
 		self.readOffsets = readOffsets
 		self.labelColumn = labelColumn
 		self.labelOffsets = labelOffsets
-		let answers = Self.answers(of: graph, reads: reads, readTable: readInterner.values, labels: labels)
+		let answers = Self.answers(of: graph, reads: reads, readTable: readInterner.values, labels: labels, bindings: bindings, bindingOffsets: bindingOffsets, bindingsBefore: bindingsBefore, properties: properties)
 		answerIsBeingBuilt = answers.isBeingBuilt
 		answerTexts = answers.texts
 		answerKeys = answers.keys
+		answerProperties = answers.properties
 		variants = answers.variants
 		let isBeingBuilt = answers.isBeingBuilt
 		let variantsOfAnswers = answers.variants
@@ -720,6 +731,9 @@ struct TypeFactsGraph: Sendable {
 	/// Each answer ID's key: the answer without what a parameter carries.
 	let answerKeys: [Int32]
 
+	/// Each answer ID's declaration, by the world's property ID: what `providesFormRead(by:_:beneath:)` compares.
+	let answerProperties: [Int32]
+
 	/// The variants of the world's bodies, answered by what each node binds at its edges (`answers(of:reads:…)`).
 	let variants: TypeFactsVariants
 
@@ -757,17 +771,28 @@ struct TypeFactsGraph: Sendable {
 		}
 	}
 
-	/// What answers each read at each edge, by value: a node answers a read of a label it declares with the forms its
-	/// declaration provides, being built where the edge builds that declaration. Interned at the edge, where the graph
-	/// is built from the table; the worklist sees IDs only. Every declaration a node holds answers at every edge: which
-	/// edges a declaration is bound before is the ordered bindings' column, owed by the table-side columns.
-	private static func answers(of graph: OrderedGraph<TypeFactsDeclaration>, reads: ReadsFromAbove, readTable: [Read], labels: TypeFactsInterner<String>) -> (variants: TypeFactsVariants, isBeingBuilt: [Bool], texts: [String], keys: [Int32]) {
+	/// Whether a declaration of this kind is a twin of a cycle identity: a value or a lazy wrapper of its label.
+	private static func isTwin(_ kind: Property.PropertyType) -> Bool {
+		switch kind {
+		case .constant, .lazilyInstantiated, .sendableLazilyInstantiated:
+			true
+		case .instantiator, .sendableInstantiator, .erasedInstantiator, .sendableErasedInstantiator:
+			false
+		}
+	}
+
+	/// What answers each read at each edge, by value: a node answers a read of a label with the forms of the last of its
+	/// bindings of that label bound before the edge (`bindingsBefore`), and the edge's child answers its own label as
+	/// the property it is built as, being built. Interned at the edge, where the graph is built from the table; the
+	/// worklist sees IDs only.
+	private static func answers(of graph: OrderedGraph<TypeFactsDeclaration>, reads: ReadsFromAbove, readTable: [Read], labels: TypeFactsInterner<String>, bindings: [TypeFactsWorldBinding], bindingOffsets: [Int32], bindingsBefore: [Int32], properties: TypeFactsInterner<Property>) -> (variants: TypeFactsVariants, isBeingBuilt: [Bool], texts: [String], keys: [Int32], properties: [Int32]) {
 		var answerIDByText = [String: Int32]()
 		var texts = [String]()
 		var isBeingBuilt = [Bool]()
 		var keys = [Int32]()
 		var kinds = [Property.PropertyType]()
-		func answer(text: String, beingBuilt: Bool, keyText: String, kind: Property.PropertyType) -> Int32 {
+		var answerProperties = [Int32]()
+		func answer(text: String, beingBuilt: Bool, keyText: String, kind: Property.PropertyType, property: Int32) -> Int32 {
 			let keyID: Int32
 			if let existing = answerIDByText[keyText] {
 				keyID = existing
@@ -779,6 +804,7 @@ struct TypeFactsGraph: Sendable {
 				isBeingBuilt.append(text == keyText && beingBuilt)
 				kinds.append(kind)
 				keys.append(keyID)
+				answerProperties.append(property)
 			}
 			guard text != keyText else {
 				return keyID
@@ -792,20 +818,23 @@ struct TypeFactsGraph: Sendable {
 			isBeingBuilt.append(beingBuilt)
 			kinds.append(kind)
 			keys.append(keyID)
+			answerProperties.append(property)
 			return id
 		}
 		var sourceByEdge = [Int32]()
-		var declarationByLabelByNode = [[Int32: (forms: String, kind: Property.PropertyType)]]()
+		// Each node's declarations by label, as its scope spells them, with the forms each provides: the world's property IDs
+		// compare two spellings of one type alike, and a body is typed as its parent spells it.
+		var declarationsByLabelByNode = [[Int32: [(property: Property, forms: String)]]]()
 		for index in graph.nodes.indices {
 			for _ in graph.edges(from: index) {
 				sourceByEdge.append(Int32(index))
 			}
-			var declarations = [Int32: (forms: String, kind: Property.PropertyType)]()
+			var declarations = [Int32: [(property: Property, forms: String)]]()
 			for (property, forms) in graph.nodes[index].scope.sortedDeclaredPropertyForms {
 				guard let label = labels.existingID(of: property.label) else { continue }
-				declarations[label] = (forms.sorted().map(\.asSource).joined(separator: ", "), property.propertyType)
+				declarations[label, default: []].append((property, forms.sorted().map(\.asSource).joined(separator: ", ")))
 			}
-			declarationByLabelByNode.append(declarations)
+			declarationsByLabelByNode.append(declarations)
 		}
 		var edgeTargets = [Int32]()
 		for index in graph.nodes.indices {
@@ -817,31 +846,63 @@ struct TypeFactsGraph: Sendable {
 			rootAnswer: { _ in nil },
 			binding: { edge, readID in
 				let read = readTable[Int(readID)]
-				let node = Int(sourceByEdge[edge])
-				guard read.channel.asksAboutLabel, let declaration = declarationByLabelByNode[node][read.label] else {
+				guard read.channel.asksAboutLabel else {
 					return nil
 				}
-				let child = Int(edgeTargets[edge])
-				let beingBuilt = graph.nodes[child].property.map { labels.existingID(of: $0.label) == read.label } ?? false
-				let text = "\(read.channel.name) \(declaration.forms)\(beingBuilt ? " being built" : "")"
-				// Rule 2: a wrapper still being built is passed and made again at the call, so it keys as the wrapper.
-				let keyText = declaration.kind.isConstant ? text : "\(read.channel.name) \(declaration.forms)"
-				return VariantBinding(answer: answer(text: text, beingBuilt: beingBuilt, keyText: keyText, kind: declaration.kind), declaration: Int32(node))
+				let node = Int(sourceByEdge[edge])
+				let child = graph.nodes[Int(edgeTargets[edge])]
+				// A child answers its own label's read as the declaration being built, by the property it is built as; any
+				// other label by the last of its parent's bindings bound before the edge, so a declaration bound after the
+				// call does not answer it.
+				// Every binding, and every child's property, is a declaration of its node's scope, which the lookup finds by its
+				// spelling.
+				let bound: Property?
+				let beingBuilt: Bool
+				if let property = child.property, labels.existingID(of: property.label) == read.label {
+					bound = property
+					beingBuilt = true
+				} else {
+					let start = Int(bindingOffsets[node])
+					bound = bindings[start..<start + Int(bindingsBefore[edge])].last { $0.label == read.label }.map { properties.values[Int($0.property)] }
+					beingBuilt = false
+				}
+				guard let bound, let declaration = declarationsByLabelByNode[node][read.label]?.first(where: { $0.property == bound }), let property = properties.existingID(of: bound) else { return nil }
+				let kind = declaration.property.propertyType
+				let declarationForms = declaration.forms
+				let text = "\(read.channel.name) \(declarationForms)\(beingBuilt ? " being built" : "")"
+				// Rule 3, case 2: a value, `LazilyInstantiated` or `SendableLazilyInstantiated` being built is one cycle
+				// identity whichever twin the path entered, which 2.4.0 builds in one function and passes no parameter. The
+				// key names the label alone, not the type and label a cycle identity names elsewhere: a node declares a label
+				// once, and a being-built answer gives no parameter whose type could tell two keys apart.
+				let keyText: String = if beingBuilt, isTwin(kind) {
+					"\(read.channel.name) twin \(bound.label) being built"
+				} else if kind.isConstant {
+					text
+				} else {
+					// Rule 2: a wrapper still being built is passed and made again at the call, so it keys as the wrapper.
+					"\(read.channel.name) \(declarationForms)"
+				}
+				return VariantBinding(answer: answer(text: text, beingBuilt: beingBuilt, keyText: keyText, kind: kind, property: property), declaration: Int32(node))
 			},
-			// Production bodies have one variant, `@Sendable` a mark folded over call edges (lead, 11-26 20:26Z); the family
-			// a seam's cases, builders and mock bodies key by is the edge facts' `opens`, owed by the table-side columns.
+			// Production bodies have one variant, `@Sendable` a mark folded over call edges; the family a seam's cases,
+			// builders and mock bodies key by is the edge facts' `opens`, which no producer feeds here yet.
 			family: { _, family in family },
 			key: { readID, answer in
 				switch readTable[Int(readID)].channel {
 				case .optional, .optionalValue:
-					// Rule 1.
-					optionalParameterKey(of: answer < 0 ? nil : kinds[Int(answer)])
+					if answer >= 0, isBeingBuilt[Int(answer)], isTwin(kinds[Int(answer)]) {
+						// Rule 3, case 2: rule 1 keys only answers that are not being built.
+						keys[Int(answer)]
+					} else {
+						// Rule 1.
+						optionalParameterKey(of: answer < 0 ? nil : kinds[Int(answer)])
+					}
 				case .value, .alias, .madeAgain, .mock, .carrier, .fill, .family, .override:
 					answer < 0 ? answer : keys[Int(answer)]
 				}
 			},
 		)
-		return (variants, isBeingBuilt, texts, keys)
+		return (variants, isBeingBuilt, texts, keys, answerProperties)
 	}
 
 	/// The declarations in the order a walk of the root's edges, depth first, first reaches each. A node keeps its scope
