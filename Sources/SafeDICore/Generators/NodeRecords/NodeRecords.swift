@@ -33,8 +33,6 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	/// The node calls another module's public mock that takes no `SafeDIOverrides`, so it is configured by an override
 	/// closure, whose arguments read the call's fills.
 	case publicMockCallOverrideClosure
-	/// The node calls another module's public mock and is promoted to the mock's root, which reads the caller's value first.
-	case publicMockCallPromoted
 	/// A mock root's node's type takes, in its initializer or its hand-written mock, a value no dependency fulfills, as a
 	/// parameter with a default value is, which a mock holds in the type's configuration.
 	case mockDefaultValuedParameter

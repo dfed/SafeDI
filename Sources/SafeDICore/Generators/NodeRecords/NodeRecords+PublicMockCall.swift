@@ -59,26 +59,10 @@ extension NodeRecords {
 		if !call.takesOverrides {
 			refusals.append(.publicMockCallOverrideClosure)
 		}
-		// A call the mock promotes to its root reads the caller's value first (`ScopeGenerator.passing(_:orBuilding:)`).
-		if isPromotedToMockRoot(declaration, in: world) {
-			refusals.append(.publicMockCallPromoted)
-		}
 		// The leaf receives only if available each parameter its tier omits, which the call never passes, and each `T? = nil`
 		// parameter of the tier, which the call passes what the caller's tree holds, or `nil`: the variant's answer, which the
 		// record reads (`passedOnlyIfAvailable(_:by:variant:in:)`).
 		return NodeRecordClaim(kind: .publicMockCall, discharges: [.construction, .onlyIfAvailable], refusals: refusals)
-	}
-
-	/// Whether `declaration` is a child of the mock's root that the root's own type does not declare: a dependency the mock
-	/// promotes.
-	private static func isPromotedToMockRoot(_ declaration: DeclarationID, in world: some NodeRecordSources) -> Bool {
-		guard let property = world.property(of: declaration),
-		      world.parents(of: declaration).contains(where: { $0.parent == 0 })
-		else { return false }
-		return !world.scope(of: 0).instantiable.dependencies.contains { dependency in
-			guard dependency.property == property, case .instantiated = dependency.source else { return false }
-			return true
-		}
 	}
 
 	/// The function of the called tier the call passes its arguments to: the leaf's mock, which takes the tier's
