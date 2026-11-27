@@ -255,6 +255,12 @@ struct NodeRecords: Sendable {
 		)
 		// The tree reports the capture as an error, which the records cannot.
 		guard !answeringDeclarations.sendableFunctionCapturesWrapper else { throw NodeRecordRefusal.sendableFunctionCapturesWrapper }
+		// A cycle's function in the tree takes a by-value read of a lazily instantiated property's instance as a parameter
+		// (`BuiltPlaceRecord.cycleParameters`), which no closing record passes yet.
+		let cycleReadsAnInstance = holdsCycle && (0..<VariantID(world.variantCount)).contains { variant in
+			world.isOnCycle(world.declaration(of: variant)) && answeringDeclarations.lazilyInstantiatedInstanceProperties(readBy: variant).contains { labelsReceived.contains($0.label) }
+		}
+		guard !cycleReadsAnInstance else { throw NodeRecordRefusal.cycleTakesParameters }
 		// A variant's one record is right only where every call into it answers its reads as the call it was written from.
 		// Checked before what the records read of the call that resolved each variant, so that which call that is does not
 		// change the refusal.

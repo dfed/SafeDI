@@ -210,10 +210,11 @@ struct SafeDIToolNodeRecordsRenameTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_refusesSeamsOwnRootAsLazy_whenTwoPathsHandARenamesLabelOneAsAWrappersInstance() async throws {
+	mutating func generate_refusesSeamsOwnRootAsCallsAnsweringAVariantApart_whenTwoPathsHandARenamesLabelOneAsAWrappersInstance() async throws {
 		// `Reader` keeps `authToken`'s label under a rename and is built under `Screen` directly, where `authToken` is the
 		// instance of the wrapper of the seam's parameter, and beneath `Detail`'s rename, whose value is no wrapper's: the
-		// tree binds `Reader`'s rename two ways, and one record cannot.
+		// tree binds `Reader`'s rename two ways, and one record cannot. The calls into `Reader`'s variant answer its label
+		// apart, which refuses the world before the rename's own check.
 		let (_, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
 			try await executeSafeDIToolTest(swiftFileContent: [
 				seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let authToken: Secret", "@Instantiated let screen: Screen"]),
@@ -226,7 +227,7 @@ struct SafeDIToolNodeRecordsRenameTests: ~Copyable {
 			], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		}
 		let screenReports = reports.filter { $0.root == "Screen" }
-		#expect(screenReports.map { $0.everyRefusal.contains("lazy") } == [true])
+		#expect(screenReports.map(\.refusal) == ["callsAnswerAVariantApart"])
 		#expect(screenReports.map(\.isLaidOutFromNodeRecords) == [false])
 	}
 
