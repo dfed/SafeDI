@@ -52,7 +52,11 @@ public enum NodeRecordsObservation {
 		var differences = [String]()
 		var treePlaceCount = 0
 		var pending = [(tree: treeBody, nodeRecords: nodeRecordsBody, path: "root")]
-		while let (tree, nodeRecords, path) = pending.popLast() {
+		while let (treeCodes, nodeRecordsCodes, path) = pending.popLast() {
+			// A hole's place, and a place on the route to one, is a sequence of places: the payloads bound before it, each
+			// a place written as text, then the place itself. Each is compared as a statement of its own.
+			let tree = treeCodes.flatMap(statements(of:))
+			let nodeRecords = nodeRecordsCodes.flatMap(statements(of:))
 			guard tree.count == nodeRecords.count else {
 				differences.append("\(path): the tree builds \(tree.count) statements, node records \(nodeRecords.count)")
 				continue
@@ -102,7 +106,14 @@ public enum NodeRecordsObservation {
 		return (indentation, inner)
 	}
 
-	/// The fields of `nodeRecords`, a rename, that differ from `tree`'s.
+	/// `code`'s statements: each piece of a sequence, indented as the sequence is, or `code` where it is no sequence.
+	private static func statements(of code: GeneratedCode) -> [GeneratedCode] {
+		let (indentation, inner) = unindented(code)
+		guard case let .sequence(pieces) = inner.node else { return [code] }
+		return pieces.flatMap { statements(of: .indented($0, by: indentation)) }
+	}
+
+	/// The fields of `nodeRecords`, a rename or a hole's place, that differ from `tree`'s.
 	private static func fieldDifferences(between tree: AliasPlaceRecord, and nodeRecords: AliasPlaceRecord) -> [String] {
 		var differences = [String]()
 		func compare<Value: Equatable>(_ name: String, _ treeValue: Value, _ nodeRecordsValue: Value) {

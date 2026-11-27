@@ -563,6 +563,8 @@ extension DependencyTreeGenerator {
 					parameters: finalSeamRoot.signature.parameters.map(\.property),
 					autoclosureLabels: Set(finalSeamRoot.autoclosureCallByLabel(of: seamRootScope.instantiable).keys),
 					signature: finalSeamRoot.signature,
+					seamRoot: finalSeamRoot,
+					seamType: seam.concreteInstantiable,
 				),
 			))
 		}

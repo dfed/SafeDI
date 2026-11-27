@@ -598,7 +598,7 @@ public actor DependencyTreeGenerator {
 		var seamTree: SeamTree?
 
 		/// What node records read of a seam's own tree beside its world.
-		struct SeamTree {
+		struct SeamTree: Sendable {
 			/// What the seam's root is handed as instances of `LazilyInstantiated` properties, which its tree reads through
 			/// their wrappers (`DependencyTreeGenerator.seamRootDeclarations(of:seamRoot:)`).
 			let rootLazilyInstantiatedInstanceProperties: Set<Property>
@@ -612,8 +612,10 @@ public actor DependencyTreeGenerator {
 			let autoclosureLabels: Set<String>
 			/// The seam's signature, whose call routes say how its tree passes its builders' structs up to the seams it calls.
 			let signature: SeamSignature
+			/// The seam's root, from which a test makes the seam's holes (`SeamHoles(of:seamType:)`), and the seam's type.
+			let seamRoot: ScopeGenerator.SeamRoot
+			let seamType: TypeDescription
 		}
-
 		/// What made this run build the root's tree (`TreeForcer`); empty where it built none.
 		var treeForcers: [TreeForcer] = [.seamWorld]
 

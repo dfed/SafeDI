@@ -49,6 +49,12 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	case renameOrHole
 	/// The node's call passes fills.
 	case fill
+	/// The node is a hole of a seam's tree, or on the route to one, that the tree reaches along more than one path: the names
+	/// a route binds follow its path, so one variant per node cannot hold the place.
+	case holeOnSeveralPaths
+	/// The node is a hole of a seam's tree held in, or reached through, a wrapper but an `Instantiator`: an erased, lazy or
+	/// `@Sendable` one, whose builder function binds what the hole's place reads apart, which hole records do not write yet.
+	case holeInWrapper
 	/// The node is on a cycle.
 	case cycle
 	/// The node is built as a `LazilyInstantiated`, which `lazyClaim(of:in:)` discharges: its record is
@@ -127,12 +133,14 @@ struct NodeRecords: Sendable {
 	///     instances of `LazilyInstantiated` properties among them, a deferred parameter's memo included, which its tree
 	///     reads through their wrappers, and the labels of those held in a wrapper a `@Sendable` function cannot capture.
 	///     `nil` for any other root.
+	///   - seamHoles: A seam's holes, by path, which its holes' places read (`seamHolePlace(of:in:seamHoles:rootLazilyInstantiatedInstanceProperties:)`);
+	///     `nil` for any other root, whose holes are passed `nil`.
 	///   - declaredTypeNames: The names the modules SafeDI read declare types by at file scope, which the check of an erased
 	///     instantiator's first generic argument reads (`checkForwardsBuiltTypesProperties(_:in:declaredTypeNames:)`).
 	///     `nil` for a mock root's world, where no kind claims an erased instantiator and the mock's own tree reports it.
 	/// - Throws: A `NodeRecordRefusal` where the world holds a kind stage 1 does not make, or what an initializer's
 	///   arguments throw.
-	init(world: some NodeRecordSources, seamTree: DependencyTreeGenerator.RootScopeInfo.SeamTree? = nil, declaredTypeNames: DeclaredTypeNames?) throws {
+	init(world: some NodeRecordSources, seamTree: DependencyTreeGenerator.RootScopeInfo.SeamTree? = nil, seamHoles: SeamHoles? = nil, declaredTypeNames: DeclaredTypeNames?) throws {
 		let declarationCount = world.declarationCount
 		var kinds = [NodeRecordKind]()
 		kinds.reserveCapacity(declarationCount)
@@ -141,6 +149,9 @@ struct NodeRecords: Sendable {
 			try Self.checkReadsNoSeamRootValue(of: seamTree, declaration, in: world)
 			try Self.checkForwardsBuiltTypesProperties(declaration, in: world, declaredTypeNames: declaredTypeNames)
 		}
+		let rootLazilyInstantiatedInstanceProperties = seamTree?.rootLazilyInstantiatedInstanceProperties ?? []
+		// A seam's tree binds the payloads of its holes before the scopes on their routes (`placeOnRouteToHole`).
+		let bindsHolesPayloads = seamHoles != nil && kinds.contains(.seamHole)
 		var variantByDeclaration = [VariantID](repeating: -1, count: declarationCount)
 		for variant in 0..<Int32(world.variantCount) {
 			let declaration = Int(world.declaration(of: variant))
@@ -176,6 +187,12 @@ struct NodeRecords: Sendable {
 			}
 			guard variant != 0, places[Int(variant)] == nil else { continue }
 			let declaration = world.declaration(of: variant)
+			// A hole's place is its site's code, written as text, and the payloads bound before it: places, not one record.
+			guard kinds[Int(declaration)] != .seamHole else {
+				typesDeclaredEscaping[Int(variant)] = []
+				places[Int(variant)] = Self.seamHolePlace(of: declaration, in: world, seamHoles: seamHoles ?? SeamHoles(), rootLazilyInstantiatedInstanceProperties: rootLazilyInstantiatedInstanceProperties)
+				continue
+			}
 			let scope = world.scope(of: declaration)
 			let instantiable = scope.instantiable
 			var escaping = Set(instantiable.initializer?.typesDeclaredEscaping ?? [])
@@ -191,7 +208,8 @@ struct NodeRecords: Sendable {
 			// What a receive by value reads as a wrapper's instance, which every record of a construction passes its arguments.
 			let instanceProperties = answeringDeclarations.lazilyInstantiatedInstanceProperties(readBy: variant)
 			let record: PlaceRecord = switch kinds[Int(declaration)] {
-			case .builtByInitializer, .erased, .lazy, .sendable:
+			// A hole's place is made above, from no record.
+			case .builtByInitializer, .erased, .lazy, .sendable, .seamHole:
 				// One record serves the four: what tells them apart, it reads of the node.
 				try .built(Self.builtByInitializerRecord(of: declaration, variant: variant, in: world, lazilyInstantiatedInstanceProperties: instanceProperties, typesDeclaredEscaping: escaping, children: children))
 			case .inlineSeam:
@@ -217,12 +235,17 @@ struct NodeRecords: Sendable {
 			}
 			typesDeclaredEscaping[Int(variant)] = escaping
 			records[Int(variant)] = record
-			places[Int(variant)] = switch record {
+			let place: GeneratedCode = switch record {
 			case let .alias(aliasRecord):
 				// A place written as text: the engine copies it as written.
 				.place(PlacePlan(code: .text(aliasRecord.text), record: record))
 			case .built, .closer:
 				.place(PlacePlan(code: .empty, record: record))
+			}
+			places[Int(variant)] = if bindsHolesPayloads, let seamHoles {
+				Self.placeOnRouteToHole(place, of: declaration, in: world, seamHoles: seamHoles, rootLazilyInstantiatedInstanceProperties: rootLazilyInstantiatedInstanceProperties)
+			} else {
+				place
 			}
 		}
 		let rootCalls = world.calls(of: 0)
@@ -366,17 +389,19 @@ struct NodeRecords: Sendable {
 		guard !world.isMockWorld else {
 			return testClaim(of: declaration, in: world) ?? mockConstructionClaim(of: declaration, in: world)
 		}
-		// Two chains, so that the type checker settles each in reasonable time.
-		let seamClaim = testClaim(of: declaration, in: world)
-			?? inlineSeamClaim(of: declaration, in: world)
-			?? seamCallClaim(of: declaration, in: world)
-		return seamClaim
-			?? unavailableDependencyClaim(of: declaration, in: world)
-			?? receivesOnlyIfAvailableClaim(of: declaration, in: world)
-			?? renameClaim(of: declaration, in: world)
-			?? erasedClaim(of: declaration, in: world)
-			?? lazyClaim(of: declaration, in: world)
-			?? sendableClaim(of: declaration, in: world)
+		// A hole is claimed apart from the chains below, which the compiler cannot type-check as one.
+		guard let claim = testClaim(of: declaration, in: world) ?? seamHoleClaim(of: declaration, in: world) else {
+			let seamClaim = inlineSeamClaim(of: declaration, in: world)
+				?? seamCallClaim(of: declaration, in: world)
+			return seamClaim
+				?? unavailableDependencyClaim(of: declaration, in: world)
+				?? receivesOnlyIfAvailableClaim(of: declaration, in: world)
+				?? renameClaim(of: declaration, in: world)
+				?? erasedClaim(of: declaration, in: world)
+				?? lazyClaim(of: declaration, in: world)
+				?? sendableClaim(of: declaration, in: world)
+		}
+		return claim
 	}
 
 	/// The claim a test makes of `declaration` by its type's name (`NodeRecordsObservation.claimsForTesting`).
@@ -425,6 +450,9 @@ enum NodeRecordKind: Sendable {
 	case lazy
 	/// A `SendableInstantiator`, erased or not, or a `SendableLazilyInstantiated` (`NodeRecords+Sendable.swift`).
 	case sendable
+	/// A hole a seam's tree declares, whose place is its site's code, or a property passed `nil` in any other world
+	/// (`NodeRecords+SeamHole.swift`).
+	case seamHole
 	/// A node of a mock root's world that stage 1 would make in a production root's, which reads its override before it
 	/// calls its type's initializer (`NodeRecords+MockConstruction.swift`).
 	case mockConstruction

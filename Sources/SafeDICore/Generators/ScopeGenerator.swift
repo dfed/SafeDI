@@ -8462,32 +8462,20 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				fillPlaceBindings: fillPlaceBindings,
 			)
 		case let .hole(property, _, site):
-			// A tree built only to compute the seam's signature has no site, and generates nothing. Nor has a root's tree,
-			// where only a property instantiated only if available is a hole, since validation reports any other: no builder
-			// reaches a root, so the property is `nil` there, as in a module that generates no seam.
-			guard let site else {
-				guard property.typeDescription.isOptional else { return .empty }
-				return .place(PlacePlan(code: .text("let \(property.asSource) = nil"), record: .alias(Self.recordOfPropertyBoundToNil(property))))
-			}
 			// The seam side of hosting seam code as text, a hole's site here and a seam's root in
 			// `generateSeamRootCode`, lives until the 2.3.1 seam rework (R2a) plans seam bodies, fills and level
 			// functions on the builder graph and deletes today's seam emission with it. The caller side, a fill below,
-			// stays until fills are planned.
-			// The payloads bound at the site's path are places of their own, as a scope's are (`valuesBindingPlaces`), so the
-			// site's place binds only its property and the function it declares; where a loop's box holds them, the site's
-			// text holds them too.
-			let valuesBindingPlaces = valuesBindingPlaces(builderFunctionNames: builderFunctionNames)
-			let sitePlace = Self.holeSitePlace(
-				text: (valuesBindingPlaces == nil ? valuesBindingLines : "") + Self.buildSiteCode(of: property, at: site, functionName: builderFunctionNames.functionName, readingInstancesOf: callSiteLazilyInstantiatedInstanceProperties, carrierUse: siteCarrierUse),
+			// stays until fills are planned. Node records write a hole's place with the same function
+			// (`NodeRecords.holePlace(of:in:seamHoles:)`).
+			return HoleSitePlaces.place(
 				of: property,
 				at: site,
 				functionName: builderFunctionNames.functionName,
 				valuesBindings: valuesBindings,
-				readingInstancesOf: callSiteLazilyInstantiatedInstanceProperties,
 				carrierUse: siteCarrierUse,
+				readingInstancesOf: callSiteLazilyInstantiatedInstanceProperties,
+				loopBindsPayloads: builderFunctionNames.loopValuesBindingLines != nil,
 			)
-			guard let valuesBindingPlaces else { return sitePlace }
-			return .sequence(valuesBindingPlaces + [sitePlace])
 		case let .fill(hole, functionName):
 			// A fill is hosted as its text until fills are planned (`.claude/rules/emission-decisions.md`).
 			let fillCode = try await generateFillCode(
@@ -8520,10 +8508,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// The record of the place of `property`, instantiated only if available, where nothing fulfills it. Its `nil` reads
 	/// nothing, which the record lists, so the type key lays it out as written, as it does an alias bound to `nil`: a place
 	/// that records nothing would keep the bodies of the root's tree one per path.
-	private static func recordOfPropertyBoundToNil(_ property: Property) -> AliasPlaceRecord {
-		AliasPlaceRecord(property: property, fulfillingProperty: nil, text: "let \(property.asSource) = nil", reads: [])
-	}
-
 	/// A place that records nothing, written as `text`.
 	@inline(never)
 	private static func textPlace(_ text: String) -> GeneratedCode {
@@ -8593,17 +8577,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// reads, so the type key lays them out as the scope's parent's statements; `nil` where there are none, or where a
 	/// loop's box holds them.
 	nonisolated private func valuesBindingPlaces(builderFunctionNames: BuilderFunctionNames) -> [GeneratedCode]? {
-		guard !valuesBindings.isEmpty, builderFunctionNames.loopValuesBindingLines == nil else { return nil }
-		return valuesBindings.map { binding in
-			let line = binding.line(readingInstancesOf: callSiteLazilyInstantiatedInstanceProperties)
-			let record = AliasPlaceRecord(
-				property: Property(label: binding.bindingName, typeDescription: binding.boundType),
-				fulfillingProperty: nil,
-				text: line,
-				reads: binding.reads(readingInstancesOf: callSiteLazilyInstantiatedInstanceProperties),
-			)
-			return .place(PlacePlan(code: .text("\(line)\n"), record: .alias(record)))
-		}
+		guard builderFunctionNames.loopValuesBindingLines == nil else { return nil }
+		return HoleSitePlaces.valuesBindingPlaces(of: valuesBindings, readingInstancesOf: callSiteLazilyInstantiatedInstanceProperties)
 	}
 
 	/// The place of an alias's declaration.
@@ -9179,7 +9154,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let record: PlaceRecord? = if let seamCall {
 				try seamCallRecord(of: property, instantiable: instantiable, seamCall: seamCall, erasedToConcreteExistential: erasedToConcreteExistential, code: code, declaredFunctionName: hasGeneratedContent ? functionName : nil, unavailableProperties: unavailableProperties, builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings, inlinePlaceBuilder: inlinePlaceBuilder, separatesValuesBindings: separatesValuesBindings, inPlaceStatements: valuesBindingLines.isEmpty && hasGeneratedContent ? (before: memberCallCode, after: fillPlaceBindingLines + childCode) : nil, lineEnd: constructionLineEnd)
 			} else if isUnavailableDependency {
-				.alias(Self.recordOfPropertyBoundToNil(property))
+				.alias(HoleSitePlaces.recordOfPropertyBoundToNil(property))
 			} else {
 				try builtRecord(functionName: functionName, hasFunction: hasGeneratedContent)
 			}
@@ -9607,64 +9582,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		lines.append("\(memberIndent)}")
 		lines.append("\(indent)}")
 		return lines.joined(separator: "\n")
-	}
-
-	/// The code a seam's tree generates at a site of `property`, a hole: the member of its case called on the builder struct
-	/// in scope there, handed the values in scope there. A constant is bound with its declared type, as inline binds an
-	/// existential. An instantiator is built around what its member returns, the builder the wrapper keeps, with no function
-	/// of the seam's own. Any other wrapper is built around a function that makes the call, as inline builds a wrapper around
-	/// its builder function, which is `@Sendable` for a `Sendable` wrapper.
-	/// - Parameters:
-	///   - functionName: The name of that function where it differs from `functionName(toBuild:)`.
-	///   - lazilyInstantiatedInstanceProperties: The by-value properties whose labels the site's owner holds only as a
-	///     `LazilyInstantiated` property, whose instance the payload reads, as the owner's receivers do
-	///     (`SeamHoles.valuesArguments(of:readingInstancesOf:)`).
-	///   - lazilyInstantiatedBindingNames: In a public mock, the names the wrappers it binds apart from their instances' labels
-	///     have where the site is built, which the payload reads a field of such a wrapper by
-	///     (`SeamHoles.valuesArguments(of:readingInstancesOf:bindingNamesPassedByName:lazilyInstantiatedBindingNames:)`).
-	// Kept out of `generatePropertyCode`'s async frame, as the functions that write a property's scope are.
-	@inline(never)
-	static func buildSiteCode(of property: Property, at site: SeamSignature.Hole, functionName: String?, readingInstancesOf lazilyInstantiatedInstanceProperties: Set<Property> = [], lazilyInstantiatedBindingNames: [String: [TypeDescription: String]] = [:], carrierUse: SeamCarrierValues.Use? = nil) -> String {
-		// A place nested by type is handed what its owner binds before it; the cases that lead to it carry what each type on
-		// the way binds, which the tree bound before building the next. A place in a `@Sendable` enum held in a `Sendable`
-		// wrapper carries nothing.
-		let fields = site.enumPlace?.values ?? site.fields
-		let arguments = SeamHoles.valuesArguments(of: fields, readingInstancesOf: lazilyInstantiatedInstanceProperties, lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames)
-		// The expression that builds the value: the place's member, called on the struct the last case on its route returned,
-		// or on the builder itself. An instantiator's member returns the builder its wrapper keeps. Every place of a seam's or
-		// a public mock's tree has its enum's case, whose member takes a struct (`SeamBuilderFamilies`). The `""` is never
-		// returned: a hole is built before its place's case is known, so `enumPlace` is optional, and it is assigned to every
-		// place before any code is generated; no type holds that order. 2.3.1's emitter rewrite replaces this code and drops
-		// the fallback.
-		guard let enumPlace = site.enumPlace, let memberValuesTypeName = enumPlace.memberValuesTypeName else { return "" }
-		let valuesType = TypeDescription.nested(name: memberValuesTypeName, parentType: enumPlace.enumType(qualifiedBy: nil), generics: [])
-		// Inside a fill whose call's case leads on, the fill is handed the struct of its own level.
-		let lastStep = enumPlace.route.last
-		let parentName = (lastStep?.member == nil ? nil : lastStep?.innerScope?.name) ?? lastStep?.member?.bindingName ?? site.internalName
-		let buildExpression = if ReservedName.seamCarrier(ofEnum: enumPlace.enumType(qualifiedBy: nil)) != nil {
-			// A seam's carrier takes the place's values as its member's arguments.
-			"\(parentName).\(enumPlace.caseName)(\(SeamHoles.carrierArguments(of: fields, use: carrierUse, readingInstancesOf: lazilyInstantiatedInstanceProperties, lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames)))"
-		} else {
-			"\(parentName).\(enumPlace.caseName)(\(valuesType.asSource)(\(arguments)))"
-		}
-		let propertyType = property.propertyType
-		guard !propertyType.isConstant else {
-			return "let \(property.asSource) = \(buildExpression)"
-		}
-		let unwrappedType = property.typeDescription.unwrapped
-		// A type constructed by annotation spells its generic arguments only in the declaration's annotation.
-		let declaration = property.typeDescription.asSource == unwrappedType.spelledForConstruction ? "let \(property.label)" : "let \(property.asSource)"
-		guard !propertyType.isAnyInstantiator else {
-			// An instantiator's member returns the builder the wrapper keeps, which takes the forwarded value itself.
-			return "\(declaration) = \(unwrappedType.spelledForConstruction)(\(buildExpression))"
-		}
-		let functionName = functionName ?? site.wrapperFunctionName ?? Self.functionName(toBuild: property)
-		return """
-		\(localFunctionPrefix(isSendable: propertyType.isSendable))func \(functionName)() -> \(site.builtType.asSource) {
-		\(standardIndent)\(buildExpression)
-		}
-		\(declaration) = \(unwrappedType.spelledForConstruction)(\(functionName))
-		"""
 	}
 
 	/// The name of the parameter that holds the value an instantiator forwards, in a fill of a hole's `property`: named
