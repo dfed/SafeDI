@@ -173,9 +173,12 @@ struct OnlyIfAvailableAnswers: Sendable {
 					let labelsOneCallAnswers = Set(existingContext.keys).symmetricDifference(calleeContext.keys)
 					// A member of a cycle takes what its calls answer as its cycle parameters, whose rows are made per call: each
 					// call passes what it sees, so a label one call answers is merged where the member's function takes it as a
-					// parameter, and refused where the function captures it. A rename only if available is bound where its scope
-					// is built, to the declaration or to `nil`, by one statement for every call, so a label one fulfills is not
-					// taken as a parameter.
+					// parameter, and refused where the function captures it. The label is then the shared function's optional
+					// parameter, not one of its cycle parameters (`cycleParameters(of:)` holds only labels declared between it and
+					// a closer); the facts' outcomes are a superset of what the function takes, so a value read where the tree
+					// passes `nil` shows as a difference of the place's arguments. A rename only if available is bound where its
+					// scope is built, to the declaration or to `nil`, by one statement for every call, so a label one fulfills is
+					// not taken as a parameter.
 					guard labelsOneCallAnswers.isEmpty || ((!world.isOnCycle(world.declaration(of: callee)) || Self.takesAsParameters(labelsOneCallAnswers, callee, in: world)) && renamedLabels.isDisjoint(with: labelsOneCallAnswers)) else {
 						throw .nodeHasSeveralVariants
 					}
