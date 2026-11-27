@@ -39,6 +39,11 @@ public enum NodeRecordsObservation {
 	/// text for a node beneath a function, which is handed its override where the walk's captures the root's.
 	@TaskLocal public static var laysOutMockRoots = false
 
+	/// Handed each mocked type and the root of its mock root's world as the mock root is built, where a test observes node records
+	/// (`DependencyTreeGenerator.createMockRootScopeGenerator`). A task local rather than a parameter: an optional closure
+	/// threaded through the mock roots' construction raised the peak memory of a run that sets none by a fifth on Linux.
+	@TaskLocal static var recordsMockWorldRoot: (@Sendable (TypeDescription, ConstructionScope) -> Void)?
+
 	/// Handed each root's report, where set. Only a test sets it.
 	@TaskLocal public static var observer: (@Sendable (NodeRecordsReport) -> Void)?
 
