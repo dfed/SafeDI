@@ -22,14 +22,19 @@ extension NodeRecords {
 	/// The claim of `declaration` in a mock root's world, and `nil` in a production root's: of kind `mockConstruction`, for a
 	/// node stage 1 makes in a production root's world (`refusalsOfBuiltByInitializer(_:in:)`) and for one its type's
 	/// hand-written mock builds, whose override is the field of its parent's configuration under the node's own label,
-	/// holding each refusal of a node whose override a later stage reads. A node stage 1 refuses for anything this kind
-	/// does not make is left unclaimed, so its first refusal is stage 1's.
+	/// holding each refusal of a node whose override a later stage reads. A node stage 1 refuses for anything a mock kind
+	/// does not make is left unclaimed, so its first refusal is stage 1's. Each mock kind adds its term to `discharges`, the
+	/// stage-1 refusals of the node its record makes, and the node is of the kind whose term discharged one.
 	static func mockConstructionClaim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
 		guard world.isMockWorld else { return nil }
 		// A hand-written mock builds its type with or without an initializer: a fake has none.
 		let buildsWithHandWrittenMock = world.construction(of: declaration) == .handWrittenMock
-		let discharges: Set<NodeRecordRefusal> = buildsWithHandWrittenMock ? [.construction, .noInitializer] : []
+		let erasedDischarges = mockErasedDischarges(of: declaration, in: world)
+		var discharges: Set<NodeRecordRefusal> = buildsWithHandWrittenMock ? [.construction, .noInitializer] : []
+		discharges.formUnion(mockOnlyIfAvailableDischarges(of: declaration))
+		discharges.formUnion(erasedDischarges)
 		guard refusalsOfBuiltByInitializer(declaration, in: world).allSatisfy(discharges.contains) else { return nil }
+		let kind: NodeRecordKind = erasedDischarges.isEmpty ? .mockConstruction : .mockErased
 		var refusals = [NodeRecordRefusal]()
 		let instantiable = world.scope(of: declaration).instantiable
 		// An actor is claimed as any node is. The closure that overrides it takes each argument `sending`
@@ -53,7 +58,7 @@ extension NodeRecords {
 		if let refusal = refusalOfNamingApart(declaration, in: world) {
 			refusals.append(refusal)
 		}
-		return NodeRecordClaim(kind: .mockConstruction, discharges: discharges, refusals: refusals)
+		return NodeRecordClaim(kind: kind, discharges: discharges, refusals: refusals)
 	}
 
 	/// Whether a call of `construction` a mock writes passes a value none of `dependencies` fulfills, which the node's
@@ -77,6 +82,7 @@ extension NodeRecords {
 		of declaration: DeclarationID,
 		variant: VariantID,
 		in world: some NodeRecordSources,
+		unavailableProperties: Set<Property>,
 		typesDeclaredEscaping: Set<TypeDescription>,
 		children: [GeneratedCode],
 	) throws -> BuiltPlaceRecord {
@@ -92,14 +98,23 @@ extension NodeRecords {
 		}
 		// A mock world that holds a lazily instantiated property is refused (`refusalsOfBuiltByInitializer(_:in:)`), so no
 		// receive of this node reads a wrapper's instance.
+		// A constant the mock builds for an optional property it promotes is bound as the unwrapped type its function returns,
+		// as every node the mock builds is bound non-optional; the optional receiver takes it through optional promotion.
+		let boundProperty = world.property(of: declaration).map { property in
+			property.propertyType == .constant && property.typeDescription.isOptional ? Property(label: property.label, typeDescription: property.typeDescription.unwrapped) : property
+		}
+		.map { property in
+			nameApart.map { Property(label: $0, typeDescription: property.typeDescription) } ?? property
+		}
 		var record = try builtByInitializerRecord(
 			of: declaration,
 			variant: variant,
 			in: world,
+			unavailableProperties: unavailableProperties,
 			lazilyInstantiatedInstanceProperties: [],
 			construction: handWrittenMock,
-			typeFunctionReturns: world.property(of: declaration)?.typeDescription.asInstantiatedTypeSpelledAsDeclared,
-			boundAs: nameApart,
+			typeFunctionReturns: boundProperty?.typeDescription.asInstantiatedTypeSpelledAsDeclared,
+			boundProperty: boundProperty,
 			typesDeclaredEscaping: typesDeclaredEscaping,
 			children: placesBindingNamesApartAgain + children,
 		)
