@@ -19,7 +19,8 @@
 // SOFTWARE.
 
 extension DependencyTreeGenerator {
-	/// Generates mock code for all `@Instantiable` types.
+	/// Generates mock code for all `@Instantiable` types. A mock keeps its local functions inlinable, where a seam’s tree
+	/// does not (`LocalFunctionInlining`).
 	/// - Parameter publicMockContext: The context the module's public mocks share (`makePublicMockContext()`), or `nil`
 	///   when the module declares no public mock.
 	func generateMockCode(
@@ -50,6 +51,8 @@ extension DependencyTreeGenerator {
 		var promotedScopesValidatedForHiddenReceives = Set<ObjectIdentifier>()
 		var scopesWithValidatedDeclarations = Set<ObjectIdentifier>()
 		var mockRoots = [(instantiable: Instantiable, scopeGenerator: ScopeGenerator)]()
+		// The root of each mock root's world, by mocked type, where a test observes node records.
+		var worldRootsByMockedType = [TypeDescription: ConstructionScope]()
 		// The public mocks the module's own files declare, whose plans its module info carries.
 		var ownPublicMockTypes = Set<TypeDescription>()
 		// One memo for the mock roots, shared between them as `sharingBetweenMockRoots` says.
@@ -100,6 +103,8 @@ extension DependencyTreeGenerator {
 					promotedScopesValidatedForHiddenReceives: &promotedScopesValidatedForHiddenReceives,
 					scopesWithValidatedDeclarations: &scopesWithValidatedDeclarations,
 					constructionMemo: &constructionMemo,
+					// Kept only where a test observes node records, which alone are made of it.
+					recordingWorldRoot: NodeRecordsObservation.observer == nil ? nil : { worldRootsByMockedType[instantiable.concreteInstantiable] = $0 },
 				)
 				if instantiable.generateMock == .public, let publicMockContext {
 					var findings = await mockRoot.publicMockFindings(of: instantiable, context: publicMockContext, mockDefaults: flatParameterMockDefaults)
@@ -222,10 +227,11 @@ extension DependencyTreeGenerator {
 			foreignPublicMocks: foreignPublicMocks,
 		)
 		let fulfillingInstantiables = typeDescriptionToFulfillingInstantiableMap
+		let worldRoots = worldRootsByMockedType
 		let loweredRoots = try await BoundedConcurrency.map(mockRoots, width: BoundedConcurrency.mockRootWidth) { instantiableAndMockRoot, _ in
 			let (instantiable, mockRoot) = instantiableAndMockRoot
 			async let fulfillers = mockRoot.fulfillersOfMock(mockDefaults: flatParameterMockDefaults)
-			let lowered = try await mockRoot.lowerMockRoot(context: mockContext)
+			let lowered = try await mockRoot.lowerMockRoot(context: mockContext, worldRoot: worldRoots[instantiable.concreteInstantiable])
 			return await (
 				root: GeneratedRoot(
 					typeDescription: instantiable.concreteInstantiable,
@@ -669,6 +675,7 @@ extension DependencyTreeGenerator {
 	///   - checksConstructions: See `createMockRootScopeGenerator`.
 	///   - promotedScopesValidatedForHiddenReceives: See `createMockRootScopeGenerator`.
 	///   - scopesWithValidatedDeclarations: See `createMockRootScopeGenerator`.
+	///   - recordingWorldRoot: See `createMockRootScopeGenerator`.
 	func createMockRoot(
 		for instantiable: Instantiable,
 		scope: Scope,
@@ -682,6 +689,7 @@ extension DependencyTreeGenerator {
 		promotedScopesValidatedForHiddenReceives: inout Set<ObjectIdentifier>,
 		scopesWithValidatedDeclarations: inout Set<ObjectIdentifier>,
 		constructionMemo: inout ConstructionMemo,
+		recordingWorldRoot: ((ConstructionScope) -> Void)? = nil,
 	) async throws -> ScopeGenerator {
 		// A hand-written method also named `mock` can be confused with the
 		// generated `mock()`: identical signatures redeclare, overlapping ones
@@ -717,6 +725,7 @@ extension DependencyTreeGenerator {
 			promotedScopesValidatedForHiddenReceives: &promotedScopesValidatedForHiddenReceives,
 			scopesWithValidatedDeclarations: &scopesWithValidatedDeclarations,
 			constructionMemo: &constructionMemo,
+			recordingWorldRoot: recordingWorldRoot,
 		)
 	}
 
@@ -1000,7 +1009,7 @@ extension DependencyTreeGenerator {
 						fulfilledBy: fulfillingProperty,
 						erasedToConcreteExistential: erasedToConcreteExistential,
 						onlyIfAvailable: onlyIfAvailable,
-						declarationReference: dependency.declarationLocation.map(aliasDeclarationReferences.reference(to:)),
+						declarationReference: aliasDeclarationReferences.reference(to: dependency.declarationLocation),
 					))
 				case .forwarded:
 					continue

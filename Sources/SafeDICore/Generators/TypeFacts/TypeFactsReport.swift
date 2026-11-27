@@ -114,8 +114,14 @@ struct TypeFactsGeneratorFacts: Sendable {
 /// and the reads its subtree made of the context above it, as `Read`s and with their answers. Made only where a test
 /// observes trees, never by the tool.
 public struct TypeFactsReport: Sendable {
-	init(root: ConstructionScope, places: TypeFactsPlaces, forMockGeneration: Bool) {
+	init(root: ConstructionScope, places: TypeFactsPlaces, forMockGeneration: Bool, tree: ScopeGenerator) {
 		let graph = TypeFactsGraph(root: root, forMockGeneration: forMockGeneration)
+		let unfolding = TypeFactsDOT(graph: graph, tree: tree)
+		dot = DOT(
+			drawnByTree: ScopeGenerator.drawnTree(of: tree),
+			unfolded: unfolding.unfolded,
+			declarationsDrawnPerPath: unfolding.declarationsDrawnPerPath,
+		)
 		self.graph = graph
 		self.root = root.instantiable.concreteInstantiable.asSource
 		self.forMockGeneration = forMockGeneration
@@ -212,6 +218,7 @@ public struct TypeFactsReport: Sendable {
 				isOnCycle: graph.graph.isOnCycle(index),
 				readsFromAbove: graph.reads.reads(of: index).map(graph.readDescription),
 				firstRoute: graph.graph.firstRoute(to: index),
+				owedFacts: Self.names(of: graph.owedFacts(of: Int32(index))),
 			)
 		}
 		self.places = places.places.map { place in
@@ -339,6 +346,19 @@ public struct TypeFactsReport: Sendable {
 		public let readsFromAbove: [String]
 		/// The nodes from the root to this one on the first route a walk of the edges in order finds.
 		public let firstRoute: [Int]
+		/// The facts producers still owe the node's answers (`TypeFactsOwedFacts`), by the names of their bits.
+		public let owedFacts: Set<String>
+	}
+
+	private static func names(of owed: TypeFactsOwedFacts) -> Set<String> {
+		let named: [(TypeFactsOwedFacts, String)] = [
+			(.fillBeingBuilt, "fillBeingBuilt"),
+			(.mockRootPin, "mockRootPin"),
+			(.mockRootRecord, "mockRootRecord"),
+			(.mockRootBinding, "mockRootBinding"),
+			(.madeAgain, "madeAgain"),
+		]
+		return Set(named.filter { owed.contains($0.0) }.map(\.1))
 	}
 
 	public struct Place: Sendable {
@@ -361,10 +381,22 @@ public struct TypeFactsReport: Sendable {
 		public let generator: Generator?
 	}
 
+	/// The tree's DOT graph as its places draw it and as the graph's declarations unfold it (`TypeFactsDOT`), which must be
+	/// the same bytes.
+	public struct DOT: Sendable {
+		/// `ScopeGenerator.generateDOT()`'s text of the tree.
+		public let drawnByTree: String
+		/// The text unfolded from each declaration's column.
+		public let unfolded: String
+		/// The declarations two of whose places draw otherwise.
+		public let declarationsDrawnPerPath: [String]
+	}
+
 	/// The world's graph, which a test of what it holds reads.
 	let graph: TypeFactsGraph
 	/// The concrete type of the world's root.
 	public let root: String
+	public let dot: DOT
 	/// The 32-bit elements of the graph's columns, which grow with its nodes and edges.
 	public let columnElementCount: Int
 	public let edgeCount: Int
@@ -403,7 +435,9 @@ public struct TypeFactsReport: Sendable {
 			line += " type \(world.builtType(of: declaration).raw) cycle \(world.cycle(of: declaration)) component \(world.component(of: declaration))"
 			line += world.isOnCycle(declaration) ? " on cycle" : ""
 			line += " route \(world.firstRoute(to: declaration)) edges \(Array(world.edges(from: declaration)))"
-			line += " facts \(world.edgeFacts(from: declaration).count) bindings \(world.bindings(of: declaration).count)"
+			let bindings = world.bindings(of: declaration)
+			// No answer provides a property: what `provides` says of none, by each binding's property.
+			line += " facts \(world.edgeFacts(from: declaration).count) bindings \(bindings.count) none provides \(bindings.contains { world.provides(-1, $0.property) })"
 			line += " parents \(world.parents(of: declaration).count) hole \(world.hole(declaration) != nil) received \(world.received(by: declaration).count)"
 			line += " receives \(world.receives(of: declaration).map { world.acceptedProperties(of: $0).count })"
 			line += " reads [\(world.reads(of: declaration).map { "\(world.read($0).channel.name)" }.joined(separator: ", "))]"
@@ -423,7 +457,7 @@ public struct TypeFactsReport: Sendable {
 			var line = "v\(index) d\(world.declaration(of: variant)) \(world.family(of: variant))"
 			line += " keys [\(world.keys(of: variant).map { "\(world.answer($0).form) \(world.forms(of: $0).count)" }.joined(separator: ", "))]"
 			let calls = world.calls(of: variant)
-			line += " calls \(Array(calls)) sources [\(calls.indices.map { "\(world.sources(ofCall: $0 - calls.startIndex, of: variant).map(\.kind))" }.joined(separator: ", "))]"
+			line += " calls \(Array(calls)) sources [\(calls.indices.map { "\(world.sources(ofCall: $0 - calls.startIndex, of: variant).map { Self.description(of: $0, in: world) })" }.joined(separator: ", "))]"
 			line += world.isCalledOnce(variant) ? " once" : ""
 			line += " outcomes \(world.outcomes(of: variant).map { "\($0)" }) bound before \(Array(world.boundBefore(of: variant)))"
 			lines.append(line)
@@ -433,6 +467,16 @@ public struct TypeFactsReport: Sendable {
 			}
 		}
 		return lines.joined(separator: "\n")
+	}
+
+	/// A call's source as the projection spells it: its kind, and for a bound answer its form.
+	private static func description(of source: AnswerSource, in world: some TypeFactsWorld) -> String {
+		switch source.kind {
+		case .none, .passedThrough:
+			"\(source.kind)"
+		case .bound:
+			"bound \(world.answer(source.answer).form)"
+		}
 	}
 }
 

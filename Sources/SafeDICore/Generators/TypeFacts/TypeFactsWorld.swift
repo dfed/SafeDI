@@ -192,6 +192,27 @@ struct TypeFactsAnswer: Equatable, Sendable {
 	let forms: Int32
 }
 
+/// The facts a producer still owes a declaration's answers: where two places of one variant can answer a read apart
+/// until that producer lands. Each producer's commit clears its own bit, and the world answers empty once every one has.
+/// Wider than what is owed: each bit is set wherever its producer's fact can differ, which the sweep's check 10 findings
+/// test, class by class.
+struct TypeFactsOwedFacts: OptionSet, Sendable {
+	let rawValue: UInt8
+
+	/// The fill channel (track C): whether a hole's property is still being built inside its own fill. Set on a fill and
+	/// on every declaration beneath one.
+	static let fillBeingBuilt = TypeFactsOwedFacts(rawValue: 1 << 0)
+	/// The mock root's pins (track D): whether a mock read is pinned. Set on every declaration of a mock world.
+	static let mockRootPin = TypeFactsOwedFacts(rawValue: 1 << 1)
+	/// The mock root's required-receive records (track D): what a read finds pinned or read above it. Set on every
+	/// declaration of a mock world.
+	static let mockRootRecord = TypeFactsOwedFacts(rawValue: 1 << 2)
+	/// The mock root's bindings (track D): whether the mock root binds a read. Set on every declaration of a mock world.
+	static let mockRootBinding = TypeFactsOwedFacts(rawValue: 1 << 3)
+	/// The `madeAgain` producer: the bindings a builder made again in a loop of builders rebinds. Set on every builder.
+	static let madeAgain = TypeFactsOwedFacts(rawValue: 1 << 4)
+}
+
 /// What every track reads of one world.
 protocol TypeFactsWorld {
 	var declarationCount: Int { get }
@@ -277,6 +298,8 @@ protocol TypeFactsWorld {
 	/// For each read of the variant, parallel to `keys(of:)`: the offset of the edge that opens the `@Sendable` function a
 	/// `readBeforeSendableFunction` read is bound before (the outermost such edge), -1 for every other outcome.
 	func boundBefore(of variant: VariantID) -> ArraySlice<Int32>
+	/// The facts producers still owe the declaration's answers (`TypeFactsOwedFacts`).
+	func owedFacts(of declaration: DeclarationID) -> TypeFactsOwedFacts
 }
 
 extension TypeFactsGraph: TypeFactsWorld {
@@ -451,5 +474,31 @@ extension TypeFactsGraph: TypeFactsWorld {
 
 	func boundBefore(of variant: VariantID) -> ArraySlice<Int32> {
 		outcomes.boundBefore(of: variant)
+	}
+
+	func owedFacts(of declaration: DeclarationID) -> TypeFactsOwedFacts {
+		var owed: TypeFactsOwedFacts = []
+		if forMockGeneration {
+			owed.formUnion([.mockRootPin, .mockRootRecord, .mockRootBinding])
+		}
+		switch kinds[Int(declaration)] {
+		case .instantiator, .sendableInstantiator, .erasedInstantiator, .sendableErasedInstantiator:
+			owed.insert(.madeAgain)
+		case .constant, .lazy, .sendableLazy, .alias, .hole:
+			break
+		}
+		// A declaration is beneath a fill where any of its routes enters one: a walk up its parents.
+		var visited: Set = [declaration]
+		var pending = [declaration]
+		while let current = pending.popLast() {
+			guard !graph.nodes[Int(current)].key.isFill else {
+				owed.insert(.fillBeingBuilt)
+				break
+			}
+			for parent in parents(of: current) where visited.insert(parent.parent).inserted {
+				pending.append(parent.parent)
+			}
+		}
+		return owed
 	}
 }

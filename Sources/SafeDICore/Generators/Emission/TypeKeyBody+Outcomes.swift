@@ -32,17 +32,34 @@ extension TypeKeyLayout {
 		} else if outcomes[owner][label] == .passed {
 			.read(owner: owner, label: label)
 		} else {
-			// Every function is declared in the root's body (`computePlacement`), so a function that captures its read, or
-			// reads none, sees the root's declarations before its own. One that reads none has no declaration there: the
-			// first root statement that reaches it is before the path that resolved the read to none.
-			lastPosition(of: label, inClass: 0, before: placementIndex[owner]).map { .statement(owner: 0, index: $0) } ?? .none
+			// A function that captures its read, or reads none, sees the declarations of the body that declares it
+			// (`computePlacement`) before its own: the root's, or, as the path key nests a loop's, a function's. One that
+			// reads none has no declaration there: the first statement that reaches it is before the path that resolved the
+			// read to none.
+			typeLookUp(label, inClass: placementOwner[owner], before: placementIndex[owner])
 		}
 	}
 
 	/// The position of the last statement of `owner`'s body before `index` that declares `label`.
 	func lastPosition(of label: String, inClass owner: Int, before index: Int) -> Int? {
-		let statements = statements(ofClass: owner)
-		return stride(from: min(index, statements.count) - 1, through: 0, by: -1).first { self.label(of: statements[$0]) == label }
+		Self.lastPosition(in: bodies[owner == 0 ? 0 : membersByClass[owner][0]].positionsByLabel[label], before: index)
+	}
+
+	/// The last of `positions`, which ascend, before `index`: a binary search, since a look-up reads it for every label at
+	/// every place, so a body of many statements costs a look-up no more than a few.
+	static func lastPosition(in positions: [Int]?, before index: Int) -> Int? {
+		guard let positions else { return nil }
+		var lower = 0
+		var upper = positions.count
+		while lower < upper {
+			let middle = (lower + upper) / 2
+			if positions[middle] < index {
+				lower = middle + 1
+			} else {
+				upper = middle
+			}
+		}
+		return lower > 0 ? positions[lower - 1] : nil
 	}
 
 	/// The type key's declaration for a path declaration.
@@ -62,12 +79,12 @@ extension TypeKeyLayout {
 		}
 	}
 
-	/// What each class's function does with each label it reads. Every function is declared in the root's body
-	/// (`computePlacement`), and a cycle parameter is always read from the caller, so no outcome depends on another: one
-	/// pass settles them.
+	/// What each class's function does with each label it reads. A cycle parameter is always read from the caller, and a
+	/// function's outcomes depend only on those of the functions declaring it (`computePlacement`), so one pass, outer
+	/// functions first, settles them.
 	mutating func computeOutcomes() {
-		var outcomes = [[String: ReadOutcome]](repeating: [:], count: membersByClass.count)
-		for owner in membersByClass.indices.dropFirst() {
+		outcomes = [[String: ReadOutcome]](repeating: [:], count: membersByClass.count)
+		for owner in membersByClass.indices.dropFirst().sorted(by: { (placementDepth[$0], $0) < (placementDepth[$1], $1) }) {
 			for label in reads[membersByClass[owner][0]] {
 				var declarations = [TypeDeclaration]()
 				for member in membersByClass[owner] {
@@ -93,7 +110,6 @@ extension TypeKeyLayout {
 				outcomes[owner][label] = outcome
 			}
 		}
-		self.outcomes = outcomes
 	}
 
 	/// What the closing statement `closer` passes the function of `place` for `label`: its argument for a cycle parameter,

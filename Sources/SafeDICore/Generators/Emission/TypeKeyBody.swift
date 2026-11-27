@@ -35,18 +35,29 @@ enum TypeKeyBody {
 	/// root keeps `rootBody`, the path key's statements. `outerDeclarations` are the declarations in scope before the root's
 	/// body that it does not write: a seam's parameters, as its narrowest tier binds them. A read the path key resolves to one
 	/// is resolved to it in the type key's layout too, never to `nil`. No function the layout declares takes a name of
-	/// `namesInScope`, the names bound around the body, such as a seam's parameters' internal names. A mock, whose body the
-	/// type key's layout replaces whatever it holds, lays out every loop of builders (`laysOutEveryLoop`); production keeps
-	/// the path key's body where it writes each member's function once. Where `declaresLoopMembersAsThePathKeyDoes` is set,
-	/// the function of each member of a loop of builders that one statement of the root's body builds is declared right
-	/// before that statement, as the path key declares a loop it writes once, rather than with the loop's other functions.
-	/// It exists so that a root laid out from node records writes the path key's bytes where the path key keeps 2.4.0's
-	/// form for a loop; once the records place functions themselves, placement comes from them and this goes.
-	static func statements(ofRootBody rootBody: [GeneratedCode], outerDeclarations: [Property] = [], namesInScope: Set<String> = [], laysOutEveryLoop: Bool = false, declaresLoopMembersAsThePathKeyDoes: Bool = false) -> [GeneratedCode]? {
+	/// `namesInScope`, the names bound around the body, such as a seam's parameters' internal names. A value path of the
+	/// root's body may name each of `rootPassedArgumentNames`, the parameters of the function the body is written in that
+	/// its places read as a function's place reads a passed argument; the layout takes each as a name in scope too. A mock,
+	/// whose body the type key's layout replaces whatever it holds, lays out every loop of builders (`laysOutEveryLoop`);
+	/// production keeps the path key's body where it writes each member's function once. Where
+	/// `declaresLoopMembersAsThePathKeyDoes` is set, the function of each member of a loop of builders that one statement of
+	/// the root's body builds is declared right before that statement, as the path key declares a loop it writes once,
+	/// rather than with the loop's other functions, and each function a member's function reaches alone is declared in the
+	/// body that calls it, as the path key nests it. It applies only where the path key writes each loop once, and exists
+	/// so that a root laid out from node records writes the path key's bytes where the path key keeps 2.4.0's form for a
+	/// loop; once the records place functions themselves, placement comes from them and this goes.
+	static func statements(
+		ofRootBody rootBody: [GeneratedCode],
+		outerDeclarations: [Property] = [],
+		namesInScope: Set<String> = [],
+		rootPassedArgumentNames: Set<String> = [],
+		laysOutEveryLoop: Bool = false,
+		declaresLoopMembersAsThePathKeyDoes: Bool = false,
+	) -> [GeneratedCode]? {
 		var layout = TypeKeyLayout()
-		layout.declaresLoopMembersAsThePathKeyDoes = declaresLoopMembersAsThePathKeyDoes
 		layout.declareOuter(outerDeclarations)
-		layout.namesInScope = namesInScope
+		layout.namesInScope = namesInScope.union(rootPassedArgumentNames)
+		layout.rootPassedArgumentNames = rootPassedArgumentNames
 		// The root functions the plan's places call are declared once, before every statement, as the path key declares
 		// them (`RootFunctionHoisting`); a root that keeps one in place keeps the path key's body, since the type key spells
 		// a place written as text without them.
@@ -65,7 +76,9 @@ enum TypeKeyBody {
 		layout.computeClasses()
 		// A root whose loops of builders the path key writes once each keeps the path key's body, the members' functions
 		// nested as before the type key laid loops out.
-		guard laysOutEveryLoop || layout.laysOutLoops(), layout.computePlacement() else { return nil }
+		let laysOutLoops = layout.laysOutLoops()
+		layout.declaresLoopMembersAsThePathKeyDoes = declaresLoopMembersAsThePathKeyDoes && !laysOutLoops
+		guard laysOutEveryLoop || laysOutLoops, layout.computePlacement() else { return nil }
 		layout.computeOutcomes()
 		guard layout.keepsCapturesOfLoopMembersDeclaredAsThePathKeyDoes(),
 		      layout.computeParameterTypes(),
@@ -137,9 +150,13 @@ struct TypeKeyLayout {
 		/// call.
 		let domainLabels: Set<String>
 		var statements = [Statement]()
+		/// The positions of the statements that bind each label, ascending.
 		var positionsByLabel = [String: [Int]]()
 		let forwardedLabels: Set<String>
 		let cycleParameterLabels: Set<String>
+		/// The declaration each label of the body's domain resolves to outside it, at its first place: what a look-up from the
+		/// body or beneath it finds once it leaves the body, without walking further up.
+		var outerDeclarations = [String: PathValue]()
 
 		/// The parent body and statement index of each of the view's places.
 		var edges: [(parent: Int, position: Int)] {
@@ -155,6 +172,10 @@ struct TypeKeyLayout {
 		/// Whether a closer beneath the node's own body, rather than one of its own statements, calls a function declared
 		/// outside it.
 		var closesBeneathItsBody = false
+		/// The names among `closedOnFunctionNames` that a member of a loop of builders calls, rebinding a sibling
+		/// (`ClosingPlaceRecord.rebindsLoopMember`): the only names a statement's function can answer. A node whose domain
+		/// holds none resolves each name to an enclosing place's function, with no look-up among statements.
+		var loopMemberFunctionNames = Set<String>()
 	}
 
 	/// What tells two places of one plan node apart (`Body`).
@@ -220,6 +241,9 @@ struct TypeKeyLayout {
 	var rootFunctionNames = Set<String>()
 	/// The names bound around the root's body, which no function the layout declares takes.
 	var namesInScope = Set<String>()
+	/// The parameters of the function the root's body is written in that a value path of the root's body may name as a
+	/// passed argument.
+	var rootPassedArgumentNames = Set<String>()
 	/// The views whose bodies wrap a member of a loop of builders again (`ClosingPlaceRecord.rebindsLoopMember`).
 	var loopRebindingBodies = Set<Int>()
 	/// The views other than the root's in post-order of the view DAG.

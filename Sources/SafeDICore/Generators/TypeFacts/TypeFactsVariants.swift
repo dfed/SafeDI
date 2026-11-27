@@ -76,6 +76,17 @@ struct VariantBinding: Equatable, Sendable {
 /// a call of each member its node's body makes again at its top, handed the caller's answers at that top, which are the
 /// caller's own but for the labels it rebinds, projected onto the member's reads as an edge's call projects them.
 struct TypeFactsVariants: Sendable {
+	/// The bucket of a variant's key: its node, family and keys hashed.
+	static func hash(_ node: Int32, _ family: VariantFamily, _ keys: [Int32]) -> Int {
+		var hasher = Hasher()
+		hasher.combine(node)
+		hasher.combine(family)
+		for key in keys {
+			hasher.combine(key)
+		}
+		return hasher.finalize()
+	}
+
 	/// - Parameters:
 	///   - rootAnswer: What answers each read of the root's reads from above: a seam's parameter, or `nil` for none.
 	///   - binding: What a node binds for a read of the edge's target at the edge (the edge's position among every node's
@@ -100,6 +111,7 @@ struct TypeFactsVariants: Sendable {
 		family: (_ edge: Int, _ callerFamily: VariantFamily) -> VariantFamily,
 		key: (_ read: Int32, _ answer: Int32) -> Int32,
 		madeAgain: (edges: MadeAgainEdges, binding: (_ node: Int, _ read: Int32) -> VariantBinding?)? = nil,
+		bucket: (_ node: Int32, _ family: VariantFamily, _ keys: [Int32]) -> Int = TypeFactsVariants.hash,
 	) {
 		var columns = Columns()
 		var bucketByHash = [Int: Int32]()
@@ -110,13 +122,7 @@ struct TypeFactsVariants: Sendable {
 
 		/// The variant of `node` in `family` with the scratch answers, made if no variant has its key.
 		func variant(of node: Int32, family: VariantFamily) -> Int32 {
-			var hasher = Hasher()
-			hasher.combine(node)
-			hasher.combine(family)
-			for key in scratchKeys {
-				hasher.combine(key)
-			}
-			let hash = hasher.finalize()
+			let hash = bucket(node, family, scratchKeys)
 			var candidate = bucketByHash[hash] ?? -1
 			while candidate >= 0 {
 				if columns.matches(Int(candidate), node: node, family: family, keys: scratchKeys) {
@@ -284,11 +290,8 @@ struct TypeFactsVariants: Sendable {
 			guard nodes[variant] == node, families[variant] == family else {
 				return false
 			}
+			// One node's variants all hold one key per read of the node's reads from above, so the runs are of one length.
 			let start = Int(keyOffsets[variant])
-			let end = Int(keyOffsets[variant + 1])
-			guard end - start == candidateKeys.count else {
-				return false
-			}
 			for offset in 0..<candidateKeys.count where keys[start + offset] != candidateKeys[offset] {
 				return false
 			}

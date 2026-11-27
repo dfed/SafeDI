@@ -96,15 +96,6 @@ struct BitRows: Sendable {
 		return nil
 	}
 
-	/// The columns a row holds.
-	func columnCount(inRow row: Int) -> Int {
-		var count = 0
-		for index in Int(rowStarts[row])..<Int(rowEnds[row]) {
-			count += wordBits[index].nonzeroBitCount
-		}
-		return count
-	}
-
 	/// The words held, for a test to count what a fold keeps.
 	var wordCount: Int {
 		wordIndices.count

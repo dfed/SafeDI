@@ -473,7 +473,7 @@ extension ScopeRecord {
 					typeFactsPlaces: &places,
 				)
 			} }
-			observer(treeBuiltWithMemo, treeBuiltWithoutMemo, TypeFactsReport(root: ConstructionScope(table: table, record: self), places: places ?? TypeFactsPlaces(), forMockGeneration: forMockGeneration))
+			observer(treeBuiltWithMemo, treeBuiltWithoutMemo, TypeFactsReport(root: ConstructionScope(table: table, record: self), places: places ?? TypeFactsPlaces(), forMockGeneration: forMockGeneration, tree: treeBuiltWithoutMemo))
 		}
 		return scopeGenerator
 	}
@@ -2017,14 +2017,14 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	///   spelling names: for a fill, that of the seam that holds the hole (`SeamSignature.Hole.declaringModuleNames`).
 	private func validateForwardedProperties(
 		of property: Property,
-		declaredAt declarationLocation: Dependency.DeclarationLocation?,
+		declaredAt declarationLocation: @autoclosure () -> Dependency.DeclarationLocation?,
 		on parent: TypeDescription,
 		seeingThroughModulesNamed declaringModuleNames: [String],
 		building builtInstantiable: Instantiable,
 	) throws {
 		guard validatesForwardedProperties, let error = ErasedInstantiatorForwardedPropertiesMismatchError(
 			property: property,
-			declarationLocation: declarationLocation,
+			declarationLocation: declarationLocation(),
 			parent: parent,
 			builtInstantiable: builtInstantiable,
 			declaringModuleNames: declaringModuleNames,
@@ -2716,10 +2716,11 @@ extension Instantiable {
 /// `@Forwarded` properties of the type it builds. Reported at the property's declaration.
 struct ErasedInstantiatorForwardedPropertiesMismatchError: SourceLocatedError {
 	/// The error for `property`, declared on `parent` at `declarationLocation` to build `builtInstantiable`, or
-	/// `nil` when `property` is not an erased instantiator or its first generic argument matches.
+	/// `nil` when `property` is not an erased instantiator or its first generic argument matches. The location is found
+	/// only for an error: finding it reads the parent's dependencies, and a check runs for every child.
 	init?(
 		property: Property,
-		declarationLocation: Dependency.DeclarationLocation?,
+		declarationLocation: @autoclosure () -> Dependency.DeclarationLocation?,
 		parent: TypeDescription,
 		builtInstantiable: Instantiable,
 		declaringModuleNames: [String],
@@ -2727,7 +2728,7 @@ struct ErasedInstantiatorForwardedPropertiesMismatchError: SourceLocatedError {
 	) {
 		guard !property.firstGenericMatchesForwardedProperties(of: builtInstantiable, declaringModuleNames: declaringModuleNames, declaredTypeNames: declaredTypeNames) else { return nil }
 		self.property = property
-		self.declarationLocation = declarationLocation
+		self.declarationLocation = declarationLocation()
 		self.parent = parent
 		builtType = builtInstantiable.concreteInstantiable
 		// The forwarded properties are spelled out rather than as `ForwardedProperties` on the built type, which the
@@ -2921,29 +2922,29 @@ struct SeamHoles: Sendable {
 			// The struct the call's own member is called on, typed where the seam's tree binds it: the builder, or the level the
 			// route's last member returns. The struct of a fill's own level, which the fill is handed, is typed by no binding.
 			let parentStep = callRoute.route.last
-			let memberParent: ScopeGenerator.BuilderCallArgument.PassedUpStruct? = if parentStep?.innerScope != nil {
+			let memberParent: (name: String, type: TypeDescription)? = if parentStep?.innerScope != nil {
 				nil
 			} else if let member = parentStep?.member {
-				.init(name: member.bindingName, type: member.levelType)
+				(member.bindingName, member.levelType)
 			} else {
-				.init(name: builderName, type: builder.parameterType)
+				(builderName, builder.parameterType)
+			}
+			// A carrier's member for a call's own case takes no values: a `let` child is read, any other member called.
+			let member: PassedOnMember? = callRoute.handsFillLevelStruct ? nil : callRoute.memberValuesType.map { memberValuesType in
+				if case let .nested(_, enumType, _) = memberValuesType, ReservedName.seamCarrier(ofEnum: enumType) != nil {
+					isLetChild(ofCaseNamed: callRoute.caseName, handed: memberValuesType) ? .carrierChild : .carrierMember
+				} else {
+					.member(valuesType: memberValuesType)
+				}
 			}
 			let memberCall = if callRoute.handsFillLevelStruct {
 				callRoute.route.last.flatMap { $0.innerScope?.name ?? $0.member?.bindingName }
 			} else {
-				callRoute.memberValuesType.map { memberValuesType in
-					let parentName = callRoute.route.last.flatMap { $0.innerScope?.name ?? $0.member?.bindingName } ?? builderName
-					if case let .nested(_, enumType, _) = memberValuesType, ReservedName.seamCarrier(ofEnum: enumType) != nil {
-						// A carrier's member for a call's own case takes no values: a `let` child is read, any other member called.
-						return isLetChild(ofCaseNamed: callRoute.caseName, handed: memberValuesType) ? "\(parentName).\(callRoute.caseName)" : "\(parentName).\(callRoute.caseName)()"
-					} else {
-						return "\(parentName).\(callRoute.caseName)(\(memberValuesType.asSource)())"
-					}
-				}
+				member.map { $0.spelled(on: callRoute.route.last.flatMap { $0.innerScope?.name ?? $0.member?.bindingName } ?? builderName, caseName: callRoute.caseName) }
 			}
 			routeCasesByCall[RouteCall(sitePath: callRoute.sitePath, innerKey: callRoute.innerKey)] = RouteCase(
 				memberCall: memberCall,
-				passedUpStruct: callRoute.handsFillLevelStruct || memberCall == nil ? nil : memberParent,
+				passedUpStruct: member.flatMap { member in memberParent.map { .init(name: $0.name, type: $0.type, caseName: callRoute.caseName, member: member) } },
 			)
 		}
 		self.routeCasesByCall = routeCasesByCall

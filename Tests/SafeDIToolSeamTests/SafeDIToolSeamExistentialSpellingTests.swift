@@ -134,14 +134,14 @@ struct SafeDIToolSeamExistentialSpellingTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_service: @autoclosure @escaping () -> any Service) {
 		        let service = LazilyInstantiated<any Service>(__safeDI_service)
-		        func __safeDI_first() -> First {
+		        @inline(never) func __safeDI_first() -> First {
 		            #sourceLocation(file: "\(output.fixtures["First.swift"])", line: 7)
 		            let other: any Service = service.instance
 		            #sourceLocation()
 		            return First(other: other)
 		        }
 		        let first: First = __safeDI_first()
-		        func __safeDI_second() -> Second {
+		        @inline(never) func __safeDI_second() -> Second {
 		            #sourceLocation(file: "\(output.fixtures["Second.swift"])", line: 7)
 		            let other: any Service = service.instance
 		            #sourceLocation()

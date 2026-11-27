@@ -94,6 +94,34 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_refusesNodeForItsOtherKind_whenAKindClaimsIt() async throws {
+		// No declaration fulfills `Analytics`, so `Root`'s property is a node that is always `nil` and that no initializer
+		// builds: two kinds stage 1 does not make. A claim that discharges the first leaves the world refused for the second.
+		let (_, reports) = try await NodeRecordsObservation.$claimsForTesting.withValue(["Analytics": ["unavailableOrInlineSeam"]]) {
+			try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+				try await executeSafeDIToolTest(swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public struct Root: Instantiable {
+					    public init(analytics: Analytics?) {
+					        self.analytics = analytics
+					    }
+
+					    @Instantiated(onlyIfAvailable: true) let analytics: Analytics?
+					}
+					""",
+					"""
+					public struct Analytics {}
+					""",
+				], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+			}
+		}
+		#expect(reports.map(\.refusal) == ["noInitializer"])
+		#expect(reports.map(\.everyRefusal) == [["noInitializer"]])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_laysOutTheOrdinaryModuleFromNodeRecords_whenItHasFortyScreens() async throws {
 		// The ordinary module's shape (designs/per-type-facts/ordinary.py): services the root builds, and layers of four
 		// screens, each forwarding an ID to its view model, every third building an avatar, each opening screens of the
@@ -177,6 +205,130 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysOutASeamBuiltInlineAsTheTreeDoes_whenNoModuleGeneratesItsInitializer() async throws {
+		// A seam in a directory a `#SafeDIConfiguration` adds is in no module's own files, so a tree that reaches it builds
+		// it inline, ending its construction with the comment that says why: node records make it as a node built by its
+		// initializer, with that comment.
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					#SafeDIConfiguration(
+					    additionalDirectoriesToInclude: ["$ADDITIONAL_DIRECTORY"]
+					)
+					""",
+					"""
+					@Instantiable(isRoot: true)
+					public struct Root: Instantiable {
+					    public init(session: Session, screen: Screen) {
+					        self.session = session
+					        self.screen = screen
+					    }
+
+					    @Instantiated let session: Session
+					    @Instantiated let screen: Screen
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Session: Instantiable {
+					    public init() {}
+					}
+					""",
+				],
+				additionalDirectorySwiftFileContent: [
+					"""
+					@Instantiable(generateDependencyTree: true)
+					public struct Screen: Instantiable {
+					    public init(detail: Detail) {
+					        self.detail = detail
+					    }
+
+					    @Instantiated let detail: Detail
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Detail: Instantiable {
+					    public init(session: Session) {
+					        self.session = session
+					    }
+
+					    @Received let session: Session
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		#expect(output.dependencyTreeFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public init() {
+			        let session = Session()
+			        func __safeDI_screen() -> Screen {
+			            let detail = Detail(session: session)
+			            return Screen(detail: detail) // Built inline: SafeDI does not know which module declares `Screen`, so this tree cannot call the initializer SafeDI generates for it.
+			        }
+			        let screen: Screen = __safeDI_screen()
+			        self.init(session: session, screen: screen)
+			    }
+			}
+			""",
+		])
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
+		#expect(reports.flatMap(\.differences) == [])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysOutAnUnavailableDependencyAsTheTreeDoes_whenNoDeclarationFulfillsItsType() async throws {
+		// Nothing fulfills `any Analytics`, so `Screen`'s property instantiated only if available is bound to `nil`, which node
+		// records write as the tree does.
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true) public final class Root: Instantiable {
+					    @Instantiated let screen: Screen
+					    public init(screen: Screen) { self.screen = screen }
+					}
+					""",
+					"""
+					@Instantiable public final class Screen: Instantiable {
+					    @Instantiated(onlyIfAvailable: true) let analytics: (any Analytics)?
+					    public init(analytics: (any Analytics)?) { self.analytics = analytics }
+					}
+					""",
+					"""
+					public protocol Analytics {}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		#expect(output.dependencyTreeFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_screen() -> Screen {
+			            let analytics: (any Analytics)? = nil
+			            return Screen(analytics: analytics)
+			        }
+			        let screen: Screen = __safeDI_screen()
+			        self.init(screen: screen)
+			    }
+			}
+			""",
+		])
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
+		#expect(reports.flatMap(\.differences) == [])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_laysOutLoopAsTheTreeDoes_whenThreeRootBuildersReceiveOneAnotherInARing() async throws {
 		// Each member's function begins by making the next member again, and is declared right before its wrapper, as the
 		// tree declares it, though each calls the next member's function.
@@ -213,6 +365,7 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 			""",
 		])
 		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
+		#expect(reports.flatMap(\.differences) == [])
 	}
 
 	@Test
@@ -236,11 +389,12 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 		// Soundness rule 2: a record is made from per-type facts, never from a tree's generator or text it spelled. Only
 		// the static helpers of `ScopeGenerator` listed here are called, until they move: a new one is a decision. The
 		// generator's hook (`DependencyTreeGenerator+NodeRecords.swift`) also calls `rootInitializer(of:)`, and plans the
-		// tree beside the records for the comparison.
+		// tree beside the records for the comparison. A mock world's records (`NodeRecords+MockConstruction.swift`) read two
+		// more, both facts of one type: its default-valued parameters, and the name of the configuration it declares.
 		let directory = URL(fileURLWithPath: #filePath)
 			.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
 			.appendingPathComponent("Sources/SafeDICore/Generators/NodeRecords")
-		let staticHelpers: Set = ["functionName", "standardIndent", "provides"]
+		let staticHelpers: Set = ["functionName", "standardIndent", "provides", "referencingDeclaration", "aliasDeclaration", "isBuilder", "DefaultParameter", "mockConfigurationStructName"]
 		let files = try FileManager.default.contentsOfDirectory(atPath: directory.path).filter { $0.hasSuffix(".swift") && $0 != "DependencyTreeGenerator+NodeRecords.swift" }.sorted()
 		#expect(files.count >= 4)
 		for file in files {
