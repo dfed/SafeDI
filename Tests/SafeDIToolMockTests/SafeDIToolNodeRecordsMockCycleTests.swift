@@ -338,6 +338,35 @@ struct SafeDIToolNodeRecordsMockCycleTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildsTheWalksValues_whenErasedBuilderOnCycleReturnsTheErasedType() async throws {
+		let walkOutput = try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: Self.erasedParentFixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: Self.erasedParentFixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [true])
+		// The child’s function returns the erased type, so the call that closes the cycle on it erases nothing again.
+		let laps = [
+			"",
+			".anyChildBuilder.instantiate()",
+			".anyChildBuilder.instantiate().child.parentBuilder.instantiate()",
+			".anyChildBuilder.instantiate().child.parentBuilder.instantiate().anyChildBuilder.instantiate()",
+			".anyChildBuilder.instantiate().child.parentBuilder.instantiate().anyChildBuilder.instantiate().child.parentBuilder.instantiate()",
+		]
+		let comparison = try await DifferentialValueOracle.compare(
+			feature: DifferentialValuePath(fixtureFiles: Self.erasedParentFixture, generatedFiles: #require(output.generatedFiles)),
+			knownRight: DifferentialValuePath(fixtureFiles: Self.erasedParentFixture, generatedFiles: #require(walkOutput.generatedFiles)),
+			probes: laps.enumerated().map { lap, path in
+				DifferentialValueProbe(name: "lap \(lap)", expression: "Parent.mock()\(path)")
+			},
+			filesToDelete: &filesToDelete,
+		)
+		// Nothing is compared where compile verification is off.
+		guard let comparison else { return }
+		#expect(comparison.differences.isEmpty, "\(comparison.report)")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_buildsTheWalksValues_whenBuilderOnCycleBuildsLazilyInstantiatedType() async throws {
 		let fixture = Self.ringFixture.merging([
 			"Parent.swift": """
@@ -733,6 +762,42 @@ struct SafeDIToolNodeRecordsMockCycleTests: ~Copyable {
 		}
 		""",
 	]) { _, replacement in replacement }
+
+	/// A mocked parent that builds its child erased, and a child that builds a parent again: the cycle closes on the
+	/// function that builds the erased child.
+	private static let erasedParentFixture: [String: String] = [
+		"Marked.swift": markedFile,
+		"Parent.swift": """
+		@Instantiable(generateMock: true)
+		public final class Parent: Instantiable, Marked {
+		    public init(anyChildBuilder: ErasedInstantiator<(), AnyChild>) {
+		        self.anyChildBuilder = anyChildBuilder
+		    }
+
+		    @Instantiated(fulfilledByType: "Child", erasedToConcreteExistential: true) let anyChildBuilder: ErasedInstantiator<(), AnyChild>
+		    public var marker = ""
+		}
+		""",
+		"Child.swift": """
+		@Instantiable
+		public final class Child: Instantiable, Marked {
+		    public init(parentBuilder: Instantiator<Parent>) {
+		        self.parentBuilder = parentBuilder
+		    }
+
+		    @Instantiated let parentBuilder: Instantiator<Parent>
+		    public var marker = ""
+		}
+
+		public final class AnyChild {
+		    public init(_ child: Child) {
+		        self.child = child
+		    }
+
+		    public let child: Child
+		}
+		""",
+	]
 
 	private static let markedFile = """
 	public protocol Marked: AnyObject {
