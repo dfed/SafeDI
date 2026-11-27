@@ -7411,7 +7411,7 @@ struct SafeDIToolGraphFuzzerTests {
 		omittedValueGraphCount: seamCorpusOmittedValueGraphCount,
 		errorMarkers: seamCorpusErrorMarkers,
 		errorGraphCounts: seamCorpusErrorGraphCounts,
-		drawFeaturesCountedWhenAccepted: Set(GraphFuzzerSeamDrawFeature.allCases.filter { $0.isAliasSpellingRollShape || $0.isCycleParameterShape || $0.isForwardedLabelAcrossSeamCallShape || $0.isRetentionShape || $0.isErasurePlaceShape || $0.isForwardingPlaceShape || $0.isPassedUpPlaceReadingPassingSeamsValueShape || $0.isFixedSeamCallDefectShape || $0.isOptionalPlaceShape || $0.isReadThroughViewShape || $0.isScreenPlaceShape || $0.isLazyRouteShape }),
+		drawFeaturesCountedWhenAccepted: Set(GraphFuzzerSeamDrawFeature.allCases.filter { $0.isTwinShape || $0.isAliasSpellingRollShape || $0.isCycleParameterShape || $0.isForwardedLabelAcrossSeamCallShape || $0.isRetentionShape || $0.isErasurePlaceShape || $0.isForwardingPlaceShape || $0.isPassedUpPlaceReadingPassingSeamsValueShape || $0.isFixedSeamCallDefectShape || $0.isOptionalPlaceShape || $0.isReadThroughViewShape || $0.isScreenPlaceShape || $0.isLazyRouteShape }),
 		acceptedDrawFeatureCounts: seamCorpusAcceptedDrawFeatureCounts,
 		readTwinGraphCount: seamCorpusReadTwinGraphCount,
 		retentionCounts: seamCorpusRetentionCounts,
@@ -8124,6 +8124,18 @@ struct SafeDIToolGraphFuzzerTests {
 		.optionalPlaceBesideRequiredPlace: 154,
 		.optionalPlaceReceivedRequired: 295,
 		.optionalPlaceSeamMocked: 74,
+		.twinsOverSharedScreen: 195,
+		.twinsOverSharedScreenValueFirst: 98,
+		.twinsOverSharedScreenWrapperFirst: 97,
+		.twinsOverSharedScreenSendableWrapper: 57,
+		.twinsOverSharedScreenScreenReceivesOnlyIfAvailable: 56,
+		.twinsOverSharedScreenScreenBuildsPanel: 73,
+		.twinsOverSharedScreenFirstThroughInstantiator: 101,
+		.twinsOverSharedScreenTopOpensSecond: 71,
+		.twinsOverSharedScreenInSeam: 195,
+		.twinsOverSharedScreenThemeInSameForm: 82,
+		.twinsOverSharedScreenThemeInMixedForms: 33,
+		.twinsOverSharedScreenThemeInMixedFormsInsideSendableBuilder: 4,
 	]
 
 	/// Seeds in `0..<seamCorpusSeedCount` whose graphs fail today. The 1 000-seed run of this corpus found that each
@@ -9544,6 +9556,14 @@ struct SafeDIToolGraphFuzzerTests {
 		.twoLeavesReceiveUnnameableDependency: 43,
 		.twoPublicMockTypes: 299,
 		.typeInExtensionOfInstantiable: 219,
+		.twinsPublicMock: 130,
+		.twinsPublicMockValueFirst: 61,
+		.twinsPublicMockWrapperFirst: 69,
+		.twinsPublicMockSendableWrapper: 22,
+		.twinsPublicMockScreenReceivesOnlyIfAvailable: 33,
+		.twinsPublicMockScreenBuildsPanel: 46,
+		.twinsPublicMockFirstThroughInstantiator: 59,
+		.twinsPublicMockTopOpensSecond: 57,
 	]
 
 	/// Seed 2760, whose mock of `S2760_T2` the tool rejected until a mock passed `nil` to a receive only if available that

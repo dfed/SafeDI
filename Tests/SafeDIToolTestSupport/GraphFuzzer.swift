@@ -2125,6 +2125,44 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 		rawValue.hasPrefix("holeScreen")
 	}
 
+	/// Twins over a shared screen beneath a seam (`addingTwinsOverSharedScreen`), one case per `TwinShape`, whose count in
+	/// accepted graphs the seam corpus pins (`acceptedDrawFeatureCounts`).
+	case twinsOverSharedScreen
+	case twinsOverSharedScreenValueFirst
+	case twinsOverSharedScreenWrapperFirst
+	case twinsOverSharedScreenSendableWrapper
+	case twinsOverSharedScreenScreenReceivesOnlyIfAvailable
+	case twinsOverSharedScreenScreenBuildsPanel
+	case twinsOverSharedScreenFirstThroughInstantiator
+	case twinsOverSharedScreenTopOpensSecond
+	case twinsOverSharedScreenInSeam
+	case twinsOverSharedScreenThemeInSameForm
+	case twinsOverSharedScreenThemeInMixedForms
+	case twinsOverSharedScreenThemeInMixedFormsInsideSendableBuilder
+
+	/// The feature of the seam corpus that `shape` is.
+	static func twinsOverSharedScreen(_ shape: TwinShape) -> GraphFuzzerSeamDrawFeature {
+		switch shape {
+		case .drawn: .twinsOverSharedScreen
+		case .valueFirst: .twinsOverSharedScreenValueFirst
+		case .wrapperFirst: .twinsOverSharedScreenWrapperFirst
+		case .sendableWrapper: .twinsOverSharedScreenSendableWrapper
+		case .screenReceivesOnlyIfAvailable: .twinsOverSharedScreenScreenReceivesOnlyIfAvailable
+		case .screenBuildsPanel: .twinsOverSharedScreenScreenBuildsPanel
+		case .firstThroughInstantiator: .twinsOverSharedScreenFirstThroughInstantiator
+		case .topOpensSecond: .twinsOverSharedScreenTopOpensSecond
+		case .inSeam: .twinsOverSharedScreenInSeam
+		case .themeInSameForm: .twinsOverSharedScreenThemeInSameForm
+		case .themeInMixedForms: .twinsOverSharedScreenThemeInMixedForms
+		case .themeInMixedFormsInsideSendableBuilder: .twinsOverSharedScreenThemeInMixedFormsInsideSendableBuilder
+		}
+	}
+
+	/// Whether `addingTwinsOverSharedScreen` draws this shape.
+	var isTwinShape: Bool {
+		rawValue.hasPrefix("twinsOverSharedScreen")
+	}
+
 	/// Whether `addingHoleShapes` draws this case of two routes whose fill reads a value one route binds lazily and the
 	/// caller holds by value, whose count in accepted graphs the seam corpus pins (`acceptedDrawFeatureCounts`), at least
 	/// ten each.
@@ -8581,7 +8619,7 @@ enum GraphFuzzerGenerator {
 			case .mixed: twinRandom.percentChance(50)
 			}
 			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
-			func append(_ name: String, isRoot: Bool = false, arguments: [String] = [], _ properties: [PropertyDeclaration]) {
+			func append(_ name: String, isRoot: Bool = false, arguments: [String] = [], leading: [PropertyDeclaration] = [], _ properties: [PropertyDeclaration]) {
 				var properties = properties
 				for index in properties.indices.reversed() {
 					properties.swapAt(index, twinRandom.integer(in: 0...index))
@@ -8589,7 +8627,7 @@ enum GraphFuzzerGenerator {
 				declarations.append(TypeDeclaration(
 					name: "\(prefix)\(name)",
 					instantiableArguments: (isRoot ? ["isRoot: true"] : []) + arguments,
-					properties: properties,
+					properties: leading + properties,
 					declaresHelperTypes: false,
 					additionalConformances: conformances,
 				))
@@ -8608,9 +8646,25 @@ enum GraphFuzzerGenerator {
 			let buildsPanel = twinRandom.percentChance(40)
 			let firstBuiltThroughInstantiator = twinRandom.percentChance(50)
 			let rootOpensSecond = twinRandom.percentChance(40)
-			append("TwinFirst", [valueFirst ? valueModel : lazyModel, screen])
-			append("TwinSecond", [valueFirst ? lazyModel : valueModel, screen])
-			append("TwinModel", [secondBuilder])
+			// Two rolls of their own: four graphs in ten give both parents a declaration of `twinTheme` in one form, by value,
+			// which `TwinModel`, the twins' type, receives, so each twin reads its own parent's theme; of the rest, four in
+			// ten declare it by value on `TwinFirst` and as the lazy wrapper on `TwinSecond`, so the twins read it in two
+			// forms.
+			let themeInSameForm = twinRandom.percentChance(40)
+			let themeInMixedForms = twinRandom.percentChance(40) && !themeInSameForm
+			let readsTheme = themeInSameForm || themeInMixedForms
+			let themeName = "\(prefix)TwinTheme"
+			let valueTheme = PropertyDeclaration(attribute: "@Instantiated", label: "twinTheme", type: themeName)
+			let firstTheme = readsTheme ? [valueTheme] : []
+			let secondTheme = themeInMixedForms
+				? [PropertyDeclaration(attribute: "@Instantiated", label: "twinTheme", type: "\(lazyWrapper)<\(themeName)>")]
+				: firstTheme
+			append("TwinFirst", leading: firstTheme, [valueFirst ? valueModel : lazyModel, screen])
+			append("TwinSecond", leading: secondTheme, [valueFirst ? lazyModel : valueModel, screen])
+			append("TwinModel", [secondBuilder] + (readsTheme ? [PropertyDeclaration(attribute: "@Received", label: "twinTheme", type: themeName)] : []))
+			if readsTheme {
+				append("TwinTheme", [])
+			}
 			append("TwinScreen", [screenReceive] + (buildsPanel ? [PropertyDeclaration(attribute: "@Instantiated", label: "twinPanel", type: "\(prefix)TwinPanel")] : []))
 			if buildsPanel {
 				append("TwinPanel", [PropertyDeclaration(attribute: "@Received", label: "twinModel", type: modelName)])
@@ -12634,6 +12688,7 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 				}
 			}
 		}
+		features.formUnion(TwinShape.shapes(of: fixture).map(GraphFuzzerSeamDrawFeature.twinsOverSharedScreen))
 		return features
 	}
 

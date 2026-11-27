@@ -465,6 +465,32 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 	/// `OptionalScreen`'s mock is `.public`.
 	case optionalPlacePublicMockPublicConsumer
 
+	/// On a stream of its own (`publicMockTwinRandomSeedMask`), twins over a shared screen beneath a public mock
+	/// (`drawTwinsPublicMock`), one case per `TwinShape` it draws.
+	case twinsPublicMock
+	case twinsPublicMockValueFirst
+	case twinsPublicMockWrapperFirst
+	case twinsPublicMockSendableWrapper
+	case twinsPublicMockScreenReceivesOnlyIfAvailable
+	case twinsPublicMockScreenBuildsPanel
+	case twinsPublicMockFirstThroughInstantiator
+	case twinsPublicMockTopOpensSecond
+
+	/// The feature of the public mock corpus that `shape` is, where it draws the shape.
+	static func twinsPublicMock(_ shape: TwinShape) -> GraphFuzzerPublicMockDrawFeature? {
+		switch shape {
+		case .drawn: .twinsPublicMock
+		case .valueFirst: .twinsPublicMockValueFirst
+		case .wrapperFirst: .twinsPublicMockWrapperFirst
+		case .sendableWrapper: .twinsPublicMockSendableWrapper
+		case .screenReceivesOnlyIfAvailable: .twinsPublicMockScreenReceivesOnlyIfAvailable
+		case .screenBuildsPanel: .twinsPublicMockScreenBuildsPanel
+		case .firstThroughInstantiator: .twinsPublicMockFirstThroughInstantiator
+		case .topOpensSecond: .twinsPublicMockTopOpensSecond
+		case .inSeam, .themeInSameForm, .themeInMixedForms, .themeInMixedFormsInsideSendableBuilder: nil
+		}
+	}
+
 	/// The shapes of `overrideClosureCall` whose call can hand an override closure no builder a person writes, so that the
 	/// consumer's overrides hold no member for it.
 	static let overrideClosureCannotHandShapes: Set<GraphFuzzerPublicMockDrawFeature> = [.overrideClosureCallPublicCallerPassesPlaceUp, .overrideClosureCallFillReadsCalledMocksOtherPlace, .overrideClosureCallFillReadsValueCalledMockRenames]
@@ -473,7 +499,7 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 	/// `retentionPublicMockValueBeforeBuilder…`, `sharedConstructionPublicMock…`, `keywordLabeledPublicMock…`,
 	/// `overrideClosure…`, `promotedHolePublicMock…`, `unbuildableValuePublicMockCall…`, `carrierBeforeSibling…`,
 	/// `wrapperReadByValuePublicMock…`, `valueFormsBesidePublicMockCall…`, `optionalPlacePublicMock…`,
-	/// `outerFulfillerPublicMockCall`, and `T6`'s mock isolated to the main
+	/// `outerFulfillerPublicMockCall`, `twinsPublicMock…`, and `T6`'s mock isolated to the main
 	/// actor or built with its hand-written mock in another public mock) draws this shape, whose count in accepted graphs the
 	/// public mock corpus pins too (`acceptedPublicMockDrawFeatureCounts`), at least ten each.
 	/// `unbuildableValuePublicMockCallTierOmits` is not one: the tool rejects every graph of it, which
@@ -489,6 +515,7 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 			|| rawValue.hasPrefix("valueFormsBesidePublicMockCall")
 			|| rawValue.hasPrefix("optionalPlacePublicMock")
 			|| rawValue.hasPrefix("outerFulfillerPublicMockCall")
+			|| rawValue.hasPrefix("twinsPublicMock")
 			|| self == .holeMockIsolatedToMainActor || self == .holeHandWrittenMockBuiltInPublicMock
 			|| self == .ownOptionalDefaultOnNonisolatedTypeThatBuilds
 	}
@@ -4782,6 +4809,7 @@ extension GraphFuzzerPublicMockDraw {
 				features.insert(.carrierBeforeSiblingBeneathInternallyConfiguredChild)
 			}
 		}
+		features.formUnion(TwinShape.shapes(of: fixture).compactMap(GraphFuzzerPublicMockDrawFeature.twinsPublicMock))
 		return features
 	}
 
