@@ -770,11 +770,11 @@ extension DependencyTreeGenerator {
 	/// The passed-up holes that name this seam's builders for the places it passes up, as indices into `passedUpHoles`, and,
 	/// by each passed-up hole, the index among those candidates of the one whose name its builder takes.
 	///
-	/// RULING OPEN (lead, 2026-11-26): one candidate per case of the called seam, the first hole of each case
-	/// (`ScopeGenerator.fillCaseKey(of:)`), so a label is named apart only from builders of other cases, whatever number of
-	/// places the called seam hands, and a run that is handed one place per case names as one handed every place. Main
-	/// names apart one candidate per place: that body returns every index for both lists. A swap is an edit of this
-	/// function alone.
+	/// One candidate per case of the called seam, the first hole of each case (`ScopeGenerator.fillCaseKey(of:)`), so a
+	/// label is named apart only from builders of other cases, whatever number of places the called seam hands, and a run
+	/// that is handed one place per case names as one handed every place (lead's ruling, 2026-11-27: a label per case; no
+	/// label a person writes moves, only the text of errors that name a builder). 2.4.1 names apart one candidate per place:
+	/// that body returns every index for both lists. A swap is an edit of this function alone.
 	private static func namingCandidates(amongPassedUpHoles passedUpHoles: [SeamSignature.Hole]) -> (candidates: [Int], candidateByHole: [Int]) {
 		var candidates = [Int]()
 		var candidateByCaseKey = [String: Int]()
