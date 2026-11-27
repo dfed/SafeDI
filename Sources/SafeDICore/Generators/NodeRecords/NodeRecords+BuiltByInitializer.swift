@@ -86,6 +86,7 @@ extension NodeRecords {
 	/// tree declares `typesDeclaredEscaping` `@escaping`.
 	static func builtByInitializerRecord(
 		of declaration: DeclarationID,
+		variant _: VariantID,
 		in world: some NodeRecordSources,
 		typesDeclaredEscaping: Set<TypeDescription>,
 		children: [GeneratedCode],

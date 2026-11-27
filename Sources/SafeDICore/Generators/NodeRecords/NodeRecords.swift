@@ -128,7 +128,7 @@ struct NodeRecords: Sendable {
 			}
 			let record = switch kinds[Int(declaration)] {
 			case .builtByInitializer:
-				try Self.builtByInitializerRecord(of: declaration, in: world, typesDeclaredEscaping: escaping, children: children)
+				try Self.builtByInitializerRecord(of: declaration, variant: variant, in: world, typesDeclaredEscaping: escaping, children: children)
 			}
 			typesDeclaredEscaping[Int(variant)] = escaping
 			records[Int(variant)] = record
@@ -167,7 +167,14 @@ struct NodeRecords: Sendable {
 	static func refusals(in world: some NodeRecordSources) -> [NodeRecordRefusal] {
 		var refusals = Set<NodeRecordRefusal>()
 		for declaration in 0..<Int32(world.declarationCount) {
-			refusals.formUnion(refusalsOfBuiltByInitializer(declaration, in: world))
+			do {
+				// A node a lane's kind claims holds no refusal of the kinds no lane makes yet.
+				if try claimedKind(of: declaration, in: world) == nil {
+					refusals.formUnion(refusalsOfBuiltByInitializer(declaration, in: world))
+				}
+			} catch {
+				refusals.insert(error)
+			}
 		}
 		var declarationsWithAVariant = Set<DeclarationID>()
 		for variant in 0..<Int32(world.variantCount) where !declarationsWithAVariant.insert(world.declaration(of: variant)).inserted {
@@ -181,12 +188,23 @@ struct NodeRecords: Sendable {
 		return NodeRecordRefusal.allCases.filter(refusals.contains)
 	}
 
-	/// The kind of record `declaration` is made as, or the refusal of its world. A lane that adds a kind asks its own
-	/// file's classifier first, which returns `nil` for a node not of its kind, and leaves the refusals of the kinds no
-	/// lane makes yet to `checkBuiltByInitializer(_:in:)`, last.
+	/// The kind of record `declaration` is made as, or the refusal of its world: the kind a lane's classifier claims it as,
+	/// and otherwise a node built by its initializer, where it holds none of the kinds no lane makes yet
+	/// (`checkBuiltByInitializer(_:in:)`).
 	private static func kind(of declaration: DeclarationID, in world: some NodeRecordSources) throws(NodeRecordRefusal) -> NodeRecordKind {
-		try checkBuiltByInitializer(declaration, in: world)
-		return .builtByInitializer
+		guard let kind = try claimedKind(of: declaration, in: world) else {
+			try checkBuiltByInitializer(declaration, in: world)
+			return .builtByInitializer
+		}
+		return kind
+	}
+
+	/// The kind a lane's classifier claims `declaration` as, or `nil` where none does. Each lane adds one line here, in
+	/// the order of `NodeRecordKind`'s cases, calling its file's classifier, `<kind>Kind(of:in:)`, which returns `nil` for
+	/// a node not of its kind and throws a refusal for a node of its kind it cannot make:
+	/// `if let kind = try <kind>Kind(of: declaration, in: world) { return kind }`.
+	private static func claimedKind(of _: DeclarationID, in _: some NodeRecordSources) throws(NodeRecordRefusal) -> NodeRecordKind? {
+		nil
 	}
 }
 

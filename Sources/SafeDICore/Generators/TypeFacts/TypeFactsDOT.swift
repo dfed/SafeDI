@@ -200,7 +200,7 @@ struct TypeFactsDOT {
 	/// order, are the node's instantiated edges, and each fill is the next fill edge for its hole's property.
 	private static func targetsByChild(of drawer: ScopeGenerator, node: Int, graph: TypeFactsGraph) -> [ObjectIdentifier: (node: Int, isFill: Bool)] {
 		let edges = graph.graph.edges(from: node).map(Int.init)
-		let instantiatedEdgeCount = Int(graph.instantiatedEdgeCounts[node])
+		let instantiatedEdgeCount = graph.edgeFacts(from: node).count { !$0.isFill }
 		var nextInstantiatedEdge = 0
 		var nextFillEdge = instantiatedEdgeCount
 		var targetsByChild = [ObjectIdentifier: (node: Int, isFill: Bool)]()
