@@ -22,6 +22,7 @@ import Foundation
 import SafeDICore
 import Testing
 @testable import SafeDIToolTestSupport
+
 /// The corpora's draw of twins over a shared screen: `addingTwinsOverSharedScreen` in the base and seam corpora, and its
 /// public mock form in the public mock corpus.
 struct SafeDIToolGraphFuzzerTwinDrawTests {
