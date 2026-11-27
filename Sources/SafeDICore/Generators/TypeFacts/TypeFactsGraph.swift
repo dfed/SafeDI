@@ -180,6 +180,115 @@ struct TypeFactsGraph: Sendable {
 			}
 			return edges.map(\.target)
 		}
+		let facts = Self.declarationFacts(of: graph, edgeEntries: edgeEntries, edgeIsFill: edgeIsFill, fillHoles: fillHoles, forMockGeneration: forMockGeneration)
+		let constructions = facts.constructions
+		let kinds = facts.kinds
+		let nodeProperties = facts.nodeProperties
+		let builtTypes = facts.builtTypes
+		let edgeFacts = facts.edgeFacts
+		let bindings = facts.bindings
+		let bindingOffsets = facts.bindingOffsets
+		let bindingsBefore = facts.bindingsBefore
+		let twins = facts.twins
+		let cycleIDs = facts.cycleIDs
+		let receives = facts.receives
+		let typesBeneath = facts.typesBeneath
+		let typesDeclaredEscaping = facts.typesDeclaredEscaping
+		let holesBeneath = facts.holesBeneath
+		let parentOffsets = facts.parentOffsets
+		let parents = facts.parents
+		let fills = facts.fills
+		let fillPathEntries = facts.fillPathEntries
+		let propertyFacts = facts.propertyFacts
+		let properties = facts.properties
+		let types = facts.types
+		let labels = facts.labels
+		let modules = facts.modules
+		let locations = facts.locations
+		let readInterner = facts.readInterner
+		let own = facts.own
+		let hidden = facts.hidden
+		aliasHiddenColumnCount = facts.aliasHiddenColumnCount
+
+		self.graph = graph
+		self.forMockGeneration = forMockGeneration
+		self.constructions = constructions
+		self.kinds = kinds
+		self.nodeProperties = nodeProperties
+		self.builtTypes = builtTypes
+		self.edgeFacts = edgeFacts
+		self.bindings = bindings
+		self.bindingOffsets = bindingOffsets
+		self.twins = twins
+		self.receives = receives
+		self.typesBeneath = typesBeneath
+		self.typesDeclaredEscaping = typesDeclaredEscaping
+		self.holesBeneath = holesBeneath
+		self.parentOffsets = parentOffsets
+		self.parents = parents
+		self.fills = fills
+		self.fillPathEntries = fillPathEntries
+		self.propertyFacts = propertyFacts
+		propertyTable = properties.values
+		typeTable = types.values
+		moduleNames = modules.values
+		declarationLocations = locations.values
+		let reads = ReadsFromAbove(graph: graph, own: own, hidden: hidden)
+		self.reads = reads
+		readTable = readInterner.values
+		labelTexts = labels.values
+		var readColumn = [Int32]()
+		var readOffsets = [Int32]()
+		var labelColumn = [Int32]()
+		var labelOffsets = [Int32]()
+		var labelSeen = [Int32](repeating: -1, count: labels.values.count)
+		for index in graph.nodes.indices {
+			readOffsets.append(Int32(readColumn.count))
+			labelOffsets.append(Int32(labelColumn.count))
+			reads.rows.forEachColumn(inRow: index) { read, _ in
+				readColumn.append(read)
+				let label = readInterner.values[Int(read)].label
+				if label >= 0, labelSeen[Int(label)] != Int32(index) {
+					labelSeen[Int(label)] = Int32(index)
+					labelColumn.append(label)
+				}
+			}
+		}
+		readOffsets.append(Int32(readColumn.count))
+		labelOffsets.append(Int32(labelColumn.count))
+		self.readColumn = readColumn
+		self.readOffsets = readOffsets
+		self.labelColumn = labelColumn
+		self.labelOffsets = labelOffsets
+		let answers = Self.answers(of: graph, reads: reads, readTable: readInterner.values, labels: labels, bindings: bindings, bindingOffsets: bindingOffsets, bindingsBefore: bindingsBefore, properties: properties)
+		answerIsBeingBuilt = answers.isBeingBuilt
+		answerTexts = answers.texts
+		answerKeys = answers.keys
+		answerProperties = answers.properties
+		variants = answers.variants
+		let isBeingBuilt = answers.isBeingBuilt
+		let variantsOfAnswers = answers.variants
+		let readsByID = readInterner.values
+		outcomes = TypeFactsOutcomes(.init(
+			variants: answers.variants,
+			cellRule: { variant, position in
+				let node = Int(variantsOfAnswers.node(of: variant))
+				return .init(channel: readsByID[Int(readColumn[Int(readOffsets[node]) + position])].channel)
+			},
+			isBeingBuilt: { isBeingBuilt[Int($0)] },
+			// No call builds its callee in its caller's body until the edge facts say which edges open no function and the
+			// layout gives the callee none: false costs only a parameter, where true could capture a function's local.
+			buildsInCallersBody: { _, _ in false },
+			edgeOffset: { graph.edgeOffset(of: $0) },
+		))
+		self.cycleIDs = cycleIDs
+	}
+
+	/// The facts of each declaration of `graph`, the subtree-wide folds among them, but none of its variants: what
+	/// `init(root:forMockGeneration:)` reads of a world's graph, and what the mock worlds' shared graph
+	/// (`MockWorldsSharedGraph`) holds of the shareable declarations, whose graph is a forest. Every ID it gives is a
+	/// position in `graph`'s order or in the order its interners first meet a value.
+	static func declarationFacts(of graph: OrderedGraph<TypeFactsDeclaration>, edgeEntries: [Int32], edgeIsFill: [Bool], fillHoles: [(edge: Int32, hole: SeamSignature.Hole)], forMockGeneration: Bool) -> DeclarationFacts {
 		let nodes = graph.nodes
 		var properties = TypeFactsInterner<Property>()
 		var types = TypeFactsInterner<TypeDescription>()
@@ -370,7 +479,6 @@ struct TypeFactsGraph: Sendable {
 				}
 			}
 		}
-		self.aliasHiddenColumnCount = aliasHiddenColumnCount
 		func requiredAliasFulfillingRows() -> BitRows {
 			let rows = ReadsFromAbove(
 				graph: graph,
@@ -449,8 +557,8 @@ struct TypeFactsGraph: Sendable {
 			followsEdge: followsEdge,
 		).rows
 		// A hole is a place only in a seam's own tree or a public mock's: in any other world it is a property passed `nil`.
-		let rootInstantiable = nodes[0].scope.instantiable
-		let holesArePlaces = rootInstantiable.generatesDependencyTree || (forMockGeneration && rootInstantiable.generateMock == .public)
+		// The mock worlds' shared graph is a forest that holds no hole, and can be empty.
+		let holesArePlaces = nodes.first.map { root in root.scope.instantiable.generatesDependencyTree || (forMockGeneration && root.scope.instantiable.generateMock == .public) } ?? false
 		let worldHoldsHoles = holesArePlaces && holesBeneath.contains(0, inRow: 0)
 		let carrierEdges = worldHoldsHoles ? Self.carrierEdges(of: graph, edgeIsFill: edgeIsFill, builtTypes: builtTypes, nodeProperties: nodeProperties) : []
 
@@ -660,79 +768,72 @@ struct TypeFactsGraph: Sendable {
 				readsByLabel[Int(binding.label)].forEach(insert)
 			}
 		}
+		return DeclarationFacts(
+			constructions: constructions,
+			kinds: kinds,
+			nodeProperties: nodeProperties,
+			builtTypes: builtTypes,
+			edgeFacts: edgeFacts,
+			bindings: bindings,
+			bindingOffsets: bindingOffsets,
+			bindingsBefore: bindingsBefore,
+			twins: twins,
+			cycleIDs: cycleIDs,
+			receives: receives,
+			typesBeneath: typesBeneath,
+			typesDeclaredEscaping: typesDeclaredEscaping,
+			holesBeneath: holesBeneath,
+			parentOffsets: parentOffsets,
+			parents: parents,
+			fills: fills,
+			fillPathEntries: fillPathEntries,
+			propertyFacts: propertyFacts,
+			properties: properties,
+			types: types,
+			labels: labels,
+			modules: modules,
+			locations: locations,
+			readInterner: readInterner,
+			own: own,
+			hidden: hidden,
+			aliasHiddenColumnCount: aliasHiddenColumnCount,
+		)
+	}
 
-		self.graph = graph
-		self.forMockGeneration = forMockGeneration
-		self.constructions = constructions
-		self.kinds = kinds
-		self.nodeProperties = nodeProperties
-		self.builtTypes = builtTypes
-		self.edgeFacts = edgeFacts
-		self.bindings = bindings
-		self.bindingOffsets = bindingOffsets
-		self.twins = twins
-		self.receives = receives
-		self.typesBeneath = typesBeneath
-		self.typesDeclaredEscaping = typesDeclaredEscaping
-		self.holesBeneath = holesBeneath
-		self.parentOffsets = parentOffsets
-		self.parents = parents
-		self.fills = fills
-		self.fillPathEntries = fillPathEntries
-		self.propertyFacts = propertyFacts
-		propertyTable = properties.values
-		typeTable = types.values
-		moduleNames = modules.values
-		declarationLocations = locations.values
-		let reads = ReadsFromAbove(graph: graph, own: own, hidden: hidden)
-		self.reads = reads
-		readTable = readInterner.values
-		labelTexts = labels.values
-		var readColumn = [Int32]()
-		var readOffsets = [Int32]()
-		var labelColumn = [Int32]()
-		var labelOffsets = [Int32]()
-		var labelSeen = [Int32](repeating: -1, count: labels.values.count)
-		for index in graph.nodes.indices {
-			readOffsets.append(Int32(readColumn.count))
-			labelOffsets.append(Int32(labelColumn.count))
-			reads.rows.forEachColumn(inRow: index) { read, _ in
-				readColumn.append(read)
-				let label = readInterner.values[Int(read)].label
-				if label >= 0, labelSeen[Int(label)] != Int32(index) {
-					labelSeen[Int(label)] = Int32(index)
-					labelColumn.append(label)
-				}
-			}
-		}
-		readOffsets.append(Int32(readColumn.count))
-		labelOffsets.append(Int32(labelColumn.count))
-		self.readColumn = readColumn
-		self.readOffsets = readOffsets
-		self.labelColumn = labelColumn
-		self.labelOffsets = labelOffsets
-		let answers = Self.answers(of: graph, reads: reads, readTable: readInterner.values, labels: labels, bindings: bindings, bindingOffsets: bindingOffsets, bindingsBefore: bindingsBefore, properties: properties)
-		answerIsBeingBuilt = answers.isBeingBuilt
-		answerTexts = answers.texts
-		answerKeys = answers.keys
-		answerProperties = answers.properties
-		variants = answers.variants
-		let isBeingBuilt = answers.isBeingBuilt
-		let variantsOfAnswers = answers.variants
-		let readsByID = readInterner.values
-		outcomes = TypeFactsOutcomes(.init(
-			variants: answers.variants,
-			cellRule: { variant, position in
-				let node = Int(variantsOfAnswers.node(of: variant))
-				return .init(channel: readsByID[Int(readColumn[Int(readOffsets[node]) + position])].channel)
-			},
-			isBeingBuilt: { isBeingBuilt[Int($0)] },
-			// No call builds its callee in its caller's body until the edge facts say which edges open no function and the
-			// layout gives the callee none: false costs only a parameter, where true could capture a function's local.
-			buildsInCallersBody: { _, _ in false },
-			edgeOffset: { graph.edgeOffset(of: $0) },
-		))
-		self.cycleIDs = cycleIDs
+	/// What `declarationFacts(of:edgeEntries:edgeIsFill:fillHoles:forMockGeneration:)` computes: each declaration's facts
+	/// and the subtree-wide folds, by the positions of its graph and the IDs of its interners, which it holds as long as
+	/// its owner keeps it.
+	struct DeclarationFacts: Sendable {
+		let constructions: [TypeFactsConstruction]
+		let kinds: [TypeFactsKind]
+		let nodeProperties: [Int32]
+		let builtTypes: [Int32]
+		let edgeFacts: [TypeFactsEdge]
+		let bindings: [TypeFactsWorldBinding]
+		let bindingOffsets: [Int32]
+		let bindingsBefore: [Int32]
+		let twins: [Int32]
+		let cycleIDs: [CycleID]
+		let receives: TypeFactsReceives
+		let typesBeneath: BitRows
+		let typesDeclaredEscaping: BitRows
+		let holesBeneath: BitRows
+		let parentOffsets: [Int32]
+		let parents: [TypeFactsParent]
+		let fills: [TypeFactsFill]
+		let fillPathEntries: [TypeFactsFillPathEntry]
+		let propertyFacts: TypeFactsPropertyFacts
+		let properties: TypeFactsInterner<Property>
+		let types: TypeFactsInterner<TypeDescription>
+		let labels: TypeFactsInterner<String>
+		let modules: TypeFactsInterner<String>
+		let locations: TypeFactsInterner<Dependency.DeclarationLocation>
+		/// The reads the declarations make themselves, interned in node order, each node's in the order it makes them.
+		let readInterner: TypeFactsInterner<Read>
+		/// The reads each node makes itself, and those it hides: what `ReadsFromAbove` folds.
+		let own: BitRows
+		let hidden: BitRows
+		let aliasHiddenColumnCount: Int
 	}
 
 	/// Each node's cycle identity, dense in first-reach order: the property as cycle validation sees it and the

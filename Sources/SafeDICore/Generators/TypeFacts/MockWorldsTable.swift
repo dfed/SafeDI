@@ -161,15 +161,17 @@ struct MockWorldsTable: Sendable {
 		return table
 	}
 
-	/// What a test observes of the table, once each world is built from it: `worlds` holds each world's records, by the
+	/// What a test observes of the table, once each world is built from it: `sharedGraphDeclarations` the table's ID of
+	/// each declaration of the shared graph (`MockWorldsSharedGraph`), in its order, `worlds` each world's records, by the
 	/// order of `mockedTypes`, `nil` for a world whose records were refused, `declarationKeysByWorld` each world's key of
 	/// each of its variants' declarations (`MockWorld.declarationKeyByVariant`), `recordCountsWithoutTable` how many records
 	/// each world's node records hold where made without the table, and `differences` every way a world's records differ
 	/// from the records the world builds without the table.
-	func report(worldRecords: [[BuiltPlaceRecord]?], declarationKeysByWorld: [[Int32]], recordCountsWithoutTable: [Int], differences: [String]) -> MockWorldsTableReport {
+	func report(sharedGraphDeclarations: [Int32], worldRecords: [[BuiltPlaceRecord]?], declarationKeysByWorld: [[Int32]], recordCountsWithoutTable: [Int], differences: [String]) -> MockWorldsTableReport {
 		MockWorldsTableReport(
 			declarationCount: interning.declarationCount,
 			shareableDeclarationCount: shareableByDeclaration.count(where: \.self),
+			sharedGraphDeclarations: sharedGraphDeclarations,
 			sharedRecordCount: sharedRecords.count,
 			rows: sharedRecords.map { sharedRecord in
 				let declaration = declaration(ofID: sharedRecord.declaration)
@@ -245,8 +247,9 @@ public enum MockWorldsTableObservation {
 	@TaskLocal public static var observer: (@Sendable (MockWorldsTableReport) -> Void)?
 }
 
-/// The counts of the mock worlds' table: its distinct declarations, those shareable, its shared records, and each world's;
-/// and every way a world's records differ from those it builds without the table.
+/// The counts of the mock worlds' table: its distinct declarations, those shareable, the shared graph's declarations, its
+/// shared records, and each world's; and every way a world's records differ from those it builds without the table, or
+/// its facts of a shareable declaration from the shared graph's.
 public struct MockWorldsTableReport: Equatable, Sendable {
 	/// One mock root's world.
 	public struct World: Equatable, Sendable {
@@ -281,9 +284,10 @@ public struct MockWorldsTableReport: Equatable, Sendable {
 		public let declarationKeys: [Int32]
 	}
 
-	public init(declarationCount: Int, shareableDeclarationCount: Int, sharedRecordCount: Int, rows: [String], differences: [String], worlds: [World]) {
+	public init(declarationCount: Int, shareableDeclarationCount: Int, sharedGraphDeclarations: [Int32], sharedRecordCount: Int, rows: [String], differences: [String], worlds: [World]) {
 		self.declarationCount = declarationCount
 		self.shareableDeclarationCount = shareableDeclarationCount
+		self.sharedGraphDeclarations = sharedGraphDeclarations
 		self.sharedRecordCount = sharedRecordCount
 		self.rows = rows
 		self.differences = differences
@@ -294,12 +298,16 @@ public struct MockWorldsTableReport: Equatable, Sendable {
 	public let declarationCount: Int
 	/// How many of them are shareable.
 	public let shareableDeclarationCount: Int
+	/// The table's ID of each declaration of the shared graph (`MockWorldsSharedGraph`), in the graph's order: every
+	/// shareable declaration, each once, built once for the run.
+	public let sharedGraphDeclarations: [Int32]
 	/// How many records the worlds share, one per row: each built once for the run.
 	public let sharedRecordCount: Int
 	/// Each row, in ID order: its declaration's ID and property (the type, for a declaration with none), and whether every
 	/// parent of it is the root.
 	public let rows: [String]
-	/// Each way a world's records differ from the records the world builds without the table, which a test fails on.
+	/// Each way a world's records differ from the records the world builds without the table, or its facts of a shareable
+	/// declaration from the shared graph's, which a test fails on.
 	public let differences: [String]
 	/// Each world, in the order the module lowers its mock roots.
 	public let worlds: [World]

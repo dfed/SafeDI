@@ -271,7 +271,9 @@ extension DependencyTreeGenerator {
 			let worldRoots = mockRoots.compactMap { mockRoot in
 				recordedWorldRoots[mockRoot.instantiable.concreteInstantiable].map { (mockedType: mockRoot.instantiable.concreteInstantiable, root: $0) }
 			}
-			let mockWorlds = try await MockWorlds.build(roots: worldRoots.map(\.root), table: MockWorldsTable(worlds: worldRoots))
+			// The shared graph of the table's shareable declarations, built once beside it.
+			let table = MockWorldsTable(worlds: worldRoots)
+			let mockWorlds = try await MockWorlds.build(roots: worldRoots.map(\.root), table: table, sharedGraph: MockWorldsSharedGraph(table: table))
 			MockWorldsTableObservation.observer?(mockWorlds.report)
 			for (worldRoot, world) in zip(worldRoots, mockWorlds.worlds) {
 				builtWorlds[worldRoot.mockedType] = world

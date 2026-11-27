@@ -105,6 +105,7 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 			MockWorldsTableReport(
 				declarationCount: 5,
 				shareableDeclarationCount: 2,
+				sharedGraphDeclarations: [1, 2],
 				sharedRecordCount: 2,
 				rows: ["1: store: SessionStore, every parent the root", "2: clock: Clock"],
 				differences: [],
@@ -193,6 +194,7 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 			MockWorldsTableReport(
 				declarationCount: 6,
 				shareableDeclarationCount: 2,
+				sharedGraphDeclarations: [4, 5],
 				sharedRecordCount: 2,
 				rows: ["4: banner: Banner, every parent the root", "5: icon: Icon"],
 				differences: [],
@@ -251,6 +253,7 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 			MockWorldsTableReport(
 				declarationCount: 4,
 				shareableDeclarationCount: 1,
+				sharedGraphDeclarations: [3],
 				sharedRecordCount: 1,
 				rows: ["3: badge: Badge, every parent the root"],
 				differences: [],
@@ -323,7 +326,7 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 			worlds.append(.init(mockedType: "Screen" + (index < 10 ? "0" : "") + String(index), rootDeclaration: rootDeclaration, declarationCount: 3, shareableDeclarationCount: 2, recordCount: 1, sharedRecordCount: 1, recordCountWithoutTable: 2, declarationKeys: [rootKey, childKey, 4]))
 		}
 		// `store` and `feed` are each only their root's child, and `clock` never is: three rows.
-		let expected = [MockWorldsTableReport(declarationCount: 25, shareableDeclarationCount: 3, sharedRecordCount: 3, rows: ["1: store: Store, every parent the root", "2: clock: Clock", "4: feed: Feed, every parent the root"], differences: [], worlds: worlds)]
+		let expected = [MockWorldsTableReport(declarationCount: 25, shareableDeclarationCount: 3, sharedGraphDeclarations: [1, 2, 4], sharedRecordCount: 3, rows: ["1: store: Store, every parent the root", "2: clock: Clock", "4: feed: Feed, every parent the root"], differences: [], worlds: worlds)]
 		#expect(reports == [expected, expected])
 	}
 
@@ -385,7 +388,7 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 			let rootKey = Int32(rootDeclaration * 2 + 1)
 			worlds.append(MockWorldsTableReport.World(mockedType: "Screen\(index)", rootDeclaration: rootDeclaration, declarationCount: 4, shareableDeclarationCount: 3, recordCount: 1, sharedRecordCount: 1, recordCountWithoutTable: 3, declarationKeys: [rootKey, 3, 4, 6]))
 		}
-		#expect(reports == [MockWorldsTableReport(declarationCount: 11, shareableDeclarationCount: 3, sharedRecordCount: 3, rows: ["1: store: SessionStore, every parent the root", "2: clock: Clock", "3: logger: Logger"], differences: [], worlds: worlds)])
+		#expect(reports == [MockWorldsTableReport(declarationCount: 11, shareableDeclarationCount: 3, sharedGraphDeclarations: [1, 2, 3], sharedRecordCount: 3, rows: ["1: store: SessionStore, every parent the root", "2: clock: Clock", "3: logger: Logger"], differences: [], worlds: worlds)])
 		#expect(reports.map { $0.sharedRecordCount + $0.worlds.map { $0.recordCount - $0.sharedRecordCount }.reduce(0, +) } == [3])
 		#expect(reports.map { $0.worlds.map(\.recordCountWithoutTable).reduce(0, +) } == [24])
 	}
@@ -443,6 +446,7 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 			MockWorldsTableReport(
 				declarationCount: 4,
 				shareableDeclarationCount: 2,
+				sharedGraphDeclarations: [1, 3],
 				sharedRecordCount: 3,
 				rows: ["1: clock: Clock, every parent the root", "3: store: SessionStore, every parent the root", "1: clock: Clock"],
 				differences: [],
@@ -532,6 +536,7 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 			MockWorldsTableReport(
 				declarationCount: 6,
 				shareableDeclarationCount: 4,
+				sharedGraphDeclarations: [1, 2, 4, 5],
 				sharedRecordCount: 2,
 				rows: ["1: helper: Helper, every parent the root", "2: clock: Clock"],
 				differences: [],
@@ -593,6 +598,7 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 			MockWorldsTableReport(
 				declarationCount: 2,
 				shareableDeclarationCount: 0,
+				sharedGraphDeclarations: [],
 				sharedRecordCount: 0,
 				rows: [],
 				differences: [],
@@ -603,6 +609,7 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 			MockWorldsTableReport(
 				declarationCount: 4,
 				shareableDeclarationCount: 1,
+				sharedGraphDeclarations: [3],
 				sharedRecordCount: 1,
 				rows: ["3: clock: Clock"],
 				differences: [],
@@ -658,6 +665,7 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 			MockWorldsTableReport(
 				declarationCount: 3,
 				shareableDeclarationCount: 2,
+				sharedGraphDeclarations: [1, 2],
 				sharedRecordCount: 0,
 				rows: [],
 				differences: [],
@@ -736,6 +744,7 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 			MockWorldsTableReport(
 				declarationCount: 5,
 				shareableDeclarationCount: 0,
+				sharedGraphDeclarations: [],
 				sharedRecordCount: 0,
 				rows: [],
 				differences: [],
@@ -777,6 +786,194 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 			}
 		}
 		#expect(reports.isEmpty)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_holdsEachShareableDeclarationOnceInSharedGraph_whenEightMockRootsShareSubtree() async throws {
+		var declarations = (0..<8).map { index in
+			"""
+			@Instantiable(generateMock: true)
+			public struct Screen\(index): Instantiable {
+			    public init(store: SessionStore) {
+			        self.store = store
+			    }
+
+			    @Instantiated let store: SessionStore
+			}
+			"""
+		}
+		declarations += [
+			"""
+			@Instantiable
+			public struct SessionStore: Instantiable {
+			    public init(clock: Clock, logger: Logger) {
+			        self.clock = clock
+			        self.logger = logger
+			    }
+
+			    @Instantiated let clock: Clock
+			    @Instantiated let logger: Logger
+			}
+			""",
+			"""
+			@Instantiable
+			public struct Clock: Instantiable {
+			    public init() {}
+			}
+			""",
+			"""
+			@Instantiable
+			public struct Logger: Instantiable {
+			    public init() {}
+			}
+			""",
+		]
+		let source = declarations.joined(separator: "\n\n")
+		let reports = try await Self.tableReports(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(
+				swiftFileContent: [],
+				swiftFileContentByFilePath: ["Screens.swift": source],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		// The worlds hold 24 shareable declarations between them, three distinct ones, which the shared graph holds once each,
+		// and each world's facts of each equal the shared graph's.
+		#expect(reports.map { $0.worlds.map(\.shareableDeclarationCount).reduce(0, +) } == [24])
+		#expect(reports.map(\.sharedGraphDeclarations) == [[1, 2, 3]])
+		#expect(reports.map(\.differences) == [[]])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_holdsSharedDeclarationOnceWithEqualFacts_whenTwoWorldsAnswerItsReadApart() async throws {
+		let reports = try await Self.tableReports(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public struct AlphaScreen: Instantiable {
+					    public init(token: Token, store: SessionStore) {
+					        self.token = token
+					        self.store = store
+					    }
+
+					    @Instantiated let token: Token
+					    @Instantiated let store: SessionStore
+					}
+					""",
+					"""
+					@Instantiable(generateMock: true)
+					public struct BetaScreen: Instantiable {
+					    public init(token: LazilyInstantiated<Token>, store: SessionStore) {
+					        self.token = token
+					        self.store = store
+					    }
+
+					    @Instantiated let token: LazilyInstantiated<Token>
+					    @Instantiated let store: SessionStore
+					}
+					""",
+					"""
+					@Instantiable
+					public struct SessionStore: Instantiable {
+					    public init(token: Token, clock: Clock) {
+					        self.token = token
+					        self.clock = clock
+					    }
+
+					    @Received let token: Token
+					    @Instantiated let clock: Clock
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Token: Instantiable {
+					    public init() {}
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Clock: Instantiable {
+					    public init() {}
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		// `store` reads `token`, which `AlphaScreen`'s world answers with a value and `BetaScreen`'s with a lazy wrapper's
+		// instance: its facts are its subtree's alone, so the shared graph holds it once, as each world computes it.
+		#expect(reports.map(\.sharedGraphDeclarations) == [[1, 2, 3, 5]])
+		#expect(reports.map(\.differences) == [[]])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_givesSameSharedGraph_whenSixMockRootsAreDeclaredInEachOfThreeOrders() async throws {
+		let declarations = [
+			("Feed", "Clock"), ("Store", "Clock"), ("Inbox", "Logger"), ("Cart", "Logger"), ("Search", "Clock"), ("Profile", "Logger"),
+		].enumerated().flatMap { index, pair in
+			let (type, child) = pair
+			let label = type.prefix(1).lowercased() + type.dropFirst()
+			let childLabel = child.prefix(1).lowercased() + child.dropFirst()
+			return [
+				"""
+				@Instantiable(generateMock: true)
+				public struct Screen\(index): Instantiable {
+				    public init(\(label): \(type)) {
+				        self.\(label) = \(label)
+				    }
+
+				    @Instantiated let \(label): \(type)
+				}
+				""",
+				"""
+				@Instantiable
+				public struct \(type): Instantiable {
+				    public init(\(childLabel): \(child)) {
+				        self.\(childLabel) = \(childLabel)
+				    }
+
+				    @Instantiated let \(childLabel): \(child)
+				}
+				""",
+			]
+		} + [
+			"""
+			@Instantiable
+			public struct Clock: Instantiable {
+			    public init() {}
+			}
+			""",
+			"""
+			@Instantiable
+			public struct Logger: Instantiable {
+			    public init() {}
+			}
+			""",
+		]
+		// The declarations as written, reversed, and in a fixed shuffle.
+		let shuffle = [7, 2, 11, 0, 13, 5, 9, 1, 12, 4, 6, 10, 3, 8]
+		var reports = [[MockWorldsTableReport]]()
+		for orderedDeclarations in [declarations, declarations.reversed(), shuffle.map { declarations[$0] }] {
+			let source = orderedDeclarations.joined(separator: "\n\n")
+			await reports.append(try Self.tableReports(filesToDelete: &filesToDelete) { filesToDelete in
+				try await executeSafeDIToolTest(
+					swiftFileContent: [],
+					swiftFileContentByFilePath: ["Screens.swift": source],
+					buildSwiftOutputDirectory: true,
+					filesToDelete: &filesToDelete,
+				)
+			})
+		}
+		// Each mock root's child is a root of the shared graph, in the order the mock roots are lowered, and each child's
+		// `clock` or `logger` follows the first child that reaches it.
+		#expect(reports.map { $0.map(\.sharedGraphDeclarations) } == [[[1, 2, 4, 6, 7, 9, 11, 13]], [[1, 2, 4, 6, 7, 9, 11, 13]], [[1, 2, 4, 6, 7, 9, 11, 13]]])
+		#expect(reports[1] == reports[0])
+		#expect(reports[2] == reports[0])
 	}
 
 	// MARK: Private

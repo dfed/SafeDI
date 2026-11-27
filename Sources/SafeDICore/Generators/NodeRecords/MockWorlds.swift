@@ -75,12 +75,18 @@ struct MockWorlds: Sendable {
 	/// - Parameters:
 	///   - roots: The root of each mock root's world, in the order the module lowers them, which `table` was built from.
 	///   - table: The mock worlds' table of `roots`, holding no shared record yet.
-	static func build(roots: [ConstructionScope], table: MockWorldsTable) async throws -> MockWorlds {
+	///   - sharedGraph: The shared graph of `table`'s shareable declarations, whose facts each world's are compared with.
+	static func build(roots: [ConstructionScope], table: MockWorldsTable, sharedGraph: MockWorldsSharedGraph) async throws -> MockWorlds {
 		let width = ProcessInfo.processInfo.activeProcessorCount
 		let worldRows = try await BoundedConcurrency.map(roots, width: width) { root, _ in
 			let graph = TypeFactsGraph(root: root, forMockGeneration: true)
 			let declarationKeyByVariant = declarationKeys(of: graph, in: table)
-			return WorldRows(graph: graph, declarationKeyByVariant: declarationKeyByVariant, rowKeyByVariant: rowKeys(of: graph, in: table, declarationKeyByVariant: declarationKeyByVariant))
+			return WorldRows(
+				graph: graph,
+				declarationKeyByVariant: declarationKeyByVariant,
+				rowKeyByVariant: rowKeys(of: graph, in: table, declarationKeyByVariant: declarationKeyByVariant),
+				sharedFactsDifferences: sharedFactsDifferences(of: graph, in: table, sharedGraph: sharedGraph),
+			)
 		}
 
 		// Each row's number, in the order the worlds first meet it, and the world and variant it is first met at.
@@ -136,13 +142,39 @@ struct MockWorlds: Sendable {
 			)
 		}
 		var differences = [String]()
-		for (root, builtWorld) in zip(roots, builtWorlds) {
-			differences += builtWorld.differences.map { "\(root.instantiable.concreteInstantiable.asSource): \($0)" }
+		for ((root, builtWorld), rows) in zip(zip(roots, builtWorlds), worldRows) {
+			differences += (rows.sharedFactsDifferences + builtWorld.differences).map { "\(root.instantiable.concreteInstantiable.asSource): \($0)" }
 		}
 		return MockWorlds(
 			worlds: builtWorlds.map(\.world),
-			report: sharedTable.report(worldRecords: builtWorlds.map(\.builtRecords), declarationKeysByWorld: worldRows.map(\.declarationKeyByVariant), recordCountsWithoutTable: builtWorlds.map(\.recordCountWithoutTable), differences: differences),
+			report: sharedTable.report(
+				sharedGraphDeclarations: sharedGraph.declarations,
+				worldRecords: builtWorlds.map(\.builtRecords),
+				declarationKeysByWorld: worldRows.map(\.declarationKeyByVariant),
+				recordCountsWithoutTable: builtWorlds.map(\.recordCountWithoutTable),
+				differences: differences,
+			),
 		)
+	}
+
+	/// Each way `world`'s facts of one of its shareable declarations differ from the shared graph's facts of it, by value
+	/// (`MockWorldsDeclarationProjection`), each declaration's in the world's order.
+	private static func sharedFactsDifferences(of world: TypeFactsGraph, in table: MockWorldsTable, sharedGraph: MockWorldsSharedGraph) -> [String] {
+		let declarationByNode = world.graph.nodes.map { table.declarationID(of: $0) ?? -1 }
+		let columns = world.sharedFactsColumns
+		var differences = [String]()
+		for (node, declaration) in declarationByNode.enumerated() where declaration >= 0 && table.isShareable(declaration) {
+			let worldFacts = columns.projection(ofNode: node, declarationByNode: declarationByNode)
+			guard let sharedFacts = sharedGraph.projection(ofDeclaration: declaration) else {
+				differences.append("the shared graph holds no declaration \(declaration)")
+				continue
+			}
+			let differingFacts = worldFacts.differingFacts(from: sharedFacts)
+			if !differingFacts.isEmpty {
+				differences.append("the shared graph's facts of declaration \(declaration) differ from the world's: \(differingFacts.joined(separator: ", "))")
+			}
+		}
+		return differences
 	}
 
 	/// The key of each of `world`'s variants' declarations (`MockWorld.declarationKeyByVariant`). The table was built from
@@ -294,6 +326,8 @@ struct MockWorlds: Sendable {
 		let graph: TypeFactsGraph
 		let declarationKeyByVariant: [Int32]
 		let rowKeyByVariant: [Int32]
+		/// Each way the world's facts of its shareable declarations differ from the shared graph's.
+		let sharedFactsDifferences: [String]
 	}
 
 	/// The world and variant where the worlds first meet a row.
