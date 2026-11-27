@@ -94,6 +94,39 @@ struct TypeFactsDeclaration: Hashable, Sendable {
 	func hash(into hasher: inout Hasher) {
 		hasher.combine(key)
 	}
+
+	/// One edge of a declaration: the declaration it leads to, and where it comes from in its scope.
+	struct Edge {
+		let target: TypeFactsDeclaration
+		/// The edge's entry among its scope's properties to generate, or, for a fill, among its hole arguments.
+		let entry: Int32
+		/// The hole a fill fills, or `nil` for an edge that is no fill.
+		let filledHole: SeamSignature.Hole?
+	}
+
+	/// The declaration's edges, in the order its scope lists them: the properties it instantiates, aliases and holes, then
+	/// the fills it passes. A leaf has none. A function of the record alone, so every world that holds the declaration
+	/// meets the same edges: a world's graph (`TypeFactsGraph`) and the mock worlds' table (`MockWorldsTable`) both walk
+	/// them.
+	var edges: [Edge] {
+		guard key.leaf == .none else { return [] }
+		var edges = [Edge]()
+		for (index, propertyToGenerate) in scope.propertiesToGenerate.enumerated() {
+			let target = switch propertyToGenerate {
+			case let .instantiated(property, child, erasedToConcreteExistential, propertyID):
+				TypeFactsDeclaration(scope: child, property: property, propertyID: propertyID, erasedToConcreteExistential: erasedToConcreteExistential, isFill: false)
+			case let .aliased(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable, _):
+				TypeFactsDeclaration(leafOf: scope, property: property, at: index, erasedToConcreteExistential: erasedToConcreteExistential, aliasOf: fulfillingProperty, onlyIfAvailable: onlyIfAvailable)
+			case let .hole(property, erasedToConcreteExistential):
+				TypeFactsDeclaration(leafOf: scope, property: property, at: index, erasedToConcreteExistential: erasedToConcreteExistential, aliasOf: nil, onlyIfAvailable: false)
+			}
+			edges.append(Edge(target: target, entry: Int32(index), filledHole: nil))
+		}
+		for case let (index, .fill(hole, child, fillContext)) in scope.holeArguments.enumerated() {
+			edges.append(Edge(target: TypeFactsDeclaration(scope: child, property: hole.property, propertyID: fillContext.propertyID, erasedToConcreteExistential: false, isFill: true), entry: Int32(index), filledHole: hole))
+		}
+		return edges
+	}
 }
 
 /// How a declaration's type comes to exist, beside its kind (the property's form), which varies apart from it: an
@@ -137,27 +170,15 @@ struct TypeFactsGraph: Sendable {
 		var edgeIsFill = [Bool]()
 		var fillHoles = [(edge: Int32, hole: SeamSignature.Hole)]()
 		let graph = OrderedGraph(root: TypeFactsDeclaration(scope: root, property: nil, propertyID: nil, erasedToConcreteExistential: false, isFill: false)) { declaration in
-			guard declaration.key.leaf == .none else { return [] }
-			var targets = [TypeFactsDeclaration]()
-			for (index, propertyToGenerate) in declaration.scope.propertiesToGenerate.enumerated() {
-				switch propertyToGenerate {
-				case let .instantiated(property, child, erasedToConcreteExistential, propertyID):
-					targets.append(TypeFactsDeclaration(scope: child, property: property, propertyID: propertyID, erasedToConcreteExistential: erasedToConcreteExistential, isFill: false))
-				case let .aliased(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable, _):
-					targets.append(TypeFactsDeclaration(leafOf: declaration.scope, property: property, at: index, erasedToConcreteExistential: erasedToConcreteExistential, aliasOf: fulfillingProperty, onlyIfAvailable: onlyIfAvailable))
-				case let .hole(property, erasedToConcreteExistential):
-					targets.append(TypeFactsDeclaration(leafOf: declaration.scope, property: property, at: index, erasedToConcreteExistential: erasedToConcreteExistential, aliasOf: nil, onlyIfAvailable: false))
+			let edges = declaration.edges
+			for edge in edges {
+				if let filledHole = edge.filledHole {
+					fillHoles.append((Int32(edgeEntries.count), filledHole))
 				}
-				edgeEntries.append(Int32(index))
-				edgeIsFill.append(false)
+				edgeEntries.append(edge.entry)
+				edgeIsFill.append(edge.filledHole != nil)
 			}
-			for case let (index, .fill(hole, child, fillContext)) in declaration.scope.holeArguments.enumerated() {
-				fillHoles.append((Int32(edgeEntries.count), hole))
-				targets.append(TypeFactsDeclaration(scope: child, property: hole.property, propertyID: fillContext.propertyID, erasedToConcreteExistential: false, isFill: true))
-				edgeEntries.append(Int32(index))
-				edgeIsFill.append(true)
-			}
-			return targets
+			return edges.map(\.target)
 		}
 		let nodes = graph.nodes
 		var properties = TypeFactsInterner<Property>()

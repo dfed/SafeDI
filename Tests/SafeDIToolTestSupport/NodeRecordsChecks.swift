@@ -26,6 +26,10 @@ import Testing
 /// names a file, each root's outcome is appended to it as a line: the test, the root, `laid out`, `accepted`, or the
 /// refusal's kind, the count of differences, every refusal the world holds, and `mock` for a mock's root. Where `SAFEDI_NODE_RECORDS_LAY_OUT` is `1`, every root node records accept is laid out from them.
 enum NodeRecordsChecks {
+	/// Whether `executeSafeDIToolTest` observes node records, which builds every mock root's world. Off only where a test
+	/// shows what a run that no test observes builds.
+	@TaskLocal static var observesNodeRecords = true
+
 	static func checking<Result>(_ body: () async throws -> Result) async rethrows -> Result {
 		let reportPath = ProcessInfo.processInfo.environment["SAFEDI_NODE_RECORDS_REPORT"]
 		let testName = Test.current?.name ?? "unknown test"
@@ -52,7 +56,12 @@ enum NodeRecordsChecks {
 	}
 
 	private static func checkingNodeRecords<Result>(laysOutRoots: Bool, reportPath: String?, testName: String, enclosingObserver: (@Sendable (NodeRecordsReport) -> Void)?, _ body: () async throws -> Result) async rethrows -> Result {
-		try await NodeRecordsObservation.$laysOutRoots.withValue(laysOutRoots) {
+		guard observesNodeRecords else {
+			return try await NodeRecordsObservation.$observer.withValue(nil) {
+				try await body()
+			}
+		}
+		return try await NodeRecordsObservation.$laysOutRoots.withValue(laysOutRoots) {
 			try await NodeRecordsObservation.$observer.withValue({ report in
 				for difference in report.differences {
 					Issue.record(Comment(rawValue: "Node records differ from the tree’s records of root \(report.root): \(difference)"))

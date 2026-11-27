@@ -264,6 +264,13 @@ extension DependencyTreeGenerator {
 			for await (mockedType, worldRoot) in worldRootRecording.stream {
 				recordedWorldRoots[mockedType] = worldRoot
 			}
+			// The mock worlds' table, built whole here, from the worlds in the order their roots are lowered, before any
+			// lowering starts, and only where mock worlds are built at all. Nothing fills a world from it yet: a test reads
+			// its counts.
+			let mockWorldsTable = MockWorldsTable(worlds: mockRoots.compactMap { mockRoot in
+				recordedWorldRoots[mockRoot.instantiable.concreteInstantiable].map { (mockedType: mockRoot.instantiable.concreteInstantiable, root: $0) }
+			})
+			MockWorldsTableObservation.observer?(mockWorldsTable.report)
 		}
 		let worldRoots = recordedWorldRoots
 		let loweredRoots = try await BoundedConcurrency.map(mockRoots, width: BoundedConcurrency.mockRootWidth) { instantiableAndMockRoot, _ in
