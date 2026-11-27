@@ -285,8 +285,8 @@ extension DependencyTreeGenerator {
 				}
 			}
 			typeCount = typeIndexByType.count
-			createdProperties = scopes.map { $0.createdProperties }
-			providedProperties = scopes.map { $0.providedProperties }
+			createdProperties = scopes.map(\.createdProperties)
+			providedProperties = scopes.map(\.providedProperties)
 			requiredProperties = scopes.map { $0.requiredReceivedProperties.map(\.property) }
 			receivedCycleInput = Self.receivedCycleFoldInput(
 				scopes: scopes,
