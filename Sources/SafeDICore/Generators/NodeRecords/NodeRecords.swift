@@ -268,7 +268,7 @@ struct NodeRecords: Sendable {
 				return (place, record, escaping)
 			}
 		}
-		let seamCallRoutes = seamTree.map { SeamCallRoutes(world: world, signature: $0.signature) } ?? SeamCallRoutes()
+		let seamCallRoutes = seamTree.map { SeamCallRoutes(world: world, seamTree: $0) } ?? SeamCallRoutes()
 		// What each place's body holds, found by a walk from the root with a stack, since a tree can be as deep as the
 		// module has types: the places of the variants it calls, and the calls that close a cycle on a place being built
 		// above them. A variant's place is made once and shared, which holds only where every place that reads it closes on
