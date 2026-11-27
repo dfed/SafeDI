@@ -61,6 +61,11 @@ struct SafeDIToolGraphFuzzerInstantiatedOnlyIfAvailableTests {
 		case tokenUnfulfilled
 		/// No declaration fulfills the token and the screen's mock is generated.
 		case tokenUnfulfilledUnderGeneratedMock
+		/// The screen erases the token it instantiates (`erasedToConcreteExistential: true`), which a mock wraps in the
+		/// erasing type without its optionality.
+		case tokenErased
+		/// The screen erases the token and its mock is generated, which the compile judges with every root's.
+		case tokenErasedUnderGeneratedMock
 	}
 
 	private static let drawnShapeCounts: [Shape: Int] = [
@@ -73,6 +78,8 @@ struct SafeDIToolGraphFuzzerInstantiatedOnlyIfAvailableTests {
 		.screenGeneratesMock: 320,
 		.tokenUnfulfilled: 318,
 		.tokenUnfulfilledUnderGeneratedMock: 124,
+		.tokenErased: 251,
+		.tokenErasedUnderGeneratedMock: 94,
 	]
 
 	/// The shapes of the draw `fixture` holds, read from its source.
@@ -105,7 +112,7 @@ struct SafeDIToolGraphFuzzerInstantiatedOnlyIfAvailableTests {
 		let screenName = "\(prefix)IfAvailableScreen"
 		guard let screenLines = propertyLinesByTypeName[screenName] else { return [] }
 		var shapes: Set<Shape> = [.drawn]
-		shapes.insert(screenLines.first?.hasPrefix("@Instantiated(onlyIfAvailable: true)") == true ? .tokenDeclaredFirst : .leafDeclaredFirst)
+		shapes.insert(screenLines.first?.contains("let ifAvailableToken: ") == true ? .tokenDeclaredFirst : .leafDeclaredFirst)
 		if propertyLinesByTypeName["\(prefix)IfAvailableLeaf"]?.contains(where: { $0.hasPrefix("@Received let ") }) == true {
 			shapes.insert(.leafRequiresToken)
 		}
@@ -117,6 +124,12 @@ struct SafeDIToolGraphFuzzerInstantiatedOnlyIfAvailableTests {
 		}
 		if mockedTypeNames.contains(screenName) {
 			shapes.insert(.screenGeneratesMock)
+		}
+		if screenLines.contains(where: { $0.contains("erasedToConcreteExistential: true") && $0.contains("let ifAvailableToken: ") }) {
+			shapes.insert(.tokenErased)
+			if mockedTypeNames.contains(screenName) {
+				shapes.insert(.tokenErasedUnderGeneratedMock)
+			}
 		}
 		if !instantiableTypeNames.contains("\(prefix)IfAvailableToken") {
 			shapes.insert(.tokenUnfulfilled)
