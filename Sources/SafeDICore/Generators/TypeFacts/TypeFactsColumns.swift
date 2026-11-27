@@ -60,6 +60,31 @@ struct TypeFactsFill: Hashable, Sendable {
 	/// The run of `TypeFactsGraph.fillPathEntries` the fill is built beneath, root first.
 	let stackStart: Int32
 	let stackCount: Int32
+	/// The run of `TypeFactsGraph.fillFields` the fill binds: the fields of the place it fills, in their declared order.
+	let fieldStart: Int32
+	let fieldCount: Int32
+	/// Why the fill channel does not model the fill yet, or `nil` where it does.
+	let refusal: TypeFactsFillRefusal?
+}
+
+/// A field of the place a fill fills, which the fill binds for its tree (`TypeFactsFill.fieldStart`): by the world's IDs.
+struct TypeFactsFillField: Hashable, Sendable {
+	let label: Int32
+	let property: Int32
+	let declaringType: Int32
+}
+
+/// Why the fill channel does not model a fill yet, so that the answers of its tree stay owed
+/// (`TypeFactsOwedFacts.fillBeingBuilt`): the first that applies, in this order. Each is counted by its name.
+enum TypeFactsFillRefusal: String, CaseIterable, Sendable {
+	/// A mock root's world, whose fills bind what the mock root binds too.
+	case mockWorld
+	/// A scope of the fill's tree builds a property and type of the path the fill is built beneath: it closes a cycle on
+	/// the path of the seam it fills, and builds what the place it closes on builds.
+	case closer
+	/// The place is built again where a cycle re-enters a scope on its path, or a call inside the fill re-enters it: what
+	/// the fill reads there is handed by the cycle.
+	case cycleReentry
 }
 
 /// One entry of a fill's path: the property built and the concrete type built for it, by the world's IDs.

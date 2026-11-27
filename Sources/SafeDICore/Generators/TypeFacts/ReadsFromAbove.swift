@@ -211,7 +211,8 @@ private struct RowAccumulator {
 /// For each node of a graph, what its subtree reads from above it, as a row of read IDs: what the node reads itself, and
 /// each read of a node it has an edge to that the node does not hide, which a node does for each read it binds what is
 /// asked for. The least sets that satisfy that rule, so a node on a cycle reads what every node of its cycle reads and
-/// none between hides.
+/// none between hides. An edge can hide reads of its own beside its source's (`hiddenAtEdge`): a call's edge to a fill
+/// hides what the fill binds as fields of the place it fills, which the call's other fills do not.
 ///
 /// Computed once, a component at a time, each after every component it reaches; a component on a cycle in passes over its
 /// nodes in position order until a pass adds nothing. It works on IDs and bit sets only: a read is the caller's dense ID,
@@ -223,11 +224,27 @@ struct ReadsFromAbove: Sendable {
 	///   - hidden: The reads each node hides from the nodes above it, of the same shape.
 	///   - followsEdge: Whether a node takes what the target of an edge, by its position among the graph's edges, reads:
 	///     every edge, unless a fold says otherwise.
-	init(graph: OrderedGraph<some Hashable & Sendable>, own: BitRows, hidden: BitRows, followsEdge: (_ edgeIndex: Int) -> Bool = { _ in true }) {
+	///   - hiddenAtEdge: The reads each edge hides beside its source's, a row per edge by its position among the graph's
+	///     edges, or `nil` where no edge hides any of its own.
+	init(graph: OrderedGraph<some Hashable & Sendable>, own: BitRows, hidden: BitRows, followsEdge: (_ edgeIndex: Int) -> Bool = { _ in true }, hiddenAtEdge: BitRows? = nil) {
 		var rows = BitRows(columnCount: own.columnCount)
 		rows.reserveRows(graph.nodes.count)
 		var accumulator = RowAccumulator(columnCount: own.columnCount)
 		var mask = RowAccumulator(columnCount: own.columnCount)
+		// The mask of an edge that hides reads of its own: its source's, with the edge's.
+		var edgeMask = RowAccumulator(columnCount: own.columnCount)
+		/// Adds `row` of `source`, without what the node `node` hides and what the edge at `edgeIndex` hides, to `accumulator`,
+		/// and returns whether that set any bit the accumulator lacked.
+		func add(row: Int, of source: BitRows, excludingAt edgeIndex: Int, of node: Int) -> Bool {
+			guard let hiddenAtEdge, hiddenAtEdge.wordCount(ofRow: edgeIndex) > 0 else {
+				return source.add(row: row, to: &accumulator, excluding: mask)
+			}
+			edgeMask.load(row: node, of: hidden)
+			edgeMask.load(row: edgeIndex, of: hiddenAtEdge)
+			let changed = source.add(row: row, to: &accumulator, excluding: edgeMask)
+			edgeMask.drain { _, _ in }
+			return changed
+		}
 		var nodesByComponent = [Int32](repeating: 0, count: graph.nodes.count)
 		var componentStarts = [Int32](repeating: 0, count: graph.componentCount + 1)
 		for index in graph.nodes.indices {
@@ -257,7 +274,7 @@ struct ReadsFromAbove: Sendable {
 				for edgeIndex in graph.edgeIndices(from: index) where followsEdge(edgeIndex) {
 					let target = graph.edgeTargets[edgeIndex]
 					work += rows.wordCount(ofRow: Int(target))
-					_ = rows.add(row: Int(target), to: &accumulator, excluding: mask)
+					_ = add(row: Int(target), of: rows, excludingAt: edgeIndex, of: index)
 				}
 				mask.drain { _, _ in }
 				rows.appendWords(ofRow: index, from: &accumulator)
@@ -282,12 +299,12 @@ struct ReadsFromAbove: Sendable {
 							let targetSlot = memberSlotByNode[Int(target)]
 							if targetSlot >= 0 {
 								work += previousPass.wordCount(ofRow: Int(targetSlot))
-								if previousPass.add(row: Int(targetSlot), to: &accumulator, excluding: mask) {
+								if add(row: Int(targetSlot), of: previousPass, excludingAt: edgeIndex, of: Int(index)) {
 									changed = true
 								}
 							} else {
 								work += rows.wordCount(ofRow: Int(target))
-								if rows.add(row: Int(target), to: &accumulator, excluding: mask) {
+								if add(row: Int(target), of: rows, excludingAt: edgeIndex, of: Int(index)) {
 									changed = true
 								}
 							}
