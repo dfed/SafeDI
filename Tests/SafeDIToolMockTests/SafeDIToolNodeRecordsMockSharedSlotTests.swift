@@ -264,9 +264,9 @@ struct SafeDIToolNodeRecordsMockSharedSlotTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_compilesAndEqualsWalks_whenMockedCycleHoldsActor() async throws {
-		// Node records refuse a mock that sends an actor a value a cycle's function builds, so the walk writes it: with
-		// every type of the cycle mocked, what the other mocks share must leave it compiling.
+	mutating func mock_buildsWalksValues_whenMockedCycleHoldsActor() async throws {
+		// An actor is sent a value a cycle's function builds, so the places entered are declared `Sendable`: with every
+		// type of the cycle mocked, what the other mocks share must leave it compiling and building the walk's values.
 		let fixtureFiles = [
 			"Marked.swift": Self.markedFile,
 			"Alpha.swift": """
@@ -281,14 +281,17 @@ struct SafeDIToolNodeRecordsMockSharedSlotTests: ~Copyable {
 			""",
 			"Bravo.swift": Self.type("Bravo", building: ["Alpha"]),
 		]
-		let walkOutput = try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixtureFiles, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
-		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
+		let (_, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
 			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixtureFiles, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		}
 
 		#expect(reports.filter(\.isMockRoot).map(\.root) == ["Alpha", "Bravo"])
-		#expect(reports.filter(\.isMockRoot).map(\.everyRefusal) == [["mockActor"], ["mockActor"]])
-		#expect(output.generatedFiles == walkOutput.generatedFiles)
+		#expect(reports.filter(\.isMockRoot).map(\.everyRefusal) == [[], []])
+		try await MockKindsAcceptance.expectLaidOutValuesEqualWalks(fixtureFiles: fixtureFiles, probes: [
+			DifferentialValueProbe("Alpha.mock()"),
+			DifferentialValueProbe("Bravo.mock()"),
+			DifferentialValueProbe("Bravo.mock().alphaBuilder.instantiate()"),
+		], filesToDelete: &filesToDelete)
 	}
 
 	@Test

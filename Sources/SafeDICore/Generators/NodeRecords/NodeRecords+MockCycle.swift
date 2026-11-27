@@ -91,7 +91,8 @@ extension NodeRecords {
 			.callHanding(ReservedName.mockPassingFunctionName, of: entered, literal: nil, value: configuration, flags: [])
 		}
 		return [
-			// Neither the configuration nor the places are `Sendable`: no call inside a `@Sendable` function hands them on.
+			// No call inside a `@Sendable` function hands the configuration or the places on, also where the places are declared
+			// `Sendable` (`mockConfigurationTypeNamesHandedWithPlacesThatMustBeSendable(in:slots:)`).
 			PassedArgument(
 				parameterName: ReservedName.mockEnteredPlacesParameterName,
 				type: .simple(name: ReservedName.mockEnteredTypeName, generics: [configurationType]),
@@ -158,13 +159,31 @@ extension NodeRecords {
 	/// form, refuses the world as `mockActor` where one of these does not
 	/// (`ScopeGenerator.nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:sendableConfigurationTypeNames:rootNames:outerDeclarations:)`).
 	/// The walk builds such a value of what the actor's own function captures.
-	static func mockConfigurationTypeNamesHandedWithPlacesAnActorIsSentValueOf(in world: some NodeRecordSources, slots: MockEnteredSlots) -> Set<String>? {
+	static func mockConfigurationTypeNamesHandedWithPlacesThatMustBeSendable(in world: some NodeRecordSources, slots: MockEnteredSlots) -> MockConfigurationTypeNamesThatMustBeSendable? {
 		let declarationsHandedPlaces = (1..<Int32(world.declarationCount)).filter { takesMockEnteredPlaces($0, in: slots) }
 		let actorIsSentValue = declarationsHandedPlaces.contains { declaration in
 			world.parents(of: declaration).contains { isActorBuiltWithInitializer($0.parent, in: world) }
 		}
 		guard actorIsSentValue else { return nil }
-		return Set(declarationsHandedPlaces.map { world.scope(of: $0).instantiable.concreteInstantiable.asSource })
+		return MockConfigurationTypeNamesThatMustBeSendable(
+			typeNames: Set(declarationsHandedPlaces.map { world.scope(of: $0).instantiable.concreteInstantiable.asSource }),
+			refusalWhereOneIsNot: .mockActor,
+		)
+	}
+
+	/// The configurations a mock's functions are handed with the places entered, where the places must be `Sendable`
+	/// (`mockConfigurationTypeNamesHandedWithPlacesThatMustBeSendable(in:slots:)`).
+	struct MockConfigurationTypeNamesThatMustBeSendable: Sendable {
+		/// The concrete type of each function handed the places.
+		let typeNames: Set<String>
+		/// The kind the world is refused as where one of the types' configurations is not of the `Sendable` form.
+		let refusalWhereOneIsNot: NodeRecordRefusal
+
+		/// The kind the world is refused as, or none where every type's configuration is among
+		/// `sendableConfigurationTypeNames`.
+		func refusal(whereConfigurationsOfSendableFormAre sendableConfigurationTypeNames: Set<String>) -> NodeRecordRefusal? {
+			typeNames.isSubset(of: sendableConfigurationTypeNames) ? nil : refusalWhereOneIsNot
+		}
 	}
 
 	/// Refuses `world`, a mock root's that holds a cycle, in the shapes the slot form does not make yet.
@@ -177,7 +196,7 @@ extension NodeRecords {
 	/// A function that takes the places and builds a `LazilyInstantiated` needs none either: its builder function is handed
 	/// the places as an instantiator's is, and the wrapper makes the instance once, where the walk's does. Nor does an
 	/// actor that is sent a value such a function builds: the places are then declared `Sendable`
-	/// (`mockConfigurationTypeNamesHandedWithPlacesAnActorIsSentValueOf(in:slots:)`).
+	/// (`mockConfigurationTypeNamesHandedWithPlacesThatMustBeSendable(in:slots:)`).
 	/// - Throws: `mockDefaultValuedParameter` where a node built along an edge the
 	///   configurations leave out, or beneath one, reads a field of its configuration for a default-valued parameter. The
 	///   empty configuration such a call hands holds one value of the parameter's default, which every node built of it
