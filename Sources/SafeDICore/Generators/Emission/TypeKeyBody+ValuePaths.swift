@@ -96,6 +96,8 @@ extension ValuePath {
 			value.reads
 		case let .call(_, value, arguments, _):
 			value.reads + arguments
+		case let .implicitMemberCall(_, arguments):
+			arguments
 		}
 	}
 
@@ -104,7 +106,8 @@ extension ValuePath {
 		switch self {
 		case .rootDeclaration,
 		     .read,
-		     .emptyInitialization:
+		     .emptyInitialization,
+		     .implicitMemberCall:
 			[]
 		case let .passedArgument(name):
 			[name]
@@ -133,6 +136,8 @@ extension ValuePath {
 			"\(value.shape).\(name)(\(argumentsWrapper?.asSource ?? "")|\(arguments.map(\.shape).joined(separator: ",")))"
 		case let .emptyInitialization(type):
 			"new:\(type.asSource)"
+		case let .implicitMemberCall(name, arguments):
+			".\(name)(\(arguments.map(\.shape).joined(separator: ",")))"
 		}
 	}
 }
@@ -166,7 +171,8 @@ extension PassedArgument {
 		case .rootDeclaration,
 		     .member,
 		     .optionalMember,
-		     .call:
+		     .call,
+		     .implicitMemberCall:
 			nil
 		}
 	}
@@ -290,6 +296,13 @@ extension TypeKeyLayout {
 			} else {
 				return "\(receiver).\(name)(\(joined))"
 			}
+		case let .implicitMemberCall(name, arguments):
+			var spelledArguments = [String]()
+			for argument in arguments {
+				guard let value = spelledValue(of: argument, inClass: owner, before: index) else { return nil }
+				spelledArguments.append("\(argument.argumentLabel.spelledAsArgumentLabel): \(value)")
+			}
+			return ".\(name)(\(spelledArguments.joined(separator: ", ")))"
 		}
 	}
 
