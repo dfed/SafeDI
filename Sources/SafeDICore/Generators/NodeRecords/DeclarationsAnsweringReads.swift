@@ -28,9 +28,8 @@
 ///   as an error (`ScopeGenerator.nonSendableWrapperCaptures(ofTreeRootedAt:)`): such a world keeps its tree
 ///   (`NodeRecordRefusal.sendableFunctionCapturesWrapper`).
 /// - Which renames are fulfilled by a wrapper's instance, which the tree binds them from (`ScopeGenerator`'s `aliasCode`),
-///   and so their records too; a rename that reads a wrapper's instance through an optional wrapper, beneath a fill, or
-///   that two calls into one variant hand its label differently, one as a wrapper's instance and the other not, keeps its
-///   world's tree (`NodeRecordRefusal.lazy`).
+///   and so their records too; a rename whose label two calls into one variant hand differently, one as a wrapper's
+///   instance and the other not, keeps its world's tree (`NodeRecordRefusal.lazy`).
 ///
 /// The nearest node above that declares a label answers a read of it, and a read that is handed that declaration (a
 /// required receive's `value`, and a receive only if available's `optionalValue`, which its record passes `nil` for
@@ -135,14 +134,11 @@ struct DeclarationsAnsweringReads: Sendable {
 					let instanceProperties = rename.fulfillingProperty.label == rename.property.label
 						? inheritedProperties
 						: inheritedProperties.filter { !callerScope.declaredLabels.contains($0.label) }.union(callerScope.declaredLazilyInstantiatedInstanceProperties)
+					// Any other form, the wrapper itself or its optional among them, is bound from its label, as the tree binds it.
+					// No instance property is optional (`Property.asLazilyInstantiatedInstanceProperty`), so none is read through
+					// an optional wrapper.
 					if instanceProperties.contains(rename.fulfillingProperty.asUnwrappedProperty) {
 						renamesReadingWrappersInstance.insert(callee)
-					} else {
-						// Any other form, the wrapper itself or its optional among them, is bound from its label, as the tree
-						// binds it, but for an instance read through an optional wrapper (beneath a fill that takes the
-						// wrapper optionally), which the tree reads with `?.instance`.
-						renameReadsWrappersInstance = renameReadsWrappersInstance
-							|| instanceProperties.contains(rename.fulfillingProperty.asUnwrappedProperty.asOptionalProperty)
 					}
 				}
 				let opensSendableFunction = Self.opensSendableFunction(edgeFacts[edgeFacts.startIndex + edgeIndex])
@@ -195,9 +191,9 @@ struct DeclarationsAnsweringReads: Sendable {
 	/// Whether a `@Sendable` function of the world reads, from outside it, a wrapper that is not `Sendable`.
 	let sendableFunctionCapturesWrapper: Bool
 
-	/// Whether a rename of the world reads its fulfilling property's label where a wrapper's instance answers it otherwise
-	/// than the tree's rule reads the instance, or where two calls into one variant hand the label differently, one as a
-	/// wrapper's instance and the other not, so the tree binds the rename two ways and one record cannot.
+	/// Whether a rename of the world reads its fulfilling property's label where two calls into one variant hand the label
+	/// differently, one as a wrapper's instance and the other not, so the tree binds the rename two ways and one record
+	/// cannot.
 	let renameReadsWrappersInstance: Bool
 
 	/// The variants of renames that the tree binds from the instance of a wrapper, which their records read too.

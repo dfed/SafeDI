@@ -59,8 +59,8 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	case cycle
 	/// The node is built as a `LazilyInstantiated`, which `lazyClaim(of:in:)` discharges: its record is
 	/// `NodeRecordKind.lazy`'s. Also a mock root's scope that declares or forwards a lazily instantiated property, whose
-	/// instance no record reads yet, and a rename the tree binds from a wrapper's instance on one path to its node only, or
-	/// reads through an optional wrapper beneath a fill (`DeclarationsAnsweringReads.renameReadsWrappersInstance`).
+	/// instance no record reads yet, and a rename the tree binds from a wrapper's instance on one path to its node only
+	/// (`DeclarationsAnsweringReads.renameReadsWrappersInstance`).
 	case lazy
 	/// The node's type receives a property only if available.
 	case onlyIfAvailable
@@ -171,7 +171,7 @@ struct NodeRecords: Sendable {
 		// The tree reports the capture as an error, which the records cannot.
 		guard !answeringDeclarations.sendableFunctionCapturesWrapper else { throw NodeRecordRefusal.sendableFunctionCapturesWrapper }
 		// A rename's record binds it from its fulfilling property's label, or from a wrapper's instance as the tree's rule
-		// reads it, never from an instance read otherwise, nor one way where the tree binds it two ways on two paths.
+		// reads it, never one way where the tree binds it two ways on two paths.
 		guard !answeringDeclarations.renameReadsWrappersInstance else { throw NodeRecordRefusal.lazy }
 		// A node's place holds its children's places, so each is made after its children: a post-order walk from the root,
 		// with a stack, since a tree can be as deep as the module has types.
