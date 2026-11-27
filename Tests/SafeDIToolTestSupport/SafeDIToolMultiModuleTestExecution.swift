@@ -620,14 +620,14 @@ func executeSafeDIToolMultiModuleTest(
 																			try await PlanSendableChecks.comparing(handingOn: PlanSendableObservation.observer) {
 																				try await PlanCaptureChecks.comparing(handingOn: PlanCaptureObservation.observer) {
 																					try await UnpassableCycleLabelChecks.checking(handingOn: UnpassableCycleLabelObservation.observer) {
-												// Every root’s imports from its union fact must equal the walk of its generator tree’s (`TypeFactsImportsChecks`).
-												try await TypeFactsImportsChecks.comparing(handingOn: TypeFactsImportsObservation.comparesWalk) {
-													// Every root’s received values from its per-type graph must equal the walk of its generator tree’s
-													// (`TypeFactsReceivedValueSuppliesChecks`).
-													try await TypeFactsReceivedValueSuppliesChecks.comparing(handingOn: TypeFactsReceivedValueSuppliesObservation.comparesWalk) {
-														try await tool.generate()
-													}
-												}
+																						// Every root’s imports from its union fact must equal the walk of its generator tree’s (`TypeFactsImportsChecks`).
+																						try await TypeFactsImportsChecks.comparing(handingOn: TypeFactsImportsObservation.comparesWalk) {
+																							// Every root’s received values from its per-type graph must equal the walk of its generator tree’s
+																							// (`TypeFactsReceivedValueSuppliesChecks`).
+																							try await TypeFactsReceivedValueSuppliesChecks.comparing(handingOn: TypeFactsReceivedValueSuppliesObservation.comparesWalk) {
+																								try await tool.generate()
+																							}
+																						}
 																					}
 																				}
 																			}
