@@ -2379,6 +2379,7 @@ func expectDifferentialValuesAgree(
 	sourceLocation: SourceLocation = #_sourceLocation,
 ) async throws {
 	guard let comparison = try await DifferentialValueOracle.compare(feature: feature, knownRight: knownRight, probes: probes, exempting: exemptions, limits: limits, filesToDelete: &filesToDelete) else { return }
+	SeamHolesPathAgreementChecks.recordValueComparison(probes: probes.count, differences: comparison.differences.count)
 	for difference in comparison.differences {
 		Issue.record(
 			"The feature path builds other values than the known-right path for \(difference)\n\(comparison.report)",

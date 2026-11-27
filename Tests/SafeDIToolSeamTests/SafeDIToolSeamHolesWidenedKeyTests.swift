@@ -108,6 +108,30 @@ struct SafeDIToolSeamHolesWidenedKeyTests: ~Copyable {
 		expectAgreement(of: answers, withOuterFillsAtLeast: 1)
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func seamHoles_answerAlikeByInnermostFill_whenOuterCallsSitBeneathLevelsThatBindOtherValues() async throws {
+		// As two deep under two outer calls, but `Outer` builds `Second` beneath `Shelf`, which binds `tag`, and the place's
+		// fill reads `tag` only if available: inline, the place beneath `First` reads `nil` and the one beneath `Second`
+		// reads `Shelf`'s, so the levels above the outer fills, not the fills, decide what the place carries.
+		let answers = try await answersOfOuter(
+			base: Self.protocols + [
+				seamFixtureType(named: "Tag", declarations: []),
+				seamFixtureType(named: "Inner", isSeam: true, declarations: ["@Instantiated public let service: any Service"]),
+				seamFixtureType(named: "First", isSeam: true, declarations: ["@Instantiated public let thing: any Thing"]),
+				seamFixtureType(named: "Second", isSeam: true, declarations: ["@Instantiated public let thing: any Thing"]),
+			],
+			top: [
+				Self.fulfillingType(named: "ThingImpl", fulfilling: "Thing", declarations: ["@Instantiated public let c: Inner"]),
+				Self.fulfillingType(named: "ServiceImpl", fulfilling: "Service", declarations: ["@Instantiated public let gizmo: any Gizmo"]),
+				seamFixtureType(named: "Shelf", declarations: ["@Instantiated public let tag: Tag", "@Instantiated public let b: Second"]),
+				seamFixtureType(named: "Outer", isSeam: true, declarations: ["@Instantiated public let a: First", "@Instantiated public let shelf: Shelf"]),
+			],
+			gizmoDeclarations: ["@Received(onlyIfAvailable: true) public let tag: Tag?"],
+		)
+		expectAgreement(of: answers, withOuterFillsAtLeast: 1)
+	}
+
 	// MARK: The smallest test of each kind of disagreement
 
 	@Test
@@ -174,12 +198,12 @@ struct SafeDIToolSeamHolesWidenedKeyTests: ~Copyable {
 
 	/// The answers `Outer`'s tree reads, in `Top`, over `Base`; `App` builds `Outer` and fills `Gizmo`.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	private mutating func answersOfOuter(base: [String], top: [String]) async throws -> [SeamHolesPathAgreementChecks.Answers] {
+	private mutating func answersOfOuter(base: [String], top: [String], gizmoDeclarations: [String] = []) async throws -> [SeamHolesPathAgreementChecks.Answers] {
 		let modules = [
 			ModuleFixture(name: "Base", packageName: "Shop", swiftFileContent: base),
 			ModuleFixture(name: "Top", packageName: "Other", swiftFileContent: top.map { "import Base\n\n" + $0 }, dependencies: ["Base"]),
 			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
-				Self.fulfillingType(named: "GizmoImpl", fulfilling: "Gizmo", declarations: []),
+				Self.fulfillingType(named: "GizmoImpl", fulfilling: "Gizmo", declarations: gizmoDeclarations),
 				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated public let outer: Outer"]),
 			].map { "import Base\nimport Top\n\n" + $0 }, dependencies: ["Base", "Top"]),
 		]

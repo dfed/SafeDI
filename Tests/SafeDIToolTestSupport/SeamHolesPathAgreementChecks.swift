@@ -118,6 +118,15 @@ enum SeamHolesPathAgreementChecks {
 		return result
 	}
 
+	/// Writes, where `SAFEDI_SEAM_PATH_ANSWERS_DIR` names a directory, a line naming the test that compared the values of a
+	/// feature path with a known-right path, so that the tests whose answers disagree by path can be checked to compare the
+	/// values their fills build.
+	static func recordValueComparison(probes: Int, differences: Int) {
+		guard let directory = ProcessInfo.processInfo.environment["SAFEDI_SEAM_PATH_ANSWERS_DIR"], !directory.isEmpty else { return }
+		let file = URL(fileURLWithPath: directory).appendingPathComponent("values-\(UUID().uuidString).txt")
+		try? "test \(Test.current?.name ?? "?") | probes \(probes) | differences \(differences)\n".write(to: file, atomically: true, encoding: .utf8)
+	}
+
 	/// Runs `operation` with every answer recorded.
 	static func collecting<Result>(_ operation: () async throws -> Result) async throws -> (Result, Answers) {
 		let (stream, continuation) = AsyncStream.makeStream(of: SeamHolesPathAnswer.self)
