@@ -673,7 +673,7 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 		// the static helpers of `ScopeGenerator` listed here are called, until they move: a new one is a decision. The
 		// generator's hook (`DependencyTreeGenerator+NodeRecords.swift`) also calls `rootInitializer(of:)`, and plans the
 		// tree beside the records for the comparison. A mock world's records (`NodeRecords+MockConstruction.swift`) read two
-		// more, both facts of one type: its default-valued parameters, and the name of the configuration it declares. 
+		// more, both facts of one type: its default-valued parameters, and the name of the configuration it declares.
 		let directory = URL(fileURLWithPath: #filePath)
 			.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
 			.appendingPathComponent("Sources/SafeDICore/Generators/NodeRecords")
