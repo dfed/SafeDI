@@ -439,7 +439,7 @@ struct SafeDIToolNodeRecordsMockRootTests: ~Copyable {
 			    let level: Int
 			}
 			""",
-			"mockDefaultValuedParameter"
+			"mockDefaultValuedParameter",
 		),
 		// An actor's arguments are sent to it.
 		(
@@ -449,7 +449,7 @@ struct SafeDIToolNodeRecordsMockRootTests: ~Copyable {
 			    public init() {}
 			}
 			""",
-			"mockActor"
+			"mockActor",
 		),
 		// A type nothing fulfills is a parameter of `mock()`.
 		(
@@ -465,7 +465,7 @@ struct SafeDIToolNodeRecordsMockRootTests: ~Copyable {
 			    @Received let clock: Clock
 			}
 			""",
-			"mockRootBindsOtherThanNodes"
+			"mockRootBindsOtherThanNodes",
 		),
 		// The mock promotes each form of a label its tree receives, and names the two apart.
 		(
@@ -504,7 +504,7 @@ struct SafeDIToolNodeRecordsMockRootTests: ~Copyable {
 			    public init() {}
 			}
 			""",
-			"mockOverrideNotParentField"
+			"mockOverrideNotParentField",
 		),
 	])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
