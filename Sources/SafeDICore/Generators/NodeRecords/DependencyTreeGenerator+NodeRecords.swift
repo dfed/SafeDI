@@ -160,13 +160,12 @@ extension DependencyTreeGenerator {
 	}
 
 	/// The extension that declares `instantiable`'s generated initializer, its body laid out from `body`, node records'
-	/// root body, or `nil` where the engine cannot lay out every statement of it, or the root has nothing to build.
+	/// root body; empty for a root with nothing to build, for which the tree generates nothing too; `nil` where the engine
+	/// cannot lay out every statement of the body.
 	static func laidOutRootCode(of instantiable: Instantiable, body: [GeneratedCode]) throws -> GeneratedCode? {
+		guard let rootInitializer = try ScopeGenerator.rootInitializer(of: instantiable) else { return .empty }
 		// A statement the engine cannot lay out would be copied as its text, which a node records place does not hold.
-		guard body.allSatisfy(\.statementsAreLaidOutByTypeKey),
-		      let rootInitializer = try ScopeGenerator.rootInitializer(of: instantiable),
-		      let statements = TypeKeyBody.statements(ofRootBody: body)
-		else { return nil }
+		guard body.allSatisfy(\.statementsAreLaidOutByTypeKey), let statements = TypeKeyBody.statements(ofRootBody: body) else { return nil }
 		return rootInitializer.spelled(writing: BuilderFunctionGraph(body: statements.map(Statement.verbatim)))
 	}
 }

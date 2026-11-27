@@ -20,12 +20,13 @@
 
 extension NodeRecords {
 	/// The claim of `declaration` as `inlineSeam` where it is a seam of another module built inline
-	/// (`ConstructionScope.builtInlineSeamComment`), which discharges the refusal of a seam built inline; `nil` for
-	/// any other node, and for every node of a mock root's world, which builds every seam inline without the comment. Every
+	/// (`ConstructionScope.builtInlineSeamComment`), which discharges the refusal of a seam built inline, and that of the
+	/// wrapper it is built in, which its record reads of the node (`wrapperRefusalsDischarged(of:in:)`); `nil` for any
+	/// other node, and for every node of a mock root's world, which builds every seam inline without the comment. Every
 	/// other check of `refusalsOfBuiltByInitializer(_:in:)` still runs on it.
 	static func inlineSeamClaim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
 		guard !world.isMockWorld, world.scope(of: declaration).builtInlineSeamComment != nil else { return nil }
-		return NodeRecordClaim(kind: .inlineSeam, discharges: [.unavailableOrInlineSeam])
+		return NodeRecordClaim(kind: .inlineSeam, discharges: wrapperRefusalsDischarged(of: declaration, in: world).union([.unavailableOrInlineSeam]))
 	}
 
 	/// The record of `declaration`'s place, a node of kind `inlineSeam`: `builtByInitializerRecord`'s, with the comment that
