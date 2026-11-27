@@ -71,7 +71,8 @@ extension TypeKeyLayout {
 			let allSites = members.flatMap { callSitesByClass[$0] }
 			let externalSites = Set(allSites.filter { !memberSet.contains($0.owner) })
 			// Every function is declared in the root's body, never nested in another: Swift 6.2's compile time doubles with
-			// each level of nested local functions past about twenty.
+			// each level of nested local functions past about twenty. Under `declaresLoopMembersAsThePathKeyDoes` the nesting
+			// is the path key's own, which the tree writes too, so the type key adds no depth.
 			guard let firstSite = externalSites.first else { return false }
 			// Where the path key writes each loop once, it declares each function in the body that calls it, a loop's
 			// functions in the body that builds the loop. A component the path key writes once per calling body, which the
