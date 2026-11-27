@@ -130,6 +130,38 @@ struct SafeDIToolTypeFactsParameterTests: ~Copyable {
 		#expect(pinnedReadCount > 0)
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_typesParameterAsOptionalWrapper_whenOneCallPassesLazilyInstantiatedWrapperAndAnotherNil() async throws {
+		// `Second` declares the theme lazily and `Third` declares none, so `Leaf`'s one function is passed the wrapper
+		// and `nil`: `__safeDI_leafBuilder(theme: LazilyInstantiated<Theme>?)`.
+		let report = try await rootReport(of: Self.leafFixture(places: [("Second", "LazilyInstantiated<Theme>"), ("Third", nil)]))
+
+		#expect(try parameters(ofVariantsOf: "Leaf ", in: report) == [["theme: LazilyInstantiated<Theme>?"]], "\(report.world)")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_typesParameterAsWrapper_whenNoCallOfTheWrappersVariantPassesNil() async throws {
+		// `First` declares the theme by value and `Second` lazily, so `Leaf` has a function for each, and no call of the
+		// wrapper's passes `nil`: `__safeDI_leafBuilder(theme: Theme?)` and
+		// `__safeDI_leafBuilder_(theme: LazilyInstantiated<Theme>)`.
+		let report = try await rootReport(of: Self.leafFixture(places: [("First", "Theme"), ("Second", "LazilyInstantiated<Theme>")]))
+
+		#expect(try parameters(ofVariantsOf: "Leaf ", in: report) == [["theme: Theme?"], ["theme: LazilyInstantiated<Theme>"]], "\(report.world)")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_typesParameterAsSendableWrapper_whenSendableLazilyInstantiatedWrapperAnswersTheReceive() async throws {
+		// `Second` declares the theme lazily, `First` as a `SendableLazilyInstantiated` and `Third` declares none: the
+		// lazy wrapper's function takes the `nil`, and the Sendable wrapper's is
+		// `__safeDI_leafBuilder_(theme: SendableLazilyInstantiated<Theme>)`.
+		let report = try await rootReport(of: Self.leafFixture(places: [("Second", "LazilyInstantiated<Theme>"), ("First", "SendableLazilyInstantiated<Theme>"), ("Third", nil)], themeIsSendable: true))
+
+		#expect(try parameters(ofVariantsOf: "Leaf ", in: report) == [["theme: LazilyInstantiated<Theme>?"], ["theme: SendableLazilyInstantiated<Theme>"]], "\(report.world)")
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -152,6 +184,18 @@ struct SafeDIToolTypeFactsParameterTests: ~Copyable {
 			seamFixtureType(named: "Session", isFinalClass: true, declarations: []),
 			seamFixtureType(named: "Logger", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let t3Builder: Instantiator<T3>?"]),
 		]
+	}
+
+	/// `Leaf` receives `theme` only if available and builds itself again through `leafBuilder`. Each of `places`, in
+	/// `Root`'s declaration order, declares the `theme` it names, if any, then builds `leafBuilder`.
+	private static func leafFixture(places: [(name: String, theme: String?)], themeIsSendable: Bool = false) -> [String] {
+		var types = [seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: places.map { "@Instantiated let \($0.name.prefix(1).lowercased() + $0.name.dropFirst()): \($0.name)" })]
+		for place in places {
+			types.append(seamFixtureType(named: place.name, isFinalClass: true, declarations: (place.theme.map { ["@Instantiated let theme: \($0)"] } ?? []) + ["@Instantiated let leafBuilder: Instantiator<Leaf>"]))
+		}
+		types.append(seamFixtureType(named: "Leaf", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let theme: Theme?", "@Instantiated let leafBuilder: Instantiator<Leaf>"]))
+		types.append(seamFixtureType(named: "Theme", isFinalClass: true, declarations: [], conformances: themeIsSendable ? ", Sendable" : ""))
+		return types
 	}
 
 	/// The parameters of each variant of the nodes whose description starts with `prefix`.
