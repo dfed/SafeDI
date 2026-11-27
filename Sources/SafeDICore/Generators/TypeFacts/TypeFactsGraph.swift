@@ -320,7 +320,9 @@ struct TypeFactsGraph: Sendable {
 				let beingBuilt = graph.nodes[child].property.map { labels.existingID(of: $0.label) == read.label } ?? false
 				let text = "\(read.channel.name) \(declaration.forms)\(beingBuilt ? " being built" : "")"
 				// Rule 3, case 2: a value, `LazilyInstantiated` or `SendableLazilyInstantiated` being built is one cycle
-				// identity whichever twin the path entered, which 2.4.0 builds in one function and passes no parameter.
+				// identity whichever twin the path entered, which 2.4.0 builds in one function and passes no parameter. The
+				// key names the label alone, not the type and label a cycle identity names elsewhere: a node declares a label
+				// once, and a being-built answer gives no parameter whose type could tell two keys apart.
 				let keyText: String
 				if beingBuilt, isTwin(declaration.kind), let label = graph.nodes[child].property?.label {
 					keyText = "\(read.channel.name) twin \(label) being built"
