@@ -27,10 +27,13 @@ final class CallFields: Sendable {
 	/// What the call hands each builder the seam takes, after `BuiltPlaceRecord.arguments`, in the signature's builder
 	/// order.
 	let closureArguments: [ClosureArgumentEntry]
+	/// The builders the call builds, which a `.built` closure argument names by index (`BuiltClosure`).
+	let builtClosures: [BuiltClosure]
 
-	init(leadingStatement: CallGuard?, closureArguments: [ClosureArgumentEntry]) {
+	init(leadingStatement: CallGuard?, closureArguments: [ClosureArgumentEntry], builtClosures: [BuiltClosure] = []) {
 		self.leadingStatement = leadingStatement
 		self.closureArguments = closureArguments
+		self.builtClosures = builtClosures
 	}
 }
 
