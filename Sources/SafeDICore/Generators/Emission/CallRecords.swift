@@ -63,10 +63,11 @@ public struct SeamCallRecordObservation: Sendable {
 	/// The call's code.
 	public let text: String
 	/// The names the record says the text reads: its arguments' reads, and each struct it passes a builder up from, by
-	/// the name the tree binds it under.
-	public let readNames: [String]
-	/// The names the record says the text binds, and the functions it declares.
-	public let boundNames: [String]
+	/// the name the tree binds it under. `nil` for a call that fills a builder, whose record does not hold yet what its
+	/// dispatchers and fills read.
+	public let readNames: [String]?
+	/// The names the record says the text binds, and the functions it declares; `nil` where `readNames` is.
+	public let boundNames: [String]?
 	/// The record's guard line and builder arguments, spelled as the engine is to spell them.
 	public let spelledFromRecord: [String]
 	/// The guard line and builder arguments the text writes, in the same order.

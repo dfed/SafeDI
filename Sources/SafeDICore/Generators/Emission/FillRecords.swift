@@ -32,6 +32,22 @@ struct BuiltClosure: Sendable {
 	let dispatchers: [DispatcherRecord]
 	/// The fills the dispatchers' cases reach, by the index of each fill's place among the call's children.
 	let fillChildIndices: [Int]
+	/// What the call hands the root dispatcher, in its order: the struct the case of the caller's own enum for the call
+	/// returns, for each struct of a level the fills take.
+	let carriedStructs: [CarriedStructRead]
+
+	/// A struct a call hands its root dispatcher: under the label the fills take it by, read of the binding the caller's tree
+	/// makes of the struct's type for the call's case, never by the name the binding is allocated.
+	struct CarriedStructRead: Hashable, Sendable {
+		let upName: String
+		let structType: TypeDescription
+	}
+
+	/// The argument, calling the root dispatcher as `dispatcherName` and handing it each carried struct bound under the name
+	/// at its position in `structNames`.
+	func spelled(dispatcherName: String, structNames: [String]) -> String {
+		"\(dispatcherName)(\(zip(carriedStructs, structNames).map { "\($0.upName.spelledAsArgumentLabel): \($1)" }.joined(separator: ", ")))"
+	}
 }
 
 /// A function of a call that switches over one level of the called seam's enums and hands each case to a fill or to the

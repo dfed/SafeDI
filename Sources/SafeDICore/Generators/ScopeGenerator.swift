@@ -1872,10 +1872,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	/// What a seam call passes one builder: the label it takes it under and the expression passed.
 	struct BuilderCallArgument: Sendable {
-		init(label: String, value: String, enclosingFill: EnclosingFill? = nil, isSendable: Bool = false, builderStruct: PublicMockBuilderStruct? = nil, overrideHanding: OverrideHanding = .none, passedUpStruct: PassedUpStruct? = nil) {
+		init(label: String, value: String, enclosingFill: EnclosingFill? = nil, isSendable: Bool = false, builderStruct: PublicMockBuilderStruct? = nil, overrideHanding: OverrideHanding = .none, passedUpStruct: PassedUpStruct? = nil, builtCall: BuiltCall? = nil) {
 			self.label = label
 			self.value = value
 			self.passedUpStruct = passedUpStruct
+			self.builtCall = builtCall
 			self.enclosingFill = enclosingFill
 			self.isSendable = isSendable
 			self.builderStruct = builderStruct
@@ -1937,6 +1938,30 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let type: TypeDescription
 			let caseName: String
 			let member: PassedOnMember
+		}
+
+		/// Where a seam's call fills the builder's places and declares the dispatchers that fill them, the call of the root
+		/// level's dispatcher `value` writes; `nil` for every other argument, and for a call that re-enters an enclosing call's.
+		let builtCall: BuiltCall?
+
+		/// The call of the dispatcher of a builder's root level a seam's call passes the builder, handed the struct the case of
+		/// the caller's own enum for the call returns, for each struct of a level its fills take.
+		struct BuiltCall: Sendable {
+			let dispatcherKey: String
+			let dispatcherName: String
+			let carriedStructs: [CarriedStruct]
+
+			/// A struct the dispatcher is handed: under the label its fills take it by, of its type, bound as `name`.
+			struct CarriedStruct: Sendable {
+				let upName: String
+				let type: TypeDescription
+				let name: String
+			}
+
+			/// The call, as the argument's value.
+			var spelled: String {
+				"\(dispatcherName)(\(carriedStructs.map { "\($0.upName.spelledAsArgumentLabel): \($0.name)" }.joined(separator: ", ")))"
+			}
 		}
 	}
 
@@ -6850,6 +6875,83 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 	}
 
+	/// Where a test observes seam calls (`SeamCallRecordObservation`) and this scope's call of another module's seam fills
+	/// a builder, the call's record as the engine is to spell it, handed to the test beside its text: a built place whose
+	/// call fields pass each builder up or build it (`BuiltClosure`). A call that re-enters an enclosing call's dispatcher, a
+	/// call of a public mock, a member of a loop of builders and a member of a cycle are not observed yet.
+	nonisolated private func observeFilledCall(
+		of property: Property,
+		instantiable: Instantiable,
+		seamCall: SeamCall,
+		erasedToConcreteExistential: Bool,
+		code: GeneratedCode,
+		unavailableProperties: Set<Property>,
+		builderFunctionNames: BuilderFunctionNames,
+		inlinePlaceBuilder: FillPlaceBindings.HoleBuilder?,
+	) throws(Initializer.GenerationError) {
+		guard let observer = SeamCallRecordObservation.observer,
+		      publicMockCall == nil,
+		      reboundProperties.isEmpty,
+		      cycleParameters.isEmpty,
+		      inlinePlaceBuilder == nil,
+		      builderCallArguments.contains(where: { $0.builtCall != nil }),
+		      builderCallArguments.allSatisfy({ $0.builtCall != nil || $0.passedUpStruct != nil }),
+		      let argumentReads = try initializerArgumentReads(of: instantiable, unavailableProperties: unavailableProperties)
+		else { return }
+		var closureArguments = [ClosureArgumentEntry]()
+		var builtClosures = [BuiltClosure]()
+		var spelledArguments = [String]()
+		for (builder, builderCallArgument) in zip(seamCall.calledBuilders.builders, builderCallArguments) {
+			if let passedUpStruct = builderCallArgument.passedUpStruct {
+				let read = PassedOnRead(calledType: instantiable.concreteInstantiable, builderLabel: builder.label, structType: passedUpStruct.type, caseName: passedUpStruct.caseName, member: passedUpStruct.member)
+				closureArguments.append(ClosureArgumentEntry(label: builderCallArgument.label, value: .passedOn(read)))
+				spelledArguments.append("\(builderCallArgument.label): \(read.member.spelled(on: passedUpStruct.name, caseName: read.caseName))")
+			} else if let builtCall = builderCallArgument.builtCall {
+				let builtClosure = BuiltClosure(
+					rootDispatcherKey: builtCall.dispatcherKey,
+					dispatchers: [],
+					fillChildIndices: [],
+					carriedStructs: builtCall.carriedStructs.map { BuiltClosure.CarriedStructRead(upName: $0.upName, structType: $0.type) },
+				)
+				closureArguments.append(ClosureArgumentEntry(label: builderCallArgument.label, value: .built(BuiltClosureID(builtClosures.count))))
+				builtClosures.append(builtClosure)
+				spelledArguments.append("\(builderCallArgument.label): \(builtClosure.spelled(dispatcherName: builtCall.dispatcherName, structNames: builtCall.carriedStructs.map(\.name)))")
+			}
+		}
+		let (text, _) = code.spelledWithoutRootFunctions()
+		var record = BuiltPlaceRecord(
+			property: property,
+			isErased: erasedToConcreteExistential,
+			concreteType: instantiable.concreteInstantiable,
+			isExtension: false,
+			target: .initializer(instantiable.concreteInstantiable),
+			arguments: argumentReads,
+			forwardedProperties: [],
+			cycleParameters: [],
+			callCycleArguments: [],
+			functionName: builderFunctionNames.functionName ?? Self.functionName(toBuild: property),
+			isSendable: buildsInSendableFunction,
+			typesDeclaredEscaping: typesDeclaredEscaping,
+			lineEnd: "",
+			hasFunction: true,
+			children: [],
+			node: PlanNode(),
+		)
+		record.callFields = CallFields(
+			leadingStatement: seamCall.callGuard(for: instantiable.concreteInstantiable),
+			closureArguments: closureArguments,
+			builtClosures: builtClosures,
+		)
+		observer(SeamCallRecordObservation(
+			text: text,
+			// The text declares the call's dispatchers and fills, whose names and reads the record does not hold yet.
+			readNames: nil,
+			boundNames: nil,
+			spelledFromRecord: (record.leadingStatement.map { [$0.spelled] } ?? []) + spelledArguments,
+			written: [seamCall.guardLine(for: instantiable.concreteInstantiable)] + builderCallArguments.map { "\($0.label): \($0.value)" },
+		))
+	}
+
 	/// The record of this scope's place where it calls another module's seam and is built by value: its text, with the reads
 	/// of the call's arguments, or `nil` where the type key does not plan it. Where a test observes it
 	/// (`SeamCallRecordObservation`), the place's record as the engine is to spell it is handed to the test beside its text.
@@ -6866,6 +6968,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		inlinePlaceBuilder: FillPlaceBindings.HoleBuilder?,
 		separatesValuesBindings: Bool,
 	) throws(Initializer.GenerationError) -> PlaceRecord? {
+		if SeamCallRecordObservation.observer != nil {
+			try observeFilledCall(of: property, instantiable: instantiable, seamCall: seamCall, erasedToConcreteExistential: erasedToConcreteExistential, code: code, unavailableProperties: unavailableProperties, builderFunctionNames: builderFunctionNames, inlinePlaceBuilder: inlinePlaceBuilder)
+		}
 		guard isPlannedByTypeKey(builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings, separatesValuesBindings: separatesValuesBindings),
 		      inlinePlaceBuilder == nil,
 		      cycleParameters.isEmpty,

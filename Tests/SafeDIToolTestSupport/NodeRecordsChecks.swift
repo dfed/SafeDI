@@ -35,8 +35,10 @@ enum NodeRecordsChecks {
 		// A seam call's record, as the engine is to spell it, must list what its text reads, binds and declares, and spell
 		// the text's guard line and builder arguments.
 		let seamCallObserver: @Sendable (SeamCallRecordObservation) -> Void = { call in
-			for mismatch in HoleSiteRecordObservation.recordMismatches(text: call.text, readNames: call.readNames, boundNames: call.boundNames, place: "a seam call") {
-				Issue.record(Comment(rawValue: mismatch))
+			if let boundNames = call.boundNames {
+				for mismatch in HoleSiteRecordObservation.recordMismatches(text: call.text, readNames: call.readNames, boundNames: boundNames, place: "a seam call") {
+					Issue.record(Comment(rawValue: mismatch))
+				}
 			}
 			for (spelled, written) in zip(call.spelledFromRecord, call.written) where spelled != written {
 				Issue.record(Comment(rawValue: "The record of a seam call spells `\(spelled)` where its text writes `\(written)`:\n\(call.text)"))
