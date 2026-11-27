@@ -80,7 +80,10 @@ enum SourceRule: String, CaseIterable {
 	/// works on a world's 32-bit IDs and bit sets, and only building the graph, spelling code and wording a message
 	/// touch a model of the source so a fold keeps no reference-counted value in its loops. A reader fold that still reads
 	/// a declaration's `Property` is left out until the graph answers what it reads: `TypeFactsImports.swift`, which hands
-	/// each declaration's type to `FulfillerImports`, until the frozen table holds each declaration's fulfiller modules.
+	/// each declaration's type to `FulfillerImports`, until the frozen table holds each declaration's fulfiller modules;
+	/// `TypeFactsReceivedValueSupplies.swift`, which reads a receive's label and an alias's properties, until its three
+	/// bridge rules (the bindings before an edge, whether an edge is in a loop, the call a lazy cycle closes on) move to
+	/// the graph, the last move deleting the tree walk.
 	case typeFactsFoldModelName
 	/// A scan of a string's characters in a generator: `split`, `replacingOccurrences` or `components(separatedBy:)`
 	/// called on anything, or `contains` given a string literal. A generator's code runs per place or per node, and such
