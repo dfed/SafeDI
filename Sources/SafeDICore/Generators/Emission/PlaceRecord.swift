@@ -109,6 +109,9 @@ struct BuiltPlaceRecord: Sendable {
 	/// Whether a wrapper built around a call of the place's function that is handed arguments spells its closure on one
 	/// line, `Instantiator<T> { f(…) }`, rather than the call on a line of its own between the braces.
 	var wrapsCallOnOneLine = false
+	/// Whether the place declares its builder function and binds its value nowhere: other places call the function, and
+	/// nothing reads the value.
+	var declaresOnlyItsFunction = false
 
 	/// The statement the place's builder function begins with, before its children.
 	var leadingStatement: CallGuard? {

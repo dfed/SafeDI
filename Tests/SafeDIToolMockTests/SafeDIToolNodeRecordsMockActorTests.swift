@@ -808,6 +808,84 @@ struct SafeDIToolNodeRecordsMockActorTests: ~Copyable {
 		#expect(output.generatedFiles == walkOutput.generatedFiles)
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_passesOverrideToFunctionWithoutLocal_whenActorBuildsNodeReadingRename() async throws {
+		let walkOutput = try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: Self.renameReaderFixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: Self.renameReaderFixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+
+		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [true, true])
+		// The walk reads the reader's override into a local its function captures; the records' function reads it from
+		// `mock()`'s overrides, which an actor's mock makes `Sendable` (its storage is a `Sendable` class of `@Sendable`
+		// closures), so capturing them is no transfer of a region and the local has nothing to do.
+		#expect(walkOutput.mockFiles["Shelf+SafeDIMock.swift"]?.contains("let __safeDI_reader__safeDIBuilder = safeDIOverrides.reader") == true)
+		#expect(output.mockFiles["Shelf+SafeDIMock.swift"] == generatedFileHeader + """
+		#if DEBUG
+		extension Shelf {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            source: (@Sendable () -> Source)? = nil,
+		            reader: (@Sendable (Source) -> Reader)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                source: source,
+		                reader: reader
+		            )
+		        }
+
+		        var source: (@Sendable () -> Source)? { __safeDI_storage.source }
+		        var reader: (@Sendable (Source) -> Reader)? { __safeDI_storage.reader }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage: Sendable {
+		            init(
+		                source: (@Sendable () -> Source)?,
+		                reader: (@Sendable (Source) -> Reader)?
+		            ) {
+		                self.source = source
+		                self.reader = reader
+		            }
+
+		            let source: (@Sendable () -> Source)?
+		            let reader: (@Sendable (Source) -> Reader)?
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Shelf {
+		        let source = if let safeDIBuilder = safeDIOverrides.source { safeDIBuilder() } else { Source() }
+		        func __safeDI_reader() -> Reader {
+		            #sourceLocation(file: "\(output.fixtures["Reader.swift"])", line: 7)
+		            let namedSource: Source = source
+		            #sourceLocation()
+		            return if let safeDIBuilder = safeDIOverrides.reader { safeDIBuilder(namedSource) } else { Reader(namedSource: namedSource) }
+		        }
+		        let reader: Reader = __safeDI_reader()
+		        return Shelf(source: source, reader: reader)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Shelf+SafeDIMock.swift"] ?? "")")
+		let comparison = try await DifferentialValueOracle.compare(
+			feature: DifferentialValuePath(fixtureFiles: Self.renameReaderFixture, generatedFiles: #require(output.generatedFiles)),
+			knownRight: DifferentialValuePath(fixtureFiles: Self.renameReaderFixture, generatedFiles: #require(walkOutput.generatedFiles)),
+			probes: [
+				DifferentialValueProbe("Shelf.mock()"),
+				DifferentialValueProbe(name: "overridden reader", expression: "Shelf.mock(safeDIOverrides: .init(reader: { marked(Reader(namedSource: $0), \"reader\") }))"),
+			],
+			filesToDelete: &filesToDelete,
+		)
+		// Nothing is compared where compile verification is off.
+		guard let comparison else { return }
+		#expect(comparison.differences.isEmpty, "\(comparison.report)")
+		#expect(comparison.featureDescription.contains("\"reader\""), "No value is marked reader:\n\(comparison.featureDescription)")
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -986,6 +1064,48 @@ struct SafeDIToolNodeRecordsMockActorTests: ~Copyable {
 		    }
 
 		    @Instantiated public let leaf: Leaf
+		    public var marker = "built"
+		}
+		""",
+	]
+
+	private static let renameReaderFixture: [String: String] = [
+		"Marked.swift": """
+		public protocol Marked: AnyObject {
+		    var marker: String { get set }
+		}
+
+		public func marked<Value: Marked>(_ value: Value, _ marker: String) -> Value {
+		    value.marker = marker
+		    return value
+		}
+		""",
+		"Shelf.swift": """
+		@Instantiable(generateMock: true)
+		public actor Shelf: Instantiable {
+		    public init(source: Source, reader: Reader) {
+		        self.source = source
+		        self.reader = reader
+		    }
+
+		    @Instantiated let source: Source
+		    @Instantiated let reader: Reader
+		}
+		""",
+		"Source.swift": """
+		@Instantiable
+		public final class Source: Instantiable, Sendable {
+		    public init() {}
+		}
+		""",
+		"Reader.swift": """
+		@Instantiable(generateMock: true)
+		public final class Reader: Instantiable, Marked {
+		    public init(namedSource: Source) {
+		        self.namedSource = namedSource
+		    }
+
+		    @Received(fulfilledByDependencyNamed: "source", ofType: Source.self) let namedSource: Source
 		    public var marker = "built"
 		}
 		""",

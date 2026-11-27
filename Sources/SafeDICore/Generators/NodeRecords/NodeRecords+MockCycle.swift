@@ -172,10 +172,13 @@ extension NodeRecords {
 	/// A function that takes the places and is `@Sendable` needs no refusal here: a node built in a `@Sendable` function
 	/// whose child is built in a function of its own is refused as `sendable` before this
 	/// (`mockSendableRefusals(of:in:)`), and every node that takes the places has such a child, the next node toward the
-	/// place entered. The engine also lays out no `@Sendable` function that is handed a value that stays outside one, as
-	/// the places and the overrides do (`TypeKeyLayout.checkSendableMarks()`).
-	/// - Throws: `mockCycleLazy` where a function that takes the places entered builds a `LazilyInstantiated`, whose
-	///   closing is the lazy kind's to add; `mockDefaultValuedParameter` where a node built along an edge the
+	/// place entered, a `SendableLazilyInstantiated`'s instance included. The engine also lays out no `@Sendable` function
+	/// that is handed a value that stays outside one, as the places and the overrides do (`TypeKeyLayout.checkSendableMarks()`).
+	/// A function that takes the places and builds a `LazilyInstantiated` needs none either: its builder function is handed
+	/// the places as an instantiator's is, and the wrapper makes the instance once, where the walk's does. Nor does an
+	/// actor that is sent a value such a function builds: the places are then declared `Sendable`
+	/// (`mockConfigurationTypeNamesHandedWithPlacesAnActorIsSentValueOf(in:slots:)`).
+	/// - Throws: `mockDefaultValuedParameter` where a node built along an edge the
 	///   configurations leave out, or beneath one, reads a field of its configuration for a default-valued parameter. The
 	///   empty configuration such a call hands holds one value of the parameter's default, which every node built of it
 	///   and of the place that keeps it would share, where the walk leaves each construction beneath such an edge to its
@@ -190,13 +193,5 @@ extension NodeRecords {
 			pending.append(contentsOf: world.edges(from: declaration))
 		}
 		guard builtOfEmptyConfiguration.allSatisfy({ mockConfigurationFieldArguments(of: $0, in: world).isEmpty }) else { throw .mockDefaultValuedParameter }
-		for declaration in 1..<Int32(world.declarationCount) where takesMockEnteredPlaces(declaration, in: slots) {
-			switch world.kind(of: declaration) {
-			case .lazy, .sendableLazy:
-				throw .mockCycleLazy
-			case .constant, .instantiator, .sendableInstantiator, .erasedInstantiator, .sendableErasedInstantiator, .alias, .hole:
-				break
-			}
-		}
 	}
 }

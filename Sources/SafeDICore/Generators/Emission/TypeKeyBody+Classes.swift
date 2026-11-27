@@ -137,9 +137,9 @@ extension TypeKeyLayout {
 		switch statement {
 		case let .built(child):
 			guard let record = bodies[child].record else { return "" }
-			return "call|\(record.property.asSource)|\(record.isErased && !record.returnsPropertyType)|\(record.isExtension)"
-		case let .closer(record, _):
-			return "call|\(record.property.asSource)|\(record.isErased)|\(record.isExtension)"
+			return "call|\(record.property.asSource)|\(callErases(record.isErased, theFunctionOf: child))|\(record.isExtension)"
+		case let .closer(record, target):
+			return "call|\(record.property.asSource)|\(callErases(record.isErased, theFunctionOf: target))|\(record.isExtension)"
 		case let .inline(record):
 			let arguments = record.arguments.map { "\($0.argumentLabel):\($0.label):\($0.property.asSource)" }.joined(separator: ",")
 			return "inline|\(record.property.asSource)|\(record.concreteType.asSource)|\(record.target.callee)|\(record.isErased)|\(record.isExtension)|\(record.lineEnd)|\(arguments)|\(record.constructionShape.joined(separator: ";"))"

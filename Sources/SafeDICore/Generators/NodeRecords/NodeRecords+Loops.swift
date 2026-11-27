@@ -51,38 +51,31 @@ extension NodeRecords {
 	}
 
 	/// Whether the loop of builders `member` belongs to, in a mock root's world, is of a shape these records make: every
-	/// member at its level is handed nothing (`mockLoopMemberTakesNothing(_:in:)`), or the level is on no cycle, none is built in a `@Sendable`
-	/// function, none builds a property nothing fulfills, whose override a member's function would take beside its own, and
-	/// none is a call of another module's public mock, whose function takes no level's configuration.
+	/// member at its level is handed nothing (`mockLoopMemberTakesNothing(_:in:)`), or the level is on no cycle, no other
+	/// level builds a member too, none is built in a `@Sendable` function, none builds a property nothing fulfills, whose
+	/// override a member's function would take beside its own, and none is a call of another module's public mock, whose
+	/// function takes no level's configuration.
 	static func mockLoopRefusesNothing(ofMember member: DeclarationID, in world: some NodeRecordSources) -> Bool {
 		let members = mockLoopMembers(atLevelOf: member, in: world)
 		// A member erased to another type is made again of its concrete type's function, whose rebinding these records
-		// do not erase yet; a member promoted for an optional receive is bound non-optional, which its rebinding would
-		// annotate optional; and a member the mock root promotes only for its loop has no binding in the walk
-		// (`ScopeGenerator.loopMembersReadOnlyInsideTheirLoop`), which the root's body here would bind unread.
+		// do not erase yet; and a member promoted for an optional receive is bound non-optional, which its rebinding would
+		// annotate optional.
 		guard !members.contains(where: { member in
-			world.isErased(member)
-				|| world.property(of: member).map { $0.asUnwrappedProperty != $0 } == true
-				|| isPromotedOnlyForItsLoop(member, in: world)
+			world.isErased(member) || world.property(of: member).map { $0.asUnwrappedProperty != $0 } == true
 		}) else { return false }
 		guard !members.allSatisfy({ mockLoopMemberTakesNothing($0, in: world) }) else { return true }
 		// A level on a cycle of the mock is entered again with another configuration, which its members' level argument
 		// would not follow.
 		let level = world.parents(of: member).first?.parent ?? 0
 		guard level == 0 || !world.isOnCycle(level) else { return false }
+		// A member another level builds too has one function, whose level's argument is typed as this level's and which
+		// the other level's body would hand its own configuration, so the loop keeps the walk, which writes a function
+		// per level.
+		guard members.allSatisfy({ member in world.parents(of: member).allSatisfy { $0.parent == level } }) else { return false }
 		return members.allSatisfy { member in
 			world.property(of: member)?.propertyType.isSendable == false
 				&& world.scope(of: member).publicMockCall == nil
 				&& !buildsUnavailableDependency(beneath: member, in: world)
-		}
-	}
-
-	/// Whether `member`, at a mock root's level, is a property the mocked type neither receives nor instantiates: one
-	/// the root promotes, which the walk may bind nowhere where only its loop reads it.
-	private static func isPromotedOnlyForItsLoop(_ member: DeclarationID, in world: some NodeRecordSources) -> Bool {
-		guard world.parents(of: member).contains(where: { $0.parent == 0 }), let property = world.property(of: member) else { return false }
-		return !world.scope(of: 0).instantiable.dependencies.contains { dependency in
-			dependency.property == property || dependency.property.asUnwrappedProperty == property.asUnwrappedProperty
 		}
 	}
 
@@ -201,8 +194,8 @@ extension NodeRecords {
 
 	/// The places `declaration`'s builder function begins with, before every child: a wrapper made again of each member of
 	/// its loop it rebinds, in the order it rebinds them, each a call of that member's builder function
-	/// (`ClosingPlaceRecord.rebindsLoopMember`). A production world has one variant per node (`nodeHasSeveralVariants`), which is the one
-	/// the parent's body calls (oracle B, check 32 of the per-type facts' checks).
+	/// (`ClosingPlaceRecord.rebindsLoopMember`). The rebinding names only the member's declaration, its label and type, so
+	/// every variant of `declaration` rebinds alike (oracle B, check 32 of the per-type facts' checks).
 	static func loopRebindings(of declaration: DeclarationID, in world: some NodeRecordSources, mockLoopLevels: MockLoopLevels = MockLoopLevels(), enteredSlots: MockEnteredSlots? = nil) -> [GeneratedCode] {
 		// In a mock, each rebinding hands the member's function what the member's level hands it.
 		let level = mockLoopLevelArgument(of: declaration, in: world, levels: mockLoopLevels, slots: enteredSlots)
