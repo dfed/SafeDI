@@ -281,7 +281,7 @@ private final class LevelFunctionTexts: Sendable {
 
 	func mismatches() -> [String] {
 		state.withLock { state in
-			state.records.filter { !state.tree.contains($0.projection) }.map { "Root \($0.root)’s call of a public mock has, from node records, the level functions\n\($0.projection)\nwhich the tree records nowhere; the tree records\n\(state.tree.sorted().joined(separator: "\n"))" }
+			state.records.filter { !state.tree.contains($0.projection) }.map { "Root \($0.root)’s call of a public mock has, from node records, the level functions\n\($0.projection)\nwhich the tree records nowhere" }
 		}
 	}
 
