@@ -336,6 +336,11 @@ enum TypeFactsChecks {
 			line.append(" check\(check)=\(result.findingsByCheck[check]?.count ?? 0)")
 		}
 		line.append(" check10Exempted=\(result.check10ExemptedPairs) sendableGapProxy=\(result.sendableGapProxyNodes)")
+		var fillRefusalCounts = [String: Int]()
+		for refusal in report.fillRefusals {
+			fillRefusalCounts[refusal ?? "modeled", default: 0] += 1
+		}
+		line.append(" fills=\(fillRefusalCounts.sorted { $0.key < $1.key }.map { "\($0.key):\($0.value)" }.joined(separator: ","))")
 		line.append(" check10Owed=\(result.check10OwedByFact.sorted { $0.key < $1.key }.map { "\($0.key):\($0.value)" }.joined(separator: ",")) check10OwedUncovered=\(result.check10OwedUncovered.count) test=\(Test.current?.name ?? "")")
 		for check in 11...lastCheck {
 			line.append(" compared\(check)=\(result.comparedByCheck[check] ?? 0)")
@@ -392,6 +397,10 @@ enum TypeFactsChecks {
 				} else {
 					owed.insert("unowed")
 				}
+			} else if answers.count == 1, field("being built", of: answers[0]) != "[]" {
+				// One place reads a label being built that the other does not read at all: a call beneath one fill of a
+				// declaration passes that fill on, and beneath another fills the place itself.
+				owed.insert("fillBeingBuilt")
 			} else {
 				owed.insert("unowed")
 			}

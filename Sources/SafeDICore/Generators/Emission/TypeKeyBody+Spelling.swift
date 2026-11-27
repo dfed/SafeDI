@@ -175,21 +175,37 @@ extension TypeKeyLayout {
 			value: .construction(record.target, arguments: Self.labeled(argumentValues, of: record.arguments)),
 			lineEnd: record.lineEnd,
 		)).spelled
-		let declaration = BindingDeclaration(
-			property: record.property,
-			rule: .constant(
-				isErased: record.isErased,
-				constructedTypeIsPropertyType: record.concreteType.asSource == record.property.typeDescription.asSource,
-				hasBuilderFunction: true,
-				isExtension: record.isExtension,
-			),
-		)
-		let binding = SafeDICore.Statement.binding(
-			declaration,
-			Expression.call(function: record.functionName, arguments: "").erased(to: record.property.typeDescription.unwrapped, where: record.isErased),
-			lineEnd: "",
-		)
-		return GeneratedCode.sequence([function, binding.spelled, .text("\n")]).spelled()
+		return GeneratedCode.sequence([function, Self.bindingOfInPlaceCall(of: record), .text("\n")]).spelled()
+	}
+
+	/// The binding of `record`'s property, a call written where its place is, to its builder function's result: by the rule
+	/// a built place of the property's form binds it with, a wrapper of the function where the property is one.
+	private static func bindingOfInPlaceCall(of record: BuiltPlaceRecord) -> GeneratedCode {
+		switch record.property.propertyType {
+		case .instantiator,
+		     .erasedInstantiator,
+		     .sendableInstantiator,
+		     .sendableErasedInstantiator:
+			// No forwarded arguments only while the seam call claim refuses a call that forwards values; then they come from the record.
+			.text(ScopeGenerator.instantiatorDeclaration(of: record.property, isExtension: record.isExtension, isErased: record.isErased, handing: record.functionName, forwardedArguments: ""))
+		case .lazilyInstantiated,
+		     .sendableLazilyInstantiated:
+			.text("\(BindingDeclaration(property: record.property, rule: .lazilyInstantiated).spelled) = \(ScopeGenerator.lazilyInstantiatedInstantiation(of: record.property, callingFunctionNamed: record.functionName, cycleArguments: "", erasedToConcreteExistential: record.isErased))")
+		case .constant:
+			SafeDICore.Statement.binding(
+				BindingDeclaration(
+					property: record.property,
+					rule: .constant(
+						isErased: record.isErased,
+						constructedTypeIsPropertyType: record.concreteType.asSource == record.property.typeDescription.asSource,
+						hasBuilderFunction: true,
+						isExtension: record.isExtension,
+					),
+				),
+				Expression.call(function: record.functionName, arguments: "").erased(to: record.property.typeDescription.unwrapped, where: record.isErased),
+				lineEnd: "",
+			).spelled
+		}
 	}
 
 	/// The binding of `property` to a call of `callee`'s function, made before the statement at `index` of `owner`'s body.

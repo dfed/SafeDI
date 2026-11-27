@@ -30,6 +30,11 @@ public enum NodeRecordsObservation {
 	/// plan before it is turned on for every run, or generate time doubles.
 	@TaskLocal public static var laysOutRoots = false
 
+	/// Whether a run no test observes lays out each root of a module with seams, a seam's own root included, from its node
+	/// records where they accept its world and the engine lays every statement out, without planning its tree's body. A
+	/// prototype's switch, for timing such a module: off unless the tool's environment turns it on.
+	@TaskLocal public static var laysOutSeamWorldRootsInRun = false
+
 	/// The nodes a test claims as a kind would (`NodeRecords.claim(of:in:)`), by their concrete type's name, each
 	/// with the raw values of the refusals the claim discharges. Only a test sets it.
 	@TaskLocal public static var claimsForTesting = [String: [String]]()

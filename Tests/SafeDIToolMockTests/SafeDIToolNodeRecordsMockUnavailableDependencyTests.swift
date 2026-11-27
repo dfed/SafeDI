@@ -143,15 +143,14 @@ struct SafeDIToolNodeRecordsMockUnavailableDependencyTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_handsOverrideDownToFunctionThatBindsProperty_whenTypeBeneathRootDeclaresUnavailableDependency() async throws {
+	mutating func mock_readsOverrideBoundBeforeNodes_whenTypeBeneathRootDeclaresUnavailableDependency() async throws {
 		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
 			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: ["Root.swift": Self.fixtureOfPropertyDeclaredBeneathRoot], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		}
 
 		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [true])
-		// `Child` declares `missing` two types beneath the root. Its function binds the property from an argument named as
-		// the override, which `mock()`'s body hands `Mid`'s function from its own parameter and `Mid`'s hands on, at the
-		// constant and inside the `Instantiator` alike. `absent`, the root's own, is read where `mock()` binds it.
+		// `Child` declares `missing` two types beneath the root. `mock()` binds the override before its nodes, and
+		// `Child`'s function reads that binding, as it reads `absent`, the root's own: neither is handed down.
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == generatedFileHeader + """
 		#if DEBUG
 		extension Root {
@@ -196,19 +195,19 @@ struct SafeDIToolNodeRecordsMockUnavailableDependencyTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let absent: Absent? = safeDIOverrides.absent
-		        func __safeDI_mid(safeDIOverrides: Mid.SafeDIMockConfiguration, missing: Missing?) -> Mid {
-		            let child: Child = __safeDI_child(safeDIOverrides: safeDIOverrides.child, missing: missing)
+		        let missing: Missing? = safeDIOverrides.missing
+		        func __safeDI_mid(safeDIOverrides: Mid.SafeDIMockConfiguration) -> Mid {
+		            let child: Child = __safeDI_child(safeDIOverrides: safeDIOverrides.child)
 		            let leaf = if let safeDIBuilder = safeDIOverrides.leaf { safeDIBuilder() } else { Leaf() }
 		            return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(child, leaf) } else { Mid(child: child, leaf: leaf) }
 		        }
-		        func __safeDI_child(safeDIOverrides: Child.SafeDIMockConfiguration, missing: Missing?) -> Child {
-		            let missing: Missing? = missing
+		        func __safeDI_child(safeDIOverrides: Child.SafeDIMockConfiguration) -> Child {
 		            let leaf = if let safeDIBuilder = safeDIOverrides.leaf { safeDIBuilder() } else { Leaf() }
 		            return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(missing, absent, leaf) } else { Child(missing: missing, absent: absent, leaf: leaf) }
 		        }
-		        let mid: Mid = __safeDI_mid(safeDIOverrides: safeDIOverrides.mid, missing: safeDIOverrides.missing)
+		        let mid: Mid = __safeDI_mid(safeDIOverrides: safeDIOverrides.mid)
 		        let midBuilder = Instantiator<Mid> {
-		            __safeDI_mid(safeDIOverrides: safeDIOverrides.midBuilder, missing: safeDIOverrides.missing)
+		            __safeDI_mid(safeDIOverrides: safeDIOverrides.midBuilder)
 		        }
 		        return Root(mid: mid, midBuilder: midBuilder, absent: absent)
 		    }
@@ -219,7 +218,7 @@ struct SafeDIToolNodeRecordsMockUnavailableDependencyTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_buildsTheWalksValues_whenOverrideIsHandedDownToTypeBeneathRoot() async throws {
+	mutating func mock_buildsTheWalksValues_whenTypeBeneathRootDeclaresUnavailableDependencyAndEveryPlaceIsOverridden() async throws {
 		let fixture = ["Root.swift": Self.fixtureOfPropertyDeclaredBeneathRoot]
 		let walkOutput = try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		let (output, _) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
@@ -244,7 +243,7 @@ struct SafeDIToolNodeRecordsMockUnavailableDependencyTests: ~Copyable {
 				DifferentialValueProbe("Root.mock().midBuilder.instantiate()"),
 				DifferentialValueProbe(name: "overridden root", expression: overridden),
 				DifferentialValueProbe(name: "overridden instantiator", expression: "\(overridden).midBuilder.instantiate()"),
-				DifferentialValueProbe(name: "only the handed down override", expression: "Root.mock(safeDIOverrides: .init(missing: marked(Stub(), \"missing alone\")))"),
+				DifferentialValueProbe(name: "only the override of the property beneath the root", expression: "Root.mock(safeDIOverrides: .init(missing: marked(Stub(), \"missing alone\")))"),
 			],
 			filesToDelete: &filesToDelete,
 		)
@@ -259,18 +258,326 @@ struct SafeDIToolNodeRecordsMockUnavailableDependencyTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_keepsTheWalksStatements_whenRootAndAnotherTypeBothBuildTypeThatDeclaresUnavailableDependency() async throws {
-		// `Child` is built by the root and by `Mid`. Its one function would be handed the override as `mock()`'s field by
-		// one call and as an argument by the other, which one record cannot spell: the world is refused when its records
-		// are made, and the walk writes it.
+	mutating func mock_readsOneBinding_whenRootAndAnotherTypeBothBuildTypeThatDeclaresUnavailableDependency() async throws {
+		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: ["Root.swift": Self.fixtureOfTypeBuiltByRootAndBeneathIt], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+
+		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [true])
+		// `Child` is built by the root and by `Mid`. Its one function reads the binding `mock()` makes before its nodes,
+		// whichever body calls it.
+		#expect(output.mockFiles["Root+SafeDIMock.swift"] == generatedFileHeader + """
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            child: Child.SafeDIMockConfiguration = .init(),
+		            mid: Mid.SafeDIMockConfiguration = .init(),
+		            midBuilder: Mid.SafeDIMockConfiguration = .init(),
+		            absent: Absent? = nil,
+		            missing: Missing? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                child: child,
+		                mid: mid,
+		                midBuilder: midBuilder
+		            )
+		            self.absent = absent
+		            self.missing = missing
+		        }
+
+		        var child: Child.SafeDIMockConfiguration { __safeDI_storage.child }
+		        var mid: Mid.SafeDIMockConfiguration { __safeDI_storage.mid }
+		        var midBuilder: Mid.SafeDIMockConfiguration { __safeDI_storage.midBuilder }
+		        let absent: Absent?
+		        let missing: Missing?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                child: Child.SafeDIMockConfiguration,
+		                mid: Mid.SafeDIMockConfiguration,
+		                midBuilder: Mid.SafeDIMockConfiguration
+		            ) {
+		                self.child = child
+		                self.mid = mid
+		                self.midBuilder = midBuilder
+		            }
+
+		            let child: Child.SafeDIMockConfiguration
+		            let mid: Mid.SafeDIMockConfiguration
+		            let midBuilder: Mid.SafeDIMockConfiguration
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        let absent: Absent? = safeDIOverrides.absent
+		        let missing: Missing? = safeDIOverrides.missing
+		        func __safeDI_child(safeDIOverrides: Child.SafeDIMockConfiguration) -> Child {
+		            let leaf = if let safeDIBuilder = safeDIOverrides.leaf { safeDIBuilder() } else { Leaf() }
+		            return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(missing, absent, leaf) } else { Child(missing: missing, absent: absent, leaf: leaf) }
+		        }
+		        let child: Child = __safeDI_child(safeDIOverrides: safeDIOverrides.child)
+		        func __safeDI_mid(safeDIOverrides: Mid.SafeDIMockConfiguration) -> Mid {
+		            let child: Child = __safeDI_child(safeDIOverrides: safeDIOverrides.child)
+		            let leaf = if let safeDIBuilder = safeDIOverrides.leaf { safeDIBuilder() } else { Leaf() }
+		            return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(child, leaf) } else { Mid(child: child, leaf: leaf) }
+		        }
+		        let mid: Mid = __safeDI_mid(safeDIOverrides: safeDIOverrides.mid)
+		        let midBuilder = Instantiator<Mid> {
+		            __safeDI_mid(safeDIOverrides: safeDIOverrides.midBuilder)
+		        }
+		        return Root(mid: mid, midBuilder: midBuilder, absent: absent, child: child)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Root+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildsTheWalksValues_whenRootAndAnotherTypeBothBuildTypeThatDeclaresUnavailableDependency() async throws {
 		let fixture = ["Root.swift": Self.fixtureOfTypeBuiltByRootAndBeneathIt]
+		let walkOutput = try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		let (output, _) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		// The two write other text, so the comparison is of two programs.
+		#expect(output.mockFiles["Root+SafeDIMock.swift"] != walkOutput.mockFiles["Root+SafeDIMock.swift"])
+		func child(_ place: String) -> String {
+			".init(leaf: { marked(Leaf(), \"\(place).leaf\") }, { marked(Child(missing: $0, absent: $1, leaf: $2), \"\(place)\") })"
+		}
+		func mid(_ place: String) -> String {
+			".init(child: \(child("\(place).child")), leaf: { marked(Leaf(), \"\(place).leaf\") }, { marked(Mid(child: $0, leaf: $1), \"\(place)\") })"
+		}
+		let overridden = "Root.mock(safeDIOverrides: .init(child: \(child("child")), mid: \(mid("mid")), midBuilder: \(mid("midBuilder")), absent: marked(Stub(), \"absent\"), missing: marked(Stub(), \"missing\")))"
+		let comparison = try await DifferentialValueOracle.compare(
+			feature: DifferentialValuePath(fixtureFiles: fixture, generatedFiles: #require(output.generatedFiles)),
+			knownRight: DifferentialValuePath(fixtureFiles: fixture, generatedFiles: #require(walkOutput.generatedFiles)),
+			probes: [
+				DifferentialValueProbe("Root.mock()"),
+				DifferentialValueProbe("Root.mock().midBuilder.instantiate()"),
+				DifferentialValueProbe(name: "overridden root", expression: overridden),
+				DifferentialValueProbe(name: "overridden instantiator", expression: "\(overridden).midBuilder.instantiate()"),
+				DifferentialValueProbe(name: "only the override of the property", expression: "Root.mock(safeDIOverrides: .init(missing: marked(Stub(), \"missing alone\")))"),
+			],
+			filesToDelete: &filesToDelete,
+		)
+		// Nothing is compared where compile verification is off.
+		guard let comparison else { return }
+		#expect(comparison.differences.isEmpty, "\(comparison.report)")
+		// Every override was read: each marks a value its closure built, and each property's is the value handed in.
+		for marker in ["absent", "missing", "missing alone", "child", "child.leaf", "mid", "mid.leaf", "mid.child", "mid.child.leaf", "midBuilder", "midBuilder.leaf", "midBuilder.child", "midBuilder.child.leaf"] {
+			#expect(comparison.featureDescription.contains("\"\(marker)\""), "No value is marked \(marker):\n\(comparison.featureDescription)")
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_bindsEachLabelToItsOverride_whenOverridesOfTwoUnavailableDependenciesAreNamedApart() async throws {
+		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: ["Root.swift": Self.fixtureOfOverridesNamedApart], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+
+		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [true])
+		// Two types declare `missing`, of two types, so `mock()` names the overrides apart, and each type's function binds
+		// its label to the name of its own.
+		#expect(output.mockFiles["Root+SafeDIMock.swift"] == generatedFileHeader + """
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            first: First.SafeDIMockConfiguration = .init(),
+		            second: Second.SafeDIMockConfiguration = .init(),
+		            missing_Missing: Missing? = nil,
+		            missing_Other: Other? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                first: first,
+		                second: second
+		            )
+		            self.missing_Missing = missing_Missing
+		            self.missing_Other = missing_Other
+		        }
+
+		        var first: First.SafeDIMockConfiguration { __safeDI_storage.first }
+		        var second: Second.SafeDIMockConfiguration { __safeDI_storage.second }
+		        let missing_Missing: Missing?
+		        let missing_Other: Other?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                first: First.SafeDIMockConfiguration,
+		                second: Second.SafeDIMockConfiguration
+		            ) {
+		                self.first = first
+		                self.second = second
+		            }
+
+		            let first: First.SafeDIMockConfiguration
+		            let second: Second.SafeDIMockConfiguration
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        let missing_Missing: Missing? = safeDIOverrides.missing_Missing
+		        let missing_Other: Other? = safeDIOverrides.missing_Other
+		        func __safeDI_first(safeDIOverrides: First.SafeDIMockConfiguration) -> First {
+		            let missing: Missing? = missing_Missing
+		            let leaf = if let safeDIBuilder = safeDIOverrides.leaf { safeDIBuilder() } else { Leaf() }
+		            return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(missing, leaf) } else { First(missing: missing, leaf: leaf) }
+		        }
+		        let first: First = __safeDI_first(safeDIOverrides: safeDIOverrides.first)
+		        func __safeDI_second(safeDIOverrides: Second.SafeDIMockConfiguration) -> Second {
+		            let missing: Other? = missing_Other
+		            let leaf = if let safeDIBuilder = safeDIOverrides.leaf { safeDIBuilder() } else { Leaf() }
+		            return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(missing, leaf) } else { Second(missing: missing, leaf: leaf) }
+		        }
+		        let second: Second = __safeDI_second(safeDIOverrides: safeDIOverrides.second)
+		        return Root(first: first, second: second)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Root+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildsTheWalksValues_whenOverridesOfTwoUnavailableDependenciesAreNamedApart() async throws {
+		let fixture = ["Root.swift": Self.fixtureOfOverridesNamedApart]
+		let walkOutput = try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		let (output, _) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		// The two write other text, so the comparison is of two programs.
+		#expect(output.mockFiles["Root+SafeDIMock.swift"] != walkOutput.mockFiles["Root+SafeDIMock.swift"])
+		let comparison = try await DifferentialValueOracle.compare(
+			feature: DifferentialValuePath(fixtureFiles: fixture, generatedFiles: #require(output.generatedFiles)),
+			knownRight: DifferentialValuePath(fixtureFiles: fixture, generatedFiles: #require(walkOutput.generatedFiles)),
+			probes: [
+				DifferentialValueProbe("Root.mock()"),
+				DifferentialValueProbe(
+					name: "overridden root",
+					expression: "Root.mock(safeDIOverrides: .init(missing_Missing: marked(Stub(), \"missing of first\"), missing_Other: marked(Stub(), \"missing of second\")))",
+				),
+			],
+			filesToDelete: &filesToDelete,
+		)
+		// Nothing is compared where compile verification is off.
+		guard let comparison else { return }
+		#expect(comparison.differences.isEmpty, "\(comparison.report)")
+		// Every override was read: each marks a value its closure built, and each property's is the value handed in.
+		for marker in ["missing of first", "missing of second"] {
+			#expect(comparison.featureDescription.contains("\"\(marker)\""), "No value is marked \(marker):\n\(comparison.featureDescription)")
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_writesNoLineForProperty_whenRootAndTypeBeneathItDeclareSameUnavailableDependency() async throws {
+		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: ["Root.swift": Self.fixtureOfPropertyRootAndChildDeclare], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+
+		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [true])
+		// The root and `Child` declare `missing`, one declaration of the world. `mock()` binds its override before the nodes,
+		// which is the root's own property, and `Child`'s function reads it.
+		#expect(output.mockFiles["Root+SafeDIMock.swift"] == generatedFileHeader + """
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            child: Child.SafeDIMockConfiguration = .init(),
+		            missing: Missing? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                child: child
+		            )
+		            self.missing = missing
+		        }
+
+		        var child: Child.SafeDIMockConfiguration { __safeDI_storage.child }
+		        let missing: Missing?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                child: Child.SafeDIMockConfiguration
+		            ) {
+		                self.child = child
+		            }
+
+		            let child: Child.SafeDIMockConfiguration
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        let missing: Missing? = safeDIOverrides.missing
+		        func __safeDI_child(safeDIOverrides: Child.SafeDIMockConfiguration) -> Child {
+		            let leaf = if let safeDIBuilder = safeDIOverrides.leaf { safeDIBuilder() } else { Leaf() }
+		            return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(missing, leaf) } else { Child(missing: missing, leaf: leaf) }
+		        }
+		        let child: Child = __safeDI_child(safeDIOverrides: safeDIOverrides.child)
+		        return Root(missing: missing, child: child)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Root+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildsTheWalksValues_whenRootAndTypeBeneathItDeclareSameUnavailableDependency() async throws {
+		let fixture = ["Root.swift": Self.fixtureOfPropertyRootAndChildDeclare]
+		let walkOutput = try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		let (output, _) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		// The two write other text, so the comparison is of two programs.
+		#expect(output.mockFiles["Root+SafeDIMock.swift"] != walkOutput.mockFiles["Root+SafeDIMock.swift"])
+		let comparison = try await DifferentialValueOracle.compare(
+			feature: DifferentialValuePath(fixtureFiles: fixture, generatedFiles: #require(output.generatedFiles)),
+			knownRight: DifferentialValuePath(fixtureFiles: fixture, generatedFiles: #require(walkOutput.generatedFiles)),
+			probes: [
+				DifferentialValueProbe("Root.mock()"),
+				DifferentialValueProbe(name: "overridden root", expression: "Root.mock(safeDIOverrides: .init(missing: marked(Stub(), \"missing\")))"),
+			],
+			filesToDelete: &filesToDelete,
+		)
+		// Nothing is compared where compile verification is off.
+		guard let comparison else { return }
+		#expect(comparison.differences.isEmpty, "\(comparison.report)")
+		// Every override was read: each marks a value its closure built, and each property's is the value handed in.
+		for marker in ["missing"] {
+			#expect(comparison.featureDescription.contains("\"\(marker)\""), "No value is marked \(marker):\n\(comparison.featureDescription)")
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_bindsNilAsTheWalkWritesIt_whenOnlySendableFunctionBuildsTypeThatDeclaresUnavailableDependency() async throws {
+		// `mock()` takes no override of a property declared only inside a `@Sendable` function, so the record is
+		// production's, and the text the walk's.
+		let fixture = ["Root.swift": Self.fixtureOfPropertyDeclaredInSendableFunction]
 		let walkOutput = try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
 			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		}
 
-		#expect(reports.filter(\.isMockRoot).map(\.refusal) == ["unavailableOrInlineSeam"])
-		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [false])
+		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [true])
 		#expect(output.generatedFiles == walkOutput.generatedFiles)
 	}
 
@@ -396,6 +703,150 @@ struct SafeDIToolNodeRecordsMockUnavailableDependencyTests: ~Copyable {
 	    public init() {}
 
 	    public var marker = "built"
+	}
+	"""
+
+	/// A root that builds two types, each of which instantiates `missing` only if available, of two types nothing fulfills.
+	private static let fixtureOfOverridesNamedApart = """
+	public protocol Marked: AnyObject {
+	    var marker: String { get set }
+	}
+
+	public func marked<Value: Marked>(_ value: Value, _ marker: String) -> Value {
+	    value.marker = marker
+	    return value
+	}
+
+	public protocol Missing {}
+	public protocol Other {}
+
+	public final class Stub: Missing, Other, Marked {
+	    public init() {}
+
+	    public var marker = "built"
+	}
+
+	@Instantiable(generateMock: true)
+	public final class Root: Instantiable {
+	    public init(first: First, second: Second) {
+	        self.first = first
+	        self.second = second
+	    }
+
+	    @Instantiated let first: First
+	    @Instantiated let second: Second
+	}
+
+	@Instantiable
+	public final class First: Instantiable, Marked {
+	    public init(missing: Missing?, leaf: Leaf) {
+	        self.missing = missing
+	        self.leaf = leaf
+	    }
+
+	    @Instantiated(onlyIfAvailable: true) let missing: Missing?
+	    @Instantiated let leaf: Leaf
+	    public var marker = "built"
+	}
+
+	@Instantiable
+	public final class Second: Instantiable, Marked {
+	    public init(missing: Other?, leaf: Leaf) {
+	        self.missing = missing
+	        self.leaf = leaf
+	    }
+
+	    @Instantiated(onlyIfAvailable: true) let missing: Other?
+	    @Instantiated let leaf: Leaf
+	    public var marker = "built"
+	}
+
+	@Instantiable
+	public final class Leaf: Instantiable, Marked {
+	    public init() {}
+
+	    public var marker = "built"
+	}
+	"""
+
+	/// A root that instantiates `missing` only if available and builds a type that instantiates it only if available too.
+	private static let fixtureOfPropertyRootAndChildDeclare = """
+	public protocol Marked: AnyObject {
+	    var marker: String { get set }
+	}
+
+	public func marked<Value: Marked>(_ value: Value, _ marker: String) -> Value {
+	    value.marker = marker
+	    return value
+	}
+
+	public protocol Missing {}
+	public protocol Other {}
+
+	public final class Stub: Missing, Other, Marked {
+	    public init() {}
+
+	    public var marker = "built"
+	}
+
+	@Instantiable(generateMock: true)
+	public final class Root: Instantiable {
+	    public init(missing: Missing?, child: Child) {
+	        self.missing = missing
+	        self.child = child
+	    }
+
+	    @Instantiated(onlyIfAvailable: true) let missing: Missing?
+	    @Instantiated let child: Child
+	}
+
+	@Instantiable
+	public final class Child: Instantiable, Marked {
+	    public init(missing: Missing?, leaf: Leaf) {
+	        self.missing = missing
+	        self.leaf = leaf
+	    }
+
+	    @Instantiated(onlyIfAvailable: true) let missing: Missing?
+	    @Instantiated let leaf: Leaf
+	    public var marker = "built"
+	}
+
+	@Instantiable
+	public final class Leaf: Instantiable, Marked {
+	    public init() {}
+
+	    public var marker = "built"
+	}
+	"""
+
+	/// A root that builds, through a `SendableInstantiator`, a type that instantiates `missing` only if available.
+	private static let fixtureOfPropertyDeclaredInSendableFunction = """
+	public protocol Missing: Sendable {}
+
+	@Instantiable(generateMock: true)
+	public final class Root: Instantiable {
+	    public init(childBuilder: SendableInstantiator<Child>) {
+	        self.childBuilder = childBuilder
+	    }
+
+	    @Instantiated let childBuilder: SendableInstantiator<Child>
+	}
+
+	@Instantiable
+	public struct Child: Instantiable {
+	    public init(missing: Missing?, leaf: Leaf) {
+	        self.missing = missing
+	        self.leaf = leaf
+	    }
+
+	    @Instantiated(onlyIfAvailable: true) let missing: Missing?
+	    @Instantiated let leaf: Leaf
+	}
+
+	@Instantiable
+	public struct Leaf: Instantiable {
+	    public init() {}
 	}
 	"""
 
