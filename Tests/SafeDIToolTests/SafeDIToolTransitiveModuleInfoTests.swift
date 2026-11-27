@@ -612,6 +612,23 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func resolvingReferences_throwsErrorOfFirstPath_whenItsFileIsStillBeingReadAsTwentyThreeOthersAreFoundMissing() async throws {
+		// The first path’s file is sixteen megabytes that are no module info, and the others do not exist, so every other
+		// failure arrives while the first file is being read: a resolver that reported the failure that arrived first would
+		// name a missing file.
+		let directory = try temporaryDirectory()
+		let largeURL = directory.appendingPathComponent("Large.safedi")
+		try Data(count: 16 << 20).write(to: largeURL)
+		let paths = (0..<23).reversed().map { directory.appendingPathComponent("Missing\($0).safedi").path } + [largeURL.path]
+		let modulesBeneathCSV = try writeList(of: paths, in: directory)
+
+		await assertThrowsError("Could not read the SafeDI module info file at \(directory.path)/Large.safedi: The file is not a module info file: it does not begin with `SDMI`. \(BinaryFile.unreadableFileExplanation)") {
+			try await ModuleReferenceResolver(transitiveModuleInfoListPath: modulesBeneathCSV).resolvingReferences(in: [(Self.fileReferringToDeep, "/App.safedi")])
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func resolvingReferences_throwsErrorNamingDirectory_whenModuleBeneathPathIsDirectory() async throws {
 		let directory = try temporaryDirectory()
 		let directoryNamedLikeModuleInfo = directory.appendingPathComponent("Folder.safedi")
