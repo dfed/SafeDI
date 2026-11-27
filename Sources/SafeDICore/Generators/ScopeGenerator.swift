@@ -7988,6 +7988,38 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		)
 	}
 
+	/// The facts the tree builds each fill of a seam call no fill encloses with, by the fill's key, as projections
+	/// (`FillFacts.projection`).
+	nonisolated func fillFactsProjectionsOfCallsOutsideFills() -> [String: String] {
+		var projections = [String: String]()
+		var pending = [self]
+		while let generator = pending.popLast() {
+			for child in generator.propertiesToGenerate {
+				guard let key = child.fillKey else {
+					pending.append(child)
+					continue
+				}
+				guard child.fillEmitsCode, generator.publicMockLevelFunctions == nil, let filled = child.propertiesToGenerate.first else { continue }
+				let treeReads = filled.fillTreeReads
+				let readLabels = Set(filled.receivedProperties.map(\.label))
+				projections[key] = FillFacts(
+					key: key,
+					declaration: -1,
+					bound: child.fillFields.filter { child.fillStructBoundLabels.contains($0.property.label) && (treeReads.reads($0.property) || treeReads.fieldsCarriedBySites.contains($0.property)) }.map(\.property.label),
+					parametersTaken: child.fillParameterFields,
+					callerReads: child.fillCallerReads.parameterByLabel.keys.sorted().map { label in
+						FillFacts.CallerRead(label: label, isRequired: treeReads.required.contains { $0.label == label })
+					},
+					readLabels: readLabels.sorted(),
+					labelsReadOrDeclared: child.fillLabelsReadOrDeclared.sorted(),
+					declaresFunction: child.fillDeclaresFunction(fillPlaceBindings: FillPlaceBindings(bindingsByGenerator: [:])),
+					returnsBoundValue: filled.property?.propertyType.isConstant ?? false,
+				).projection
+			}
+		}
+		return projections
+	}
+
 	/// Whether this fill's body declares a function: the builder function of the property it fills, which a wrapper, a
 	/// constant with children of its own, and a call of a seam or a public mock declare. A constant built in one expression
 	/// declares none.

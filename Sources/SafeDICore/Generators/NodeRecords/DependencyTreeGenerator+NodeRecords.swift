@@ -69,6 +69,12 @@ extension DependencyTreeGenerator {
 				(report.treeFillKeys, report.treeCarrierFillKeys, report.treeDispatcherKeys, report.treeFillSignaturesByKey) = FillPrototype.treeKeys(beneath: scopeGenerator)
 				FillPrototype.append(report)
 			}
+			if FillFactsObservation.observer != nil, rootInfo.seamTree == nil, let constructionScope = rootInfo.constructionScope {
+				// The work of making the facts is no run's, so the tests that count a run's work count none of it.
+				GenerationWork.$observer.withValue(nil) {
+					FillFactsObservation.observe(root: root, world: TypeFactsGraph(root: constructionScope, forMockGeneration: false), treeProjections: scopeGenerator.fillFactsProjectionsOfCallsOutsideFills())
+				}
+			}
 			guard let constructionScope = rootInfo.constructionScope, let observer = NodeRecordsObservation.observer else {
 				return try await scopeGenerator.generatePlan()
 			}

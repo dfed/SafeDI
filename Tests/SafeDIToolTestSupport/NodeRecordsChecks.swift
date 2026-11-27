@@ -76,7 +76,26 @@ enum NodeRecordsChecks {
 			}
 			enclosingDecisionsObserver?(decisions)
 		}
-		return try await SeamCallRecordObservation.$observer.withValue(seamCallObserver) {
+		let enclosingFillFactsObserver = FillFactsObservation.observer
+		// Each fill of a root's seam call no fill encloses binds, takes and reads, as node records make its facts from the
+		// world, what the tree builds it with.
+		let fillFactsObserver: @Sendable (FillFactsObservation) -> Void = { facts in
+			if let fillFactsReportPath = ProcessInfo.processInfo.environment["SAFEDI_FILL_FACTS_REPORT"] {
+				let agreeing = facts.fromRecords.filter { facts.tree[$0.key] == $0.value }.count
+				append("\(testName)\t\(facts.root)\t\(agreeing)/\(facts.fromRecords.count)\t\(facts.refusals.joined(separator: ","))\n", toFileAt: fillFactsReportPath)
+			}
+			for (key, projection) in facts.fromRecords.sorted(by: { $0.key < $1.key }) where facts.tree[key] != projection {
+				Issue.record(Comment(rawValue: "Root \(facts.root)’s fill \(key) has the facts\n\(projection)\nfrom node records where the tree builds it with\n\(facts.tree[key] ?? "no fill")"))
+			}
+			if facts.refusals.isEmpty {
+				for key in facts.tree.keys.sorted() where facts.fromRecords[key] == nil {
+					Issue.record(Comment(rawValue: "Root \(facts.root)’s fill \(key) has no facts from node records"))
+				}
+			}
+			enclosingFillFactsObserver?(facts)
+		}
+		return try await FillFactsObservation.$observer.withValue(fillFactsObserver) {
+			try await SeamCallRecordObservation.$observer.withValue(seamCallObserver) {
 			try await DispatcherRecordObservation.$observer.withValue(dispatcherObserver) {
 				try await FillSignatureObservation.$observer.withValue(fillObserver) {
 					try await FillEmissionDecisionsObservation.$observer.withValue(decisionsObserver) {
@@ -84,6 +103,7 @@ enum NodeRecordsChecks {
 					}
 				}
 			}
+		}
 		}
 	}
 
