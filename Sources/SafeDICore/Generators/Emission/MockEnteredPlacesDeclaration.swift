@@ -18,6 +18,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+/// The declaration of the places a mock root's functions enter (`ReservedName.mockEnteredPlacesTypeName`), from its
+/// slots (`NodeRecords+MockEnteredSlots.swift`).
 extension MockEnteredSlot {
 	/// The lines, unindented, of the struct a mock root declares once for the functions on its tree's cycles. A value
 	/// of it is the places entered along one path: a member per slot of `slots`, in their order, then one per

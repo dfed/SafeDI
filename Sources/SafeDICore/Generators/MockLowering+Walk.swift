@@ -257,8 +257,13 @@ extension ScopeGenerator {
 				}
 			}
 			outerDeclarations += overridesBoundBeforeNodes.map { Property(label: $0.name, typeDescription: $0.typeDescription) }
+			// The override of a property instantiated only if available that nothing fulfills is an ordinary read from above
+			// in the records, so `mock()` binds it before its nodes too, where the walk has the type that declares the
+			// property read `mock()`'s overrides. A public mock takes no override of one: it takes a builder.
+			let unavailableDependencyOverrides = signature.onlyIfAvailableOverrides.filter { signature.unavailableDependencyOverrideNames[$0.receivedProperty] != nil }
+			outerDeclarations += unavailableDependencyOverrides.map { Property(label: $0.name, typeDescription: $0.typeDescription) }
 			outerDeclarations += rootReceivesBoundAgain
-			if let statements = try Self.nodeRecordsMockStatements(
+			if let statements = Self.nodeRecordsMockStatements(
 				of: instantiable,
 				worldRoot: worldRoot,
 				bindsOnlyNodes: bindsOnlyNodes,
@@ -277,7 +282,10 @@ extension ScopeGenerator {
 			) {
 				// The builders' and the overrides' bindings, and the mocked type's own receives bound again, stay before the nodes
 				// that read them.
-				bindingLines = Array(bindingLines.prefix(bindingsBeforeNodes + rootReceiverBindingLines.count)) + (statements.isEmpty ? [] : [statements])
+				let unavailableDependencyOverrideLines = unavailableDependencyOverrides.map { override in
+					"\(bodyIndent)let \(override.name): \(override.typeDescription.asSource) = \(ReservedName.mockOverridesParameterName).\(override.name)"
+				}
+				bindingLines = bindingLines.prefix(bindingsBeforeNodes) + unavailableDependencyOverrideLines + bindingLines.dropFirst(bindingsBeforeNodes).prefix(rootReceiverBindingLines.count) + (statements.isEmpty ? [] : [statements])
 			}
 		}
 		// A public mock's tiers, overrides and guard (`MockLowering+PublicMocks.swift`).

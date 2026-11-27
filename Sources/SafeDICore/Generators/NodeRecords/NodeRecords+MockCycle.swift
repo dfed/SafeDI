@@ -116,10 +116,8 @@ extension NodeRecords {
 	/// - Throws: `mockCycleLazy` where a function that takes the places entered builds a `LazilyInstantiated`, whose
 	///   closing is the lazy kind's to add; `mockActor` where an actor is sent a value such a function builds, which is
 	///   built of the places the function was handed and so cannot be sent, where the walk builds the value of what the
-	///   actor's own function captures; `unavailableOrInlineSeam` where `mock()` takes the override of a property nothing
-	///   fulfills, which a call that closes a cycle would have to hand on.
+	///   actor's own function captures.
 	static func checkMockCycles(in world: some NodeRecordSources, slots: MockEnteredSlots) throws(NodeRecordRefusal) {
-		guard world.mockRootNames.unavailableDependencyOverrideNamesInOrder.isEmpty else { throw .unavailableOrInlineSeam }
 		for declaration in 1..<Int32(world.declarationCount) where takesMockEnteredPlaces(declaration, in: slots) {
 			switch world.kind(of: declaration) {
 			case .lazy, .sendableLazy:

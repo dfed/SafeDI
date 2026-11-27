@@ -376,20 +376,27 @@ struct SafeDIToolNodeRecordsMockCycleTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_keepsTheWalksStatements_whenMockOfTreeWithCycleTakesOverrideOfPropertyNothingFulfills() async throws {
+	mutating func mock_buildsTheWalksValues_whenTypeOnCycleDeclaresPropertyNothingFulfills() async throws {
 		let fixture = Self.ringFixture.merging([
-			"Root.swift": """
+			"Child.swift": """
 			public protocol Missing {}
 
-			@Instantiable(generateMock: true)
-			public final class Root: Instantiable {
-			    public init(missing: Missing?, parentBuilder: Instantiator<Parent>) {
-			        self.missing = missing
+			public final class Stub: Missing, Marked {
+			    public init() {}
+
+			    public var marker = ""
+			}
+
+			@Instantiable
+			public final class Child: Instantiable, Marked {
+			    public init(parentBuilder: Instantiator<Parent>, missing: Missing?) {
 			        self.parentBuilder = parentBuilder
+			        self.missing = missing
 			    }
 
-			    @Instantiated(onlyIfAvailable: true) let missing: Missing?
 			    @Instantiated let parentBuilder: Instantiator<Parent>
+			    @Instantiated(onlyIfAvailable: true) let missing: Missing?
+			    public var marker = ""
 			}
 			""",
 		]) { _, replacement in replacement }
@@ -397,9 +404,36 @@ struct SafeDIToolNodeRecordsMockCycleTests: ~Copyable {
 		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
 			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		}
-		#expect(reports.filter(\.isMockRoot).map(\.refusal) == ["unavailableOrInlineSeam"])
-		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [false])
-		#expect(output.generatedFiles == walkOutput.generatedFiles)
+		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [true])
+		// `mock()` binds the override of the property before its nodes, so every child of the ring reads the one binding,
+		// on whichever lap it is built.
+		let overridden = """
+		Root.mock(safeDIOverrides: .init(parentBuilder: .init({ marked(Parent(childBuilder: $0), "parent") }), missing: marked(Stub(), "missing")))
+		"""
+		let paths = [
+			".parentBuilder.instantiate()",
+			".parentBuilder.instantiate().childBuilder.instantiate()",
+			".parentBuilder.instantiate().childBuilder.instantiate().parentBuilder.instantiate()",
+			".parentBuilder.instantiate().childBuilder.instantiate().parentBuilder.instantiate().childBuilder.instantiate()",
+		]
+		let comparison = try await DifferentialValueOracle.compare(
+			feature: DifferentialValuePath(fixtureFiles: fixture, generatedFiles: #require(output.generatedFiles)),
+			knownRight: DifferentialValuePath(fixtureFiles: fixture, generatedFiles: #require(walkOutput.generatedFiles)),
+			probes: paths.enumerated().flatMap { index, path in
+				[
+					DifferentialValueProbe(name: "path \(index)", expression: "Root.mock()\(path)"),
+					DifferentialValueProbe(name: "overridden path \(index)", expression: "\(overridden)\(path)"),
+				]
+			},
+			filesToDelete: &filesToDelete,
+		)
+		// Nothing is compared where compile verification is off.
+		guard let comparison else { return }
+		#expect(comparison.differences.isEmpty, "\(comparison.report)")
+		// Each override was read: it marks the value its closure built, or is the value handed in.
+		for marker in ["parent", "missing"] {
+			#expect(comparison.featureDescription.contains("\"\(marker)\""), "No value is marked \(marker):\n\(comparison.featureDescription)")
+		}
 	}
 
 	// MARK: Private
