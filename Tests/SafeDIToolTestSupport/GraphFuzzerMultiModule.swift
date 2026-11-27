@@ -325,8 +325,7 @@ struct GraphFuzzerPartition: Equatable, Sendable {
 /// integrations place differently when a module has `#if` content, are kept as a unit of their own; the fuzzer emits
 /// no `#if`, so none appear.
 struct GraphFuzzerGeneratedModule: Equatable, Sendable {
-	/// The generated extensions' code by unit name, each with every path under the fixture root reduced to
-	/// `<fixture-directory>/…`, so that both integrations' `#sourceLocation` directives read the same.
+	/// The generated extensions' code by unit name.
 	var units: [String: String]
 	/// The `import` lines of each generated file's header, sorted and unique, by file name: the plugin's files each
 	/// carry their own header, and the module-info integration's one combined file carries one.
@@ -670,7 +669,7 @@ enum GraphFuzzerMultiModuleProperty {
 
 	/// `text` with each path under a fixture root – a directory named by a UUID under the tests' temporary directory,
 	/// however that directory is spelled: through `/private` or not – reduced to `<fixture-directory>/…`, so the
-	/// paths both integrations cite in `#sourceLocation` directives and in diagnostics read the same. The harness
+	/// paths both integrations cite in diagnostics read the same. The harness
 	/// spells the root two ways, as `TestTemporaryDirectory.root` spells it and resolved with `realpath(3)`,
 	/// and both end in the UUID component, so one expression covers both without threading the root, which the
 	/// harness's error does not carry, through to here; everything after the root is kept.
@@ -721,7 +720,7 @@ enum GraphFuzzerMultiModuleProperty {
 			}
 			var generatedModule = GraphFuzzerGeneratedModule(units: [:], importsByFileName: [:], warnings: moduleOutput.warnings.map { reducingFixtureRootPaths(in: "\($0)") })
 			for fileName in moduleOutput.generatedFiles.keys.sorted() {
-				GraphFuzzerGeneratedModule.parsingGeneratedFile(reducingFixtureRootPaths(in: moduleOutput.generatedFiles[fileName, default: ""]), named: fileName, into: &generatedModule)
+				GraphFuzzerGeneratedModule.parsingGeneratedFile(moduleOutput.generatedFiles[fileName, default: ""], named: fileName, into: &generatedModule)
 			}
 			verdicts.append(GraphFuzzerMultiModuleOutcome.ModuleVerdict(moduleName: module.name, kind: .accepted(generatedModule)))
 		}

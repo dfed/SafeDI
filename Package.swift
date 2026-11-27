@@ -94,7 +94,6 @@ let package = Package(
 				"SafeDICore/Generators",
 				"SafeDICore/Utilities",
 				"SafeDICore/Extensions/ImportDeclSyntaxExtensions.swift",
-				"SafeDICore/Models/AliasDeclarationReferences.swift",
 				"SafeDICore/Models/ConstructionScope.swift",
 				"SafeDICore/Models/CycleParameter.swift",
 				"SafeDICore/Models/ImportStatement.swift",

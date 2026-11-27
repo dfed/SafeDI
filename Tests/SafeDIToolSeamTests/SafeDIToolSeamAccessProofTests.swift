@@ -455,9 +455,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			    public init(__safeDI_session: @autoclosure @escaping () -> Session) {
 			        let session = LazilyInstantiated<Session>(__safeDI_session)
 			        @inline(never) func __safeDI_consumer() -> Consumer {
-			            #sourceLocation(file: "\(consumerPath)", line: 7)
-			            let auth: any Auth = session.instance
-			            #sourceLocation()
+			            let auth: any Auth = session.instance // Declared as Consumer.auth
 			            return Consumer(auth: auth)
 			        }
 			        let consumer: Consumer = __safeDI_consumer()

@@ -618,9 +618,7 @@ struct SafeDIToolReceivedBuilderCycleTests: ~Copyable {
 			    public convenience init() {
 			        func __safeDI_screenBuilder() -> Screen {
 			            let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
-			            #sourceLocation(file: "\(output.fixtures["Screen.swift"])", line: 7)
-			            let next: Instantiator<Screen> = screenBuilder
-			            #sourceLocation()
+			            let next: Instantiator<Screen> = screenBuilder // Declared as Screen.next
 			            return Screen(next: next)
 			        }
 			        let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
@@ -647,9 +645,7 @@ struct SafeDIToolReceivedBuilderCycleTests: ~Copyable {
 			            return Screen(detailBuilder: detailBuilder)
 			        }
 			        let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
-			        #sourceLocation(file: "\(output.fixtures["Root.swift"])", line: 9)
-			        let detailBuilder: Instantiator<Screen> = screenBuilder
-			        #sourceLocation()
+			        let detailBuilder: Instantiator<Screen> = screenBuilder // Declared as Root.detailBuilder
 			        self.init(screenBuilder: screenBuilder, detailBuilder: detailBuilder)
 			    }
 			}
@@ -850,9 +846,7 @@ struct SafeDIToolReceivedBuilderCycleTests: ~Copyable {
 			    public convenience init() {
 			        func __safeDI_screenBuilder() -> Screen {
 			            let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
-			            #sourceLocation(file: "\(output.fixtures["Screen.swift"])", line: 7)
-			            let next: Instantiator<Screen>? = screenBuilder
-			            #sourceLocation()
+			            let next: Instantiator<Screen>? = screenBuilder // Declared as Screen.next
 			            return Screen(next: next)
 			        }
 			        let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
@@ -879,9 +873,7 @@ struct SafeDIToolReceivedBuilderCycleTests: ~Copyable {
 			            return Screen(detailBuilder: detailBuilder)
 			        }
 			        let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
-			        #sourceLocation(file: "\(output.fixtures["Root.swift"])", line: 9)
-			        let detailBuilder: Instantiator<Screen> = screenBuilder
-			        #sourceLocation()
+			        let detailBuilder: Instantiator<Screen> = screenBuilder // Declared as Root.detailBuilder
 			        self.init(screenBuilder: screenBuilder, detailBuilder: detailBuilder)
 			    }
 			}
@@ -905,9 +897,7 @@ struct SafeDIToolReceivedBuilderCycleTests: ~Copyable {
 			            return Screen(detailBuilder: detailBuilder)
 			        }
 			        let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
-			        #sourceLocation(file: "\(output.fixtures["Root.swift"])", line: 9)
-			        let detailBuilder: Instantiator<Screen>? = screenBuilder
-			        #sourceLocation()
+			        let detailBuilder: Instantiator<Screen>? = screenBuilder // Declared as Root.detailBuilder
 			        self.init(screenBuilder: screenBuilder, detailBuilder: detailBuilder)
 			    }
 			}
@@ -931,9 +921,7 @@ struct SafeDIToolReceivedBuilderCycleTests: ~Copyable {
 			            return Screen(detailBuilder: detailBuilder)
 			        }
 			        let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
-			        #sourceLocation(file: "\(output.fixtures["Root.swift"])", line: 9)
-			        let detailBuilder: Instantiator<Screen>? = screenBuilder
-			        #sourceLocation()
+			        let detailBuilder: Instantiator<Screen>? = screenBuilder // Declared as Root.detailBuilder
 			        self.init(screenBuilder: screenBuilder, detailBuilder: detailBuilder)
 			    }
 			}
@@ -1115,17 +1103,13 @@ struct SafeDIToolReceivedBuilderCycleTests: ~Copyable {
 			    public convenience init() {
 			        func __safeDI_t4Builder() -> T4 {
 			            let t4Builder = Instantiator<T4>(__safeDI_t4Builder)
-			            #sourceLocation(file: "\(output.fixtures["T4.swift"])", line: 8)
-			            let t4BuilderAlias: Instantiator<T4> = t4Builder
-			            #sourceLocation()
+			            let t4BuilderAlias: Instantiator<T4> = t4Builder // Declared as T4.t4BuilderAlias
 			            return T4(t4BuilderAlias: t4BuilderAlias, t2Builder: nil)
 			        }
 			        let t4Builder = Instantiator<T4>(__safeDI_t4Builder)
 			        func __safeDI_t3() -> T3 {
 			            func __safeDI_t4() -> T4 {
-			                #sourceLocation(file: "\(output.fixtures["T4.swift"])", line: 8)
-			                let t4BuilderAlias: Instantiator<T4> = t4Builder
-			                #sourceLocation()
+			                let t4BuilderAlias: Instantiator<T4> = t4Builder // Declared as T4.t4BuilderAlias
 			                return T4(t4BuilderAlias: t4BuilderAlias, t2Builder: nil)
 			            }
 			            let t4: T4 = __safeDI_t4()
@@ -1192,17 +1176,13 @@ struct SafeDIToolReceivedBuilderCycleTests: ~Copyable {
 			    public convenience init() {
 			        func __safeDI_t4Builder() -> T4 {
 			            let t4Builder = Instantiator<T4>(__safeDI_t4Builder)
-			            #sourceLocation(file: "\(output.fixtures["T4.swift"])", line: 8)
-			            let t4BuilderAlias: Instantiator<T4> = t4Builder
-			            #sourceLocation()
+			            let t4BuilderAlias: Instantiator<T4> = t4Builder // Declared as T4.t4BuilderAlias
 			            return T4(t4BuilderAlias: t4BuilderAlias, t2Builder: nil)
 			        }
 			        let t4Builder = Instantiator<T4>(__safeDI_t4Builder)
 			        func __safeDI_t3() -> T3 {
 			            func __safeDI_t4() -> T4 {
-			                #sourceLocation(file: "\(output.fixtures["T4.swift"])", line: 8)
-			                let t4BuilderAlias: Instantiator<T4> = t4Builder
-			                #sourceLocation()
+			                let t4BuilderAlias: Instantiator<T4> = t4Builder // Declared as T4.t4BuilderAlias
 			                return T4(t4BuilderAlias: t4BuilderAlias, t2Builder: nil)
 			            }
 			            let t4: T4 = __safeDI_t4()
@@ -1240,17 +1220,13 @@ struct SafeDIToolReceivedBuilderCycleTests: ~Copyable {
 			        let t2Builder = Instantiator<T2>(__safeDI_t2Builder)
 			        func __safeDI_t4Builder() -> T4 {
 			            let t4Builder = Instantiator<T4>(__safeDI_t4Builder)
-			            #sourceLocation(file: "\(output.fixtures["T4.swift"])", line: 8)
-			            let t4BuilderAlias: Instantiator<T4> = t4Builder
-			            #sourceLocation()
+			            let t4BuilderAlias: Instantiator<T4> = t4Builder // Declared as T4.t4BuilderAlias
 			            return T4(t4BuilderAlias: t4BuilderAlias, t2Builder: t2Builder)
 			        }
 			        let t4Builder = Instantiator<T4>(__safeDI_t4Builder)
 			        func __safeDI_t3() -> T3 {
 			            func __safeDI_t4() -> T4 {
-			                #sourceLocation(file: "\(output.fixtures["T4.swift"])", line: 8)
-			                let t4BuilderAlias: Instantiator<T4> = t4Builder
-			                #sourceLocation()
+			                let t4BuilderAlias: Instantiator<T4> = t4Builder // Declared as T4.t4BuilderAlias
 			                return T4(t4BuilderAlias: t4BuilderAlias, t2Builder: t2Builder)
 			            }
 			            let t4: T4 = __safeDI_t4()
@@ -1279,9 +1255,7 @@ struct SafeDIToolReceivedBuilderCycleTests: ~Copyable {
 			    public convenience init() {
 			        func __safeDI_t3() -> T3 {
 			            func __safeDI_t4() -> T4 {
-			                #sourceLocation(file: "\(output.fixtures["T4.swift"])", line: 8)
-			                let t4BuilderAlias: Instantiator<T4>? = nil
-			                #sourceLocation()
+			                let t4BuilderAlias: Instantiator<T4>? = nil // Declared as T4.t4BuilderAlias
 			                return T4(t4BuilderAlias: t4BuilderAlias, t2Builder: nil)
 			            }
 			            let t4: T4 = __safeDI_t4()
@@ -1294,9 +1268,7 @@ struct SafeDIToolReceivedBuilderCycleTests: ~Copyable {
 			        let t2Builder = Instantiator<T2>(__safeDI_t2Builder)
 			        func __safeDI_t4Builder() -> T4 {
 			            let t4Builder = Instantiator<T4>(__safeDI_t4Builder)
-			            #sourceLocation(file: "\(output.fixtures["T4.swift"])", line: 8)
-			            let t4BuilderAlias: Instantiator<T4>? = t4Builder
-			            #sourceLocation()
+			            let t4BuilderAlias: Instantiator<T4>? = t4Builder // Declared as T4.t4BuilderAlias
 			            return T4(t4BuilderAlias: t4BuilderAlias, t2Builder: t2Builder)
 			        }
 			        let t4Builder = Instantiator<T4>(__safeDI_t4Builder)
@@ -1322,17 +1294,13 @@ struct SafeDIToolReceivedBuilderCycleTests: ~Copyable {
 			    public convenience init() {
 			        @Sendable nonisolated func __safeDI_t4Builder() -> T4 {
 			            let t4Builder = SendableInstantiator<T4>(__safeDI_t4Builder)
-			            #sourceLocation(file: "\(output.fixtures["T4.swift"])", line: 8)
-			            let t4BuilderAlias: SendableInstantiator<T4> = t4Builder
-			            #sourceLocation()
+			            let t4BuilderAlias: SendableInstantiator<T4> = t4Builder // Declared as T4.t4BuilderAlias
 			            return T4(t4BuilderAlias: t4BuilderAlias, t2Builder: nil)
 			        }
 			        let t4Builder = SendableInstantiator<T4>(__safeDI_t4Builder)
 			        func __safeDI_t3() -> T3 {
 			            func __safeDI_t4() -> T4 {
-			                #sourceLocation(file: "\(output.fixtures["T4.swift"])", line: 8)
-			                let t4BuilderAlias: SendableInstantiator<T4> = t4Builder
-			                #sourceLocation()
+			                let t4BuilderAlias: SendableInstantiator<T4> = t4Builder // Declared as T4.t4BuilderAlias
 			                return T4(t4BuilderAlias: t4BuilderAlias, t2Builder: nil)
 			            }
 			            let t4: T4 = __safeDI_t4()
@@ -1365,17 +1333,13 @@ struct SafeDIToolReceivedBuilderCycleTests: ~Copyable {
 			    public convenience init() {
 			        @Sendable nonisolated func __safeDI_t4Builder() -> T4 {
 			            let t4Builder = SendableInstantiator<T4>(__safeDI_t4Builder)
-			            #sourceLocation(file: "\(output.fixtures["T4.swift"])", line: 8)
-			            let t4BuilderAlias: SendableInstantiator<T4> = t4Builder
-			            #sourceLocation()
+			            let t4BuilderAlias: SendableInstantiator<T4> = t4Builder // Declared as T4.t4BuilderAlias
 			            return T4(t4BuilderAlias: t4BuilderAlias, t2Builder: nil)
 			        }
 			        let t4Builder = SendableInstantiator<T4>(__safeDI_t4Builder)
 			        func __safeDI_t3() -> T3 {
 			            func __safeDI_t4() -> T4 {
-			                #sourceLocation(file: "\(output.fixtures["T4.swift"])", line: 8)
-			                let t4BuilderAlias: SendableInstantiator<T4> = t4Builder
-			                #sourceLocation()
+			                let t4BuilderAlias: SendableInstantiator<T4> = t4Builder // Declared as T4.t4BuilderAlias
 			                return T4(t4BuilderAlias: t4BuilderAlias, t2Builder: nil)
 			            }
 			            let t4: T4 = __safeDI_t4()
@@ -1554,9 +1518,7 @@ struct SafeDIToolReceivedBuilderCycleTests: ~Copyable {
 			    public convenience init() {
 			        func __safeDI_t4Builder() -> T4 {
 			            let t4Builder = Instantiator<T4>(__safeDI_t4Builder)
-			            #sourceLocation(file: "\(output.fixtures["T4.swift"])", line: 8)
-			            let t4BuilderAlias: Instantiator<T4>? = t4Builder
-			            #sourceLocation()
+			            let t4BuilderAlias: Instantiator<T4>? = t4Builder // Declared as T4.t4BuilderAlias
 			            return T4(t4BuilderAlias: t4BuilderAlias, t2Builder: nil)
 			        }
 			        let t4Builder = Instantiator<T4>(__safeDI_t4Builder)
@@ -1758,9 +1720,7 @@ struct SafeDIToolReceivedBuilderCycleTests: ~Copyable {
 			        func __safeDI_t4Builder() -> T4 {
 			            let t4Builder = Instantiator<T4>(__safeDI_t4Builder)
 			            let t7Builder = Instantiator<T7>(__safeDI_t7Builder)
-			            #sourceLocation(file: "\(output.fixtures["T4.swift"])", line: 9)
-			            let mine: Instantiator<T4>? = t4Builder
-			            #sourceLocation()
+			            let mine: Instantiator<T4>? = t4Builder // Declared as T4.mine
 			            return T4(mine: mine, t7Builder: t7Builder, t2Builder: nil)
 			        }
 			        let t4Builder = Instantiator<T4>(__safeDI_t4Builder)
@@ -2449,9 +2409,7 @@ struct SafeDIToolReceivedBuilderCycleTests: ~Copyable {
 			    public convenience init() {
 			        func __safeDI_bBuilder() -> B {
 			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-			            #sourceLocation(file: "\(output.fixtures["B.swift"])", line: 9)
-			            let aBuilderAlias: Instantiator<A> = aBuilder
-			            #sourceLocation()
+			            let aBuilderAlias: Instantiator<A> = aBuilder // Declared as B.aBuilderAlias
 			            return B(aBuilder: aBuilder, aBuilderAlias: aBuilderAlias)
 			        }
 			        func __safeDI_aBuilder() -> A {
@@ -2480,9 +2438,7 @@ struct SafeDIToolReceivedBuilderCycleTests: ~Copyable {
 			    public convenience init() {
 			        func __safeDI_bBuilder() -> B {
 			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-			            #sourceLocation(file: "\(output.fixtures["B.swift"])", line: 9)
-			            let aBuilderAlias: Instantiator<A>? = aBuilder
-			            #sourceLocation()
+			            let aBuilderAlias: Instantiator<A>? = aBuilder // Declared as B.aBuilderAlias
 			            return B(aBuilder: aBuilder, aBuilderAlias: aBuilderAlias)
 			        }
 			        func __safeDI_aBuilder() -> A {
@@ -2516,9 +2472,7 @@ struct SafeDIToolReceivedBuilderCycleTests: ~Copyable {
 			                return A(bBuilder: bBuilder, aBuilder: aBuilder)
 			            }
 			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-			            #sourceLocation(file: "\(output.fixtures["B.swift"])", line: 9)
-			            let aBuilderAlias: Instantiator<A>? = aBuilder
-			            #sourceLocation()
+			            let aBuilderAlias: Instantiator<A>? = aBuilder // Declared as B.aBuilderAlias
 			            return B(aBuilder: aBuilder, aBuilderAlias: aBuilderAlias)
 			        }
 			        let bBuilder = Instantiator<B>(__safeDI_bBuilder)
@@ -2550,9 +2504,7 @@ struct SafeDIToolReceivedBuilderCycleTests: ~Copyable {
 			                return A(bBuilder: bBuilder, c: c)
 			            }
 			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-			            #sourceLocation(file: "\(output.fixtures["B.swift"])", line: 9)
-			            let aBuilderAlias: Instantiator<A> = aBuilder
-			            #sourceLocation()
+			            let aBuilderAlias: Instantiator<A> = aBuilder // Declared as B.aBuilderAlias
 			            return B(aBuilder: aBuilder, aBuilderAlias: aBuilderAlias)
 			        }
 			        let bBuilder = Instantiator<B>(__safeDI_bBuilder)
@@ -2592,9 +2544,7 @@ struct SafeDIToolReceivedBuilderCycleTests: ~Copyable {
 			                return X(aBuilder: aBuilder)
 			            }
 			            let xBuilder = Instantiator<X>(__safeDI_xBuilder)
-			            #sourceLocation(file: "\(output.fixtures["B.swift"])", line: 11)
-			            let aBuilderAlias: Instantiator<A> = aBuilder
-			            #sourceLocation()
+			            let aBuilderAlias: Instantiator<A> = aBuilder // Declared as B.aBuilderAlias
 			            return B(aBuilder: aBuilder, xBuilder: xBuilder, aBuilderAlias: aBuilderAlias)
 			        }
 			        let bBuilder = Instantiator<B>(__safeDI_bBuilder)
@@ -2625,9 +2575,7 @@ struct SafeDIToolReceivedBuilderCycleTests: ~Copyable {
 			            let aBuilder = Instantiator<A> {
 			                __safeDI_aBuilder(c: c)
 			            }
-			            #sourceLocation(file: "\(output.fixtures["B.swift"])", line: 11)
-			            let aBuilderAlias: Instantiator<A> = aBuilder
-			            #sourceLocation()
+			            let aBuilderAlias: Instantiator<A> = aBuilder // Declared as B.aBuilderAlias
 			            return B(c: c, aBuilder: aBuilder, aBuilderAlias: aBuilderAlias)
 			        }
 			        func __safeDI_c() -> C {

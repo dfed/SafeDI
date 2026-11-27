@@ -152,12 +152,6 @@ public struct QueryGraph: AsyncParsableCommand {
 			importStatements: [],
 			mockImportStatements: [],
 			typeDescriptionToFulfillingInstantiableMap: productionMap,
-			// No code is generated, so no alias declaration is referenced.
-			aliasDeclarationReferences: AliasDeclarationReferences(
-				declarationFilePaths: [],
-				compilerFilePaths: nil,
-				commentFilePath: { $0 },
-			),
 			compilesGeneratedMocks: false,
 			unfulfilledReceiveLocations: unfulfilledReceiveLocations,
 		)

@@ -82,21 +82,6 @@ struct FilePathSpellingTests: ~Copyable {
 	}
 
 	@Test
-	func reportsResolvedProjectRoot_isTrue_whenRootIsSpelledAsResolved() throws {
-		#expect(try ProjectFilePaths(projectRoot: resolvedProjectRoot).reportsResolvedProjectRoot)
-	}
-
-	@Test
-	func reportsResolvedProjectRoot_isFalse_whenRootIsReportedThroughSymbolicLink() {
-		#expect(!ProjectFilePaths(projectRoot: linkedProjectRoot).reportsResolvedProjectRoot)
-	}
-
-	@Test
-	func reportsResolvedProjectRoot_isFalse_whenRootDoesNotExist() {
-		#expect(!ProjectFilePaths(projectRoot: "/\(UUID().uuidString)").reportsResolvedProjectRoot)
-	}
-
-	@Test
 	func reportedProjectRoot_isAbsoluteWithoutTrailingSlash_whenRootIsRelativeOrEndsInSlash() {
 		#expect(ProjectFilePaths(projectRoot: ".").reportedProjectRoot == FileManager.default.currentDirectoryPath)
 		#expect(ProjectFilePaths(projectRoot: "\(linkedProjectRoot)/").reportedProjectRoot == linkedProjectRoot)

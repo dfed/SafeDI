@@ -362,8 +362,7 @@ struct SafeDIToolReceivedPropertiesByComponentTests: ~Copyable {
 		return Run(outcome: outcome, collectedScopeCount: collectedScopeCount)
 	}
 
-	/// `text` with each fixture's directory left out, so two runs' diagnostics, and the `#sourceLocation` directives of
-	/// their generated code, compare equal.
+	/// `text` with each fixture's directory left out, so two runs' diagnostics compare equal.
 	private static func withFixtureNames(_ text: String) -> String {
 		text.split(separator: "\n", omittingEmptySubsequences: false).map { line in
 			guard let swiftRange = line.range(of: ".swift"),

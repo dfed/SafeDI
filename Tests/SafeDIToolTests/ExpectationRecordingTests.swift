@@ -46,7 +46,7 @@ struct ExpectationRecordingTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func executeSafeDIToolTest_writesOneRecordPerGeneratedFileWithPlaceholderPaths_whenGivenARecordDirectory() async throws {
+	mutating func executeSafeDIToolTest_writesOneRecordPerGeneratedFile_whenGivenARecordDirectory() async throws {
 		let callLine = #line + 1
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: Self.aliasedReceiveFixture,
@@ -56,13 +56,9 @@ struct ExpectationRecordingTests: ~Copyable {
 			recordDirectory: recordDirectory,
 		)
 
-		let fixtureDirectory = try (#require(output.fixtures.writtenPath(of: "Consumer.swift")) as NSString).deletingLastPathComponent
-		let expectedContentByOutputName = try #require(output.generatedFiles).mapValues {
-			$0.replacingOccurrences(of: fixtureDirectory, with: "$TARGET_DIRECTORY")
-		}
+		let expectedContentByOutputName = try #require(output.generatedFiles)
 		let records = try Self.records(in: recordDirectory)
 		#expect(Dictionary(grouping: records.generation, by: \.outputName).mapValues { $0.map(\.content) } == expectedContentByOutputName.mapValues { [$0] })
-		#expect(expectedContentByOutputName.values.contains { $0.contains("#sourceLocation(file: \"$TARGET_DIRECTORY/Consumer.swift\", line: 7)") })
 		#expect(records.generation.allSatisfy { $0.fileID == #fileID && $0.line == callLine && $0.integration == nil && $0.module == nil && $0.skipsCompileVerification })
 		#expect(records.assertion.isEmpty)
 		#expect(try String(contentsOf: recordDirectory.appendingPathComponent(ExpectationRecording.headerFileName), encoding: .utf8) == generatedFileHeader)
@@ -91,7 +87,7 @@ struct ExpectationRecordingTests: ~Copyable {
 
 	@Test(arguments: MultiModuleIntegration.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func executeSafeDIToolMultiModuleTest_writesOneRecordPerGeneratedFileWithPlaceholderPaths_whenGivenARecordDirectory(integration: MultiModuleIntegration) async throws {
+	mutating func executeSafeDIToolMultiModuleTest_writesOneRecordPerGeneratedFile_whenGivenARecordDirectory(integration: MultiModuleIntegration) async throws {
 		let callLine = #line + 1
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: [ModuleFixture(name: "App", packageName: "App", swiftFileContent: Self.aliasedReceiveFixture)],
@@ -101,13 +97,9 @@ struct ExpectationRecordingTests: ~Copyable {
 			recordDirectory: recordDirectory,
 		)
 
-		let fixtureRootSpellings = try [realPath(of: output.fixtureRoot), output.fixtureRoot.path]
-		let expectedContentByOutputName = try #require(output.modules["App"]).generatedFiles.mapValues { content in
-			fixtureRootSpellings.reduce(content) { $0.replacingOccurrences(of: $1, with: "$FIXTURE_ROOT") }
-		}
+		let expectedContentByOutputName = try #require(output.modules["App"]).generatedFiles
 		let records = try Self.records(in: recordDirectory)
 		#expect(Dictionary(grouping: records.generation, by: \.outputName).mapValues { $0.map(\.content) } == expectedContentByOutputName.mapValues { [$0] })
-		#expect(expectedContentByOutputName.values.contains { $0.contains("$FIXTURE_ROOT/App/Sources/App/Consumer.swift") })
 		#expect(records.generation.allSatisfy { $0.fileID == #fileID && $0.line == callLine && $0.integration == "\(integration)" && $0.module == "App" && $0.skipsCompileVerification })
 		#expect(records.assertion.isEmpty)
 	}
@@ -338,8 +330,8 @@ struct ExpectationRecordingTests: ~Copyable {
 	private var filesToDelete: [URL]
 	private let recordDirectory: URL
 
-	/// A root whose mock-generating child receives a renamed property, so the generated code cites the child's file in a
-	/// `// Declared at` comment or a `#sourceLocation` directive.
+	/// A root whose mock-generating child receives a renamed property, so the generated code names the child's
+	/// declaration of it in a comment.
 	private static let aliasedReceiveFixture = [
 		"""
 		@Instantiable(isRoot: true)

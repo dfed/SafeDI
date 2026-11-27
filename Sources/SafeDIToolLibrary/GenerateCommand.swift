@@ -74,7 +74,7 @@ public struct Generate: AsyncParsableCommand {
 
 	@Flag(help: "Writes the view of '--module-info-output' as references to the modules it carries, each found in that module’s own module info file among those '--transitive-module-info-file-path' lists, instead of copies of their declarations.") var moduleInfoViewsReferToModules = false
 
-	@Flag(help: "States that the compiler is handed every input Swift file, including the files behind dependent module info, at exactly the path this tool is handed. Generated code then wraps each `@Received(fulfilledByDependencyNamed:ofType:)` assignment in a `#sourceLocation` directive naming that path, so the compiler reports a type mismatch at the declaration. Without a build tool plugin’s manifest, this tool also prints each error and warning at the path it was handed, as the compiler prints its own. Without this flag, and without a build tool plugin’s manifest, the assignment names the declaration in a comment instead, because the compiler warns at a directive whose path differs from the one it was handed, and errors and warnings name each file by its absolute path.") var compilerReceivesInputPathsUnchanged = false
+	@Flag(help: "States that the compiler is handed every input Swift file, including the files behind dependent module info, at exactly the path this tool is handed. Without a build tool plugin’s manifest, this tool then prints each error and warning at the path it was handed, as the compiler prints its own. Without this flag, and without a build tool plugin’s manifest, errors and warnings name each file by its absolute path.") var compilerReceivesInputPathsUnchanged = false
 
 	// MARK: Internal
 
@@ -537,14 +537,6 @@ public struct Generate: AsyncParsableCommand {
 			// A dependent module's mock-only declarations reach this module's mocks, so its mock imports do too.
 			mockImportStatements: importingOtherModules(importingModulesReadFromBeneath(dependentModuleInfo.flatMap(\.mockImports) + viewOnlyDeclarations.flatMap(\.mockImports) + additionalImportStatements + module.mockImports)),
 			typeDescriptionToFulfillingInstantiableMap: typeDescriptionToFulfillingInstantiableMap,
-			aliasDeclarationReferences: AliasDeclarationReferences(
-				declarationFilePaths: Self.aliasDeclarationFilePaths(of: normalizedInstantiables),
-				compilerFilePaths: compilerFilePaths(manifest: manifest, buildSystemFilePaths: buildSystemFilePaths, inputFilePaths: inputFilePaths),
-				// A plugin's paths relative to its project root, and any other integration's paths as it wrote them.
-				commentFilePath: { [projectFilePaths] filePath in
-					projectFilePaths.map { $0.manifestPath(of: $0.projectFilePath(of: filePath)) } ?? filePath
-				},
-			),
 			compilesGeneratedMocks: evaluator.compilesGeneratedMocks,
 			emittingModule: DependencyTreeGenerator.EmittingModule(
 				identity: ModuleIdentity(moduleName: module.moduleName, packageName: module.packageName),
@@ -2013,64 +2005,6 @@ public struct Generate: AsyncParsableCommand {
 			}
 		}
 		return refreshedFileScans
-	}
-
-	/// How the compiler spells the paths this tool was handed, or `nil` when this tool does not know.
-	///
-	/// A build tool plugin records its project root in the manifest and writes each input path relative to it,
-	/// and the build system hands the compiler the absolute path it reported to the plugin. The plugin names the
-	/// target's own files exactly as the build system reported them with `--mock-scoped-files` when `generate`
-	/// scans for itself, and relative to the project root in the manifest otherwise. An integration that passes
-	/// `--compiler-receives-input-paths-unchanged`, such as the Bazel rule, hands the compiler every input path
-	/// as written. Any other integration may not: the Tuist plugin hands this tool paths relative to `$SRCROOT`,
-	/// and Xcode hands the compiler absolute ones.
-	///
-	/// A build system that reports the project root through a symbolic link may hand the compiler either
-	/// spelling: Xcode reports a package under `/tmp` to its plugin as `/tmp/…` and hands the compiler
-	/// `/private/tmp/…`, and a plugin that runs `scan` while it plans the build records only the first. This tool
-	/// then does not know how the compiler spells any path.
-	/// The files that declare the aliased dependencies of `instantiables`, collected without an array per declaration.
-	private static func aliasDeclarationFilePaths(of instantiables: [Instantiable]) -> Set<String> {
-		var filePaths = Set<String>()
-		for instantiable in instantiables {
-			for dependency in instantiable.dependencies {
-				switch dependency.source {
-				case .aliased:
-					if let filePath = dependency.declarationLocation?.filePath {
-						filePaths.insert(filePath)
-					}
-				case .forwarded, .instantiated, .received:
-					break
-				}
-			}
-		}
-		return filePaths
-	}
-
-	private func compilerFilePaths(
-		manifest: SafeDIToolManifest?,
-		buildSystemFilePaths: BuildSystemFilePaths?,
-		inputFilePaths: Set<String>,
-	) -> AliasDeclarationReferences.CompilerFilePaths? {
-		switch buildSystemFilePaths {
-		case let .underProjectRoot(projectFilePaths):
-			guard projectFilePaths.reportsResolvedProjectRoot else { return nil }
-			let compilerFilePath = { (filePath: String) in projectFilePaths.buildSystemPath(of: projectFilePaths.projectFilePath(of: filePath)) }
-			if swiftManifest == nil, !mockScopedFiles.isEmpty {
-				return .init(filePath: compilerFilePath, moduleFilePaths: Set(mockScopedFiles), moduleFilePath: { $0 })
-			} else {
-				return .init(
-					filePath: compilerFilePath,
-					// A project root comes from a manifest, so `manifest` is present here.
-					moduleFilePaths: manifest?.mockScopedFilePaths.map(Set.init) ?? inputFilePaths,
-					moduleFilePath: compilerFilePath,
-				)
-			}
-		case .unchanged:
-			return .init(filePath: { $0 }, moduleFilePaths: inputFilePaths, moduleFilePath: { $0 })
-		case nil:
-			return nil
-		}
 	}
 
 	/// The paths the CSV file at `csvPath` lists, each once, in path order. Their order is the order in which their

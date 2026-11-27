@@ -2045,9 +2045,7 @@ struct SafeDIToolPublicMockRootLevelTests: ~Copyable {
 			        session: Session,
 			        apiBuilder __safeDI_apiBuilder: Detail.SafeDIMockScope_Api.__safeDI_Builder<any Api>
 			    ) -> Detail {
-			        #sourceLocation(file: "{Detail.swift}", line: 8)
-			        let renamed: Session = session
-			        #sourceLocation()
+			        let renamed: Session = session // Declared as Detail.renamed
 			        let api: any Api = __safeDI_apiBuilder.api(SafeDIMockScope_Api.api_Values(session: session, renamed: renamed))
 			        return Detail(renamed: renamed, api: api)
 			    }
@@ -2845,12 +2843,8 @@ struct SafeDIToolPublicMockRootLevelTests: ~Copyable {
 	) async throws {
 		let modules = Self.modules(feature: feature, app: app, appPackageName: appPackageName)
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete, sourceLocation: sourceLocation)
-		for (moduleName, expectedWithFileNames) in [("Feature", Optional(expectedFeature)), ("App", expectedApp)] {
-			guard let expectedWithFileNames, let moduleOutput = output.modules[moduleName] else { continue }
-			// A `#sourceLocation` names a file of the fixture by its path, which `{<file name>}` stands for.
-			let expected = expectedWithFileNames.contains("{Detail.swift}")
-				? expectedWithFileNames.replacingOccurrences(of: "{Detail.swift}", with: moduleOutput.fixtures["Detail.swift"])
-				: expectedWithFileNames
+		for (moduleName, expected) in [("Feature", Optional(expectedFeature)), ("App", expectedApp)] {
+			guard let expected, let moduleOutput = output.modules[moduleName] else { continue }
 			let generated = moduleOutput.generatedFiles["\(moduleName).swift"]
 			#expect(generated == generatedFileHeader + expected, sourceLocation: sourceLocation)
 			if let generated, generated != generatedFileHeader + expected {

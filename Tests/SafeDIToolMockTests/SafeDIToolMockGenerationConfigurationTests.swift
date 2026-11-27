@@ -1462,9 +1462,7 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		    ) -> Top {
 		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        func __safeDI_mid() -> Mid {
-		            #sourceLocation(file: "\(crossModuleOutput.fixtures["Mid.swift"])", line: 4)
-		            let analytics: EventTracker = analytics
-		            #sourceLocation()
+		            let analytics: EventTracker = analytics // Declared as Mid.analytics
 		            let child = if let safeDIBuilder = safeDIOverrides.mid.child { safeDIBuilder(analytics) } else { Child(analytics: analytics) }
 		            return if let safeDIBuilder = safeDIOverrides.mid.safeDIBuilder { safeDIBuilder(analytics, child) } else { Mid(analytics: analytics, child: child) }
 		        }
@@ -1688,9 +1686,7 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		        let fileLogger = if let safeDIBuilder = safeDIOverrides.fileLogger { safeDIBuilder() } else { FileLogger() }
 		        let header = if let safeDIBuilder = safeDIOverrides.header { safeDIBuilder(fileLogger) } else { Header(fileLogger: fileLogger) }
 		        func __safeDI_footer() -> Footer {
-		            #sourceLocation(file: "\(output.fixtures["Footer.swift"])", line: 5)
-		            let logger: Logger? = fileLogger
-		            #sourceLocation()
+		            let logger: Logger? = fileLogger // Declared as Footer.logger
 		            return if let safeDIBuilder = safeDIOverrides.footer { safeDIBuilder(logger) } else { Footer(logger: logger) }
 		        }
 		        let footer: Footer = __safeDI_footer()

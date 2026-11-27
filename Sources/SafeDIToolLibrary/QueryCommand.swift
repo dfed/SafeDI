@@ -92,12 +92,6 @@ public struct QueryNeeds: AsyncParsableCommand {
 				importStatements: [],
 				mockImportStatements: [],
 				typeDescriptionToFulfillingInstantiableMap: typeDescriptionToFulfillingInstantiableMap,
-				// No code is generated, so no alias declaration is referenced.
-				aliasDeclarationReferences: AliasDeclarationReferences(
-					declarationFilePaths: [],
-					compilerFilePaths: nil,
-					commentFilePath: { $0 },
-				),
 				// The query describes no one build whose mock condition would decide whether the mock is compiled, so it
 				// checks the hand-written mocks the mock calls as a build that compiles the mock does.
 				compilesGeneratedMocks: true,

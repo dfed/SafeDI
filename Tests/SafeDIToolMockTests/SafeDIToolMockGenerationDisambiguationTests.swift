@@ -1627,9 +1627,7 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		    ) -> Root {
 		        func __safeDI_child() -> Child {
 		            let service = if let safeDIBuilder = safeDIOverrides.child.service { safeDIBuilder() } else { TypeB() }
-		            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 8)
-		            let serviceAlias: TypeB = service
-		            #sourceLocation()
+		            let serviceAlias: TypeB = service // Declared as Child.serviceAlias
 		            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(service, serviceAlias) } else { Child(service: service, serviceAlias: serviceAlias) }
 		        }
 		        let child: Child = __safeDI_child()
@@ -1752,9 +1750,7 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		        func __safeDI_childA() -> ChildA {
 		            let service = if let safeDIBuilder = safeDIOverrides.childA.service { safeDIBuilder() } else { SharedService() }
 		            func __safeDI_consumer() -> Consumer {
-		                #sourceLocation(file: "\(output.fixtures["Consumer.swift"])", line: 6)
-		                let serviceAlias: SharedService = service
-		                #sourceLocation()
+		                let serviceAlias: SharedService = service // Declared as Consumer.serviceAlias
 		                return if let safeDIBuilder = safeDIOverrides.childA.consumer { safeDIBuilder(serviceAlias) } else { Consumer(serviceAlias: serviceAlias) }
 		            }
 		            let consumer: Consumer = __safeDI_consumer()
@@ -2020,9 +2016,7 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let service_UserService = if let safeDIBuilder = safeDIOverrides.service_UserService { safeDIBuilder() } else { UserService() }
-		        #sourceLocation(file: "\(output.fixtures["Root.swift"])", line: 8)
-		        let serviceAlias: UserService = service_UserService
-		        #sourceLocation()
+		        let serviceAlias: UserService = service_UserService // Declared as Root.serviceAlias
 		        func __safeDI_childA() -> ChildA {
 		            let service: UserService = service_UserService
 		            return if let safeDIBuilder = safeDIOverrides.childA { safeDIBuilder(service) } else { ChildA(service: service) }
@@ -2113,9 +2107,7 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            if let safeDIBuilder = safeDIOverrides.childBuilder { safeDIBuilder() } else { Child() }
 		        }
 		        let childBuilder = Instantiator<Child>(__safeDI_childBuilder)
-		        #sourceLocation(file: "\(output.fixtures["Root.swift"])", line: 8)
-		        let aliasBuilder: Instantiator<Child> = childBuilder
-		        #sourceLocation()
+		        let aliasBuilder: Instantiator<Child> = childBuilder // Declared as Root.aliasBuilder
 		        return Root(childBuilder: childBuilder, aliasBuilder: aliasBuilder)
 		    }
 		}
@@ -4929,9 +4921,7 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		    ) -> ProfileView {
 		        let user: Draft? = safeDIOverrides.user
 		        let account = if let safeDIBuilder = safeDIOverrides.account { safeDIBuilder() } else { Account() }
-		        #sourceLocation(file: "\(output.fixtures["ProfileView.swift"])", line: 5)
-		        let user_Account: Account = account
-		        #sourceLocation()
+		        let user_Account: Account = account // Declared as ProfileView.user
 		        let editor = if let safeDIBuilder = safeDIOverrides.editor { safeDIBuilder(user) } else { Editor(user: user) }
 		        return ProfileView(account: account, user: user_Account, editor: editor)
 		    }
@@ -5157,9 +5147,7 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		        let user_Draft: Draft? = safeDIOverrides.user_Draft
 		        func __safeDI_composer() -> Composer {
 		            let draft = if let safeDIBuilder = safeDIOverrides.composer.draft { safeDIBuilder() } else { Draft() }
-		            #sourceLocation(file: "\(output.fixtures["Composer.swift"])", line: 5)
-		            let user: Draft = draft
-		            #sourceLocation()
+		            let user: Draft = draft // Declared as Composer.user
 		            let preview = if let safeDIBuilder = safeDIOverrides.composer.preview { safeDIBuilder(user) } else { Preview(user: user) }
 		            return if let safeDIBuilder = safeDIOverrides.composer.safeDIBuilder { safeDIBuilder(draft, user, preview) } else { Composer(draft: draft, user: user, preview: preview) }
 		        }
@@ -6045,15 +6033,11 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            func __safeDI_anyProfileViewBuilder() -> AnyProfileView {
 		                func __safeDI_profileViewBuilder() -> ProfileView {
 		                    let profileViewBuilder = Instantiator<ProfileView>(__safeDI_profileViewBuilder)
-		                    #sourceLocation(file: "\(output.fixtures["ProfileView.swift"])", line: 5)
-		                    let renamedService: ServiceProtocol? = service
-		                    #sourceLocation()
+		                    let renamedService: ServiceProtocol? = service // Declared as ProfileView.renamedService
 		                    return if let safeDIBuilder = safeDIOverrides.sessionBuilder.anyProfileViewBuilder.safeDIBuilder { safeDIBuilder(profileViewBuilder, renamedService, editor, sessionBuilder) } else { ProfileView(profileViewBuilder: profileViewBuilder, renamedService: renamedService, editor: editor, sessionBuilder: sessionBuilder) }
 		                }
 		                let profileViewBuilder = Instantiator<ProfileView>(__safeDI_profileViewBuilder)
-		                #sourceLocation(file: "\(output.fixtures["ProfileView.swift"])", line: 5)
-		                let renamedService: ServiceProtocol? = service
-		                #sourceLocation()
+		                let renamedService: ServiceProtocol? = service // Declared as ProfileView.renamedService
 		                return if let safeDIBuilder = safeDIOverrides.sessionBuilder.anyProfileViewBuilder.safeDIBuilder { AnyProfileView(safeDIBuilder(profileViewBuilder, renamedService, editor, sessionBuilder)) } else { AnyProfileView(ProfileView(profileViewBuilder: profileViewBuilder, renamedService: renamedService, editor: editor, sessionBuilder: sessionBuilder)) }
 		            }
 		            let anyProfileViewBuilder = ErasedInstantiator<(), AnyProfileView>(__safeDI_anyProfileViewBuilder)
@@ -6064,23 +6048,17 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		        }
 		        func __safeDI_editor() -> Editor {
 		            let service = if let safeDIBuilder = safeDIOverrides.editor.service { safeDIBuilder() } else { Service() }
-		            #sourceLocation(file: "\(output.fixtures["Editor.swift"])", line: 5)
-		            let sessionBuilderAlias: Instantiator<Session> = sessionBuilder
-		            #sourceLocation()
+		            let sessionBuilderAlias: Instantiator<Session> = sessionBuilder // Declared as Editor.sessionBuilderAlias
 		            return if let safeDIBuilder = safeDIOverrides.editor.safeDIBuilder { safeDIBuilder(service, sessionBuilderAlias, renamedService, sessionBuilder) } else { Editor(service: service, sessionBuilderAlias: sessionBuilderAlias, renamedService: renamedService, sessionBuilder: sessionBuilder) }
 		        }
 		        let editor: Editor = __safeDI_editor()
 		        func __safeDI_profileViewBuilder() -> ProfileView {
 		            let profileViewBuilder = Instantiator<ProfileView>(__safeDI_profileViewBuilder)
-		            #sourceLocation(file: "\(output.fixtures["ProfileView.swift"])", line: 5)
-		            let renamedService: ServiceProtocol? = service
-		            #sourceLocation()
+		            let renamedService: ServiceProtocol? = service // Declared as ProfileView.renamedService
 		            return if let safeDIBuilder = safeDIOverrides.profileViewBuilder.safeDIBuilder { safeDIBuilder(profileViewBuilder, renamedService, editor, sessionBuilder) } else { ProfileView(profileViewBuilder: profileViewBuilder, renamedService: renamedService, editor: editor, sessionBuilder: sessionBuilder) }
 		        }
 		        let profileViewBuilder = Instantiator<ProfileView>(__safeDI_profileViewBuilder)
-		        #sourceLocation(file: "\(output.fixtures["ProfileView.swift"])", line: 5)
-		        let renamedService_ServiceProtocol: ServiceProtocol? = service
-		        #sourceLocation()
+		        let renamedService_ServiceProtocol: ServiceProtocol? = service // Declared as ProfileView.renamedService
 		        return ProfileView(profileViewBuilder: profileViewBuilder, renamedService: renamedService_ServiceProtocol, editor: editor, sessionBuilder: sessionBuilder)
 		    }
 		}
@@ -7145,9 +7123,7 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		    ) -> ProfileView {
 		        let user: Draft? = safeDIOverrides.user
 		        let account = if let safeDIBuilder = safeDIOverrides.account { safeDIBuilder() } else { Account() }
-		        #sourceLocation(file: "\(output.fixtures["ProfileView.swift"])", line: 8)
-		        let user_Account_: Account = account
-		        #sourceLocation()
+		        let user_Account_: Account = account // Declared as ProfileView.user
 		        func __safeDI_home() -> Home {
 		            let user_Account = if let safeDIBuilder = safeDIOverrides.home.user_Account { safeDIBuilder() } else { Note() }
 		            func __safeDI_viewer() -> Viewer {
@@ -8110,9 +8086,7 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		        }
 		        let x_AnyXyz = ErasedInstantiator<(), AnyXyz>(__safeDI_x_AnyXyz)
 		        func __safeDI_consumerC() -> ConsumerC {
-		            #sourceLocation(file: "\(output.fixtures["ConsumerC.swift"])", line: 21)
-		            let xFactory: AnyXyzFactory = AnyXyzFactory(x_AnyXyz)
-		            #sourceLocation()
+		            let xFactory: AnyXyzFactory = AnyXyzFactory(x_AnyXyz) // Declared as ConsumerC.xFactory
 		            return if let safeDIBuilder = safeDIOverrides.consumerC { safeDIBuilder(xFactory) } else { ConsumerC(xFactory: xFactory) }
 		        }
 		        let consumerC: ConsumerC = __safeDI_consumerC()

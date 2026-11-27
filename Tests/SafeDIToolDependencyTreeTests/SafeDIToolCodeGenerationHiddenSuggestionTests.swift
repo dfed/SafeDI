@@ -267,9 +267,7 @@ struct SafeDIToolCodeGenerationHiddenSuggestionTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_detail() -> Detail {
-		            #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 7)
-		            let auth: Value? = nil
-		            #sourceLocation()
+		            let auth: Value? = nil // Declared as Detail.auth
 		            let reader = Reader(auth: auth)
 		            return Detail(auth: auth, reader: reader)
 		        }

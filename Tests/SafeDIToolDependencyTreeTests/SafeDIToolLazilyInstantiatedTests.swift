@@ -214,9 +214,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_b() -> B {
-		            #sourceLocation(file: "\(output.fixtures["B.swift"])", line: 4)
-		            let renamedA: LazilyInstantiated<A>? = nil
-		            #sourceLocation()
+		            let renamedA: LazilyInstantiated<A>? = nil // Declared as B.renamedA
 		            return B(renamedA: renamedA)
 		        }
 		        func __safeDI_a() -> A {
@@ -676,9 +674,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		        }
 		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
 		        func __safeDI_settingsBuilder() -> Settings {
-		            #sourceLocation(file: "\(output.fixtures["Settings.swift"])", line: 7)
-		            let eventTracker: EventTracker = analytics.instance
-		            #sourceLocation()
+		            let eventTracker: EventTracker = analytics.instance // Declared as Settings.eventTracker
 		            return Settings(eventTracker: eventTracker)
 		        }
 		        let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
@@ -728,9 +724,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            Analytics()
 		        }
 		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
-		        #sourceLocation(file: "\(output.fixtures["Root.swift"])", line: 8)
-		        let eventTracker: EventTracker = analytics.instance
-		        #sourceLocation()
+		        let eventTracker: EventTracker = analytics.instance // Declared as Root.eventTracker
 		        self.init(analytics: analytics, eventTracker: eventTracker)
 		    }
 		}
@@ -777,9 +771,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            Analytics()
 		        }
 		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
-		        #sourceLocation(file: "\(output.fixtures["Root.swift"])", line: 8)
-		        let eventTracker: EventTracker? = analytics.instance
-		        #sourceLocation()
+		        let eventTracker: EventTracker? = analytics.instance // Declared as Root.eventTracker
 		        self.init(analytics: analytics, eventTracker: eventTracker)
 		    }
 		}
@@ -826,9 +818,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            Analytics()
 		        }
 		        let analytics = SendableLazilyInstantiated<Analytics>(__safeDI_analytics)
-		        #sourceLocation(file: "\(output.fixtures["Root.swift"])", line: 8)
-		        let eventTracker: EventTracker = analytics.instance
-		        #sourceLocation()
+		        let eventTracker: EventTracker = analytics.instance // Declared as Root.eventTracker
 		        self.init(analytics: analytics, eventTracker: eventTracker)
 		    }
 		}
@@ -1230,9 +1220,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		        }
 		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
 		        func __safeDI_settingsBuilder() -> Settings {
-		            #sourceLocation(file: "\(output.fixtures["Settings.swift"])", line: 7)
-		            let analytics: EventTracker = analytics.instance
-		            #sourceLocation()
+		            let analytics: EventTracker = analytics.instance // Declared as Settings.analytics
 		            return Settings(analytics: analytics)
 		        }
 		        let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
@@ -1582,9 +1570,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		        }
 		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
 		        func __safeDI_parent() -> Parent {
-		            #sourceLocation(file: "\(output.fixtures["Parent.swift"])", line: 7)
-		            let analytics: Analytics? = nil
-		            #sourceLocation()
+		            let analytics: Analytics? = nil // Declared as Parent.analytics
 		            let child = Child(analytics: analytics)
 		            return Parent(analytics: analytics, child: child)
 		        }
@@ -3094,9 +3080,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 			        }
 			        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
 			        func __safeDI_parent() -> Parent {
-			            #sourceLocation(file: "\(output.fixtures["Parent.swift"])", line: 7)
-			            let analytics: Analytics? = nil
-			            #sourceLocation()
+			            let analytics: Analytics? = nil // Declared as Parent.analytics
 			            let child = Child(analytics: analytics)
 			            return Parent(analytics: analytics, child: child)
 			        }
@@ -4130,9 +4114,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		    ) -> Node {
 		        let nodeBuilder: Node? = safeDIOverrides.nodeBuilder
 		        let nodeBuilder_lazilyInstantiated = nodeBuilder.map { instance in LazilyInstantiated<Node> { instance } }
-		        #sourceLocation(file: "\(output.fixtures["Node.swift"])", line: 7)
-		        let child: LazilyInstantiated<Node>? = nodeBuilder_lazilyInstantiated
-		        #sourceLocation()
+		        let child: LazilyInstantiated<Node>? = nodeBuilder_lazilyInstantiated // Declared as Node.child
 		        return Node(child: child)
 		    }
 		}
@@ -4209,9 +4191,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        func __safeDI_nodeBuilder() -> Node {
-		            #sourceLocation(file: "\(output.fixtures["Node.swift"])", line: 7)
-		            let child: LazilyInstantiated<Node>? = nil
-		            #sourceLocation()
+		            let child: LazilyInstantiated<Node>? = nil // Declared as Node.child
 		            return if let safeDIBuilder = safeDIOverrides.nodeBuilder { safeDIBuilder(child) } else { Node(child: child) }
 		        }
 		        let nodeBuilder = LazilyInstantiated<Node>(__safeDI_nodeBuilder)
@@ -4514,9 +4494,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        }
 		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
-		        #sourceLocation(file: "\(output.fixtures["Feature.swift"])", line: 8)
-		        let eventTracker: EventTracker = analytics.instance
-		        #sourceLocation()
+		        let eventTracker: EventTracker = analytics.instance // Declared as Feature.eventTracker
 		        return Feature(analytics: analytics, eventTracker: eventTracker)
 		    }
 		}
@@ -4592,9 +4570,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        }
 		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
-		        #sourceLocation(file: "\(output.fixtures["Root.swift"])", line: 8)
-		        let eventTracker: EventTracker = analytics.instance
-		        #sourceLocation()
+		        let eventTracker: EventTracker = analytics.instance // Declared as Root.eventTracker
 		        return Root(analytics: analytics, eventTracker: eventTracker)
 		    }
 		}
@@ -5608,9 +5584,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        }
 		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
-		        #sourceLocation(file: "\(output.fixtures["Feature.swift"])", line: 7)
-		        let tracker: LazilyInstantiated<Analytics> = analytics
-		        #sourceLocation()
+		        let tracker: LazilyInstantiated<Analytics> = analytics // Declared as Feature.tracker
 		        let child = if let safeDIBuilder = safeDIOverrides.child { safeDIBuilder(tracker.instance) } else { Child(tracker: tracker.instance) }
 		        return Feature(tracker: tracker, child: child)
 		    }
@@ -6867,9 +6841,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		        let otherSession_lazilyInstantiated = LazilyInstantiated<Session> { otherSession }
 		        let session_lazilyInstantiated = LazilyInstantiated<Session> { session }
 		        func __safeDI_child() -> Child {
-		            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 7)
-		            let session: LazilyInstantiated<Session> = otherSession_lazilyInstantiated
-		            #sourceLocation()
+		            let session: LazilyInstantiated<Session> = otherSession_lazilyInstantiated // Declared as Child.session
 		            let grandchild = if let safeDIBuilder = safeDIOverrides.child.grandchild { safeDIBuilder(session) } else { Grandchild(session: session) }
 		            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(session, grandchild) } else { Child(session: session, grandchild: grandchild) }
 		        }
@@ -6964,9 +6936,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		        let session_lazilyInstantiated = LazilyInstantiated<Session> { session }
 		        func __safeDI_childBuilder(session: LazilyInstantiated<Session>) -> Child {
 		            func __safeDI_grandchild() -> Grandchild {
-		                #sourceLocation(file: "\(output.fixtures["Grandchild.swift"])", line: 7)
-		                let renamedSession: LazilyInstantiated<Session> = session
-		                #sourceLocation()
+		                let renamedSession: LazilyInstantiated<Session> = session // Declared as Grandchild.renamedSession
 		                return if let safeDIBuilder = safeDIOverrides.childBuilder.grandchild { safeDIBuilder(renamedSession) } else { Grandchild(renamedSession: renamedSession) }
 		            }
 		            let grandchild: Grandchild = __safeDI_grandchild()
@@ -7263,9 +7233,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		    ) -> Root {
 		        let otherSession_lazilyInstantiated = LazilyInstantiated<Session> { otherSession }
 		        func __safeDI_child() -> Child {
-		            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 7)
-		            let session: LazilyInstantiated<Session> = otherSession_lazilyInstantiated
-		            #sourceLocation()
+		            let session: LazilyInstantiated<Session> = otherSession_lazilyInstantiated // Declared as Child.session
 		            let grandchild = if let safeDIBuilder = safeDIOverrides.child.grandchild { safeDIBuilder(session.instance) } else { Grandchild(session: session.instance) }
 		            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(session, grandchild) } else { Child(session: session, grandchild: grandchild) }
 		        }
@@ -7660,9 +7628,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		    ) -> Screen {
 		        let analytics_lazilyInstantiated = LazilyInstantiated<Analytics> { analytics }
 		        func __safeDI_home() -> Home {
-		            #sourceLocation(file: "\(output.fixtures["Home.swift"])", line: 8)
-		            let tracker: Analytics = analytics
-		            #sourceLocation()
+		            let tracker: Analytics = analytics // Declared as Home.tracker
 		            return if let safeDIBuilder = safeDIOverrides.home { safeDIBuilder(analytics_lazilyInstantiated, tracker) } else { Home(analytics: analytics_lazilyInstantiated, tracker: tracker) }
 		        }
 		        let home: Home = __safeDI_home()
@@ -7788,9 +7754,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		        }
 		        let analytics_Analytics = LazilyInstantiated<Analytics>(__safeDI_analytics_Analytics)
 		        func __safeDI_logger() -> Logger {
-		            #sourceLocation(file: "\(output.fixtures["Logger.swift"])", line: 7)
-		            let renamed: Analytics = analytics_Analytics.instance
-		            #sourceLocation()
+		            let renamed: Analytics = analytics_Analytics.instance // Declared as Logger.renamed
 		            return if let safeDIBuilder = safeDIOverrides.logger { safeDIBuilder(renamed) } else { Logger(renamed: renamed) }
 		        }
 		        let logger: Logger = __safeDI_logger()
@@ -7921,9 +7885,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		        let analytics_Analytics = LazilyInstantiated<Analytics>(__safeDI_analytics_Analytics)
 		        func __safeDI_logger() -> Logger {
 		            let analytics: LazilyInstantiated<Analytics>? = analytics_Analytics
-		            #sourceLocation(file: "\(output.fixtures["Logger.swift"])", line: 8)
-		            let renamed: Analytics = analytics_Analytics.instance
-		            #sourceLocation()
+		            let renamed: Analytics = analytics_Analytics.instance // Declared as Logger.renamed
 		            return if let safeDIBuilder = safeDIOverrides.logger { safeDIBuilder(analytics, renamed) } else { Logger(analytics: analytics, renamed: renamed) }
 		        }
 		        let logger: Logger = __safeDI_logger()
@@ -8227,9 +8189,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		    ) -> Screen {
 		        let analytics_lazilyInstantiated = LazilyInstantiated<Analytics> { analytics }
 		        func __safeDI_home() -> Home {
-		            #sourceLocation(file: "\(output.fixtures["Home.swift"])", line: 7)
-		            let tracker: LazilyInstantiated<Analytics> = analytics_lazilyInstantiated
-		            #sourceLocation()
+		            let tracker: LazilyInstantiated<Analytics> = analytics_lazilyInstantiated // Declared as Home.tracker
 		            return if let safeDIBuilder = safeDIOverrides.home { safeDIBuilder(tracker) } else { Home(tracker: tracker) }
 		        }
 		        let home: Home = __safeDI_home()
@@ -8553,9 +8513,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		        let a = if let safeDIBuilder = safeDIOverrides.a { safeDIBuilder(session_lazilyInstantiated_SessionA) } else { A(session: session_lazilyInstantiated_SessionA) }
 		        func __safeDI_b() -> B {
 		            let session: SessionB = session_SessionB
-		            #sourceLocation(file: "\(output.fixtures["B.swift"])", line: 8)
-		            let other: LazilyInstantiated<SessionB> = session_lazilyInstantiated_SessionB
-		            #sourceLocation()
+		            let other: LazilyInstantiated<SessionB> = session_lazilyInstantiated_SessionB // Declared as B.other
 		            return if let safeDIBuilder = safeDIOverrides.b { safeDIBuilder(session, other) } else { B(session: session, other: other) }
 		        }
 		        let b: B = __safeDI_b()
