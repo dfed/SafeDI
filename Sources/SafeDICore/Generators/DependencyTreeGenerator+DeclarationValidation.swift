@@ -57,6 +57,13 @@ extension DependencyTreeGenerator {
 		}
 	}
 
+	/// The calls of seams' tiers in the tree rooted at `rootScope` that omit a value the tree holds, read where the tree is
+	/// built, so that no root keeps its frozen table until validation; `nil` where the module checks none.
+	func seamTierOmissions(ofTreeRootedAt rootScope: ConstructionScope, instantiable: Instantiable, seamRoot: ScopeGenerator.SeamRoot?) -> [ScopeGenerator.SeamTierOmission]? {
+		guard !seams.isEmpty, let emittingModule else { return nil }
+		return TypeFactsSeamTierOmissions(root: rootScope, instantiable: instantiable, seamRoot: seamRoot, isOwnFile: emittingModule.isOwnFile).omissions
+	}
+
 	/// Validates that no call of a seam's generated initializer in the trees rooted at `roots` drops a value the tree
 	/// holds: a value for a parameter the tier the call reaches omits, or no tier takes, which the receivers inside
 	/// the seam would be handed were the tree built inline. Reads each root's per-type graph (`TypeFactsSeamTierOmissions`),
@@ -67,12 +74,7 @@ extension DependencyTreeGenerator {
 		guard !seams.isEmpty, let emittingModule else { return }
 		var omissions = [DependencyTreeGeneratorError.ProvidedValueOmission]()
 		for root in roots {
-			let seamRoot: ScopeGenerator.SeamRoot? = if case let .root(_, seamRoot) = root.scopeGenerator.scopeData {
-				seamRoot
-			} else {
-				nil
-			}
-			let folded = TypeFactsSeamTierOmissions(root: root.rootScope, instantiable: root.instantiable, seamRoot: seamRoot, isOwnFile: emittingModule.isOwnFile).omissions
+			let folded = root.seamTierOmissions ?? []
 			if let observer = TypeFactsSeamTierOmissionsObservation.comparesWalk {
 				let walked = await GenerationWork.$observer.withValue(nil) {
 					await root.scopeGenerator.seamTierOmissions(ofTreeRootedAt: root.instantiable, isOwnFile: emittingModule.isOwnFile)
