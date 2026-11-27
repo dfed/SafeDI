@@ -1814,6 +1814,29 @@ struct ScopeGeneratorUnderConstruction: Sendable {
 	/// The scope under construction for the property a fill of this scope's seam call builds: the scope of the type
 	/// that fulfills the hole in the caller's declarations, built with the stack the seam whose tree holds the site
 	/// reaches it with, and with the fields of the site's scope struct in scope beside what encloses the call.
+	/// `fill` with the fields it binds from its struct, and those fields: every field but one bound from a deferred
+	/// parameter, unless it reads such a field from the struct (`readsDeferredFieldsFromStruct`, a label of
+	/// `deferredLabelsBoundFromStruct`, or one some route hands it as a memo), which it binds as the memo, except a label of
+	/// `deferredLabelsBoundByValue` that is not deferred `@Sendable`, which it binds by value (`fillUnderConstruction`).
+	static func boundFill(
+		_ fill: Fill,
+		readsDeferredFieldsFromStruct: Bool,
+		deferredLabelsBoundFromStruct: Set<String>,
+		deferredLabelsBoundByValue: Set<String>,
+	) -> (fill: Fill, boundFields: [SeamSignature.Hole.Field]) {
+		var fill = fill
+		func isBoundFromStruct(_ field: SeamSignature.Hole.Field) -> Bool {
+			field.isDeferredParameter && (readsDeferredFieldsFromStruct || deferredLabelsBoundFromStruct.contains(field.property.label) || fill.labelsHandedAsMemo.contains(field.property.label))
+		}
+		func isBoundByValue(_ field: SeamSignature.Hole.Field) -> Bool {
+			deferredLabelsBoundByValue.contains(field.property.label) && field.deferral != .deferred(isSendable: true)
+		}
+		fill.fields = fill.fields.map { isBoundFromStruct($0) && !isBoundByValue($0) ? $0.bindingItsMemo : $0 }
+		let boundFields = fill.fields.filter { !$0.isDeferredParameter || isBoundFromStruct($0) }
+		fill.boundLabels = Set(boundFields.map(\.property.label))
+		return (fill, boundFields)
+	}
+
 	mutating func fillUnderConstruction(fill: Fill, scope: ConstructionScope, context fillContext: ScopeRecord.FillContext) throws -> ScopeGeneratorUnderConstruction {
 		var fill = fill
 		let hole = fill.hole
@@ -1841,15 +1864,8 @@ struct ScopeGeneratorUnderConstruction: Sendable {
 		// `@Sendable` function captures: the pass before found the label read inside one while the fill still took a
 		// `LazilyInstantiated`.
 		let deferredLabelsBoundByValue = previousPassGenerator?.fillDeferredLabelsReadInsideSendableFunction[fill.key] ?? []
-		func isBoundFromStruct(_ field: SeamSignature.Hole.Field) -> Bool {
-			field.isDeferredParameter && (readsDeferredFieldsFromStruct || deferredLabelsBoundFromStruct.contains(field.property.label) || fill.labelsHandedAsMemo.contains(field.property.label))
-		}
-		func isBoundByValue(_ field: SeamSignature.Hole.Field) -> Bool {
-			deferredLabelsBoundByValue.contains(field.property.label) && field.deferral != .deferred(isSendable: true)
-		}
-		fill.fields = fill.fields.map { isBoundFromStruct($0) && !isBoundByValue($0) ? $0.bindingItsMemo : $0 }
-		let boundFields = fill.fields.filter { !$0.isDeferredParameter || isBoundFromStruct($0) }
-		fill.boundLabels = Set(boundFields.map(\.property.label))
+		let boundFields: [SeamSignature.Hole.Field]
+		(fill, boundFields) = Self.boundFill(fill, readsDeferredFieldsFromStruct: readsDeferredFieldsFromStruct, deferredLabelsBoundFromStruct: deferredLabelsBoundFromStruct, deferredLabelsBoundByValue: deferredLabelsBoundByValue)
 		fill.callerNearestDeclarations = childNearestDeclarations
 		// A value the called public mock binds at its root from the argument the call passes, outside the `@Sendable` function
 		// that builds the place, is the caller's own where the caller binds the value's form here: the call passes it, so the
@@ -2139,11 +2155,11 @@ struct ScopeGeneratorUnderConstruction: Sendable {
 	/// root dispatcher passes: the caller's declaration of the parameter's form, its instance where the caller holds it
 	/// lazily, or `nil`. `labelsHandedToReenteredFunctions` are the labels of the values a call in `child`'s tree that
 	/// re-enters a root level function of an enclosing call hands it non-optional.
-	private static func callerReads(of fill: Fill, child: ScopeGenerator, labelsHandedToReenteredFunctions: Set<String>, log: inout ConstructionLog) -> ScopeGenerator.FillCallerReads {
+	static func callerReads(of fill: Fill, child: FillTreeReadFacts, labelsHandedToReenteredFunctions: Set<String>, log: inout ConstructionLog) -> ScopeGenerator.FillCallerReads {
 		var reads = ScopeGenerator.FillCallerReads()
 		// The inner scope, only where the fill's tree builds a place or a call that passes one up, whose case carries it, or a
 		// call that re-enters an enclosing call's fill, whose case's member is called on it.
-		if child.readsFillInnerScopes {
+		if child.readsInnerScopes {
 			reads.innerScopeParameters = fill.innerScopeParameters
 		}
 		for field in fill.fields where fill.callerReadLabels.contains(field.property.label) && fill.boundLabels.contains(field.property.label) {
@@ -2154,7 +2170,7 @@ struct ScopeGeneratorUnderConstruction: Sendable {
 			// again, which the scope that builds the loop declares, a scope inside the fill, since a fill's own generator finds
 			// no loops; or a parameter a lazy cycle closes on, whose declaration is inside the fill, since a cycle a fill closes
 			// on a declaration of the seam's tree is an error (`FillFinding.Kind.closesCycleInSeamTree`).
-			var forms = Set(child.receivedProperties.filter { $0.label == label })
+			var forms = Set(child.received.filter { $0.label == label })
 			// A call in `child`'s tree that re-enters a root level function hands it the fill's value of each label the function
 			// takes (`PublicMockLevelFunctions.Reentry`), so the fill takes that value as a required read where the function takes
 			// it non-optional, whatever the fill's own tree reads of it: as where a fill of a called type that holds no copy of the
@@ -2168,7 +2184,7 @@ struct ScopeGeneratorUnderConstruction: Sendable {
 			}
 			guard !forms.isEmpty else { continue }
 			func isRequired(_ form: Property) -> Bool {
-				child.requiredReceivedProperties.contains(form) || (isHandedToReenteredFunction && form == field.property)
+				child.required.contains(form) || (isHandedToReenteredFunction && form == field.property)
 			}
 			let parameter = !fill.optionalLazilyInstantiatedLabels.contains(label) && (forms.contains(where: isRequired) || field.property.typeDescription.isOptional)
 				? field
@@ -2597,7 +2613,7 @@ struct ScopeGeneratorUnderConstruction: Sendable {
 				fields: fill.fields,
 				caseHoles: fill.caseHoles,
 				emitsCode: fill.emitsCode,
-				callerReads: Self.callerReads(of: fill, child: builtGenerator, labelsHandedToReenteredFunctions: labelsHandedToReenteredFunctions(by: builtGenerator), log: &log),
+				callerReads: Self.callerReads(of: fill, child: builtGenerator.fillTreeReads, labelsHandedToReenteredFunctions: labelsHandedToReenteredFunctions(by: builtGenerator), log: &log),
 				returnsWrapperBuilder: fill.returnsWrapperBuilder,
 				labelsHandedAsMemo: fill.labelsHandedAsMemo,
 				plainMemoRoutesOfSendableWrapperReads: fill.plainMemoRoutesOfSendableWrapperReads,

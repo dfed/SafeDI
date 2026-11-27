@@ -157,7 +157,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		propertiesToGenerateSlot = DeferredReleaseSlot(propertiesToGenerate)
 		seamAndFillFields.fillFieldSelection = fill.flatMap { fill in
 			propertiesToGenerate.first.flatMap { child in
-				FillFieldSelection(hole: fill.hole, boundLabels: fill.boundLabels, fields: fill.fields, child: child)
+				FillFieldSelection(hole: fill.hole, boundLabels: fill.boundLabels, fields: fill.fields, treeReads: child.fillTreeReads)
 			}
 		}
 		// What the code generated for the call's dispatchers decides, from the fills its children generate.
@@ -2838,9 +2838,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// Whether this generator's tree reads `field`, a field of a scope struct, as its fill binds it: it receives the
 	/// field, its optional form, or its instance.
 	nonisolated func reads(_ field: Property) -> Bool {
-		receivedProperties.contains(field)
-			|| receivedProperties.contains(field.asOptionalProperty)
-			|| field.asLazilyInstantiatedInstancePropertyOfDeclaredBinding.map { receivedProperties.contains($0) || receivedProperties.contains($0.asOptionalProperty) } == true
+		FillTreeReadFacts.reads(field, among: receivedProperties)
+	}
+
+	/// What this generator's tree reads from above it, as a fill's code reads it of the tree it builds (`FillTreeReadFacts`).
+	nonisolated var fillTreeReads: FillTreeReadFacts {
+		FillTreeReadFacts(received: receivedProperties, required: requiredReceivedProperties, readsInnerScopes: readsFillInnerScopes, fieldsCarriedBySites: fieldsCarriedBySites)
 	}
 
 	/// For a fill, the field it binds from its struct whose memo serves a read of `property`, a `LazilyInstantiated` or
@@ -5311,7 +5314,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// function's member asks for them once per call it makes. It holds indices, not fields, and no generator, so it keeps
 	/// alive nothing the fill's generator does not.
 	final class FillFieldSelection: Sendable {
-		init?(hole: SeamSignature.Hole, boundLabels: Set<String>, fields: [SeamSignature.Hole.Field], child: ScopeGenerator) {
+		init?(hole: SeamSignature.Hole, boundLabels: Set<String>, fields: [SeamSignature.Hole.Field], treeReads: FillTreeReadFacts) {
 			guard let enumPlace = hole.enumPlace else { return nil }
 			let carried = Set(enumPlace.values.map(\.property.label))
 			var firstBoundIndexByLabel = [String: Int]()
@@ -5320,7 +5323,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				if firstBoundIndexByLabel[field.property.label] == nil {
 					firstBoundIndexByLabel[field.property.label] = index
 				}
-				if !carried.contains(field.property.label), child.reads(field.property) || child.fieldsCarriedBySites.contains(field.property) {
+				if !carried.contains(field.property.label), treeReads.reads(field.property) || treeReads.fieldsCarriedBySites.contains(field.property) {
 					parameterFieldIndices.append(index)
 				}
 			}
@@ -5328,7 +5331,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// A payload value's field is the first bound field of its label, as a search of the bound fields in order finds it.
 			payloadFieldIndices = enumPlace.values.compactMap { value in
 				guard let index = firstBoundIndexByLabel[value.property.label],
-				      child.reads(value.property) || child.fieldsCarriedBySites.contains(value.property)
+				      treeReads.reads(value.property) || treeReads.fieldsCarriedBySites.contains(value.property)
 				else { return nil }
 				return index
 			}
