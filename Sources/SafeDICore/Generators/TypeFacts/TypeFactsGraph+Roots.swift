@@ -186,10 +186,36 @@ extension TypeFactsGraph {
 		fills = []
 		fillPathEntries = []
 		propertyFacts = TypeFactsPropertyFacts(labels: [], unwrapped: [], isOptional: [], instances: [], isBuilder: [], formsReadOffsets: [], formsRead: [], formsProvidedOffsets: [], formsProvided: [])
+		// An answer's declaration is an ID of the world's table of properties, which this world does not hold: its answers
+		// name their forms by the run's IDs (`answerForms`).
+		answerProperties = []
 		propertyTable = []
 		typeTable = []
 		moduleNames = []
 		declarationLocations = []
+	}
+
+	/// `providesFormRead(by:_:beneath:)` of a world of several roots: whether the forms the answer's declaration provides
+	/// hold a property that a receive making `read` accepts, among the receives of the declaration's subtree that read
+	/// from above it. A node that declares the read's label answers the reads beneath it itself, so the walk goes no
+	/// further there, and it visits a child only where the child's subtree makes the read. Each node is visited once.
+	func formsProvideRead(by answer: AnswerID, _ read: ReadID, beneath declaration: DeclarationID) -> Bool {
+		let forms = forms(of: answer)
+		let label = readTable[Int(read)].label
+		var visited = Set<DeclarationID>()
+		var unvisited = [declaration]
+		while let index = unvisited.popLast() {
+			guard visited.insert(index).inserted else { continue }
+			for receive in receives(of: index) where receive.read == read {
+				guard !acceptedProperties(of: receive).contains(where: forms.contains) else { return true }
+			}
+			let node = graph.nodes[Int(index)]
+			guard node.key.frame == TypeFactsDeclaration.noFrame, label < 0 || !node.scope.declaredLabels.contains(labelTexts[Int(label)]) else { continue }
+			for target in edges(from: index) where reads(of: target).contains(read) {
+				unvisited.append(target)
+			}
+		}
+		return false
 	}
 
 	/// The elements of the columns that state how a validated tree is generated, and what each node's accessors of them
@@ -199,6 +225,7 @@ extension TypeFactsGraph {
 		var count = nodeProperties.count + builtTypes.count + edgeFacts.count + bindings.count + twins.count
 		count += parents.count + fills.count + fillPathEntries.count
 		count += propertyFacts.labels.count + propertyFacts.formsRead.count + propertyFacts.formsProvided.count
+		count += answerProperties.count
 		count += propertyTable.count + typeTable.count + moduleNames.count + declarationLocations.count
 		for index in graph.nodes.indices {
 			count += edgeFacts(from: index).count + worldBindings(of: index).count + parents(of: index).count
