@@ -88,9 +88,8 @@ struct TypeFactsDeclaration: Hashable, Sendable {
 /// How a declaration's type comes to exist, beside its kind (the property's form), which varies apart from it: an
 /// `Instantiator<T>` whose `T` a hand-written mock builds is kind `instantiator`, construction `handWrittenMock`. Read
 /// from the record: a call of another module's seam or public mock, a fill, or the type's own initializer. In a mock
-/// world it is part of the declaration, and the mock track's column decides `handWrittenMock` and
-/// `constructionFunction` per declaration (lanes/per-type-facts/track-d-columns.md, section 1); until then no node holds
-/// either.
+/// world it is part of the declaration, and the mock writer's column decides `handWrittenMock` and
+/// `constructionFunction` per declaration; until it lands no node holds either.
 enum TypeFactsConstruction: UInt8, Sendable {
 	case initializer
 	case handWrittenMock
@@ -819,8 +818,8 @@ struct TypeFactsGraph: Sendable {
 				let keyText = kind.isConstant ? text : "\(read.channel.name) \(declarationForms)"
 				return VariantBinding(answer: answer(text: text, beingBuilt: beingBuilt, keyText: keyText, kind: kind), declaration: Int32(node))
 			},
-			// Production bodies have one variant, `@Sendable` a mark folded over call edges (lead, 11-26 20:26Z); the family
-			// a seam's cases, builders and mock bodies key by is the edge facts' `opens`, owed by the table-side columns.
+			// Production bodies have one variant, `@Sendable` a mark folded over call edges; the family a seam's cases,
+			// builders and mock bodies key by is the edge facts' `opens`, which no producer feeds here yet.
 			family: { _, family in family },
 			key: { readID, answer in
 				switch readTable[Int(readID)].channel {

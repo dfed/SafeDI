@@ -77,8 +77,8 @@ struct SafeDIToolTypeFactsVariantKeyTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_keysVariantPerParameterType_whenReceiveOnlyIfAvailableIsAnsweredLazilyUnderOneParentAndNilUnderTheOther() async throws {
-		// `nil` keys apart from a lazy wrapper's answer until rule 3 is ruled, which would let a `nil` wrapper parameter
-		// stand for it: this count is the one that ruling changes.
+		// `nil` keys apart from a lazy wrapper's answer until rule 3's second stage, which lets a `nil` wrapper parameter
+		// stand for it: this count is the one that stage changes.
 		let report = try await rootReport(of: [
 			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let first: First", "@Instantiated let second: Second"]),
 			seamFixtureType(named: "First", isFinalClass: true, declarations: ["@Instantiated let x: LazilyInstantiated<X>", "@Instantiated let child: Child"]),

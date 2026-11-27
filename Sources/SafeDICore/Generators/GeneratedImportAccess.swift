@@ -309,6 +309,7 @@ public struct GeneratedImportAccess: Sendable {
 	/// The types the declarations of `code`, a generated file's code, name where an import's level matters.
 	func namedTypes(inGeneratedCode code: String) -> NamedTypes {
 		// Only a declaration that spells one of these can name a type through a `public` or `package` import.
+		// safedi-source-rule: allow stringScan — once per generated file (its unconditional code and its mock code), over that file’s code.
 		guard code.contains("public ") || code.contains("package ") || code.contains("@usableFromInline") else {
 			return NamedTypes(publicTypeNames: [], packageTypeNames: [])
 		}

@@ -110,6 +110,11 @@ a tenth of it is under the 8 MB, which then decides the shape: S16 peaked at 67 
 failed from about 1.12 times, and at 146.7 MB in CI's container, where the tenth decides. Why the two machines differ
 on that shape is not known.
 
+E24-public-mock is judged on the runs with one arena alone, at MEMORY-LIMIT. Its timed runs' peak moves by more than
+the limit between runs of one tool on one machine: on one commit its base tool's median peak read 186.5 MB and, half
+an hour later, 143.5 MB, and that difference failed a check of a change that had not touched memory, twice. Its timed
+peak is still printed, and is not compared.
+
 Growth: the comparison above holds a change to what main does, so it passes a shape that main already generates in
 time that grows by a factor with each layer of the graph, and such a shape cannot be made large enough to matter
 without taking minutes. The growth rows hold HEAD_TOOL alone to how its work grows. Each row is one shape built at a
@@ -226,9 +231,28 @@ alternating runs after one untimed run of each graph. A run still going after 30
                                types every feature opens. Each entry instantiates 5 values, and at the larger size
                                25, under labels every feature declares with types of its own, which its screens
                                receive.
-A row whose growth is known and not yet removed carries limits of its own (`GROWTH_ROWS`), each what it measured with
-room for noise, which the change that removes the growth deletes. Add a row with each change that removes growth of
-this kind, for the shape it fixed.
+  LP-lifelike-chain-under-the-plugin
+                               `shape_lifelike_chain`: module `Core`, a chain of feature modules, the row's number its
+                               length, and module `App`. Each feature is a seam with a public mock that opens thirty
+                               screens with generated mocks, in four layers, and the seam of the feature before it.
+                               The last feature alone is generated, as the SwiftPM plugin generates it, in a chain of
+                               five features and in a chain of ten.
+
+As the SwiftPM plugin generates: every other row is generated per module with `.safedi` files, as the comparison's
+shapes are. A Swift package's modules write none: the SafeDIGenerator plugin hands each module's `generate` the sources
+of every module beneath it. A row that names a module is generated that way, the named module alone: the check writes
+what the plugin writes (`InputSwiftFiles.csv`, which lists the module's file and the file of every module beneath it,
+relative to the package, and the target graph beside it), runs the plugin's `scan`, which is not timed, and then times
+the plugin's `generate` command, with `DEBUG` as the target's one condition (`createBuildCommands` in
+`Plugins/SafeDIGenerator/SafeDIGenerateDependencyTree.swift` builds both commands). The row's `.safedi` bytes are 0,
+and its code is every file of the module's output directory. Such a row names both its numbers of layers: one
+module's `generate` is short, so two more layers of it differ by less than a busy machine does. This one's larger
+chain has twice the features, so work that grows with the chain is at 2, and the row always carries limits: they are
+not growth to remove, but what the feature on top may take when every feature beneath it is one more layer.
+
+Any other row whose growth is known and not yet removed carries limits of its own (`GROWTH_ROWS`), each what it
+measured with room for noise, which the change that removes the growth deletes. Add a row with each change that
+removes growth of this kind, for the shape it fixed.
 
 A shape the base tool cannot generate (a new attribute, say) is reported and not compared. A shape the head tool cannot
 generate fails the check: the shapes are valid SafeDI, so either the change broke them or they need updating with it.
@@ -240,6 +264,7 @@ or DIRECTORY exists.
 files that grow with the types a module declares) and checks each verdict above.
 """
 import hashlib
+import json
 import os
 import random
 import signal
@@ -267,14 +292,10 @@ sys.exit(code if code >= 0 else 128 - code)
 """
 SIZE_NOISE_FLOOR_BYTES = 4096
 # Sizes accepted for one change, by shape and module: a listed module passes while the head's file is at most this many
-# bytes, whatever its ratio to the base's. Above it, and for every other module, the ratio limit holds.
-#
-# M80x80-calling-mocks: the module info now stores each public mock's plan, which lists, for each of its builders, the
-# builder's siblings. Each list is written as a difference from an earlier one, so the file grows with the builders,
-# but a plan of 80 builders is still several times the size of a base file that stores no plan. Once the change that
-# stores the plans is on main, main's own tool is the base and writes files of this size, so the entry is
-# unnecessary: remove it then.
-ACCEPTED_MODULE_INFO_BYTES = {"M80x80-calling-mocks": {"Feat": 36_000, "App": 48_000}}
+# bytes, whatever its ratio to the base's. Above it, and for every other module, the ratio limit holds. An entry is
+# for the one change that grows a file on purpose: once that change is on main, main's own tool is the base and
+# writes files of that size, so the entry is removed. None is needed now.
+ACCEPTED_MODULE_INFO_BYTES = {}
 
 
 # MARK: Shapes
@@ -537,6 +558,103 @@ def shape_public_mock_seam_chain(depth, fan=3):
     return modules
 
 
+# How often, in a hundred screens, a screen of `shape_lifelike_chain` has each trait.
+LIFELIKE_TRAITS = {"forwarded": 33, "sendable-worker": 25, "lazy": 30, "default-valued": 30, "optional": 15, "erased": 10, "hand-written": 40}
+
+
+def lifelike_declaration(attribute, name, properties, conformances="Instantiable", defaults=(), members=""):
+    """One `public` class with internal properties: `properties` are (macro, label, type) each, `defaults` (label,
+    type, default value) each, parameters of the initializer alone, and `members` is more source for its body."""
+    parameters = [f"{label}: {type_}" for _, label, type_ in properties] + [f"{label}: {type_} = {value}" for label, type_, value in defaults]
+    body = "\n".join(f"        self.{label} = {label}" for _, label, _ in properties) + "".join(f"\n        _ = {label}" for label, _, _ in defaults)
+    stored = "\n".join(f"    {macro} let {label}: {type_}" for macro, label, type_ in properties)
+    return f"{attribute}\npublic final class {name}: {conformances} {{\n    public init({', '.join(parameters)}) {{\n{body}\n    }}\n\n{stored}\n{members}}}\n\n"
+
+
+def shape_lifelike_chain(features, screens=30, layers=4, seed=11):
+    """An app as its authors would write one: module `Core`, feature modules `F0` to `F{features-1}`, each depending
+    on `Core` and on every feature before it, and `App`. A chain of fewer features is the same modules without the
+    last ones, so `F4` is one module in a chain of five and in a chain of ten.
+
+    `Core`: four `Sendable` services, `any AnalyticsClient`, which only a `mockOnly` type fulfills in a mock, a
+    `Logger` with a hand-written mock, and a `Formatter`. Feature i: a seam with a public mock, `Entry{i}`, which
+    receives four values of `Core`, opens every screen of its first layer and, above `F0`, the entry of the feature
+    before it, each through an `Instantiator`; and `screens` screens in `layers` layers, each with a generated mock, a
+    view model and a repository, opening two or three screens of the next layer. `seed` decides which screens a
+    screen opens and which traits (`LIFELIKE_TRAITS`) it has: it forwards an `id`; its view model holds a
+    `SendableInstantiator` of a worker, a `LazilyInstantiated` formatter, a parameter with a default value, or a
+    `Session` received only if available; it opens a child through an `ErasedInstantiator`; its repository receives
+    the logger and the analytics client. `App`: the type that fulfills `any AnalyticsClient` and a mocked root that
+    opens every entry."""
+    generator = random.Random(seed)
+    drawn = lambda trait: generator.randrange(100) < LIFELIKE_TRAITS[trait]
+    core = "import SafeDI\n\n"
+    for service in ("Network", "Database", "Session", "ImageCache"):
+        core += lifelike_declaration("@Instantiable", service, [], conformances="Instantiable, Sendable")
+    core += "public protocol AnalyticsClient: AnyObject, Sendable {}\n\n"
+    core += "@Instantiable(fulfillingAdditionalTypes: [(any AnalyticsClient).self], mockOnly: true)\npublic final class FakeAnalytics: AnalyticsClient, Instantiable {\n    public init() {}\n    public static func mock() -> FakeAnalytics { FakeAnalytics() }\n}\n\n"
+    core += lifelike_declaration("@Instantiable", "Logger", [("@Received", "network", "Network")], conformances="Instantiable, Sendable",
+                                 members="\n    public static func mock(network: Network) -> Logger {\n        Logger(network: network)\n    }\n")
+    core += lifelike_declaration("@Instantiable", "Formatter", [])
+    core += "public protocol ScreenProtocol: AnyObject {}\n\n"
+    modules = [("Core", [], core)]
+    names = [f"F{feature}" for feature in range(features)]
+    per_layer = max(1, screens // layers)
+    layer_of = [min(screen // per_layer, layers - 1) for screen in range(screens)]
+    for feature in range(features):
+        source = "import SafeDI\nimport Core\n" + "".join(f"import {name}\n" for name in names[:feature]) + "\n#SafeDIConfiguration(generatePlainDependencyTreeInitializers: true)\n\n"
+        # A screen of the first layer is opened by the entry, which passes no `id`.
+        forwards = [drawn("forwarded") for _ in range(screens)]
+        forwards = [forwarded and layer_of[screen] > 0 for screen, forwarded in enumerate(forwards)]
+        for screen in range(screens):
+            name = f"{feature}_{screen}"
+            next_layer_screens = [other for other in range(screens) if layer_of[other] == layer_of[screen] + 1]
+            opened = []
+            if next_layer_screens:
+                count = generator.choice([2, 3])
+                opened = sorted(generator.sample(next_layer_screens, min(len(next_layer_screens), count)))
+            view_model = [("@Received", "id", "Int")] if forwards[screen] else []
+            view_model += [("@Received", "network", "Network"), ("@Instantiated", "repository", f"Repository{name}")]
+            if drawn("sendable-worker"):
+                view_model.append(("@Instantiated", "workerBuilder", f"SendableInstantiator<Worker{name}>"))
+                source += lifelike_declaration("@Instantiable", f"Worker{name}", [("@Received", "database", "Database")], conformances="Instantiable, Sendable")
+            if drawn("lazy"):
+                view_model.append(("@Instantiated", "formatter", "LazilyInstantiated<Formatter>"))
+            if drawn("optional"):
+                view_model.append(("@Received(onlyIfAvailable: true)", "session", "Session?"))
+            source += lifelike_declaration("@Instantiable", f"ViewModel{name}", view_model, defaults=[("pageSize", "Int", "20")] if drawn("default-valued") else [])
+            repository = [("@Received", "database", "Database"), ("@Instantiated", "imageCache", "ImageCache")]
+            if drawn("hand-written"):
+                repository += [("@Received", "logger", "Logger"), ("@Received", "analytics", "any AnalyticsClient")]
+            source += lifelike_declaration("@Instantiable", f"Repository{name}", repository)
+            properties = [("@Forwarded", "id", "Int")] if forwards[screen] else []
+            properties.append(("@Instantiated", "viewModel", f"ViewModel{name}"))
+            for child in opened:
+                # One draw per child that decides nothing: the graph is the one the row's limits were measured on, whose
+                # generator spent a draw here on a trait no screen of it has.
+                generator.randrange(100)
+                if not forwards[child] and drawn("erased"):
+                    properties.append((f'@Instantiated(fulfilledByType: "Screen{feature}_{child}")', f"screen{child}Builder", "ErasedInstantiator<(), any ScreenProtocol>"))
+                else:
+                    properties.append(("@Instantiated", f"screen{child}Builder", f"Instantiator<Screen{feature}_{child}>"))
+            source += lifelike_declaration("@Instantiable(generateMock: true)", f"Screen{name}", properties, conformances="Instantiable, ScreenProtocol")
+        entry = [("@Received", "network", "Network"), ("@Received", "database", "Database"), ("@Received", "logger", "Logger"),
+                 ("@Received", "analytics", "any AnalyticsClient"), ("@Instantiated", "session", "Session")]
+        entry += [("@Instantiated", f"screen{screen}Builder", f"Instantiator<Screen{feature}_{screen}>") for screen in range(screens) if layer_of[screen] == 0]
+        if feature > 0:
+            entry.append(("@Instantiated", f"entry{feature - 1}Builder", f"Instantiator<Entry{feature - 1}>"))
+        source += lifelike_declaration("@Instantiable(generateDependencyTree: true, generateMock: .public)", f"Entry{feature}", entry)
+        modules.append((names[feature], ["Core"] + names[:feature], source))
+    app = "import SafeDI\nimport Core\n" + "".join(f"import {name}\n" for name in names) + "\n"
+    app += lifelike_declaration("@Instantiable(fulfillingAdditionalTypes: [(any AnalyticsClient).self])", "LiveAnalytics", [], conformances="Instantiable, AnalyticsClient")
+    root = [("@Instantiated", "network", "Network"), ("@Instantiated", "database", "Database"), ("@Instantiated", "logger", "Logger"),
+            ("@Instantiated", "analytics", "any AnalyticsClient")]
+    root += [("@Instantiated", f"entry{feature}Builder", f"Instantiator<Entry{feature}>") for feature in range(features)]
+    app += lifelike_declaration("@Instantiable(isRoot: true, generateMock: true)", "Root", root)
+    modules.append(("App", ["Core"] + names, app))
+    return modules
+
+
 def shape_q(layers, width=4, received=True):
     """Module `Feature`: `layers` layers of `width` screens, each holding `Instantiator`s of three screens of the next
     layer; every screen of the first layer is a seam, and, with `received`, every screen receives `service`. No hole:
@@ -592,6 +710,25 @@ def shape_seam_holes_in_cycles(layers, width=2):
             feature += declaration(attribute, f"Screen{layer}x{position}", properties)
     app = declaration("@Instantiable(fulfillingAdditionalTypes: [(any Tracker).self])", "LiveTracker", [("@Received", "service", "Service")], conformances="Instantiable, Tracker")
     app += declaration("@Instantiable(isRoot: true)", "Root", [("@Instantiated", "service", "Service"), ("@Instantiated", "home", "Screen0x0")])
+    return [("Feature", [], feature), ("App", ["Feature"], "import Feature\nimport SafeDI\n\n" + app)]
+
+
+def shape_all_to_all_tangle(members):
+    """Module `Feature`: the seam `Hub` holds an `Instantiator` of each of `members` types, each of which instantiates a
+    `Mark` of its own and `any Api`, which no type of the module fulfills, and holds an `Instantiator` of every other
+    member: a tangle of cycles no type always encloses, where the member a builder call closes on depends on the set of
+    members on the path. Module `App`: the root and the only `Api`."""
+    names = [f"M{index}" for index in range(members)]
+    feature = "import SafeDI\n\npublic protocol Api: AnyObject {}\n\n"
+    for name in names:
+        feature += declaration("@Instantiable", f"Mark{name}", [])
+        properties = [("@Instantiated", f"mark{name}", f"Mark{name}")]
+        properties += [("@Instantiated", f"{other.lower()}Builder", f"Instantiator<{other}>") for other in names if other != name]
+        properties.append(("@Instantiated", "api", "any Api"))
+        feature += declaration("@Instantiable", name, properties)
+    feature += declaration("@Instantiable(generateDependencyTree: true)", "Hub", [("@Instantiated", f"{name.lower()}Builder", f"Instantiator<{name}>") for name in names])
+    app = declaration("@Instantiable(fulfillingAdditionalTypes: [(any Api).self])", "LiveApi", [], conformances="Instantiable, Api")
+    app += declaration("@Instantiable(isRoot: true)", "Root", [("@Instantiated", "hub", "Hub")])
     return [("Feature", [], feature), ("App", ["Feature"], "import Feature\nimport SafeDI\n\n" + app)]
 
 
@@ -877,11 +1014,16 @@ LARGE_MEMORY_SHAPES = frozenset(["S12-mocks", "S16", "E32-inline-mocks", "C1500-
 # How many runs with one allocator arena those shapes take of each tool ("Peak memory" in the header says why).
 LARGE_MEMORY_RUNS = 5
 ONE_ARENA = {"MALLOC_ARENA_MAX": "1"}
+# The shapes whose peak memory is judged only on the runs with one allocator arena, at `--memory-limit` ("Peak memory"
+# in the header says why).
+ONE_ARENA_ONLY_SHAPES = frozenset(["E24-public-mock"])
 
 # The growth rows ("Growth" in the header): name -> (the shape at a number of layers, the smaller number of layers,
 # the limits that differ from `--growth-limit`, by measure: "time", "memory", "size" or "code"). A row with limits of
 # its own is a shape whose growth is known and not yet removed: each is what the shape measured, with room for noise,
 # so that the row holds what has been gained until the change that removes the growth deletes the entry.
+# A row generated as the SwiftPM plugin generates ("As the SwiftPM plugin generates" in the header) gives both numbers
+# of layers in place of the smaller, and ends with the function that names the one module generated at a number.
 #
 # Measured on a four-core Linux machine with a release build of the tool, the smaller graph's figure first:
 # P 0.376 s and 3.313 s (8.82), 50.7 MB and 213.5 MB (4.21), 341,899 and 3,966,895 bytes of `.safedi` (11.60);
@@ -915,6 +1057,12 @@ GROWTH_ROWS = {
     # H 0.15 s and 2.1 s (13.7 and 14.5 in two runs), 35 MB and 74 MB (2.13), 25,811 and 1,406,899 bytes of `.safedi`
     # (54.5), 31,432 and 126,780 bytes of code (4.03). Starts at three layers: at six, Feature alone takes 9.8 s.
     "H-seam-holes-in-cycles": (lambda layers: shape_seam_holes_in_cycles(layers), 3, {"time": 22.0, "memory": 2.6, "size": 65.0, "code": 5.0}),
+    # TA 0.150 s and 3.28 s (19.6 and 21.9 in two runs), 42 MB and 166 MB (3.93), 37,156 and 1,466,255 bytes of `.safedi`
+    # (39.5), 79,777 and 5,541,268 bytes of code (69.5). The same graph with `Api` fulfilled in `Feature` and no seam stays
+    # within the default limits (1.84 times the code from three members to five), so the growth is the seam's places:
+    # where a builder call closes depends on the set of members above it.
+    # The roadmap's row 4 (seams: one stored graph per seam, a passed-up place a reference) removes these limits.
+    "TA-all-to-all-tangle": (lambda members: shape_all_to_all_tangle(members), 4, {"time": 27.0, "memory": 4.7, "size": 47.0, "code": 83.0}),
     "O-only-if-available-at-every-screen": (lambda layers: shape_census(layers, "only-if-available"), 6, {}),
     "R-received-instantiator-at-every-screen": (lambda layers: shape_census(layers, "received-instantiator"), 6, {}),
     "N-rename-at-every-screen": (lambda layers: shape_census(layers, "rename"), 8, {}),
@@ -963,9 +1111,24 @@ GROWTH_ROWS = {
     # Asked once for each label and each scope that declares it, over every scope beneath that scope, the shared tree
     # included, it took 2.26 s and 5.94 s (2.63).
     "BLS-back-links-with-feature-labels-over-shared-tree": (lambda layers: shape_feature_labels_over_shared_tree(10 * layers - 5), 1, {}),
+    # `F4` of five features and `F9` of ten: twice the features beneath the module on top. Four runs of the row with
+    # each of three tools that build the features beneath inline (the 2.4.0 release among them) measured 0.63 to
+    # 0.68 s and 1.22 to 1.41 s, 1.79 to 2.17 times, and 3,540,750 and 6,776,238 bytes of code (1.91, and 1.97 with
+    # another of the three); peak memory 64 to 69 MB and 89 to 103 MB (1.33 to 1.60). A tool whose mock of each
+    # feature's seam instead calls the public mock of the feature before it measured 0.67 to 0.68 s and 1.67 to
+    # 1.95 s, 2.47 to 2.92 times, in four runs: the features beneath then cost the module on top more each than they
+    # cost built inline. In CI's container a tool that builds them inline measured 0.497 s and 1.013 s (2.04 times),
+    # 66.1 MB and 101.1 MB, and 3,542,265 and 6,777,708 bytes of code (1.91), in three runs (run 45938379663). The
+    # time limit is that reading plus 15% for noise: this row is the acceptance test of a mock that calls the public
+    # mock of the feature beneath, since no feature's plan may be worked out again in the module above it.
+    "LP-lifelike-chain-under-the-plugin": (lambda features: shape_lifelike_chain(features), (5, 10), {"time": 2.35, "code": 2.2}, lambda features: f"F{features - 1}"),
 }
 GROWTH_STEP = 2
 GROWTH_RUNS = 3
+# The last arguments of the SwiftPM plugin's `generate` command (`buildSettingCompilationConditionArguments` in the
+# plugin): references to build settings, which, as the comment there says, SwiftPM's own build system passes as they
+# are written here, and the tool then uses the conditions the plugin reported.
+UNEXPANDED_BUILD_SETTINGS = ["--build-setting-active-compilation-conditions=[${SWIFT_ACTIVE_COMPILATION_CONDITIONS}]", "--build-setting-other-swift-flags=[${OTHER_SWIFT_FLAGS}]"]
 # A run of a row that is still going after this long is stopped and fails the row: growth by a factor per layer makes
 # two layers more take many times as long, and the check must end.
 GROWTH_TIME_LIMIT_SECONDS = 300
@@ -984,33 +1147,62 @@ def write(path, text):
         handle.write(text)
 
 
-def generate(tool, modules, sources, output, variables={}, time_limit=None):
+def plugin_command(tool, name, direct, beneath, sources, output, environment):
+    """The `generate` command the SwiftPM plugin runs for module `name` ("As the SwiftPM plugin generates" in the
+    header), after writing what the plugin writes and running its `scan`, which is not timed."""
+    file = lambda module: f"{module}/Types.swift"
+    target = lambda module: {"moduleName": module, "packageID": "generatetimecheck", "sourceFilePaths": [file(module)], "dependencyModuleNames": sorted(direct[module])}
+    inputs = f"{output}/{name}/InputSwiftFiles.csv"
+    manifest = f"{output}/{name}/SafeDIManifest.json"
+    write(inputs, ",".join(file(module) for module in [name] + beneath[name]))
+    write(inputs + ".targets.json", json.dumps({"target": target(name), "dependencyTargets": [target(module) for module in beneath[name]]}))
+    # The build system makes the directory of the outputs a command declares.
+    os.makedirs(f"{output}/{name}/SafeDIOutput", exist_ok=True)
+    with open(f"{output}/{name}.scan.log", "wb") as log:
+        scan = subprocess.run([tool, "scan", "--input-sources-file", inputs, "--project-root", sources, "--output-directory", f"{output}/{name}/SafeDIOutput",
+                               "--manifest-file", manifest, "--mock-scoped-files", f"{sources}/{file(name)}", "--active-compilation-conditions", "DEBUG"],
+                              stdout=log, stderr=subprocess.STDOUT, env=environment, cwd=sources)
+    if scan.returncode != 0:
+        with open(f"{output}/{name}.scan.log", errors="replace") as log:
+            raise Failure(f"`scan` of module {name} exited {scan.returncode}: {log.read().strip()[-1500:]}")
+    return [tool, inputs, "--swift-manifest", manifest, "--active-compilation-conditions", "DEBUG"] + UNEXPANDED_BUILD_SETTINGS
+
+
+def generate(tool, modules, sources, output, variables={}, time_limit=None, under_plugin=None):
     """Runs `generate` for each module into `output`, with `variables` added to its environment; returns (wall
     seconds, CPU seconds, peak bytes): the times summed over the modules, the peak the largest of the modules'
     processes' maximum resident set sizes. A module's process still running after `time_limit` seconds is killed,
-    which fails the run."""
+    which fails the run. With `under_plugin`, a module's name, runs `generate` for that module alone, as the SwiftPM
+    plugin runs it."""
     os.makedirs(output, exist_ok=True)
     environment = dict(os.environ, TMPDIR=output, **variables)
+    direct = {name: dependencies for name, dependencies, _ in modules}
     beneath = {}
     wall = 0.0
     cpu = 0.0
     peak = 0
     for name, dependencies, _ in modules:
         beneath[name] = sorted(set(dependencies).union(*(beneath[dependency] for dependency in dependencies)))
-        write(f"{output}/{name}.csv", f"{sources}/{name}/Types.swift\n")
-        command = [tool, "generate", f"{output}/{name}.csv", "--combined-output", f"{output}/{name}.generated.swift",
-                   "--module-info-output", f"{output}/{name}.safedi", "--active-compilation-conditions", "DEBUG",
-                   "--module-name", name, "--package-name", "GenerateTimeCheck"]
-        if dependencies:
-            write(f"{output}/{name}.dependencies.csv", "".join(f"{output}/{dependency}.safedi\n" for dependency in dependencies))
-            write(f"{output}/{name}.transitive.csv", "".join(f"{output}/{module}.safedi\n" for module in beneath[name]))
-            command += ["--dependent-module-info-file-path", f"{output}/{name}.dependencies.csv",
-                        "--transitive-module-info-file-path", f"{output}/{name}.transitive.csv"]
+        if under_plugin is None:
+            write(f"{output}/{name}.csv", f"{sources}/{name}/Types.swift\n")
+            command = [tool, "generate", f"{output}/{name}.csv", "--combined-output", f"{output}/{name}.generated.swift",
+                       "--module-info-output", f"{output}/{name}.safedi", "--active-compilation-conditions", "DEBUG",
+                       "--module-name", name, "--package-name", "GenerateTimeCheck"]
+            if dependencies:
+                write(f"{output}/{name}.dependencies.csv", "".join(f"{output}/{dependency}.safedi\n" for dependency in dependencies))
+                write(f"{output}/{name}.transitive.csv", "".join(f"{output}/{module}.safedi\n" for module in beneath[name]))
+                command += ["--dependent-module-info-file-path", f"{output}/{name}.dependencies.csv",
+                            "--transitive-module-info-file-path", f"{output}/{name}.transitive.csv"]
+        elif name == under_plugin:
+            command = plugin_command(tool, name, direct, beneath, sources, output, environment)
+        else:
+            continue
         with open(f"{output}/{name}.log", "wb") as log:
             started = time.monotonic()
-            # A session of its own, so that stopping it stops the launcher and the tool together.
+            # A session of its own, so that stopping it stops the launcher and the tool together. The plugin's command
+            # starts in the sources' directory, which the paths in the plugin's files are relative to.
             process = subprocess.Popen([sys.executable, "-I", "-S", "-c", LAUNCHER, f"{output}/{name}.usage"] + command,
-                                       stdout=log, stderr=subprocess.STDOUT, env=environment, start_new_session=True)
+                                       stdout=log, stderr=subprocess.STDOUT, env=environment, start_new_session=True, cwd=sources if under_plugin else None)
             stopped = threading.Event()
 
             def stop():
@@ -1036,23 +1228,32 @@ def generate(tool, modules, sources, output, variables={}, time_limit=None):
     return wall, cpu, peak
 
 
-def module_info_sizes(modules, output):
-    return [os.path.getsize(f"{output}/{name}.safedi") for name, _, _ in modules]
+def module_info_sizes(modules, output, under_plugin=None):
+    """Each module's `.safedi` bytes; none `under_plugin`, where no module writes one."""
+    return [os.path.getsize(f"{output}/{name}.safedi") for name, _, _ in modules if under_plugin is None]
 
 
-def generated_code(modules, output):
-    """Each module's generated code as (its length, a digest of it), with the output directory's path removed. Read
-    a line at a time: a child process's peak memory starts at what this process holds when it starts the child, so a
-    file held here whole would become the floor of every later measurement."""
+def generated_code(modules, output, under_plugin=None):
+    """Each module's generated code as (its length, a digest of it), with the output directory's path removed: the
+    one file it writes, or, of the module generated `under_plugin`, the files of its output directory in name order.
+    Read a line at a time: a child process's peak memory starts at what this process holds when it starts the child,
+    so a file held here whole would become the floor of every later measurement."""
     code = []
     for name, _, _ in modules:
+        if under_plugin is None:
+            files = [f"{output}/{name}.generated.swift"]
+        elif name == under_plugin:
+            files = [f"{output}/{name}/SafeDIOutput/{file}" for file in sorted(os.listdir(f"{output}/{name}/SafeDIOutput")) if file.endswith(".swift")]
+        else:
+            continue
         length = 0
         digest = hashlib.sha256()
-        with open(f"{output}/{name}.generated.swift") as handle:
-            for line in handle:
-                line = line.replace(output, "")
-                length += len(line)
-                digest.update(line.encode())
+        for file in files:
+            with open(file) as handle:
+                for line in handle:
+                    line = line.replace(output, "")
+                    length += len(line)
+                    digest.update(line.encode())
         code.append((length, digest.hexdigest()))
     return code
 
@@ -1060,14 +1261,16 @@ def generated_code(modules, output):
 # MARK: Comparing
 
 
-def compare(base_tool, head_tool, directory, shapes, runs, limit, memory_limit, size_limit, large_memory_limit=1.1, large_memory_shapes=LARGE_MEMORY_SHAPES, large_memory_runs=LARGE_MEMORY_RUNS, accepted_sizes=ACCEPTED_MODULE_INFO_BYTES):
+def compare(base_tool, head_tool, directory, shapes, runs, limit, memory_limit, size_limit, large_memory_limit=1.1, large_memory_shapes=LARGE_MEMORY_SHAPES, large_memory_runs=LARGE_MEMORY_RUNS, accepted_sizes=ACCEPTED_MODULE_INFO_BYTES, one_arena_only_shapes=ONE_ARENA_ONLY_SHAPES):
     """Returns (the time and memory table's rows, the size table's rows, the failures)."""
     rows = []
     size_rows = []
     failures = []
     for shape in shapes:
         modules = SHAPES[shape]()
-        one_arena_runs = large_memory_runs if shape in large_memory_shapes else 0
+        one_arena_only = shape in one_arena_only_shapes
+        one_arena_runs = large_memory_runs if shape in large_memory_shapes or one_arena_only else 0
+        one_arena_limit = min(memory_limit, large_memory_limit) if shape in large_memory_shapes else memory_limit
         sources = f"{directory}/{shape}/sources"
         for name, _, source in modules:
             write(f"{sources}/{name}/Types.swift", source)
@@ -1110,7 +1313,7 @@ def compare(base_tool, head_tool, directory, shapes, runs, limit, memory_limit, 
         if over:
             failures.append(f"{shape}: `generate` took {ratio:.2f} times as long as the base tool ({median['head'][0]:.3f} s against {median['base'][0]:.3f} s, median wall of {runs}); the limit is {limit:g}")
         memory_ratio = median["head"][2] / median["base"][2]
-        memory_over = memory_ratio >= memory_limit and median["head"][2] - median["base"][2] > MEMORY_NOISE_FLOOR_BYTES
+        memory_over = not one_arena_only and memory_ratio >= memory_limit and median["head"][2] - median["base"][2] > MEMORY_NOISE_FLOOR_BYTES
         if memory_over:
             failures.append(f"{shape}: `generate` needed {memory_ratio:.2f} times the base tool's peak memory ({megabytes(median['head'][2])} against {megabytes(median['base'][2])}, median of {runs}); the limit is {memory_limit:g}")
         one_arena = ""
@@ -1121,10 +1324,10 @@ def compare(base_tool, head_tool, directory, shapes, runs, limit, memory_limit, 
                     peaks[label].append(generate(tools[label], modules, sources, f"{directory}/{shape}/{label}-one-arena-{run}", ONE_ARENA)[2])
             base_peak, head_peak = statistics.median(peaks["base"]), statistics.median(peaks["head"])
             one_arena_ratio = head_peak / base_peak
-            if one_arena_ratio >= min(memory_limit, large_memory_limit) and head_peak - base_peak > MEMORY_NOISE_FLOOR_BYTES:
+            if one_arena_ratio >= one_arena_limit and head_peak - base_peak > MEMORY_NOISE_FLOOR_BYTES:
                 memory_over = True
-                failures.append(f"{shape}: `generate` needed {one_arena_ratio:.2f} times the base tool's peak memory with one allocator arena ({megabytes(head_peak)} against {megabytes(base_peak)}, median of {one_arena_runs}); the limit is {min(memory_limit, large_memory_limit):g}")
-            one_arena = f"; with one arena {megabytes(base_peak)} and {megabytes(head_peak)}, {one_arena_ratio:.2f}"
+                failures.append(f"{shape}: `generate` needed {one_arena_ratio:.2f} times the base tool's peak memory with one allocator arena ({megabytes(head_peak)} against {megabytes(base_peak)}, median of {one_arena_runs}); the limit is {one_arena_limit:g}")
+            one_arena = f"; with one arena {megabytes(base_peak)} and {megabytes(head_peak)}, {one_arena_ratio:.2f}{', the figure compared' if one_arena_only else ''}"
             for label in ("base", "head"):
                 print(f"{shape}: {label}'s peak memory of each run with one arena, lowest first, in MB: {' '.join(f'{peak / 1024 / 1024:.1f}' for peak in sorted(peaks[label]))}", flush=True)
         figure = lambda label: f"{median[label][0]:.3f} s / {median[label][1]:.3f} s"
@@ -1141,13 +1344,21 @@ def megabytes(size):
 # MARK: Growth
 
 
+def row_parts(row):
+    """A growth row's (shape, the two numbers of layers it is built at, limits, the function that names the module
+    generated as the SwiftPM plugin generates it at a number of layers, or None for a row generated per module)."""
+    build, layers, row_limits, *under_plugin = row
+    return build, layers if isinstance(layers, tuple) else (layers, layers + GROWTH_STEP), row_limits, under_plugin[0] if under_plugin else None
+
+
 def grow(head_tool, directory, growth_rows, runs, limit, time_limit=GROWTH_TIME_LIMIT_SECONDS):
-    """Returns (the growth table's rows, the failures): each of `growth_rows` generated by `head_tool` at its layers
-    and at `GROWTH_STEP` layers more."""
+    """Returns (the growth table's rows, the failures): each of `growth_rows` generated by `head_tool` at its two
+    numbers of layers."""
     rows = []
     failures = []
-    for name, (build, layers, row_limits) in growth_rows.items():
-        depths = (layers, layers + GROWTH_STEP)
+    for name, row in growth_rows.items():
+        build, depths, row_limits, timed_module = row_parts(row)
+        under_plugin = {depth: timed_module(depth) if timed_module else None for depth in depths}
         modules = {depth: build(depth) for depth in depths}
         samples = {depth: [] for depth in depths}
         sizes = {}
@@ -1157,12 +1368,12 @@ def grow(head_tool, directory, growth_rows, runs, limit, time_limit=GROWTH_TIME_
                 sources = f"{directory}/growth-{name}/{depth}/sources"
                 for module, _, source in modules[depth]:
                     write(f"{sources}/{module}/Types.swift", source)
-                generate(head_tool, modules[depth], sources, f"{directory}/growth-{name}/{depth}/warm-up", time_limit=time_limit)
-                sizes[depth] = sum(module_info_sizes(modules[depth], f"{directory}/growth-{name}/{depth}/warm-up"))
-                code[depth] = sum(length for length, _ in generated_code(modules[depth], f"{directory}/growth-{name}/{depth}/warm-up"))
+                generate(head_tool, modules[depth], sources, f"{directory}/growth-{name}/{depth}/warm-up", time_limit=time_limit, under_plugin=under_plugin[depth])
+                sizes[depth] = sum(module_info_sizes(modules[depth], f"{directory}/growth-{name}/{depth}/warm-up", under_plugin[depth]))
+                code[depth] = sum(length for length, _ in generated_code(modules[depth], f"{directory}/growth-{name}/{depth}/warm-up", under_plugin[depth]))
             for run in range(runs):
                 for depth in depths:
-                    samples[depth].append(generate(head_tool, modules[depth], f"{directory}/growth-{name}/{depth}/sources", f"{directory}/growth-{name}/{depth}/{run}", time_limit=time_limit))
+                    samples[depth].append(generate(head_tool, modules[depth], f"{directory}/growth-{name}/{depth}/sources", f"{directory}/growth-{name}/{depth}/{run}", time_limit=time_limit, under_plugin=under_plugin[depth]))
         except Failure as failure:
             rows.append(f"| {name} | {depths[0]} and {depths[1]} | did not generate | | | | **failed** |")
             failures.append(f"{name}: the head tool did not generate it at {depth} layers: {failure}")
@@ -1191,13 +1402,13 @@ def grow(head_tool, directory, growth_rows, runs, limit, time_limit=GROWTH_TIME_
 
 
 def report(rows, size_rows, failures, runs, limit, memory_limit, size_limit, summary, large_memory_limit=1.1, large_memory_runs=LARGE_MEMORY_RUNS, growth_rows=[], growth_runs=GROWTH_RUNS, growth_limit=2.0):
-    lines = [f"`generate` time and peak memory, head against base: median of {runs} alternating runs; a shape fails at {limit:g} times the base's wall time or {memory_limit:g} times its peak memory, and {', '.join(sorted(LARGE_MEMORY_SHAPES))} also at {min(memory_limit, large_memory_limit):g} times the base's median peak of {large_memory_runs} more runs with one allocator arena.", "",
+    lines = [f"`generate` time and peak memory, head against base: median of {runs} alternating runs; a shape fails at {limit:g} times the base's wall time or {memory_limit:g} times its peak memory, and {', '.join(sorted(LARGE_MEMORY_SHAPES))} also at {min(memory_limit, large_memory_limit):g} times the base's median peak of {large_memory_runs} more runs with one allocator arena. {', '.join(sorted(ONE_ARENA_ONLY_SHAPES))} is compared at {memory_limit:g} on its runs with one arena alone.", "",
              "| Shape | Runs | Base wall / CPU | Head wall / CPU | Head / base (wall) | Base peak | Head peak | Head / base (peak) | Generated code | Verdict |",
              "|---|---|---|---|---|---|---|---|---|---|"] + rows
     lines += ["", f"`.safedi` size, head against base: a module fails at {size_limit:g} times the base's bytes.", "",
               "| Shape | Module | Base bytes | Head bytes | Head / base | Verdict |", "|---|---|---|---|---|---|"] + size_rows
     if growth_rows:
-        lines += ["", f"Growth, the head tool alone: each row at its layers and at {GROWTH_STEP} more; median of {growth_runs} alternating runs for time and peak memory. A measure fails at {growth_limit:g} times the smaller graph's, or at the limit beside it.", "",
+        lines += ["", f"Growth, the head tool alone: each row at its layers and at {GROWTH_STEP} more, or at the two numbers it names; median of {growth_runs} alternating runs for time and peak memory. A measure fails at {growth_limit:g} times the smaller graph's, or at the limit beside it.", "",
                   "| Row | Layers | Wall: fewer layers, more, ratio | Peak memory | `.safedi` bytes | Generated code | Verdict |", "|---|---|---|---|---|---|---|"] + growth_rows
     lines += [""] + [f"- {failure}" for failure in failures]
     text = "\n".join(lines) + "\n"
@@ -1217,18 +1428,30 @@ STAND_IN = """#!/usr/bin/env python3
 import os, sys, time
 arguments = sys.argv[1:]
 option = lambda name: arguments[arguments.index(name) + 1]
-if {refuses!r} and option("--module-name") == "App":
+# The SwiftPM plugin's commands: a `scan`, whose manifest here holds only the output directory, then a `generate`
+# that names no subcommand and reads the manifest.
+scans = arguments[0] == "scan"
+under_plugin = "--swift-manifest" in arguments
+if {refuses!r} and (scans or not under_plugin and option("--module-name") == "App"):
     sys.exit("stand-in: refused")
-# Touched page by page, so that the memory is resident.
-# What a measure listed in `grows` is multiplied by: the number of types the module declares, to the listed power.
-types = sum(open(path).read().count("final class ") for path in open(arguments[1]).read().split())
+if scans:
+    open(option("--manifest-file"), "w").write(option("--output-directory"))
+    sys.exit(0)
+# What a measure listed in `grows` is multiplied by: the number of types the module's input declares, to the listed
+# power. The plugin's input lists the files of the modules beneath too, separated by commas.
+types = sum(open(path).read().count("final class ") for path in open(arguments[0 if under_plugin else 1]).read().replace(",", " ").split())
 factor = lambda measure: types ** {grows!r}.get(measure, 0)
+# Touched page by page, so that the memory is resident.
 held = bytearray({allocates!r} * factor("memory") + (0 if os.environ.get("MALLOC_ARENA_MAX") == "1" else {allocates_without_one_arena!r}))
 for index in range(0, len(held), 4096):
     held[index] = 1
 time.sleep({sleep!r} * factor("time"))
-open(option("--combined-output"), "w").write("// generated\\n" * factor("code"))
-open(option("--module-info-output"), "w").write("x" * ({module_info_size!r} * factor("size")))
+if under_plugin:
+    for file in ("One+SafeDI.swift", "Two+SafeDI.swift"):
+        open(open(option("--swift-manifest")).read() + "/" + file, "w").write("// generated\\n" * factor("code"))
+else:
+    open(option("--combined-output"), "w").write("// generated\\n" * factor("code"))
+    open(option("--module-info-output"), "w").write("x" * ({module_info_size!r} * factor("size")))
 """
 
 
@@ -1241,8 +1464,8 @@ def self_test(directory):
         os.chmod(path, 0o755)
         return path
 
-    def expect(name, base, head, expected_failures, expected_row, expected_size_row=None, memory_limit=1.3, large_memory_shapes=frozenset(), large_memory_runs=3, accepted_sizes={}):
-        rows, size_rows, found = compare(base, head, f"{directory}/{name}", ["E16-seam"], 3, 2.0, memory_limit, 2.0, large_memory_shapes=large_memory_shapes, large_memory_runs=large_memory_runs, accepted_sizes=accepted_sizes)
+    def expect(name, base, head, expected_failures, expected_row, expected_size_row=None, memory_limit=1.3, large_memory_shapes=frozenset(), large_memory_runs=3, accepted_sizes={}, one_arena_only_shapes=frozenset()):
+        rows, size_rows, found = compare(base, head, f"{directory}/{name}", ["E16-seam"], 3, 2.0, memory_limit, 2.0, large_memory_shapes=large_memory_shapes, large_memory_runs=large_memory_runs, accepted_sizes=accepted_sizes, one_arena_only_shapes=one_arena_only_shapes)
         if len(found) != expected_failures or expected_row not in rows[0] or (expected_size_row and expected_size_row not in size_rows[0]):
             failures.append(f"{name}: expected {expected_failures} failure(s), a row with {expected_row!r} and a size row with {expected_size_row!r}, got {found}, {rows} and {size_rows}")
 
@@ -1274,6 +1497,11 @@ def self_test(directory):
     # A large shape's row gives both counts of runs and both figures; an ordinary shape's has neither.
     expect("runs-of-a-large-shape", held, held, 0, "| E16-seam | 3, and 5 with one arena |", large_memory_shapes=frozenset(["E16-seam"]), large_memory_runs=5)
     expect("figures-of-a-large-shape", held, held, 0, "; with one arena ", large_memory_shapes=frozenset(["E16-seam"]))
+    # A shape judged with one arena alone: more in the timed runs alone passes, however much, and more with one arena
+    # fails at the ordinary limit, not the tighter one.
+    expect("twice-the-memory-without-one-arena-of-a-one-arena-shape", held, tool("holds-twice-in-arenas", 0.0, allocates=64 * 1024 * 1024, allocates_without_one_arena=64 * 1024 * 1024), 0, "within the limits", one_arena_only_shapes=frozenset(["E16-seam"]))
+    expect("a-fifth-more-with-one-arena-of-a-one-arena-shape", held, holds_more, 0, ", the figure compared", one_arena_only_shapes=frozenset(["E16-seam"]))
+    expect("half-more-with-one-arena-of-a-one-arena-shape", held, tool("holds-half-more", 0.0, allocates=96 * 1024 * 1024), 1, "**memory over the limit**", one_arena_only_shapes=frozenset(["E16-seam"]))
     expect("runs-of-an-ordinary-shape", held, held, 0, "| E16-seam | 3 |", large_memory_runs=5)
     expect("slower-and-more-memory", fast, tool("slower-and-more-memory", 0.2, allocates=64 * 1024 * 1024), 2, "**time and memory over the limit**")
     expect("head-refuses", fast, tool("head-refuses", 0.0, refuses=True), 1, "**failed**")
@@ -1316,19 +1544,45 @@ def self_test(directory):
     expect_growth("growth-of-another-measure-than-the-rows-limit", tool("cubic-code-beside-a-size-limit", 0.0, grows={"code": 3}), 1, "**code over the limit**", row_limits={"size": 4.0})
     expect_growth("growth-refused", tool("growth-refuses", 0.0, refuses=True), 1, "**failed**")
     expect_growth("growth-never-ends", tool("never-ends", 30.0), 1, "**failed**", time_limit=1)
-    for row, (build, layers, row_limits) in GROWTH_ROWS.items():
+
+    def expect_growth_under_plugin(name, head, expected_failures, expected_row, time_limit=GROWTH_TIME_LIMIT_SECONDS):
+        rows, found = grow(head, f"{directory}/{name}", {"P": (shape_p, (4, 7), {}, lambda layers: "App")}, 3, 2.0, time_limit=time_limit)
+        if len(found) != expected_failures or expected_row not in rows[0]:
+            failures.append(f"{name}: expected {expected_failures} failure(s) and a growth row with {expected_row!r}, got {found} and {rows}")
+
+    # As the SwiftPM plugin generates, `App` alone is generated, from its own two types and `Feature`'s, 27 at 4
+    # layers and 45 at 7, 1.67 times as many: their cube is 4.63 times. A module writes no `.safedi` file, and its
+    # code is every file of its output directory.
+    expect_growth_under_plugin("growth-under-the-plugin-none", fast, 0, "| P | 4 and 7 |")
+    expect_growth_under_plugin("growth-under-the-plugin-of-time-with-the-types", tool("linear-time-under-the-plugin", 0.005, grows={"time": 1}), 0, "within the limits")
+    expect_growth_under_plugin("growth-under-the-plugin-of-time-with-their-cube", tool("cubic-time-under-the-plugin", 0.00001, grows={"time": 3}), 1, "**time over the limit**")
+    expect_growth_under_plugin("growth-under-the-plugin-of-size", tool("cubic-size-under-the-plugin", 0.0, module_info_size=1, grows={"size": 3}), 0, "| 0 bytes, 0 bytes, 1.00 |")
+    expect_growth_under_plugin("growth-under-the-plugin-of-code-with-the-types", tool("linear-code-under-the-plugin", 0.0, grows={"code": 1}), 0, "| 702 bytes, 1170 bytes, 1.67 |")
+    expect_growth_under_plugin("growth-under-the-plugin-of-code-with-their-cube", tool("cubic-code-under-the-plugin", 0.0, grows={"code": 3}), 1, "**code over the limit**")
+    expect_growth_under_plugin("growth-under-the-plugin-scan-refused", tool("scan-refuses", 0.0, refuses=True), 1, "**failed**")
+    expect_growth_under_plugin("growth-under-the-plugin-never-ends", tool("never-ends-under-the-plugin", 30.0), 1, "**failed**", time_limit=1)
+    for row, parts in GROWTH_ROWS.items():
+        build, (fewer, more), row_limits, timed_module = row_parts(parts)
         if not set(row_limits) <= {"time", "memory", "size", "code"}:
             failures.append(f"growth row {row} limits {sorted(row_limits)}, which are not all measures")
-        for module, dependencies, _ in build(layers):
-            if not all(dependency in [earlier for earlier, _, _ in build(layers)] for dependency in dependencies):
+        for module, dependencies, _ in build(fewer):
+            if not all(dependency in [earlier for earlier, _, _ in build(fewer)] for dependency in dependencies):
                 failures.append(f"growth row {row}: module {module} depends on a module the shape does not have")
-        if sum(len(source) for _, _, source in build(layers + GROWTH_STEP)) <= sum(len(source) for _, _, source in build(layers)):
-            failures.append(f"growth row {row}: the shape is no larger at {layers + GROWTH_STEP} layers than at {layers}")
+        if sum(len(source) for _, _, source in build(more)) <= sum(len(source) for _, _, source in build(fewer)):
+            failures.append(f"growth row {row}: the shape is no larger at {more} layers than at {fewer}")
+        for layers in (fewer, more):
+            if timed_module and timed_module(layers) not in [module for module, _, _ in build(layers)]:
+                failures.append(f"growth row {row}: at {layers} layers the shape has no module {timed_module(layers)} to generate as the SwiftPM plugin does")
+    # The lifelike chain's row times `F4` of five features and `F9` of ten as one chain's modules at two heights.
+    if shape_lifelike_chain(10)[:6] != shape_lifelike_chain(5)[:6]:
+        failures.append("the lifelike chain of ten features does not start with the modules of the chain of five")
     for shape, accepted in ACCEPTED_MODULE_INFO_BYTES.items():
         if shape not in SHAPES or not set(accepted) <= {name for name, _, _ in SHAPES[shape]()}:
             failures.append(f"the accepted sizes name {shape} {sorted(accepted)}, which are not a shape and its modules")
     if not LARGE_MEMORY_SHAPES <= set(SHAPES):
         failures.append(f"the large shapes name {sorted(LARGE_MEMORY_SHAPES - set(SHAPES))}, which are not shapes")
+    if not ONE_ARENA_ONLY_SHAPES <= set(SHAPES):
+        failures.append(f"the shapes judged with one arena alone name {sorted(ONE_ARENA_ONLY_SHAPES - set(SHAPES))}, which are not shapes")
     if SHAPES["S12-mocks"]() != SHAPES["S12-mocks"]():
         failures.append("S12-mocks: two builds of the shape differ, so its seed does not decide it")
     for name, build in SHAPES.items():
