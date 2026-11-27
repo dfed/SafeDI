@@ -26,11 +26,19 @@ extension NodeRecords {
 		guard world.kind(of: declaration) != .alias, world.kind(of: declaration) != .hole else { return nil }
 		let scope = world.scope(of: declaration)
 		let declaresRename = scope.propertiesToGenerate.contains {
-			if case .aliased = $0 { true } else { false }
+			if case .aliased = $0 {
+				true
+			} else {
+				false
+			}
 		}
 		guard declaresRename || scope.instantiable.dependencies.contains(where: { $0.source == .received(onlyIfAvailable: true) }) else { return nil }
 		let declaresHole = scope.propertiesToGenerate.contains {
-			if case .hole = $0 { true } else { false }
+			if case .hole = $0 {
+				true
+			} else {
+				false
+			}
 		}
 		let refusals: [NodeRecordRefusal] = declaresHole || !scope.instantiatedDependenciesNotGenerated.isEmpty ? [.renameOrHole] : []
 		return NodeRecordClaim(kind: .receivesOnlyIfAvailable, discharges: [.onlyIfAvailable, .renameOrHole], refusals: refusals)
