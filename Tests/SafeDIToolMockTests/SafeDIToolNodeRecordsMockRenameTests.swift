@@ -517,10 +517,10 @@ struct SafeDIToolNodeRecordsMockRenameTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_keepsTheWalksStatements_whenTypeDeclaringRenameTakesDependencyMockCannotBuild() async throws {
+	mutating func mock_laysOutTheWalksStatements_whenTypeDeclaringRenameTakesDependencyMockCannotBuild() async throws {
 		// `Profile` declares a rename and instantiates a `Clock` the mock cannot build, which `mock()` takes as a parameter:
-		// a value the root binds beside its nodes, which no record makes yet, so the world is refused and the walk writes
-		// the mock.
+		// `Profile`'s record reads the parameter, and its rename is a node of its own, so the root is laid out from the
+		// records, with the walk's statements.
 		let fixture = [
 			"""
 			@Instantiable(generateMock: true)
@@ -561,8 +561,9 @@ struct SafeDIToolNodeRecordsMockRenameTests: ~Copyable {
 			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		}
 
+		#expect(reports.filter(\.isMockRoot).map(\.refusal) == [nil])
+		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [true])
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == Self.mockFile(of: "Root", in: walkOutput, withFixturePathsOf: output, fixtureNames: ["Profile.swift"]))
-		#expect(reports.filter(\.isMockRoot).map(\.refusal) == ["renameOrHole"])
 	}
 
 	// MARK: Private

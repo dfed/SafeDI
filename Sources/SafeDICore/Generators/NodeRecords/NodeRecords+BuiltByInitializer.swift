@@ -53,7 +53,7 @@ extension NodeRecords {
 			refusals.append(.fill)
 		}
 		if !scope.instantiatedDependenciesNotGenerated.isEmpty {
-			refusals.append(.renameOrHole)
+			refusals.append(.uncoveredDependency)
 		}
 		for propertyToGenerate in scope.propertiesToGenerate {
 			switch propertyToGenerate {
@@ -89,6 +89,8 @@ extension NodeRecords {
 	///   property; `nil` for the world's.
 	/// - Parameter argumentsOfOtherValues: The construction's arguments no dependency fulfills whose values a kind sets
 	///   (`BuiltPlaceRecord.argumentValues`), each with its position among the arguments the call passes.
+	/// - Parameter uncoveredArgumentNames: The name each dependency the node's type instantiates that its scope does not
+	///   build is read by, by its label, where a mock names the parameter it takes for it apart from the label.
 	/// - Parameter alwaysDeclaresFunction: Whether a kind builds the node in a function of its own whatever its body holds.
 	static func builtByInitializerRecord(
 		of declaration: DeclarationID,
@@ -100,6 +102,7 @@ extension NodeRecords {
 		typeFunctionReturns: TypeDescription? = nil,
 		boundProperty: Property? = nil,
 		argumentsOfOtherValues: [(position: Int, argument: Initializer.Argument)] = [],
+		uncoveredArgumentNames: [String: String] = [:],
 		alwaysDeclaresFunction: Bool = false,
 		typesDeclaredEscaping: Set<TypeDescription>,
 		children: [GeneratedCode],
@@ -122,8 +125,13 @@ extension NodeRecords {
 		case .constant, .alias, .hole:
 			(false, false)
 		}
-		var reads = arguments.map {
-			PlaceRead(argumentLabel: $0.argument.label, label: $0.dependency.property.label, property: $0.dependency.property, source: $0.argument.source)
+		var reads = arguments.map { argument, dependency in
+			if case .instantiated = dependency.source, let name = uncoveredArgumentNames[dependency.property.label] {
+				// A dependency the mock cannot build reads the parameter `mock()` takes for it under its name apart.
+				PlaceRead(argumentLabel: argument.label, label: name, property: Property(label: name, typeDescription: dependency.property.typeDescription), source: .binding(label: name))
+			} else {
+				PlaceRead(argumentLabel: argument.label, label: dependency.property.label, property: dependency.property, source: argument.source)
+			}
 		}
 		// A kind sets the value of each of these, so the read only holds the argument's place and label in the call.
 		for (position, argument) in argumentsOfOtherValues {

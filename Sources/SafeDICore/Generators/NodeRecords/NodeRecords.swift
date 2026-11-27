@@ -49,8 +49,12 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	/// The node is built as an `ErasedInstantiator`, or as a constant or an `Instantiator` erased to its property's type,
 	/// which `erasedClaim(of:in:)` discharges: its record is `NodeRecordKind.erased`'s.
 	case erased
-	/// The node's type declares a rename, a hole, or an instantiated dependency its scope does not build.
+	/// The node's type declares a rename or a hole.
 	case renameOrHole
+	/// The node's type instantiates a dependency its scope does not build, which a mock takes as a parameter of `mock()`
+	/// (`Scope.instantiatedDependenciesNotGenerated`): in a mock root's world `mockUncoveredDependencyDischarges(of:in:)`
+	/// discharges it where `mock()` takes each such dependency as a plain value. A production root's world never holds one.
+	case uncoveredDependency
 	/// The node's call passes fills.
 	case fill
 	/// The node is on a cycle.
