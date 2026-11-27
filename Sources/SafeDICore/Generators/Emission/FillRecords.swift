@@ -53,15 +53,22 @@ struct DispatcherRecord: Sendable {
 /// The function of a fill: the place it fills, built in its body, and how the function takes and binds the case's values.
 /// The fill's place is a built place among the call's children whose record holds this signature.
 struct FillSignature: Sendable {
-	/// How the fill takes the values of its case.
+	/// How the fill takes the values of its case (`lanes/node-records-fills/fill-body-record.md`).
 	enum Form: Sendable {
-		/// The fill returns the builder the place's wrapper keeps, taking each field a level function's member hands it.
+		/// One payload struct of `valuesType`, whose members the bound values read; `nil` where the place is not nested by
+		/// type, which takes no parameter.
+		case caseValues(valuesType: TypeDescription?)
+		/// A carrier's level whose fill has no carrier use: one positional parameter per case value, read or not.
+		case caseArguments
+		/// A carrier's level taken as the carrier's member takes it: the struct of the run the values end, then each value
+		/// after it.
+		case carrierUse(SeamCarrierValues.Use)
+		/// The fill returns the builder the place's wrapper keeps, and takes each field a level function's member hands it,
+		/// binding none.
 		case wrapperBuilder(parameters: [SeamSignature.Hole.Field])
-		/// The fill takes each field of its payload by itself: an override closure's or a level function member's call.
+		/// The fill takes each field of its payload by itself, binding none: an override closure's or a level function
+		/// member's call.
 		case payloadFields(parameters: [SeamSignature.Hole.Field])
-		/// The fill takes its case's values: as one payload struct of `valuesType`, positionally, or as a carrier's member
-		/// takes them (`carrierUse`), and binds `bound` from them first. `nil` `valuesType` where the case carries none.
-		case caseValues(valuesType: TypeDescription?, takesValuesAsArguments: Bool, carrierUse: SeamCarrierValues.Use?, bound: [BoundValue])
 	}
 
 	/// A value of the case the fill binds before its tree.
@@ -79,7 +86,10 @@ struct FillSignature: Sendable {
 	let functionNameStem: String
 	let isSendable: Bool
 	let form: Form
-	/// What the fill takes after its case's values (`ScopeGenerator.fillParameterFields`).
+	/// The case values the fill binds first, in case-value order (forms `caseValues`, `caseArguments`, `carrierUse`).
+	let bound: [BoundValue]
+	/// What the fill takes after its case's values (`ScopeGenerator.fillParameterFields`): bound labels the payload does
+	/// not carry, each in the form the root dispatcher hands, then the inner scope parameters.
 	let parameters: [SeamSignature.Hole.Field]
 	/// Each label the fill's tree reads and each name it declares, which the parameter that takes the case's values is
 	/// named apart from, and which decide whether the fill can be written inline in its dispatcher's case.
