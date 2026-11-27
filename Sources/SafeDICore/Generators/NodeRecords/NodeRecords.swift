@@ -299,7 +299,9 @@ struct NodeRecords: Sendable {
 	/// a node not of its kind and throws a refusal for a node of its kind it cannot make:
 	/// `if let kind = try <kind>Kind(of: declaration, in: world) { return kind }`.
 	private static func claimedKind(of declaration: DeclarationID, in world: some NodeRecordSources) throws(NodeRecordRefusal) -> NodeRecordKind? {
-		if let kind = try cycleKind(of: declaration, in: world) { return kind }
+		if let kind = try cycleKind(of: declaration, in: world) {
+			return kind
+		}
 		return nil
 	}
 }
