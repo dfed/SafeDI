@@ -166,6 +166,7 @@ struct NodeRecords: Sendable {
 		}
 		let order = try NodeBuildOrder(world: world)
 		let onlyIfAvailableAnswers = try OnlyIfAvailableAnswers(world: world, rootParameters: seamTree?.parameters ?? outerDeclarations)
+		let mockReceivesBoundAgain = Self.mockReceivesBoundAgain(in: world)
 		let answeringDeclarations = DeclarationsAnsweringReads(world: world)
 		// The tree reports the capture as an error, which the records cannot.
 		guard !answeringDeclarations.sendableFunctionCapturesWrapper else { throw NodeRecordRefusal.sendableFunctionCapturesWrapper }
@@ -222,11 +223,11 @@ struct NodeRecords: Sendable {
 			case .mockRename:
 				try .alias(Self.mockRenameRecord(of: declaration, variant: variant, in: world, answers: onlyIfAvailableAnswers))
 			case .mockConstruction:
-				try .built(Self.mockConstructionRecord(of: declaration, variant: variant, in: world, unavailableProperties: onlyIfAvailableAnswers.unavailableProperties(of: variant), typesDeclaredEscaping: escaping, children: children))
+				try .built(Self.mockConstructionRecord(of: declaration, variant: variant, in: world, unavailableProperties: onlyIfAvailableAnswers.unavailableProperties(of: variant), receivesBoundAgain: mockReceivesBoundAgain[Int(variant)], typesDeclaredEscaping: escaping, children: children))
 			case .mockUnavailableDependency:
 				try .alias(Self.mockUnavailableDependencyRecord(of: declaration, in: world))
 			case .mockErased:
-				try .built(Self.mockErasedRecord(of: declaration, variant: variant, in: world, unavailableProperties: onlyIfAvailableAnswers.unavailableProperties(of: variant), typesDeclaredEscaping: escaping, children: children))
+				try .built(Self.mockErasedRecord(of: declaration, variant: variant, in: world, unavailableProperties: onlyIfAvailableAnswers.unavailableProperties(of: variant), receivesBoundAgain: mockReceivesBoundAgain[Int(variant)], typesDeclaredEscaping: escaping, children: children))
 			case .publicMockCall:
 				try .built(Self.publicMockCallRecord(of: declaration, variant: variant, in: world, typesDeclaredEscaping: escaping, children: children))
 			}

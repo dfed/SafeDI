@@ -36,10 +36,11 @@ extension NodeRecords {
 		variant: VariantID,
 		in world: some NodeRecordSources,
 		unavailableProperties: Set<Property>,
+		receivesBoundAgain: [MockReceiveBoundAgain],
 		typesDeclaredEscaping: Set<TypeDescription>,
 		children: [GeneratedCode],
 	) throws -> BuiltPlaceRecord {
-		var record = try mockConstructionRecord(of: declaration, variant: variant, in: world, unavailableProperties: unavailableProperties, typesDeclaredEscaping: typesDeclaredEscaping, children: children)
+		var record = try mockConstructionRecord(of: declaration, variant: variant, in: world, unavailableProperties: unavailableProperties, receivesBoundAgain: receivesBoundAgain, typesDeclaredEscaping: typesDeclaredEscaping, children: children)
 		// A constant built in place returns nothing: its construction is erased where it is bound, and its override is read
 		// there as the property's type.
 		guard record.hasFunction else { return record }

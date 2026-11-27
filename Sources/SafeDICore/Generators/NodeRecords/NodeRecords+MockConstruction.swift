@@ -93,14 +93,14 @@ extension NodeRecords {
 		variant: VariantID,
 		in world: some NodeRecordSources,
 		unavailableProperties: Set<Property>,
+		receivesBoundAgain: [MockReceiveBoundAgain],
 		typesDeclaredEscaping: Set<TypeDescription>,
 		children: [GeneratedCode],
 	) throws -> BuiltPlaceRecord {
 		let instantiable = world.scope(of: declaration).instantiable
-		// A child the mock root names apart is bound, and overridden, under that name, and a type that receives one binds
-		// it again under its label before its own children.
-		let nameApart = world.property(of: declaration).flatMap(world.mockRootNames.nameApart(of:))
-		let placesBindingNamesApartAgain = placesBindingNamesApartAgain(in: declaration, of: world)
+		// A child of the root's level the mock root names apart is bound, and overridden, under that name, and a type that
+		// receives a value named apart binds it again under its label before its own children (`mockReceivesBoundAgain(in:)`).
+		let nameApart = world.edges(from: 0).contains(declaration) ? world.property(of: declaration).flatMap(world.mockRootNames.nameApart(of:)) : nil
 		let handWrittenMock: (function: Initializer, target: ConstructionTarget)? = if world.construction(of: declaration) == .handWrittenMock, let mockInitializer = instantiable.mockInitializer {
 			(mockInitializer, .mock(instantiable.concreteInstantiable, name: instantiable.customMockName ?? InstantiableVisitor.mockMethodName))
 		} else {
@@ -130,7 +130,7 @@ extension NodeRecords {
 			argumentsOfOtherValues: fieldArguments,
 			alwaysDeclaresFunction: !fieldArguments.isEmpty,
 			typesDeclaredEscaping: typesDeclaredEscaping,
-			children: placesBindingNamesApartAgain + children,
+			children: receivesBoundAgain.map(\.place) + children,
 		)
 		// A constant built in a function for its configuration's fields writes `return`, as the walk writes it.
 		record.functionAlwaysWritesReturn = !fieldArguments.isEmpty && record.property.propertyType.isConstant
