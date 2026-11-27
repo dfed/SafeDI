@@ -20,11 +20,16 @@
 
 extension NodeRecords {
 	/// The claim of `declaration` in a mock root's world, and `nil` in a production root's: of kind `mockConstruction`, for a
-	/// node stage 1 makes in a production root's world (`refusalsOfBuiltByInitializer(_:in:)`), whose override is the field
-	/// of its parent's configuration under the node's own label, discharging nothing and holding each refusal of a node
-	/// whose override a later stage reads. A node stage 1 refuses is left unclaimed, so its first refusal is stage 1's.
+	/// node stage 1 makes in a production root's world (`refusalsOfBuiltByInitializer(_:in:)`) and for one its type's
+	/// hand-written mock builds, whose override is the field of its parent's configuration under the node's own label,
+	/// holding each refusal of a node whose override a later stage reads. A node stage 1 refuses for anything this kind
+	/// does not make is left unclaimed, so its first refusal is stage 1's.
 	static func mockConstructionClaim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
-		guard world.isMockWorld, refusalsOfBuiltByInitializer(declaration, in: world).isEmpty else { return nil }
+		guard world.isMockWorld else { return nil }
+		// A hand-written mock builds its type with or without an initializer: a fake has none.
+		let buildsWithHandWrittenMock = world.construction(of: declaration) == .handWrittenMock
+		let discharges: Set<NodeRecordRefusal> = buildsWithHandWrittenMock ? [.construction, .noInitializer] : []
+		guard refusalsOfBuiltByInitializer(declaration, in: world).allSatisfy(discharges.contains) else { return nil }
 		var refusals = [NodeRecordRefusal]()
 		let instantiable = world.scope(of: declaration).instantiable
 		// An actor's arguments are sent to it, and each node built for one reads its override before its function.
@@ -32,11 +37,13 @@ extension NodeRecords {
 			refusals.append(.mockActor)
 		}
 		// The root's own such parameters are parameters of `mock()`, which the root's lowering judges
-		// (`ScopeGenerator.nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:)`). A type's configuration
-		// takes the defaults its hand-written mock declares too, whichever way a node builds it.
+		// (`ScopeGenerator.nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:)`). A type's configuration takes the
+		// defaults of its initializer and of its hand-written mock, whichever of the two builds a node.
 		if declaration != 0 {
-			let takesDefaultValuedParameter = instantiable.initializer.map { !ScopeGenerator.DefaultParameter.defaultParameters(of: $0, dependencies: instantiable.dependencies).isEmpty } ?? false
-			if takesDefaultValuedParameter || instantiable.mockInitializer != nil {
+			let (construction, otherConstruction) = buildsWithHandWrittenMock ? (instantiable.mockInitializer, instantiable.initializer) : (instantiable.initializer, instantiable.mockInitializer)
+			let callPassesValueNoDependencyFulfills = construction.map { takesValueNoDependencyFulfills($0, given: instantiable.dependencies) } ?? false
+			let otherConstructionDeclaresDefault = otherConstruction.map { !ScopeGenerator.DefaultParameter.defaultParameters(of: $0, dependencies: instantiable.dependencies).isEmpty } ?? false
+			if callPassesValueNoDependencyFulfills || otherConstructionDeclaresDefault {
 				refusals.append(.mockDefaultValuedParameter)
 			}
 		}
@@ -47,13 +54,25 @@ extension NodeRecords {
 			refusals.append(.mockOverrideNotParentField)
 			break
 		}
-		return NodeRecordClaim(kind: .mockConstruction, discharges: [], refusals: refusals)
+		return NodeRecordClaim(kind: .mockConstruction, discharges: discharges, refusals: refusals)
 	}
 
-	/// The record of `declaration`'s place, a node of kind `mockConstruction`: the record stage 1 makes of it, which
-	/// first tries the closure that overrides it (`mockOverrideSlot(ofNodeLabeled:typed:hasFunction:)`), called with its
-	/// initializer's arguments. A node that builds children is configured: its override is the builder of the
-	/// configuration its function is handed, whose fields its children read.
+	/// Whether a call of `construction` a mock writes passes a value none of `dependencies` fulfills, which the node's
+	/// configuration holds: every argument but one a dependency fulfills and one the call leaves to its default
+	/// (`Initializer.Argument.isLeftToItsDefault`, which a dependency's label is never left to).
+	private static func takesValueNoDependencyFulfills(_ construction: Initializer, given dependencies: [Dependency]) -> Bool {
+		construction.arguments.contains { argument in
+			!dependencies.contains(where: argument.isFulfilled(by:))
+				&& !(argument.isLeftToItsDefault && !dependencies.contains { $0.property.label == argument.innerLabel })
+		}
+	}
+
+	/// The record of `declaration`'s place, a node of kind `mockConstruction`: the record stage 1 makes of it, built with
+	/// its type's hand-written mock where the world says so (`TypeFactsConstruction.handWrittenMock`), which first tries
+	/// the closure that overrides it (`mockOverrideSlot(ofNodeLabeled:typed:hasFunction:)`), called with its
+	/// construction's arguments. A node that builds children is configured: its override is the builder of the
+	/// configuration its function is handed, whose fields its children read. The closure of a node that is not
+	/// configured returns the property's type, so every node's function does, as the walk's does.
 	static func mockConstructionRecord(
 		of declaration: DeclarationID,
 		variant: VariantID,
@@ -61,16 +80,30 @@ extension NodeRecords {
 		typesDeclaredEscaping: Set<TypeDescription>,
 		children: [GeneratedCode],
 	) throws -> BuiltPlaceRecord {
+		let instantiable = world.scope(of: declaration).instantiable
+		let handWrittenMock: (function: Initializer, target: ConstructionTarget)? = if world.construction(of: declaration) == .handWrittenMock, let mockInitializer = instantiable.mockInitializer {
+			(mockInitializer, .mock(instantiable.concreteInstantiable, name: instantiable.customMockName ?? InstantiableVisitor.mockMethodName))
+		} else {
+			nil
+		}
 		// A mock world that holds a lazily instantiated property is refused (`refusalsOfBuiltByInitializer(_:in:)`), so no
 		// receive of this node reads a wrapper's instance.
-		var record = try builtByInitializerRecord(of: declaration, variant: variant, in: world, lazilyInstantiatedInstanceProperties: [], typesDeclaredEscaping: typesDeclaredEscaping, children: children)
-		let instantiable = world.scope(of: declaration).instantiable
+		var record = try builtByInitializerRecord(
+			of: declaration,
+			variant: variant,
+			in: world,
+			lazilyInstantiatedInstanceProperties: [],
+			construction: handWrittenMock,
+			typeFunctionReturns: world.property(of: declaration)?.typeDescription.asInstantiatedTypeSpelledAsDeclared,
+			typesDeclaredEscaping: typesDeclaredEscaping,
+			children: children,
+		)
 		let isConfigured = !children.isEmpty
 		let slotType: TypeDescription = if isConfigured {
 			.nested(name: ScopeGenerator.mockConfigurationStructName, parentType: instantiable.concreteInstantiable, generics: [])
 		} else {
 			// The closure's type as the configuration that holds it spells it (`MockLowering.ConstantNode.builderClosureType`).
-			.unknown(text: "((\(MockLowering.BuilderParameters(of: instantiable, usesMockInitializer: false).spelled)) -> \(record.property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource))?")
+			.unknown(text: "((\(MockLowering.BuilderParameters(of: instantiable, usesMockInitializer: handWrittenMock != nil).spelled)) -> \(record.property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource))?")
 		}
 		let slot = mockOverrideSlot(ofNodeLabeled: record.property.label, typed: slotType, hasFunction: record.hasFunction)
 		record.passedArguments = slot.passedArguments
