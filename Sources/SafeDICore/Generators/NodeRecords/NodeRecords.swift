@@ -422,7 +422,9 @@ struct NodeRecords: Sendable {
 		// today's tree has it (`CycleParameter`): a parameter by value hides a wrapper above, and a wrapper parameter offers
 		// its instance, read through the optional where `nil` arrives. Found by a walk from the root with a stack; a place
 		// shared by two bodies must see one set from both, or the world keeps its tree.
-		var instancePropertiesAtCall = [Set<Property>?](repeating: nil, count: world.variantCount)
+		// Every variant of `postOrder` is a place the walk from the root reaches, so the walk resolves each.
+		var instancePropertiesAtCall = [Set<Property>](repeating: [], count: world.variantCount)
+		var isResolved = [Bool](repeating: false, count: world.variantCount)
 		var instancePropertiesInFunction = [Set<Property>](repeating: [], count: world.variantCount)
 		func applying(_ parameters: [String: TypeFactsParameter], to properties: Set<Property>) -> Set<Property> {
 			guard !parameters.isEmpty else { return properties }
@@ -436,12 +438,16 @@ struct NodeRecords: Sendable {
 		}
 		var placesToResolve: [(variant: VariantID, parametersInScope: [String: TypeFactsParameter])] = [(0, [:])]
 		while let (variant, parametersInScope) = placesToResolve.popLast() {
-			let atCall = applying(parametersInScope, to: answeringDeclarations.lazilyInstantiatedInstanceProperties(readBy: variant))
-			if let resolved = instancePropertiesAtCall[Int(variant)] {
-				guard resolved == atCall else { throw NodeRecordRefusal.cycleTakesParameters }
+			// Only the labels the variant's own function takes are read at its call (`cycleArguments`), so a parameter of an
+			// enclosing function the variant does not take never sets two places of it apart.
+			let labelsTaken = Set(cycleParameters(of: variant).map(\.property.label))
+			let atCall = applying(parametersInScope, to: answeringDeclarations.lazilyInstantiatedInstanceProperties(readBy: variant)).filter { labelsTaken.contains($0.label) }
+			if isResolved[Int(variant)] {
+				guard instancePropertiesAtCall[Int(variant)] == atCall else { throw NodeRecordRefusal.cycleTakesParameters }
 				continue
 			}
 			instancePropertiesAtCall[Int(variant)] = atCall
+			isResolved[Int(variant)] = true
 			var parametersInFunction = parametersInScope
 			for parameter in cycleParameters(of: variant) {
 				parametersInFunction[parameter.property.label] = parameter
@@ -535,7 +541,7 @@ struct NodeRecords: Sendable {
 				isMadeSendable: isMadeSendable,
 				// Only a function a cycle closes on takes parameters; every other captures what it reads.
 				cycleParameters: body.closedOn.contains(variant) ? cycleParameters(of: variant).map(\.property) : [],
-				callCycleArguments: body.closedOn.contains(variant) ? cycleArguments(of: variant, holding: instancePropertiesAtCall[Int(variant)] ?? []) : [],
+				callCycleArguments: body.closedOn.contains(variant) ? cycleArguments(of: variant, holding: instancePropertiesAtCall[Int(variant)]) : [],
 				instanceProperties: instancePropertiesInFunction[Int(variant)],
 			)
 			records[Int(variant)] = record
