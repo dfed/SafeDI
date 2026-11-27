@@ -41,18 +41,37 @@ extension SeamSignature.Places {
 	/// It holds its memos for as long as its owner keeps it: one computation of a seam's holes, or one caller's reads of a
 	/// signature.
 	public final class Query {
-		/// - Parameter excludedEntries: The entries a route's stack (`stack(along:)`) must hold none of for any question to
-		///   range over it; empty, every route of a case's family.
+		/// A query over every route of a case's family.
 		/// - Parameter calledPlaces: The place graph of the seam or public mock a passed-up case refers to
-		///   (`CalledCase`), or `nil` where the run holds none; never asked where no case is passed up.
+		///   (`CalledCase`), or `nil` where the run holds none; never asked where no case is passed up. The query of a called
+		///   graph is made the same way, with the reference's `isPublicMock`.
 		/// - Parameter isPublicMock: Whether `places` is the graph of a public mock's plan, not of a seam's signature. Where
 		///   seams call each other, a reference of a seam beneath to this graph's type of the same kind is a case of this
 		///   graph (`pathToHoldingSeam(of:)`).
-		public init(
+		public convenience init(
 			of places: SeamSignature.Places,
-			excludingRoutesWhoseStackHolds excludedEntries: Set<SeamSignature.Places.StackEntry> = [],
 			calledPlaces: ((SeamSignature.Places.CalledCase) -> SeamSignature.Places?)? = nil,
 			ofPublicMock isPublicMock: Bool = false,
+		) {
+			self.init(places: places, excludedEntries: [], calledPlaces: calledPlaces, isPublicMock: isPublicMock)
+		}
+
+		/// A query over only the routes whose stack (`stack(along:)`) holds none of `excludedEntries`. It is given no called
+		/// graph: the entries are of this graph's stack, which a called graph's routes do not have, so a passed-up case is
+		/// never resolved through it (`calledCase(of:)` is `nil`), and no called graph's query can range over fewer routes
+		/// than all.
+		public convenience init(
+			of places: SeamSignature.Places,
+			excludingRoutesWhoseStackHolds excludedEntries: Set<SeamSignature.Places.StackEntry>,
+		) {
+			self.init(places: places, excludedEntries: excludedEntries, calledPlaces: nil, isPublicMock: false)
+		}
+
+		private init(
+			places: SeamSignature.Places,
+			excludedEntries: Set<SeamSignature.Places.StackEntry>,
+			calledPlaces: ((SeamSignature.Places.CalledCase) -> SeamSignature.Places?)?,
+			isPublicMock: Bool,
 		) {
 			self.places = places
 			self.calledPlaces = calledPlaces
@@ -936,7 +955,7 @@ extension SeamSignature.Places {
 				query = known
 			} else {
 				guard let called = calledPlaces?(reference) else { return nil }
-				query = Query(of: called, calledPlaces: calledPlaces)
+				query = Query(of: called, calledPlaces: calledPlaces, ofPublicMock: reference.isPublicMock)
 				calledQueries[key] = query
 			}
 			guard query.places.cases.indices.contains(reference.caseIndex) else { return nil }
