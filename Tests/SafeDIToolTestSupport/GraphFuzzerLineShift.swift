@@ -179,7 +179,7 @@ enum GraphFuzzerLineShift {
 	/// Up to 48 bytes of a `.safedi` text from `offset`, each byte outside printable ASCII escaped as `\xNN`.
 	private static func excerpt(of text: String, at offset: Int) -> String {
 		text.unicodeScalars.dropFirst(offset).prefix(48).map { scalar in
-			(0x20 ..< 0x7F).contains(scalar.value) && scalar != "`" ? String(scalar) : String(format: "\\x%02X", scalar.value)
+			(0x20..<0x7F).contains(scalar.value) && scalar != "`" ? String(scalar) : String(format: "\\x%02X", scalar.value)
 		}.joined()
 	}
 }
