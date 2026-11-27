@@ -302,15 +302,9 @@ extension DependencyTreeGenerator {
 						let twinValue = TwinValue(concreteType: calledScope.instantiable.concreteInstantiable, property: context.property.asValidatedForDependencyCycles)
 						let functionProperty = context.twinsBeingBuilt[twinValue] ?? context.property
 						var calledNearestDeclarations = context.nearestDeclarations
-						var calledBuilder = (scope: context.builder, erasedToConcreteExistential: context.erasedToConcreteExistential)
 						if functionProperty != context.property {
 							calledNearestDeclarations = context.enclosingNearestDeclarations
 							calledNearestDeclarations.build(functionProperty)
-							// The function is the twin's, which the scope that declares the twin builds: the calling scope
-							// declares only the property the call place is built as.
-							if let twinBuilder = shadow.twinBuilders[twinValue]?[functionProperty] {
-								calledBuilder = (twinBuilder.scope, twinBuilder.erasedToConcreteExistential)
-							}
 						}
 						let key = VariantBodyKey(scope: ObjectIdentifier(calledScope), property: functionProperty, twinsBeingBuilt: context.twinsBeingBuilt)
 						let (calledBody, arguments) = try self.calledBody(
@@ -323,7 +317,7 @@ extension DependencyTreeGenerator {
 							lazilyInstantiatedInstanceProperties: context.lazilyInstantiatedInstanceProperties,
 							makingAgain: context.labelsMadeAgainAtCall,
 							takingOptionallyAmong: shadow.parameterLabels(ofFunctionOf: calledScope),
-							builtBy: calledBuilder,
+							builtBy: (context.builder, context.erasedToConcreteExistential),
 							cache: &cache,
 						)
 						// Bodies a key holds apart differ in a label no one optional parameter takes, such as one declared

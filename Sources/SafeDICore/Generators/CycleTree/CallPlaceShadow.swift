@@ -414,7 +414,6 @@ extension DependencyTreeGenerator {
 				}
 			}
 			var propertiesByTwinValue = [TwinValue: Set<Property>]()
-			var twinBuilders = [TwinValue: [Property: TwinBuilder]]()
 			for identifier in graph.nodes {
 				if let scope = scopeByIdentifier[identifier], let copy = copyByIdentifier[identifier] {
 					// A call that passes builders keeps its fills, whose trees are today's: such a call keeps its root per
@@ -427,13 +426,7 @@ extension DependencyTreeGenerator {
 								copy.propertiesToGenerate.append(.instantiated(property, child, erasedToConcreteExistential: erasedToConcreteExistential))
 							}
 							if callPlaceByIdentifier[ObjectIdentifier(childScope)] != nil {
-								let twinValue = TwinValue(concreteType: childScope.instantiable.concreteInstantiable, property: property.asValidatedForDependencyCycles)
-								propertiesByTwinValue[twinValue, default: []].insert(property)
-								// The first scope the root reaches that builds the value as the property: every scope that
-								// declares the property builds the same body of it.
-								if twinBuilders[twinValue, default: [:]][property] == nil {
-									twinBuilders[twinValue, default: [:]][property] = TwinBuilder(scope: scope, erasedToConcreteExistential: erasedToConcreteExistential)
-								}
+								propertiesByTwinValue[TwinValue(concreteType: childScope.instantiable.concreteInstantiable, property: property.asValidatedForDependencyCycles), default: []].insert(property)
 							}
 						case .hole, .aliased:
 							copy.propertiesToGenerate.append(propertyToGenerate)
@@ -464,21 +457,8 @@ extension DependencyTreeGenerator {
 			self.calledScopeByCallPlace = calledScopeByCallPlace
 			self.callPlaceByIdentifier = callPlaceByIdentifier
 			self.parameterLabelsByCallPlace = parameterLabelsByCallPlace
-			let twinValues = Set(propertiesByTwinValue.lazy.filter { $0.value.count > 1 }.map(\.key))
-			self.twinValues = twinValues
-			self.twinBuilders = twinBuilders.filter { twinValues.contains($0.key) }
+			twinValues = Set(propertiesByTwinValue.lazy.filter { $0.value.count > 1 }.map(\.key))
 		}
-
-		/// A scope that builds a twin value as one of its properties, and whether it erases what it builds.
-		struct TwinBuilder {
-			let scope: Scope
-			let erasedToConcreteExistential: Bool
-		}
-
-		/// The scope that builds each twin value as each property that builds it, the first the root reaches: a call that
-		/// closes on the twin its path is building runs that property's function, which the scope declaring the property
-		/// builds, not the scope that makes the call. Held as long as the shadow, a few entries per twin value.
-		let twinBuilders: [TwinValue: [Property: TwinBuilder]]
 
 		/// The copy of each scope the root reaches, the root's first, in the order the root reaches them.
 		let copies: [Scope]
