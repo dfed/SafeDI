@@ -258,6 +258,50 @@ struct SafeDIToolNodeRecordsMockOverrideNotParentFieldTests: ~Copyable {
 		#expect(try namesBound(in: #require(walkOutput.mockFiles["Root+SafeDIMock.swift"])) == expectedNames)
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_keepsTheWalksStatements_whenTypeReceivesLabelNamedApartOnlyIfAvailable() async throws {
+		// `Third` receives `thing` only if available. Whether it is handed the root's `Thing` or `nil` is its place's: a
+		// required receive of the `Instantiator` above a place pins the label there. One function serves every place, so
+		// the world is refused, and the walk writes it.
+		let fixture = Self.fixture.merging([
+			"Root.swift": """
+			@Instantiable(generateMock: true)
+			public final class Root: Instantiable, Marked {
+			    public init(leaf: Leaf, third: Third) {
+			        self.leaf = leaf
+			        self.third = third
+			    }
+
+			    @Instantiated let leaf: Leaf
+			    @Instantiated let third: Third
+			    public var marker = "built"
+			}
+			""",
+			"Third.swift": """
+			@Instantiable
+			public final class Third: Instantiable, Marked {
+			    public init(thing: Thing?, first: First) {
+			        self.thing = thing
+			        self.first = first
+			    }
+
+			    @Received(onlyIfAvailable: true) let thing: Thing?
+			    @Instantiated let first: First
+			    public var marker = "built"
+			}
+			""",
+		]) { $1 }
+		let walkOutput = try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+
+		#expect(reports.filter(\.isMockRoot).map(\.everyRefusal) == [["mockOverrideNotParentField"]])
+		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [false])
+		#expect(output.generatedFiles == walkOutput.generatedFiles)
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
