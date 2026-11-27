@@ -783,7 +783,9 @@ jobs:
           {
             echo "### ${{ matrix.corpus }} seeds ${{ matrix.starting-seed }} + ${{ matrix.iterations }}, mocks laid out from node records"
             echo '```'
-            grep '↳ Graph fuzzer seed' "$RUNNER_TEMP/long-run.txt" | sed 's/^↳ Graph fuzzer seed \([0-9]*\): /\1 /' | awk '{ seed = $1; $1 = ""; seeds[$0] = seeds[$0] " " seed; count[$0]++ } END { for (k in count) printf "%4d%s:%s\n", count[k], k, seeds[k] }' | sort -rn
+            # A seed's line follows the line that records its issue: a known issue's says "recorded a known issue", so
+            # only the others are failures the run did not expect, which are listed apart from the known ones.
+            awk '/^↳ Graph fuzzer seed/ { kind = (previous ~ /recorded a known issue/) ? "known" : "NEW" } /^↳ Graph fuzzer seed/ { line = $0; sub(/^↳ Graph fuzzer seed /, "", line); seed = line; sub(/:.*/, "", seed); sub(/^[0-9]*: /, "", line); key = kind " " line; seeds[key] = seeds[key] " " seed; count[key]++ } { previous = $0 } END { for (k in count) printf "%4d %s:%s\n", count[k], k, seeds[k] }' "$RUNNER_TEMP/long-run.txt" | sort -k2,2r -k1,1rn
             grep -c 'no longer fails' "$RUNNER_TEMP/long-run.txt" | sed 's/^/stale known issues: /'
             tail -3 "$RUNNER_TEMP/long-run.txt"
             echo '```'
