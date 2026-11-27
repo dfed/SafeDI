@@ -37,12 +37,11 @@ extension NodeRecords {
 
 	/// The shapes of a node built in a `@Sendable` function this kind does not make yet, refused as `sendable`: a node
 	/// with more than one parent, or a child with more than one, whose override is read from more than one place; a child
-	/// built in a function of its own, which would be handed the local's field across the `@Sendable` function; a local
-	/// whose name a node's label or function takes, which the walk names apart; and a type declared in an extension,
-	/// whose wrapper the engine annotates as production's binding does, where the walk does not.
+	/// built in a function of its own, which would be handed the local's field across the `@Sendable` function; and a
+	/// local whose name a node's label or function takes, which the walk names apart.
 	static func mockSendableRefusals(of declaration: DeclarationID, in world: some NodeRecordSources) -> [NodeRecordRefusal] {
 		guard isBuiltInSendableFunction(declaration, in: world), let label = world.property(of: declaration)?.label else { return [] }
-		guard world.parents(of: declaration).count == 1, !world.scope(of: declaration).instantiable.declarationType.isExtension else { return [.sendable] }
+		guard world.parents(of: declaration).count == 1 else { return [.sendable] }
 		for child in world.edges(from: declaration) {
 			guard world.parents(of: child).count == 1, !isBuiltInFunctionOfItsOwn(child, in: world) else { return [.sendable] }
 		}
