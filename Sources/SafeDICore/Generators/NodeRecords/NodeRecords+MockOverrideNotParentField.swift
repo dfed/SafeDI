@@ -21,10 +21,16 @@
 /// What a mock root's lowering names that the records of its world read: values of the root's level, which no fact of
 /// the world holds, so the world is made with them (`TypeFactsGraph.mockRootNames`). Empty for every production root's world.
 struct MockRootNames: Sendable {
-	/// - Parameter namesApart: The name the root's level gives each child it names apart, by the child's label and then its
-	///   property's type (`MockLowering.Walk.rootRenames`).
-	init(namesApart: [String: [TypeDescription: String]] = [:]) {
+	/// - Parameters:
+	///   - namesApart: The name the root's level gives each child it names apart, by the child's label and then its
+	///     property's type (`MockLowering.Walk.rootRenames`).
+	///   - unavailableDependencyOverrides: Each property instantiated only if available that nothing fulfills and that
+	///     `mock()` takes an override of, with the override's name, in the order `SafeDIOverrides` declares the overrides
+	///     (`MockLowering.RootSignature.unavailableDependencyOverrideNames`).
+	init(namesApart: [String: [TypeDescription: String]] = [:], unavailableDependencyOverrides: [(property: Property, name: String)] = []) {
 		self.namesApart = namesApart
+		unavailableDependencyOverrideNamesInOrder = unavailableDependencyOverrides.map(\.name)
+		unavailableDependencyOverrideNames = Dictionary(unavailableDependencyOverrides.map { ($0.property, $0.name) }) { first, _ in first }
 	}
 
 	/// The name the mock root binds `property` under where it names it apart from a sibling of its label, and `nil`
@@ -38,7 +44,17 @@ struct MockRootNames: Sendable {
 		namesApart[label].map { !$0.isEmpty } ?? false
 	}
 
+	/// The name of the override `mock()` takes of `property`, one instantiated only if available that nothing fulfills,
+	/// and `nil` where it takes none.
+	func unavailableDependencyOverrideName(of property: Property) -> String? {
+		unavailableDependencyOverrideNames[property]
+	}
+
+	/// The names of the overrides `mock()` takes of properties nothing fulfills, in the order `SafeDIOverrides` declares them.
+	let unavailableDependencyOverrideNamesInOrder: [String]
+
 	private let namesApart: [String: [TypeDescription: String]]
+	private let unavailableDependencyOverrideNames: [Property: String]
 }
 
 extension NodeRecords {

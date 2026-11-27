@@ -27,6 +27,8 @@ extension NodeRecords {
 	/// stage-1 refusals of the node its record makes, and the node is of the kind whose term discharged one.
 	static func mockConstructionClaim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
 		guard world.isMockWorld else { return nil }
+		// A property nothing fulfills builds nothing, so it is no construction (`NodeRecords+MockUnavailableDependency.swift`).
+		guard !world.scope(of: declaration).isUnavailableDependency else { return mockUnavailableDependencyClaim(of: declaration, in: world) }
 		// A hand-written mock builds its type with or without an initializer: a fake has none.
 		let buildsWithHandWrittenMock = world.construction(of: declaration) == .handWrittenMock
 		let erasedDischarges = mockErasedDischarges(of: declaration, in: world)
@@ -118,7 +120,8 @@ extension NodeRecords {
 			typesDeclaredEscaping: typesDeclaredEscaping,
 			children: placesBindingNamesApartAgain + children,
 		)
-		let isConfigured = !children.isEmpty
+		// A property nothing fulfills is a child with no override of its own, so it makes its type no configuration.
+		let isConfigured = world.edges(from: declaration).contains { !world.scope(of: $0).isUnavailableDependency }
 		let slotType: TypeDescription = if isConfigured {
 			.nested(name: ScopeGenerator.mockConfigurationStructName, parentType: instantiable.concreteInstantiable, generics: [])
 		} else {
@@ -134,7 +137,9 @@ extension NodeRecords {
 			handsOverridesToChildren: isConfigured,
 			isSendable: record.isSendable,
 		)
-		record.passedArguments = slot.passedArguments
+		// The override `mock()` takes of a property nothing fulfills is handed down to the function of the type that
+		// declares the property (`NodeRecords+MockUnavailableDependency.swift`).
+		record.passedArguments = try slot.passedArguments + unavailableDependencyOverrideArguments(of: declaration, in: world, children: children, isSendable: record.isSendable)
 		record.alternatives = [ConstructionAlternative(
 			closure: isConfigured ? .member(ReservedName.configurationBuilderPropertyName, of: slot.value) : slot.value,
 			bindingName: ReservedName.configurationBuilderPropertyName,

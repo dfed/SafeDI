@@ -199,6 +199,8 @@ struct NodeRecords: Sendable {
 				try .alias(Self.renameRecord(of: declaration, variant: variant, in: world, answers: onlyIfAvailableAnswers))
 			case .mockConstruction:
 				try .built(Self.mockConstructionRecord(of: declaration, variant: variant, in: world, unavailableProperties: onlyIfAvailableAnswers.unavailableProperties(of: variant), typesDeclaredEscaping: escaping, children: children))
+			case .mockUnavailableDependency:
+				try .alias(Self.mockUnavailableDependencyRecord(of: declaration, in: world))
 			case .mockErased:
 				try .built(Self.mockErasedRecord(of: declaration, variant: variant, in: world, unavailableProperties: onlyIfAvailableAnswers.unavailableProperties(of: variant), typesDeclaredEscaping: escaping, children: children))
 			}
@@ -390,4 +392,7 @@ enum NodeRecordKind: Sendable {
 	/// or a constant or an `Instantiator` erased to its property's type, whose override returns the property's type
 	/// (`NodeRecords+MockErased.swift`).
 	case mockErased
+	/// A property instantiated only if available that no declaration fulfills, in a mock root's world: bound to the
+	/// override `mock()` takes of it, or to `nil` where it takes none (`NodeRecords+MockUnavailableDependency.swift`).
+	case mockUnavailableDependency
 }

@@ -213,12 +213,13 @@ extension ScopeGenerator {
 			let bindsOnlyNodes = rootReceiverBindingIndex == 0
 				&& linesBoundBesideNodes.isEmpty
 				&& signature.parameters.isEmpty
-				&& signature.onlyIfAvailableOverrides.isEmpty
+				// The override of a property nothing fulfills is read by the record of the type that declares it.
+				&& signature.onlyIfAvailableOverrides.allSatisfy { signature.unavailableDependencyOverrideNames[$0.receivedProperty] != nil }
 				&& builders.isEmpty
 				// A node the root's level names apart is bound under that name by its record; any other name is no node's.
 				&& rootRenames.values.allSatisfy { $0.values.allSatisfy(walk.rootPropertyNodeBindingNames.contains) }
 				&& rootInstancesReadByValue.isEmpty
-			if let statements = try Self.nodeRecordsMockStatements(of: instantiable, worldRoot: worldRoot, bindsOnlyNodes: bindsOnlyNodes, rootNames: MockRootNames(namesApart: walk.rootRenames)) {
+			if let statements = try Self.nodeRecordsMockStatements(of: instantiable, worldRoot: worldRoot, bindsOnlyNodes: bindsOnlyNodes, rootNames: MockRootNames(namesApart: walk.rootRenames, unavailableDependencyOverrides: signature.onlyIfAvailableOverrides.compactMap { override in signature.unavailableDependencyOverrideNames[override.receivedProperty].map { (override.receivedProperty, $0) } })) {
 				bindingLines = [statements]
 			}
 		}
