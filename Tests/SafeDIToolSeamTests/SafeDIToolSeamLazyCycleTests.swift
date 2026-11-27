@@ -2391,6 +2391,27 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		""" + "\n"])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorAtDeclarationOfFunctionAlone_whenMemberOfLoopOfBuildersClosesCycleOnFunctionWhoseCallOfTierOmitsLabel() async {
+		// `Root`'s `themeBuilder` builds `AppTheme`, which receives it back, so the builder is a loop of one that rebinds it in
+		// its function, whose `Badge`, beneath `Service`'s `public` tier, would be handed it. `X`'s `themeBuilder` closes the
+		// cycle on that function and rebinds it too, but a call of the function passes no value of the label the function
+		// builds: inside it the label reads what it reads where the function is declared, so the error is at `Root` alone.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["Root.swift"]):11:5: error: `Root` provides `themeBuilder: Instantiator<any Hub.Space.Theme>`, but the `public` initializer SafeDI generated for `Service` in module `Feature`, the narrowest one module `App` can call, does not take it: `Service` takes `themeBuilder` only on its `internal` initializer, so this call would pass `nil` to `Badge`, which the tree would hand `themeBuilder` were it built inline. `Hub.Space.Theme` is nested in `Hub.Space`, which is `internal` as far as SafeDI can tell: it is declared inside an extension of `Hub` that spells no access level, which SafeDI counts as `internal`, since it reads `Hub`’s access only from a declaration of `Hub` in the same module that is outside every extension, or inside an extension of a type it reads the same way. If `Hub` can be `public`, spell the extension’s access level (`public extension Hub { … }`, dropping the modifier on `Space` that Swift then reports as redundant; the compiler rejects a level wider than `Hub`’s), or declare `Space` in `Hub`’s body or at top level; mention `Hub.Space` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; or stop providing `themeBuilder` on this path.
+			\(fixtures["Feature"]!["Badge.swift"]):9:5: note: `Badge` receives `themeBuilder: Instantiator<any Hub.Space.Theme>?` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(modules: Self.hubSpaceThemeModules(appPackage: "Other", appFiles: [
+				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let themeBuilder: Instantiator<any Hub.Space.Theme>"]),
+				Self.appTheme(declarations: ["@Received let themeBuilder: Instantiator<any Hub.Space.Theme>", "@Instantiated let service: Service", "@Instantiated let xBuilder: Instantiator<X>"]),
+				seamFixtureType(named: "X", declarations: ["@Instantiated let themeBuilder: Instantiator<any Hub.Space.Theme>"]),
+			], badgeReceives: (label: "themeBuilder", type: "Instantiator<any Hub.Space.Theme>")), integration: .moduleInfo, filesToDelete: &filesToDelete)
+		}
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -2413,11 +2434,12 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 	/// with `appFiles`. `Hub.Space.Theme` is a `public` protocol in an extension of `Hub.Space`, which `Feature` declares
 	/// `@Instantiable` in an extension of another module's `Hub` (`hubTheme(named:declarations:)`): SafeDI proves
 	/// `Hub.Space`, and so the protocol, narrower than `public`, while a module in another package can conform to it.
-	private static func hubSpaceThemeModules(appPackage: String, appFiles: [String]) -> [ModuleFixture] {
+	/// `badgeReceives` is the label and type `Badge` receives only if available, `theme: any Hub.Space.Theme` unless given.
+	private static func hubSpaceThemeModules(appPackage: String, appFiles: [String], badgeReceives: (label: String, type: String) = (label: "theme", type: "(any Hub.Space.Theme)")) -> [ModuleFixture] {
 		[
 			hubsModule,
 			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
-				"import Hubs\n\n@Instantiable\npublic struct Badge: Instantiable {\n    package init(theme: (any Hub.Space.Theme)?) {\n        self.theme = theme\n    }\n\n    @Received(onlyIfAvailable: true) let theme: (any Hub.Space.Theme)?\n}",
+				"import Hubs\n\n@Instantiable\npublic struct Badge: Instantiable {\n    package init(\(badgeReceives.label): \(badgeReceives.type)?) {\n        self.\(badgeReceives.label) = \(badgeReceives.label)\n    }\n\n    @Received(onlyIfAvailable: true) let \(badgeReceives.label): \(badgeReceives.type)?\n}",
 				seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let badge: Badge"]),
 				hubTheme(named: "Space"),
 				"import Hubs\n\nextension Hub.Space {\n    public protocol Theme {}\n}",

@@ -84,15 +84,6 @@ struct TypeFactsSeamTierOmissions: Sendable {
 			}
 		}
 
-		// Where each declaration a node's type makes is declared, by property, as the walk's scopes find it.
-		func declarationLocation(of property: Property, declaredBy node: Int) -> Dependency.DeclarationLocation? {
-			let declaringInstantiable = nodes[node].scope.instantiable
-			guard let dependency = declaringInstantiable.dependencies.last(where: { !$0.source.isReceived && $0.property == property }) else {
-				return declaringInstantiable.declarationLocation
-			}
-			return dependency.declarationLocation
-		}
-
 		// The references to what leads to each node, interned: the root's declaration, and each edge's dependency where a
 		// type in one of the module's own files declares it.
 		var referenceLocations: [Dependency.DeclarationLocation?] = [instantiable.declarationLocation]
@@ -244,10 +235,12 @@ struct TypeFactsSeamTierOmissions: Sendable {
 			let edgeFact = edgeFacts[Int(edge)]
 			let isRebound = edgeFact.loop >= 0 && bindingEdge >= 0 && edgeFacts[Int(bindingEdge)].loop == edgeFact.loop
 			guard index < Int(edgeFact.bindingsBefore) || isRebound else { return nil }
+			// Every binding of a type's own is a dependency it declares, whose location the graph keeps.
+			let location = facts.bindings[offset + index].declarationLocation
 			return Provider(
 				property: property,
 				declaringType: nodes[source].scope.instantiable.concreteInstantiable,
-				declarationLocation: declarationLocation(of: property, declaredBy: source),
+				declarationLocation: location >= 0 ? facts.declarationLocations[Int(location)] : nil,
 			)
 		}
 
