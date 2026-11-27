@@ -37,6 +37,21 @@ struct TypeFactsVariantsTests {
 	}
 
 	@Test
+	func init_handsNoAnswer_whenCallerHidesReadItBindsAtAnotherEdgeOnly() {
+		// 1 builds 2 and 3, which each read 0, and binds 0 at its edge to 2 alone: 1 hides 0 from above, so nothing answers
+		// 3's read of it.
+		let graph = OrderedGraph(root: 0) { node in
+			[0: [1], 1: [2, 3]][node, default: []]
+		}
+		let variants = makeVariants(graph: graph, own: [[], [], [0], [0]], bindings: [
+			Edge(node: 1, index: 0): [0: VariantBinding(answer: 7, declaration: 1)],
+		])
+		let variantOfOne = Int(variants.callees(of: 0)[0])
+
+		#expect(Array(variants.sources(ofCall: variants.callOffset(of: variantOfOne) + 1)) == [.none])
+	}
+
+	@Test
 	func init_sharesVariantAndKeepsEachCallsSource_whenTwoParentsBindOneAnswer() {
 		// The root builds 1 and 2, which each build 3, which reads 0; 1 and 2 each bind 0 with the same answer, so 3 has
 		// one variant, and each call says which declaration handed it.

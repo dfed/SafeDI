@@ -35,8 +35,10 @@ enum NodeRecordsChecks {
 		// A seam call's record, as the engine is to spell it, must list what its text reads, binds and declares, and spell
 		// the text's guard line and builder arguments.
 		let seamCallObserver: @Sendable (SeamCallRecordObservation) -> Void = { call in
-			for mismatch in HoleSiteRecordObservation.recordMismatches(text: call.text, readNames: call.readNames, boundNames: call.boundNames, place: "a seam call") {
-				Issue.record(Comment(rawValue: mismatch))
+			if let boundNames = call.boundNames {
+				for mismatch in HoleSiteRecordObservation.recordMismatches(text: call.text, readNames: call.readNames, boundNames: boundNames, place: "a seam call") {
+					Issue.record(Comment(rawValue: mismatch))
+				}
 			}
 			for (spelled, written) in zip(call.spelledFromRecord, call.written) where spelled != written {
 				Issue.record(Comment(rawValue: "The record of a seam call spells `\(spelled)` where its text writes `\(written)`:\n\(call.text)"))
@@ -46,8 +48,28 @@ enum NodeRecordsChecks {
 			}
 			enclosingSeamCallObserver?(call)
 		}
+		let enclosingDispatcherObserver = DispatcherRecordObservation.observer
+		// A dispatcher's declaration, spelled from the call's records alone, must be the text the tree writes.
+		let dispatcherObserver: @Sendable (DispatcherRecordObservation) -> Void = { dispatcher in
+			if dispatcher.spelledFromRecord != dispatcher.text {
+				Issue.record(Comment(rawValue: "The records of a dispatcher spell\n\(dispatcher.spelledFromRecord)\nwhere the tree writes\n\(dispatcher.text)"))
+			}
+			enclosingDispatcherObserver?(dispatcher)
+		}
+		let enclosingFillObserver = FillSignatureObservation.observer
+		// A fill's function, up to its tree, spelled from the fill's record alone, must be the text the tree writes.
+		let fillObserver: @Sendable (FillSignatureObservation) -> Void = { fill in
+			if fill.spelledFromRecord != fill.written {
+				Issue.record(Comment(rawValue: "The record of a fill spells\n\(fill.spelledFromRecord.joined(separator: "\n"))\nwhere the tree writes\n\(fill.written.joined(separator: "\n"))"))
+			}
+			enclosingFillObserver?(fill)
+		}
 		return try await SeamCallRecordObservation.$observer.withValue(seamCallObserver) {
-			try await checkingNodeRecords(laysOutRoots: laysOutRoots, reportPath: reportPath, testName: testName, enclosingObserver: enclosingObserver, body)
+			try await DispatcherRecordObservation.$observer.withValue(dispatcherObserver) {
+				try await FillSignatureObservation.$observer.withValue(fillObserver) {
+					try await checkingNodeRecords(laysOutRoots: laysOutRoots, reportPath: reportPath, testName: testName, enclosingObserver: enclosingObserver, body)
+				}
+			}
 		}
 	}
 

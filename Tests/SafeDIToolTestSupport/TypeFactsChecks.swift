@@ -93,6 +93,13 @@ enum TypeFactsChecks {
 		/// place and by a `SendableLazilyInstantiated` at another. Wider than the gap: it does not ask whether the node is
 		/// reached inside a `@Sendable` function, which the report does not say.
 		var sendableGapProxyNodes = 0
+		/// Places check 35 leaves out: a place closes on their function whose variant in the facts is another.
+		var check35ClosedOnByAnotherVariant = 0
+		/// The facts' parameters of the variants check 35 compared that the tree's function does not take, because it
+		/// captures the value where it is nested, each variant counted at its first place; and the text they would add
+		/// were each a parameter: its declaration in the signature and its argument at each call of the variant.
+		var check35CapturedParameters = 0
+		var check35CapturedParameterBytes = 0
 		var line = ""
 	}
 
@@ -409,6 +416,53 @@ enum TypeFactsChecks {
 				}
 			}
 		}
+		// Check 35 (34 is the production Sendable mark’s): a variant’s parameters, read from the facts alone, are the
+		// cycle parameters of the function the tree builds at each of its places. A place that closes a cycle builds no
+		// function.
+		// A function a place closes on whose own variant in the facts is another (a member built two ways, which is two
+		// declarations, or a call whose answers key it apart from the function’s first call) is two variants in the facts,
+		// which hold its parameters apart: counted, and no finding.
+		var placesClosedOnByAnotherVariant = Set<Int>()
+		var variantsWithParametersTheTreeCaptures = Set<Int>()
+		for (index, place) in places.enumerated() where place.closesCycle {
+			if let closedOn = closedOnPlace(of: index), factsVariantByPlace[closedOn] != factsVariantByPlace[index] {
+				placesClosedOnByAnotherVariant.insert(closedOn)
+			}
+		}
+		for (index, place) in places.enumerated() {
+			guard !place.closesCycle, let variant = factsVariantByPlace[index], let generator = place.generator, let node = place.node, report.nodes[node].owedFacts.isEmpty else { continue }
+			guard !placesClosedOnByAnotherVariant.contains(index) else {
+				result.check35ClosedOnByAnotherVariant += 1
+				continue
+			}
+			result.comparedByCheck[35, default: 0] += 1
+			// The facts' variant takes a parameter for every read its function does not capture, where the tree's function
+			// takes one only for a label declared again inside a cycle that closes on it: the tree's are among the facts',
+			// in the facts' order.
+			var remaining = report.variantParameters[variant][...]
+			let areAmongTheFacts = generator.cycleParameters.allSatisfy { parameter in
+				guard let position = remaining.firstIndex(of: parameter) else { return false }
+				remaining = remaining[(position + 1)...]
+				return true
+			}
+			if areAmongTheFacts, report.variantParameters[variant].count > generator.cycleParameters.count, variantsWithParametersTheTreeCaptures.insert(variant).inserted {
+				var treeParameters = generator.cycleParameters[...]
+				let callCount = report.variantCalls.reduce(0) { $0 + $1.count { $0 == variant } }
+				for parameter in report.variantParameters[variant] {
+					guard parameter != treeParameters.first else {
+						treeParameters = treeParameters.dropFirst()
+						continue
+					}
+					result.check35CapturedParameters += 1
+					// `label: Type, ` in the signature, and `label: label, ` at each call.
+					let label = parameter.prefix { $0 != ":" }
+					result.check35CapturedParameterBytes += parameter.utf8.count + 2 + callCount * (2 * label.utf8.count + 4)
+				}
+			}
+			if !areAmongTheFacts {
+				add(35, "the function of \(nodeDescription(node)) takes \(generator.cycleParameters) where the facts give its variant \(report.variantParameters[variant])")
+			}
+		}
 		// Check 33.
 		if !report.forMockGeneration {
 			for (variant, family) in report.variantFamilies.enumerated() where family != "plain" && !(report.holesArePlaces && report.nodes[report.variantNodes[variant]].holdsHoleBeneath) {
@@ -462,14 +516,14 @@ enum TypeFactsChecks {
 		}
 		var compared = [Int: Int]()
 		columnChecks(of: report, subtreeClosesCycle: subtreeClosesCycle, closedOnPlace: closedOnPlace, childrenByPlace: childrenByPlace, add: add, compared: &compared)
-		result.comparedByCheck = compared
+		result.comparedByCheck.merge(compared) { $0 + $1 }
 		let unwalkedNodes = report.nodes.count - nodesSeen.count - report.nodes.count(where: \.isLeaf)
 		let twinNodes = report.nodes.count { $0.twin >= 0 }
 		var line = "root=\(report.root) mock=\(report.forMockGeneration) nodes=\(report.nodes.count) unwalkedNodes=\(unwalkedNodes) places=\(places.count) variants=\(result.variantCount) factsVariants=\(result.factsVariantCount) worst=\(result.worstNodeVariantCount) twins=\(twinNodes)"
 		for check in 1...lastCheck {
 			line.append(" check\(check)=\(result.findingsByCheck[check]?.count ?? 0)")
 		}
-		line.append(" check10Exempted=\(result.check10ExemptedPairs) check10SilentNil=\(result.check10SilentNilReads) nilOrderReads=\(result.nilOrderReads) nilOrderFewerFunctions=\(result.nilOrderFewerFunctions) nilOrderPlaces=\(result.nilOrderPlaces) sendableGapProxy=\(result.sendableGapProxyNodes)")
+		line.append(" check10Exempted=\(result.check10ExemptedPairs) check10SilentNil=\(result.check10SilentNilReads) nilOrderReads=\(result.nilOrderReads) nilOrderFewerFunctions=\(result.nilOrderFewerFunctions) nilOrderPlaces=\(result.nilOrderPlaces) sendableGapProxy=\(result.sendableGapProxyNodes) check35ClosedOnByAnotherVariant=\(result.check35ClosedOnByAnotherVariant) check35CapturedParameters=\(result.check35CapturedParameters) check35CapturedParameterBytes=\(result.check35CapturedParameterBytes)")
 		line.append(" check10Owed=\(result.check10OwedByFact.sorted { $0.key < $1.key }.map { "\($0.key):\($0.value)" }.joined(separator: ",")) check10OwedUncovered=\(result.check10OwedUncovered.count) test=\(Test.current?.name ?? "")")
 		for check in 11...lastCheck {
 			line.append(" compared\(check)=\(result.comparedByCheck[check] ?? 0)")
@@ -614,7 +668,7 @@ enum TypeFactsChecks {
 		return reads
 	}
 
-	static let lastCheck = 33
+	static let lastCheck = 35
 
 	/// Checks 11 to 31: each column of the graph against what the generator decided at each place.
 	///
@@ -640,8 +694,11 @@ enum TypeFactsChecks {
 	/// 30. A node holds a hole beneath exactly when a hole is reachable from it along edges that are not fills.
 	/// 31. How the place is constructed: a seam call, a call of another module's public mock, a type built with its
 	///     hand-written mock.
+	/// 32. Oracle B: each member a variant makes again is called as the variant that each body calling the maker calls for
+	///     that member at its own edge, and the maker has such a body. It reads the variants alone, so it runs on every tree
+	///     with a loop of builders, refused or not.
 	///
-	/// 33, outside the columns (32 is reserved for the made-again oracle): a production world keys by family only the bodies
+	/// 33, outside the columns: a production world keys by family only the bodies
 	/// of a seam's tree that hold a hole, which read their cases from the `@Sendable` carrier inside a `@Sendable` function.
 	/// Every other body serves its places inside and outside a `@Sendable` function, the mark folded over its calls, as
 	/// 2.4.x writes it.
@@ -848,6 +905,30 @@ enum TypeFactsChecks {
 			count(30)
 			if node.holdsHoleBeneath != holdsHole[index] {
 				add(30, "node \(index) \(node.description) holds a hole beneath \(node.holdsHoleBeneath) where its edges reach one \(holdsHole[index])")
+			}
+		}
+		// Check 32.
+		guard report.variantMadeAgainCalls.contains(where: { !$0.isEmpty }) else { return }
+		var edgeCallersByVariant = [[Int]](repeating: [], count: report.variantCalls.count)
+		for (caller, calls) in report.variantCalls.enumerated() {
+			for callee in calls {
+				edgeCallersByVariant[callee].append(caller)
+			}
+		}
+		for (maker, calls) in report.variantMadeAgainCalls.enumerated() {
+			let makerNode = nodes[report.variantNodes[maker]]
+			for (member, callee) in zip(makerNode.madeAgain, calls) {
+				count(32)
+				let parents = edgeCallersByVariant[maker]
+				if parents.isEmpty {
+					add(32, "v\(maker) of \(makerNode.description) makes again v\(callee) and no body calls it at an edge")
+				}
+				for parent in parents {
+					let parentNode = nodes[report.variantNodes[parent]]
+					for (edge, target) in parentNode.edges.enumerated() where target == member && report.variantCalls[parent][edge] != callee {
+						add(32, "v\(maker) of \(makerNode.description) makes again v\(callee) of node \(member), where its parent v\(parent) calls v\(report.variantCalls[parent][edge])")
+					}
+				}
 			}
 		}
 	}

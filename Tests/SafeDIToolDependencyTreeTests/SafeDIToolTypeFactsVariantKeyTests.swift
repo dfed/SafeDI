@@ -1345,7 +1345,13 @@ struct SafeDIToolTypeFactsVariantKeyTests: ~Copyable {
 		for await report in stream where report.root == root && report.forMockGeneration == forMockGeneration {
 			reports.append(report)
 		}
-		return try #require(reports.last)
+		// Where a root's cycles are planned per type, the tree is built in pieces, each observed as a world of its own: the
+		// last piece with the most places holds the functions a test reads.
+		var largest = try #require(reports.last)
+		for report in reports.reversed() where report.places.count > largest.places.count {
+			largest = report
+		}
+		return largest
 	}
 
 	/// `Leaf` receives `theme` only if available, as `leafTheme`, and builds itself again through `leafBuilder`, so 2.4.x
