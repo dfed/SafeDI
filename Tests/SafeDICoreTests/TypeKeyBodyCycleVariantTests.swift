@@ -249,6 +249,41 @@ struct TypeKeyBodyCycleVariantTests {
 	}
 
 	@Test
+	func statements_passesNilAtEveryCall_whenEveryCallPassesNilForAnOptionalParameter() throws {
+		let optionalX = Answer.declared(Property(label: "x", typeDescription: .optional(.simple(name: "X"))), isBeingBuilt: false)
+		let statements = try #require(TypeKeyBody.statements(
+			ofRootBody: [
+				Self.call("aBuilder", building: "A", variant: 1, reading: []),
+				Self.call("bBuilder", building: "B", variant: 0, reading: ["x"], answers: [optionalX], arguments: [.none]),
+			],
+			variants: [
+				Self.variant("bBuilder", building: "B", reading: ["x"], answers: [optionalX], children: [
+					Self.inline("k", "K", reading: "x", "X?"),
+				]),
+				Self.variant("aBuilder", building: "A", reading: [], children: [
+					Self.call("bBuilder", building: "B", variant: 0, reading: ["x"], answers: [optionalX], arguments: [.none]),
+				]),
+			],
+		))
+		#expect(GeneratedCode.lines(statements).spelled() == """
+		        func __safeDI_bBuilder(x: X?) -> B {
+		            let k = K(x: x)
+		            return B(k: k)
+		        }
+		        func __safeDI_aBuilder() -> A {
+		            let bBuilder = Instantiator<B> {
+		                __safeDI_bBuilder(x: nil)
+		            }
+		            return A(bBuilder: bBuilder)
+		        }
+		        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+		        let bBuilder = Instantiator<B> {
+		            __safeDI_bBuilder(x: nil)
+		        }
+		""")
+	}
+
+	@Test
 	func statements_typesTheParameterAsItsAnswer_whenOnlyARenameOnlyIfAvailableReadsIt() throws {
 		let statements = try #require(TypeKeyBody.statements(
 			ofRootBody: [
@@ -685,8 +720,9 @@ struct TypeKeyBodyCycleVariantTests {
 	}
 
 	/// A call place of the variant at index `variant`, whose function builds `type` for `label`, an `Instantiator`, answering
-	/// every label of `reading` with the declaration of its label where it is made, or with each of `answers` where given.
-	private static func call(_ label: String, building type: String, variant: Int, reading: [String], answers: [Answer]? = nil) -> GeneratedCode {
+	/// every label of `reading` with the declaration of its label where it is made, or with each of `answers` where given,
+	/// and passing each parameter the answers give what `arguments` answers where given, else what the answers do.
+	private static func call(_ label: String, building type: String, variant: Int, reading: [String], answers: [Answer]? = nil, arguments: [Answer]? = nil) -> GeneratedCode {
 		let record = ClosingPlaceRecord(
 			callingVariant: variant,
 			property: Property(label: label, typeDescription: .simple(name: "Instantiator", generics: [.simple(name: type)])),
@@ -695,7 +731,7 @@ struct TypeKeyBodyCycleVariantTests {
 			forwardedProperties: [],
 			labels: reading,
 			answers: answers ?? declarations(of: reading),
-			arguments: answers ?? declarations(of: reading),
+			arguments: arguments ?? answers ?? declarations(of: reading),
 		)
 		return .place(PlacePlan(code: .text("let \(label) = Instantiator<\(type)>(__safeDI_\(label))"), record: .closer(record)))
 	}
