@@ -344,6 +344,33 @@ struct SafeDIToolTypeFactsVariantKeyTests: ~Copyable {
 		#expect(labelTexts(graph.parameterOrder(of: Int32(ring1))) == ["zeta", "alpha"])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_ordersParametersAsBodyFirstReceives_whenTheBodyReceivesALabelThroughARename() async throws {
+		// As above, with `Ring0` receiving `zeta` through a rename: the rename receives `zeta` itself, before its `leaf`
+		// receives `alpha`, so `zeta` still comes first.
+		let report = try await rootReport(of: [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let entry0: Entry0"]),
+			seamFixtureType(named: "Entry0", isFinalClass: true, declarations: ["@Instantiated let alpha: Alpha", "@Instantiated let zeta: Zeta", "@Instantiated let early: Early", "@Instantiated let ring0Builder: Instantiator<Ring0>"]),
+			seamFixtureType(named: "Early", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let alpha: Alpha?"]),
+			seamFixtureType(named: "Ring0", isFinalClass: true, declarations: ["@Received(fulfilledByDependencyNamed: \"zeta\", ofType: Zeta.self) let renamedZeta: Zeta", "@Instantiated let leaf: Leaf", "@Instantiated let ring1Builder: Instantiator<Ring1>"]),
+			seamFixtureType(named: "Leaf", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let alpha: Alpha?"]),
+			seamFixtureType(named: "Ring1", isFinalClass: true, declarations: ["@Instantiated let ring0Builder: Instantiator<Ring0>"]),
+			seamFixtureType(named: "Alpha", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "Zeta", isFinalClass: true, declarations: []),
+		])
+		let graph = report.graph
+		func labelTexts(_ labels: some Sequence<WorldLabelID>) -> [String] {
+			labels.map { graph.labelTexts[Int($0)] }
+		}
+		let ring0 = try #require(report.nodes.firstIndex { $0.description.hasPrefix("Ring0 ") })
+		let ring1 = try #require(report.nodes.firstIndex { $0.description.hasPrefix("Ring1 ") })
+
+		#expect(labelTexts(graph.labels(of: Int32(ring0))) == ["zeta", "alpha", "ring0Builder"])
+		#expect(labelTexts(graph.parameterOrder(of: Int32(ring0))) == ["zeta", "alpha"])
+		#expect(labelTexts(graph.parameterOrder(of: Int32(ring1))) == ["zeta", "alpha"])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
