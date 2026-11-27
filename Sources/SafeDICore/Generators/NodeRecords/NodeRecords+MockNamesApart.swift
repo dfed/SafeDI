@@ -20,9 +20,10 @@
 
 extension NodeRecords {
 	/// A receive a node of a mock root's world binds again under its label at the top of its builder function, from the
-	/// name the mock root binds the value apart under (`MockRootNames.nameApart(receivedAs:)`): a child of the root's level,
-	/// a parameter of `mock()` or an override of what the tree receives only if available, each named apart from another
-	/// form of its label.
+	/// name the mock root binds the value apart under (`MockRootNames.namesBoundAgain`): a child of the root's level, a
+	/// parameter of `mock()` or an override of what the tree receives only if available, each named apart from another form
+	/// of its label, or a builder a call of another module's public mock passes up, which `mock()` binds under its internal
+	/// name.
 	struct MockReceiveBoundAgain: Equatable {
 		/// The receive, as the node's type declares it.
 		let property: Property
@@ -33,16 +34,23 @@ extension NodeRecords {
 		/// (`MockLowering.ConstantNode.receiverBindingLines(indent:)`), read as a rename of the name is, so the function is
 		/// handed the name as it is any value it reads.
 		var place: GeneratedCode {
-			let text = "let \(property.label): \(property.typeDescription.asSource) = \(nameApart.label)"
+			// A builder a call passes up is received `@escaping`, which no binding spells.
+			let type = property.typeDescription.strippingEscaping
+			let text = "let \(property.label): \(type.asSource) = \(nameApart.label)"
+			let record = AliasPlaceRecord(
+				property: Property(label: property.label, typeDescription: type),
+				fulfillingProperty: Property(label: nameApart.label, typeDescription: type),
+				text: text,
+			)
 			return .indented(
-				.place(PlacePlan(code: .text(text), record: .alias(AliasPlaceRecord(property: property, fulfillingProperty: nameApart, text: text)))),
+				.place(PlacePlan(code: .text(text), record: .alias(record))),
 				by: ScopeGenerator.standardIndent,
 			)
 		}
 	}
 
 	/// The receives each variant of a mock root's world binds again, by variant, read from the names the mock root binds
-	/// apart (`world.mockRootNames`). A node reads a name apart where no node above it, below the root, declares its
+	/// apart (`MockRootNames.namesBoundAgain`). A node reads a name apart where no node above it, below the root, declares its
 	/// label, as the walk prunes them (`MockLowering.removingRenames(hiddenBy:from:)`): each node's own children and, for a
 	/// wrapper, its forwarded properties hide the label from the scopes beneath. A receive named apart is bound again under
 	/// its label at the top of the node's builder function, in the order its type declares the receives, as the walk binds
@@ -54,11 +62,11 @@ extension NodeRecords {
 	/// (`refusalOfNamingApart(_:in:)`).
 	static func mockReceivesBoundAgain(in world: some NodeRecordSources) -> [[MockReceiveBoundAgain]] {
 		var receivesBoundAgain = [[MockReceiveBoundAgain]](repeating: [], count: world.variantCount)
-		let mockRootNames = world.mockRootNames
-		guard mockRootNames.namesAnyApart else { return receivesBoundAgain }
+		let namesBoundAgain = world.mockRootNames.namesBoundAgain
+		guard !namesBoundAgain.isEmpty else { return receivesBoundAgain }
 		// The names apart each variant's node sees where it is built, by variant.
 		var visibleNamesApart = [[String: [TypeDescription: String]]?](repeating: nil, count: world.variantCount)
-		visibleNamesApart[0] = mockRootNames.namesApart
+		visibleNamesApart[0] = namesBoundAgain
 		// The root's calls come first and every variant is reached from the root, so a variant's names are set before its calls.
 		var variantsToVisit: [VariantID] = [0]
 		while let variant = variantsToVisit.popLast() {
@@ -67,7 +75,7 @@ extension NodeRecords {
 			// The names a node's builder function sees: those above it, less those its own declarations hide.
 			let functionNamesApart: [String: [TypeDescription: String]]
 			if variant == 0 {
-				functionNamesApart = mockRootNames.namesApart
+				functionNamesApart = namesBoundAgain
 			} else {
 				let instantiable = world.scope(of: declaration).instantiable
 				let isWrapper = switch world.kind(of: declaration) {

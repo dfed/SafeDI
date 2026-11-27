@@ -37,31 +37,24 @@ extension NodeRecords {
 		let scope = world.scope(of: declaration)
 		guard let call = scope.publicMockCall else { return nil }
 		var refusals = [NodeRecordRefusal]()
-		var fills = false
-		var passesUp = call.passedParameters.contains { $0.builder != nil }
-		for argument in scope.holeArguments {
+		let fills = scope.holeArguments.contains { argument in
 			switch argument {
 			case .fill:
-				fills = true
+				true
 			case .passUp:
-				passesUp = true
+				false
 			}
 		}
 		// A call that fills a builder declares its fills and dispatchers in a builder function of its own.
 		if fills {
 			refusals.append(.publicMockCallFills)
 		}
-		// A builder the call passes up is bound again under the label the leaf receives it as.
-		if passesUp {
+		// A builder the call passes up is `mock()`'s, which the record reads under the name `mock()` binds it apart by
+		// (`MockRootNames.passedUpBuilderName(of:)`); one `mock()` takes no builder for is left to the walk.
+		// An override closure is handed a builder the call passes up as it is, where the call passes the called mock a struct
+		// made of it.
+		if call.passedParameters.contains(where: { $0.builder != nil && (!call.takesOverrides || world.mockRootNames.passedUpBuilderName(of: $0.dependency.property) == nil) }) {
 			refusals.append(.publicMockCallPassesUp)
-		}
-		// A mock that takes no overrides is configured by an override closure, whose arguments read the call's fills.
-		if !call.takesOverrides {
-			refusals.append(.publicMockCallOverrideClosure)
-		}
-		// A call the mock promotes to its root reads the caller's value first (`ScopeGenerator.passing(_:orBuilding:)`).
-		if isPromotedToMockRoot(declaration, in: world) {
-			refusals.append(.publicMockCallPromoted)
 		}
 		// A parameter under a label the root names apart is handed the name, which no record of a call binds again.
 		if callTakesLabelNamedApart(declaration, in: world) {
@@ -70,19 +63,8 @@ extension NodeRecords {
 		// The leaf receives only if available each parameter its tier omits, which the call never passes, and each `T? = nil`
 		// parameter of the tier, which the call passes what the caller's tree holds, or `nil`: the variant's answer, which the
 		// record reads (`passedOnlyIfAvailable(_:by:variant:in:)`).
-		return NodeRecordClaim(kind: .publicMockCall, discharges: [.construction, .onlyIfAvailable], refusals: refusals)
-	}
-
-	/// Whether `declaration` is a child of the mock's root that the root's own type does not declare: a dependency the mock
-	/// promotes.
-	private static func isPromotedToMockRoot(_ declaration: DeclarationID, in world: some NodeRecordSources) -> Bool {
-		guard let property = world.property(of: declaration),
-		      world.parents(of: declaration).contains(where: { $0.parent == 0 })
-		else { return false }
-		return !world.scope(of: 0).instantiable.dependencies.contains { dependency in
-			guard dependency.property == property, case .instantiated = dependency.source else { return false }
-			return true
-		}
+		// A call that passes builders up and fills none makes its record of them (`.fill` is stage 1's refusal of any hole argument).
+		return NodeRecordClaim(kind: .publicMockCall, discharges: fills ? [.construction, .onlyIfAvailable] : [.construction, .onlyIfAvailable, .fill], refusals: refusals)
 	}
 
 	/// The function of the called tier the call passes its arguments to: the leaf's mock, which takes the tier's
@@ -137,6 +119,7 @@ extension NodeRecords {
 		of declaration: DeclarationID,
 		variant: VariantID,
 		in world: some NodeRecordSources,
+		receivesBoundAgain: [MockReceiveBoundAgain],
 		typesDeclaredEscaping: Set<TypeDescription>,
 		children _: [GeneratedCode],
 	) throws -> BuiltPlaceRecord {
@@ -150,21 +133,78 @@ extension NodeRecords {
 		else { throw NodeRecordRefusal.construction }
 		let calledType = instantiable.concreteInstantiable
 		var arguments = [PlaceRead]()
-		for (argument, dependency) in try initializer.createInitializerArguments(given: instantiable.dependencies) {
-			let source = dependency.source == .received(onlyIfAvailable: true)
-				? try passedOnlyIfAvailable(dependency, by: declaration, variant: variant, in: world)
-				: argument.source
-			arguments.append(PlaceRead(argumentLabel: argument.label, label: dependency.property.label, property: dependency.property, source: source))
+		// Each builder the call passes up is bound again under the label the leaf receives it as, first in the call's function,
+		// from the name `mock()` binds it apart by (`mockReceivesBoundAgain(in:)`).
+		var builderStructValues = [Int: ValuePath]()
+		for calledArgument in initializer.arguments {
+			// The leaf receives a builder the call passes up as its label alone, which no argument's type matches: the called
+			// mock takes the builder's struct (`MockLowering.Walk.publicMockCallNode` matches it by label too).
+			if let dependency = instantiable.dependencies.first(where: { $0.property.label == calledArgument.innerLabel }),
+			   call.passesUpBuilder(receivedAs: dependency.property),
+			   world.mockRootNames.passedUpBuilderName(of: dependency.property) != nil
+			{
+				// The called mock takes the builder's struct, made of the builder alone.
+				builderStructValues[arguments.count] = .implicitMemberCall("init", arguments: [PlaceRead(
+					argumentLabel: ReservedName.noScopeArgumentLabel,
+					label: dependency.property.label,
+					property: dependency.property,
+					source: .binding(label: dependency.property.label),
+				)])
+				arguments.append(PlaceRead(
+					argumentLabel: calledArgument.label,
+					label: dependency.property.label,
+					property: dependency.property,
+					source: .binding(label: dependency.property.label),
+				))
+				continue
+			}
+			for (argument, dependency) in try Initializer(arguments: [calledArgument]).createInitializerArguments(given: instantiable.dependencies) {
+				let source = dependency.source == .received(onlyIfAvailable: true)
+					? try passedOnlyIfAvailable(dependency, by: declaration, variant: variant, in: world)
+					: argument.source
+				arguments.append(PlaceRead(argumentLabel: argument.label, label: dependency.property.label, property: dependency.property, source: source))
+			}
 		}
-		// The called mock's own overrides: the enclosing configuration's field under the node's label, which the record never
-		// spells (`mockConfigurationField(named:)`).
-		let isInstantiator = world.kind(of: declaration) == .instantiator
-		let overridesType = TypeDescription.nested(name: ReservedName.mockOverridesTypeName, parentType: calledType, generics: [])
-		let overridesProperty = Property(label: ReservedName.mockOverridesParameterName, typeDescription: overridesType)
-		// The called mock's overrides are its own: the node hands no configuration to children, since it has none.
-		let slot = mockOverrideSlot(of: declaration, labeled: property.label, typed: overridesType, in: world, hasFunction: isInstantiator, handsOverridesToChildren: false, isSendable: false)
-		let argumentValues = [arguments.count: slot.value]
-		arguments.append(PlaceRead(argumentLabel: overridesProperty.label, label: overridesProperty.label, property: overridesProperty, source: .binding(label: overridesProperty.label)))
+		// An `Instantiator` declares the builder function it holds, as does a call that binds a builder again; any other
+		// constant call is made where it is bound.
+		let hasFunction = world.kind(of: declaration) == .instantiator || !receivesBoundAgain.isEmpty
+		let argumentValues: [Int: ValuePath]
+		let alternatives: [ConstructionAlternative]
+		let passedArguments: [PassedArgument]
+		if call.takesOverrides {
+			// The called mock's own overrides: the enclosing configuration's field under the node's label, which the record
+			// never spells (`mockConfigurationField(named:)`).
+			let overridesType = TypeDescription.nested(name: ReservedName.mockOverridesTypeName, parentType: calledType, generics: [])
+			let overridesProperty = Property(label: ReservedName.mockOverridesParameterName, typeDescription: overridesType)
+			// The called mock's overrides are its own: the node hands no configuration to children, since it has none.
+			let slot = mockOverrideSlot(of: declaration, labeled: property.label, typed: overridesType, in: world, hasFunction: hasFunction, handsOverridesToChildren: false, isSendable: false)
+			var values = builderStructValues
+			values[arguments.count] = slot.value
+			argumentValues = values
+			arguments.append(PlaceRead(argumentLabel: overridesProperty.label, label: overridesProperty.label, property: overridesProperty, source: .binding(label: overridesProperty.label)))
+			alternatives = []
+			passedArguments = slot.passedArguments
+		} else {
+			// A mock that takes no overrides is configured by an override closure, which the enclosing configuration holds
+			// under the node's label, called with what the call passes the called mock (`MockLowering.PublicMockCallNode`'s
+			// `overrideClosureType`). A call that fills or passes up a builder, whose closure is handed builders, is refused.
+			let parameterTypes = initializer.arguments.map { argument in
+				(argument.typeDescription.strippingEscaping.autoclosureValueType ?? argument.typeDescription)
+					.asFunctionParameter(amongTypesDeclaredEscaping: call.typesDeclaredEscaping)
+					.asSource
+			}
+			let closureType = TypeDescription.unknown(text: "((\(parameterTypes.joined(separator: ", "))) -> \(property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource))?")
+			let slot = mockOverrideSlot(of: declaration, labeled: property.label, typed: closureType, in: world, hasFunction: hasFunction, handsOverridesToChildren: false, isSendable: false)
+			argumentValues = builderStructValues
+			alternatives = [ConstructionAlternative(
+				closure: slot.value,
+				bindingName: ReservedName.configurationBuilderPropertyName,
+				requiresAbsent: [],
+				use: .calledWithConstructionArguments,
+				resultWrapper: nil,
+			)]
+			passedArguments = slot.passedArguments
+		}
 		var record = BuiltPlaceRecord(
 			property: property,
 			isErased: false,
@@ -179,12 +219,11 @@ extension NodeRecords {
 			isSendable: false,
 			typesDeclaredEscaping: typesDeclaredEscaping.union(call.typesDeclaredEscaping),
 			lineEnd: "",
-			// An `Instantiator` declares the builder function it holds; a constant call is made where it is bound.
-			hasFunction: isInstantiator,
-			children: [],
+			hasFunction: hasFunction,
+			children: receivesBoundAgain.map(\.place),
 			node: PlanNode(),
 		)
-		record.sharingFields = PlaceSharingFields(passedArguments: slot.passedArguments, constructionValue: nil, alternatives: [], argumentValues: argumentValues)
+		record.sharingFields = PlaceSharingFields(passedArguments: passedArguments, constructionValue: nil, alternatives: alternatives, argumentValues: argumentValues)
 		return record
 	}
 }

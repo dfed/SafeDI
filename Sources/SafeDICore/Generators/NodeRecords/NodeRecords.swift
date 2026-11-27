@@ -30,11 +30,6 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	/// The node calls another module's public mock and passes a builder up to it, which is bound again under the label the
 	/// leaf receives it as.
 	case publicMockCallPassesUp
-	/// The node calls another module's public mock that takes no `SafeDIOverrides`, so it is configured by an override
-	/// closure, whose arguments read the call's fills.
-	case publicMockCallOverrideClosure
-	/// The node calls another module's public mock and is promoted to the mock's root, which reads the caller's value first.
-	case publicMockCallPromoted
 	/// A mock root's node's type takes, in its initializer or its hand-written mock, a value no dependency fulfills, as a
 	/// parameter with a default value is, which a mock holds in the type's configuration.
 	case mockDefaultValuedParameter
@@ -229,7 +224,7 @@ struct NodeRecords: Sendable {
 			case .mockErased:
 				try .built(Self.mockErasedRecord(of: declaration, variant: variant, in: world, unavailableProperties: onlyIfAvailableAnswers.unavailableProperties(of: variant), receivesBoundAgain: mockReceivesBoundAgain[Int(variant)], typesDeclaredEscaping: escaping, children: children))
 			case .publicMockCall:
-				try .built(Self.publicMockCallRecord(of: declaration, variant: variant, in: world, typesDeclaredEscaping: escaping, children: children))
+				try .built(Self.publicMockCallRecord(of: declaration, variant: variant, in: world, receivesBoundAgain: mockReceivesBoundAgain[Int(variant)], typesDeclaredEscaping: escaping, children: children))
 			}
 			typesDeclaredEscaping[Int(variant)] = escaping
 			records[Int(variant)] = record
