@@ -248,7 +248,7 @@ struct TypeFactsVariantsTests {
 			rootAnswer: rootAnswer,
 			binding: { edge, read in bindingByEdge[edge]?[read] },
 			family: family,
-			key: key,
+			key: { read, answer, _ in key(read, answer) },
 			bucket: bucket,
 		)
 	}
