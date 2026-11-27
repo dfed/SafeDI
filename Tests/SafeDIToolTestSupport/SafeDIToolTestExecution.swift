@@ -354,16 +354,19 @@ func executeSafeDIToolTest(
 											// Every root’s received values from its per-type graph must equal the walk of its generator tree’s
 											// (`TypeFactsReceivedValueSuppliesChecks`).
 											try await TypeFactsReceivedValueSuppliesChecks.comparing(handingOn: TypeFactsReceivedValueSuppliesObservation.comparesWalk) {
-												// Every root’s tier omissions from its per-type graph must equal the walk of its generator tree’s
-												// (`TypeFactsSeamTierOmissionsChecks`).
-												try await TypeFactsSeamTierOmissionsChecks.comparing(handingOn: TypeFactsSeamTierOmissionsObservation.comparesWalk) {
-													// Every root’s captures from its per-type graph must equal the walk of its generator tree’s, where the fold
-													// reads the root (`TypeFactsSendableCapturesChecks`).
-													try await TypeFactsSendableCapturesChecks.comparing(handingOn: TypeFactsSendableCapturesObservation.comparesWalk) {
-														// Every root’s answers of which places build in their caller’s body must equal its layout’s
-														// (`TypeFactsBuildsInCallersBodyChecks`).
-														try await TypeFactsBuildsInCallersBodyChecks.comparing(handingOn: TypeFactsBuildsInCallersBodyObservation.comparesLayout) {
-															try await tool.generate()
+												// The fold that decides whether any route is walked must send every graph the walk rejects to the walk (`FulfillmentFoldChecks`).
+												try await ValidationWalkObservation.$foldComparison.withValue(FulfillmentFoldChecks.comparison(handingOn: ValidationWalkObservation.foldComparison)) {
+													// Every root’s tier omissions from its per-type graph must equal the walk of its generator tree’s
+													// (`TypeFactsSeamTierOmissionsChecks`).
+													try await TypeFactsSeamTierOmissionsChecks.comparing(handingOn: TypeFactsSeamTierOmissionsObservation.comparesWalk) {
+														// Every root’s captures from its per-type graph must equal the walk of its generator tree’s, where the fold
+														// reads the root (`TypeFactsSendableCapturesChecks`).
+														try await TypeFactsSendableCapturesChecks.comparing(handingOn: TypeFactsSendableCapturesObservation.comparesWalk) {
+															// Every root’s answers of which places build in their caller’s body must equal its layout’s
+															// (`TypeFactsBuildsInCallersBodyChecks`).
+															try await TypeFactsBuildsInCallersBodyChecks.comparing(handingOn: TypeFactsBuildsInCallersBodyObservation.comparesLayout) {
+																try await tool.generate()
+															}
 														}
 													}
 												}
