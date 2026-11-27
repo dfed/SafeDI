@@ -771,6 +771,16 @@ struct TypeFactsGraph: Sendable {
 		}
 	}
 
+	/// An answer as its text reads, in IDs: the channel, and the forms of the declaration that answers it, being built or
+	/// not, or for a twin being built, the label alone. Two answers are one exactly when their texts are equal.
+	private struct AnswerKey: Hashable {
+		let channel: ReadChannel
+		/// The ID of the declaration's forms' text, or of a twin's label.
+		let subject: Int32
+		let isTwin: Bool
+		let beingBuilt: Bool
+	}
+
 	/// Whether a declaration of this kind is a twin of a cycle identity: a value or a lazy wrapper of its label.
 	private static func isTwin(_ kind: Property.PropertyType) -> Bool {
 		switch kind {
@@ -786,55 +796,71 @@ struct TypeFactsGraph: Sendable {
 	/// the property it is built as, being built. Interned at the edge, where the graph is built from the table; the
 	/// worklist sees IDs only.
 	private static func answers(of graph: OrderedGraph<TypeFactsDeclaration>, reads: ReadsFromAbove, readTable: [Read], labels: TypeFactsInterner<String>, bindings: [TypeFactsWorldBinding], bindingOffsets: [Int32], bindingsBefore: [Int32], properties: TypeFactsInterner<Property>) -> (variants: TypeFactsVariants, isBeingBuilt: [Bool], texts: [String], keys: [Int32], properties: [Int32]) {
-		var answerIDByText = [String: Int32]()
+		// Each node's declarations by label, as its scope spells them, with the forms each provides by the ID of their text:
+		// the world's property IDs compare two spellings of one type alike, and a body is typed as its parent spells it.
+		var sourceByEdge = [Int32]()
+		var formsIDByText = [String: Int32]()
+		var formsTexts = [String]()
+		var declarationsByLabelByNode = [[Int32: [(property: Property, forms: Int32)]]]()
+		for index in graph.nodes.indices {
+			for _ in graph.edges(from: index) {
+				sourceByEdge.append(Int32(index))
+			}
+			var declarations = [Int32: [(property: Property, forms: Int32)]]()
+			for (property, forms) in graph.nodes[index].scope.sortedDeclaredPropertyForms {
+				guard let label = labels.existingID(of: property.label) else { continue }
+				let formsText = forms.sorted().map(\.asSource).joined(separator: ", ")
+				let formsID = formsIDByText[formsText] ?? Int32(formsTexts.count)
+				if formsID == formsTexts.count {
+					formsIDByText[formsText] = formsID
+					formsTexts.append(formsText)
+				}
+				declarations[label, default: []].append((property, formsID))
+			}
+			declarationsByLabelByNode.append(declarations)
+		}
+		// Answers are interned by key, which spells no text: an answer's text is spelled once, when its ID is given.
+		var answerIDByKey = [AnswerKey: Int32]()
 		var texts = [String]()
 		var isBeingBuilt = [Bool]()
 		var keys = [Int32]()
 		var kinds = [Property.PropertyType]()
 		var answerProperties = [Int32]()
-		func answer(text: String, beingBuilt: Bool, keyText: String, kind: Property.PropertyType, property: Int32) -> Int32 {
+		func text(of key: AnswerKey) -> String {
+			if key.isTwin {
+				"\(key.channel.name) twin \(labels.values[Int(key.subject)]) being built"
+			} else {
+				"\(key.channel.name) \(formsTexts[Int(key.subject)])\(key.beingBuilt ? " being built" : "")"
+			}
+		}
+		func answer(_ full: AnswerKey, keyedAs key: AnswerKey, kind: Property.PropertyType, property: Int32) -> Int32 {
 			let keyID: Int32
-			if let existing = answerIDByText[keyText] {
+			if let existing = answerIDByKey[key] {
 				keyID = existing
 			} else {
 				keyID = Int32(texts.count)
-				answerIDByText[keyText] = keyID
-				texts.append(keyText)
-				// A constant's key text is its full text, so this entry is the answer itself where the texts are equal.
-				isBeingBuilt.append(text == keyText && beingBuilt)
+				answerIDByKey[key] = keyID
+				texts.append(text(of: key))
+				// A constant's key is the answer itself, so this entry is the answer where the keys are equal.
+				isBeingBuilt.append(full == key && full.beingBuilt)
 				kinds.append(kind)
 				keys.append(keyID)
 				answerProperties.append(property)
 			}
-			guard text != keyText else {
+			if full == key {
 				return keyID
-			}
-			if let existing = answerIDByText[text] {
+			} else if let existing = answerIDByKey[full] {
 				return existing
+			} else {
+				let id = Int32(texts.count)
+				answerIDByKey[full] = id
+				texts.append(text(of: full))
+				isBeingBuilt.append(full.beingBuilt)
+				kinds.append(kind)
+				keys.append(keyID)
+				answerProperties.append(property)
+				return id
 			}
-			let id = Int32(texts.count)
-			answerIDByText[text] = id
-			texts.append(text)
-			isBeingBuilt.append(beingBuilt)
-			kinds.append(kind)
-			keys.append(keyID)
-			answerProperties.append(property)
-			return id
-		}
-		var sourceByEdge = [Int32]()
-		// Each node's declarations by label, as its scope spells them, with the forms each provides: the world's property IDs
-		// compare two spellings of one type alike, and a body is typed as its parent spells it.
-		var declarationsByLabelByNode = [[Int32: [(property: Property, forms: String)]]]()
-		for index in graph.nodes.indices {
-			for _ in graph.edges(from: index) {
-				sourceByEdge.append(Int32(index))
-			}
-			var declarations = [Int32: [(property: Property, forms: String)]]()
-			for (property, forms) in graph.nodes[index].scope.sortedDeclaredPropertyForms {
-				guard let label = labels.existingID(of: property.label) else { continue }
-				declarations[label, default: []].append((property, forms.sorted().map(\.asSource).joined(separator: ", ")))
-			}
-			declarationsByLabelByNode.append(declarations)
 		}
 		var edgeTargets = [Int32]()
 		for index in graph.nodes.indices {
@@ -868,21 +894,20 @@ struct TypeFactsGraph: Sendable {
 				}
 				guard let bound, let declaration = declarationsByLabelByNode[node][read.label]?.first(where: { $0.property == bound }), let property = properties.existingID(of: bound) else { return nil }
 				let kind = declaration.property.propertyType
-				let declarationForms = declaration.forms
-				let text = "\(read.channel.name) \(declarationForms)\(beingBuilt ? " being built" : "")"
+				let full = AnswerKey(channel: read.channel, subject: declaration.forms, isTwin: false, beingBuilt: beingBuilt)
 				// Rule 3, case 2: a value, `LazilyInstantiated` or `SendableLazilyInstantiated` being built is one cycle
 				// identity whichever twin the path entered, which 2.4.0 builds in one function and passes no parameter. The
 				// key names the label alone, not the type and label a cycle identity names elsewhere: a node declares a label
 				// once, and a being-built answer gives no parameter whose type could tell two keys apart.
-				let keyText: String = if beingBuilt, isTwin(kind) {
-					"\(read.channel.name) twin \(bound.label) being built"
+				let key = if beingBuilt, isTwin(kind) {
+					AnswerKey(channel: read.channel, subject: read.label, isTwin: true, beingBuilt: true)
 				} else if kind.isConstant {
-					text
+					full
 				} else {
 					// Rule 2: a wrapper still being built is passed and made again at the call, so it keys as the wrapper.
-					"\(read.channel.name) \(declarationForms)"
+					AnswerKey(channel: read.channel, subject: declaration.forms, isTwin: false, beingBuilt: false)
 				}
-				return VariantBinding(answer: answer(text: text, beingBuilt: beingBuilt, keyText: keyText, kind: kind, property: property), declaration: Int32(node))
+				return VariantBinding(answer: answer(full, keyedAs: key, kind: kind, property: property), declaration: Int32(node))
 			},
 			// Production bodies have one variant, `@Sendable` a mark folded over call edges; the family a seam's cases,
 			// builders and mock bodies key by is the edge facts' `opens`, which no producer feeds here yet.
