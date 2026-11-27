@@ -32,10 +32,11 @@ extension NodeRecords {
 		guard refusalsOfBuiltByInitializer(declaration, in: world).allSatisfy(discharges.contains) else { return nil }
 		var refusals = [NodeRecordRefusal]()
 		let instantiable = world.scope(of: declaration).instantiable
-		// An actor's arguments are sent to it, and each node built for one reads its override before its function.
-		if instantiable.declarationType == .actorType {
-			refusals.append(.mockActor)
-		}
+		// An actor is claimed as any node is. The closure that overrides it takes each argument `sending`
+		// (`MockLowering.BuilderParameters`), and what it is sent is built by functions that are each handed their
+		// configuration, the `Sendable` form beneath an actor (`ScopeGenerator.sendableConfigurationTypeNames(ofMockRootOf:)`),
+		// so none captures `mock()`'s overrides, as the walk's read of them into a local before each function keeps its own
+		// from doing.
 		// The root's own such parameters are parameters of `mock()`, which the root's lowering judges
 		// (`ScopeGenerator.nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:)`). A type's configuration takes the
 		// defaults of its initializer and of its hand-written mock, whichever of the two builds a node.
