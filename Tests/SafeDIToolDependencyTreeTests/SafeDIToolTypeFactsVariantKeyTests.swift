@@ -857,6 +857,24 @@ struct SafeDIToolTypeFactsVariantKeyTests: ~Copyable {
 		#expect(TypeFactsChecks.findings(of: report).findingsByCheck[10, default: []].isEmpty, "\(TypeFactsChecks.findings(of: report).findingsByCheck[10, default: []])")
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keysOneVariant_whenProductionBuildsTypeInPlainFunctionAndInSendableFunction() async throws {
+		// `leaf` is one node with two parents, one built in a plain `Instantiator`'s function and one in a
+		// `SendableInstantiator`'s `@Sendable` function: production's body is one, `@Sendable` a mark folded over its calls,
+		// so the family keys no production variant.
+		let report = try await rootReport(of: [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let plainBuilder: Instantiator<Plain>", "@Instantiated let sharedBuilder: SendableInstantiator<Shared>"]),
+			seamFixtureType(named: "Plain", isFinalClass: true, declarations: ["@Instantiated let leaf: Leaf"]),
+			seamFixtureType(named: "Shared", isFinalClass: true, declarations: ["@Instantiated let leaf: Leaf"], conformances: ", Sendable"),
+			seamFixtureType(named: "Leaf", isFinalClass: true, declarations: [], conformances: ", Sendable"),
+		])
+
+		#expect(report.places.count(where: { $0.declaration == "Leaf as leaf: Leaf" }) == 2, "\(report.world)")
+		#expect(variantCount(ofNodeDeclaring: "Leaf as leaf: Leaf", in: report) == 1, "\(report.world)")
+		#expect(Set(report.variantFamilies) == ["plain"], "\(report.world)")
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]

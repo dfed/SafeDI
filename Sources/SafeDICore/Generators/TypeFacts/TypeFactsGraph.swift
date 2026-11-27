@@ -713,7 +713,22 @@ struct TypeFactsGraph: Sendable {
 		self.readOffsets = readOffsets
 		self.labelColumn = labelColumn
 		self.labelOffsets = labelOffsets
-		let answers = Self.answers(of: graph, reads: reads, readTable: readInterner.values, labels: labels, bindings: bindings, bindingOffsets: bindingOffsets, bindingsBefore: bindingsBefore, properties: properties, forms: (table: formInterner.values, readFromAbove: formsReadFromAbove))
+		let edgeOpens = edgeFacts.map(\.opens)
+		let answers = Self.answers(
+			of: graph,
+			reads: reads,
+			readTable: readInterner.values,
+			labels: labels,
+			bindings: bindings,
+			bindingOffsets: bindingOffsets,
+			bindingsBefore: bindingsBefore,
+			properties: properties,
+			forms: (table: formInterner.values, readFromAbove: formsReadFromAbove),
+			// Production bodies have one variant, `@Sendable` a mark folded over call edges (`TypeFactsOutcomes`), so the
+			// root's `.plain` reaches every node. A mock's body reads its overrides from a local bound before the `@Sendable`
+			// function that encloses it, and its parent's configuration where none does, so a mock keys by its family.
+			family: forMockGeneration ? { edge, callerFamily in Self.familyOfCall(opening: edgeOpens[edge], callerFamily: callerFamily) } : { _, callerFamily in callerFamily },
+		)
 		answerIsBeingBuilt = answers.isBeingBuilt
 		answerTexts = answers.texts
 		answerKeys = answers.keys
@@ -829,7 +844,7 @@ struct TypeFactsGraph: Sendable {
 	/// bindings of that label bound before the edge (`bindingsBefore`), and the edge's child answers its own label as
 	/// the property it is built as, being built. Interned at the edge, where the graph is built from the table; the
 	/// worklist sees IDs only.
-	private static func answers(of graph: OrderedGraph<TypeFactsDeclaration>, reads: ReadsFromAbove, readTable: [Read], labels: TypeFactsInterner<String>, bindings: [TypeFactsWorldBinding], bindingOffsets: [Int32], bindingsBefore: [Int32], properties: TypeFactsInterner<Property>, forms: (table: [OnlyIfAvailableForm], readFromAbove: ReadsFromAbove)) -> (variants: TypeFactsVariants, isBeingBuilt: [Bool], texts: [String], keys: [Int32], properties: [Int32]) {
+	private static func answers(of graph: OrderedGraph<TypeFactsDeclaration>, reads: ReadsFromAbove, readTable: [Read], labels: TypeFactsInterner<String>, bindings: [TypeFactsWorldBinding], bindingOffsets: [Int32], bindingsBefore: [Int32], properties: TypeFactsInterner<Property>, forms: (table: [OnlyIfAvailableForm], readFromAbove: ReadsFromAbove), family: (_ edge: Int, _ callerFamily: VariantFamily) -> VariantFamily) -> (variants: TypeFactsVariants, isBeingBuilt: [Bool], texts: [String], keys: [Int32], properties: [Int32]) {
 		var answerIDByText = [String: Int32]()
 		var texts = [String]()
 		var isBeingBuilt = [Bool]()
@@ -942,9 +957,7 @@ struct TypeFactsGraph: Sendable {
 				}
 				return VariantBinding(answer: answer(text: text, beingBuilt: beingBuilt, keyText: keyText, kind: kind, property: property, inReadForm: inReadForm), declaration: Int32(node))
 			},
-			// Production bodies have one variant, `@Sendable` a mark folded over call edges; the family a seam's cases,
-			// builders and mock bodies key by is the edge facts' `opens`, which no producer feeds here yet.
-			family: { _, family in family },
+			family: family,
 			key: { readID, answer in
 				switch readTable[Int(readID)].channel {
 				case .optional, .optionalValue:
@@ -1317,6 +1330,17 @@ struct TypeFactsGraph: Sendable {
 			}
 		}
 		return dominators
+	}
+
+	/// The family a call builds its callee in, given the function its edge `opens` and its caller's family: a body inside a
+	/// `@Sendable` function is in the `@Sendable` family, and so is every body beneath it.
+	static func familyOfCall(opening opens: TypeFactsFunctionOpened, callerFamily: VariantFamily) -> VariantFamily {
+		switch opens {
+		case .sendableInstantiatorBuilder, .sendableLazyWrapper, .otherSendableFunction:
+			.sendable
+		case .none, .instantiatorBuilder:
+			callerFamily
+		}
 	}
 
 	private static func opens(_ node: TypeFactsDeclaration) -> TypeFactsFunctionOpened {
