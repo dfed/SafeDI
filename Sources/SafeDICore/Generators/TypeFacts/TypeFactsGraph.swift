@@ -78,6 +78,7 @@ struct TypeFactsDeclaration: Hashable, Sendable {
 	var aliasFulfillingProperty: Property? {
 		alias?.fulfillingProperty
 	}
+
 	let isOnlyIfAvailableAlias: Bool
 
 	/// An alias leaf's two properties, which every alias has.
