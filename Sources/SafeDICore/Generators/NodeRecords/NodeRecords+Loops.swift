@@ -51,9 +51,10 @@ extension NodeRecords {
 	}
 
 	/// Whether the loop of builders `member` belongs to, in a mock root's world, is of a shape these records make: every
-	/// member at its level is handed nothing (`mockLoopMemberTakesNothing(_:in:)`), or the level is on no cycle, none is built in a `@Sendable`
-	/// function, none builds a property nothing fulfills, whose override a member's function would take beside its own, and
-	/// none is a call of another module's public mock, whose function takes no level's configuration.
+	/// member at its level is handed nothing (`mockLoopMemberTakesNothing(_:in:)`), or the level is on no cycle, no other
+	/// level builds a member too, none is built in a `@Sendable` function, none builds a property nothing fulfills, whose
+	/// override a member's function would take beside its own, and none is a call of another module's public mock, whose
+	/// function takes no level's configuration.
 	static func mockLoopRefusesNothing(ofMember member: DeclarationID, in world: some NodeRecordSources) -> Bool {
 		let members = mockLoopMembers(atLevelOf: member, in: world)
 		// A member erased to another type is made again of its concrete type's function, whose rebinding these records
@@ -70,6 +71,10 @@ extension NodeRecords {
 		// would not follow.
 		let level = world.parents(of: member).first?.parent ?? 0
 		guard level == 0 || !world.isOnCycle(level) else { return false }
+		// A member another level builds too has one function, whose level's argument is typed as this level's and which
+		// the other level's body would hand its own configuration, so the loop keeps the walk, which writes a function
+		// per level.
+		guard members.allSatisfy({ member in world.parents(of: member).allSatisfy { $0.parent == level } }) else { return false }
 		return members.allSatisfy { member in
 			world.property(of: member)?.propertyType.isSendable == false
 				&& world.scope(of: member).publicMockCall == nil
