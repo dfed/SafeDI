@@ -7095,7 +7095,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// draw it, changes these and must update them deliberately, with the hashes and the accepted-seed pins.
 	static let corpusAcceptedFeatureCounts: [GraphFuzzerFeature: Int] = [
 		.constantProperty: 2_616,
-		.erasedConstantProperty: 450,
+		.erasedConstantProperty: 560,
 		.instantiatorProperty: 2_187,
 		.sendableInstantiatorProperty: 917,
 		.erasedInstantiatorProperty: 1_382,
@@ -7338,10 +7338,10 @@ struct SafeDIToolGraphFuzzerTests {
 		drawnMocksMatchingOnlyAfterNormalizationCount: 945,
 		mirroredPairsTakingSamplesCount: 972,
 		forwardedPropertiesSampleCount: 2_727,
-		overridePairCount: 6_849,
-		overridePairsSum: GraphFuzzerSeedSetSum(value: 0xE1FAE895B9AEFAA1),
+		overridePairCount: 6_839,
+		overridePairsSum: GraphFuzzerSeedSetSum(value: 0x0185BEF41D6F9B71),
 		overrideFieldKindCounts: [
-			.builder: 4_536,
+			.builder: 4_526,
 			.configuration: 2_313,
 		],
 		pinnedPlacePairCount: 105,
