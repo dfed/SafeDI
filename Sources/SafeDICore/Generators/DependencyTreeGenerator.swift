@@ -601,6 +601,11 @@ public actor DependencyTreeGenerator {
 			/// What the seam's root is handed as instances of `LazilyInstantiated` properties, which its tree reads through
 			/// their wrappers (`DependencyTreeGenerator.seamRootDeclarations(of:seamRoot:)`).
 			let rootLazilyInstantiatedInstanceProperties: Set<Property>
+			/// The seam's parameters, the nearest declarations of their labels in its tree, in signature order.
+			let parameters: [Property]
+			/// The labels of the deferred parameters the seam's own rename of the label reads from the autoclosure
+			/// (`ScopeGenerator.SeamRoot.autoclosureCallByLabel(of:)`).
+			let autoclosureLabels: Set<String>
 		}
 
 		/// What made this run build the root's tree (`TreeForcer`); empty where it built none.
