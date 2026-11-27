@@ -56,29 +56,37 @@ struct TypeFactsReadArrivals: Sendable {
 		// that binds or passes `nil` hands its callee something whatever arrives at its caller.
 		var worklist = Array((0..<Int32(world.variantCount)).reversed())
 		var isQueued = [Bool](repeating: true, count: world.variantCount)
+		// What one call hands its callee, folded into the callee's arrivals; queues the callee when they grew.
+		func hand(_ sources: ArraySlice<AnswerSource>, from caller: VariantID, to callee: VariantID) {
+			var changed = false
+			for (position, source) in sources.enumerated() {
+				let arrived: UInt8 = switch source.kind {
+				case .none:
+					TypeFactsArrivals.nil.rawValue
+				case .bound:
+					TypeFactsArrivals.answer.rawValue
+				case .passedThrough:
+					arrivals[Int(offsets[Int(caller)] + source.payload)]
+				}
+				let index = Int(offsets[Int(callee)]) + position
+				if arrivals[index] | arrived != arrivals[index] {
+					arrivals[index] |= arrived
+					changed = true
+				}
+			}
+			if changed, !isQueued[Int(callee)] {
+				isQueued[Int(callee)] = true
+				worklist.append(callee)
+			}
+		}
 		while let caller = worklist.popLast() {
 			isQueued[Int(caller)] = false
 			for (edgeIndex, callee) in world.calls(of: caller).enumerated() {
-				var changed = false
-				for (position, source) in world.sources(ofCall: edgeIndex, of: caller).enumerated() {
-					let arrived: UInt8 = switch source.kind {
-					case .none:
-						TypeFactsArrivals.nil.rawValue
-					case .bound:
-						TypeFactsArrivals.answer.rawValue
-					case .passedThrough:
-						arrivals[Int(offsets[Int(caller)] + source.payload)]
-					}
-					let index = Int(offsets[Int(callee)]) + position
-					if arrivals[index] | arrived != arrivals[index] {
-						arrivals[index] |= arrived
-						changed = true
-					}
-				}
-				if changed, !isQueued[Int(callee)] {
-					isQueued[Int(callee)] = true
-					worklist.append(callee)
-				}
+				hand(world.sources(ofCall: edgeIndex, of: caller), from: caller, to: callee)
+			}
+			// A member a loop of builders makes again is called from the top of the caller's body too.
+			for (index, callee) in world.madeAgainCalls(of: caller).enumerated() {
+				hand(world.sources(ofMadeAgainCall: index, of: caller), from: caller, to: callee)
 			}
 		}
 		self.offsets = offsets
