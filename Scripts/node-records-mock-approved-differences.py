@@ -28,7 +28,9 @@ import sys
 import threading
 NEAREST='\x00nearest'
 CONFIG='\x00configuration'
-FOLD=re.compile(r'if let safeDIBuilder = (?:\w+\.)*\w+\.SafeDIMockConfiguration\(\)(?:\.\w+)* \{ .*? \} else \{ (.*) \}$')
+# A fresh configuration and every member path of one hold nil, by the configurations' defaulted initializers.
+# A then-branch that holds an else of its own is not folded.
+FOLD=re.compile(r'if let safeDIBuilder = (?:\w+\.)*\w+\.SafeDIMockConfiguration\(\)(?:\.\w+)* \{ (?:(?! else ).)*? \} else \{ (.*) \}$')
 def fold_empty(line):
     return FOLD.sub(lambda m:m.group(1),line)
 GUARD=re.compile(r'^\s*_ = (?:\w+\.)*\w+\.__safeDI_\w+_mock_\w+\.self //')
@@ -97,7 +99,8 @@ def expand(lines,hoisted,base_indent,entered={},nearest={}):
         newline=line[:s]+line[e:]
         # entry 20: a fresh configuration, or a member of one, holds no override
         if name in entered:
-            # entry 20: a call of a function this one is nested in closes the cycle on that function
+            # entry 20: a call of a function this one is nested in closes the cycle on that function. The records
+            # declare one function per place of the list, so the function's name stands for its place.
             newline=re.sub(r'(?<![\w.])'+re.escape(name)+r'(?=\()',entered[name],newline)
             lines[i]=newline
             mm=re.match(r'^\s*(__safeDI_\w+)\(\)$',newline)
