@@ -68,6 +68,8 @@ struct SafeDIToolSeamTreeReadsTests: ~Copyable {
 			}
 		}
 		let tree = switch field {
+		case .requiredReceivedProperties:
+			["clock: Clock", "config: Config", "onTap: OnTap", "session: Session"]
 		case .requiredAliasFulfillingProperties:
 			["token: Token"]
 		case .typesDeclaredEscaping:
@@ -102,6 +104,28 @@ struct SafeDIToolSeamTreeReadsTests: ~Copyable {
 		continuation.finish()
 		var comparisons = [SeamTreeReadsComparison]()
 		for await comparison in stream where comparison.seam == "Top" {
+			comparisons.append(comparison)
+		}
+		#expect(!comparisons.isEmpty)
+		#expect(comparisons.flatMap(\.differences).isEmpty)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsNoDifference_whenFillOfSeamCallRequiresValueOfSeamsCaller() async throws {
+		// `Desk`'s fill of `Drawer`'s place builds `PenImpl`, which requires `clock` of `Desk`'s caller: the tree's
+		// required receives count it, as the facts' must.
+		let (stream, continuation) = AsyncStream.makeStream(of: SeamTreeReadsComparison.self)
+		try await SeamTreeReadsObservation.$comparesFacts.withValue({ continuation.yield($0) }) {
+			_ = try await executeSafeDIToolMultiModuleTest(
+				modules: Self.fillRequiringCallersValueModules,
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		continuation.finish()
+		var comparisons = [SeamTreeReadsComparison]()
+		for await comparison in stream where comparison.seam == "Desk" {
 			comparisons.append(comparison)
 		}
 		#expect(!comparisons.isEmpty)
@@ -355,5 +379,42 @@ struct SafeDIToolSeamTreeReadsTests: ~Copyable {
 		    @Instantiated public let outer: Outer
 		}
 		"""], dependencies: ["Core", "Session"]),
+	]
+
+	/// `Drawer`, a seam of `Supplies`, takes a builder for `pen`; `Desk`, a seam of `Office`, calls `Drawer` and fills the
+	/// place with `PenImpl`, which requires `clock`, a value no type of `Desk`'s tree declares.
+	private static let fillRequiringCallersValueModules = [
+		ModuleFixture(name: "Supplies", packageName: "Stationery", swiftFileContent: ["""
+		import SafeDI
+
+		public protocol Pen {}
+
+		@Instantiable
+		public final class Clock: Instantiable {
+		    public init() {}
+		}
+
+		@Instantiable(generateDependencyTree: true)
+		public final class Drawer: Instantiable {
+		    public init(pen: any Pen) { self.pen = pen }
+		    @Instantiated public let pen: any Pen
+		}
+		"""]),
+		ModuleFixture(name: "Office", packageName: "Stationery", swiftFileContent: ["""
+		import Supplies
+		import SafeDI
+
+		@Instantiable(fulfillingAdditionalTypes: [Pen.self])
+		public final class PenImpl: Instantiable, Pen {
+		    public init(clock: Clock) { self.clock = clock }
+		    @Received public let clock: Clock
+		}
+
+		@Instantiable(generateDependencyTree: true)
+		public final class Desk: Instantiable {
+		    public init(drawer: Drawer) { self.drawer = drawer }
+		    @Instantiated public let drawer: Drawer
+		}
+		"""], dependencies: ["Supplies"]),
 	]
 }
