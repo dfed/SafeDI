@@ -21,8 +21,8 @@
 extension ScopeGenerator {
 	/// The statements that build the nodes of `instantiable`'s mock, laid out from the node records of its world, the
 	/// root `worldRoot` builds, or `nil` where the mock's walk writes them: node records refuse the world, the mock binds a
-	/// value that is no node of it (`rootBindings` is not empty), no test turns `NodeRecordsObservation.laysOutMockRoots` on,
-	/// or the engine cannot lay the records out. Each node reads its override from the overrides its body's function was
+	/// value that is no node of it (`bindsOnlyNodes` is false; `rootBindings` reports which kinds), no test turns
+	/// `NodeRecordsObservation.laysOutMockRoots` on, or the engine cannot lay the records out. Each node reads its override from the overrides its body's function was
 	/// handed (`NodeRecords.mockConfigurationField(named:)`), which the root's body reads of `mock()`'s own parameter. The
 	/// root is reported to the test that observes node records (`NodeRecordsObservation.observer`), which alone hands a
 	/// mock root its world.
@@ -30,7 +30,7 @@ extension ScopeGenerator {
 	/// The function awaits nothing and is kept out of the frame of the mock's walk, which every root's lowering holds.
 	/// - Throws: What an initializer's arguments throw, as the mock's walk throws it of the same node.
 	@inline(never)
-	static func nodeRecordsMockStatements(of instantiable: Instantiable, worldRoot: ConstructionScope, rootBindings: [NodeRecordsReport.RootBinding]) throws -> String? {
+	static func nodeRecordsMockStatements(of instantiable: Instantiable, worldRoot: ConstructionScope, bindsOnlyNodes: Bool, rootBindings: [NodeRecordsReport.RootBinding], outerDeclarations: [Property]) throws -> String? {
 		let world = TypeFactsGraph(root: worldRoot, forMockGeneration: true)
 		func report(refusal: NodeRecordRefusal?, everyRefusal: [NodeRecordRefusal], isLaidOut: Bool, recordCount: Int) {
 			var report = NodeRecordsReport(
@@ -57,7 +57,7 @@ extension ScopeGenerator {
 			return nil
 		}
 		// A read of a value the mock binds beside its nodes would resolve to no declaration of the records' body.
-		guard rootBindings.isEmpty else {
+		guard bindsOnlyNodes else {
 			report(refusal: .mockRootBindsOtherThanNodes, everyRefusal: [.mockRootBindsOtherThanNodes], isLaidOut: false, recordCount: 0)
 			return nil
 		}
@@ -65,7 +65,7 @@ extension ScopeGenerator {
 			report(refusal: nil, everyRefusal: [], isLaidOut: false, recordCount: nodeRecords.recordCount)
 			return nil
 		}
-		let statements = TypeKeyBody.statements(ofRootBody: nodeRecords.rootBody, rootPassedArgumentNames: [ReservedName.mockOverridesParameterName])
+		let statements = TypeKeyBody.statements(ofRootBody: nodeRecords.rootBody, outerDeclarations: outerDeclarations, namesInScope: Set(outerDeclarations.map(\.label)), rootPassedArgumentNames: [ReservedName.mockOverridesParameterName])
 		report(refusal: statements == nil ? .notLaidOut : nil, everyRefusal: [], isLaidOut: statements != nil, recordCount: nodeRecords.recordCount)
 		return statements.map { GeneratedCode.lines($0).spelled() }
 	}
