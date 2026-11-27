@@ -266,15 +266,20 @@ public actor DependencyTreeGenerator {
 		///     warnings about their trees.
 		///   - mocks: What to generate mocks with, or `nil` to generate none.
 		///   - generatesDOTTree: Whether to draw the roots' and seams' trees as a DOT graph.
-		public init(generatesDependencyTrees: Bool, mocks: MockRequest?, generatesDOTTree: Bool) {
+		///   - namesNodeRecordRefusals: Whether the report of what forced each tree (`GenerationResults.treeForcers`) names,
+		///     for each root of a module with seams, the kind node records refuse its world with, which only a measurement
+		///     reads: making the records costs a run that builds the tree anyway.
+		public init(generatesDependencyTrees: Bool, mocks: MockRequest?, generatesDOTTree: Bool, namesNodeRecordRefusals: Bool = false) {
 			self.generatesDependencyTrees = generatesDependencyTrees
 			self.mocks = mocks
 			self.generatesDOTTree = generatesDOTTree
+			self.namesNodeRecordRefusals = namesNodeRecordRefusals
 		}
 
 		public let generatesDependencyTrees: Bool
 		public let mocks: MockRequest?
 		public let generatesDOTTree: Bool
+		public let namesNodeRecordRefusals: Bool
 	}
 
 	/// What `generate(_:)` generates mocks with.
@@ -349,7 +354,9 @@ public actor DependencyTreeGenerator {
 		// The roots' plans generate in a child task while the warnings and the DOT graph are made from the same trees.
 		// The mocks are made only once the trees are released, so a module's root trees and its mock trees are never held
 		// at once: making them beside the plans raised a mock-heavy module's peak memory by a fifth.
-		let treeForcers = TreeForcerReport(forcersByRoot: trees?.roots.map { (root: $0.instantiable.concreteInstantiable.asSource, forcers: $0.treeForcers) } ?? [])
+		let treeForcers = TreeForcerReport(forcersByRoot: trees?.roots.map { root in
+			(root: root.instantiable.concreteInstantiable.asSource, forcers: root.treeForcers + (request.namesNodeRecordRefusals ? Self.nodeRecordRefusal(ofSeamWorldRoot: root) : []))
+		} ?? [])
 		let storedSeamSignatures = if request.generatesDependencyTrees, let trees {
 			trees.storedSeamSignatures
 		} else {
