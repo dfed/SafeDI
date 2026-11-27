@@ -58,6 +58,12 @@ The shapes (every name invented; `--shapes` picks among them, default all):
                        of each protocol and eighty types with `generateMock: true` that each instantiate `F`, so
                        each of the eighty mocks calls the public mock of `F` and fills eighty hole types. At thirty
                        of each a run took 0.16 s, too near the 0.1 s a shape must lose before it can fail.
+  R10x10-referenced-modules
+                       ten layers of ten modules, each depending on every module of the layer beneath and declaring a
+                       seam and twenty plain types, and module `App`, whose root builds the top layer's seams: 101
+                       modules, run as the Bazel rule runs them (`--module-info-views-refer-to-modules`), so each
+                       module reads every module beneath once per file it lists. Comparing each module's entry by
+                       encoding it once per file that carried it took a seventh of this shape's time.
 
 The four shapes below are the ones whose peak memory is the largest, each one module with no seam, as a project that
 has not adopted seams writes its graph. They are also held to the tighter memory limit (see "Peak memory"):
@@ -363,6 +369,28 @@ def shape_d(count):
     for name, dependencies, _ in modules:
         beneath[name] = sorted(set(dependencies).union(*(beneath[dependency] for dependency in dependencies)))
     return [(name, dependencies, (source if name == "Core" else "import SafeDI\n" + "".join(f"import {module}\n" for module in beneath[name]) + "\n" + source)) for name, dependencies, source in modules]
+
+
+def shape_r(layers, width, types):
+    """`layers` layers of `width` modules, each module depending on every module of the layer beneath and declaring a
+    seam, which instantiates the seam of the module at its position beneath, and `types` plain types; module `App`: a
+    root that instantiates every seam of the top layer. Run as Bazel runs it (`REFERRING_SHAPES`)."""
+    modules = []
+    for layer in range(layers):
+        for position in range(width):
+            name = f"L{layer}M{position}"
+            dependencies = [f"L{layer - 1}M{below}" for below in range(width)] if layer else []
+            properties = [("@Instantiated", f"type{index}", f"{name}Type{index}") for index in range(types)]
+            if layer:
+                properties.append(("@Instantiated", "below", f"L{layer - 1}M{position}Seam"))
+            source = "import SafeDI\n" + "".join(f"import {module}\n" for module in dependencies) + "\n"
+            source += declaration("@Instantiable(generateDependencyTree: true)", f"{name}Seam", properties)
+            source += "".join(declaration("@Instantiable", f"{name}Type{index}", []) for index in range(types))
+            modules.append((name, dependencies, source))
+    top = [f"L{layers - 1}M{position}" for position in range(width)]
+    root = declaration("@Instantiable(isRoot: true)", "Root", [("@Instantiated", f"seam{position}", f"{module}Seam") for position, module in enumerate(top)])
+    modules.append(("App", top, "import SafeDI\n" + "".join(f"import {module}\n" for module in top) + "\n" + root))
+    return modules
 
 
 def shape_i(count):
@@ -866,11 +894,16 @@ SHAPES = {
     "I800-seam": lambda: shape_i(800),
     "H1200-seam": lambda: shape_h(1200),
     "M80x80-calling-mocks": lambda: shape_m(80, 80),
+    "R10x10-referenced-modules": lambda: shape_r(10, 10, 20),
     "S12-mocks": lambda: shape_s(12, seed=5, mocks=True),
     "S16": lambda: shape_s(16, seed=1, mocks=False),
     "E32-inline-mocks": lambda: shape_e(32, seam=False, variant="mocks"),
     "C1500-mock-chain": lambda: shape_c(1500),
 }
+
+# The shapes run as SafeDI's Bazel rule runs `generate`, whose views refer to the modules they carry
+# (`--module-info-views-refer-to-modules`) instead of copying their declarations.
+REFERRING_SHAPES = frozenset(["R10x10-referenced-modules"])
 
 # The shapes whose peak memory is held to `--large-memory-limit`.
 LARGE_MEMORY_SHAPES = frozenset(["S12-mocks", "S16", "E32-inline-mocks", "C1500-mock-chain"])
@@ -984,7 +1017,7 @@ def write(path, text):
         handle.write(text)
 
 
-def generate(tool, modules, sources, output, variables={}, time_limit=None):
+def generate(tool, modules, sources, output, variables={}, time_limit=None, views_refer_to_modules=False):
     """Runs `generate` for each module into `output`, with `variables` added to its environment; returns (wall
     seconds, CPU seconds, peak bytes): the times summed over the modules, the peak the largest of the modules'
     processes' maximum resident set sizes. A module's process still running after `time_limit` seconds is killed,
@@ -1006,6 +1039,8 @@ def generate(tool, modules, sources, output, variables={}, time_limit=None):
             write(f"{output}/{name}.transitive.csv", "".join(f"{output}/{module}.safedi\n" for module in beneath[name]))
             command += ["--dependent-module-info-file-path", f"{output}/{name}.dependencies.csv",
                         "--transitive-module-info-file-path", f"{output}/{name}.transitive.csv"]
+        if views_refer_to_modules:
+            command.append("--module-info-views-refer-to-modules")
         with open(f"{output}/{name}.log", "wb") as log:
             started = time.monotonic()
             # A session of its own, so that stopping it stops the launcher and the tool together.
@@ -1068,6 +1103,7 @@ def compare(base_tool, head_tool, directory, shapes, runs, limit, memory_limit, 
     for shape in shapes:
         modules = SHAPES[shape]()
         one_arena_runs = large_memory_runs if shape in large_memory_shapes else 0
+        refers = {"views_refer_to_modules": shape in REFERRING_SHAPES}
         sources = f"{directory}/{shape}/sources"
         for name, _, source in modules:
             write(f"{sources}/{name}/Types.swift", source)
@@ -1077,7 +1113,7 @@ def compare(base_tool, head_tool, directory, shapes, runs, limit, memory_limit, 
         sizes = {}
         try:
             for label in ("base", "head"):
-                generate(tools[label], modules, sources, f"{directory}/{shape}/{label}-warm-up")
+                generate(tools[label], modules, sources, f"{directory}/{shape}/{label}-warm-up", **refers)
                 code[label] = generated_code(modules, f"{directory}/{shape}/{label}-warm-up")
                 sizes[label] = module_info_sizes(modules, f"{directory}/{shape}/{label}-warm-up")
         except Failure as failure:
@@ -1085,7 +1121,7 @@ def compare(base_tool, head_tool, directory, shapes, runs, limit, memory_limit, 
                 rows.append(f"| {shape} | | did not generate | | | | | | not compared |")
                 print(f"{shape}: the base tool did not generate it, so it is not compared: {failure}", flush=True)
                 try:
-                    generate(head_tool, modules, sources, f"{directory}/{shape}/head-alone")
+                    generate(head_tool, modules, sources, f"{directory}/{shape}/head-alone", **refers)
                 except Failure as head_failure:
                     failures.append(f"{shape}: the head tool did not generate it: {head_failure}")
             else:
@@ -1103,7 +1139,7 @@ def compare(base_tool, head_tool, directory, shapes, runs, limit, memory_limit, 
             print(f"{shape}: module {name}'s `.safedi` file, base {base_size} bytes, head {head_size} bytes, ratio {size_ratio:.2f}", flush=True)
         for run in range(runs):
             for label in ("base", "head"):
-                samples[label].append(generate(tools[label], modules, sources, f"{directory}/{shape}/{label}-{run}"))
+                samples[label].append(generate(tools[label], modules, sources, f"{directory}/{shape}/{label}-{run}", **refers))
         median = {label: tuple(statistics.median(sample[index] for sample in values) for index in range(3)) for label, values in samples.items()}
         ratio = median["head"][0] / median["base"][0]
         over = ratio >= limit and median["head"][0] - median["base"][0] > NOISE_FLOOR_SECONDS
@@ -1118,7 +1154,7 @@ def compare(base_tool, head_tool, directory, shapes, runs, limit, memory_limit, 
             peaks = {"base": [], "head": []}
             for run in range(one_arena_runs):
                 for label in ("base", "head"):
-                    peaks[label].append(generate(tools[label], modules, sources, f"{directory}/{shape}/{label}-one-arena-{run}", ONE_ARENA)[2])
+                    peaks[label].append(generate(tools[label], modules, sources, f"{directory}/{shape}/{label}-one-arena-{run}", ONE_ARENA, **refers)[2])
             base_peak, head_peak = statistics.median(peaks["base"]), statistics.median(peaks["head"])
             one_arena_ratio = head_peak / base_peak
             if one_arena_ratio >= min(memory_limit, large_memory_limit) and head_peak - base_peak > MEMORY_NOISE_FLOOR_BYTES:
