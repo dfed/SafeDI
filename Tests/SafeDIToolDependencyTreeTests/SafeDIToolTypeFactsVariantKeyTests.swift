@@ -191,6 +191,40 @@ struct SafeDIToolTypeFactsVariantKeyTests: ~Copyable {
 		#expect(variantCount(ofNodeDeclaring: "Child as child: Child", in: report) == 1, "\(report.world)")
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keysOneVariant_whenValueTwinAndLazyTwinOfOneLabelAreBeingBuilt() async throws {
+		// Rule 3, case 2: `Leaf` receives `home` only if available beneath the `home` being built, by value under `First`
+		// and lazily under `Second`; either way it is `nil` and 2.4.0 builds one function for the identity, so one body.
+		let report = try await rootReport(of: [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let first: First", "@Instantiated let second: Second"]),
+			seamFixtureType(named: "First", isFinalClass: true, declarations: ["@Instantiated let home: Home"]),
+			seamFixtureType(named: "Second", isFinalClass: true, declarations: ["@Instantiated let home: LazilyInstantiated<Home>"]),
+			seamFixtureType(named: "Home", isFinalClass: true, declarations: ["@Instantiated let leaf: Leaf"]),
+			seamFixtureType(named: "Leaf", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let home: Home?"]),
+		])
+
+		#expect(report.places.count(where: { $0.declaration == "Leaf as leaf: Leaf" }) == 2, "\(report.world)")
+		#expect(variantCount(ofNodeDeclaring: "Leaf as leaf: Leaf", in: report) == 1, "\(report.world)")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keysVariantPerOtherRead_whenTwinsBeingBuiltReadAnotherLabelInOtherForms() async throws {
+		// Rule 3, case 2 drops only the being-built answer's form: `Leaf` also requires `theme`, which `First` declares by
+		// value and `Second` lazily, so the two bodies stay apart by `theme` alone.
+		let report = try await rootReport(of: [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let first: First", "@Instantiated let second: Second"]),
+			seamFixtureType(named: "First", isFinalClass: true, declarations: ["@Instantiated let theme: Theme", "@Instantiated let home: Home"]),
+			seamFixtureType(named: "Second", isFinalClass: true, declarations: ["@Instantiated let theme: LazilyInstantiated<Theme>", "@Instantiated let home: LazilyInstantiated<Home>"]),
+			seamFixtureType(named: "Home", isFinalClass: true, declarations: ["@Instantiated let leaf: Leaf"]),
+			seamFixtureType(named: "Leaf", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let home: Home?", "@Received let theme: Theme"]),
+			seamFixtureType(named: "Theme", isFinalClass: true, declarations: []),
+		])
+
+		#expect(variantCount(ofNodeDeclaring: "Leaf as leaf: Leaf", in: report) == 2, "\(report.world)")
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
