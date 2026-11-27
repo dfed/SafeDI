@@ -153,8 +153,8 @@ struct TypeFactsReceived: Equatable, Sendable {
 	let isRequiredThroughAlias: Bool
 }
 
-/// One receive a node's own type makes: the read it makes, the properties that fulfill it as a run of
-/// `acceptedProperties(of:)`, whether it is required, and the alias it is read through.
+/// One receive a node's own type makes: the read it makes, the properties that fulfill it (which no world reports yet),
+/// whether it is required, and the alias it is read through.
 struct TypeFactsReceive: Equatable, Sendable {
 	let read: ReadID
 	let acceptedStart: Int32
@@ -249,8 +249,6 @@ protocol TypeFactsWorld {
 	/// The receives the declaration's own type makes, in declaration order; `reads(of:)` is its subtree's. Owed by the
 	/// table-side columns.
 	func receives(of declaration: DeclarationID) -> ArraySlice<TypeFactsReceive>
-	/// The properties that fulfill a receive. Owed by the table-side columns.
-	func acceptedProperties(of receive: TypeFactsReceive) -> ArraySlice<PropertyID>
 
 	/// What the node's subtree reads from above it, by read ID in increasing order.
 	func reads(of declaration: DeclarationID) -> ArraySlice<ReadID>
@@ -274,8 +272,6 @@ protocol TypeFactsWorld {
 	/// The forms an answer's declaration provides, by value, interned apart from the channel that reads them. Owed with
 	/// answers interned by ID (answers are interned by text tonight).
 	func forms(of answer: AnswerID) -> ArraySlice<PropertyID>
-	/// Whether the answer's declaration provides `property`. Owed with `forms(of:)`: `false` until then.
-	func provides(_ answer: AnswerID, _ property: PropertyID) -> Bool
 	/// The variant each edge of the variant's declaration calls, in edge order.
 	func calls(of variant: VariantID) -> ArraySlice<VariantID>
 	/// Where each answer a call hands its callee comes from, in the callee's read order.
@@ -384,16 +380,8 @@ extension TypeFactsGraph: TypeFactsWorld {
 		[]
 	}
 
-	func acceptedProperties(of _: TypeFactsReceive) -> ArraySlice<PropertyID> {
-		[]
-	}
-
 	func forms(of _: AnswerID) -> ArraySlice<PropertyID> {
 		[]
-	}
-
-	func provides(_: AnswerID, _: PropertyID) -> Bool {
-		false
 	}
 
 	var rootCount: Int {

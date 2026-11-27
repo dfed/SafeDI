@@ -1357,6 +1357,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		ownerConcreteTypeStack: [TypeDescription],
 		ownerLazilyInstantiatedInstanceProperties: Set<Property> = [],
 		carrierSite: SeamHoles.CarrierSite? = nil,
+		siteRouteMembers: [SeamSignature.Hole.RouteStep.Member?] = [],
 	) {
 		scopeData = .hole(property: holeProperty, erasedToConcreteExistential: erasedToConcreteExistential, site: site)
 		self.ownerPropertyStack = ownerPropertyStack
@@ -1411,6 +1412,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var seamAndFillFields = SeamAndFillFields()
 		seamAndFillFields.valuesBindings = carrierSite?.formations ?? []
 		seamAndFillFields.siteCarrierUse = carrierSite?.use
+		seamAndFillFields.siteRouteMembers = siteRouteMembers
 		seamAndFillFieldsStorage = SeamAndFillFieldsStorage.storing(seamAndFillFields)
 		isBuiltByFill = false
 		fillReturnsWrapperBuilder = false
@@ -1457,6 +1459,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			scopeData = .hole(property: property, erasedToConcreteExistential: erasedToConcreteExistential, site: site)
 			fields.valuesBindings = carrierSite?.formations ?? []
 			fields.siteCarrierUse = carrierSite?.use
+			fields.siteRouteMembers = seamHoles.routeMembers(at: sitePath)
 			fieldsCarriedBySites = Set((site.map(Self.fieldsCarried(by:)) ?? []).map(\.property))
 		case let .root(instantiable, _):
 			scopeData = .root(instantiable: instantiable, seamRoot: seamRoot)
@@ -1667,6 +1670,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			"publicMockOverrideBuilders": .copied,
 			"fillFieldSelection": .copied,
 			"siteCarrierUse": .recomputed,
+			"siteRouteMembers": .recomputed,
 			"fillCarrierUse": .copied,
 			"fillsStoodFor": .copied,
 			"buildsFillOfEveryPlace": .copied,
@@ -4768,6 +4772,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	struct SeamRoot: Sendable {
 		/// The signature of the generated initializer.
 		let signature: SeamSignature
+		/// How the seam's tree hands each inner seam's enum up from a call whose case is in an enum nested by type. Only
+		/// the generation of the seam's own tree reads them, so no signature holds them and no module info file stores
+		/// them: a root read from a file, and a root a seam is called through before its signature is computed, have none.
+		let callRoutes: [SeamSignature.CallRoute]
+		/// The member call each step of the route to each of the seam's own sites makes, in the route's order
+		/// (`SeamSignature.Hole.RouteStep.Member`). As `callRoutes`, only the generation of the seam's own tree reads them, so
+		/// no signature holds them and no module info file stores them.
+		let routeMembersBySite: [SeamSignature.Hole.Site: [SeamSignature.Hole.RouteStep.Member?]]
 		/// The comment the generated `public` declarations' file carries, naming the types they name that SafeDI reads
 		/// no declaration of, or `nil` when the run writes none.
 		var unreadTypeComment: UnreadTypeComment?
@@ -4879,6 +4891,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var publicMockOverrideBuilders: [String: PublicMockOverrideBuilder]?
 		var fillFieldSelection: FillFieldSelection?
 		var siteCarrierUse: SeamCarrierValues.Use?
+		var siteRouteMembers: [SeamSignature.Hole.RouteStep.Member?] = []
 		var fillCarrierUse: SeamCarrierValues.Use?
 		var fillsStoodFor: [FillStoodFor] = []
 		var buildsFillOfEveryPlace = false
@@ -4923,6 +4936,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				|| publicMockOverrideBuilders != nil
 				|| fillFieldSelection != nil
 				|| siteCarrierUse != nil
+				|| !siteRouteMembers.isEmpty
 				|| fillCarrierUse != nil
 		}
 	}
@@ -5514,6 +5528,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// For a hole whose case is a carrier's, how its member takes its values (`SeamHoles.carrierSite(at:)`); `nil` elsewhere.
 	nonisolated private var siteCarrierUse: SeamCarrierValues.Use? {
 		seamAndFillFieldsStorage?.fields.siteCarrierUse
+	}
+
+	/// For a hole's site, the member call each step of its route makes (`SeamHoles.routeMembers(at:)`); empty elsewhere.
+	nonisolated var siteRouteMembers: [SeamSignature.Hole.RouteStep.Member?] {
+		seamAndFillFieldsStorage?.fields.siteRouteMembers ?? []
 	}
 
 	/// For a fill of a place whose case is a seam's carrier's, how the fill takes the case's values: the struct of the run
@@ -8484,6 +8503,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			return HoleSitePlaces.place(
 				of: property,
 				at: site,
+				routeMembers: siteRouteMembers,
 				functionName: builderFunctionNames.functionName,
 				valuesBindings: valuesBindings,
 				carrierUse: siteCarrierUse,
