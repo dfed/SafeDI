@@ -103,6 +103,8 @@ public enum NodeRecordsObservation {
 		compare("lineEnd", tree.lineEnd, nodeRecords.lineEnd)
 		compare("hasFunction", tree.hasFunction, nodeRecords.hasFunction)
 		compare("holdsSharingFields", tree.sharingFields != nil, nodeRecords.sharingFields != nil)
+		compare("leadingStatement", tree.leadingStatement, nodeRecords.leadingStatement)
+		compare("closureArguments", tree.closureArguments, nodeRecords.closureArguments)
 		return differences
 	}
 }
