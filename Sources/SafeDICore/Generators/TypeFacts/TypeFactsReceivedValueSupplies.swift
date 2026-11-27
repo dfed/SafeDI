@@ -117,6 +117,10 @@ struct TypeFactsReceivedValueSupplies: Sendable {
 			let bindsLabel = nodes.indices.map(binds)
 			var contexts = [Set<Int32>](repeating: [], count: nodes.count)
 			contexts[0] = [Self.noDeclaration]
+			// A node no edge has handed anything yet takes its source's set itself, which the two then share until either
+			// changes, so a chain beneath the declarations of a label copies none of them. A change of a shared set copies it,
+			// which counts as the elements it moves.
+			var sharesSourcesSet = [Bool](repeating: false, count: nodes.count)
 			for component in nodesByComponent.reversed() {
 				// A component of one node that no edge of its own enters takes one pass; any other, passes until none changes.
 				let isCycle = component.count > 1 || edgesInto[component[0]].contains { sourceByEdge[Int($0)] == Int32(component[0]) }
@@ -132,11 +136,25 @@ struct TypeFactsReceivedValueSupplies: Sendable {
 								// A call of the function a cycle closes on passes no value of the label the function builds: inside
 								// it, the label reads what it reads where the function is declared, which an edge before this one
 								// hands (`CycleParameter`).
-								if labelByNode[node] != label || !alwaysClosesCycle(edge) {
+								if labelByNode[node] != label || !alwaysClosesCycle(edge), !contexts[node].contains(edge) {
+									if sharesSourcesSet[node] {
+										work += contexts[node].count
+										sharesSourcesSet[node] = false
+									}
 									contexts[node].insert(edge)
 								}
+							} else if contexts[node].isEmpty {
+								contexts[node] = contexts[source]
+								sharesSourcesSet[node] = true
 							} else {
-								contexts[node].formUnion(contexts[source])
+								work += contexts[source].count
+								if !contexts[source].isSubset(of: contexts[node]) {
+									if sharesSourcesSet[node] {
+										work += contexts[node].count
+										sharesSourcesSet[node] = false
+									}
+									contexts[node].formUnion(contexts[source])
+								}
 							}
 							if isCycle, contexts[node].count != before {
 								changed = true

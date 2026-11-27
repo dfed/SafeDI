@@ -1074,11 +1074,47 @@ struct SafeDIToolQueryGraphTests: ~Copyable {
 		// Layers of four screens, each holding instantiators of three screens of the next layer and receiving `service`,
 		// under a root that declares `service` and builds the first layer, so the last layer is reached along
 		// 4 × 3^(layers - 1) paths. The fold reads the per-type graph, where a node stands for every place of its
-		// declaration: one pass over each edge, 1 + 4 + 12 × (layers - 1), and each declaration a screen's receive can read,
-		// one root edge for each of the first layer, three for each of the second and four for each later one, so 24 + 32
-		// more with each two layers. The walk it replaced entered every path: at four and six layers, 162 and 1,458 visits.
+		// declaration, so each later layer adds the same work: its 12 edges, the four declarations of `service` (one per
+		// screen of the first layer) that the second and third edge into each of its four screens read, 32, and the four
+		// each screen's receive judges, 16, which is 60. The walk it replaced entered every path: at four and six layers,
+		// 162 and 1,458 visits.
 		let visits = try await supplyVisitsInLayersOfScreens()
-		#expect(visits == [89, 145])
+		#expect(visits == [169, 289])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func graph_countsEachDeclarationOnce_whenParentsDeclaringLabelShareChainThatReceivesIt() async throws {
+		// k parents under the root each declare `theme` and build the first of a chain of n links, whose last receives
+		// `theme`. The fold visits each of the 3k + n - 1 edges once and judges the k declarations at the reader, 4k + n - 1
+		// in all: the links share the first link's set of k declarations rather than copying it, which would move n × k.
+		var visits = [Int]()
+		for (parentCount, linkCount) in [(4, 8), (8, 16)] {
+			let (stream, continuation) = AsyncStream.makeStream(of: GenerationWork.self)
+			try await GenerationWork.$observer.withValue({ continuation.yield($0) }) {
+				var types = [Self.fixtureType(named: "Theme", properties: [])]
+				types.append(Self.fixtureType(named: "Root", isRoot: true, properties: (0..<parentCount).map { FixtureProperty("@Instantiated", "parent\($0)", "Parent\($0)") }))
+				for parent in 0..<parentCount {
+					types.append(Self.fixtureType(named: "Parent\(parent)", properties: [FixtureProperty("@Instantiated", "theme", "Theme"), FixtureProperty("@Instantiated", "link0", "Link0")]))
+				}
+				for link in 0..<linkCount {
+					let properties = if link + 1 < linkCount {
+						[FixtureProperty("@Instantiated", "link\(link + 1)", "Link\(link + 1)")]
+					} else {
+						[FixtureProperty("@Received", "theme", "Theme")]
+					}
+					types.append(Self.fixtureType(named: "Link\(link)", properties: properties))
+				}
+				_ = try await graph(of: ["Chain.swift": types.joined(separator: "\n\n")])
+			}
+			continuation.finish()
+			var visitsOfThisSize = 0
+			for await work in stream where work.step == .findingReceivedValueSupplies {
+				visitsOfThisSize += work.elementCount
+			}
+			visits.append(visitsOfThisSize)
+		}
+		#expect(visits == [23, 47])
 	}
 
 	@Test
