@@ -365,7 +365,10 @@ func executeSafeDIToolTest(
 												try await TypeFactsReceivedValueSuppliesChecks.comparing(handingOn: TypeFactsReceivedValueSuppliesObservation.comparesWalk) {
 													// The fold that decides whether any route is walked must send every graph the walk rejects to the walk (`FulfillmentFoldChecks`).
 													try await ValidationWalkObservation.$foldComparison.withValue(FulfillmentFoldChecks.comparison(handingOn: ValidationWalkObservation.foldComparison)) {
-														try await tool.generate()
+														// Where a sweep names a report, each mock root's tree names beside its world's (`MockTreeNamesChecks`).
+														try await MockTreeNamesChecks.sweeping {
+															try await tool.generate()
+														}
 													}
 												}
 											}

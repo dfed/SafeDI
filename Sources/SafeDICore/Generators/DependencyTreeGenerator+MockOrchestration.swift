@@ -30,7 +30,8 @@ extension DependencyTreeGenerator {
 		storesPublicMockPlans: Bool,
 		publicMockContext: PublicMockContext?,
 	) async throws -> MockGenerationResult {
-		guard NodeRecordsObservation.observer != nil else {
+		// The tree names comparison reads the same roots (`MockTreeNamesObservation`).
+		guard NodeRecordsObservation.observer != nil || MockTreeNamesObservation.observer != nil else {
 			return try await generateMockCode(
 				mockConditionalCompilation: mockConditionalCompilation,
 				currentModuleSourceFilePaths: currentModuleSourceFilePaths,
