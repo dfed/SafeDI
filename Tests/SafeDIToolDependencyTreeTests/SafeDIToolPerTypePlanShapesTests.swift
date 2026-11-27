@@ -1517,7 +1517,68 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 		}
 		""")
 
-		#expect(choices == ["Root": .receivesBuilderThatClosesLoop])
+		#expect(choices == ["Root": .declaresLoopOfBuilders])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsRootOnTodaysTree_whenSiblingBuildersReceiveEachOther() async throws {
+		// The root declares two builders, and each one's tree receives the other's, a loop of two builders; the first is
+		// on a cycle of its own.
+		let choices = try await choicesGeneratingTodaysCode(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let aBuilder: Instantiator<A>
+		    @Instantiated let bBuilder: Instantiator<B>
+		    public init(aBuilder: Instantiator<A>, bBuilder: Instantiator<B>) { self.aBuilder = aBuilder; self.bBuilder = bBuilder }
+		}
+
+		@Instantiable public final class A: Instantiable {
+		    @Received let bBuilder: Instantiator<B>
+		    @Instantiated let cBuilder: Instantiator<C>
+		    public init(bBuilder: Instantiator<B>, cBuilder: Instantiator<C>) { self.bBuilder = bBuilder; self.cBuilder = cBuilder }
+		}
+
+		@Instantiable public final class B: Instantiable {
+		    @Received let aBuilder: Instantiator<A>
+		    public init(aBuilder: Instantiator<A>) { self.aBuilder = aBuilder }
+		}
+
+		@Instantiable public final class C: Instantiable {
+		    @Instantiated let aBuilder: Instantiator<A>
+		    public init(aBuilder: Instantiator<A>) { self.aBuilder = aBuilder }
+		}
+		""")
+
+		#expect(choices == ["Root": .declaresLoopOfBuilders])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysRootOutFromItsPlanWithTodaysCode_whenOneSiblingBuilderReceivesAnotherThatDoesNotReceiveIt() async throws {
+		// The root declares two builders, and the first one's tree receives the second, whose tree receives nothing: no
+		// loop.
+		let choices = try await choicesGeneratingTodaysCode(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let aBuilder: Instantiator<A>
+		    @Instantiated let bBuilder: Instantiator<B>
+		    public init(aBuilder: Instantiator<A>, bBuilder: Instantiator<B>) { self.aBuilder = aBuilder; self.bBuilder = bBuilder }
+		}
+
+		@Instantiable public final class A: Instantiable {
+		    @Received let bBuilder: Instantiator<B>
+		    @Instantiated let cBuilder: Instantiator<C>
+		    public init(bBuilder: Instantiator<B>, cBuilder: Instantiator<C>) { self.bBuilder = bBuilder; self.cBuilder = cBuilder }
+		}
+
+		@Instantiable public final class B: Instantiable { public init() {} }
+
+		@Instantiable public final class C: Instantiable {
+		    @Instantiated let aBuilder: Instantiator<A>
+		    public init(aBuilder: Instantiator<A>) { self.aBuilder = aBuilder }
+		}
+		""")
+
+		#expect(choices == ["Root": nil])
 	}
 
 	@Test
