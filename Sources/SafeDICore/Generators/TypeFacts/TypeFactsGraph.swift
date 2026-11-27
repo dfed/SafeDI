@@ -337,14 +337,16 @@ struct TypeFactsGraph: Sendable {
 				followsEdge: followsEdge,
 			).rows
 		}
-		var aliasesRequired = Set<Int>()
+		// By edge: one alias leaf is shared by every declaration of its scope, each of which requires it on its own.
+		var aliasEdgesRequired = Set<Int>()
 		var requiredAliasFulfilling = requiredAliasFulfillingRows()
 		var aliasJoined = true
 		while aliasJoined {
 			aliasJoined = false
 			for (index, node) in nodes.enumerated() where node.key.leaf == .none {
-				let children = graph.edgeIndices(from: index).filter(followsEdge).map { Int(graph.edgeTargets[$0]) }
-				for alias in children where nodes[alias].key.leaf == .alias && childProperties[alias].aliasFulfilling >= 0 && !aliasesRequired.contains(alias) {
+				let childEdges = graph.edgeIndices(from: index).filter(followsEdge)
+				let children = childEdges.map { Int(graph.edgeTargets[$0]) }
+				for (aliasEdge, alias) in zip(childEdges, children) where nodes[alias].key.leaf == .alias && childProperties[alias].aliasFulfilling >= 0 && !aliasEdgesRequired.contains(aliasEdge) {
 					let aliasProperty = nodeProperties[alias]
 					let isRequired = children.contains { child in
 						requiredRows.contains(aliasProperty, inRow: child)
@@ -353,7 +355,7 @@ struct TypeFactsGraph: Sendable {
 							}
 					}
 					if isRequired {
-						aliasesRequired.insert(alias)
+						aliasEdgesRequired.insert(aliasEdge)
 						ownRequiredThroughAlias[index].append(childProperties[alias].aliasFulfilling)
 						aliasJoined = true
 					}

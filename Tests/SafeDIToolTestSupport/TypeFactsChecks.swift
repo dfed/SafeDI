@@ -313,11 +313,13 @@ enum TypeFactsChecks {
 	/// Checks 11 to 31: each column of the graph against what the generator decided at each place.
 	///
 	/// 11. The children: as many as the node's listed edges, each of its edge's label.
-	/// 12. The order the place builds its children in is the edges' positions; 13 where the place's subtree closes a cycle
-	///     or the place is inside a fill, whose receives the node's union does not see alike.
+	/// 12. The order the place builds its children in is the edges' positions; 13 where the place's subtree closes a cycle,
+	///     the place is inside a fill or passes one beneath it, whose receives the node's union does not see alike, or the
+	///     place is a mock's root, whose pins order it too.
 	/// 14. Each child's loop of builders is the edge's loop; 15 as 13.
 	/// 16. What the place receives, required, only if available, through an alias, is the node's union; 17 as 13, or in a
-	///     mock, where a receive a required one pins is passed `nil`.
+	///     mock, where a receive a required one pins is passed `nil`, a fill beneath only where each receive it adds is of a
+	///     label a fill reads.
 	/// 18. The names declared `@escaping` beneath are the node's; 19 as 13.
 	/// 20. A place built in a `Sendable` wrapper builds in a `@Sendable` function; 21 a function made `@Sendable` only by a
 	///     cycle closed from inside one, which the edge does not open.
@@ -436,10 +438,13 @@ enum TypeFactsChecks {
 			}
 			// Check 12 and 13.
 			let expectedOrder = childEdges.sorted { $0.element.1.buildPosition < $1.element.1.buildPosition }.map(\.offset)
-			count(explained ? 13 : 12)
+			// A mock root orders its children by what its pins pass `nil` too (`MockReceivesPassedNil`), which the node's
+			// receives leave to the variants.
+			let isExplainedOrder = explained || report.forMockGeneration && place.parent == nil
+			count(isExplainedOrder ? 13 : 12)
 			// A child that lists a property a sibling before it lists is never built, and follows those built.
 			if Array(expectedOrder.prefix(generator.orderedIndices.count)) != generator.orderedIndices {
-				add(explained ? 13 : 12, "place \(index) \(place.declaration) builds its children \(generator.childLabels) in order \(generator.orderedIndices) where its node's positions give \(expectedOrder)")
+				add(isExplainedOrder ? 13 : 12, "place \(index) \(place.declaration) builds its children \(generator.childLabels) in order \(generator.orderedIndices) where its node's positions give \(expectedOrder)")
 			}
 			// Check 14 and 15.
 			let expectedLoops = childEdges.map(\.element.1.loop)
