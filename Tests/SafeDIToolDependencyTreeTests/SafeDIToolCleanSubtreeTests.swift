@@ -802,6 +802,43 @@ struct SafeDIToolCleanSubtreeTests: ~Copyable {
 		#expect(skippingCounts == [192, 272, 352, 432])
 	}
 
+	@Test(arguments: [FeatureState.instantiated, .forwarded, .lazilyInstantiated, .renamed, .renamedByEntry])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_validatesScopesInNumbersThatDoNotGrowWithLinks_whenLastScreenOfFeaturesThatOpenOneAnotherOpensItsEntryAgain(state: FeatureState) async throws {
+		// Six features open one another, and each declares `state` with a type of its own, which only its own screens read.
+		// The last screen of the first `linkCount` features opens its feature's entry again. No screen can read another
+		// feature's state, since its own entry declares the label above it on every path, so a tree a link builds again
+		// has nothing to judge, and a screen reads nothing of the features its own is opened beneath. With `state` counted
+		// as a label the tree built again can judge, every link blocked every walk above it and walked its tree again; and
+		// with every feature's state in a screen's key, a screen had another key beneath each set of features: 179, 775
+		// and 6,046 scopes at one, three and six links where the entries instantiate the state, with a further 144, 972
+		// and 8,028 in the trees built again. An entry that also renames its own state reads the label, but only from
+		// itself, so that read is hidden by no feature's declaration either. Two shapes are left as they were, and still
+		// double with each link. A state the screens receive only if available makes the optional form receivable beneath
+		// the receive, so a first screen built again beneath its own feature's last screen is given a property its first
+		// build was not, and its key differs. And a second label that a screen between the entry and the link declares is
+		// declared again on the path from the entry to the link that opens it again.
+		var skippingCounts = [Int]()
+		for linkCount in 1...6 {
+			let skipping = try await run(Self.featuresOpeningOneAnother(linkCount: linkCount, state: state), skippingCleanSubtrees: true)
+			#expect(skipping.isGenerated)
+			skippingCounts.append(skipping.validatedScopeCount)
+		}
+		#expect(skippingCounts == state.validatedScopeCounts)
+	}
+
+	@Test(arguments: FeatureState.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsWhatWalkWithoutSkipReports_whenLastScreenOfFeaturesThatOpenOneAnotherOpensItsEntryAgain(state: FeatureState) async throws {
+		// The graph above with two links, small enough to walk without the skip.
+		let fixture = Self.featuresOpeningOneAnother(linkCount: 2, state: state)
+		let skipping = try await run(fixture, skippingCleanSubtrees: true)
+		let walking = try await run(fixture, skippingCleanSubtrees: false)
+		#expect(walking.isGenerated)
+		#expect(skipping.outcome == walking.outcome)
+		#expect(walking.skippedSubtreeCount == 0)
+	}
+
 	// MARK: Tests – A label declared with different types
 
 	@Test(arguments: LabelAbove.allCases, LabelBeneath.allCases)
@@ -1185,6 +1222,117 @@ struct SafeDIToolCleanSubtreeTests: ~Copyable {
 					+ screenDeclarations[index, default: []],
 			))
 			fixture.append(seamFixtureType(named: "Model\(index)", isFinalClass: true, declarations: ["@Received let id: Int", "@Received let service: Service"] + modelDeclarations))
+		}
+		return fixture
+	}
+
+	/// How each feature of `featuresOpeningOneAnother(linkCount:state:)` declares its state and how its screens read it.
+	enum FeatureState: CaseIterable {
+		/// The entry instantiates the state, and each screen receives it.
+		case instantiated
+		/// The entry forwards the state, and each screen receives it.
+		case forwarded
+		/// The entry instantiates the state lazily, and each screen receives its instance.
+		case lazilyInstantiated
+		/// The entry instantiates the state, and each screen renames it.
+		case renamed
+		/// The entry instantiates the state and renames it itself, and each screen receives it.
+		case renamedByEntry
+		/// The entry instantiates the state, and each screen receives it. Each first screen also instantiates a state of its
+		/// feature's screens, a second label with a type per feature, which each last screen receives beside the first.
+		case instantiatedBesideScreenState
+		/// The entry instantiates the state, and each screen receives it only if available.
+		case receivedOnlyIfAvailable
+
+		func entryDeclarations(feature: Int) -> [String] {
+			switch self {
+			case .instantiated, .renamed, .receivedOnlyIfAvailable, .instantiatedBesideScreenState:
+				["@Instantiated let state: State\(feature)"]
+			case .forwarded:
+				["@Forwarded let state: State\(feature)"]
+			case .lazilyInstantiated:
+				["@Instantiated let state: LazilyInstantiated<State\(feature)>"]
+			case .renamedByEntry:
+				[
+					"@Instantiated let state: State\(feature)",
+					"@Received(fulfilledByDependencyNamed: \"state\", ofType: State\(feature).self) let renamedState: State\(feature)",
+				]
+			}
+		}
+
+		func firstScreenDeclarations(feature: Int) -> [String] {
+			switch self {
+			case .instantiated, .forwarded, .lazilyInstantiated, .renamed, .renamedByEntry, .receivedOnlyIfAvailable:
+				lastScreenDeclarations(feature: feature)
+			case .instantiatedBesideScreenState:
+				["@Received let state: State\(feature)", "@Instantiated let screenState: ScreenState\(feature)"]
+			}
+		}
+
+		func lastScreenDeclarations(feature: Int) -> [String] {
+			switch self {
+			case .instantiated, .forwarded, .lazilyInstantiated, .renamedByEntry:
+				["@Received let state: State\(feature)"]
+			case .renamed:
+				["@Received(fulfilledByDependencyNamed: \"state\", ofType: State\(feature).self) let renamedState: State\(feature)"]
+			case .receivedOnlyIfAvailable:
+				["@Received(onlyIfAvailable: true) let state: State\(feature)?"]
+			case .instantiatedBesideScreenState:
+				["@Received let state: State\(feature)", "@Received let screenState: ScreenState\(feature)"]
+			}
+		}
+
+		/// The scopes the walk validates at one to six links: two more for each link, the entry the link opens again and
+		/// the state it instantiates, or one more where the entry forwards its state. An entry that renames its own state
+		/// is keyed by the declaration of the label above it, which its rename is looked up in, so it is walked once
+		/// beneath each feature that opens it, and no more with the links than that. `nil` where the count still doubles
+		/// with each link.
+		var validatedScopeCounts: [Int]? {
+			switch self {
+			case .instantiated, .lazilyInstantiated, .renamed:
+				[51, 53, 55, 57, 59, 61]
+			case .renamedByEntry:
+				[71, 71, 71, 72, 73, 77]
+			case .forwarded:
+				[44, 45, 46, 47, 48, 49]
+			case .receivedOnlyIfAvailable, .instantiatedBesideScreenState:
+				nil
+			}
+		}
+	}
+
+	/// `Root` opens the entry of each of six features. Each entry declares its feature's state, opens its feature's two
+	/// first screens, and opens the entries of the feature before its own and of the feature three before. Each first
+	/// screen reads the state and opens the feature's two last screens, which read it too; and in the first `linkCount`
+	/// features the last screen opens its feature's entry again.
+	private static func featuresOpeningOneAnother(linkCount: Int, state: FeatureState) -> [String] {
+		let featureCount = 6
+		var fixture = [seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: (0..<featureCount).map { "@Instantiated let feature\($0)Builder: Instantiator<Entry\($0)>" })]
+		for feature in 0..<featureCount {
+			fixture.append(seamFixtureType(named: "State\(feature)", isFinalClass: true, declarations: []))
+			if state == .instantiatedBesideScreenState {
+				fixture.append(seamFixtureType(named: "ScreenState\(feature)", isFinalClass: true, declarations: []))
+			}
+			fixture.append(seamFixtureType(
+				named: "Entry\(feature)",
+				isFinalClass: true,
+				declarations: state.entryDeclarations(feature: feature)
+					+ (0..<2).map { "@Instantiated let first\($0)Builder: Instantiator<First\(feature)x\($0)>" }
+					+ [feature - 1, feature - 3].filter { $0 >= 0 }.map { "@Instantiated let feature\($0)Builder: Instantiator<Entry\($0)>" },
+			))
+			for position in 0..<2 {
+				fixture.append(seamFixtureType(
+					named: "First\(feature)x\(position)",
+					isFinalClass: true,
+					declarations: state.firstScreenDeclarations(feature: feature) + (0..<2).map { "@Instantiated let last\($0)Builder: Instantiator<Last\(feature)x\($0)>" },
+				))
+				fixture.append(seamFixtureType(
+					named: "Last\(feature)x\(position)",
+					isFinalClass: true,
+					declarations: state.lastScreenDeclarations(feature: feature)
+						+ (position == 1 && feature < linkCount ? ["@Instantiated let entryBuilder: Instantiator<Entry\(feature)>"] : []),
+				))
+			}
 		}
 		return fixture
 	}

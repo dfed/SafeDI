@@ -776,9 +776,8 @@ extension DependencyTreeGenerator {
 	}
 
 	/// The labels the key of a scope holds (`cleanSubtreeKey(of:rootContextIndex:)`): `receivableLabels`,
-	/// `labelsComparedWithEntries` and `builtTypes` for every scope, `propertiesAskedOfReceivableProperties` only for one
-	/// that reaches no cycle of instantiators, and `labelsOnlyInstantiatorsBuild` and `labelsJudgedInTheirTrees` only for
-	/// one that reaches one.
+	/// `propertiesAskedOfReceivableProperties`, `labelsComparedWithEntries` and `builtTypes` for every scope, and
+	/// `labelsOnlyInstantiatorsBuild` and `labelsJudgedInTheirTrees` only for one that reaches a cycle of instantiators.
 	private struct CleanSubtreeKeyLabels {
 		/// The labels whose receivable properties a walk of the subtree looks up.
 		let receivableLabels: Set<String>
@@ -1225,11 +1224,14 @@ extension DependencyTreeGenerator {
 		/// See `labelsNoJudgementFiresFor()`.
 		var memoizedLabelsNoJudgementFiresFor: Set<String>?
 		/// The labels for which neither judgement of `validateTreeBuiltAgainByCycle` can fire anywhere in the trees of these
-		/// roots, whatever is new where: every declaration of the label is one that every read of it accepts, as
-		/// `recordHiddenReceives` accepts the closest declaration, so no declaration of it hides a read; and no tree built for a
-		/// property of the label reads it, so no declaration of it is still being built where it is read. A value redeclared
-		/// between screens with its own type, such as a flow's state, is such a label. The answer reads every scope the roots
-		/// reach and no walk's outcome, so it is computed once, when a walk first finds a read label new.
+		/// roots, whatever is new where: every declaration of the label is one that every read it can be the closest
+		/// declaration of accepts, as `recordHiddenReceives` accepts the closest declaration, so no declaration of it hides a
+		/// read; and no tree built for a property of the label reads it, so no declaration of it is still being built where it
+		/// is read. A read of what its own scope creates, as a rename of a property the scope instantiates, is for the first
+		/// no read: it refers to that declaration wherever the scope is built, and `recordHiddenReceives` skips it. A value
+		/// redeclared between screens with its own type, such as a flow's state, is such a label, and so is one each feature
+		/// declares with a type of its own that only its own screens receive. The answer reads every scope the roots reach
+		/// and no walk's outcome, so it is computed once, when a walk first finds a read label new.
 		func labelsNoJudgementFiresFor() -> Set<String> {
 			if let memoizedLabelsNoJudgementFiresFor {
 				return memoizedLabelsNoJudgementFiresFor
@@ -1248,16 +1250,13 @@ extension DependencyTreeGenerator {
 						if reachedScope.createdProperties.contains(dependency.property) {
 							declarationsByLabel[dependency.property.label, default: []].append((dependency.property, dependency.lazilyInstantiatedInstanceProperty))
 						}
-						// What `recordHiddenReceives` accepts for each read.
-						switch dependency.source {
-						case .received:
-							acceptedPropertiesOfReadsByLabel[dependency.property.label, default: []].append([dependency.property, dependency.property.asUnwrappedProperty])
-						case let .aliased(fulfillingProperty, _, onlyIfAvailable):
-							acceptedPropertiesOfReadsByLabel[fulfillingProperty.label, default: []].append(onlyIfAvailable
-								? Set(fulfillingProperty.formsReadByOnlyIfAvailableReceive)
-								: [fulfillingProperty, fulfillingProperty.asUnwrappedProperty])
-						case .instantiated, .forwarded:
-							break
+						if let read = Self.readOfLabel(by: dependency) {
+							if read.acceptedProperties.isDisjoint(with: reachedScope.createdProperties) {
+								acceptedPropertiesOfReadsByLabel[read.label, default: []].append(read.acceptedProperties)
+							} else if acceptedPropertiesOfReadsByLabel[read.label] == nil {
+								// A label only its own declaring scopes read is still a label a tree reads.
+								acceptedPropertiesOfReadsByLabel[read.label] = []
+							}
 						}
 					}
 					for case let .instantiated(childProperty, childScope, _) in reachedScope.propertiesToGenerate {
@@ -1268,19 +1267,124 @@ extension DependencyTreeGenerator {
 					}
 				}
 				var labels = Set<String>()
+				var labelsSomeReadDoesNotAcceptEveryDeclarationOf = Set<String>()
 				for (label, acceptedPropertiesOfReads) in acceptedPropertiesOfReadsByLabel {
+					// Nearly every label has no declaration that a read of it anywhere would not accept, which this finds without
+					// following any path.
 					let everyDeclarationIsAccepted = declarationsByLabel[label, default: []].allSatisfy { declaration in
 						acceptedPropertiesOfReads.allSatisfy {
 							$0.contains(declaration.property) || declaration.lazilyInstantiatedInstanceProperty.map($0.contains) == true
 						}
 					}
-					if everyDeclarationIsAccepted, scopesBuiltByLabel[label, default: []].allSatisfy({ !labelsRead(inTreeOf: $0).contains(label) }) {
+					if everyDeclarationIsAccepted {
 						labels.insert(label)
+					} else {
+						labelsSomeReadDoesNotAcceptEveryDeclarationOf.insert(label)
 					}
+				}
+				if !labelsSomeReadDoesNotAcceptEveryDeclarationOf.isEmpty {
+					labels.formUnion(labelsSomeReadDoesNotAcceptEveryDeclarationOf.subtracting(
+						labelsSomeClosestDeclarationHides(among: labelsSomeReadDoesNotAcceptEveryDeclarationOf),
+					))
+				}
+				labels = labels.filter { label in
+					scopesBuiltByLabel[label, default: []].allSatisfy { !labelsRead(inTreeOf: $0).contains(label) }
 				}
 				memoizedLabelsNoJudgementFiresFor = labels
 				return labels
 			}
+		}
+		/// The labels among `candidateLabels` that some declaration hides from a read it can be the closest declaration of:
+		/// one the read does not accept. A read resolves to the closest declaration on the path its scope is built along, in
+		/// the walk of a tree and in a tree a cycle builds again alike, since the scopes between a cycle-closing scope and the
+		/// scope it closes on are on that path. So a declaration can be the closest only of the reads in the trees its scope's
+		/// children build, down to each scope that declares the label again: beneath that scope its own declaration is the
+		/// closest, and its own reads of the label resolve to the declaration above it, but for a read of what the scope
+		/// itself creates, which `recordHiddenReceives` skips and this pass leaves out.
+		///
+		/// One pass over the scopes the roots reach, children first. Each scope hands the scopes that build it its own reads
+		/// of the labels and what its children hand it of the labels it does not declare, each distinct read once however
+		/// many scopes make it, and judges what its children hand it of the labels it declares. Scopes that instantiate one
+		/// another are answered together, each taking what the others hand it until nothing is added, as
+		/// `labelsReadFromAbove(by:)` answers them. So the pass grows with the scopes and with the distinct reads handed past
+		/// each, not with the labels times the scopes that declare them. What each scope hands up is held until the pass ends.
+		func labelsSomeClosestDeclarationHides(among candidateLabels: Set<String>) -> Set<String> {
+			var hiddenLabels = Set<String>()
+			// Each distinct read of one of the labels, which a scope hands up as its index here.
+			var reads = [ReadOfLabel]()
+			var readIndexByRead = [ReadOfLabel: Int]()
+			var readIndicesHandedUpByScope = [Scope: Set<Int>]()
+			for rootScope in rootScopes + additionalMockRootScopes {
+				_ = valuesReached(
+					from: rootScope.scope,
+					successors: instantiatedScopes(of:),
+					componentValues: { component, successorsByScope, readIndicesHandedUpByReachedScope in
+						var declarationsByLabelByMember = [Scope: [String: [Dependency]]]()
+						var readIndicesHandedUpByMember = [Scope: Set<Int>]()
+						for member in component {
+							var declarationsByLabel = [String: [Dependency]]()
+							var readIndices = Set<Int>()
+							for dependency in member.instantiable.dependencies {
+								// What `enterDeclarations` enters as a closest declaration.
+								if candidateLabels.contains(dependency.property.label), member.createdProperties.contains(dependency.property) {
+									declarationsByLabel[dependency.property.label, default: []].append(dependency)
+								}
+								// The label is compared first: nearly every read is of another label, whose accepted properties no one asks for.
+								if let label = Self.labelRead(by: dependency), candidateLabels.contains(label),
+								   let read = Self.readOfLabel(by: dependency), read.acceptedProperties.isDisjoint(with: member.createdProperties)
+								{
+									let readIndex = readIndexByRead[read] ?? reads.count
+									if readIndex == reads.count {
+										reads.append(read)
+										readIndexByRead[read] = readIndex
+									}
+									readIndices.insert(readIndex)
+								}
+							}
+							declarationsByLabelByMember[member] = declarationsByLabel
+							readIndicesHandedUpByMember[member] = readIndices
+						}
+						// A scope that instantiates itself takes its own reads once, which is all it hands itself.
+						var addedRead: Bool
+						repeat {
+							addedRead = false
+							for member in component {
+								var readIndices = readIndicesHandedUpByMember[member, default: []]
+								let readCount = readIndices.count
+								let declarationsByLabel = declarationsByLabelByMember[member, default: [:]]
+								for child in successorsByScope[member, default: []] {
+									let childReadIndices = readIndicesHandedUpByMember[child] ?? readIndicesHandedUpByReachedScope[child, default: []]
+									if declarationsByLabel.isEmpty {
+										readIndices.formUnion(childReadIndices)
+									} else {
+										for readIndex in childReadIndices {
+											let read = reads[readIndex]
+											if let declarations = declarationsByLabel[read.label] {
+												if !declarations.allSatisfy({ declaration in
+													read.acceptedProperties.contains(declaration.property)
+														|| declaration.lazilyInstantiatedInstanceProperty.map(read.acceptedProperties.contains) == true
+												}) {
+													hiddenLabels.insert(read.label)
+												}
+											} else {
+												readIndices.insert(readIndex)
+											}
+										}
+									}
+								}
+								if readIndices.count > readCount {
+									readIndicesHandedUpByMember[member] = readIndices
+									addedRead = true
+								}
+							}
+						} while addedRead && component.count > 1
+						return readIndicesHandedUpByMember
+					},
+					empty: [],
+					cache: &readIndicesHandedUpByScope,
+				)
+			}
+			return hiddenLabels
 		}
 		/// The walk skips nothing when a test or the graph fuzzer's oracle compares its outcome with and without the skip.
 		let skipsCleanSubtrees = ValidationWalkObservation.skipsCleanSubtrees
@@ -1613,9 +1717,9 @@ extension DependencyTreeGenerator {
 		}
 		/// The labels the key of `scope` holds. A walk of its subtree reads less of its path than
 		/// `labelsDeclaredOrRead(beneath:)` allows for, and what it does not read differs on every path through a cycle, and on
-		/// every path through screens that each declare one label with a type of their own. The first two and the fourth hold
-		/// for every scope; the third holds only for a scope that reaches no cycle of instantiators, and the last is read
-		/// only of one that reaches one:
+		/// every path through screens that each declare one label with a type of their own. The first four hold for every
+		/// scope, the third less the labels a tree a cycle builds again can judge beneath one that reaches a cycle of
+		/// instantiators, and the last is read only of one that reaches one:
 		/// - The receivable properties of a label no scope beneath receives or renames are read by no judgement.
 		/// - Nor are those of a label the scopes beneath only forward and require, as one non-optional property, where every
 		///   receive of it is beneath a scope that forwards it (`labelsReadFromAbove(by:)` holds it not): that scope makes the
@@ -1623,9 +1727,15 @@ extension DependencyTreeGenerator {
 		/// - Of the receivable properties of the labels left, a judgement asks only whether a property a scope beneath
 		///   receives or renames is among them, in a form it reads (`Dependency.formsAskedOfReceivableProperties`). The others
 		///   are read by label only for the suggestions of a receive already reported, which is never remembered, and by
-		///   `validateTreeBuiltAgainByCycle`: so the key of a scope that reaches no cycle of instantiators holds none of them
-		///   (`cleanSubtreeKey(of:rootContextIndex:)`), and screens that each declare one label with a type of their own,
-		///   which a type beneath each receives, no longer give every path beneath them another key.
+		///   `validateTreeBuiltAgainByCycle`, which reads by label only the labels it can judge in the tree it walks
+		///   (`labelsJudged(inTreeOf:)`: its first guard and `treeReadsAnything` filter by them, and
+		///   `recordHiddenReceives` asks the receivable properties only past a closest declaration that does not fulfill the
+		///   read, which a label read there and not judged never has). So the key holds none of the others but those of a
+		///   label judged in a tree an instantiator beneath the scope builds (`labelsJudgedInTheirTrees`, which holds what
+		///   every tree a cycle beneath the scope builds again can judge: an accepted cycle has an instantiator on it, whose
+		///   tree reaches the scope the cycle closes on), and screens or features that each declare one label with a type of
+		///   their own, which a type beneath each receives, give no path beneath them another key, inside a cycle of
+		///   instantiators or not.
 		/// - An entry of the instantiation stack is compared with the property a scope receives or renames, by its label, or
 		///   with the property a scope builds a scope for, which closes a cycle only on an entry built for the same concrete
 		///   type (`indexOfEntryClosedOn`). An entry of a label nothing beneath receives or renames, built for a type no scope
@@ -1657,9 +1767,9 @@ extension DependencyTreeGenerator {
 		///   production reports a required receive of an optional property whose own form is not receivable, whatever else
 		///   is; a mock's tree reads the unwrapped form only of a property still being built, which appears to be receivable
 		///   there only through a declaration nearer than the one being built, which the key holds.
-		/// - a scope that reaches a cycle of instantiators keeping the receivable properties no scope beneath it asks for.
-		///   `validateTreeBuiltAgainByCycle` reads them by label, so they stay; keeping only what is asked for there, as for
-		///   every other scope, made no difference on these graphs.
+		/// - a scope that reaches a cycle of instantiators keeping, of a label a tree a cycle builds again can judge, the
+		///   receivable properties no scope beneath it asks for. `validateTreeBuiltAgainByCycle` reads them by label, so
+		///   they stay; keeping only what is asked for there too made no difference on these graphs.
 		/// - two raises of `memoBlockingEventCount` for a value that repeats an entry of the stack, which no test fails
 		///   without: for an instantiation of it, whose cycle-closing scope appears to raise the count wherever it does,
 		///   and for a receive of it in the received walk, which throws unless a nearer declaration fulfills it, whose
@@ -1789,14 +1899,18 @@ extension DependencyTreeGenerator {
 			}
 			// A walk asks the receivable properties only whether they hold a property a scope beneath receives or renames, in a
 			// form it reads, so the others are left out: the scopes above that each declare one label with a type of their own
-			// otherwise give every path another key. A tree a cycle builds again reads them by label
-			// (`validateTreeBuiltAgainByCycle`), so a scope that reaches a cycle of instantiators keeps every property of its
-			// labels; beneath any other scope a cycle-closing scope raises `memoBlockingEventCount`, and the entry it closes
-			// on is in `stack`.
+			// otherwise give every path another key. A tree a cycle builds again reads them by label, of the labels it can
+			// judge (`validateTreeBuiltAgainByCycle`), so a scope that reaches a cycle of instantiators keeps every property
+			// of those labels; beneath any other scope a cycle-closing scope raises `memoBlockingEventCount`, and the entry it
+			// closes on is in `stack`. No test fails with those properties left out, and none can be written while this
+			// holds: of a property no scope beneath asks for, that walk reads only whether it is new where a cycle closes,
+			// which decides whether it walks the tree again and nothing it reports, since each of its judgements asks for a
+			// form a scope reads (`recordHiddenReceives`), which the key holds. They are kept so that a judgement added to
+			// that walk which reads a label's properties by label is still keyed.
 			let receivablePropertiesOfLabels = scopeToValidate.receivableProperties.properties(labeledAnyOf: keyLabels.receivableLabels)
-			let receivableProperties = cycleKeyLabels == nil
-				? receivablePropertiesOfLabels.filter(keyLabels.propertiesAskedOfReceivableProperties.contains)
-				: receivablePropertiesOfLabels
+			let receivableProperties = receivablePropertiesOfLabels.filter {
+				keyLabels.propertiesAskedOfReceivableProperties.contains($0) || cycleKeyLabels?.labelsJudgedInTheirTrees.contains($0.label) == true
+			}
 			return CleanSubtreeKey(
 				scope: scope,
 				property: scopeToValidate.property,
@@ -2917,6 +3031,43 @@ extension DependencyTreeGenerator {
 		}
 		if !hiddenReceivedProperties.isEmpty {
 			throw DependencyTreeGeneratorError.hiddenReceivedProperties(Self.reportingEachSeamsChainOnce(hiddenReceivedProperties, seamTypes: generatedSeamTypes))
+		}
+	}
+
+	/// A read of a label from the scopes above the reading scope's own, with the properties `recordHiddenReceives`
+	/// accepts as the closest declaration of that label.
+	private struct ReadOfLabel: Hashable {
+		let label: String
+		let acceptedProperties: Set<Property>
+	}
+
+	/// The label `dependency` reads from the scopes above its own: a receive reads its own label, and an alias its
+	/// fulfilling property's. `nil` for a dependency that reads none.
+	private static func labelRead(by dependency: Dependency) -> String? {
+		switch dependency.source {
+		case .received:
+			dependency.property.label
+		case let .aliased(fulfillingProperty, _, _):
+			fulfillingProperty.label
+		case .instantiated, .forwarded:
+			nil
+		}
+	}
+
+	/// The read `dependency` makes of the label `labelRead(by:)` names. `nil` for a dependency that reads none.
+	private static func readOfLabel(by dependency: Dependency) -> ReadOfLabel? {
+		switch dependency.source {
+		case .received:
+			ReadOfLabel(label: dependency.property.label, acceptedProperties: [dependency.property, dependency.property.asUnwrappedProperty])
+		case let .aliased(fulfillingProperty, _, onlyIfAvailable):
+			ReadOfLabel(
+				label: fulfillingProperty.label,
+				acceptedProperties: onlyIfAvailable
+					? Set(fulfillingProperty.formsReadByOnlyIfAvailableReceive)
+					: [fulfillingProperty, fulfillingProperty.asUnwrappedProperty],
+			)
+		case .instantiated, .forwarded:
+			nil
 		}
 	}
 
