@@ -803,6 +803,100 @@ struct SafeDIToolNodeRecordsMockLoopTests: ~Copyable {
 		}
 	}
 
+	/// A member the mock root promotes only because another member's tree receives it stays refused: the walk binds no wrapper of it, which the root's body would bind unread.
+	@Test
+	mutating func mock_refusesLoop_whenMockRootPromotesMemberOnlyForItsLoop() async throws {
+		let fixture = [
+			"""
+			@Instantiable(generateMock: true)
+			public final class A: Instantiable {
+			    public init(bBuilder: Instantiator<B>) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+			    @Received let bBuilder: Instantiator<B>
+			}
+			""",
+			"""
+			@Instantiable
+			public final class B: Instantiable {
+			    public init(aBuilder: Instantiator<A>) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+			    @Received let aBuilder: Instantiator<A>
+			}
+			""",
+		]
+		let (_, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(reports.filter(\.isMockRoot).map(\.everyRefusal) == [["builderLoop"]])
+	}
+
+	/// A member promoted for an optional receive stays refused: the walk binds it non-optional, which its rebinding would annotate optional.
+	@Test
+	mutating func mock_refusesLoop_whenMemberIsPromotedForOptionalReceive() async throws {
+		let fixture = [
+			"""
+			@Instantiable(generateMock: true)
+			public struct Screen: Instantiable {
+			    public init(aBuilder: Instantiator<A>?) { self.aBuilder = aBuilder }
+			    @Received let aBuilder: Instantiator<A>?
+			}
+			""",
+			"""
+			@Instantiable
+			public struct A: Instantiable {
+			    public init(bBuilder: Instantiator<B>) { self.bBuilder = bBuilder }
+			    @Instantiated let bBuilder: Instantiator<B>
+			}
+			""",
+			"""
+			@Instantiable
+			public struct B: Instantiable {
+			    public init(aBuilder: Instantiator<A>?) { self.aBuilder = aBuilder }
+			    @Received(onlyIfAvailable: true) let aBuilder: Instantiator<A>?
+			}
+			""",
+		]
+		let (_, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(reports.filter(\.isMockRoot).map(\.everyRefusal) == [["builderLoop"]])
+	}
+
+	/// A member erased to another type stays refused: its rebinding would hand the erased wrapper its concrete type's function unerased.
+	@Test
+	mutating func mock_refusesLoop_whenMemberIsErasedToAnotherType() async throws {
+		let fixture = [
+			"""
+			public final class AnyNode {
+			    public init(_ node: Node) { self.node = node }
+			    let node: Node
+			}
+			public struct AnyNodeFactory {
+			    public init(_ builder: ErasedInstantiator<(), AnyNode>) { self.builder = builder }
+			    let builder: ErasedInstantiator<(), AnyNode>
+			}
+			@Instantiable
+			public final class Holder: Instantiable {
+			    public init(nodeBuilder: ErasedInstantiator<(), AnyNode>) { self.nodeBuilder = nodeBuilder }
+			    @Instantiated(fulfilledByType: "Node", erasedToConcreteExistential: true) let nodeBuilder: ErasedInstantiator<(), AnyNode>
+			}
+			""",
+			"""
+			@Instantiable(generateMock: true)
+			public final class Node: Instantiable {
+			    public init(childBuilder: AnyNodeFactory) { self.childBuilder = childBuilder }
+			    @Received(fulfilledByDependencyNamed: "nodeBuilder", ofType: ErasedInstantiator<(), AnyNode>.self, erasedToConcreteExistential: true) let childBuilder: AnyNodeFactory
+			}
+			""",
+		]
+		let (_, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(reports.filter(\.isMockRoot).map(\.everyRefusal) == [["builderLoop"]])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
