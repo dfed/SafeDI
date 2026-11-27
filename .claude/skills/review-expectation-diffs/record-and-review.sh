@@ -67,13 +67,20 @@ if [ "$base_commit" = "$(git -C "$checkout" rev-parse HEAD)" ] && git -C "$check
 	same_commit=1
 fi
 
-record() { # record NAME CHECKOUT ENV…
-	local name="$1" directory="$2"; shift 2
+record() { # record NAME CHECKOUT BUNDLE ENV…
+	local name="$1" directory="$2" bundle="$3"; shift 3
 	mkdir -p "$out/$name/records"
 	local environment=(SAFEDI_TEST_RECORD_DIRECTORY="$out/$name/records" "$@")
 	if [ "$fast" = 1 ]; then environment+=(SAFEDI_SKIP_COMPILE_CHECK=1); fi
-	(cd "$directory" && env "${environment[@]}" $runner swift test --traits sourceBuild --skip-build \
-		${filters[@]+"${filters[@]}"} >"$out/$name/test.log" 2>&1) || true
+	# SwiftPM lets one `swift test` at a time use a build directory, so on Linux the test bundle runs directly, which
+	# lets both runs of one commit go at once. Elsewhere `swift test` runs it, and the second run waits for the first.
+	if [ "$(uname)" = Linux ] && [ -x "$bundle" ]; then
+		(cd "$directory" && env "${environment[@]}" $runner "$bundle" ${filters[@]+"${filters[@]}"} --testing-library swift-testing \
+			>"$out/$name/test.log" 2>&1) || true
+	else
+		(cd "$directory" && env "${environment[@]}" $runner swift test --traits sourceBuild --skip-build \
+			${filters[@]+"${filters[@]}"} >"$out/$name/test.log" 2>&1) || true
+	fi
 	python3 -I "$checkout/.claude/skills/regenerate-expectations/regenerate-expectations.py" \
 		--write-manifest "$out/$name/records" --checkout "$checkout" >/dev/null
 }
@@ -94,6 +101,8 @@ if [ "$same_commit" = 0 ] && [ ! -d "$cache" ]; then
 fi
 for pid in "${builds[@]}"; do wait "$pid" || { echo "error: a build failed; see $out/*-build.log" >&2; exit 2; }; done
 echo "built in $(( $(date +%s) - start ))s"
+bundle_of() { echo "$(cd "$1" && swift build --traits sourceBuild --show-bin-path)/SafeDIPackageTests.xctest"; }
+head_bundle="$(bundle_of "$checkout")"
 
 runs=()
 if [ -d "$cache" ]; then
@@ -102,9 +111,9 @@ if [ -d "$cache" ]; then
 		--write-manifest "$out/base/records" --checkout "$checkout" >/dev/null
 	echo "base records from the cache ($cache)"
 else
-	record base "$base_checkout" ${base_env[@]+"${base_env[@]}"} & runs+=($!)
+	record base "$base_checkout" "$(bundle_of "$base_checkout")" ${base_env[@]+"${base_env[@]}"} & runs+=($!)
 fi
-record head "$checkout" ${head_env[@]+"${head_env[@]}"} & runs+=($!)
+record head "$checkout" "$head_bundle" ${head_env[@]+"${head_env[@]}"} & runs+=($!)
 for pid in "${runs[@]}"; do wait "$pid"; done
 echo "recorded in $(( $(date +%s) - start ))s"
 if [ ! -d "$cache" ]; then

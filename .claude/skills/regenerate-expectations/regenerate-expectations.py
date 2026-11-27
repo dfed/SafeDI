@@ -778,6 +778,7 @@ FRAGMENTS_AMBIGUOUS = "literals tile the output as fragments in more than one wa
 FRAGMENT_BOUNDARY_CHANGED = "literals tile the output as fragments, but the change touches what lies around them: the header, the imports or the blank lines between"
 FRAGMENT_DECLARATIONS_CHANGED = "literals tile the output as fragments, but a line that opens or closes a top-level declaration was added, removed or changed, so a declaration may be either neighbor’s"
 FRAGMENT_UNBALANCED = "literals tile the output as fragments, but a fragment does not start and end at the top level of the output"
+UNTILED_UNCHANGED = "unchanged, and no literal it could be compared with changes, so it was not tiled as fragments"
 FRAGMENTS_TOO_MANY = "literals tile the output as more fragments than the script follows"
 
 
@@ -816,7 +817,10 @@ def tile_fragments(literals, content, header):
                     text = literal.plain_text
                     ends = [position + len(text)] if content.startswith(text, position) and non_whitespace_count(text) >= SHORTEST_ANCHOR else []
                 elif literal.parts[0][1] and content.startswith(literal.parts[0][1], position):
-                    ends = ends_after(position)
+                    # `match_literal` takes only a body that ends with the literal's last text, so the other line
+                    # ends are left out before it runs: an output of thousands of lines has as many.
+                    last = literal.parts[-1][1]
+                    ends = [end for end in ends_after(position) if content.endswith(last, position, end)]
                 else:
                     ends = []
                 for end in ends:
@@ -1375,9 +1379,7 @@ def apply(arguments):
             literals_by_scope[relative_path] = by_function
         return literals_by_scope[relative_path].get(function, [])
 
-    for record in sorted(base_generation, key=lambda record: record["key"]):
-        if record["key"] in mapped_record_keys:
-            continue
+    def fragment_candidates(record):
         call_path = resolver.resolve(record["fileID"])
         scopes = [(call_path, files[call_path].test_function_of_line(record["line"]))]
         if record.get("testFileID") and record.get("testLine"):
@@ -1387,6 +1389,31 @@ def apply(arguments):
         for relative_path, function in scopes:
             for literal in literals_in(relative_path, function) + (literals_in(relative_path, None) if function is not None else []):
                 path_of_literal.setdefault(id(literal), (relative_path, literal))
+        return path_of_literal
+
+    # Tiling is most of the run's time, and a record whose output did not change can only ask that the literals it
+    # tiles stay as they are, which matters only where another record or an assertion would change one of them. So an
+    # unchanged record is tiled only when one of its candidate literals is a literal something else may change: one a
+    # whole match changes, a candidate of a changed record's tiling, or the literal of a head assertion.
+    unfragmented = [record for record in sorted(base_generation, key=lambda record: record["key"]) if record["key"] not in mapped_record_keys]
+    candidates_of = {record["key"]: fragment_candidates(record) for record in unfragmented}
+    changing_literals = {id(outcome.literal) for outcome in outcomes.values() if any(match[5] is not None and match[5] != match[2] for match in outcome.matches)}
+    for record in unfragmented:
+        head = head_by_key.get(record["key"])
+        if head is None or head["content"] != record["content"]:
+            changing_literals |= set(candidates_of[record["key"]])
+    for record in head_assertions:
+        literal, _ = find_assertion_literal(files[resolver.resolve(record["fileID"])], record)
+        if literal is not None:
+            changing_literals.add(id(literal))
+    untiled_record_keys = set()
+    for record in unfragmented:
+        path_of_literal = candidates_of[record["key"]]
+        head = head_by_key.get(record["key"])
+        if path_of_literal and head is not None and head["content"] == record["content"] and not changing_literals & set(path_of_literal):
+            untiled_record_keys.add(record["key"])
+            fragment_reasons[record["key"]] = UNTILED_UNCHANGED
+            continue
         candidates = sorted(path_of_literal.values(), key=lambda candidate: (candidate[0], candidate[1].start))
         tiling, reason = tile_fragments([literal for _, literal in candidates], record["content"], header)
         if tiling is None:
@@ -1567,6 +1594,7 @@ def apply(arguments):
             with open(current.path, "w", encoding="utf-8") as source_file:
                 source_file.write(source)
     summary["fragmentRecords"] = len(fragment_record_keys)
+    summary["untiledUnchangedRecords"] = len(untiled_record_keys)
     write_report(arguments, rules, summary, explained, unexplained, manual, assertion_outcomes, no_head, unmapped_reasons, changed_without_literal, base_generation, mapped_record_keys, outcomes, resolver)
     summary["manualReasons"] = sorted(item[3] for item in manual) + sorted(outcome[2] for outcome in assertion_outcomes if outcome[2] is not None)
     status = 0 if not unexplained and summary["manual"] == 0 else 1
@@ -1645,13 +1673,13 @@ def write_report(arguments, rules, summary, explained, unexplained, manual, asse
         lines.append(f"--- {relative_path}:{line} ({', '.join(test_names)})")
         lines.append(diff.rstrip("\n"))
     lines.append("")
-    lines.extend(mapping_statistics(base_generation, mapped_record_keys, unmapped_reasons, outcomes, resolver, summary["fragmentRecords"]))
+    lines.extend(mapping_statistics(base_generation, mapped_record_keys, unmapped_reasons, outcomes, resolver, summary["fragmentRecords"], summary["untiledUnchangedRecords"]))
     os.makedirs(arguments.report, exist_ok=True)
     with open(os.path.join(arguments.report, "report.txt"), "w", encoding="utf-8") as report_file:
         report_file.write("\n".join(lines) + "\n")
 
 
-def mapping_statistics(base_generation, mapped_record_keys, unmapped_reasons, outcomes, resolver, fragment_records):
+def mapping_statistics(base_generation, mapped_record_keys, unmapped_reasons, outcomes, resolver, fragment_records, untiled_records):
     functions = {}
     for record in base_generation:
         functions.setdefault((resolver.resolve(record["fileID"]), record.get("testName", "")), []).append(record)
@@ -1678,6 +1706,7 @@ def mapping_statistics(base_generation, mapped_record_keys, unmapped_reasons, ou
         f"  Test functions with a base record that have a literal mapped: {share(mapped_functions, len(functions))}",
         f"  Base records mapped to a literal: {share(mapped_records, record_count)}",
         f"  Base records mapped to literals as fragments, of those mapped: {fragment_records}",
+        f"  Unchanged base records not tiled, since no literal they could be compared with changes: {untiled_records}",
         f"  Base records mapped, of those not unmapped for a named reason: {share(mapped_records, record_count - named)}",
         f"  Literals matched: {len(outcomes)} ({len(plain)} plain, {len(interpolated)} interpolated, holding {sum(outcome.literal.interpolation_count for outcome in interpolated)} interpolations)",
         "  Matched literals that would be manual if they changed:",
