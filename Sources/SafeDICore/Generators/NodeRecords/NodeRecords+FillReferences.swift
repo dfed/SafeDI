@@ -39,8 +39,10 @@ struct FillReferences: Sendable {
 	///   - dispatchers: The call's dispatchers.
 	///   - callingTreeHoldsHoles: Whether the tree that makes the call holds holes, whose levels a seam's call inside a fill
 	///     would read to decide which of the enclosing call's dispatchers it reuses.
-	/// - Throws: `NodeRecordRefusal.fillHoldsCall` where a call inside a fill holds a call inside one of its own fills, or
-	///   decides what it reuses from levels node records do not hand it.
+	/// - Throws: Why node records leave a call inside a fill to the tree: it holds a call inside one of its own fills
+	///   (`NodeRecordRefusal.fillCallNestsCall`), decides what it reuses from levels node records do not hand it
+	///   (`fillSeamCallReadsCallingTreesLevels`), reads a value of the fill's case (`fillCallReadsCasePayload`), or has a
+	///   `@Sendable` dispatcher lead to one of its own that serves both families (`fillCallReachesBothFamiliesDispatcher`).
 	static func of(
 		fills: [(key: String, node: DeclarationID, payloadLabels: Set<String>)],
 		dispatchers: [ScopeGenerator.FillDispatcher],
@@ -57,18 +59,17 @@ struct FillReferences: Sendable {
 			var visitedOutsideSendableFunction = Set<DeclarationID>()
 			while let (node, insideSendableFunction) = pending.popLast() {
 				let isFirstVisit = insideSendableFunction ? visitedInsideSendableFunction.insert(node).inserted : visitedOutsideSendableFunction.insert(node).inserted
-				guard isFirstVisit else { continue }
 				let scope = world.scope(of: node)
-				if node != fill.node, scope.seamCall != nil || scope.publicMockCall != nil {
+				if isFirstVisit, scope.seamCall != nil || scope.publicMockCall != nil {
 					let call = try referencesOfCall(node, insideFillWithPayloadLabels: fill.payloadLabels, enclosingKeys: enclosingKeys, in: world, callingTreeHoldsHoles: callingTreeHoldsHoles)
 					referenced.formUnion(call.referenced)
 					// A `@Sendable` function between the fill and the call, or the call's own, refers to all the call refers to.
 					references.referencedFromSendableFunctions.formUnion(insideSendableFunction ? call.referenced : call.referencedFromSendableFunctions)
 					references.namedKeys.formUnion(call.named)
-					continue
-				}
-				for child in world.edges(from: node) {
-					pending.append((child, insideSendableFunction || NodeRecords.buildsInSendableFunction(child, in: world)))
+				} else if isFirstVisit {
+					for child in world.edges(from: node) {
+						pending.append((child, insideSendableFunction || NodeRecords.buildsInSendableFunction(child, in: world)))
+					}
 				}
 			}
 			if !referenced.isEmpty {
@@ -92,14 +93,16 @@ struct FillReferences: Sendable {
 		// A seam's call decides whether a dispatcher returns its builder struct from the levels of the tree that makes it. A
 		// value of the fill's case a call reads, which the fill then takes by itself, its facts do not hold yet.
 		let readsPayloadValue = world.reads(of: call).contains { payloadLabels.contains(world.text(ofLabel: world.read($0).label)) }
-		guard isPublicMockCall || !callingTreeHoldsHoles, !readsPayloadValue else { throw .fillHoldsCall }
+		guard isPublicMockCall || !callingTreeHoldsHoles else { throw .fillSeamCallReadsCallingTreesLevels }
+		guard !readsPayloadValue else { throw .fillCallReadsCasePayload }
 		var referenced = Set<String>()
 		var referencedFromSendableFunctions = Set<String>()
 		var named = Set<String>()
 		var ownFills = [String]()
 		var ownFillNodes = [DeclarationID]()
 		var filledSites = Set<SeamSignature.Hole.Site>()
-		// The fill nodes the call passes, one per fill argument, in their order.
+		// The fill nodes the call passes, one per fill argument, in their order: `TypeFactsGraph`'s graph adds a scope's fill
+		// edges after its properties', in the order of its `holeArguments`.
 		let fillNodes = world.edges(from: call).filter { world.construction(of: $0) == .fill }
 		let filledHoles = scope.holeArguments.compactMap { argument -> SeamSignature.Hole? in
 			switch argument {
@@ -110,19 +113,18 @@ struct FillReferences: Sendable {
 		for (hole, fillNode) in zip(filledHoles, fillNodes) {
 			filledSites.insert(hole.site)
 			let key = ScopeGenerator.fillKey(of: hole)
-			// The call passes the enclosing call's fill of a place of the same site by name.
+			// The call passes the enclosing call's fill of a place of the same site by name. Where the place is of a `@Sendable`
+			// builder, that fill, of the same hole, is `@Sendable` already, which the tree's reference from a `@Sendable`
+			// function adds nothing to.
 			if enclosingKeys.contains(key) {
 				referenced.insert(key)
-				if hole.isSendable {
-					referencedFromSendableFunctions.insert(key)
-				}
 			} else {
 				ownFills.append(key)
 				ownFillNodes.append(fillNode)
 			}
 		}
 		// What a call inside one of the call's own fills refers to of them is a later step's.
-		guard !FillFacts.treesHoldCall(ownFillNodes, in: world) else { throw .fillHoldsCall }
+		guard !FillFacts.treesHoldCall(ownFillNodes, in: world) else { throw .fillCallNestsCall }
 		let calledBuilders = scope.calledBuilders
 		// The call passes the enclosing call's dispatcher of a builder's enum by name. A seam's builder that takes a builder
 		// struct is handed the struct its root level returns, unless the enclosing call declares a dispatcher of the hole
@@ -141,6 +143,7 @@ struct FillReferences: Sendable {
 				referencedFromSendableFunctions.formUnion(builder.enumKey.isSendable ? [key] : [])
 			}
 		}
+		// Only the dispatchers' keys, families and cases' targets are read, never their names, which are placeholders.
 		var names = GeneratedNameAllocator(reserving: [])
 		let dispatchers = calledBuilders.map { calledBuilders in
 			ScopeGenerator.FillDispatcher.dispatchers(
@@ -160,7 +163,7 @@ struct FillReferences: Sendable {
 			referenced.formUnion(targetKeys.filter { !ownKeys.contains($0) })
 			// A `@Sendable` dispatcher refers to what its cases lead to from a `@Sendable` function. One whose case leads to a
 			// dispatcher of its own call that serves both families would make that one `@Sendable` too: a later step's.
-			guard !sendableDispatcherKeys.contains(dispatcher.key) || targetKeys.allSatisfy({ !ownKeys.contains($0) || sendableDispatcherKeys.contains($0) || ownFills.contains($0) }) else { throw .fillHoldsCall }
+			guard !sendableDispatcherKeys.contains(dispatcher.key) || targetKeys.allSatisfy({ !ownKeys.contains($0) || sendableDispatcherKeys.contains($0) || ownFills.contains($0) }) else { throw .fillCallReachesBothFamiliesDispatcher }
 			referencedFromSendableFunctions.formUnion(sendableDispatcherKeys.contains(dispatcher.key) ? targetKeys.filter { !ownKeys.contains($0) } : [])
 		}
 		return (referenced, referencedFromSendableFunctions, named.subtracting(ownKeys))
