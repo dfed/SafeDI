@@ -97,7 +97,7 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		    /// From code you write, call the initializer above instead.
 		    public convenience init(__safeDI_userServiceBuilder: __safeDI_UserServiceCarrier<any UserService>) {
 		        let __safeDI_userServiceBuilder_profileBuilder = __safeDI_userServiceBuilder.profileBuilder
-		        func __safeDI_profileBuilder() -> Profile {
+		        @inline(never) func __safeDI_profileBuilder() -> Profile {
 		            let userService: any UserService = __safeDI_userServiceBuilder_profileBuilder.userService()
 		            return Profile(userService: userService)
 		        }
@@ -234,13 +234,13 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		    /// From code you write, call the initializer above instead.
 		    public convenience init(__safeDI_userServiceBuilder: __safeDI_UserServiceCarrier<any UserService>) {
 		        let __safeDI_userServiceBuilder_profile = __safeDI_userServiceBuilder.profile
-		        func __safeDI_profile() -> Profile {
+		        @inline(never) func __safeDI_profile() -> Profile {
 		            let userService: any UserService = __safeDI_userServiceBuilder_profile.userService()
 		            return Profile(userService: userService)
 		        }
 		        let profile: Profile = __safeDI_profile()
 		        let __safeDI_userServiceBuilder_settings = __safeDI_userServiceBuilder.settings(profile)
-		        func __safeDI_settings() -> Settings {
+		        @inline(never) func __safeDI_settings() -> Settings {
 		            let service: any UserService = __safeDI_userServiceBuilder_settings.service()
 		            return Settings(service: service)
 		        }
@@ -412,7 +412,7 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_userServiceBuilder: __safeDI_UserServiceCarrier<any UserService>) {
-		        func __safeDI_inner() -> Inner {
+		        @inline(never) func __safeDI_inner() -> Inner {
 		            _ = Inner.__safeDI_Inner_77377260EC17D5BB.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Inner(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder.inner)
 		        }
@@ -543,7 +543,7 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_defaultUserService_AnyUserServiceBuilder: __safeDI_DefaultUserService_AnyUserServiceCarrier<AnyUserService>) {
 		        let __safeDI_defaultUserService_AnyUserServiceBuilder_profile = __safeDI_defaultUserService_AnyUserServiceBuilder.profile
-		        func __safeDI_profile() -> Profile {
+		        @inline(never) func __safeDI_profile() -> Profile {
 		            let userService: AnyUserService = __safeDI_defaultUserService_AnyUserServiceBuilder_profile.userService()
 		            return Profile(userService: userService)
 		        }
@@ -660,13 +660,13 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		    /// From code you write, call the initializer above instead.
 		    public convenience init(__safeDI_userServiceBuilder: __safeDI_UserServiceCarrier<any UserService>) {
 		        let __safeDI_userServiceBuilder_settings = __safeDI_userServiceBuilder.settings
-		        func __safeDI_settings() -> Settings {
+		        @inline(never) func __safeDI_settings() -> Settings {
 		            let service: any UserService = __safeDI_userServiceBuilder_settings.service()
 		            return Settings(service: service)
 		        }
 		        let settings: Settings = __safeDI_settings()
 		        let __safeDI_userServiceBuilder_account = __safeDI_userServiceBuilder.account(settings)
-		        func __safeDI_account() -> Account {
+		        @inline(never) func __safeDI_account() -> Account {
 		            let service: any UserService = __safeDI_userServiceBuilder_account.service()
 		            return Account(service: service)
 		        }
@@ -811,7 +811,7 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		        let service = LazilyInstantiated<Clock>(__safeDI_service_)
 		        let reader = Reader(service: service.instance)
 		        let __safeDI_userServiceBuilder_settings = __safeDI_userServiceBuilder.settings(service, reader)
-		        func __safeDI_settings() -> Settings {
+		        @inline(never) func __safeDI_settings() -> Settings {
 		            let service: any UserService = __safeDI_userServiceBuilder_settings.service()
 		            return Settings(service: service)
 		        }
@@ -925,12 +925,12 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// From code you write, call the initializer above instead.
 		    public convenience init(__safeDI_userServiceBuilder __safeDI_userServiceBuilder_: __safeDI_UserServiceCarrier<any UserService>) {
-		        func __safeDI_userServiceBuilder() -> Analytics {
+		        @inline(never) func __safeDI_userServiceBuilder() -> Analytics {
 		            Analytics()
 		        }
 		        let userServiceBuilder = Instantiator<Analytics>(__safeDI_userServiceBuilder)
 		        let __safeDI_userServiceBuilder_profile = __safeDI_userServiceBuilder_.profile(userServiceBuilder)
-		        func __safeDI_profile() -> Profile {
+		        @inline(never) func __safeDI_profile() -> Profile {
 		            let userService: any UserService = __safeDI_userServiceBuilder_profile.userService()
 		            return Profile(userService: userService)
 		        }
@@ -1063,10 +1063,10 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		    /// From code you write, call the initializer above instead.
 		    public convenience init(__safeDI_userServiceBuilder __safeDI_userServiceBuilder_: __safeDI_UserServiceCarrier<any UserService>) {
 		        let __safeDI_userServiceBuilder_badge = __safeDI_userServiceBuilder_.badge
-		        func __safeDI_userServiceBuilder() -> Analytics {
+		        @inline(never) func __safeDI_userServiceBuilder() -> Analytics {
 		            Analytics()
 		        }
-		        func __safeDI_badge() -> Badge {
+		        @inline(never) func __safeDI_badge() -> Badge {
 		            let userServiceBuilder = Instantiator<Analytics>(__safeDI_userServiceBuilder)
 		            let userService: any UserService = __safeDI_userServiceBuilder_badge.userService(userServiceBuilder)
 		            return Badge(userService: userService, userServiceBuilder: userServiceBuilder)
@@ -1274,7 +1274,7 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// From code you write, call the initializer above instead.
 		    public convenience init(__safeDI_userServiceBuilder: __safeDI_UserServiceCarrier<any UserService>) {
-		        func __safeDI_userService() -> any UserService {
+		        @inline(never) func __safeDI_userService() -> any UserService {
 		            __safeDI_userServiceBuilder.userService()
 		        }
 		        let userService = LazilyInstantiated<any UserService>(__safeDI_userService)
@@ -1344,7 +1344,7 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// From code you write, call the initializer above instead.
 		    public convenience init(__safeDI_userServiceSendableBuilder: __safeDI_UserServiceSendableCarrier<any UserService>) {
-		        @Sendable nonisolated func __safeDI_profileBuilder() -> SendableProfile {
+		        @inline(never) @Sendable nonisolated func __safeDI_profileBuilder() -> SendableProfile {
 		            let __safeDI_userServiceSendableBuilder_profileBuilder = __safeDI_userServiceSendableBuilder.profileBuilder()
 		            let userService: any UserService = __safeDI_userServiceSendableBuilder_profileBuilder.userService()
 		            return SendableProfile(userService: userService)
@@ -1531,7 +1531,7 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		        let zone = LazilyInstantiated<Clock>(__safeDI_zone)
 		        let reader = Reader(alarm: alarm.instance, zone: zone.instance)
 		        let __safeDI_userServiceBuilder_settings = __safeDI_userServiceBuilder.settings(alarm, zone, reader)
-		        func __safeDI_settings() -> Settings {
+		        @inline(never) func __safeDI_settings() -> Settings {
 		            let service: any UserService = __safeDI_userServiceBuilder_settings.service()
 		            return Settings(service: service)
 		        }
@@ -1784,7 +1784,7 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_userServiceBuilder: __safeDI_UserServiceCarrier<any UserService>) {
-		        func __safeDI_panel() -> Panel {
+		        @inline(never) func __safeDI_panel() -> Panel {
 		            _ = Panel.__safeDI_Panel_7286E80DE81EE22D.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Panel(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder.panel)
 		        }
@@ -1889,7 +1889,7 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		    /// From code you write, call the initializer above instead.
 		    public convenience init(__safeDI_userServiceBuilder: __safeDI_UserServiceCarrier<any UserService>) {
 		        let __safeDI_userServiceBuilder_profile = __safeDI_userServiceBuilder.profile
-		        func __safeDI_profile() -> Profile {
+		        @inline(never) func __safeDI_profile() -> Profile {
 		            let userService: any UserService = __safeDI_userServiceBuilder_profile.userService()
 		            return Profile(userService: userService)
 		        }
@@ -1994,13 +1994,13 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_userServiceBuilder: __safeDI_UserServiceCarrier<any UserService>) {
-		        func __safeDI_panel() -> Panel {
+		        @inline(never) func __safeDI_panel() -> Panel {
 		            _ = Panel.__safeDI_Panel_7286E80DE81EE22D.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Panel(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder.panel)
 		        }
 		        let panel: Panel = __safeDI_panel()
 		        let __safeDI_userServiceBuilder_profile = __safeDI_userServiceBuilder.profile(panel)
-		        func __safeDI_profile() -> Profile {
+		        @inline(never) func __safeDI_profile() -> Profile {
 		            let userService: any UserService = __safeDI_userServiceBuilder_profile.userService()
 		            return Profile(userService: userService)
 		        }
@@ -2328,12 +2328,12 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_apiSendableBuilder: __safeDI_ApiSendableCarrier<any Api>) {
-		        @Sendable nonisolated func __safeDI_dBuilder() -> D {
+		        @inline(never) @Sendable nonisolated func __safeDI_dBuilder() -> D {
 		            _ = D.__safeDI_D_D740AF79FDC059A7.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return D(__safeDI_apiBuilder: __safeDI_apiSendableBuilder.dBuilder())
 		        }
 		        let dBuilder = SendableInstantiator<D>(__safeDI_dBuilder)
-		        @Sendable nonisolated func __safeDI_gadgetBuilder() -> Gadget {
+		        @inline(never) @Sendable nonisolated func __safeDI_gadgetBuilder() -> Gadget {
 		            let __safeDI_apiSendableBuilder_gadgetBuilder = __safeDI_apiSendableBuilder.gadgetBuilder()
 		            let api: any Api = __safeDI_apiSendableBuilder_gadgetBuilder.api()
 		            return Gadget(api: api)

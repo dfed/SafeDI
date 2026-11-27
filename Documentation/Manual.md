@@ -923,7 +923,7 @@ extension Service {
     public init(__safeDI_userServiceBuilder: __safeDI_UserServiceCarrier<any UserService>) {
         let analytics = Analytics()
         let __safeDI_userServiceBuilder_profile = __safeDI_userServiceBuilder.profile(analytics)
-        func __safeDI_profile() -> Profile {
+        @inline(never) func __safeDI_profile() -> Profile {
             let userService: any UserService = __safeDI_userServiceBuilder_profile.userService()
             return Profile(userService: userService, analytics: analytics)
         }
@@ -1420,7 +1420,7 @@ To add the SafeDI framework as a dependency to a package utilizing [Swift Packag
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/dfed/SafeDI.git", from: "2.4.0"),
+    .package(url: "https://github.com/dfed/SafeDI.git", from: "2.4.1"),
 ]
 ```
 
@@ -1527,7 +1527,7 @@ Unlike the Xcode project plugin, the Swift package plugin finds the source files
 
 #### Bazel
 
-Add `bazel_dep(name = "safedi", version = "2.4.0")` to your `MODULE.bazel`, then declare each first-party Swift module ([Generating your dependency tree](#generating-your-dependency-tree)) with `safedi_swift_library` in place of `swift_library`:
+Add `bazel_dep(name = "safedi", version = "2.4.1")` to your `MODULE.bazel`, then declare each first-party Swift module ([Generating your dependency tree](#generating-your-dependency-tree)) with `safedi_swift_library` in place of `swift_library`:
 
 ```python
 load("@safedi//bazel:safedi.bzl", "safedi_swift_library")
@@ -1592,7 +1592,7 @@ Depend on SafeDI in `Tuist/Package.swift`, so that `tuist install` fetches the S
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/dfed/SafeDI.git", from: "2.4.0"),
+    .package(url: "https://github.com/dfed/SafeDI.git", from: "2.4.1"),
 ]
 ```
 
@@ -1664,7 +1664,8 @@ An Xcode script phase that runs `SafeDITool` can keep `ENABLE_USER_SCRIPT_SANDBO
 | `--dependent-module-info-file-path` | A file listing the `.safedi` file of each module this one [lists](#which-modules-to-list). |
 | `--transitive-module-info-file-path` | A file listing the `.safedi` file of every module this one depends on, directly or through other modules, as the Bazel rule passes. |
 | `--module-info-views-refer-to-modules` | A smaller `.safedi` file: it names the modules whose declarations a module that calls this one’s seams or public mocks needs, instead of copying them. Pass it only when every module that reads the file is also given the `.safedi` of every module beneath it through `--transitive-module-info-file-path`, as the Bazel rule does. |
-| `--unused-inputs-list-output` | Where to write the paths `--transitive-module-info-file-path` lists, and the module does not list, whose files the run did not open, one per line, for Bazel’s `unused_inputs_list`, as the Bazel rule passes. A module that declares no root or seam opens none of them but those its listed modules’ views refer to (`--module-info-views-refer-to-modules`), so with Bazel’s local action cache an edit to a module beneath reruns only the modules that list it or open it. |
+| `--module-info-positions-in-own-file` | A `.safedi` file that leaves out the line and column of its declarations, but those of an aliased `@Received`, and writes them to a file beside it (`Name.safedipositions`), as the Bazel rule passes. A module that lists this one reads the positions file only to report an error or a warning located in this module, so an edit that moves declarations to other lines, keeping their order in their file and moving no aliased `@Received`, changes neither the `.safedi` file nor the code generated above it. Give every module that lists this one both files beside each other, from one run: the positions file can change when the `.safedi` file does not, so a copy of the `.safedi` file kept because it did not change still needs the new positions file. A run that finds the positions file missing, or written beside another version of the `.safedi` file, leaves out those lines and columns, and says so where it reports a diagnostic in that module. |
+| `--unused-inputs-list-output` | Where to write the paths `--transitive-module-info-file-path` lists, and the module does not list, whose files the run did not open, one per line, for Bazel’s `unused_inputs_list`, as the Bazel rule passes. A module that declares no root or seam opens none of them but those its listed modules’ views refer to (`--module-info-views-refer-to-modules`), so with Bazel’s local action cache an edit to a module beneath reruns only the modules that list it or open it. It also names each positions file the run did not open (`--module-info-positions-in-own-file`). |
 | `--compiler-receives-input-paths-unchanged` | Better error locations, when your build allows it; see below. |
 
 `--module-name` and `--package-name` tell `SafeDITool` which module and package declare each type it reads, which decides the access its generated code needs ([Access levels](#access-levels)).
@@ -1729,7 +1730,7 @@ Your integration already has a `SafeDITool`; a [custom build system](#custom-bui
 
 - **Swift package:** `.build/artifacts/safedi/SafeDIToolBinary/SafeDITool.artifactbundle/SafeDITool-macos-arm64/bin/SafeDITool` from the package’s directory, or `swift run SafeDITool` with the `sourceBuild` trait; writes no `.safedi` files.
 - **Xcode project:** `SourcePackages/artifacts/safedi/SafeDIToolBinary/…` in the project’s derived data, or `.safedi/<version>/safeditool` once [installed](#installing-the-prebuilt-safeditool-binary); writes no `.safedi` files.
-- **Bazel:** `bazel run @safedi//:SafeDITool -- <arguments>` runs the `SafeDITool` your build runs, prebuilt or built from source, in the directory you run it from, so relative paths among the arguments work. A build writes `bazel-bin/<package>/<name>_safedi.safedi`, though when the action’s result comes from a cache, such as `--disk_cache`, only for a build passed `--remote_download_regex='.*\.safedi$'`.
+- **Bazel:** `bazel run @safedi//:SafeDITool -- <arguments>` runs the `SafeDITool` your build runs, prebuilt or built from source, in the directory you run it from, so relative paths among the arguments work. A build writes `bazel-bin/<package>/<name>_safedi.safedi`, though when the action’s result comes from a cache, such as `--disk_cache`, only for a build passed `--remote_download_regex='.*\.safedi(positions)?$'`, which also writes the positions file beside it (`<name>_safedi.safedipositions`) that `query` and `dump` read lines and columns from.
 - **Tuist:** `Tuist/.build/artifacts/safedi/SafeDIToolBinary/SafeDITool.artifactbundle/SafeDITool-macos-arm64/bin/SafeDITool` from the directory that holds `Tuist/Package.swift`; a build writes `$BUILT_PRODUCTS_DIR/SafeDI/<PRODUCT_MODULE_NAME>.safedi`.
 
 On an Intel Mac, the bundle’s directory is `SafeDITool-macos-x86_64`, and on Linux, `SafeDITool-linux-x86_64` or `SafeDITool-linux-arm64`.
@@ -2122,7 +2123,7 @@ This plugin will:
 ### Manual migration
 
 1. Update your `swift-tools-version` to 6.2 or later
-2. Update your SafeDI dependency to `from: "2.4.0"`
+2. Update your SafeDI dependency to `from: "2.4.1"`
 3. If you have `.safedi/configuration/include.csv` or `.safedi/configuration/additionalImportedModules.csv`, add a `#SafeDIConfiguration` in your root module with the equivalent values and delete the CSV files
 4. If you don’t have CSV configuration files and do not need other SafeDI configuration options, no `#SafeDIConfiguration()` declaration is required
 

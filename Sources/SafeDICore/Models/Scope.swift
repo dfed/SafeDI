@@ -419,6 +419,7 @@ extension ScopeRecord {
 		declaredTypeNames: DeclaredTypeNames,
 		constructionMemo: inout ConstructionMemo,
 	) throws -> ScopeGenerator {
+		var unrecordedPlaces: TypeFactsPlaces?
 		let scopeGenerator = try createdTree(
 			in: table,
 			nearestDeclarations: nearestDeclarations,
@@ -430,6 +431,7 @@ extension ScopeRecord {
 			validatesForwardedProperties: validatesForwardedProperties,
 			declaredTypeNames: declaredTypeNames,
 			constructionMemo: &constructionMemo,
+			typeFactsPlaces: &unrecordedPlaces,
 		)
 		if let observer = ConstructionMemoOracle.observer {
 			// The build with the memo shares it across every tree created with this memo, whatever the memo's own sharing,
@@ -447,11 +449,14 @@ extension ScopeRecord {
 					validatesForwardedProperties: validatesForwardedProperties,
 					declaredTypeNames: declaredTypeNames,
 					constructionMemo: &oracleMemo,
+					typeFactsPlaces: &unrecordedPlaces,
 				)
 			} }
 			constructionMemo.oracleMemo = oracleMemo
 			// The reference tree is built with neither the memo nor the settled cycle parameter seed, so every
 			// graph compares the seeded build with the plain pass loop as well.
+			// It reuses nothing, so it walks every place, which it records for the graph of per-type facts to be compared with.
+			var places: TypeFactsPlaces? = TypeFactsPlaces()
 			let treeBuiltWithoutMemo = try ConstructionMemo.$isEnabled.withValue(false) { try CycleParameterPlan.$isEnabled.withValue(false) {
 				var unusedMemo = ConstructionMemo()
 				return try createdTree(
@@ -465,9 +470,10 @@ extension ScopeRecord {
 					validatesForwardedProperties: validatesForwardedProperties,
 					declaredTypeNames: declaredTypeNames,
 					constructionMemo: &unusedMemo,
+					typeFactsPlaces: &places,
 				)
 			} }
-			observer(treeBuiltWithMemo, treeBuiltWithoutMemo)
+			observer(treeBuiltWithMemo, treeBuiltWithoutMemo, TypeFactsReport(root: ConstructionScope(table: table, record: self), places: places ?? TypeFactsPlaces(), forMockGeneration: forMockGeneration))
 		}
 		return scopeGenerator
 	}
@@ -484,6 +490,7 @@ extension ScopeRecord {
 		validatesForwardedProperties: Bool,
 		declaredTypeNames: DeclaredTypeNames,
 		constructionMemo: inout ConstructionMemo,
+		typeFactsPlaces: inout TypeFactsPlaces?,
 	) throws -> ScopeGenerator {
 		var previousPassGenerator: ScopeGenerator?
 		// The cycle parameters settled on the first pass's tree, which the second pass is built with in place of the first
@@ -523,6 +530,7 @@ extension ScopeRecord {
 			if previousPassGenerator == nil, ConstructionMemo.isEnabled, ConstructionSharingSchedule.current?.offersLaterPlacesCandidates == true {
 				// The sharing oracle offers each place what a place after it built: the first pass starts from what a
 				// discarded build of the same pass stored, which the schedule asks newest first.
+				var discardedPlaces: TypeFactsPlaces?
 				_ = try createScopeGenerator(
 					nearestDeclarations: nearestDeclarations,
 					lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
@@ -539,8 +547,11 @@ extension ScopeRecord {
 					settledPassMemo: nil,
 					root: root,
 					scopesBuiltAtOnePlace: scopesBuiltAtOnePlace,
+					typeFactsPlaces: &discardedPlaces,
 				)
 			}
+			// A recorded tree keeps the places of its last pass, which is the tree.
+			var passPlaces: TypeFactsPlaces? = typeFactsPlaces == nil ? nil : TypeFactsPlaces()
 			scopeGenerator = try createScopeGenerator(
 				nearestDeclarations: nearestDeclarations,
 				lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
@@ -557,7 +568,11 @@ extension ScopeRecord {
 				settledPassMemo: settledPassMemo,
 				root: root,
 				scopesBuiltAtOnePlace: scopesBuiltAtOnePlace,
+				typeFactsPlaces: &passPlaces,
 			)
+			if passPlaces != nil {
+				typeFactsPlaces = passPlaces
+			}
 			if previousPassGenerator == nil {
 				cycleParameterSeed = Self.cycleParameterSeed(
 					ofFirstPassTree: scopeGenerator,
@@ -644,7 +659,10 @@ extension ScopeRecord {
 		settledPassMemo: ConstructionMemo?,
 		root: ConstructionScope,
 		scopesBuiltAtOnePlace: ScopesBuiltAtOnePlace?,
+		typeFactsPlaces: inout TypeFactsPlaces?,
 	) throws -> ScopeGenerator {
+		// The position of each scope under construction among the places recorded, where a test records them.
+		var placeIndices = [typeFactsPlaces?.start(TypeFactsDeclaration(scope: root, property: nil, propertyID: nil, erasedToConcreteExistential: false, isFill: false), parent: nil)]
 		var scopeGeneratorsUnderConstruction = [ScopeGeneratorUnderConstruction(
 			scope: root,
 			property: nil,
@@ -666,8 +684,8 @@ extension ScopeRecord {
 			cycleParameterSeed: cycleParameterSeed,
 			cycleParameterContexts: [:],
 			placeHoldingPropertiesByType: placeHoldingPropertiesByType,
-			// A root's place is never stored.
-			recordsReads: false,
+			// A root's place is never stored, so only a recorded place keeps what its subtree read.
+			recordsReads: typeFactsPlaces != nil,
 		)]
 		let reusesGenerators = ConstructionMemo.isEnabled
 		// The sharing oracle's schedule, test only, and how many lookups it has drawn for (`ConstructionSharingSchedule`).
@@ -710,6 +728,7 @@ extension ScopeRecord {
 						)
 						child.memoKey = key
 						scopeGeneratorsUnderConstruction.append(child)
+						placeIndices.append(typeFactsPlaces?.start(TypeFactsDeclaration(scope: scope, property: property, propertyID: propertyID, erasedToConcreteExistential: erasedToConcreteExistential, isFill: false), parent: placeIndices[index]))
 					}
 				case let .aliased(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable, declarationReference):
 					scopeGeneratorsUnderConstruction[index].addAliasGenerator(
@@ -731,9 +750,17 @@ extension ScopeRecord {
 					scope: fill.scope,
 					context: fill.context,
 				))
+				placeIndices.append(typeFactsPlaces?.start(TypeFactsDeclaration(scope: fill.scope, property: fill.fill.hole.property, propertyID: fill.context.propertyID, erasedToConcreteExistential: false, isFill: true), parent: placeIndices[index]))
 			} else {
 				var createdScope = scopeGeneratorsUnderConstruction.removeLast()
+				let placeIndex = placeIndices.removeLast()
+				if let placeIndex {
+					typeFactsPlaces?.finish(placeIndex, closesCycle: createdScope.closesCycle, reads: createdScope.readsAnsweredAbove)
+				}
 				let scopeGenerator = createdScope.scopeGenerator()
+				if let placeIndex {
+					typeFactsPlaces?.record(placeIndex, generator: scopeGenerator)
+				}
 				let callGenerators = createdScope.callGenerators(including: scopeGenerator)
 				callGeneratorsInTree.formUnion(callGenerators)
 				if scopeGeneratorsUnderConstruction.isEmpty {
@@ -1501,6 +1528,11 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		!isCall && childrenAreSettled && ConstructionMemo.foundAlike(by: generator, asBy: previousPassGenerator, builtWithCycleParameters: ownCycleParameters)
 	}
 
+	/// Whether the scope closes a cycle on a declaration above it, and so builds no children.
+	var closesCycle: Bool {
+		isPropertyCycle
+	}
+
 	/// What this scope's subtree read of the context above this scope (see `ConstructionMemo`).
 	var readsAnsweredAbove: ConstructionLog {
 		log.reads(answeredAbove: depth)
@@ -1985,14 +2017,14 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	///   spelling names: for a fill, that of the seam that holds the hole (`SeamSignature.Hole.declaringModuleNames`).
 	private func validateForwardedProperties(
 		of property: Property,
-		declaredAt declarationLocation: Dependency.DeclarationLocation?,
+		declaredAt declarationLocation: @autoclosure () -> Dependency.DeclarationLocation?,
 		on parent: TypeDescription,
 		seeingThroughModulesNamed declaringModuleNames: [String],
 		building builtInstantiable: Instantiable,
 	) throws {
 		guard validatesForwardedProperties, let error = ErasedInstantiatorForwardedPropertiesMismatchError(
 			property: property,
-			declarationLocation: declarationLocation,
+			declarationLocation: declarationLocation(),
 			parent: parent,
 			builtInstantiable: builtInstantiable,
 			declaringModuleNames: declaringModuleNames,
@@ -2684,10 +2716,11 @@ extension Instantiable {
 /// `@Forwarded` properties of the type it builds. Reported at the property's declaration.
 struct ErasedInstantiatorForwardedPropertiesMismatchError: SourceLocatedError {
 	/// The error for `property`, declared on `parent` at `declarationLocation` to build `builtInstantiable`, or
-	/// `nil` when `property` is not an erased instantiator or its first generic argument matches.
+	/// `nil` when `property` is not an erased instantiator or its first generic argument matches. The location is found
+	/// only for an error: finding it reads the parent's dependencies, and a check runs for every child.
 	init?(
 		property: Property,
-		declarationLocation: Dependency.DeclarationLocation?,
+		declarationLocation: @autoclosure () -> Dependency.DeclarationLocation?,
 		parent: TypeDescription,
 		builtInstantiable: Instantiable,
 		declaringModuleNames: [String],
@@ -2695,7 +2728,7 @@ struct ErasedInstantiatorForwardedPropertiesMismatchError: SourceLocatedError {
 	) {
 		guard !property.firstGenericMatchesForwardedProperties(of: builtInstantiable, declaringModuleNames: declaringModuleNames, declaredTypeNames: declaredTypeNames) else { return nil }
 		self.property = property
-		self.declarationLocation = declarationLocation
+		self.declarationLocation = declarationLocation()
 		self.parent = parent
 		builtType = builtInstantiable.concreteInstantiable
 		// The forwarded properties are spelled out rather than as `ForwardedProperties` on the built type, which the

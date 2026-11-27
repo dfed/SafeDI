@@ -109,16 +109,16 @@ struct SafeDIToolSeamCarrierFormationKeyTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>, __safeDI_apiSendableBuilder: __safeDI_ApiSendableCarrier<any Api>) {
 		        let __safeDI_apiBuilder_detail = __safeDI_apiBuilder.detail
-		        func __safeDI_detail() -> Detail {
+		        @inline(never) func __safeDI_detail() -> Detail {
 		            let api: any Api = __safeDI_apiBuilder_detail.api()
 		            return Detail(api: api)
 		        }
 		        let detail: Detail = __safeDI_detail()
-		        @Sendable nonisolated func __safeDI_detail_(__safeDI_apiSendableBuilder_detail: __safeDI_ApiCarrier_Detail<any Api>) -> Detail {
+		        @inline(never) @Sendable nonisolated func __safeDI_detail_(__safeDI_apiSendableBuilder_detail: __safeDI_ApiCarrier_Detail<any Api>) -> Detail {
 		            let api: any Api = __safeDI_apiSendableBuilder_detail.api()
 		            return Detail(api: api)
 		        }
-		        @Sendable nonisolated func __safeDI_screenBuilder(id: Int) -> Screen {
+		        @inline(never) @Sendable nonisolated func __safeDI_screenBuilder(id: Int) -> Screen {
 		            let __safeDI_apiSendableBuilder_screenBuilder = __safeDI_apiSendableBuilder.screenBuilder()
 		            let __safeDI_apiSendableBuilder_detail = __safeDI_apiSendableBuilder_screenBuilder.detail(id)
 		            let detail: Detail = __safeDI_detail_(__safeDI_apiSendableBuilder_detail: __safeDI_apiSendableBuilder_detail)
@@ -235,16 +235,16 @@ struct SafeDIToolSeamCarrierFormationKeyTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>, __safeDI_apiSendableBuilder: __safeDI_ApiSendableCarrier<any Api>) {
 		        let __safeDI_apiBuilder_detail = __safeDI_apiBuilder.detail
-		        func __safeDI_detail() -> Detail {
+		        @inline(never) func __safeDI_detail() -> Detail {
 		            let api: any Api = __safeDI_apiBuilder_detail.api()
 		            return Detail(api: api)
 		        }
 		        let detail: Detail = __safeDI_detail()
-		        @Sendable nonisolated func __safeDI_detail_(__safeDI_apiSendableBuilder_detail: __safeDI_ApiCarrier_Detail<any Api>) -> Detail {
+		        @inline(never) @Sendable nonisolated func __safeDI_detail_(__safeDI_apiSendableBuilder_detail: __safeDI_ApiCarrier_Detail<any Api>) -> Detail {
 		            let api: any Api = __safeDI_apiSendableBuilder_detail.api()
 		            return Detail(api: api)
 		        }
-		        @Sendable nonisolated func __safeDI_screenBuilder(id: Int) -> Screen {
+		        @inline(never) @Sendable nonisolated func __safeDI_screenBuilder(id: Int) -> Screen {
 		            let __safeDI_apiSendableBuilder_screenBuilder = __safeDI_apiSendableBuilder.screenBuilder()
 		            let __safeDI_apiSendableBuilder_detail = __safeDI_apiSendableBuilder_screenBuilder.detail(id)
 		            let detail: Detail = __safeDI_detail_(__safeDI_apiSendableBuilder_detail: __safeDI_apiSendableBuilder_detail)

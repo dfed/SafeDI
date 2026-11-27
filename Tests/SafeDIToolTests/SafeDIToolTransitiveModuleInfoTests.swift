@@ -908,7 +908,7 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		extension FeedScreen {
 		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public init() {
-		        func __safeDI_innerScreen() -> InnerScreen {
+		        @inline(never) func __safeDI_innerScreen() -> InnerScreen {
 		            let clock = Clock()
 		            return InnerScreen(clock: clock)
 		        }

@@ -130,18 +130,17 @@ struct TypeKeyLayout {
 		/// The labels the body looks up outside it: its plan node's `Domain`, and the domains of the functions its closers
 		/// call.
 		let domainLabels: Set<String>
-		/// What each label of `domainLabels` resolves to at the view's first place, where the walk first reached the view:
-		/// the nearest declaration outside the body (`lookUp(_:inBody:before:)` from `parent` before `position`), so that a
-		/// look-up climbing out of the body, which climbs through that place, stops here rather than walking every body
-		/// above it. The view's key holds each one as `keyed(_:label:byKind:)` gives it.
-		let outerView: [String: PathValue]
 		var statements = [Statement]()
+		/// The positions of the statements that bind each label, ascending.
 		var positionsByLabel = [String: [Int]]()
 		/// The positions of the statements that declare each function, by its name (`AliasPlaceRecord.declaredFunctionNames`),
 		/// apart from the labels the statements bind, so no read of a label resolves to a function.
 		var positionsByDeclaredFunction = [String: [Int]]()
 		let forwardedLabels: Set<String>
 		let cycleParameterLabels: Set<String>
+		/// The declaration each label of the body's domain resolves to outside it, at its first place: what a look-up from the
+		/// body or beneath it finds once it leaves the body, without walking further up.
+		var outerDeclarations = [String: PathValue]()
 
 		/// The parent body and statement index of each of the view's places.
 		var edges: [(parent: Int, position: Int)] {
@@ -157,6 +156,10 @@ struct TypeKeyLayout {
 		/// Whether a closer beneath the node's own body, rather than one of its own statements, calls a function declared
 		/// outside it.
 		var closesBeneathItsBody = false
+		/// The names among `closedOnFunctionNames` that a member of a loop of builders calls, rebinding a sibling
+		/// (`ClosingPlaceRecord.rebindsLoopMember`): the only names a statement's function can answer. A node whose domain
+		/// holds none resolves each name to an enclosing place's function, with no look-up among statements.
+		var loopMemberFunctionNames = Set<String>()
 	}
 
 	/// What tells two places of one plan node apart (`Body`).

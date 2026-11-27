@@ -2394,7 +2394,7 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_window: @autoclosure @escaping () -> Window) {
 		        let window = LazilyInstantiated<Window>(__safeDI_window)
-		        func __safeDI_session() -> Session {
+		        @inline(never) func __safeDI_session() -> Session {
 		            _ = Session.__safeDI_Session_48814468D463AD3C.self\(pluginComment)
 		            return Session(__safeDI_window: window.instance)
 		        }
