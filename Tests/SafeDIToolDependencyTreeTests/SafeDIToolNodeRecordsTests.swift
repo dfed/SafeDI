@@ -94,6 +94,61 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysOutRootFromNodeRecords_whenTypeRenamesLazilyInstantiatedPropertyAboveItOnlyIfAvailable() async throws {
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true)
+				public final class Root: Instantiable {
+				    public init(analytics: LazilyInstantiated<Analytics>, child: Child) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Instantiated let analytics: LazilyInstantiated<Analytics>
+				    @Instantiated let child: Child
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Child: Instantiable {
+				    public init(tracker: LazilyInstantiated<Analytics>?) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Received(fulfilledByDependencyNamed: "analytics", ofType: LazilyInstantiated<Analytics>.self, onlyIfAvailable: true) let tracker: LazilyInstantiated<Analytics>?
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Analytics: Instantiable {
+				    public init() {}
+				}
+				""",
+			], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(try #require(output.generatedFiles?["Root+SafeDI.swift"]) == generatedFileHeader + """
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_analytics() -> Analytics {
+		            Analytics()
+		        }
+		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
+		        func __safeDI_child() -> Child {
+		            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 7)
+		            let tracker: LazilyInstantiated<Analytics>? = analytics
+		            #sourceLocation()
+		            return Child(tracker: tracker)
+		        }
+		        let child: Child = __safeDI_child()
+		        self.init(analytics: analytics, child: child)
+		    }
+		}
+		""")
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_refusesNodeForItsOtherKind_whenAKindClaimsIt() async throws {
 		// No declaration fulfills `Analytics`, so `Root`'s property is a node that is always `nil` and that no initializer
 		// builds: two kinds stage 1 does not make. A claim that discharges the first leaves the world refused for the second.

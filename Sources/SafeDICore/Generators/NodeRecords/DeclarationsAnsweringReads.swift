@@ -28,8 +28,8 @@
 ///   as an error (`ScopeGenerator.nonSendableWrapperCaptures(ofTreeRootedAt:)`): such a world keeps its tree
 ///   (`NodeRecordRefusal.sendableFunctionCapturesWrapper`).
 /// - Which renames are fulfilled by a wrapper's instance, which the tree binds them from (`ScopeGenerator`'s `aliasCode`),
-///   and so their records too; a rename whose label a wrapper's instance answers in a form the tree's rule does not, such
-///   as one that reads it through an optional, keeps its world's tree (`NodeRecordRefusal.lazy`).
+///   and so their records too; a rename that reads a wrapper's instance through an optional wrapper, beneath a fill,
+///   keeps its world's tree (`NodeRecordRefusal.lazy`).
 ///
 /// The nearest node above that declares a label answers a read of it, and a read that is handed that declaration (a
 /// required receive's `value`, and a receive only if available's `optionalValue`, which its record passes `nil` for
@@ -86,8 +86,7 @@ struct DeclarationsAnsweringReads: Sendable {
 			for (edgeIndex, callee) in world.calls(of: caller).enumerated() where answeringDeclarations[Int(callee)] == nil {
 				// A rename is a leaf of the scope that declares it, which reads its fulfilling property for it: a wrapper's
 				// instance where the scope declares the wrapper itself, or reads the label as one from above. Matched by
-				// label, so a rename that reads the label as neither the instance nor the wrapper, such as through an
-				// optional, keeps its world's tree.
+				// label, and refined below by the tree's rule.
 				if let rename = Self.rename(world.declaration(of: callee), in: world),
 				   callerScope.declaredLazilyInstantiatedInstanceProperties.contains(where: { $0.label == rename.fulfillingProperty.label })
 				   || lazilyInstantiatedInstancePropertiesByVariant[Int(caller)].contains(where: { $0.label == rename.fulfillingProperty.label })
@@ -100,10 +99,12 @@ struct DeclarationsAnsweringReads: Sendable {
 						: inheritedProperties.filter { !callerScope.declaredLabels.contains($0.label) }.union(callerScope.declaredLazilyInstantiatedInstanceProperties)
 					if instanceProperties.contains(rename.fulfillingProperty.asUnwrappedProperty) {
 						renamesReadingWrappersInstance.insert(callee)
-					} else if let instance = rename.fulfillingProperty.asLazilyInstantiatedInstanceProperty, instanceProperties.contains(instance) {
-						// A rename of the wrapper itself is bound from its label, as the tree binds it.
 					} else {
-						renameReadsWrappersInstance = true
+						// Any other form, the wrapper itself or its optional among them, is bound from its label, as the tree
+						// binds it, but for an instance read through an optional wrapper (beneath a fill that takes the
+						// wrapper optionally), which the tree reads with `?.instance`.
+						renameReadsWrappersInstance = renameReadsWrappersInstance
+							|| instanceProperties.contains(rename.fulfillingProperty.asUnwrappedProperty.asOptionalProperty)
 					}
 				}
 				let opensSendableFunction = Self.opensSendableFunction(edgeFacts[edgeFacts.startIndex + edgeIndex])
@@ -180,14 +181,11 @@ struct DeclarationsAnsweringReads: Sendable {
 		case .optional, .optionalValue:
 			var child = callee
 			var parent = caller
-			while parent >= 0 {
-				if world.declaration(of: parent) == answeringDeclaration {
-					return world.property(of: world.declaration(of: child))?.label == label
-				}
+			while parent >= 0, world.declaration(of: parent) != answeringDeclaration {
 				child = parent
 				parent = callerByVariant[Int(parent)]
 			}
-			return false
+			return parent >= 0 && world.property(of: world.declaration(of: child))?.label == label
 		case .value, .alias, .madeAgain, .mock, .carrier, .fill, .family, .override:
 			return false
 		}
