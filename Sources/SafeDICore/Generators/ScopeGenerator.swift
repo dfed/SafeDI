@@ -9996,6 +9996,25 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		return .lines([.text(declaration), isSendable ? .sendableFunction(statements) : statements, .text("}")])
 	}
 
+	/// The binding of `fill`, a child of this scope's seam call or public mock call, or `nil` for any other child. A fill
+	/// that generates no code, a place of a case another place's fill generates, has the binding of the fill that does,
+	/// which is the first of this scope's fills of its case.
+	nonisolated func fillBinding(of fill: ScopeGenerator) -> SeamFillBinding? {
+		guard let hole = fill.fillHole else { return nil }
+		let caseKey = Self.fillCaseKey(of: hole)
+		guard fill.fillEmitsCode else {
+			return children.first { $0.fillEmitsCode && $0.fillHole.map(Self.fillCaseKey(of:)) == caseKey }.flatMap { fillBinding(of: $0) }
+		}
+		return SeamFillBinding(
+			caseKey: caseKey,
+			excludedStackEntries: [],
+			boundFields: fill.fillBoundFields + fill.fillParameterFields,
+			irreconcilableLabels: Set(Self.irreconcilableFields(of: fill.fillCaseHoles.isEmpty ? [hole] : fill.fillCaseHoles).keys),
+			isSendable: buildsInSendableFunction(ofFill: fill),
+			isBuiltInSendableFunction: hole.enumPlace?.isBuiltBySendableBuilder ?? hole.isSendable,
+		)
+	}
+
 	/// Whether `fill`, a child of this scope, a fill of its seam call, builds its tree inside a `@Sendable` function: its
 	/// own (`sendableFills(of:referencedFromSendableFunctions:)`). `false` for a generator that is no fill. Every reader of
 	/// whether a fill is `@Sendable` – generation, the capture walk, a seam's signature, and the walk of what its tree reads

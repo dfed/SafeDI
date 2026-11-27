@@ -1188,6 +1188,45 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_namesPassedUpPlacesOfOneCaseByOneBuilderLabel_whenPlacesInAndOutsideInstantiatorReadValueThePassingSeamInstantiates() async {
+		// `Hub` builds `Owner`, whose `service` a `@Sendable` builder builds, once in an `Instantiator` and once as a value:
+		// two places of one case, which `Outer` and then `Mid` pass up to `Root`. `Mid` instantiates the `logger` the fill
+		// reads, so the fill is an error, and the error names both places by the one label their builder has,
+		// `serviceSendableBuilder`, not a label per place.
+		let feature = [
+			"public protocol Service: Sendable {}",
+			seamFixtureType(named: "Logger", isFinalClass: true, declarations: [], conformances: ", Sendable"),
+			seamFixtureType(named: "Owner", isFinalClass: true, declarations: ["@Received public let logger: Logger", "@Instantiated public let service: SendableLazilyInstantiated<any Service>"], conformances: ", Sendable"),
+			seamFixtureType(named: "Hub", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let ownerBuilder: Instantiator<Owner>", "@Instantiated public let owner: Owner"]),
+		]
+		let middle = [
+			seamFixtureType(named: "Outer", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let hub: Hub"]),
+			seamFixtureType(named: "Mid", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let logger: Logger", "@Instantiated public let outer: Outer"]),
+		]
+		let app = [
+			SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "LiveService", fulfilling: "Service", declarations: ["@Received public let logger: Logger"]),
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated public let logger: Logger", "@Instantiated public let mid: Mid"]),
+		]
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["LiveService.swift"]):10:5: error: `LiveService` receives `logger: Logger`, which `Mid` builds where it calls `Hub`, but `Mid` passes the builder for `Owner`’s `service: SendableLazilyInstantiated<any Service>` (`service` of `serviceSendableBuilder`) on from its own caller, which cannot hand it `Mid`’s values. Instantiate `logger` outside `Mid` and declare `@Received let logger: Logger` on `Mid`, so the builder’s caller reads its own, or declare an @Instantiable type that fulfills `Service` in module `Middle` or a module it lists among its SafeDI dependencies, so `Mid` fills the builder itself.
+			\(fixtures["Middle"]!["Mid.swift"]):10:5: note: `Mid` declares `logger: Logger` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: feature),
+					ModuleFixture(name: "Middle", packageName: "Other", swiftFileContent: middle.map { "import Feature\n\n" + $0 }, dependencies: ["Feature"]),
+					ModuleFixture(name: "App", packageName: "Other", swiftFileContent: app.map { "import Feature\nimport Middle\n\n" + $0 }, dependencies: ["Feature", "Middle"]),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
 	@Test(arguments: ["declarationOrder", "reversedFileNames"])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_reportsEveryFindingOfReader_whenPlacesOneFillFillsLoseItsValueForDifferentReasons(fileNames: String) async {

@@ -2255,7 +2255,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
-		        func __safeDI_liveGadget_GadgetBuilder_screenBuilder_Home_Screen_Scope_panel(id: Int) -> ErasedInstantiator<String, any Gadget>.Builder {
+		        func __safeDI_liveGadget_GadgetBuilder_Home_Screen_Scope_panel(id: Int) -> ErasedInstantiator<String, any Gadget>.Builder {
 		            return __safeDI_fillBody_55D071755F974A0E(id: id)
 		        }
 		        func __safeDI_fillBody_55D071755F974A0E(id: Int) -> ErasedInstantiator<String, any Gadget>.Builder {
@@ -2271,7 +2271,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            .init(screenBuilder: __safeDI_liveGadget_GadgetBuilder_Home_Screen_Scope())
 		        }
 		        func __safeDI_liveGadget_GadgetBuilder_Home_Screen_Scope() -> Home.__safeDI_LiveGadget_GadgetCarrier_Screen<any Gadget> {
-		            .init(panel: { values_id in __safeDI_liveGadget_GadgetBuilder_screenBuilder_Home_Screen_Scope_panel(id: values_id) }, next: { values_id, values_panel in __safeDI_liveGadget_GadgetBuilder_Home_Screen_Scope() })
+		            .init(panel: { values_id in __safeDI_liveGadget_GadgetBuilder_Home_Screen_Scope_panel(id: values_id) }, next: { values_id, values_panel in __safeDI_liveGadget_GadgetBuilder_Home_Screen_Scope() })
 		        }
 		        func __safeDI_outer() -> Outer {
 		            _ = Outer.__safeDI_Outer_050544FCB3C79E0B.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.

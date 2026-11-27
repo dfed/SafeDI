@@ -66,6 +66,38 @@ struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func fillBinding_equalsAtEveryCallAndDiffersBetweenCases_whenTwoTypesCallSeamWhosePlacesAreTwoCases() async throws {
+		// `Root` and `Other` each call `Home`, whose tree builds `Panel` beneath `First` and `Second`, and `Row` inside
+		// `Panel`: `Panel`'s `api` is one case reached along two paths, and `Row`'s `api` another. Every fill of one case binds
+		// the same at both calls, and the fills of the two cases bind apart.
+		let (fills, error) = await fillsOfCalls { filesToDelete in
+			_ = try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modules(
+					parentDeclarations: [["@Instantiated let panel: Panel"], ["@Instantiated let panel: Panel"]],
+					panelDeclarations: ["@Instantiated let api: any Api", "@Instantiated let row: Row"],
+					liveApiDeclarations: [],
+					appDeclarations: [seamFixtureType(named: "Other", declarations: ["@Instantiated let home: Home"])],
+					rootDeclarations: ["@Instantiated let other: Other"],
+				),
+				integration: .moduleInfo,
+				compileVerification: .skipped,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		#expect(error == nil)
+		let callsOfHome = fills.filter { $0.calledType == "Home" }
+		let bindingsByCall = callsOfHome.map { call in
+			Dictionary(call.bindings.map { ($0.sitePath.map(\.label).joined(separator: "."), $0.binding) }, uniquingKeysWith: { first, _ in first })
+		}
+		#expect(Set(bindingsByCall.map { $0.keys.sorted() }) == [["first.panel.api", "first.panel.row.api"]])
+		#expect(Set(bindingsByCall).count == 1)
+		let bindings = try #require(bindingsByCall.first)
+		#expect(bindings["first.panel.api"] != bindings["first.panel.row.api"])
+		#expect(bindingsByCall.count >= 2)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func casePlaces_holdFirstPlaceOfEachCaseInBuilderOrder_whenSeamReachesItsPlacesAlongManyPaths() async throws {
 		// Shape E with twelve screens reaches the `api` of each of its last layer's four models along nine paths: 36 places
 		// in the signature, nine of each case in a row.
