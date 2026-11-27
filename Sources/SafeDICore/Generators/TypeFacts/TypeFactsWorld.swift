@@ -270,6 +270,9 @@ protocol TypeFactsWorld {
 	/// For each read of the variant, parallel to `keys(of:)`: the offset of the edge that opens the `@Sendable` function a
 	/// `readBeforeSendableFunction` read is bound before (the outermost such edge), -1 for every other outcome.
 	func boundBefore(of variant: VariantID) -> ArraySlice<Int32>
+	/// What arrives at a root's reads from outside the world (`TypeFactsReadArrivals`): `nil` alone at a root nothing
+	/// calls, also an answer where a caller passes the root its reads (a seam's caller, a mock's parameters).
+	var rootReadArrivals: TypeFactsArrivals { get }
 	/// The facts producers still owe the declaration's answers (`TypeFactsOwedFacts`).
 	func owedFacts(of declaration: DeclarationID) -> TypeFactsOwedFacts
 	/// Whether the declaration an answer binds provides a form that a receive of the read's label in the declaration's
@@ -428,6 +431,11 @@ extension TypeFactsGraph: TypeFactsWorld {
 
 	func boundBefore(of variant: VariantID) -> ArraySlice<Int32> {
 		outcomes.boundBefore(of: variant)
+	}
+
+	var rootReadArrivals: TypeFactsArrivals {
+		let root = graph.nodes[0].scope.instantiable
+		return forMockGeneration || root.generatesDependencyTree ? [.nil, .answer] : .nil
 	}
 
 	func providesFormRead(by answer: AnswerID, _ read: ReadID, beneath declaration: DeclarationID) -> Bool {
