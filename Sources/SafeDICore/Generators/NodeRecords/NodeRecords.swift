@@ -60,6 +60,9 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	case nodeHasSeveralVariants
 	/// The engine could not lay the root out from the records.
 	case notLaidOut
+	/// A seam's own root holds a node whose record reads what each call finds, which a seam's root, handed its tree's
+	/// values as parameters, does not answer yet: a rename or a receive only if available.
+	case seamRootAnswers
 }
 
 /// What a world's records read of a node beside the frozen interface (`TypeFactsWorld`): the scope it builds and the
@@ -102,15 +105,18 @@ struct NodeRecords: Sendable {
 	///   - world: A production root's world.
 	///   - rootLazilyInstantiatedInstanceProperties: What the root is handed as instances of `LazilyInstantiated` properties:
 	///     a seam's deferred parameters, which its tree reads through their memos. Empty for any other root.
+	///   - isSeamRoot: Whether the root is a seam's own, whose tree is handed its values as parameters.
 	/// - Throws: A `NodeRecordRefusal` where the world holds a kind stage 1 does not make, or what an initializer's
 	///   arguments throw.
-	init(world: some NodeRecordSources, rootLazilyInstantiatedInstanceProperties: Set<Property> = []) throws {
+	init(world: some NodeRecordSources, rootLazilyInstantiatedInstanceProperties: Set<Property> = [], isSeamRoot: Bool = false) throws {
 		let declarationCount = world.declarationCount
 		var kinds = [NodeRecordKind]()
 		kinds.reserveCapacity(declarationCount)
 		for declaration in 0..<Int32(declarationCount) {
-			try kinds.append(Self.kind(of: declaration, in: world))
+			let kind = try Self.kind(of: declaration, in: world)
 			try Self.checkReadsNoInstance(of: rootLazilyInstantiatedInstanceProperties, declaration, in: world)
+			try Self.checkAnswered(kind, isSeamRoot: isSeamRoot)
+			kinds.append(kind)
 		}
 		var variantByDeclaration = [VariantID](repeating: -1, count: declarationCount)
 		for variant in 0..<Int32(world.variantCount) {
@@ -198,12 +204,14 @@ struct NodeRecords: Sendable {
 
 	/// Every refusal `world` holds, each once, in the order of `NodeRecordRefusal`'s cases: what a test reports of a world, so
 	/// that each stage counts the worlds it frees.
-	static func refusals(in world: some NodeRecordSources, rootLazilyInstantiatedInstanceProperties: Set<Property> = []) -> [NodeRecordRefusal] {
+	static func refusals(in world: some NodeRecordSources, rootLazilyInstantiatedInstanceProperties: Set<Property> = [], isSeamRoot: Bool = false) -> [NodeRecordRefusal] {
 		var refusals = Set<NodeRecordRefusal>()
 		for declaration in 0..<Int32(world.declarationCount) {
-			refusals.formUnion(kindAndRefusals(of: declaration, in: world).refusals)
+			let (kind, kindRefusals) = kindAndRefusals(of: declaration, in: world)
+			refusals.formUnion(kindRefusals)
 			do {
 				try checkReadsNoInstance(of: rootLazilyInstantiatedInstanceProperties, declaration, in: world)
+				try checkAnswered(kind, isSeamRoot: isSeamRoot)
 			} catch {
 				refusals.insert(error)
 			}
@@ -236,6 +244,16 @@ struct NodeRecords: Sendable {
 				&& instanceProperties.contains(dependency.property.asUnwrappedProperty)
 		}
 		guard !receivesAnInstance else { throw .lazy }
+	}
+
+	/// Refuses a seam's own root where `kind` reads what each call finds (`NodeRecordRefusal.seamRootAnswers`).
+	private static func checkAnswered(_ kind: NodeRecordKind, isSeamRoot: Bool) throws(NodeRecordRefusal) {
+		switch kind {
+		case .receivesOnlyIfAvailable, .rename:
+			guard !isSeamRoot else { throw .seamRootAnswers }
+		case .builtByInitializer, .inlineSeam, .mockConstruction:
+			break
+		}
 	}
 
 	/// The kind of record `declaration` is made as, or the first refusal it holds (`kindAndRefusals(of:in:)`).
