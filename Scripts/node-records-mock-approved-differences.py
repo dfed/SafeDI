@@ -17,7 +17,9 @@ written again before each nested copy of the function it stands before).
 3 (an actor's override local, placed where the walk's text declares it) and 11 (a function named apart with a
 trailing underscore) read one fact from the walk's text. 5 as ruled 17:35Z (a dependency nothing fulfills, bound once by mock() in the records and first in each
 function that declares it in the walk) and 17 (a local only the records read) read one too. Not rewritten, so
-such a pair fails: 12 and 16. 20 (cycle kind, form c) removes the places list's declaration and the calls that
+such a pair fails: 12. 16 (a member of a loop of builders takes its level's configuration): the level's
+configuration is written out, a call of another member the level declares is a reference to it, and the
+members are declared one after another. 20 (cycle kind, form c) removes the places list's declaration and the calls that
 hand it on; a call of a function the caller is nested in closes on that function, and a fresh configuration
 holds no override; a function reading the nearest place of its type takes the configuration that place was
 entered with. 21 gives a nested cycle function the type suffix the walk declares it with.
@@ -26,6 +28,7 @@ import collections
 import re
 import sys
 import threading
+MEMBERS='\x00members'
 NEAREST='\x00nearest'
 CONFIG='\x00configuration'
 # A fresh configuration and every member path of one hold nil, by the configurations' defaulted initializers.
@@ -35,7 +38,7 @@ def fold_empty(line):
     return FOLD.sub(lambda m:m.group(1),line)
 GUARD=re.compile(r'^\s*_ = (?:\w+\.)*\w+\.__safeDI_\w+_mock_\w+\.self //')
 ALSO_USED=[]
-FUNC=re.compile(r'^(\s*)((?:@Sendable nonisolated )?func )(__safeDI_\w+|`__safeDI_[^`]+`)\((.*)\)((?: async| throws)* -> .+) \{$')
+FUNC=re.compile(r'^(\s*)((?:@Sendable nonisolated )?func )(__safeDI_[^\s(`]+|`__safeDI_[^`]+`)\((.*)\)((?: async| throws)* -> .+) \{$')
 TOKEN=re.compile(r'(?<![\w.])safeDIOverrides(?![\w:])')
 def block_end(lines,i):
     ind=len(lines[i])-len(lines[i].lstrip())
@@ -43,6 +46,8 @@ def block_end(lines,i):
     j=i+1
     while j<len(lines) and lines[j]!=close: j+=1
     return j
+LOOP_ARGUMENT=re.compile(r'^__safeDI_\w+_loopConfiguration: ')
+LOOP_PARAMETER=re.compile(r'(^|, )(__safeDI_\w+_loopConfiguration): [^,]*$')
 def find_call_arg(line,name):
     """returns (start,end,expr) of ', safeDIOverrides: EXPR' in a call of name"""
     for m in re.finditer(r'(?<![\w.])'+re.escape(name)+r'\(',line):
@@ -55,10 +60,17 @@ def find_call_arg(line,name):
                 if depth==0: break
         args=line[m.end():k]
         parts=split_top(args)
-        if parts and parts[-1].startswith('safeDIOverrides: '):
-            a=args.rfind(parts[-1])
-            sep=2 if len(parts)>1 else 0
-            return m.end()+a-sep,k,parts[-1][len('safeDIOverrides: '):]
+        # entry 16: a member of a loop of builders is handed its level's configuration after its own
+        loop=None;taken=0
+        if parts and LOOP_ARGUMENT.match(parts[-1]):
+            loop=parts[-1].split(': ',1)[1];taken=1
+        expr=None
+        if len(parts)>taken and parts[-1-taken].startswith('safeDIOverrides: '):
+            expr=parts[-1-taken][len('safeDIOverrides: '):];taken+=1
+        if taken:
+            a=args.rfind(parts[-taken])
+            sep=2 if len(parts)>taken else 0
+            return m.end()+a-sep,k,expr,loop
     return None
 def statement_start(lines,i,base_indent):
     """index of the first line of the statement at base indentation containing line i"""
@@ -75,12 +87,22 @@ def split_top(t):
         else: cur+=c
     if cur.strip(): parts.append(cur.strip())
     return parts
-def expand(lines,hoisted,base_indent,entered={},nearest={}):
+def expand(lines,hoisted,base_indent,entered={},nearest={},visible=frozenset(),referenced=None):
     """lines: body of one function (or root) at base_indent. returns new lines."""
     out=[]
     i=0
     declared=set()
     nearest=dict(nearest)
+    if referenced is None: referenced=set()
+    # entry 16: the members of a loop of builders this level calls, which the walk declares together at the level
+    level=set()
+    for line in lines:
+        if '_loopConfiguration: ' not in line: continue
+        for name in hoisted:
+            if name in line:
+                r=find_call_arg(line,name)
+                if r and r[3] is not None: level.add((name,r[2],r[3]))
+    members=[]
     while i<len(lines):
         line=lines[i]
         if line.strip().startswith(NEAREST):
@@ -95,13 +117,25 @@ def expand(lines,hoisted,base_indent,entered={},nearest={}):
                 if r: hit=(name,)+r; break
         if not hit:
             out.append(line); i+=1; continue
-        name,s,e,expr=hit
+        name,s,e,expr,loop=hit
         newline=line[:s]+line[e:]
         # entry 20: a fresh configuration, or a member of one, holds no override
         if name in entered:
             # entry 20: a call of a function this one is nested in closes the cycle on that function. The records
             # declare one function per place of the list, so the function's name stands for its place.
+            newline=reference(newline,name,hoisted)
             newline=re.sub(r'(?<![\w.])'+re.escape(name)+r'(?=\()',entered[name],newline)
+            lines[i]=newline
+            mm=re.match(r'^\s*(__safeDI_\w+)\(\)$',newline)
+            if mm and out and out[-1].rstrip().endswith('> {') and i+1<len(lines) and lines[i+1].strip()=='}':
+                out[-1]=out[-1][:-2].rstrip()+'('+mm.group(1)+')'
+                i+=2
+            continue
+        if (name,expr,loop) in visible:
+            # entry 16: a member of the loop calls another member, which the level it is nested in declares
+            referenced.add((name,expr,loop))
+            ALSO_USED.append('16')
+            newline=reference(newline,name,hoisted)
             lines[i]=newline
             mm=re.match(r'^\s*(__safeDI_\w+)\(\)$',newline)
             if mm and out and out[-1].rstrip().endswith('> {') and i+1<len(lines) and lines[i+1].strip()=='}':
@@ -114,11 +148,16 @@ def expand(lines,hoisted,base_indent,entered={},nearest={}):
         if body and body[0].startswith(CONFIG):
             # entry 20: a function that takes the nearest place's configuration where one was entered above
             _,key,own=body[0].split(' ',2)
-            expr=nearest.get(key) or TOKEN.sub(lambda _:expr,own)
+            expr=nearest.get(key) or (TOKEN.sub(lambda _:expr,own) if expr is not None else own)
             below=dict(nearest,**{key:expr})
             body=body[1:]
         m=FUNC.match(sig)
-        params=re.sub(r'(^|, )safeDIOverrides: .*$','',m.group(4))
+        loop_parameter=LOOP_PARAMETER.search(m.group(4))
+        params=LOOP_PARAMETER.sub('',m.group(4))
+        params=re.sub(r'(^|, )safeDIOverrides: .*$','',params)
+        handed=None
+        if loop_parameter and loop is not None:
+            handed=re.compile(r'(?<![\w.])'+re.escape(loop_parameter.group(2))+r'(?![\w:])')
         # a parameter every call hands the value of its own name was a capture
         plist=split_top(params)
         callm=re.search(r'(?<![\w.])'+re.escape(name)+r'\((.*)\)',newline)
@@ -128,7 +167,9 @@ def expand(lines,hoisted,base_indent,entered={},nearest={}):
             for pp in plist:
                 lab=pp.split(':')[0]
                 ident=lab+': '+lab
+                bare=lab.strip('`')+': '+lab
                 if ident in alist: alist.remove(ident)
+                elif bare in alist: alist.remove(bare)
                 else: keep_p.append(pp)
             if len(keep_p)!=len(plist):
                 params=', '.join(keep_p)
@@ -146,8 +187,10 @@ def expand(lines,hoisted,base_indent,entered={},nearest={}):
             newline=re.sub(r'(?<![\w.])'+re.escape(name)+r'(?=\()',newname,newline)
         if guard and base_indent>8: ALSO_USED.append('10')
         inst=([ind+guard.strip()] if guard else [])+[ind+m.group(2)+newname+'('+params+')'+m.group(5)+' {']
-        sub=[ (ind+'    '+b if b else b) for b in (fold_empty(TOKEN.sub(lambda _:expr,x)) for x in body)]
-        sub=expand(sub,hoisted,base_indent+4,dict(entered,**{name:newname}),below)
+        sub=[ (ind+'    '+b if b else b) for b in (fold_empty(TOKEN.sub(lambda _:expr,x)) if expr is not None else x for x in body)]
+        if handed: sub=[handed.sub(lambda _:loop,x) for x in sub]
+        if base_indent>8000: raise RecursionError('functions nest without end')
+        sub=expand(sub,hoisted,base_indent+4,dict(entered,**{name:newname}),below,visible|level,referenced)
         inst+=sub+[ind+'}']
         # find statement start in out
         k=len(out)
@@ -155,9 +198,16 @@ def expand(lines,hoisted,base_indent,entered={},nearest={}):
         if cur_ind>base_indent:
             k=len(out)-1
             while len(out[k])-len(out[k].lstrip())>base_indent: k-=1
-        key=(name,expr)
+        key=(name,expr,loop)
         if key not in declared:
-            out[k:k]=inst; declared.add(key)
+            if key in level:
+                # entry 16: the walk declares a loop's members one after another, in the order the records
+                # declare their functions, before the first is bound
+                if not members: out.insert(k,MEMBERS)
+                members.append((list(hoisted).index(name),inst))
+            else:
+                out[k:k]=inst
+            declared.add(key)
         lines[i]=newline
         # collapse 3-line wrapper closure
         mm=re.match(r'^\s*((?:try |await )*)(__safeDI_\w+)\(\)$',newline)
@@ -166,7 +216,17 @@ def expand(lines,hoisted,base_indent,entered={},nearest={}):
             i+=2; continue
         # re-scan same line for more calls
         continue
+    if members:
+        at=out.index(MEMBERS)
+        out[at:at+1]=[line for _,inst in sorted(members,key=lambda member:member[0]) for line in inst]
     return out
+def reference(newline,name,hoisted):
+    """a call of a function declared above: an argument handed under its own name was a capture there"""
+    call=re.search(r'(?<![\w.])'+re.escape(name)+r'\((.*)\)',newline)
+    if not call: return newline
+    labels=[part.split(':')[0] for part in split_top(FUNC.match(hoisted[name][0]).group(4))]
+    kept=[a for a in split_top(call.group(1)) if not any(a in (label+': '+label,label.strip('`')+': '+label) for label in labels)]
+    return newline[:call.start(1)]+', '.join(kept)+newline[call.end(1):]
 def unhoist(text,walk=None):
     lines=text.split('\n')
     res=[];i=0
@@ -180,7 +240,7 @@ def unhoist(text,walk=None):
             hoisted={};rest=[];k=0
             while k<len(body):
                 m=FUNC.match(body[k])
-                if m and len(m.group(1))==8 and re.search(r'(^|, )safeDIOverrides: ',m.group(4)):
+                if m and len(m.group(1))==8 and re.search(r'(^|, )(?:safeDIOverrides|__safeDI_\w+_loopConfiguration): ',m.group(4)):
                     e=block_end(body,k)
                     # entry 10: a public mock's guard line stands before the function that calls the mock
                     guard=rest.pop() if rest and GUARD.match(rest[-1]) else None
@@ -434,7 +494,7 @@ def main():
             else:
                 failures += 1
                 print('%s: %s' % (records_path, failure))
-        for name in [name for name, _ in REWRITES] + ['10', '17']:
+        for name in [name for name, _ in REWRITES] + ['10', '16', '17']:
             print('entry %s: used on %d pairs' % (name, counts[name]))
         print('%d of %d pairs equal after rewrite' % (total - failures, total))
         sys.exit(1 if failures else 0)
