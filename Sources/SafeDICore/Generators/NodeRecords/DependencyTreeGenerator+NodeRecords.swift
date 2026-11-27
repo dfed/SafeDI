@@ -59,8 +59,7 @@ extension DependencyTreeGenerator {
 		let world = TypeFactsGraph(root: constructionScope, forMockGeneration: false)
 		do {
 			let nodeRecords = try NodeRecords(world: world, seamTree: RootScopeInfo.SeamTree(seam: seam, seamRoot: seamRoot), declaredTypeNames: declaredTypeNames)
-			guard !nodeRecords.holdsSeamCallOrHole else { return nil }
-			guard let code = try laidOutSeamRootCode(of: seam, seamRoot: seamRoot, nodeRecords: nodeRecords) else { return nil }
+			guard !nodeRecords.holdsSeamCallOrHole, let code = try laidOutSeamRootCode(of: seam, seamRoot: seamRoot, nodeRecords: nodeRecords) else { return nil }
 			return NodeRecordsLayout(code: code, nodeRecords: nodeRecords)
 		} catch is NodeRecordRefusal {
 			return nil
