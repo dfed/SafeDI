@@ -8600,9 +8600,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			} else {
 				.alias(AliasPlaceRecord(property: property, fulfillingProperty: fulfillingProperty, text: aliasCode))
 			}
-		} else if !readsOptionalInstance {
+		} else if !readsOptionalInstance, NodeRecordsObservation.observer != nil {
 			// A seam's own alias bound from a deferred parameter's autoclosure (`SeamRoot.autoclosureCallByLabel(of:)`) reads
-			// no declaration: the autoclosure is the initializer's parameter, which nothing else reads.
+			// no declaration: the autoclosure is the initializer's parameter, which nothing else reads. Its record is written
+			// only where a test observes node records, so a plain run keeps its text and pays nothing for it.
 			.alias(AliasPlaceRecord(property: property, fulfillingProperty: nil, text: aliasCode, reads: []))
 		} else {
 			nil
@@ -9065,8 +9066,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// A seam call's forwarded values are bound inside its text, which lists only the reads outside it.
 				// One the engine spells where its place is binds the wrapper of its function as a built place does
 				// (`InPlaceCall`): its body holds the call's guard among its statements, with nothing a loop or a fill binds first,
-				// and its function takes the values the wrapper is forwarded.
-				try seamCallRecord(of: property, instantiable: instantiable, seamCall: seamCall, erasedToConcreteExistential: erasedToConcreteExistential, code: code, declaredFunctionName: functionName, forwardedProperties: forwardedProperties, unavailableProperties: unavailableProperties, builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings, inlinePlaceBuilder: inlinePlaceBuilder, separatesValuesBindings: separatesValuesBindings, inPlaceStatements: valuesBindingLines.isEmpty && unboxingLines.isEmpty && forwardedInnerScopeLines.isEmpty && rebindingLines.isEmpty ? (before: memberCallCode, after: fillPlaceBindingLines + childCode) : nil, lineEnd: constructionLineEnd)
+				// and its function takes the values the wrapper is forwarded. A call that is forwarded values has its record
+				// written only where a test observes node records, so a plain run keeps its text and pays nothing for it.
+				forwardedProperties.isEmpty || NodeRecordsObservation.observer != nil ? try seamCallRecord(of: property, instantiable: instantiable, seamCall: seamCall, erasedToConcreteExistential: erasedToConcreteExistential, code: code, declaredFunctionName: functionName, forwardedProperties: forwardedProperties, unavailableProperties: unavailableProperties, builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings, inlinePlaceBuilder: inlinePlaceBuilder, separatesValuesBindings: separatesValuesBindings, inPlaceStatements: valuesBindingLines.isEmpty && unboxingLines.isEmpty && forwardedInnerScopeLines.isEmpty && rebindingLines.isEmpty ? (before: memberCallCode, after: fillPlaceBindingLines + childCode) : nil, lineEnd: constructionLineEnd) : nil
 			} else {
 				try builtRecord(functionName: functionName, hasFunction: true, rebindings: rebindingLines)
 			}
