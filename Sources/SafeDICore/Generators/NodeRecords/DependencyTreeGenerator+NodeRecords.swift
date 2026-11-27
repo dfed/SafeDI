@@ -62,6 +62,12 @@ extension DependencyTreeGenerator {
 			}
 			return layout.code
 		case let .tree(scopeGenerator):
+			// PROTOTYPE (step 3's timing prototype, `FillPrototype`).
+			if FillPrototype.reportPath != nil, rootInfo.seamTree == nil, let constructionScope = rootInfo.constructionScope {
+				var report = FillPrototype.report(ofRoot: root, world: TypeFactsGraph(root: constructionScope, forMockGeneration: false))
+				(report.treeFillKeys, report.treeCarrierFillKeys, report.treeDispatcherKeys) = FillPrototype.treeKeys(beneath: scopeGenerator)
+				FillPrototype.append(report)
+			}
 			guard let constructionScope = rootInfo.constructionScope, let observer = NodeRecordsObservation.observer else {
 				return try await scopeGenerator.generatePlan()
 			}

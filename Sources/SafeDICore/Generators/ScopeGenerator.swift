@@ -4960,13 +4960,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	/// The dispatchers this scope's seam call declares.
-	nonisolated private var fillDispatchers: [FillDispatcher] {
+	nonisolated var fillDispatchers: [FillDispatcher] {
 		seamAndFillFieldsStorage?.fields.fillDispatchers ?? []
 	}
 
 	/// For a scope that calls another module's public mock and fills a builder, the level functions its call declares for
 	/// the builders it fills (`PublicMockLevelFunctions`); `nil` for every other scope.
-	nonisolated private var publicMockLevelFunctions: PublicMockLevelFunctions? {
+	nonisolated var publicMockLevelFunctions: PublicMockLevelFunctions? {
 		seamAndFillFieldsStorage?.fields.publicMockLevelFunctions
 	}
 
@@ -5350,7 +5350,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	/// For a fill of a place whose case is a seam's carrier's, how the fill takes the case's values: the struct of the run
 	/// they end, then each value after it (`SeamCarrierValues.Use`); `nil` for every other generator.
-	nonisolated private var fillCarrierUse: SeamCarrierValues.Use? {
+	nonisolated var fillCarrierUse: SeamCarrierValues.Use? {
 		seamAndFillFieldsStorage?.fields.fillCarrierUse
 	}
 

@@ -787,7 +787,7 @@ extension ScopeRecord {
 
 /// A scope whose generator `ScopeRecord.createScopeGenerator` is creating, with what the generator is created from once
 /// the generators of the scopes it creates exist.
-private struct ScopeGeneratorUnderConstruction: Sendable {
+struct ScopeGeneratorUnderConstruction: Sendable {
 	/// - Parameters:
 	///   - property: The property the scope builds, with its ID in `scope`'s interner, or `nil` for a root.
 	///   - contextStack: The declarations being built above the scope.
