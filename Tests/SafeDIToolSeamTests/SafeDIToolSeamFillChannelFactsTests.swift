@@ -143,6 +143,33 @@ struct SafeDIToolSeamFillChannelFactsTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_refusesFillAsCycleReentryAndKeepsItsTreeOwed_whenFillsTreeCallsItsSeamAgain() async throws {
+		// `LiveGadget` fills `Home`'s `gadget` and builds `Home` again: beneath `Home`'s fill that call passes the fill on,
+		// beneath `Office`'s it fills `gadget` itself, so the one declaration of `Home` beneath the fill answers its reads
+		// two ways.
+		let report = try await lastReport(
+			of: SafeDIToolSeamBuilderParameterTests.modules(
+				feature: [
+					"public protocol Gadget {}",
+					seamFixtureType(named: "Home", isSeam: true, declarations: ["@Instantiated let gadget: any Gadget"]),
+					seamFixtureType(named: "Office", isSeam: true, declarations: ["@Instantiated let gadget: any Gadget"]),
+				],
+				app: [
+					SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "LiveGadget", fulfilling: "Gadget", declarations: ["@Instantiated let homeBuilder: Instantiator<Home>"]),
+					seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let home: Home", "@Instantiated let office: Office"]),
+				],
+			),
+			root: "Root",
+		)
+
+		#expect(report.fillRefusals.contains("cycleReentry"), "\(report.fillRefusals)")
+		let findings = TypeFactsChecks.findings(of: report)
+		#expect(findings.check10OwedUncovered.isEmpty, "\(findings.check10OwedUncovered)")
+		Self.expectFillsOwe(in: report)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_refusesFillOfMockWorld_whenCallingMockFillsPlaceOfCalledPublicMock() async throws {
 		// `Screen`'s mock fills `S0`'s place: a mock root's world, whose fills the channel does not model yet.
 		let report = try await lastReport(

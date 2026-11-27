@@ -20,7 +20,7 @@
 
 extension NodeRecords {
 	/// The claim of `declaration` as `unavailableDependency` where it stands for a property instantiated only if available
-	/// that no declaration fulfills (`ConstructionScope.isUnavailableDependency`): it discharges stage 1's refusal of an
+	/// that no declaration fulfills (`ConstructionScope.isUnavailableDependency`): it discharges the refusal of an
 	/// unavailable dependency, and of a type with no initializer, since the node builds nothing. `nil` for any other node,
 	/// and for every node of a mock root's world, which reads each node's override.
 	static func unavailableDependencyClaim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {

@@ -77,8 +77,8 @@ struct SafeDIToolTypeFactsVariantKeyTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_keysVariantPerParameterType_whenReceiveOnlyIfAvailableIsAnsweredLazilyUnderOneParentAndNilUnderTheOther() async throws {
-		// `nil` keys apart from a lazy wrapper's answer until rule 3 is ruled, which would let a `nil` wrapper parameter
-		// stand for it: this count is the one that ruling changes.
+		// `nil` keys apart from a lazy wrapper's answer until rule 3's second stage, which lets a `nil` wrapper parameter
+		// stand for it: this count is the one that stage changes.
 		let report = try await rootReport(of: [
 			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let first: First", "@Instantiated let second: Second"]),
 			seamFixtureType(named: "First", isFinalClass: true, declarations: ["@Instantiated let x: LazilyInstantiated<X>", "@Instantiated let child: Child"]),
@@ -205,6 +205,138 @@ struct SafeDIToolTypeFactsVariantKeyTests: ~Copyable {
 
 		#expect(report.world.contains("bound beingBuilt"), "\(report.world)")
 		#expect(!report.world.contains("bound declared"), "\(report.world)")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_answersNone_whenParentBindsReadLabelAfterTheCall() async throws {
+		// `Second` receives `first`, so `Root` builds `first` before `second`, and `Leaf` beneath `first` receives `second`
+		// only if available: at the edge to `first` nothing of `Root` answers `second` yet, and `Leaf` is handed nil, as the
+		// generated code passes it.
+		let report = try await rootReport(of: [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let first: First", "@Instantiated let second: Second"]),
+			seamFixtureType(named: "First", isFinalClass: true, declarations: ["@Instantiated let leaf: Leaf"]),
+			seamFixtureType(named: "Second", isFinalClass: true, declarations: ["@Received let first: First"]),
+			seamFixtureType(named: "Leaf", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let second: Second?"]),
+		])
+
+		// `Second` receives `first`, so `Root` builds `first` first: its call answers `second`'s two reads none.
+		#expect(report.world.contains("v0 d0 plain keys [] calls [1, 2] sources [[\"bound beingBuilt\", \"none\", \"none\"], [\"bound declared\", \"bound beingBuilt\"]]"), "\(report.world)")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keysOneVariant_whenValueTwinAndLazyTwinOfOneLabelAreBeingBuilt() async throws {
+		// Rule 3, case 2: `Leaf` receives `home` only if available beneath the `home` being built, by value under `First`
+		// and lazily under `Second`; either way it is `nil` and 2.4.0 builds one function for the identity, so one body.
+		let report = try await rootReport(of: [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let first: First", "@Instantiated let second: Second"]),
+			seamFixtureType(named: "First", isFinalClass: true, declarations: ["@Instantiated let home: Home"]),
+			seamFixtureType(named: "Second", isFinalClass: true, declarations: ["@Instantiated let home: LazilyInstantiated<Home>"]),
+			seamFixtureType(named: "Home", isFinalClass: true, declarations: ["@Instantiated let leaf: Leaf"]),
+			seamFixtureType(named: "Leaf", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let home: Home?"]),
+		])
+
+		#expect(report.places.count(where: { $0.declaration == "Leaf as leaf: Leaf" }) == 2, "\(report.world)")
+		#expect(variantCount(ofNodeDeclaring: "Leaf as leaf: Leaf", in: report) == 1, "\(report.world)")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keysOneVariant_whenReceiveOnlyIfAvailableIsUnansweredUnderOneParentAndBeingBuiltUnderTheOther() async throws {
+		// `A` receives `theme` only if available: `Root` declares none, and the cycle `Theme` closes on `aBuilder` reads the
+		// `theme` `Mid` is still building. Both pass `nil`, and 2.4.0 builds one function of `A`, so one body.
+		let report = try await rootReport(of: [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let aBuilder: Instantiator<A>"]),
+			seamFixtureType(named: "A", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let theme: Theme?", "@Instantiated let midBuilder: Instantiator<Mid>"]),
+			seamFixtureType(named: "Mid", isFinalClass: true, declarations: ["@Instantiated let theme: Theme"]),
+			seamFixtureType(named: "Theme", isFinalClass: true, declarations: ["@Instantiated let aBuilder: Instantiator<A>"]),
+		])
+
+		#expect(report.places.count(where: { $0.declaration == "A as aBuilder: Instantiator<A>" }) == 2, "\(report.world)")
+		#expect(variantCount(ofNodeDeclaring: "A as aBuilder: Instantiator<A>", in: report) == 1, "\(report.world)")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keysOneVariant_whenReceiveOnlyIfAvailableIsUnansweredUnderOneParentAndALazyWrapperBeingBuiltUnderTheOther() async throws {
+		// As above, with `Mid` building `theme` lazily and `A` receiving the wrapper: both calls still pass `nil`.
+		let report = try await rootReport(of: [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let aBuilder: Instantiator<A>"]),
+			seamFixtureType(named: "A", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let theme: LazilyInstantiated<Theme>?", "@Instantiated let midBuilder: Instantiator<Mid>"]),
+			seamFixtureType(named: "Mid", isFinalClass: true, declarations: ["@Instantiated let theme: LazilyInstantiated<Theme>"]),
+			seamFixtureType(named: "Theme", isFinalClass: true, declarations: ["@Instantiated let aBuilder: Instantiator<A>"]),
+		])
+
+		#expect(report.places.count(where: { $0.declaration == "A as aBuilder: Instantiator<A>" }) == 2, "\(report.world)")
+		#expect(variantCount(ofNodeDeclaring: "A as aBuilder: Instantiator<A>", in: report) == 1, "\(report.world)")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keysVariantPerOtherRead_whenTwinsBeingBuiltReadAnotherLabelInOtherForms() async throws {
+		// Rule 3, case 2 drops only the being-built answer's form: `Leaf` also requires `theme`, which `First` declares by
+		// value and `Second` lazily, so the two bodies stay apart by `theme` alone.
+		let report = try await rootReport(of: [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let first: First", "@Instantiated let second: Second"]),
+			seamFixtureType(named: "First", isFinalClass: true, declarations: ["@Instantiated let theme: Theme", "@Instantiated let home: Home"]),
+			seamFixtureType(named: "Second", isFinalClass: true, declarations: ["@Instantiated let theme: LazilyInstantiated<Theme>", "@Instantiated let home: LazilyInstantiated<Home>"]),
+			seamFixtureType(named: "Home", isFinalClass: true, declarations: ["@Instantiated let leaf: Leaf"]),
+			seamFixtureType(named: "Leaf", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let home: Home?", "@Received let theme: Theme"]),
+			seamFixtureType(named: "Theme", isFinalClass: true, declarations: []),
+		])
+
+		#expect(variantCount(ofNodeDeclaring: "Leaf as leaf: Leaf", in: report) == 2, "\(report.world)")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_answersBoundButNotProvided_whenNearestDeclarationOfLabelIsAnotherType() async throws {
+		// `Entry0` binds `mark: OtherMark` before it builds `ring0Builder`, whose `Ring0` receives `mark: Mark?` only if
+		// available: the answer at the edge is bound, but provides no form the subtree reads, so the call passes `nil`, as
+		// the generated `Ring0(ring1Builder: ring1Builder, mark: nil)` does. A farther `mark: Mark` above `Entry0` would be
+		// rejected as hidden in the chain, so nothing farther is handed.
+		let report = try await rootReport(of: [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let entry0: Entry0"]),
+			seamFixtureType(named: "Entry0", isFinalClass: true, declarations: ["@Instantiated let mark: OtherMark", "@Instantiated let ring0Builder: Instantiator<Ring0>"]),
+			seamFixtureType(named: "Ring0", isFinalClass: true, declarations: ["@Instantiated let ring1Builder: Instantiator<Ring1>", "@Received(onlyIfAvailable: true) let mark: Mark?"]),
+			seamFixtureType(named: "Ring1", isFinalClass: true, declarations: ["@Instantiated let ring0Builder: Instantiator<Ring0>"]),
+			seamFixtureType(named: "Mark", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "OtherMark", isFinalClass: true, declarations: []),
+		])
+
+		// The call of `Ring0` answers its two reads of `mark` (only if available, and optional) by `mark: OtherMark`.
+		#expect(report.world.contains("[\"bound beingBuilt\", \"bound declared not provided\", \"bound declared not provided\"]"), "\(report.world)")
+		#expect(report.world.components(separatedBy: "not provided").count == 3, "\(report.world)")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_ordersParametersAsBodyFirstReceives_whenAnEarlierSiblingReadsALaterLabelFirst() async throws {
+		// `Early` reads `alpha` before the world reaches `Ring0`, so the world's reads order `alpha` first (and read
+		// `ring0Builder`, the label of the cycle `Ring1` closes, which is no parameter), while
+		// `Ring0`'s body receives `zeta` itself before its `leaf` receives `alpha`: the generated functions are
+		// `__safeDI_ring0Builder(zeta: Zeta?, alpha: Alpha?)` and `__safeDI_ring1Builder(zeta: Zeta?, alpha: Alpha?)`.
+		let report = try await rootReport(of: [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let entry0: Entry0"]),
+			seamFixtureType(named: "Entry0", isFinalClass: true, declarations: ["@Instantiated let alpha: Alpha", "@Instantiated let zeta: Zeta", "@Instantiated let early: Early", "@Instantiated let ring0Builder: Instantiator<Ring0>"]),
+			seamFixtureType(named: "Early", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let alpha: Alpha?"]),
+			seamFixtureType(named: "Ring0", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let zeta: Zeta?", "@Instantiated let leaf: Leaf", "@Instantiated let ring1Builder: Instantiator<Ring1>"]),
+			seamFixtureType(named: "Leaf", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let alpha: Alpha?"]),
+			seamFixtureType(named: "Ring1", isFinalClass: true, declarations: ["@Instantiated let ring0Builder: Instantiator<Ring0>"]),
+			seamFixtureType(named: "Alpha", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "Zeta", isFinalClass: true, declarations: []),
+		])
+		let graph = report.graph
+		func labelTexts(_ labels: some Sequence<WorldLabelID>) -> [String] {
+			labels.map { graph.labelTexts[Int($0)] }
+		}
+		let ring0 = try #require(report.nodes.firstIndex { $0.description.hasPrefix("Ring0 ") })
+		let ring1 = try #require(report.nodes.firstIndex { $0.description.hasPrefix("Ring1 ") })
+
+		#expect(labelTexts(graph.labels(of: Int32(ring0))) == ["alpha", "ring0Builder", "zeta"])
+		#expect(labelTexts(graph.parameterOrder(of: Int32(ring0))) == ["zeta", "alpha"])
+		#expect(labelTexts(graph.parameterOrder(of: Int32(ring1))) == ["zeta", "alpha"])
 	}
 
 	// MARK: Private

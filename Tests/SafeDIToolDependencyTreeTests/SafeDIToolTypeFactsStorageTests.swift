@@ -86,6 +86,50 @@ struct SafeDIToolTypeFactsStorageTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func generate_hidesEachAliasOncePerDeclarationOfItsLabel_whenOneLabelIsDeclaredByManyTypes() async throws {
+		// Every `Feature` declares `m`, each of another type, and one tree beneath the first reads `m` through an alias
+		// received only if available. A declaration hides the alias of its label, one column, however many properties
+		// share the label: the hidden columns grow with the declarations, where hiding every property of the label grew
+		// with their square.
+		var hiddenColumnCounts = [Int]()
+		for featureCount in [8, 32] {
+			var types = [seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: (1...featureCount).map { "@Instantiated let feature\($0): Feature\($0)" })]
+			for feature in 1...featureCount {
+				let declarations = feature == 1
+					? ["@Instantiated let m: Model1", "@Instantiated let reader: Reader"]
+					: ["@Instantiated let m: Model\(feature)"]
+				types.append(seamFixtureType(named: "Feature\(feature)", isFinalClass: true, declarations: declarations))
+				types.append(seamFixtureType(named: "Model\(feature)", isFinalClass: true, declarations: []))
+			}
+			types.append(seamFixtureType(named: "Reader", isFinalClass: true, declarations: [#"@Received(fulfilledByDependencyNamed: "m", ofType: Model1.self, onlyIfAvailable: true) let model: Model1?"#]))
+			let report = try await report(ofRoot: "Root", in: types)
+			hiddenColumnCounts.append(report.graph.aliasHiddenColumnCount)
+		}
+		#expect(hiddenColumnCounts == [8, 32])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func generate_hidesEveryAliasOfALabelPerDeclaration_whenEachTypeDeclaringTheLabelAliasesItsOwnProperty() async throws {
+		// The case the label hiding leaves quadratic: every `Feature` declares `m` of another type, and a tree beneath each
+		// reads its own `m` through an alias received only if available, so the label has as many aliases as declarations
+		// and each declaration hides all of them. The move of the facts graph onto the run's IDs owns hiding by label ID.
+		var hiddenColumnCounts = [Int]()
+		for featureCount in [8, 32] {
+			var types = [seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: (1...featureCount).map { "@Instantiated let feature\($0): Feature\($0)" })]
+			for feature in 1...featureCount {
+				types.append(seamFixtureType(named: "Feature\(feature)", isFinalClass: true, declarations: ["@Instantiated let m: Model\(feature)", "@Instantiated let reader: Reader\(feature)"]))
+				types.append(seamFixtureType(named: "Model\(feature)", isFinalClass: true, declarations: []))
+				types.append(seamFixtureType(named: "Reader\(feature)", isFinalClass: true, declarations: ["@Received(fulfilledByDependencyNamed: \"m\", ofType: Model\(feature).self, onlyIfAvailable: true) let model: Model\(feature)?"]))
+			}
+			let report = try await report(ofRoot: "Root", in: types)
+			hiddenColumnCounts.append(report.graph.aliasHiddenColumnCount)
+		}
+		#expect(hiddenColumnCounts == [8 * 8, 32 * 32])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func generate_buildsTypeFactsGraphOfFlatColumns_whenWorldIsLifelikeOrHubDoublesItsPaths() async throws {
 		// Section 15: the graph holds only flat columns, no array inside a column's elements, so what its build allocates
 		// grows with its elements, which the test above bounds. Allocations and retains are not counted: the runtime's

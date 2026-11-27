@@ -19,11 +19,12 @@
 // SOFTWARE.
 
 extension NodeRecords {
-	/// Every kind stage 1 does not make that `declaration` is of, in the order they are checked.
+	/// Every kind `builtByInitializer` does not make that `declaration` is of, in the order they are checked: the refusals
+	/// another kind's claim may discharge.
 	static func refusalsOfBuiltByInitializer(_ declaration: DeclarationID, in world: some NodeRecordSources) -> [NodeRecordRefusal] {
 		var refusals = [NodeRecordRefusal]()
-		// Every other construction is a call of another module's code, a hand-written mock or a fill, which a later stage or
-		// another lane's kind makes.
+		// Every other construction is a call of another module's code, a hand-written mock or a fill, which another kind
+		// makes or node records refuse.
 		if world.construction(of: declaration) != .initializer {
 			refusals.append(.construction)
 		}
@@ -38,7 +39,10 @@ extension NodeRecords {
 			refusals.append(.erased)
 		case .lazy:
 			refusals.append(.lazy)
-		case .alias, .hole:
+		case .hole:
+			// A hole's scope is the one that declares it, whose own node is checked for what it holds.
+			return [.renameOrHole]
+		case .alias:
 			refusals.append(.renameOrHole)
 		}
 		if world.isOnCycle(declaration) {
@@ -58,7 +62,10 @@ extension NodeRecords {
 			switch propertyToGenerate {
 			case .instantiated:
 				break
-			case .hole, .aliased:
+			case .hole:
+				// A hole is a node of its own, whose kind is checked there.
+				break
+			case .aliased:
 				refusals.append(.renameOrHole)
 			}
 		}
@@ -83,6 +90,8 @@ extension NodeRecords {
 	/// place is erased, is `@Sendable` and always declares its builder function, it reads of the node.
 	/// - Parameter lazilyInstantiatedInstanceProperties: The by-value properties the node's type receives as the instance
 	///   of a lazily instantiated property declared above it (`DeclarationsAnsweringReads`).
+	/// - Parameter declaresFunction: Whether the caller's kind begins the builder function with a statement of its own, so
+	///   that a constant declares it too.
 	static func builtByInitializerRecord(
 		of declaration: DeclarationID,
 		variant _: VariantID,
@@ -92,6 +101,7 @@ extension NodeRecords {
 		typesDeclaredEscaping: Set<TypeDescription>,
 		children: [GeneratedCode],
 		lineEnd: String = "",
+		declaresFunction: Bool = false,
 	) throws -> BuiltPlaceRecord {
 		let instantiable = world.scope(of: declaration).instantiable
 		// Every node but the root is built as a property, and has an initializer (`refusalsOfBuiltByInitializer(_:in:)`).
@@ -125,8 +135,9 @@ extension NodeRecords {
 			isSendable: isSendable,
 			typesDeclaredEscaping: typesDeclaredEscaping,
 			lineEnd: lineEnd,
-			// A wrapper always declares its builder function; a constant only where its body has a statement.
-			hasFunction: isWrapper || !children.isEmpty,
+			// A wrapper always declares its builder function; a constant only where its body has a statement, or where the
+			// caller's kind begins it with one (`declaresFunction`).
+			hasFunction: declaresFunction || isWrapper || !children.isEmpty,
 			children: children,
 			node: PlanNode(),
 		)
