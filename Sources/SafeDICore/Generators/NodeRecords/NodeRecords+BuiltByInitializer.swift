@@ -19,11 +19,12 @@
 // SOFTWARE.
 
 extension NodeRecords {
-	/// Every kind stage 1 does not make that `declaration` is of, in the order they are checked.
+	/// Every kind `builtByInitializer` does not make that `declaration` is of, in the order they are checked: the refusals
+	/// another kind's claim may discharge.
 	static func refusalsOfBuiltByInitializer(_ declaration: DeclarationID, in world: some NodeRecordSources) -> [NodeRecordRefusal] {
 		var refusals = [NodeRecordRefusal]()
-		// Every other construction is a call of another module's code, a hand-written mock or a fill, which a later stage or
-		// another lane's kind makes.
+		// Every other construction is a call of another module's code, a hand-written mock or a fill, which another kind
+		// makes or node records refuse.
 		if world.construction(of: declaration) != .initializer {
 			refusals.append(.construction)
 		}
@@ -38,7 +39,10 @@ extension NodeRecords {
 			refusals.append(.erased)
 		case .lazy:
 			refusals.append(.lazy)
-		case .alias, .hole:
+		case .hole:
+			// A hole's scope is the one that declares it, whose own node is checked for what it holds.
+			return [.renameOrHole]
+		case .alias:
 			refusals.append(.renameOrHole)
 		}
 		if world.isOnCycle(declaration) {
@@ -58,7 +62,10 @@ extension NodeRecords {
 			switch propertyToGenerate {
 			case .instantiated:
 				break
-			case .hole, .aliased:
+			case .hole:
+				// A hole is a node of its own, whose kind is checked there.
+				break
+			case .aliased:
 				refusals.append(.renameOrHole)
 			}
 		}
@@ -79,11 +86,12 @@ extension NodeRecords {
 
 	/// The record of `declaration`'s place, a node its type's initializer builds, as a constant or in any of SafeDI's
 	/// wrappers, whose body builds `children`, whose tree declares `typesDeclaredEscaping` `@escaping`, whose construction
-	/// is passed `nil` for `unavailableProperties`, whose line constructing the type ends with `lineEnd`, and which declares
-	/// its builder function where `declaresFunction`. Whether the place is erased, is `@Sendable` and always declares its
-	/// builder function, it reads of the node.
+	/// is passed `nil` for `unavailableProperties`, and whose line constructing the type ends with `lineEnd`. Whether the
+	/// place is erased, is `@Sendable` and always declares its builder function, it reads of the node.
 	/// - Parameter lazilyInstantiatedInstanceProperties: The by-value properties the node's type receives as the instance
 	///   of a lazily instantiated property declared above it (`DeclarationsAnsweringReads`).
+	/// - Parameter declaresFunction: Whether the caller's kind begins the builder function with a statement of its own, so
+	///   that a constant declares it too.
 	static func builtByInitializerRecord(
 		of declaration: DeclarationID,
 		variant _: VariantID,
