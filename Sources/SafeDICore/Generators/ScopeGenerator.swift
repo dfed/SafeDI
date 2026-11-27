@@ -8592,6 +8592,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			declarationReference: declarationReference,
 			unavailableProperties: unavailableProperties,
 		)
+		let readsOptionalInstance = fulfillingExpression == "\(fulfillingProperty.label)?.\(Dependency.lazilyInstantiatedInstancePropertyName)"
 		let record: PlaceRecord? = if fulfillingExpression == nil {
 			// An alias bound to `nil` reads nothing, which its record lists, so the type key lays it out as written.
 			if Self.aliasIsBoundToNil(onlyIfAvailable: onlyIfAvailable, fulfillingProperty: fulfillingProperty, unavailableProperties: unavailableProperties) {
@@ -8599,6 +8600,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			} else {
 				.alias(AliasPlaceRecord(property: property, fulfillingProperty: fulfillingProperty, text: aliasCode))
 			}
+		} else if !readsOptionalInstance {
+			// A seam's own alias bound from a deferred parameter's autoclosure (`SeamRoot.autoclosureCallByLabel(of:)`) reads
+			// no declaration: the autoclosure is the initializer's parameter, which nothing else reads.
+			.alias(AliasPlaceRecord(property: property, fulfillingProperty: nil, text: aliasCode, reads: []))
 		} else {
 			nil
 		}

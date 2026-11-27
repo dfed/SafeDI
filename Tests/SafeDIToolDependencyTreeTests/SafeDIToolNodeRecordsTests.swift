@@ -995,6 +995,63 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 		#expect(reports.flatMap(\.differences) == [])
 	}
 
+	@Test
+	mutating func generate_laysOutASeamsOwnRootAsTheTreeDoes_whenItsRenameKeepsADeferredParametersLabel() async throws {
+		// `Screen` retypes its pass-through `token` under its own label, so the rename is the parameter's only reader, bound
+		// from the parameter's autoclosure, with no memo beside it.
+		let files = [
+			seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let token: Secret", "@Instantiated let screen: Screen"]),
+			"""
+			@Instantiable(generateDependencyTree: true)
+			public struct Screen: Instantiable {
+			    public init(token: any Auth, detailBuilder: Instantiator<Detail>) {
+			        self.token = token
+			        self.detailBuilder = detailBuilder
+			    }
+
+			    @Received(fulfilledByDependencyNamed: "token", ofType: Secret.self) let token: any Auth
+			    @Instantiated let detailBuilder: Instantiator<Detail>
+			}
+			""",
+			seamFixtureType(named: "Detail", declarations: ["@Received let token: any Auth"]),
+			"""
+			public protocol Auth: Sendable {}
+
+			@Instantiable
+			public final class Secret: Instantiable, Auth {
+			    public init() {}
+			}
+			""",
+		]
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: files, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
+		extension Screen {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public init(__safeDI_token __safeDI_token_: @autoclosure @escaping () -> Secret) {
+		        #sourceLocation(file: "\(output.fixtures["Screen.swift"])", line: 8)
+		        let token: any Auth = __safeDI_token_()
+		        #sourceLocation()
+		        @inline(never) func __safeDI_detailBuilder() -> Detail {
+		            Detail(token: token)
+		        }
+		        let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
+		        self.init(token: token, detailBuilder: detailBuilder)
+		    }
+		}
+
+		extension Screen {
+		    public enum __safeDI_Screen_55AF83B7D12DE285 {}
+		}
+		""")
+		let screenReports = reports.filter { $0.root == "Screen" }
+		#expect(screenReports.map(\.refusal) == [nil])
+		#expect(screenReports.map(\.isLaidOutFromNodeRecords) == [true])
+		#expect(reports.flatMap(\.differences) == [])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
