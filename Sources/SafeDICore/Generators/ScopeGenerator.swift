@@ -9314,7 +9314,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					fillPlaceBindings: fillPlaceBindings,
 				) : nil
 			} else if let seamCall {
-				try seamCallRecord(of: property, instantiable: instantiable, seamCall: seamCall, erasedToConcreteExistential: erasedToConcreteExistential, forwardedProperties: forwardedProperties, code: code, declaredFunctionName: functionName, unavailableProperties: unavailableProperties, builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings, inlinePlaceBuilder: inlinePlaceBuilder, separatesValuesBindings: separatesValuesBindings, inPlaceStatements: nil, lineEnd: constructionLineEnd)
+				// A wrapped seam call without forwarded values that binds nothing first is spelled where its place is (`InPlaceCall`).
+				try seamCallRecord(of: property, instantiable: instantiable, seamCall: seamCall, erasedToConcreteExistential: erasedToConcreteExistential, forwardedProperties: forwardedProperties, code: code, declaredFunctionName: functionName, unavailableProperties: unavailableProperties, builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings, inlinePlaceBuilder: inlinePlaceBuilder, separatesValuesBindings: separatesValuesBindings, inPlaceStatements: forwardedProperties.isEmpty && valuesBindingLines.isEmpty && unboxingLines.isEmpty && forwardedInnerScopeLines.isEmpty && rebindingLines.isEmpty ? (before: memberCallCode, after: fillPlaceBindingLines + childCode) : nil, lineEnd: constructionLineEnd)
 			} else {
 				try builtRecord(functionName: functionName, hasFunction: true, rebindings: rebindingLines)
 			}
