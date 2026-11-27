@@ -2009,6 +2009,8 @@ extension DependencyTreeGenerator {
 		///   - receivableProperties: What the scopes `scope` is built inside make available to it.
 		///   - propertyStack: The properties of the scopes `scope` is built inside, innermost first.
 		///   - parentTypeStack: The concrete types of those scopes, beside `propertyStack`.
+		///   - depths: In the walk of a tree, `ScopeToValidate.closestDeclarationDepthByLabel` and
+		///     `receivableDepthByProperty` of `scope`.
 		///   - changedContext: For a scope of a tree a cycle-closing scope builds again, what is new there to the tree (see
 		///     `ScopeBuiltAgain`): only a receive whose hiding declaration is new, or that only a new receivable property
 		///     provides, is recorded, since the tree's first build judged every other receive as this one would.
@@ -2019,11 +2021,22 @@ extension DependencyTreeGenerator {
 			propertyStack: [Property],
 			parentTypeStack: [TypeDescription],
 			root: TypeDescription,
+			depths: (closestDeclarationDepthByLabel: LayeredMap<String, Int>, receivableDepthByProperty: LayeredMap<Property, Int>)? = nil,
 			changedContext: (newLabels: Set<String>, newReceivableProperties: Set<Property>)? = nil,
 		) {
 			// Whether the tree's first build received `property` here.
 			func firstBuildReceives(_ property: Property) -> Bool {
 				receivableProperties.contains(property) && changedContext?.newReceivableProperties.contains(property) != true
+			}
+			// Whether each of `properties` that is receivable here has been only since a scope built beneath the one that
+			// makes the closest declaration of `label`. Never in the walk of a tree a cycle builds again, which is handed
+			// no depths.
+			func isReceivableOnlyBeneathClosestDeclaration(_ properties: Set<Property>, ofLabel label: String) -> Bool {
+				let closestDeclarationDepth = depths?.closestDeclarationDepthByLabel[label]
+				return properties.allSatisfy { property in
+					!receivableProperties.contains(property)
+						|| depths?.receivableDepthByProperty[property].flatMap { depth in closestDeclarationDepth.map { depth > $0 } } == true
+				}
 			}
 			// A builder an internal mock passes up to its own parameter, which the leaf that calls the public mock receives
 			// under the builder's label, is a receive no declaration the person wrote can fulfill: the mock names the
@@ -2057,6 +2070,16 @@ extension DependencyTreeGenerator {
 				      // declares every received dependency at its root, above every hiding declaration.
 				      cyclesOnly || acceptedProperties.contains(where: receivableProperties.contains)
 				else {
+					continue
+				}
+				// `query graph` builds the trees of a graph mid-edit around the receives it was told nothing provides, each of
+				// which still makes its property receivable beneath it. A property receivable only since a scope beneath the
+				// closest declaration of its label is receivable only so, since every other scope that makes a property
+				// receivable declares it: the value will be declared above that receive, and whether above or beneath the
+				// closest declaration is not known, so no fix makes `generate` report this receive alone. The clean-subtree
+				// key does not hold the depth since which a property is receivable, so the subtree is not remembered as clean.
+				guard unfulfilledReceiveLocations.isEmpty || !isReceivableOnlyBeneathClosestDeclaration(acceptedProperties, ofLabel: receivedProperty.label) else {
+					memoBlockingEventCount += 1
 					continue
 				}
 				if let changedContext {
@@ -2649,6 +2672,9 @@ extension DependencyTreeGenerator {
 				let parentContainsProperty = receivableProperties.contains(receivedProperty)
 				let propertyIsCreatedAtThisScope = scope.createdProperties.contains(receivedProperty)
 				guard !parentContainsProperty, !propertyIsCreatedAtThisScope, property != nil else { continue }
+				// `query graph` builds the trees of a graph mid-edit around the receives it was told nothing provides: one of
+				// them is no event here, so a subtree that holds it can still be remembered as clean.
+				guard requiredReceivedProperty.declarationLocation.map(unfulfilledReceiveLocations.contains) != true else { continue }
 				// The instantiation stack holds a lazily instantiated property as the constant it stands for.
 				let beingBuiltIndex = receivableProperties.contains(receivedProperty.asUnwrappedProperty)
 					? nil
@@ -2708,6 +2734,7 @@ extension DependencyTreeGenerator {
 					propertyStack: propertyStack,
 					parentTypeStack: scopeToValidate.parentTypeStack,
 					root: root,
+					depths: (scopeToValidate.closestDeclarationDepthByLabel, scopeToValidate.receivableDepthByProperty),
 				)
 			}
 

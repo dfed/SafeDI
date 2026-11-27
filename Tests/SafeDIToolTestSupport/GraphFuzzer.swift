@@ -7979,7 +7979,7 @@ enum GraphFuzzerGenerator {
 			let badgeValue = "\(badgeName)(repeatBadgeDetail: \(badgeDetailValue))"
 			let screenProtocolName = "\(screenName)Protocol"
 			let badgeProtocolName = "\(badgeName)Protocol"
-			var root = TypeDeclaration(
+			let root = TypeDeclaration(
 				name: rootName,
 				instantiableArguments: ["generateMock: true"],
 				properties: [PropertyDeclaration(attribute: "@Instantiated", label: "repeatScreen", type: screenProtocolName)],
@@ -14698,6 +14698,14 @@ struct GraphFuzzerFailure: Equatable {
 		/// `query graph` names other suppliers for a receive than the generated code hands it, or the oracle cannot follow
 		/// a read of the generated code (`GraphFuzzerToolRuns.querySuppliersFailure`).
 		case querySuppliersDifferFromGeneratedCode = "query graph names other suppliers for a receive than the generated code hands it"
+		/// `query graph` marks a dependency unfulfilled that neither `generate` reports nor it reports once each type no
+		/// declaration fulfills is declared, or marks none where its trees are partial or one where they are not, or leaves
+		/// a dependency `generate` reports unmarked (`GraphFuzzerToolRuns.queryUnfulfilledFailure`).
+		case queryMarksOtherDependenciesUnfulfilled = "query graph marks other dependencies unfulfilled than the errors generate reports name"
+		/// `query graph`'s export of a graph the tool accepts, with a type's declaration or a property that provides a value
+		/// deleted, is not the graph's own export but for what read the deleted declaration
+		/// (`GraphFuzzerToolRuns.queryDeletionFailure`).
+		case queryProvenanceMovesWhenDeclarationIsDeleted = "query graph moves what a receive is handed when another declaration is deleted"
 		/// The graph names a type no declaration SafeDI reads declares, and its read twin (`GraphFuzzerFixture.readTwin`),
 		/// which declares that type `public` where SafeDI reads it, gets another verdict, other diagnostics, or other
 		/// generated code: SafeDI counts the type otherwise than as `public` (decision 54).
@@ -15584,6 +15592,14 @@ struct GraphFuzzerToolRuns {
 	///     (`GraphFuzzerGenerator.drawnHolePlaces(forSeed:features:)`), which the builder surface's floors count.
 	///   - queryExport: The JSON `query graph` exports for a graph in one module the tool accepts, which
 	///     `querySuppliersFailure` compares with the generated code.
+	///   - rejectedQueryExport: The JSON `query graph` exports for a graph in one module the tool rejects, which
+	///     `queryUnfulfilledFailure` judges.
+	///   - missingTypesDeclaredOutcome: The outcome of that graph with an empty declaration of each type the export marks
+	///     missing, with no seam, where the export has partial trees built around such a type.
+	///   - queryDeletion: The declaration the deletion oracle deletes from a graph in one module the tool accepts, with
+	///     the JSON `query graph` exports for the graph without it, which `queryDeletionFailure` judges.
+	///   - queryProviderDeletion: The property that provides a value the deletion oracle deletes from that graph, with
+	///     the JSON `query graph` exports for the graph without it, which `queryDeletionFailure` judges too.
 	init(
 		fixture: GraphFuzzerFixture,
 		firstOutcome: GraphFuzzerToolOutcome,
@@ -15609,8 +15625,16 @@ struct GraphFuzzerToolRuns {
 		builderSurfaceRuns: [GraphFuzzerBuilderSurfaceRun] = [],
 		drawnHolePlaces: [GraphFuzzerDrawnHolePlace] = [],
 		queryExport: String? = nil,
+		rejectedQueryExport: String? = nil,
+		missingTypesDeclaredOutcome: GraphFuzzerUnfulfilledDependencies.OutcomeWithMissingTypesDeclared? = nil,
+		queryDeletion: (deletion: GraphFuzzerQueryDeletion, export: String)? = nil,
+		queryProviderDeletion: (deletion: GraphFuzzerQueryProviderDeletion, export: String)? = nil,
 	) {
 		self.queryExport = queryExport
+		self.rejectedQueryExport = rejectedQueryExport
+		self.missingTypesDeclaredOutcome = missingTypesDeclaredOutcome
+		self.queryDeletion = queryDeletion
+		self.queryProviderDeletion = queryProviderDeletion
 		self.builderSurfaceRuns = builderSurfaceRuns
 		self.drawnHolePlaces = drawnHolePlaces
 		self.withoutSecondHolePlaceOutcome = withoutSecondHolePlaceOutcome
@@ -15665,6 +15689,10 @@ struct GraphFuzzerToolRuns {
 	let builderSurfaceRuns: [GraphFuzzerBuilderSurfaceRun]
 	let drawnHolePlaces: [GraphFuzzerDrawnHolePlace]
 	let queryExport: String?
+	let rejectedQueryExport: String?
+	let missingTypesDeclaredOutcome: GraphFuzzerUnfulfilledDependencies.OutcomeWithMissingTypesDeclared?
+	let queryDeletion: (deletion: GraphFuzzerQueryDeletion, export: String)?
+	let queryProviderDeletion: (deletion: GraphFuzzerQueryProviderDeletion, export: String)?
 
 	/// The failure of a graph some place of whose seam's tree has a path that repeats a declaration, or `nil`: the tree
 	/// closes a cycle where a declaration is already being built above, and a build that closes a cycle is the first build,
@@ -16498,7 +16526,7 @@ enum GraphFuzzerOracle {
 			let renamedGraphFailures = runs.renamedGraphFailures(refutingOrderOf: valueComparisons.listOrderRefutations[runs.fixture.seed] ?? [:])
 			var failures = [runs.runsDifferFailure, runs.cleanSubtreeSkipFailure, runs.differentialFailure, runs.acceptanceDifferentialFailure, runs.integrationsDisagreeFailure, runs.storedSeamSignaturesDisagreeFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.seamRejectedWhereInlineAcceptsFailure, runs.nilArgumentFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.publicMockRootLevelFailure, runs.publicMockOverrideClosureFailure, runs.publicMockOverridesOrderFailure, runs.omittedValueFailure, codeCompilationFailures[runs.fixture.seed], runs.valueOracleFixtureFailure].compactMap(\.self)
 			failures.append(contentsOf: valueComparisons.failures[runs.fixture.seed] ?? [])
-			failures.append(contentsOf: [runs.wrapperParameterFailure, runs.generatedCodeCallsEntryMeantForPeopleFailure, runs.generatedOnlyInitializerTakesDefaultFailure, runs.carrierMemberReadApartFailure, runs.configurationStorageFailure, runs.handWrittenMockBypassFailure, runs.readTwinFailure, runs.holeNameStabilityFailure, runs.builderSurfaceFailure, builderCallFailures[runs.fixture.seed], runs.builderLabelFailure, runs.sameSupplyFailure, runs.sameSupplyEditRejectedFailure, runs.addedSupplyFailure, runs.forwardedValuesFailure, runs.forwardingRemedyFailure, runs.remedyBuildersFailure, runs.callingMockFailure, runs.placeLevelsFailure, runs.rootFunctionKeyFailure, runs.placesJudgedByAnotherPlacesFillFailure, runs.placeChainFailure, runs.secondPathFailure, runs.multiModuleFailures.first, runs.remedyFailure, runs.querySuppliersFailure].compactMap(\.self))
+			failures.append(contentsOf: [runs.wrapperParameterFailure, runs.generatedCodeCallsEntryMeantForPeopleFailure, runs.generatedOnlyInitializerTakesDefaultFailure, runs.carrierMemberReadApartFailure, runs.configurationStorageFailure, runs.handWrittenMockBypassFailure, runs.readTwinFailure, runs.holeNameStabilityFailure, runs.builderSurfaceFailure, builderCallFailures[runs.fixture.seed], runs.builderLabelFailure, runs.sameSupplyFailure, runs.sameSupplyEditRejectedFailure, runs.addedSupplyFailure, runs.forwardedValuesFailure, runs.forwardingRemedyFailure, runs.remedyBuildersFailure, runs.callingMockFailure, runs.placeLevelsFailure, runs.rootFunctionKeyFailure, runs.placesJudgedByAnotherPlacesFillFailure, runs.placeChainFailure, runs.secondPathFailure, runs.multiModuleFailures.first, runs.remedyFailure, runs.querySuppliersFailure, runs.queryUnfulfilledFailure, runs.queryDeletionFailure].compactMap(\.self))
 			failures.append(contentsOf: runs.scopeCaseFailures)
 			// Whether a closure a level function returns keeps a level's values, read from the generated text, so it judges
 			// with compiles and without.
@@ -17447,8 +17475,32 @@ enum GraphFuzzerOracle {
 		// A graph in one module the tool accepts is exported by `query graph`, whose suppliers must be what the generated code
 		// hands each receive (`querySuppliersFailure`).
 		var queryExport: String?
-		if fixture.modules == nil, !drawnFeatures.contains(.generateMockPublic), case .accepted = firstOutcome {
-			queryExport = try await GraphFuzzerQuerySupplies.export(of: fixture)
+		// A graph in one module the tool rejects is exported too, whose dependencies marked unfulfilled must be where the
+		// errors it reports are (`queryUnfulfilledFailure`).
+		var rejectedQueryExport: String?
+		var missingTypesDeclaredOutcome: GraphFuzzerUnfulfilledDependencies.OutcomeWithMissingTypesDeclared?
+		var queryDeletion: (deletion: GraphFuzzerQueryDeletion, export: String)?
+		var queryProviderDeletion: (deletion: GraphFuzzerQueryProviderDeletion, export: String)?
+		if fixture.modules == nil, !drawnFeatures.contains(.generateMockPublic) {
+			switch firstOutcome {
+			case .accepted:
+				let export = try await GraphFuzzerQuerySupplies.export(of: fixture)
+				queryExport = export
+				// The graph is exported again without one of its declarations, which must move no other receive's suppliers
+				// (`queryDeletionFailure`).
+				if let deletion = try? GraphFuzzerQueryDeletion(exportedJSON: export, fixture: fixture) {
+					queryDeletion = try await (deletion, GraphFuzzerQuerySupplies.export(of: deletion.fixtureWithoutDeclaration))
+				}
+				if let deletion = try? GraphFuzzerQueryProviderDeletion(exportedJSON: export, fixture: fixture) {
+					queryProviderDeletion = try await (deletion, GraphFuzzerQuerySupplies.export(of: deletion.fixtureWithoutProperty))
+				}
+			case .rejected:
+				let export = try await GraphFuzzerQuerySupplies.export(of: fixture)
+				rejectedQueryExport = export
+				// Where the export has partial trees built around a missing type, the graph is run again with each missing
+				// type declared: its errors are the further marks, and the export marks every one of them.
+				missingTypesDeclaredOutcome = try await (try? GraphFuzzerUnfulfilledDependencies(exportedJSON: export))?.outcomeWithMissingTypesDeclared(of: fixture)
+			}
 		}
 		return try await GraphFuzzerToolRuns(
 			fixture: fixture,
@@ -17492,6 +17544,10 @@ enum GraphFuzzerOracle {
 			builderSurfaceRuns: builderSurfaceRuns,
 			drawnHolePlaces: drawnHolePlaces,
 			queryExport: queryExport,
+			rejectedQueryExport: rejectedQueryExport,
+			missingTypesDeclaredOutcome: missingTypesDeclaredOutcome,
+			queryDeletion: queryDeletion,
+			queryProviderDeletion: queryProviderDeletion,
 		)
 	}
 
