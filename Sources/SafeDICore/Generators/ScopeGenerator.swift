@@ -1357,6 +1357,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		ownerConcreteTypeStack: [TypeDescription],
 		ownerLazilyInstantiatedInstanceProperties: Set<Property> = [],
 		carrierSite: SeamHoles.CarrierSite? = nil,
+		siteRouteMembers: [SeamSignature.Hole.RouteStep.Member?] = [],
 	) {
 		scopeData = .hole(property: holeProperty, erasedToConcreteExistential: erasedToConcreteExistential, site: site)
 		self.ownerPropertyStack = ownerPropertyStack
@@ -1411,6 +1412,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var seamAndFillFields = SeamAndFillFields()
 		seamAndFillFields.valuesBindings = carrierSite?.formations ?? []
 		seamAndFillFields.siteCarrierUse = carrierSite?.use
+		seamAndFillFields.siteRouteMembers = siteRouteMembers
 		seamAndFillFieldsStorage = SeamAndFillFieldsStorage.storing(seamAndFillFields)
 		isBuiltByFill = false
 		fillReturnsWrapperBuilder = false
@@ -1457,6 +1459,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			scopeData = .hole(property: property, erasedToConcreteExistential: erasedToConcreteExistential, site: site)
 			fields.valuesBindings = carrierSite?.formations ?? []
 			fields.siteCarrierUse = carrierSite?.use
+			fields.siteRouteMembers = seamHoles.routeMembers(at: sitePath)
 			fieldsCarriedBySites = Set((site.map(Self.fieldsCarried(by:)) ?? []).map(\.property))
 		case let .root(instantiable, _):
 			scopeData = .root(instantiable: instantiable, seamRoot: seamRoot)
@@ -1667,6 +1670,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			"publicMockOverrideBuilders": .copied,
 			"fillFieldSelection": .copied,
 			"siteCarrierUse": .recomputed,
+			"siteRouteMembers": .recomputed,
 			"fillCarrierUse": .copied,
 			"fillsStoodFor": .copied,
 			"buildsFillOfEveryPlace": .copied,
@@ -3734,7 +3738,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// type is constructed, in the order the tree's code is generated, or `nil` where generation passes `nil`
 	/// (`unavailableProperties`). Where that declaration is a parameter of a builder function a lazy cycle closes on, the
 	/// value is the one each call of the function passes (see `OmissionFindings`). Also returns the concrete type of each
-	/// scope the tree constructs, in the order the walk meets them.
+	/// scope the tree constructs, in the order the walk meets them. `query graph` runs it only for trees built around
+	/// received dependencies nothing provides, which the fold that replaced it does not read yet, and otherwise only the
+	/// fold's oracle runs it (`TypeFactsReceivedValueSuppliesObservation`), since it enters every path of the tree.
 	///
 	/// A receive `unfulfilledReceives` holds is one the tree was built around although nothing provides it in some place
 	/// (`DependencyTreeGenerator.unfulfilledReceiveLocations`). Where nothing provides it, it is handed nothing, and an
@@ -4222,7 +4228,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// The types the tree rooted at this scope builds that its declarations do not name: through a `fulfilledByType:`
 	/// string or a `fulfillingAdditionalTypes:` entry, or as what a mock promotes for such a property, and, in a mock, by
 	/// calling a hand-written mock another module merges in. The code generated for the tree names each, while no
-	/// declaration of the property does, so no file SafeDI read need import its module.
+	/// declaration of the property does, so no file SafeDI read need import its module. A root's file takes its imports
+	/// from its world's declarations instead (`TypeFactsImports`), which the tests compare with this walk of its tree.
 	/// - Parameter buildingMock: Whether the tree is a mock's, which builds a type with its hand-written mock.
 	func fulfillersOfTree(buildingMock: Bool) async -> Set<FulfillerImports.Fulfiller> {
 		var fulfillers = Set<FulfillerImports.Fulfiller>()
@@ -4952,6 +4959,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	struct SeamRoot: Sendable {
 		/// The signature of the generated initializer.
 		let signature: SeamSignature
+		/// How the seam's tree hands each inner seam's enum up from a call whose case is in an enum nested by type. Only
+		/// the generation of the seam's own tree reads them, so no signature holds them and no module info file stores
+		/// them: a root read from a file, and a root a seam is called through before its signature is computed, have none.
+		let callRoutes: [SeamSignature.CallRoute]
+		/// The member call each step of the route to each of the seam's own sites makes, in the route's order
+		/// (`SeamSignature.Hole.RouteStep.Member`). As `callRoutes`, only the generation of the seam's own tree reads them, so
+		/// no signature holds them and no module info file stores them.
+		let routeMembersBySite: [SeamSignature.Hole.Site: [SeamSignature.Hole.RouteStep.Member?]]
 		/// The comment the generated `public` declarations' file carries, naming the types they name that SafeDI reads
 		/// no declaration of, or `nil` when the run writes none.
 		var unreadTypeComment: UnreadTypeComment?
@@ -5063,6 +5078,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var publicMockOverrideBuilders: [String: PublicMockOverrideBuilder]?
 		var fillFieldSelection: FillFieldSelection?
 		var siteCarrierUse: SeamCarrierValues.Use?
+		var siteRouteMembers: [SeamSignature.Hole.RouteStep.Member?] = []
 		var fillCarrierUse: SeamCarrierValues.Use?
 		var fillsStoodFor: [FillStoodFor] = []
 		var buildsFillOfEveryPlace = false
@@ -5107,6 +5123,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				|| publicMockOverrideBuilders != nil
 				|| fillFieldSelection != nil
 				|| siteCarrierUse != nil
+				|| !siteRouteMembers.isEmpty
 				|| fillCarrierUse != nil
 		}
 	}
@@ -5700,6 +5717,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		seamAndFillFieldsStorage?.fields.siteCarrierUse
 	}
 
+	/// For a hole's site, the member call each step of its route makes (`SeamHoles.routeMembers(at:)`); empty elsewhere.
+	nonisolated var siteRouteMembers: [SeamSignature.Hole.RouteStep.Member?] {
+		seamAndFillFieldsStorage?.fields.siteRouteMembers ?? []
+	}
+
 	/// For a fill of a place whose case is a seam's carrier's, how the fill takes the case's values: the struct of the run
 	/// they end, then each value after it (`SeamCarrierValues.Use`); `nil` for every other generator.
 	nonisolated private var fillCarrierUse: SeamCarrierValues.Use? {
@@ -5849,7 +5871,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	/// Whether this scope, in the tree of a fill a mock declares for another module's public mock, builds its type with
 	/// its hand-written mock, as the mock's tree built inline would (`Scope.createScopeGenerator`).
-	private let constructsWithHandWrittenMock: Bool
+	let constructsWithHandWrittenMock: Bool
 	/// How a mock tree calls the public mock another module generated for this scope's type, or `nil` for a scope
 	/// that builds its type (see `Scope.publicMockCall`).
 	nonisolated var publicMockCall: PublicMockCall? {
@@ -7907,6 +7929,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		else { return nil }
 		let body = lines[1..<(lines.count - 1)].map { Self.standardIndent + $0 }
 		// The fill binds the fields its tree reads first, each from the scope; nothing after them reads the scope.
+		// safedi-source-rule: allow stringScan — reads the first line of one inlined fill, once per fill.
 		let readsScope = carriesPayload && lines[1].hasPrefix(leadingMemberWhitespace + Self.standardIndent + "let ") && (lines[1].contains(" = scope.") || (argumentFields != nil && lines[1].contains(" = scope_")))
 		let builtProperty = fill.propertiesToGenerate.first?.property
 		let forwardedValueName = fill.fillHole?.forwardedType == nil ? nil : builtProperty.map(Self.forwardedValueParameterName(forBuilding:))
@@ -8477,9 +8500,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// text holds them too.
 			let valuesBindingPlaces = valuesBindingPlaces(builderFunctionNames: builderFunctionNames)
 			let sitePlace = Self.holeSitePlace(
-				text: (valuesBindingPlaces == nil ? valuesBindingLines : "") + Self.buildSiteCode(of: property, at: site, functionName: builderFunctionNames.functionName, readingInstancesOf: callSiteLazilyInstantiatedInstanceProperties, carrierUse: siteCarrierUse),
+				text: (valuesBindingPlaces == nil ? valuesBindingLines : "") + Self.buildSiteCode(of: property, at: site, routeMembers: siteRouteMembers, functionName: builderFunctionNames.functionName, readingInstancesOf: callSiteLazilyInstantiatedInstanceProperties, carrierUse: siteCarrierUse),
 				of: property,
 				at: site,
+				routeMembers: siteRouteMembers,
 				functionName: builderFunctionNames.functionName,
 				valuesBindings: valuesBindings,
 				readingInstancesOf: callSiteLazilyInstantiatedInstanceProperties,
@@ -9623,7 +9647,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	///     (`SeamHoles.valuesArguments(of:readingInstancesOf:bindingNamesPassedByName:lazilyInstantiatedBindingNames:)`).
 	// Kept out of `generatePropertyCode`'s async frame, as the functions that write a property's scope are.
 	@inline(never)
-	static func buildSiteCode(of property: Property, at site: SeamSignature.Hole, functionName: String?, readingInstancesOf lazilyInstantiatedInstanceProperties: Set<Property> = [], lazilyInstantiatedBindingNames: [String: [TypeDescription: String]] = [:], carrierUse: SeamCarrierValues.Use? = nil) -> String {
+	static func buildSiteCode(of property: Property, at site: SeamSignature.Hole, routeMembers: [SeamSignature.Hole.RouteStep.Member?], functionName: String?, readingInstancesOf lazilyInstantiatedInstanceProperties: Set<Property> = [], lazilyInstantiatedBindingNames: [String: [TypeDescription: String]] = [:], carrierUse: SeamCarrierValues.Use? = nil) -> String {
 		// A place nested by type is handed what its owner binds before it; the cases that lead to it carry what each type on
 		// the way binds, which the tree bound before building the next. A place in a `@Sendable` enum held in a `Sendable`
 		// wrapper carries nothing.
@@ -9639,7 +9663,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let valuesType = TypeDescription.nested(name: memberValuesTypeName, parentType: enumPlace.enumType(qualifiedBy: nil), generics: [])
 		// Inside a fill whose call's case leads on, the fill is handed the struct of its own level.
 		let lastStep = enumPlace.route.last
-		let parentName = (lastStep?.member == nil ? nil : lastStep?.innerScope?.name) ?? lastStep?.member?.bindingName ?? site.internalName
+		let lastMember = routeMembers.last ?? nil
+		let parentName = (lastMember == nil ? nil : lastStep?.innerScope?.name) ?? lastMember?.bindingName ?? site.internalName
 		let buildExpression = if ReservedName.seamCarrier(ofEnum: enumPlace.enumType(qualifiedBy: nil)) != nil {
 			// A seam's carrier takes the place's values as its member's arguments.
 			"\(parentName).\(enumPlace.caseName)(\(SeamHoles.carrierArguments(of: fields, use: carrierUse, readingInstancesOf: lazilyInstantiatedInstanceProperties, lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames)))"
@@ -12456,6 +12481,7 @@ extension TypeDescription {
 	// D1 lane hook (lane D): the mock lowering takes the parameter so too.
 	var autoclosureTakenWithoutThrowing: TypeDescription {
 		guard case let .attributed(.closure(arguments, isAsync, true, _, returnType), specifiers, attributes) = self,
+		      // safedi-source-rule: allow stringScan — `attributes` is a type’s `[String]` of attributes: membership among a few elements, no scan of text.
 		      attributes.contains("autoclosure")
 		else { return self }
 		return .attributed(.closure(arguments: arguments, isAsync: isAsync, doesThrow: false, thrownType: nil, returnType: returnType), specifiers: specifiers, attributes: attributes)
