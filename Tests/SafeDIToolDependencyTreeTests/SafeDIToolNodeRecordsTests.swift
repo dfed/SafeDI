@@ -329,6 +329,101 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_refusesWorldAsCallsAnswerAVariantApart_whenOneVariantsRenameReadsAValueUnderOneParentAndAWrapperUnderTheOther() async throws {
+		// `Reader` renames `x`, which `ValueParent` declares as an `X` and `LazyParent` as a `LazilyInstantiated<X>`: one
+		// variant whose rename is bound from the value under one parent and from the wrapper's instance under the other.
+		// Whichever parent the root builds first, the world keeps its tree.
+		var everyRefusal = [[String]]()
+		for parents in [["lazyParent: LazyParent", "valueParent: ValueParent"], ["valueParent: ValueParent", "lazyParent: LazyParent"]] {
+			let (_, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+				try await executeSafeDIToolTest(swiftFileContent: Self.renameOfAValueAndAWrapper(parents: parents), buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+			}
+			#expect(reports.map(\.refusal) == ["callsAnswerAVariantApart"])
+			everyRefusal += reports.map(\.everyRefusal)
+		}
+		#expect(everyRefusal == [["lazy", "callsAnswerAVariantApart"], ["lazy", "callsAnswerAVariantApart"]])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysOutRootFromNodeRecords_whenOneVariantsRenameReadsAValueDeclaredUnderEachOfTwoParents() async throws {
+		// Both parents declare `x` as an `X`: two declarations answer the rename's read in one form, so its one record is
+		// right under both.
+		let (_, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(
+				swiftFileContent: Self.renameOfAValueAndAWrapper(parents: ["lazyParent: LazyParent", "valueParent: ValueParent"], lazyParentsX: "X"),
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
+		#expect(reports.flatMap(\.differences) == [])
+	}
+
+	/// A root that builds `LazyParent` and `ValueParent` in the order `parents` names, each of which builds a `Reader` that
+	/// renames `x`: `LazyParent` declares `x` as `lazyParentsX`, and `ValueParent` as an `X`.
+	private static func renameOfAValueAndAWrapper(parents: [String], lazyParentsX: String = "LazilyInstantiated<X>") -> [String] {
+		[
+			"""
+			@Instantiable(isRoot: true)
+			public final class Root: Instantiable {
+			    public init(\(parents.joined(separator: ", "))) {
+			\(parents.map { "        self.\($0.prefix(while: { $0 != ":" })) = \($0.prefix(while: { $0 != ":" }))" }.joined(separator: "\n"))
+			    }
+			\(parents.map { "    @Instantiated let \($0)" }.joined(separator: "\n"))
+			}
+			""",
+			"""
+			@Instantiable
+			public final class LazyParent: Instantiable {
+			    public init(readerBuilder: Instantiator<Reader>, x: \(lazyParentsX)) {
+			        self.readerBuilder = readerBuilder
+			        self.x = x
+			    }
+			    @Instantiated let readerBuilder: Instantiator<Reader>
+			    @Instantiated let x: \(lazyParentsX)
+			}
+			""",
+			"""
+			@Instantiable
+			public final class ValueParent: Instantiable {
+			    public init(x: X, holder: Holder) {
+			        self.x = x
+			        self.holder = holder
+			    }
+			    @Instantiated let x: X
+			    @Instantiated let holder: Holder
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Holder: Instantiable {
+			    public init(reader: Reader) {
+			        self.reader = reader
+			    }
+			    @Instantiated let reader: Reader
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Reader: Instantiable {
+			    public init(renamed: X) {
+			        self.renamed = renamed
+			    }
+			    @Received(fulfilledByDependencyNamed: "x", ofType: X.self) let renamed: X
+			}
+			""",
+			"""
+			@Instantiable
+			public final class X: Instantiable {
+			    public init() {}
+			}
+			""",
+		]
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_refusesWorldAsReadAnsweredTwoWays_whenAMemberOfALoopOfBuildersIsOwedItsBindings() async throws {
 		// `Editor` receives `editorBuilder`, the `Instantiator` being built around it: a member of a loop of builders, whose
 		// bindings made again the facts still owe (`madeAgain`).
