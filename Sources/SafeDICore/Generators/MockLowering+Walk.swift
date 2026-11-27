@@ -210,20 +210,22 @@ extension ScopeGenerator {
 		// Where a test observes node records, an internal mock that binds nothing but its nodes has the statements that build
 		// them laid out from the records of its world (`nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:outerDeclarations:)`).
 		if let worldRoot {
-			// `mock()`'s parameters are the declarations the nodes' reads resolve to, as a seam's parameters are for its
-			// root's body, each by its label: one named apart, or an uncovered parameter handed to the type that
-			// instantiates it, is no declaration the records read.
-			let bindsOnlyNodes = rootReceiverBindingIndex == 0
+			// `mock()`'s parameters and the overrides it binds before the nodes are the declarations the nodes' reads resolve
+			// to, as a seam's parameters are for its root's body, each by its label: one named apart, or an uncovered
+			// parameter handed to the type that instantiates it, is no declaration the records read.
+			let overridesBoundBeforeNodes = signature.onlyIfAvailableOverrides.filter { signature.unavailableDependencyOverrideNames[$0.receivedProperty] == nil }
+			let bindsOnlyNodes = rootReceiverBindingIndex == overridesBoundBeforeNodes.count
 				&& linesBoundBesideNodes.isEmpty
 				&& signature.uncoveredParameters.isEmpty
 				&& signature.parameters.allSatisfy { $0.name == $0.property.label }
-				&& signature.onlyIfAvailableOverrides.isEmpty
+				&& signature.onlyIfAvailableOverrides.allSatisfy { $0.name == $0.receivedProperty.label }
 				&& builders.isEmpty
 				&& rootRenames.values.allSatisfy(\.isEmpty)
 				&& rootInstancesReadByValue.isEmpty
-			if let statements = try Self.nodeRecordsMockStatements(of: instantiable, worldRoot: worldRoot, bindsOnlyNodes: bindsOnlyNodes, outerDeclarations: signature.parameters.map(\.property)) {
-				// A mock that builds no node binds nothing.
-				bindingLines = statements.isEmpty ? [] : [statements]
+			let outerDeclarations = signature.parameters.map(\.property) + overridesBoundBeforeNodes.map { Property(label: $0.name, typeDescription: $0.typeDescription) }
+			if let statements = try Self.nodeRecordsMockStatements(of: instantiable, worldRoot: worldRoot, bindsOnlyNodes: bindsOnlyNodes, outerDeclarations: outerDeclarations) {
+				// The overrides' bindings stay before the nodes that read them.
+				bindingLines = Array(bindingLines.prefix(overridesBoundBeforeNodes.count)) + (statements.isEmpty ? [] : [statements])
 			}
 		}
 		// A public mock's tiers, overrides and guard (`MockLowering+PublicMocks.swift`).

@@ -1007,7 +1007,8 @@ struct SafeDIToolNodeRecordsMockRootTests: ~Copyable {
 		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [true])
 		let overridden = """
 		Root.mock(name: "named", level: 7, timer: marked(Ticker(), "timer"), safeDIOverrides: .init(\
-		leaf: { marked(Leaf(name: $0, timer: $1), "leaf") }\
+		leaf: { marked(Leaf(name: $0, timer: $1), "leaf") }, \
+		clock: marked(Ticker(), "clock")\
 		))
 		"""
 		let comparison = try await DifferentialValueOracle.compare(
@@ -1023,7 +1024,7 @@ struct SafeDIToolNodeRecordsMockRootTests: ~Copyable {
 		guard let comparison else { return }
 		#expect(comparison.differences.isEmpty, "\(comparison.report)")
 		// Every parameter and override was read: each marks the value it set.
-		for marker in ["named", "timer", "leaf"] {
+		for marker in ["named", "timer", "clock", "leaf"] {
 			#expect(comparison.featureDescription.contains("\"\(marker)\""), "No value is marked \(marker):\n\(comparison.featureDescription)")
 		}
 	}
@@ -1091,9 +1092,29 @@ struct SafeDIToolNodeRecordsMockRootTests: ~Copyable {
 		    public init() {}
 		}
 		""",
+		// The root's own receive only if available is an override `mock()` binds before the nodes.
+		"""
+		public protocol Clock {}
+
+		@Instantiable(generateMock: true)
+		public struct Root: Instantiable {
+		    public init(clock: Clock?, leaf: Leaf) {
+		        self.clock = clock
+		        self.leaf = leaf
+		    }
+
+		    @Received(onlyIfAvailable: true) let clock: Clock?
+		    @Instantiated let leaf: Leaf
+		}
+
+		@Instantiable
+		public struct Leaf: Instantiable {
+		    public init() {}
+		}
+		""",
 	])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_laysOutNodesAsTheWalkWritesThem_whenRootBindsParameter(declarations: String) async throws {
+	mutating func mock_laysOutNodesAsTheWalkWritesThem_whenRootBindsParameterOrOverride(declarations: String) async throws {
 		let walkOutput = try await executeSafeDIToolTest(swiftFileContent: [declarations], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
 			try await executeSafeDIToolTest(swiftFileContent: [declarations], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
@@ -1480,8 +1501,8 @@ struct SafeDIToolNodeRecordsMockRootTests: ~Copyable {
 		""",
 	]
 
-	/// A root that forwards a name and takes a default-valued level, whose leaf reads the name and a timer nothing
-	/// fulfills, a flat parameter of `mock()`.
+	/// A root that forwards a name, takes a default-valued level, and receives a clock only if available, whose leaf
+	/// reads the name and a timer nothing fulfills, a flat parameter of `mock()`.
 	private static let parameterValueFixture: [String: String] = [
 		"Marked.swift": """
 		public protocol Marked: AnyObject {
@@ -1493,9 +1514,11 @@ struct SafeDIToolNodeRecordsMockRootTests: ~Copyable {
 		    return value
 		}
 
+		public protocol Clock: AnyObject {}
+
 		public protocol Timer: AnyObject {}
 
-		public final class Ticker: Timer, Marked {
+		public final class Ticker: Clock, Timer, Marked {
 		    public init() {}
 
 		    public var marker = "built"
@@ -1504,13 +1527,15 @@ struct SafeDIToolNodeRecordsMockRootTests: ~Copyable {
 		"Root.swift": """
 		@Instantiable(generateMock: true)
 		public final class Root: Instantiable {
-		    public init(name: String, leaf: Leaf, level: Int = 1) {
+		    public init(name: String, clock: Clock?, leaf: Leaf, level: Int = 1) {
 		        self.name = name
+		        self.clock = clock
 		        self.leaf = leaf
 		        self.level = level
 		    }
 
 		    @Forwarded let name: String
+		    @Received(onlyIfAvailable: true) let clock: Clock?
 		    @Instantiated let leaf: Leaf
 		    let level: Int
 		}

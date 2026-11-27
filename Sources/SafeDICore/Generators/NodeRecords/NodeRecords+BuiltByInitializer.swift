@@ -68,7 +68,10 @@ extension NodeRecords {
 		if world.isMockWorld, !scope.declaredLazilyInstantiatedInstanceProperties.isEmpty || !scope.forwardedLazilyInstantiatedInstanceProperties.isEmpty {
 			refusals.append(.lazy)
 		}
-		for dependency in scope.instantiable.dependencies where dependency.source == .received(onlyIfAvailable: true) {
+		// A mock root's own receive only if available is no node's: `mock()` binds its override before the nodes, which the
+		// root's lowering judges (`ScopeGenerator.nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:outerDeclarations:)`).
+		let receivesOnlyIfAvailableOfANode = declaration != 0 || !world.isMockWorld
+		for dependency in scope.instantiable.dependencies where receivesOnlyIfAvailableOfANode && dependency.source == .received(onlyIfAvailable: true) {
 			refusals.append(.onlyIfAvailable)
 		}
 		if declaration != 0, scope.instantiable.initializer == nil {
