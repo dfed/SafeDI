@@ -65,19 +65,26 @@ enum LeadingStatement: Hashable, Sendable {
 /// configuration and the places as they were above it; otherwise the function enters a new place, whose configuration
 /// is the nearest one of its type among the entered places, else the one it was handed. The second and third lines bind
 /// that configuration and the places beneath this one under the names of the function's own parameters, so every
-/// statement after them reads as in a function off every cycle.
+/// statement after them reads as in a function off every cycle. A function off every cycle that a function on one reads
+/// the nearest configuration of its type from has no slot: it enters only the nearest place of its type, in one line,
+/// and reads the configuration it was handed.
 struct EnteredPlace: Hashable, Sendable {
-	/// The member of the entered places that holds this function's place: its property's slot.
-	let slot: String
+	/// The member of the entered places that holds this function's place: its property's slot; `nil` for a function off
+	/// every cycle, which only enters the nearest place of its type.
+	let slot: String?
 	/// The member of the entered places that holds the nearest place of this function's configuration's type, where the
-	/// type is reached under several properties; `nil` where this function's property is the only one of its type.
+	/// type is reached under several properties; `nil` where this function's property is the only one of its type. Set
+	/// wherever `slot` is `nil`.
 	let nearestOfTypeSlot: String?
 
-	/// The three lines.
+	/// The lines.
 	var spelledLines: [String] {
 		let enteredPlaces = ReservedName.mockEnteredPlacesParameterName
 		let place = ReservedName.mockEnteredPlaceName
 		let handedConfiguration = ReservedName.mockOverridesParameterName
+		guard let slot else {
+			return nearestOfTypeSlot.map { ["let \(enteredPlaces) = \(enteredPlaces).\(Self.enteringFunctionName)(\($0.spelledAsArgumentLabel): .init(\(handedConfiguration), \(Self.enteredAboveArgumentLabel): \(enteredPlaces)))"] } ?? []
+		}
 		let newConfiguration = nearestOfTypeSlot.map { "\(enteredPlaces).\($0)?.\(Self.configurationMemberName) ?? \(handedConfiguration)" } ?? handedConfiguration
 		return [
 			"let \(place) = \(enteredPlaces).\(slot) ?? .init(\(newConfiguration), \(Self.enteredAboveArgumentLabel): \(enteredPlaces))",

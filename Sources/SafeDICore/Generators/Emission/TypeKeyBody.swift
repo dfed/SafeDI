@@ -115,7 +115,7 @@ enum TypeKeyBody {
 		guard laysOutEveryLoop || laysOutLoops else { return .failure(.loopWrittenOnce) }
 		guard layout.computePlacement() else { return .failure(.functionNotPlaced) }
 		layout.computeOutcomes()
-		guard layout.keepsCapturesOfLoopMembersDeclaredAsThePathKeyDoes() else { return .failure(.loopMemberCaptureDiffers) }
+		guard layout.keepsCapturesOfLoopMembersDeclaredAsThePathKeyDoes() else { return .failure(.loopMemberCapturesLaterBinding) }
 		guard layout.computeParameterTypes() else { return .failure(.parameterHasNoType) }
 		guard layout.checkEveryRead() else { return .failure(.readResolvesOtherwise) }
 		guard layout.checkValuePaths() else { return .failure(.valuePathResolvesOtherwise) }

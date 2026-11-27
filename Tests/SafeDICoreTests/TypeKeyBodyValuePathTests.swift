@@ -59,6 +59,21 @@ struct TypeKeyBodyValuePathTests {
 	}
 
 	@Test
+	func statements_beginsThePlacesFunctionByEnteringOnlyTheNearestPlaceOfItsType_whenItsEnteredPlaceHasNoSlot() throws {
+		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.rootBody { built in
+			built.callFields = CallFields(leadingStatement: .enteredPlace(EnteredPlace(slot: nil, nearestOfTypeSlot: "nearestB")), closureArguments: [])
+		}))
+		#expect(GeneratedCode.lines(statements).spelled() == """
+		        let id = 1
+		        func __safeDI_b() -> B {
+		            let __safeDI_entered = __safeDI_entered.entering(nearestB: .init(safeDIOverrides, above: __safeDI_entered))
+		            return B()
+		        }
+		        let b: B = __safeDI_b()
+		""")
+	}
+
+	@Test
 	func statements_spellsMemberCallWithWrappedReads_whenConstructionIsACallOfAValue() throws {
 		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.rootBody { built in
 			built.constructionValue = ConstructionValue(value: .call("member", of: .rootDeclaration("builder"), arguments: [Self.idRead], argumentsWrapper: .simple(name: "Values")), resultWrapper: nil)
@@ -582,6 +597,7 @@ struct TypeKeyBodyValuePathTests {
 		// The statement a place's function begins with (`BuiltPlaceRecord.leadingStatement`).
 		case enteredPlaceSlot
 		case enteredPlaceNearestOfTypeSlot
+		case enteredPlaceWithoutSlot
 
 		func configure(_ c: inout BuiltPlaceRecord, isSecond: Bool) {
 			let cfg = ValuePath.passedArgument("cfg")
@@ -639,6 +655,8 @@ struct TypeKeyBodyValuePathTests {
 				c.callFields = CallFields(leadingStatement: .enteredPlace(EnteredPlace(slot: isSecond ? "other" : "c", nearestOfTypeSlot: nil)), closureArguments: [])
 			case .enteredPlaceNearestOfTypeSlot:
 				c.callFields = CallFields(leadingStatement: .enteredPlace(EnteredPlace(slot: "c", nearestOfTypeSlot: isSecond ? "nearestC" : nil)), closureArguments: [])
+			case .enteredPlaceWithoutSlot:
+				c.callFields = CallFields(leadingStatement: .enteredPlace(EnteredPlace(slot: isSecond ? nil : "c", nearestOfTypeSlot: "nearestC")), closureArguments: [])
 			}
 		}
 	}
