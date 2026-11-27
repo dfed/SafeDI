@@ -82,8 +82,8 @@ KNOWN_WORDS = {
     "shard", "corpus", "corpora", "features", "inspected", "compared", "retention", "gating", "gating-shapes",
     "read-twins", "omitted-values", "spellings", "draws", "errors", "outputs", "value-oracle", "remedies", "partitions",
     "cpu", "builder-surface", "seam-mock-builders", "level-captures", "failure", "stale", "misfiled", "known", "renamed", "multimodule", "problem", "seed", "finished", "completed",
-    # Counted against no pin, so nothing is derived from it.
-    "clean-subtree-skips",
+    # Counted against no pin, so nothing is derived from them.
+    "clean-subtree-skips", "root-function-keys",
 }
 
 NOT_DERIVED = [
@@ -1541,6 +1541,11 @@ def analyze(out):
         markdown.append("- Runs: none (reports read from a directory)")
     markdown.append("- Combine verdict: exit %d (%s), %d problem%s" % (combine_exit, "green" if combine_exit == 0 else "red", len(combine_problems), "" if len(combine_problems) == 1 else "s"))
     markdown.append("- Complete: %s" % ("yes, every corpus the `corpora` line names has a complete report for every shard" if all_complete else "no: " + "; ".join("%s (%s)" % (entry["corpus"], entry["reason"]) for entry in integrity["incompleteCorpora"])))
+    # "Complete" speaks of the shards' reports alone; a line the analysis could not read leaves its sums partial, which
+    # `apply-fuzzer-pins` refuses, so the header says so beside it rather than only in the integrity section below.
+    unreadable = [(key, len(integrity[key])) for key in ("unparsed", "ambiguousSplit", "shardsDisagree", "duplicateShard", "rejectedKnownIssueLists") if integrity[key]]
+    if unreadable:
+        markdown.append("- Whole: no, the pins may be partial and `apply-fuzzer-pins` refuses them: %s (listed under \u201cIntegrity\u201d below)" % ", ".join("%d %s" % (count, key) for key, count in unreadable))
     markdown.append("- Exit: %d" % status)
     markdown.append("")
 
