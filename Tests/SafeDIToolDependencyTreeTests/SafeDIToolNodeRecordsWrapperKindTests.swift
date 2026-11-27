@@ -575,9 +575,88 @@ struct SafeDIToolNodeRecordsWrapperKindTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsTheTreesFirstError_whenTwoPlacesErrorBesideARootLaidOutFromNodeRecords() async {
+		// `Alpha`'s world is accepted, so the run lays it out from its records and builds no tree for it; each of the other
+		// roots holds a place whose capture the tree reports. The run reports the errors a run that builds every tree
+		// reports, in its order.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Settings.swift"]):7:5: error: @Received property `childBuilder: Instantiator<Child>` cannot be received inside a `@Sendable` function in chain: Root -> Settings. SafeDI builds `settingsBuilder: SendableInstantiator<Settings>` on `Root` in a `@Sendable` function, which cannot capture `childBuilder: Instantiator<Child>` on `Root`, because `Instantiator<Child>` is not `Sendable`. Declare `childBuilder` on `Root` and `SecondRoot`, and this property, as `SendableInstantiator<Child>` to fix. `SendableInstantiator<Child>` builds `Child` in a `@Sendable` function, so what the tree of `Child` receives from outside that function must be `Sendable` too.
+				\(fixtures["Root.swift"]):7:5: note: `childBuilder: Instantiator<Child>` is declared here
+				\(fixtures["Settings.swift"]):7:5: error: @Received property `childBuilder: Instantiator<Child>` cannot be received inside a `@Sendable` function in chain: SecondRoot -> Settings. SafeDI builds `settingsBuilder: SendableInstantiator<Settings>` on `SecondRoot` in a `@Sendable` function, which cannot capture `childBuilder: Instantiator<Child>` on `SecondRoot`, because `Instantiator<Child>` is not `Sendable`. Declare `childBuilder` on `Root` and `SecondRoot`, and this property, as `SendableInstantiator<Child>` to fix. `SendableInstantiator<Child>` builds `Child` in a `@Sendable` function, so what the tree of `Child` receives from outside that function must be `Sendable` too.
+				\(fixtures["SecondRoot.swift"]):7:5: note: `childBuilder: Instantiator<Child>` is declared here
+				"""
+			},
+		) {
+			var filesMade = [URL]()
+			defer { filesToDelete += filesMade }
+			return try await executeSafeDIToolTest(
+				swiftFileContent: Self.twoErroringPlacesFixture,
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesMade,
+			)
+		}
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
+
+	/// Three roots: `Alpha`, which node records lay out, and two that each build `Settings` in a `@Sendable` function
+	/// that captures their own `childBuilder`, which is not `Sendable`.
+	private static let twoErroringPlacesFixture = [
+		"""
+		@Instantiable(isRoot: true)
+		public final class Alpha: Instantiable {
+		    public init(child: Child) {
+		        fatalError("SafeDI doesn't inspect the initializer body")
+		    }
+
+		    @Instantiated let child: Child
+		}
+		""",
+		"""
+		@Instantiable(isRoot: true)
+		public final class Root: Instantiable {
+		    public init(childBuilder: Instantiator<Child>, settingsBuilder: SendableInstantiator<Settings>) {
+		        fatalError("SafeDI doesn't inspect the initializer body")
+		    }
+
+		    @Instantiated let childBuilder: Instantiator<Child>
+		    @Instantiated let settingsBuilder: SendableInstantiator<Settings>
+		}
+		""",
+		"""
+		@Instantiable(isRoot: true)
+		public final class SecondRoot: Instantiable {
+		    public init(childBuilder: Instantiator<Child>, settingsBuilder: SendableInstantiator<Settings>) {
+		        fatalError("SafeDI doesn't inspect the initializer body")
+		    }
+
+		    @Instantiated let childBuilder: Instantiator<Child>
+		    @Instantiated let settingsBuilder: SendableInstantiator<Settings>
+		}
+		""",
+		"""
+		@Instantiable
+		public final class Child: Instantiable {
+		    public init() {}
+		}
+		""",
+		"""
+		@Instantiable
+		public final class Settings: Instantiable {
+		    public init(childBuilder: Instantiator<Child>) {
+		        fatalError("SafeDI doesn't inspect the initializer body")
+		    }
+
+		    @Received let childBuilder: Instantiator<Child>
+		}
+		""",
+	]
 
 	/// What `body` returns with every root node records accept laid out from them, and the report of each root of the run.
 	private static func layingOutRoots<Output>(

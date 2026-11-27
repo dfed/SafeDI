@@ -83,7 +83,7 @@ struct ClosureArgumentEntry: Hashable, Sendable {
 enum ClosureArgument: Hashable, Sendable {
 	/// A builder or level struct the caller's tree binds, which the call passes up whole.
 	case passedOn(PassedOnRead)
-	/// A builder the call builds (the fills lane's records), by its index in the call's built closures.
+	/// A builder the call builds (a fill's records), by its index in the call's built closures.
 	case built(BuiltClosureID)
 	/// Nothing: a builder the tier takes optionally, which the call neither builds nor passes up.
 	case `nil`
