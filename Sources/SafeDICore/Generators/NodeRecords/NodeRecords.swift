@@ -24,8 +24,8 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	/// The node is built by anything but its type's initializer or `instantiate()`: a seam's or a public mock's call, a
 	/// hand-written mock, a construction function or a fill.
 	case construction
-	/// A mock root's node takes a parameter with a default value, which a mock holds in the type's configuration, or its
-	/// type has a hand-written mock, whose defaults that configuration takes too.
+	/// A mock root's node's type takes, in its initializer or its hand-written mock, a value no dependency fulfills, as a
+	/// parameter with a default value is, which a mock holds in the type's configuration.
 	case mockDefaultValuedParameter
 	/// A mock root's node is an actor, whose arguments a mock sends it.
 	case mockActor

@@ -20,15 +20,18 @@
 
 extension NodeRecords {
 	/// The claim of `declaration` in a mock root's world, and `nil` in a production root's: of kind `mockConstruction`, for a
-	/// node stage 1 makes in a production root's world (`refusalsOfBuiltByInitializer(_:in:)`), whose override is the field
-	/// of its parent's configuration under the node's own label, discharging nothing and holding each refusal of a node
-	/// whose override a later stage reads. A node stage 1 refuses for anything a mock kind does not discharge is left
-	/// unclaimed, so its first refusal is stage 1's. Each mock kind adds its term to `discharges`, the stage-1 refusals of
-	/// the node its record makes, and the node is of the kind whose term discharged one.
+	/// node stage 1 makes in a production root's world (`refusalsOfBuiltByInitializer(_:in:)`) and for one its type's
+	/// hand-written mock builds, whose override is the field of its parent's configuration under the node's own label,
+	/// holding each refusal of a node whose override a later stage reads. A node stage 1 refuses for anything a mock kind
+	/// does not make is left unclaimed, so its first refusal is stage 1's. Each mock kind adds its term to `discharges`, the
+	/// stage-1 refusals of the node its record makes, and the node is of the kind whose term discharged one.
 	static func mockConstructionClaim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
 		guard world.isMockWorld else { return nil }
+		// A hand-written mock builds its type with or without an initializer: a fake has none.
+		let buildsWithHandWrittenMock = world.construction(of: declaration) == .handWrittenMock
 		let erasedDischarges = mockErasedDischarges(of: declaration, in: world)
-		let discharges = erasedDischarges
+		let constructionDischarges: Set<NodeRecordRefusal> = buildsWithHandWrittenMock ? [.construction, .noInitializer] : []
+		let discharges = constructionDischarges.union(erasedDischarges)
 		guard refusalsOfBuiltByInitializer(declaration, in: world).allSatisfy(discharges.contains) else { return nil }
 		let kind: NodeRecordKind = erasedDischarges.isEmpty ? .mockConstruction : .mockErased
 		var refusals = [NodeRecordRefusal]()
@@ -38,11 +41,13 @@ extension NodeRecords {
 			refusals.append(.mockActor)
 		}
 		// The root's own such parameters are parameters of `mock()`, which the root's lowering judges
-		// (`ScopeGenerator.nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:)`). A type's configuration
-		// takes the defaults its hand-written mock declares too, whichever way a node builds it.
+		// (`ScopeGenerator.nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:)`). A type's configuration takes the
+		// defaults of its initializer and of its hand-written mock, whichever of the two builds a node.
 		if declaration != 0 {
-			let takesDefaultValuedParameter = instantiable.initializer.map { !ScopeGenerator.DefaultParameter.defaultParameters(of: $0, dependencies: instantiable.dependencies).isEmpty } ?? false
-			if takesDefaultValuedParameter || instantiable.mockInitializer != nil {
+			let (construction, otherConstruction) = buildsWithHandWrittenMock ? (instantiable.mockInitializer, instantiable.initializer) : (instantiable.initializer, instantiable.mockInitializer)
+			let callPassesValueNoDependencyFulfills = construction.map { takesValueNoDependencyFulfills($0, given: instantiable.dependencies) } ?? false
+			let otherConstructionDeclaresDefault = otherConstruction.map { !ScopeGenerator.DefaultParameter.defaultParameters(of: $0, dependencies: instantiable.dependencies).isEmpty } ?? false
+			if callPassesValueNoDependencyFulfills || otherConstructionDeclaresDefault {
 				refusals.append(.mockDefaultValuedParameter)
 			}
 		}
@@ -56,10 +61,23 @@ extension NodeRecords {
 		return NodeRecordClaim(kind: kind, discharges: discharges, refusals: refusals)
 	}
 
-	/// The record of `declaration`'s place, a node of kind `mockConstruction`: the record stage 1 makes of it, which
-	/// first tries the closure that overrides it (`mockOverrideSlot(ofNodeLabeled:typed:hasFunction:)`), called with its
-	/// initializer's arguments. A node that builds children is configured: its override is the builder of the
-	/// configuration its function is handed, whose fields its children read.
+	/// Whether a call of `construction` a mock writes passes a value none of `dependencies` fulfills, which the node's
+	/// configuration holds: every argument but one a dependency fulfills and one the call leaves to its default
+	/// (`Initializer.Argument.isLeftToItsDefault`, which a dependency's label is never left to).
+	private static func takesValueNoDependencyFulfills(_ construction: Initializer, given dependencies: [Dependency]) -> Bool {
+		construction.arguments.contains { argument in
+			!dependencies.contains(where: argument.isFulfilled(by:))
+				&& !(argument.isLeftToItsDefault && !dependencies.contains { $0.property.label == argument.innerLabel })
+		}
+	}
+
+	/// The record of `declaration`'s place, a node of kind `mockConstruction`: the record stage 1 makes of it, built with
+	/// its type's hand-written mock where the world says so (`TypeFactsConstruction.handWrittenMock`), which first tries
+	/// the closure that overrides it (`mockOverrideSlot(of:labeled:typed:in:hasFunction:handsOverridesToChildren:isSendable:)`),
+	/// called with its
+	/// construction's arguments. A node that builds children is configured: its override is the builder of the
+	/// configuration its function is handed, whose fields its children read. The closure of a node that is not
+	/// configured returns the property's type, so every node's function does, as the walk's does.
 	static func mockConstructionRecord(
 		of declaration: DeclarationID,
 		variant: VariantID,
@@ -67,18 +85,40 @@ extension NodeRecords {
 		typesDeclaredEscaping: Set<TypeDescription>,
 		children: [GeneratedCode],
 	) throws -> BuiltPlaceRecord {
+		let instantiable = world.scope(of: declaration).instantiable
+		let handWrittenMock: (function: Initializer, target: ConstructionTarget)? = if world.construction(of: declaration) == .handWrittenMock, let mockInitializer = instantiable.mockInitializer {
+			(mockInitializer, .mock(instantiable.concreteInstantiable, name: instantiable.customMockName ?? InstantiableVisitor.mockMethodName))
+		} else {
+			nil
+		}
 		// A mock world that holds a lazily instantiated property is refused (`refusalsOfBuiltByInitializer(_:in:)`), so no
 		// receive of this node reads a wrapper's instance.
-		var record = try builtByInitializerRecord(of: declaration, variant: variant, in: world, lazilyInstantiatedInstanceProperties: [], typesDeclaredEscaping: typesDeclaredEscaping, children: children)
-		let instantiable = world.scope(of: declaration).instantiable
+		var record = try builtByInitializerRecord(
+			of: declaration,
+			variant: variant,
+			in: world,
+			lazilyInstantiatedInstanceProperties: [],
+			construction: handWrittenMock,
+			typeFunctionReturns: world.property(of: declaration)?.typeDescription.asInstantiatedTypeSpelledAsDeclared,
+			typesDeclaredEscaping: typesDeclaredEscaping,
+			children: children,
+		)
 		let isConfigured = !children.isEmpty
 		let slotType: TypeDescription = if isConfigured {
 			.nested(name: ScopeGenerator.mockConfigurationStructName, parentType: instantiable.concreteInstantiable, generics: [])
 		} else {
 			// The closure's type as the configuration that holds it spells it (`MockLowering.ConstantNode.builderClosureType`).
-			.unknown(text: "((\(MockLowering.BuilderParameters(of: instantiable, usesMockInitializer: false).spelled)) -> \(record.property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource))?")
+			.unknown(text: "((\(MockLowering.BuilderParameters(of: instantiable, usesMockInitializer: handWrittenMock != nil).spelled)) -> \(record.property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource))?")
 		}
-		let slot = mockOverrideSlot(ofNodeLabeled: record.property.label, typed: slotType, hasFunction: record.hasFunction)
+		let slot = mockOverrideSlot(
+			of: declaration,
+			labeled: record.property.label,
+			typed: slotType,
+			in: world,
+			hasFunction: record.hasFunction,
+			handsOverridesToChildren: isConfigured,
+			isSendable: record.isSendable,
+		)
 		record.passedArguments = slot.passedArguments
 		record.alternatives = [ConstructionAlternative(
 			closure: isConfigured ? .member(ReservedName.configurationBuilderPropertyName, of: slot.value) : slot.value,
@@ -90,23 +130,40 @@ extension NodeRecords {
 		return record
 	}
 
-	/// Where a node of a mock root's world built as the property labeled `label` reads its override, a value of
-	/// `type`: the field of its parent's configuration under its label. Every function is declared in the root's body,
-	/// where it can capture no other function's argument, so a node with a function of its own is handed the value as a
-	/// passed argument named as `mock()`'s own overrides are, which its body reads as the root's reads `mock()`'s; a
-	/// node built in place reads the field where it is built. Each record of a mock root's world takes its override from
-	/// here, so that no record spells the path.
+	/// Where `declaration`, a node of a mock root's world built as the property labeled `label`, reads its override, a
+	/// value of `type`: the field of its parent's configuration under its label. Every function is declared in the root's
+	/// body, where it can capture no other function's argument, so a node with a function of its own is handed the value
+	/// as a passed argument named as `mock()`'s own overrides are, which its body reads as the root's reads `mock()`'s; a
+	/// node built in place reads the field where it is built. A function that only the root's body calls, and whose body
+	/// alone reads the value, captures `mock()`'s own overrides instead and takes no argument, as the walk writes it: its
+	/// one parent's configuration is `mock()`'s. A function that hands its overrides to its children keeps the argument,
+	/// since a child built under two parents reads one name in both, and so does a `@Sendable` function, which cannot
+	/// capture the overrides. Each record of a mock root's world takes its override from here, so that no record spells
+	/// the path.
+	/// - Parameters:
+	///   - hasFunction: Whether the node is built in a function of its own.
+	///   - handsOverridesToChildren: Whether the value is a configuration whose fields the node's children read.
+	///   - isSendable: Whether the node's function is `@Sendable`.
 	/// - Returns: The value the node's own construction reads, and what each call of its function hands it.
-	static func mockOverrideSlot(ofNodeLabeled label: String, typed type: TypeDescription, hasFunction: Bool) -> (value: ValuePath, passedArguments: [PassedArgument]) {
+	static func mockOverrideSlot(
+		of declaration: DeclarationID,
+		labeled label: String,
+		typed type: TypeDescription,
+		in world: some NodeRecordSources,
+		hasFunction: Bool,
+		handsOverridesToChildren: Bool,
+		isSendable: Bool,
+	) -> (value: ValuePath, passedArguments: [PassedArgument]) {
 		let field = mockConfigurationField(named: label)
-		if hasFunction {
+		guard hasFunction else { return (field, []) }
+		if !handsOverridesToChildren, !isSendable, world.parents(of: declaration).allSatisfy({ $0.parent == 0 }) {
+			return (.member(label.spelledAsMemberDeclarationName, of: .rootDeclaration(ReservedName.mockOverridesParameterName)), [])
+		} else {
 			// The overrides are not `Sendable`: no call inside a `@Sendable` function hands them on.
 			return (
 				.passedArgument(ReservedName.mockOverridesParameterName),
 				[PassedArgument(parameterName: ReservedName.mockOverridesParameterName, type: type, value: field, staysOutsideSendableFunctions: true)],
 			)
-		} else {
-			return (field, [])
 		}
 	}
 
