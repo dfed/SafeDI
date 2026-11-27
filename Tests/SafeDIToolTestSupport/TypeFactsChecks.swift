@@ -614,7 +614,7 @@ enum TypeFactsChecks {
 		return reads
 	}
 
-	static let lastCheck = 33
+	static let lastCheck = 36
 
 	/// Checks 11 to 31: each column of the graph against what the generator decided at each place.
 	///
@@ -640,6 +640,9 @@ enum TypeFactsChecks {
 	/// 30. A node holds a hole beneath exactly when a hole is reachable from it along edges that are not fills.
 	/// 31. How the place is constructed: a seam call, a call of another module's public mock, a type built with its
 	///     hand-written mock.
+	/// 36. What the place requires, the receives inside the fills beneath it counted, is its node's fold along every
+	///     edge (`requiredIncludingFills`), in a production world, outside a fill, and where no cycle explains a
+	///     difference (34 and 35 are other lanes' checks).
 	///
 	/// 33, outside the columns (32 is reserved for the made-again oracle): a production world keys no variant by family. One body serves its places inside and
 	/// outside a `@Sendable` function, the mark folded over its calls, as 2.4.x writes it; only seam cases and mock bodies
@@ -800,6 +803,13 @@ enum TypeFactsChecks {
 				}
 				let differences = receiveDifferences.map { "\($0.0) \($0.1) where its node's union is \($0.2)" }.joined(separator: ", ")
 				add(isExplainedReceive && isSubset ? 17 : 16, "place \(index) \(place.declaration) receives \(differences)")
+			}
+			// Check 36. The fold along every edge counts what the fills beneath read, as the generator's required receives do.
+			if !subtreeClosesCycle[index], !isInsideFill[index], !report.forMockGeneration, !facts.isOnCycle {
+				count(36)
+				if spellingsOfOneType(generator.required) != spellingsOfOneType(facts.requiredIncludingFills) {
+					add(36, "place \(index) \(place.declaration) requires \(generator.required) where its node's fold including fills is \(facts.requiredIncludingFills)")
+				}
 			}
 			// Check 18 and 19.
 			count(explained ? 19 : 18)

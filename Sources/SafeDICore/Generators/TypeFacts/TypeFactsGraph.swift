@@ -136,6 +136,8 @@ struct TypeFactsGraph: Sendable {
 		var edgeEntries = [Int32]()
 		var edgeIsFill = [Bool]()
 		var fillHoles = [(edge: Int32, hole: SeamSignature.Hole)]()
+		// What each fill declares for its tree, parallel to `fillHoles`.
+		var fillDeclarations = [Set<Property>]()
 		let graph = OrderedGraph(root: TypeFactsDeclaration(scope: root, property: nil, propertyID: nil, erasedToConcreteExistential: false, isFill: false)) { declaration in
 			guard declaration.key.leaf == .none else { return [] }
 			var targets = [TypeFactsDeclaration]()
@@ -151,7 +153,9 @@ struct TypeFactsGraph: Sendable {
 				edgeEntries.append(Int32(index))
 				edgeIsFill.append(false)
 			}
+			let innerScopeReaders = declaration.scope.calledBuilders.map { InnerScopeReaders(enumsByKey: $0.enumsByKey) }
 			for case let (index, .fill(hole, child, fillContext)) in declaration.scope.holeArguments.enumerated() {
+				fillDeclarations.append(ScopeGenerator.propertiesDeclared(byFillOf: hole, passedByPublicMockCall: declaration.scope.publicMockCall != nil, innerScopeReaders: innerScopeReaders))
 				fillHoles.append((Int32(edgeEntries.count), hole))
 				targets.append(TypeFactsDeclaration(scope: child, property: hole.property, propertyID: fillContext.propertyID, erasedToConcreteExistential: false, isFill: true))
 				edgeEntries.append(Int32(index))
@@ -297,6 +301,35 @@ struct TypeFactsGraph: Sendable {
 			hidden: BitRows(rowCount: nodes.count, columnCount: propertyCount) { node, insert in provided(by: node, insert) },
 			followsEdge: followsEdge,
 		).rows
+		// What a seam's caller is asked for counts the receives inside the fills its tree's seam calls pass
+		// (`ScopeGenerator.requiredReceivedProperties`), so a second fold follows every edge. A world without fills
+		// shares the first.
+		// Along a fill edge, what the fill binds from the site's scope struct hides the fill's reads of it from the caller.
+		let requiredIncludingFillsRows: BitRows
+		let boundFromScopeStructByEdge: BitRows?
+		if fillHoles.isEmpty {
+			requiredIncludingFillsRows = requiredRows
+			boundFromScopeStructByEdge = nil
+		} else {
+			var fillDeclarationsByEdge = [Int32: Set<Property>]()
+			for (fill, declarations) in zip(fillHoles, fillDeclarations) {
+				fillDeclarationsByEdge[fill.edge] = declarations
+			}
+			let hiddenAtEdge = BitRows(rowCount: graph.edgeCount, columnCount: propertyCount) { edge, insert in
+				// A property no node reads or declares has no ID, and hides nothing.
+				for case let id? in (fillDeclarationsByEdge[Int32(edge)] ?? []).map(properties.existingID(of:)) {
+					insert(id)
+					propertiesByUnwrapped[id]?.forEach(insert)
+				}
+			}
+			requiredIncludingFillsRows = ReadsFromAbove(
+				graph: graph,
+				own: BitRows(rowCount: nodes.count, columnCount: propertyCount) { node, insert in ownRequired[node].forEach(insert) },
+				hidden: BitRows(rowCount: nodes.count, columnCount: propertyCount) { node, insert in provided(by: node, insert) },
+				hiddenAtEdge: hiddenAtEdge,
+			).rows
+			boundFromScopeStructByEdge = hiddenAtEdge
+		}
 		let onlyIfAvailableRows = ReadsFromAbove(
 			graph: graph,
 			own: BitRows(rowCount: nodes.count, columnCount: propertyCount) { node, insert in ownOnlyIfAvailable[node].forEach(insert) },
@@ -397,7 +430,7 @@ struct TypeFactsGraph: Sendable {
 				requiredAliasFulfilling = requiredAliasFulfillingRows()
 			}
 		}
-		let receives = TypeFactsReceives(received: received, required: requiredRows, onlyIfAvailableUnwrapped: onlyIfAvailableUnwrapped, requiredAliasFulfilling: requiredAliasFulfilling)
+		let receives = TypeFactsReceives(received: received, required: requiredRows, requiredIncludingFills: requiredIncludingFillsRows, boundFromScopeStructByEdge: boundFromScopeStructByEdge, onlyIfAvailableUnwrapped: onlyIfAvailableUnwrapped, requiredAliasFulfilling: requiredAliasFulfilling)
 
 		// The other union facts: the types built beneath, the names declared `@escaping` beneath, and whether a hole is.
 		let noneHidden = BitRows(rowCount: nodes.count, columnCount: types.values.count) { _, _ in }
