@@ -105,7 +105,9 @@ extension DependencyTreeGenerator {
 			}
 			let (treeCode, comparisons) = planned
 			// A root whose tree's body holds nothing is compared nowhere.
-			let codeDifferences = (laidOutCode.map { $0.spelled() == treeCode.spelled() ? [] : ["root: the code laid out from node records differs from the tree’s"] } ?? []) + fillLevelDifferences
+			// A hole's one record stands for its place only where one route reaches it (`holesReachedOnSeveralRoutes(in:)`).
+			let holeDifferences = NodeRecords.holesReachedOnSeveralRoutes(in: world).map { "root: node records accept the hole \($0), which more than one route reaches" }
+			let codeDifferences = (laidOutCode.map { $0.spelled() == treeCode.spelled() ? [] : ["root: the code laid out from node records differs from the tree’s"] } ?? []) + fillLevelDifferences + holeDifferences
 			for comparison in comparisons {
 				observer(NodeRecordsReport(
 					root: root,
