@@ -27,10 +27,12 @@ extension NodeRecords {
 	/// of a receive only if available too: the leaf receives only if available each parameter the seam takes so, which the
 	/// call is passed `nil` for where `OnlyIfAvailableAnswers` finds it unavailable. The engine binds a call in
 	/// place as a built place of its form, a wrapper of its function where the property is one (`InPlaceCall`), whose
-	/// function takes the values the seam forwards, which the wrapper hands it.
+	/// function takes the values the seam forwards, which the wrapper hands it. A call that forwards values is refused as
+	/// `construction` for now, as the tree writes no record of it (`ScopeGenerator`'s seam call place).
 	static func seamCallClaim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
 		guard !world.isMockWorld, world.construction(of: declaration) == .seamCall else { return nil }
 		let scope = world.scope(of: declaration)
+		let forwardsValues = scope.instantiable.dependencies.contains { $0.source == .forwarded }
 		let passesEveryBuilderUp = scope.holeArguments.allSatisfy { holeArgument in
 			switch holeArgument {
 			case .passUp:
@@ -45,6 +47,7 @@ extension NodeRecords {
 		return NodeRecordClaim(
 			kind: .seamCall,
 			discharges: (passesEveryBuilderUp ? Set<NodeRecordRefusal>([.construction, .fill, .onlyIfAvailable]) : [.construction, .onlyIfAvailable]).union(wrapperDischarges),
+			refusals: forwardsValues ? [.construction] : [],
 		)
 	}
 
