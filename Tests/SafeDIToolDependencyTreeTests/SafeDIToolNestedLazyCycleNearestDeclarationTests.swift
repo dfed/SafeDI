@@ -483,7 +483,7 @@ struct SafeDIToolNestedLazyCycleNearestDeclarationTests: ~Copyable {
 				pDeclares: ["@Forwarded let l: L", "@Instantiated let uBuilder: Instantiator<U>"],
 				vDeclares: [#"@Received(fulfilledByDependencyNamed: "l", ofType: L.self) let renamed: L"#],
 			),
-			equals: { output in
+			equals: { _ in
 				"""
 				extension Root {
 				    public convenience init() {

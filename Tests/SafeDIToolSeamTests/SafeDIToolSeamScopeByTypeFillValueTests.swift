@@ -885,39 +885,39 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			fulfillers: [SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "DefaultUserService", fulfilling: "UserService", declarations: [#"@Received(fulfilledByDependencyNamed: "token", ofType: Token.self, onlyIfAvailable: true) let renamed: Token?"#])],
 			root: Self.lazyRouteRoot,
 			expectedApp: """
-				#if canImport(Feature)
-				import Feature
-				#endif
+			#if canImport(Feature)
+			import Feature
+			#endif
 
-				extension Root {
-				    public init() {
-				        let token = Token()
-				        func __safeDI_office() -> Office {
-				            _ = Office.__safeDI_Office_B2DE8228FC9538C0.self // \(Self.moduleInfoComment)
-				            func __safeDI_userServiceBuilder_Office_Model_Scope_userService(token: LazilyInstantiated<Token>?) -> any UserService {
-				                func __safeDI_userService() -> DefaultUserService {
-				                    let renamed: Token? = token?.instance // Declared as DefaultUserService.renamed
-				                    return DefaultUserService(renamed: renamed)
-				                }
-				                let userService: any UserService = __safeDI_userService()
-				                return userService
-				            }
-				            func __safeDI_userServiceBuilder_Office() -> Office.__safeDI_UserServiceCarrier<any UserService> {
-				                .init(desk: __safeDI_userServiceBuilder_Office_Desk_Scope(), model: { values_desk in __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>({ token })) })
-				            }
-				            func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.__safeDI_UserServiceCarrier_Desk<any UserService> {
-				                .init(model: { values_token in __safeDI_userServiceBuilder_Office_Model_Scope(token: values_token) })
-				            }
-				            func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>?) -> Office.__safeDI_UserServiceCarrier_Model<any UserService> {
-				                .init(userService: { __safeDI_userServiceBuilder_Office_Model_Scope_userService(token: token) })
-				            }
-				            return Office(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Office())
-				        }
-				        let office: Office = __safeDI_office()
-				        self.init(token: token, office: office)
-				    }
-				}
-				""",
+			extension Root {
+			    public init() {
+			        let token = Token()
+			        func __safeDI_office() -> Office {
+			            _ = Office.__safeDI_Office_B2DE8228FC9538C0.self // \(Self.moduleInfoComment)
+			            func __safeDI_userServiceBuilder_Office_Model_Scope_userService(token: LazilyInstantiated<Token>?) -> any UserService {
+			                func __safeDI_userService() -> DefaultUserService {
+			                    let renamed: Token? = token?.instance // Declared as DefaultUserService.renamed
+			                    return DefaultUserService(renamed: renamed)
+			                }
+			                let userService: any UserService = __safeDI_userService()
+			                return userService
+			            }
+			            func __safeDI_userServiceBuilder_Office() -> Office.__safeDI_UserServiceCarrier<any UserService> {
+			                .init(desk: __safeDI_userServiceBuilder_Office_Desk_Scope(), model: { values_desk in __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>({ token })) })
+			            }
+			            func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.__safeDI_UserServiceCarrier_Desk<any UserService> {
+			                .init(model: { values_token in __safeDI_userServiceBuilder_Office_Model_Scope(token: values_token) })
+			            }
+			            func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>?) -> Office.__safeDI_UserServiceCarrier_Model<any UserService> {
+			                .init(userService: { __safeDI_userServiceBuilder_Office_Model_Scope_userService(token: token) })
+			            }
+			            return Office(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Office())
+			        }
+			        let office: Office = __safeDI_office()
+			        self.init(token: token, office: office)
+			    }
+			}
+			""",
 		)
 	}
 

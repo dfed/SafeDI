@@ -447,7 +447,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		let fixtures = try #require(output.modules["Feature"]).fixtures
-		func seamFile(consumerPath: String) -> String {
+		func seamFile(consumerPath _: String) -> String {
 			generatedFileHeader + """
 			extension Screen {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
