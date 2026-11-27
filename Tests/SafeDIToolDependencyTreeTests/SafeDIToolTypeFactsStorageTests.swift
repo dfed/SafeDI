@@ -23,9 +23,6 @@ import Testing
 @testable import SafeDICore
 @testable import SafeDIToolLibrary
 @testable import SafeDIToolTestSupport
-#if os(Linux)
-	import Synchronization
-#endif
 
 /// A world's graph of per-type facts keeps its facts in flat columns of 32-bit IDs and bit sets (`TypeFactsGraph`), so
 /// what it holds grows with its declarations and edges, never with the paths through them.
@@ -89,38 +86,17 @@ struct SafeDIToolTypeFactsStorageTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func generate_buildsTypeFactsGraphWithinFixedAllocationsAndRetainsPerNodeAndEdge_whenWorldIsLifelikeOrHubDoublesItsPaths() async throws {
-		// Section 15: the graph's build allocates and retains a small constant per node and edge, never per path, and
-		// holds only flat columns: no array inside a column's elements. Allocations and retains are counted through the
-		// runtime's instrumentation hooks (`_swift_allocObject`, `_swift_retain`) on the thread that builds the graph; where
-		// the runtime has none, only what the graph holds is checked.
+	func generate_buildsTypeFactsGraphOfFlatColumns_whenWorldIsLifelikeOrHubDoublesItsPaths() async throws {
+		// Section 15: the graph holds only flat columns, no array inside a column's elements, so what its build allocates
+		// grows with its elements, which the test above bounds. Allocations and retains are not counted: the runtime's
+		// instrumentation hooks (`_swift_allocObject`, `_swift_retain`) take a hook in a register-preserving convention a
+		// Swift closure does not keep, which crashed the suite on Swift 6.3 on Linux.
 		var reports = await [try report(ofRoot: "Root", in: Self.lifelikeFixture)]
 		for layerCount in [6, 12] {
 			await reports.append(try report(ofRoot: "Root", in: Self.hubFixture(layerCount: layerCount)))
 		}
-		var perElement = [(allocations: Double, retains: Double)]()
 		for report in reports {
-			let elements = Double(report.nodes.count + report.edgeCount)
-			let root = report.graph.graph.nodes[0].scope
-			let counts = RuntimeCounts.counting {
-				_ = TypeFactsGraph(root: root, forMockGeneration: report.forMockGeneration)
-			}
-			if let counts {
-				perElement.append((Double(counts.allocations) / elements, Double(counts.retains) / elements))
-			}
 			try Self.expectFlatColumns(of: report.graph)
-		}
-		if perElement.count == reports.count {
-			// A debug build measured 83, 47 and 40 allocations and 1,360, 1,061 and 1,037 retains per node and edge, the
-			// variants included: the interning of properties and types hashes their spellings, which retains each part.
-			// The bounds stop growth.
-			for (allocations, retains) in perElement {
-				#expect(allocations <= 100, "\(perElement)")
-				#expect(retains <= 1_600, "\(perElement)")
-			}
-			// The hub of 12 layers holds 64 times the paths of 6 layers, and no more per node and edge.
-			#expect(perElement[2].allocations <= perElement[1].allocations * 1.1, "\(perElement)")
-			#expect(perElement[2].retains <= perElement[1].retains * 1.1, "\(perElement)")
 		}
 	}
 
@@ -213,66 +189,4 @@ struct SafeDIToolTypeFactsStorageTests: ~Copyable {
 			return true
 		}
 	}
-}
-
-/// The allocations and retains the runtime makes on one thread while a body runs, counted through its instrumentation
-/// hooks.
-private enum RuntimeCounts {
-	#if os(Linux)
-		typealias AllocateObject = @convention(c) (UnsafeRawPointer?, Int, Int) -> UnsafeMutableRawPointer?
-		typealias Retain = @convention(c) (UnsafeMutableRawPointer?) -> UnsafeMutableRawPointer?
-
-		static let countingThread = Atomic<UInt>(0)
-		static let allocations = Atomic<Int>(0)
-		static let retains = Atomic<Int>(0)
-		static let originalAllocateObject = Atomic<UInt>(0)
-		static let originalRetain = Atomic<UInt>(0)
-
-		/// The counts while `body` runs, or `nil` where the runtime has no hooks.
-		static func counting(_ body: () -> Void) -> (allocations: Int, retains: Int)? {
-			let handle = dlopen(nil, RTLD_NOW)
-			guard let enable = dlsym(handle, "_swift_enableSwizzlingOfAllocationAndRefCountingFunctions_forInstrumentsOnly"),
-			      let allocateHook = dlsym(handle, "_swift_allocObject"),
-			      let retainHook = dlsym(handle, "_swift_retain")
-			else { return nil }
-			let allocatePointer = allocateHook.assumingMemoryBound(to: AllocateObject.self)
-			let retainPointer = retainHook.assumingMemoryBound(to: Retain.self)
-			let enablePointer = enable.assumingMemoryBound(to: Bool.self)
-			originalAllocateObject.store(UInt(bitPattern: unsafeBitCast(allocatePointer.pointee, to: Int.self)), ordering: .sequentiallyConsistent)
-			originalRetain.store(UInt(bitPattern: unsafeBitCast(retainPointer.pointee, to: Int.self)), ordering: .sequentiallyConsistent)
-			allocations.store(0, ordering: .sequentiallyConsistent)
-			retains.store(0, ordering: .sequentiallyConsistent)
-			countingThread.store(UInt(pthread_self()), ordering: .sequentiallyConsistent)
-			let wasEnabled = enablePointer.pointee
-			let original = (allocatePointer.pointee, retainPointer.pointee)
-			allocatePointer.pointee = { metadata, size, alignmentMask in
-				if RuntimeCounts.countingThread.load(ordering: .relaxed) == UInt(pthread_self()) {
-					RuntimeCounts.allocations.add(1, ordering: .relaxed)
-				}
-				let original = unsafeBitCast(Int(bitPattern: RuntimeCounts.originalAllocateObject.load(ordering: .relaxed)), to: AllocateObject.self)
-				return original(metadata, size, alignmentMask)
-			}
-			retainPointer.pointee = { object in
-				if RuntimeCounts.countingThread.load(ordering: .relaxed) == UInt(pthread_self()) {
-					RuntimeCounts.retains.add(1, ordering: .relaxed)
-				}
-				let original = unsafeBitCast(Int(bitPattern: RuntimeCounts.originalRetain.load(ordering: .relaxed)), to: Retain.self)
-				return original(object)
-			}
-			enablePointer.pointee = true
-			body()
-			countingThread.store(0, ordering: .sequentiallyConsistent)
-			enablePointer.pointee = wasEnabled
-			allocatePointer.pointee = original.0
-			retainPointer.pointee = original.1
-			return (allocations.load(ordering: .sequentiallyConsistent), retains.load(ordering: .sequentiallyConsistent))
-		}
-	#else
-		/// The counts while `body` runs, or `nil` where the runtime has no hooks: this platform's runtime keeps them for
-		/// Instruments alone.
-		static func counting(_ body: () -> Void) -> (allocations: Int, retains: Int)? {
-			body()
-			return nil
-		}
-	#endif
 }

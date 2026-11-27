@@ -454,7 +454,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_session: @autoclosure @escaping () -> Session) {
 			        let session = LazilyInstantiated<Session>(__safeDI_session)
-			        func __safeDI_consumer() -> Consumer {
+			        @inline(never) func __safeDI_consumer() -> Consumer {
 			            #sourceLocation(file: "\(consumerPath)", line: 7)
 			            let auth: any Auth = session.instance
 			            #sourceLocation()
@@ -2604,7 +2604,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			extension Shell {
 			    /// Code you write and code SafeDI generates can both call this initializer.
 			    public init() {
-			        func __safeDI_service() -> Service {
+			        @inline(never) func __safeDI_service() -> Service {
 			            _ = Service.__safeDI_Service_93E737BA887EDA11.self // If this line does not compile, compile the code SafeDI generates for module Base into Base: under Bazel, add Base’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			            return Service()
 			        }
@@ -2694,7 +2694,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			    package init(__safeDI_session: @autoclosure @escaping () -> Session?, __safeDI_theme: @autoclosure @escaping () -> Theme?) {
 			        let session = LazilyInstantiated<Session?>(__safeDI_session)
 			        let theme = LazilyInstantiated<Theme?>(__safeDI_theme)
-			        func __safeDI_service() -> Service {
+			        @inline(never) func __safeDI_service() -> Service {
 			            _ = Service.__safeDI_Service_4376E198933DD11D.self // If this line does not compile, compile the code SafeDI generates for module Base into Base: under Bazel, add Base’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			            return Service(__safeDI_session: session.instance, __safeDI_theme: theme.instance)
 			        }
@@ -3623,7 +3623,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    package convenience init(__safeDI_shared shared: SharedThing, __safeDI_feedServiceBuilder: __safeDI_FeedServiceCarrier<FeedService>) {
-			        func __safeDI_store() -> FeedStore {
+			        @inline(never) func __safeDI_store() -> FeedStore {
 			            let formatter = FeedFormatter()
 			            return FeedStore(shared: shared, formatter: formatter)
 			        }

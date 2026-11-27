@@ -222,3 +222,29 @@ public struct DispatcherRecordObservation: Sendable {
 	/// Called with each dispatcher as its declaration is written, when set: by the tests, never by the tool.
 	@TaskLocal public static var observer: (@Sendable (DispatcherRecordObservation) -> Void)?
 }
+
+/// What the tree a fill builds reads from above it, which decides the values the fill binds and takes
+/// (`ScopeGenerator.FillFieldSelection`, `ScopeGeneratorUnderConstruction.callerReads(of:child:labelsHandedToReenteredFunctions:log:)`):
+/// the tree's from its generator, node records' from the world's facts.
+struct FillTreeReadFacts: Sendable {
+	/// The properties the tree receives from above it.
+	let received: Set<Property>
+	/// Those of `received` some receive requires.
+	let required: Set<Property>
+	/// Whether the tree reads the scope values the fill is handed (`ScopeGenerator.readsFillInnerScopes`).
+	let readsInnerScopes: Bool
+	/// The fields a site inside the fill carries (`ScopeGenerator.fieldsCarriedBySites`).
+	let fieldsCarriedBySites: Set<Property>
+
+	/// Whether the tree reads `field`: its form, its optional, or the instance of the wrapper it declares.
+	func reads(_ field: Property) -> Bool {
+		Self.reads(field, among: received)
+	}
+
+	/// Whether `received` holds a read of `field` (`reads(_:)`).
+	static func reads(_ field: Property, among received: Set<Property>) -> Bool {
+		received.contains(field)
+			|| received.contains(field.asOptionalProperty)
+			|| field.asLazilyInstantiatedInstancePropertyOfDeclaredBinding.map { received.contains($0) || received.contains($0.asOptionalProperty) } == true
+	}
+}

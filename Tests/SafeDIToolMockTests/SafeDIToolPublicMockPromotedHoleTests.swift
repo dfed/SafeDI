@@ -280,7 +280,7 @@ struct SafeDIToolPublicMockPromotedHoleTests: ~Copyable {
 				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 				    public convenience init(__safeDI_d d: SendableInstantiator<D>, __safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 				        let __safeDI_apiBuilder_leaf = __safeDI_apiBuilder.leaf(d)
-				        func __safeDI_leaf() -> Leaf {
+				        @inline(never) func __safeDI_leaf() -> Leaf {
 				            let api: any Api = __safeDI_apiBuilder_leaf.api()
 				            return Leaf(api: api, d: d)
 				        }

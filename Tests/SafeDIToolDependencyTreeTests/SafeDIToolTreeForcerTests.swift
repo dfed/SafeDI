@@ -44,23 +44,23 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_buildsTreeOnlyForRootNodeRecordsRefuse_whenNothingElseReadsTrees() async throws {
-		let (forcers, heldTaskCounts) = try await treeForcers(of: Self.plainAndLazyRoots)
+		let (forcers, heldTaskCounts) = try await treeForcers(of: Self.plainAndLoopingRoots)
 		#expect(forcers == """
-		Lazy\tkind lazy
+		Looping\tkind cycle
 		Plain\tnone
 		roots that built a tree: 1 of 2
 
 		""")
-		// A tree's code tasks are counted once its code is planned: only `Lazy` built one.
+		// A tree's code tasks are counted once its code is planned: only `Looping` built one.
 		#expect(heldTaskCounts == [0])
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_buildsEveryRootsTree_whenRunDrawsDOTGraph() async throws {
-		let (forcers, heldTaskCounts) = try await treeForcers(of: Self.plainAndLazyRoots, buildDOTFileOutput: true)
+		let (forcers, heldTaskCounts) = try await treeForcers(of: Self.plainAndLoopingRoots, buildDOTFileOutput: true)
 		#expect(forcers == """
-		Lazy\tkind lazy, DOT graph
+		Looping\tkind cycle, DOT graph
 		Plain\tDOT graph
 		roots that built a tree: 2 of 2
 
@@ -79,6 +79,7 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 			],
 			moduleMembershipArguments: ["--module-name", "Feature"],
 		)
+		// Node records make the records of the root's world, which calls the seam, and of the seam's own world.
 		#expect(forcers == """
 		Root\tseam world
 		Screen\tseam world
@@ -91,11 +92,12 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 
 	private var filesToDelete: [URL]
 
-	/// `Plain`, a root node records lay out, and `Lazy`, a root whose `LazilyInstantiated` property they refuse, since its
-	/// instance can be read by value.
-	private static let plainAndLazyRoots = [
+	/// `Plain`, a root node records lay out, and `Looping`, a root they refuse, since a type of its tree builds itself
+	/// again through an `Instantiator`.
+	private static let plainAndLoopingRoots = [
+		seamFixtureType(named: "Looping", isRoot: true, declarations: ["@Instantiated let stepBuilder: Instantiator<Step>"]),
 		seamFixtureType(named: "Plain", isRoot: true, declarations: ["@Instantiated let service: Service"]),
-		seamFixtureType(named: "Lazy", isRoot: true, declarations: ["@Instantiated let service: LazilyInstantiated<Service>"]),
+		seamFixtureType(named: "Step", declarations: ["@Instantiated let stepBuilder: Instantiator<Step>"]),
 		seamFixtureType(named: "Service", declarations: []),
 	]
 

@@ -84,8 +84,8 @@ struct SafeDIToolSeamCarrierCallRingTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 		        let __safeDI_apiBuilder_mid = __safeDI_apiBuilder.mid()
-		        func __safeDI_mid() -> Mid {
-		            func __safeDI_secondBuilder() -> Second {
+		        @inline(never) func __safeDI_mid() -> Mid {
+		            @inline(never) func __safeDI_secondBuilder() -> Second {
 		                _ = Second.__safeDI_Second_65EDB0DFB850B578.self
 		                return Second(__safeDI_apiBuilder: __safeDI_apiBuilder_mid.secondBuilder())
 		            }
@@ -120,7 +120,7 @@ struct SafeDIToolSeamCarrierCallRingTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
-		        func __safeDI_firstBuilder() -> First {
+		        @inline(never) func __safeDI_firstBuilder() -> First {
 		            _ = First.__safeDI_First_65EDB0DFB850B578.self
 		            return First(__safeDI_apiBuilder: __safeDI_apiBuilder.firstBuilder())
 		        }
@@ -179,8 +179,8 @@ struct SafeDIToolSeamCarrierCallRingTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_apiSendableBuilder: __safeDI_ApiSendableCarrier<any Api>) {
 		        let __safeDI_apiSendableBuilder_mid_Sendable = __safeDI_apiSendableBuilder.mid_Sendable()
-		        func __safeDI_mid() -> Mid {
-		            @Sendable nonisolated func __safeDI_secondBuilder() -> Second {
+		        @inline(never) func __safeDI_mid() -> Mid {
+		            @inline(never) @Sendable nonisolated func __safeDI_secondBuilder() -> Second {
 		                _ = Second.__safeDI_Second_3B1EC6CD5520D2F2.self
 		                return Second(__safeDI_apiBuilder: __safeDI_apiSendableBuilder_mid_Sendable.secondBuilder(), __safeDI_apiSendableBuilder: __safeDI_apiSendableBuilder_mid_Sendable.secondBuilder_Sendable())
 		            }
@@ -226,7 +226,7 @@ struct SafeDIToolSeamCarrierCallRingTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>, __safeDI_apiSendableBuilder: __safeDI_ApiSendableCarrier<any Api>) {
-		        @Sendable nonisolated func __safeDI_firstBuilder() -> First {
+		        @inline(never) @Sendable nonisolated func __safeDI_firstBuilder() -> First {
 		            _ = First.__safeDI_First_DEFB40E03FD8B994.self
 		            return First(__safeDI_apiSendableBuilder: __safeDI_apiSendableBuilder.firstBuilder_Sendable())
 		        }

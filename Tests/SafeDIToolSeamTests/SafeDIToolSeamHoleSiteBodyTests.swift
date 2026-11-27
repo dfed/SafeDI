@@ -96,19 +96,19 @@ struct SafeDIToolSeamHoleSiteBodyTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 		        let __safeDI_apiBuilder_panel = __safeDI_apiBuilder.panel
-		        func __safeDI_panel() -> Panel {
+		        @inline(never) func __safeDI_panel() -> Panel {
 		            let api: any Api = __safeDI_apiBuilder_panel.api()
 		            return Panel(api: api)
 		        }
 		        let panel: Panel = __safeDI_panel()
 		        let __safeDI_apiBuilder_panelBuilder = __safeDI_apiBuilder.panelBuilder(panel)
-		        func __safeDI_panelBuilder() -> Panel {
+		        @inline(never) func __safeDI_panelBuilder() -> Panel {
 		            let api: any Api = __safeDI_apiBuilder_panelBuilder.api()
 		            return Panel(api: api)
 		        }
 		        let panelBuilder = Instantiator<Panel>(__safeDI_panelBuilder)
 		        let __safeDI_apiBuilder_lazyPanel = __safeDI_apiBuilder.lazyPanel(panel, panelBuilder)
-		        func __safeDI_lazyPanel() -> Panel {
+		        @inline(never) func __safeDI_lazyPanel() -> Panel {
 		            let api: any Api = __safeDI_apiBuilder_lazyPanel.api()
 		            return Panel(api: api)
 		        }

@@ -33,6 +33,11 @@ public enum NodeRecordsObservation {
 	/// with the raw values of the refusals the claim discharges. Only a test sets it.
 	@TaskLocal public static var claimsForTesting = [String: [String]]()
 
+	/// Whether a mock root whose world node records accept has the statements that build its nodes laid out from them,
+	/// rather than written by the mock's walk, where `observer` is set. Off unless a test turns it on: the two write other
+	/// text for a node beneath a function, which is handed its override where the walk's captures the root's.
+	@TaskLocal public static var laysOutMockRoots = false
+
 	/// Handed each root's report, where set. Only a test sets it.
 	@TaskLocal public static var observer: (@Sendable (NodeRecordsReport) -> Void)?
 
@@ -55,21 +60,33 @@ public enum NodeRecordsObservation {
 			for (treeCode, nodeRecordsCode) in zip(tree, nodeRecords) {
 				let (treeIndentation, treeInner) = unindented(treeCode)
 				let (nodeRecordsIndentation, nodeRecordsInner) = unindented(nodeRecordsCode)
-				guard case let .place(nodeRecordsPlan) = nodeRecordsInner.node, case let .built(nodeRecordsRecord)? = nodeRecordsPlan.record else {
-					differences.append("\(path): node records made a statement that is no built place")
+				guard case let .place(nodeRecordsPlan) = nodeRecordsInner.node, let nodeRecordsRecord = nodeRecordsPlan.record else {
+					differences.append("\(path): node records made a statement that is no place")
 					continue
 				}
-				let placePath = "\(path).\(nodeRecordsRecord.property.label)"
-				guard case let .place(treePlan) = treeInner.node, case let .built(treeRecord)? = treePlan.record else {
-					differences.append("\(placePath): the tree writes no built place’s record")
+				let label = switch nodeRecordsRecord {
+				case let .built(record): record.property.label
+				case let .closer(record): record.property.label
+				case let .alias(record): record.property.label
+				}
+				let placePath = "\(path).\(label)"
+				guard case let .place(treePlan) = treeInner.node, let treeRecord = treePlan.record else {
+					differences.append("\(placePath): the tree writes no place’s record")
 					continue
 				}
 				treePlaceCount += 1
 				if treeIndentation != nodeRecordsIndentation {
 					differences.append("\(placePath): indented \(treeIndentation.count) in the tree, \(nodeRecordsIndentation.count) by node records")
 				}
-				differences += fieldDifferences(between: treeRecord, and: nodeRecordsRecord).map { "\(placePath): \($0)" }
-				pending.append((tree: treeRecord.children, nodeRecords: nodeRecordsRecord.children, path: placePath))
+				switch (treeRecord, nodeRecordsRecord) {
+				case let (.built(treeBuilt), .built(nodeRecordsBuilt)):
+					differences += fieldDifferences(between: treeBuilt, and: nodeRecordsBuilt).map { "\(placePath): \($0)" }
+					pending.append((tree: treeBuilt.children, nodeRecords: nodeRecordsBuilt.children, path: placePath))
+				case let (.alias(treeAlias), .alias(nodeRecordsAlias)):
+					differences += fieldDifferences(between: treeAlias, and: nodeRecordsAlias).map { "\(placePath): \($0)" }
+				case (.built, _), (.alias, _), (.closer, _):
+					differences.append("\(placePath): the tree writes another kind of place than node records")
+				}
 			}
 		}
 		return (differences, treePlaceCount)
@@ -83,6 +100,34 @@ public enum NodeRecordsObservation {
 			inner = wrapped
 		}
 		return (indentation, inner)
+	}
+
+	/// The fields of `nodeRecords`, a rename, that differ from `tree`'s.
+	private static func fieldDifferences(between tree: AliasPlaceRecord, and nodeRecords: AliasPlaceRecord) -> [String] {
+		var differences = [String]()
+		func compare<Value: Equatable>(_ name: String, _ treeValue: Value, _ nodeRecordsValue: Value) {
+			guard treeValue != nodeRecordsValue else { return }
+			differences.append("\(name) is \(treeValue) in the tree, \(nodeRecordsValue) by node records")
+		}
+		compare("property", tree.property, nodeRecords.property)
+		compare("fulfillingProperty", tree.fulfillingProperty, nodeRecords.fulfillingProperty)
+		// Node records leave a call's text to the engine, which spells it from the call (`InPlaceCall`).
+		if nodeRecords.call == nil {
+			compare("text", tree.text, nodeRecords.text)
+		}
+		compare("reads", tree.reads, nodeRecords.reads)
+		compare("otherBindings", tree.otherBindings, nodeRecords.otherBindings)
+		compare("calledFunctionNames", tree.calledFunctionNames, nodeRecords.calledFunctionNames)
+		compare("declaredFunctionNames", tree.declaredFunctionNames, nodeRecords.declaredFunctionNames)
+		compare("calledRootFunctionNames", tree.calledRootFunctionNames, nodeRecords.calledRootFunctionNames)
+		compare("holdsCall", tree.call != nil, nodeRecords.call != nil)
+		if let treeCall = tree.call, let nodeRecordsCall = nodeRecords.call {
+			differences += fieldDifferences(between: treeCall.record, and: nodeRecordsCall.record).map { "call: \($0)" }
+			compare("call: argumentValues", treeCall.record.argumentValues, nodeRecordsCall.record.argumentValues)
+			compare("call: statements before the leading statement", treeCall.statementsBeforeLeadingStatement.count, nodeRecordsCall.statementsBeforeLeadingStatement.count)
+			compare("call: statements after the leading statement", treeCall.statementsAfterLeadingStatement.count, nodeRecordsCall.statementsAfterLeadingStatement.count)
+		}
+		return differences
 	}
 
 	/// The fields of `nodeRecords` that differ from `tree`'s, children aside.
@@ -119,7 +164,7 @@ public struct NodeRecordsReport: Sendable {
 	public let root: String
 	/// Why node records refused the root's world (`NodeRecordRefusal`), or `nil` where they made its records.
 	public let refusal: String?
-	/// Every refusal the root's world holds, at any node, each once (`NodeRecords.refusals(in:)`): empty where node records
+	/// Every refusal the root's world holds, at any node, each once (`NodeRecords.refusals(in:seamTree:declaredTypeNames:)`): empty where node records
 	/// made its records.
 	public let everyRefusal: [String]
 	/// Whether the root's code was laid out from node records.
@@ -133,4 +178,7 @@ public struct NodeRecordsReport: Sendable {
 	/// What made the run build the root's tree (`TreeForcer`); empty where its code was laid out from node records alone,
 	/// and the tree was built only for the test to compare.
 	public let treeForcers: [TreeForcer]
+	/// Whether the root is a mock's: its records are compared with no tree's, so `differences` is empty, and a test
+	/// compares the code laid out from them, or the values that code builds, with the mock's walk's.
+	public var isMockRoot = false
 }
