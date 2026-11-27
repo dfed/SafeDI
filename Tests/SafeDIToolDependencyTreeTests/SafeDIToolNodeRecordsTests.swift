@@ -407,8 +407,76 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 			)
 		}
 		#expect(reports.map(\.root) == ["Screen", "Home"])
-		// `Screen`'s tree holds its hole; `Home`'s records are made, and a seam's own tree is not laid out.
-		#expect(reports.map(\.refusal) == ["renameOrHole", "notLaidOut"])
+		// `Screen`'s tree holds its hole; `Home`'s records are made, and its initializers are written around its body laid out
+		// from them.
+		#expect(reports.map(\.refusal) == ["renameOrHole", nil])
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [false, true])
+		#expect(reports.flatMap(\.differences) == [])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsTheTreeOfASeamCall_whenTwoPathsToOneNodePassUpTwoCases() async throws {
+		// `Home` builds `Screen` beneath `Left` and beneath `Right`, one node with one variant, and each path passes up the
+		// member of `Home`'s builder struct for its own case: no one read stands for the node, so its call keeps the tree.
+		let (_, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(name: "Feature", packageName: "App", swiftFileContent: [
+						"""
+						public protocol Api {}
+
+						@Instantiable(generateDependencyTree: true)
+						public struct Screen: Instantiable {
+						    public init(api: any Api) {
+						        self.api = api
+						    }
+
+						    @Instantiated let api: any Api
+						}
+						""",
+					], dependencies: []),
+					ModuleFixture(name: "Middle", packageName: "App", swiftFileContent: [
+						"""
+						import Feature
+
+						@Instantiable(generateDependencyTree: true)
+						public struct Home: Instantiable {
+						    public init(left: Left, right: Right) {
+						        self.left = left
+						        self.right = right
+						    }
+
+						    @Instantiated let left: Left
+						    @Instantiated let right: Right
+						}
+
+						@Instantiable
+						public struct Left: Instantiable {
+						    public init(screen: Screen) {
+						        self.screen = screen
+						    }
+
+						    @Instantiated let screen: Screen
+						}
+
+						@Instantiable
+						public struct Right: Instantiable {
+						    public init(screen: Screen) {
+						        self.screen = screen
+						    }
+
+						    @Instantiated let screen: Screen
+						}
+						""",
+					], dependencies: ["Feature"]),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		#expect(reports.map(\.root) == ["Screen", "Home"])
+		#expect(reports.map(\.refusal) == ["renameOrHole", "fill"])
 		#expect(reports.flatMap(\.differences) == [])
 	}
 

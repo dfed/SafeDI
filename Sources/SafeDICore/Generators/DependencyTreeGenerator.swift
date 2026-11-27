@@ -609,6 +609,8 @@ public actor DependencyTreeGenerator {
 			let autoclosureLabels: Set<String>
 			/// The seam's signature, whose call routes say how its tree passes its builders' structs up to the seams it calls.
 			let signature: SeamSignature
+			/// What the seam's initializers are written from around its tree's body (`ScopeGenerator.seamRootCode`).
+			let seamRoot: ScopeGenerator.SeamRoot
 		}
 
 		/// What made this run build the root's tree (`TreeForcer`); empty where it built none.

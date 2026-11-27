@@ -131,15 +131,10 @@ struct SeamCallRoutes: Sendable {
 		for callRoute in signature.callRoutes where !callRoute.reentersEnclosingFill {
 			// The node at the end of the route's path: each step the child of the step before built as the step's property. A
 			// path into a fill names no edge's property, and leaves its call without a read.
-			var declaration: DeclarationID = 0
-			for property in callRoute.sitePath {
-				guard let child = world.edges(from: declaration).first(where: { world.property(of: $0) == property }) else {
-					declaration = -1
-					break
-				}
-				declaration = child
+			let reached = callRoute.sitePath.reduce(DeclarationID?(0)) { declaration, property in
+				declaration.flatMap { world.edges(from: $0).first { world.property(of: $0) == property } }
 			}
-			guard declaration > 0,
+			guard let declaration = reached, declaration > 0,
 			      let calledBuilder = world.scope(of: declaration).seamCall?.calledBuilders.builders.first(where: { $0.enumKey == callRoute.innerKey })
 			else { continue }
 			// A call whose case is nested in another's binds the payloads of the cases on its route before the places that lead

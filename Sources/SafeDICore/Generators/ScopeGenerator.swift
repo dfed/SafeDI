@@ -501,20 +501,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		seamCall: SeamCall?,
 		children: [ScopeGenerator],
 	) -> Set<TypeDescription> {
-		var typesDeclaredEscaping = Set(instantiable.initializer?.typesDeclaredEscaping ?? [])
-		typesDeclaredEscaping.formUnion(instantiable.mockInitializer?.typesDeclaredEscaping ?? [])
-		// An alias hands its receiver the value of the property it names, so a name that fulfills a property of a name
-		// its initializers declare `@escaping` is a function type too, which a generated parameter of it must also spell
-		// `@escaping`: `nameDeclaredEscaping` of that name spelled `@escaping`, which is `nil` for any type but a name. An
-		// erased alias hands the value to an initializer instead, which may take any type.
-		let initializerTypesDeclaredEscaping = typesDeclaredEscaping
-		for dependency in instantiable.dependencies where initializerTypesDeclaredEscaping.contains(dependency.property.typeDescription) {
-			if case let .aliased(fulfillingProperty: fulfillingProperty, erasedToConcreteExistential: false, onlyIfAvailable: _) = dependency.source,
-			   let fulfillingName = TypeDescription.attributed(fulfillingProperty.typeDescription, specifiers: [], attributes: ["escaping"]).nameDeclaredEscaping
-			{
-				typesDeclaredEscaping.insert(fulfillingName)
-			}
-		}
+		var typesDeclaredEscaping = instantiable.typesDeclaredEscapingByItsDeclaration
 		typesDeclaredEscaping.formUnion(publicMockCall?.typesDeclaredEscaping ?? [])
 		typesDeclaredEscaping.formUnion(seamCall?.typesDeclaredEscaping ?? [])
 		for child in children where !child.typesDeclaredEscaping.isEmpty {
@@ -9884,6 +9871,63 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		builderFunctionNames: BuilderFunctionNames,
 		fillPlaceBindings: FillPlaceBindings,
 	) async throws -> String {
+		// The narrowest tier builds the tree, which reads each builder by its internal name, its parameter's name.
+		// A seam's root body plans its children at once, as a root of the dependency tree does, where its module plans
+		// few trees (`ConcurrentChildCode`).
+		let generatedProperties = try await ConcurrentChildCode.$plansChildrenAtOnce.withValue(ConcurrentChildCode.seamRootsPlanChildrenAtOnce) {
+			try await generateProperties(
+				propertiesGeneratedLater: propertiesGeneratedLater,
+				enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
+				leadingMemberWhitespace: "\(Self.standardIndent)\(Self.standardIndent)",
+				fillPlaceBindings: fillPlaceBindings,
+			)
+		}
+		// A test that observes node records compares this body with theirs.
+		NodeRecordsObservation.rootBodyObserver?(generatedProperties)
+		// A seam lays its body out by the type key, as a root does, reading its parameters and builders as the
+		// declarations before the body.
+		let declarations = Self.seamRootBodyDeclarations(of: instantiable, seamRoot: seamRoot)
+		let layout = TypeKeyBody.statements(
+			ofRootBody: generatedProperties,
+			outerDeclarations: declarations.outerDeclarations,
+			namesInScope: declarations.namesInScope,
+		)
+		return try Self.seamRootCode(
+			of: instantiable,
+			seamRoot: seamRoot,
+			narrowestTierStatements: layout ?? RootFunctionHoisting.hoisted(generatedProperties, indentation: "\(Self.standardIndent)\(Self.standardIndent)"),
+			unavailableProperties: unavailableProperties,
+			typesDeclaredEscaping: typesDeclaredEscaping,
+			loopLevelsTypesInTree: loopLevelsTypesInTree,
+		)
+	}
+
+	/// What a seam's narrowest tier declares before its tree's body, which the type key reads as the declarations before a
+	/// root's body: each parameter, a deferred one as the memo bound under its label, then each builder under its internal
+	/// name; and the names bound around the body, which no function the body declares takes.
+	static func seamRootBodyDeclarations(of instantiable: Instantiable, seamRoot: SeamRoot) -> (outerDeclarations: [Property], namesInScope: Set<String>) {
+		let signature = seamRoot.signature
+		let autoclosureCallByLabel = seamRoot.autoclosureCallByLabel(of: instantiable)
+		// A deferred parameter is read through its memo, bound under its label.
+		var outerDeclarations = signature.parameters.map { parameter in
+			guard case let .deferred(isSendable) = parameter.deferral, autoclosureCallByLabel[parameter.property.label] == nil else { return parameter.property }
+			return Property(label: parameter.property.label, typeDescription: .simple(name: isSendable ? Dependency.sendableLazilyInstantiatedType : Dependency.lazilyInstantiatedType, generics: [parameter.property.typeDescription]))
+		}
+		outerDeclarations.append(contentsOf: signature.builders.map { Property(label: $0.internalName, typeDescription: $0.parameterType) })
+		return (outerDeclarations, Set(signature.parameters.map(\.internalName) + signature.builders.map(\.internalName)))
+	}
+
+	/// The code `generateSeamRootCode` writes for the seam `instantiable`, whose narrowest tier writes
+	/// `narrowestTierStatements`, its tree's body laid out, and calls the seam's own initializer, passing `nil` for each of
+	/// `unavailableProperties`. `typesDeclaredEscaping` and `loopLevelsTypesInTree` are those of the seam's tree.
+	static func seamRootCode(
+		of instantiable: Instantiable,
+		seamRoot: SeamRoot,
+		narrowestTierStatements: [GeneratedCode],
+		unavailableProperties: Set<Property>,
+		typesDeclaredEscaping: Set<TypeDescription>,
+		loopLevelsTypesInTree: [String: String],
+	) throws -> String {
 		let signature = seamRoot.signature
 		let typeName = instantiable.concreteInstantiable.asSource
 		let initializerKeyword = "\(instantiable.declarationType == .classType ? "convenience " : "")init"
@@ -9928,38 +9972,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let parameters = tierParameters[index]
 			let body: String
 			if index == signature.tiers.count - 1 {
-				// The narrowest tier builds the tree, which reads each builder by its internal name, its parameter's name.
-				// A seam's root body plans its children at once, as a root of the dependency tree does, where its module plans
-				// few trees (`ConcurrentChildCode`).
-				let generatedProperties = try await ConcurrentChildCode.$plansChildrenAtOnce.withValue(ConcurrentChildCode.seamRootsPlanChildrenAtOnce) {
-					try await generateProperties(
-						propertiesGeneratedLater: propertiesGeneratedLater,
-						enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
-						leadingMemberWhitespace: bodyIndent,
-						fillPlaceBindings: fillPlaceBindings,
-					)
-				}
-				// A test that observes node records compares this body with theirs.
-				NodeRecordsObservation.rootBodyObserver?(generatedProperties)
 				let argumentList = try instantiable.generateArgumentList(
 					unavailableProperties: unavailableProperties,
 				)
-				// A seam lays its body out by the type key, as a root does, reading its parameters and builders as the
-				// declarations before the body. A deferred parameter is read through its memo, bound under its label.
-				var outerDeclarations = signature.parameters.map { parameter in
-					guard case let .deferred(isSendable) = parameter.deferral, autoclosureCallByLabel[parameter.property.label] == nil else { return parameter.property }
-					return Property(label: parameter.property.label, typeDescription: .simple(name: isSendable ? Dependency.sendableLazilyInstantiatedType : Dependency.lazilyInstantiatedType, generics: [parameter.property.typeDescription]))
-				}
-				outerDeclarations.append(contentsOf: signature.builders.map { Property(label: $0.internalName, typeDescription: $0.parameterType) })
-				let layout = TypeKeyBody.statements(
-					ofRootBody: generatedProperties,
-					outerDeclarations: outerDeclarations,
-					namesInScope: Set(signature.parameters.map(\.internalName) + signature.builders.map(\.internalName)),
-				)
 				var bodyLines = memoLines
-				let bodyStatements = layout ?? RootFunctionHoisting.hoisted(generatedProperties, indentation: bodyIndent)
-				if !bodyStatements.isEmpty {
-					bodyLines.append(GeneratedCode.lines(bodyStatements).spelled())
+				if !narrowestTierStatements.isEmpty {
+					bodyLines.append(GeneratedCode.lines(narrowestTierStatements).spelled())
 				}
 				bodyLines.append("\(bodyIndent)self.init(\(argumentList))")
 				body = bodyLines.joined(separator: "\n")
@@ -12559,5 +12577,26 @@ extension ScopeGenerator: CycleParameterSearchNode {
 	/// closes on (see `childrenTakePartInCycle`).
 	nonisolated var searchChildrenTakePartInCycle: Bool {
 		childrenTakePartInCycle
+	}
+}
+
+extension Instantiable {
+	/// The names this declaration's initializers declare `@escaping`, and each name an alias of one of them fulfills it with.
+	var typesDeclaredEscapingByItsDeclaration: Set<TypeDescription> {
+		var typesDeclaredEscaping = Set(initializer?.typesDeclaredEscaping ?? [])
+		typesDeclaredEscaping.formUnion(mockInitializer?.typesDeclaredEscaping ?? [])
+		// An alias hands its receiver the value of the property it names, so a name that fulfills a property of a name
+		// its initializers declare `@escaping` is a function type too, which a generated parameter of it must also spell
+		// `@escaping`: `nameDeclaredEscaping` of that name spelled `@escaping`, which is `nil` for any type but a name. An
+		// erased alias hands the value to an initializer instead, which may take any type.
+		let initializerTypesDeclaredEscaping = typesDeclaredEscaping
+		for dependency in dependencies where initializerTypesDeclaredEscaping.contains(dependency.property.typeDescription) {
+			if case let .aliased(fulfillingProperty: fulfillingProperty, erasedToConcreteExistential: false, onlyIfAvailable: _) = dependency.source,
+			   let fulfillingName = TypeDescription.attributed(fulfillingProperty.typeDescription, specifiers: [], attributes: ["escaping"]).nameDeclaredEscaping
+			{
+				typesDeclaredEscaping.insert(fulfillingName)
+			}
+		}
+		return typesDeclaredEscaping
 	}
 }

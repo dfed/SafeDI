@@ -224,6 +224,12 @@ struct NodeRecords: Sendable {
 		rootBody = order.edgeIndices(of: 0).map { edgeIndex in
 			.indented(places[Int(rootCalls[rootCalls.startIndex + edgeIndex])] ?? .empty, by: TypeKeyBody.rootStatementIndentation)
 		}
+		// The root's declaration spells its own, as the tree's root does, then every place's.
+		var rootEscaping = world.scope(of: world.declaration(of: 0)).instantiable.typesDeclaredEscapingByItsDeclaration
+		for callee in rootCalls {
+			rootEscaping.formUnion(typesDeclaredEscaping[Int(callee)] ?? [])
+		}
+		rootTypesDeclaredEscaping = rootEscaping
 		self.records = records
 		declarationByVariant = (0..<Int32(world.variantCount)).map(world.declaration(of:))
 	}
@@ -236,6 +242,10 @@ struct NodeRecords: Sendable {
 	/// The root's body: a place for each of the root's children, in the order the root builds them, indented as a root's
 	/// statements are.
 	let rootBody: [GeneratedCode]
+
+	/// The names the root's tree declares `@escaping`, as the tree's root collects them (`ScopeGenerator.typesDeclaredEscaping`),
+	/// which a seam's own root spells its parameters with.
+	let rootTypesDeclaredEscaping: Set<TypeDescription>
 
 	/// How many variants have a record, which is every variant but the root's.
 	var recordCount: Int {
