@@ -67,7 +67,9 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 		// Reading a fill's tree and finding what calls inside a fill hide hand each scope a copy of what is above it, so their
 		// work grows with the paths times the layers, as 2.4.1's walks of the same trees did; the fill channel of the per-type
 		// facts (`TypeFactsGraph`), which judges fills without the tree, removes both walks.
-		let seamSteps = Set(GenerationWork.Step.allCases).subtracting([.layingOutTypeKeyViews, .findingRootFunctions, .checkingReadsAtEveryMember, .askingMemoCandidates, .filingMemoEntryReads, .collectingTypesOfATree, .collectingDeclarationsOfACycle, .findingCarrierASiblingRequires, .findingSeamTierOmissions])
+		// Finding the value each receive is handed runs for `query graph` alone: `SafeDIToolQueryGraphTests` counts it on
+		// layers of screens that open screens of the next layer.
+		let seamSteps = Set(GenerationWork.Step.allCases).subtracting([.layingOutTypeKeyViews, .findingRootFunctions, .checkingReadsAtEveryMember, .askingMemoCandidates, .filingMemoEntryReads, .collectingTypesOfATree, .collectingDeclarationsOfACycle, .findingCarrierASiblingRequires, .findingSeamTierOmissions, .findingReceivedValueSupplies])
 		var countedSteps = Set<GenerationWork.Step>()
 		for shape in Shape.allCases {
 			var measures = [Measure]()

@@ -35,13 +35,23 @@ enum TypeKeyBody {
 	/// root keeps `rootBody`, the path key's statements. `outerDeclarations` are the declarations in scope before the root's
 	/// body that it does not write: a seam's parameters, as its narrowest tier binds them. A read the path key resolves to one
 	/// is resolved to it in the type key's layout too, never to `nil`. No function the layout declares takes a name of
-	/// `namesInScope`, the names bound around the body, such as a seam's parameters' internal names.
+	/// `namesInScope`, the names bound around the body, such as a seam's parameters' internal names. A value path of the
+	/// root's body may name each of `rootPassedArgumentNames`, the parameters of the function the body is written in that
+	/// its places read as a function's place reads a passed argument; the layout takes each as a name in scope too.
 	/// - Parameter hoisting: The root functions `rootBody` reaches (`RootFunctionHoisting.hoisting(_:indentation:)`), which a
 	///   caller that keeps the path key's body where this returns `nil` reads once for both.
-	static func statements(ofRootBody rootBody: [GeneratedCode], outerDeclarations: [Property] = [], namesInScope: Set<String> = [], hoisting: RootFunctionHoisting.Hoisting? = nil, indentation: String = rootStatementIndentation) -> [GeneratedCode]? {
+	static func statements(
+		ofRootBody rootBody: [GeneratedCode],
+		outerDeclarations: [Property] = [],
+		namesInScope: Set<String> = [],
+		rootPassedArgumentNames: Set<String> = [],
+		hoisting: RootFunctionHoisting.Hoisting? = nil,
+		indentation: String = rootStatementIndentation,
+	) -> [GeneratedCode]? {
 		var layout = TypeKeyLayout()
 		layout.declareOuter(outerDeclarations)
-		layout.namesInScope = namesInScope
+		layout.namesInScope = namesInScope.union(rootPassedArgumentNames)
+		layout.rootPassedArgumentNames = rootPassedArgumentNames
 		// The root functions the plan's places call are declared once, before every statement, as the path key declares
 		// them (`RootFunctionHoisting`). A statement of the root's body that holds one the path key keeps in place keeps the
 		// path key's code, which declares it where its call does, and every other statement is laid out by type.
@@ -241,6 +251,9 @@ struct TypeKeyLayout {
 	var keptRootFunctionNames = Set<String>()
 	/// The names bound around the root's body, which no function the layout declares takes.
 	var namesInScope = Set<String>()
+	/// The parameters of the function the root's body is written in that a value path of the root's body may name as a
+	/// passed argument.
+	var rootPassedArgumentNames = Set<String>()
 	/// The views whose bodies wrap a member of a loop of builders again (`ClosingPlaceRecord.rebindsLoopMember`).
 	var loopRebindingBodies = Set<Int>()
 	/// The views other than the root's in post-order of the view DAG.

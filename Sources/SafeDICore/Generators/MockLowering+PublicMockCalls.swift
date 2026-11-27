@@ -332,6 +332,7 @@ extension MockLowering.Walk {
 				}
 				arguments.append(labeled(".init(\(ReservedName.noScopeArgumentLabel): \(dependency.property.label))", as: argument))
 			} else if let builderStruct = structValuesByLabel[argument.innerLabel] {
+				// safedi-source-rule: allow stringScan — not cold, and bounded: it runs once for each builder struct that a call of another module’s public mock passes, as often as the mock bodies write such a call, and each run reads only that one struct’s text (its fills), never the generated file. Removed by the roadmap’s row 5 (mock bodies: one writer).
 				let fillsStruct = builderStruct.replacingOccurrences(of: "\n\(ScopeGenerator.standardIndent)", with: "\n\(innerIndent)")
 				arguments.append(labeled(holeBuilders[argument.innerLabel]?.structValue(fillsStruct: fillsStruct) ?? fillsStruct, as: argument))
 				if overrideBuilders != nil {

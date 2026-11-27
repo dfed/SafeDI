@@ -91,40 +91,14 @@ extension DependencyTreeGenerator {
 		)
 	}
 
-	/// Walks, for cycles only, the tree of each foreign seam whose initializer takes a builder, from the seam's root, as
-	/// the seam's own module validates it where it sees the fulfilling declarations: this module's validated scopes
-	/// build the seam inline, with the fills this module generates, but a tree rooted elsewhere reaches a fill with
-	/// another stack, and can close a cycle earlier, on a lazy property above the seam, than the seam's own validation
-	/// does. A fill is generated with the seam's stack, so a constant repeat the seam's walk rejects is rejected here,
-	/// with the diagnostic that walk reports. A seam's tree is walked whether or not this module fills each of its holes:
-	/// a hole this module does not fill has no scope, and the walk stops there. A seam whose builder another seam passes
-	/// up is walked too, so every seam on the chain from the outermost one this module fills down to the one whose tree
-	/// holds the hole is walked from its own root.
-	func validateCyclesFromRootsOfForeignSeamsWithHoles(
-		in typeDescriptionToScopeMap: [TypeDescription: Scope],
-		foreignSeamRoots: [TypeDescription: ScopeGenerator.SeamRoot?],
-		receivedPropertiesCache: inout ReceivedPropertiesCache,
-	) throws {
-		let seamTypesWithHoles = foreignSeamTypesWithHoles(among: foreignSeamRoots)
-		guard !seamTypesWithHoles.isEmpty else { return }
-		let rootScopes = seamTypesWithHoles.compactMap { typeDescriptionToScopeMap[$0] }.map { scope in
-			var receivedFromOutside = Set<Property>()
-			for property in Self.collectReceivedProperties(from: scope, cache: &receivedPropertiesCache).received {
-				receivedFromOutside.insert(property)
-				if let instanceProperty = property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding {
-					receivedFromOutside.insert(instanceProperty)
-				}
-			}
-			return ValidatedRootScope(scope: scope, boundProperties: [], isMock: false, receivedFromOutside: receivedFromOutside)
-		}
-		try validatePropertiesAreFulfillable(onRootScopes: rootScopes, typeDescriptionToScopeMap: typeDescriptionToScopeMap, cyclesOnly: true)
-	}
-
 	/// Walks, for cycles only, the trees a calling mock's production tree walks: where a mock tree calls another module's
 	/// public mock that has places, the trees of the module's mock roots and of each called type, from its own root, built
 	/// inline with this module's fills (`inlineTypeDescriptionToScopeMap`, the mock scope map built with no call), as
-	/// production builds the called type's seam inline (`validateCyclesFromRootsOfForeignSeamsWithHoles`). The mock roots
-	/// are walked first, then the called types in type order, as production walks its roots before the foreign seams.
+	/// production builds the called type's seam inline. The mock roots are walked first, then the called types in type
+	/// order. Production walks its roots alone: their walk builds every foreign seam inline with the same fills, and
+	/// judges each cycle of a seam's tree as a walk from the seam's own root would, since a cycle is accepted where any
+	/// dependency along it is an instantiator, wherever the walk enters it. Whether that holds for a called type, whose
+	/// mock roots bind what their trees receive from above them, is not shown, so the called types keep their walk.
 	func validateCyclesOfCallsWithPlaces(
 		publicMockCalls: [TypeDescription: PublicMockCall],
 		inlineTypeDescriptionToScopeMap: [TypeDescription: Scope],
@@ -834,9 +808,42 @@ extension DependencyTreeGenerator {
 	/// dependency is hidden by a closer ancestor's property with the same label.
 	/// - Parameter additionalMockRootScopes: The scopes of types whose mock is generated because
 	///   `additionalMocksToGenerate` lists them. Their trees are validated for hidden received dependencies only.
+	///
+	/// The fold over the facts of each type decides first (`FulfillmentFold`): where it finds no route that may fail, no
+	/// route is walked. Otherwise the walk of every route judges the trees and reports what it finds.
 	func validatePropertiesAreFulfillable(
 		onRootScopes rootScopes: [ValidatedRootScope],
 		additionalMockRootScopes: [ValidatedRootScope] = [],
+		typeDescriptionToScopeMap: [TypeDescription: Scope],
+		cyclesOnly: Bool,
+	) throws {
+		let routeThatMayFail = FulfillmentFold(
+			rootScopes: rootScopes,
+			additionalMockRootScopes: additionalMockRootScopes,
+			typeDescriptionToScopeMap: typeDescriptionToScopeMap,
+			cyclesOnly: cyclesOnly,
+		).firstRouteThatMayFail()
+		let comparison = ValidationWalkObservation.foldComparison
+		guard routeThatMayFail != nil || comparison != nil else { return }
+		do {
+			try validateEveryRouteIsFulfillable(
+				onRootScopes: rootScopes,
+				additionalMockRootScopes: additionalMockRootScopes,
+				typeDescriptionToScopeMap: typeDescriptionToScopeMap,
+				cyclesOnly: cyclesOnly,
+			)
+		} catch {
+			comparison?(FulfillmentFoldComparison(routeThatMayFail: routeThatMayFail?.rawValue, walkRejected: true))
+			throw error
+		}
+		comparison?(FulfillmentFoldComparison(routeThatMayFail: routeThatMayFail?.rawValue, walkRejected: false))
+	}
+
+	/// The walk of every route of the trees `validatePropertiesAreFulfillable(onRootScopes:…)` validates, which reports
+	/// what it finds.
+	private func validateEveryRouteIsFulfillable(
+		onRootScopes rootScopes: [ValidatedRootScope],
+		additionalMockRootScopes: [ValidatedRootScope],
 		typeDescriptionToScopeMap: [TypeDescription: Scope],
 		cyclesOnly: Bool,
 	) throws {
@@ -2172,17 +2179,14 @@ extension DependencyTreeGenerator {
 				// Most receives have no declaration of their label in the tree, so the forms they accept are listed only for one
 				// that has.
 				guard let closestDeclaration = closestDeclarationByLabel[receivedProperty.label] else { continue }
-				// A receive of an optional property, required or `onlyIfAvailable`, resolves to its non-optional form too, and an
-				// `onlyIfAvailable` alias reads the optional form of its fulfilling property too, as `nil` where it is.
 				let acceptedProperties: Set<Property> = isOnlyIfAvailableAlias
 					? Set(receivedProperty.formsReadByOnlyIfAvailableReceive)
 					: [receivedProperty, receivedProperty.asUnwrappedProperty]
+				// Nearly every receive is answered by the nearest declaration of its label, which no judgement fires for, so
+				// the read and what else the place answers it with are gathered only for one that is not.
 				guard !closestDeclaration.fulfills(anyOf: acceptedProperties),
-				      // An alias of a property this scope declares refers to that declaration.
-				      acceptedProperties.isDisjoint(with: scope.createdProperties),
-				      // Production passes `nil` for an `onlyIfAvailable` dependency no ancestor provides. A mock
-				      // declares every received dependency at its root, above every hiding declaration.
-				      cyclesOnly || acceptedProperties.contains(where: receivableProperties.contains)
+				      // An alias of a property this scope declares refers to that declaration: it reads nothing above.
+				      acceptedProperties.isDisjoint(with: scope.createdProperties)
 				else {
 					continue
 				}
@@ -2196,12 +2200,21 @@ extension DependencyTreeGenerator {
 					memoBlockingEventCount += 1
 					continue
 				}
+				let read = FulfillmentRead(channel: .value, label: receivedProperty.label, acceptedProperties: acceptedProperties)
+				let answer = DeclaredLabelAnswer(nearest: closestDeclaration.forms, isProvidedAbove: acceptedProperties.contains(where: receivableProperties.contains))
 				if let changedContext {
 					// A declaration between the function and the cycle-closing scope hides the receive; or the function's
 					// own tree hides it, as on its first build, which passed it `nil`, since only a scope between provides it.
-					guard changedContext.newLabels.contains(receivedProperty.label)
-						|| !cyclesOnly && !acceptedProperties.contains(where: firstBuildReceives)
-					else { continue }
+					guard Self.receiveIsHiddenOnLapBuiltAgain(
+						read,
+						firstBuild: changedContext.newLabels.contains(receivedProperty.label)
+							? nil
+							: DeclaredLabelAnswer(nearest: answer.nearest, isProvidedAbove: acceptedProperties.contains(where: firstBuildReceives)),
+						builtAgain: answer,
+						rootBindsEveryReceive: cyclesOnly,
+					) else { continue }
+				} else {
+					guard Self.receiveIsHidden(read, answeredWith: answer, rootBindsEveryReceive: cyclesOnly) else { continue }
 				}
 				memoBlockingEventCount += 1
 				let hiddenReceive = HiddenReceiveInTree(
@@ -2417,20 +2430,19 @@ extension DependencyTreeGenerator {
 					case .received(onlyIfAvailable: true), .aliased(_, _, onlyIfAvailable: true), .instantiated, .forwarded:
 						continue
 					}
-					let acceptedProperties: Set<Property> = [receivedProperty, receivedProperty.asUnwrappedProperty]
 					// A new nearest declaration: the first build judged one it saw. One of another type is the hidden-label
 					// error, recorded above.
-					if scopeToWalk.newLabels.contains(receivedProperty.label),
-					   let declaration = scopeToWalk.closestDeclarationByLabel[receivedProperty.label],
-					   acceptedProperties.contains(declaration.property) || declaration.lazilyInstantiatedInstanceProperty.map(acceptedProperties.contains) == true,
-					   let beingBuiltIndex = instantiationStack.firstIndex(of: declaration.property.asValidatedForDependencyCycles),
-					   // The scopes being built inside the first build of the scope the cycle closes on are those before it on
-					   // the stack.
-					   beingBuiltIndex < instantiationStack.count - scopeToWalk.closedOnStackCount,
-					   // An instantiator still being built is wrapped again where the cycle-closing scope passes it (see
-					   // `ScopeGenerator.ReceivedBuilderLoops`).
-					   !ScopeGenerator.isBuilder(instantiationStack[beingBuiltIndex])
-					{
+					guard scopeToWalk.newLabels.contains(receivedProperty.label),
+					      let declaration = scopeToWalk.closestDeclarationByLabel[receivedProperty.label]
+					else { continue }
+					let read = FulfillmentRead(channel: .value, label: receivedProperty.label, acceptedProperties: [receivedProperty, receivedProperty.asUnwrappedProperty])
+					// Where the declaration is still being built around the cycle-closing scope: the scopes being built inside
+					// the first build of the scope the cycle closes on are those before it on the stack.
+					let beingBuiltIndex = instantiationStack.firstIndex(of: declaration.property.asValidatedForDependencyCycles).flatMap {
+						$0 < instantiationStack.count - scopeToWalk.closedOnStackCount ? $0 : nil
+					}
+					let answer: FulfillmentAnswer = beingBuiltIndex == nil ? .declared(declaration.forms) : .beingBuilt(declaration.forms)
+					if Self.requiredReceiveClosesCycleOnLapBuiltAgain(read, newlyAnsweredWith: answer), let beingBuiltIndex {
 						// The nearest declaration is still being built around the cycle-closing scope.
 						throw invalidCycleError(
 							propertiesInCycle: [receivedProperty.asValidatedForDependencyCycles] + instantiationStack[0...beingBuiltIndex],
@@ -2789,11 +2801,17 @@ extension DependencyTreeGenerator {
 				// `query graph` builds the trees of a graph mid-edit around the receives it was told nothing provides: one of
 				// them is no event here, so a subtree that holds it can still be remembered as clean.
 				guard requiredReceivedProperty.declarationLocation.map(unfulfilledReceiveLocations.contains) != true else { continue }
-				// The instantiation stack holds a lazily instantiated property as the constant it stands for.
-				let beingBuiltIndex = receivableProperties.contains(receivedProperty.asUnwrappedProperty)
-					? nil
-					: instantiationStack.firstIndex(of: receivedProperty.asUnwrappedProperty.asValidatedForDependencyCycles)
-				if !cyclesOnly || beingBuiltIndex != nil {
+				// What the place answers a read of the receive's non-optional form. The instantiation stack holds a lazily
+				// instantiated property as the constant it stands for.
+				let unwrappedForms = FulfillmentForms(property: receivedProperty.asUnwrappedProperty, lazilyInstantiatedInstanceProperty: nil)
+				let nonOptionalFormAnswer: FulfillmentAnswer = if receivableProperties.contains(unwrappedForms.property) {
+					.declared(unwrappedForms)
+				} else if instantiationStack.contains(unwrappedForms.property.asValidatedForDependencyCycles) {
+					.beingBuilt(unwrappedForms)
+				} else {
+					.none
+				}
+				if Self.requiredReceiveIsUnfulfillable(nonOptionalForm: nonOptionalFormAnswer, rootBindsEveryReceive: cyclesOnly) {
 					// A mock binds every property its tree receives from above it, so there only a property still
 					// being built is unfulfillable. A non-optional one is a cycle, reported below.
 					// This property is in a dependency tree and is unfulfillable. Record the problem.

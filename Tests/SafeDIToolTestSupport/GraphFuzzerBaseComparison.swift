@@ -28,7 +28,8 @@ import Foundation
 /// beside the new code: CI builds the base's tool, and each graph of the fuzzer's corpora runs through both tools with
 /// the same arguments over the same files, in the same directories, one tool after the other. Everything either tool
 /// writes, and how each run ends, is compared byte for byte: each step's exit status and standard error, every
-/// generated file, every `.safedi` file, and the manifest `scan` writes. Only the scan cache is left out, which a run
+/// generated file, the DOT graph of each `generate` (`--dot-file-output`, so a change that draws the graph another way
+/// shows), every `.safedi` file, and the manifest `scan` writes. Only the scan cache is left out, which a run
 /// reads to save work and which no build compiles or hands another module.
 ///
 /// A graph in one module runs as the SwiftPM plugin runs the tool (`scan`, then `generate --swift-manifest`); a graph
@@ -283,7 +284,7 @@ enum GraphFuzzerBaseComparison {
 					"--manifest-file", manifestFile.path,
 					"--mock-scoped-files",
 				] + paths + conditions),
-				("generate", ["generate", inputsFile.path, "--swift-manifest", manifestFile.path] + conditions),
+				("generate", ["generate", inputsFile.path, "--swift-manifest", manifestFile.path, "--dot-file-output", workDirectory.appendingPathComponent("Output").appendingPathComponent("graph.dot").path] + conditions),
 			]
 		}
 
@@ -313,6 +314,7 @@ enum GraphFuzzerBaseComparison {
 					"--compiler-receives-input-paths-unchanged",
 					"--module-info-output", moduleInfoDirectory.appendingPathComponent("\(module.name).safedi").path,
 					"--module-name", module.name,
+					"--dot-file-output", workDirectory.appendingPathComponent("Output").appendingPathComponent("\(module.name).dot").path,
 				]
 				if !fixture.modulesOmittingPackageName.contains(module) {
 					arguments += ["--package-name", module.packageName]
