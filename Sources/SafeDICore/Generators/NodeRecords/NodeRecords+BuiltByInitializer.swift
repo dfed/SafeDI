@@ -104,7 +104,7 @@ extension NodeRecords {
 	///   that a constant declares it too.
 	static func builtByInitializerRecord(
 		of declaration: DeclarationID,
-		variant: VariantID,
+		variant _: VariantID,
 		in world: some NodeRecordVariantFacts,
 		unavailableProperties: Set<Property> = [],
 		lazilyInstantiatedInstanceProperties: Set<Property>,
