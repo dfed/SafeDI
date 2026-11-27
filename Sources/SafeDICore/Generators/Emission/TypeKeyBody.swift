@@ -42,8 +42,8 @@ enum TypeKeyBody {
 	/// production keeps the path key's body where it writes each member's function once. Where
 	/// `declaresLoopMembersAsThePathKeyDoes` is set, the function of each member of a loop of builders that one statement of
 	/// the root's body builds is declared right before that statement, as the path key declares a loop it writes once,
-	/// rather than with the loop's other functions, and each function a member's function reaches alone is declared in the
-	/// body that calls it, as the path key nests it. It applies only where the path key writes each loop once, and exists
+	/// rather than with the loop's other functions, and every other function is declared in the body that calls it, as the
+	/// path key nests it. It applies only where the path key writes each loop once, and exists
 	/// so that a root laid out from node records writes the path key's bytes where the path key keeps 2.4.0's form for a
 	/// loop; once the records place functions themselves, placement comes from them and this goes.
 	static func statements(

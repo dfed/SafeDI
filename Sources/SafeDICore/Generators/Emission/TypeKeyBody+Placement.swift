@@ -63,9 +63,6 @@ extension TypeKeyLayout {
 		placementIndex = Array(repeating: 0, count: classCount)
 		placementDepth = Array(repeating: 0, count: classCount)
 		placementOwner[0] = 0
-		// Where the path key writes each loop of builders once, the classes its members' functions alone reach, members
-		// included, which the path key nests in the function that calls them (`declaresLoopMembersAsThePathKeyDoes`).
-		var isNestedAsThePathKeyDoes = [Bool](repeating: false, count: classCount)
 		// Tarjan's algorithm finishes a component after every component it reaches, so callers come last: they are placed
 		// first.
 		for component in classesByComponent.keys.sorted(by: >) {
@@ -76,15 +73,11 @@ extension TypeKeyLayout {
 			// Every function is declared in the root's body, never nested in another: Swift 6.2's compile time doubles with
 			// each level of nested local functions past about twenty.
 			guard let firstSite = externalSites.first else { return false }
-			// A loop is a component whose members call one another, or a member itself. The path key declares a loop in the
-			// body that builds it, and each function a nested one calls in its caller's body: a component called from that
-			// body alone is declared there. One the path key writes once per calling body, which the type key keys as one
-			// view, has no one body to be declared in, so the root keeps the path key's body.
-			let isLoop = members.count > 1 || allSites.contains { memberSet.contains($0.owner) }
-			let isReachedAsThePathKeyNests = declaresLoopMembersAsThePathKeyDoes && (isLoop || externalSites.contains { isNestedAsThePathKeyDoes[$0.owner] })
-			let isCalledFromOneBody = externalSites.allSatisfy { $0.owner == firstSite.owner }
-			guard !isReachedAsThePathKeyNests || isCalledFromOneBody else { return false }
-			let isNested = isReachedAsThePathKeyNests
+			// Where the path key writes each loop once, it declares each function in the body that calls it, a loop's
+			// functions in the body that builds the loop. A component the path key writes once per calling body, which the
+			// type key keys as one view, has no one body to be declared in, so the root keeps the path key's body.
+			let isNested = declaresLoopMembersAsThePathKeyDoes
+			guard !isNested || externalSites.allSatisfy({ $0.owner == firstSite.owner }) else { return false }
 			let owner = isNested ? firstSite.owner : 0
 			let isAttached = members.count == 1 && externalSites.count == 1 && allSites.count == 1 && firstSite.owner == owner
 			// The functions are declared before the first statement of the root's body that reaches them: one that calls a
@@ -100,9 +93,6 @@ extension TypeKeyLayout {
 			// A loop of builders whose members the root's statements each build once, and nothing else reaches, declares each
 			// member's function right before the statement that builds it, as the path key does: a member's function may call
 			// a later one's, which `keepsCapturesOfLoopMembersDeclaredAsThePathKeyDoes()` checks once captures are known.
-			for member in members {
-				isNestedAsThePathKeyDoes[member] = isNested
-			}
 			let sitesByMember = members.map { member in callSitesByClass[member].filter { !memberSet.contains($0.owner) } }
 			if isNested, members.count > 1, sitesByMember.allSatisfy({ $0.count == 1 && $0.first?.owner == owner }) {
 				for (member, sites) in zip(members, sitesByMember) {
