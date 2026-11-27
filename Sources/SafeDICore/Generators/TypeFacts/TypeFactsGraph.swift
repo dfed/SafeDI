@@ -260,13 +260,11 @@ struct TypeFactsGraph: Sendable {
 		// receive only if available, each form it reads.
 		var propertiesByUnwrapped = [Int32: [Int32]]()
 		var propertiesByFormRead = [Int32: [Int32]]()
-		var propertiesByLabel = [Int32: [Int32]]()
 		for property in 0..<Int32(properties.values.count) {
 			propertiesByUnwrapped[propertyFacts.unwrapped[Int(property)], default: []].append(property)
 			for form in propertyFacts.formsRead(by: property) {
 				propertiesByFormRead[form, default: []].append(property)
 			}
-			propertiesByLabel[propertyFacts.labels[Int(property)], default: []].append(property)
 		}
 		let propertyCount = properties.values.count
 		func provided(by node: Int, _ insert: (Int32) -> Void) {
@@ -318,23 +316,48 @@ struct TypeFactsGraph: Sendable {
 		// fulfilling property, where a child's tree requires the alias, or requires through an alias a property of the
 		// alias's label that the alias provides a form of, carried up until a scope declares its label. The second reads
 		// what the children require through aliases, so the rows are found again until no alias joins them.
-		let hiddenByDeclaredLabels = BitRows(rowCount: nodes.count, columnCount: propertyCount) { node, insert in
+		// The rows' columns are only the properties a requirement through an alias can name: a seam call's own, and each
+		// alias's fulfilling property, which is all the fixed point adds. A declaration hides the columns of its label, so
+		// what a node hides costs the aliases of the labels it declares, never every property that shares a label.
+		var aliasColumnProperties = Set(ownRequiredThroughAlias.joined())
+		for childProperty in childProperties where childProperty.aliasFulfilling >= 0 {
+			aliasColumnProperties.insert(childProperty.aliasFulfilling)
+		}
+		let propertyByAliasColumn = aliasColumnProperties.sorted()
+		var aliasColumnOfProperty = [Int32](repeating: -1, count: propertyCount)
+		var aliasColumnsByLabel = [Int32: [Int32]]()
+		for (column, property) in propertyByAliasColumn.enumerated() {
+			aliasColumnOfProperty[Int(property)] = Int32(column)
+			aliasColumnsByLabel[propertyFacts.labels[Int(property)], default: []].append(Int32(column))
+		}
+		var aliasHiddenColumnCount = 0
+		let hiddenByDeclaredLabels = BitRows(rowCount: nodes.count, columnCount: propertyByAliasColumn.count) { node, insert in
 			for property in declared[node] {
-				propertiesByLabel[propertyFacts.labels[Int(property)]]?.forEach(insert)
+				for column in aliasColumnsByLabel[propertyFacts.labels[Int(property)]] ?? [] {
+					aliasHiddenColumnCount += 1
+					insert(column)
+				}
 			}
 		}
+		self.aliasHiddenColumnCount = aliasHiddenColumnCount
 		func requiredAliasFulfillingRows() -> BitRows {
-			ReadsFromAbove(
+			let rows = ReadsFromAbove(
 				graph: graph,
 				// A requirement stops at the nearest declaration of its label, the scope's own included.
-				own: BitRows(rowCount: nodes.count, columnCount: propertyCount) { node, insert in
-					for property in ownRequiredThroughAlias[node] where !hiddenByDeclaredLabels.contains(property, inRow: node) {
-						insert(property)
+				own: BitRows(rowCount: nodes.count, columnCount: propertyByAliasColumn.count) { node, insert in
+					for column in ownRequiredThroughAlias[node].map({ aliasColumnOfProperty[Int($0)] }) where !hiddenByDeclaredLabels.contains(column, inRow: node) {
+						insert(column)
 					}
 				},
 				hidden: hiddenByDeclaredLabels,
 				followsEdge: followsEdge,
 			).rows
+			// Back to property IDs, in increasing order, as every other receive row holds them.
+			return BitRows(rowCount: nodes.count, columnCount: propertyCount) { node, insert in
+				for column in rows.columns(inRow: node) {
+					insert(propertyByAliasColumn[Int(column)])
+				}
+			}
 		}
 		// By edge: one alias leaf is shared by every declaration of its scope, each of which requires it on its own.
 		var aliasEdgesRequired = Set<Int>()
@@ -680,6 +703,11 @@ struct TypeFactsGraph: Sendable {
 	/// Each node's cycle identity (A4), dense in first-reach order: the property as cycle validation sees it and the
 	/// concrete type built, by the run's IDs, so two nodes of one identity close cycles on each other. A leaf's is its own.
 	let cycleIDs: [CycleID]
+
+	/// How many columns the declarations hide from the rows of what is required through an alias, over every node: a
+	/// declaration hides the aliases of its label, so this grows with declarations and aliases, never with the properties
+	/// that share a label. For a test to count how the rows' cost grows.
+	let aliasHiddenColumnCount: Int
 
 	/// Each node's reads from above, in increasing read ID, one run per node at `readOffsets`: what `reads(of:)` slices.
 	let readColumn: [Int32]
