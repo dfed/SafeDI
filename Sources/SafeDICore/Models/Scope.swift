@@ -781,7 +781,18 @@ extension ScopeRecord {
 /// the generators of the scopes it creates exist.
 /// A case of a place graph, told apart from another graph's case of the same index by the graph's query, whose identity
 /// orders nothing.
-private struct HoldingCaseKey: Hashable {
+/// A case of a place graph as a set tells it apart: its indices are its own graph's, so two graphs' cases are told apart by
+/// the graph's identity, which orders nothing.
+struct HoldingCaseKey: Hashable {
+	init(graph: ObjectIdentifier, caseIndex: Int) {
+		self.graph = graph
+		self.caseIndex = caseIndex
+	}
+
+	init(_ resolved: SeamSignature.Places.Query.ResolvedCase) {
+		self.init(graph: ObjectIdentifier(resolved.query), caseIndex: resolved.caseIndex)
+	}
+
 	let graph: ObjectIdentifier
 	let caseIndex: Int
 }

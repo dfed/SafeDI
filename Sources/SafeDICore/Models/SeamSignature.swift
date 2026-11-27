@@ -2624,13 +2624,6 @@ struct CalledBuilders: Sendable {
 	/// captures the run's signatures, which live as long as the run.
 	let placesOfSeamsBeneath: @Sendable (SeamSignature.Places.CalledCase) -> SeamSignature.Places.Called?
 
-	/// The case in `places` of the place at `site` where it is a case of the called seam's own: a place the called seam
-	/// passes up refers into another seam's graph, which a reader resolves through `Query.holdingCase(of:)`.
-	func ownCaseIndex(ofSite site: SeamSignature.Hole.Site) -> Int? {
-		guard let caseIndex = caseIndexBySite[site], places.cases[caseIndex].passedUp == nil else { return nil }
-		return caseIndex
-	}
-
 	/// The case of the place at `site` in the graph of the seam whose tree holds it: for a case of the called seam's own,
 	/// that case of `query`, which is `places`' query; for a place the called seam passes up, the case `query` resolves it to
 	/// (`Query.holdingCase(of:)`). `nil` where `places` holds no case of the place, or the run does not hold the graph of a
@@ -2639,6 +2632,25 @@ struct CalledBuilders: Sendable {
 		guard let caseIndex = caseIndexBySite[site] else { return nil }
 		guard places.cases[caseIndex].passedUp != nil else { return SeamSignature.Places.Query.ResolvedCase(query: query, caseIndex: caseIndex) }
 		return query.holdingCase(of: caseIndex)
+	}
+
+	/// The holding case (`holdingCase(ofSite:in:)`) of each of `sites`, each case once, in the order its first site comes,
+	/// or `nil` where one of them has none.
+	func holdingCases(ofSites sites: some Sequence<SeamSignature.Hole.Site>, in query: SeamSignature.Places.Query) -> [SeamSignature.Places.Query.ResolvedCase]? {
+		var holdingCases = [SeamSignature.Places.Query.ResolvedCase]()
+		var seen = Set<HoldingCaseKey>()
+		for site in sites {
+			guard let holding = holdingCase(ofSite: site, in: query) else { return nil }
+			if seen.insert(HoldingCaseKey(holding)).inserted {
+				holdingCases.append(holding)
+			}
+		}
+		return holdingCases
+	}
+
+	/// The query of `places` that resolves the cases the called seam passes up into the graphs of the seams beneath it.
+	var placesQuery: SeamSignature.Places.Query {
+		SeamSignature.Places.Query(of: places, calledPlaces: { [placesOfSeamsBeneath] in placesOfSeamsBeneath($0)?.places })
 	}
 
 	/// The sites of `sites` that a route from the root enum of `rootKey` reaches (see `sitesReachedOnItsRoutes(by:in:)`).
