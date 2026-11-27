@@ -2168,8 +2168,8 @@ extension DependencyTreeGenerator {
 	/// by what generation found (`ScopeGenerator.closesCycleOnFillPath`), so only against the stack it was built
 	/// with: the walk goes on into a fill nested in this one, whose receives fall through to this fill's fields, but a closer
 	/// beneath it is that fill's, which `validateFills` reaches itself. This generator tree holds a seam the fill calls as a
-	/// leaf, so a property re-entered through such a call is never judged here; the cycle walk of
-	/// `validateCyclesFromRootsOfForeignSeamsWithHoles`, which inlines every seam, judges those.
+	/// leaf, so a property re-entered through such a call is never judged here; the validation walk of the module's roots
+	/// (`validatePropertiesAreFulfillable(typeDescriptionToScopeMap:)`), which inlines every seam, judges those.
 	/// - Parameters:
 	///   - fill: The fill's generator, whose fields say which memos it binds.
 	///   - call: The seam call that declares this fill, whose fills decide whether a type above the seam can
@@ -2947,7 +2947,7 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 		/// What identifies the finding: its kind and where it is reported, and, for a label the seam's tree receives in two
 		/// forms, which the seam reports per label at its own declaration, the label.
 		var key: String {
-			let location = sourceDiagnostics.first?.location.map { "\($0.filePath):\($0.line):\($0.column)" } ?? ""
+			let location = sourceDiagnostics.first?.location.map(\.identity) ?? ""
 			if case let .parameterReceivedInAnotherForm(label, _, _, _, _) = kind {
 				return "\(kindName) \(location) \(label)"
 			} else if case let .publicMockHandsOptionalWrapperOfRequiredValue(label, _, _, _, _) = kind {
@@ -3151,6 +3151,7 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 			case let .sendableWrapperReadBesidePlainMemo(reader, memo, instanceReader, routes):
 				let memoProperty = Property(label: memo.property.label, typeDescription: memo.memoType ?? memo.property.typeDescription)
 				var seams = [String]()
+				// safedi-source-rule: allow stringScan — `seams` is the `[String]` of seam names one error message lists, built only when the error is reported.
 				for route in routes where !seams.contains("`\(route.seamType.asSource)`’s") {
 					seams.append("`\(route.seamType.asSource)`’s")
 				}
@@ -3260,6 +3261,7 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 					/// renaming of the types moves together.
 					func seamsInPlaceOrder(_ orderedPlaces: [SeamSignature.Hole.UncarriedDeclaration.PresentedPlace]) -> [String] {
 						var seams = [String]()
+						// safedi-source-rule: allow stringScan — `seams` is the `[String]` of seam names one error message lists, built only when the error is reported.
 						for place in orderedPlaces where !seams.contains("`\(place.seamType.asSource)`") {
 							seams.append("`\(place.seamType.asSource)`")
 						}
@@ -3521,7 +3523,7 @@ extension SeamSignature.Hole.UncarriedDeclaration.PresentedPlace {
 extension SeamSignature.Hole.ReenteringCallDeclaration {
 	/// Everything that tells two such declarations apart, which a place's list holds once each.
 	fileprivate var identity: [String] {
-		var identity = [property.label, property.typeDescription.asSource, declaringType.asSource, declarationLocation.map { "\($0.filePath):\($0.line):\($0.column)" } ?? ""]
+		var identity = [property.label, property.typeDescription.asSource, declaringType.asSource, declarationLocation.map(\.identity) ?? ""]
 		identity += pathPlace.nameOrder
 		identity += [callingType.asSource, callProperty.label, callProperty.typeDescription.asSource, calledSeam.asSource]
 		identity += reenteredPlace.nameOrder
@@ -3538,7 +3540,7 @@ extension SeamSignature.Hole.ReenteringCallDeclaration {
 extension SeamSignature.Hole.ReenteringPlaceField {
 	/// Everything that tells two such fields apart, which a place's list holds once each.
 	fileprivate var identity: [String] {
-		var identity = [carried.field.property.label, carried.field.property.typeDescription.asSource, carried.field.declaringType.asSource, carried.field.declarationLocation.map { "\($0.filePath):\($0.line):\($0.column)" } ?? ""]
+		var identity = [carried.field.property.label, carried.field.property.typeDescription.asSource, carried.field.declaringType.asSource, carried.field.declarationLocation.map(\.identity) ?? ""]
 		identity += carried.reenteringPlace.nameOrder
 		identity += [carried.callProperty.label, carried.callProperty.typeDescription.asSource, carried.calledSeam.asSource]
 		identity += reenteredIdentity

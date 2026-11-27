@@ -251,7 +251,10 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	/// Where a diagnostic about the requested mock points: the `generateMock:` argument's value, else the declaration.
 	public var mockGenerationArgumentLocation: Dependency.DeclarationLocation? {
 		declarationLocation.map { declarationLocation in
-			mockGenerationArgumentRange.map { Dependency.DeclarationLocation(filePath: declarationLocation.filePath, line: $0.startLine, column: $0.startColumn) } ?? declarationLocation
+			// A range read without its positions is reported at the declaration, which only a run that reads them then
+			// prints (`SourceDiagnostic.printsPositionStoredElsewhere`).
+			guard case let .here(startLine, startColumn, _, _) = mockGenerationArgumentRange?.placement else { return declarationLocation }
+			return Dependency.DeclarationLocation(filePath: declarationLocation.filePath, line: startLine, column: startColumn)
 		}
 	}
 

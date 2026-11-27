@@ -120,7 +120,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 				    public init(__safeDI_analytics analytics: Analytics, __safeDI_gadgetBuilder: __safeDI_GadgetCarrier<any Gadget>) {
-				        func __safeDI_part() -> any Gadget {
+				        @inline(never) func __safeDI_part() -> any Gadget {
 				            __safeDI_gadgetBuilder.part(analytics)
 				        }
 				        let part = LazilyInstantiated<any Gadget>(__safeDI_part)
@@ -153,7 +153,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 				    public init(__safeDI_analytics analytics: Analytics, __safeDI_gadgetSendableBuilder: __safeDI_GadgetSendableCarrier<any Gadget>) {
-				        @Sendable nonisolated func __safeDI_part() -> any Gadget {
+				        @inline(never) @Sendable nonisolated func __safeDI_part() -> any Gadget {
 				            __safeDI_gadgetSendableBuilder.part()
 				        }
 				        let part = SendableLazilyInstantiated<any Gadget>(__safeDI_part)
@@ -990,7 +990,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_analytics analytics: Analytics, __safeDI_panelSendableBuilder: __safeDI_PanelSendableCarrier<Panel>) {
-		        @Sendable nonisolated func __safeDI_ownerBuilder() -> Owner {
+		        @inline(never) @Sendable nonisolated func __safeDI_ownerBuilder() -> Owner {
 		            let __safeDI_panelSendableBuilder_ownerBuilder = __safeDI_panelSendableBuilder.ownerBuilder()
 		            let held = Instantiator<Panel>(__safeDI_panelSendableBuilder_ownerBuilder.held())
 		            return Owner(held: held)
@@ -1101,7 +1101,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_analytics analytics: Analytics, __safeDI_panelSendableBuilder: __safeDI_PanelSendableCarrier<Panel>) {
-		        @Sendable nonisolated func __safeDI_ownerBuilder() -> Owner {
+		        @inline(never) @Sendable nonisolated func __safeDI_ownerBuilder() -> Owner {
 		            let __safeDI_panelSendableBuilder_ownerBuilder_Sendable = __safeDI_panelSendableBuilder.ownerBuilder_Sendable
 		            let tally = Tally()
 		            let held = SendableInstantiator<Panel>(__safeDI_panelSendableBuilder_ownerBuilder_Sendable.held())
@@ -1235,7 +1235,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_panelBuilder: __safeDI_PanelCarrier<Panel>) {
-		        func __safeDI_inner() -> Inner {
+		        @inline(never) func __safeDI_inner() -> Inner {
 		            _ = Inner.__safeDI_Inner_5304DA22A233A920.self
 		            return Inner(__safeDI_panelBuilder: __safeDI_panelBuilder.inner)
 		        }
@@ -1357,17 +1357,17 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_gadgetSendableBuilder: SafeDISendableScope_Gadget.__safeDI_Builder<any Gadget>) {
-			        func __safeDI_inner() -> Inner {
+			        @inline(never) func __safeDI_inner() -> Inner {
 			            _ = Inner.__safeDI_Inner_6D43C09429362F02.self\(seamCallComment(seam: "Inner"))
-			            @Sendable nonisolated func __safeDI_widgetSendableBuilder_Inner_widget() -> any Widget {
-			                @Sendable nonisolated func __safeDI_widget() -> DefaultWidget {
+			            @inline(never) @Sendable nonisolated func __safeDI_widgetSendableBuilder_Inner_widget() -> any Widget {
+			                @inline(never) @Sendable nonisolated func __safeDI_widget() -> DefaultWidget {
 			                    let __safeDI_gadgetSendableBuilder_inner_widgetSendableBuilder = __safeDI_gadgetSendableBuilder.inner_widgetSendableBuilder(SafeDISendableScope_Gadget.inner_widgetSendableBuilder_Values())
 			                    let gadget: any Gadget = __safeDI_gadgetSendableBuilder_inner_widgetSendableBuilder.gadget(SafeDIScope_Gadget.DefaultWidget_Scope.gadget_Values())
 			                    return DefaultWidget(gadget: gadget)
 			                }
 			                return __safeDI_widget()
 			            }
-			            @Sendable nonisolated func __safeDI_widgetSendableBuilder_Inner() -> Inner.__safeDI_WidgetSendableCarrier<any Widget> {
+			            @inline(never) @Sendable nonisolated func __safeDI_widgetSendableBuilder_Inner() -> Inner.__safeDI_WidgetSendableCarrier<any Widget> {
 			                .init(widget: { __safeDI_widgetSendableBuilder_Inner_widget() })
 			            }
 			            return Inner(__safeDI_widgetSendableBuilder: __safeDI_widgetSendableBuilder_Inner())
@@ -1649,15 +1649,15 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_gadgetBuilder: __safeDI_GadgetCarrier<any Gadget>) {
 		        let __safeDI_gadgetBuilder_again = __safeDI_gadgetBuilder.again
-		        func __safeDI_again() -> Middle {
+		        @inline(never) func __safeDI_again() -> Middle {
 		            let beneath: Beneath = __safeDI_beneath()
-		            func __safeDI_again_Gadget() -> any Gadget {
+		            @inline(never) func __safeDI_again_Gadget() -> any Gadget {
 		                __safeDI_gadgetBuilder_again.again(beneath)
 		            }
 		            let again = LazilyInstantiated<any Gadget>(__safeDI_again_Gadget)
 		            return Middle(again: again, beneath: beneath)
 		        }
-		        func __safeDI_beneath() -> Beneath {
+		        @inline(never) func __safeDI_beneath() -> Beneath {
 		            let again = Instantiator<Middle>(__safeDI_again)
 		            return Beneath(again: again)
 		        }
@@ -2936,22 +2936,22 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_trackerBuilder: __safeDI_TrackerCarrier<any Tracker>) {
 			        let __safeDI_trackerBuilder_trackerBuilder_ = __safeDI_trackerBuilder.trackerBuilder_
-			        func __safeDI_trackerBuilder_() -> B {
+			        @inline(never) func __safeDI_trackerBuilder_() -> B {
 			            let __safeDI_trackerBuilder_cBuilder = __safeDI_trackerBuilder_trackerBuilder_.cBuilder
 			            let cBuilder = Instantiator<C> {
 			                __safeDI_cBuilder(__safeDI_trackerBuilder_cBuilder: __safeDI_trackerBuilder_cBuilder)
 			            }
 			            return B(cBuilder: cBuilder)
 			        }
-			        func __safeDI_cBuilder(__safeDI_trackerBuilder_cBuilder: __safeDI_TrackerCarrier_C<any Tracker>) -> C {
+			        @inline(never) func __safeDI_cBuilder(__safeDI_trackerBuilder_cBuilder: __safeDI_TrackerCarrier_C<any Tracker>) -> C {
 			            let dBuilder = Instantiator<D>(__safeDI_dBuilder)
-			            func __safeDI_trackerBuilder__Tracker() -> any Tracker {
+			            @inline(never) func __safeDI_trackerBuilder__Tracker() -> any Tracker {
 			                __safeDI_trackerBuilder_cBuilder.trackerBuilder(dBuilder)
 			            }
 			            let trackerBuilder = LazilyInstantiated<any Tracker>(__safeDI_trackerBuilder__Tracker)
 			            return C(trackerBuilder: trackerBuilder, dBuilder: dBuilder)
 			        }
-			        func __safeDI_dBuilder() -> D {
+			        @inline(never) func __safeDI_dBuilder() -> D {
 			            let trackerBuilder_ = Instantiator<B>(__safeDI_trackerBuilder_)
 			            return D(trackerBuilder_: trackerBuilder_)
 			        }

@@ -26,7 +26,7 @@ import SwiftSyntax
 // that states no isolation makes generated code that does not compile, with the compiler’s error in a generated file.
 // `FileVisitor` records what one declaration shows (`InstantiableVisitor.unstatedGlobalActorIsolation`), and `generate`,
 // which knows the module’s setting, reports each finding whose text that setting does not fill
-// (`Instantiable.UnstatedGlobalActorIsolation.sourceDiagnostics(reporting:inFileAt:)`). The macro cannot see the setting,
+// (`Instantiable.UnstatedGlobalActorIsolation.sourceDiagnostics(reporting:declaredAt:)`). The macro cannot see the setting,
 // so the check is the tool’s.
 
 extension InstantiableVisitor {
@@ -219,12 +219,16 @@ extension InstantiableVisitor {
 private let mainActorAttribute = "@MainActor"
 
 extension Instantiable.UnstatedGlobalActorIsolation {
-	/// The errors that report `reported`, findings of this declaration, at its `@Instantiable` attribute in the file at
-	/// `filePath`. The first carries the fix-it, which adds `@MainActor` to every argument a reported finding reads, so
-	/// that no two fix-its edit the attribute.
-	public func sourceDiagnostics(reporting reported: [Finding], inFileAt filePath: String) -> [SourceDiagnostic] {
+	/// The errors that report `reported`, findings of this declaration, at its `@Instantiable` attribute in the file of
+	/// `declarationLocation`. The first carries the fix-it, which adds `@MainActor` to every argument a reported finding
+	/// reads, so that no two fix-its edit the attribute.
+	public func sourceDiagnostics(reporting reported: [Finding], declaredAt declarationLocation: Dependency.DeclarationLocation) -> [SourceDiagnostic] {
 		let fixedAttribute = reported.count == findings.count ? attributeFixingEveryFinding : reported.first?.attributeFixingFinding
-		let location = Dependency.DeclarationLocation(filePath: filePath, line: attributeRange.startLine, column: attributeRange.startColumn)
+		let location = { () -> Dependency.DeclarationLocation in
+			// A range read without its positions is reported at the declaration, as `mockGenerationArgumentLocation` is.
+			guard case let .here(startLine, startColumn, _, _) = attributeRange.placement else { return declarationLocation }
+			return Dependency.DeclarationLocation(filePath: declarationLocation.filePath, line: startLine, column: startColumn)
+		}()
 		return reported.enumerated().map { index, finding in
 			SourceDiagnostic(
 				severity: .error,

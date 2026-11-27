@@ -44,7 +44,7 @@ public struct Generate: AsyncParsableCommand {
 
 	@Option(help: "A path to a CSV file containing paths of the `.safedi` file of every module beneath this one, directly or through another, as SafeDI’s Bazel rule collects them. A file '--dependent-module-info-file-path' lists too is read once. Dependency trees alone ask for these modules: when this module declares a root (`isRoot: true`) or a type with `generateDependencyTree: true`, every module one of these files describes that declares a type its dependency trees need, and that nothing read declares, is read as though listed, and the generated code imports it. A generated mock asks for none of them: it builds a deeper type only when a dependency tree of this module uses that type’s module or the module is listed, and otherwise takes the type as a parameter. In a module that declares neither, this run opens none of the files it lists, so a module with no dependency tree generates what the modules it lists give it.") var transitiveModuleInfoFilePath: String?
 
-	@Option(help: "Where to write, one per line, each path '--transitive-module-info-file-path' lists, and '--dependent-module-info-file-path' does not, whose file this run did not open, for Bazel’s `unused_inputs_list`: what it wrote cannot depend on those files. The run opens them only when the module declares a root or a type with `generateDependencyTree: true` whose trees reach a type that the module and the files it lists do not declare, and then opens all of them to choose what to read, and opens the file of each module a listed file’s view refers to that no listed file describes. Written only when the run succeeds.") var unusedInputsListOutput: String?
+	@Option(help: "Where to write, one per line, each path '--transitive-module-info-file-path' lists, and '--dependent-module-info-file-path' does not, whose file this run did not open, for Bazel’s `unused_inputs_list`: what it wrote cannot depend on those files. The run opens them only when the module declares a root or a type with `generateDependencyTree: true` whose trees reach a type that the module and the files it lists do not declare, and then opens all of them to choose what to read, and opens the file of each module a listed file’s view refers to that no listed file describes. It also names the positions file beside each module info file either list names (`--module-info-positions-in-own-file`) that this run did not open. Written only when the run succeeds.") var unusedInputsListOutput: String?
 
 	@Option(help: "A path to the JSON manifest `scan` writes, describing the desired Swift output files. A manifest written by hand is deprecated, and SafeDI 3.0 rejects one: pass `--output-directory`, which runs `scan` for you, or `--combined-output`, which writes every output to one file.") var swiftManifest: String?
 
@@ -66,9 +66,13 @@ public struct Generate: AsyncParsableCommand {
 
 	@Option(help: "The desired output location of the DOT file expressing the dependency trees of the roots and the types with `generateDependencyTree: true` this module declares. A module that declares neither writes an empty graph.") var dotFileOutput: String?
 
+	@Option(help: ArgumentHelp("Where to write, a line per root and seam this run generates, what made the run build its place tree, and then how many roots built one. For measuring the move to per-type facts, not for builds.", visibility: .hidden)) var treeForcersOutput: String?
+
 	@Option(help: "The name of the module this run generates code for: the module that compiles the files the input CSV and '--include' name. Each of those files’ declarations, and the '--module-info-output' file, record it, so a module that reads the file knows which module declares each type. Files reached through a #SafeDIConfiguration’s additionalDirectoriesToInclude belong to another module. Without this option and '--package-name', a run with '--swift-manifest' or '--output-directory' reads the module of each file from the target graph the SafeDIGenerator plugin writes beside its input CSV. Either way, the '--module-info-output' file also records, as modules this one depends on, the module each '--dependent-module-info-file-path' file, and each '--transitive-module-info-file-path' file this run reads, records.") var moduleName: String?
 
 	@Option(help: "The package of the module this run generates code for, as the compiler’s '-package-name' names it, recorded as '--module-name' is. Omit it when the compiler receives no '-package-name'.") var packageName: String?
+
+	@Flag(help: "Writes the line and column of each declaration of the '--module-info-output' file, but those of an aliased `@Received`, to a positions file beside it, named as that file is with `positions` appended (`Name.safedipositions`), and keeps in the module info file each declaration’s rank in its file, which orders the declarations as their lines and columns do. A line moved in the module then changes only the positions file, which a module that lists this one opens only when it reports a diagnostic, or a warning, located in this module: it runs again reading every positions file. Requires '--module-info-output'. A module that lists this one is given both files beside each other.") var moduleInfoPositionsInOwnFile = false
 
 	@Flag(help: "Writes the view of '--module-info-output' as references to the modules it carries, each found in that module’s own module info file among those '--transitive-module-info-file-path' lists, instead of copies of their declarations.") var moduleInfoViewsReferToModules = false
 
@@ -165,6 +169,9 @@ public struct Generate: AsyncParsableCommand {
 		/// everything after it did not: the stored blocks then made a run fail that computing them does not, which no
 		/// generated file and no error shows. The tests read it, never the tool.
 		public var errorOfDiscardedRunThatReadStoredBlocks: (any Error)?
+		/// Whether the output is that of a second run, which read the positions files beside the module info files it read
+		/// because the first run read a position stored elsewhere and then threw or warned at one. The tests read it.
+		public var readPositionsFilesInSecondRun = false
 	}
 
 	/// An output `run()` keeps until the process ends.
@@ -182,6 +189,53 @@ public struct Generate: AsyncParsableCommand {
 	/// - Returns: Warnings about the module, which do not stop generation, and the modules this run read.
 	@discardableResult
 	public func generate(buildLog: BuildLog = BuildLog()) async throws -> Output {
+		// A module info file that stores its positions in a positions file of its own (`--module-info-positions-in-own-file`)
+		// holds, for each location, its file and its rank there, which order and identify locations as their lines and
+		// columns do, so the code a run generates and whether it succeeds never depend on positions. A diagnostic prints
+		// them, so a run whose error or warning prints a position it read without its line and column runs again reading
+		// every positions file, and returns or throws what that run does. That run computes the seam signatures and public
+		// mock plans the first one discarded, so a failing build runs at most once more than it would with positions in
+		// the module info file, and every build that prints no such position opens no positions file.
+		let firstReading = ModulePositionsReading(reattachesPositions: false)
+		var errorOfDiscardedRunThatReadStoredBlocks: (any Error)?
+		do {
+			let output = try await ModulePositionsReading.$current.withValue(firstReading) {
+				try await generateReadingStoredBlocksFirst(buildLog: buildLog, readsStoredBlocks: true, errorOfDiscardedRunThatReadStoredBlocks: &errorOfDiscardedRunThatReadStoredBlocks)
+			}
+			guard output.warnings.contains(where: \.printsPositionStoredElsewhere) else {
+				return output
+			}
+		} catch let error as any SourceLocatedError where error.sourceDiagnostics.contains(where: \.printsPositionStoredElsewhere) {
+			// Run again below. An error that is not located in source prints no position.
+		}
+		let reattachingReading = ModulePositionsReading(reattachesPositions: true)
+		let secondRun: Result<Output, any Error>
+		do {
+			secondRun = try await .success(ModulePositionsReading.$current.withValue(reattachingReading) {
+				try await generateReadingStoredBlocksFirst(buildLog: buildLog, readsStoredBlocks: errorOfDiscardedRunThatReadStoredBlocks == nil, errorOfDiscardedRunThatReadStoredBlocks: &errorOfDiscardedRunThatReadStoredBlocks)
+			})
+		} catch {
+			secondRun = .failure(error)
+		}
+		switch secondRun {
+		case var .success(output):
+			if let pairingError = await reattachingReading.pairingError(after: output.warnings) {
+				throw pairingError
+			}
+			output.readPositionsFilesInSecondRun = true
+			return output
+		case let .failure(error):
+			guard let locatedError = error as? any SourceLocatedError, let pairingError = await reattachingReading.pairingError(after: locatedError.sourceDiagnostics) else {
+				throw error
+			}
+			throw pairingError
+		}
+	}
+
+	/// See `generate(buildLog:)`: the run that reads the seam signatures and public mock plans module infos carry, where
+	/// `readsStoredBlocks`, and that computes them where it throws, recording what it threw in
+	/// `errorOfDiscardedRunThatReadStoredBlocks`, which the output carries.
+	private func generateReadingStoredBlocksFirst(buildLog: BuildLog, readsStoredBlocks: Bool, errorOfDiscardedRunThatReadStoredBlocks: inout (any Error)?) async throws -> Output {
 		// A module info carries the signatures of its module's seams without positions, which the code a run generates
 		// never reads. An error can: one about a declaration inside another module's seam is located only where this run
 		// reads that declaration from its module's own file. So a run that read a stored signature and then throws runs
@@ -189,8 +243,11 @@ public struct Generate: AsyncParsableCommand {
 		// other build reads the signatures. Warnings come from the inlined trees, which read no signature.
 		var readStoredSeamSignatures = false
 		do {
-			return try await generate(buildLog: buildLog, readsStoredSeamSignatures: true, readStoredSeamSignatures: &readStoredSeamSignatures)
+			var output = try await generate(buildLog: buildLog, readsStoredSeamSignatures: readsStoredBlocks, readStoredSeamSignatures: &readStoredSeamSignatures)
+			output.errorOfDiscardedRunThatReadStoredBlocks = errorOfDiscardedRunThatReadStoredBlocks
+			return output
 		} catch where readStoredSeamSignatures {
+			errorOfDiscardedRunThatReadStoredBlocks = error
 			var output = try await generate(buildLog: buildLog, readsStoredSeamSignatures: false, readStoredSeamSignatures: &readStoredSeamSignatures)
 			output.errorOfDiscardedRunThatReadStoredBlocks = error
 			return output
@@ -542,6 +599,7 @@ public struct Generate: AsyncParsableCommand {
 
 		// The DOT graph, drawn by the call of `generate(_:)` that generates the module's code when the run asks for one.
 		var dotGraph: String?
+		var treeForcerLines = [String]()
 		// The signatures of the seams the module generates, from that same call, which its module info carries.
 		var storedSeamSignatures = [StoredSeamSignature]()
 		var storedPublicMockPlans = [StoredPublicMockPlan]()
@@ -741,10 +799,12 @@ public struct Generate: AsyncParsableCommand {
 					generatesDependencyTrees: true,
 					mocks: mockRequest,
 					generatesDOTTree: dotFileOutput != nil && listsPassTheirChecks,
+					namesNodeRecordRefusals: treeForcersOutput != nil,
 				))
 				warnings.append(contentsOf: results.warnings)
 				let (additionalMocksToGenerate, dependencyTreeDestinationsBySource) = try listChecks.get()
 				dotGraph = results.dotTree
+				treeForcerLines = results.treeForcers.lines
 				storedSeamSignatures = results.storedSeamSignatures
 				storedPublicMockPlans = results.mocks?.storedPublicMockPlans ?? []
 
@@ -977,23 +1037,42 @@ public struct Generate: AsyncParsableCommand {
 			}
 			""".write(toPath: dotFileOutput)
 		}
+		if let treeForcersOutput {
+			try treeForcerLines.map { $0 + "\n" }.joined().write(toPath: treeForcersOutput)
+		}
 		// Written last, once every validation passed, so a run that fails publishes no module info for its dependents to
 		// read; and only when its bytes change, so a dependent whose build compares modification times reruns only when
 		// what the file describes changed.
 		if let moduleInfoDestination {
-			try ModuleInfoFile(module: module, moduleName: moduleInfoDestination.moduleName, seamSignatures: storedSeamSignatures, publicMockPlans: storedPublicMockPlans, compilesGeneratedMocks: evaluator.compilesGeneratedMocks, view: moduleInfoViewToWrite, storesOwnEntryChecksum: moduleInfoViewsReferToModules)
-				.moduleInfoDataWritingSeamSignaturesWithoutPositions
-				.writeIfChanged(toPath: moduleInfoDestination.path)
+			let moduleInfoFile = ModuleInfoFile(module: module, moduleName: moduleInfoDestination.moduleName, seamSignatures: storedSeamSignatures, publicMockPlans: storedPublicMockPlans, compilesGeneratedMocks: evaluator.compilesGeneratedMocks, view: moduleInfoViewToWrite, storesOwnEntryChecksum: moduleInfoViewsReferToModules)
+			if moduleInfoPositionsInOwnFile {
+				// The positions file first, so a reader never finds a module info file newer than its positions.
+				let (moduleInfo, positions) = try moduleInfoFile.moduleInfoDataStoringPositionsElsewhere
+				try positions.writeIfChanged(toPath: ModuleInfoFile.positionsFilePath(ofModuleInfoAt: moduleInfoDestination.path))
+				try moduleInfo.writeIfChanged(toPath: moduleInfoDestination.path)
+			} else {
+				try moduleInfoFile
+					.moduleInfoDataWritingSeamSignaturesWithoutPositions
+					.writeIfChanged(toPath: moduleInfoDestination.path)
+			}
 		}
 		if let unusedInputsListOutput {
 			// Bazel leaves each file this list names out of the action’s key in its local action cache, so it names only
 			// files whose bytes cannot have changed anything this run wrote: those it never opened. A file whose first fields
 			// alone the reference resolver read gave it only the module the file describes, which its target fixes.
 			let pathsOpenedForReferences = await referenceResolver.openedPaths
-			let unopenedPaths = try Set(moduleInfoPaths(listedIn: transitiveModuleInfoFilePath))
+			let transitiveModuleInfoPaths = try moduleInfoPaths(listedIn: transitiveModuleInfoFilePath)
+			// A positions file beside a module info file is opened only by a run that reads every one of them, so each the
+			// run did not open is listed too, whichever list names its module info file.
+			let openedPositionsFilePaths = await ModulePositionsReading.current?.openedPositionsFilePaths ?? []
+			let unopenedPositionsFilePaths = Set(listedModuleInfoPaths + transitiveModuleInfoPaths)
+				.map(ModuleInfoFile.positionsFilePath(ofModuleInfoAt:))
+				.filter { !openedPositionsFilePaths.contains($0.asFileURL.path) && FileManager.default.fileExists(atPath: $0) }
+			let unopenedPaths = Set(transitiveModuleInfoPaths)
 				.subtracting(listedModuleInfoPaths)
 				.subtracting(pathsBeneathOpened)
 				.subtracting(pathsOpenedForReferences)
+				.union(unopenedPositionsFilePaths)
 				.sorted()
 			try unopenedPaths.map { "\($0)\n" }.joined().write(toPath: unusedInputsListOutput)
 		}
@@ -1168,7 +1247,7 @@ public struct Generate: AsyncParsableCommand {
 			      instantiable.sourceFilePath.map(isOwnFile) == true
 			else { return nil }
 			let reported = isolation.findings.filter { !$0.generatedDeclaration.isFilledByModuleDefaultIsolation(in: instantiable) }
-			return reported.isEmpty ? nil : isolation.sourceDiagnostics(reporting: reported, inFileAt: location.filePath)
+			return reported.isEmpty ? nil : isolation.sourceDiagnostics(reporting: reported, declaredAt: location)
 		})
 	}
 
@@ -2057,10 +2136,12 @@ public struct Generate: AsyncParsableCommand {
 	/// whose element is a tuple holding a `Result` with an existential error (see `QueryNeeds.ModuleRead`).
 	private struct ModuleInfoFileRead: Sendable {
 		let index: Int
-		let read: Result<ModuleInfoFile, any Error>
+		let read: Result<(file: ModuleInfoFile, positions: PositionsRead, opensPositionsFile: Bool), any Error>
 	}
 
 	static func loadSafeDIModuleInfo(at paths: [String], readingViews: Bool = true) async throws -> [(file: ModuleInfoFile, path: String)] {
+		let positionsReading = ModulePositionsReading.current
+		let reattachesPositions = positionsReading?.reattachesPositions ?? false
 		let moduleInfoURLs = paths.map(\.asFileURL)
 		let reads = await withTaskGroup(
 			of: ModuleInfoFileRead.self,
@@ -2068,7 +2149,7 @@ public struct Generate: AsyncParsableCommand {
 		) { taskGroup in
 			for (index, moduleInfoURL) in moduleInfoURLs.enumerated() {
 				taskGroup.addTask {
-					ModuleInfoFileRead(index: index, read: Result { try UnreadableModuleInfoError.reading(moduleInfoURL, readingViews: readingViews) })
+					ModuleInfoFileRead(index: index, read: Result { try UnreadableModuleInfoError.reading(moduleInfoURL, readingViews: readingViews, reattachesPositions: reattachesPositions) })
 				}
 			}
 			var reads = [ModuleInfoFileRead]()
@@ -2078,9 +2159,13 @@ public struct Generate: AsyncParsableCommand {
 			return reads
 		}
 		// The files are read in parallel, so their failures arrive in any order: the one reported is that of the first path.
-		return try reads
+		let files = try reads
 			.sorted { $0.index < $1.index }
-			.map { try (file: $0.read.get(), path: moduleInfoURLs[$0.index].path) }
+			.map { try (read: $0.read.get(), path: moduleInfoURLs[$0.index].path) }
+		for (read, path) in files {
+			await positionsReading?.record(read.positions, ofModuleInfoAt: path, openedPositionsFile: read.opensPositionsFile)
+		}
+		return files.map { (file: $0.read.file, path: $0.path) }
 	}
 
 	/// `listedFiles`, read from `listedPaths`, with those of the files `--transitive-module-info-file-path` lists that
@@ -2117,9 +2202,12 @@ public struct Generate: AsyncParsableCommand {
 	private func moduleInfoDestination() throws -> (path: String, moduleName: String)? {
 		switch (moduleInfoOutput, moduleName) {
 		case (nil, _):
-			nil
+			guard !moduleInfoPositionsInOwnFile else {
+				throw ValidationError("'--module-info-positions-in-own-file' requires '--module-info-output': the positions file is written beside the module info file.")
+			}
+			return nil
 		case let (path?, moduleName?):
-			(path: path, moduleName: moduleName)
+			return (path: path, moduleName: moduleName)
 		case (_?, nil):
 			throw ValidationError("'--module-info-output' requires '--module-name': a module info file names the module it describes.")
 		}
@@ -2255,12 +2343,18 @@ struct UnreadableModuleInfoError: Error, CustomStringConvertible {
 		"Could not read the SafeDI module info file at \(path): \(reason)"
 	}
 
-	/// The module info file at `url`, with its view when `readingViews`.
+	/// The module info file at `url`, with its view when `readingViews`, and with the positions it stores elsewhere read
+	/// from the positions file beside it when `reattachesPositions`.
+	/// - Returns: The file, how its positions were read, and whether its positions file was opened.
 	/// - Throws: `UnreadableModuleInfoError` when the file is missing, cannot be opened, or is not a module info file.
-	static func reading(_ url: URL, readingViews: Bool) throws(UnreadableModuleInfoError) -> ModuleInfoFile {
+	static func reading(_ url: URL, readingViews: Bool, reattachesPositions: Bool) throws(UnreadableModuleInfoError) -> (file: ModuleInfoFile, positions: PositionsRead, opensPositionsFile: Bool) {
 		let data = try contents(of: url)
+		// A positions file that cannot be opened is read as missing: the run then reports the module info file's diagnostics
+		// without the positions, and says so.
+		let positionsData = reattachesPositions ? try? Data(contentsOf: URL(fileURLWithPath: ModuleInfoFile.positionsFilePath(ofModuleInfoAt: url.path))) : nil
 		do {
-			return try readingViews ? ModuleInfoFile(moduleInfoData: data) : ModuleInfoFile(moduleInfoDataWithoutView: data)
+			let (file, positions) = try ModuleInfoFile.reading(moduleInfoData: data, readingView: readingViews, positionsData: positionsData, reattachesPositions: reattachesPositions)
+			return (file, positions, positionsData != nil)
 		} catch {
 			throw UnreadableModuleInfoError(path: url.path, reason: "\(error) \(BinaryFile.unreadableFileExplanation)")
 		}

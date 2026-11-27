@@ -24,7 +24,8 @@
 /// its files imports, and generated code then names that type, and a `mockOnly` declaration in a third module lets a mock
 /// call a method none of the module's files can see. Every other import of a generated file repeats what the files SafeDI
 /// read import, so nothing else imports those modules. A file gains the import only when its own trees build such a type
-/// (`ScopeGenerator.fulfillersOfTree(buildingMock:)`) or its mock's parameters default to one
+/// (a root's world, `TypeFactsImports`, and a mock's tree, `ScopeGenerator.fulfillersOfTree(buildingMock:)`) or its mock's
+/// parameters default to one
 /// (`ScopeGenerator.fulfillersOfMock(mockDefaults:)`), and no import that a file SafeDI read spells makes the type visible.
 ///
 /// The trees decide, and not the names the file's code holds, because a name proves nothing: a file can name a type of a

@@ -119,21 +119,21 @@ struct SafeDIToolSeamSendableMemberCallTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_gadgetSendableBuilder: __safeDI_GadgetSendableCarrier<any Gadget>) {
-			        @Sendable nonisolated func __safeDI_rowA(__safeDI_gadgetSendableBuilder_rowA: __safeDI_GadgetCarrier_RowA<any Gadget>) -> RowA {
+			        @inline(never) @Sendable nonisolated func __safeDI_rowA(__safeDI_gadgetSendableBuilder_rowA: __safeDI_GadgetCarrier_RowA<any Gadget>) -> RowA {
 			            let __safeDI_gadgetSendableBuilder_cell = __safeDI_gadgetSendableBuilder_rowA.cell
 			            let cell: Cell = __safeDI_cell(__safeDI_gadgetSendableBuilder_cell: __safeDI_gadgetSendableBuilder_cell)
 			            return RowA(cell: cell)
 			        }
-			        @Sendable nonisolated func __safeDI_cell(__safeDI_gadgetSendableBuilder_cell: __safeDI_GadgetCarrier_Cell<any Gadget>) -> Cell {
+			        @inline(never) @Sendable nonisolated func __safeDI_cell(__safeDI_gadgetSendableBuilder_cell: __safeDI_GadgetCarrier_Cell<any Gadget>) -> Cell {
 			            let gadget: any Gadget = __safeDI_gadgetSendableBuilder_cell.gadget()
 			            return Cell(gadget: gadget)
 			        }
-			        @Sendable nonisolated func __safeDI_rowB(__safeDI_gadgetSendableBuilder_rowB: __safeDI_GadgetCarrier_RowB<any Gadget>) -> RowB {
+			        @inline(never) @Sendable nonisolated func __safeDI_rowB(__safeDI_gadgetSendableBuilder_rowB: __safeDI_GadgetCarrier_RowB<any Gadget>) -> RowB {
 			            let __safeDI_gadgetSendableBuilder_cell = __safeDI_gadgetSendableBuilder_rowB.cell
 			            let cell: Cell = __safeDI_cell(__safeDI_gadgetSendableBuilder_cell: __safeDI_gadgetSendableBuilder_cell)
 			            return RowB(cell: cell)
 			        }
-			        @Sendable nonisolated func __safeDI_screenBuilder() -> Screen {
+			        @inline(never) @Sendable nonisolated func __safeDI_screenBuilder() -> Screen {
 			            let __safeDI_gadgetSendableBuilder_screenBuilder = __safeDI_gadgetSendableBuilder.screenBuilder()
 			            let __safeDI_gadgetSendableBuilder_rowA = __safeDI_gadgetSendableBuilder_screenBuilder.rowA
 			            let rowA: RowA = __safeDI_rowA(__safeDI_gadgetSendableBuilder_rowA: __safeDI_gadgetSendableBuilder_rowA)
