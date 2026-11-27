@@ -114,8 +114,14 @@ struct TypeFactsGeneratorFacts: Sendable {
 /// and the reads its subtree made of the context above it, as `Read`s and with their answers. Made only where a test
 /// observes trees, never by the tool.
 public struct TypeFactsReport: Sendable {
-	init(root: ConstructionScope, places: TypeFactsPlaces, forMockGeneration: Bool) {
+	init(root: ConstructionScope, places: TypeFactsPlaces, forMockGeneration: Bool, tree: ScopeGenerator) {
 		let graph = TypeFactsGraph(root: root, forMockGeneration: forMockGeneration)
+		let unfolding = TypeFactsDOT(graph: graph, tree: tree)
+		dot = DOT(
+			drawnByTree: ScopeGenerator.drawnTree(of: tree),
+			unfolded: unfolding.unfolded,
+			declarationsDrawnPerPath: unfolding.declarationsDrawnPerPath,
+		)
 		self.graph = graph
 		self.root = root.instantiable.concreteInstantiable.asSource
 		self.forMockGeneration = forMockGeneration
@@ -332,10 +338,22 @@ public struct TypeFactsReport: Sendable {
 		public let generator: Generator?
 	}
 
+	/// The tree's DOT graph as its places draw it and as the graph's declarations unfold it (`TypeFactsDOT`), which must be
+	/// the same bytes.
+	public struct DOT: Sendable {
+		/// `ScopeGenerator.generateDOT()`'s text of the tree.
+		public let drawnByTree: String
+		/// The text unfolded from each declaration's column.
+		public let unfolded: String
+		/// The declarations two of whose places draw otherwise.
+		public let declarationsDrawnPerPath: [String]
+	}
+
 	/// The world's graph, which a test of what it holds reads.
 	let graph: TypeFactsGraph
 	/// The concrete type of the world's root.
 	public let root: String
+	public let dot: DOT
 	/// The 32-bit elements of the graph's columns, which grow with its nodes and edges.
 	public let columnElementCount: Int
 	public let edgeCount: Int
