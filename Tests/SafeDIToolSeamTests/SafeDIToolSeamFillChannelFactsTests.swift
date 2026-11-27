@@ -88,6 +88,12 @@ struct SafeDIToolSeamFillChannelFactsTests: ~Copyable {
 		#expect(call.readsFromAbove.contains("value(service)"), "\(call.readsFromAbove)")
 		#expect(call.readsFromAbove.contains("value(backup)"), "\(call.readsFromAbove)")
 		#expect(report.fillRefusals == [nil, nil], "\(report.fillRefusals)")
+		let world = report.graph
+		let fieldLabels = (0..<world.fillCount).map { index in
+			world.fields(ofFill: index).map { world.labelTexts[Int($0.label)] }
+		}
+		#expect(fieldLabels == [["session"], ["session", "service"]], "\(fieldLabels)")
+		#expect((0..<world.fillCount).allSatisfy { world.fill($0).refusal == nil })
 	}
 
 	@Test
