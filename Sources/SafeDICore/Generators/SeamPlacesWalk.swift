@@ -215,6 +215,11 @@ extension DependencyTreeGenerator {
 
 		/// What a frame hands its children that decides what they declare and how their levels and sites are added: two
 		/// frames with one key build the same subtree, unless a cycle in it closes differently (`WalkedSubtree`).
+		/// `isOnPathToCalls` and `nearestDeclarations` only make the key finer, so at worst they keep a subtree from being
+		/// replayed. No accepted shape is known where either differs between two paths whose other terms agree:
+		/// `isOnPathToCalls` equals the scope's `passesUpBuilder` below the seam's root, since a scope passes up every builder
+		/// its children do, and each public mock that could give two paths different `nearestDeclarations` was rejected as a
+		/// label hidden in the chain before generation. Neither term has a test of its own for that reason.
 		struct SubtreeKey: Hashable {
 			let builtType: TypeDescription?
 			let property: Property?

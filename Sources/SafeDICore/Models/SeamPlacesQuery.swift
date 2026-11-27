@@ -1834,7 +1834,8 @@ extension SeamSignature.Places {
 			let parents = levels[level].parents
 			switch family {
 			case .plainOnly:
-				guard !opens else { return [] }
+				// Only levels a plain route reaches are asked about in this family, and none of them opens a `@Sendable` function:
+				// `startState(of:)` and this filter keep to `plainReach`, so the validity table's entries elsewhere are never read.
 				return parents.filter { plainReach[$0] }.map { ($0, .plainOnly) }
 			case .needsOpenAbove:
 				if opens {
