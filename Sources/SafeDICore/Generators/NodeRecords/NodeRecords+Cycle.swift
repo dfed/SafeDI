@@ -68,14 +68,13 @@ extension NodeRecords {
 		}
 	}
 
-	/// The labels the types of `world`, which holds a cycle, receive, plainly, only if available or through a rename: read
-	/// from above wherever they are, a superset of what the function a call closes a cycle on reads from above it.
+	/// Refuses `world`, which holds a cycle, where one of its types receives a builder, plainly, only if available or
+	/// through a rename.
 	/// - Throws: `cycleReceivesBuilder` where a type receives a builder.
-	static func labelsReceived(inWorldWithCycle world: some NodeRecordSources) throws(NodeRecordRefusal) -> Set<String> {
-		var labels = Set<String>()
+	static func refuseReceivedBuilders(inWorldWithCycle world: some NodeRecordSources) throws(NodeRecordRefusal) {
 		for declaration in 0..<Int32(world.declarationCount) {
-			let reads = world.scope(of: declaration).instantiable.dependencies.compactMap { dependency -> Property? in
-				switch dependency.source {
+			for dependency in world.scope(of: declaration).instantiable.dependencies {
+				let read: Property? = switch dependency.source {
 				case .received:
 					dependency.property
 				case let .aliased(fulfillingProperty, _, _):
@@ -83,13 +82,9 @@ extension NodeRecords {
 				case .instantiated, .forwarded:
 					nil
 				}
-			}
-			for read in reads {
-				guard read.asUnwrappedProperty.propertyType.isConstant else { throw .cycleReceivesBuilder }
-				labels.insert(read.label)
+				guard read?.asUnwrappedProperty.propertyType.isConstant ?? true else { throw .cycleReceivesBuilder }
 			}
 		}
-		return labels
 	}
 
 	/// Whether `declaration` is built in a `@Sendable` function of its own.

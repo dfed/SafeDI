@@ -68,10 +68,8 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	/// A world with a cycle in which a type receives a builder, whose call today's tree makes through a function it
 	/// declares for the loop of builders it closes.
 	case cycleReceivesBuilder
-	/// A place between a place on a cycle and the call that closes the cycle on it declares a label some type receives, and
-	/// the facts give the function the call refers to no parameters (`TypeFactsWorld.parameters(of:)`); or the function
-	/// takes a parameter of a label some declaration holds lazily, which a call can find as the wrapper at its site where
-	/// the records read the callee's view.
+	/// The function a call closes a cycle on takes a parameter of a label some declaration holds lazily, which a call can
+	/// find as the wrapper at its site where the records read the callee's view.
 	case cycleTakesParameters
 	/// Two bodies of a world with a cycle name one variant's function apart, or hand the functions its body refers to
 	/// different names (`CycleFunctionNames`), where its one place cannot stand for both.
@@ -215,7 +213,9 @@ struct NodeRecords: Sendable {
 		// A world whose edges close a cycle builds each node's children in the order step 0's sibling-order fixed point gives
 		// them (`TypeFactsEdge.buildPosition`), which `NodeBuildOrder` stands in for only off every cycle.
 		let order: NodeBuildOrder? = holdsCycle ? nil : try NodeBuildOrder(world: world)
-		let labelsReceived = holdsCycle ? try Self.labelsReceived(inWorldWithCycle: world) : []
+		if holdsCycle {
+			try Self.refuseReceivedBuilders(inWorldWithCycle: world)
+		}
 		let onlyIfAvailableAnswers = try OnlyIfAvailableAnswers(world: world, rootParameters: seamTree?.parameters ?? [])
 		let answeringDeclarations = DeclarationsAnsweringReads(
 			world: world,
@@ -344,10 +344,6 @@ struct NodeRecords: Sendable {
 					if let closedOn = stack.lastIndex(where: { $0.variant == callee }) {
 						for frame in stack[(closedOn + 1)...] {
 							let declared = Self.labelsDeclared(by: world.declaration(of: frame.variant), in: world)
-							guard labelsReceived.isDisjoint(with: declared) || !world.parameters(of: callee, arrivals: arrivals()).isEmpty else {
-								// The function the call refers to may take a parameter the facts do not answer.
-								throw NodeRecordRefusal.cycleTakesParameters
-							}
 							labelsDeclaredBetween[Int(callee)].formUnion(declared)
 							variantsBetween[Int(callee)].insert(frame.variant)
 						}
