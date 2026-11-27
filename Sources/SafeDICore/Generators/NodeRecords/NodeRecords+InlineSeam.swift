@@ -19,14 +19,12 @@
 // SOFTWARE.
 
 extension NodeRecords {
-	/// `inlineSeam` where `declaration` is a seam of another module built inline (`ConstructionScope.builtInlineSeamComment`)
-	/// and is otherwise a node `builtByInitializer` makes, `nil` for any other node.
-	/// - Throws: The refusal `checkBuiltByInitializer(_:in:admittingInlineSeam:)` finds for a seam built inline that is no
-	///   such node.
-	static func inlineSeamKind(of declaration: DeclarationID, in world: some NodeRecordSources) throws(NodeRecordRefusal) -> NodeRecordKind? {
+	/// The claim of `declaration` as `inlineSeam` where it is a seam of another module built inline
+	/// (`ConstructionScope.builtInlineSeamComment`), which discharges stage 1's refusal of a seam built inline; `nil` for
+	/// any other node. Every other check of stage 1 still runs on it.
+	static func inlineSeamClaim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
 		guard world.scope(of: declaration).builtInlineSeamComment != nil else { return nil }
-		try checkBuiltByInitializer(declaration, in: world, admittingInlineSeam: true)
-		return .inlineSeam
+		return NodeRecordClaim(kind: .inlineSeam, discharges: [.unavailableOrInlineSeam])
 	}
 
 	/// The record of `declaration`'s place, a node of kind `inlineSeam`: `builtByInitializerRecord`'s, with the comment that
@@ -38,7 +36,7 @@ extension NodeRecords {
 		typesDeclaredEscaping: Set<TypeDescription>,
 		children: [GeneratedCode],
 	) throws -> BuiltPlaceRecord {
-		// Never `nil`: the node is of kind `inlineSeam` (`inlineSeamKind(of:in:)`).
+		// Never `nil`: the node is of kind `inlineSeam` (`inlineSeamClaim(of:in:)`).
 		let comment = world.scope(of: declaration).builtInlineSeamComment.map { " \($0)" } ?? ""
 		return try builtByInitializerRecord(of: declaration, variant: variant, in: world, typesDeclaredEscaping: typesDeclaredEscaping, children: children, lineEnd: comment)
 	}
