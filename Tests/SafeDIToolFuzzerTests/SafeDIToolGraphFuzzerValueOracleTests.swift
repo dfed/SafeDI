@@ -1127,6 +1127,48 @@ struct SafeDIToolGraphFuzzerValueOracleTests {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func overrideProbes_recordWhatOneMoreCallOfStoredInstantiatorBuilds_whenOverriddenDependencyIsSendableInstantiator() async throws {
+		// Seed 1 takes the root's second field and the mirror's first, the mocked type's own erased instantiator, whose
+		// builder returns the erasing type. Each side calls the instantiator the mocked type stores once more.
+		let runs = try await Self.valueOracleToolRuns(of: Self.fixture([
+			Self.type("S1_Root", arguments: "isRoot: true", properties: ["@Instantiated let screen: S1_Screen", "@Instantiated let storeBuilder: SendableInstantiator<S1_Store>"]),
+			Self.type("S1_Screen", arguments: "generateMock: true", properties: [
+				"@Instantiated(fulfilledByType: \"S1_T3\", erasedToConcreteExistential: true) let anyT3Builder: SendableErasedInstantiator<(), S1_AnyT3>",
+				"@Received let storeBuilder: SendableInstantiator<S1_Store>",
+			]),
+			Self.type("S1_Store", properties: []),
+			Self.type("S1_T3", properties: []) + """
+
+			public final class S1_AnyT3: Sendable {
+				public init(_ value: S1_T3) {
+					self.value = value
+				}
+
+				public let value: S1_T3
+			}
+
+			""",
+		].map { $0.replacingOccurrences(of: ": Instantiable {", with: ": Instantiable, Sendable {") }))
+
+		let probes = try #require(runs.valueOracle).overrideProbes
+		#expect(probes.map(\.candidateKind) == [.sendableInstantiator, .sendableInstantiator])
+		#expect(probes.map(\.fieldKind) == [.builder, .builder])
+		#expect(probes.map(\.pair) == [
+			DifferentialValueProbePair(
+				name: "S1_Root.mock(safeDIOverrides: .init(storeBuilder: sentinel))",
+				featureExpression: "{ S1_ZOverrideSentinel.value = nil; let value = S1_Root.mock(safeDIOverrides: .init(storeBuilder: S1_ZOverrideSentinel.recording(S1_Store.init))); return (value, { S1_ZOverrideSentinel.value = nil; _ = value.storeBuilder.instantiate(); return S1_ZOverrideSentinel.value }()) }()",
+				knownRightExpression: "{ let known = S1_Root(); return (known, known.storeBuilder.instantiate() as Any?) }()",
+			),
+			DifferentialValueProbePair(
+				name: "S1_Screen.mock(safeDIOverrides: .init(anyT3Builder: sentinel))",
+				featureExpression: "{ S1_ZOverrideSentinel.value = nil; let value = S1_Screen.mock(safeDIOverrides: .init(anyT3Builder: S1_ZOverrideSentinel.recording(S1_T3.init, erasedBy: { S1_AnyT3($0) }))); return (value, { S1_ZOverrideSentinel.value = nil; _ = value.anyT3Builder.instantiate(); return S1_ZOverrideSentinel.value }()) }()",
+				knownRightExpression: "{ let known = S1_ZMirror0(); return (known.differentialMirrorValue, known.anyT3Builder.instantiate() as Any?) }()",
+			),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func overrideProbes_omitLazilyInstantiatedDependency_whenMockedTypeHoldsNoFormOfIt() async throws {
 		// The mock promotes `lazyStore` for `S1_Editor`, which `S1_Screen` does not hold, so its instance is created only
 		// where something reads the editor's wrapper, which production's `known.lazyStore.instance` would read regardless

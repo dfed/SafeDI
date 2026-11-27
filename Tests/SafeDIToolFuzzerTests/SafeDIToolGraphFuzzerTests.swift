@@ -7376,6 +7376,7 @@ struct SafeDIToolGraphFuzzerTests {
 		errorMarkers: [GraphFuzzerOracle.guardedMockParameterErrorMarker],
 		errorGraphCounts: corpusErrorGraphCounts,
 		valueOracleCounts: corpusValueOracleCounts,
+		seedsTraversingPastTheBatchBudget: corpusSeedsTraversingPastTheBatchBudget,
 	)
 
 	/// How many of the corpus's graphs the tool rejects with the error of a hand-written mock's parameter whose
@@ -7411,16 +7412,17 @@ struct SafeDIToolGraphFuzzerTests {
 		drawnMocksMatchingOnlyAfterNormalizationCount: 945,
 		mirroredPairsTakingSamplesCount: 972,
 		forwardedPropertiesSampleCount: 2_727,
-		overridePairCount: 7_551,
-		overridePairsSum: GraphFuzzerSeedSetSum(value: 0x2F994271AD17A34A),
+		overridePairCount: 8_022,
+		overridePairsSum: GraphFuzzerSeedSetSum(value: 0xFD0772C0C776EA2B),
 		overrideFieldKindCounts: [
-			.builder: 4_799,
-			.configuration: 2_752,
+			.builder: 4_921,
+			.configuration: 3_101,
 		],
 		overrideCandidateKindCounts: [
-			.constant: 6_574,
-			.lazilyInstantiated: 566,
-			.erased: 411,
+			.constant: 6_185,
+			.lazilyInstantiated: 530,
+			.erased: 386,
+			.sendableInstantiator: 921,
 		],
 		pinnedPlacePairCount: 105,
 		nestedCyclePairCount: 92,
@@ -7528,6 +7530,12 @@ struct SafeDIToolGraphFuzzerTests {
 
 	/// What the retention oracle judges over the public mock corpus (`Corpus.retentionCounts`). Pins: derived on CI.
 	static let publicMockCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 693, judgedDrawingRetentionShape: 131, judgedThroughHandWrittenBuilder: 92, unpairedExperiments: 0)
+
+	/// The base corpus's seeds whose probes traverse more wrappers than a batch allows, compared on their own with
+	/// `DifferentialValueLimits.isolatedFuzzerGraph`: seeds 512, 1136 and 1627, whose override probe records what one more
+	/// call of `cycleWalkScreen7Builder` builds, which the describer unrolls through the eight screens of the cycle walk
+	/// again from the record's own path.
+	static let corpusSeedsTraversingPastTheBatchBudget: Set<UInt64> = [512, 1_136, 1_627]
 
 	static let seamCorpusSeedCount = 2_000
 	static let seamCorpusFixtureHash: UInt64 = 0x1313E68FFFFF5176
