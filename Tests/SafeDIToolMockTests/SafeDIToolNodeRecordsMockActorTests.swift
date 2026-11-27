@@ -313,7 +313,7 @@ struct SafeDIToolNodeRecordsMockActorTests: ~Copyable {
 		// into, which is `Sendable`, and not the actor's configuration, which is not. The class's instantiator is the same
 		// node of the world, so its closure reads a local too.
 		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
-			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: Self.sharedWrapperFixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: Self.sharedWrapperFixture(buildsClassFirst: false, leafIsSendable: false), buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		}
 
 		#expect(reports.filter { $0.isMockRoot && $0.root == "Root" }.map(\.isLaidOutFromNodeRecords) == [true])
@@ -608,32 +608,43 @@ struct SafeDIToolNodeRecordsMockActorTests: ~Copyable {
 		""", "Unexpected output \(output.mockFiles["Store+SafeDIMock.swift"] ?? "")")
 	}
 
-	@Test
+	@Test(arguments: [false, true], [false, true])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_buildsTheWalksValues_whenActorAndClassBuildSameInstantiatorOfLeaf() async throws {
-		let walkOutput = try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: Self.sharedWrapperFixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+	mutating func mock_buildsTheWalksValues_whenActorAndClassBuildSameInstantiatorOfLeaf(buildsClassFirst: Bool, leafIsSendable: Bool) async throws {
+		// The generated mock is compiled as it ships, with a leaf that is `Sendable` and one that is not, and with the
+		// actor or the class built first. The override is set through both, through the actor alone, and through the class
+		// alone.
+		let fixture = Self.sharedWrapperFixture(buildsClassFirst: buildsClassFirst, leafIsSendable: leafIsSendable)
+		let walkOutput = try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		let (output, _) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
-			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: Self.sharedWrapperFixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		}
 		// The two write other text, so the comparison is of two programs.
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] != walkOutput.mockFiles["Root+SafeDIMock.swift"])
+		let throughActor = "a: .init(leafBuilder: { Leaf(marker: \"a.leafBuilder\") })"
+		let throughClass = "b: .init(leafBuilder: { Leaf(marker: \"b.leafBuilder\") })"
+		let throughBoth = (buildsClassFirst ? [throughClass, throughActor] : [throughActor, throughClass]).joined(separator: ", ")
 		let comparison = try await DifferentialValueOracle.compare(
-			feature: DifferentialValuePath(fixtureFiles: Self.sharedWrapperFixture, generatedFiles: #require(output.generatedFiles)),
-			knownRight: DifferentialValuePath(fixtureFiles: Self.sharedWrapperFixture, generatedFiles: #require(walkOutput.generatedFiles)),
+			feature: DifferentialValuePath(fixtureFiles: fixture, generatedFiles: #require(output.generatedFiles)),
+			knownRight: DifferentialValuePath(fixtureFiles: fixture, generatedFiles: #require(walkOutput.generatedFiles)),
 			probes: [
 				DifferentialValueProbe("Root.mock()"),
-				DifferentialValueProbe(
-					name: "overridden root",
-					expression: "Root.mock(safeDIOverrides: .init(a: .init(leafBuilder: { marked(Leaf(), \"a.leafBuilder\") }), b: .init(leafBuilder: { marked(Leaf(), \"b.leafBuilder\") })))",
-				),
+				DifferentialValueProbe(name: "overridden through both", expression: "Root.mock(safeDIOverrides: .init(\(throughBoth)))"),
+				DifferentialValueProbe(name: "overridden through the actor", expression: "Root.mock(safeDIOverrides: .init(\(throughActor)))"),
+				DifferentialValueProbe(name: "overridden through the class", expression: "Root.mock(safeDIOverrides: .init(\(throughClass)))"),
 			],
 			filesToDelete: &filesToDelete,
 		)
 		// Nothing is compared where compile verification is off.
 		guard let comparison else { return }
 		#expect(comparison.differences.isEmpty, "\(comparison.report)")
-		for marker in ["a.leafBuilder", "b.leafBuilder"] {
-			#expect(comparison.featureDescription.contains("\"\(marker)\""), "No value is marked \(marker):\n\(comparison.featureDescription)")
+		// Each override is read where it alone is set: the other place builds its leaf.
+		let described = comparison.featureDescription.components(separatedBy: "probe ")
+		for (probe, markers) in [("overridden through both", ["a.leafBuilder", "b.leafBuilder"]), ("overridden through the actor", ["a.leafBuilder", "built"]), ("overridden through the class", ["b.leafBuilder", "built"])] {
+			let description = described.first { $0.hasPrefix(probe) } ?? ""
+			for marker in markers {
+				#expect(description.contains("\"\(marker)\""), "No value of \(probe) is marked \(marker):\n\(comparison.featureDescription)")
+			}
 		}
 	}
 
@@ -724,59 +735,58 @@ struct SafeDIToolNodeRecordsMockActorTests: ~Copyable {
 	/// A root that builds an actor in place and through an `Instantiator`, and the actor's own mock. The actor takes a
 	/// configured argument, a leaf argument and another actor it receives. Each class carries a marker an override's
 	/// closure sets, and the received actor one its second initializer takes.
-	/// A root that builds an actor and a class, each handed an `Instantiator` of one leaf it builds.
-	private static let sharedWrapperFixture: [String: String] = [
-		"A.swift": """
-		@Instantiable
-		public actor A: Instantiable {
-		    public init(leafBuilder: Instantiator<Leaf>) {
-		        self.leafBuilder = leafBuilder
-		    }
+	/// A root that builds an actor and a class, each handed an `Instantiator` of one leaf it builds: the class first
+	/// where `buildsClassFirst`, and a leaf that is a `Sendable` struct where `leafIsSendable`, and a class otherwise.
+	private static func sharedWrapperFixture(buildsClassFirst: Bool, leafIsSendable: Bool) -> [String: String] {
+		let properties = buildsClassFirst ? [("b", "B"), ("a", "A")] : [("a", "A"), ("b", "B")]
+		return [
+			"A.swift": """
+			@Instantiable
+			public actor A: Instantiable {
+			    public init(leafBuilder: Instantiator<Leaf>) {
+			        self.leafBuilder = leafBuilder
+			    }
 
-		    @Instantiated let leafBuilder: Instantiator<Leaf>
-		}
-		""",
-		"B.swift": """
-		@Instantiable
-		public final class B: Instantiable {
-		    public init(leafBuilder: Instantiator<Leaf>) {
-		        self.leafBuilder = leafBuilder
-		    }
+			    @Instantiated let leafBuilder: Instantiator<Leaf>
+			}
+			""",
+			"B.swift": """
+			@Instantiable
+			public final class B: Instantiable {
+			    public init(leafBuilder: Instantiator<Leaf>) {
+			        self.leafBuilder = leafBuilder
+			    }
 
-		    @Instantiated let leafBuilder: Instantiator<Leaf>
-		}
-		""",
-		"Leaf.swift": """
-		@Instantiable
-		public final class Leaf: Instantiable, Marked {
-		    public init() {}
+			    @Instantiated let leafBuilder: Instantiator<Leaf>
+			}
+			""",
+			"Leaf.swift": """
+			@Instantiable
+			public \(leafIsSendable ? "struct Leaf: Instantiable, Sendable" : "final class Leaf: Instantiable") {
+			    public init() {
+			        marker = "built"
+			    }
 
-		    public var marker = "built"
-		}
-		""",
-		"Marked.swift": """
-		public protocol Marked: AnyObject {
-		    var marker: String { get set }
-		}
+			    public init(marker: String) {
+			        self.marker = marker
+			    }
 
-		public func marked<Value: Marked>(_ value: Value, _ marker: String) -> Value {
-		    value.marker = marker
-		    return value
-		}
-		""",
-		"Root.swift": """
-		@Instantiable(generateMock: true)
-		public final class Root: Instantiable {
-		    public init(a: A, b: B) {
-		        self.a = a
-		        self.b = b
-		    }
+			    public let marker: String
+			}
+			""",
+			"Root.swift": """
+			@Instantiable(generateMock: true)
+			public final class Root: Instantiable {
+			    public init(\(properties.map { "\($0.0): \($0.1)" }.joined(separator: ", "))) {
+			        self.a = a
+			        self.b = b
+			    }
 
-		    @Instantiated let a: A
-		    @Instantiated let b: B
-		}
-		""",
-	]
+			\(properties.map { "    @Instantiated let \($0.0): \($0.1)" }.joined(separator: "\n"))
+			}
+			""",
+		]
+	}
 
 	/// A root that builds an actor handed each kind of wrapper it builds, one of a type that builds a child, and an actor
 	/// built with its hand-written mock; the first actor has a mock of its own.
