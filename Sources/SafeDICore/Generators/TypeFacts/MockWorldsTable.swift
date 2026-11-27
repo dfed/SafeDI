@@ -162,10 +162,11 @@ struct MockWorldsTable: Sendable {
 	}
 
 	/// What a test observes of the table, once each world is built from it: `worlds` holds each world's records, by the
-	/// order of `mockedTypes`, `nil` for a world whose records were refused, `recordCountsWithoutTable` how many records
+	/// order of `mockedTypes`, `nil` for a world whose records were refused, `declarationKeysByWorld` each world's key of
+	/// each of its variants' declarations (`MockWorld.declarationKeyByVariant`), `recordCountsWithoutTable` how many records
 	/// each world's node records hold where made without the table, and `differences` every way a world's records differ
 	/// from the records the world builds without the table.
-	func report(worldRecords: [[BuiltPlaceRecord]?], recordCountsWithoutTable: [Int], differences: [String]) -> MockWorldsTableReport {
+	func report(worldRecords: [[BuiltPlaceRecord]?], declarationKeysByWorld: [[Int32]], recordCountsWithoutTable: [Int], differences: [String]) -> MockWorldsTableReport {
 		MockWorldsTableReport(
 			declarationCount: interning.declarationCount,
 			shareableDeclarationCount: shareableByDeclaration.count(where: \.self),
@@ -175,8 +176,8 @@ struct MockWorldsTable: Sendable {
 				return "\(sharedRecord.declaration): \(declaration.property?.asSource ?? declaration.scope.instantiable.concreteInstantiable.asSource)\(sharedRecord.everyParentIsRoot ? ", every parent the root" : "")"
 			},
 			differences: differences,
-			worlds: zip(zip(zip(mockedTypes, worldRootDeclarations), worldRecords), recordCountsWithoutTable).map { worldAndRecords, recordCountWithoutTable in
-				let ((mockedType, root), records) = worldAndRecords
+			worlds: zip(zip(zip(zip(mockedTypes, worldRootDeclarations), worldRecords), recordCountsWithoutTable), declarationKeysByWorld).map { worldAndCounts, declarationKeys in
+				let (((mockedType, root), records), recordCountWithoutTable) = worldAndCounts
 				let declarations = declarations(inWorldRootedAt: root)
 				return MockWorldsTableReport.World(
 					mockedType: mockedType.asSource,
@@ -186,6 +187,7 @@ struct MockWorldsTable: Sendable {
 					recordCount: records?.count ?? 0,
 					sharedRecordCount: records?.count(where: { sharedRecordID(of: $0.node) != nil }) ?? 0,
 					recordCountWithoutTable: recordCountWithoutTable,
+					declarationKeys: declarationKeys,
 				)
 			},
 		)
@@ -248,7 +250,7 @@ public enum MockWorldsTableObservation {
 public struct MockWorldsTableReport: Equatable, Sendable {
 	/// One mock root's world.
 	public struct World: Equatable, Sendable {
-		public init(mockedType: String, rootDeclaration: Int, declarationCount: Int, shareableDeclarationCount: Int, recordCount: Int, sharedRecordCount: Int, recordCountWithoutTable: Int) {
+		public init(mockedType: String, rootDeclaration: Int, declarationCount: Int, shareableDeclarationCount: Int, recordCount: Int, sharedRecordCount: Int, recordCountWithoutTable: Int, declarationKeys: [Int32]) {
 			self.mockedType = mockedType
 			self.rootDeclaration = rootDeclaration
 			self.declarationCount = declarationCount
@@ -256,6 +258,7 @@ public struct MockWorldsTableReport: Equatable, Sendable {
 			self.recordCount = recordCount
 			self.sharedRecordCount = sharedRecordCount
 			self.recordCountWithoutTable = recordCountWithoutTable
+			self.declarationKeys = declarationKeys
 		}
 
 		/// The mocked type.
@@ -274,6 +277,8 @@ public struct MockWorldsTableReport: Equatable, Sendable {
 		/// How many built records the world's node records hold where they are made without the table: each built for the
 		/// world alone.
 		public let recordCountWithoutTable: Int
+		/// The key of each of the world's variants' declarations, by variant (`MockWorld.declarationKeyByVariant`).
+		public let declarationKeys: [Int32]
 	}
 
 	public init(declarationCount: Int, shareableDeclarationCount: Int, sharedRecordCount: Int, rows: [String], differences: [String], worlds: [World]) {

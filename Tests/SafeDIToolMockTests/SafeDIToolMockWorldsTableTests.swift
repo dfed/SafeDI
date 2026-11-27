@@ -109,9 +109,9 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 				rows: ["1: store: SessionStore, every parent the root", "2: clock: Clock"],
 				differences: [],
 				worlds: [
-					.init(mockedType: "AlphaScreen", rootDeclaration: 0, declarationCount: 3, shareableDeclarationCount: 2, recordCount: 1, sharedRecordCount: 1, recordCountWithoutTable: 2),
-					.init(mockedType: "BetaScreen", rootDeclaration: 3, declarationCount: 3, shareableDeclarationCount: 2, recordCount: 1, sharedRecordCount: 1, recordCountWithoutTable: 2),
-					.init(mockedType: "GammaScreen", rootDeclaration: 4, declarationCount: 3, shareableDeclarationCount: 2, recordCount: 1, sharedRecordCount: 1, recordCountWithoutTable: 2),
+					.init(mockedType: "AlphaScreen", rootDeclaration: 0, declarationCount: 3, shareableDeclarationCount: 2, recordCount: 1, sharedRecordCount: 1, recordCountWithoutTable: 2, declarationKeys: [1, 3, 4]),
+					.init(mockedType: "BetaScreen", rootDeclaration: 3, declarationCount: 3, shareableDeclarationCount: 2, recordCount: 1, sharedRecordCount: 1, recordCountWithoutTable: 2, declarationKeys: [7, 3, 4]),
+					.init(mockedType: "GammaScreen", rootDeclaration: 4, declarationCount: 3, shareableDeclarationCount: 2, recordCount: 1, sharedRecordCount: 1, recordCountWithoutTable: 2, declarationKeys: [9, 3, 4]),
 				],
 			),
 		])
@@ -197,7 +197,7 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 				rows: ["4: banner: Banner, every parent the root", "5: icon: Icon"],
 				differences: [],
 				worlds: [
-					.init(mockedType: "Dashboard", rootDeclaration: 0, declarationCount: 6, shareableDeclarationCount: 2, recordCount: 0, sharedRecordCount: 0, recordCountWithoutTable: 0),
+					.init(mockedType: "Dashboard", rootDeclaration: 0, declarationCount: 6, shareableDeclarationCount: 2, recordCount: 0, sharedRecordCount: 0, recordCountWithoutTable: 0, declarationKeys: [1, 3, 9, 4, 10, 6]),
 				],
 			),
 		])
@@ -255,7 +255,7 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 				rows: ["3: badge: Badge, every parent the root"],
 				differences: [],
 				worlds: [
-					.init(mockedType: "Screen", rootDeclaration: 0, declarationCount: 4, shareableDeclarationCount: 1, recordCount: 0, sharedRecordCount: 0, recordCountWithoutTable: 0),
+					.init(mockedType: "Screen", rootDeclaration: 0, declarationCount: 4, shareableDeclarationCount: 1, recordCount: 0, sharedRecordCount: 0, recordCountWithoutTable: 0, declarationKeys: [1, 3, 7, 4]),
 				],
 			),
 		])
@@ -318,7 +318,9 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 			case 1: 3
 			default: index + 3
 			}
-			worlds.append(.init(mockedType: "Screen" + (index < 10 ? "0" : "") + String(index), rootDeclaration: rootDeclaration, declarationCount: 3, shareableDeclarationCount: 2, recordCount: 1, sharedRecordCount: 1, recordCountWithoutTable: 2))
+			let rootKey = Int32(rootDeclaration * 2 + 1)
+			let childKey: Int32 = index.isMultiple(of: 2) ? 3 : 9
+			worlds.append(.init(mockedType: "Screen" + (index < 10 ? "0" : "") + String(index), rootDeclaration: rootDeclaration, declarationCount: 3, shareableDeclarationCount: 2, recordCount: 1, sharedRecordCount: 1, recordCountWithoutTable: 2, declarationKeys: [rootKey, childKey, 4]))
 		}
 		// `store` and `feed` are each only their root's child, and `clock` never is: three rows.
 		let expected = [MockWorldsTableReport(declarationCount: 25, shareableDeclarationCount: 3, sharedRecordCount: 3, rows: ["1: store: Store, every parent the root", "2: clock: Clock", "4: feed: Feed, every parent the root"], differences: [], worlds: worlds)]
@@ -377,8 +379,11 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 		}
 		// `store`, `clock` and `logger` are three rows, each record built once for the run; each world holds `store`'s,
 		// which holds the other two, where without the table each world builds all three.
-		let worlds = (0..<8).map { index in
-			MockWorldsTableReport.World(mockedType: "Screen\(index)", rootDeclaration: index == 0 ? 0 : index + 3, declarationCount: 4, shareableDeclarationCount: 3, recordCount: 1, sharedRecordCount: 1, recordCountWithoutTable: 3)
+		var worlds = [MockWorldsTableReport.World]()
+		for index in 0..<8 {
+			let rootDeclaration = index == 0 ? 0 : index + 3
+			let rootKey = Int32(rootDeclaration * 2 + 1)
+			worlds.append(MockWorldsTableReport.World(mockedType: "Screen\(index)", rootDeclaration: rootDeclaration, declarationCount: 4, shareableDeclarationCount: 3, recordCount: 1, sharedRecordCount: 1, recordCountWithoutTable: 3, declarationKeys: [rootKey, 3, 4, 6]))
 		}
 		#expect(reports == [MockWorldsTableReport(declarationCount: 11, shareableDeclarationCount: 3, sharedRecordCount: 3, rows: ["1: store: SessionStore, every parent the root", "2: clock: Clock", "3: logger: Logger"], differences: [], worlds: worlds)])
 		#expect(reports.map { $0.sharedRecordCount + $0.worlds.map { $0.recordCount - $0.sharedRecordCount }.reduce(0, +) } == [3])
@@ -442,8 +447,8 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 				rows: ["1: clock: Clock, every parent the root", "3: store: SessionStore, every parent the root", "1: clock: Clock"],
 				differences: [],
 				worlds: [
-					.init(mockedType: "AlphaScreen", rootDeclaration: 0, declarationCount: 2, shareableDeclarationCount: 1, recordCount: 1, sharedRecordCount: 1, recordCountWithoutTable: 1),
-					.init(mockedType: "BetaScreen", rootDeclaration: 2, declarationCount: 3, shareableDeclarationCount: 2, recordCount: 1, sharedRecordCount: 1, recordCountWithoutTable: 2),
+					.init(mockedType: "AlphaScreen", rootDeclaration: 0, declarationCount: 2, shareableDeclarationCount: 1, recordCount: 1, sharedRecordCount: 1, recordCountWithoutTable: 1, declarationKeys: [1, 3]),
+					.init(mockedType: "BetaScreen", rootDeclaration: 2, declarationCount: 3, shareableDeclarationCount: 2, recordCount: 1, sharedRecordCount: 1, recordCountWithoutTable: 2, declarationKeys: [5, 7, 2]),
 				],
 			),
 		])
@@ -531,8 +536,8 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 				rows: ["1: helper: Helper, every parent the root", "2: clock: Clock"],
 				differences: [],
 				worlds: [
-					.init(mockedType: "Other", rootDeclaration: 0, declarationCount: 3, shareableDeclarationCount: 2, recordCount: 1, sharedRecordCount: 1, recordCountWithoutTable: 2),
-					.init(mockedType: "Root", rootDeclaration: 3, declarationCount: 4, shareableDeclarationCount: 3, recordCount: 0, sharedRecordCount: 0, recordCountWithoutTable: 0),
+					.init(mockedType: "Other", rootDeclaration: 0, declarationCount: 3, shareableDeclarationCount: 2, recordCount: 1, sharedRecordCount: 1, recordCountWithoutTable: 2, declarationKeys: [1, 3, 4]),
+					.init(mockedType: "Root", rootDeclaration: 3, declarationCount: 4, shareableDeclarationCount: 3, recordCount: 0, sharedRecordCount: 0, recordCountWithoutTable: 0, declarationKeys: [7, 9, 11, 4]),
 				],
 			),
 		])
@@ -592,7 +597,7 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 				rows: [],
 				differences: [],
 				worlds: [
-					.init(mockedType: "Panel", rootDeclaration: 0, declarationCount: 2, shareableDeclarationCount: 0, recordCount: 0, sharedRecordCount: 0, recordCountWithoutTable: 0),
+					.init(mockedType: "Panel", rootDeclaration: 0, declarationCount: 2, shareableDeclarationCount: 0, recordCount: 0, sharedRecordCount: 0, recordCountWithoutTable: 0, declarationKeys: [1, 3]),
 				],
 			),
 			MockWorldsTableReport(
@@ -602,7 +607,7 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 				rows: ["3: clock: Clock"],
 				differences: [],
 				worlds: [
-					.init(mockedType: "Root", rootDeclaration: 0, declarationCount: 4, shareableDeclarationCount: 1, recordCount: 0, sharedRecordCount: 0, recordCountWithoutTable: 0),
+					.init(mockedType: "Root", rootDeclaration: 0, declarationCount: 4, shareableDeclarationCount: 1, recordCount: 0, sharedRecordCount: 0, recordCountWithoutTable: 0, declarationKeys: [1, 3, 4, 6]),
 				],
 			),
 		])
@@ -657,7 +662,86 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 				rows: [],
 				differences: [],
 				worlds: [
-					.init(mockedType: "AlphaScreen", rootDeclaration: 0, declarationCount: 3, shareableDeclarationCount: 2, recordCount: 2, sharedRecordCount: 0, recordCountWithoutTable: 2),
+					.init(mockedType: "AlphaScreen", rootDeclaration: 0, declarationCount: 3, shareableDeclarationCount: 2, recordCount: 2, sharedRecordCount: 0, recordCountWithoutTable: 2, declarationKeys: [1, 3, 4]),
+				],
+			),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_givesDeclarationOnCycleOneKeyInEveryWorld_whenTwoMockRootsReachTheCycle() async throws {
+		let reports = try await Self.tableReports(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public struct AlphaScreen: Instantiable {
+					    public init(holder: Holder) {
+					        self.holder = holder
+					    }
+
+					    @Instantiated let holder: Holder
+					}
+					""",
+					"""
+					@Instantiable(generateMock: true)
+					public struct BetaScreen: Instantiable {
+					    public init(holder: Holder) {
+					        self.holder = holder
+					    }
+
+					    @Instantiated let holder: Holder
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Holder: Instantiable {
+					    public init(editor: Editor) {
+					        self.editor = editor
+					    }
+
+					    @Instantiated let editor: Editor
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Editor: Instantiable {
+					    public init(previewBuilder: Instantiator<Preview>) {
+					        self.previewBuilder = previewBuilder
+					    }
+
+					    @Instantiated let previewBuilder: Instantiator<Preview>
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Preview: Instantiable {
+					    public init(editor: Editor) {
+					        self.editor = editor
+					    }
+
+					    @Instantiated let editor: Editor
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		// `editor` and `previewBuilder` form a cycle, so nothing is shareable and no variant is a row, yet every variant has
+		// a key, and `editor`, on the cycle, has the key 4 (declaration 2, beneath `holder`) in both worlds, as do `holder`
+		// (3) and `previewBuilder` (6). Only the roots' keys differ.
+		#expect(reports == [
+			MockWorldsTableReport(
+				declarationCount: 5,
+				shareableDeclarationCount: 0,
+				sharedRecordCount: 0,
+				rows: [],
+				differences: [],
+				worlds: [
+					.init(mockedType: "AlphaScreen", rootDeclaration: 0, declarationCount: 4, shareableDeclarationCount: 0, recordCount: 0, sharedRecordCount: 0, recordCountWithoutTable: 0, declarationKeys: [1, 3, 4, 6]),
+					.init(mockedType: "BetaScreen", rootDeclaration: 4, declarationCount: 4, shareableDeclarationCount: 0, recordCount: 0, sharedRecordCount: 0, recordCountWithoutTable: 0, declarationKeys: [9, 3, 4, 6]),
 				],
 			),
 		])

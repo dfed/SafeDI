@@ -32,6 +32,14 @@ struct MockWorld: Sendable {
 	let everyRefusal: [NodeRecordRefusal]
 	/// The table the world took its shared records from.
 	let table: MockWorldsTable
+	/// The key of each of the world's variants' declarations, by variant, one entry for every variant, a row or not: the
+	/// table's ID of the declaration times two, plus one where every parent of the declaration is the world's root. A row's
+	/// key is its row's (`MockWorlds`).
+	///
+	/// Two worlds give one key to the same declaration with the same bit, and to nothing else, but not to the same record:
+	/// the record of a declaration on a cycle, or of one that reaches a cycle, a hole, a fill or a loop of builders,
+	/// depends on where the world's root enters it. The key is for facts of the declaration alone.
+	let declarationKeyByVariant: [Int32]
 }
 
 /// Every mock world of a module, each built once, before the mock roots are lowered, from the frozen mock worlds' table,
@@ -71,7 +79,8 @@ struct MockWorlds: Sendable {
 		let width = ProcessInfo.processInfo.activeProcessorCount
 		let worldRows = try await BoundedConcurrency.map(roots, width: width) { root, _ in
 			let graph = TypeFactsGraph(root: root, forMockGeneration: true)
-			return WorldRows(graph: graph, rowKeyByVariant: rowKeys(of: graph, in: table))
+			let declarationKeyByVariant = declarationKeys(of: graph, in: table)
+			return WorldRows(graph: graph, declarationKeyByVariant: declarationKeyByVariant, rowKeyByVariant: rowKeys(of: graph, in: table, declarationKeyByVariant: declarationKeyByVariant))
 		}
 
 		// Each row's number, in the order the worlds first meet it, and the world and variant it is first met at.
@@ -120,7 +129,7 @@ struct MockWorlds: Sendable {
 				try NodeRecords(world: rows.graph, declaredTypeNames: nil, refusesOwedFacts: false)
 			}
 			return BuiltWorld(
-				world: world(of: rows.graph, records: records, table: sharedTable),
+				world: world(of: rows.graph, records: records, table: sharedTable, declarationKeyByVariant: rows.declarationKeyByVariant),
 				builtRecords: builtRecords(of: records),
 				recordCountWithoutTable: builtRecords(of: recordsWithoutTable)?.count ?? 0,
 				differences: Self.differences(between: records, and: recordsWithoutTable),
@@ -132,13 +141,24 @@ struct MockWorlds: Sendable {
 		}
 		return MockWorlds(
 			worlds: builtWorlds.map(\.world),
-			report: sharedTable.report(worldRecords: builtWorlds.map(\.builtRecords), recordCountsWithoutTable: builtWorlds.map(\.recordCountWithoutTable), differences: differences),
+			report: sharedTable.report(worldRecords: builtWorlds.map(\.builtRecords), declarationKeysByWorld: worldRows.map(\.declarationKeyByVariant), recordCountsWithoutTable: builtWorlds.map(\.recordCountWithoutTable), differences: differences),
 		)
 	}
 
-	/// The row of each of `world`'s variants, as its table declaration's ID times two, plus one where every parent of the
-	/// declaration is the root, or -1 for a variant that is no row.
-	private static func rowKeys(of world: TypeFactsGraph, in table: MockWorldsTable) -> [Int32] {
+	/// The key of each of `world`'s variants' declarations (`MockWorld.declarationKeyByVariant`). The table was built from
+	/// the same roots by the same walk of each root's declarations, so it holds every declaration of the world, and no
+	/// entry is -1.
+	private static func declarationKeys(of world: TypeFactsGraph, in table: MockWorldsTable) -> [Int32] {
+		let keyByDeclaration = (0..<world.declarationCount).map { declaration in
+			let everyParentIsRoot = world.parents(of: declaration).allSatisfy { $0.parent == 0 }
+			return (table.declarationID(of: world.graph.nodes[declaration]) ?? -1) * 2 + (everyParentIsRoot ? 1 : 0)
+		}
+		return (0..<Int32(world.variantCount)).map { keyByDeclaration[Int(world.declaration(of: $0))] }
+	}
+
+	/// The row of each of `world`'s variants, its declaration's key (`declarationKeyByVariant`), or -1 for a variant that
+	/// is no row.
+	private static func rowKeys(of world: TypeFactsGraph, in table: MockWorldsTable, declarationKeyByVariant: [Int32]) -> [Int32] {
 		// Each member of a loop of builders, and each declaration whose children hold one.
 		var holdsLoop = [Bool](repeating: false, count: world.declarationCount)
 		for declaration in 0..<Int32(world.declarationCount) {
@@ -147,15 +167,12 @@ struct MockWorlds: Sendable {
 				holdsLoop[Int(edge.child)] = true
 			}
 		}
-		// The table's ID of each declaration that may be a row of its own, -1 for one that may not. The root, declaration 0,
-		// is its world's own.
-		var rowDeclarations = [Int32](repeating: -1, count: world.declarationCount)
+		// Whether each declaration may be a row of its own. The root, declaration 0, is its world's own.
+		var mayBeRow = [Bool](repeating: false, count: world.declarationCount)
 		for declaration in 1..<world.declarationCount where !holdsLoop[declaration] {
 			guard let id = table.declarationID(of: world.graph.nodes[declaration]), table.isShareable(id) else { continue }
 			let (kind, refusals) = NodeRecords.kindAndRefusals(of: Int32(declaration), in: world)
-			if kind == .mockConstruction, refusals.isEmpty {
-				rowDeclarations[declaration] = id
-			}
+			mayBeRow[declaration] = kind == .mockConstruction && refusals.isEmpty
 		}
 		// A variant is a row where its declaration may be one and every variant it calls is a row: a post-order walk from
 		// the root, with a stack, since a tree can be as deep as the module has types. A callee still on the path closes a
@@ -175,11 +192,8 @@ struct MockWorlds: Sendable {
 				continue
 			}
 			state[Int(variant)] = .visited
-			let declaration = world.declaration(of: variant)
-			let id = rowDeclarations[Int(declaration)]
-			guard id >= 0, calls.allSatisfy({ rowKeyByVariant[Int($0)] >= 0 }) else { continue }
-			let everyParentIsRoot = world.parents(of: declaration).allSatisfy { $0.parent == 0 }
-			rowKeyByVariant[Int(variant)] = id * 2 + (everyParentIsRoot ? 1 : 0)
+			guard mayBeRow[Int(world.declaration(of: variant))], calls.allSatisfy({ rowKeyByVariant[Int($0)] >= 0 }) else { continue }
+			rowKeyByVariant[Int(variant)] = declarationKeyByVariant[Int(variant)]
 		}
 		return rowKeyByVariant
 	}
@@ -233,7 +247,7 @@ struct MockWorlds: Sendable {
 
 	/// The world whose node records, made with the table and without refusing owed facts, are `records`: refused as
 	/// `readAnsweredTwoWays` where a producer owes its facts, as `NodeRecords` refuses it.
-	private static func world(of graph: TypeFactsGraph, records: Result<NodeRecords, NodeRecordRefusal>, table: MockWorldsTable) -> MockWorld {
+	private static func world(of graph: TypeFactsGraph, records: Result<NodeRecords, NodeRecordRefusal>, table: MockWorldsTable, declarationKeyByVariant: [Int32]) -> MockWorld {
 		let records = records.flatMap { made in NodeRecords.owesFacts(in: graph) ? .failure(.readAnsweredTwoWays) : .success(made) }
 		let everyRefusal: [NodeRecordRefusal] = switch records {
 		case .success:
@@ -241,7 +255,7 @@ struct MockWorlds: Sendable {
 		case let .failure(refusal):
 			refusal == .recordsThrew ? [.recordsThrew] : NodeRecords.refusals(in: graph, declaredTypeNames: nil)
 		}
-		return MockWorld(records: records, everyRefusal: everyRefusal, table: table)
+		return MockWorld(records: records, everyRefusal: everyRefusal, table: table, declarationKeyByVariant: declarationKeyByVariant)
 	}
 
 	/// The built records `records` holds, or `nil` where they were refused.
@@ -274,9 +288,11 @@ struct MockWorlds: Sendable {
 		}
 	}
 
-	/// A world's graph, and the row each of its variants is (`rowKeys(of:in:)`).
+	/// A world's graph, the key of each of its variants' declarations (`declarationKeys(of:in:)`), and the row each of its
+	/// variants is (`rowKeys(of:in:declarationKeyByVariant:)`).
 	private struct WorldRows: Sendable {
 		let graph: TypeFactsGraph
+		let declarationKeyByVariant: [Int32]
 		let rowKeyByVariant: [Int32]
 	}
 
