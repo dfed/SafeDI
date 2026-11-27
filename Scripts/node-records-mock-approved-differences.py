@@ -164,35 +164,92 @@ def e8(text,walk=None):
         return m.group(1)+' = '+m.group(3) if re.search(r'else \{ (?:try |await )*'+re.escape(m.group(2))+r'\.[a-z_]\w*\(',m.group(0)+m.string[m.end():m.string.find('\n',m.end())]) else m.group(0)
     return re.sub(r'^(\s*let \w+): (.+?) = (if let safeDIBuilder = )',f,text,flags=re.M)
 def e9(text,walk=None):
+    # entry 9: only a member of a path that starts at safeDIOverrides, so nothing else in the text is touched
     return re.sub(r'(safeDIOverrides(?:\.\w+)*)\.`(Type|Protocol)`',r'\1.\2',text)
 def e6(text,walk=None):
-    return re.sub(r'([(,] ?)_: ',r'\1',text)
+    # entry 6: only an argument of a call the records wrote, of a type's initializer or static method or of
+    # an override: `Type(_: value)`, `Type.mock(_: value)`, `safeDIBuilder(_: value)`
+    out=[]
+    for line in text.split('\n'):
+        position=0
+        while True:
+            call=E6_CALL.search(line,position)
+            if not call: break
+            depth=0;end=None
+            for k in range(call.end()-1,len(line)):
+                if line[k] in '([': depth+=1
+                elif line[k] in ')]':
+                    depth-=1
+                    if depth==0: end=k; break
+            if end is None: break
+            arguments=split_top(line[call.end():end])
+            renamed=', '.join(a[3:] if a.startswith('_: ') else a for a in arguments)
+            if arguments and renamed!=line[call.end():end]:
+                line=line[:call.end()]+renamed+line[end:]
+            position=call.end()
+        out.append(line)
+    return '\n'.join(out)
+E6_CALL=re.compile(r'(?<![\w.`])(?:(?:[A-Z]\w*\.)*[A-Z]\w*(?:\.\w+)?|safeDIBuilder)\(')
 def e4(text,walk=None):
     return re.sub(r'^(\s*let \w+): ((?:Sendable)?(?:Erased)?Instantiator<.*>|(?:Sendable)?LazilyInstantiated<.*>) = \2',r'\1 = \2',text,flags=re.M)
+def mock_bodies(text):
+    """the text cut before each mock function, so that a fact is read from the walk's text of the same mock"""
+    parts=[[]]
+    for line in text.split('\n'):
+        if MOCK.match(line): parts.append([])
+        parts[-1].append(line)
+    return ['\n'.join(part) for part in parts]
+def per_mock(rewrite):
+    def whole(text,walk):
+        ours=mock_bodies(text);theirs=mock_bodies(walk)
+        if len(ours)!=len(theirs): return text
+        return '\n'.join(rewrite(a,b) for a,b in zip(ours,theirs))
+    return whole
+MOCK=re.compile(r'^    (?:public )?(?:@\w+ )*static func mock\(')
+LOCAL=re.compile(r'^( *)let (__safeDI_(\w+?)__overrides) = (safeDIOverrides(?:\.\w+)+)$')
 def e3(text,walk):
-    # entry 3: the walk reads an actor's overrides into a local before the actor's function; which functions
-    # are an actor's is a fact read from the walk's text, and each local must find its function here
+    # entry 3: the walk reads an actor's overrides into a local before the actor's function, and the records
+    # read a local wherever a function is handed its overrides in a closure. Which places the walk gives a
+    # local is a fact read from the walk's text of the same mock; each local must find its function here.
     lines=text.split('\n')
-    for local in re.finditer(r'^( *)let __safeDI_(\w+?)__overrides = (safeDIOverrides(?:\.\w+)+)$',walk,flags=re.M):
-        indent,label,path=local.groups()
-        for i,line in enumerate(lines):
-            f=FUNC.match(line)
+    walk_lines=walk.split('\n')
+    walk_locals=set(l.strip() for l in walk_lines if LOCAL.match(l))
+    i=0
+    while i<len(lines):
+        local=LOCAL.match(lines[i])
+        if local and lines[i].strip() not in walk_locals:
+            indent=len(local.group(1))
+            name=re.compile(r'(?<![\w.])'+re.escape(local.group(2))+r'(?!\w)')
+            del lines[i]
+            k=i
+            while k<len(lines) and (not lines[k].strip() or len(lines[k])-len(lines[k].lstrip())>=indent):
+                lines[k]=name.sub(local.group(4),lines[k]);k+=1
+        else: i+=1
+    for line in walk_lines:
+        local=LOCAL.match(line)
+        if not local: continue
+        indent,_,label,path=local.groups()
+        for i,candidate in enumerate(lines):
+            f=FUNC.match(candidate)
             if not (f and f.group(1)==indent and f.group(3)=='__safeDI_'+label): continue
-            if i and lines[i-1]==local.group(0): continue
+            if i and lines[i-1]==line: continue
             e=block_end(lines,i)
             reads=re.compile(re.escape(path)+r'(?=\.)')
             if not any(reads.search(b) for b in lines[i+1:e]): continue
             lines[i+1:e]=[reads.sub('__safeDI_'+label+'__overrides',b) for b in lines[i+1:e]]
-            lines.insert(i,local.group(0))
+            lines.insert(i,line)
             break
     return '\n'.join(lines)
 def e11(text,walk):
     # entry 11: a function the records name apart with a trailing underscore, where the walk's nested
-    # function of the same name hides the outer one
+    # function of the same name hides the outer one. Whether the walk names it apart too is a fact read
+    # from the walk's text of the same mock.
     for name in sorted(set(re.findall(r'func (__safeDI_\w+?_)\(',text))):
         if not re.search(r'(?<!\w)'+re.escape(name)+r'\(',walk):
             text=re.sub(r'(?<![\w.])'+re.escape(name)+r'(?=[(),\n])',name[:-1],text)
     return text
+e3=per_mock(e3)
+e11=per_mock(e11)
 REWRITES=[('1+2',unhoist),('11',e11),('3',e3),('8',e8),('9',e9),('6',e6),('4',e4)]
 
 
