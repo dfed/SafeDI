@@ -80,6 +80,9 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	case notLaidOut
 	/// A member of a loop of builders under two parents whose loops make different members of it again.
 	case builderLoopSharedApart
+	/// A loop of builders in a seam's own tree, whose levels the tree holds in a box and whose members bind its holes'
+	/// payloads, which node records do not write.
+	case builderLoopBoxed
 }
 
 /// What a world's records read of a node beside the frozen interface (`TypeFactsWorld`): the scope it builds and the
@@ -153,6 +156,7 @@ struct NodeRecords: Sendable {
 		for declaration in 0..<Int32(declarationCount) {
 			try kinds.append(Self.kind(of: declaration, in: world))
 			try Self.checkReadsNoSeamRootValue(of: seamTree, declaration, in: world)
+			try Self.checkMakesNoLoopMemberAgain(inSeamTree: seamTree, declaration, in: world)
 			try Self.checkForwardsBuiltTypesProperties(declaration, in: world, declaredTypeNames: declaredTypeNames)
 		}
 		let rootLazilyInstantiatedInstanceProperties = seamTree?.rootLazilyInstantiatedInstanceProperties ?? []
@@ -305,6 +309,11 @@ struct NodeRecords: Sendable {
 				refusals.insert(error)
 			}
 			do {
+				try checkMakesNoLoopMemberAgain(inSeamTree: seamTree, declaration, in: world)
+			} catch {
+				refusals.insert(error)
+			}
+			do {
 				try checkForwardsBuiltTypesProperties(declaration, in: world, declaredTypeNames: declaredTypeNames)
 			} catch {
 				refusals.insert(error)
@@ -369,6 +378,12 @@ struct NodeRecords: Sendable {
 			world.kind(of: edge) == .alias && world.property(of: edge).map { seamTree.autoclosureLabels.contains($0.label) } == true
 		}
 		guard !readsAnAutoclosure else { throw .renameOrHole }
+	}
+
+	/// Refuses `declaration`'s world as `builderLoopBoxed` where it is a seam's own and `declaration` makes a member of a
+	/// loop of builders again.
+	private static func checkMakesNoLoopMemberAgain(inSeamTree seamTree: DependencyTreeGenerator.RootScopeInfo.SeamTree?, _ declaration: DeclarationID, in world: some NodeRecordSources) throws(NodeRecordRefusal) {
+		guard seamTree == nil || world.madeAgain(from: declaration).isEmpty else { throw .builderLoopBoxed }
 	}
 
 	/// Refuses `declaration`'s world where it is an `ErasedInstantiator` or a `SendableErasedInstantiator` whose first
