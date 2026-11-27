@@ -131,7 +131,7 @@ struct OnlyIfAvailableAnswers: Sendable {
 			guard let callContext = contextByVariant[Int(variant)], world.kind(of: declaration) != .alias, world.kind(of: declaration) != .hole else { continue }
 			let scope = world.scope(of: declaration)
 			// A member of a loop of builders begins its builder function by binding each member it makes again
-			// (`NodeRecords.loopRebindings(of:in:)`), so its construction and everything inside it read those bindings.
+			// (`NodeRecords.loopRebindings(of:in:mockLoopLevels:enteredSlots:)`), so its construction and everything inside it read those bindings.
 			var context = callContext
 			for member in world.madeAgain(from: declaration) {
 				if let property = world.property(of: member), labels.contains(property.label) {

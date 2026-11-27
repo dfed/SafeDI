@@ -175,69 +175,16 @@ extension PassedArgument {
 		case .emptyInitialization:
 			shape
 		case .member,
-		     .optionalMember:
-			// A member of a value the function was handed reads no declaration, so it is the same text at every member.
-			value.isMemberOfPassedArgument ? shape : nil
-		case .callHanding:
-			// A call of what the function was handed, handing what it was handed or a new value, is the same text at every
-			// member too.
-			value.readsNoDeclaration ? shape : nil
+		     .optionalMember,
+		     .callHanding:
+			// A member of a value that reads no declaration, such as a member of a value the function was handed or a loop
+			// member's field of its level's configuration, is the same text at every member, as is a call of one such value
+			// that hands it another.
+			value.reads.isEmpty ? shape : nil
 		case .rootDeclaration,
 		     .call,
 		     .implicitMemberCall:
 			nil
-		}
-	}
-}
-
-extension ValuePath {
-	/// Whether the path is a member read, at any depth, of a value its function was handed: text that reads no
-	/// declaration, which a mock's call that closes a cycle hands as its overrides (`NodeRecords+MockCycle.swift`).
-	var isMemberOfPassedArgument: Bool {
-		switch self {
-		case let .member(_, value),
-		     let .optionalMember(_, value):
-			switch value {
-			case .passedArgument:
-				true
-			case .member,
-			     .optionalMember,
-			     .rootDeclaration,
-			     .read,
-			     .call,
-			     .implicitMemberCall,
-			     .callHanding,
-			     .emptyInitialization:
-				value.isMemberOfPassedArgument
-			}
-		case .rootDeclaration,
-		     .read,
-		     .passedArgument,
-		     .call,
-		     .implicitMemberCall,
-		     .callHanding,
-		     .emptyInitialization:
-			false
-		}
-	}
-
-	/// Whether the path reads no declaration: a value its function was handed, a member of one at any depth, a new value,
-	/// or a call of one such value that hands it another.
-	var readsNoDeclaration: Bool {
-		switch self {
-		case .passedArgument,
-		     .emptyInitialization:
-			true
-		case .member,
-		     .optionalMember:
-			isMemberOfPassedArgument
-		case let .callHanding(_, value, _, handed, _):
-			value.readsNoDeclaration && handed.readsNoDeclaration
-		case .rootDeclaration,
-		     .read,
-		     .call,
-		     .implicitMemberCall:
-			false
 		}
 	}
 }

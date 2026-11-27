@@ -150,6 +150,13 @@ public enum ReservedName: Hashable, Sendable {
 		"\(functionName)_received".spelledAsJoinedIdentifier
 	}
 
+	/// The name of the parameter under which a mock's function of a member of a loop of builders takes the overrides of the
+	/// loop's level, a node of the type `typeIdentifier` names, or `mock()` itself, whose overrides every member's
+	/// configuration is a field of (`NodeRecords.mockLoopLevelArgument(of:in:levels:slots:)`).
+	static func loopLevelConfigurationParameterName(ofTypeIdentifier typeIdentifier: String) -> String {
+		"\(builderFunctionNamePrefix)\(typeIdentifier)_loopConfiguration".spelledAsJoinedIdentifier
+	}
+
 	/// The name of the box a scope binds the levels and payloads of a loop of builders in, beside the builder function
 	/// named `functionName` of the loop's first member (see `ScopeGenerator.boxedLoops`).
 	static func loopLevelsName(of functionName: String) -> String {

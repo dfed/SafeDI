@@ -165,7 +165,7 @@ extension NodeRecords {
 	/// whether it builds a child with an override of its own (`buildsMockChildWithOverride(_:in:)`), or passes its
 	/// construction a field of its configuration (`mockConfigurationFieldArguments(of:in:)`). A node whose children are
 	/// all renames has none, so the local its override is bound to is named as a closure's.
-	private static func isConfigured(_ declaration: DeclarationID, in world: some NodeRecordSources) -> Bool {
+	static func isConfigured(_ declaration: DeclarationID, in world: some NodeRecordSources) -> Bool {
 		buildsMockChildWithOverride(declaration, in: world) || !mockConfigurationFieldArguments(of: declaration, in: world).isEmpty
 	}
 

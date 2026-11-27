@@ -107,11 +107,9 @@ struct TypeKeyBodyValuePathTests {
 		""")
 	}
 
-	@Test(arguments: [
-		ValuePath.callHanding("entering", of: .rootDeclaration("places"), literal: "b", value: .emptyInitialization(.simple(name: "Cfg")), flags: []),
-		.callHanding("entering", of: .passedArgument("cfg"), literal: "b", value: .read(idRead), flags: []),
-	])
-	func statements_keepsThePathKeysBody_whenACloserHandsACallThatReadsADeclaration(value: ValuePath) {
+	@Test
+	func statements_keepsThePathKeysBody_whenACloserHandsACallThatReadsADeclaration() {
+		let value = ValuePath.callHanding("entering", of: .passedArgument("cfg"), literal: "b", value: .read(Self.idRead), flags: [])
 		#expect(TypeKeyBody.statements(ofRootBody: Self.closerBody(handing: PassedArgument(parameterName: "cfg", type: .simple(name: "Cfg"), value: value, staysOutsideSendableFunctions: false))) == nil)
 	}
 
@@ -382,8 +380,18 @@ struct TypeKeyBodyValuePathTests {
 	}
 
 	@Test
-	func statements_keepsThePathKeysBody_whenACloserHandsAPassedArgumentAMember() {
-		#expect(TypeKeyBody.statements(ofRootBody: Self.closerBody(handing: PassedArgument(parameterName: "cfg", type: .simple(name: "Cfg"), value: .member("cfg", of: .rootDeclaration("overrides")), staysOutsideSendableFunctions: false))) == nil)
+	func statements_handsTheClosedOnFunctionTheMember_whenACloserHandsAPassedArgumentAMember() throws {
+		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.closerBody(handing: PassedArgument(parameterName: "cfg", type: .simple(name: "Cfg"), value: .member("cfg", of: .rootDeclaration("overrides")), staysOutsideSendableFunctions: false))))
+		#expect(GeneratedCode.lines(statements).spelled() == """
+		        let id = 1
+		        func __safeDI_b(cfg: Cfg) -> B {
+		            let bBuilder = Instantiator<B> {
+		                __safeDI_b(cfg: overrides.cfg)
+		            }
+		            return B(bBuilder: bBuilder)
+		        }
+		        let b: B = __safeDI_b(cfg: Cfg())
+		""")
 	}
 
 	@Test
