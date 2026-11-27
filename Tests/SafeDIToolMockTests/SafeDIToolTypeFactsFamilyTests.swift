@@ -164,6 +164,146 @@ struct SafeDIToolTypeFactsFamilyTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keysSeamCaseVariantPerFamily_whenSeamBuildsPlaceHoldingHoleInPlainFunctionAndInSendableFunction() async throws {
+		// `Home`'s tree builds `leaf`, which holds the hole `api`, under `plainBuilder`'s plain function and under
+		// `sharedBuilder`'s `@Sendable` one, where it reads `api` from the `@Sendable` carrier: `leaf` and the case key by
+		// family. `clock` holds no hole, so its one body serves both functions, as in any other production world.
+		let modules = [
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+				"public protocol Api: Sendable {}",
+				seamFixtureType(named: "Clock", isFinalClass: true, declarations: [], conformances: ", Sendable"),
+				seamFixtureType(named: "Leaf", isFinalClass: true, declarations: ["@Instantiated public let clock: Clock", "@Instantiated public let api: any Api"], conformances: ", Sendable"),
+				seamFixtureType(named: "Plain", isFinalClass: true, declarations: ["@Instantiated public let leaf: Leaf"]),
+				seamFixtureType(named: "Shared", isFinalClass: true, declarations: ["@Instantiated public let leaf: Leaf"], conformances: ", Sendable"),
+				seamFixtureType(named: "Home", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let plainBuilder: Instantiator<Plain>", "@Instantiated public let sharedBuilder: SendableInstantiator<Shared>"]),
+			]),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
+				seamFixtureType(named: "LiveApi", isFinalClass: true, declarations: [], conformances: ", Api")
+					.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(fulfillingAdditionalTypes: [Api.self])\n"),
+				seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated public let home: Home"]),
+			].map { "import Feature\n\n" + $0 }, dependencies: ["Feature"]),
+		]
+		var output: MultiModuleTestOutput?
+		let report = try await typeFactsReport(ofRoot: "Home", forMockGeneration: false) { filesToDelete in
+			output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		}
+
+		for (index, node) in report.nodes.enumerated() {
+			let expected: [String] = if node.description.hasPrefix("Leaf as leaf") || node.description.hasPrefix("hole as api") {
+				["plain", "sendable"]
+			} else if node.description.hasPrefix("Shared as sharedBuilder") {
+				["sendable"]
+			} else {
+				["plain"]
+			}
+			#expect(variantFamilies(ofNode: index, in: report) == expected, "\(node.description): \(report.world)")
+		}
+		#expect(try #require(output).modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
+		extension Home {
+		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		    nonisolated public final class __safeDI_ApiCarrier<__safeDI_Built> {
+		        public let plainBuilder: __safeDI_ApiCarrier_Plain<__safeDI_Built>
+
+		        public init(plainBuilder: __safeDI_ApiCarrier_Plain<__safeDI_Built>) {
+		            self.plainBuilder = plainBuilder
+		        }
+
+		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		            self.init(plainBuilder: .init(__safeDI_noScope: __safeDI_builder))
+		        }
+		    }
+
+		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		    nonisolated public final class __safeDI_ApiCarrier_Plain<__safeDI_Built> {
+		        public let leaf: __safeDI_ApiCarrier_Leaf<__safeDI_Built>
+
+		        public init(leaf: __safeDI_ApiCarrier_Leaf<__safeDI_Built>) {
+		            self.leaf = leaf
+		        }
+
+		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		            self.init(leaf: .init(__safeDI_noScope: __safeDI_builder))
+		        }
+		    }
+
+		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		    nonisolated public final class __safeDI_ApiCarrier_Shared<__safeDI_Built> {
+		        public let leaf: __safeDI_ApiCarrier_Leaf<__safeDI_Built>
+
+		        public init(leaf: __safeDI_ApiCarrier_Leaf<__safeDI_Built>) {
+		            self.leaf = leaf
+		        }
+
+		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		            self.init(leaf: .init(__safeDI_noScope: __safeDI_builder))
+		        }
+		    }
+
+		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		    nonisolated public final class __safeDI_ApiCarrier_Leaf<__safeDI_Built> {
+		        public let api: (Clock) -> __safeDI_Built
+
+		        public init(api: @escaping (Clock) -> __safeDI_Built) {
+		            self.api = api
+		        }
+
+		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		            self.init(api: { _ in __safeDI_builder() })
+		        }
+		    }
+
+		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		    nonisolated public final class __safeDI_ApiSendableCarrier<__safeDI_Built>: Sendable {
+		        public let sharedBuilder: @Sendable () -> __safeDI_ApiCarrier_Shared<__safeDI_Built>
+
+		        public init(sharedBuilder: @escaping @Sendable () -> __safeDI_ApiCarrier_Shared<__safeDI_Built>) {
+		            self.sharedBuilder = sharedBuilder
+		        }
+
+		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+		            self.init(sharedBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
+		        }
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public convenience init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>, __safeDI_apiSendableBuilder: __safeDI_ApiSendableCarrier<any Api>) {
+		        let __safeDI_apiBuilder_plainBuilder = __safeDI_apiBuilder.plainBuilder
+		        @inline(never) func __safeDI_leaf(__safeDI_apiBuilder_leaf: __safeDI_ApiCarrier_Leaf<any Api>) -> Leaf {
+		            let clock = Clock()
+		            let api: any Api = __safeDI_apiBuilder_leaf.api(clock)
+		            return Leaf(clock: clock, api: api)
+		        }
+		        @inline(never) func __safeDI_plainBuilder() -> Plain {
+		            let __safeDI_apiBuilder_leaf = __safeDI_apiBuilder_plainBuilder.leaf
+		            let leaf: Leaf = __safeDI_leaf(__safeDI_apiBuilder_leaf: __safeDI_apiBuilder_leaf)
+		            return Plain(leaf: leaf)
+		        }
+		        let plainBuilder = Instantiator<Plain>(__safeDI_plainBuilder)
+		        @inline(never) @Sendable nonisolated func __safeDI_leaf_(__safeDI_apiSendableBuilder_leaf: __safeDI_ApiCarrier_Leaf<any Api>) -> Leaf {
+		            let clock = Clock()
+		            let api: any Api = __safeDI_apiSendableBuilder_leaf.api(clock)
+		            return Leaf(clock: clock, api: api)
+		        }
+		        @inline(never) @Sendable nonisolated func __safeDI_sharedBuilder() -> Shared {
+		            let __safeDI_apiSendableBuilder_sharedBuilder = __safeDI_apiSendableBuilder.sharedBuilder()
+		            let __safeDI_apiSendableBuilder_leaf = __safeDI_apiSendableBuilder_sharedBuilder.leaf
+		            let leaf: Leaf = __safeDI_leaf_(__safeDI_apiSendableBuilder_leaf: __safeDI_apiSendableBuilder_leaf)
+		            return Shared(leaf: leaf)
+		        }
+		        let sharedBuilder = SendableInstantiator<Shared>(__safeDI_sharedBuilder)
+		        self.init(plainBuilder: plainBuilder, sharedBuilder: sharedBuilder)
+		    }
+		}
+
+		extension Home {
+		    public enum __safeDI_Home_7D1002EC194B49A7 {}
+		}
+		"""])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -191,6 +331,12 @@ struct SafeDIToolTypeFactsFamilyTests: ~Copyable {
 	/// The type facts report of `Root`'s mock world, which `run` generates.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private func mockReport(_ run: (inout [URL]) async throws -> Void) async throws -> TypeFactsReport {
+		try await typeFactsReport(ofRoot: "Root", forMockGeneration: true, run)
+	}
+
+	/// The type facts report of `root`'s mock world or production world, which `run` generates.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private func typeFactsReport(ofRoot root: String, forMockGeneration: Bool, _ run: (inout [URL]) async throws -> Void) async throws -> TypeFactsReport {
 		let (stream, continuation) = AsyncStream.makeStream(of: TypeFactsReport.self)
 		try await ConstructionMemoOracle.$observer.withValue({ _, _, report in continuation.yield(report) }) {
 			var filesToDelete = [URL]()
@@ -203,7 +349,7 @@ struct SafeDIToolTypeFactsFamilyTests: ~Copyable {
 		}
 		continuation.finish()
 		var reports = [TypeFactsReport]()
-		for await report in stream where report.root == "Root" && report.forMockGeneration {
+		for await report in stream where report.root == root && report.forMockGeneration == forMockGeneration {
 			reports.append(report)
 		}
 		return try #require(reports.last)

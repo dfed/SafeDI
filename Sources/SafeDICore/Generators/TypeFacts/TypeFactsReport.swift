@@ -119,6 +119,7 @@ public struct TypeFactsReport: Sendable {
 		self.graph = graph
 		self.root = root.instantiable.concreteInstantiable.asSource
 		self.forMockGeneration = forMockGeneration
+		holesArePlaces = graph.holesArePlaces
 		projection = graph.projection
 		world = Self.projection(of: graph)
 		var variantCounts = [Int](repeating: 0, count: graph.declarationCount)
@@ -355,6 +356,8 @@ public struct TypeFactsReport: Sendable {
 	public let columnElementCount: Int
 	public let edgeCount: Int
 	public let forMockGeneration: Bool
+	/// Whether the world's holes are places: a seam's own tree, or a public mock's.
+	public let holesArePlaces: Bool
 	/// The graph as text, a line per node (`TypeFactsGraph.projection`).
 	public let projection: String
 	public let nodes: [Node]

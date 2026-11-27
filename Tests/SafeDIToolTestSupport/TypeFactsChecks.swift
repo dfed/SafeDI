@@ -412,8 +412,8 @@ enum TypeFactsChecks {
 		}
 		// Check 33.
 		if !report.forMockGeneration {
-			for line in report.world.split(separator: "\n") where line.hasPrefix("v") && line.contains(" sendable keys ") {
-				add(33, "a production variant keys by family: \(line)")
+			for (variant, family) in report.variantFamilies.enumerated() where family != "plain" && !(report.holesArePlaces && report.nodes[report.variantNodes[variant]].holdsHoleBeneath) {
+				add(33, "a production variant of a body holding no case keys by family: v\(variant) of \(report.nodes[report.variantNodes[variant]].description)")
 			}
 		}
 		result.factsVariantCount = report.variantNodes.count
@@ -642,9 +642,10 @@ enum TypeFactsChecks {
 	/// 31. How the place is constructed: a seam call, a call of another module's public mock, a type built with its
 	///     hand-written mock.
 	///
-	/// 33, outside the columns (32 is reserved for the made-again oracle): a production world keys no variant by family. One body serves its places inside and
-	/// outside a `@Sendable` function, the mark folded over its calls, as 2.4.x writes it; only seam cases and mock bodies
-	/// key by family.
+	/// 33, outside the columns (32 is reserved for the made-again oracle): a production world keys by family only the bodies
+	/// of a seam's tree that hold a hole, which read their cases from the `@Sendable` carrier inside a `@Sendable` function.
+	/// Every other body serves its places inside and outside a `@Sendable` function, the mark folded over its calls, as
+	/// 2.4.x writes it.
 	private static func columnChecks(
 		of report: TypeFactsReport,
 		subtreeClosesCycle: [Bool],
