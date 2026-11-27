@@ -110,7 +110,7 @@ struct SafeDIToolSeamCarrierLoopTests: ~Copyable {
 		            __safeDI_apiBuilder_screenABuilder: __safeDI_apiBuilder.screenABuilder,
 		            __safeDI_apiBuilder_screenBBuilder: __safeDI_apiBuilder.screenBBuilder
 		        )
-		        func __safeDI_screenABuilder(id: Int) -> ScreenA {
+		        @inline(never) func __safeDI_screenABuilder(id: Int) -> ScreenA {
 		            let __safeDI_apiBuilder_screenABuilder = __safeDI_screenABuilder_loopLevels.__safeDI_apiBuilder_screenABuilder
 		            let screenBBuilder = Instantiator<ScreenB> {
 		                __safeDI_screenBBuilder(id: $0)
@@ -122,7 +122,7 @@ struct SafeDIToolSeamCarrierLoopTests: ~Copyable {
 		        let screenABuilder = Instantiator<ScreenA> {
 		            __safeDI_screenABuilder(id: $0)
 		        }
-		        func __safeDI_screenBBuilder(id: Int) -> ScreenB {
+		        @inline(never) func __safeDI_screenBBuilder(id: Int) -> ScreenB {
 		            let __safeDI_apiBuilder_screenBBuilder = __safeDI_screenABuilder_loopLevels.__safeDI_apiBuilder_screenBBuilder
 		            let screenABuilder = Instantiator<ScreenA> {
 		                __safeDI_screenABuilder(id: $0)
@@ -276,7 +276,7 @@ struct SafeDIToolSeamCarrierLoopTests: ~Copyable {
 		            __safeDI_apiBuilder_screenBBuilder: __safeDI_apiBuilder.screenBBuilder,
 		            __safeDI_apiBuilder_screenCBuilder: __safeDI_apiBuilder.screenCBuilder
 		        )
-		        func __safeDI_screenABuilder(id: Int) -> ScreenA {
+		        @inline(never) func __safeDI_screenABuilder(id: Int) -> ScreenA {
 		            let __safeDI_apiBuilder_screenABuilder = __safeDI_screenABuilder_loopLevels.__safeDI_apiBuilder_screenABuilder
 		            let screenBBuilder = Instantiator<ScreenB> {
 		                __safeDI_screenBBuilder(id: $0)
@@ -287,7 +287,7 @@ struct SafeDIToolSeamCarrierLoopTests: ~Copyable {
 		        let screenABuilder = Instantiator<ScreenA> {
 		            __safeDI_screenABuilder(id: $0)
 		        }
-		        func __safeDI_screenBBuilder(id: Int) -> ScreenB {
+		        @inline(never) func __safeDI_screenBBuilder(id: Int) -> ScreenB {
 		            let __safeDI_apiBuilder_screenBBuilder = __safeDI_screenABuilder_loopLevels.__safeDI_apiBuilder_screenBBuilder
 		            let screenCBuilder = Instantiator<ScreenC> {
 		                __safeDI_screenCBuilder(id: $0)
@@ -298,7 +298,7 @@ struct SafeDIToolSeamCarrierLoopTests: ~Copyable {
 		        let screenBBuilder = Instantiator<ScreenB> {
 		            __safeDI_screenBBuilder(id: $0)
 		        }
-		        func __safeDI_screenCBuilder(id: Int) -> ScreenC {
+		        @inline(never) func __safeDI_screenCBuilder(id: Int) -> ScreenC {
 		            let __safeDI_apiBuilder_screenCBuilder = __safeDI_screenABuilder_loopLevels.__safeDI_apiBuilder_screenCBuilder
 		            let screenABuilder = Instantiator<ScreenA> {
 		                __safeDI_screenABuilder(id: $0)

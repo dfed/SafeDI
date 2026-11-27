@@ -1256,16 +1256,19 @@ jobs:
       # subdirectory of the workspace, as a user may. No target outputs a
       # `.safedi` file at the top level, so Bazel writes one to bazel-bin
       # from the disk cache only when `--remote_download_regex` asks for
-      # it. Kept out of the retry wrapper: the build above fetched
-      # everything this runs.
+      # it, with the positions file beside it that `query` and `dump`
+      # read lines from. Kept out of the retry wrapper: the build above
+      # fetched everything this runs.
       - name: Run SafeDITool through bazel run with a relative path
         timeout-minutes: 5
         id: bazel-5
         if: ${{ !cancelled() && steps.bazel-4.outcome == 'success' }}
         working-directory: Examples/ExampleBazelIntegration/Subproject
         run: |
-          bazelisk build --disk_cache="$HOME/.cache/bazel-disk" --repository_cache="$HOME/.cache/bazel-repository" '--remote_download_regex=.*\.safedi$' //Subproject:Subproject
+          bazelisk build --disk_cache="$HOME/.cache/bazel-disk" --repository_cache="$HOME/.cache/bazel-repository" '--remote_download_regex=.*\.safedi(positions)?$' //Subproject:Subproject
+          test -f ../bazel-bin/Subproject/Subproject_safedi.safedipositions
           bazelisk run --disk_cache="$HOME/.cache/bazel-disk" --repository_cache="$HOME/.cache/bazel-repository" @safedi//:SafeDITool -- dump ../bazel-bin/Subproject/Subproject_safedi.safedi > /dev/null
+          bazelisk run --disk_cache="$HOME/.cache/bazel-disk" --repository_cache="$HOME/.cache/bazel-repository" @safedi//:SafeDITool -- query needs TitleFormatter --module-info ../bazel-bin/Subproject/Subproject_safedi.safedi > /dev/null
       # Optimized builds define `NDEBUG` and no `DEBUG`, so the rule must report the
       # former, withhold the latter, and SafeDI must wire the example's
       # `#elseif NDEBUG` logger. The `_safedi` target is listed so
@@ -1291,6 +1294,29 @@ jobs:
         id: bazel-7
         if: ${{ !cancelled() && steps.bazel-6.outcome == 'success' }}
         run: grep -q "DisabledEventLogger()" Examples/ExampleBazelIntegration/bazel-bin/ExampleBazelIntegration/ExampleBazelIntegration_safedi.swift
+      # A line moved in a lower module, keeping every declaration's order in
+      # its file, changes only that module's positions file, which the
+      # root's SafeDI action lists as unused, so Bazel's local action cache
+      # reruns Subproject's SafeDI action and no other. Each local action
+      # cache hit is left out of the execution log; a disk cache hit is in
+      # it. Kept out of the retry wrapper: an extra action is deterministic.
+      - name: Verify a moved line in Subproject reruns no SafeDI action above it
+        timeout-minutes: 10
+        id: bazel-8
+        if: ${{ !cancelled() && steps.bazel-7.outcome == 'success' }}
+        working-directory: Examples/ExampleBazelIntegration
+        run: |
+          bazelisk build --disk_cache="$HOME/.cache/bazel-disk" --repository_cache="$HOME/.cache/bazel-repository" //ExampleBazelIntegration:ExampleBazelIntegration_safedi
+          cp Subproject/TitleFormatter.swift "$RUNNER_TEMP/TitleFormatter.swift"
+          { echo; cat "$RUNNER_TEMP/TitleFormatter.swift"; } > Subproject/TitleFormatter.swift
+          bazelisk build --disk_cache="$HOME/.cache/bazel-disk" --repository_cache="$HOME/.cache/bazel-repository" --execution_log_json_file="$RUNNER_TEMP/moved-line.json" //ExampleBazelIntegration:ExampleBazelIntegration_safedi
+          cp "$RUNNER_TEMP/TitleFormatter.swift" Subproject/TitleFormatter.swift
+          ran=$(jq -r 'select(.mnemonic == "SafeDI") | .targetLabel' "$RUNNER_TEMP/moved-line.json" | sort -u)
+          echo "SafeDI actions the moved line ran: $ran"
+          if [ "$ran" != "//Subproject:Subproject_safedi" ]; then
+            echo "::error::A line moved in Subproject ran SafeDI actions other than Subproject's own."
+            exit 1
+          fi
       # For main's run after the merge, which skips this job when it finds the record ("Find Builds a Pull Request
       # Passed on This Tree"). Only when every step passed and every cache restored was an exact hit, so that a
       # run with a stale cache leaves main to run the job and save it. A one-line file: uploads of files this
