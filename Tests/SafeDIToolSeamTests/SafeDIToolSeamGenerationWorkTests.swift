@@ -192,7 +192,7 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 		// layer is reached from each seam along 3^(layers - 1) paths. The walk that collects the names of a seam's builder
 		// functions visits each generator once, and the walk that finds a seam's receivers each generator once for each
 		// context it is reached in, as far as its subtree reads it: here one. No call omits a parameter and no cycle closes,
-		// so the walk that finds the values a tier omits enters nothing. Each of the last two walks visited every path: at
+		// so the fold that finds the values a tier omits reads nothing. Each of the last two walks visited every path: at
 		// four and six layers, 160 and 1,456 visits each.
 		let visits = try await visitsInLayersOfScreens()
 		#expect(visits == [
@@ -206,7 +206,7 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 	mutating func generate_walksNoPathOfSeamsTreeForOmissions_whenNoCallOmitsParameterAndLastLayerClosesLazyCycles() async throws {
 		// The layers of screens above, each screen of the last layer holding an instantiator of itself: a lazy cycle closes
 		// at the end of every path. A scope that closes a lazy cycle only records calls, which judge what a call omitting a
-		// parameter reads, and no call omits one, so the walk that finds the values a tier omits enters nothing. It entered
+		// parameter reads, and no call omits one, so the fold that finds the values a tier omits reads nothing. Its walk entered
 		// every path to a cycle's closer: at four and six layers, 160 and 1,456 visits.
 		let visits = try await visitsInLayersOfScreens(screenDeclarations: { layer, position, layerCount in
 			layer + 1 == layerCount ? ["@Instantiated let screen\(layer)x\(position)Builder: Instantiator<Screen\(layer)x\(position)>"] : []
@@ -245,11 +245,11 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_walksOnlyPathsToCallOmittingParameter_whenFirstLayerCallsTierThatOmitsParameter() async throws {
+	mutating func generate_readsOnlyNodesAboveCallOmittingParameter_whenFirstLayerCallsTierThatOmitsParameter() async throws {
 		// The layers of screens above, each screen of the first layer also calling `Library`'s `Panel`, whose `public` tier
-		// omits the `token` its `Badge` receives only if available, since `Token` is internal. The walk that finds the
-		// values a tier omits enters the call in each screen of the first layer, and none of the layers beneath, which hold
-		// no such call: the same visits at four and six layers.
+		// omits the `token` its `Badge` receives only if available, since `Token` is internal. The fold that finds the
+		// values a tier omits reads the nodes on the paths to the call in each screen of the first layer, and none of the
+		// layers beneath, which hold no such call: the same work at four and six layers.
 		let visits = try await visitsInLayersOfScreens(
 			screenDeclarations: { layer, _, _ in layer == 0 ? ["@Instantiated let panel: Panel"] : [] },
 			libraryModule: ModuleFixture(
@@ -278,8 +278,8 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 			),
 		)
 		#expect(visits == [
-			[.collectingBuilderFunctionNames: 216, .findingSeamReceivers: 212, .findingSeamTierOmissions: 4],
-			[.collectingBuilderFunctionNames: 344, .findingSeamReceivers: 404, .findingSeamTierOmissions: 4],
+			[.collectingBuilderFunctionNames: 216, .findingSeamReceivers: 212, .findingSeamTierOmissions: 12],
+			[.collectingBuilderFunctionNames: 344, .findingSeamReceivers: 404, .findingSeamTierOmissions: 12],
 		])
 	}
 

@@ -354,7 +354,11 @@ func executeSafeDIToolTest(
 											// Every root’s received values from its per-type graph must equal the walk of its generator tree’s
 											// (`TypeFactsReceivedValueSuppliesChecks`).
 											try await TypeFactsReceivedValueSuppliesChecks.comparing(handingOn: TypeFactsReceivedValueSuppliesObservation.comparesWalk) {
-												try await tool.generate()
+												// Every root’s tier omissions from its per-type graph must equal the walk of its generator tree’s
+												// (`TypeFactsSeamTierOmissionsChecks`).
+												try await TypeFactsSeamTierOmissionsChecks.comparing(handingOn: TypeFactsSeamTierOmissionsObservation.comparesWalk) {
+													try await tool.generate()
+												}
 											}
 										}
 									}

@@ -59,16 +59,23 @@ extension DependencyTreeGenerator {
 
 	/// Validates that no call of a seam's generated initializer in the trees rooted at `roots` drops a value the tree
 	/// holds: a value for a parameter the tier the call reaches omits, or no tier takes, which the receivers inside
-	/// the seam would be handed were the tree built inline. Walks each finished generator tree as generation does
-	/// (`ScopeGenerator.seamTierOmissions(ofTreeRootedAt:)`), before any code is generated, and reports every finding
-	/// of every root, in source order.
+	/// the seam would be handed were the tree built inline. Reads each root's per-type graph (`TypeFactsSeamTierOmissions`),
+	/// before any code is generated, and reports every finding of every root, in source order.
 	func validateNoSeamTierOmitsProvidedValue(inTreesRootedAt roots: [RootScopeInfo]) async throws {
-		// A module that calls no seam's tier omitting a parameter has nothing to walk. A run that knows of a seam knows
+		// A module that calls no seam's tier omitting a parameter has nothing to read. A run that knows of a seam knows
 		// its module.
 		guard !seams.isEmpty, let emittingModule else { return }
 		var omissions = [DependencyTreeGeneratorError.ProvidedValueOmission]()
 		for root in roots {
-			for omission in await root.scopeGenerator.seamTierOmissions(ofTreeRootedAt: root.instantiable, isOwnFile: emittingModule.isOwnFile) {
+			let seamRoot: ScopeGenerator.SeamRoot? = if case let .root(_, seamRoot) = root.scopeGenerator.scopeData { seamRoot } else { nil }
+			let folded = TypeFactsSeamTierOmissions(root: root.rootScope, instantiable: root.instantiable, seamRoot: seamRoot, isOwnFile: emittingModule.isOwnFile).omissions
+			if let observer = TypeFactsSeamTierOmissionsObservation.comparesWalk {
+				let walked = await GenerationWork.$observer.withValue(nil) {
+					await root.scopeGenerator.seamTierOmissions(ofTreeRootedAt: root.instantiable, isOwnFile: emittingModule.isOwnFile)
+				}
+				observer(TypeFactsSeamTierOmissionsComparison(root: root.typeDescription.asSource, folded: folded.map(\.comparedSpelling), walked: walked.map(\.comparedSpelling)))
+			}
+			for omission in folded {
 				// A provider in a file this run cannot read – another module's, in a build that hands this run that
 				// module's declarations but not its files – is reported where this module refers to what leads to the
 				// call, naming the provider's module.

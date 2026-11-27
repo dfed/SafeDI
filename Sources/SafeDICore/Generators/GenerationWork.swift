@@ -120,9 +120,10 @@ public struct GenerationWork: Sendable {
 		/// already visited with the same context, as far as the generator's subtree reads it, is skipped and its children
 		/// are not reached, so the generators and the contexts their parents are visited in count, not the paths to them.
 		case findingSeamReceivers
-		/// Finding the values a seam tier a tree calls omits (`ScopeGenerator.seamTierOmissions(ofTreeRootedAt:isOwnFile:)`):
-		/// each place the walk visits. The walk enters no tree that holds no call of a seam tier that omits a parameter, and
-		/// in a tree that holds one only a place whose subtree holds such a call or a scope that closes a lazy cycle.
+		/// Finding the values a seam tier a tree calls omits (`TypeFactsSeamTierOmissions`): each edge climbed from the
+		/// omitting calls, each read an edge hands on, and each declaration judged. The fold reads no graph that holds no
+		/// call of a seam tier that omits a parameter, and in a graph that holds one only the nodes on the paths to such a
+		/// call. The walk it replaced, kept as its oracle, counts nothing.
 		case findingSeamTierOmissions
 	}
 

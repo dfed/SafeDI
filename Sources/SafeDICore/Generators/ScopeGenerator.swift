@@ -3532,6 +3532,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// than `nil`, as generation decides it (`unavailableProperties`), located at the closest declaration of its label. A
 	/// seam's own parameters are declarations of the seam's own. Where that declaration is a parameter of a builder
 	/// function a lazy cycle closes on, the value is the one each call of the function passes (see `OmissionFindings`).
+	/// Only the oracle of the fold that replaced it runs it (`TypeFactsSeamTierOmissionsObservation`), since it enters
+	/// every path to a call; it goes with the walk the received-values fold replaced.
 	/// - Parameters:
 	///   - instantiable: The type this root scope builds.
 	///   - isOwnFile: Whether a file a declaration records is one of the module's own files.
