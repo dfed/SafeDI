@@ -656,11 +656,12 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 		// tree beside the records for the comparison. A mock world's records (`NodeRecords+MockConstruction.swift`) read two
 		// more, both facts of one type: its default-valued parameters, and the name of the configuration it declares. A world
 		// with a cycle names a body's functions apart as the tree does (`identifierSafeNames`), from the labels and types of
-		// the places the body holds.
+		// the places the body holds. A mock world with a cycle asks which edges its module's configurations leave out
+		// (`CycleEdge`), a fact of the module's types together that the world is made with until an edge fact holds it.
 		let directory = URL(fileURLWithPath: #filePath)
 			.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
 			.appendingPathComponent("Sources/SafeDICore/Generators/NodeRecords")
-		let staticHelpers: Set = ["functionName", "standardIndent", "provides", "referencingDeclaration", "aliasDeclaration", "isBuilder", "DefaultParameter", "mockConfigurationStructName", "identifierSafeNames"]
+		let staticHelpers: Set = ["functionName", "standardIndent", "provides", "referencingDeclaration", "aliasDeclaration", "isBuilder", "DefaultParameter", "mockConfigurationStructName", "identifierSafeNames", "CycleEdge"]
 		let files = try FileManager.default.contentsOfDirectory(atPath: directory.path).filter { $0.hasSuffix(".swift") && $0 != "DependencyTreeGenerator+NodeRecords.swift" }.sorted()
 		#expect(files.count >= 4)
 		for file in files {

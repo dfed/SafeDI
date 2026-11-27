@@ -271,6 +271,7 @@ extension ScopeGenerator {
 						signature.uncoveredRootParameters.filter { !$0.isSendableAutoclosure }.map { ($0.property, $0.label) },
 						uniquingKeysWith: { first, _ in first },
 					),
+					edgesConfigurationsLeaveOut: context.cycleEdges,
 				),
 				outerDeclarations: outerDeclarations,
 			) {

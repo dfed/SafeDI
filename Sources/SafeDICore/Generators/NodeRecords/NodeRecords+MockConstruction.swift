@@ -49,6 +49,9 @@ extension NodeRecords {
 		// A dependency the mock cannot build is a parameter of `mock()`, which the node's construction reads
 		// (`NodeRecords+MockUncoveredDependency.swift`).
 		discharges.formUnion(mockUncoveredDependencyDischarges(of: declaration, in: world))
+		// A node on a cycle is handed the places entered above it, and finds its own among them
+		// (`NodeRecords+MockCycle.swift`).
+		discharges.formUnion(mockCycleDischarges(of: declaration, in: world))
 		guard refusalsOfBuiltByInitializer(declaration, in: world).allSatisfy(discharges.contains) else { return nil }
 		// A `Sendable` wrapper erased to its property's type is made as `mockErased` makes an erased node:
 		// `builtByInitializer` refuses it as `sendable` alone. An erased `LazilyInstantiated`'s override returns the erased
@@ -110,6 +113,8 @@ extension NodeRecords {
 	/// hands down beside the node's, so a node whose children are all of those two kinds and whose construction takes no
 	/// field is not configured. The closure of a node that is not configured returns the property's type, so every node's
 	/// function does, as the walk's does.
+	/// - Parameter enteredSlots: The slots of the places the world's cycles enter, and which nodes take them; `nil` for a
+	///   world with no cycle.
 	static func mockConstructionRecord(
 		of declaration: DeclarationID,
 		variant: VariantID,
@@ -117,6 +122,7 @@ extension NodeRecords {
 		unavailableProperties: Set<Property>,
 		lazilyInstantiatedInstanceProperties: Set<Property>,
 		receivesBoundAgain: [MockReceiveBoundAgain],
+		enteredSlots: MockEnteredSlots?,
 		typesDeclaredEscaping: Set<TypeDescription>,
 		children: [GeneratedCode],
 	) throws -> BuiltPlaceRecord {
@@ -161,15 +167,27 @@ extension NodeRecords {
 		// configuration; its function is still handed the overrides, beside which it takes that property’s.
 		let isConfigured = buildsMockChildWithOverride(declaration, in: world) || !fieldArguments.isEmpty
 		let slotType = mockOverrideType(of: record, usesHandWrittenMock: handWrittenMock != nil, isConfigured: isConfigured, instantiable: instantiable)
-		let slot = mockOverrideSlot(
-			of: declaration,
-			labeled: record.property.label,
-			typed: slotType,
-			in: world,
-			hasFunction: record.hasFunction,
-			handsOverridesToChildren: isConfiguredForChildren,
-			isSendable: record.isSendable,
-		)
+		// A function that takes the places its world's cycles enter is handed its overrides beside them by every call, a
+		// call that closes a cycle on it included, and begins by entering its place where it has one
+		// (`NodeRecords+MockCycle.swift`).
+		let slot: (value: ValuePath, passedArguments: [PassedArgument])
+		if let enteredSlots, takesMockEnteredPlaces(declaration, in: enteredSlots) {
+			slot = (
+				.passedArgument(ReservedName.mockOverridesParameterName),
+				mockArgumentsHanded(to: declaration, labeled: record.property.label, by: world.parents(of: declaration).first?.parent ?? 0, in: world, slots: enteredSlots),
+			)
+			record.callFields = mockEnteredPlace(of: declaration, in: enteredSlots).map { CallFields(leadingStatement: .enteredPlace($0), closureArguments: []) }
+		} else {
+			slot = mockOverrideSlot(
+				of: declaration,
+				labeled: record.property.label,
+				typed: slotType,
+				in: world,
+				hasFunction: record.hasFunction,
+				handsOverridesToChildren: isConfiguredForChildren,
+				isSendable: record.isSendable,
+			)
+		}
 		// The override `mock()` takes of a property nothing fulfills is handed down to the function of the type that
 		// declares the property (`NodeRecords+MockUnavailableDependency.swift`).
 		record.passedArguments = try slot.passedArguments + unavailableDependencyOverrideArguments(of: declaration, in: world, children: children, isSendable: record.isSendable)

@@ -38,6 +38,7 @@ extension NodeRecords {
 		unavailableProperties: Set<Property>,
 		lazilyInstantiatedInstanceProperties: Set<Property>,
 		receivesBoundAgain: [MockReceiveBoundAgain],
+		enteredSlots: MockEnteredSlots?,
 		typesDeclaredEscaping: Set<TypeDescription>,
 		children: [GeneratedCode],
 	) throws -> BuiltPlaceRecord {
@@ -48,6 +49,7 @@ extension NodeRecords {
 			unavailableProperties: unavailableProperties,
 			lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
 			receivesBoundAgain: receivesBoundAgain,
+			enteredSlots: enteredSlots,
 			typesDeclaredEscaping: typesDeclaredEscaping,
 			children: children,
 		)
