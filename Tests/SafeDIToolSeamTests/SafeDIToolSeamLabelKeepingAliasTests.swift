@@ -652,31 +652,31 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        let authToken = Secret()
+			        func __safeDI_reader() -> Reader {
+			            #sourceLocation(file: "\(inlineOutput.fixtures["Reader.swift"])", line: 7)
+			            let authToken: (any Auth)? = authToken
+			            #sourceLocation()
+			            return Reader(authToken: authToken)
+			        }
+			        func __safeDI_left() -> Left {
+			            let detail: Detail = __safeDI_detail()
+			            return Left(detail: detail)
+			        }
+			        func __safeDI_detail() -> Detail {
+			            #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
+			            let authToken: Secret? = nil
+			            #sourceLocation()
+			            let reader: Reader = __safeDI_reader_(authToken: authToken)
+			            return Detail(authToken: authToken, reader: reader)
+			        }
+			        func __safeDI_reader_(authToken: Secret?) -> Reader {
+			            #sourceLocation(file: "\(inlineOutput.fixtures["Reader.swift"])", line: 7)
+			            let authToken: (any Auth)? = authToken
+			            #sourceLocation()
+			            return Reader(authToken: authToken)
+			        }
 			        func __safeDI_screen() -> Screen {
-			            func __safeDI_reader() -> Reader {
-			                #sourceLocation(file: "\(inlineOutput.fixtures["Reader.swift"])", line: 7)
-			                let authToken: (any Auth)? = authToken
-			                #sourceLocation()
-			                return Reader(authToken: authToken)
-			            }
 			            let reader: Reader = __safeDI_reader()
-			            func __safeDI_left() -> Left {
-			                func __safeDI_detail() -> Detail {
-			                    #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
-			                    let authToken: Secret? = nil
-			                    #sourceLocation()
-			                    func __safeDI_reader() -> Reader {
-			                        #sourceLocation(file: "\(inlineOutput.fixtures["Reader.swift"])", line: 7)
-			                        let authToken: (any Auth)? = authToken
-			                        #sourceLocation()
-			                        return Reader(authToken: authToken)
-			                    }
-			                    let reader: Reader = __safeDI_reader()
-			                    return Detail(authToken: authToken, reader: reader)
-			                }
-			                let detail: Detail = __safeDI_detail()
-			                return Left(detail: detail)
-			            }
 			            let left: Left = __safeDI_left()
 			            return Screen(reader: reader, left: left)
 			        }
