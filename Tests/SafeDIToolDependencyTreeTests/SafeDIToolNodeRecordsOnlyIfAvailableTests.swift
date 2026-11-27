@@ -171,7 +171,7 @@ struct SafeDIToolNodeRecordsOnlyIfAvailableTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_refusesWorldAsNodeOfSeveralVariants_whenTwoCallsOfOneTypeFindValueAndNil() async throws {
+	mutating func generate_refusesWorldAsOnlyIfAvailableAnsweredApart_whenTwoCallsOfOneTypeFindValueAndNil() async throws {
 		// `Badge` is built inside `first`, before `session`, which requires `first`, and inside `second`, after it: one
 		// variant under rule 1, which one place per variant cannot write as the tree writes each.
 		let (_, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
@@ -229,7 +229,7 @@ struct SafeDIToolNodeRecordsOnlyIfAvailableTests: ~Copyable {
 				""",
 			], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		}
-		#expect(reports.map(\.refusal) == ["nodeHasSeveralVariants"])
+		#expect(reports.map(\.refusal) == ["onlyIfAvailableAnsweredApart"])
 	}
 
 	@Test

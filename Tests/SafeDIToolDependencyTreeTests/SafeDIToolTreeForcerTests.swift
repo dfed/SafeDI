@@ -90,25 +90,27 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_buildsTree_whenRenameOfSharedTypeIsFulfilledByWrapperOnFirstPathAndValueOnSecond() async throws {
+	mutating func generate_laysOutRoot_whenRenameOfSharedTypeIsFulfilledByWrapperOnFirstPathAndValueOnSecond() async throws {
 		let (forcers, _) = try await treeForcers(of: Self.renameFulfilledByWrapperAndValue(lazyParentFirst: true))
-		// One variant of `Reader` is built beneath both parents, and its rename reads `x` as a wrapper's instance beneath
-		// `LazyParent`, which a rename's record cannot bind.
+		// The rename beneath both parents keys its read of `x` by the form that answers it, so it has a variant beneath each,
+		// and each variant's record binds it as its own key says: `x.instance` beneath `LazyParent`, `x` beneath `Holder`.
+		// Every test compares the records' code with the tree's (`NodeRecordsChecks`).
 		#expect(forcers == """
-		Root\tkind lazy
-		roots that built a tree: 1 of 1
+		Root\tnone
+		roots that built a tree: 0 of 1
 
 		""")
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_buildsTree_whenRenameOfSharedTypeIsFulfilledByValueOnFirstPathAndWrapperOnSecond() async throws {
+	mutating func generate_laysOutRoot_whenRenameOfSharedTypeIsFulfilledByValueOnFirstPathAndWrapperOnSecond() async throws {
 		let (forcers, _) = try await treeForcers(of: Self.renameFulfilledByWrapperAndValue(lazyParentFirst: false))
-		// The same world with the root's properties swapped: the refusal does not follow which parent is declared first.
+		// The same world with the root's properties swapped: which record each variant gets does not follow which parent is
+		// declared first.
 		#expect(forcers == """
-		Root\tkind lazy
-		roots that built a tree: 1 of 1
+		Root\tnone
+		roots that built a tree: 0 of 1
 
 		""")
 	}

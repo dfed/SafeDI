@@ -22,7 +22,7 @@ extension NodeRecords {
 	/// The claim of `declaration` where it is a node whose type receives a property only if available or declares a rename:
 	/// of kind `receivesOnlyIfAvailable`, discharging `onlyIfAvailable` and `renameOrHole`, which it still holds where its
 	/// scope declares a hole or an instantiated dependency it does not build; `nil` for any other node.
-	static func receivesOnlyIfAvailableClaim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
+	static func receivesOnlyIfAvailableClaim(of declaration: DeclarationID, in world: some NodeRecordVariantFacts) -> NodeRecordClaim? {
 		guard world.kind(of: declaration) != .alias, world.kind(of: declaration) != .hole else { return nil }
 		let scope = world.scope(of: declaration)
 		let declaresRename = scope.propertiesToGenerate.contains {
@@ -46,13 +46,12 @@ extension NodeRecords {
 
 	/// The record of `declaration`'s place in `variant`, a node of kind `receivesOnlyIfAvailable`: a `builtByInitializer`
 	/// record whose construction is passed `nil` for each receive only if available `answers` finds unavailable there, and
-	/// the instance of each of `lazilyInstantiatedInstanceProperties` it receives (`DeclarationsAnsweringReads`).
+	/// the instance of each lazy wrapper the variant's key says answers a receive by value.
 	static func receivesOnlyIfAvailableRecord(
 		of declaration: DeclarationID,
 		variant: VariantID,
-		in world: some NodeRecordSources,
+		in world: some NodeRecordVariantFacts,
 		answers: OnlyIfAvailableAnswers,
-		lazilyInstantiatedInstanceProperties: Set<Property>,
 		typesDeclaredEscaping: Set<TypeDescription>,
 		children: [GeneratedCode],
 	) throws -> BuiltPlaceRecord {
@@ -61,7 +60,6 @@ extension NodeRecords {
 			variant: variant,
 			in: world,
 			unavailableProperties: answers.unavailableProperties(of: variant),
-			lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
 			typesDeclaredEscaping: typesDeclaredEscaping,
 			children: children,
 		)
@@ -75,8 +73,8 @@ extension NodeRecords {
 ///
 /// Rule 1 of the per-type facts keys a read only if available alike whether it is `nil` or a value, so one variant can be
 /// called where the read is `nil` and where it is a value, while each place of today's tree writes the one it reads. A
-/// world in which two calls of one variant find different answers is refused (`nodeHasSeveralVariants`) until its places
-/// are made per call. Only the labels some receive only if available reads are followed, so a world without one costs
+/// world in which two calls of one variant find different answers is refused (`onlyIfAvailableAnsweredApart`) until its
+/// records take the read as a parameter. Only the labels some receive only if available reads are followed, so a world without one costs
 /// nothing.
 ///
 /// Holds, per variant, the set of the properties it is passed `nil` for, for as long as the world's records are made.
@@ -155,7 +153,7 @@ struct OnlyIfAvailableAnswers: Sendable {
 					calleeContext[label] = bindings
 				}
 				if let existingContext = contextByVariant[Int(callee)] {
-					guard existingContext == calleeContext else { throw .nodeHasSeveralVariants }
+					guard existingContext == calleeContext else { throw .onlyIfAvailableAnsweredApart }
 				} else {
 					contextByVariant[Int(callee)] = calleeContext
 					variantsToVisit.append(callee)

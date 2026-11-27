@@ -21,7 +21,7 @@
 extension NodeRecords {
 	/// Every kind `builtByInitializer` does not make that `declaration` is of, in the order they are checked: the refusals
 	/// another kind's claim may discharge.
-	static func refusalsOfBuiltByInitializer(_ declaration: DeclarationID, in world: some NodeRecordSources) -> [NodeRecordRefusal] {
+	static func refusalsOfBuiltByInitializer(_ declaration: DeclarationID, in world: some NodeRecordVariantFacts) -> [NodeRecordRefusal] {
 		var refusals = [NodeRecordRefusal]()
 		// Every other construction is a call of another module's code, a hand-written mock or a fill, which another kind
 		// makes or node records refuse.
@@ -82,14 +82,13 @@ extension NodeRecords {
 	/// wrappers, whose body builds `children`, whose tree declares `typesDeclaredEscaping` `@escaping`, whose construction
 	/// is passed `nil` for `unavailableProperties`, and whose line constructing the type ends with `lineEnd`. Whether the
 	/// place is erased, is `@Sendable` and always declares its builder function, it reads of the node.
-	/// - Parameter lazilyInstantiatedInstanceProperties: The by-value properties the node's type receives as the instance
-	///   of a lazily instantiated property declared above it (`DeclarationsAnsweringReads`).
+	/// Each by-value receive of the node's type that a lazily instantiated property declared above it answers reads its
+	/// instance, which the record reads of the variant's key (`lazilyInstantiatedInstanceProperties(of:variant:in:)`).
 	static func builtByInitializerRecord(
 		of declaration: DeclarationID,
-		variant _: VariantID,
-		in world: some NodeRecordSources,
+		variant: VariantID,
+		in world: some NodeRecordVariantFacts,
 		unavailableProperties: Set<Property> = [],
-		lazilyInstantiatedInstanceProperties: Set<Property>,
 		typesDeclaredEscaping: Set<TypeDescription>,
 		children: [GeneratedCode],
 		lineEnd: String = "",
@@ -99,7 +98,7 @@ extension NodeRecords {
 		guard let property = world.property(of: declaration), let initializer = instantiable.initializer else { throw NodeRecordRefusal.noInitializer }
 		// Never throws: a type's initializer is one that fulfills its dependencies (`InstantiableVisitor`'s
 		// `canonicalConstructionInitializer`, through `Initializer.isValid(forFulfilling:)`, which makes the same binding).
-		let arguments = try initializer.createInitializerArguments(given: instantiable.dependencies, unavailableProperties: unavailableProperties, lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties)
+		let arguments = try initializer.createInitializerArguments(given: instantiable.dependencies, unavailableProperties: unavailableProperties, lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties(of: declaration, variant: variant, in: world))
 		let isExtension = instantiable.declarationType.isExtension
 		// An instantiator or a lazy wrapper is made of its builder function, which is `@Sendable` for a `Sendable` wrapper.
 		let (isWrapper, isSendable) = switch world.kind(of: declaration) {

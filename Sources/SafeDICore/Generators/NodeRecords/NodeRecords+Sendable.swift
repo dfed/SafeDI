@@ -25,7 +25,7 @@ extension NodeRecords {
 	/// marked `@Sendable`. Only the wrapper's own place carries the mark: a place built inside its function keeps a plain
 	/// record, as the tree's does, and the engine marks the functions the `@Sendable` one captures from where they are
 	/// placed. A production body has one variant per node whatever function encloses it.
-	static func sendableClaim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
+	static func sendableClaim(of declaration: DeclarationID, in world: some NodeRecordVariantFacts) -> NodeRecordClaim? {
 		switch world.kind(of: declaration) {
 		case .sendableInstantiator, .sendableErasedInstantiator, .sendableLazy:
 			NodeRecordClaim(kind: .sendable, discharges: [.sendable])

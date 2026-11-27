@@ -37,7 +37,7 @@ extension NodeRecords {
 	/// The claim of `declaration` where it is a rename (`@Received(fulfilledByDependencyNamed:ofType:)`): of kind `rename`,
 	/// discharging each refusal `refusalsOfBuiltByInitializer(_:in:)` finds of it. A rename is a leaf whose scope is the
 	/// scope that declares it, so each such refusal is of that scope, which its own node holds; `nil` for any other node.
-	static func renameClaim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
+	static func renameClaim(of declaration: DeclarationID, in world: some NodeRecordVariantFacts) -> NodeRecordClaim? {
 		guard world.kind(of: declaration) == .alias else { return nil }
 		// A rename of a builder that does not erase it can be a member of a loop of builders, which the tree rebinds where
 		// the loop holds only builders (`ScopeGenerator.isLoopBuilder(amongSiblings:)`): a loop of builders, refused.
@@ -48,7 +48,7 @@ extension NodeRecords {
 	/// The rename `declaration` is, as its scope declares it, under its property (`TypeFactsGraph`).
 	private static func rename(
 		of declaration: DeclarationID,
-		in world: some NodeRecordSources,
+		in world: some NodeRecordVariantFacts,
 	) -> (property: Property, fulfillingProperty: Property, erasedToConcreteExistential: Bool, declarationReference: AliasDeclarationReferences.Reference?)? {
 		world.scope(of: declaration).propertiesToGenerate.lazy.compactMap { propertyToGenerate in
 			if case let .aliased(property, fulfillingProperty, erasedToConcreteExistential, _, declarationReference) = propertyToGenerate, property == world.property(of: declaration) {
@@ -64,26 +64,49 @@ extension NodeRecords {
 	static func renameRecord(
 		of declaration: DeclarationID,
 		variant: VariantID,
-		in world: some NodeRecordSources,
+		in world: some NodeRecordVariantFacts,
 		answers: OnlyIfAvailableAnswers,
 	) throws(NodeRecordRefusal) -> AliasPlaceRecord {
 		guard let (property, fulfillingProperty, erasedToConcreteExistential, declarationReference) = rename(of: declaration, in: world) else { throw .renameOrHole }
+		// A rename of the wrapper itself is bound from the wrapper; only one of its value reads the instance.
+		// A rename that keeps its label is the declaration being built where it reads the label, so its key names itself,
+		// not what it renames: refused until the facts key that read past the rename's own declaration.
+		guard fulfillingProperty.label != property.label, let fulfillingKeyIsLazyWrapper = fulfillingKeyIsLazyWrapper(declaration, variant: variant, in: world) else { throw .lazy }
+		let readsWrappersInstance = fulfillingProperty.asUnwrappedProperty.propertyType.isConstant && fulfillingKeyIsLazyWrapper
 		switch answers.renameBinding(of: variant) {
 		case .boundToNil:
 			// A rename only if available is still declared, so that the type declaring it reads it, `nil` included.
 			let text = ScopeGenerator.referencingDeclaration(of: "let \(property.asSource) = nil", by: declarationReference)
 			return AliasPlaceRecord(property: property, fulfillingProperty: nil, text: text, reads: [])
 		case let .bound(fulfillingBindingIsOptional):
-			return renameRecord(of: property, fulfilledBy: fulfillingProperty, erasedToConcreteExistential: erasedToConcreteExistential, fulfillingBindingIsOptional: fulfillingBindingIsOptional, declarationReference: declarationReference)
+			// A wrapper's instance is read from a non-optional wrapper, which the tree binds the rename from as itself.
+			guard !(readsWrappersInstance && fulfillingBindingIsOptional) else { throw .lazy }
+			return renameRecord(of: property, fulfilledBy: fulfillingProperty, readingWrappersInstance: readsWrappersInstance, erasedToConcreteExistential: erasedToConcreteExistential, fulfillingBindingIsOptional: fulfillingBindingIsOptional, declarationReference: declarationReference)
 		case nil:
 			// A required rename is bound from its fulfilling property, which its scope requires.
-			return renameRecord(of: property, fulfilledBy: fulfillingProperty, erasedToConcreteExistential: erasedToConcreteExistential, fulfillingBindingIsOptional: false, declarationReference: declarationReference)
+			return renameRecord(of: property, fulfilledBy: fulfillingProperty, readingWrappersInstance: readsWrappersInstance, erasedToConcreteExistential: erasedToConcreteExistential, fulfillingBindingIsOptional: false, declarationReference: declarationReference)
 		}
+	}
+
+	/// Whether the read of its fulfilling label that the rename `declaration` makes, in `variant`, is answered by a lazy
+	/// wrapper, as its variant's key says: the read (`alias` for a required rename, `optionalValue` for one only if
+	/// available) keys as the kind of the declaration that answers it, a value or one of the two lazy wrappers, which every
+	/// call of the variant shares. `nil` where the variant keys no such read.
+	private static func fulfillingKeyIsLazyWrapper(_ declaration: DeclarationID, variant: VariantID, in world: some NodeRecordVariantFacts) -> Bool? {
+		zip(world.reads(of: declaration), world.keys(of: variant)).first { readID, _ in
+			switch world.read(readID).channel {
+			case .alias, .optionalValue:
+				true
+			case .value, .optional, .madeAgain, .mock, .carrier, .fill, .family, .override:
+				false
+			}
+		}.map { isLazyWrapperOfAValueRead($0.1) }
 	}
 
 	private static func renameRecord(
 		of property: Property,
 		fulfilledBy fulfillingProperty: Property,
+		readingWrappersInstance: Bool,
 		erasedToConcreteExistential: Bool,
 		fulfillingBindingIsOptional: Bool,
 		declarationReference: AliasDeclarationReferences.Reference?,
@@ -91,7 +114,7 @@ extension NodeRecords {
 		let text = ScopeGenerator.referencingDeclaration(
 			of: ScopeGenerator.aliasDeclaration(
 				of: property,
-				fulfilledBy: fulfillingProperty.label,
+				fulfilledBy: readingWrappersInstance ? "\(fulfillingProperty.label).\(Dependency.lazilyInstantiatedInstancePropertyName)" : fulfillingProperty.label,
 				ofType: fulfillingProperty.typeDescription,
 				erasedToConcreteExistential: erasedToConcreteExistential,
 				fulfillingValueMayBeOptional: fulfillingBindingIsOptional,

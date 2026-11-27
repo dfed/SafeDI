@@ -23,7 +23,7 @@ extension NodeRecords {
 	/// node `builtByInitializer` makes in a production root's world (`refusalsOfBuiltByInitializer(_:in:)`), whose override
 	/// is the field of its parent's configuration under the node's own label, discharging nothing and holding each refusal
 	/// of a node whose override it does not read yet. Any other node is left unclaimed, so its first refusal is its own.
-	static func mockConstructionClaim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
+	static func mockConstructionClaim(of declaration: DeclarationID, in world: some NodeRecordVariantFacts) -> NodeRecordClaim? {
 		guard world.isMockWorld, refusalsOfBuiltByInitializer(declaration, in: world).isEmpty else { return nil }
 		var refusals = [NodeRecordRefusal]()
 		let instantiable = world.scope(of: declaration).instantiable
@@ -57,13 +57,13 @@ extension NodeRecords {
 	static func mockConstructionRecord(
 		of declaration: DeclarationID,
 		variant: VariantID,
-		in world: some NodeRecordSources,
+		in world: some NodeRecordVariantFacts,
 		typesDeclaredEscaping: Set<TypeDescription>,
 		children: [GeneratedCode],
 	) throws -> BuiltPlaceRecord {
-		// A mock world that holds a lazily instantiated property is refused (`refusalsOfBuiltByInitializer(_:in:)`), so no
-		// receive of this node reads a wrapper's instance.
-		var record = try builtByInitializerRecord(of: declaration, variant: variant, in: world, lazilyInstantiatedInstanceProperties: [], typesDeclaredEscaping: typesDeclaredEscaping, children: children)
+		// A mock world that holds a lazily instantiated property is refused (`refusalsOfBuiltByInitializer(_:in:)`), so its
+		// key names no lazy wrapper for a receive of this node to read the instance of.
+		var record = try builtByInitializerRecord(of: declaration, variant: variant, in: world, typesDeclaredEscaping: typesDeclaredEscaping, children: children)
 		let instantiable = world.scope(of: declaration).instantiable
 		let isConfigured = !children.isEmpty
 		let slotType: TypeDescription = if isConfigured {
