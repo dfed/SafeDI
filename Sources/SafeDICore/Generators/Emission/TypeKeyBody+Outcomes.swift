@@ -27,7 +27,7 @@ extension TypeKeyLayout {
 			.statement(owner: owner, index: position)
 		} else if owner == 0 {
 			.none
-		} else if parameterLabelsByClass[owner].contains(label) {
+		} else if representative(of: owner)?.parameterProperties.contains(where: { $0.label == label }) == true {
 			.forwarded(owner: owner, label: label)
 		} else if outcomes[owner][label] == .passed {
 			.read(owner: owner, label: label)
@@ -41,21 +41,24 @@ extension TypeKeyLayout {
 
 	/// The position of the last statement of `owner`'s body before `index` that declares `label`.
 	func lastPosition(of label: String, inClass owner: Int, before index: Int) -> Int? {
-		// The body `statements(ofClass:)` reads, whose positions of each label are indexed in order: a lookup in the root's
-		// long body stays logarithmic.
-		let body = owner == 0 ? 0 : membersByClass[owner][0]
-		guard let positions = bodies[body].positionsByLabel[label] else { return nil }
-		var low = 0
-		var high = positions.count
-		while low < high {
-			let middle = (low + high) / 2
+		Self.lastPosition(in: bodies[owner == 0 ? 0 : membersByClass[owner][0]].positionsByLabel[label], before: index)
+	}
+
+	/// The last of `positions`, which ascend, before `index`: a binary search, since a look-up reads it for every label at
+	/// every place, so a body of many statements costs a look-up no more than a few.
+	static func lastPosition(in positions: [Int]?, before index: Int) -> Int? {
+		guard let positions else { return nil }
+		var lower = 0
+		var upper = positions.count
+		while lower < upper {
+			let middle = (lower + upper) / 2
 			if positions[middle] < index {
-				low = middle + 1
+				lower = middle + 1
 			} else {
-				high = middle
+				upper = middle
 			}
 		}
-		return low == 0 ? nil : positions[low - 1]
+		return lower > 0 ? positions[lower - 1] : nil
 	}
 
 	/// The type key's declaration for a path declaration.
@@ -122,12 +125,12 @@ extension TypeKeyLayout {
 	// MARK: Parameter types
 
 	/// The type of a type key's declaration, `nil` for none or a parameter not typed yet.
-	func type(of declaration: TypeDeclaration, label readLabel: String) -> TypeDescription? {
+	func type(of declaration: TypeDeclaration) -> TypeDescription? {
 		switch declaration {
 		case .none:
 			nil
 		case let .statement(owner, index):
-			property(of: statements(ofClass: owner)[index], label: readLabel)?.typeDescription
+			property(of: statements(ofClass: owner)[index])?.typeDescription
 		case let .forwarded(owner, label):
 			representative(of: owner)?.parameterProperties.first(where: { $0.label == label })?.typeDescription
 		case let .read(owner, label):
@@ -148,12 +151,12 @@ extension TypeKeyLayout {
 					var isComplete = true
 					for site in callSitesByClass[owner].sorted(by: { ($0.owner, $0.index) < ($1.owner, $1.index) }) {
 						let declaration = typeLookUp(label, inClass: site.owner, before: site.index)
-						if case .read = declaration, type(of: declaration, label: label) == nil {
+						if case .read = declaration, type(of: declaration) == nil {
 							// A parameter whose type is not known yet passes a value of some type, never `nil`: it is
 							// left out until it is known, so it never makes this parameter optional.
 							isComplete = false
 						} else {
-							types.append(type(of: declaration, label: label))
+							types.append(type(of: declaration))
 						}
 					}
 					guard isComplete || parameterTypes[owner][label] == nil else { continue }

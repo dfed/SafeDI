@@ -394,7 +394,7 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let x: X? = safeDIOverrides.x
-		        let user: User? = if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { User() }
+		        let user = if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { User() }
 		        func __safeDI_hub() -> Hub {
 		            @Sendable nonisolated func __safeDI_apiSendableBuilder_Hub() -> Hub.SafeDISendableMockScope_Api.__safeDI_Builder<any Api> {
 		                .init(x_Sendable: { _ in __safeDI_apiSendableBuilder_Hub_X_Scope() })
@@ -688,7 +688,7 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let x: X? = safeDIOverrides.x
-		        let user: User? = if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { User() }
+		        let user = if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { User() }
 		        func __safeDI_hub() -> Hub {
 		            @Sendable nonisolated func __safeDI_apiSendableBuilder_Hub() -> Hub.SafeDISendableMockScope_Api.__safeDI_Builder<any Api> {
 		                .init(x_Sendable: { _ in __safeDI_apiSendableBuilder_Hub_X_Scope() })
@@ -770,7 +770,7 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let x: X? = safeDIOverrides.x
-		        let user: User? = if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { User() }
+		        let user = if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { User() }
 		        func __safeDI_hub() -> Hub {
 		            @Sendable nonisolated func __safeDI_apiSendableBuilder_Hub() -> Hub.SafeDISendableMockScope_Api.__safeDI_Builder<any Api> {
 		                .init(x_Sendable: { _ in __safeDI_apiSendableBuilder_Hub_X_Scope() })
@@ -1338,7 +1338,7 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let x: X? = safeDIOverrides.x
-		        let user: User? = if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { User() }
+		        let user = if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { User() }
 		        func __safeDI_hub() -> Hub {
 		            func __safeDI_apiBuilder_Hub() -> Hub.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
 		                .init(x: { _ in __safeDI_apiBuilder_Hub_X_Scope() })
@@ -1613,7 +1613,7 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let bBuilder: Instantiator<B>? = safeDIOverrides.bBuilder
-		        let user: User? = if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { User() }
+		        let user = if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { User() }
 		        func __safeDI_hub() -> Hub {
 		            func __safeDI_apiBuilder_Hub() -> Hub.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
 		                .init(bBuilder: { _ in __safeDI_apiBuilder_Hub_B_Scope() })
@@ -1693,7 +1693,7 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let x: X? = safeDIOverrides.x
-		        let user: User? = if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { User() }
+		        let user = if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { User() }
 		        func __safeDI_hub() -> Hub {
 		            func __safeDI_apiBuilder_Hub() -> Hub.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
 		                .init(x: { _ in __safeDI_apiBuilder_Hub_X_Scope() })

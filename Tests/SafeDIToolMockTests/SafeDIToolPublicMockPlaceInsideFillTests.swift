@@ -2390,7 +2390,7 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
 			        let b: B? = safeDIOverrides.b
-			        let user: Draft? = if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { Draft() }
+			        let user = if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { Draft() }
 			        func __safeDI_outer() -> Outer {
 			            func __safeDI_gadgetBuilder_Outer() -> Outer.SafeDIMockScope_Gadget.__safeDI_Builder<any Gadget> {
 			                .init(b: { _ in __safeDI_gadgetBuilder_Outer_B_Scope() })
@@ -2704,7 +2704,7 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			        gadgetBuilder: (() -> any Gadget)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        let user: Draft? = if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { Draft() }
+			        let user = if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { Draft() }
 			        func __safeDI_outer() -> Outer {
 			            func __safeDI_gadgetBuilder_Outer() -> Outer.SafeDIMockScope_Gadget.__safeDI_Builder<any Gadget> {
 			                .init(b: { _ in __safeDI_gadgetBuilder_Outer_B_Scope() })

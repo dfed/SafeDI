@@ -109,63 +109,92 @@ struct SafeDIToolMockCycleReceiveWalkTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen0 {
 		        let context: Context? = safeDIOverrides.context
-		        func __safeDI_screen5Builder(__safeDI_Screen5_configuration: Screen5.SafeDIMockConfiguration, __safeDI_Screen4_configuration_nearest: Screen4.SafeDIMockConfiguration?, __safeDI_Screen7_configuration_nearest: Screen7.SafeDIMockConfiguration?) -> Screen5 {
-		            let context = if let safeDIBuilder = __safeDI_Screen5_configuration.context { safeDIBuilder() } else { Context() }
-		            let screen3Builder = Instantiator<Screen3> {
-		                __safeDI_screen3Builder(context: context, __safeDI_Screen3_configuration: __safeDI_Screen5_configuration.screen3Builder, __safeDI_Screen5_configuration_nearest: __safeDI_Screen5_configuration, __safeDI_Screen4_configuration_nearest: __safeDI_Screen4_configuration_nearest, __safeDI_Screen7_configuration_nearest: __safeDI_Screen7_configuration_nearest)
+		        func __safeDI_screen5Builder() -> Screen5 {
+		            let context = if let safeDIBuilder = safeDIOverrides.screen5Builder.context { safeDIBuilder() } else { Context() }
+		            func __safeDI_screen3Builder() -> Screen3 {
+		                func __safeDI_screen6Builder() -> Screen6 {
+		                    func __safeDI_screen4Builder() -> Screen4 {
+		                        func __safeDI_screen2Builder() -> Screen2 {
+		                            let screen6Builder = Instantiator<Screen6>(__safeDI_screen6Builder)
+		                            return if let safeDIBuilder = safeDIOverrides.screen5Builder.screen3Builder.screen6Builder.screen4Builder.screen2Builder.safeDIBuilder { safeDIBuilder(screen6Builder) } else { Screen2(screen6Builder: screen6Builder) }
+		                        }
+		                        let screen2Builder = Instantiator<Screen2>(__safeDI_screen2Builder)
+		                        func __safeDI_screen7Builder() -> Screen7 {
+		                            func __safeDI_screen0Builder() -> Screen0 {
+		                                let screen5Builder = Instantiator<Screen5>(__safeDI_screen5Builder)
+		                                let screen7Builder = Instantiator<Screen7>(__safeDI_screen7Builder)
+		                                return Screen0(screen5Builder: screen5Builder, screen7Builder: screen7Builder)
+		                            }
+		                            let screen0Builder = Instantiator<Screen0>(__safeDI_screen0Builder)
+		                            let screen4Builder = Instantiator<Screen4>(__safeDI_screen4Builder)
+		                            return if let safeDIBuilder = safeDIOverrides.screen5Builder.screen3Builder.screen6Builder.screen4Builder.screen7Builder.safeDIBuilder { safeDIBuilder(screen0Builder, screen4Builder) } else { Screen7(screen0Builder: screen0Builder, screen4Builder: screen4Builder) }
+		                        }
+		                        let screen7Builder = Instantiator<Screen7>(__safeDI_screen7Builder)
+		                        return if let safeDIBuilder = safeDIOverrides.screen5Builder.screen3Builder.screen6Builder.screen4Builder.safeDIBuilder { safeDIBuilder(screen2Builder, screen7Builder) } else { Screen4(screen2Builder: screen2Builder, screen7Builder: screen7Builder) }
+		                    }
+		                    let screen4Builder = Instantiator<Screen4>(__safeDI_screen4Builder)
+		                    return if let safeDIBuilder = safeDIOverrides.screen5Builder.screen3Builder.screen6Builder.safeDIBuilder { safeDIBuilder(context, screen4Builder) } else { Screen6(context: context, screen4Builder: screen4Builder) }
+		                }
+		                let screen6Builder = Instantiator<Screen6>(__safeDI_screen6Builder)
+		                return if let safeDIBuilder = safeDIOverrides.screen5Builder.screen3Builder.safeDIBuilder { safeDIBuilder(screen6Builder) } else { Screen3(screen6Builder: screen6Builder) }
 		            }
-		            return if let safeDIBuilder = __safeDI_Screen5_configuration.safeDIBuilder { safeDIBuilder(context, screen3Builder) } else { Screen5(context: context, screen3Builder: screen3Builder) }
+		            let screen3Builder = Instantiator<Screen3>(__safeDI_screen3Builder)
+		            return if let safeDIBuilder = safeDIOverrides.screen5Builder.safeDIBuilder { safeDIBuilder(context, screen3Builder) } else { Screen5(context: context, screen3Builder: screen3Builder) }
 		        }
-		        func __safeDI_screen3Builder(context: Context?, __safeDI_Screen3_configuration: Screen3.SafeDIMockConfiguration, __safeDI_Screen5_configuration_nearest: Screen5.SafeDIMockConfiguration?, __safeDI_Screen4_configuration_nearest: Screen4.SafeDIMockConfiguration?, __safeDI_Screen7_configuration_nearest: Screen7.SafeDIMockConfiguration?) -> Screen3 {
-		            let screen6Builder = Instantiator<Screen6> {
-		                __safeDI_screen6Builder(context: context, __safeDI_Screen6_configuration: __safeDI_Screen3_configuration.screen6Builder, __safeDI_Screen5_configuration_nearest: __safeDI_Screen5_configuration_nearest, __safeDI_Screen4_configuration_nearest: __safeDI_Screen4_configuration_nearest, __safeDI_Screen7_configuration_nearest: __safeDI_Screen7_configuration_nearest)
+		        let screen5Builder = Instantiator<Screen5>(__safeDI_screen5Builder)
+		        func __safeDI_screen7Builder(context: Context?) -> Screen7 {
+		            func __safeDI_screen0Builder() -> Screen0 {
+		                func __safeDI_screen5Builder() -> Screen5 {
+		                    let context = Context()
+		                    func __safeDI_screen3Builder() -> Screen3 {
+		                        func __safeDI_screen6Builder() -> Screen6 {
+		                            func __safeDI_screen4Builder() -> Screen4 {
+		                                func __safeDI_screen2Builder() -> Screen2 {
+		                                    let screen6Builder = Instantiator<Screen6>(__safeDI_screen6Builder)
+		                                    return Screen2(screen6Builder: screen6Builder)
+		                                }
+		                                let screen2Builder = Instantiator<Screen2>(__safeDI_screen2Builder)
+		                                let screen7Builder = Instantiator<Screen7> {
+		                                    __safeDI_screen7Builder(context: context)
+		                                }
+		                                return Screen4(screen2Builder: screen2Builder, screen7Builder: screen7Builder)
+		                            }
+		                            let screen4Builder = Instantiator<Screen4>(__safeDI_screen4Builder)
+		                            return Screen6(context: context, screen4Builder: screen4Builder)
+		                        }
+		                        let screen6Builder = Instantiator<Screen6>(__safeDI_screen6Builder)
+		                        return Screen3(screen6Builder: screen6Builder)
+		                    }
+		                    let screen3Builder = Instantiator<Screen3>(__safeDI_screen3Builder)
+		                    return Screen5(context: context, screen3Builder: screen3Builder)
+		                }
+		                let screen5Builder = Instantiator<Screen5>(__safeDI_screen5Builder)
+		                let screen7Builder = Instantiator<Screen7> {
+		                    __safeDI_screen7Builder(context: context)
+		                }
+		                return Screen0(screen5Builder: screen5Builder, screen7Builder: screen7Builder)
 		            }
-		            return if let safeDIBuilder = __safeDI_Screen3_configuration.safeDIBuilder { safeDIBuilder(screen6Builder) } else { Screen3(screen6Builder: screen6Builder) }
-		        }
-		        func __safeDI_screen6Builder(context: Context?, __safeDI_Screen6_configuration: Screen6.SafeDIMockConfiguration, __safeDI_Screen5_configuration_nearest: Screen5.SafeDIMockConfiguration?, __safeDI_Screen4_configuration_nearest: Screen4.SafeDIMockConfiguration?, __safeDI_Screen7_configuration_nearest: Screen7.SafeDIMockConfiguration?) -> Screen6 {
-		            let screen4Builder = Instantiator<Screen4> {
-		                __safeDI_screen4Builder(context: context, __safeDI_Screen4_configuration: __safeDI_Screen4_configuration_nearest ?? __safeDI_Screen6_configuration.screen4Builder, __safeDI_Screen5_configuration_nearest: __safeDI_Screen5_configuration_nearest, __safeDI_Screen6_configuration_nearest: __safeDI_Screen6_configuration, __safeDI_Screen7_configuration_nearest: __safeDI_Screen7_configuration_nearest)
+		            let screen0Builder = Instantiator<Screen0>(__safeDI_screen0Builder)
+		            func __safeDI_screen4Builder() -> Screen4 {
+		                func __safeDI_screen2Builder() -> Screen2 {
+		                    func __safeDI_screen6Builder() -> Screen6 {
+		                        let screen4Builder = Instantiator<Screen4>(__safeDI_screen4Builder)
+		                        return Screen6(context: context, screen4Builder: screen4Builder)
+		                    }
+		                    let screen6Builder = Instantiator<Screen6>(__safeDI_screen6Builder)
+		                    return Screen2(screen6Builder: screen6Builder)
+		                }
+		                let screen2Builder = Instantiator<Screen2>(__safeDI_screen2Builder)
+		                let screen7Builder = Instantiator<Screen7> {
+		                    __safeDI_screen7Builder(context: context)
+		                }
+		                return Screen4(screen2Builder: screen2Builder, screen7Builder: screen7Builder)
 		            }
-		            return if let safeDIBuilder = __safeDI_Screen6_configuration.safeDIBuilder { safeDIBuilder(context, screen4Builder) } else { Screen6(context: context, screen4Builder: screen4Builder) }
-		        }
-		        func __safeDI_screen4Builder(context: Context?, __safeDI_Screen4_configuration: Screen4.SafeDIMockConfiguration, __safeDI_Screen5_configuration_nearest: Screen5.SafeDIMockConfiguration?, __safeDI_Screen6_configuration_nearest: Screen6.SafeDIMockConfiguration?, __safeDI_Screen7_configuration_nearest: Screen7.SafeDIMockConfiguration?) -> Screen4 {
-		            let screen2Builder = Instantiator<Screen2> {
-		                __safeDI_screen2Builder(context: context, __safeDI_Screen2_configuration: __safeDI_Screen4_configuration.screen2Builder, __safeDI_Screen5_configuration_nearest: __safeDI_Screen5_configuration_nearest, __safeDI_Screen6_configuration_nearest: __safeDI_Screen6_configuration_nearest, __safeDI_Screen4_configuration_nearest: __safeDI_Screen4_configuration, __safeDI_Screen7_configuration_nearest: __safeDI_Screen7_configuration_nearest)
-		            }
-		            let screen7Builder = Instantiator<Screen7> {
-		                __safeDI_screen7Builder(context: context, __safeDI_Screen7_configuration: __safeDI_Screen7_configuration_nearest ?? __safeDI_Screen4_configuration.screen7Builder, __safeDI_Screen5_configuration_nearest: __safeDI_Screen5_configuration_nearest, __safeDI_Screen6_configuration_nearest: __safeDI_Screen6_configuration_nearest, __safeDI_Screen4_configuration_nearest: __safeDI_Screen4_configuration)
-		            }
-		            return if let safeDIBuilder = __safeDI_Screen4_configuration.safeDIBuilder { safeDIBuilder(screen2Builder, screen7Builder) } else { Screen4(screen2Builder: screen2Builder, screen7Builder: screen7Builder) }
-		        }
-		        func __safeDI_screen2Builder(context: Context?, __safeDI_Screen2_configuration: Screen2.SafeDIMockConfiguration, __safeDI_Screen5_configuration_nearest: Screen5.SafeDIMockConfiguration?, __safeDI_Screen6_configuration_nearest: Screen6.SafeDIMockConfiguration?, __safeDI_Screen4_configuration_nearest: Screen4.SafeDIMockConfiguration?, __safeDI_Screen7_configuration_nearest: Screen7.SafeDIMockConfiguration?) -> Screen2 {
-		            let screen6Builder = Instantiator<Screen6> {
-		                __safeDI_screen6Builder(context: context, __safeDI_Screen6_configuration: __safeDI_Screen6_configuration_nearest ?? Screen6.SafeDIMockConfiguration(), __safeDI_Screen5_configuration_nearest: __safeDI_Screen5_configuration_nearest, __safeDI_Screen4_configuration_nearest: __safeDI_Screen4_configuration_nearest, __safeDI_Screen7_configuration_nearest: __safeDI_Screen7_configuration_nearest)
-		            }
-		            return if let safeDIBuilder = __safeDI_Screen2_configuration.safeDIBuilder { safeDIBuilder(screen6Builder) } else { Screen2(screen6Builder: screen6Builder) }
-		        }
-		        func __safeDI_screen7Builder(context: Context?, __safeDI_Screen7_configuration: Screen7.SafeDIMockConfiguration, __safeDI_Screen5_configuration_nearest: Screen5.SafeDIMockConfiguration?, __safeDI_Screen6_configuration_nearest: Screen6.SafeDIMockConfiguration?, __safeDI_Screen4_configuration_nearest: Screen4.SafeDIMockConfiguration?) -> Screen7 {
-		            let screen0Builder = Instantiator<Screen0> {
-		                __safeDI_screen0Builder(context: context, __safeDI_Screen0_configuration: Screen0.SafeDIMockConfiguration(), __safeDI_Screen5_configuration_nearest: __safeDI_Screen5_configuration_nearest, __safeDI_Screen6_configuration_nearest: __safeDI_Screen6_configuration_nearest, __safeDI_Screen4_configuration_nearest: __safeDI_Screen4_configuration_nearest, __safeDI_Screen7_configuration_nearest: __safeDI_Screen7_configuration)
-		            }
-		            let screen4Builder = Instantiator<Screen4> {
-		                __safeDI_screen4Builder(context: context, __safeDI_Screen4_configuration: __safeDI_Screen4_configuration_nearest ?? Screen4.SafeDIMockConfiguration(), __safeDI_Screen5_configuration_nearest: __safeDI_Screen5_configuration_nearest, __safeDI_Screen6_configuration_nearest: __safeDI_Screen6_configuration_nearest, __safeDI_Screen7_configuration_nearest: __safeDI_Screen7_configuration)
-		            }
-		            return if let safeDIBuilder = __safeDI_Screen7_configuration.safeDIBuilder { safeDIBuilder(screen0Builder, screen4Builder) } else { Screen7(screen0Builder: screen0Builder, screen4Builder: screen4Builder) }
-		        }
-		        func __safeDI_screen0Builder(context: Context?, __safeDI_Screen0_configuration: Screen0.SafeDIMockConfiguration, __safeDI_Screen5_configuration_nearest: Screen5.SafeDIMockConfiguration?, __safeDI_Screen6_configuration_nearest: Screen6.SafeDIMockConfiguration?, __safeDI_Screen4_configuration_nearest: Screen4.SafeDIMockConfiguration?, __safeDI_Screen7_configuration_nearest: Screen7.SafeDIMockConfiguration?) -> Screen0 {
-		            let screen5Builder = Instantiator<Screen5> {
-		                __safeDI_screen5Builder(__safeDI_Screen5_configuration: __safeDI_Screen5_configuration_nearest ?? __safeDI_Screen0_configuration.screen5Builder, __safeDI_Screen4_configuration_nearest: __safeDI_Screen4_configuration_nearest, __safeDI_Screen7_configuration_nearest: __safeDI_Screen7_configuration_nearest)
-		            }
-		            let screen7Builder = Instantiator<Screen7> {
-		                __safeDI_screen7Builder(context: context, __safeDI_Screen7_configuration: __safeDI_Screen7_configuration_nearest ?? Screen7.SafeDIMockConfiguration(), __safeDI_Screen5_configuration_nearest: __safeDI_Screen5_configuration_nearest, __safeDI_Screen6_configuration_nearest: __safeDI_Screen6_configuration_nearest, __safeDI_Screen4_configuration_nearest: __safeDI_Screen4_configuration_nearest)
-		            }
-		            return if let safeDIBuilder = __safeDI_Screen0_configuration.safeDIBuilder { safeDIBuilder(screen5Builder, screen7Builder) } else { Screen0(screen5Builder: screen5Builder, screen7Builder: screen7Builder) }
-		        }
-		        let screen5Builder = Instantiator<Screen5> {
-		            __safeDI_screen5Builder(__safeDI_Screen5_configuration: safeDIOverrides.screen5Builder, __safeDI_Screen4_configuration_nearest: nil, __safeDI_Screen7_configuration_nearest: nil)
+		            let screen4Builder = Instantiator<Screen4>(__safeDI_screen4Builder)
+		            return if let safeDIBuilder = safeDIOverrides.screen7Builder.safeDIBuilder { safeDIBuilder(screen0Builder, screen4Builder) } else { Screen7(screen0Builder: screen0Builder, screen4Builder: screen4Builder) }
 		        }
 		        let screen7Builder = Instantiator<Screen7> {
-		            __safeDI_screen7Builder(context: context, __safeDI_Screen7_configuration: safeDIOverrides.screen7Builder, __safeDI_Screen5_configuration_nearest: nil, __safeDI_Screen6_configuration_nearest: nil, __safeDI_Screen4_configuration_nearest: nil)
+		            __safeDI_screen7Builder(context: context)
 		        }
 		        return Screen0(screen5Builder: screen5Builder, screen7Builder: screen7Builder)
 		    }
@@ -278,64 +307,93 @@ struct SafeDIToolMockCycleReceiveWalkTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen0 {
-		        func __safeDI_screen5Builder(__safeDI_Screen5_configuration: Screen5.SafeDIMockConfiguration, __safeDI_Screen4_configuration_nearest: Screen4.SafeDIMockConfiguration?, __safeDI_Screen7_configuration_nearest: Screen7.SafeDIMockConfiguration?) -> Screen5 {
-		            let context = if let safeDIBuilder = __safeDI_Screen5_configuration.context { safeDIBuilder() } else { Context() }
-		            let screen3Builder = Instantiator<Screen3> {
-		                __safeDI_screen3Builder(context: context, __safeDI_Screen3_configuration: __safeDI_Screen5_configuration.screen3Builder, __safeDI_Screen5_configuration_nearest: __safeDI_Screen5_configuration, __safeDI_Screen4_configuration_nearest: __safeDI_Screen4_configuration_nearest, __safeDI_Screen7_configuration_nearest: __safeDI_Screen7_configuration_nearest)
+		        func __safeDI_screen5Builder() -> Screen5 {
+		            let context = if let safeDIBuilder = safeDIOverrides.screen5Builder.context { safeDIBuilder() } else { Context() }
+		            func __safeDI_screen3Builder() -> Screen3 {
+		                func __safeDI_screen6Builder() -> Screen6 {
+		                    func __safeDI_screen4Builder() -> Screen4 {
+		                        func __safeDI_screen2Builder() -> Screen2 {
+		                            let screen6Builder = Instantiator<Screen6>(__safeDI_screen6Builder)
+		                            return if let safeDIBuilder = safeDIOverrides.screen5Builder.screen3Builder.screen6Builder.screen4Builder.screen2Builder.safeDIBuilder { safeDIBuilder(screen6Builder) } else { Screen2(screen6Builder: screen6Builder) }
+		                        }
+		                        let screen2Builder = Instantiator<Screen2>(__safeDI_screen2Builder)
+		                        func __safeDI_screen7Builder() -> Screen7 {
+		                            func __safeDI_screen0Builder() -> Screen0 {
+		                                let screen5Builder = Instantiator<Screen5>(__safeDI_screen5Builder)
+		                                let screen7Builder = Instantiator<Screen7>(__safeDI_screen7Builder)
+		                                return Screen0(screen5Builder: screen5Builder, screen7Builder: screen7Builder)
+		                            }
+		                            let screen0Builder = Instantiator<Screen0>(__safeDI_screen0Builder)
+		                            let screen4Builder = Instantiator<Screen4>(__safeDI_screen4Builder)
+		                            return if let safeDIBuilder = safeDIOverrides.screen5Builder.screen3Builder.screen6Builder.screen4Builder.screen7Builder.safeDIBuilder { safeDIBuilder(screen0Builder, screen4Builder) } else { Screen7(screen0Builder: screen0Builder, screen4Builder: screen4Builder) }
+		                        }
+		                        let screen7Builder = Instantiator<Screen7>(__safeDI_screen7Builder)
+		                        return if let safeDIBuilder = safeDIOverrides.screen5Builder.screen3Builder.screen6Builder.screen4Builder.safeDIBuilder { safeDIBuilder(screen2Builder, screen7Builder) } else { Screen4(screen2Builder: screen2Builder, screen7Builder: screen7Builder) }
+		                    }
+		                    let screen4Builder = Instantiator<Screen4>(__safeDI_screen4Builder)
+		                    return if let safeDIBuilder = safeDIOverrides.screen5Builder.screen3Builder.screen6Builder.safeDIBuilder { safeDIBuilder(context, screen4Builder) } else { Screen6(context: context, screen4Builder: screen4Builder) }
+		                }
+		                let screen6Builder = Instantiator<Screen6>(__safeDI_screen6Builder)
+		                return if let safeDIBuilder = safeDIOverrides.screen5Builder.screen3Builder.safeDIBuilder { safeDIBuilder(screen6Builder) } else { Screen3(screen6Builder: screen6Builder) }
 		            }
-		            return if let safeDIBuilder = __safeDI_Screen5_configuration.safeDIBuilder { safeDIBuilder(context, screen3Builder) } else { Screen5(context: context, screen3Builder: screen3Builder) }
+		            let screen3Builder = Instantiator<Screen3>(__safeDI_screen3Builder)
+		            return if let safeDIBuilder = safeDIOverrides.screen5Builder.safeDIBuilder { safeDIBuilder(context, screen3Builder) } else { Screen5(context: context, screen3Builder: screen3Builder) }
 		        }
-		        func __safeDI_screen3Builder(context: Context, __safeDI_Screen3_configuration: Screen3.SafeDIMockConfiguration, __safeDI_Screen5_configuration_nearest: Screen5.SafeDIMockConfiguration?, __safeDI_Screen4_configuration_nearest: Screen4.SafeDIMockConfiguration?, __safeDI_Screen7_configuration_nearest: Screen7.SafeDIMockConfiguration?) -> Screen3 {
-		            let screen6Builder = Instantiator<Screen6> {
-		                __safeDI_screen6Builder(context: context, __safeDI_Screen6_configuration: __safeDI_Screen3_configuration.screen6Builder, __safeDI_Screen5_configuration_nearest: __safeDI_Screen5_configuration_nearest, __safeDI_Screen4_configuration_nearest: __safeDI_Screen4_configuration_nearest, __safeDI_Screen7_configuration_nearest: __safeDI_Screen7_configuration_nearest)
-		            }
-		            return if let safeDIBuilder = __safeDI_Screen3_configuration.safeDIBuilder { safeDIBuilder(screen6Builder) } else { Screen3(screen6Builder: screen6Builder) }
-		        }
-		        func __safeDI_screen6Builder(context: Context, __safeDI_Screen6_configuration: Screen6.SafeDIMockConfiguration, __safeDI_Screen5_configuration_nearest: Screen5.SafeDIMockConfiguration?, __safeDI_Screen4_configuration_nearest: Screen4.SafeDIMockConfiguration?, __safeDI_Screen7_configuration_nearest: Screen7.SafeDIMockConfiguration?) -> Screen6 {
-		            let screen4Builder = Instantiator<Screen4> {
-		                __safeDI_screen4Builder(context: context, __safeDI_Screen4_configuration: __safeDI_Screen4_configuration_nearest ?? __safeDI_Screen6_configuration.screen4Builder, __safeDI_Screen5_configuration_nearest: __safeDI_Screen5_configuration_nearest, __safeDI_Screen6_configuration_nearest: __safeDI_Screen6_configuration, __safeDI_Screen7_configuration_nearest: __safeDI_Screen7_configuration_nearest)
-		            }
-		            return if let safeDIBuilder = __safeDI_Screen6_configuration.safeDIBuilder { safeDIBuilder(context, screen4Builder) } else { Screen6(context: context, screen4Builder: screen4Builder) }
-		        }
-		        func __safeDI_screen4Builder(context: Context, __safeDI_Screen4_configuration: Screen4.SafeDIMockConfiguration, __safeDI_Screen5_configuration_nearest: Screen5.SafeDIMockConfiguration?, __safeDI_Screen6_configuration_nearest: Screen6.SafeDIMockConfiguration?, __safeDI_Screen7_configuration_nearest: Screen7.SafeDIMockConfiguration?) -> Screen4 {
-		            let screen2Builder = Instantiator<Screen2> {
-		                __safeDI_screen2Builder(context: context, __safeDI_Screen2_configuration: __safeDI_Screen4_configuration.screen2Builder, __safeDI_Screen5_configuration_nearest: __safeDI_Screen5_configuration_nearest, __safeDI_Screen6_configuration_nearest: __safeDI_Screen6_configuration_nearest, __safeDI_Screen4_configuration_nearest: __safeDI_Screen4_configuration, __safeDI_Screen7_configuration_nearest: __safeDI_Screen7_configuration_nearest)
-		            }
-		            let screen7Builder = Instantiator<Screen7> {
-		                __safeDI_screen7Builder(context: context, __safeDI_Screen7_configuration: __safeDI_Screen7_configuration_nearest ?? __safeDI_Screen4_configuration.screen7Builder, __safeDI_Screen5_configuration_nearest: __safeDI_Screen5_configuration_nearest, __safeDI_Screen6_configuration_nearest: __safeDI_Screen6_configuration_nearest, __safeDI_Screen4_configuration_nearest: __safeDI_Screen4_configuration)
-		            }
-		            return if let safeDIBuilder = __safeDI_Screen4_configuration.safeDIBuilder { safeDIBuilder(screen2Builder, screen7Builder) } else { Screen4(screen2Builder: screen2Builder, screen7Builder: screen7Builder) }
-		        }
-		        func __safeDI_screen2Builder(context: Context, __safeDI_Screen2_configuration: Screen2.SafeDIMockConfiguration, __safeDI_Screen5_configuration_nearest: Screen5.SafeDIMockConfiguration?, __safeDI_Screen6_configuration_nearest: Screen6.SafeDIMockConfiguration?, __safeDI_Screen4_configuration_nearest: Screen4.SafeDIMockConfiguration?, __safeDI_Screen7_configuration_nearest: Screen7.SafeDIMockConfiguration?) -> Screen2 {
-		            let screen6Builder = Instantiator<Screen6> {
-		                __safeDI_screen6Builder(context: context, __safeDI_Screen6_configuration: __safeDI_Screen6_configuration_nearest ?? Screen6.SafeDIMockConfiguration(), __safeDI_Screen5_configuration_nearest: __safeDI_Screen5_configuration_nearest, __safeDI_Screen4_configuration_nearest: __safeDI_Screen4_configuration_nearest, __safeDI_Screen7_configuration_nearest: __safeDI_Screen7_configuration_nearest)
-		            }
-		            return if let safeDIBuilder = __safeDI_Screen2_configuration.safeDIBuilder { safeDIBuilder(screen6Builder) } else { Screen2(screen6Builder: screen6Builder) }
-		        }
-		        func __safeDI_screen7Builder(context: Context, __safeDI_Screen7_configuration: Screen7.SafeDIMockConfiguration, __safeDI_Screen5_configuration_nearest: Screen5.SafeDIMockConfiguration?, __safeDI_Screen6_configuration_nearest: Screen6.SafeDIMockConfiguration?, __safeDI_Screen4_configuration_nearest: Screen4.SafeDIMockConfiguration?) -> Screen7 {
-		            let screen0Builder = Instantiator<Screen0> {
-		                __safeDI_screen0Builder(context: context, __safeDI_Screen0_configuration: Screen0.SafeDIMockConfiguration(), __safeDI_Screen5_configuration_nearest: __safeDI_Screen5_configuration_nearest, __safeDI_Screen6_configuration_nearest: __safeDI_Screen6_configuration_nearest, __safeDI_Screen4_configuration_nearest: __safeDI_Screen4_configuration_nearest, __safeDI_Screen7_configuration_nearest: __safeDI_Screen7_configuration)
-		            }
-		            let screen4Builder = Instantiator<Screen4> {
-		                __safeDI_screen4Builder(context: context, __safeDI_Screen4_configuration: __safeDI_Screen4_configuration_nearest ?? Screen4.SafeDIMockConfiguration(), __safeDI_Screen5_configuration_nearest: __safeDI_Screen5_configuration_nearest, __safeDI_Screen6_configuration_nearest: __safeDI_Screen6_configuration_nearest, __safeDI_Screen7_configuration_nearest: __safeDI_Screen7_configuration)
-		            }
-		            return if let safeDIBuilder = __safeDI_Screen7_configuration.safeDIBuilder { safeDIBuilder(screen0Builder, screen4Builder) } else { Screen7(screen0Builder: screen0Builder, screen4Builder: screen4Builder) }
-		        }
-		        func __safeDI_screen0Builder(context: Context, __safeDI_Screen0_configuration: Screen0.SafeDIMockConfiguration, __safeDI_Screen5_configuration_nearest: Screen5.SafeDIMockConfiguration?, __safeDI_Screen6_configuration_nearest: Screen6.SafeDIMockConfiguration?, __safeDI_Screen4_configuration_nearest: Screen4.SafeDIMockConfiguration?, __safeDI_Screen7_configuration_nearest: Screen7.SafeDIMockConfiguration?) -> Screen0 {
-		            let screen5Builder = Instantiator<Screen5> {
-		                __safeDI_screen5Builder(__safeDI_Screen5_configuration: __safeDI_Screen5_configuration_nearest ?? __safeDI_Screen0_configuration.screen5Builder, __safeDI_Screen4_configuration_nearest: __safeDI_Screen4_configuration_nearest, __safeDI_Screen7_configuration_nearest: __safeDI_Screen7_configuration_nearest)
-		            }
-		            let screen7Builder = Instantiator<Screen7> {
-		                __safeDI_screen7Builder(context: context, __safeDI_Screen7_configuration: __safeDI_Screen7_configuration_nearest ?? Screen7.SafeDIMockConfiguration(), __safeDI_Screen5_configuration_nearest: __safeDI_Screen5_configuration_nearest, __safeDI_Screen6_configuration_nearest: __safeDI_Screen6_configuration_nearest, __safeDI_Screen4_configuration_nearest: __safeDI_Screen4_configuration_nearest)
-		            }
-		            return if let safeDIBuilder = __safeDI_Screen0_configuration.safeDIBuilder { safeDIBuilder(screen5Builder, screen7Builder) } else { Screen0(screen5Builder: screen5Builder, screen7Builder: screen7Builder) }
-		        }
-		        let screen5Builder = Instantiator<Screen5> {
-		            __safeDI_screen5Builder(__safeDI_Screen5_configuration: safeDIOverrides.screen5Builder, __safeDI_Screen4_configuration_nearest: nil, __safeDI_Screen7_configuration_nearest: nil)
-		        }
+		        let screen5Builder = Instantiator<Screen5>(__safeDI_screen5Builder)
 		        let context = if let safeDIBuilder = safeDIOverrides.context { safeDIBuilder() } else { Context() }
+		        func __safeDI_screen7Builder(context: Context) -> Screen7 {
+		            func __safeDI_screen0Builder() -> Screen0 {
+		                func __safeDI_screen5Builder() -> Screen5 {
+		                    let context = Context()
+		                    func __safeDI_screen3Builder() -> Screen3 {
+		                        func __safeDI_screen6Builder() -> Screen6 {
+		                            func __safeDI_screen4Builder() -> Screen4 {
+		                                func __safeDI_screen2Builder() -> Screen2 {
+		                                    let screen6Builder = Instantiator<Screen6>(__safeDI_screen6Builder)
+		                                    return Screen2(screen6Builder: screen6Builder)
+		                                }
+		                                let screen2Builder = Instantiator<Screen2>(__safeDI_screen2Builder)
+		                                let screen7Builder = Instantiator<Screen7> {
+		                                    __safeDI_screen7Builder(context: context)
+		                                }
+		                                return Screen4(screen2Builder: screen2Builder, screen7Builder: screen7Builder)
+		                            }
+		                            let screen4Builder = Instantiator<Screen4>(__safeDI_screen4Builder)
+		                            return Screen6(context: context, screen4Builder: screen4Builder)
+		                        }
+		                        let screen6Builder = Instantiator<Screen6>(__safeDI_screen6Builder)
+		                        return Screen3(screen6Builder: screen6Builder)
+		                    }
+		                    let screen3Builder = Instantiator<Screen3>(__safeDI_screen3Builder)
+		                    return Screen5(context: context, screen3Builder: screen3Builder)
+		                }
+		                let screen5Builder = Instantiator<Screen5>(__safeDI_screen5Builder)
+		                let screen7Builder = Instantiator<Screen7> {
+		                    __safeDI_screen7Builder(context: context)
+		                }
+		                return Screen0(screen5Builder: screen5Builder, screen7Builder: screen7Builder)
+		            }
+		            let screen0Builder = Instantiator<Screen0>(__safeDI_screen0Builder)
+		            func __safeDI_screen4Builder() -> Screen4 {
+		                func __safeDI_screen2Builder() -> Screen2 {
+		                    func __safeDI_screen6Builder() -> Screen6 {
+		                        let screen4Builder = Instantiator<Screen4>(__safeDI_screen4Builder)
+		                        return Screen6(context: context, screen4Builder: screen4Builder)
+		                    }
+		                    let screen6Builder = Instantiator<Screen6>(__safeDI_screen6Builder)
+		                    return Screen2(screen6Builder: screen6Builder)
+		                }
+		                let screen2Builder = Instantiator<Screen2>(__safeDI_screen2Builder)
+		                let screen7Builder = Instantiator<Screen7> {
+		                    __safeDI_screen7Builder(context: context)
+		                }
+		                return Screen4(screen2Builder: screen2Builder, screen7Builder: screen7Builder)
+		            }
+		            let screen4Builder = Instantiator<Screen4>(__safeDI_screen4Builder)
+		            return if let safeDIBuilder = safeDIOverrides.screen7Builder.safeDIBuilder { safeDIBuilder(screen0Builder, screen4Builder) } else { Screen7(screen0Builder: screen0Builder, screen4Builder: screen4Builder) }
+		        }
 		        let screen7Builder = Instantiator<Screen7> {
-		            __safeDI_screen7Builder(context: context, __safeDI_Screen7_configuration: safeDIOverrides.screen7Builder, __safeDI_Screen5_configuration_nearest: nil, __safeDI_Screen6_configuration_nearest: nil, __safeDI_Screen4_configuration_nearest: nil)
+		            __safeDI_screen7Builder(context: context)
 		        }
 		        return Screen0(screen5Builder: screen5Builder, screen7Builder: screen7Builder)
 		    }

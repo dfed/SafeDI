@@ -521,7 +521,8 @@ jobs:
     if: ${{ needs.verify.outputs.split == 'true' }}
     runs-on: ubuntu-latest
     container: swift:6.2
-    timeout-minutes: 30
+    # Above the test step's limit by more than the job's other steps take.
+    timeout-minutes: 55
     permissions:
       contents: read
       # To read the passed compile checks other runs uploaded.
@@ -576,10 +577,14 @@ jobs:
       # seam smoke seeds 3.4, the other smoke tests 1.9 and the other three
       # groups 1.2 to 1.3 (run 43766692766). The seam tests have since taken
       # 6.5 (run 44097575826), and on the 2.3.0 stack the fuzzer smoke tests
-      # took 10.1 (run 44595917463), so the limit is twice that, rounded up.
+      # took 10.1 (run 44595917463), so the limit was twice that, rounded
+      # up. Over eight later runs the slowest group took 9.6 to 18.2 minutes
+      # (runs 45850201388 and 45815169776, the seam smoke seeds both times),
+      # and the old limit of 21 cut off the seam tests of run 45801718822,
+      # which take 1.4 to 9.6 in the others; the limit is twice 21.
       - name: Test
         id: tests
-        timeout-minutes: 21
+        timeout-minutes: 42
         shell: bash
         env:
           SELECTION: ${{ matrix.selection }}

@@ -445,14 +445,12 @@ struct SafeDIToolCallingMockOnlyIfAvailableOverrideTests: ~Copyable {
 		    ) -> Screen {
 		        let cache: Cache? = safeDIOverrides.cache
 		        let filter: (any FilterProtocol)? = safeDIOverrides.filter
-		        func __safeDI_homeBuilder(__safeDI_Home_configuration: Home.SafeDIMockConfiguration) -> Home {
+		        func __safeDI_homeBuilder() -> Home {
 		            _ = Cache.__safeDI_Cache_mock_215B449271BCAB93.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            let cache = Cache.__safeDI_mock(filter: filter, safeDIOverrides: safeDIOverrides.homeBuilder.cache)
-		            return if let safeDIBuilder = __safeDI_Home_configuration.safeDIBuilder { safeDIBuilder(cache) } else { Home(cache: cache) }
+		            return if let safeDIBuilder = safeDIOverrides.homeBuilder.safeDIBuilder { safeDIBuilder(cache) } else { Home(cache: cache) }
 		        }
-		        let homeBuilder = Instantiator<Home> {
-		            __safeDI_homeBuilder(__safeDI_Home_configuration: safeDIOverrides.homeBuilder)
-		        }
+		        let homeBuilder = Instantiator<Home>(__safeDI_homeBuilder)
 		        return Screen(cache: cache, homeBuilder: homeBuilder)
 		    }
 		}
@@ -1487,13 +1485,11 @@ struct SafeDIToolCallingMockOnlyIfAvailableOverrideTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        @Sendable nonisolated func __safeDI_filter(__safeDI_Filter_configuration: (@Sendable () -> Filter)?) -> Filter {
-		            if let safeDIBuilder = __safeDI_Filter_configuration { safeDIBuilder() } else { Filter() }
+		        let __safeDI_filter__safeDIBuilder = safeDIOverrides.filter
+		        @Sendable nonisolated func __safeDI_filter() -> Filter {
+		            if let safeDIBuilder = __safeDI_filter__safeDIBuilder { safeDIBuilder() } else { Filter() }
 		        }
-		        let __safeDI_filter____safeDI_Filter_configuration: (@Sendable () -> Filter)? = safeDIOverrides.filter
-		        let filter = SendableLazilyInstantiated<Filter> {
-		            __safeDI_filter(__safeDI_Filter_configuration: __safeDI_filter____safeDI_Filter_configuration)
-		        }
+		        let filter = SendableLazilyInstantiated<Filter>(__safeDI_filter)
 		        _ = Cache.__safeDI_Cache_mock_5E1700DCC2ECDE3C.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        let cache = Cache.__safeDI_mock(filter: filter, safeDIOverrides: safeDIOverrides.cache)
 		        let reader = if let safeDIBuilder = safeDIOverrides.reader { safeDIBuilder(filter.instance) } else { Reader(filter: filter.instance) }

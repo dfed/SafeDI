@@ -553,11 +553,11 @@ struct SafeDIToolFlatMockParameterDefaultTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Consumer {
-		        func __safeDI_sessionBuilder(token: Token, __safeDI_Session_mockConfiguration: ((Token) -> Session)?) -> Session {
-		            if let safeDIBuilder = __safeDI_Session_mockConfiguration { safeDIBuilder(token) } else { Session.preview(token: token) }
+		        func __safeDI_sessionBuilder(token: Token) -> Session {
+		            if let safeDIBuilder = safeDIOverrides.sessionBuilder { safeDIBuilder(token) } else { Session.preview(token: token) }
 		        }
 		        let sessionBuilder = Instantiator<Session> {
-		            __safeDI_sessionBuilder(token: $0, __safeDI_Session_mockConfiguration: safeDIOverrides.sessionBuilder)
+		            __safeDI_sessionBuilder(token: $0)
 		        }
 		        return Consumer(sessionBuilder: sessionBuilder)
 		    }
@@ -1165,11 +1165,8 @@ struct SafeDIToolFlatMockParameterDefaultTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        let session: Session? = safeDIOverrides.session
-			        func __safeDI_consumer() -> Consumer {
-			            _ = Consumer.__safeDI_Consumer_mock_D4A974D59A93702C.self\(seamCallComment)
-			            return if let safeDIBuilder = safeDIOverrides.consumer { safeDIBuilder(session) } else { Consumer.__safeDI_mock(session: session) }
-			        }
-			        let consumer: Consumer = __safeDI_consumer()
+			        _ = Consumer.__safeDI_Consumer_mock_D4A974D59A93702C.self\(seamCallComment)
+			        let consumer = if let safeDIBuilder = safeDIOverrides.consumer { safeDIBuilder(session) } else { Consumer.__safeDI_mock(session: session) }
 			        return Screen(consumer: consumer)
 			    }
 			}
@@ -1221,11 +1218,8 @@ struct SafeDIToolFlatMockParameterDefaultTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        let session: Session? = safeDIOverrides.session
-			        func __safeDI_consumer() -> Consumer {
-			            _ = Consumer.__safeDI_Consumer_mock_D4A974D59A93702C.self\(seamCallComment)
-			            return if let safeDIBuilder = safeDIOverrides.consumer { safeDIBuilder(session) } else { Consumer.__safeDI_mock(session: session) }
-			        }
-			        let consumer: Consumer = __safeDI_consumer()
+			        _ = Consumer.__safeDI_Consumer_mock_D4A974D59A93702C.self\(seamCallComment)
+			        let consumer = if let safeDIBuilder = safeDIOverrides.consumer { safeDIBuilder(session) } else { Consumer.__safeDI_mock(session: session) }
 			        return Screen(consumer: consumer)
 			    }
 			}

@@ -19,7 +19,8 @@
 // SOFTWARE.
 
 extension DependencyTreeGenerator {
-	/// Generates mock code for all `@Instantiable` types.
+	/// Generates mock code for all `@Instantiable` types. A mock keeps its local functions inlinable, where a seam’s tree
+	/// does not (`LocalFunctionInlining`).
 	/// - Parameter publicMockContext: The context the module's public mocks share (`makePublicMockContext()`), or `nil`
 	///   when the module declares no public mock.
 	func generateMockCode(
@@ -28,6 +29,41 @@ extension DependencyTreeGenerator {
 		additionalMocksToGenerate: Set<String>,
 		storesPublicMockPlans: Bool,
 		publicMockContext: PublicMockContext?,
+	) async throws -> MockGenerationResult {
+		guard NodeRecordsObservation.observer != nil else {
+			return try await generateMockCode(
+				mockConditionalCompilation: mockConditionalCompilation,
+				currentModuleSourceFilePaths: currentModuleSourceFilePaths,
+				additionalMocksToGenerate: additionalMocksToGenerate,
+				storesPublicMockPlans: storesPublicMockPlans,
+				publicMockContext: publicMockContext,
+				worldRootRecording: nil,
+			)
+		}
+		// The root of each mock root's world, by mocked type, where a test observes node records: handed on through a task
+		// local, so that a run no test observes threads nothing through the mock roots' construction.
+		let worldRootRecording = AsyncStream.makeStream(of: (mockedType: TypeDescription, worldRoot: ConstructionScope).self)
+		return try await NodeRecordsObservation.$recordsMockWorldRoot.withValue({ worldRootRecording.continuation.yield(($0, $1)) }) {
+			try await generateMockCode(
+				mockConditionalCompilation: mockConditionalCompilation,
+				currentModuleSourceFilePaths: currentModuleSourceFilePaths,
+				additionalMocksToGenerate: additionalMocksToGenerate,
+				storesPublicMockPlans: storesPublicMockPlans,
+				publicMockContext: publicMockContext,
+				worldRootRecording: worldRootRecording,
+			)
+		}
+	}
+
+	/// - Parameter worldRootRecording: Where the root of each mock root's world arrives, by mocked type, where a test
+	///   observes node records.
+	private func generateMockCode(
+		mockConditionalCompilation: String?,
+		currentModuleSourceFilePaths: Set<String>?,
+		additionalMocksToGenerate: Set<String>,
+		storesPublicMockPlans: Bool,
+		publicMockContext: PublicMockContext?,
+		worldRootRecording: (stream: AsyncStream<(mockedType: TypeDescription, worldRoot: ConstructionScope)>, continuation: AsyncStream<(mockedType: TypeDescription, worldRoot: ConstructionScope)>.Continuation)?,
 	) async throws -> MockGenerationResult {
 		var receivedPropertiesCache = ReceivedPropertiesCache()
 		// The plans of the public mocks of other modules this module's mock trees call, computed once each.
@@ -222,10 +258,18 @@ extension DependencyTreeGenerator {
 			foreignPublicMocks: foreignPublicMocks,
 		)
 		let fulfillingInstantiables = typeDescriptionToFulfillingInstantiableMap
+		var recordedWorldRoots = [TypeDescription: ConstructionScope]()
+		if let worldRootRecording {
+			worldRootRecording.continuation.finish()
+			for await (mockedType, worldRoot) in worldRootRecording.stream {
+				recordedWorldRoots[mockedType] = worldRoot
+			}
+		}
+		let worldRoots = recordedWorldRoots
 		let loweredRoots = try await BoundedConcurrency.map(mockRoots, width: BoundedConcurrency.mockRootWidth) { instantiableAndMockRoot, _ in
 			let (instantiable, mockRoot) = instantiableAndMockRoot
 			async let fulfillers = mockRoot.fulfillersOfMock(mockDefaults: flatParameterMockDefaults)
-			let lowered = try await mockRoot.lowerMockRoot(context: mockContext)
+			let lowered = try await mockRoot.lowerMockRoot(context: mockContext, worldRoot: worldRoots[instantiable.concreteInstantiable])
 			return await (
 				root: GeneratedRoot(
 					typeDescription: instantiable.concreteInstantiable,
@@ -729,11 +773,6 @@ extension DependencyTreeGenerator {
 		return mockDeclarationLocations
 	}
 
-	/// The name `computeCycleEdges` orders each type by in place of its spelling, or `nil` to order by spelling. Only a test
-	/// sets it, to a renaming's inverse, so that a renamed graph's walk meets its types in the original graph's order and
-	/// leaves out the same back-edges: the renamed graph's mocks then show what follows from anything but that choice.
-	@TaskLocal public static var cycleEdgeOrderingName: (@Sendable (String) -> String)?
-
 	/// Computes the set of `(parent, child)` type-reference edges that, when removed,
 	/// makes the global type graph acyclic. Walks the graph with a DFS, starting from
 	/// each node in alphabetical order; any edge into a node already on the active DFS
@@ -743,8 +782,6 @@ extension DependencyTreeGenerator {
 	private static func computeCycleEdges(
 		in scopeMap: [TypeDescription: Scope],
 	) -> Set<ScopeGenerator.CycleEdge> {
-		let orderingName = cycleEdgeOrderingName
-		let orderingKey: (TypeDescription) -> String = { type in orderingName?(type.asSource) ?? type.asSource }
 		var adjacency = [TypeDescription: [TypeDescription]]()
 		for scope in Set(scopeMap.values) {
 			let parent = scope.instantiable.concreteInstantiable
@@ -755,12 +792,12 @@ extension DependencyTreeGenerator {
 			}
 		}
 		for key in adjacency.keys {
-			adjacency[key]?.sort { orderingKey($0) < orderingKey($1) }
+			adjacency[key]?.sort { $0.asSource < $1.asSource }
 		}
 
 		let allNodes = Set(adjacency.keys)
 			.union(adjacency.values.flatMap(\.self))
-			.sorted { orderingKey($0) < orderingKey($1) }
+			.sorted { $0.asSource < $1.asSource }
 
 		var visited = Set<TypeDescription>()
 		var onStack = Set<TypeDescription>()
@@ -1007,7 +1044,7 @@ extension DependencyTreeGenerator {
 						fulfilledBy: fulfillingProperty,
 						erasedToConcreteExistential: erasedToConcreteExistential,
 						onlyIfAvailable: onlyIfAvailable,
-						declarationReference: dependency.declarationLocation.map(aliasDeclarationReferences.reference(to:)),
+						declarationReference: aliasDeclarationReferences.reference(to: dependency.declarationLocation),
 					))
 				case .forwarded:
 					continue

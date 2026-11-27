@@ -127,21 +127,26 @@ struct SafeDIToolMockCycleOverrideReadTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Home {
-		        func __safeDI_screen(__safeDI_Screen_configuration: Screen.SafeDIMockConfiguration, __safeDI_Step_configuration_nearest: Step.SafeDIMockConfiguration?) -> Screen {
-		            let cache = if let safeDIBuilder = __safeDI_Screen_configuration.cache { safeDIBuilder() } else { Cache() }
+		        func __safeDI_screen() -> Screen {
+		            let cache = if let safeDIBuilder = safeDIOverrides.screen.cache { safeDIBuilder() } else { Cache() }
+		            func __safeDI_stepBuilder(cache: Cache) -> Step {
+		                let model = if let safeDIBuilder = safeDIOverrides.screen.stepBuilder.model { safeDIBuilder(cache) } else { Model(cache: cache) }
+		                func __safeDI_screenBuilder() -> Screen {
+		                    let cache = if let safeDIBuilder = safeDIOverrides.screen.cache { safeDIBuilder() } else { Cache() }
+		                    let stepBuilder = Instantiator<Step> {
+		                        __safeDI_stepBuilder(cache: cache)
+		                    }
+		                    return if let safeDIBuilder = safeDIOverrides.screen.safeDIBuilder { safeDIBuilder(cache, stepBuilder) } else { Screen(cache: cache, stepBuilder: stepBuilder) }
+		                }
+		                let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
+		                return if let safeDIBuilder = safeDIOverrides.screen.stepBuilder.safeDIBuilder { safeDIBuilder(model, screenBuilder) } else { Step(model: model, screenBuilder: screenBuilder) }
+		            }
 		            let stepBuilder = Instantiator<Step> {
-		                __safeDI_stepBuilder(cache: cache, __safeDI_Step_configuration: __safeDI_Step_configuration_nearest ?? __safeDI_Screen_configuration.stepBuilder, __safeDI_Screen_configuration_nearest: __safeDI_Screen_configuration)
+		                __safeDI_stepBuilder(cache: cache)
 		            }
-		            return if let safeDIBuilder = __safeDI_Screen_configuration.safeDIBuilder { safeDIBuilder(cache, stepBuilder) } else { Screen(cache: cache, stepBuilder: stepBuilder) }
+		            return if let safeDIBuilder = safeDIOverrides.screen.safeDIBuilder { safeDIBuilder(cache, stepBuilder) } else { Screen(cache: cache, stepBuilder: stepBuilder) }
 		        }
-		        func __safeDI_stepBuilder(cache: Cache, __safeDI_Step_configuration: Step.SafeDIMockConfiguration, __safeDI_Screen_configuration_nearest: Screen.SafeDIMockConfiguration?) -> Step {
-		            let model = if let safeDIBuilder = __safeDI_Step_configuration.model { safeDIBuilder(cache) } else { Model(cache: cache) }
-		            let screenBuilder = Instantiator<Screen> {
-		                __safeDI_screen(__safeDI_Screen_configuration: __safeDI_Screen_configuration_nearest ?? Screen.SafeDIMockConfiguration(), __safeDI_Step_configuration_nearest: __safeDI_Step_configuration)
-		            }
-		            return if let safeDIBuilder = __safeDI_Step_configuration.safeDIBuilder { safeDIBuilder(model, screenBuilder) } else { Step(model: model, screenBuilder: screenBuilder) }
-		        }
-		        let screen: Screen = __safeDI_screen(__safeDI_Screen_configuration: safeDIOverrides.screen, __safeDI_Step_configuration_nearest: nil)
+		        let screen: Screen = __safeDI_screen()
 		        return Home(screen: screen)
 		    }
 		}
@@ -233,29 +238,29 @@ struct SafeDIToolMockCycleOverrideReadTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Home {
-		        @Sendable nonisolated func __safeDI_stepBuilder(cache: Cache, __safeDI_Step_configuration: Step.SafeDIMockConfiguration, __safeDI_Screen_configuration_nearest: Screen.SafeDIMockConfiguration?) -> Step {
-		            let model = if let safeDIBuilder = __safeDI_Step_configuration.model { safeDIBuilder(cache) } else { Model(cache: cache) }
-		            let screenBuilder = SendableInstantiator<Screen> {
-		                __safeDI_screenBuilder(__safeDI_Screen_configuration: __safeDI_Screen_configuration_nearest ?? Screen.SafeDIMockConfiguration(), __safeDI_Step_configuration_nearest: __safeDI_Step_configuration)
+		        func __safeDI_screen() -> Screen {
+		            let cache = if let safeDIBuilder = safeDIOverrides.screen.cache { safeDIBuilder() } else { Cache() }
+		            let __safeDI_stepBuilder__overrides = safeDIOverrides.screen.stepBuilder
+		            let __safeDI_stepBuilder__screen_safeDIBuilder = safeDIOverrides.screen.safeDIBuilder
+		            let __safeDI_stepBuilder__screen_cache_safeDIBuilder = safeDIOverrides.screen.cache
+		            @Sendable nonisolated func __safeDI_stepBuilder(cache: Cache) -> Step {
+		                let model = if let safeDIBuilder = __safeDI_stepBuilder__overrides.model { safeDIBuilder(cache) } else { Model(cache: cache) }
+		                @Sendable nonisolated func __safeDI_screenBuilder() -> Screen {
+		                    let cache = if let safeDIBuilder = __safeDI_stepBuilder__screen_cache_safeDIBuilder { safeDIBuilder() } else { Cache() }
+		                    let stepBuilder = SendableInstantiator<Step> {
+		                        __safeDI_stepBuilder(cache: cache)
+		                    }
+		                    return if let safeDIBuilder = __safeDI_stepBuilder__screen_safeDIBuilder { safeDIBuilder(cache, stepBuilder) } else { Screen(cache: cache, stepBuilder: stepBuilder) }
+		                }
+		                let screenBuilder = SendableInstantiator<Screen>(__safeDI_screenBuilder)
+		                return if let safeDIBuilder = __safeDI_stepBuilder__overrides.safeDIBuilder { safeDIBuilder(model, screenBuilder) } else { Step(model: model, screenBuilder: screenBuilder) }
 		            }
-		            return if let safeDIBuilder = __safeDI_Step_configuration.safeDIBuilder { safeDIBuilder(model, screenBuilder) } else { Step(model: model, screenBuilder: screenBuilder) }
-		        }
-		        @Sendable nonisolated func __safeDI_screenBuilder(__safeDI_Screen_configuration: Screen.SafeDIMockConfiguration, __safeDI_Step_configuration_nearest: Step.SafeDIMockConfiguration?) -> Screen {
-		            let cache = if let safeDIBuilder = __safeDI_Screen_configuration.cache { safeDIBuilder() } else { Cache() }
 		            let stepBuilder = SendableInstantiator<Step> {
-		                __safeDI_stepBuilder(cache: cache, __safeDI_Step_configuration: __safeDI_Step_configuration_nearest ?? __safeDI_Screen_configuration.stepBuilder, __safeDI_Screen_configuration_nearest: __safeDI_Screen_configuration)
+		                __safeDI_stepBuilder(cache: cache)
 		            }
-		            return if let safeDIBuilder = __safeDI_Screen_configuration.safeDIBuilder { safeDIBuilder(cache, stepBuilder) } else { Screen(cache: cache, stepBuilder: stepBuilder) }
+		            return if let safeDIBuilder = safeDIOverrides.screen.safeDIBuilder { safeDIBuilder(cache, stepBuilder) } else { Screen(cache: cache, stepBuilder: stepBuilder) }
 		        }
-		        func __safeDI_screen(__safeDI_Screen_configuration: Screen.SafeDIMockConfiguration, __safeDI_Step_configuration_nearest: Step.SafeDIMockConfiguration?) -> Screen {
-		            let cache = if let safeDIBuilder = __safeDI_Screen_configuration.cache { safeDIBuilder() } else { Cache() }
-		            let __safeDI_stepBuilder____safeDI_Step_configuration: Step.SafeDIMockConfiguration = __safeDI_Step_configuration_nearest ?? __safeDI_Screen_configuration.stepBuilder
-		            let stepBuilder = SendableInstantiator<Step> {
-		                __safeDI_stepBuilder(cache: cache, __safeDI_Step_configuration: __safeDI_stepBuilder____safeDI_Step_configuration, __safeDI_Screen_configuration_nearest: __safeDI_Screen_configuration)
-		            }
-		            return if let safeDIBuilder = __safeDI_Screen_configuration.safeDIBuilder { safeDIBuilder(cache, stepBuilder) } else { Screen(cache: cache, stepBuilder: stepBuilder) }
-		        }
-		        let screen: Screen = __safeDI_screen(__safeDI_Screen_configuration: safeDIOverrides.screen, __safeDI_Step_configuration_nearest: nil)
+		        let screen: Screen = __safeDI_screen()
 		        return Home(screen: screen)
 		    }
 		}
@@ -348,32 +353,37 @@ struct SafeDIToolMockCycleOverrideReadTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Home {
-		        @Sendable nonisolated func __safeDI_stepBuilder(cache: Cache, __safeDI_Step_configuration: Step.SafeDIMockConfiguration, __safeDI_Screen_configuration_nearest: Screen.SafeDIMockConfiguration?) -> Step {
-		            let model = if let safeDIBuilder = __safeDI_Step_configuration.model { safeDIBuilder(cache) } else { Model(cache: cache) }
-		            let screenBuilder = SendableInstantiator<Screen> {
-		                __safeDI_screenBuilder(__safeDI_Screen_configuration: __safeDI_Screen_configuration_nearest ?? Screen.SafeDIMockConfiguration(), __safeDI_Step_configuration_nearest: __safeDI_Step_configuration)
+		        func __safeDI_screen() -> Screen {
+		            let cache = if let safeDIBuilder = safeDIOverrides.screen.cache { safeDIBuilder() } else { Cache() }
+		            let __safeDI_stepBuilder__overrides = safeDIOverrides.screen.stepBuilder
+		            let __safeDI_stepBuilder__screen_safeDIBuilder = safeDIOverrides.screen.safeDIBuilder
+		            let __safeDI_stepBuilder__screen_cache_safeDIBuilder = safeDIOverrides.screen.cache
+		            @Sendable nonisolated func __safeDI_stepBuilder(cache: Cache) -> Step {
+		                let model = if let safeDIBuilder = __safeDI_stepBuilder__overrides.model { safeDIBuilder(cache) } else { Model(cache: cache) }
+		                @Sendable nonisolated func __safeDI_screenBuilder() -> Screen {
+		                    let cache = if let safeDIBuilder = __safeDI_stepBuilder__screen_cache_safeDIBuilder { safeDIBuilder() } else { Cache() }
+		                    let stepBuilder = SendableInstantiator<Step> {
+		                        __safeDI_stepBuilder(cache: cache)
+		                    }
+		                    return if let safeDIBuilder = __safeDI_stepBuilder__screen_safeDIBuilder { safeDIBuilder(cache, stepBuilder) } else { Screen(cache: cache, stepBuilder: stepBuilder) }
+		                }
+		                let screenBuilder = SendableInstantiator<Screen>(__safeDI_screenBuilder)
+		                @Sendable nonisolated func __safeDI_otherScreenBuilder() -> Screen {
+		                    let cache = if let safeDIBuilder = __safeDI_stepBuilder__screen_cache_safeDIBuilder { safeDIBuilder() } else { Cache() }
+		                    let stepBuilder = SendableInstantiator<Step> {
+		                        __safeDI_stepBuilder(cache: cache)
+		                    }
+		                    return if let safeDIBuilder = __safeDI_stepBuilder__screen_safeDIBuilder { safeDIBuilder(cache, stepBuilder) } else { Screen(cache: cache, stepBuilder: stepBuilder) }
+		                }
+		                let otherScreenBuilder = SendableInstantiator<Screen>(__safeDI_otherScreenBuilder)
+		                return if let safeDIBuilder = __safeDI_stepBuilder__overrides.safeDIBuilder { safeDIBuilder(model, screenBuilder, otherScreenBuilder) } else { Step(model: model, screenBuilder: screenBuilder, otherScreenBuilder: otherScreenBuilder) }
 		            }
-		            let otherScreenBuilder = SendableInstantiator<Screen> {
-		                __safeDI_screenBuilder(__safeDI_Screen_configuration: __safeDI_Screen_configuration_nearest ?? Screen.SafeDIMockConfiguration(), __safeDI_Step_configuration_nearest: __safeDI_Step_configuration)
-		            }
-		            return if let safeDIBuilder = __safeDI_Step_configuration.safeDIBuilder { safeDIBuilder(model, screenBuilder, otherScreenBuilder) } else { Step(model: model, screenBuilder: screenBuilder, otherScreenBuilder: otherScreenBuilder) }
-		        }
-		        @Sendable nonisolated func __safeDI_screenBuilder(__safeDI_Screen_configuration: Screen.SafeDIMockConfiguration, __safeDI_Step_configuration_nearest: Step.SafeDIMockConfiguration?) -> Screen {
-		            let cache = if let safeDIBuilder = __safeDI_Screen_configuration.cache { safeDIBuilder() } else { Cache() }
 		            let stepBuilder = SendableInstantiator<Step> {
-		                __safeDI_stepBuilder(cache: cache, __safeDI_Step_configuration: __safeDI_Step_configuration_nearest ?? __safeDI_Screen_configuration.stepBuilder, __safeDI_Screen_configuration_nearest: __safeDI_Screen_configuration)
+		                __safeDI_stepBuilder(cache: cache)
 		            }
-		            return if let safeDIBuilder = __safeDI_Screen_configuration.safeDIBuilder { safeDIBuilder(cache, stepBuilder) } else { Screen(cache: cache, stepBuilder: stepBuilder) }
+		            return if let safeDIBuilder = safeDIOverrides.screen.safeDIBuilder { safeDIBuilder(cache, stepBuilder) } else { Screen(cache: cache, stepBuilder: stepBuilder) }
 		        }
-		        func __safeDI_screen(__safeDI_Screen_configuration: Screen.SafeDIMockConfiguration, __safeDI_Step_configuration_nearest: Step.SafeDIMockConfiguration?) -> Screen {
-		            let cache = if let safeDIBuilder = __safeDI_Screen_configuration.cache { safeDIBuilder() } else { Cache() }
-		            let __safeDI_stepBuilder____safeDI_Step_configuration: Step.SafeDIMockConfiguration = __safeDI_Step_configuration_nearest ?? __safeDI_Screen_configuration.stepBuilder
-		            let stepBuilder = SendableInstantiator<Step> {
-		                __safeDI_stepBuilder(cache: cache, __safeDI_Step_configuration: __safeDI_stepBuilder____safeDI_Step_configuration, __safeDI_Screen_configuration_nearest: __safeDI_Screen_configuration)
-		            }
-		            return if let safeDIBuilder = __safeDI_Screen_configuration.safeDIBuilder { safeDIBuilder(cache, stepBuilder) } else { Screen(cache: cache, stepBuilder: stepBuilder) }
-		        }
-		        let screen: Screen = __safeDI_screen(__safeDI_Screen_configuration: safeDIOverrides.screen, __safeDI_Step_configuration_nearest: nil)
+		        let screen: Screen = __safeDI_screen()
 		        return Home(screen: screen)
 		    }
 		}
@@ -596,22 +606,46 @@ struct SafeDIToolMockCycleOverrideReadTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Home {
-		        func __safeDI_primary(__safeDI_Screen_configuration: Screen.SafeDIMockConfiguration, __safeDI_Step_configuration_nearest: Step.SafeDIMockConfiguration?) -> Screen {
-		            let cache = if let safeDIBuilder = __safeDI_Screen_configuration.cache { safeDIBuilder() } else { Cache() }
+		        func __safeDI_primary() -> Screen {
+		            let cache = if let safeDIBuilder = safeDIOverrides.primary.cache { safeDIBuilder() } else { Cache() }
+		            func __safeDI_stepBuilder(cache: Cache) -> Step {
+		                let model = if let safeDIBuilder = safeDIOverrides.primary.stepBuilder.model { safeDIBuilder(cache) } else { Model(cache: cache) }
+		                func __safeDI_screenBuilder() -> Screen {
+		                    let cache = if let safeDIBuilder = safeDIOverrides.primary.cache { safeDIBuilder() } else { Cache() }
+		                    let stepBuilder = Instantiator<Step> {
+		                        __safeDI_stepBuilder(cache: cache)
+		                    }
+		                    return if let safeDIBuilder = safeDIOverrides.primary.safeDIBuilder { safeDIBuilder(cache, stepBuilder) } else { Screen(cache: cache, stepBuilder: stepBuilder) }
+		                }
+		                let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
+		                return if let safeDIBuilder = safeDIOverrides.primary.stepBuilder.safeDIBuilder { safeDIBuilder(model, screenBuilder) } else { Step(model: model, screenBuilder: screenBuilder) }
+		            }
 		            let stepBuilder = Instantiator<Step> {
-		                __safeDI_stepBuilder(cache: cache, __safeDI_Step_configuration: __safeDI_Step_configuration_nearest ?? __safeDI_Screen_configuration.stepBuilder, __safeDI_Screen_configuration_nearest: __safeDI_Screen_configuration)
+		                __safeDI_stepBuilder(cache: cache)
 		            }
-		            return if let safeDIBuilder = __safeDI_Screen_configuration.safeDIBuilder { safeDIBuilder(cache, stepBuilder) } else { Screen(cache: cache, stepBuilder: stepBuilder) }
+		            return if let safeDIBuilder = safeDIOverrides.primary.safeDIBuilder { safeDIBuilder(cache, stepBuilder) } else { Screen(cache: cache, stepBuilder: stepBuilder) }
 		        }
-		        func __safeDI_stepBuilder(cache: Cache, __safeDI_Step_configuration: Step.SafeDIMockConfiguration, __safeDI_Screen_configuration_nearest: Screen.SafeDIMockConfiguration?) -> Step {
-		            let model = if let safeDIBuilder = __safeDI_Step_configuration.model { safeDIBuilder(cache) } else { Model(cache: cache) }
-		            let screenBuilder = Instantiator<Screen> {
-		                __safeDI_primary(__safeDI_Screen_configuration: __safeDI_Screen_configuration_nearest ?? Screen.SafeDIMockConfiguration(), __safeDI_Step_configuration_nearest: __safeDI_Step_configuration)
+		        let primary: Screen = __safeDI_primary()
+		        func __safeDI_secondary() -> Screen {
+		            let cache = if let safeDIBuilder = safeDIOverrides.secondary.cache { safeDIBuilder() } else { Cache() }
+		            func __safeDI_stepBuilder(cache: Cache) -> Step {
+		                let model = if let safeDIBuilder = safeDIOverrides.secondary.stepBuilder.model { safeDIBuilder(cache) } else { Model(cache: cache) }
+		                func __safeDI_screenBuilder() -> Screen {
+		                    let cache = if let safeDIBuilder = safeDIOverrides.secondary.cache { safeDIBuilder() } else { Cache() }
+		                    let stepBuilder = Instantiator<Step> {
+		                        __safeDI_stepBuilder(cache: cache)
+		                    }
+		                    return if let safeDIBuilder = safeDIOverrides.secondary.safeDIBuilder { safeDIBuilder(cache, stepBuilder) } else { Screen(cache: cache, stepBuilder: stepBuilder) }
+		                }
+		                let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
+		                return if let safeDIBuilder = safeDIOverrides.secondary.stepBuilder.safeDIBuilder { safeDIBuilder(model, screenBuilder) } else { Step(model: model, screenBuilder: screenBuilder) }
 		            }
-		            return if let safeDIBuilder = __safeDI_Step_configuration.safeDIBuilder { safeDIBuilder(model, screenBuilder) } else { Step(model: model, screenBuilder: screenBuilder) }
+		            let stepBuilder = Instantiator<Step> {
+		                __safeDI_stepBuilder(cache: cache)
+		            }
+		            return if let safeDIBuilder = safeDIOverrides.secondary.safeDIBuilder { safeDIBuilder(cache, stepBuilder) } else { Screen(cache: cache, stepBuilder: stepBuilder) }
 		        }
-		        let primary: Screen = __safeDI_primary(__safeDI_Screen_configuration: safeDIOverrides.primary, __safeDI_Step_configuration_nearest: nil)
-		        let secondary: Screen = __safeDI_primary(__safeDI_Screen_configuration: safeDIOverrides.secondary, __safeDI_Step_configuration_nearest: nil)
+		        let secondary: Screen = __safeDI_secondary()
 		        return Home(primary: primary, secondary: secondary)
 		    }
 		}
@@ -704,26 +738,30 @@ struct SafeDIToolMockCycleOverrideReadTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Game {
-		        @Sendable nonisolated func __safeDI_pingBuilder(__safeDI_Ping_configuration: Ping.SafeDIMockConfiguration, __safeDI_Pong_configuration_nearest: Pong.SafeDIMockConfiguration?) -> Ping {
-		            let pongBuilder = SendableInstantiator<Pong> {
-		                __safeDI_pongBuilder(__safeDI_Pong_configuration: __safeDI_Pong_configuration_nearest ?? __safeDI_Ping_configuration.pongBuilder, __safeDI_Ping_configuration_nearest: __safeDI_Ping_configuration)
+		        let __safeDI_pingBuilder__overrides = safeDIOverrides.pingBuilder
+		        @Sendable nonisolated func __safeDI_pingBuilder() -> Ping {
+		            @Sendable nonisolated func __safeDI_pongBuilder() -> Pong {
+		                let pingBuilder = SendableInstantiator<Ping>(__safeDI_pingBuilder)
+		                return if let safeDIBuilder = __safeDI_pingBuilder__overrides.pongBuilder.safeDIBuilder { safeDIBuilder(__safeDI_pingBuilder__overrides.pongBuilder.label(), pingBuilder) } else { Pong(label: __safeDI_pingBuilder__overrides.pongBuilder.label(), pingBuilder: pingBuilder) }
 		            }
-		            return if let safeDIBuilder = __safeDI_Ping_configuration.safeDIBuilder { safeDIBuilder(__safeDI_Ping_configuration.label(), pongBuilder) } else { Ping(label: __safeDI_Ping_configuration.label(), pongBuilder: pongBuilder) }
+		            let pongBuilder = SendableInstantiator<Pong>(__safeDI_pongBuilder)
+		            return if let safeDIBuilder = __safeDI_pingBuilder__overrides.safeDIBuilder { safeDIBuilder(__safeDI_pingBuilder__overrides.label(), pongBuilder) } else { Ping(label: __safeDI_pingBuilder__overrides.label(), pongBuilder: pongBuilder) }
 		        }
-		        @Sendable nonisolated func __safeDI_pongBuilder(__safeDI_Pong_configuration: Pong.SafeDIMockConfiguration, __safeDI_Ping_configuration_nearest: Ping.SafeDIMockConfiguration?) -> Pong {
-		            let pingBuilder = SendableInstantiator<Ping> {
-		                __safeDI_pingBuilder(__safeDI_Ping_configuration: __safeDI_Ping_configuration_nearest ?? Ping.SafeDIMockConfiguration(), __safeDI_Pong_configuration_nearest: __safeDI_Pong_configuration)
+		        let pingBuilder = SendableInstantiator<Ping>(__safeDI_pingBuilder)
+		        let __safeDI_otherPingBuilder__overrides = safeDIOverrides.otherPingBuilder
+		        @Sendable nonisolated func __safeDI_otherPingBuilder() -> Ping {
+		            @Sendable nonisolated func __safeDI_pongBuilder() -> Pong {
+		                @Sendable nonisolated func __safeDI_pingBuilder() -> Ping {
+		                    let pongBuilder = SendableInstantiator<Pong>(__safeDI_pongBuilder)
+		                    return if let safeDIBuilder = __safeDI_otherPingBuilder__overrides.safeDIBuilder { safeDIBuilder(__safeDI_otherPingBuilder__overrides.label(), pongBuilder) } else { Ping(label: __safeDI_otherPingBuilder__overrides.label(), pongBuilder: pongBuilder) }
+		                }
+		                let pingBuilder = SendableInstantiator<Ping>(__safeDI_pingBuilder)
+		                return if let safeDIBuilder = __safeDI_otherPingBuilder__overrides.pongBuilder.safeDIBuilder { safeDIBuilder(__safeDI_otherPingBuilder__overrides.pongBuilder.label(), pingBuilder) } else { Pong(label: __safeDI_otherPingBuilder__overrides.pongBuilder.label(), pingBuilder: pingBuilder) }
 		            }
-		            return if let safeDIBuilder = __safeDI_Pong_configuration.safeDIBuilder { safeDIBuilder(__safeDI_Pong_configuration.label(), pingBuilder) } else { Pong(label: __safeDI_Pong_configuration.label(), pingBuilder: pingBuilder) }
+		            let pongBuilder = SendableInstantiator<Pong>(__safeDI_pongBuilder)
+		            return if let safeDIBuilder = __safeDI_otherPingBuilder__overrides.safeDIBuilder { safeDIBuilder(__safeDI_otherPingBuilder__overrides.label(), pongBuilder) } else { Ping(label: __safeDI_otherPingBuilder__overrides.label(), pongBuilder: pongBuilder) }
 		        }
-		        let __safeDI_pingBuilder____safeDI_Ping_configuration: Ping.SafeDIMockConfiguration = safeDIOverrides.pingBuilder
-		        let pingBuilder = SendableInstantiator<Ping> {
-		            __safeDI_pingBuilder(__safeDI_Ping_configuration: __safeDI_pingBuilder____safeDI_Ping_configuration, __safeDI_Pong_configuration_nearest: nil)
-		        }
-		        let __safeDI_pingBuilder____safeDI_Ping_configuration_: Ping.SafeDIMockConfiguration = safeDIOverrides.otherPingBuilder
-		        let otherPingBuilder = SendableInstantiator<Ping> {
-		            __safeDI_pingBuilder(__safeDI_Ping_configuration: __safeDI_pingBuilder____safeDI_Ping_configuration_, __safeDI_Pong_configuration_nearest: nil)
-		        }
+		        let otherPingBuilder = SendableInstantiator<Ping>(__safeDI_otherPingBuilder)
 		        return Game(pingBuilder: pingBuilder, otherPingBuilder: otherPingBuilder)
 		    }
 		}

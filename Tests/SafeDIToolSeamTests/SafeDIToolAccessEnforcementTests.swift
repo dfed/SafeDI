@@ -404,11 +404,11 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
-			        func __safeDI_engine(__safeDI_Engine_configuration: Engine.SafeDIMockConfiguration) -> Engine {
-			            let service = if let safeDIBuilder = __safeDI_Engine_configuration.service { safeDIBuilder() } else { Service.mock() }
-			            return if let safeDIBuilder = __safeDI_Engine_configuration.safeDIBuilder { safeDIBuilder(service) } else { Engine(service: service) }
+			        func __safeDI_engine() -> Engine {
+			            let service = if let safeDIBuilder = safeDIOverrides.engine.service { safeDIBuilder() } else { Service.mock() }
+			            return if let safeDIBuilder = safeDIOverrides.engine.safeDIBuilder { safeDIBuilder(service) } else { Engine(service: service) }
 			        }
-			        let engine: Engine = __safeDI_engine(__safeDI_Engine_configuration: safeDIOverrides.engine)
+			        let engine: Engine = __safeDI_engine()
 			        return Screen(engine: engine)
 			    }
 			}

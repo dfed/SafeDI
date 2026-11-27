@@ -401,8 +401,8 @@ struct SafeDIToolCallingMockAccessErrorTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        let __safeDI_serviceBuilder = serviceBuilder
+			        _ = Panel.__safeDI_Panel_mock_4C19E5205B40458C.self // If this line does not compile, compile the code SafeDI generates for module Up into Up: under Bazel, add Up’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			        func __safeDI_panel() -> Panel {
-			            _ = Panel.__safeDI_Panel_mock_4C19E5205B40458C.self // If this line does not compile, compile the code SafeDI generates for module Up into Up: under Bazel, add Up’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			            let serviceBuilder: () -> any Service = __safeDI_serviceBuilder
 			            return if let safeDIBuilder = safeDIOverrides.panel { safeDIBuilder(serviceBuilder) } else { Panel.__safeDI_mock(serviceBuilder: .init(__safeDI_noScope: serviceBuilder)) }
 			        }

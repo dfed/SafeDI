@@ -116,14 +116,12 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        @Sendable nonisolated func __safeDI_childBuilder(__safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
-		            let grandchild = if let safeDIBuilder = __safeDI_Child_configuration.grandchild { safeDIBuilder() } else { Grandchild() }
-		            return if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(grandchild, __safeDI_Child_configuration.formatter()) } else { Child(grandchild: grandchild, formatter: __safeDI_Child_configuration.formatter()) }
+		        let __safeDI_childBuilder__overrides = safeDIOverrides.childBuilder
+		        @Sendable nonisolated func __safeDI_childBuilder() -> Child {
+		            let grandchild = if let safeDIBuilder = __safeDI_childBuilder__overrides.grandchild { safeDIBuilder() } else { Grandchild() }
+		            return if let safeDIBuilder = __safeDI_childBuilder__overrides.safeDIBuilder { safeDIBuilder(grandchild, __safeDI_childBuilder__overrides.formatter()) } else { Child(grandchild: grandchild, formatter: __safeDI_childBuilder__overrides.formatter()) }
 		        }
-		        let __safeDI_childBuilder____safeDI_Child_configuration: Child.SafeDIMockConfiguration = safeDIOverrides.childBuilder
-		        let childBuilder = SendableInstantiator<Child> {
-		            __safeDI_childBuilder(__safeDI_Child_configuration: __safeDI_childBuilder____safeDI_Child_configuration)
-		        }
+		        let childBuilder = SendableInstantiator<Child>(__safeDI_childBuilder)
 		        return Root(childBuilder: childBuilder)
 		    }
 		}
@@ -253,17 +251,15 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        @Sendable nonisolated func __safeDI_grandchild(__safeDI_Grandchild_configuration: Grandchild.SafeDIMockConfiguration) -> Grandchild {
-		            if let safeDIBuilder = __safeDI_Grandchild_configuration.safeDIBuilder { safeDIBuilder(__safeDI_Grandchild_configuration.formatter()) } else { Grandchild(formatter: __safeDI_Grandchild_configuration.formatter()) }
+		        let __safeDI_childBuilder__overrides = safeDIOverrides.childBuilder
+		        @Sendable nonisolated func __safeDI_childBuilder() -> ChildProtocol {
+		            func __safeDI_grandchild() -> Grandchild {
+		                return if let safeDIBuilder = __safeDI_childBuilder__overrides.grandchild.safeDIBuilder { safeDIBuilder(__safeDI_childBuilder__overrides.grandchild.formatter()) } else { Grandchild(formatter: __safeDI_childBuilder__overrides.grandchild.formatter()) }
+		            }
+		            let grandchild: Grandchild = __safeDI_grandchild()
+		            return if let safeDIBuilder = __safeDI_childBuilder__overrides.safeDIBuilder { safeDIBuilder(grandchild) } else { Child(grandchild: grandchild) }
 		        }
-		        @Sendable nonisolated func __safeDI_childBuilder(__safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> ChildProtocol {
-		            let grandchild: Grandchild = __safeDI_grandchild(__safeDI_Grandchild_configuration: __safeDI_Child_configuration.grandchild)
-		            return if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(grandchild) } else { Child(grandchild: grandchild) }
-		        }
-		        let __safeDI_childBuilder____safeDI_Child_configuration: Child.SafeDIMockConfiguration = safeDIOverrides.childBuilder
-		        let childBuilder = SendableErasedInstantiator<Void, ChildProtocol> {
-		            __safeDI_childBuilder(__safeDI_Child_configuration: __safeDI_childBuilder____safeDI_Child_configuration)
-		        }
+		        let childBuilder = SendableErasedInstantiator<Void, ChildProtocol>(__safeDI_childBuilder)
 		        return Root(childBuilder: childBuilder)
 		    }
 		}
@@ -411,13 +407,11 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        @Sendable nonisolated func __safeDI_child(__safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
-		            if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(__safeDI_Child_configuration.formatter()) } else { Child(formatter: __safeDI_Child_configuration.formatter()) }
+		        let __safeDI_child__overrides = safeDIOverrides.child
+		        @Sendable nonisolated func __safeDI_child() -> Child {
+		            if let safeDIBuilder = __safeDI_child__overrides.safeDIBuilder { safeDIBuilder(__safeDI_child__overrides.formatter()) } else { Child(formatter: __safeDI_child__overrides.formatter()) }
 		        }
-		        let __safeDI_child____safeDI_Child_configuration: Child.SafeDIMockConfiguration = safeDIOverrides.child
-		        let child = SendableLazilyInstantiated<Child> {
-		            __safeDI_child(__safeDI_Child_configuration: __safeDI_child____safeDI_Child_configuration)
-		        }
+		        let child = SendableLazilyInstantiated<Child>(__safeDI_child)
 		        return Root(child: child)
 		    }
 		}
@@ -542,14 +536,12 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        @Sendable nonisolated func __safeDI_childBuilder(__safeDI_Child_mockConfiguration: Child.SafeDIMockConfiguration) -> Child {
-		            let grandchild = if let safeDIBuilder = __safeDI_Child_mockConfiguration.grandchild { safeDIBuilder() } else { Grandchild() }
-		            return if let safeDIBuilder = __safeDI_Child_mockConfiguration.safeDIBuilder { safeDIBuilder(grandchild, __safeDI_Child_mockConfiguration.formatter()) } else { Child.customMock(grandchild: grandchild, formatter: __safeDI_Child_mockConfiguration.formatter()) }
+		        let __safeDI_childBuilder__overrides = safeDIOverrides.childBuilder
+		        @Sendable nonisolated func __safeDI_childBuilder() -> Child {
+		            let grandchild = if let safeDIBuilder = __safeDI_childBuilder__overrides.grandchild { safeDIBuilder() } else { Grandchild() }
+		            return if let safeDIBuilder = __safeDI_childBuilder__overrides.safeDIBuilder { safeDIBuilder(grandchild, __safeDI_childBuilder__overrides.formatter()) } else { Child.customMock(grandchild: grandchild, formatter: __safeDI_childBuilder__overrides.formatter()) }
 		        }
-		        let __safeDI_childBuilder____safeDI_Child_mockConfiguration: Child.SafeDIMockConfiguration = safeDIOverrides.childBuilder
-		        let childBuilder = SendableInstantiator<Child> {
-		            __safeDI_childBuilder(__safeDI_Child_mockConfiguration: __safeDI_childBuilder____safeDI_Child_mockConfiguration)
-		        }
+		        let childBuilder = SendableInstantiator<Child>(__safeDI_childBuilder)
 		        return Root(childBuilder: childBuilder)
 		    }
 		}
@@ -716,13 +708,11 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_childBuilder(__safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
-		            let grandchild = if let safeDIBuilder = __safeDI_Child_configuration.grandchild { safeDIBuilder() } else { Grandchild() }
-		            return if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(grandchild, __safeDI_Child_configuration.formatter) } else { Child(grandchild: grandchild, formatter: __safeDI_Child_configuration.formatter) }
+		        func __safeDI_childBuilder() -> Child {
+		            let grandchild = if let safeDIBuilder = safeDIOverrides.childBuilder.grandchild { safeDIBuilder() } else { Grandchild() }
+		            return if let safeDIBuilder = safeDIOverrides.childBuilder.safeDIBuilder { safeDIBuilder(grandchild, safeDIOverrides.childBuilder.formatter) } else { Child(grandchild: grandchild, formatter: safeDIOverrides.childBuilder.formatter) }
 		        }
-		        let childBuilder = Instantiator<Child> {
-		            __safeDI_childBuilder(__safeDI_Child_configuration: safeDIOverrides.childBuilder)
-		        }
+		        let childBuilder = Instantiator<Child>(__safeDI_childBuilder)
 		        return Root(childBuilder: childBuilder)
 		    }
 		}
@@ -866,22 +856,16 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		        formatter: Formatter = Formatter(),
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> A {
-		        @Sendable nonisolated func __safeDI_bBuilder(__safeDI_B_configuration: B.SafeDIMockConfiguration) -> B {
-		            let aBuilder = SendableInstantiator<A> {
-		                __safeDI_aBuilder(__safeDI_A_configuration: A.SafeDIMockConfiguration(), __safeDI_B_configuration_nearest: __safeDI_B_configuration)
+		        let __safeDI_bBuilder__overrides = safeDIOverrides.bBuilder
+		        @Sendable nonisolated func __safeDI_bBuilder() -> B {
+		            @Sendable nonisolated func __safeDI_aBuilder() -> A {
+		                let bBuilder = SendableInstantiator<B>(__safeDI_bBuilder)
+		                return A(bBuilder: bBuilder, formatter: A.SafeDIMockConfiguration().formatter())
 		            }
-		            return if let safeDIBuilder = __safeDI_B_configuration.safeDIBuilder { safeDIBuilder(aBuilder) } else { B(aBuilder: aBuilder) }
+		            let aBuilder = SendableInstantiator<A>(__safeDI_aBuilder)
+		            return if let safeDIBuilder = __safeDI_bBuilder__overrides.safeDIBuilder { safeDIBuilder(aBuilder) } else { B(aBuilder: aBuilder) }
 		        }
-		        @Sendable nonisolated func __safeDI_aBuilder(__safeDI_A_configuration: A.SafeDIMockConfiguration, __safeDI_B_configuration_nearest: B.SafeDIMockConfiguration?) -> A {
-		            let bBuilder = SendableInstantiator<B> {
-		                __safeDI_bBuilder(__safeDI_B_configuration: __safeDI_B_configuration_nearest ?? B.SafeDIMockConfiguration())
-		            }
-		            return if let safeDIBuilder = __safeDI_A_configuration.safeDIBuilder { safeDIBuilder(bBuilder, __safeDI_A_configuration.formatter()) } else { A(bBuilder: bBuilder, formatter: __safeDI_A_configuration.formatter()) }
-		        }
-		        let __safeDI_bBuilder____safeDI_B_configuration: B.SafeDIMockConfiguration = safeDIOverrides.bBuilder
-		        let bBuilder = SendableInstantiator<B> {
-		            __safeDI_bBuilder(__safeDI_B_configuration: __safeDI_bBuilder____safeDI_B_configuration)
-		        }
+		        let bBuilder = SendableInstantiator<B>(__safeDI_bBuilder)
 		        return A(bBuilder: bBuilder, formatter: formatter)
 		    }
 		}
@@ -964,22 +948,16 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> B {
-		        @Sendable nonisolated func __safeDI_aBuilder(__safeDI_A_configuration: A.SafeDIMockConfiguration) -> A {
-		            let bBuilder = SendableInstantiator<B> {
-		                __safeDI_bBuilder(__safeDI_B_configuration: __safeDI_A_configuration.bBuilder, __safeDI_A_configuration_nearest: __safeDI_A_configuration)
+		        let __safeDI_aBuilder__overrides = safeDIOverrides.aBuilder
+		        @Sendable nonisolated func __safeDI_aBuilder() -> A {
+		            @Sendable nonisolated func __safeDI_bBuilder() -> B {
+		                let aBuilder = SendableInstantiator<A>(__safeDI_aBuilder)
+		                return if let safeDIBuilder = __safeDI_aBuilder__overrides.bBuilder.safeDIBuilder { safeDIBuilder(aBuilder) } else { B(aBuilder: aBuilder) }
 		            }
-		            return if let safeDIBuilder = __safeDI_A_configuration.safeDIBuilder { safeDIBuilder(bBuilder, __safeDI_A_configuration.formatter()) } else { A(bBuilder: bBuilder, formatter: __safeDI_A_configuration.formatter()) }
+		            let bBuilder = SendableInstantiator<B>(__safeDI_bBuilder)
+		            return if let safeDIBuilder = __safeDI_aBuilder__overrides.safeDIBuilder { safeDIBuilder(bBuilder, __safeDI_aBuilder__overrides.formatter()) } else { A(bBuilder: bBuilder, formatter: __safeDI_aBuilder__overrides.formatter()) }
 		        }
-		        @Sendable nonisolated func __safeDI_bBuilder(__safeDI_B_configuration: B.SafeDIMockConfiguration, __safeDI_A_configuration_nearest: A.SafeDIMockConfiguration?) -> B {
-		            let aBuilder = SendableInstantiator<A> {
-		                __safeDI_aBuilder(__safeDI_A_configuration: __safeDI_A_configuration_nearest ?? A.SafeDIMockConfiguration())
-		            }
-		            return if let safeDIBuilder = __safeDI_B_configuration.safeDIBuilder { safeDIBuilder(aBuilder) } else { B(aBuilder: aBuilder) }
-		        }
-		        let __safeDI_aBuilder____safeDI_A_configuration: A.SafeDIMockConfiguration = safeDIOverrides.aBuilder
-		        let aBuilder = SendableInstantiator<A> {
-		            __safeDI_aBuilder(__safeDI_A_configuration: __safeDI_aBuilder____safeDI_A_configuration)
-		        }
+		        let aBuilder = SendableInstantiator<A>(__safeDI_aBuilder)
 		        return B(aBuilder: aBuilder)
 		    }
 		}
@@ -1091,13 +1069,11 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        @Sendable nonisolated func __safeDI_childBuilder(__safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
-		            if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(__safeDI_Child_configuration.onTap()) } else { Child(onTap: __safeDI_Child_configuration.onTap()) }
+		        let __safeDI_childBuilder__overrides = safeDIOverrides.childBuilder
+		        @Sendable nonisolated func __safeDI_childBuilder() -> Child {
+		            if let safeDIBuilder = __safeDI_childBuilder__overrides.safeDIBuilder { safeDIBuilder(__safeDI_childBuilder__overrides.onTap()) } else { Child(onTap: __safeDI_childBuilder__overrides.onTap()) }
 		        }
-		        let __safeDI_childBuilder____safeDI_Child_configuration: Child.SafeDIMockConfiguration = safeDIOverrides.childBuilder
-		        let childBuilder = SendableInstantiator<Child> {
-		            __safeDI_childBuilder(__safeDI_Child_configuration: __safeDI_childBuilder____safeDI_Child_configuration)
-		        }
+		        let childBuilder = SendableInstantiator<Child>(__safeDI_childBuilder)
 		        return Root(childBuilder: childBuilder)
 		    }
 		}
@@ -1242,13 +1218,11 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        @Sendable nonisolated func __safeDI_childBuilder(__safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
-		            if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(__safeDI_Child_configuration.onSend(), __safeDI_Child_configuration.onHandle(), __safeDI_Child_configuration.onPress(), __safeDI_Child_configuration.onText(), __safeDI_Child_configuration.onMain()) } else { Child(onSend: __safeDI_Child_configuration.onSend(), onHandle: __safeDI_Child_configuration.onHandle(), onPress: __safeDI_Child_configuration.onPress(), onText: __safeDI_Child_configuration.onText(), onMain: __safeDI_Child_configuration.onMain()) }
+		        let __safeDI_childBuilder__overrides = safeDIOverrides.childBuilder
+		        @Sendable nonisolated func __safeDI_childBuilder() -> Child {
+		            if let safeDIBuilder = __safeDI_childBuilder__overrides.safeDIBuilder { safeDIBuilder(__safeDI_childBuilder__overrides.onSend(), __safeDI_childBuilder__overrides.onHandle(), __safeDI_childBuilder__overrides.onPress(), __safeDI_childBuilder__overrides.onText(), __safeDI_childBuilder__overrides.onMain()) } else { Child(onSend: __safeDI_childBuilder__overrides.onSend(), onHandle: __safeDI_childBuilder__overrides.onHandle(), onPress: __safeDI_childBuilder__overrides.onPress(), onText: __safeDI_childBuilder__overrides.onText(), onMain: __safeDI_childBuilder__overrides.onMain()) }
 		        }
-		        let __safeDI_childBuilder____safeDI_Child_configuration: Child.SafeDIMockConfiguration = safeDIOverrides.childBuilder
-		        let childBuilder = SendableInstantiator<Child> {
-		            __safeDI_childBuilder(__safeDI_Child_configuration: __safeDI_childBuilder____safeDI_Child_configuration)
-		        }
+		        let childBuilder = SendableInstantiator<Child>(__safeDI_childBuilder)
 		        return Root(childBuilder: childBuilder)
 		    }
 		}
@@ -1417,13 +1391,11 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        @Sendable nonisolated func __safeDI_childBuilder(__safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
-		            if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(__safeDI_Child_configuration.onFinish(), __safeDI_Child_configuration.onSend(), __safeDI_Child_configuration.onMain(), __safeDI_Child_configuration.onText()) } else { Child(onFinish: __safeDI_Child_configuration.onFinish(), onSend: __safeDI_Child_configuration.onSend(), onMain: __safeDI_Child_configuration.onMain(), onText: __safeDI_Child_configuration.onText()) }
+		        let __safeDI_childBuilder__overrides = safeDIOverrides.childBuilder
+		        @Sendable nonisolated func __safeDI_childBuilder() -> Child {
+		            if let safeDIBuilder = __safeDI_childBuilder__overrides.safeDIBuilder { safeDIBuilder(__safeDI_childBuilder__overrides.onFinish(), __safeDI_childBuilder__overrides.onSend(), __safeDI_childBuilder__overrides.onMain(), __safeDI_childBuilder__overrides.onText()) } else { Child(onFinish: __safeDI_childBuilder__overrides.onFinish(), onSend: __safeDI_childBuilder__overrides.onSend(), onMain: __safeDI_childBuilder__overrides.onMain(), onText: __safeDI_childBuilder__overrides.onText()) }
 		        }
-		        let __safeDI_childBuilder____safeDI_Child_configuration: Child.SafeDIMockConfiguration = safeDIOverrides.childBuilder
-		        let childBuilder = SendableInstantiator<Child> {
-		            __safeDI_childBuilder(__safeDI_Child_configuration: __safeDI_childBuilder____safeDI_Child_configuration)
-		        }
+		        let childBuilder = SendableInstantiator<Child>(__safeDI_childBuilder)
 		        return Root(childBuilder: childBuilder)
 		    }
 		}
@@ -1560,14 +1532,12 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let __safeDI_service = service
-		        @Sendable nonisolated func __safeDI_childBuilder(__safeDI_Child_configuration: (@Sendable (Service) -> Child)?) -> Child {
+		        let __safeDI_childBuilder__safeDIBuilder = safeDIOverrides.childBuilder
+		        @Sendable nonisolated func __safeDI_childBuilder() -> Child {
 		            let service = __safeDI_service()
-		            return if let safeDIBuilder = __safeDI_Child_configuration { safeDIBuilder(service) } else { Child(service: service) }
+		            return if let safeDIBuilder = __safeDI_childBuilder__safeDIBuilder { safeDIBuilder(service) } else { Child(service: service) }
 		        }
-		        let __safeDI_childBuilder____safeDI_Child_configuration: (@Sendable (Service) -> Child)? = safeDIOverrides.childBuilder
-		        let childBuilder = SendableInstantiator<Child> {
-		            __safeDI_childBuilder(__safeDI_Child_configuration: __safeDI_childBuilder____safeDI_Child_configuration)
-		        }
+		        let childBuilder = SendableInstantiator<Child>(__safeDI_childBuilder)
 		        return Root(childBuilder: childBuilder)
 		    }
 		}
@@ -1641,14 +1611,12 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let __safeDI_engine = engine
-		        @Sendable nonisolated func __safeDI_childBuilder(__safeDI_Child_configuration: (@Sendable (Engine) -> Child)?) -> Child {
+		        let __safeDI_childBuilder__safeDIBuilder = safeDIOverrides.childBuilder
+		        @Sendable nonisolated func __safeDI_childBuilder() -> Child {
 		            let engine = __safeDI_engine()
-		            return if let safeDIBuilder = __safeDI_Child_configuration { safeDIBuilder(engine) } else { Child(engine: engine) }
+		            return if let safeDIBuilder = __safeDI_childBuilder__safeDIBuilder { safeDIBuilder(engine) } else { Child(engine: engine) }
 		        }
-		        let __safeDI_childBuilder____safeDI_Child_configuration: (@Sendable (Engine) -> Child)? = safeDIOverrides.childBuilder
-		        let childBuilder = SendableInstantiator<Child> {
-		            __safeDI_childBuilder(__safeDI_Child_configuration: __safeDI_childBuilder____safeDI_Child_configuration)
-		        }
+		        let childBuilder = SendableInstantiator<Child>(__safeDI_childBuilder)
 		        return Root(childBuilder: childBuilder)
 		    }
 		}
@@ -1721,14 +1689,12 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let __safeDI_serviceBuilder = serviceBuilder
-		        @Sendable nonisolated func __safeDI_childBuilder(__safeDI_Child_configuration: (@Sendable (ErasedInstantiator<Void, Service>) -> Child)?) -> Child {
+		        let __safeDI_childBuilder__safeDIBuilder = safeDIOverrides.childBuilder
+		        @Sendable nonisolated func __safeDI_childBuilder() -> Child {
 		            let serviceBuilder = __safeDI_serviceBuilder()
-		            return if let safeDIBuilder = __safeDI_Child_configuration { safeDIBuilder(serviceBuilder) } else { Child(serviceBuilder: serviceBuilder) }
+		            return if let safeDIBuilder = __safeDI_childBuilder__safeDIBuilder { safeDIBuilder(serviceBuilder) } else { Child(serviceBuilder: serviceBuilder) }
 		        }
-		        let __safeDI_childBuilder____safeDI_Child_configuration: (@Sendable (ErasedInstantiator<Void, Service>) -> Child)? = safeDIOverrides.childBuilder
-		        let childBuilder = SendableInstantiator<Child> {
-		            __safeDI_childBuilder(__safeDI_Child_configuration: __safeDI_childBuilder____safeDI_Child_configuration)
-		        }
+		        let childBuilder = SendableInstantiator<Child>(__safeDI_childBuilder)
 		        return Root(childBuilder: childBuilder)
 		    }
 		}
@@ -1803,14 +1769,12 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let __safeDI_service = service
-		        @Sendable nonisolated func __safeDI_childBuilder(__safeDI_Child_configuration: (@Sendable (Service) -> ChildProtocol)?) -> ChildProtocol {
+		        let __safeDI_childBuilder__safeDIBuilder = safeDIOverrides.childBuilder
+		        @Sendable nonisolated func __safeDI_childBuilder() -> ChildProtocol {
 		            let service = __safeDI_service()
-		            return if let safeDIBuilder = __safeDI_Child_configuration { safeDIBuilder(service) } else { Child(service: service) }
+		            return if let safeDIBuilder = __safeDI_childBuilder__safeDIBuilder { safeDIBuilder(service) } else { Child(service: service) }
 		        }
-		        let __safeDI_childBuilder____safeDI_Child_configuration: (@Sendable (Service) -> ChildProtocol)? = safeDIOverrides.childBuilder
-		        let childBuilder = SendableErasedInstantiator<Void, ChildProtocol> {
-		            __safeDI_childBuilder(__safeDI_Child_configuration: __safeDI_childBuilder____safeDI_Child_configuration)
-		        }
+		        let childBuilder = SendableErasedInstantiator<Void, ChildProtocol>(__safeDI_childBuilder)
 		        return Root(childBuilder: childBuilder)
 		    }
 		}
@@ -1882,14 +1846,12 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let __safeDI_service = service
-		        @Sendable nonisolated func __safeDI_child(__safeDI_Child_configuration: (@Sendable (Service) -> Child)?) -> Child {
+		        let __safeDI_child__safeDIBuilder = safeDIOverrides.child
+		        @Sendable nonisolated func __safeDI_child() -> Child {
 		            let service = __safeDI_service()
-		            return if let safeDIBuilder = __safeDI_Child_configuration { safeDIBuilder(service) } else { Child(service: service) }
+		            return if let safeDIBuilder = __safeDI_child__safeDIBuilder { safeDIBuilder(service) } else { Child(service: service) }
 		        }
-		        let __safeDI_child____safeDI_Child_configuration: (@Sendable (Service) -> Child)? = safeDIOverrides.child
-		        let child = SendableLazilyInstantiated<Child> {
-		            __safeDI_child(__safeDI_Child_configuration: __safeDI_child____safeDI_Child_configuration)
-		        }
+		        let child = SendableLazilyInstantiated<Child>(__safeDI_child)
 		        return Root(child: child)
 		    }
 		}
@@ -1961,12 +1923,10 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		        service: Service,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_childBuilder(__safeDI_Child_configuration: ((Service) -> Child)?) -> Child {
-		            if let safeDIBuilder = __safeDI_Child_configuration { safeDIBuilder(service) } else { Child(service: service) }
+		        func __safeDI_childBuilder() -> Child {
+		            if let safeDIBuilder = safeDIOverrides.childBuilder { safeDIBuilder(service) } else { Child(service: service) }
 		        }
-		        let childBuilder = Instantiator<Child> {
-		            __safeDI_childBuilder(__safeDI_Child_configuration: safeDIOverrides.childBuilder)
-		        }
+		        let childBuilder = Instantiator<Child>(__safeDI_childBuilder)
 		        return Root(childBuilder: childBuilder)
 		    }
 		}
@@ -2037,12 +1997,10 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		        serviceBuilder: ErasedInstantiator<Void, Service>,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_childBuilder(__safeDI_Child_configuration: ((ErasedInstantiator<Void, Service>) -> Child)?) -> Child {
-		            if let safeDIBuilder = __safeDI_Child_configuration { safeDIBuilder(serviceBuilder) } else { Child(serviceBuilder: serviceBuilder) }
+		        func __safeDI_childBuilder() -> Child {
+		            if let safeDIBuilder = safeDIOverrides.childBuilder { safeDIBuilder(serviceBuilder) } else { Child(serviceBuilder: serviceBuilder) }
 		        }
-		        let childBuilder = Instantiator<Child> {
-		            __safeDI_childBuilder(__safeDI_Child_configuration: safeDIOverrides.childBuilder)
-		        }
+		        let childBuilder = Instantiator<Child>(__safeDI_childBuilder)
 		        return Root(childBuilder: childBuilder)
 		    }
 		}
@@ -2121,14 +2079,12 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		    ) -> Root {
 		        let __safeDI_service = service
 		        let service = __safeDI_service()
-		        @Sendable nonisolated func __safeDI_childBuilder(__safeDI_Child_configuration: (@Sendable (Service) -> Child)?) -> Child {
+		        let __safeDI_childBuilder__safeDIBuilder = safeDIOverrides.childBuilder
+		        @Sendable nonisolated func __safeDI_childBuilder() -> Child {
 		            let service = __safeDI_service()
-		            return if let safeDIBuilder = __safeDI_Child_configuration { safeDIBuilder(service) } else { Child(service: service) }
+		            return if let safeDIBuilder = __safeDI_childBuilder__safeDIBuilder { safeDIBuilder(service) } else { Child(service: service) }
 		        }
-		        let __safeDI_childBuilder____safeDI_Child_configuration: (@Sendable (Service) -> Child)? = safeDIOverrides.childBuilder
-		        let childBuilder = SendableInstantiator<Child> {
-		            __safeDI_childBuilder(__safeDI_Child_configuration: __safeDI_childBuilder____safeDI_Child_configuration)
-		        }
+		        let childBuilder = SendableInstantiator<Child>(__safeDI_childBuilder)
 		        return Root(service: service, childBuilder: childBuilder)
 		    }
 		}
@@ -2219,19 +2175,17 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let __safeDI_service = service
-		        func __safeDI_sibling(__safeDI_Sibling_configuration: ((Service) -> Sibling)?) -> Sibling {
+		        func __safeDI_sibling() -> Sibling {
 		            let service = __safeDI_service()
-		            return if let safeDIBuilder = __safeDI_Sibling_configuration { safeDIBuilder(service) } else { Sibling(service: service) }
+		            return if let safeDIBuilder = safeDIOverrides.sibling { safeDIBuilder(service) } else { Sibling(service: service) }
 		        }
-		        let sibling: Sibling = __safeDI_sibling(__safeDI_Sibling_configuration: safeDIOverrides.sibling)
-		        @Sendable nonisolated func __safeDI_childBuilder(__safeDI_Child_configuration: (@Sendable (Service) -> Child)?) -> Child {
+		        let sibling: Sibling = __safeDI_sibling()
+		        let __safeDI_childBuilder__safeDIBuilder = safeDIOverrides.childBuilder
+		        @Sendable nonisolated func __safeDI_childBuilder() -> Child {
 		            let service = __safeDI_service()
-		            return if let safeDIBuilder = __safeDI_Child_configuration { safeDIBuilder(service) } else { Child(service: service) }
+		            return if let safeDIBuilder = __safeDI_childBuilder__safeDIBuilder { safeDIBuilder(service) } else { Child(service: service) }
 		        }
-		        let __safeDI_childBuilder____safeDI_Child_configuration: (@Sendable (Service) -> Child)? = safeDIOverrides.childBuilder
-		        let childBuilder = SendableInstantiator<Child> {
-		            __safeDI_childBuilder(__safeDI_Child_configuration: __safeDI_childBuilder____safeDI_Child_configuration)
-		        }
+		        let childBuilder = SendableInstantiator<Child>(__safeDI_childBuilder)
 		        return Root(sibling: sibling, childBuilder: childBuilder)
 		    }
 		}
@@ -2316,21 +2270,17 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let __safeDI_service = service
-		        @Sendable nonisolated func __safeDI_grandchildBuilder(__safeDI_Grandchild_configuration: (@Sendable (Service) -> Grandchild)?) -> Grandchild {
+		        let __safeDI_childBuilder__overrides = safeDIOverrides.childBuilder
+		        @Sendable nonisolated func __safeDI_childBuilder() -> Child {
 		            let service = __safeDI_service()
-		            return if let safeDIBuilder = __safeDI_Grandchild_configuration { safeDIBuilder(service) } else { Grandchild(service: service) }
-		        }
-		        @Sendable nonisolated func __safeDI_childBuilder(__safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
-		            let service = __safeDI_service()
-		            let grandchildBuilder = Instantiator<Grandchild> {
-		                __safeDI_grandchildBuilder(__safeDI_Grandchild_configuration: __safeDI_Child_configuration.grandchildBuilder)
+		            func __safeDI_grandchildBuilder() -> Grandchild {
+		                let service = __safeDI_service()
+		                return if let safeDIBuilder = __safeDI_childBuilder__overrides.grandchildBuilder { safeDIBuilder(service) } else { Grandchild(service: service) }
 		            }
-		            return if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(service, grandchildBuilder) } else { Child(service: service, grandchildBuilder: grandchildBuilder) }
+		            let grandchildBuilder = Instantiator<Grandchild>(__safeDI_grandchildBuilder)
+		            return if let safeDIBuilder = __safeDI_childBuilder__overrides.safeDIBuilder { safeDIBuilder(service, grandchildBuilder) } else { Child(service: service, grandchildBuilder: grandchildBuilder) }
 		        }
-		        let __safeDI_childBuilder____safeDI_Child_configuration: Child.SafeDIMockConfiguration = safeDIOverrides.childBuilder
-		        let childBuilder = SendableInstantiator<Child> {
-		            __safeDI_childBuilder(__safeDI_Child_configuration: __safeDI_childBuilder____safeDI_Child_configuration)
-		        }
+		        let childBuilder = SendableInstantiator<Child>(__safeDI_childBuilder)
 		        return Root(childBuilder: childBuilder)
 		    }
 		}
@@ -2415,15 +2365,13 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let __safeDI_service = service
-		        @Sendable nonisolated func __safeDI_childBuilder(__safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
+		        let __safeDI_childBuilder__overrides = safeDIOverrides.childBuilder
+		        @Sendable nonisolated func __safeDI_childBuilder() -> Child {
 		            let service = __safeDI_service()
-		            let grandchild = if let safeDIBuilder = __safeDI_Child_configuration.grandchild { safeDIBuilder(service) } else { Grandchild(service: service) }
-		            return if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(service, grandchild) } else { Child(service: service, grandchild: grandchild) }
+		            let grandchild = if let safeDIBuilder = __safeDI_childBuilder__overrides.grandchild { safeDIBuilder(service) } else { Grandchild(service: service) }
+		            return if let safeDIBuilder = __safeDI_childBuilder__overrides.safeDIBuilder { safeDIBuilder(service, grandchild) } else { Child(service: service, grandchild: grandchild) }
 		        }
-		        let __safeDI_childBuilder____safeDI_Child_configuration: Child.SafeDIMockConfiguration = safeDIOverrides.childBuilder
-		        let childBuilder = SendableInstantiator<Child> {
-		            __safeDI_childBuilder(__safeDI_Child_configuration: __safeDI_childBuilder____safeDI_Child_configuration)
-		        }
+		        let childBuilder = SendableInstantiator<Child>(__safeDI_childBuilder)
 		        return Root(childBuilder: childBuilder)
 		    }
 		}
@@ -2518,14 +2466,12 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let __safeDI_service = service
-		        @Sendable nonisolated func __safeDI_childBuilder(__safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
+		        let __safeDI_childBuilder__overrides = safeDIOverrides.childBuilder
+		        @Sendable nonisolated func __safeDI_childBuilder() -> Child {
 		            let service = __safeDI_service()
-		            return if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(service, __safeDI_Child_configuration.formatter()) } else { Child(service: service, formatter: __safeDI_Child_configuration.formatter()) }
+		            return if let safeDIBuilder = __safeDI_childBuilder__overrides.safeDIBuilder { safeDIBuilder(service, __safeDI_childBuilder__overrides.formatter()) } else { Child(service: service, formatter: __safeDI_childBuilder__overrides.formatter()) }
 		        }
-		        let __safeDI_childBuilder____safeDI_Child_configuration: Child.SafeDIMockConfiguration = safeDIOverrides.childBuilder
-		        let childBuilder = SendableInstantiator<Child> {
-		            __safeDI_childBuilder(__safeDI_Child_configuration: __safeDI_childBuilder____safeDI_Child_configuration)
-		        }
+		        let childBuilder = SendableInstantiator<Child>(__safeDI_childBuilder)
 		        return Root(childBuilder: childBuilder)
 		    }
 		}

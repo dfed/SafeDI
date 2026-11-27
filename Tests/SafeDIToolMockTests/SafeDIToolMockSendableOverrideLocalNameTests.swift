@@ -87,19 +87,17 @@ struct SafeDIToolMockSendableOverrideLocalNameTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        @Sendable nonisolated func __safeDI_header(__safeDI_Header_configuration: Header.SafeDIMockConfiguration) -> Header {
-		            let leaf = if let safeDIBuilder = __safeDI_Header_configuration.leaf { safeDIBuilder() } else { Leaf() }
-		            return if let safeDIBuilder = __safeDI_Header_configuration.safeDIBuilder { safeDIBuilder(leaf) } else { Header(leaf: leaf) }
+		        let __safeDI_screenBuilder__overrides = safeDIOverrides.screenBuilder
+		        @Sendable nonisolated func __safeDI_screenBuilder() -> Screen {
+		            func __safeDI_header() -> Header {
+		                let leaf = if let safeDIBuilder = __safeDI_screenBuilder__overrides.header.leaf { safeDIBuilder() } else { Leaf() }
+		                return if let safeDIBuilder = __safeDI_screenBuilder__overrides.header.safeDIBuilder { safeDIBuilder(leaf) } else { Header(leaf: leaf) }
+		            }
+		            let header: Header = __safeDI_header()
+		            let header_leaf = if let safeDIBuilder = __safeDI_screenBuilder__overrides.header_leaf { safeDIBuilder() } else { Leaf() }
+		            return if let safeDIBuilder = __safeDI_screenBuilder__overrides.safeDIBuilder { safeDIBuilder(header, header_leaf) } else { Screen(header: header, header_leaf: header_leaf) }
 		        }
-		        @Sendable nonisolated func __safeDI_screenBuilder(__safeDI_Screen_configuration: Screen.SafeDIMockConfiguration) -> Screen {
-		            let header: Header = __safeDI_header(__safeDI_Header_configuration: __safeDI_Screen_configuration.header)
-		            let header_leaf = if let safeDIBuilder = __safeDI_Screen_configuration.header_leaf { safeDIBuilder() } else { Leaf() }
-		            return if let safeDIBuilder = __safeDI_Screen_configuration.safeDIBuilder { safeDIBuilder(header, header_leaf) } else { Screen(header: header, header_leaf: header_leaf) }
-		        }
-		        let __safeDI_screenBuilder____safeDI_Screen_configuration: Screen.SafeDIMockConfiguration = safeDIOverrides.screenBuilder
-		        let screenBuilder = SendableInstantiator<Screen> {
-		            __safeDI_screenBuilder(__safeDI_Screen_configuration: __safeDI_screenBuilder____safeDI_Screen_configuration)
-		        }
+		        let screenBuilder = SendableInstantiator<Screen>(__safeDI_screenBuilder)
 		        return Root(screenBuilder: screenBuilder)
 		    }
 		}
@@ -176,27 +174,21 @@ struct SafeDIToolMockSendableOverrideLocalNameTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        @Sendable nonisolated func __safeDI_screenBuilder(__safeDI_Screen_configuration: Screen.SafeDIMockConfiguration) -> Screen {
-		            let leaf = if let safeDIBuilder = __safeDI_Screen_configuration.leaf { safeDIBuilder() } else { Leaf() }
-		            return if let safeDIBuilder = __safeDI_Screen_configuration.safeDIBuilder { safeDIBuilder(leaf) } else { Screen(leaf: leaf) }
+		        let __safeDI_screenBuilder__overrides = safeDIOverrides.screenBuilder
+		        @Sendable nonisolated func __safeDI_screenBuilder() -> Screen {
+		            let leaf = if let safeDIBuilder = __safeDI_screenBuilder__overrides.leaf { safeDIBuilder() } else { Leaf() }
+		            return if let safeDIBuilder = __safeDI_screenBuilder__overrides.safeDIBuilder { safeDIBuilder(leaf) } else { Screen(leaf: leaf) }
 		        }
-		        let __safeDI_screenBuilder____safeDI_Screen_configuration: Screen.SafeDIMockConfiguration = safeDIOverrides.screenBuilder
-		        let screenBuilder = SendableInstantiator<Screen> {
-		            __safeDI_screenBuilder(__safeDI_Screen_configuration: __safeDI_screenBuilder____safeDI_Screen_configuration)
+		        let screenBuilder = SendableInstantiator<Screen>(__safeDI_screenBuilder)
+		        let __safeDI_screenBuilder__safeDIBuilder__safeDIBuilder = safeDIOverrides.screenBuilder__safeDIBuilder
+		        @Sendable nonisolated func __safeDI_screenBuilder__safeDIBuilder() -> Leaf {
+		            if let safeDIBuilder = __safeDI_screenBuilder__safeDIBuilder__safeDIBuilder { safeDIBuilder() } else { Leaf() }
 		        }
-		        @Sendable nonisolated func __safeDI_screenBuilder__safeDIBuilder(__safeDI_Leaf_configuration: (@Sendable () -> Leaf)?) -> Leaf {
-		            if let safeDIBuilder = __safeDI_Leaf_configuration { safeDIBuilder() } else { Leaf() }
+		        let screenBuilder__safeDIBuilder = SendableInstantiator<Leaf>(__safeDI_screenBuilder__safeDIBuilder)
+		        func __safeDI_screenBuilder__screenBuilder_leaf_safeDIBuilder() -> Leaf {
+		            if let safeDIBuilder = safeDIOverrides.screenBuilder__screenBuilder_leaf_safeDIBuilder { safeDIBuilder() } else { Leaf() }
 		        }
-		        let __safeDI_screenBuilder__safeDIBuilder____safeDI_Leaf_configuration: (@Sendable () -> Leaf)? = safeDIOverrides.screenBuilder__safeDIBuilder
-		        let screenBuilder__safeDIBuilder = SendableInstantiator<Leaf> {
-		            __safeDI_screenBuilder__safeDIBuilder(__safeDI_Leaf_configuration: __safeDI_screenBuilder__safeDIBuilder____safeDI_Leaf_configuration)
-		        }
-		        func __safeDI_screenBuilder__screenBuilder_leaf_safeDIBuilder(__safeDI_Leaf_configuration: (() -> Leaf)?) -> Leaf {
-		            if let safeDIBuilder = __safeDI_Leaf_configuration { safeDIBuilder() } else { Leaf() }
-		        }
-		        let screenBuilder__screenBuilder_leaf_safeDIBuilder = Instantiator<Leaf> {
-		            __safeDI_screenBuilder__screenBuilder_leaf_safeDIBuilder(__safeDI_Leaf_configuration: safeDIOverrides.screenBuilder__screenBuilder_leaf_safeDIBuilder)
-		        }
+		        let screenBuilder__screenBuilder_leaf_safeDIBuilder = Instantiator<Leaf>(__safeDI_screenBuilder__screenBuilder_leaf_safeDIBuilder)
 		        return Root(screenBuilder: screenBuilder, screenBuilder__safeDIBuilder: screenBuilder__safeDIBuilder, screenBuilder__screenBuilder_leaf_safeDIBuilder: screenBuilder__screenBuilder_leaf_safeDIBuilder)
 		    }
 		}
@@ -272,24 +264,20 @@ struct SafeDIToolMockSendableOverrideLocalNameTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        @Sendable nonisolated func __safeDI_header(__safeDI_Header_configuration: Header.SafeDIMockConfiguration) -> Header {
-		            let leaf = if let safeDIBuilder = __safeDI_Header_configuration.leaf { safeDIBuilder() } else { Leaf() }
-		            let screenBuilder__screenBuilder_header_safeDIBuilder = Instantiator<Leaf> {
-		                __safeDI_screenBuilder__screenBuilder_header_safeDIBuilder(__safeDI_Leaf_configuration: __safeDI_Header_configuration.screenBuilder__screenBuilder_header_safeDIBuilder)
+		        let __safeDI_screenBuilder__overrides = safeDIOverrides.screenBuilder
+		        @Sendable nonisolated func __safeDI_screenBuilder() -> Screen {
+		            func __safeDI_header() -> Header {
+		                let leaf = if let safeDIBuilder = __safeDI_screenBuilder__overrides.header.leaf { safeDIBuilder() } else { Leaf() }
+		                func __safeDI_screenBuilder__screenBuilder_header_safeDIBuilder() -> Leaf {
+		                    if let safeDIBuilder = __safeDI_screenBuilder__overrides.header.screenBuilder__screenBuilder_header_safeDIBuilder { safeDIBuilder() } else { Leaf() }
+		                }
+		                let screenBuilder__screenBuilder_header_safeDIBuilder = Instantiator<Leaf>(__safeDI_screenBuilder__screenBuilder_header_safeDIBuilder)
+		                return if let safeDIBuilder = __safeDI_screenBuilder__overrides.header.safeDIBuilder { safeDIBuilder(leaf, screenBuilder__screenBuilder_header_safeDIBuilder) } else { Header(leaf: leaf, screenBuilder__screenBuilder_header_safeDIBuilder: screenBuilder__screenBuilder_header_safeDIBuilder) }
 		            }
-		            return if let safeDIBuilder = __safeDI_Header_configuration.safeDIBuilder { safeDIBuilder(leaf, screenBuilder__screenBuilder_header_safeDIBuilder) } else { Header(leaf: leaf, screenBuilder__screenBuilder_header_safeDIBuilder: screenBuilder__screenBuilder_header_safeDIBuilder) }
+		            let header: Header = __safeDI_header()
+		            return if let safeDIBuilder = __safeDI_screenBuilder__overrides.safeDIBuilder { safeDIBuilder(header) } else { Screen(header: header) }
 		        }
-		        @Sendable nonisolated func __safeDI_screenBuilder__screenBuilder_header_safeDIBuilder(__safeDI_Leaf_configuration: (@Sendable () -> Leaf)?) -> Leaf {
-		            if let safeDIBuilder = __safeDI_Leaf_configuration { safeDIBuilder() } else { Leaf() }
-		        }
-		        @Sendable nonisolated func __safeDI_screenBuilder(__safeDI_Screen_configuration: Screen.SafeDIMockConfiguration) -> Screen {
-		            let header: Header = __safeDI_header(__safeDI_Header_configuration: __safeDI_Screen_configuration.header)
-		            return if let safeDIBuilder = __safeDI_Screen_configuration.safeDIBuilder { safeDIBuilder(header) } else { Screen(header: header) }
-		        }
-		        let __safeDI_screenBuilder____safeDI_Screen_configuration: Screen.SafeDIMockConfiguration = safeDIOverrides.screenBuilder
-		        let screenBuilder = SendableInstantiator<Screen> {
-		            __safeDI_screenBuilder(__safeDI_Screen_configuration: __safeDI_screenBuilder____safeDI_Screen_configuration)
-		        }
+		        let screenBuilder = SendableInstantiator<Screen>(__safeDI_screenBuilder)
 		        return Root(screenBuilder: screenBuilder)
 		    }
 		}
@@ -356,15 +344,13 @@ struct SafeDIToolMockSendableOverrideLocalNameTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let __safeDI_screenBuilder__screenBuilder_leaf_safeDIBuilder = screenBuilder__screenBuilder_leaf_safeDIBuilder
-		        @Sendable nonisolated func __safeDI_screenBuilder(__safeDI_Screen_configuration: Screen.SafeDIMockConfiguration) -> Screen {
+		        let __safeDI_screenBuilder__overrides = safeDIOverrides.screenBuilder
+		        @Sendable nonisolated func __safeDI_screenBuilder() -> Screen {
 		            let screenBuilder__screenBuilder_leaf_safeDIBuilder = __safeDI_screenBuilder__screenBuilder_leaf_safeDIBuilder()
-		            let leaf = if let safeDIBuilder = __safeDI_Screen_configuration.leaf { safeDIBuilder() } else { Leaf() }
-		            return if let safeDIBuilder = __safeDI_Screen_configuration.safeDIBuilder { safeDIBuilder(leaf, screenBuilder__screenBuilder_leaf_safeDIBuilder) } else { Screen(leaf: leaf, screenBuilder__screenBuilder_leaf_safeDIBuilder: screenBuilder__screenBuilder_leaf_safeDIBuilder) }
+		            let leaf = if let safeDIBuilder = __safeDI_screenBuilder__overrides.leaf { safeDIBuilder() } else { Leaf() }
+		            return if let safeDIBuilder = __safeDI_screenBuilder__overrides.safeDIBuilder { safeDIBuilder(leaf, screenBuilder__screenBuilder_leaf_safeDIBuilder) } else { Screen(leaf: leaf, screenBuilder__screenBuilder_leaf_safeDIBuilder: screenBuilder__screenBuilder_leaf_safeDIBuilder) }
 		        }
-		        let __safeDI_screenBuilder____safeDI_Screen_configuration: Screen.SafeDIMockConfiguration = safeDIOverrides.screenBuilder
-		        let screenBuilder = SendableInstantiator<Screen> {
-		            __safeDI_screenBuilder(__safeDI_Screen_configuration: __safeDI_screenBuilder____safeDI_Screen_configuration)
-		        }
+		        let screenBuilder = SendableInstantiator<Screen>(__safeDI_screenBuilder)
 		        return Root(screenBuilder: screenBuilder)
 		    }
 		}

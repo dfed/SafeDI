@@ -162,8 +162,8 @@ struct SafeDIToolCallingMockInstantiatedOnlyIfAvailableTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Home {
 		        let __safeDI_analyticsOptionalBuilder = analyticsOptionalBuilder
+		        _ = Screen.__safeDI_Screen_mock_619EB7E40DC508C0.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        func __safeDI_screen() -> Screen {
-		            _ = Screen.__safeDI_Screen_mock_619EB7E40DC508C0.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            let analyticsOptionalBuilder: () -> (any Analytics)? = __safeDI_analyticsOptionalBuilder
 		            return Screen.__safeDI_mock(analyticsOptionalBuilder: .init(__safeDI_noScope: analyticsOptionalBuilder), safeDIOverrides: safeDIOverrides.screen)
 		        }
@@ -394,7 +394,8 @@ struct SafeDIToolCallingMockInstantiatedOnlyIfAvailableTests: ~Copyable {
 		        analyticsOptionalSendableBuilder: (@Sendable () -> (any Analytics)?)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Home {
-		        @Sendable nonisolated func __safeDI_screenBuilder(safeDIBuilder: (@Sendable () -> Screen.SafeDIOverrides)?) -> Screen {
+		        let __safeDI_screenBuilder__safeDIBuilder = safeDIOverrides.screenBuilder
+		        @Sendable nonisolated func __safeDI_screenBuilder() -> Screen {
 		            func __safeDI_analyticsOptionalBuilder_Screen() -> Screen.SafeDIMockScope_AnalyticsOptional.__safeDI_Builder<(any Analytics)?> {
 		                .init(middle: { _ in __safeDI_analyticsOptionalBuilder_Screen_Middle_Scope() })
 		            }
@@ -408,12 +409,9 @@ struct SafeDIToolCallingMockInstantiatedOnlyIfAvailableTests: ~Copyable {
 		                })
 		            }
 		            _ = Screen.__safeDI_Screen_mock_619EB7E40DC508C0.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Screen.__safeDI_mock(analyticsOptionalBuilder: analyticsOptionalSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_analyticsOptionalBuilder_Screen(), safeDIOverrides: safeDIBuilder?() ?? .init())
+		            return Screen.__safeDI_mock(analyticsOptionalBuilder: analyticsOptionalSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_analyticsOptionalBuilder_Screen(), safeDIOverrides: __safeDI_screenBuilder__safeDIBuilder?() ?? .init())
 		        }
-		        let __safeDI_screenBuilder__safeDIBuilder: (@Sendable () -> Screen.SafeDIOverrides)? = safeDIOverrides.screenBuilder
-		        let screenBuilder = SendableInstantiator<Screen> {
-		            __safeDI_screenBuilder(safeDIBuilder: __safeDI_screenBuilder__safeDIBuilder)
-		        }
+		        let screenBuilder = SendableInstantiator<Screen>(__safeDI_screenBuilder)
 		        return Home(screenBuilder: screenBuilder)
 		    }
 		}
@@ -773,28 +771,28 @@ struct SafeDIToolCallingMockInstantiatedOnlyIfAvailableTests: ~Copyable {
 		        analyticsOptionalBuilder: (() -> (any Analytics)?)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Home {
-		        func __safeDI_screen(config: Config) -> Screen {
-		            func __safeDI_analyticsOptionalBuilder_Screen() -> Screen.SafeDIMockScope_AnalyticsOptional.__safeDI_Builder<(any Analytics)?> {
-		                .init(middle: { _ in __safeDI_analyticsOptionalBuilder_Screen_Middle_Scope() })
+		        func __safeDI_shell() -> Shell {
+		            let config = if let safeDIBuilder = safeDIOverrides.shell.config { safeDIBuilder() } else { Config() }
+		            func __safeDI_screen() -> Screen {
+		                func __safeDI_analyticsOptionalBuilder_Screen() -> Screen.SafeDIMockScope_AnalyticsOptional.__safeDI_Builder<(any Analytics)?> {
+		                    .init(middle: { _ in __safeDI_analyticsOptionalBuilder_Screen_Middle_Scope() })
+		                }
+		                func __safeDI_analyticsOptionalBuilder_Screen_Middle_Scope() -> Screen.SafeDIMockScope_AnalyticsOptional.Middle_Scope.__safeDI_Builder<(any Analytics)?> {
+		                    .init(child: { _ in __safeDI_analyticsOptionalBuilder_Screen_Child_Scope() })
+		                }
+		                func __safeDI_analyticsOptionalBuilder_Screen_Child_Scope() -> Screen.SafeDIMockScope_AnalyticsOptional.Child_Scope.__safeDI_Builder<(any Analytics)?> {
+		                    .init(analytics: { _ in
+		                        let analytics: (any Analytics)? = AnalyticsImpl(config: config)
+		                        return analytics
+		                    })
+		                }
+		                _ = Screen.__safeDI_Screen_mock_619EB7E40DC508C0.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		                return Screen.__safeDI_mock(analyticsOptionalBuilder: analyticsOptionalBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_analyticsOptionalBuilder_Screen(), safeDIOverrides: safeDIOverrides.shell.screen)
 		            }
-		            func __safeDI_analyticsOptionalBuilder_Screen_Middle_Scope() -> Screen.SafeDIMockScope_AnalyticsOptional.Middle_Scope.__safeDI_Builder<(any Analytics)?> {
-		                .init(child: { _ in __safeDI_analyticsOptionalBuilder_Screen_Child_Scope() })
-		            }
-		            func __safeDI_analyticsOptionalBuilder_Screen_Child_Scope() -> Screen.SafeDIMockScope_AnalyticsOptional.Child_Scope.__safeDI_Builder<(any Analytics)?> {
-		                .init(analytics: { _ in
-		                    let analytics: (any Analytics)? = AnalyticsImpl(config: config)
-		                    return analytics
-		                })
-		            }
-		            _ = Screen.__safeDI_Screen_mock_619EB7E40DC508C0.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Screen.__safeDI_mock(analyticsOptionalBuilder: analyticsOptionalBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_analyticsOptionalBuilder_Screen(), safeDIOverrides: safeDIOverrides.shell.screen)
+		            let screen: Screen = __safeDI_screen()
+		            return if let safeDIBuilder = safeDIOverrides.shell.safeDIBuilder { safeDIBuilder(config, screen) } else { Shell(config: config, screen: screen) }
 		        }
-		        func __safeDI_shell(__safeDI_Shell_configuration: Shell.SafeDIMockConfiguration) -> Shell {
-		            let config = if let safeDIBuilder = __safeDI_Shell_configuration.config { safeDIBuilder() } else { Config() }
-		            let screen: Screen = __safeDI_screen(config: config)
-		            return if let safeDIBuilder = __safeDI_Shell_configuration.safeDIBuilder { safeDIBuilder(config, screen) } else { Shell(config: config, screen: screen) }
-		        }
-		        let shell: Shell = __safeDI_shell(__safeDI_Shell_configuration: safeDIOverrides.shell)
+		        let shell: Shell = __safeDI_shell()
 		        return Home(shell: shell)
 		    }
 		}

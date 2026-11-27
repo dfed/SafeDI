@@ -159,12 +159,12 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			extension Flow {
 			    /// Code you write and code SafeDI generates can both call this initializer.
 			    public init() {
-			        func __safeDI_aBuilder() -> A {
+			        @inline(never) func __safeDI_aBuilder() -> A {
 			            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
 			            return A(bBuilder: bBuilder)
 			        }
 			        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-			        func __safeDI_bBuilder() -> B {
+			        @inline(never) func __safeDI_bBuilder() -> B {
 			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
 			            return B(aBuilder: aBuilder)
 			        }
@@ -204,7 +204,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		extension Flow {
 		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public init() {
-		        func __safeDI_t4Builder() -> T4 {
+		        @inline(never) func __safeDI_t4Builder() -> T4 {
 		            let t4Builder = Instantiator<T4>(__safeDI_t4Builder)
 		            #sourceLocation(file: "\(fixtures["T4.swift"])", line: 8)
 		            let t4BuilderAlias: Instantiator<T4> = t4Builder
@@ -212,8 +212,8 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		            return T4(t4BuilderAlias: t4BuilderAlias, t2Builder: nil)
 		        }
 		        let t4Builder = Instantiator<T4>(__safeDI_t4Builder)
-		        func __safeDI_t3() -> T3 {
-		            func __safeDI_t4() -> T4 {
+		        @inline(never) func __safeDI_t3() -> T3 {
+		            @inline(never) func __safeDI_t4() -> T4 {
 		                #sourceLocation(file: "\(fixtures["T4.swift"])", line: 8)
 		                let t4BuilderAlias: Instantiator<T4> = t4Builder
 		                #sourceLocation()
@@ -223,7 +223,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		            return T3(t4: t4)
 		        }
 		        let t3: T3 = __safeDI_t3()
-		        func __safeDI_t2Builder() -> T2 {
+		        @inline(never) func __safeDI_t2Builder() -> T2 {
 		            T2(t3: t3)
 		        }
 		        let t2Builder = Instantiator<T2>(__safeDI_t2Builder)
@@ -373,13 +373,13 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		extension Flow {
 		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public init() {
-		        func __safeDI_t4Builder() -> T4 {
+		        @inline(never) func __safeDI_t4Builder() -> T4 {
 		            let t4Builder = Instantiator<T4>(__safeDI_t4Builder)
 		            return T4(t4Builder: t4Builder, t2Builder: nil)
 		        }
 		        let t4Builder = Instantiator<T4>(__safeDI_t4Builder)
 		        let t3 = T3(t4Builder: t4Builder)
-		        func __safeDI_t2Builder() -> T2 {
+		        @inline(never) func __safeDI_t2Builder() -> T2 {
 		            T2(t3: t3)
 		        }
 		        let t2Builder = Instantiator<T2>(__safeDI_t2Builder)
@@ -401,13 +401,13 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		extension Flow {
 		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public init() {
-		        func __safeDI_t4Builder() -> T4 {
+		        @inline(never) func __safeDI_t4Builder() -> T4 {
 		            let t4Builder = Instantiator<T4>(__safeDI_t4Builder)
 		            return T4(t4Builder: t4Builder, t2Builder: nil)
 		        }
 		        let t4Builder = Instantiator<T4>(__safeDI_t4Builder)
 		        let t3 = T3(t4Builder: t4Builder)
-		        func __safeDI_t2Builder() -> T2 {
+		        @inline(never) func __safeDI_t2Builder() -> T2 {
 		            T2(t3: t3)
 		        }
 		        let t2Builder = Instantiator<T2>(__safeDI_t2Builder)
@@ -527,11 +527,11 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			    public init(__safeDI_screenBuilder_received: @autoclosure @escaping () -> Thing) {
 			        let screenBuilder_received = LazilyInstantiated<Thing>(__safeDI_screenBuilder_received)
 			        let session = Session()
-			        func __safeDI_screenBuilder(session: Session) -> Screen {
+			        @inline(never) func __safeDI_screenBuilder(session: Session) -> Screen {
 			            let screenBuilder = Instantiator<Screen> {
 			                __safeDI_screenBuilder(session: session)
 			            }
-			            func __safeDI_stepBuilder() -> Step {
+			            @inline(never) func __safeDI_stepBuilder() -> Step {
 			                let session = Session()
 			                let screenBuilder = Instantiator<Screen> {
 			                    __safeDI_screenBuilder(session: session)
@@ -542,7 +542,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            let detail = Detail(screenBuilder: screenBuilder)
 			            return Screen(session: session, stepBuilder: stepBuilder, detail: detail)
 			        }
-			        func __safeDI_screenBuilder_received_() -> Screen {
+			        @inline(never) func __safeDI_screenBuilder_received_() -> Screen {
 			            __safeDI_screenBuilder(session: session)
 			        }
 			        let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder_received_)
@@ -630,13 +630,13 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_widgetBuilder: __safeDI_WidgetCarrier<any Widget>) {
 			        let __safeDI_widgetBuilder_aBuilder = __safeDI_widgetBuilder.aBuilder
-			        func __safeDI_aBuilder() -> A {
+			        @inline(never) func __safeDI_aBuilder() -> A {
 			            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
 			            let widget: any Widget = __safeDI_widgetBuilder_aBuilder.widget(bBuilder)
 			            return A(bBuilder: bBuilder, widget: widget)
 			        }
 			        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-			        func __safeDI_bBuilder() -> B {
+			        @inline(never) func __safeDI_bBuilder() -> B {
 			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
 			            return B(aBuilder: aBuilder)
 			        }
@@ -731,14 +731,14 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_widgetSendableBuilder: __safeDI_WidgetSendableCarrier<any Widget>) {
-			        @Sendable nonisolated func __safeDI_aBuilder() -> A {
+			        @inline(never) @Sendable nonisolated func __safeDI_aBuilder() -> A {
 			            let __safeDI_widgetSendableBuilder_aBuilder = __safeDI_widgetSendableBuilder.aBuilder()
 			            let bBuilder = SendableInstantiator<B>(__safeDI_bBuilder)
 			            let widget: any Widget = __safeDI_widgetSendableBuilder_aBuilder.widget(bBuilder)
 			            return A(bBuilder: bBuilder, widget: widget)
 			        }
 			        let aBuilder = SendableInstantiator<A>(__safeDI_aBuilder)
-			        @Sendable nonisolated func __safeDI_bBuilder() -> B {
+			        @inline(never) @Sendable nonisolated func __safeDI_bBuilder() -> B {
 			            let aBuilder = SendableInstantiator<A>(__safeDI_aBuilder)
 			            return B(aBuilder: aBuilder)
 			        }
@@ -864,18 +864,18 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_widgetBuilder: __safeDI_WidgetCarrier<any Widget>) {
 			        let __safeDI_widgetBuilder_xBuilder = __safeDI_widgetBuilder.xBuilder
-			        func __safeDI_xBuilder() -> X {
+			        @inline(never) func __safeDI_xBuilder() -> X {
 			            let __safeDI_widgetBuilder_p = __safeDI_widgetBuilder_xBuilder.p
-			            func __safeDI_p() -> P {
+			            @inline(never) func __safeDI_p() -> P {
 			                let __safeDI_widgetBuilder_aBuilder = __safeDI_widgetBuilder_p.aBuilder
-			                func __safeDI_aBuilder() -> A {
+			                @inline(never) func __safeDI_aBuilder() -> A {
 			                    let bBuilder = Instantiator<B>(__safeDI_bBuilder)
 			                    let xBuilder = Instantiator<X>(__safeDI_xBuilder)
 			                    let widget: any Widget = __safeDI_widgetBuilder_aBuilder.widget(bBuilder, xBuilder)
 			                    return A(bBuilder: bBuilder, widget: widget, xBuilder: xBuilder)
 			                }
 			                let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-			                func __safeDI_bBuilder() -> B {
+			                @inline(never) func __safeDI_bBuilder() -> B {
 			                    let aBuilder = Instantiator<A>(__safeDI_aBuilder)
 			                    return B(aBuilder: aBuilder)
 			                }
@@ -1006,7 +1006,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            __safeDI_widgetBuilder_aBuilder: __safeDI_widgetBuilder.aBuilder,
 			            __safeDI_widgetBuilder_bBuilder: __safeDI_widgetBuilder.bBuilder
 			        )
-			        func __safeDI_aBuilder() -> A {
+			        @inline(never) func __safeDI_aBuilder() -> A {
 			            let __safeDI_widgetBuilder_aBuilder = __safeDI_aBuilder_loopLevels.__safeDI_widgetBuilder_aBuilder
 			            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
 			            let mark = Mark()
@@ -1014,7 +1014,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            return A(mark: mark, bBuilder: bBuilder, widget: widget)
 			        }
 			        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-			        func __safeDI_bBuilder() -> B {
+			        @inline(never) func __safeDI_bBuilder() -> B {
 			            let __safeDI_widgetBuilder_bBuilder = __safeDI_aBuilder_loopLevels.__safeDI_widgetBuilder_bBuilder
 			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
 			            let mark = Mark()
@@ -1138,13 +1138,13 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_widgetBuilder: __safeDI_WidgetCarrier<any Widget>) {
 			        let __safeDI_widgetBuilder_bBuilder = __safeDI_widgetBuilder.bBuilder
-			        func __safeDI_aBuilder() -> A {
+			        @inline(never) func __safeDI_aBuilder() -> A {
 			            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
 			            let mark = Mark()
 			            return A(mark: mark, bBuilder: bBuilder)
 			        }
 			        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-			        func __safeDI_bBuilder() -> B {
+			        @inline(never) func __safeDI_bBuilder() -> B {
 			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
 			            let mark = Mark()
 			            let widget: any Widget = __safeDI_widgetBuilder_bBuilder.widget(aBuilder, mark)
@@ -1253,14 +1253,14 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            __safeDI_widgetBuilder_aBuilder: __safeDI_widgetBuilder.aBuilder,
 			            __safeDI_widgetBuilder_bBuilder: __safeDI_widgetBuilder.bBuilder
 			        )
-			        func __safeDI_aBuilder() -> A {
+			        @inline(never) func __safeDI_aBuilder() -> A {
 			            let __safeDI_widgetBuilder_aBuilder = __safeDI_aBuilder_loopLevels.__safeDI_widgetBuilder_aBuilder
 			            let cBuilder = Instantiator<C> {
 			                __safeDI_cBuilder(id: $0)
 			            }
 			            let mark = Mark()
 			            let __safeDI_widgetBuilder_leaf = __safeDI_widgetBuilder_aBuilder.leaf(cBuilder, mark)
-			            func __safeDI_leaf() -> Leaf {
+			            @inline(never) func __safeDI_leaf() -> Leaf {
 			                let widget: any Widget = __safeDI_widgetBuilder_leaf.widget()
 			                return Leaf(cBuilder: cBuilder, widget: widget)
 			            }
@@ -1269,14 +1269,14 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            return A(mark: mark, leaf: leaf, widget: widget)
 			        }
 			        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-			        func __safeDI_bBuilder() -> B {
+			        @inline(never) func __safeDI_bBuilder() -> B {
 			            let __safeDI_widgetBuilder_bBuilder = __safeDI_aBuilder_loopLevels.__safeDI_widgetBuilder_bBuilder
 			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
 			            let cBuilder = Instantiator<C> {
 			                __safeDI_cBuilder(id: $0)
 			            }
 			            let __safeDI_widgetBuilder_leaf = __safeDI_widgetBuilder_bBuilder.leaf(aBuilder, cBuilder)
-			            func __safeDI_leaf() -> Leaf {
+			            @inline(never) func __safeDI_leaf() -> Leaf {
 			                let widget: any Widget = __safeDI_widgetBuilder_leaf.widget()
 			                return Leaf(cBuilder: cBuilder, widget: widget)
 			            }
@@ -1284,7 +1284,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            return B(aBuilder: aBuilder, leaf: leaf)
 			        }
 			        let bBuilder = Instantiator<B>(__safeDI_bBuilder)
-			        func __safeDI_cBuilder(id: Int) -> C {
+			        @inline(never) func __safeDI_cBuilder(id: Int) -> C {
 			            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
 			            return C(bBuilder: bBuilder, id: id)
 			        }
@@ -1292,7 +1292,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            __safeDI_cBuilder(id: $0)
 			        }
 			        let __safeDI_widgetBuilder_leaf = __safeDI_widgetBuilder.leaf(aBuilder, bBuilder, cBuilder)
-			        func __safeDI_leaf() -> Leaf {
+			        @inline(never) func __safeDI_leaf() -> Leaf {
 			            let widget: any Widget = __safeDI_widgetBuilder_leaf.widget()
 			            return Leaf(cBuilder: cBuilder, widget: widget)
 			        }
@@ -1394,16 +1394,16 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_bBuilder bBuilder: Instantiator<B>?, __safeDI_widgetBuilder: __safeDI_WidgetCarrier<any Widget>) {
 			        let __safeDI_widgetBuilder_flow = __safeDI_widgetBuilder.flow(bBuilder)
-			        func __safeDI_flow() -> Flow {
+			        @inline(never) func __safeDI_flow() -> Flow {
 			            let __safeDI_widgetBuilder_aBuilder = __safeDI_widgetBuilder_flow.aBuilder
-			            func __safeDI_aBuilder() -> A {
+			            @inline(never) func __safeDI_aBuilder() -> A {
 			                let bBuilder = Instantiator<B>(__safeDI_bBuilder)
 			                let mark = Mark()
 			                let widget: any Widget = __safeDI_widgetBuilder_aBuilder.widget(bBuilder, mark)
 			                return A(mark: mark, bBuilder: bBuilder, widget: widget)
 			            }
 			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-			            func __safeDI_bBuilder() -> B {
+			            @inline(never) func __safeDI_bBuilder() -> B {
 			                let aBuilder = Instantiator<A>(__safeDI_aBuilder)
 			                return B(aBuilder: aBuilder)
 			            }
@@ -1412,7 +1412,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			        }
 			        let flow: Flow = __safeDI_flow()
 			        let __safeDI_widgetBuilder_a = __safeDI_widgetBuilder.a(bBuilder, flow)
-			        func __safeDI_a() -> A {
+			        @inline(never) func __safeDI_a() -> A {
 			            let mark = Mark()
 			            let widget: any Widget = __safeDI_widgetBuilder_a.widget(bBuilder, mark)
 			            return A(mark: mark, bBuilder: bBuilder, widget: widget)
@@ -2558,33 +2558,22 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		lines += screens.map { "            let screen\($0)Builder: Screen\($0).SafeDIMockConfiguration" }
 		lines += ["        }", "    }", "", "    static func mock(", "        safeDIOverrides: SafeDIOverrides = .init()", "    ) -> Root {"]
 		lines.append("        let service = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { Service() }")
-		// A loop's members declare every function first, then every wrapper, and read their overrides through the mock's
-		// overrides. A screen outside the loop is laid out by type: its function is handed its configuration.
+		// A loop's members declare every function first, then every wrapper.
 		for unit in units {
-			let isLoop = unit.count > 1
 			for screen in unit {
 				let opened = edges[screen].map { "screen\($0)Builder" }
-				let configuration = isLoop ? "safeDIOverrides.screen\(screen)Builder" : "__safeDI_Screen\(screen)_configuration"
-				lines.append("        func __safeDI_screen\(screen)Builder(id: Int\(isLoop ? "" : ", __safeDI_Screen\(screen)_configuration: Screen\(screen).SafeDIMockConfiguration")) -> Screen {")
+				lines.append("        func __safeDI_screen\(screen)Builder(id: Int) -> Screen {")
 				for openedScreen in screensRebound(by: screen) {
 					lines += wrapper(of: openedScreen, indentation: "            ")
 				}
-				lines.append("            let model\(screen) = if let safeDIBuilder = \(configuration).model\(screen) { safeDIBuilder(id, service) } else { Model\(screen)(id: id, service: service) }")
+				lines.append("            let model\(screen) = if let safeDIBuilder = safeDIOverrides.screen\(screen)Builder.model\(screen) { safeDIBuilder(id, service) } else { Model\(screen)(id: id, service: service) }")
 				let builderArguments = (["id", "service", "model\(screen)"] + opened).joined(separator: ", ")
 				let initializerArguments = (["id: id", "service: service", "model\(screen): model\(screen)"] + opened.map { "\($0): \($0)" }).joined(separator: ", ")
-				lines.append("            return if let safeDIBuilder = \(configuration).safeDIBuilder { safeDIBuilder(\(builderArguments)) } else { Screen\(screen)(\(initializerArguments)) }")
+				lines.append("            return if let safeDIBuilder = safeDIOverrides.screen\(screen)Builder.safeDIBuilder { safeDIBuilder(\(builderArguments)) } else { Screen\(screen)(\(initializerArguments)) }")
 				lines.append("        }")
 			}
 			for screen in unit {
-				if isLoop {
-					lines += wrapper(of: screen, indentation: "        ")
-				} else {
-					lines += [
-						"        let screen\(screen)Builder = ErasedInstantiator<Int, Screen> {",
-						"            __safeDI_screen\(screen)Builder(id: $0, __safeDI_Screen\(screen)_configuration: safeDIOverrides.screen\(screen)Builder)",
-						"        }",
-					]
-				}
+				lines += wrapper(of: screen, indentation: "        ")
 			}
 		}
 		lines += ["        return Root(\(rootArguments))", "    }", "}", "#endif", "", "#if DEBUG"]

@@ -178,14 +178,16 @@ struct SafeDIToolKeywordLabelTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_default(__safeDI_Thing_configuration: Thing.SafeDIMockConfiguration) -> Thing {
-		            let leaf = if let safeDIBuilder = __safeDI_Thing_configuration.leaf { safeDIBuilder() } else { Leaf() }
-		            return if let safeDIBuilder = __safeDI_Thing_configuration.safeDIBuilder { safeDIBuilder(leaf) } else { Thing(leaf: leaf) }
+		        func __safeDI_default() -> Thing {
+		            let leaf = if let safeDIBuilder = safeDIOverrides.`default`.leaf { safeDIBuilder() } else { Leaf() }
+		            return if let safeDIBuilder = safeDIOverrides.`default`.safeDIBuilder { safeDIBuilder(leaf) } else { Thing(leaf: leaf) }
 		        }
-		        let `default`: Thing = __safeDI_default(__safeDI_Thing_configuration: safeDIOverrides.`default`)
-		        let `class` = Instantiator<Thing> {
-		            __safeDI_default(__safeDI_Thing_configuration: safeDIOverrides.`class`)
+		        let `default`: Thing = __safeDI_default()
+		        func __safeDI_class() -> Thing {
+		            let leaf = if let safeDIBuilder = safeDIOverrides.`class`.leaf { safeDIBuilder() } else { Leaf() }
+		            return if let safeDIBuilder = safeDIOverrides.`class`.safeDIBuilder { safeDIBuilder(leaf) } else { Thing(leaf: leaf) }
 		        }
+		        let `class` = Instantiator<Thing>(__safeDI_class)
 		        return Root(default: `default`, class: `class`)
 		    }
 		}
@@ -330,11 +332,11 @@ struct SafeDIToolKeywordLabelTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let `default` = if let safeDIBuilder = safeDIOverrides.`default` { safeDIBuilder() } else { Leaf() }
-		        func __safeDI_thing(__safeDI_Thing_configuration: Thing.SafeDIMockConfiguration) -> Thing {
-		            let `class` = if let safeDIBuilder = __safeDI_Thing_configuration.`class` { safeDIBuilder() } else { Leaf() }
-		            return if let safeDIBuilder = __safeDI_Thing_configuration.safeDIBuilder { safeDIBuilder(`class`) } else { Thing(class: `class`) }
+		        func __safeDI_thing() -> Thing {
+		            let `class` = if let safeDIBuilder = safeDIOverrides.thing.`class` { safeDIBuilder() } else { Leaf() }
+		            return if let safeDIBuilder = safeDIOverrides.thing.safeDIBuilder { safeDIBuilder(`class`) } else { Thing(class: `class`) }
 		        }
-		        let thing: Thing = __safeDI_thing(__safeDI_Thing_configuration: safeDIOverrides.thing)
+		        let thing: Thing = __safeDI_thing()
 		        return Root(default: `default`, thing: thing)
 		    }
 		}
@@ -697,10 +699,10 @@ struct SafeDIToolKeywordLabelTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_child(__safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
-		            if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(__safeDI_Child_configuration.`default`) } else { Child(default: __safeDI_Child_configuration.`default`) }
+		        func __safeDI_child() -> Child {
+		            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(safeDIOverrides.child.`default`) } else { Child(default: safeDIOverrides.child.`default`) }
 		        }
-		        let child: Child = __safeDI_child(__safeDI_Child_configuration: safeDIOverrides.child)
+		        let child: Child = __safeDI_child()
 		        return Root(child: child)
 		    }
 		}
@@ -857,11 +859,11 @@ struct SafeDIToolKeywordLabelTests: ~Copyable {
 		    ) -> Root {
 		        let `inout` = if let safeDIBuilder = safeDIOverrides.`inout` { safeDIBuilder() } else { Leaf() }
 		        let `_` = if let safeDIBuilder = safeDIOverrides.`_` { safeDIBuilder() } else { Leaf() }
-		        func `__safeDI_my leaf`(__safeDI_Thing_configuration: Thing.SafeDIMockConfiguration) -> Thing {
-		            let leaf = if let safeDIBuilder = __safeDI_Thing_configuration.leaf { safeDIBuilder() } else { Leaf() }
-		            return if let safeDIBuilder = __safeDI_Thing_configuration.safeDIBuilder { safeDIBuilder(leaf) } else { Thing(leaf: leaf) }
+		        func `__safeDI_my leaf`() -> Thing {
+		            let leaf = if let safeDIBuilder = safeDIOverrides.`my leaf`.leaf { safeDIBuilder() } else { Leaf() }
+		            return if let safeDIBuilder = safeDIOverrides.`my leaf`.safeDIBuilder { safeDIBuilder(leaf) } else { Thing(leaf: leaf) }
 		        }
-		        let `my leaf`: Thing = `__safeDI_my leaf`(__safeDI_Thing_configuration: safeDIOverrides.`my leaf`)
+		        let `my leaf`: Thing = `__safeDI_my leaf`()
 		        return Root(`inout`: `inout`, `_`: `_`, `my leaf`: `my leaf`)
 		    }
 		}
@@ -1223,14 +1225,12 @@ struct SafeDIToolKeywordLabelTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        @Sendable nonisolated func __safeDI_thingBuilder(__safeDI_Thing_configuration: Thing.SafeDIMockConfiguration) -> Thing {
-		            let `default` = if let safeDIBuilder = __safeDI_Thing_configuration.`default` { safeDIBuilder() } else { Leaf() }
-		            return if let safeDIBuilder = __safeDI_Thing_configuration.safeDIBuilder { safeDIBuilder(`default`) } else { Thing(default: `default`) }
+		        let __safeDI_thingBuilder__overrides = safeDIOverrides.thingBuilder
+		        @Sendable nonisolated func __safeDI_thingBuilder() -> Thing {
+		            let `default` = if let safeDIBuilder = __safeDI_thingBuilder__overrides.`default` { safeDIBuilder() } else { Leaf() }
+		            return if let safeDIBuilder = __safeDI_thingBuilder__overrides.safeDIBuilder { safeDIBuilder(`default`) } else { Thing(default: `default`) }
 		        }
-		        let __safeDI_thingBuilder____safeDI_Thing_configuration: Thing.SafeDIMockConfiguration = safeDIOverrides.thingBuilder
-		        let thingBuilder = SendableInstantiator<Thing> {
-		            __safeDI_thingBuilder(__safeDI_Thing_configuration: __safeDI_thingBuilder____safeDI_Thing_configuration)
-		        }
+		        let thingBuilder = SendableInstantiator<Thing>(__safeDI_thingBuilder)
 		        return Root(thingBuilder: thingBuilder)
 		    }
 		}

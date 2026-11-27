@@ -19,8 +19,8 @@
 // SOFTWARE.
 
 import Foundation
+import SafeDICore
 import Testing
-@testable import SafeDICore
 @testable import SafeDIToolLibrary
 @testable import SafeDIToolTestSupport
 
@@ -214,16 +214,13 @@ struct SafeDIToolDeepTreeTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesMock_whenTypeWhoseMockIsGeneratedStartsAChainOfFifteenHundredFeaturesEachInstantiatingTheNext() async throws {
-		// The walk's body, which the type key's layout replaces by default; its laid-out twin is below.
-		let output = try await MockLowering.$laysOutWithTypeKey.withValue(false) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: Self.featureChain(depth: 1_500, rootAttribute: "@Instantiable(generateMock: true)", featuresAreConstant: false),
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-				// The time the compiler takes for nested builder functions grows exponentially with their depth, so the chain of twenty below is compiled instead.
-				skipCompileVerification: true,
-			)
-		}
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: Self.featureChain(depth: 1_500, rootAttribute: "@Instantiable(generateMock: true)", featuresAreConstant: false),
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			// The time the compiler takes for nested builder functions grows exponentially with their depth, so the chain of twenty below is compiled instead.
+			skipCompileVerification: true,
+		)
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == Self.instantiatorChainMock(depth: 1_500))
 		#expect(output.mockConfigurationFile == Self.instantiatorChainMockConfiguration(depth: 1_500))
@@ -231,70 +228,12 @@ struct SafeDIToolDeepTreeTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_writesMockLaidOutByTypeKey_whenTypeWhoseMockIsGeneratedStartsAChainOfFifteenHundredFeaturesEachInstantiatingTheNext() async throws {
-		let depth = 1_500
-		// The type key's layout records each place with the code of the places its function's body builds, so a place's
-		// record holds the chain beneath it, which releasing the plan must not release one nested level at a time.
-		let output = try await MockLowering.$laysOutWithTypeKey.withValue(true) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: Self.featureChain(depth: depth, rootAttribute: "@Instantiable(generateMock: true)", featuresAreConstant: false),
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-				// The time the compiler takes for nested builder functions grows exponentially with their depth, so the chain of twenty below is compiled instead.
-				skipCompileVerification: true,
-			)
-		}
-
-		#expect(output.mockFiles["Root+SafeDIMock.swift"] == Self.laidOutInstantiatorChainMock(depth: depth))
-		#expect(output.mockConfigurationFile == Self.instantiatorChainMockConfiguration(depth: depth))
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_writesMockLaidOutByTypeKey_whenSeamWhoseMockIsGeneratedStartsAChainOfFifteenHundredFeaturesEachInstantiatingTheNext() async throws {
-		let depth = 1_500
-		// Each place's override is a member of its parent's, so the path the layout reads a place's override through is as
-		// deep as the chain, which releasing the records must not release one nested level at a time.
-		let output = try await MockLowering.$laysOutWithTypeKey.withValue(true) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: Self.featureChain(depth: depth, rootAttribute: "@Instantiable(generateDependencyTree: true, generateMock: true)", featuresAreConstant: false),
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-				// The time the compiler takes for nested builder functions grows exponentially with their depth, so the chain of twenty above is compiled instead.
-				skipCompileVerification: true,
-			)
-		}
-
-		#expect(output.mockFiles["Root+SafeDIMock.swift"] == Self.laidOutInstantiatorChainMock(depth: depth))
-		#expect(output.mockConfigurationFile == Self.instantiatorChainMockConfiguration(depth: depth))
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_writesMockLaidOutByTypeKeyThatCompiles_whenTypeWhoseMockIsGeneratedStartsAChainOfTwentyFeaturesEachInstantiatingTheNext() async throws {
-		let output = try await MockLowering.$laysOutWithTypeKey.withValue(true) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: Self.featureChain(depth: 20, rootAttribute: "@Instantiable(generateMock: true)", featuresAreConstant: false),
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
-
-		#expect(output.mockFiles["Root+SafeDIMock.swift"] == Self.laidOutInstantiatorChainMock(depth: 20))
-		#expect(output.mockConfigurationFile == Self.instantiatorChainMockConfiguration(depth: 20))
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesMockThatCompiles_whenTypeWhoseMockIsGeneratedStartsAChainOfTwentyFeaturesEachInstantiatingTheNext() async throws {
-		// The walk's body, which the type key's layout replaces by default; its laid-out twin is above.
-		let output = try await MockLowering.$laysOutWithTypeKey.withValue(false) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: Self.featureChain(depth: 20, rootAttribute: "@Instantiable(generateMock: true)", featuresAreConstant: false),
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: Self.featureChain(depth: 20, rootAttribute: "@Instantiable(generateMock: true)", featuresAreConstant: false),
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == Self.instantiatorChainMock(depth: 20))
 		#expect(output.mockConfigurationFile == Self.instantiatorChainMockConfiguration(depth: 20))
@@ -617,43 +556,6 @@ struct SafeDIToolDeepTreeTests: ~Copyable {
 			}
 		}
 		lines += [
-			"        return Root(service: service, feature0: feature0)",
-			"    }",
-			"}",
-			"#endif",
-		]
-		return fileHeader + lines.joined(separator: "\n")
-	}
-
-	/// The mock of `Root` above a chain of `depth` features instantiated through an `Instantiator`, as the type key lays it
-	/// out: one builder function per feature at the mock's top, each taking its feature's configuration, the deepest
-	/// feature's override closure for the last, and `feature0`'s last.
-	private static func laidOutInstantiatorChainMock(depth: Int) -> String {
-		var lines = instantiatorChainMock(depth: depth).dropFirst(fileHeader.count).split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-		guard let serviceLine = lines.firstIndex(where: { $0.hasPrefix("        let service = ") }) else { return "" }
-		lines.removeSubrange((serviceLine + 1)...)
-		for index in Array(1..<depth) + [0] {
-			if index + 1 < depth {
-				lines += [
-					"        func __safeDI_feature\(index)(__safeDI_Feature\(index)_configuration: Feature\(index).SafeDIMockConfiguration) -> Feature\(index) {",
-					"            let feature\(index + 1) = Instantiator<Feature\(index + 1)> {",
-					"                __safeDI_feature\(index + 1)(__safeDI_Feature\(index + 1)_configuration: __safeDI_Feature\(index)_configuration.feature\(index + 1))",
-					"            }",
-					"            return if let safeDIBuilder = __safeDI_Feature\(index)_configuration.safeDIBuilder { safeDIBuilder(service, feature\(index + 1)) } else { Feature\(index)(service: service, feature\(index + 1): feature\(index + 1)) }",
-					"        }",
-				]
-			} else {
-				lines += [
-					"        func __safeDI_feature\(index)(__safeDI_Feature\(index)_configuration: ((Service) -> Feature\(index))?) -> Feature\(index) {",
-					"            if let safeDIBuilder = __safeDI_Feature\(index)_configuration { safeDIBuilder(service) } else { Feature\(index)(service: service) }",
-					"        }",
-				]
-			}
-		}
-		lines += [
-			"        let feature0 = Instantiator<Feature0> {",
-			"            __safeDI_feature0(__safeDI_Feature0_configuration: safeDIOverrides.feature0)",
-			"        }",
 			"        return Root(service: service, feature0: feature0)",
 			"    }",
 			"}",

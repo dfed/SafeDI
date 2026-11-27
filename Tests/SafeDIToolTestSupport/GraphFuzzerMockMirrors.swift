@@ -2155,8 +2155,9 @@ enum GraphFuzzerMockOverrides {
 	}
 
 	/// The type each field of `fields` builds beside the mocked type, by its concrete type's name: the configured type
-	/// of a configuration field, or the return type of a builder closure field, with an erased type `AnyT<n>` named by
-	/// the concrete type it erases, `T<n>`, as every erasure of the base corpus does.
+	/// of a configuration field, or the return type of a builder closure field, with each erased type of the base corpus
+	/// named by the concrete type it erases: `AnyT<n>` and `AnyTupleChild` by `T<n>` and `TupleChild`, and
+	/// `AnyIfAvailableToken` by `IfAvailableToken`.
 	static func builtTypeNames(of fields: [(label: String, type: String)], typeNamePrefix: String) -> [String] {
 		fields.compactMap { field -> String? in
 			let builtType: String
@@ -2167,7 +2168,9 @@ enum GraphFuzzerMockOverrides {
 			} else {
 				return nil
 			}
-			return builtType.replacingOccurrences(of: "\(typeNamePrefix)AnyT", with: "\(typeNamePrefix)T")
+			return builtType
+				.replacingOccurrences(of: "\(typeNamePrefix)AnyT", with: "\(typeNamePrefix)T")
+				.replacingOccurrences(of: "\(typeNamePrefix)AnyIfAvailableToken", with: "\(typeNamePrefix)IfAvailableToken")
 		}.sorted()
 	}
 
@@ -2256,8 +2259,7 @@ extension GraphFuzzerMockOverrides {
 	/// `contents`, a generated mock file, as the corpus run and the value-oracle run of one graph both generate it: without
 	/// its configuration blocks (`removingConfigurations(from:)`), and reading a configuration's default-valued field as a
 	/// value where a configuration that is `@Sendable`-typed calls its `@Sendable` autoclosure
-	/// (`safeDIOverrides.ext.retryCount()`, or `__safeDI_Ext_configuration.retryCount()` where a function the mock
-	/// shares by type reads its configuration parameter), or through a local a `@Sendable` function's caller reads it into
+	/// (`safeDIOverrides.ext.retryCount()`), or through a local a `@Sendable` function's caller reads it into
 	/// (`let __safeDI_ext__ext_retryCount = safeDIOverrides.ext.retryCount`, then `__safeDI_ext__ext_retryCount()`; base
 	/// corpus seed 1029). A root's mock that builds a type inside a `Sendable` builder makes the type's configuration
 	/// `@Sendable`-typed for every mock, so a drawn mock reads the same default through the autoclosure, and a drawn mock's
@@ -2265,7 +2267,7 @@ extension GraphFuzzerMockOverrides {
 	/// (`ConfigurationStorage`), so the storage is read without its conformance.
 	static func comparableWithAnotherRunsMocks(_ contents: String) -> String {
 		var comparable = removingConfigurations(from: contents)
-			.replacingOccurrences(of: #"((?:safeDIOverrides|__safeDI_[A-Za-z0-9_]+_configuration)(\.[A-Za-z0-9_]+)+)\(\)"#, with: "$1", options: .regularExpression)
+			.replacingOccurrences(of: #"(safeDIOverrides(\.[A-Za-z0-9_]+)+)\(\)"#, with: "$1", options: .regularExpression)
 			.replacingOccurrences(of: "private final class __safeDI_Storage: Sendable {", with: "private final class __safeDI_Storage {")
 		for local in localsReadingOverrides(in: comparable) {
 			comparable = comparable.replacingOccurrences(of: #"\b\#(local)\(\)"#, with: local, options: .regularExpression)

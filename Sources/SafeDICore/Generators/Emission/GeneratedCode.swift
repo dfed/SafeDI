@@ -85,7 +85,7 @@ struct GeneratedCode: Sendable {
 
 	/// A place of the body's walk (`PlacePlan`), whose code is written as it is.
 	static func place(_ plan: PlacePlan) -> GeneratedCode {
-		GeneratedCode(storage: .children(Children(.place(laysOut: TypeKeyLayout.laysOut(placeRecordedAs: plan.record)), [plan.code], record: plan.record)))
+		GeneratedCode(storage: .children(Children(.place(record: plan.record, laysOut: TypeKeyLayout.laysOut(placeRecordedAs: plan.record)), [plan.code])))
 	}
 
 	/// A function the root may declare once at its top, written as the call declares it where the root does not
@@ -120,7 +120,7 @@ struct GeneratedCode: Sendable {
 	/// Whether this level, under the indentations around it, is a place the type key can lay out with every place of its
 	/// tree (`TypeKeyLayout.laysOut(_:)`), which the place records as it is built.
 	var isPlaceTheTypeKeyLaysOut: Bool {
-		guard case let .children(children) = unindented.storage, case let .place(laysOut) = children.kind else { return false }
+		guard case let .children(children) = unindented.storage, case let .place(_, laysOut) = children.kind else { return false }
 		return laysOut
 	}
 
@@ -160,8 +160,8 @@ struct GeneratedCode: Sendable {
 				.lines(children.codes)
 			case let .indented(indentation):
 				.indented(children.codes[0], by: indentation)
-			case .place:
-				.place(PlacePlan(code: children.codes[0], record: children.record))
+			case let .place(record, _):
+				.place(PlacePlan(code: children.codes[0], record: record))
 			case let .rootFunction(record):
 				.rootFunction(record, inPlace: children.codes[0])
 			case .sendableFunction:
@@ -192,25 +192,22 @@ struct GeneratedCode: Sendable {
 		case children(Children)
 	}
 
-	/// The codes a level holds, and a place's record, which their slots hand to `DeferredRelease` when the level is
-	/// released, so that releasing a deep plan nests no release per level. A built place's record holds the code of the
-	/// places its function's body builds (`BuiltPlaceRecord.children`), so a record released within the level's release
-	/// would release the level beneath within it, once per level of a chain.
+	/// The codes a level holds, which its slot hands to `DeferredRelease` when the level is released, so that releasing a
+	/// deep plan nests no release per level.
 	private final class Children: Sendable {
 		enum Kind: Sendable {
 			case sequence
 			case lines
 			case indented(String)
 			/// `laysOut`: whether the type key can lay out every place of the tree beneath, its own included, which the
-			/// places beneath recorded as they were built, so no walk of the tree asks it. The place's record is in the
-			/// level's `recordSlot`.
-			case place(laysOut: Bool)
+			/// places beneath recorded as they were built, so no walk of the tree asks it.
+			case place(record: PlaceRecord?, laysOut: Bool)
 			case rootFunction(RootFunctionRecord)
 			case sendableFunction
 			case omittingRootFunctions(Set<String>)
 		}
 
-		init(_ kind: Kind, _ codes: [GeneratedCode], record: PlaceRecord? = nil) {
+		init(_ kind: Kind, _ codes: [GeneratedCode]) {
 			self.kind = kind
 			holdsRootFunction = switch kind {
 			case .rootFunction:
@@ -219,7 +216,6 @@ struct GeneratedCode: Sendable {
 				codes.contains(where: \.holdsRootFunction)
 			}
 			slot = DeferredReleaseSlot(codes)
-			recordSlot = DeferredReleaseSlot(record.map { [$0] } ?? [])
 		}
 
 		let kind: Kind
@@ -230,13 +226,7 @@ struct GeneratedCode: Sendable {
 			slot.value
 		}
 
-		/// A place's record (`Kind.place`), or `nil` for every other level.
-		var record: PlaceRecord? {
-			recordSlot.value.first
-		}
-
 		private let slot: DeferredReleaseSlot<[GeneratedCode]>
-		private let recordSlot: DeferredReleaseSlot<[PlaceRecord]>
 	}
 
 	private let storage: Storage

@@ -3804,18 +3804,14 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_analytics(__safeDI_Analytics_configuration: (() -> Analytics)?) -> Analytics {
-		            if let safeDIBuilder = __safeDI_Analytics_configuration { safeDIBuilder() } else { Analytics() }
+		        func __safeDI_analytics() -> Analytics {
+		            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        }
-		        let analytics = LazilyInstantiated<Analytics> {
-		            __safeDI_analytics(__safeDI_Analytics_configuration: safeDIOverrides.analytics)
+		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
+		        func __safeDI_settingsBuilder() -> Settings {
+		            if let safeDIBuilder = safeDIOverrides.settingsBuilder { safeDIBuilder(analytics.instance) } else { Settings(analytics: analytics.instance) }
 		        }
-		        func __safeDI_settingsBuilder(__safeDI_Settings_configuration: ((Analytics) -> Settings)?) -> Settings {
-		            if let safeDIBuilder = __safeDI_Settings_configuration { safeDIBuilder(analytics.instance) } else { Settings(analytics: analytics.instance) }
-		        }
-		        let settingsBuilder = Instantiator<Settings> {
-		            __safeDI_settingsBuilder(__safeDI_Settings_configuration: safeDIOverrides.settingsBuilder)
-		        }
+		        let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
 		        let home = if let safeDIBuilder = safeDIOverrides.home { safeDIBuilder(analytics) } else { Home(analytics: analytics) }
 		        return Root(analytics: analytics, settingsBuilder: settingsBuilder, home: home)
 		    }
@@ -3885,12 +3881,10 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Home {
-		        func __safeDI_analytics(__safeDI_Analytics_configuration: (() -> Analytics)?) -> Analytics {
-		            if let safeDIBuilder = __safeDI_Analytics_configuration { safeDIBuilder() } else { Analytics() }
+		        func __safeDI_analytics() -> Analytics {
+		            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        }
-		        let analytics = LazilyInstantiated<Analytics> {
-		            __safeDI_analytics(__safeDI_Analytics_configuration: safeDIOverrides.analytics)
-		        }
+		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
 		        return Home(analytics: analytics)
 		    }
 		}
@@ -3992,12 +3986,10 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        func __safeDI_analytics(__safeDI_Analytics_configuration: (() -> Analytics)?) -> Analytics {
-		            if let safeDIBuilder = __safeDI_Analytics_configuration { safeDIBuilder() } else { Analytics() }
+		        func __safeDI_analytics() -> Analytics {
+		            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        }
-		        let analytics = LazilyInstantiated<Analytics> {
-		            __safeDI_analytics(__safeDI_Analytics_configuration: safeDIOverrides.analytics)
-		        }
+		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
 		        let home = if let safeDIBuilder = safeDIOverrides.home { safeDIBuilder(analytics) } else { Home(analytics: analytics) }
 		        let settings = if let safeDIBuilder = safeDIOverrides.settings { safeDIBuilder(analytics.instance) } else { Settings(analytics: analytics.instance) }
 		        return Screen(home: home, settings: settings)
@@ -4442,12 +4434,10 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        func __safeDI_analytics(__safeDI_Analytics_configuration: (() -> Analytics)?) -> Analytics {
-		            if let safeDIBuilder = __safeDI_Analytics_configuration { safeDIBuilder() } else { Analytics() }
+		        func __safeDI_analytics() -> Analytics {
+		            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        }
-		        let analytics = LazilyInstantiated<Analytics> {
-		            __safeDI_analytics(__safeDI_Analytics_configuration: safeDIOverrides.analytics)
-		        }
+		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
 		        let home = if let safeDIBuilder = safeDIOverrides.home { safeDIBuilder(analytics) } else { Home(analytics: analytics) }
 		        return Screen(analytics: analytics.instance, home: home)
 		    }
@@ -4520,12 +4510,10 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Feature {
-		        func __safeDI_analytics(__safeDI_Analytics_configuration: (() -> Analytics)?) -> Analytics {
-		            if let safeDIBuilder = __safeDI_Analytics_configuration { safeDIBuilder() } else { Analytics() }
+		        func __safeDI_analytics() -> Analytics {
+		            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        }
-		        let analytics = LazilyInstantiated<Analytics> {
-		            __safeDI_analytics(__safeDI_Analytics_configuration: safeDIOverrides.analytics)
-		        }
+		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
 		        #sourceLocation(file: "\(output.fixtures["Feature.swift"])", line: 8)
 		        let eventTracker: EventTracker = analytics.instance
 		        #sourceLocation()
@@ -4600,12 +4588,10 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_analytics(__safeDI_Analytics_configuration: (() -> Analytics)?) -> Analytics {
-		            if let safeDIBuilder = __safeDI_Analytics_configuration { safeDIBuilder() } else { Analytics() }
+		        func __safeDI_analytics() -> Analytics {
+		            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        }
-		        let analytics = LazilyInstantiated<Analytics> {
-		            __safeDI_analytics(__safeDI_Analytics_configuration: safeDIOverrides.analytics)
-		        }
+		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
 		        #sourceLocation(file: "\(output.fixtures["Root.swift"])", line: 8)
 		        let eventTracker: EventTracker = analytics.instance
 		        #sourceLocation()
@@ -4695,12 +4681,10 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        func __safeDI_analytics(__safeDI_Analytics_configuration: (() -> Analytics)?) -> Analytics {
-		            if let safeDIBuilder = __safeDI_Analytics_configuration { safeDIBuilder() } else { Analytics() }
+		        func __safeDI_analytics() -> Analytics {
+		            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        }
-		        let analytics = LazilyInstantiated<Analytics> {
-		            __safeDI_analytics(__safeDI_Analytics_configuration: safeDIOverrides.analytics)
-		        }
+		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
 		        let logger = if let safeDIBuilder = safeDIOverrides.logger { safeDIBuilder(analytics.instance) } else { Logger(analytics: analytics.instance) }
 		        return Screen(analytics: analytics, logger: logger)
 		    }
@@ -4804,12 +4788,10 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        func __safeDI_analytics(__safeDI_Analytics_configuration: (() -> Analytics)?) -> Analytics {
-		            if let safeDIBuilder = __safeDI_Analytics_configuration { safeDIBuilder() } else { Analytics() }
+		        func __safeDI_analytics() -> Analytics {
+		            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        }
-		        let analytics = LazilyInstantiated<Analytics> {
-		            __safeDI_analytics(__safeDI_Analytics_configuration: safeDIOverrides.analytics)
-		        }
+		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
 		        let home = if let safeDIBuilder = safeDIOverrides.home { safeDIBuilder(analytics) } else { Home(analytics: analytics) }
 		        let settings = if let safeDIBuilder = safeDIOverrides.settings { safeDIBuilder(analytics.instance) } else { Settings(analytics: analytics.instance) }
 		        return Screen(home: home, settings: settings)
@@ -4920,19 +4902,17 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let tracker_LazilyInstantiated__Tracker: LazilyInstantiated<Tracker>? = safeDIOverrides.tracker_LazilyInstantiated__Tracker
-		        @Sendable nonisolated func __safeDI_tracker(__safeDI_Tracker_configuration: (@Sendable () -> Tracker)?) -> Tracker {
-		            if let safeDIBuilder = __safeDI_Tracker_configuration { safeDIBuilder() } else { Tracker() }
+		        let __safeDI_tracker__safeDIBuilder = safeDIOverrides.tracker
+		        @Sendable nonisolated func __safeDI_tracker() -> Tracker {
+		            if let safeDIBuilder = __safeDI_tracker__safeDIBuilder { safeDIBuilder() } else { Tracker() }
 		        }
-		        let __safeDI_tracker____safeDI_Tracker_configuration: (@Sendable () -> Tracker)? = safeDIOverrides.tracker
-		        let tracker = SendableLazilyInstantiated<Tracker> {
-		            __safeDI_tracker(__safeDI_Tracker_configuration: __safeDI_tracker____safeDI_Tracker_configuration)
-		        }
+		        let tracker = SendableLazilyInstantiated<Tracker>(__safeDI_tracker)
 		        let home = if let safeDIBuilder = safeDIOverrides.home { safeDIBuilder(tracker) } else { Home(tracker: tracker) }
-		        func __safeDI_settings(__safeDI_Settings_configuration: ((LazilyInstantiated<Tracker>?) -> Settings)?) -> Settings {
+		        func __safeDI_settings() -> Settings {
 		            let tracker: LazilyInstantiated<Tracker>? = tracker_LazilyInstantiated__Tracker
-		            return if let safeDIBuilder = __safeDI_Settings_configuration { safeDIBuilder(tracker) } else { Settings(tracker: tracker) }
+		            return if let safeDIBuilder = safeDIOverrides.settings { safeDIBuilder(tracker) } else { Settings(tracker: tracker) }
 		        }
-		        let settings: Settings = __safeDI_settings(__safeDI_Settings_configuration: safeDIOverrides.settings)
+		        let settings: Settings = __safeDI_settings()
 		        return Screen(home: home, settings: settings)
 		    }
 		}
@@ -5624,12 +5604,10 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Feature {
-		        func __safeDI_analytics(__safeDI_Analytics_configuration: (() -> Analytics)?) -> Analytics {
-		            if let safeDIBuilder = __safeDI_Analytics_configuration { safeDIBuilder() } else { Analytics() }
+		        func __safeDI_analytics() -> Analytics {
+		            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        }
-		        let analytics = LazilyInstantiated<Analytics> {
-		            __safeDI_analytics(__safeDI_Analytics_configuration: safeDIOverrides.analytics)
-		        }
+		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
 		        #sourceLocation(file: "\(output.fixtures["Feature.swift"])", line: 7)
 		        let tracker: LazilyInstantiated<Analytics> = analytics
 		        #sourceLocation()
@@ -5801,12 +5779,10 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        func __safeDI_analytics(__safeDI_Analytics_configuration: (() -> Analytics)?) -> Analytics {
-		            if let safeDIBuilder = __safeDI_Analytics_configuration { safeDIBuilder() } else { Analytics() }
+		        func __safeDI_analytics() -> Analytics {
+		            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        }
-		        let analytics = LazilyInstantiated<Analytics> {
-		            __safeDI_analytics(__safeDI_Analytics_configuration: safeDIOverrides.analytics)
-		        }
+		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
 		        let logger = if let safeDIBuilder = safeDIOverrides.logger { safeDIBuilder(analytics) } else { Logger(analytics: analytics) }
 		        return Screen(analytics: analytics.instance, logger: logger)
 		    }
@@ -6190,18 +6166,16 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_analytics(__safeDI_Analytics_configuration: Analytics.SafeDIMockConfiguration) -> Analytics {
-		            let logger = if let safeDIBuilder = __safeDI_Analytics_configuration.logger { safeDIBuilder(nil) } else { Logger(analytics: nil) }
-		            return if let safeDIBuilder = __safeDI_Analytics_configuration.safeDIBuilder { safeDIBuilder(logger) } else { Analytics(logger: logger) }
+		        func __safeDI_analytics() -> Analytics {
+		            let logger = if let safeDIBuilder = safeDIOverrides.analytics.logger { safeDIBuilder(nil) } else { Logger(analytics: nil) }
+		            return if let safeDIBuilder = safeDIOverrides.analytics.safeDIBuilder { safeDIBuilder(logger) } else { Analytics(logger: logger) }
 		        }
-		        let analytics = LazilyInstantiated<Analytics> {
-		            __safeDI_analytics(__safeDI_Analytics_configuration: safeDIOverrides.analytics)
+		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
+		        func __safeDI_screen() -> Screen {
+		            let logger = if let safeDIBuilder = safeDIOverrides.screen.logger { safeDIBuilder(analytics) } else { Logger(analytics: analytics) }
+		            return if let safeDIBuilder = safeDIOverrides.screen.safeDIBuilder { safeDIBuilder(logger) } else { Screen(logger: logger) }
 		        }
-		        func __safeDI_screen(__safeDI_Screen_configuration: Screen.SafeDIMockConfiguration) -> Screen {
-		            let logger = if let safeDIBuilder = __safeDI_Screen_configuration.logger { safeDIBuilder(analytics) } else { Logger(analytics: analytics) }
-		            return if let safeDIBuilder = __safeDI_Screen_configuration.safeDIBuilder { safeDIBuilder(logger) } else { Screen(logger: logger) }
-		        }
-		        let screen: Screen = __safeDI_screen(__safeDI_Screen_configuration: safeDIOverrides.screen)
+		        let screen: Screen = __safeDI_screen()
 		        return Root(analytics: analytics, screen: screen)
 		    }
 		}
@@ -6302,18 +6276,16 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_analytics(__safeDI_Analytics_configuration: Analytics.SafeDIMockConfiguration) -> Analytics {
-		            let logger = if let safeDIBuilder = __safeDI_Analytics_configuration.logger { safeDIBuilder(nil) } else { Logger(analytics: nil) }
-		            return if let safeDIBuilder = __safeDI_Analytics_configuration.safeDIBuilder { safeDIBuilder(logger) } else { Analytics(logger: logger) }
+		        func __safeDI_analytics() -> Analytics {
+		            let logger = if let safeDIBuilder = safeDIOverrides.analytics.logger { safeDIBuilder(nil) } else { Logger(analytics: nil) }
+		            return if let safeDIBuilder = safeDIOverrides.analytics.safeDIBuilder { safeDIBuilder(logger) } else { Analytics(logger: logger) }
 		        }
-		        let analytics = LazilyInstantiated<Analytics> {
-		            __safeDI_analytics(__safeDI_Analytics_configuration: safeDIOverrides.analytics)
+		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
+		        func __safeDI_screen() -> Screen {
+		            let logger = if let safeDIBuilder = safeDIOverrides.screen.logger { safeDIBuilder(analytics.instance) } else { Logger(analytics: analytics.instance) }
+		            return if let safeDIBuilder = safeDIOverrides.screen.safeDIBuilder { safeDIBuilder(logger) } else { Screen(logger: logger) }
 		        }
-		        func __safeDI_screen(__safeDI_Screen_configuration: Screen.SafeDIMockConfiguration) -> Screen {
-		            let logger = if let safeDIBuilder = __safeDI_Screen_configuration.logger { safeDIBuilder(analytics.instance) } else { Logger(analytics: analytics.instance) }
-		            return if let safeDIBuilder = __safeDI_Screen_configuration.safeDIBuilder { safeDIBuilder(logger) } else { Screen(logger: logger) }
-		        }
-		        let screen: Screen = __safeDI_screen(__safeDI_Screen_configuration: safeDIOverrides.screen)
+		        let screen: Screen = __safeDI_screen()
 		        return Root(analytics: analytics, screen: screen)
 		    }
 		}
@@ -6404,13 +6376,11 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        func __safeDI_analytics(__safeDI_Analytics_configuration: Analytics.SafeDIMockConfiguration) -> Analytics {
-		            let logger = if let safeDIBuilder = __safeDI_Analytics_configuration.logger { safeDIBuilder(nil) } else { Logger(analytics: nil) }
-		            return if let safeDIBuilder = __safeDI_Analytics_configuration.safeDIBuilder { safeDIBuilder(logger) } else { Analytics(logger: logger) }
+		        func __safeDI_analytics() -> Analytics {
+		            let logger = if let safeDIBuilder = safeDIOverrides.analytics.logger { safeDIBuilder(nil) } else { Logger(analytics: nil) }
+		            return if let safeDIBuilder = safeDIOverrides.analytics.safeDIBuilder { safeDIBuilder(logger) } else { Analytics(logger: logger) }
 		        }
-		        let analytics = LazilyInstantiated<Analytics> {
-		            __safeDI_analytics(__safeDI_Analytics_configuration: safeDIOverrides.analytics)
-		        }
+		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
 		        let logger = if let safeDIBuilder = safeDIOverrides.logger { safeDIBuilder(analytics) } else { Logger(analytics: analytics) }
 		        return Screen(analytics: analytics, logger: logger)
 		    }
@@ -6600,12 +6570,12 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let session_lazilyInstantiated = LazilyInstantiated<Session> { session }
-		        func __safeDI_childBuilder(session: LazilyInstantiated<Session>, __safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
-		            let grandchild = if let safeDIBuilder = __safeDI_Child_configuration.grandchild { safeDIBuilder(session) } else { Grandchild(session: session) }
-		            return if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(session, grandchild) } else { Child(session: session, grandchild: grandchild) }
+		        func __safeDI_childBuilder(session: LazilyInstantiated<Session>) -> Child {
+		            let grandchild = if let safeDIBuilder = safeDIOverrides.childBuilder.grandchild { safeDIBuilder(session) } else { Grandchild(session: session) }
+		            return if let safeDIBuilder = safeDIOverrides.childBuilder.safeDIBuilder { safeDIBuilder(session, grandchild) } else { Child(session: session, grandchild: grandchild) }
 		        }
 		        let childBuilder = Instantiator<Child> {
-		            __safeDI_childBuilder(session: $0, __safeDI_Child_configuration: safeDIOverrides.childBuilder)
+		            __safeDI_childBuilder(session: $0)
 		        }
 		        return Root(session: session_lazilyInstantiated, childBuilder: childBuilder)
 		    }
@@ -6695,12 +6665,12 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let session_sendableLazilyInstantiated = SendableLazilyInstantiated<Session> { session }
-		        func __safeDI_childBuilder(session: SendableLazilyInstantiated<Session>, __safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
-		            let grandchild = if let safeDIBuilder = __safeDI_Child_configuration.grandchild { safeDIBuilder(session) } else { Grandchild(session: session) }
-		            return if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(session, grandchild) } else { Child(session: session, grandchild: grandchild) }
+		        func __safeDI_childBuilder(session: SendableLazilyInstantiated<Session>) -> Child {
+		            let grandchild = if let safeDIBuilder = safeDIOverrides.childBuilder.grandchild { safeDIBuilder(session) } else { Grandchild(session: session) }
+		            return if let safeDIBuilder = safeDIOverrides.childBuilder.safeDIBuilder { safeDIBuilder(session, grandchild) } else { Child(session: session, grandchild: grandchild) }
 		        }
 		        let childBuilder = Instantiator<Child> {
-		            __safeDI_childBuilder(session: $0, __safeDI_Child_configuration: safeDIOverrides.childBuilder)
+		            __safeDI_childBuilder(session: $0)
 		        }
 		        return Root(session: session_sendableLazilyInstantiated, childBuilder: childBuilder)
 		    }
@@ -6796,17 +6766,15 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let session_lazilyInstantiated = LazilyInstantiated<Session> { session }
-		        func __safeDI_session(__safeDI_SessionImplementation_configuration: (() -> Session)?) -> Session {
-		            if let safeDIBuilder = __safeDI_SessionImplementation_configuration { safeDIBuilder() } else { SessionImplementation() }
-		        }
-		        func __safeDI_child(__safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
-		            let session = LazilyInstantiated<Session> {
-		                __safeDI_session(__safeDI_SessionImplementation_configuration: __safeDI_Child_configuration.session)
+		        func __safeDI_child() -> Child {
+		            func __safeDI_session() -> Session {
+		                if let safeDIBuilder = safeDIOverrides.child.session { safeDIBuilder() } else { SessionImplementation() }
 		            }
-		            let grandchild = if let safeDIBuilder = __safeDI_Child_configuration.grandchild { safeDIBuilder(session) } else { Grandchild(session: session) }
-		            return if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(session, grandchild) } else { Child(session: session, grandchild: grandchild) }
+		            let session = LazilyInstantiated<Session>(__safeDI_session)
+		            let grandchild = if let safeDIBuilder = safeDIOverrides.child.grandchild { safeDIBuilder(session) } else { Grandchild(session: session) }
+		            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(session, grandchild) } else { Child(session: session, grandchild: grandchild) }
 		        }
-		        let child: Child = __safeDI_child(__safeDI_Child_configuration: safeDIOverrides.child)
+		        let child: Child = __safeDI_child()
 		        return Root(session: session_lazilyInstantiated, child: child)
 		    }
 		}
@@ -6994,18 +6962,18 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let session_lazilyInstantiated = LazilyInstantiated<Session> { session }
-		        func __safeDI_grandchild(session: LazilyInstantiated<Session>, __safeDI_Grandchild_configuration: ((LazilyInstantiated<Session>) -> Grandchild)?) -> Grandchild {
-		            #sourceLocation(file: "\(output.fixtures["Grandchild.swift"])", line: 7)
-		            let renamedSession: LazilyInstantiated<Session> = session
-		            #sourceLocation()
-		            return if let safeDIBuilder = __safeDI_Grandchild_configuration { safeDIBuilder(renamedSession) } else { Grandchild(renamedSession: renamedSession) }
-		        }
-		        func __safeDI_childBuilder(session: LazilyInstantiated<Session>, __safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
-		            let grandchild: Grandchild = __safeDI_grandchild(session: session, __safeDI_Grandchild_configuration: __safeDI_Child_configuration.grandchild)
-		            return if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(session, grandchild) } else { Child(session: session, grandchild: grandchild) }
+		        func __safeDI_childBuilder(session: LazilyInstantiated<Session>) -> Child {
+		            func __safeDI_grandchild() -> Grandchild {
+		                #sourceLocation(file: "\(output.fixtures["Grandchild.swift"])", line: 7)
+		                let renamedSession: LazilyInstantiated<Session> = session
+		                #sourceLocation()
+		                return if let safeDIBuilder = safeDIOverrides.childBuilder.grandchild { safeDIBuilder(renamedSession) } else { Grandchild(renamedSession: renamedSession) }
+		            }
+		            let grandchild: Grandchild = __safeDI_grandchild()
+		            return if let safeDIBuilder = safeDIOverrides.childBuilder.safeDIBuilder { safeDIBuilder(session, grandchild) } else { Child(session: session, grandchild: grandchild) }
 		        }
 		        let childBuilder = Instantiator<Child> {
-		            __safeDI_childBuilder(session: $0, __safeDI_Child_configuration: safeDIOverrides.childBuilder)
+		            __safeDI_childBuilder(session: $0)
 		        }
 		        return Root(session: session_lazilyInstantiated, childBuilder: childBuilder)
 		    }
@@ -7095,12 +7063,12 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let session_lazilyInstantiated = LazilyInstantiated<Session> { session }
-		        func __safeDI_childBuilder(session: LazilyInstantiated<Session>, __safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
-		            let grandchild = if let safeDIBuilder = __safeDI_Child_configuration.grandchild { safeDIBuilder(session.instance) } else { Grandchild(session: session.instance) }
-		            return if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(session, grandchild) } else { Child(session: session, grandchild: grandchild) }
+		        func __safeDI_childBuilder(session: LazilyInstantiated<Session>) -> Child {
+		            let grandchild = if let safeDIBuilder = safeDIOverrides.childBuilder.grandchild { safeDIBuilder(session.instance) } else { Grandchild(session: session.instance) }
+		            return if let safeDIBuilder = safeDIOverrides.childBuilder.safeDIBuilder { safeDIBuilder(session, grandchild) } else { Child(session: session, grandchild: grandchild) }
 		        }
 		        let childBuilder = Instantiator<Child> {
-		            __safeDI_childBuilder(session: $0, __safeDI_Child_configuration: safeDIOverrides.childBuilder)
+		            __safeDI_childBuilder(session: $0)
 		        }
 		        return Root(session: session_lazilyInstantiated, childBuilder: childBuilder)
 		    }
@@ -7195,17 +7163,15 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		        session: Session,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_session(__safeDI_SessionImplementation_configuration: (() -> Session)?) -> Session {
-		            if let safeDIBuilder = __safeDI_SessionImplementation_configuration { safeDIBuilder() } else { SessionImplementation() }
-		        }
-		        func __safeDI_child(__safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
-		            let session = LazilyInstantiated<Session> {
-		                __safeDI_session(__safeDI_SessionImplementation_configuration: __safeDI_Child_configuration.session)
+		        func __safeDI_child() -> Child {
+		            func __safeDI_session() -> Session {
+		                if let safeDIBuilder = safeDIOverrides.child.session { safeDIBuilder() } else { SessionImplementation() }
 		            }
-		            let grandchild = if let safeDIBuilder = __safeDI_Child_configuration.grandchild { safeDIBuilder(session.instance) } else { Grandchild(session: session.instance) }
-		            return if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(session, grandchild) } else { Child(session: session, grandchild: grandchild) }
+		            let session = LazilyInstantiated<Session>(__safeDI_session)
+		            let grandchild = if let safeDIBuilder = safeDIOverrides.child.grandchild { safeDIBuilder(session.instance) } else { Grandchild(session: session.instance) }
+		            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(session, grandchild) } else { Child(session: session, grandchild: grandchild) }
 		        }
-		        let child: Child = __safeDI_child(__safeDI_Child_configuration: safeDIOverrides.child)
+		        let child: Child = __safeDI_child()
 		        return Root(session: session, child: child)
 		    }
 		}
@@ -8068,12 +8034,10 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        func __safeDI_userService(__safeDI_DefaultUserService_configuration: (() -> AnyUserService)?) -> AnyUserService {
-		            if let safeDIBuilder = __safeDI_DefaultUserService_configuration { safeDIBuilder() } else { AnyUserService(DefaultUserService()) }
+		        func __safeDI_userService() -> AnyUserService {
+		            if let safeDIBuilder = safeDIOverrides.userService { safeDIBuilder() } else { AnyUserService(DefaultUserService()) }
 		        }
-		        let userService = LazilyInstantiated<AnyUserService> {
-		            __safeDI_userService(__safeDI_DefaultUserService_configuration: safeDIOverrides.userService)
-		        }
+		        let userService = LazilyInstantiated<AnyUserService>(__safeDI_userService)
 		        let home = if let safeDIBuilder = safeDIOverrides.home { safeDIBuilder(userService) } else { Home(userService: userService) }
 		        return Screen(userService: userService.instance, home: home)
 		    }
@@ -8178,12 +8142,10 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        func __safeDI_userService(__safeDI_DefaultUserService_configuration: (() -> AnyUserService)?) -> AnyUserService {
-		            if let safeDIBuilder = __safeDI_DefaultUserService_configuration { safeDIBuilder() } else { AnyUserService(DefaultUserService()) }
+		        func __safeDI_userService() -> AnyUserService {
+		            if let safeDIBuilder = safeDIOverrides.userService { safeDIBuilder() } else { AnyUserService(DefaultUserService()) }
 		        }
-		        let userService = LazilyInstantiated<AnyUserService> {
-		            __safeDI_userService(__safeDI_DefaultUserService_configuration: safeDIOverrides.userService)
-		        }
+		        let userService = LazilyInstantiated<AnyUserService>(__safeDI_userService)
 		        let home = if let safeDIBuilder = safeDIOverrides.home { safeDIBuilder(userService) } else { Home(userService: userService) }
 		        return Screen(userService: userService.instance, home: home)
 		    }
@@ -10320,12 +10282,10 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        func __safeDI_analytics(__safeDI_Analytics_configuration: (() -> Analytics)?) -> Analytics {
-		            if let safeDIBuilder = __safeDI_Analytics_configuration { safeDIBuilder() } else { Analytics() }
+		        func __safeDI_analytics() -> Analytics {
+		            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        }
-		        let analytics = LazilyInstantiated<Analytics> {
-		            __safeDI_analytics(__safeDI_Analytics_configuration: safeDIOverrides.analytics)
-		        }
+		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
 		        let logger = if let safeDIBuilder = safeDIOverrides.logger { safeDIBuilder(analytics) } else { Logger(analytics: analytics) }
 		        return Screen(analytics: analytics.instance, logger: logger)
 		    }
@@ -10444,12 +10404,10 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let config = if let safeDIBuilder = safeDIOverrides.config { safeDIBuilder() } else { Config() }
-		        func __safeDI_analytics(__safeDI_Analytics_configuration: ((Config) -> Analytics)?) -> Analytics {
-		            if let safeDIBuilder = __safeDI_Analytics_configuration { safeDIBuilder(config) } else { Analytics(config: config) }
+		        func __safeDI_analytics() -> Analytics {
+		            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder(config) } else { Analytics(config: config) }
 		        }
-		        let analytics = LazilyInstantiated<Analytics> {
-		            __safeDI_analytics(__safeDI_Analytics_configuration: safeDIOverrides.analytics)
-		        }
+		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
 		        let logger = if let safeDIBuilder = safeDIOverrides.logger { safeDIBuilder(analytics) } else { Logger(analytics: analytics) }
 		        let uploader = if let safeDIBuilder = safeDIOverrides.uploader { safeDIBuilder(analytics.instance) } else { Uploader(analytics: analytics.instance) }
 		        return Screen(analytics: analytics.instance, logger: logger, uploader: uploader)
@@ -10552,12 +10510,10 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        func __safeDI_analytics(__safeDI_Analytics_configuration: (() -> Analytics)?) -> Analytics {
-		            if let safeDIBuilder = __safeDI_Analytics_configuration { safeDIBuilder() } else { Analytics() }
+		        func __safeDI_analytics() -> Analytics {
+		            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        }
-		        let analytics = LazilyInstantiated<Analytics> {
-		            __safeDI_analytics(__safeDI_Analytics_configuration: safeDIOverrides.analytics)
-		        }
+		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
 		        let logger = if let safeDIBuilder = safeDIOverrides.logger { safeDIBuilder(analytics) } else { Logger(analytics: analytics) }
 		        let first = if let safeDIBuilder = safeDIOverrides.first { safeDIBuilder(logger) } else { First(logger: logger) }
 		        return Screen(first: first, analytics: analytics.instance)

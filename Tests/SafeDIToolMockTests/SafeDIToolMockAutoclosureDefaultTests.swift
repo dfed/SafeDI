@@ -227,12 +227,10 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        func __safeDI_serviceBuilder(__safeDI_Service_configuration: Service.SafeDIMockConfiguration) -> Service {
-			            if let safeDIBuilder = __safeDI_Service_configuration.safeDIBuilder { safeDIBuilder(__safeDI_Service_configuration.retries()) } else { Service(retries: __safeDI_Service_configuration.retries()) }
+			        func __safeDI_serviceBuilder() -> Service {
+			            if let safeDIBuilder = safeDIOverrides.serviceBuilder.safeDIBuilder { safeDIBuilder(safeDIOverrides.serviceBuilder.retries()) } else { Service(retries: safeDIOverrides.serviceBuilder.retries()) }
 			        }
-			        let serviceBuilder = Instantiator<Service> {
-			            __safeDI_serviceBuilder(__safeDI_Service_configuration: safeDIOverrides.serviceBuilder)
-			        }
+			        let serviceBuilder = Instantiator<Service>(__safeDI_serviceBuilder)
 			        return Root(serviceBuilder: serviceBuilder)
 			    }
 			}
@@ -355,10 +353,10 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        func __safeDI_service(__safeDI_Service_configuration: Service.SafeDIMockConfiguration) -> Service {
-			            if let safeDIBuilder = __safeDI_Service_configuration.safeDIBuilder { safeDIBuilder(__safeDI_Service_configuration.retries()) } else { Service.instantiate(retries: __safeDI_Service_configuration.retries()) }
+			        func __safeDI_service() -> Service {
+			            return if let safeDIBuilder = safeDIOverrides.service.safeDIBuilder { safeDIBuilder(safeDIOverrides.service.retries()) } else { Service.instantiate(retries: safeDIOverrides.service.retries()) }
 			        }
-			        let service: Service = __safeDI_service(__safeDI_Service_configuration: safeDIOverrides.service)
+			        let service: Service = __safeDI_service()
 			        return Root(service: service)
 			    }
 			}
@@ -484,11 +482,11 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        func __safeDI_serviceBuilder(retries: Int, __safeDI_Service_mockConfiguration: Service.SafeDIMockConfiguration) -> Service {
-			            if let safeDIBuilder = __safeDI_Service_mockConfiguration.safeDIBuilder { safeDIBuilder(retries, __safeDI_Service_mockConfiguration.attempts()) } else { Service.mock(retries: retries, attempts: __safeDI_Service_mockConfiguration.attempts()) }
+			        func __safeDI_serviceBuilder(retries: Int) -> Service {
+			            if let safeDIBuilder = safeDIOverrides.serviceBuilder.safeDIBuilder { safeDIBuilder(retries, safeDIOverrides.serviceBuilder.attempts()) } else { Service.mock(retries: retries, attempts: safeDIOverrides.serviceBuilder.attempts()) }
 			        }
 			        let serviceBuilder = Instantiator<Service> {
-			            __safeDI_serviceBuilder(retries: $0, __safeDI_Service_mockConfiguration: safeDIOverrides.serviceBuilder)
+			            __safeDI_serviceBuilder(retries: $0)
 			        }
 			        return Root(serviceBuilder: serviceBuilder)
 			    }
@@ -609,13 +607,11 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        @Sendable nonisolated func __safeDI_serviceBuilder(__safeDI_Service_configuration: Service.SafeDIMockConfiguration) -> Service {
-			            if let safeDIBuilder = __safeDI_Service_configuration.safeDIBuilder { safeDIBuilder(__safeDI_Service_configuration.retries()) } else { Service(retries: __safeDI_Service_configuration.retries()) }
+			        let __safeDI_serviceBuilder__overrides = safeDIOverrides.serviceBuilder
+			        @Sendable nonisolated func __safeDI_serviceBuilder() -> Service {
+			            if let safeDIBuilder = __safeDI_serviceBuilder__overrides.safeDIBuilder { safeDIBuilder(__safeDI_serviceBuilder__overrides.retries()) } else { Service(retries: __safeDI_serviceBuilder__overrides.retries()) }
 			        }
-			        let __safeDI_serviceBuilder____safeDI_Service_configuration: Service.SafeDIMockConfiguration = safeDIOverrides.serviceBuilder
-			        let serviceBuilder = SendableInstantiator<Service> {
-			            __safeDI_serviceBuilder(__safeDI_Service_configuration: __safeDI_serviceBuilder____safeDI_Service_configuration)
-			        }
+			        let serviceBuilder = SendableInstantiator<Service>(__safeDI_serviceBuilder)
 			        return Root(serviceBuilder: serviceBuilder)
 			    }
 			}
@@ -735,10 +731,10 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 			        retries: @escaping @autoclosure () -> Int = 3,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        func __safeDI_service(__safeDI_Service_configuration: Service.SafeDIMockConfiguration) -> Service {
-			            if let safeDIBuilder = __safeDI_Service_configuration.safeDIBuilder { safeDIBuilder(__safeDI_Service_configuration.retries()) } else { Service(retries: __safeDI_Service_configuration.retries()) }
+			        func __safeDI_service() -> Service {
+			            return if let safeDIBuilder = safeDIOverrides.service.safeDIBuilder { safeDIBuilder(safeDIOverrides.service.retries()) } else { Service(retries: safeDIOverrides.service.retries()) }
 			        }
-			        let service: Service = __safeDI_service(__safeDI_Service_configuration: safeDIOverrides.service)
+			        let service: Service = __safeDI_service()
 			        return Root(service: service, retries: retries())
 			    }
 			}
@@ -1091,12 +1087,10 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 			        limit: @escaping @autoclosure () -> Int? = 5,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        func __safeDI_serviceBuilder(__safeDI_Service_configuration: Service.SafeDIMockConfiguration) -> Service {
-			            if let safeDIBuilder = __safeDI_Service_configuration.safeDIBuilder { safeDIBuilder(__safeDI_Service_configuration.limit(), __safeDI_Service_configuration.onFinish(), __safeDI_Service_configuration.formatter()) } else { Service(limit: __safeDI_Service_configuration.limit(), onFinish: __safeDI_Service_configuration.onFinish(), formatter: __safeDI_Service_configuration.formatter()) }
+			        func __safeDI_serviceBuilder() -> Service {
+			            if let safeDIBuilder = safeDIOverrides.serviceBuilder.safeDIBuilder { safeDIBuilder(safeDIOverrides.serviceBuilder.limit(), safeDIOverrides.serviceBuilder.onFinish(), safeDIOverrides.serviceBuilder.formatter()) } else { Service(limit: safeDIOverrides.serviceBuilder.limit(), onFinish: safeDIOverrides.serviceBuilder.onFinish(), formatter: safeDIOverrides.serviceBuilder.formatter()) }
 			        }
-			        let serviceBuilder = Instantiator<Service> {
-			            __safeDI_serviceBuilder(__safeDI_Service_configuration: safeDIOverrides.serviceBuilder)
-			        }
+			        let serviceBuilder = Instantiator<Service>(__safeDI_serviceBuilder)
 			        return Root(serviceBuilder: serviceBuilder, limit: limit())
 			    }
 			}
@@ -1851,10 +1845,10 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        func __safeDI_service(__safeDI_Service_configuration: Service.SafeDIMockConfiguration) -> Service {
-			            if let safeDIBuilder = __safeDI_Service_configuration.safeDIBuilder { safeDIBuilder(__safeDI_Service_configuration.retries()) } else { Service(retries: __safeDI_Service_configuration.retries()) }
+			        func __safeDI_service() -> Service {
+			            return if let safeDIBuilder = safeDIOverrides.service.safeDIBuilder { safeDIBuilder(safeDIOverrides.service.retries()) } else { Service(retries: safeDIOverrides.service.retries()) }
 			        }
-			        let service: Service = __safeDI_service(__safeDI_Service_configuration: safeDIOverrides.service)
+			        let service: Service = __safeDI_service()
 			        return Root(service: service)
 			    }
 			}
@@ -1968,10 +1962,10 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        func __safeDI_service(__safeDI_Service_configuration: Service.SafeDIMockConfiguration) -> Service {
-			            if let safeDIBuilder = __safeDI_Service_configuration.safeDIBuilder { safeDIBuilder(__safeDI_Service_configuration.limit) } else { Service(limit: __safeDI_Service_configuration.limit) }
+			        func __safeDI_service() -> Service {
+			            return if let safeDIBuilder = safeDIOverrides.service.safeDIBuilder { safeDIBuilder(safeDIOverrides.service.limit) } else { Service(limit: safeDIOverrides.service.limit) }
 			        }
-			        let service: Service = __safeDI_service(__safeDI_Service_configuration: safeDIOverrides.service)
+			        let service: Service = __safeDI_service()
 			        return Root(service: service)
 			    }
 			}
@@ -2088,13 +2082,11 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        @Sendable nonisolated func __safeDI_serviceBuilder(__safeDI_Service_configuration: Service.SafeDIMockConfiguration) -> Service {
-			            if let safeDIBuilder = __safeDI_Service_configuration.safeDIBuilder { safeDIBuilder(__safeDI_Service_configuration.retries()) } else { Service(retries: __safeDI_Service_configuration.retries()) }
+			        let __safeDI_serviceBuilder__overrides = safeDIOverrides.serviceBuilder
+			        @Sendable nonisolated func __safeDI_serviceBuilder() -> Service {
+			            if let safeDIBuilder = __safeDI_serviceBuilder__overrides.safeDIBuilder { safeDIBuilder(__safeDI_serviceBuilder__overrides.retries()) } else { Service(retries: __safeDI_serviceBuilder__overrides.retries()) }
 			        }
-			        let __safeDI_serviceBuilder____safeDI_Service_configuration: Service.SafeDIMockConfiguration = safeDIOverrides.serviceBuilder
-			        let serviceBuilder = SendableInstantiator<Service> {
-			            __safeDI_serviceBuilder(__safeDI_Service_configuration: __safeDI_serviceBuilder____safeDI_Service_configuration)
-			        }
+			        let serviceBuilder = SendableInstantiator<Service>(__safeDI_serviceBuilder)
 			        return Root(serviceBuilder: serviceBuilder)
 			    }
 			}

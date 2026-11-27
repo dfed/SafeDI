@@ -22,11 +22,6 @@
 /// declaration and its finished generator, as `mockRootParameters(instantiable:mockDefaults:)` computes them for
 /// `generateMockRootCode`.
 extension MockLowering {
-	/// Called, where set, by each walk of `ScopeGenerator.treeNames(of:readsFills:)` with how many nodes it visited and how
-	/// many meetings of a node it recorded. Set by the tests that check the walk grows with the nodes beneath a mock root
-	/// and the places that build them, never with the paths; never by the tool.
-	@TaskLocal public static var treeNamesWalkObserver: (@Sendable (_ visitedNodes: Int, _ meetings: Int) -> Void)?
-
 	/// The parameters `mock()` takes before its overrides, each under its label, in the order `mock()` declares them.
 	struct RootSignature {
 		/// A parameter of `mock()`: the property it binds under its name, and its default, if it has one.
@@ -467,11 +462,7 @@ extension ScopeGenerator {
 	/// uncovered dependencies are the mocked type's in its declaration order, then each node's, in the order a walk of the
 	/// tree in generation order first meets them; a dependency is uncovered where no child of the type that instantiates it
 	/// builds its label (for the mocked type, its property or a `LazilyInstantiated` of it). The tree is walked with a stack,
-	/// since it can be as deep as the module has types. A node is visited once per generator and family (inside a
-	/// `@Sendable` builder function or not): a generator met again holds the same children, so what its subtree adds is
-	/// already added, and the walk records only where it was met, which the uncovered dependencies' order and whether a
-	/// builder function around one hides it read. A tree whose screens build the next layer's beneath two parents meets
-	/// each node on exponentially many paths and holds few nodes.
+	/// since it can be as deep as the module has types.
 	/// - Parameter readsFills: Whether to read the families of the builders the calls pass up, and the calls that fill
 	///   builders with the places inside their fills, which only the mock's own lowering reads.
 	func treeNames(of instantiable: Instantiable, readsFills: Bool = true) -> TreeNames {
@@ -501,84 +492,23 @@ extension ScopeGenerator {
 			}
 		}
 		var nodes = [Node]()
-		/// The node first met for each generator and family, which the walk visits; a later meeting is a node of its own,
-		/// whose parent is a node the walk visited, and is listed under the node it meets again.
-		struct NodeKey: Hashable {
-			let generator: ObjectIdentifier
-			let isInsideSendableFunction: Bool
+		func path(toNodeAt index: Int?) -> [Position] {
+			var path = [Position]()
+			var current = index
+			while let nodeIndex = current {
+				path.append(nodes[nodeIndex].position)
+				current = nodes[nodeIndex].parentIndex
+			}
+			return path.reversed()
 		}
-		var visitedNodeIndexByKey = [NodeKey: Int]()
-		var laterMeetingsByVisitedNodeIndex = [Int: [Int]]()
-		/// The walk's nodes and where it met each visited node again, read once the walk has ended: each visited node's first
-		/// path and the labels the builder functions around it declare, each computed once. Its memory dies with this function.
-		/// A value, not local functions over the walk's dictionaries, which Swift 6.4 reports as sending them ("sending
-		/// 'laterMeetingsByVisitedNodeIndex' risks causing data races") inside the actor's method.
-		struct Meetings {
-			let nodes: [Node]
-			let laterMeetingsByVisitedNodeIndex: [Int: [Int]]
-			/// The first path to the visited node at each index, by declaration and then generation order, over every path that
-			/// meets it. No path to a node extends another, so the first path to a node extends the first path to a parent.
-			var firstPathByNodeIndex = [Int: [Position]]()
-			/// The labels a builder function around the visited node at each index, its own excluded, declares on some path to it.
-			var namesDeclaredAroundByNodeIndex = [Int: Set<String>]()
-
-			mutating func path(toNodeAt index: Int?) -> [Position] {
-				guard let index else { return [] }
-				let nodes = nodes
-				return Self.valueOfNode(at: index, of: nodes, laterMeetingsByVisitedNodeIndex: laterMeetingsByVisitedNodeIndex, memo: &firstPathByNodeIndex) { meetingsAndParentPaths in
-					meetingsAndParentPaths.map { ($0.parentValue ?? []) + [nodes[$0.meeting].position] }
-						.min(by: { $0.lexicographicallyPrecedes($1) }) ?? []
-				}
+		/// Whether a builder function around the node, its own excluded, declares `label`.
+		func isDeclaredAround(nodeAt index: Int, _ label: String) -> Bool {
+			var current = nodes[index].parentIndex
+			while let nodeIndex = current {
+				guard !nodes[nodeIndex].namesDeclared.contains(label) else { return true }
+				current = nodes[nodeIndex].parentIndex
 			}
-
-			mutating func isDeclaredAround(nodeAt index: Int, _ label: String) -> Bool {
-				let nodes = nodes
-				return Self.valueOfNode(at: index, of: nodes, laterMeetingsByVisitedNodeIndex: laterMeetingsByVisitedNodeIndex, memo: &namesDeclaredAroundByNodeIndex) { meetingsAndParentNames in
-					var names = Set<String>()
-					for (meeting, parentNames) in meetingsAndParentNames {
-						guard let parentIndex = nodes[meeting].parentIndex else { continue }
-						names.formUnion(parentNames ?? [])
-						names.formUnion(nodes[parentIndex].namesDeclared)
-					}
-					return names
-				}.contains(label)
-			}
-
-			/// The meetings of the visited node at `index`: the node itself, then each later meeting.
-			private static func meetings(ofNodeAt index: Int, laterMeetingsByVisitedNodeIndex: [Int: [Int]]) -> [Int] {
-				[index] + (laterMeetingsByVisitedNodeIndex[index] ?? [])
-			}
-
-			/// Computes `value` for the visited node at `index` from the values of the parents of its meetings, each computed
-			/// once, with a stack, since the tree can be as deep as the module has types. A meeting's parent is a visited node,
-			/// and no node is met beneath itself, since a node that repeats an ancestor's declaration closes a cycle and builds
-			/// nothing beneath it.
-			private static func valueOfNode<Value>(
-				at index: Int,
-				of nodes: [Node],
-				laterMeetingsByVisitedNodeIndex: [Int: [Int]],
-				memo: inout [Int: Value],
-				value: (_ meetingsAndParentValues: [(meeting: Int, parentValue: Value?)]) -> Value,
-			) -> Value {
-				var stack = [index]
-				while let current = stack.last {
-					guard memo[current] == nil else {
-						stack.removeLast()
-						continue
-					}
-					let meetings = meetings(ofNodeAt: current, laterMeetingsByVisitedNodeIndex: laterMeetingsByVisitedNodeIndex)
-					let pendingParents = meetings.compactMap { nodes[$0].parentIndex }.filter { memo[$0] == nil }
-					guard pendingParents.isEmpty else {
-						stack.append(contentsOf: pendingParents)
-						continue
-					}
-					memo[current] = value(meetings.map { meeting in
-						(meeting: meeting, parentValue: nodes[meeting].parentIndex.flatMap { memo[$0] })
-					})
-					stack.removeLast()
-				}
-				return memo[index] ?? value([])
-			}
+			return false
 		}
 		/// The generators of the children that build a type, each at its position among them.
 		func propertyChildren(of generator: ScopeGenerator, declaredBy dependencies: [Dependency], under parentIndex: Int?, insideSendableFunction: Bool) -> [Visit] {
@@ -665,12 +595,10 @@ extension ScopeGenerator {
 		var propertyNodes = [ScopeGenerator.MockTreeNames.PropertyNode]()
 		// The index in `propertyNodes` of each node visited, by its index in `nodes`; a node is visited before its children.
 		var propertyNodeIndexByNodeIndex = [Int: Int]()
-		// The uncovered dependencies each visited node creates, judged hidden or not once every meeting is known.
-		var uncoveredCreations = [(dependency: Dependency, nodeIndex: Int)]()
 		while let visit = visits.popLast() {
 			guard case let .property(nodeInstantiable, nodeProperty, _, erasedToConcreteExistential, isPropertyCycle, _) = visit.generator.scopeData else { continue }
-			let key = NodeKey(generator: ObjectIdentifier(visit.generator), isInsideSendableFunction: visit.isInsideSendableFunction)
-			let propertyNode = ScopeGenerator.MockTreeNames.PropertyNode(
+			propertyNodeIndexByNodeIndex[visit.nodeIndex] = propertyNodes.count
+			propertyNodes.append(ScopeGenerator.MockTreeNames.PropertyNode(
 				parentIndex: nodes[visit.nodeIndex].parentIndex.flatMap { propertyNodeIndexByNodeIndex[$0] },
 				property: nodeProperty,
 				instantiable: nodeInstantiable,
@@ -678,19 +606,7 @@ extension ScopeGenerator {
 				isPropertyCycle: isPropertyCycle,
 				generator: visit.generator,
 				isInsideSendableFunction: visit.isInsideSendableFunction,
-			)
-			if let visitedNodeIndex = visitedNodeIndexByKey[key] {
-				laterMeetingsByVisitedNodeIndex[visitedNodeIndex, default: []].append(visit.nodeIndex)
-				// A child of the root keeps a node of its own, met first beneath another child or not: the public mock's plan
-				// and `query needs` read the root's children from the nodes without a parent. Its subtree is walked once.
-				if nodes[visit.nodeIndex].parentIndex == nil {
-					propertyNodes.append(propertyNode)
-				}
-				continue
-			}
-			visitedNodeIndexByKey[key] = visit.nodeIndex
-			propertyNodeIndexByNodeIndex[visit.nodeIndex] = propertyNodes.count
-			propertyNodes.append(propertyNode)
+			))
 			builderFunctionNames.insert(ScopeGenerator.functionName(toBuildPropertyNamed: nodeProperty.label))
 			let publicMockCall = visit.generator.publicMockCall
 			if publicMockCall != nil, visit.generator.fillsABuilder {
@@ -727,17 +643,12 @@ extension ScopeGenerator {
 					dependency,
 					createdBy: nodeInstantiable.concreteInstantiable,
 					atNode: visit.nodeIndex,
-					isHiddenWhereReferenced: false,
+					isHiddenWhereReferenced: isDeclaredAround(nodeAt: visit.nodeIndex, label),
 					isInstantiatedInSendableFunction: visit.isInsideSendableFunction,
 				)
-				uncoveredCreations.append((dependency: dependency, nodeIndex: visit.nodeIndex))
 			}
 			nodes[visit.nodeIndex].namesDeclared = namesDeclared
 			visits.append(contentsOf: children.reversed())
-		}
-		var meetings = Meetings(nodes: nodes, laterMeetingsByVisitedNodeIndex: laterMeetingsByVisitedNodeIndex)
-		for creation in uncoveredCreations where meetings.isDeclaredAround(nodeAt: creation.nodeIndex, creation.dependency.property.label) {
-			hiddenProperties.insert(creation.dependency.property)
 		}
 		var uncoveredDependencies = [ScopeGenerator.MockTreeNames.UncoveredDependency]()
 		for property in properties {
@@ -746,7 +657,7 @@ extension ScopeGenerator {
 			let creations = creatingTypesByProperty[property] ?? []
 			let orderedCreations = creations.count < 2
 				? creations
-				: creations.map { (path: meetings.path(toNodeAt: $0.nodeIndex), type: $0.type) }.sorted(by: { $0.path.lexicographicallyPrecedes($1.path) }).map { (nodeIndex: Int?.none, type: $0.type) }
+				: creations.map { (path: path(toNodeAt: $0.nodeIndex), type: $0.type) }.sorted(by: { $0.path.lexicographicallyPrecedes($1.path) }).map { (nodeIndex: Int?.none, type: $0.type) }
 			for (_, type) in orderedCreations where !creatingTypes.contains(type) {
 				creatingTypes.append(type)
 			}
@@ -769,7 +680,6 @@ extension ScopeGenerator {
 			builderFunctionNames: builderFunctionNames,
 		)
 		names.propertyNodes = propertyNodes
-		MockLowering.treeNamesWalkObserver?(propertyNodes.count, nodes.count)
 		names.unavailableDependencyProperties = unavailableProperties
 		names.rootHoleSiteProperties = rootHoleSiteProperties
 		// The families of the builders the calls pass up, which only a tree that passes one up walks for.

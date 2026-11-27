@@ -366,9 +366,9 @@ struct SafeDIToolGraphFuzzerTests {
 		#expect(captures == [
 			1: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 0, namedMemberClosureCount: 0, conversionFunctionCount: 0, fillFunctionCount: 0),
 			16: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 0, namedMemberClosureCount: 0, conversionFunctionCount: 0, fillFunctionCount: 0),
-			24: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 29, namedMemberClosureCount: 1, conversionFunctionCount: 0, fillFunctionCount: 0),
+			24: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 26, namedMemberClosureCount: 1, conversionFunctionCount: 0, fillFunctionCount: 0),
 			68: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 76, namedMemberClosureCount: 11, conversionFunctionCount: 0, fillFunctionCount: 1),
-			84: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 71, namedMemberClosureCount: 6, conversionFunctionCount: 0, fillFunctionCount: 3),
+			84: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 68, namedMemberClosureCount: 6, conversionFunctionCount: 0, fillFunctionCount: 3),
 			92: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 0, namedMemberClosureCount: 0, conversionFunctionCount: 0, fillFunctionCount: 0),
 			93: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 67, namedMemberClosureCount: 6, conversionFunctionCount: 0, fillFunctionCount: 0),
 			151: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 62, namedMemberClosureCount: 8, conversionFunctionCount: 0, fillFunctionCount: 2),
@@ -377,12 +377,12 @@ struct SafeDIToolGraphFuzzerTests {
 			180: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 52, namedMemberClosureCount: 2, conversionFunctionCount: 0, fillFunctionCount: 1),
 			215: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 39, namedMemberClosureCount: 0, conversionFunctionCount: 0, fillFunctionCount: 0),
 			227: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 66, namedMemberClosureCount: 2, conversionFunctionCount: 0, fillFunctionCount: 0),
-			273: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 157, namedMemberClosureCount: 22, conversionFunctionCount: 0, fillFunctionCount: 2),
+			273: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 154, namedMemberClosureCount: 22, conversionFunctionCount: 0, fillFunctionCount: 2),
 			277: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 50, namedMemberClosureCount: 2, conversionFunctionCount: 0, fillFunctionCount: 2),
 			309: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 50, namedMemberClosureCount: 12, conversionFunctionCount: 0, fillFunctionCount: 2),
 			347: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 80, namedMemberClosureCount: 15, conversionFunctionCount: 0, fillFunctionCount: 2),
 			468: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 63, namedMemberClosureCount: 3, conversionFunctionCount: 0, fillFunctionCount: 1),
-			594: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 78, namedMemberClosureCount: 26, conversionFunctionCount: 0, fillFunctionCount: 11),
+			594: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 75, namedMemberClosureCount: 26, conversionFunctionCount: 0, fillFunctionCount: 11),
 			605: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 96, namedMemberClosureCount: 22, conversionFunctionCount: 0, fillFunctionCount: 1),
 			705: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 42, namedMemberClosureCount: 1, conversionFunctionCount: 0, fillFunctionCount: 1),
 			850: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 81, namedMemberClosureCount: 16, conversionFunctionCount: 0, fillFunctionCount: 3),
@@ -393,7 +393,7 @@ struct SafeDIToolGraphFuzzerTests {
 			1_020: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 83, namedMemberClosureCount: 25, conversionFunctionCount: 0, fillFunctionCount: 4),
 			1_450: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 91, namedMemberClosureCount: 9, conversionFunctionCount: 0, fillFunctionCount: 4),
 			1_837: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 0, namedMemberClosureCount: 0, conversionFunctionCount: 0, fillFunctionCount: 0),
-			1_890: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 105, namedMemberClosureCount: 6, conversionFunctionCount: 0, fillFunctionCount: 4),
+			1_890: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 102, namedMemberClosureCount: 6, conversionFunctionCount: 0, fillFunctionCount: 4),
 			1_986: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 87, namedMemberClosureCount: 4, conversionFunctionCount: 0, fillFunctionCount: 2),
 		])
 	}
@@ -2509,50 +2509,82 @@ struct SafeDIToolGraphFuzzerTests {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func sharedSubtreeSeeds_judgeSubtreeSharing_inGraphsWhoseMocksMeetASubtreeAgain() async throws {
-		// Every run of the tool compares each mock lowered with shared work with its walk of every path
-		// (`MockSubtreeSharingChecks`), which judges only a mock whose walk meets a subtree again. The corpus meets one in
-		// almost no graph but those `addingSharedSubtreeShapes` draws, so this runs the first of those. A change that stops
-		// the walk sharing, or the draw landing, fails here rather than quietly judging nothing. Dropping the properties each
-		// child is built before from the key (`childrenPropertiesGeneratedLater: []`) fails seeds 12 and 31 through that
-		// comparison. The draw renames no receive, so dropping the key's renames fails only
-		// `SafeDIToolMockSubtreeSharingTests`' `mock_sharesNothing_whenRepeatedSubtreeReceivesRenamedParameter`.
-		var drawnCount = 0
-		var judgedCount = 0
-		for seed in UInt64(0)..<Self.sharedSubtreeSeedCount {
-			let fixture = GraphFuzzerGenerator.fixture(forSeed: seed)
-			guard fixture.swiftFileContent.contains(where: { $0.contains("_DiamondHost") }) else { continue }
-			drawnCount += 1
-			let (stream, continuation) = AsyncStream.makeStream(of: MockLowering.SubtreeSharingOutcome.self)
-			_ = try await MockLowering.$subtreeSharingObserver.withValue({ outcome in
-				continuation.yield(outcome)
-			}) {
-				try await GraphFuzzerOracle.toolOutcome(of: fixture)
-			}
-			continuation.finish()
-			var sharesAndLaysOut = false
-			for await outcome in stream where outcome.sharedMeetings > 0 {
-				// A root that shares lays its places out by type key, which reads only the records the shared meetings took.
-				#expect(outcome.layoutOutcome == "laidOut", "Seed \(seed): \(outcome.mockedType) shared and fell back: \(outcome.layoutOutcome)")
-				sharesAndLaysOut = sharesAndLaysOut || outcome.layoutOutcome == "laidOut"
-			}
-			if sharesAndLaysOut {
-				judgedCount += 1
-			}
-		}
-		#expect(judgedCount >= 10, "Judged \(judgedCount) of the \(drawnCount) graphs that draw a shared subtree")
-	}
-
-	/// The corpus seeds `sharedSubtreeSeeds_judgeSubtreeSharing_inGraphsWhoseMocksMeetASubtreeAgain` reads.
-	private static let sharedSubtreeSeedCount: UInt64 = 120
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func smokeSeeds_judgeQuerySuppliers_inGraphsTheToolAccepts() async throws {
 		// The query oracle compares the suppliers `query graph` exports with the generated code of each accepted graph in
 		// one module, so a change that stops it exporting or reading them fails here rather than quietly judging nothing.
 		let judgedCount = try await smokeResults.value.count(where: \.isJudgedByQueryOracle)
 		#expect(judgedCount >= 10, "Judged \(judgedCount) of \(Self.smokeSeeds.count) graphs")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func queryGraph_marksDependenciesGenerateReports_inTenBaseCorpusGraphsWithPartialTrees() async throws {
+		// The smoke batch holds too few graphs whose trees `query graph` builds around dependencies that cannot be
+		// fulfilled for a floor, so this judges the first base corpus graphs the tool rejects as the marks oracle does,
+		// with one run of the tool each. Only an export with partial trees counts, so a change that stops `query graph`
+		// building them fails here rather than quietly judging nothing.
+		//
+		// What the marks and deletion oracles add to a long run, measured in a debug build on one core over base corpus
+		// seeds 0..<1250, a shard: 221 seconds (the rejected graphs’ exports 69, the runs with missing types declared 8,
+		// the two deletions with their exports 144), where one `generate` run of each of those graphs takes 277.
+		var partialSeeds = [UInt64]()
+		for seed in UInt64(0)..<120 {
+			guard let marks = try await GraphFuzzerQueryJudgment.marks(of: GraphFuzzerGenerator.fixture(forSeed: seed)) else { continue }
+			#expect(marks.problems == [], "Seed \(seed)")
+			if marks.isPartial {
+				partialSeeds.append(seed)
+			}
+		}
+		#expect(partialSeeds.count >= 10, "Judged partial trees of seeds \(partialSeeds)")
+	}
+
+	@Test(arguments: [70, 79, 293, 335, 485, 896, 1_101, 1_342, 1_345, 1_354, 1_419] as [UInt64])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func queryGraph_marksReceivesGenerateReportsOnceMissingTypesAreDeclared_inBaseCorpusGraphThatHoldsBoth(seed: UInt64) async throws {
+		// A graph that instantiates a type no declaration fulfills and receives a value nothing provides is rare, so the
+		// marks oracle's checks against the graph with its missing types declared have named seeds: each further mark is
+		// an error `generate` reports of that graph, and each error it reports of that graph is at a mark. Each seed must
+		// still run the graph so and agree with it. With the receives the second build reports left unmarked, every one
+		// of these seeds fails.
+		let marks = try #require(await GraphFuzzerQueryJudgment.marks(of: GraphFuzzerGenerator.fixture(forSeed: seed)))
+		#expect(marks.isPartial)
+		#expect(marks.ranWithMissingTypesDeclared)
+		#expect(marks.problems == [])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func queryGraph_handsEveryOtherReceiveItsValue_whenDeclarationIsDeletedFromTenBaseCorpusGraphs() async throws {
+		// The deletion oracle exports a graph again without one type's declaration, and without one property that provides
+		// a value, and requires every receive that read neither to keep its provenance. This judges the first base corpus
+		// graphs so, with no run of the tool, so a change that stops it finding a declaration to delete, or a deletion that
+		// leaves partial trees, fails here rather than quietly judging nothing.
+		var seedsLeftWithUnfulfilledDependency = [UInt64]()
+		var seedsLeftWithUnfulfilledReceive = [UInt64]()
+		for seed in UInt64(0)..<60 {
+			let deletions = try await GraphFuzzerQueryJudgment.deletions(of: GraphFuzzerGenerator.fixture(forSeed: seed))
+			#expect(deletions.problems == [], "Seed \(seed)")
+			if deletions.declarationLeavesDependencyUnfulfilled {
+				seedsLeftWithUnfulfilledDependency.append(seed)
+			}
+			if deletions.propertyLeavesPartialTrees {
+				seedsLeftWithUnfulfilledReceive.append(seed)
+			}
+		}
+		#expect(seedsLeftWithUnfulfilledDependency.count >= 10, "Deleted a declaration a reached dependency requires from seeds \(seedsLeftWithUnfulfilledDependency)")
+		#expect(seedsLeftWithUnfulfilledReceive.count >= 10, "Deleted a property a reached receive requires from seeds \(seedsLeftWithUnfulfilledReceive)")
+	}
+
+	@Test(arguments: [2, 25, 33, 35, 39, 77, 83, 114, 121, 146, 164, 170] as [UInt64])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func queryGraph_namesMarkedReceiveOfDeletedProperty_inBaseCorpusGraphWithReceiveBeneathIt(seed: UInt64) async throws {
+		// A receive beneath a marked receive of the deleted property, whose value names the receive above, is in about one
+		// base corpus graph in twelve, so those graphs have named seeds: each must still hold such a receive, which the
+		// oracle judges.
+		let deletions = try await GraphFuzzerQueryJudgment.deletions(of: GraphFuzzerGenerator.fixture(forSeed: seed))
+		#expect(deletions.propertyLeavesPartialTrees)
+		#expect(deletions.propertyLeavesReceiveBeneathMarkedReceive)
+		#expect(deletions.problems == [])
 	}
 
 	@Test
@@ -2588,14 +2620,9 @@ struct SafeDIToolGraphFuzzerTests {
 		#expect(Self.knownIssueListProblems(Self.seamKnownIssues, corpusSeedCount: Self.seamCorpusSeedCount) == [])
 		// A seed left out of the inherited shapes must be one of theirs, or the entry filters nothing.
 		#expect(Self.seamCorpusSeedsOfOtherShapes.subtracting(Self.knownIssuesBesideReportedIssueShapes.flatMap(\.seeds)) == [])
-		// A seed added to an inherited shape must name a shape, and be one its list lacks, or the entry adds nothing; one
-		// another inherited shape lists must be left out of that shape, which the first expectation's list check also
-		// requires of it.
+		// A seed added to an inherited shape must name a shape, and be one its list lacks, or the entry adds nothing.
 		#expect(Set(Self.seamCorpusSeedsAddedToInheritedShapes.keys).subtracting(Self.knownIssuesBesideReportedIssueShapes.map(\.reason)) == [])
-		for knownIssue in Self.knownIssuesBesideReportedIssueShapes {
-			#expect(Set(Self.seamCorpusSeedsAddedToInheritedShapes[knownIssue.reason] ?? []).intersection(knownIssue.seeds) == [], "\(knownIssue.reason)")
-		}
-		#expect(Set(Self.seamCorpusSeedsAddedToInheritedShapes.values.joined()).intersection(Self.knownIssuesBesideReportedIssueShapes.flatMap(\.seeds)).subtracting(Self.seamCorpusSeedsOfOtherShapes) == [])
+		#expect(Set(Self.seamCorpusSeedsAddedToInheritedShapes.values.joined()).intersection(Self.knownIssuesBesideReportedIssueShapes.flatMap(\.seeds)) == [])
 	}
 
 	@Test
@@ -3290,34 +3317,6 @@ struct SafeDIToolGraphFuzzerTests {
 		#expect(errorsByBuild["hole"] == errorsByBuild["visible"])
 	}
 
-	/// The seeds `lazyCycleBackEdgeSharesBuilderFunctionsReason` lists. Their mocks change under a renaming that reorders
-	/// type names, which that entry excuses as `.mockCode` beside `.mockConfigurationFieldPresence`, because
-	/// `computeCycleEdges` then leaves out another back-edge of a lazy cycle. Ordered by the original names
-	/// (`DependencyTreeGenerator.cycleEdgeOrderingName`), the renamed graph must generate the original's code, so nothing
-	/// else follows the names; and without that order some renaming must change a mock's code, so the entry is needed.
-	@Test(arguments: [UInt64(311), 525, 991, 1_075, 1_857, 2_013, 3_180, 3_215, 3_221, 3_584, 3_832, 4_776])
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func toolRuns_generateSameCodeUnderRenamingsOfTypeNames_whenCycleEdgesAreChosenInOriginalOrder(seed: UInt64) async throws {
-		let fixture = GraphFuzzerGenerator.fixture(forSeed: seed)
-		let prefix = fixture.typeNamePrefix
-		let outcome = try await GraphFuzzerOracle.toolOutcome(of: fixture)
-		var mockCodeChangesWithoutOriginalOrder = false
-		for renaming in GraphFuzzerRenaming.all where renaming.changesOrderOfTypeNames && !renaming.reversesLabels {
-			let renamedFixture = fixture.renamed(by: renaming)
-			let fileNames = renaming.fileNames(of: renamedFixture)
-			let renamedOutcome = try await renaming.restore(GraphFuzzerOracle.toolOutcome(of: renamedFixture, fileNames: fileNames), typeNamePrefix: prefix)
-			let renamedOutcomeInOriginalOrder = try await DependencyTreeGenerator.$cycleEdgeOrderingName.withValue({ renaming.restore($0, typeNamePrefix: prefix) }) {
-				try await renaming.restore(GraphFuzzerOracle.toolOutcome(of: renamedFixture, fileNames: fileNames), typeNamePrefix: prefix)
-			}
-			let differences = GraphFuzzerToolOutcome.differences(between: outcome, and: renamedOutcomeInOriginalOrder, comparingCode: .inAnyOrderOfExtensions)
-			#expect(differences.isEmpty, "Seed \(seed), \(renaming): \(differences.map(\.description))")
-			if GraphFuzzerToolOutcome.differences(between: outcome, and: renamedOutcome, comparingCode: .inAnyOrderOfExtensions).contains(where: { $0.aspect == .mockCode }) {
-				mockCodeChangesWithoutOriginalOrder = true
-			}
-		}
-		#expect(mockCodeChangesWithoutOriginalOrder, "Seed \(seed)’s mock code changes under no renaming of its type names")
-	}
-
 	@Test(arguments: [UInt64(609), 10_921])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func toolRuns_rejectBothBuildsWithDeferringSeamsTwoForms_whenCarriedOuterReceivesWrapperItsLevelsFillReadsOptionally(seed: UInt64) async throws {
@@ -3692,38 +3691,37 @@ struct SafeDIToolGraphFuzzerTests {
 		    ) -> S2420_T0 {
 		        let t6 = if let safeDIBuilder = safeDIOverrides.t6 { safeDIBuilder() } else { S2420_T6() }
 		        let service = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { S2420_Service.preview() }
-		        func __safeDI_t1Builder(__safeDI_S2420_T1_mockConfiguration: ((S2420_Service) -> S2420_T1)?) -> S2420_T1 {
-		            if let safeDIBuilder = __safeDI_S2420_T1_mockConfiguration { safeDIBuilder(service) } else { S2420_T1.customMock(service: service) }
-		        }
-		        func __safeDI_link0(t6Alias: S2420_T6?, __safeDI_S2420_Link0_configuration: S2420_Link0.SafeDIMockConfiguration) -> S2420_Link0 {
-		            #sourceLocation(file: "S2420_Link0.swift", line: 8)
-		            let t6AliasAlias: S2420_T6? = t6Alias
-		            #sourceLocation()
-		            let link1: S2420_Link1 = __safeDI_link1(t6AliasAlias: t6AliasAlias, __safeDI_S2420_Link1_configuration: __safeDI_S2420_Link0_configuration.link1)
-		            return if let safeDIBuilder = __safeDI_S2420_Link0_configuration.safeDIBuilder { safeDIBuilder(t6AliasAlias, link1) } else { S2420_Link0(t6AliasAlias: t6AliasAlias, link1: link1) }
-		        }
-		        func __safeDI_link1(t6AliasAlias: S2420_T6?, __safeDI_S2420_Link1_configuration: S2420_Link1.SafeDIMockConfiguration) -> S2420_Link1 {
-		            #sourceLocation(file: "S2420_Link1.swift", line: 8)
-		            let t6AliasAliasAlias: S2420_T6? = t6AliasAlias
-		            #sourceLocation()
-		            let link2 = if let safeDIBuilder = __safeDI_S2420_Link1_configuration.link2 { safeDIBuilder(t6AliasAliasAlias) } else { S2420_Link2(t6AliasAliasAlias: t6AliasAliasAlias) }
-		            return if let safeDIBuilder = __safeDI_S2420_Link1_configuration.safeDIBuilder { safeDIBuilder(t6AliasAliasAlias, link2) } else { S2420_Link1(t6AliasAliasAlias: t6AliasAliasAlias, link2: link2) }
-		        }
-		        func __safeDI_t2(__safeDI_S2420_T2_configuration: S2420_T2.SafeDIMockConfiguration) -> S2420_T2 {
-		            let t1Builder = Instantiator<S2420_T1> {
-		                __safeDI_t1Builder(__safeDI_S2420_T1_mockConfiguration: __safeDI_S2420_T2_configuration.t1Builder)
+		        func __safeDI_t2() -> S2420_T2 {
+		            func __safeDI_t1Builder() -> S2420_T1 {
+		                if let safeDIBuilder = safeDIOverrides.t2.t1Builder { safeDIBuilder(service) } else { S2420_T1.customMock(service: service) }
 		            }
+		            let t1Builder = Instantiator<S2420_T1>(__safeDI_t1Builder)
 		            #sourceLocation(file: "S2420_T2.swift", line: 10)
 		            let t6Alias: S2420_T6? = t6
 		            #sourceLocation()
-		            let link0: S2420_Link0 = __safeDI_link0(t6Alias: t6Alias, __safeDI_S2420_Link0_configuration: __safeDI_S2420_T2_configuration.link0)
-		            return if let safeDIBuilder = __safeDI_S2420_T2_configuration.safeDIBuilder { safeDIBuilder(t1Builder, t6Alias, link0) } else { S2420_T2(t1Builder: t1Builder, t6Alias: t6Alias, link0: link0) }
+		            func __safeDI_link0() -> S2420_Link0 {
+		                #sourceLocation(file: "S2420_Link0.swift", line: 8)
+		                let t6AliasAlias: S2420_T6? = t6Alias
+		                #sourceLocation()
+		                func __safeDI_link1() -> S2420_Link1 {
+		                    #sourceLocation(file: "S2420_Link1.swift", line: 8)
+		                    let t6AliasAliasAlias: S2420_T6? = t6AliasAlias
+		                    #sourceLocation()
+		                    let link2 = if let safeDIBuilder = safeDIOverrides.t2.link0.link1.link2 { safeDIBuilder(t6AliasAliasAlias) } else { S2420_Link2(t6AliasAliasAlias: t6AliasAliasAlias) }
+		                    return if let safeDIBuilder = safeDIOverrides.t2.link0.link1.safeDIBuilder { safeDIBuilder(t6AliasAliasAlias, link2) } else { S2420_Link1(t6AliasAliasAlias: t6AliasAliasAlias, link2: link2) }
+		                }
+		                let link1: S2420_Link1 = __safeDI_link1()
+		                return if let safeDIBuilder = safeDIOverrides.t2.link0.safeDIBuilder { safeDIBuilder(t6AliasAlias, link1) } else { S2420_Link0(t6AliasAlias: t6AliasAlias, link1: link1) }
+		            }
+		            let link0: S2420_Link0 = __safeDI_link0()
+		            return if let safeDIBuilder = safeDIOverrides.t2.safeDIBuilder { safeDIBuilder(t1Builder, t6Alias, link0) } else { S2420_T2(t1Builder: t1Builder, t6Alias: t6Alias, link0: link0) }
 		        }
-		        let t2: S2420_T2 = __safeDI_t2(__safeDI_S2420_T2_configuration: safeDIOverrides.t2)
+		        let t2: S2420_T2 = __safeDI_t2()
 		        let anyT1 = if let safeDIBuilder = safeDIOverrides.anyT1 { safeDIBuilder(service) } else { S2420_AnyT1(S2420_T1.customMock(service: service)) }
-		        let t1Builder = Instantiator<S2420_T1> {
-		            __safeDI_t1Builder(__safeDI_S2420_T1_mockConfiguration: safeDIOverrides.t1Builder)
+		        func __safeDI_t1Builder() -> S2420_T1 {
+		            if let safeDIBuilder = safeDIOverrides.t1Builder { safeDIBuilder(service) } else { S2420_T1.customMock(service: service) }
 		        }
+		        let t1Builder = Instantiator<S2420_T1>(__safeDI_t1Builder)
 		        return S2420_T0(t6: t6, t2: t2, anyT1: anyT1, t1Builder: t1Builder, service: service)
 		    }
 		}
@@ -4564,7 +4562,7 @@ struct SafeDIToolGraphFuzzerTests {
 
 	/// A lazy cycle of two mocked types erased where they are instantiated, the second of which also instantiates an erased leaf.
 	private static var lazyCycleOfErasedTypesFixture: GraphFuzzerFixture {
-		let prefix = Self.mockDifferencePrefix
+		let prefix = mockDifferencePrefix
 		return GraphFuzzerFixture(seed: 1_000_000_011, swiftFileContent: [
 			"@Instantiable(generateMock: true)\npublic final class \(prefix)T7: Instantiable {\n\tpublic init(anyT8Builder: ErasedInstantiator<(), \(prefix)AnyT8>) {\n\t\tself.anyT8Builder = anyT8Builder\n\t}\n\t@Instantiated(fulfilledByType: \"\(prefix)T8\", erasedToConcreteExistential: true) let anyT8Builder: ErasedInstantiator<(), \(prefix)AnyT8>\n}\n",
 			"@Instantiable(generateMock: true)\npublic final class \(prefix)T8: Instantiable {\n\tpublic init(anyT7Builder: ErasedInstantiator<(), \(prefix)AnyT7>, anyT4: \(prefix)AnyT4) {\n\t\tself.anyT7Builder = anyT7Builder\n\t\tself.anyT4 = anyT4\n\t}\n\t@Instantiated(fulfilledByType: \"\(prefix)T7\", erasedToConcreteExistential: true) let anyT7Builder: ErasedInstantiator<(), \(prefix)AnyT7>\n\t@Instantiated(fulfilledByType: \"\(prefix)T4\", erasedToConcreteExistential: true) let anyT4: \(prefix)AnyT4\n}\n",
@@ -4706,7 +4704,7 @@ struct SafeDIToolGraphFuzzerTests {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func differences_nameNeitherReason_whenStatementsThatAreNotParameterBindingsChangePlaces() async throws {
 		let toolRuns = try await GraphFuzzerOracle.toolRuns(of: Self.lazyCycleFixture, renamings: [], multiModuleRenamings: [])
-		let binding = "        let t8Builder = Instantiator<\(Self.mockDifferencePrefix)T8> {\n            __safeDI_t8Builder(__safeDI_\(Self.mockDifferencePrefix)T8_configuration: safeDIOverrides.t8Builder)\n        }"
+		let binding = "        let t8Builder = Instantiator<\(Self.mockDifferencePrefix)T8>(__safeDI_t8Builder)"
 		let construction = "        return \(Self.mockDifferencePrefix)T7(t8Builder: t8Builder)"
 		var originalLines = [Substring]()
 		var editedLines = [Substring]()
@@ -4734,7 +4732,7 @@ struct SafeDIToolGraphFuzzerTests {
 			return
 		}
 		let fileName = "\(Self.mockDifferencePrefix)T7+SafeDIMock.swift"
-		let condition = "if let safeDIBuilder = __safeDI_\(Self.mockDifferencePrefix)T7_configuration.safeDIBuilder { safeDIBuilder(t8Builder) } else"
+		let condition = "if let safeDIBuilder = safeDIOverrides.t8Builder.t7Builder.safeDIBuilder { safeDIBuilder(t8Builder) } else"
 		let construction = "\(Self.mockDifferencePrefix)T7(t8Builder: t8Builder)"
 		var editedRenamedFiles = renamedFiles
 		#expect(renamedFiles[fileName]?.contains("\(condition) { \(construction) }") == true)
@@ -4822,7 +4820,7 @@ struct SafeDIToolGraphFuzzerTests {
 				.replacingOccurrences(of: "init(\n            _ safeDIBuilder", with: "init(\n            t7Builder: \(t7Configuration) = .init(),\n            _ safeDIBuilder")
 				.replacingOccurrences(of: "            self.safeDIBuilder = safeDIBuilder\n", with: "            self.t7Builder = t7Builder\n            self.safeDIBuilder = safeDIBuilder\n")
 				.replacingOccurrences(of: "        /// Overrides how this type", with: "        let t7Builder: \(t7Configuration)\n        /// Overrides how this type")
-		}.replacingOccurrences(of: "__safeDI_\(Self.mockDifferencePrefix)T7_configuration.t8Builder,", with: "__safeDI_\(Self.mockDifferencePrefix)T7_configuration.renamedLabel,")
+		}.replacingOccurrences(of: "safeDIOverrides.t7Builder.t8Builder.", with: "safeDIOverrides.t7Builder.renamedLabel.")
 
 		let differences = GraphFuzzerToolOutcome.differences(between: toolRuns.firstOutcome, and: .accepted(generatedFiles: editedFiles, warnings: warnings), comparingCode: .inAnyOrderOfExtensions, renaming: Self.reversalOfEveryOrder)
 
@@ -4867,83 +4865,6 @@ struct SafeDIToolGraphFuzzerTests {
 		#expect(try await Self.aspectsOfT7sMockWithDroppedOverride(editedTo: "{ fatalError() }") == [.mockCode])
 	}
 
-	/// The aspects of the difference in `T7`'s mock between the graph of `lazyCycleWithTwoLabelsFixture` and its reversal of
-	/// type names, with the reversal's `text` replaced by `replacement`. With the type-key layout, `T7`'s mock hoists the
-	/// builder of each type into a function that takes the type's configuration, and the cycle's back-edge is the field the
-	/// graph's `T8` configuration drops: the graph passes `T7.SafeDIMockConfiguration()` where the reversal reads
-	/// `__safeDI_<prefix>T8_configuration.t7Builder`.
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	private static func aspectsOfT7sLaidOutMock(replacing text: String, with replacement: String) async throws -> [GraphFuzzerOutcomeDifference.Aspect] {
-		let toolRuns = try await GraphFuzzerOracle.toolRuns(of: lazyCycleWithTwoLabelsFixture, multiModuleRenamings: [])
-		let reversalOfTypeNames = try #require(toolRuns.renamedOutcomes.first { $0.renaming.reversesTypeNames && !$0.renaming.reversesLabels && !$0.renaming.reversesFileNames })
-		guard case let .accepted(renamedFiles, renamedWarnings) = reversalOfTypeNames.outcome else {
-			Issue.record("The fixture's graph is rejected.")
-			return []
-		}
-		let fileName = "\(mockDifferencePrefix)T7+SafeDIMock.swift"
-		var editedFiles = renamedFiles
-		#expect(renamedFiles[fileName]?.components(separatedBy: text).count == 2, "The reversal's mock holds `\(text)` once.")
-		editedFiles[fileName] = renamedFiles[fileName]?.replacingOccurrences(of: text, with: replacement)
-		return GraphFuzzerToolOutcome.differences(between: toolRuns.firstOutcome, and: .accepted(generatedFiles: editedFiles, warnings: renamedWarnings), comparingCode: .inAnyOrderOfExtensions, renaming: reversalOfTypeNames.renaming)
-			.filter { $0.fileName == fileName }
-			.map(\.aspect)
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func differences_nameNeitherReason_whenALaidOutMockPassesADefaultConfigurationWhereBothOutcomesHaveTheField() async throws {
-		// The root's `t8Builder` field is in both outcomes, so a default in its place is no dropped field.
-		let prefix = Self.mockDifferencePrefix
-		#expect(try await Self.aspectsOfT7sLaidOutMock(
-			replacing: "__safeDI_\(prefix)T8_configuration: safeDIOverrides.t8Builder)",
-			with: "__safeDI_\(prefix)T8_configuration: \(prefix)T8.SafeDIMockConfiguration())",
-		) == [.mockCode])
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func differences_nameNeitherReason_whenALaidOutMockReadsTheDroppedFieldThroughAnotherConfiguration() async throws {
-		// The field the other outcome drops, read through the root's configuration rather than its owner's at that place.
-		let prefix = Self.mockDifferencePrefix
-		#expect(try await Self.aspectsOfT7sLaidOutMock(
-			replacing: "__safeDI_\(prefix)T7_configuration: __safeDI_\(prefix)T8_configuration.t7Builder,",
-			with: "__safeDI_\(prefix)T7_configuration: safeDIOverrides.t8Builder.t7Builder,",
-		) == [.mockCode])
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func differences_nameNeitherReason_whenALaidOutMockPassesTheDefaultOfAnotherTypeForTheDroppedField() async throws {
-		let prefix = Self.mockDifferencePrefix
-		#expect(try await Self.aspectsOfT7sLaidOutMock(
-			replacing: "__safeDI_\(prefix)T7_configuration: __safeDI_\(prefix)T8_configuration.t7Builder,",
-			with: "__safeDI_\(prefix)T7_configuration: \(prefix)T8.SafeDIMockConfiguration(),",
-		) == [.mockCode])
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func differences_nameNeitherReason_whenALaidOutMockDropsTheNearestConfigurationItIsHanded() async throws {
-		// The cycle's closing call passes its nearest configuration in both outcomes; passing only the default is no drop.
-		let prefix = Self.mockDifferencePrefix
-		#expect(try await Self.aspectsOfT7sLaidOutMock(
-			replacing: "__safeDI_\(prefix)T8_configuration_nearest ?? \(prefix)T8.SafeDIMockConfiguration()",
-			with: "\(prefix)T8.SafeDIMockConfiguration()",
-		) == [.mockCode])
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func differences_nameNeitherReason_whenALaidOutMockPassesADefaultConfigurationWhereItHoldsTheDroppedField() async throws {
-		// The reversal holds the field the graph drops, and builds its type's configuration afresh in its place, so the
-		// override the field holds is never read.
-		let prefix = Self.mockDifferencePrefix
-		#expect(try await Self.aspectsOfT7sLaidOutMock(
-			replacing: "__safeDI_\(prefix)T7_configuration: __safeDI_\(prefix)T8_configuration.t7Builder,",
-			with: "__safeDI_\(prefix)T7_configuration: \(prefix)T7.SafeDIMockConfiguration(),",
-		) == [.mockCode])
-	}
-
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func differences_namePresence_whenALazyCycleOfErasedTypesDropsAField() async throws {
@@ -4956,8 +4877,8 @@ struct SafeDIToolGraphFuzzerTests {
 		}
 
 		// Beneath the dropped field, an erased node with a configuration struct and an erased leaf.
-		#expect(generatedFiles[fileName]?.contains("__safeDI_\(Self.mockDifferencePrefix)T8_configuration.safeDIBuilder { \(Self.mockDifferencePrefix)AnyT8(safeDIBuilder(anyT7Builder, anyT4)) }") == true)
-		#expect(generatedFiles[fileName]?.contains("__safeDI_\(Self.mockDifferencePrefix)T8_configuration.anyT4 { safeDIBuilder() } else { \(Self.mockDifferencePrefix)AnyT4(\(Self.mockDifferencePrefix)T4()) }") == true)
+		#expect(generatedFiles[fileName]?.contains("safeDIOverrides.anyT7Builder.anyT8Builder.safeDIBuilder { \(Self.mockDifferencePrefix)AnyT8(safeDIBuilder(anyT7Builder, anyT4)) }") == true)
+		#expect(generatedFiles[fileName]?.contains("safeDIOverrides.anyT7Builder.anyT8Builder.anyT4 { safeDIBuilder() } else { \(Self.mockDifferencePrefix)AnyT4(\(Self.mockDifferencePrefix)T4()) }") == true)
 		#expect(Set(GraphFuzzerToolOutcome.differences(between: toolRuns.firstOutcome, and: reversalOfTypeNames.outcome, comparingCode: .inAnyOrderOfExtensions, renaming: reversalOfTypeNames.renaming).map(\.aspect)) == [.mockConfigurationFieldPresence])
 	}
 
@@ -4971,7 +4892,7 @@ struct SafeDIToolGraphFuzzerTests {
 			return
 		}
 		let fileName = "\(Self.mockDifferencePrefix)T8+SafeDIMock.swift"
-		let condition = "if let safeDIBuilder = __safeDI_\(Self.mockDifferencePrefix)T8_configuration.safeDIBuilder { "
+		let condition = "if let safeDIBuilder = safeDIOverrides.anyT7Builder.anyT8Builder.safeDIBuilder { "
 		var editedFiles = generatedFiles
 		#expect(generatedFiles[fileName]?.contains("\(condition)\(Self.mockDifferencePrefix)AnyT8(safeDIBuilder(") == true)
 		editedFiles[fileName] = generatedFiles[fileName]?.replacingOccurrences(of: "\(condition)\(Self.mockDifferencePrefix)AnyT8(safeDIBuilder(", with: "\(condition)Other\(Self.mockDifferencePrefix)AnyT8(safeDIBuilder(")
@@ -5315,7 +5236,7 @@ struct SafeDIToolGraphFuzzerTests {
 
 	/// A chain of three mocked types closed into a cycle, with a chord from the first to the third.
 	private static var lazyCycleWithChordFixture: GraphFuzzerFixture {
-		let prefix = Self.mockDifferencePrefix
+		let prefix = mockDifferencePrefix
 		return GraphFuzzerFixture(seed: 1_000_000_011, swiftFileContent: [
 			mockedType("T7", instantiating: [("t8Builder", "Instantiator<\(prefix)T8>"), ("t9Builder", "Instantiator<\(prefix)T9>")]),
 			mockedType("T8", instantiating: [("t9Builder", "Instantiator<\(prefix)T9>")]),
@@ -5433,7 +5354,7 @@ struct SafeDIToolGraphFuzzerTests {
 
 	/// A lazy cycle whose first mocked type also instantiates two values of one type, and has two default-valued parameters.
 	private static var lazyCycleWithTwoLeavesAndDefaultsFixture: GraphFuzzerFixture {
-		let prefix = Self.mockDifferencePrefix
+		let prefix = mockDifferencePrefix
 		return GraphFuzzerFixture(seed: 1_000_000_011, swiftFileContent: [
 			"@Instantiable(generateMock: true)\npublic final class \(prefix)T7: Instantiable {\n\tpublic init(t8Builder: Instantiator<\(prefix)T8>, t4: \(prefix)T3, t5: \(prefix)T3, theme: Int = 1, size: Int = 2) {\n\t\tself.t8Builder = t8Builder\n\t\tself.t4 = t4\n\t\tself.t5 = t5\n\t}\n\t@Instantiated let t8Builder: Instantiator<\(prefix)T8>\n\t@Instantiated let t4: \(prefix)T3\n\t@Instantiated let t5: \(prefix)T3\n}\n",
 			mockedType("T8", instantiating: [("t7Builder", "Instantiator<\(prefix)T7>")]),
@@ -5461,7 +5382,7 @@ struct SafeDIToolGraphFuzzerTests {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func differences_nameNeitherReason_whenADiscardedOverrideReadsAnotherFieldPastADroppedField() async throws {
 		let aspects = try await Self.aspectsOfT7sMockWithDroppedReads {
-			Self.replacing("let t4 = if let safeDIBuilder = __safeDI_\(Self.mockDifferencePrefix)T7_configuration.t4 {", with: "let t4 = if let safeDIBuilder = __safeDI_\(Self.mockDifferencePrefix)T7_configuration.t5 {", in: $0)
+			Self.replacing("let t4 = if let safeDIBuilder = safeDIOverrides.t8Builder.t7Builder.t4 {", with: "let t4 = if let safeDIBuilder = safeDIOverrides.t8Builder.t7Builder.t5 {", in: $0)
 		}
 
 		#expect(aspects == [.mockCode])
@@ -5471,7 +5392,7 @@ struct SafeDIToolGraphFuzzerTests {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func differences_nameNeitherReason_whenADiscardedOverrideReadsAFieldNoStructHolds() async throws {
 		let aspects = try await Self.aspectsOfT7sMockWithDroppedReads {
-			Self.replacing("let t4 = if let safeDIBuilder = __safeDI_\(Self.mockDifferencePrefix)T7_configuration.t4 {", with: "let t4 = if let safeDIBuilder = __safeDI_\(Self.mockDifferencePrefix)T7_configuration.noSuchField {", in: $0)
+			Self.replacing("let t4 = if let safeDIBuilder = safeDIOverrides.t8Builder.t7Builder.t4 {", with: "let t4 = if let safeDIBuilder = safeDIOverrides.t8Builder.t7Builder.noSuchField {", in: $0)
 		}
 
 		#expect(aspects == [.mockCode])
@@ -5480,7 +5401,7 @@ struct SafeDIToolGraphFuzzerTests {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func differences_nameNeitherReason_whenADiscardedConstructionPassesOneDefaultTheFieldOfAnother() async throws {
-		let path = "__safeDI_\(Self.mockDifferencePrefix)T7_configuration"
+		let path = "safeDIOverrides.t8Builder.t7Builder"
 		let aspects = try await Self.aspectsOfT7sMockWithDroppedReads { code in
 			Self.replacing("theme: \(path).theme, size: \(path).size", with: "theme: \(path).size, size: \(path).theme", in: Self.replacing("t5, \(path).theme, \(path).size)", with: "t5, \(path).size, \(path).theme)", in: code))
 		}
@@ -5498,9 +5419,9 @@ struct SafeDIToolGraphFuzzerTests {
 		}).filter { $0.fileName == mockFileName(of: "T8") }.map(\.aspect)
 	}
 
-	private static let erasedNodeOverride = "if let safeDIBuilder = __safeDI_\(Self.mockDifferencePrefix)T8_configuration.safeDIBuilder { "
+	private static let erasedNodeOverride = "if let safeDIBuilder = safeDIOverrides.anyT7Builder.anyT8Builder.safeDIBuilder { "
 
-	private static let erasedLeafOverride = "if let safeDIBuilder = __safeDI_\(Self.mockDifferencePrefix)T8_configuration.anyT4 { "
+	private static let erasedLeafOverride = "if let safeDIBuilder = safeDIOverrides.anyT7Builder.anyT8Builder.anyT4 { "
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
@@ -5531,7 +5452,7 @@ struct SafeDIToolGraphFuzzerTests {
 
 	/// A lazy cycle through `@Sendable` builders whose types each have default-valued parameters.
 	private static var lazyCycleOfSendableBuildersWithDefaultsFixture: GraphFuzzerFixture {
-		let prefix = Self.mockDifferencePrefix
+		let prefix = mockDifferencePrefix
 		return GraphFuzzerFixture(seed: 1_000_000_011, swiftFileContent: [
 			"@Instantiable(generateMock: true)\npublic final class \(prefix)T7: Instantiable, Sendable {\n\tpublic init(t8Builder: SendableInstantiator<\(prefix)T8>, theme: Int = 1) {\n\t\tself.t8Builder = t8Builder\n\t}\n\t@Instantiated let t8Builder: SendableInstantiator<\(prefix)T8>\n}\n",
 			"@Instantiable(generateMock: true)\npublic final class \(prefix)T8: Instantiable, Sendable {\n\tpublic init(t7Builder: SendableInstantiator<\(prefix)T7>, count: Int = 2, size: Int = 3) {\n\t\tself.t7Builder = t7Builder\n\t}\n\t@Instantiated let t7Builder: SendableInstantiator<\(prefix)T7>\n}\n",
@@ -5551,7 +5472,7 @@ struct SafeDIToolGraphFuzzerTests {
 	func differences_nameNeitherReason_whenAnExtractedLocalReadsTheFieldOfAnotherDefault() async throws {
 		let differences = try await Self.differences(of: Self.lazyCycleOfSendableBuildersWithDefaultsFixture, under: Self.reversalOfTypeNames, editingOutcome: { files in
 			let fileName = Self.mockFileName(of: "T8")
-			files[fileName] = Self.replacing("count: __safeDI_\(Self.mockDifferencePrefix)T8_configuration.count()", with: "count: __safeDI_\(Self.mockDifferencePrefix)T8_configuration.size()", in: files[fileName])
+			files[fileName] = Self.replacing("count: __safeDI_t7Builder__overrides.t8Builder.count()", with: "count: __safeDI_t7Builder__overrides.t8Builder.size()", in: files[fileName])
 		})
 
 		#expect(differences.filter { $0.fileName == Self.mockFileName(of: "T8") }.map(\.aspect) == [.mockCode])
@@ -6806,7 +6727,6 @@ struct SafeDIToolGraphFuzzerTests {
 		var gatingDrawJudgedCounts = [String: Int]()
 		var readTwinGraphCount = 0
 		var cleanSubtreeSkipOffGraphCount = 0
-		var rootFunctionKeyJudgedGraphCount = 0
 		var builderSurfaceCounts = [String: Int]()
 		var acceptedSpellingDrawFeatures = Set<GraphFuzzerSeamDrawFeature>()
 		var omittedValueGraphCount = 0
@@ -6869,7 +6789,6 @@ struct SafeDIToolGraphFuzzerTests {
 								isComparedWithRecomputedSignatures: results[index].isComparedWithRecomputedSignatures,
 								isComparedWithReadTwin: results[index].isComparedWithReadTwin,
 								isComparedWithCleanSubtreeSkipOff: results[index].isComparedWithCleanSubtreeSkipOff,
-								isJudgedByRootFunctionKeyOracle: results[index].isJudgedByRootFunctionKeyOracle,
 								retentionCounts: results[index].retentionCounts,
 								valueOracle: results[index].valueOracle,
 								remedyRuns: results[index].remedyRuns,
@@ -6960,9 +6879,6 @@ struct SafeDIToolGraphFuzzerTests {
 							if result.isComparedWithCleanSubtreeSkipOff {
 								cleanSubtreeSkipOffGraphCount += 1
 							}
-							if result.isJudgedByRootFunctionKeyOracle {
-								rootFunctionKeyJudgedGraphCount += 1
-							}
 							if let valueOracle = result.valueOracle {
 								valueOracleCounts.add(valueOracle, isCompared: result.isComparedByValueOracle)
 							}
@@ -7048,9 +6964,6 @@ struct SafeDIToolGraphFuzzerTests {
 		// The graphs the oracle ran again with no skip of a clean subtree in the validation walk, against no pin: a run of the
 		// whole corpus checks the floor below.
 		report.append("clean-subtree-skips \(cleanSubtreeSkipOffGraphCount) \(corpus.name)")
-		// The graphs in which the root function oracle compared two texts of one key, against no pin: a run of the whole seam
-		// corpus checks the floor below.
-		report.append("root-function-keys \(rootFunctionKeyJudgedGraphCount) \(corpus.name)")
 		// The accepted graphs whose seam's own internal mock takes a builder as a closure that takes nothing, which ci.yml's
 		// combine job adds up and checks against a floor of ten: the only count of that shape the corpus draws.
 		if corpus.features.contains(.generateDependencyTree) {
@@ -7127,9 +7040,6 @@ struct SafeDIToolGraphFuzzerTests {
 			}
 			if cleanSubtreeSkipOffGraphCount < Self.cleanSubtreeSkipOffGraphFloor {
 				reportProblem("The oracle ran \(cleanSubtreeSkipOffGraphCount) graphs of the \(corpus.name) corpus again with no skip of a clean subtree in the validation walk, fewer than \(Self.cleanSubtreeSkipOffGraphFloor): the oracle that compares the two runs judges too few graphs to stand in for unit tests.")
-			}
-			if corpus.features.contains(.generateDependencyTree), rootFunctionKeyJudgedGraphCount < Self.rootFunctionKeyJudgedGraphFloor {
-				reportProblem("The root function oracle compared two texts of one key in \(rootFunctionKeyJudgedGraphCount) graphs of the \(corpus.name) corpus, fewer than \(Self.rootFunctionKeyJudgedGraphFloor): it judges too few graphs to stand in for unit tests.")
 			}
 			if readTwinGraphCount != corpus.readTwinGraphCount {
 				reportProblem("The oracle compared \(readTwinGraphCount) graphs of the \(corpus.name) corpus with their read twin, but \(corpus.readTwinGraphCount) are pinned.")
@@ -7225,7 +7135,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// one compile and one link.
 	static let smokeSeeds: [UInt64] = [4, 5, 12, 18, 25, 30, 40, 53, 59, 62, 70, 86, 94, 97, 98, 99, 133, 161, 212, 267, 304, 327, 378, 466, 520, 582, 691, 705, 731, 930, 2_314, 2_420, 2_611, 3_360, 4_002, 4_224, 4_516, 5_889, 6_388]
 
-	static let smokeAndKnownIssueFixtureHash: UInt64 = 0xCAB37FED9DFF7202
+	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x33ADA44BB7966C3B
 
 	/// The remedies the remedy oracle applies in the smoke batch's rejected graphs. `SafeDIToolGraphFuzzerRemedyTests`
 	/// holds a representative of every kind.
@@ -7235,15 +7145,15 @@ struct SafeDIToolGraphFuzzerTests {
 	/// them; `corpusPartitionHash` pins the whole corpus's. The partition draws nothing from the seed, so changing it
 	/// changes neither the graphs nor the pins on them: these pins make a change to the partition deliberate. They
 	/// move with the generator and, this one, with the smoke and known-issue seeds too, as the fixture hashes do.
-	static let smokeAndKnownIssuePartitionHash: UInt64 = 0x2C217A8F5FD7D7A2
+	static let smokeAndKnownIssuePartitionHash: UInt64 = 0x7DD0C0FE5EACE756
 
 	/// The corpus, seeds `0..<corpusSeedCount`, which ci.yml fuzzes on every pull request and push to main and
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=corpus` selects. `knownIssues` lists every one that fails.
 	static let corpusSeedCount = 5_000
 
-	static let corpusFixtureHash: UInt64 = 0x10A1BB35E3724C80
+	static let corpusFixtureHash: UInt64 = 0xAA725E722421C987
 
-	static let corpusPartitionHash: UInt64 = 0x0412BBED8052CEBF
+	static let corpusPartitionHash: UInt64 = 0x856D3A8836B9FF17
 
 	/// How many of the corpus's graphs the tool accepts, and which ones, as a `GraphFuzzerSeedSetSum`, which
 	/// shards of the corpus can add up.
@@ -7255,23 +7165,23 @@ struct SafeDIToolGraphFuzzerTests {
 	/// corpus, so a generator change that stops drawing a feature, or a tool change that stops accepting the graphs that
 	/// draw it, changes these and must update them deliberately, with the hashes and the accepted-seed pins.
 	static let corpusAcceptedFeatureCounts: [GraphFuzzerFeature: Int] = [
-		.constantProperty: 2_616,
-		.erasedConstantProperty: 450,
+		.constantProperty: 2_623,
+		.erasedConstantProperty: 560,
 		.instantiatorProperty: 2_187,
 		.sendableInstantiatorProperty: 917,
 		.erasedInstantiatorProperty: 1_382,
 		.sendableErasedInstantiatorProperty: 493,
-		.lazilyInstantiatedProperty: 555,
-		.sendableLazilyInstantiatedProperty: 149,
+		.lazilyInstantiatedProperty: 777,
+		.sendableLazilyInstantiatedProperty: 191,
 		.erasedLazilyInstantiatedProperty: 216,
 		.forwardedLazilyInstantiatedProperty: 328,
 		.receivedLazilyInstantiatedInstance: 277,
 		.forwardedProperty: 1_686,
 		.optionalForwardedProperty: 889,
-		.requiredReceive: 2_501,
+		.requiredReceive: 2_522,
 		.requiredOptionalReceive: 371,
 		.onlyIfAvailableReceive: 2_287,
-		.requiredAlias: 1_097,
+		.requiredAlias: 1_293,
 		.onlyIfAvailableAlias: 1_033,
 		.aliasOfOnlyIfAvailableAlias: 78,
 		.aliasOfOptionalFormOfProperty: 83,
@@ -7300,7 +7210,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.forwardedTupleKeywordLabel: 173,
 		.forwardedPropertiesTypealiasArgument: 156,
 		.forwardedTupleBuilderReceivedByMockedType: 137,
-		.multipleRoots: 1_935,
+		.multipleRoots: 2_039,
 		.generateMock: 2_490,
 		.lazyCycle: 1_420,
 		.constantCycleCloser: 157,
@@ -7317,7 +7227,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.dependencyMockCannotBuildReceivedBeneathItsOwner: 267,
 		.dependencyMockCannotBuildReceivedLazilyBesideItsMockedOwner: 68,
 		.dependencyMockCannotBuildLazilyInstantiatedReceivedAsOtherKindBesideItsMockedOwner: 9,
-		.sendableAndNonSendableWrappers: 574,
+		.sendableAndNonSendableWrappers: 579,
 		.mockedTypeOnLazyCycle: 704,
 		.typesReceivingEachOtherOnlyIfAvailable: 298,
 		.labelReceivedAsInstanceAndAsInstantiator: 244,
@@ -7476,8 +7386,8 @@ struct SafeDIToolGraphFuzzerTests {
 
 	/// What the base corpus's value oracle compares and skips over the whole corpus (`GraphFuzzerValueOracleCounts`).
 	static let corpusValueOracleCounts = GraphFuzzerValueOracleCounts(
-		rootPairCount: 5_773,
-		rootPairsSum: GraphFuzzerSeedSetSum(value: 0x21D60FFE6D4DA739),
+		rootPairCount: 6_109,
+		rootPairsSum: GraphFuzzerSeedSetSum(value: 0x1BBA8A8003FE33F1),
 		mirroredPairCount: 5_290,
 		mirroredPairsSum: GraphFuzzerSeedSetSum(value: 0x10EC6065CFF8BC10),
 		skipCounts: [
@@ -7499,11 +7409,11 @@ struct SafeDIToolGraphFuzzerTests {
 		drawnMocksMatchingOnlyAfterNormalizationCount: 945,
 		mirroredPairsTakingSamplesCount: 972,
 		forwardedPropertiesSampleCount: 2_727,
-		overridePairCount: 6_849,
-		overridePairsSum: GraphFuzzerSeedSetSum(value: 0xE1FAE895B9AEFAA1),
+		overridePairCount: 7_175,
+		overridePairsSum: GraphFuzzerSeedSetSum(value: 0xF109DE5E9C763A40),
 		overrideFieldKindCounts: [
-			.builder: 4_536,
-			.configuration: 2_313,
+			.builder: 4_522,
+			.configuration: 2_653,
 		],
 		pinnedPlacePairCount: 105,
 		nestedCyclePairCount: 92,
@@ -7597,10 +7507,6 @@ struct SafeDIToolGraphFuzzerTests {
 	/// The fewest graphs of a corpus the oracle must run again with no skip of a clean subtree in the validation walk
 	/// (`GraphFuzzerToolRuns.cleanSubtreeSkipFailure`) for that comparison to stand in for unit tests.
 	static let cleanSubtreeSkipOffGraphFloor = 10
-
-	/// The fewest graphs of the seam corpus in which the root function oracle must compare two texts of one key
-	/// (`GraphFuzzerToolRuns.rootFunctionKeyFailure`) for it to stand in for unit tests.
-	static let rootFunctionKeyJudgedGraphFloor = 10
 
 	/// What the retention oracle judges over the seam corpus (`Corpus.retentionCounts`). Pins: derived on CI.
 	static let seamCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 112, judgedDrawingRetentionShape: 108, judgedThroughHandWrittenBuilder: 69, unpairedExperiments: 0, judgedHoldingForwardingWrapper: ["ErasedInstantiator": 77, "SendableErasedInstantiator": 22, "Instantiator": 73, "SendableInstantiator": 21])
@@ -7894,7 +7800,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// rejects as it rejects the seam whose own tree receives both forms. Pinned by `seamSmokeAndKnownIssueFixtureHash`.
 	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 24, 31, 68, 78, 84, 92, 93, 151, 153, 164, 180, 215, 227, 273, 277, 304, 309, 347, 468, 594, 605, 705, 743, 850, 881, 892, 934, 969, 1_010, 1_020, 1_450, 1_815, 1_837, 1_890, 1_986, 2_006, 3_575, 4_668]
 
-	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x4182046576BCD46D
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x89196AB0BDCA7106
 
 	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
 	/// so a draw that stops landing, or a change in a shape's share, fails
@@ -9087,8 +8993,7 @@ struct SafeDIToolGraphFuzzerTests {
 		7, 14, 21, 27, 35, 45, 51, 107, 114, 116, 157, 167, 204, 264, 265, 272, 281, 300, 309, 323, 338, 342, 364,
 		371, 381, 383, 431, 434, 455, 461, 476, 508, 525, 527, 545, 548, 567, 577, 593, 595, 617, 624, 628, 632, 634,
 		657, 695, 714, 728, 735, 742, 749, 751, 768, 772, 774, 786, 801, 808, 836, 840, 847, 848, 886, 903, 912, 940,
-		948, 953, 991, 993, 1_024, 1_029, 1_035, 1_042, 1_044, 1_051, 1_061, 1_072, 1_073, 1_075, 1_081, 1_084, 1_092, 1_139,
-		1_145, 1_147,
+		948, 953, 993, 1_024, 1_029, 1_035, 1_042, 1_044, 1_051, 1_061, 1_072, 1_073, 1_081, 1_084, 1_092, 1_139, 1_145, 1_147,
 		1_149, 1_163, 1_300, 1_301, 1_322, 1_329, 1_335, 1_352, 1_362, 1_366, 1_369, 1_372, 1_432, 1_433, 1_434, 1_436,
 		1_447, 1_464, 1_483, 1_492, 1_504, 1_521, 1_524, 1_525, 1_531, 1_559, 1_561, 1_563, 1_567, 1_572, 1_580, 1_602,
 		1_633, 1_646, 1_659, 1_664, 1_724, 1_742, 1_758, 1_784, 1_804, 1_805, 1_816, 1_832, 1_857, 1_864, 1_867, 1_896,
@@ -9096,12 +9001,9 @@ struct SafeDIToolGraphFuzzerTests {
 	]
 
 	/// Seeds that `knownIssues` does not list under an inherited shape, whose graphs the seam's draw changes so that
-	/// they fail it, by the shape's reason. Observed, not derived, as `seamCorpusSeedsOfOtherShapes` is. Seeds 991 and
-	/// 1075, which the base corpus lists under `lazyCycleBackEdgeSharesBuilderFunctionsReason`, change only which
-	/// configuration fields their mocks have here, never the mocks' code, so `seamCorpusSeedsOfOtherShapes` leaves them
-	/// out of that shape and they are listed under the lazy cycle's configuration field.
+	/// they fail it, by the shape's reason. Observed, not derived, as `seamCorpusSeedsOfOtherShapes` is.
 	private static let seamCorpusSeedsAddedToInheritedShapes: [String: [UInt64]] = [
-		lazyCycleConfigurationFieldReason: [135, 991, 1_049, 1_075, 1_215, 1_289, 1_293],
+		lazyCycleConfigurationFieldReason: [135, 1_049, 1_215, 1_289, 1_293],
 	]
 
 	/// Seeds whose seam has two or more pass-throughs. They are sorted by label – kept by ruling: a parameter order
@@ -9727,13 +9629,6 @@ struct SafeDIToolGraphFuzzerTests {
 
 	private static let lazyCycleConfigurationFieldReason = "Which back-edge of a lazy cycle loses its override follows the order of type names, so one field of a configuration struct, with the reads of it, is present under one naming and absent under another"
 
-	/// The same cause as `lazyCycleConfigurationFieldReason`, where the configuration field the back-edge drops also decides
-	/// which of the laid-out mock's calls share a hoisted builder function, so the layout writes one function more or fewer,
-	/// with its `_` name. With `computeCycleEdges` made to pick the same edges under both namings, both namings of every
-	/// listed seed generate the same code, so the difference is the edge choice, not the layout:
-	/// `toolRuns_generateSameCodeUnderRenamingsOfTypeNames_whenCycleEdgesAreChosenInOriginalOrder` holds each seed to it.
-	private static let lazyCycleBackEdgeSharesBuilderFunctionsReason = "Which back-edge of a lazy cycle loses its override follows the order of type names, and so which calls of the laid-out mock share a builder function: one field of a configuration struct is present under one naming and absent under another, and the mock declares one builder function more or fewer"
-
 	private static let mockParameterAndFieldOrderAndLazyCycleConfigurationFieldReason = "\(mockParameterAndFieldOrderReason), and which back-edge of a lazy cycle loses its override follows the order of type names, so one field of a configuration struct is present under one naming and absent under another"
 
 	// The remedy oracle's shapes: advice an error states that does not fix it. Each names its minimal graph, a test in
@@ -9820,32 +9715,26 @@ struct SafeDIToolGraphFuzzerTests {
 			],
 		),
 		GraphFuzzerKnownIssue(
-			reason: lazyCycleBackEdgeSharesBuilderFunctionsReason,
-			signatures: [.renamedGraphDiffers(.mockConfigurationFieldPresence), .renamedGraphDiffers(.mockCode)],
-			seeds: [
-				311, 525, 991, 1_075, 1_857, 2_013, 3_180, 3_215, 3_221, 3_584, 3_832, 4_776,
-			],
-		),
-		GraphFuzzerKnownIssue(
 			reason: lazyCycleConfigurationFieldReason,
 			signatures: [.renamedGraphDiffers(.mockConfigurationFieldPresence)],
 			seeds: [
-				3, 35, 107, 114, 116, 131, 168, 204, 223, 241, 264, 265, 323, 338, 364, 383, 390, 431, 448, 450,
-				473, 508, 515, 527, 545, 567, 595, 617, 628, 630, 644, 680, 714, 728, 732, 735, 742, 749, 751, 768, 785,
-				786, 836, 847, 886, 912, 940, 948, 953, 975, 987, 993, 1_004, 1_029, 1_044, 1_051, 1_061, 1_064, 1_072,
-				1_084, 1_092, 1_139, 1_145, 1_147, 1_149, 1_172, 1_236, 1_244, 1_322, 1_329, 1_352, 1_362, 1_372,
-				1_433, 1_441, 1_447, 1_453, 1_464, 1_492, 1_504, 1_524, 1_531, 1_559, 1_567, 1_580, 1_602, 1_633, 1_708,
-				1_758, 1_781, 1_784, 1_804, 1_896, 1_926, 1_938, 1_972, 2_009, 2_017, 2_084, 2_123, 2_152, 2_165, 2_234,
-				2_249, 2_270, 2_277, 2_282, 2_287, 2_316, 2_325, 2_335, 2_348, 2_389, 2_403, 2_430, 2_432, 2_437, 2_444,
-				2_456, 2_529, 2_555, 2_577, 2_630, 2_633, 2_637, 2_669, 2_682, 2_732, 2_808, 2_835, 2_845, 2_874, 2_914,
-				2_972, 3_004, 3_064, 3_074, 3_075, 3_091, 3_134, 3_183, 3_196, 3_232, 3_241, 3_250, 3_252, 3_298, 3_306,
-				3_329, 3_344, 3_345, 3_359, 3_361, 3_430, 3_504, 3_506, 3_522, 3_526, 3_533, 3_541, 3_567, 3_577, 3_579, 3_582,
-				3_588, 3_594, 3_596, 3_602, 3_648, 3_699, 3_707, 3_715, 3_723, 3_741, 3_750, 3_775, 3_776, 3_805,
-				3_820, 3_823, 3_826, 3_850, 3_858, 3_879, 3_885, 3_894, 3_915, 4_044, 4_068, 4_102, 4_107, 4_110,
-				4_117, 4_122, 4_125, 4_156, 4_177, 4_206, 4_213, 4_215, 4_217, 4_227, 4_254, 4_260, 4_266, 4_281, 4_304,
-				4_344, 4_358, 4_371, 4_396, 4_404, 4_420, 4_428, 4_515, 4_534, 4_545, 4_549, 4_567, 4_603, 4_619, 4_637,
-				4_640, 4_642, 4_666, 4_684, 4_699, 4_707, 4_716, 4_717, 4_775, 4_781, 4_783, 4_786, 4_795, 4_859,
-				4_904, 4_918, 4_921, 4_922, 4_944, 4_963, 4_964, 4_996,
+				3, 35, 107, 114, 116, 131, 168, 204, 223, 241, 264, 265, 311, 323, 338, 364, 383, 390, 431, 448, 450,
+				473, 508, 515, 525, 527, 545, 567, 595, 617, 628, 630, 644, 680, 714, 728, 732, 735, 742, 749, 751, 768,
+				785, 786, 836, 847, 886, 912, 940, 948, 953, 975, 987, 991, 993, 1_004, 1_029, 1_044, 1_051, 1_061,
+				1_064, 1_072, 1_075, 1_084, 1_092, 1_139, 1_145, 1_147, 1_149, 1_172, 1_236, 1_244, 1_322, 1_329, 1_352,
+				1_362, 1_372, 1_433, 1_441, 1_447, 1_453, 1_464, 1_492, 1_504, 1_524, 1_531, 1_559, 1_567, 1_580, 1_602,
+				1_633, 1_708, 1_758, 1_781, 1_784, 1_804, 1_857, 1_896, 1_926, 1_938, 1_972, 2_009, 2_013, 2_017, 2_084,
+				2_123, 2_152, 2_165, 2_234, 2_249, 2_270, 2_277, 2_282, 2_287, 2_316, 2_325, 2_335, 2_348, 2_389, 2_403,
+				2_430, 2_432, 2_437, 2_444, 2_456, 2_529, 2_555, 2_577, 2_630, 2_633, 2_637, 2_669, 2_682, 2_732, 2_808,
+				2_835, 2_845, 2_874, 2_914, 2_972, 3_004, 3_064, 3_074, 3_075, 3_091, 3_134, 3_180, 3_183, 3_196, 3_215,
+				3_221, 3_232, 3_241, 3_250, 3_252, 3_298, 3_306, 3_329, 3_344, 3_345, 3_359, 3_361, 3_430, 3_504, 3_506,
+				3_522, 3_526, 3_533, 3_541, 3_567, 3_577, 3_579, 3_582, 3_584, 3_588, 3_594, 3_596, 3_602, 3_648, 3_699,
+				3_707, 3_715, 3_723, 3_741, 3_750, 3_775, 3_776, 3_805, 3_820, 3_823, 3_826, 3_832, 3_850, 3_858, 3_879,
+				3_885, 3_894, 3_915, 4_044, 4_068, 4_102, 4_107, 4_110, 4_117, 4_122, 4_125, 4_156, 4_177, 4_206, 4_213,
+				4_215, 4_217, 4_227, 4_254, 4_260, 4_266, 4_281, 4_304, 4_344, 4_358, 4_371, 4_396, 4_404, 4_420, 4_428,
+				4_515, 4_534, 4_545, 4_549, 4_567, 4_603, 4_619, 4_637, 4_640, 4_642, 4_666, 4_684, 4_699, 4_707, 4_716,
+				4_717, 4_775, 4_776, 4_781, 4_783, 4_786, 4_795, 4_859, 4_904, 4_918, 4_921, 4_922, 4_944, 4_963, 4_964,
+				4_996,
 			],
 		),
 		// A graph that shows both reasons, under one renaming or across them, is documented only by the shape that names both.

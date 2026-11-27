@@ -1138,8 +1138,8 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let __safeDI_apiBuilder = apiBuilder
+		        _ = Page.__safeDI_Page_mock_50657E78D19F8704.self // If this line does not compile, compile the code SafeDI generates for module Feed into Feed: under Bazel, add Feed’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        func __safeDI_page() -> Page {
-		            _ = Page.__safeDI_Page_mock_50657E78D19F8704.self // If this line does not compile, compile the code SafeDI generates for module Feed into Feed: under Bazel, add Feed’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            let apiBuilder: () -> any Api = __safeDI_apiBuilder
 		            return Page.__safeDI_mock(apiBuilder: .init(__safeDI_noScope: apiBuilder), safeDIOverrides: safeDIOverrides.page)
 		        }
@@ -1525,7 +1525,7 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let token: Token? = if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
+		        let token = if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
 		        _ = Shell.__safeDI_Shell_mock_AEA38F513AD02F1C.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        let shell = Shell.__safeDI_mock(token: token, safeDIOverrides: safeDIOverrides.shell)
 		        return Root(shell: shell)
@@ -4279,8 +4279,8 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		    ) -> Screen {
 		        let __safeDI_serviceBuilder = serviceBuilder
 		        let serviceBuilder_Thing: Thing? = safeDIOverrides.serviceBuilder_Thing
+		        _ = Panel.__safeDI_Panel_mock_615ECD1543E5AA59.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        func __safeDI_panel() -> Panel {
-		            _ = Panel.__safeDI_Panel_mock_615ECD1543E5AA59.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            let serviceBuilder_: () -> any Service = __safeDI_serviceBuilder
 		            let serviceBuilder: Thing? = serviceBuilder_Thing
 		            return Panel.__safeDI_mock(serviceBuilder_: .init(__safeDI_noScope: serviceBuilder_), serviceBuilder: serviceBuilder, safeDIOverrides: safeDIOverrides.panel)
@@ -4989,7 +4989,8 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        serviceSendableBuilder: (@Sendable () -> any Service)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        @Sendable nonisolated func __safeDI_heldBuilder(safeDIBuilder: (@Sendable (@escaping () -> any Service) -> Panel)?) -> Panel {
+		        let __safeDI_heldBuilder__safeDIBuilder = safeDIOverrides.heldBuilder
+		        @Sendable nonisolated func __safeDI_heldBuilder() -> Panel {
 		            func __safeDI_serviceBuilder_Panel_service() -> any Service {
 		                func __safeDI_service() -> DefaultService {
 		                    let tracker = Tracker()
@@ -5002,12 +5003,9 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		                .init(service: { _ in __safeDI_serviceBuilder_Panel_service() })
 		            }
 		            _ = Panel.__safeDI_Panel_mock_4C19E5205B40458C.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return if let safeDIBuilder = safeDIBuilder { safeDIBuilder({ if let serviceSendableBuilder { serviceSendableBuilder() } else { __safeDI_serviceBuilder_Panel_service() } }) } else { Panel.__safeDI_mock(serviceBuilder: serviceSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Panel()) }
+		            return if let safeDIBuilder = __safeDI_heldBuilder__safeDIBuilder { safeDIBuilder({ if let serviceSendableBuilder { serviceSendableBuilder() } else { __safeDI_serviceBuilder_Panel_service() } }) } else { Panel.__safeDI_mock(serviceBuilder: serviceSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Panel()) }
 		        }
-		        let __safeDI_heldBuilder__safeDIBuilder: (@Sendable (@escaping () -> any Service) -> Panel)? = safeDIOverrides.heldBuilder
-		        let heldBuilder = SendableInstantiator<Panel> {
-		            __safeDI_heldBuilder(safeDIBuilder: __safeDI_heldBuilder__safeDIBuilder)
-		        }
+		        let heldBuilder = SendableInstantiator<Panel>(__safeDI_heldBuilder)
 		        return Root(heldBuilder: heldBuilder)
 		    }
 		}
@@ -5104,7 +5102,8 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        serviceSendableBuilder: (@Sendable () -> any Service)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        @Sendable nonisolated func __safeDI_heldBuilder(safeDIBuilder: (@Sendable (@escaping () -> any Service) -> Panel)?) -> Panel {
+		        let __safeDI_heldBuilder__safeDIBuilder = safeDIOverrides.heldBuilder
+		        @Sendable nonisolated func __safeDI_heldBuilder() -> Panel {
 		            func __safeDI_serviceBuilder_Panel_service() -> any Service {
 		                func __safeDI_service() -> DefaultService {
 		                    let tracker = Tracker()
@@ -5117,12 +5116,9 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		                .init(service: { _ in __safeDI_serviceBuilder_Panel_service() })
 		            }
 		            _ = Panel.__safeDI_Panel_mock_4C19E5205B40458C.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return if let safeDIBuilder = safeDIBuilder { safeDIBuilder({ if let serviceSendableBuilder { serviceSendableBuilder() } else { __safeDI_serviceBuilder_Panel_service() } }) } else { Panel.__safeDI_mock(serviceBuilder: serviceSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Panel()) }
+		            return if let safeDIBuilder = __safeDI_heldBuilder__safeDIBuilder { safeDIBuilder({ if let serviceSendableBuilder { serviceSendableBuilder() } else { __safeDI_serviceBuilder_Panel_service() } }) } else { Panel.__safeDI_mock(serviceBuilder: serviceSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Panel()) }
 		        }
-		        let __safeDI_heldBuilder__safeDIBuilder: (@Sendable (@escaping () -> any Service) -> Panel)? = safeDIOverrides.heldBuilder
-		        let heldBuilder = SendableInstantiator<Panel> {
-		            __safeDI_heldBuilder(safeDIBuilder: __safeDI_heldBuilder__safeDIBuilder)
-		        }
+		        let heldBuilder = SendableInstantiator<Panel>(__safeDI_heldBuilder)
 		        return Root(heldBuilder: heldBuilder)
 		    }
 		}
@@ -5510,7 +5506,7 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let token: Token? = if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
+		        let token = if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
 		        _ = Shell.__safeDI_Shell_mock_AEA38F513AD02F1C.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        let shell = Shell.__safeDI_mock(token: token, safeDIOverrides: safeDIOverrides.shell)
 		        return Root(shell: shell)
@@ -6186,8 +6182,8 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let __safeDI_apiBuilder = apiBuilder
+		        _ = Shell.__safeDI_Shell_mock_BCE44FADDA8E6FCF.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        func __safeDI_shell() -> Shell {
-		            _ = Shell.__safeDI_Shell_mock_BCE44FADDA8E6FCF.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            let apiBuilder: () -> any Api = __safeDI_apiBuilder
 		            return Shell.__safeDI_mock(apiBuilder: .init(__safeDI_noScope: apiBuilder), safeDIOverrides: safeDIOverrides.shell)
 		        }

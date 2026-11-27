@@ -418,11 +418,11 @@ struct SafeDIToolCombinedOutputTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_middle(__safeDI_Middle_configuration: Middle.SafeDIMockConfiguration) -> Middle {
-		            let leaf = if let safeDIBuilder = __safeDI_Middle_configuration.leaf { safeDIBuilder() } else { Leaf() }
-		            return if let safeDIBuilder = __safeDI_Middle_configuration.safeDIBuilder { safeDIBuilder(leaf) } else { Middle(leaf: leaf) }
+		        func __safeDI_middle() -> Middle {
+		            let leaf = if let safeDIBuilder = safeDIOverrides.middle.leaf { safeDIBuilder() } else { Leaf() }
+		            return if let safeDIBuilder = safeDIOverrides.middle.safeDIBuilder { safeDIBuilder(leaf) } else { Middle(leaf: leaf) }
 		        }
-		        let middle: Middle = __safeDI_middle(__safeDI_Middle_configuration: safeDIOverrides.middle)
+		        let middle: Middle = __safeDI_middle()
 		        return Root(middle: middle)
 		    }
 		}

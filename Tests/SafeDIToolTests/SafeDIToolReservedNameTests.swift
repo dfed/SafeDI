@@ -228,17 +228,17 @@ struct SafeDIToolReservedNameTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_SafeDIOverrides(__safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
-		            let SafeDIMockConfiguration = if let safeDIBuilder = __safeDI_Child_configuration.SafeDIMockConfiguration { safeDIBuilder() } else { Leaf() }
-		            return if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(SafeDIMockConfiguration) } else { Child(SafeDIMockConfiguration: SafeDIMockConfiguration) }
+		        func __safeDI_SafeDIOverrides() -> Child {
+		            let SafeDIMockConfiguration = if let safeDIBuilder = safeDIOverrides.SafeDIOverrides.SafeDIMockConfiguration { safeDIBuilder() } else { Leaf() }
+		            return if let safeDIBuilder = safeDIOverrides.SafeDIOverrides.safeDIBuilder { safeDIBuilder(SafeDIMockConfiguration) } else { Child(SafeDIMockConfiguration: SafeDIMockConfiguration) }
 		        }
-		        let SafeDIOverrides: Child = __safeDI_SafeDIOverrides(__safeDI_Child_configuration: safeDIOverrides.SafeDIOverrides)
+		        let SafeDIOverrides: Child = __safeDI_SafeDIOverrides()
 		        let mock = if let safeDIBuilder = safeDIOverrides.mock { safeDIBuilder() } else { Leaf() }
-		        func __safeDI_formBuilder(ForwardedProperties: String, __safeDI_Form_configuration: ((String) -> Form)?) -> Form {
-		            if let safeDIBuilder = __safeDI_Form_configuration { safeDIBuilder(ForwardedProperties) } else { Form(ForwardedProperties: ForwardedProperties) }
+		        func __safeDI_formBuilder(ForwardedProperties: String) -> Form {
+		            if let safeDIBuilder = safeDIOverrides.formBuilder { safeDIBuilder(ForwardedProperties) } else { Form(ForwardedProperties: ForwardedProperties) }
 		        }
 		        let formBuilder = Instantiator<Form> {
-		            __safeDI_formBuilder(ForwardedProperties: $0, __safeDI_Form_configuration: safeDIOverrides.formBuilder)
+		            __safeDI_formBuilder(ForwardedProperties: $0)
 		        }
 		        return Root(SafeDIOverrides: SafeDIOverrides, mock: mock, formBuilder: formBuilder)
 		    }

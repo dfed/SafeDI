@@ -28,13 +28,6 @@ extension MockLowering.Walk {
 		sendableOverrideExtractor?.extract(expression, localNameSuffix: localNameSuffix) ?? expression
 	}
 
-	/// `read` as the node reads it: the read itself, or, inside a `@Sendable` function, the local the function's extractor
-	/// binds it to, which reads no overrides' member.
-	func readingOverride(_ read: MockLowering.OverrideRead, localNameSuffix: String) -> MockLowering.OverrideRead {
-		guard let local = sendableOverrideExtractor?.extract(read.text, localNameSuffix: localNameSuffix) else { return read }
-		return MockLowering.OverrideRead(text: local, path: nil, configuration: read.configuration)
-	}
-
 	/// Starts a level of the walk whose nodes are `generators`: its allocator of names holds the builder functions the
 	/// level declares, and inside a `@Sendable` builder function the extractor keeps its locals apart from those and from
 	/// the builder functions the level's nodes declare in their own bodies, before any read there is named.

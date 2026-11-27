@@ -136,11 +136,11 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_filter(__safeDI_AppFilter_configuration: AppFilter.SafeDIMockConfiguration) -> any FilterProtocol {
-		            let ruleSet = if let safeDIBuilder = __safeDI_AppFilter_configuration.ruleSet { safeDIBuilder() } else { RuleSet() }
-		            return if let safeDIBuilder = __safeDI_AppFilter_configuration.safeDIBuilder { safeDIBuilder(ruleSet) } else { AppFilter(ruleSet: ruleSet) }
+		        func __safeDI_filter() -> any FilterProtocol {
+		            let ruleSet = if let safeDIBuilder = safeDIOverrides.filter.ruleSet { safeDIBuilder() } else { RuleSet() }
+		            return if let safeDIBuilder = safeDIOverrides.filter.safeDIBuilder { safeDIBuilder(ruleSet) } else { AppFilter(ruleSet: ruleSet) }
 		        }
-		        let filter: any FilterProtocol = __safeDI_filter(__safeDI_AppFilter_configuration: safeDIOverrides.filter)
+		        let filter: any FilterProtocol = __safeDI_filter()
 		        return Root(filter: filter)
 		    }
 		}
@@ -354,12 +354,10 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_filterBuilder(__safeDI_AppFilter_configuration: (() -> AnyFilter)?) -> AnyFilter {
-		            if let safeDIBuilder = __safeDI_AppFilter_configuration { safeDIBuilder() } else { AnyFilter(AppFilter()) }
+		        func __safeDI_filterBuilder() -> AnyFilter {
+		            if let safeDIBuilder = safeDIOverrides.filterBuilder { safeDIBuilder() } else { AnyFilter(AppFilter()) }
 		        }
-		        let filterBuilder = ErasedInstantiator<(), AnyFilter> {
-		            __safeDI_filterBuilder(__safeDI_AppFilter_configuration: safeDIOverrides.filterBuilder)
-		        }
+		        let filterBuilder = ErasedInstantiator<(), AnyFilter>(__safeDI_filterBuilder)
 		        return Root(filterBuilder: filterBuilder)
 		    }
 		}
@@ -436,12 +434,10 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_filterBuilder(__safeDI_AppFilter_configuration: (() -> any FilterProtocol)?) -> any FilterProtocol {
-		            if let safeDIBuilder = __safeDI_AppFilter_configuration { safeDIBuilder() } else { AppFilter() }
+		        func __safeDI_filterBuilder() -> any FilterProtocol {
+		            if let safeDIBuilder = safeDIOverrides.filterBuilder { safeDIBuilder() } else { AppFilter() }
 		        }
-		        let filterBuilder = ErasedInstantiator<(), any FilterProtocol> {
-		            __safeDI_filterBuilder(__safeDI_AppFilter_configuration: safeDIOverrides.filterBuilder)
-		        }
+		        let filterBuilder = ErasedInstantiator<(), any FilterProtocol>(__safeDI_filterBuilder)
 		        return Root(filterBuilder: filterBuilder)
 		    }
 		}
@@ -527,12 +523,10 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_filter(__safeDI_AppFilter_configuration: (() -> AnyFilter)?) -> AnyFilter {
-		            if let safeDIBuilder = __safeDI_AppFilter_configuration { safeDIBuilder() } else { AnyFilter(AppFilter()) }
+		        func __safeDI_filter() -> AnyFilter {
+		            if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder() } else { AnyFilter(AppFilter()) }
 		        }
-		        let filter = LazilyInstantiated<AnyFilter> {
-		            __safeDI_filter(__safeDI_AppFilter_configuration: safeDIOverrides.filter)
-		        }
+		        let filter = LazilyInstantiated<AnyFilter>(__safeDI_filter)
 		        return Root(filter: filter)
 		    }
 		}
@@ -609,12 +603,10 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_filter(__safeDI_AppFilter_configuration: (() -> any FilterProtocol)?) -> any FilterProtocol {
-		            if let safeDIBuilder = __safeDI_AppFilter_configuration { safeDIBuilder() } else { AppFilter() }
+		        func __safeDI_filter() -> any FilterProtocol {
+		            if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder() } else { AppFilter() }
 		        }
-		        let filter = LazilyInstantiated<any FilterProtocol> {
-		            __safeDI_filter(__safeDI_AppFilter_configuration: safeDIOverrides.filter)
-		        }
+		        let filter = LazilyInstantiated<any FilterProtocol>(__safeDI_filter)
 		        return Root(filter: filter)
 		    }
 		}

@@ -103,13 +103,11 @@ struct SafeDIToolMockDefaultMainActorIsolationTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        @Sendable nonisolated func __safeDI_screenBuilder(__safeDI_Screen_configuration: (@Sendable () -> Screen)?) -> Screen {
-			            if let safeDIBuilder = __safeDI_Screen_configuration { safeDIBuilder() } else { Screen() }
+			        let __safeDI_screenBuilder__safeDIBuilder = safeDIOverrides.screenBuilder
+			        @Sendable nonisolated func __safeDI_screenBuilder() -> Screen {
+			            if let safeDIBuilder = __safeDI_screenBuilder__safeDIBuilder { safeDIBuilder() } else { Screen() }
 			        }
-			        let __safeDI_screenBuilder____safeDI_Screen_configuration: (@Sendable () -> Screen)? = safeDIOverrides.screenBuilder
-			        let screenBuilder = SendableInstantiator<Screen> {
-			            __safeDI_screenBuilder(__safeDI_Screen_configuration: __safeDI_screenBuilder____safeDI_Screen_configuration)
-			        }
+			        let screenBuilder = SendableInstantiator<Screen>(__safeDI_screenBuilder)
 			        return Root(screenBuilder: screenBuilder)
 			    }
 			}
@@ -274,45 +272,37 @@ struct SafeDIToolMockDefaultMainActorIsolationTests: ~Copyable {
 			    @MainActor static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        func __safeDI_client(__safeDI_Client_configuration: Client.SafeDIMockConfiguration) -> Client {
-			            if let safeDIBuilder = __safeDI_Client_configuration.safeDIBuilder { safeDIBuilder(__safeDI_Client_configuration.timeout()) } else { Client(timeout: __safeDI_Client_configuration.timeout()) }
+			        func __safeDI_client() -> Client {
+			            return if let safeDIBuilder = safeDIOverrides.client.safeDIBuilder { safeDIBuilder(safeDIOverrides.client.timeout()) } else { Client(timeout: safeDIOverrides.client.timeout()) }
 			        }
-			        let client: Client = __safeDI_client(__safeDI_Client_configuration: safeDIOverrides.client)
-			        @Sendable nonisolated func __safeDI_client_(__safeDI_Client_configuration: Client.SafeDIMockConfiguration) -> Client {
-			            if let safeDIBuilder = __safeDI_Client_configuration.safeDIBuilder { safeDIBuilder(__safeDI_Client_configuration.timeout()) } else { Client(timeout: __safeDI_Client_configuration.timeout()) }
+			        let client: Client = __safeDI_client()
+			        let __safeDI_workerBuilder__overrides = safeDIOverrides.workerBuilder
+			        @Sendable nonisolated func __safeDI_workerBuilder(jobID: String) -> Worker {
+			            let logger: any Logging = if let safeDIBuilder = __safeDI_workerBuilder__overrides.logger { safeDIBuilder() } else { ConsoleLogger() }
+			            func __safeDI_client() -> Client {
+			                return if let safeDIBuilder = __safeDI_workerBuilder__overrides.client.safeDIBuilder { safeDIBuilder(__safeDI_workerBuilder__overrides.client.timeout()) } else { Client(timeout: __safeDI_workerBuilder__overrides.client.timeout()) }
+			            }
+			            let client: Client = __safeDI_client()
+			            return if let safeDIBuilder = __safeDI_workerBuilder__overrides.safeDIBuilder { safeDIBuilder(jobID, __safeDI_workerBuilder__overrides.retries(), logger, client) } else { Worker(jobID: jobID, retries: __safeDI_workerBuilder__overrides.retries(), logger: logger, client: client) }
 			        }
-			        @Sendable nonisolated func __safeDI_workerBuilder(jobID: String, __safeDI_Worker_configuration: Worker.SafeDIMockConfiguration) -> Worker {
-			            let logger: any Logging = if let safeDIBuilder = __safeDI_Worker_configuration.logger { safeDIBuilder() } else { ConsoleLogger() }
-			            let client: Client = __safeDI_client_(__safeDI_Client_configuration: __safeDI_Worker_configuration.client)
-			            return if let safeDIBuilder = __safeDI_Worker_configuration.safeDIBuilder { safeDIBuilder(jobID, __safeDI_Worker_configuration.retries(), logger, client) } else { Worker(jobID: jobID, retries: __safeDI_Worker_configuration.retries(), logger: logger, client: client) }
-			        }
-			        let __safeDI_workerBuilder____safeDI_Worker_configuration: Worker.SafeDIMockConfiguration = safeDIOverrides.workerBuilder
 			        let workerBuilder = SendableInstantiator<Worker> {
-			            __safeDI_workerBuilder(jobID: $0, __safeDI_Worker_configuration: __safeDI_workerBuilder____safeDI_Worker_configuration)
+			            __safeDI_workerBuilder(jobID: $0)
 			        }
-			        @Sendable nonisolated func __safeDI_cache(__safeDI_Cache_configuration: Cache.SafeDIMockConfiguration) -> Cache {
-			            if let safeDIBuilder = __safeDI_Cache_configuration.safeDIBuilder { safeDIBuilder(__safeDI_Cache_configuration.limit()) } else { Cache(limit: __safeDI_Cache_configuration.limit()) }
+			        let __safeDI_cache__overrides = safeDIOverrides.cache
+			        @Sendable nonisolated func __safeDI_cache() -> Cache {
+			            if let safeDIBuilder = __safeDI_cache__overrides.safeDIBuilder { safeDIBuilder(__safeDI_cache__overrides.limit()) } else { Cache(limit: __safeDI_cache__overrides.limit()) }
 			        }
-			        let __safeDI_cache____safeDI_Cache_configuration: Cache.SafeDIMockConfiguration = safeDIOverrides.cache
-			        let cache = SendableLazilyInstantiated<Cache> {
-			            __safeDI_cache(__safeDI_Cache_configuration: __safeDI_cache____safeDI_Cache_configuration)
-			        }
-			        @Sendable nonisolated func __safeDI_pingBuilder(__safeDI_Ping_configuration: Ping.SafeDIMockConfiguration) -> Ping {
-			            let pongBuilder = SendableInstantiator<Pong> {
-			                __safeDI_pongBuilder(__safeDI_Pong_configuration: __safeDI_Ping_configuration.pongBuilder, __safeDI_Ping_configuration_nearest: __safeDI_Ping_configuration)
+			        let cache = SendableLazilyInstantiated<Cache>(__safeDI_cache)
+			        let __safeDI_pingBuilder__overrides = safeDIOverrides.pingBuilder
+			        @Sendable nonisolated func __safeDI_pingBuilder() -> Ping {
+			            @Sendable nonisolated func __safeDI_pongBuilder() -> Pong {
+			                let pingBuilder = SendableInstantiator<Ping>(__safeDI_pingBuilder)
+			                return if let safeDIBuilder = __safeDI_pingBuilder__overrides.pongBuilder.safeDIBuilder { safeDIBuilder(__safeDI_pingBuilder__overrides.pongBuilder.label(), pingBuilder) } else { Pong(label: __safeDI_pingBuilder__overrides.pongBuilder.label(), pingBuilder: pingBuilder) }
 			            }
-			            return if let safeDIBuilder = __safeDI_Ping_configuration.safeDIBuilder { safeDIBuilder(__safeDI_Ping_configuration.label(), pongBuilder) } else { Ping(label: __safeDI_Ping_configuration.label(), pongBuilder: pongBuilder) }
+			            let pongBuilder = SendableInstantiator<Pong>(__safeDI_pongBuilder)
+			            return if let safeDIBuilder = __safeDI_pingBuilder__overrides.safeDIBuilder { safeDIBuilder(__safeDI_pingBuilder__overrides.label(), pongBuilder) } else { Ping(label: __safeDI_pingBuilder__overrides.label(), pongBuilder: pongBuilder) }
 			        }
-			        @Sendable nonisolated func __safeDI_pongBuilder(__safeDI_Pong_configuration: Pong.SafeDIMockConfiguration, __safeDI_Ping_configuration_nearest: Ping.SafeDIMockConfiguration?) -> Pong {
-			            let pingBuilder = SendableInstantiator<Ping> {
-			                __safeDI_pingBuilder(__safeDI_Ping_configuration: __safeDI_Ping_configuration_nearest ?? Ping.SafeDIMockConfiguration())
-			            }
-			            return if let safeDIBuilder = __safeDI_Pong_configuration.safeDIBuilder { safeDIBuilder(__safeDI_Pong_configuration.label(), pingBuilder) } else { Pong(label: __safeDI_Pong_configuration.label(), pingBuilder: pingBuilder) }
-			        }
-			        let __safeDI_pingBuilder____safeDI_Ping_configuration: Ping.SafeDIMockConfiguration = safeDIOverrides.pingBuilder
-			        let pingBuilder = SendableInstantiator<Ping> {
-			            __safeDI_pingBuilder(__safeDI_Ping_configuration: __safeDI_pingBuilder____safeDI_Ping_configuration)
-			        }
+			        let pingBuilder = SendableInstantiator<Ping>(__safeDI_pingBuilder)
 			        return Root(client: client, workerBuilder: workerBuilder, cache: cache, pingBuilder: pingBuilder)
 			    }
 			}

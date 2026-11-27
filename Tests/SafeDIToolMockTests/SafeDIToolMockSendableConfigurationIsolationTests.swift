@@ -121,17 +121,15 @@ struct SafeDIToolMockSendableConfigurationIsolationTests: ~Copyable {
 			    @MainActor static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        func __safeDI_client(__safeDI_Client_configuration: Client.SafeDIMockConfiguration) -> Client {
-			            if let safeDIBuilder = __safeDI_Client_configuration.safeDIBuilder { safeDIBuilder(__safeDI_Client_configuration.timeout(), __safeDI_Client_configuration.policy(), __safeDI_Client_configuration.name()) } else { Client(timeout: __safeDI_Client_configuration.timeout(), policy: __safeDI_Client_configuration.policy(), name: __safeDI_Client_configuration.name()) }
+			        func __safeDI_client() -> Client {
+			            return if let safeDIBuilder = safeDIOverrides.client.safeDIBuilder { safeDIBuilder(safeDIOverrides.client.timeout(), safeDIOverrides.client.policy(), safeDIOverrides.client.name()) } else { Client(timeout: safeDIOverrides.client.timeout(), policy: safeDIOverrides.client.policy(), name: safeDIOverrides.client.name()) }
 			        }
-			        let client: Client = __safeDI_client(__safeDI_Client_configuration: safeDIOverrides.client)
-			        @Sendable nonisolated func __safeDI_clientBuilder(__safeDI_Client_configuration: Client.SafeDIMockConfiguration) -> Client {
-			            if let safeDIBuilder = __safeDI_Client_configuration.safeDIBuilder { safeDIBuilder(__safeDI_Client_configuration.timeout(), __safeDI_Client_configuration.policy(), __safeDI_Client_configuration.name()) } else { Client(timeout: __safeDI_Client_configuration.timeout(), policy: __safeDI_Client_configuration.policy(), name: __safeDI_Client_configuration.name()) }
+			        let client: Client = __safeDI_client()
+			        let __safeDI_clientBuilder__overrides = safeDIOverrides.clientBuilder
+			        @Sendable nonisolated func __safeDI_clientBuilder() -> Client {
+			            if let safeDIBuilder = __safeDI_clientBuilder__overrides.safeDIBuilder { safeDIBuilder(__safeDI_clientBuilder__overrides.timeout(), __safeDI_clientBuilder__overrides.policy(), __safeDI_clientBuilder__overrides.name()) } else { Client(timeout: __safeDI_clientBuilder__overrides.timeout(), policy: __safeDI_clientBuilder__overrides.policy(), name: __safeDI_clientBuilder__overrides.name()) }
 			        }
-			        let __safeDI_clientBuilder____safeDI_Client_configuration: Client.SafeDIMockConfiguration = safeDIOverrides.clientBuilder
-			        let clientBuilder = SendableInstantiator<Client> {
-			            __safeDI_clientBuilder(__safeDI_Client_configuration: __safeDI_clientBuilder____safeDI_Client_configuration)
-			        }
+			        let clientBuilder = SendableInstantiator<Client>(__safeDI_clientBuilder)
 			        return Root(client: client, clientBuilder: clientBuilder)
 			    }
 			}
@@ -265,17 +263,15 @@ struct SafeDIToolMockSendableConfigurationIsolationTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        func __safeDI_client(__safeDI_Client_configuration: Client.SafeDIMockConfiguration) -> Client {
-			            if let safeDIBuilder = __safeDI_Client_configuration.safeDIBuilder { safeDIBuilder(__safeDI_Client_configuration.timeout(), __safeDI_Client_configuration.policy(), __safeDI_Client_configuration.name()) } else { Client(timeout: __safeDI_Client_configuration.timeout(), policy: __safeDI_Client_configuration.policy(), name: __safeDI_Client_configuration.name()) }
+			        func __safeDI_client() -> Client {
+			            return if let safeDIBuilder = safeDIOverrides.client.safeDIBuilder { safeDIBuilder(safeDIOverrides.client.timeout(), safeDIOverrides.client.policy(), safeDIOverrides.client.name()) } else { Client(timeout: safeDIOverrides.client.timeout(), policy: safeDIOverrides.client.policy(), name: safeDIOverrides.client.name()) }
 			        }
-			        let client: Client = __safeDI_client(__safeDI_Client_configuration: safeDIOverrides.client)
-			        @Sendable nonisolated func __safeDI_clientBuilder(__safeDI_Client_configuration: Client.SafeDIMockConfiguration) -> Client {
-			            if let safeDIBuilder = __safeDI_Client_configuration.safeDIBuilder { safeDIBuilder(__safeDI_Client_configuration.timeout(), __safeDI_Client_configuration.policy(), __safeDI_Client_configuration.name()) } else { Client(timeout: __safeDI_Client_configuration.timeout(), policy: __safeDI_Client_configuration.policy(), name: __safeDI_Client_configuration.name()) }
+			        let client: Client = __safeDI_client()
+			        let __safeDI_clientBuilder__overrides = safeDIOverrides.clientBuilder
+			        @Sendable nonisolated func __safeDI_clientBuilder() -> Client {
+			            if let safeDIBuilder = __safeDI_clientBuilder__overrides.safeDIBuilder { safeDIBuilder(__safeDI_clientBuilder__overrides.timeout(), __safeDI_clientBuilder__overrides.policy(), __safeDI_clientBuilder__overrides.name()) } else { Client(timeout: __safeDI_clientBuilder__overrides.timeout(), policy: __safeDI_clientBuilder__overrides.policy(), name: __safeDI_clientBuilder__overrides.name()) }
 			        }
-			        let __safeDI_clientBuilder____safeDI_Client_configuration: Client.SafeDIMockConfiguration = safeDIOverrides.clientBuilder
-			        let clientBuilder = SendableInstantiator<Client> {
-			            __safeDI_clientBuilder(__safeDI_Client_configuration: __safeDI_clientBuilder____safeDI_Client_configuration)
-			        }
+			        let clientBuilder = SendableInstantiator<Client>(__safeDI_clientBuilder)
 			        return Root(client: client, clientBuilder: clientBuilder)
 			    }
 			}
@@ -409,10 +405,10 @@ struct SafeDIToolMockSendableConfigurationIsolationTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        func __safeDI_client(__safeDI_Client_configuration: Client.SafeDIMockConfiguration) -> Client {
-			            if let safeDIBuilder = __safeDI_Client_configuration.safeDIBuilder { safeDIBuilder(__safeDI_Client_configuration.timeout, __safeDI_Client_configuration.policy, __safeDI_Client_configuration.theme, __safeDI_Client_configuration.name()) } else { Client(timeout: __safeDI_Client_configuration.timeout, policy: __safeDI_Client_configuration.policy, theme: __safeDI_Client_configuration.theme, name: __safeDI_Client_configuration.name()) }
+			        func __safeDI_client() -> Client {
+			            return if let safeDIBuilder = safeDIOverrides.client.safeDIBuilder { safeDIBuilder(safeDIOverrides.client.timeout, safeDIOverrides.client.policy, safeDIOverrides.client.theme, safeDIOverrides.client.name()) } else { Client(timeout: safeDIOverrides.client.timeout, policy: safeDIOverrides.client.policy, theme: safeDIOverrides.client.theme, name: safeDIOverrides.client.name()) }
 			        }
-			        let client: Client = __safeDI_client(__safeDI_Client_configuration: safeDIOverrides.client)
+			        let client: Client = __safeDI_client()
 			        return Root(client: client)
 			    }
 			}
@@ -546,10 +542,10 @@ struct SafeDIToolMockSendableConfigurationIsolationTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        func __safeDI_client(__safeDI_Client_configuration: Client.SafeDIMockConfiguration) -> Client {
-			            if let safeDIBuilder = __safeDI_Client_configuration.safeDIBuilder { safeDIBuilder(__safeDI_Client_configuration.timeout, __safeDI_Client_configuration.policy, __safeDI_Client_configuration.name()) } else { Client(timeout: __safeDI_Client_configuration.timeout, policy: __safeDI_Client_configuration.policy, name: __safeDI_Client_configuration.name()) }
+			        func __safeDI_client() -> Client {
+			            return if let safeDIBuilder = safeDIOverrides.client.safeDIBuilder { safeDIBuilder(safeDIOverrides.client.timeout, safeDIOverrides.client.policy, safeDIOverrides.client.name()) } else { Client(timeout: safeDIOverrides.client.timeout, policy: safeDIOverrides.client.policy, name: safeDIOverrides.client.name()) }
 			        }
-			        let client: Client = __safeDI_client(__safeDI_Client_configuration: safeDIOverrides.client)
+			        let client: Client = __safeDI_client()
 			        return Root(client: client)
 			    }
 			}
@@ -686,18 +682,16 @@ struct SafeDIToolMockSendableConfigurationIsolationTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        func __safeDI_client(__safeDI_Client_configuration: Client.SafeDIMockConfiguration) -> Client {
-			            if let safeDIBuilder = __safeDI_Client_configuration.safeDIBuilder { safeDIBuilder(__safeDI_Client_configuration.timeout(), __safeDI_Client_configuration.policy(), __safeDI_Client_configuration.name()) } else { Client(timeout: __safeDI_Client_configuration.timeout(), policy: __safeDI_Client_configuration.policy(), name: __safeDI_Client_configuration.name()) }
+			        let __safeDI_client__overrides = safeDIOverrides.client
+			        func __safeDI_client() -> Client {
+			            return if let safeDIBuilder = __safeDI_client__overrides.safeDIBuilder { safeDIBuilder(__safeDI_client__overrides.timeout(), __safeDI_client__overrides.policy(), __safeDI_client__overrides.name()) } else { Client(timeout: __safeDI_client__overrides.timeout(), policy: __safeDI_client__overrides.policy(), name: __safeDI_client__overrides.name()) }
 			        }
-			        let __safeDI_client____safeDI_Client_configuration: Client.SafeDIMockConfiguration = safeDIOverrides.client
-			        let client: Client = __safeDI_client(__safeDI_Client_configuration: __safeDI_client____safeDI_Client_configuration)
-			        @Sendable nonisolated func __safeDI_clientBuilder(__safeDI_Client_configuration: Client.SafeDIMockConfiguration) -> Client {
-			            if let safeDIBuilder = __safeDI_Client_configuration.safeDIBuilder { safeDIBuilder(__safeDI_Client_configuration.timeout(), __safeDI_Client_configuration.policy(), __safeDI_Client_configuration.name()) } else { Client(timeout: __safeDI_Client_configuration.timeout(), policy: __safeDI_Client_configuration.policy(), name: __safeDI_Client_configuration.name()) }
+			        let client: Client = __safeDI_client()
+			        let __safeDI_clientBuilder__overrides = safeDIOverrides.clientBuilder
+			        @Sendable nonisolated func __safeDI_clientBuilder() -> Client {
+			            if let safeDIBuilder = __safeDI_clientBuilder__overrides.safeDIBuilder { safeDIBuilder(__safeDI_clientBuilder__overrides.timeout(), __safeDI_clientBuilder__overrides.policy(), __safeDI_clientBuilder__overrides.name()) } else { Client(timeout: __safeDI_clientBuilder__overrides.timeout(), policy: __safeDI_clientBuilder__overrides.policy(), name: __safeDI_clientBuilder__overrides.name()) }
 			        }
-			        let __safeDI_clientBuilder____safeDI_Client_configuration: Client.SafeDIMockConfiguration = safeDIOverrides.clientBuilder
-			        let clientBuilder = SendableInstantiator<Client> {
-			            __safeDI_clientBuilder(__safeDI_Client_configuration: __safeDI_clientBuilder____safeDI_Client_configuration)
-			        }
+			        let clientBuilder = SendableInstantiator<Client>(__safeDI_clientBuilder)
 			        return Root(client: client, clientBuilder: clientBuilder)
 			    }
 			}

@@ -22,12 +22,12 @@ extension TypeKeyLayout {
 	// MARK: Classes
 
 	/// The type of a path declaration.
-	func type(of value: PathValue, label readLabel: String) -> TypeDescription? {
+	func type(of value: PathValue) -> TypeDescription? {
 		switch value {
 		case .none:
 			nil
 		case let .statement(body, index):
-			property(of: bodies[body].statements[index], label: readLabel)?.typeDescription
+			property(of: bodies[body].statements[index])?.typeDescription
 		case let .forwarded(body, label):
 			bodies[body].record?.parameterProperties.first(where: { $0.label == label })?.typeDescription
 		case let .cycleParameter(body, label):
@@ -56,7 +56,7 @@ extension TypeKeyLayout {
 		var groupedClasses = [[Int]: Int]()
 		var classesWithForms = [Int](repeating: 0, count: count)
 		for body in bodies.indices.dropFirst() {
-			let forms: [String?] = reads[body].map { label in type(of: resolution(of: label, atPlace: body), label: label)?.unwrapped.asSource }
+			let forms: [String?] = reads[body].map { label in type(of: resolution(of: label, atPlace: body))?.unwrapped.asSource }
 			var groups = groupsByClass[refined[body], default: []]
 			var groupIndex = groups.firstIndex { group in
 				zip(group, forms).allSatisfy { $0 == nil || $1 == nil || $0 == $1 }
@@ -90,10 +90,6 @@ extension TypeKeyLayout {
 			classByBody[body] = id
 			membersByClass[id].append(body)
 		}
-		// Every lookup in a class's body asks whether its function is handed a label, so each class's labels are kept once.
-		parameterLabelsByClass = membersByClass.map { members in
-			members.first.flatMap { bodies[$0].record }.map { Set($0.parameterProperties.map(\.label)) } ?? []
-		}
 	}
 
 	func structuralKey(of body: Int, isInSendableFamily: Bool) -> [String] {
@@ -107,6 +103,14 @@ extension TypeKeyLayout {
 			record.forwardedProperties.map(\.asSource).joined(separator: ","),
 			reads[body].joined(separator: ","),
 		]
+		// A function that returns the property's type spells it, and erases in its body.
+		if record.returnsPropertyType {
+			key.append("returns|\(record.property.typeDescription.asSource)|\(record.isErased)")
+		}
+		// A function that writes `return` before a lone value is another function's text.
+		if record.functionAlwaysWritesReturn {
+			key.append("writesReturn")
+		}
 		for argument in record.arguments {
 			key.append("argument|\(argument.argumentLabel)|\(argument.label)|\(argument.property.asSource)")
 		}
@@ -121,7 +125,7 @@ extension TypeKeyLayout {
 			let passedArguments = passedArguments(ofStatementAt: index, inBody: body)
 			key.append("passedArguments|\(passedArguments.count)")
 			if case .closer = statement {
-				key.append(contentsOf: passedArguments.map(\.closerShape))
+				key.append(contentsOf: passedArguments.map { $0.closerShape ?? $0.shape })
 			} else {
 				key.append(contentsOf: passedArguments.map(\.shape))
 			}
@@ -133,7 +137,7 @@ extension TypeKeyLayout {
 		switch statement {
 		case let .built(child):
 			guard let record = bodies[child].record else { return "" }
-			return "call|\(record.property.asSource)|\(record.isErased)|\(record.isExtension)"
+			return "call|\(record.property.asSource)|\(record.isErased && !record.returnsPropertyType)|\(record.isExtension)"
 		case let .closer(record, _):
 			return "call|\(record.property.asSource)|\(record.isErased)|\(record.isExtension)"
 		case let .inline(record):

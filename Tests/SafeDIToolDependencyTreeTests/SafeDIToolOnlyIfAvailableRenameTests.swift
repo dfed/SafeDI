@@ -1136,14 +1136,14 @@ struct SafeDIToolOnlyIfAvailableRenameTests: ~Copyable {
 			    ) -> Root {
 			        let secretToken: Token? = safeDIOverrides.secretToken
 			        let token = if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
-			        func __safeDI_child(__safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
+			        func __safeDI_child() -> Child {
 			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 2)
 			            let token: Token? = secretToken
 			            #sourceLocation()
-			            let grand = if let safeDIBuilder = __safeDI_Child_configuration.grand { safeDIBuilder(token) } else { Grand(token: token) }
-			            return if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(token, grand) } else { Child(token: token, grand: grand) }
+			            let grand = if let safeDIBuilder = safeDIOverrides.child.grand { safeDIBuilder(token) } else { Grand(token: token) }
+			            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(token, grand) } else { Child(token: token, grand: grand) }
 			        }
-			        let child: Child = __safeDI_child(__safeDI_Child_configuration: safeDIOverrides.child)
+			        let child: Child = __safeDI_child()
 			        return Root(token: token, child: child)
 			    }
 			}

@@ -76,6 +76,21 @@ enum SourceRule: String, CaseIterable {
 	/// and knows no feature, so a feature that needs something of it records a fact in general terms on the place, and
 	/// the layout reads the fact.
 	case engineFeatureName
+	/// `String`, `Property` or `TypeDescription` named in a fold of the per-type facts (`OrderedGraph.swift`, `ReadsFromAbove.swift`, `SiblingOrder.swift`, `TypeFactsColumns.swift`, `TypeFactsVariants.swift`, `TypeFactsOutcomes.swift`): a fold
+	/// works on a world's 32-bit IDs and bit sets, and only building the graph, spelling code and wording a message
+	/// touch a model of the source so a fold keeps no reference-counted value in its loops. A reader fold that still reads
+	/// a declaration's `Property` is left out until the graph answers what it reads: `TypeFactsImports.swift`, which hands
+	/// each declaration's type to `FulfillerImports`, until the frozen table holds each declaration's fulfiller modules;
+	/// `TypeFactsReceivedValueSupplies.swift`, which reads a receive's label and an alias's properties, until its three
+	/// bridge rules (the bindings before an edge, whether an edge is in a loop, the call a lazy cycle closes on) move to
+	/// the graph, the last move deleting the tree walk.
+	case typeFactsFoldModelName
+	/// A scan of a string's characters in a generator: `split`, `replacingOccurrences` or `components(separatedBy:)`
+	/// called on anything, or `contains` given a string literal. A generator's code runs per place or per node, and such
+	/// a scan reads every character of its text there, which grew `generate` with the square of the tree where the text
+	/// held a subtree's code. A text transform at every node goes over UTF-8 bytes (`GeneratedCodeText`); a site that
+	/// runs a bounded number of times, or over a few elements (an `[String]` of attributes), is waived with why.
+	case stringScan
 
 	/// Whether the rule applies to the file at `path`, relative to the repository root. SafeDI ships its sources and
 	/// plugins, so neither traps; the Tuist plugin's build script prints SafeDI's errors too, so it spells their
@@ -100,6 +115,17 @@ enum SourceRule: String, CaseIterable {
 			path.hasPrefix("Sources/") || path.hasPrefix("Plugins/")
 		case .engineFeatureName:
 			path.hasPrefix("Sources/SafeDICore/Generators/Emission/TypeKeyBody") || path == "Sources/SafeDICore/Generators/Emission/PlaceRecord.swift"
+		case .typeFactsFoldModelName:
+			[
+				"Sources/SafeDICore/Generators/TypeFacts/OrderedGraph.swift",
+				"Sources/SafeDICore/Generators/TypeFacts/ReadsFromAbove.swift",
+				"Sources/SafeDICore/Generators/TypeFacts/SiblingOrder.swift",
+				"Sources/SafeDICore/Generators/TypeFacts/TypeFactsColumns.swift",
+				"Sources/SafeDICore/Generators/TypeFacts/TypeFactsOutcomes.swift",
+				"Sources/SafeDICore/Generators/TypeFacts/TypeFactsVariants.swift",
+			].contains(path)
+		case .stringScan:
+			path.hasPrefix("Sources/SafeDICore/Generators/")
 		}
 	}
 }
@@ -277,6 +303,14 @@ private final class SourceRuleVisitor: SyntaxVisitor {
 	}
 
 	override func visit(_ node: FunctionCallExprSyntax) -> SyntaxVisitorContinueKind {
+		if let memberAccess = node.calledExpression.as(MemberAccessExprSyntax.self),
+		   !Self.scansUTF8Bytes(memberAccess),
+		   Self.stringScanFunctionNames.contains(memberAccess.declName.baseName.text)
+		   || (memberAccess.declName.baseName.text == "contains" && node.arguments.contains { $0.expression.is(StringLiteralExprSyntax.self) })
+		{
+			let memberName = memberAccess.declName.baseName
+			record(.stringScan, at: memberName, "`\(memberName.text)` reads every character of its text, and a generator’s code runs per place or per node: go over UTF-8 bytes (`GeneratedCodeText`), or waive a site that runs a bounded number of times with why")
+		}
 		if let calledName = node.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
 		   Self.taskGroupFunctionNames.contains(calledName),
 		   let elementType = node.arguments.first(where: { $0.label?.text == "of" })?.expression,
@@ -286,6 +320,15 @@ private final class SourceRuleVisitor: SyntaxVisitor {
 		}
 		return .visitChildren
 	}
+
+	/// Whether `memberAccess` is called on a string's UTF-8 view (`code.utf8.split(separator: UInt8(ascii: "\n"))`), which
+	/// is the remedy the rule recommends: it compares bytes, not characters.
+	private static func scansUTF8Bytes(_ memberAccess: MemberAccessExprSyntax) -> Bool {
+		memberAccess.base?.as(MemberAccessExprSyntax.self)?.declName.baseName.text == "utf8"
+	}
+
+	/// The members that scan every character of a string whatever their arguments.
+	private static let stringScanFunctionNames: Set<String> = ["split", "replacingOccurrences", "components"]
 
 	/// The functions that make a task group whose element type their `of:` argument names.
 	private static let taskGroupFunctionNames: Set<String> = ["withTaskGroup", "withThrowingTaskGroup"]
@@ -375,6 +418,9 @@ private final class SourceRuleVisitor: SyntaxVisitor {
 		if let text, let word = Self.featureWords(in: text).first {
 			record(.engineFeatureName, at: token, "the type key and its records name no feature, and `\(text)` names `\(word)`: record the fact in general terms on the place, and read that")
 		}
+		if case let .identifier(text) = token.tokenKind, Self.modelNames.contains(text) {
+			record(.typeFactsFoldModelName, at: token, "a fold of the per-type facts works on IDs and bit sets, and names no `\(text)`: intern the value where the graph is built, and read its ID")
+		}
 		return .visitChildren
 	}
 
@@ -420,6 +466,9 @@ private final class SourceRuleVisitor: SyntaxVisitor {
 	// MARK: Private
 
 	private static let trappingFunctionNames: Set = ["fatalError", "precondition", "preconditionFailure", "assert", "assertionFailure"]
+
+	/// The model types a fold of the per-type facts must not name (`typeFactsFoldModelName`).
+	private static let modelNames: Set = ["String", "Property", "TypeDescription"]
 
 	/// The words that name a feature the type key must not know, each in the forms an identifier spells it.
 	private static let featureWords: Set = ["mock", "mocks", "mocked", "override", "overrides", "overridden", "configuration", "configurations", "seam", "seams", "hole", "holes", "fill", "fills", "filled"]

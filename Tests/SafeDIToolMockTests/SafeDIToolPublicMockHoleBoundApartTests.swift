@@ -259,13 +259,11 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 			        gizmo: LazilyInstantiated<Gizmo>,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
-			        func __safeDI_settingsBuilder(__safeDI_Settings_configuration: ((Instantiator<Widget>) -> Settings)?) -> Settings {
+			        func __safeDI_settingsBuilder() -> Settings {
 			            let gizmo: Instantiator<Widget> = gizmo_Instantiator__Widget
-			            return if let safeDIBuilder = __safeDI_Settings_configuration { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
+			            return if let safeDIBuilder = safeDIOverrides.settingsBuilder { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
 			        }
-			        let settingsBuilder = Instantiator<Settings> {
-			            __safeDI_settingsBuilder(__safeDI_Settings_configuration: safeDIOverrides.settingsBuilder)
-			        }
+			        let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
 			        return Screen(settingsBuilder: settingsBuilder, gadget: gadget, gizmo: gizmo)
 			    }
 			""",
@@ -333,11 +331,11 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 			        thing: Thing,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
-			        func __safeDI_settings(__safeDI_Settings_configuration: ((Instantiator<Widget>, Thing) -> Settings)?) -> Settings {
+			        func __safeDI_settings() -> Settings {
 			            let gizmo: Instantiator<Widget> = gizmo_Instantiator__Widget
-			            return if let safeDIBuilder = __safeDI_Settings_configuration { safeDIBuilder(gizmo, thing) } else { Settings(gizmo: gizmo, thing: thing) }
+			            return if let safeDIBuilder = safeDIOverrides.settings { safeDIBuilder(gizmo, thing) } else { Settings(gizmo: gizmo, thing: thing) }
 			        }
-			        let settings: Settings = __safeDI_settings(__safeDI_Settings_configuration: safeDIOverrides.settings)
+			        let settings: Settings = __safeDI_settings()
 			        return Screen(settings: settings, gizmo: gizmo)
 			    }
 			""",
@@ -405,11 +403,11 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 			        thing: Thing,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
-			        func __safeDI_settings(__safeDI_Settings_configuration: ((Instantiator<Widget>, Thing) -> Settings)?) -> Settings {
+			        func __safeDI_settings() -> Settings {
 			            let gizmo: Instantiator<Widget> = gizmo_Instantiator__Widget
-			            return if let safeDIBuilder = __safeDI_Settings_configuration { safeDIBuilder(gizmo, thing) } else { Settings(gizmo: gizmo, thing: thing) }
+			            return if let safeDIBuilder = safeDIOverrides.settings { safeDIBuilder(gizmo, thing) } else { Settings(gizmo: gizmo, thing: thing) }
 			        }
-			        let settings: Settings = __safeDI_settings(__safeDI_Settings_configuration: safeDIOverrides.settings)
+			        let settings: Settings = __safeDI_settings()
 			        return Screen(gizmo: gizmo, settings: settings)
 			    }
 			""",
@@ -485,12 +483,12 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 			        thing: Thing,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
-			        func __safeDI_settings(__safeDI_Settings_configuration: Settings.SafeDIMockConfiguration) -> Settings {
+			        func __safeDI_settings() -> Settings {
 			            let gizmo: Instantiator<Widget> = gizmo_Instantiator__Widget
-			            let inner = if let safeDIBuilder = __safeDI_Settings_configuration.inner { safeDIBuilder(thing) } else { Inner(thing: thing) }
-			            return if let safeDIBuilder = __safeDI_Settings_configuration.safeDIBuilder { safeDIBuilder(gizmo, inner) } else { Settings(gizmo: gizmo, inner: inner) }
+			            let inner = if let safeDIBuilder = safeDIOverrides.settings.inner { safeDIBuilder(thing) } else { Inner(thing: thing) }
+			            return if let safeDIBuilder = safeDIOverrides.settings.safeDIBuilder { safeDIBuilder(gizmo, inner) } else { Settings(gizmo: gizmo, inner: inner) }
 			        }
-			        let settings: Settings = __safeDI_settings(__safeDI_Settings_configuration: safeDIOverrides.settings)
+			        let settings: Settings = __safeDI_settings()
 			        return Screen(settings: settings, gizmo: gizmo)
 			    }
 			""",
@@ -566,12 +564,12 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 			        thing: Thing,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
-			        func __safeDI_settings(__safeDI_Settings_configuration: Settings.SafeDIMockConfiguration) -> Settings {
+			        func __safeDI_settings() -> Settings {
 			            let gizmo: Instantiator<Widget> = gizmo_Instantiator__Widget
-			            let inner = if let safeDIBuilder = __safeDI_Settings_configuration.inner { safeDIBuilder(thing) } else { Inner(thing: thing) }
-			            return if let safeDIBuilder = __safeDI_Settings_configuration.safeDIBuilder { safeDIBuilder(gizmo, inner) } else { Settings(gizmo: gizmo, inner: inner) }
+			            let inner = if let safeDIBuilder = safeDIOverrides.settings.inner { safeDIBuilder(thing) } else { Inner(thing: thing) }
+			            return if let safeDIBuilder = safeDIOverrides.settings.safeDIBuilder { safeDIBuilder(gizmo, inner) } else { Settings(gizmo: gizmo, inner: inner) }
 			        }
-			        let settings: Settings = __safeDI_settings(__safeDI_Settings_configuration: safeDIOverrides.settings)
+			        let settings: Settings = __safeDI_settings()
 			        return Screen(gizmo: gizmo, settings: settings)
 			    }
 			""",
@@ -639,13 +637,11 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 			        thing: Thing,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
-			        func __safeDI_settingsBuilder(__safeDI_Settings_configuration: ((Instantiator<Widget>, Thing) -> Settings)?) -> Settings {
+			        func __safeDI_settingsBuilder() -> Settings {
 			            let gizmo: Instantiator<Widget> = gizmo_Instantiator__Widget
-			            return if let safeDIBuilder = __safeDI_Settings_configuration { safeDIBuilder(gizmo, thing) } else { Settings(gizmo: gizmo, thing: thing) }
+			            return if let safeDIBuilder = safeDIOverrides.settingsBuilder { safeDIBuilder(gizmo, thing) } else { Settings(gizmo: gizmo, thing: thing) }
 			        }
-			        let settingsBuilder = Instantiator<Settings> {
-			            __safeDI_settingsBuilder(__safeDI_Settings_configuration: safeDIOverrides.settingsBuilder)
-			        }
+			        let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
 			        return Screen(settingsBuilder: settingsBuilder, gizmo: gizmo)
 			    }
 			""",
@@ -713,13 +709,11 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 			        thing: Thing,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
-			        func __safeDI_settingsBuilder(__safeDI_Settings_configuration: ((Instantiator<Widget>, Thing) -> Settings)?) -> Settings {
+			        func __safeDI_settingsBuilder() -> Settings {
 			            let gizmo: Instantiator<Widget> = gizmo_Instantiator__Widget
-			            return if let safeDIBuilder = __safeDI_Settings_configuration { safeDIBuilder(gizmo, thing) } else { Settings(gizmo: gizmo, thing: thing) }
+			            return if let safeDIBuilder = safeDIOverrides.settingsBuilder { safeDIBuilder(gizmo, thing) } else { Settings(gizmo: gizmo, thing: thing) }
 			        }
-			        let settingsBuilder = Instantiator<Settings> {
-			            __safeDI_settingsBuilder(__safeDI_Settings_configuration: safeDIOverrides.settingsBuilder)
-			        }
+			        let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
 			        return Screen(gizmo: gizmo, settingsBuilder: settingsBuilder)
 			    }
 			""",
@@ -796,18 +790,16 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 			        thing: Thing,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
-			        func __safeDI_inner(__safeDI_Inner_configuration: ((Instantiator<Widget>, Thing) -> Inner)?) -> Inner {
+			        func __safeDI_settingsBuilder() -> Settings {
 			            let gizmo: Instantiator<Widget> = gizmo_Instantiator__Widget
-			            return if let safeDIBuilder = __safeDI_Inner_configuration { safeDIBuilder(gizmo, thing) } else { Inner(gizmo: gizmo, thing: thing) }
+			            func __safeDI_inner() -> Inner {
+			                let gizmo: Instantiator<Widget> = gizmo_Instantiator__Widget
+			                return if let safeDIBuilder = safeDIOverrides.settingsBuilder.inner { safeDIBuilder(gizmo, thing) } else { Inner(gizmo: gizmo, thing: thing) }
+			            }
+			            let inner: Inner = __safeDI_inner()
+			            return if let safeDIBuilder = safeDIOverrides.settingsBuilder.safeDIBuilder { safeDIBuilder(gizmo, inner) } else { Settings(gizmo: gizmo, inner: inner) }
 			        }
-			        func __safeDI_settingsBuilder(__safeDI_Settings_configuration: Settings.SafeDIMockConfiguration) -> Settings {
-			            let gizmo: Instantiator<Widget> = gizmo_Instantiator__Widget
-			            let inner: Inner = __safeDI_inner(__safeDI_Inner_configuration: __safeDI_Settings_configuration.inner)
-			            return if let safeDIBuilder = __safeDI_Settings_configuration.safeDIBuilder { safeDIBuilder(gizmo, inner) } else { Settings(gizmo: gizmo, inner: inner) }
-			        }
-			        let settingsBuilder = Instantiator<Settings> {
-			            __safeDI_settingsBuilder(__safeDI_Settings_configuration: safeDIOverrides.settingsBuilder)
-			        }
+			        let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
 			        return Screen(settingsBuilder: settingsBuilder, gizmo: gizmo)
 			    }
 			""",
@@ -884,18 +876,16 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 			        thing: Thing,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
-			        func __safeDI_inner(__safeDI_Inner_configuration: ((Instantiator<Widget>, Thing) -> Inner)?) -> Inner {
+			        func __safeDI_settingsBuilder() -> Settings {
 			            let gizmo: Instantiator<Widget> = gizmo_Instantiator__Widget
-			            return if let safeDIBuilder = __safeDI_Inner_configuration { safeDIBuilder(gizmo, thing) } else { Inner(gizmo: gizmo, thing: thing) }
+			            func __safeDI_inner() -> Inner {
+			                let gizmo: Instantiator<Widget> = gizmo_Instantiator__Widget
+			                return if let safeDIBuilder = safeDIOverrides.settingsBuilder.inner { safeDIBuilder(gizmo, thing) } else { Inner(gizmo: gizmo, thing: thing) }
+			            }
+			            let inner: Inner = __safeDI_inner()
+			            return if let safeDIBuilder = safeDIOverrides.settingsBuilder.safeDIBuilder { safeDIBuilder(gizmo, inner) } else { Settings(gizmo: gizmo, inner: inner) }
 			        }
-			        func __safeDI_settingsBuilder(__safeDI_Settings_configuration: Settings.SafeDIMockConfiguration) -> Settings {
-			            let gizmo: Instantiator<Widget> = gizmo_Instantiator__Widget
-			            let inner: Inner = __safeDI_inner(__safeDI_Inner_configuration: __safeDI_Settings_configuration.inner)
-			            return if let safeDIBuilder = __safeDI_Settings_configuration.safeDIBuilder { safeDIBuilder(gizmo, inner) } else { Settings(gizmo: gizmo, inner: inner) }
-			        }
-			        let settingsBuilder = Instantiator<Settings> {
-			            __safeDI_settingsBuilder(__safeDI_Settings_configuration: safeDIOverrides.settingsBuilder)
-			        }
+			        let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
 			        return Screen(gizmo: gizmo, settingsBuilder: settingsBuilder)
 			    }
 			""",
@@ -966,13 +956,11 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 			        thing: Thing,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
-			        func __safeDI_settingsBuilder(__safeDI_Settings_configuration: ((Instantiator<Widget>, Thing) -> Settings)?) -> Settings {
+			        func __safeDI_settingsBuilder() -> Settings {
 			            let gizmo: Instantiator<Widget> = gizmo_Instantiator__Widget
-			            return if let safeDIBuilder = __safeDI_Settings_configuration { safeDIBuilder(gizmo, thing) } else { Settings(gizmo: gizmo, thing: thing) }
+			            return if let safeDIBuilder = safeDIOverrides.settingsBuilder { safeDIBuilder(gizmo, thing) } else { Settings(gizmo: gizmo, thing: thing) }
 			        }
-			        let settingsBuilder = Instantiator<Settings> {
-			            __safeDI_settingsBuilder(__safeDI_Settings_configuration: safeDIOverrides.settingsBuilder)
-			        }
+			        let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
 			        return Screen(settingsBuilder: settingsBuilder, gizmo: gizmo, gadget: gadget)
 			    }
 			""",
@@ -1043,13 +1031,11 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 			        thing: Thing,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
-			        func __safeDI_settingsBuilder(__safeDI_Settings_configuration: ((Instantiator<Widget>, Thing) -> Settings)?) -> Settings {
+			        func __safeDI_settingsBuilder() -> Settings {
 			            let gizmo: Instantiator<Widget> = gizmo_Instantiator__Widget
-			            return if let safeDIBuilder = __safeDI_Settings_configuration { safeDIBuilder(gizmo, thing) } else { Settings(gizmo: gizmo, thing: thing) }
+			            return if let safeDIBuilder = safeDIOverrides.settingsBuilder { safeDIBuilder(gizmo, thing) } else { Settings(gizmo: gizmo, thing: thing) }
 			        }
-			        let settingsBuilder = Instantiator<Settings> {
-			            __safeDI_settingsBuilder(__safeDI_Settings_configuration: safeDIOverrides.settingsBuilder)
-			        }
+			        let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
 			        return Screen(gizmo: gizmo, settingsBuilder: settingsBuilder, gadget: gadget)
 			    }
 			""",
@@ -1122,14 +1108,12 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 			        gadget: Gadget,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
-			        func __safeDI_settingsBuilder(__safeDI_Settings_configuration: ((Instantiator<Widget>, Instantiator<Widget>) -> Settings)?) -> Settings {
+			        func __safeDI_settingsBuilder() -> Settings {
 			            let gizmo: Instantiator<Widget> = gizmo_Instantiator__Widget
 			            let gear: Instantiator<Widget> = gear_Instantiator__Widget
-			            return if let safeDIBuilder = __safeDI_Settings_configuration { safeDIBuilder(gizmo, gear) } else { Settings(gizmo: gizmo, gear: gear) }
+			            return if let safeDIBuilder = safeDIOverrides.settingsBuilder { safeDIBuilder(gizmo, gear) } else { Settings(gizmo: gizmo, gear: gear) }
 			        }
-			        let settingsBuilder = Instantiator<Settings> {
-			            __safeDI_settingsBuilder(__safeDI_Settings_configuration: safeDIOverrides.settingsBuilder)
-			        }
+			        let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
 			        return Screen(settingsBuilder: settingsBuilder, gizmo: gizmo, gear: gear, gadget: gadget)
 			    }
 			""",
@@ -1200,13 +1184,11 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        let gizmo_Widget: Widget? = safeDIOverrides.gizmo_Widget
-			        func __safeDI_settingsBuilder(__safeDI_Settings_configuration: ((Widget?) -> Settings)?) -> Settings {
+			        func __safeDI_settingsBuilder() -> Settings {
 			            let gizmo: Widget? = gizmo_Widget
-			            return if let safeDIBuilder = __safeDI_Settings_configuration { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
+			            return if let safeDIBuilder = safeDIOverrides.settingsBuilder { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
 			        }
-			        let settingsBuilder = Instantiator<Settings> {
-			            __safeDI_settingsBuilder(__safeDI_Settings_configuration: safeDIOverrides.settingsBuilder)
-			        }
+			        let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
 			        return Screen(settingsBuilder: settingsBuilder, gizmo: gizmo, gadget: gadget)
 			    }
 			""",
@@ -1284,13 +1266,11 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        let gizmo_Widget: Widget? = safeDIOverrides.gizmo_Widget
-			        func __safeDI_settingsBuilder(__safeDI_Settings_configuration: ((Widget?) -> Settings)?) -> Settings {
+			        func __safeDI_settingsBuilder() -> Settings {
 			            let gizmo: Widget? = gizmo_Widget
-			            return if let safeDIBuilder = __safeDI_Settings_configuration { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
+			            return if let safeDIBuilder = safeDIOverrides.settingsBuilder { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
 			        }
-			        let settingsBuilder = Instantiator<Settings> {
-			            __safeDI_settingsBuilder(__safeDI_Settings_configuration: safeDIOverrides.settingsBuilder)
-			        }
+			        let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
 			        return Screen(settingsBuilder: settingsBuilder, gizmo: gizmo, gadget: gadget)
 			    }
 			""",
@@ -1370,18 +1350,14 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 			        gadget: any GadgetProtocol,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
-			        func __safeDI_gizmo(__safeDI_Widget_configuration: (() -> Widget)?) -> Widget {
-			            if let safeDIBuilder = __safeDI_Widget_configuration { safeDIBuilder() } else { Widget() }
+			        func __safeDI_gizmo() -> Widget {
+			            if let safeDIBuilder = safeDIOverrides.gizmo { safeDIBuilder() } else { Widget() }
 			        }
-			        let gizmo = Instantiator<Widget> {
-			            __safeDI_gizmo(__safeDI_Widget_configuration: safeDIOverrides.gizmo)
+			        let gizmo = Instantiator<Widget>(__safeDI_gizmo)
+			        func __safeDI_settingsBuilder() -> Settings {
+			            if let safeDIBuilder = safeDIOverrides.settingsBuilder { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
 			        }
-			        func __safeDI_settingsBuilder(__safeDI_Settings_configuration: ((Instantiator<Widget>) -> Settings)?) -> Settings {
-			            if let safeDIBuilder = __safeDI_Settings_configuration { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
-			        }
-			        let settingsBuilder = Instantiator<Settings> {
-			            __safeDI_settingsBuilder(__safeDI_Settings_configuration: safeDIOverrides.settingsBuilder)
-			        }
+			        let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
 			        return Screen(settingsBuilder: settingsBuilder, gizmo: gizmo_GizmoProtocol, gadget: gadget)
 			    }
 			""",
@@ -1464,21 +1440,17 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        let __safeDI_gadget = gadget
-			        @Sendable nonisolated func __safeDI_panel(__safeDI_Panel_configuration: (@Sendable (Gadget) -> Panel)?) -> Panel {
+			        let __safeDI_panel__safeDIBuilder = safeDIOverrides.panel
+			        @Sendable nonisolated func __safeDI_panel() -> Panel {
 			            let gadget = __safeDI_gadget()
-			            return if let safeDIBuilder = __safeDI_Panel_configuration { safeDIBuilder(gadget) } else { Panel(gadget: gadget) }
+			            return if let safeDIBuilder = __safeDI_panel__safeDIBuilder { safeDIBuilder(gadget) } else { Panel(gadget: gadget) }
 			        }
-			        let __safeDI_panel____safeDI_Panel_configuration: (@Sendable (Gadget) -> Panel)? = safeDIOverrides.panel
-			        let panel = SendableInstantiator<Panel> {
-			            __safeDI_panel(__safeDI_Panel_configuration: __safeDI_panel____safeDI_Panel_configuration)
-			        }
-			        func __safeDI_settingsBuilder(__safeDI_Settings_configuration: ((Instantiator<Widget>) -> Settings)?) -> Settings {
+			        let panel = SendableInstantiator<Panel>(__safeDI_panel)
+			        func __safeDI_settingsBuilder() -> Settings {
 			            let gizmo: Instantiator<Widget> = gizmo_Instantiator__Widget
-			            return if let safeDIBuilder = __safeDI_Settings_configuration { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
+			            return if let safeDIBuilder = safeDIOverrides.settingsBuilder { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
 			        }
-			        let settingsBuilder = Instantiator<Settings> {
-			            __safeDI_settingsBuilder(__safeDI_Settings_configuration: safeDIOverrides.settingsBuilder)
-			        }
+			        let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
 			        return Screen(settingsBuilder: settingsBuilder, gizmo: gizmo, panel: panel)
 			    }
 			""",
@@ -1558,18 +1530,14 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 			        gizmo_Gizmo: Gizmo,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
-			        func __safeDI_gizmo(__safeDI_Widget_configuration: (() -> Widget)?) -> Widget {
-			            if let safeDIBuilder = __safeDI_Widget_configuration { safeDIBuilder() } else { Widget() }
+			        func __safeDI_gizmo() -> Widget {
+			            if let safeDIBuilder = safeDIOverrides.gizmo { safeDIBuilder() } else { Widget() }
 			        }
-			        let gizmo = Instantiator<Widget> {
-			            __safeDI_gizmo(__safeDI_Widget_configuration: safeDIOverrides.gizmo)
+			        let gizmo = Instantiator<Widget>(__safeDI_gizmo)
+			        func __safeDI_settingsBuilder() -> Settings {
+			            if let safeDIBuilder = safeDIOverrides.settingsBuilder { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
 			        }
-			        func __safeDI_settingsBuilder(__safeDI_Settings_configuration: ((Instantiator<Widget>) -> Settings)?) -> Settings {
-			            if let safeDIBuilder = __safeDI_Settings_configuration { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
-			        }
-			        let settingsBuilder = Instantiator<Settings> {
-			            __safeDI_settingsBuilder(__safeDI_Settings_configuration: safeDIOverrides.settingsBuilder)
-			        }
+			        let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
 			        return Screen(settingsBuilder: settingsBuilder, gadget: gadget, gizmo: gizmo_Gizmo)
 			    }
 			""",
@@ -1664,18 +1632,14 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        let panel = if let safeDIBuilder = safeDIOverrides.panel { safeDIBuilder(gadget) } else { Panel(gadget: gadget) }
-			        func __safeDI_gizmo(__safeDI_Widget_configuration: (() -> Widget)?) -> Widget {
-			            if let safeDIBuilder = __safeDI_Widget_configuration { safeDIBuilder() } else { Widget() }
+			        func __safeDI_gizmo() -> Widget {
+			            if let safeDIBuilder = safeDIOverrides.gizmo { safeDIBuilder() } else { Widget() }
 			        }
-			        let gizmo = Instantiator<Widget> {
-			            __safeDI_gizmo(__safeDI_Widget_configuration: safeDIOverrides.gizmo)
+			        let gizmo = Instantiator<Widget>(__safeDI_gizmo)
+			        func __safeDI_settingsBuilder() -> Settings {
+			            if let safeDIBuilder = safeDIOverrides.settingsBuilder { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
 			        }
-			        func __safeDI_settingsBuilder(__safeDI_Settings_configuration: ((Instantiator<Widget>) -> Settings)?) -> Settings {
-			            if let safeDIBuilder = __safeDI_Settings_configuration { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
-			        }
-			        let settingsBuilder = Instantiator<Settings> {
-			            __safeDI_settingsBuilder(__safeDI_Settings_configuration: safeDIOverrides.settingsBuilder)
-			        }
+			        let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
 			        return Screen(settingsBuilder: settingsBuilder, gizmo: gizmo_Gizmo, panel: panel)
 			    }
 			""",
@@ -1769,24 +1733,18 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 			        gadget: Gadget,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
-			        func __safeDI_panel(__safeDI_Panel_configuration: ((Gadget) -> Panel)?) -> Panel {
-			            if let safeDIBuilder = __safeDI_Panel_configuration { safeDIBuilder(gadget) } else { Panel(gadget: gadget) }
+			        func __safeDI_panel() -> Panel {
+			            if let safeDIBuilder = safeDIOverrides.panel { safeDIBuilder(gadget) } else { Panel(gadget: gadget) }
 			        }
-			        let panel = Instantiator<Panel> {
-			            __safeDI_panel(__safeDI_Panel_configuration: safeDIOverrides.panel)
+			        let panel = Instantiator<Panel>(__safeDI_panel)
+			        func __safeDI_gizmo() -> Widget {
+			            if let safeDIBuilder = safeDIOverrides.gizmo { safeDIBuilder() } else { Widget() }
 			        }
-			        func __safeDI_gizmo(__safeDI_Widget_configuration: (() -> Widget)?) -> Widget {
-			            if let safeDIBuilder = __safeDI_Widget_configuration { safeDIBuilder() } else { Widget() }
+			        let gizmo = Instantiator<Widget>(__safeDI_gizmo)
+			        func __safeDI_settingsBuilder() -> Settings {
+			            if let safeDIBuilder = safeDIOverrides.settingsBuilder { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
 			        }
-			        let gizmo = Instantiator<Widget> {
-			            __safeDI_gizmo(__safeDI_Widget_configuration: safeDIOverrides.gizmo)
-			        }
-			        func __safeDI_settingsBuilder(__safeDI_Settings_configuration: ((Instantiator<Widget>) -> Settings)?) -> Settings {
-			            if let safeDIBuilder = __safeDI_Settings_configuration { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
-			        }
-			        let settingsBuilder = Instantiator<Settings> {
-			            __safeDI_settingsBuilder(__safeDI_Settings_configuration: safeDIOverrides.settingsBuilder)
-			        }
+			        let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
 			        return Screen(settingsBuilder: settingsBuilder, gizmo: gizmo_Gizmo, panel: panel)
 			    }
 			""",
@@ -1866,18 +1824,14 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 			        gadget: Gadget,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
-			        func __safeDI_gizmo(__safeDI_Widget_configuration: (() -> Widget)?) -> Widget {
-			            if let safeDIBuilder = __safeDI_Widget_configuration { safeDIBuilder() } else { Widget() }
+			        func __safeDI_gizmo() -> Widget {
+			            if let safeDIBuilder = safeDIOverrides.gizmo { safeDIBuilder() } else { Widget() }
 			        }
-			        let gizmo = Instantiator<Widget> {
-			            __safeDI_gizmo(__safeDI_Widget_configuration: safeDIOverrides.gizmo)
+			        let gizmo = Instantiator<Widget>(__safeDI_gizmo)
+			        func __safeDI_settingsBuilder() -> Settings {
+			            if let safeDIBuilder = safeDIOverrides.settingsBuilder { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
 			        }
-			        func __safeDI_settingsBuilder(__safeDI_Settings_configuration: ((Instantiator<Widget>) -> Settings)?) -> Settings {
-			            if let safeDIBuilder = __safeDI_Settings_configuration { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
-			        }
-			        let settingsBuilder = Instantiator<Settings> {
-			            __safeDI_settingsBuilder(__safeDI_Settings_configuration: safeDIOverrides.settingsBuilder)
-			        }
+			        let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
 			        return Screen(settingsBuilder: settingsBuilder, gizmo: gizmo_Instantiator__Gizmo, gadget: gadget)
 			    }
 			""",
@@ -1957,18 +1911,14 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 			        gadget: Gadget,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
-			        func __safeDI_gizmo(__safeDI_Widget_configuration: (() -> Widget)?) -> Widget {
-			            if let safeDIBuilder = __safeDI_Widget_configuration { safeDIBuilder() } else { Widget() }
+			        func __safeDI_gizmo() -> Widget {
+			            if let safeDIBuilder = safeDIOverrides.gizmo { safeDIBuilder() } else { Widget() }
 			        }
-			        let gizmo = Instantiator<Widget> {
-			            __safeDI_gizmo(__safeDI_Widget_configuration: safeDIOverrides.gizmo)
+			        let gizmo = Instantiator<Widget>(__safeDI_gizmo)
+			        func __safeDI_settingsBuilder() -> Settings {
+			            if let safeDIBuilder = safeDIOverrides.settingsBuilder { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
 			        }
-			        func __safeDI_settingsBuilder(__safeDI_Settings_configuration: ((Instantiator<Widget>) -> Settings)?) -> Settings {
-			            if let safeDIBuilder = __safeDI_Settings_configuration { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
-			        }
-			        let settingsBuilder = Instantiator<Settings> {
-			            __safeDI_settingsBuilder(__safeDI_Settings_configuration: safeDIOverrides.settingsBuilder)
-			        }
+			        let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
 			        return Screen(settingsBuilder: settingsBuilder, gizmo: gizmo_LazilyInstantiated__Gizmo, gadget: gadget)
 			    }
 			""",
@@ -2049,12 +1999,10 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        let gizmo = if let safeDIBuilder = safeDIOverrides.gizmo { safeDIBuilder() } else { Widget() }
-			        func __safeDI_settingsBuilder(__safeDI_Settings_configuration: ((Widget) -> Settings)?) -> Settings {
-			            if let safeDIBuilder = __safeDI_Settings_configuration { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
+			        func __safeDI_settingsBuilder() -> Settings {
+			            if let safeDIBuilder = safeDIOverrides.settingsBuilder { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
 			        }
-			        let settingsBuilder = Instantiator<Settings> {
-			            __safeDI_settingsBuilder(__safeDI_Settings_configuration: safeDIOverrides.settingsBuilder)
-			        }
+			        let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
 			        return Screen(settingsBuilder: settingsBuilder, gizmo: gizmo_Gizmo, gadget: gadget)
 			    }
 			""",
@@ -2137,18 +2085,14 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 			        gadget: Gadget,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
-			        func __safeDI_gizmo(__safeDI_Widget_configuration: (() -> Widget)?) -> Widget {
-			            if let safeDIBuilder = __safeDI_Widget_configuration { safeDIBuilder() } else { Widget() }
+			        func __safeDI_gizmo() -> Widget {
+			            if let safeDIBuilder = safeDIOverrides.gizmo { safeDIBuilder() } else { Widget() }
 			        }
-			        let gizmo = Instantiator<Widget> {
-			            __safeDI_gizmo(__safeDI_Widget_configuration: safeDIOverrides.gizmo)
+			        let gizmo = Instantiator<Widget>(__safeDI_gizmo)
+			        func __safeDI_settingsBuilder() -> Settings {
+			            if let safeDIBuilder = safeDIOverrides.settingsBuilder { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
 			        }
-			        func __safeDI_settingsBuilder(__safeDI_Settings_configuration: ((Instantiator<Widget>) -> Settings)?) -> Settings {
-			            if let safeDIBuilder = __safeDI_Settings_configuration { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
-			        }
-			        let settingsBuilder = Instantiator<Settings> {
-			            __safeDI_settingsBuilder(__safeDI_Settings_configuration: safeDIOverrides.settingsBuilder)
-			        }
+			        let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
 			        return Screen(settingsBuilder: settingsBuilder, gear: gear, gizmo: gizmo_Gizmo, gadget: gadget)
 			    }
 			""",
@@ -2228,12 +2172,10 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 			        gadget: Gadget,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
-			        func __safeDI_gizmo(__safeDI_Widget_configuration: (() -> Widget)?) -> Widget {
-			            if let safeDIBuilder = __safeDI_Widget_configuration { safeDIBuilder() } else { Widget() }
+			        func __safeDI_gizmo() -> Widget {
+			            if let safeDIBuilder = safeDIOverrides.gizmo { safeDIBuilder() } else { Widget() }
 			        }
-			        let gizmo = Instantiator<Widget> {
-			            __safeDI_gizmo(__safeDI_Widget_configuration: safeDIOverrides.gizmo)
-			        }
+			        let gizmo = Instantiator<Widget>(__safeDI_gizmo)
 			        let settings = if let safeDIBuilder = safeDIOverrides.settings { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
 			        return Screen(settings: settings, gizmo: gizmo_Gizmo, gadget: gadget)
 			    }
@@ -2315,12 +2257,10 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        let gizmo = if let safeDIBuilder = safeDIOverrides.gizmo { safeDIBuilder() } else { Widget() }
-			        func __safeDI_settingsBuilder(__safeDI_Settings_configuration: ((Widget) -> Settings)?) -> Settings {
-			            if let safeDIBuilder = __safeDI_Settings_configuration { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
+			        func __safeDI_settingsBuilder() -> Settings {
+			            if let safeDIBuilder = safeDIOverrides.settingsBuilder { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
 			        }
-			        let settingsBuilder = Instantiator<Settings> {
-			            __safeDI_settingsBuilder(__safeDI_Settings_configuration: safeDIOverrides.settingsBuilder)
-			        }
+			        let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
 			        return Screen(settingsBuilder: settingsBuilder, gizmo: gizmo_LazilyInstantiated__Gizmo, gadget: gadget)
 			    }
 			""",
@@ -2400,18 +2340,14 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 			        gadget: Gadget,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
-			        func __safeDI_gizmo(__safeDI_Widget_configuration: (() -> Widget)?) -> Widget {
-			            if let safeDIBuilder = __safeDI_Widget_configuration { safeDIBuilder() } else { Widget() }
+			        func __safeDI_gizmo() -> Widget {
+			            if let safeDIBuilder = safeDIOverrides.gizmo { safeDIBuilder() } else { Widget() }
 			        }
-			        let gizmo = Instantiator<Widget> {
-			            __safeDI_gizmo(__safeDI_Widget_configuration: safeDIOverrides.gizmo)
+			        let gizmo = Instantiator<Widget>(__safeDI_gizmo)
+			        func __safeDI_settingsBuilder() -> Settings {
+			            if let safeDIBuilder = safeDIOverrides.settingsBuilder { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
 			        }
-			        func __safeDI_settingsBuilder(__safeDI_Settings_configuration: ((Instantiator<Widget>) -> Settings)?) -> Settings {
-			            if let safeDIBuilder = __safeDI_Settings_configuration { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
-			        }
-			        let settingsBuilder = Instantiator<Settings> {
-			            __safeDI_settingsBuilder(__safeDI_Settings_configuration: safeDIOverrides.settingsBuilder)
-			        }
+			        let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
 			        return Screen(settingsBuilder: settingsBuilder, gizmo: gizmo_Gizmo, gadget: gadget)
 			    }
 			""",
@@ -2488,18 +2424,14 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 			        gizmo_Gizmo: Gizmo,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
-			        func __safeDI_gizmo(__safeDI_Widget_configuration: (() -> Widget)?) -> Widget {
-			            if let safeDIBuilder = __safeDI_Widget_configuration { safeDIBuilder() } else { Widget() }
+			        func __safeDI_gizmo() -> Widget {
+			            if let safeDIBuilder = safeDIOverrides.gizmo { safeDIBuilder() } else { Widget() }
 			        }
-			        let gizmo = Instantiator<Widget> {
-			            __safeDI_gizmo(__safeDI_Widget_configuration: safeDIOverrides.gizmo)
+			        let gizmo = Instantiator<Widget>(__safeDI_gizmo)
+			        func __safeDI_settingsBuilder() -> Settings {
+			            if let safeDIBuilder = safeDIOverrides.settingsBuilder { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
 			        }
-			        func __safeDI_settingsBuilder(__safeDI_Settings_configuration: ((Instantiator<Widget>) -> Settings)?) -> Settings {
-			            if let safeDIBuilder = __safeDI_Settings_configuration { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
-			        }
-			        let settingsBuilder = Instantiator<Settings> {
-			            __safeDI_settingsBuilder(__safeDI_Settings_configuration: safeDIOverrides.settingsBuilder)
-			        }
+			        let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
 			        return Screen(settingsBuilder: settingsBuilder, gizmo: gizmo_Gizmo)
 			    }
 			""",
@@ -2591,23 +2523,19 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 			        gizmo_Gizmo: Gizmo,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
-			        func __safeDI_panel(__safeDI_Panel_configuration: ((Gizmo) -> Panel)?) -> Panel {
+			        func __safeDI_panel() -> Panel {
 			            let gizmo: Gizmo = gizmo_Gizmo
-			            return if let safeDIBuilder = __safeDI_Panel_configuration { safeDIBuilder(gizmo) } else { Panel(gizmo: gizmo) }
+			            return if let safeDIBuilder = safeDIOverrides.panel { safeDIBuilder(gizmo) } else { Panel(gizmo: gizmo) }
 			        }
-			        let panel: Panel = __safeDI_panel(__safeDI_Panel_configuration: safeDIOverrides.panel)
-			        func __safeDI_gizmo(__safeDI_Widget_configuration: (() -> Widget)?) -> Widget {
-			            if let safeDIBuilder = __safeDI_Widget_configuration { safeDIBuilder() } else { Widget() }
+			        let panel: Panel = __safeDI_panel()
+			        func __safeDI_gizmo() -> Widget {
+			            if let safeDIBuilder = safeDIOverrides.gizmo { safeDIBuilder() } else { Widget() }
 			        }
-			        let gizmo = Instantiator<Widget> {
-			            __safeDI_gizmo(__safeDI_Widget_configuration: safeDIOverrides.gizmo)
+			        let gizmo = Instantiator<Widget>(__safeDI_gizmo)
+			        func __safeDI_settingsBuilder() -> Settings {
+			            if let safeDIBuilder = safeDIOverrides.settingsBuilder { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
 			        }
-			        func __safeDI_settingsBuilder(__safeDI_Settings_configuration: ((Instantiator<Widget>) -> Settings)?) -> Settings {
-			            if let safeDIBuilder = __safeDI_Settings_configuration { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
-			        }
-			        let settingsBuilder = Instantiator<Settings> {
-			            __safeDI_settingsBuilder(__safeDI_Settings_configuration: safeDIOverrides.settingsBuilder)
-			        }
+			        let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
 			        return Screen(settingsBuilder: settingsBuilder, gizmo: gizmo_Gizmo, panel: panel)
 			    }
 			""",
@@ -2699,23 +2627,19 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 			        gizmo_LazilyInstantiated__Gizmo: LazilyInstantiated<Gizmo>,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
-			        func __safeDI_panel(__safeDI_Panel_configuration: ((LazilyInstantiated<Gizmo>) -> Panel)?) -> Panel {
+			        func __safeDI_panel() -> Panel {
 			            let gizmo: LazilyInstantiated<Gizmo> = gizmo_LazilyInstantiated__Gizmo
-			            return if let safeDIBuilder = __safeDI_Panel_configuration { safeDIBuilder(gizmo) } else { Panel(gizmo: gizmo) }
+			            return if let safeDIBuilder = safeDIOverrides.panel { safeDIBuilder(gizmo) } else { Panel(gizmo: gizmo) }
 			        }
-			        let panel: Panel = __safeDI_panel(__safeDI_Panel_configuration: safeDIOverrides.panel)
-			        func __safeDI_gizmo(__safeDI_Widget_configuration: (() -> Widget)?) -> Widget {
-			            if let safeDIBuilder = __safeDI_Widget_configuration { safeDIBuilder() } else { Widget() }
+			        let panel: Panel = __safeDI_panel()
+			        func __safeDI_gizmo() -> Widget {
+			            if let safeDIBuilder = safeDIOverrides.gizmo { safeDIBuilder() } else { Widget() }
 			        }
-			        let gizmo = Instantiator<Widget> {
-			            __safeDI_gizmo(__safeDI_Widget_configuration: safeDIOverrides.gizmo)
+			        let gizmo = Instantiator<Widget>(__safeDI_gizmo)
+			        func __safeDI_settingsBuilder() -> Settings {
+			            if let safeDIBuilder = safeDIOverrides.settingsBuilder { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
 			        }
-			        func __safeDI_settingsBuilder(__safeDI_Settings_configuration: ((Instantiator<Widget>) -> Settings)?) -> Settings {
-			            if let safeDIBuilder = __safeDI_Settings_configuration { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
-			        }
-			        let settingsBuilder = Instantiator<Settings> {
-			            __safeDI_settingsBuilder(__safeDI_Settings_configuration: safeDIOverrides.settingsBuilder)
-			        }
+			        let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
 			        return Screen(settingsBuilder: settingsBuilder, gizmo: gizmo_LazilyInstantiated__Gizmo, panel: panel)
 			    }
 			""",
@@ -2908,18 +2832,16 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 			        gizmo_Other: Gizmo,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
-			        func __safeDI_prefs(__safeDI_Prefs_configuration: ((Another) -> Prefs)?) -> Prefs {
+			        func __safeDI_prefs() -> Prefs {
 			            let gizmo: Another = gizmo_Another
-			            return if let safeDIBuilder = __safeDI_Prefs_configuration { safeDIBuilder(gizmo) } else { Prefs(gizmo: gizmo) }
+			            return if let safeDIBuilder = safeDIOverrides.prefs { safeDIBuilder(gizmo) } else { Prefs(gizmo: gizmo) }
 			        }
-			        let prefs: Prefs = __safeDI_prefs(__safeDI_Prefs_configuration: safeDIOverrides.prefs)
-			        func __safeDI_settingsBuilder(__safeDI_Settings_configuration: ((Other, Prefs) -> Settings)?) -> Settings {
+			        let prefs: Prefs = __safeDI_prefs()
+			        func __safeDI_settingsBuilder() -> Settings {
 			            let gizmo: Other = gizmo_Other_
-			            return if let safeDIBuilder = __safeDI_Settings_configuration { safeDIBuilder(gizmo, prefs) } else { Settings(gizmo: gizmo, prefs: prefs) }
+			            return if let safeDIBuilder = safeDIOverrides.settingsBuilder { safeDIBuilder(gizmo, prefs) } else { Settings(gizmo: gizmo, prefs: prefs) }
 			        }
-			        let settingsBuilder = Instantiator<Settings> {
-			            __safeDI_settingsBuilder(__safeDI_Settings_configuration: safeDIOverrides.settingsBuilder)
-			        }
+			        let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
 			        return Screen(settingsBuilder: settingsBuilder, gizmo_Other: gizmo_Other)
 			    }
 			""",
@@ -3751,12 +3673,10 @@ struct HoleBoundApartControl: CustomTestStringConvertible, Sendable {
 			        #sourceLocation(file: "\(screenFixturePath)", line: 10)
 			        let gizmo_Source: any Source = store
 			        #sourceLocation()
-			        func __safeDI_settingsBuilder(__safeDI_Settings_configuration: ((Instantiator<Widget>) -> Settings)?) -> Settings {
-			            if let safeDIBuilder = __safeDI_Settings_configuration { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
+			        func __safeDI_settingsBuilder() -> Settings {
+			            if let safeDIBuilder = safeDIOverrides.settingsBuilder { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
 			        }
-			        let settingsBuilder = Instantiator<Settings> {
-			            __safeDI_settingsBuilder(__safeDI_Settings_configuration: safeDIOverrides.settingsBuilder)
-			        }
+			        let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
 			        return Screen(settingsBuilder: settingsBuilder, store: store, gizmo: gizmo_Source, gadget: gadget)
 			    }
 			}
@@ -4212,18 +4132,14 @@ struct HoleBoundApartControl: CustomTestStringConvertible, Sendable {
 			        gadget: Gadget,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
-			        func __safeDI_gizmo(__safeDI_Widget_configuration: (() -> Widget)?) -> Widget {
-			            if let safeDIBuilder = __safeDI_Widget_configuration { safeDIBuilder() } else { Widget() }
+			        func __safeDI_gizmo() -> Widget {
+			            if let safeDIBuilder = safeDIOverrides.gizmo { safeDIBuilder() } else { Widget() }
 			        }
-			        let gizmo = Instantiator<Widget> {
-			            __safeDI_gizmo(__safeDI_Widget_configuration: safeDIOverrides.gizmo)
+			        let gizmo = Instantiator<Widget>(__safeDI_gizmo)
+			        func __safeDI_settingsBuilder() -> Settings {
+			            if let safeDIBuilder = safeDIOverrides.settingsBuilder { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
 			        }
-			        func __safeDI_settingsBuilder(__safeDI_Settings_configuration: ((Instantiator<Widget>) -> Settings)?) -> Settings {
-			            if let safeDIBuilder = __safeDI_Settings_configuration { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
-			        }
-			        let settingsBuilder = Instantiator<Settings> {
-			            __safeDI_settingsBuilder(__safeDI_Settings_configuration: safeDIOverrides.settingsBuilder)
-			        }
+			        let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
 			        return Screen(settingsBuilder: settingsBuilder, gizmo: gizmo, gadget: gadget)
 			    }
 			}

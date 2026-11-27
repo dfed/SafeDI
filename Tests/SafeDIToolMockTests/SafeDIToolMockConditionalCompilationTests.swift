@@ -184,10 +184,10 @@ struct SafeDIToolMockConditionalCompilationTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
-		        func __safeDI_userService(__safeDI_DefaultUserService_mockConfiguration: DefaultUserService.SafeDIMockConfiguration) -> DefaultUserService {
-		            if let safeDIBuilder = __safeDI_DefaultUserService_mockConfiguration.safeDIBuilder { safeDIBuilder(__safeDI_DefaultUserService_mockConfiguration.analytics) } else { DefaultUserService.mock(analytics: __safeDI_DefaultUserService_mockConfiguration.analytics) }
+		        func __safeDI_userService() -> DefaultUserService {
+		            return if let safeDIBuilder = safeDIOverrides.userService.safeDIBuilder { safeDIBuilder(safeDIOverrides.userService.analytics) } else { DefaultUserService.mock(analytics: safeDIOverrides.userService.analytics) }
 		        }
-		        let userService: DefaultUserService = __safeDI_userService(__safeDI_DefaultUserService_mockConfiguration: safeDIOverrides.userService)
+		        let userService: DefaultUserService = __safeDI_userService()
 		        return Screen(analytics: analytics, userService: userService)
 		    }
 		}

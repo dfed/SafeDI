@@ -965,12 +965,10 @@ struct SafeDIToolNestedTypeTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Feature.Root {
-		        func __safeDI_serviceBuilder(__safeDI_Feature_Service_configuration: (() -> Feature.Service)?) -> Feature.Service {
-		            if let safeDIBuilder = __safeDI_Feature_Service_configuration { safeDIBuilder() } else { Feature.Service() }
+		        func __safeDI_serviceBuilder() -> Feature.Service {
+		            if let safeDIBuilder = safeDIOverrides.serviceBuilder { safeDIBuilder() } else { Feature.Service() }
 		        }
-		        let serviceBuilder = Instantiator<Feature.Service> {
-		            __safeDI_serviceBuilder(__safeDI_Feature_Service_configuration: safeDIOverrides.serviceBuilder)
-		        }
+		        let serviceBuilder = Instantiator<Feature.Service>(__safeDI_serviceBuilder)
 		        return Feature.Root(serviceBuilder: serviceBuilder)
 		    }
 		}
@@ -1040,12 +1038,10 @@ struct SafeDIToolNestedTypeTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Feature.Consumer {
-		        func __safeDI_serviceBuilder(__safeDI_Feature_Service_configuration: (() -> Feature.Service)?) -> Feature.Service {
-		            if let safeDIBuilder = __safeDI_Feature_Service_configuration { safeDIBuilder() } else { Feature.Service() }
+		        func __safeDI_serviceBuilder() -> Feature.Service {
+		            if let safeDIBuilder = safeDIOverrides.serviceBuilder { safeDIBuilder() } else { Feature.Service() }
 		        }
-		        let serviceBuilder = Instantiator<Feature.Service> {
-		            __safeDI_serviceBuilder(__safeDI_Feature_Service_configuration: safeDIOverrides.serviceBuilder)
-		        }
+		        let serviceBuilder = Instantiator<Feature.Service>(__safeDI_serviceBuilder)
 		        return Feature.Consumer(serviceBuilder: serviceBuilder)
 		    }
 		}
@@ -1393,12 +1389,10 @@ struct SafeDIToolNestedTypeTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Feature.Root {
-		        func __safeDI_service(__safeDI_Feature_Service_configuration: (() -> Feature.Service)?) -> Feature.Service {
-		            if let safeDIBuilder = __safeDI_Feature_Service_configuration { safeDIBuilder() } else { Feature.Service() }
+		        func __safeDI_service() -> Feature.Service {
+		            if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { Feature.Service() }
 		        }
-		        let service = LazilyInstantiated<Feature.Service> {
-		            __safeDI_service(__safeDI_Feature_Service_configuration: safeDIOverrides.service)
-		        }
+		        let service = LazilyInstantiated<Feature.Service>(__safeDI_service)
 		        return Feature.Root(service: service)
 		    }
 		}
@@ -1468,12 +1462,10 @@ struct SafeDIToolNestedTypeTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Feature.Consumer {
-		        func __safeDI_service(__safeDI_Feature_Service_configuration: (() -> Feature.Service)?) -> Feature.Service {
-		            if let safeDIBuilder = __safeDI_Feature_Service_configuration { safeDIBuilder() } else { Feature.Service() }
+		        func __safeDI_service() -> Feature.Service {
+		            if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { Feature.Service() }
 		        }
-		        let service = LazilyInstantiated<Feature.Service> {
-		            __safeDI_service(__safeDI_Feature_Service_configuration: safeDIOverrides.service)
-		        }
+		        let service = LazilyInstantiated<Feature.Service>(__safeDI_service)
 		        return Feature.Consumer(service: service)
 		    }
 		}
@@ -1567,11 +1559,11 @@ struct SafeDIToolNestedTypeTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_childBuilder(config: Child.Config, __safeDI_Child_configuration: ((Child.Config) -> Child)?) -> Child {
-		            if let safeDIBuilder = __safeDI_Child_configuration { safeDIBuilder(config) } else { Child(config: config) }
+		        func __safeDI_childBuilder(config: Child.Config) -> Child {
+		            if let safeDIBuilder = safeDIOverrides.childBuilder { safeDIBuilder(config) } else { Child(config: config) }
 		        }
 		        let childBuilder = Instantiator<Child> {
-		            __safeDI_childBuilder(config: $0, __safeDI_Child_configuration: safeDIOverrides.childBuilder)
+		            __safeDI_childBuilder(config: $0)
 		        }
 		        return Root(childBuilder: childBuilder)
 		    }
@@ -1745,11 +1737,11 @@ struct SafeDIToolNestedTypeTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Feature.Root {
-		        func __safeDI_childBuilder(config: Feature.Child.Config, __safeDI_Feature_Child_configuration: ((Feature.Child.Config) -> Feature.Child)?) -> Feature.Child {
-		            if let safeDIBuilder = __safeDI_Feature_Child_configuration { safeDIBuilder(config) } else { Feature.Child(config: config) }
+		        func __safeDI_childBuilder(config: Feature.Child.Config) -> Feature.Child {
+		            if let safeDIBuilder = safeDIOverrides.childBuilder { safeDIBuilder(config) } else { Feature.Child(config: config) }
 		        }
 		        let childBuilder = Instantiator<Feature.Child> {
-		            __safeDI_childBuilder(config: $0, __safeDI_Feature_Child_configuration: safeDIOverrides.childBuilder)
+		            __safeDI_childBuilder(config: $0)
 		        }
 		        return Feature.Root(childBuilder: childBuilder)
 		    }
@@ -1847,11 +1839,11 @@ struct SafeDIToolNestedTypeTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_childBuilder(services: [Child.Service], __safeDI_Child_configuration: (([Child.Service]) -> Child)?) -> Child {
-		            if let safeDIBuilder = __safeDI_Child_configuration { safeDIBuilder(services) } else { Child(services: services) }
+		        func __safeDI_childBuilder(services: [Child.Service]) -> Child {
+		            if let safeDIBuilder = safeDIOverrides.childBuilder { safeDIBuilder(services) } else { Child(services: services) }
 		        }
 		        let childBuilder = Instantiator<Child> {
-		            __safeDI_childBuilder(services: $0, __safeDI_Child_configuration: safeDIOverrides.childBuilder)
+		            __safeDI_childBuilder(services: $0)
 		        }
 		        return Root(childBuilder: childBuilder)
 		    }

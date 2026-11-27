@@ -514,11 +514,11 @@ struct SafeDIToolMockRootAliasBesidePromotedTreeTests: ~Copyable {
 			        #sourceLocation(file: "\(output.fixtures["Screen.swift"])", line: 12)
 			        let leafProtocol_LeafProtocol: LeafProtocol? = leaf
 			        #sourceLocation()
-			        func __safeDI_promoted(__safeDI_Promoted_configuration: Promoted.SafeDIMockConfiguration) -> Promoted {
-			            let inner = if let safeDIBuilder = __safeDI_Promoted_configuration.inner { safeDIBuilder(leafProtocol) } else { Inner(leafProtocol: leafProtocol) }
-			            return if let safeDIBuilder = __safeDI_Promoted_configuration.safeDIBuilder { safeDIBuilder(inner) } else { Promoted(inner: inner) }
+			        func __safeDI_promoted() -> Promoted {
+			            let inner = if let safeDIBuilder = safeDIOverrides.promoted.inner { safeDIBuilder(leafProtocol) } else { Inner(leafProtocol: leafProtocol) }
+			            return if let safeDIBuilder = safeDIOverrides.promoted.safeDIBuilder { safeDIBuilder(inner) } else { Promoted(inner: inner) }
 			        }
-			        let promoted: Promoted = __safeDI_promoted(__safeDI_Promoted_configuration: safeDIOverrides.promoted)
+			        let promoted: Promoted = __safeDI_promoted()
 			        return Screen(leaf: leaf, leafProtocol: leafProtocol_LeafProtocol, promoted: promoted)
 			    }
 			}
@@ -608,13 +608,11 @@ struct SafeDIToolMockRootAliasBesidePromotedTreeTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
-			        @Sendable nonisolated func __safeDI_leafBuilder(__safeDI_Leaf_configuration: (@Sendable () -> Leaf)?) -> Leaf {
-			            if let safeDIBuilder = __safeDI_Leaf_configuration { safeDIBuilder() } else { Leaf() }
+			        let __safeDI_leafBuilder__safeDIBuilder = safeDIOverrides.leafBuilder
+			        @Sendable nonisolated func __safeDI_leafBuilder() -> Leaf {
+			            if let safeDIBuilder = __safeDI_leafBuilder__safeDIBuilder { safeDIBuilder() } else { Leaf() }
 			        }
-			        let __safeDI_leafBuilder____safeDI_Leaf_configuration: (@Sendable () -> Leaf)? = safeDIOverrides.leafBuilder
-			        let leafBuilder = SendableInstantiator<Leaf> {
-			            __safeDI_leafBuilder(__safeDI_Leaf_configuration: __safeDI_leafBuilder____safeDI_Leaf_configuration)
-			        }
+			        let leafBuilder = SendableInstantiator<Leaf>(__safeDI_leafBuilder)
 			        #sourceLocation(file: "\(output.fixtures["Screen.swift"])", line: 8)
 			        let leafBuilderAlias: SendableInstantiator<Leaf> = leafBuilder
 			        #sourceLocation()
@@ -703,12 +701,10 @@ struct SafeDIToolMockRootAliasBesidePromotedTreeTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
-			        func __safeDI_leafBuilder(__safeDI_Leaf_configuration: (() -> Leaf)?) -> Leaf {
-			            if let safeDIBuilder = __safeDI_Leaf_configuration { safeDIBuilder() } else { Leaf() }
+			        func __safeDI_leafBuilder() -> Leaf {
+			            if let safeDIBuilder = safeDIOverrides.leafBuilder { safeDIBuilder() } else { Leaf() }
 			        }
-			        let leafBuilder = Instantiator<Leaf> {
-			            __safeDI_leafBuilder(__safeDI_Leaf_configuration: safeDIOverrides.leafBuilder)
-			        }
+			        let leafBuilder = Instantiator<Leaf>(__safeDI_leafBuilder)
 			        #sourceLocation(file: "\(output.fixtures["Screen.swift"])", line: 8)
 			        let leafBuilderAlias: Instantiator<Leaf> = leafBuilder
 			        #sourceLocation()

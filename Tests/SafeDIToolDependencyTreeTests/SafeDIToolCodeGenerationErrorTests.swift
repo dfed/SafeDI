@@ -5296,7 +5296,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		} catch let error as MultipleConfigurationsError {
 			// `scan` throws before the harness records the fixture paths, so the diagnostics are compared by file name.
 			let diagnostics = error.sourceDiagnostics.map {
-				"\($0.location.map { "\(($0.filePath as NSString).lastPathComponent):\($0.line):\($0.column)" } ?? "nil"): \($0.severity.rawValue): \($0.message)"
+				"\($0.location.map { "\(($0.filePath as NSString).lastPathComponent):\($0.lineAndColumn?.line ?? 0):\($0.lineAndColumn?.column ?? 0)" } ?? "nil"): \($0.severity.rawValue): \($0.message)"
 			}
 			#expect(diagnostics == [
 				"File.swift:1:1: error: This module declares #SafeDIConfiguration 2 times, but a module can declare it at most once. Keep one and remove the others.",
@@ -7811,6 +7811,46 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					public final class Root: Instantiable {
 					    public init(child: Child) { self.child = child }
 					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Parent: Instantiable {
+					    public init(child: Child) { self.child = child }
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(parent: Parent?) { self.parent = parent }
+					    @Received let parent: Parent?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_saysDeclaringReceivedPropertyClosesCycle_whenOptionalFormIsRequiredInTreeOfDeclarationStillBeingBuilt() async {
+		// Root declares `parent: Parent`, whose tree builds Child, which requires `parent: Parent?`: the declaration that
+		// would answer the receive's non-optional form is still being built where Child is.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"\(fixtures["Child.swift"]):4:5: error: @Received property `parent: Parent?` is not @Instantiated or @Forwarded in chain: Root -> Parent -> Child. Declaring `@Instantiated let parent: Parent` would close a dependency cycle wherever it is declared, because the tree of `Parent` requires `parent`, which is still being built there. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required."
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(parent: Parent) { self.parent = parent }
+					    @Instantiated let parent: Parent
 					}
 					""",
 					"""

@@ -1254,17 +1254,15 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> T8 {
-		        func __safeDI_analytics(__safeDI_Analytics_configuration: (() -> Analytics)?) -> Analytics {
-		            if let safeDIBuilder = __safeDI_Analytics_configuration { safeDIBuilder() } else { Analytics() }
+		        func __safeDI_analytics() -> Analytics {
+		            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        }
-		        let analytics = LazilyInstantiated<Analytics> {
-		            __safeDI_analytics(__safeDI_Analytics_configuration: safeDIOverrides.analytics)
+		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
+		        func __safeDI_anyT0() -> AnyT0 {
+		            let t3 = if let safeDIBuilder = safeDIOverrides.anyT0.t3 { safeDIBuilder() } else { T3() }
+		            return if let safeDIBuilder = safeDIOverrides.anyT0.safeDIBuilder { AnyT0(safeDIBuilder(t3, analytics)) } else { AnyT0(T0.customMock(t3: t3, analytics: analytics)) }
 		        }
-		        func __safeDI_anyT0(__safeDI_T0_mockConfiguration: T0.SafeDIMockConfiguration) -> AnyT0 {
-		            let t3 = if let safeDIBuilder = __safeDI_T0_mockConfiguration.t3 { safeDIBuilder() } else { T3() }
-		            return if let safeDIBuilder = __safeDI_T0_mockConfiguration.safeDIBuilder { AnyT0(safeDIBuilder(t3, analytics)) } else { AnyT0(T0.customMock(t3: t3, analytics: analytics)) }
-		        }
-		        let anyT0: AnyT0 = __safeDI_anyT0(__safeDI_T0_mockConfiguration: safeDIOverrides.anyT0)
+		        let anyT0: AnyT0 = __safeDI_anyT0()
 		        return T8(anyT0: anyT0, analytics: analytics)
 		    }
 		}

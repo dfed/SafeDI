@@ -197,10 +197,10 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let shared = if let safeDIBuilder = safeDIOverrides.shared { safeDIBuilder() } else { Shared() }
-		        func __safeDI_child(__safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
-		            if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(shared, __safeDI_Child_configuration.flag) } else { Child(shared: shared, flag: __safeDI_Child_configuration.flag) }
+		        func __safeDI_child() -> Child {
+		            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(shared, safeDIOverrides.child.flag) } else { Child(shared: shared, flag: safeDIOverrides.child.flag) }
 		        }
-		        let child: Child = __safeDI_child(__safeDI_Child_configuration: safeDIOverrides.child)
+		        let child: Child = __safeDI_child()
 		        return Root(child: child, shared: shared)
 		    }
 		}
@@ -334,10 +334,10 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_child(__safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
-		            if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(__safeDI_Child_configuration.config) } else { Child(config: __safeDI_Child_configuration.config) }
+		        func __safeDI_child() -> Child {
+		            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(safeDIOverrides.child.config) } else { Child(config: safeDIOverrides.child.config) }
 		        }
-		        let child: Child = __safeDI_child(__safeDI_Child_configuration: safeDIOverrides.child)
+		        let child: Child = __safeDI_child()
 		        return Root(child: child)
 		    }
 		}
@@ -406,11 +406,11 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_childBuilder(name: String, __safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
-		            if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(name, __safeDI_Child_configuration.flag) } else { Child(name: name, flag: __safeDI_Child_configuration.flag) }
+		        func __safeDI_childBuilder(name: String) -> Child {
+		            if let safeDIBuilder = safeDIOverrides.childBuilder.safeDIBuilder { safeDIBuilder(name, safeDIOverrides.childBuilder.flag) } else { Child(name: name, flag: safeDIOverrides.childBuilder.flag) }
 		        }
 		        let childBuilder = Instantiator<Child> {
-		            __safeDI_childBuilder(name: $0, __safeDI_Child_configuration: safeDIOverrides.childBuilder)
+		            __safeDI_childBuilder(name: $0)
 		        }
 		        return Root(childBuilder: childBuilder)
 		    }
@@ -537,14 +537,14 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_grandchild(__safeDI_Grandchild_configuration: Grandchild.SafeDIMockConfiguration) -> Grandchild {
-		            if let safeDIBuilder = __safeDI_Grandchild_configuration.safeDIBuilder { safeDIBuilder(__safeDI_Grandchild_configuration.viewModel) } else { Grandchild(viewModel: __safeDI_Grandchild_configuration.viewModel) }
+		        func __safeDI_child() -> Child {
+		            func __safeDI_grandchild() -> Grandchild {
+		                return if let safeDIBuilder = safeDIOverrides.child.grandchild.safeDIBuilder { safeDIBuilder(safeDIOverrides.child.grandchild.viewModel) } else { Grandchild(viewModel: safeDIOverrides.child.grandchild.viewModel) }
+		            }
+		            let grandchild: Grandchild = __safeDI_grandchild()
+		            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(grandchild) } else { Child(grandchild: grandchild) }
 		        }
-		        func __safeDI_child(__safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
-		            let grandchild: Grandchild = __safeDI_grandchild(__safeDI_Grandchild_configuration: __safeDI_Child_configuration.grandchild)
-		            return if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(grandchild) } else { Child(grandchild: grandchild) }
-		        }
-		        let child: Child = __safeDI_child(__safeDI_Child_configuration: safeDIOverrides.child)
+		        let child: Child = __safeDI_child()
 		        return Root(child: child)
 		    }
 		}
@@ -586,10 +586,10 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Child {
-		        func __safeDI_grandchild(__safeDI_Grandchild_configuration: Grandchild.SafeDIMockConfiguration) -> Grandchild {
-		            if let safeDIBuilder = __safeDI_Grandchild_configuration.safeDIBuilder { safeDIBuilder(__safeDI_Grandchild_configuration.viewModel) } else { Grandchild(viewModel: __safeDI_Grandchild_configuration.viewModel) }
+		        func __safeDI_grandchild() -> Grandchild {
+		            return if let safeDIBuilder = safeDIOverrides.grandchild.safeDIBuilder { safeDIBuilder(safeDIOverrides.grandchild.viewModel) } else { Grandchild(viewModel: safeDIOverrides.grandchild.viewModel) }
 		        }
-		        let grandchild: Grandchild = __safeDI_grandchild(__safeDI_Grandchild_configuration: safeDIOverrides.grandchild)
+		        let grandchild: Grandchild = __safeDI_grandchild()
 		        return Child(grandchild: grandchild)
 		    }
 		}
@@ -815,12 +815,12 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        @Sendable nonisolated func __safeDI_childBuilder(name: String, __safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
-		            if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(name, __safeDI_Child_configuration.flag()) } else { Child(name: name, flag: __safeDI_Child_configuration.flag()) }
+		        let __safeDI_childBuilder__overrides = safeDIOverrides.childBuilder
+		        @Sendable nonisolated func __safeDI_childBuilder(name: String) -> Child {
+		            if let safeDIBuilder = __safeDI_childBuilder__overrides.safeDIBuilder { safeDIBuilder(name, __safeDI_childBuilder__overrides.flag()) } else { Child(name: name, flag: __safeDI_childBuilder__overrides.flag()) }
 		        }
-		        let __safeDI_childBuilder____safeDI_Child_configuration: Child.SafeDIMockConfiguration = safeDIOverrides.childBuilder
 		        let childBuilder = SendableInstantiator<Child> {
-		            __safeDI_childBuilder(name: $0, __safeDI_Child_configuration: __safeDI_childBuilder____safeDI_Child_configuration)
+		            __safeDI_childBuilder(name: $0)
 		        }
 		        return Root(childBuilder: childBuilder)
 		    }
@@ -903,14 +903,14 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_childA(__safeDI_ChildA_configuration: ChildA.SafeDIMockConfiguration) -> ChildA {
-		            if let safeDIBuilder = __safeDI_ChildA_configuration.safeDIBuilder { safeDIBuilder(__safeDI_ChildA_configuration.flagA) } else { ChildA(flagA: __safeDI_ChildA_configuration.flagA) }
+		        func __safeDI_childA() -> ChildA {
+		            return if let safeDIBuilder = safeDIOverrides.childA.safeDIBuilder { safeDIBuilder(safeDIOverrides.childA.flagA) } else { ChildA(flagA: safeDIOverrides.childA.flagA) }
 		        }
-		        let childA: ChildA = __safeDI_childA(__safeDI_ChildA_configuration: safeDIOverrides.childA)
-		        func __safeDI_childB(__safeDI_ChildB_configuration: ChildB.SafeDIMockConfiguration) -> ChildB {
-		            if let safeDIBuilder = __safeDI_ChildB_configuration.safeDIBuilder { safeDIBuilder(__safeDI_ChildB_configuration.flagB) } else { ChildB(flagB: __safeDI_ChildB_configuration.flagB) }
+		        let childA: ChildA = __safeDI_childA()
+		        func __safeDI_childB() -> ChildB {
+		            return if let safeDIBuilder = safeDIOverrides.childB.safeDIBuilder { safeDIBuilder(safeDIOverrides.childB.flagB) } else { ChildB(flagB: safeDIOverrides.childB.flagB) }
 		        }
-		        let childB: ChildB = __safeDI_childB(__safeDI_ChildB_configuration: safeDIOverrides.childB)
+		        let childB: ChildB = __safeDI_childB()
 		        return Root(childA: childA, childB: childB)
 		    }
 		}
@@ -978,10 +978,10 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_child(__safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
-		            if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(__safeDI_Child_configuration.viewModel) } else { Child(viewModel: __safeDI_Child_configuration.viewModel) }
+		        func __safeDI_child() -> Child {
+		            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(safeDIOverrides.child.viewModel) } else { Child(viewModel: safeDIOverrides.child.viewModel) }
 		        }
-		        let child: Child = __safeDI_child(__safeDI_Child_configuration: safeDIOverrides.child)
+		        let child: Child = __safeDI_child()
 		        return Root(child: child)
 		    }
 		}
@@ -1118,14 +1118,14 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_childA(__safeDI_ChildA_configuration: ChildA.SafeDIMockConfiguration) -> ChildA {
-		            if let safeDIBuilder = __safeDI_ChildA_configuration.safeDIBuilder { safeDIBuilder(__safeDI_ChildA_configuration.flag) } else { ChildA(flag: __safeDI_ChildA_configuration.flag) }
+		        func __safeDI_childA() -> ChildA {
+		            return if let safeDIBuilder = safeDIOverrides.childA.safeDIBuilder { safeDIBuilder(safeDIOverrides.childA.flag) } else { ChildA(flag: safeDIOverrides.childA.flag) }
 		        }
-		        let childA: ChildA = __safeDI_childA(__safeDI_ChildA_configuration: safeDIOverrides.childA)
-		        func __safeDI_childB(__safeDI_ChildB_configuration: ChildB.SafeDIMockConfiguration) -> ChildB {
-		            if let safeDIBuilder = __safeDI_ChildB_configuration.safeDIBuilder { safeDIBuilder(__safeDI_ChildB_configuration.flag) } else { ChildB(flag: __safeDI_ChildB_configuration.flag) }
+		        let childA: ChildA = __safeDI_childA()
+		        func __safeDI_childB() -> ChildB {
+		            return if let safeDIBuilder = safeDIOverrides.childB.safeDIBuilder { safeDIBuilder(safeDIOverrides.childB.flag) } else { ChildB(flag: safeDIOverrides.childB.flag) }
 		        }
-		        let childB: ChildB = __safeDI_childB(__safeDI_ChildB_configuration: safeDIOverrides.childB)
+		        let childB: ChildB = __safeDI_childB()
 		        return Root(childA: childA, childB: childB)
 		    }
 		}
@@ -1199,11 +1199,11 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_childBuilder(name: String, __safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
-		            if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(name, __safeDI_Child_configuration.flag) } else { Child(name: name, flag: __safeDI_Child_configuration.flag) }
+		        func __safeDI_childBuilder(name: String) -> Child {
+		            if let safeDIBuilder = safeDIOverrides.childBuilder.safeDIBuilder { safeDIBuilder(name, safeDIOverrides.childBuilder.flag) } else { Child(name: name, flag: safeDIOverrides.childBuilder.flag) }
 		        }
 		        let childBuilder = ErasedInstantiator<String, Child> {
-		            __safeDI_childBuilder(name: $0, __safeDI_Child_configuration: safeDIOverrides.childBuilder)
+		            __safeDI_childBuilder(name: $0)
 		        }
 		        return Root(childBuilder: childBuilder)
 		    }
@@ -1276,12 +1276,12 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        @Sendable nonisolated func __safeDI_childBuilder(name: String, __safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
-		            if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(name, __safeDI_Child_configuration.flag()) } else { Child(name: name, flag: __safeDI_Child_configuration.flag()) }
+		        let __safeDI_childBuilder__overrides = safeDIOverrides.childBuilder
+		        @Sendable nonisolated func __safeDI_childBuilder(name: String) -> Child {
+		            if let safeDIBuilder = __safeDI_childBuilder__overrides.safeDIBuilder { safeDIBuilder(name, __safeDI_childBuilder__overrides.flag()) } else { Child(name: name, flag: __safeDI_childBuilder__overrides.flag()) }
 		        }
-		        let __safeDI_childBuilder____safeDI_Child_configuration: Child.SafeDIMockConfiguration = safeDIOverrides.childBuilder
 		        let childBuilder = SendableErasedInstantiator<String, Child> {
-		            __safeDI_childBuilder(name: $0, __safeDI_Child_configuration: __safeDI_childBuilder____safeDI_Child_configuration)
+		            __safeDI_childBuilder(name: $0)
 		        }
 		        return Root(childBuilder: childBuilder)
 		    }
@@ -1349,10 +1349,10 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_child(__safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
-		            if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(__safeDI_Child_configuration.values) } else { Child(values: __safeDI_Child_configuration.values) }
+		        func __safeDI_child() -> Child {
+		            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(safeDIOverrides.child.values) } else { Child(values: safeDIOverrides.child.values) }
 		        }
-		        let child: Child = __safeDI_child(__safeDI_Child_configuration: safeDIOverrides.child)
+		        let child: Child = __safeDI_child()
 		        return Root(child: child)
 		    }
 		}
@@ -1437,10 +1437,10 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		        clientId: String,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Parent {
-		        func __safeDI_child(__safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
-		            if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(__safeDI_Child_configuration.clientId) } else { Child(clientId: __safeDI_Child_configuration.clientId) }
+		        func __safeDI_child() -> Child {
+		            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(safeDIOverrides.child.clientId) } else { Child(clientId: safeDIOverrides.child.clientId) }
 		        }
-		        let child: Child = __safeDI_child(__safeDI_Child_configuration: safeDIOverrides.child)
+		        let child: Child = __safeDI_child()
 		        return Parent(clientId: clientId, child: child)
 		    }
 		}
@@ -1573,14 +1573,14 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_childA(__safeDI_ChildA_configuration: ChildA.SafeDIMockConfiguration) -> ChildA {
-		            if let safeDIBuilder = __safeDI_ChildA_configuration.safeDIBuilder { safeDIBuilder(__safeDI_ChildA_configuration.viewModel) } else { ChildA(viewModel: __safeDI_ChildA_configuration.viewModel) }
+		        func __safeDI_childA() -> ChildA {
+		            return if let safeDIBuilder = safeDIOverrides.childA.safeDIBuilder { safeDIBuilder(safeDIOverrides.childA.viewModel) } else { ChildA(viewModel: safeDIOverrides.childA.viewModel) }
 		        }
-		        let childA: ChildA = __safeDI_childA(__safeDI_ChildA_configuration: safeDIOverrides.childA)
-		        func __safeDI_childB(__safeDI_ChildB_configuration: ChildB.SafeDIMockConfiguration) -> ChildB {
-		            if let safeDIBuilder = __safeDI_ChildB_configuration.safeDIBuilder { safeDIBuilder(__safeDI_ChildB_configuration.viewModel) } else { ChildB(viewModel: __safeDI_ChildB_configuration.viewModel) }
+		        let childA: ChildA = __safeDI_childA()
+		        func __safeDI_childB() -> ChildB {
+		            return if let safeDIBuilder = safeDIOverrides.childB.safeDIBuilder { safeDIBuilder(safeDIOverrides.childB.viewModel) } else { ChildB(viewModel: safeDIOverrides.childB.viewModel) }
 		        }
-		        let childB: ChildB = __safeDI_childB(__safeDI_ChildB_configuration: safeDIOverrides.childB)
+		        let childB: ChildB = __safeDI_childB()
 		        return Root(childA: childA, childB: childB)
 		    }
 		}
@@ -1658,14 +1658,14 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_grandchild(__safeDI_Grandchild_configuration: Grandchild.SafeDIMockConfiguration) -> Grandchild {
-		            if let safeDIBuilder = __safeDI_Grandchild_configuration.safeDIBuilder { safeDIBuilder(__safeDI_Grandchild_configuration.viewModel) } else { Grandchild(viewModel: __safeDI_Grandchild_configuration.viewModel) }
+		        func __safeDI_child() -> Child {
+		            func __safeDI_grandchild() -> Grandchild {
+		                return if let safeDIBuilder = safeDIOverrides.child.grandchild.safeDIBuilder { safeDIBuilder(safeDIOverrides.child.grandchild.viewModel) } else { Grandchild(viewModel: safeDIOverrides.child.grandchild.viewModel) }
+		            }
+		            let grandchild: Grandchild = __safeDI_grandchild()
+		            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(grandchild, safeDIOverrides.child.config) } else { Child(grandchild: grandchild, config: safeDIOverrides.child.config) }
 		        }
-		        func __safeDI_child(__safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
-		            let grandchild: Grandchild = __safeDI_grandchild(__safeDI_Grandchild_configuration: __safeDI_Child_configuration.grandchild)
-		            return if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(grandchild, __safeDI_Child_configuration.config) } else { Child(grandchild: grandchild, config: __safeDI_Child_configuration.config) }
-		        }
-		        let child: Child = __safeDI_child(__safeDI_Child_configuration: safeDIOverrides.child)
+		        let child: Child = __safeDI_child()
 		        return Root(child: child)
 		    }
 		}
@@ -1746,16 +1746,16 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_grandchildBuilder(name: String, __safeDI_Grandchild_configuration: Grandchild.SafeDIMockConfiguration) -> Grandchild {
-		            if let safeDIBuilder = __safeDI_Grandchild_configuration.safeDIBuilder { safeDIBuilder(name, __safeDI_Grandchild_configuration.viewModel) } else { Grandchild(name: name, viewModel: __safeDI_Grandchild_configuration.viewModel) }
-		        }
-		        func __safeDI_child(__safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
-		            let grandchildBuilder = Instantiator<Grandchild> {
-		                __safeDI_grandchildBuilder(name: $0, __safeDI_Grandchild_configuration: __safeDI_Child_configuration.grandchildBuilder)
+		        func __safeDI_child() -> Child {
+		            func __safeDI_grandchildBuilder(name: String) -> Grandchild {
+		                if let safeDIBuilder = safeDIOverrides.child.grandchildBuilder.safeDIBuilder { safeDIBuilder(name, safeDIOverrides.child.grandchildBuilder.viewModel) } else { Grandchild(name: name, viewModel: safeDIOverrides.child.grandchildBuilder.viewModel) }
 		            }
-		            return if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(grandchildBuilder) } else { Child(grandchildBuilder: grandchildBuilder) }
+		            let grandchildBuilder = Instantiator<Grandchild> {
+		                __safeDI_grandchildBuilder(name: $0)
+		            }
+		            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(grandchildBuilder) } else { Child(grandchildBuilder: grandchildBuilder) }
 		        }
-		        let child: Child = __safeDI_child(__safeDI_Child_configuration: safeDIOverrides.child)
+		        let child: Child = __safeDI_child()
 		        return Root(child: child)
 		    }
 		}
@@ -1824,10 +1824,10 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_child(__safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
-		            if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(__safeDI_Child_configuration.onDismiss) } else { Child(onDismiss: __safeDI_Child_configuration.onDismiss) }
+		        func __safeDI_child() -> Child {
+		            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(safeDIOverrides.child.onDismiss) } else { Child(onDismiss: safeDIOverrides.child.onDismiss) }
 		        }
-		        let child: Child = __safeDI_child(__safeDI_Child_configuration: safeDIOverrides.child)
+		        let child: Child = __safeDI_child()
 		        return Root(child: child)
 		    }
 		}
@@ -1983,10 +1983,10 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_child(__safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
-		            if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(__safeDI_Child_configuration.onComplete) } else { Child(onComplete: __safeDI_Child_configuration.onComplete) }
+		        func __safeDI_child() -> Child {
+		            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(safeDIOverrides.child.onComplete) } else { Child(onComplete: safeDIOverrides.child.onComplete) }
 		        }
-		        let child: Child = __safeDI_child(__safeDI_Child_configuration: safeDIOverrides.child)
+		        let child: Child = __safeDI_child()
 		        return Root(child: child)
 		    }
 		}
@@ -2064,13 +2064,11 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        @Sendable nonisolated func __safeDI_childBuilder(__safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
-		            if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(__safeDI_Child_configuration.plain, __safeDI_Child_configuration.taking, __safeDI_Child_configuration.returning, __safeDI_Child_configuration.top) } else { Child(plain: __safeDI_Child_configuration.plain, taking: __safeDI_Child_configuration.taking, returning: __safeDI_Child_configuration.returning, top: __safeDI_Child_configuration.top) }
+		        let __safeDI_childBuilder__overrides = safeDIOverrides.childBuilder
+		        @Sendable nonisolated func __safeDI_childBuilder() -> Child {
+		            if let safeDIBuilder = __safeDI_childBuilder__overrides.safeDIBuilder { safeDIBuilder(__safeDI_childBuilder__overrides.plain, __safeDI_childBuilder__overrides.taking, __safeDI_childBuilder__overrides.returning, __safeDI_childBuilder__overrides.top) } else { Child(plain: __safeDI_childBuilder__overrides.plain, taking: __safeDI_childBuilder__overrides.taking, returning: __safeDI_childBuilder__overrides.returning, top: __safeDI_childBuilder__overrides.top) }
 		        }
-		        let __safeDI_childBuilder____safeDI_Child_configuration: Child.SafeDIMockConfiguration = safeDIOverrides.childBuilder
-		        let childBuilder = SendableInstantiator<Child> {
-		            __safeDI_childBuilder(__safeDI_Child_configuration: __safeDI_childBuilder____safeDI_Child_configuration)
-		        }
+		        let childBuilder = SendableInstantiator<Child>(__safeDI_childBuilder)
 		        return Root(childBuilder: childBuilder)
 		    }
 		}
@@ -2340,10 +2338,10 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_child(__safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
-		            if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(__safeDI_Child_configuration.onTap, __safeDI_Child_configuration.onFinish, __safeDI_Child_configuration.onSend, __safeDI_Child_configuration.onMain, __safeDI_Child_configuration.onText, __safeDI_Child_configuration.onNested, __safeDI_Child_configuration.onHandle) } else { Child(onTap: __safeDI_Child_configuration.onTap, onFinish: __safeDI_Child_configuration.onFinish, onSend: __safeDI_Child_configuration.onSend, onMain: __safeDI_Child_configuration.onMain, onText: __safeDI_Child_configuration.onText, onNested: __safeDI_Child_configuration.onNested, onHandle: __safeDI_Child_configuration.onHandle) }
+		        func __safeDI_child() -> Child {
+		            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(safeDIOverrides.child.onTap, safeDIOverrides.child.onFinish, safeDIOverrides.child.onSend, safeDIOverrides.child.onMain, safeDIOverrides.child.onText, safeDIOverrides.child.onNested, safeDIOverrides.child.onHandle) } else { Child(onTap: safeDIOverrides.child.onTap, onFinish: safeDIOverrides.child.onFinish, onSend: safeDIOverrides.child.onSend, onMain: safeDIOverrides.child.onMain, onText: safeDIOverrides.child.onText, onNested: safeDIOverrides.child.onNested, onHandle: safeDIOverrides.child.onHandle) }
 		        }
-		        let child: Child = __safeDI_child(__safeDI_Child_configuration: safeDIOverrides.child)
+		        let child: Child = __safeDI_child()
 		        return Root(child: child)
 		    }
 		}
@@ -2446,12 +2444,10 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_widgetBuilder(__safeDI_Widget_configuration: Widget.SafeDIMockConfiguration) -> Widget {
-		            if let safeDIBuilder = __safeDI_Widget_configuration.safeDIBuilder { safeDIBuilder(__safeDI_Widget_configuration.onTap) } else { Widget.instantiate(onTap: __safeDI_Widget_configuration.onTap) }
+		        func __safeDI_widgetBuilder() -> Widget {
+		            if let safeDIBuilder = safeDIOverrides.widgetBuilder.safeDIBuilder { safeDIBuilder(safeDIOverrides.widgetBuilder.onTap) } else { Widget.instantiate(onTap: safeDIOverrides.widgetBuilder.onTap) }
 		        }
-		        let widgetBuilder: Instantiator<Widget> = Instantiator<Widget> {
-		            __safeDI_widgetBuilder(__safeDI_Widget_configuration: safeDIOverrides.widgetBuilder)
-		        }
+		        let widgetBuilder = Instantiator<Widget>(__safeDI_widgetBuilder)
 		        return Root(widgetBuilder: widgetBuilder)
 		    }
 		}
@@ -2582,10 +2578,10 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_child(__safeDI_Child_mockConfiguration: Child.SafeDIMockConfiguration) -> Child {
-		            if let safeDIBuilder = __safeDI_Child_mockConfiguration.safeDIBuilder { safeDIBuilder(__safeDI_Child_mockConfiguration.onTap) } else { Child.mock(onTap: __safeDI_Child_mockConfiguration.onTap) }
+		        func __safeDI_child() -> Child {
+		            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(safeDIOverrides.child.onTap) } else { Child.mock(onTap: safeDIOverrides.child.onTap) }
 		        }
-		        let child: Child = __safeDI_child(__safeDI_Child_mockConfiguration: safeDIOverrides.child)
+		        let child: Child = __safeDI_child()
 		        return Root(child: child)
 		    }
 		}
@@ -2730,10 +2726,10 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    ) -> Root {
 		        let service: Service? = safeDIOverrides.service
 		        let childA = if let safeDIBuilder = safeDIOverrides.childA { safeDIBuilder(service) } else { ChildA(service: service) }
-		        func __safeDI_childB(__safeDI_ChildB_configuration: ChildB.SafeDIMockConfiguration) -> ChildB {
-		            if let safeDIBuilder = __safeDI_ChildB_configuration.safeDIBuilder { safeDIBuilder(__safeDI_ChildB_configuration.service) } else { ChildB(service: __safeDI_ChildB_configuration.service) }
+		        func __safeDI_childB() -> ChildB {
+		            return if let safeDIBuilder = safeDIOverrides.childB.safeDIBuilder { safeDIBuilder(safeDIOverrides.childB.service) } else { ChildB(service: safeDIOverrides.childB.service) }
 		        }
-		        let childB: ChildB = __safeDI_childB(__safeDI_ChildB_configuration: safeDIOverrides.childB)
+		        let childB: ChildB = __safeDI_childB()
 		        return Root(childA: childA, childB: childB)
 		    }
 		}
@@ -2817,10 +2813,10 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		        name: String,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Feature {
-		        func __safeDI_child(__safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
-		            if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(__safeDI_Child_configuration.name) } else { Child(name: __safeDI_Child_configuration.name) }
+		        func __safeDI_child() -> Child {
+		            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(safeDIOverrides.child.name) } else { Child(name: safeDIOverrides.child.name) }
 		        }
-		        let child: Child = __safeDI_child(__safeDI_Child_configuration: safeDIOverrides.child)
+		        let child: Child = __safeDI_child()
 		        return Feature(name: name, child: child)
 		    }
 		}
@@ -2923,10 +2919,10 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_child(__safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
-		            if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(__safeDI_Child_configuration.isLoggingEnabled) } else { Child(isLoggingEnabled: __safeDI_Child_configuration.isLoggingEnabled) }
+		        func __safeDI_child() -> Child {
+		            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(safeDIOverrides.child.isLoggingEnabled) } else { Child(isLoggingEnabled: safeDIOverrides.child.isLoggingEnabled) }
 		        }
-		        let child: Child = __safeDI_child(__safeDI_Child_configuration: safeDIOverrides.child)
+		        let child: Child = __safeDI_child()
 		        return Root(child: child)
 		    }
 		}
@@ -3288,11 +3284,11 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_child(__safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
-		            let leaf = if let safeDIBuilder = __safeDI_Child_configuration.leaf { safeDIBuilder() } else { Leaf() }
-		            return if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(leaf) } else { Child(_: leaf) }
+		        func __safeDI_child() -> Child {
+		            let leaf = if let safeDIBuilder = safeDIOverrides.child.leaf { safeDIBuilder() } else { Leaf() }
+		            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(leaf) } else { Child(leaf) }
 		        }
-		        let child: Child = __safeDI_child(__safeDI_Child_configuration: safeDIOverrides.child)
+		        let child: Child = __safeDI_child()
 		        return Root(child: child)
 		    }
 		}
@@ -3371,11 +3367,11 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_child(__safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
-		            let leaf = if let safeDIBuilder = __safeDI_Child_configuration.leaf { safeDIBuilder() } else { Leaf() }
-		            return if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(leaf) } else { Child(_: leaf) }
+		        func __safeDI_child() -> Child {
+		            let leaf = if let safeDIBuilder = safeDIOverrides.child.leaf { safeDIBuilder() } else { Leaf() }
+		            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(leaf) } else { Child(leaf) }
 		        }
-		        let child: Child = __safeDI_child(__safeDI_Child_configuration: safeDIOverrides.child)
+		        let child: Child = __safeDI_child()
 		        return Root(child: child)
 		    }
 		}
@@ -3454,11 +3450,11 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_child(__safeDI_Child_mockConfiguration: Child.SafeDIMockConfiguration) -> Child {
-		            let leaf = if let safeDIBuilder = __safeDI_Child_mockConfiguration.leaf { safeDIBuilder() } else { Leaf() }
-		            return if let safeDIBuilder = __safeDI_Child_mockConfiguration.safeDIBuilder { safeDIBuilder(leaf) } else { Child.customMock(_: leaf) }
+		        func __safeDI_child() -> Child {
+		            let leaf = if let safeDIBuilder = safeDIOverrides.child.leaf { safeDIBuilder() } else { Leaf() }
+		            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(leaf) } else { Child.customMock(leaf) }
 		        }
-		        let child: Child = __safeDI_child(__safeDI_Child_mockConfiguration: safeDIOverrides.child)
+		        let child: Child = __safeDI_child()
 		        return Root(child: child)
 		    }
 		}
@@ -3555,10 +3551,10 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Parent {
 		        let database = if let safeDIBuilder = safeDIOverrides.database { safeDIBuilder() } else { Database() }
-		        func __safeDI_service(__safeDI_Service_configuration: Service.SafeDIMockConfiguration) -> Service {
-		            if let safeDIBuilder = __safeDI_Service_configuration.safeDIBuilder { safeDIBuilder(database, __safeDI_Service_configuration.title) } else { Service.instantiate(database: database, title: __safeDI_Service_configuration.title) }
+		        func __safeDI_service() -> Service {
+		            return if let safeDIBuilder = safeDIOverrides.service.safeDIBuilder { safeDIBuilder(database, safeDIOverrides.service.title) } else { Service.instantiate(database: database, title: safeDIOverrides.service.title) }
 		        }
-		        let service: Service = __safeDI_service(__safeDI_Service_configuration: safeDIOverrides.service)
+		        let service: Service = __safeDI_service()
 		        return Parent(database: database, service: service)
 		    }
 		}
@@ -3746,10 +3742,10 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Parent {
 		        let database = if let safeDIBuilder = safeDIOverrides.database { safeDIBuilder() } else { Database() }
-		        func __safeDI_service(__safeDI_Service_mockConfiguration: Service.SafeDIMockConfiguration) -> Service {
-		            if let safeDIBuilder = __safeDI_Service_mockConfiguration.safeDIBuilder { safeDIBuilder(database, __safeDI_Service_mockConfiguration.title) } else { Service.mock(database: database, title: __safeDI_Service_mockConfiguration.title) }
+		        func __safeDI_service() -> Service {
+		            return if let safeDIBuilder = safeDIOverrides.service.safeDIBuilder { safeDIBuilder(database, safeDIOverrides.service.title) } else { Service.mock(database: database, title: safeDIOverrides.service.title) }
 		        }
-		        let service: Service = __safeDI_service(__safeDI_Service_mockConfiguration: safeDIOverrides.service)
+		        let service: Service = __safeDI_service()
 		        return Parent(database: database, service: service)
 		    }
 		}

@@ -364,11 +364,11 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 		        userService: AnyUserService,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        func __safeDI_zebra(__safeDI_Zebra_configuration: Zebra.SafeDIMockConfiguration) -> Zebra {
-		            let deep = if let safeDIBuilder = __safeDI_Zebra_configuration.deep { safeDIBuilder(userService) } else { Deep(userService: userService) }
-		            return if let safeDIBuilder = __safeDI_Zebra_configuration.safeDIBuilder { safeDIBuilder(deep, userService) } else { Zebra(deep: deep, userService: userService) }
+		        func __safeDI_zebra() -> Zebra {
+		            let deep = if let safeDIBuilder = safeDIOverrides.zebra.deep { safeDIBuilder(userService) } else { Deep(userService: userService) }
+		            return if let safeDIBuilder = safeDIOverrides.zebra.safeDIBuilder { safeDIBuilder(deep, userService) } else { Zebra(deep: deep, userService: userService) }
 		        }
-		        let zebra: Zebra = __safeDI_zebra(__safeDI_Zebra_configuration: safeDIOverrides.zebra)
+		        let zebra: Zebra = __safeDI_zebra()
 		        let apple = if let safeDIBuilder = safeDIOverrides.apple { safeDIBuilder(userService) } else { Apple(userService: userService) }
 		        return Screen(userService: userService, zebra: zebra, apple: apple)
 		    }
@@ -564,16 +564,16 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 		        userService: AnyUserService,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        func __safeDI_zebra(__safeDI_Zebra_configuration: Zebra.SafeDIMockConfiguration) -> Zebra {
-		            let profile = if let safeDIBuilder = __safeDI_Zebra_configuration.profile { safeDIBuilder(userService) } else { Profile(userService: userService) }
-		            return if let safeDIBuilder = __safeDI_Zebra_configuration.safeDIBuilder { safeDIBuilder(profile) } else { Zebra(profile: profile) }
+		        func __safeDI_zebra() -> Zebra {
+		            let profile = if let safeDIBuilder = safeDIOverrides.zebra.profile { safeDIBuilder(userService) } else { Profile(userService: userService) }
+		            return if let safeDIBuilder = safeDIOverrides.zebra.safeDIBuilder { safeDIBuilder(profile) } else { Zebra(profile: profile) }
 		        }
-		        let zebra: Zebra = __safeDI_zebra(__safeDI_Zebra_configuration: safeDIOverrides.zebra)
-		        func __safeDI_apple(__safeDI_Apple_configuration: Apple.SafeDIMockConfiguration) -> Apple {
-		            let profile = if let safeDIBuilder = __safeDI_Apple_configuration.profile { safeDIBuilder(userService) } else { Profile(userService: userService) }
-		            return if let safeDIBuilder = __safeDI_Apple_configuration.safeDIBuilder { safeDIBuilder(profile) } else { Apple(profile: profile) }
+		        let zebra: Zebra = __safeDI_zebra()
+		        func __safeDI_apple() -> Apple {
+		            let profile = if let safeDIBuilder = safeDIOverrides.apple.profile { safeDIBuilder(userService) } else { Profile(userService: userService) }
+		            return if let safeDIBuilder = safeDIOverrides.apple.safeDIBuilder { safeDIBuilder(profile) } else { Apple(profile: profile) }
 		        }
-		        let apple: Apple = __safeDI_apple(__safeDI_Apple_configuration: safeDIOverrides.apple)
+		        let apple: Apple = __safeDI_apple()
 		        let settings = if let safeDIBuilder = safeDIOverrides.settings { safeDIBuilder(userService) } else { Settings(userService: userService) }
 		        return Screen(zebra: zebra, apple: apple, settings: settings)
 		    }
@@ -664,16 +664,16 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 		        userService: AnyUserService,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        func __safeDI_zebra(__safeDI_Zebra_configuration: Zebra.SafeDIMockConfiguration) -> Zebra {
-		            let profile = if let safeDIBuilder = __safeDI_Zebra_configuration.profile { safeDIBuilder(userService) } else { Profile(userService: userService) }
-		            return if let safeDIBuilder = __safeDI_Zebra_configuration.safeDIBuilder { safeDIBuilder(profile) } else { Zebra(profile: profile) }
+		        func __safeDI_zebra() -> Zebra {
+		            let profile = if let safeDIBuilder = safeDIOverrides.zebra.profile { safeDIBuilder(userService) } else { Profile(userService: userService) }
+		            return if let safeDIBuilder = safeDIOverrides.zebra.safeDIBuilder { safeDIBuilder(profile) } else { Zebra(profile: profile) }
 		        }
-		        let zebra: Zebra = __safeDI_zebra(__safeDI_Zebra_configuration: safeDIOverrides.zebra)
-		        func __safeDI_apple(__safeDI_Apple_configuration: Apple.SafeDIMockConfiguration) -> Apple {
-		            let profile = if let safeDIBuilder = __safeDI_Apple_configuration.profile { safeDIBuilder(userService) } else { Profile(userService: userService) }
-		            return if let safeDIBuilder = __safeDI_Apple_configuration.safeDIBuilder { safeDIBuilder(profile) } else { Apple(profile: profile) }
+		        let zebra: Zebra = __safeDI_zebra()
+		        func __safeDI_apple() -> Apple {
+		            let profile = if let safeDIBuilder = safeDIOverrides.apple.profile { safeDIBuilder(userService) } else { Profile(userService: userService) }
+		            return if let safeDIBuilder = safeDIOverrides.apple.safeDIBuilder { safeDIBuilder(profile) } else { Apple(profile: profile) }
 		        }
-		        let apple: Apple = __safeDI_apple(__safeDI_Apple_configuration: safeDIOverrides.apple)
+		        let apple: Apple = __safeDI_apple()
 		        return Screen(zebra: zebra, apple: apple)
 		    }
 		}
@@ -859,19 +859,17 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let __safeDI_userService = userService
-		        @Sendable nonisolated func __safeDI_zebraBuilder(__safeDI_Zebra_configuration: (@Sendable (AnyUserService) -> Zebra)?) -> Zebra {
+		        let __safeDI_zebraBuilder__safeDIBuilder = safeDIOverrides.zebraBuilder
+		        @Sendable nonisolated func __safeDI_zebraBuilder() -> Zebra {
 		            let userService = __safeDI_userService()
-		            return if let safeDIBuilder = __safeDI_Zebra_configuration { safeDIBuilder(userService) } else { Zebra(userService: userService) }
+		            return if let safeDIBuilder = __safeDI_zebraBuilder__safeDIBuilder { safeDIBuilder(userService) } else { Zebra(userService: userService) }
 		        }
-		        let __safeDI_zebraBuilder____safeDI_Zebra_configuration: (@Sendable (AnyUserService) -> Zebra)? = safeDIOverrides.zebraBuilder
-		        let zebraBuilder = SendableInstantiator<Zebra> {
-		            __safeDI_zebraBuilder(__safeDI_Zebra_configuration: __safeDI_zebraBuilder____safeDI_Zebra_configuration)
-		        }
-		        func __safeDI_apple(__safeDI_Apple_configuration: ((AnyUserService) -> Apple)?) -> Apple {
+		        let zebraBuilder = SendableInstantiator<Zebra>(__safeDI_zebraBuilder)
+		        func __safeDI_apple() -> Apple {
 		            let userService = __safeDI_userService()
-		            return if let safeDIBuilder = __safeDI_Apple_configuration { safeDIBuilder(userService) } else { Apple(userService: userService) }
+		            return if let safeDIBuilder = safeDIOverrides.apple { safeDIBuilder(userService) } else { Apple(userService: userService) }
 		        }
-		        let apple: Apple = __safeDI_apple(__safeDI_Apple_configuration: safeDIOverrides.apple)
+		        let apple: Apple = __safeDI_apple()
 		        return Screen(zebraBuilder: zebraBuilder, apple: apple)
 		    }
 		}
@@ -970,24 +968,22 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Dashboard {
 		        let __safeDI_engine_Engine = engine_Engine
-		        func __safeDI_car(__safeDI_Car_configuration: ((Engine) -> Car)?) -> Car {
+		        func __safeDI_garage() -> Garage {
+		            let engine = if let safeDIBuilder = safeDIOverrides.garage.engine { safeDIBuilder() } else { Toolbox() }
+		            func __safeDI_car() -> Car {
+		                let engine_Engine = __safeDI_engine_Engine()
+		                return if let safeDIBuilder = safeDIOverrides.garage.car { safeDIBuilder(engine_Engine) } else { Car(engine: engine_Engine) }
+		            }
+		            let car: Car = __safeDI_car()
+		            return if let safeDIBuilder = safeDIOverrides.garage.safeDIBuilder { safeDIBuilder(engine, car) } else { Garage(engine: engine, car: car) }
+		        }
+		        let garage: Garage = __safeDI_garage()
+		        let __safeDI_truckBuilder__safeDIBuilder = safeDIOverrides.truckBuilder
+		        @Sendable nonisolated func __safeDI_truckBuilder() -> Truck {
 		            let engine_Engine = __safeDI_engine_Engine()
-		            return if let safeDIBuilder = __safeDI_Car_configuration { safeDIBuilder(engine_Engine) } else { Car(engine: engine_Engine) }
+		            return if let safeDIBuilder = __safeDI_truckBuilder__safeDIBuilder { safeDIBuilder(engine_Engine) } else { Truck(engine: engine_Engine) }
 		        }
-		        func __safeDI_garage(__safeDI_Garage_configuration: Garage.SafeDIMockConfiguration) -> Garage {
-		            let engine = if let safeDIBuilder = __safeDI_Garage_configuration.engine { safeDIBuilder() } else { Toolbox() }
-		            let car: Car = __safeDI_car(__safeDI_Car_configuration: __safeDI_Garage_configuration.car)
-		            return if let safeDIBuilder = __safeDI_Garage_configuration.safeDIBuilder { safeDIBuilder(engine, car) } else { Garage(engine: engine, car: car) }
-		        }
-		        let garage: Garage = __safeDI_garage(__safeDI_Garage_configuration: safeDIOverrides.garage)
-		        @Sendable nonisolated func __safeDI_truckBuilder(__safeDI_Truck_configuration: (@Sendable (Engine) -> Truck)?) -> Truck {
-		            let engine_Engine = __safeDI_engine_Engine()
-		            return if let safeDIBuilder = __safeDI_Truck_configuration { safeDIBuilder(engine_Engine) } else { Truck(engine: engine_Engine) }
-		        }
-		        let __safeDI_truckBuilder____safeDI_Truck_configuration: (@Sendable (Engine) -> Truck)? = safeDIOverrides.truckBuilder
-		        let truckBuilder = SendableInstantiator<Truck> {
-		            __safeDI_truckBuilder(__safeDI_Truck_configuration: __safeDI_truckBuilder____safeDI_Truck_configuration)
-		        }
+		        let truckBuilder = SendableInstantiator<Truck>(__safeDI_truckBuilder)
 		        return Dashboard(garage: garage, truckBuilder: truckBuilder)
 		    }
 		}
@@ -1529,11 +1525,11 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let zebra = if let safeDIBuilder = safeDIOverrides.zebra { safeDIBuilder(engine) } else { Zebra(engine: engine) }
-		        func __safeDI_apple(__safeDI_Apple_configuration: Apple.SafeDIMockConfiguration) -> Apple {
-		            let reader = if let safeDIBuilder = __safeDI_Apple_configuration.reader { safeDIBuilder(engine) } else { Reader(engine: engine) }
-		            return if let safeDIBuilder = __safeDI_Apple_configuration.safeDIBuilder { safeDIBuilder(engine, reader) } else { Apple(engine: engine, reader: reader) }
+		        func __safeDI_apple() -> Apple {
+		            let reader = if let safeDIBuilder = safeDIOverrides.apple.reader { safeDIBuilder(engine) } else { Reader(engine: engine) }
+		            return if let safeDIBuilder = safeDIOverrides.apple.safeDIBuilder { safeDIBuilder(engine, reader) } else { Apple(engine: engine, reader: reader) }
 		        }
-		        let apple: Apple = __safeDI_apple(__safeDI_Apple_configuration: safeDIOverrides.apple)
+		        let apple: Apple = __safeDI_apple()
 		        return Screen(zebra: zebra, apple: apple)
 		    }
 		}
@@ -1627,21 +1623,19 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 		        engine: Engine,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        func __safeDI_b(__safeDI_B_configuration: B.SafeDIMockConfiguration, __safeDI_A_configuration_nearest: A.SafeDIMockConfiguration?) -> B {
-		            let y = Instantiator<A> {
-		                __safeDI_y(__safeDI_A_configuration: __safeDI_A_configuration_nearest ?? A.SafeDIMockConfiguration(), __safeDI_B_configuration_nearest: __safeDI_B_configuration)
+		        func __safeDI_b() -> B {
+		            func __safeDI_y() -> A {
+		                func __safeDI_z() -> B {
+		                    let y = Instantiator<A>(__safeDI_y)
+		                    return if let safeDIBuilder = safeDIOverrides.b.safeDIBuilder { safeDIBuilder(y) } else { B(y: y) }
+		                }
+		                let z = Instantiator<B>(__safeDI_z)
+		                return A(z: z, engine: engine)
 		            }
-		            return if let safeDIBuilder = __safeDI_B_configuration.safeDIBuilder { safeDIBuilder(y) } else { B(y: y) }
+		            let y = Instantiator<A>(__safeDI_y)
+		            return if let safeDIBuilder = safeDIOverrides.b.safeDIBuilder { safeDIBuilder(y) } else { B(y: y) }
 		        }
-		        func __safeDI_y(__safeDI_A_configuration: A.SafeDIMockConfiguration, __safeDI_B_configuration_nearest: B.SafeDIMockConfiguration?) -> A {
-		            let z = Instantiator<B> {
-		                __safeDI_b(__safeDI_B_configuration: __safeDI_B_configuration_nearest ?? B.SafeDIMockConfiguration(), __safeDI_A_configuration_nearest: __safeDI_A_configuration)
-		            }
-		            return if let safeDIBuilder = __safeDI_A_configuration.safeDIBuilder { safeDIBuilder(z, engine) } else { A(z: z, engine: engine) }
-		        }
-		        let b = Instantiator<B> {
-		            __safeDI_b(__safeDI_B_configuration: safeDIOverrides.b, __safeDI_A_configuration_nearest: nil)
-		        }
+		        let b = Instantiator<B>(__safeDI_b)
 		        let kiwi = if let safeDIBuilder = safeDIOverrides.kiwi { safeDIBuilder(engine) } else { Kiwi(engine: engine) }
 		        return Screen(b: b, kiwi: kiwi)
 		    }

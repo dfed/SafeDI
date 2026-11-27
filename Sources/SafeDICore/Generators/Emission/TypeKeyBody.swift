@@ -35,11 +35,19 @@ enum TypeKeyBody {
 	/// root keeps `rootBody`, the path key's statements. `outerDeclarations` are the declarations in scope before the root's
 	/// body that it does not write: a seam's parameters, as its narrowest tier binds them. A read the path key resolves to one
 	/// is resolved to it in the type key's layout too, never to `nil`. No function the layout declares takes a name of
-	/// `namesInScope`, the names bound around the body, such as a seam's parameters' internal names.
-	static func statements(ofRootBody rootBody: [GeneratedCode], outerDeclarations: [Property] = [], namesInScope: Set<String> = []) -> [GeneratedCode]? {
+	/// `namesInScope`, the names bound around the body, such as a seam's parameters' internal names. A value path of the
+	/// root's body may name each of `rootPassedArgumentNames`, the parameters of the function the body is written in that
+	/// its places read as a function's place reads a passed argument; the layout takes each as a name in scope too.
+	static func statements(
+		ofRootBody rootBody: [GeneratedCode],
+		outerDeclarations: [Property] = [],
+		namesInScope: Set<String> = [],
+		rootPassedArgumentNames: Set<String> = [],
+	) -> [GeneratedCode]? {
 		var layout = TypeKeyLayout()
 		layout.declareOuter(outerDeclarations)
-		layout.namesInScope = namesInScope
+		layout.namesInScope = namesInScope.union(rootPassedArgumentNames)
+		layout.rootPassedArgumentNames = rootPassedArgumentNames
 		// The root functions the plan's places call are declared once, before every statement, as the path key declares
 		// them (`RootFunctionHoisting`); a root that keeps one in place keeps the path key's body, since the type key spells
 		// a place written as text without them.
@@ -128,18 +136,14 @@ struct TypeKeyLayout {
 		/// The labels the body looks up outside it: its plan node's `Domain`, and the domains of the functions its closers
 		/// call.
 		let domainLabels: Set<String>
-		/// What each label of `domainLabels` resolves to at the view's first place, where the walk first reached the view:
-		/// the nearest declaration outside the body (`lookUp(_:inBody:before:)` from `parent` before `position`), so that a
-		/// look-up climbing out of the body, which climbs through that place, stops here rather than walking every body
-		/// above it. The view's key holds each one as `keyed(_:label:byKind:)` gives it.
-		let outerView: [String: PathValue]
 		var statements = [Statement]()
+		/// The positions of the statements that bind each label, ascending.
 		var positionsByLabel = [String: [Int]]()
-		/// The positions of the statements that declare each function, by its name (`AliasPlaceRecord.declaredFunctionNames`),
-		/// apart from the labels the statements bind, so no read of a label resolves to a function.
-		var positionsByDeclaredFunction = [String: [Int]]()
 		let forwardedLabels: Set<String>
 		let cycleParameterLabels: Set<String>
+		/// The declaration each label of the body's domain resolves to outside it, at its first place: what a look-up from the
+		/// body or beneath it finds once it leaves the body, without walking further up.
+		var outerDeclarations = [String: PathValue]()
 
 		/// The parent body and statement index of each of the view's places.
 		var edges: [(parent: Int, position: Int)] {
@@ -155,6 +159,10 @@ struct TypeKeyLayout {
 		/// Whether a closer beneath the node's own body, rather than one of its own statements, calls a function declared
 		/// outside it.
 		var closesBeneathItsBody = false
+		/// The names among `closedOnFunctionNames` that a member of a loop of builders calls, rebinding a sibling
+		/// (`ClosingPlaceRecord.rebindsLoopMember`): the only names a statement's function can answer. A node whose domain
+		/// holds none resolves each name to an enclosing place's function, with no look-up among statements.
+		var loopMemberFunctionNames = Set<String>()
 	}
 
 	/// What tells two places of one plan node apart (`Body`).
@@ -220,6 +228,9 @@ struct TypeKeyLayout {
 	var rootFunctionNames = Set<String>()
 	/// The names bound around the root's body, which no function the layout declares takes.
 	var namesInScope = Set<String>()
+	/// The parameters of the function the root's body is written in that a value path of the root's body may name as a
+	/// passed argument.
+	var rootPassedArgumentNames = Set<String>()
 	/// The views whose bodies wrap a member of a loop of builders again (`ClosingPlaceRecord.rebindsLoopMember`).
 	var loopRebindingBodies = Set<Int>()
 	/// The views other than the root's in post-order of the view DAG.
@@ -244,8 +255,6 @@ struct TypeKeyLayout {
 	var classByBody = [Int]()
 	/// Each class's members, in walk order.
 	var membersByClass = [[Int]]()
-	/// The labels each class's function is handed (`BuiltPlaceRecord.parameterProperties`), empty for the root's.
-	var parameterLabelsByClass = [Set<String>]()
 	/// The classes each class's body calls, and the call sites of each class.
 	var calleesByClass = [Set<Int>]()
 	var callSitesByClass = [Set<CallSite>]()
@@ -267,9 +276,6 @@ struct TypeKeyLayout {
 	/// The passed arguments each call of a place's function hands it, keyed by the body and index of the call: the places
 	/// of one view can each hand their own.
 	var passedArgumentsByCall = [[Int]: [PassedArgument]]()
-	/// The local each call binds a passed argument to before it calls (`PassedArgument.bindsBeforeCall`), by the call's
-	/// site and the parameter's name.
-	var boundArgumentNames = [CallSite: [String: String]]()
 	/// The declaration each label a view reads outside it resolves to at each of its places, keyed by the body and index of
 	/// the place's statement: what the walk looked up for the view's key, which `resolution(of:atPlace:edge:)` reads rather
 	/// than walking up again.

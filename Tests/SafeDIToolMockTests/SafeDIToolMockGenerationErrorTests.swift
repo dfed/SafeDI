@@ -104,17 +104,17 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 			        name: String,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> CachedItem {
-			        func __safeDI_player(__safeDI_Player_configuration: Player.SafeDIMockConfiguration) -> Player {
-			            let cachedItemBuilder = Instantiator<CachedItem> {
-			                __safeDI_cachedItemBuilder(name: $0, __safeDI_CachedItem_configuration: CachedItem.SafeDIMockConfiguration(), __safeDI_Player_configuration_nearest: __safeDI_Player_configuration)
+			        func __safeDI_player() -> Player {
+			            func __safeDI_cachedItemBuilder(name: String) -> CachedItem {
+			                let player: Player = __safeDI_player()
+			                return CachedItem(player: player, name: name)
 			            }
-			            return if let safeDIBuilder = __safeDI_Player_configuration.safeDIBuilder { safeDIBuilder(cachedItemBuilder) } else { Player(cachedItemBuilder: cachedItemBuilder) }
+			            let cachedItemBuilder = Instantiator<CachedItem> {
+			                __safeDI_cachedItemBuilder(name: $0)
+			            }
+			            return if let safeDIBuilder = safeDIOverrides.player.safeDIBuilder { safeDIBuilder(cachedItemBuilder) } else { Player(cachedItemBuilder: cachedItemBuilder) }
 			        }
-			        func __safeDI_cachedItemBuilder(name: String, __safeDI_CachedItem_configuration: CachedItem.SafeDIMockConfiguration, __safeDI_Player_configuration_nearest: Player.SafeDIMockConfiguration?) -> CachedItem {
-			            let player: Player = __safeDI_player(__safeDI_Player_configuration: __safeDI_Player_configuration_nearest ?? Player.SafeDIMockConfiguration())
-			            return if let safeDIBuilder = __safeDI_CachedItem_configuration.safeDIBuilder { safeDIBuilder(player, name) } else { CachedItem(player: player, name: name) }
-			        }
-			        let player: Player = __safeDI_player(__safeDI_Player_configuration: safeDIOverrides.player)
+			        let player: Player = __safeDI_player()
 			        return CachedItem(player: player, name: name)
 			    }
 			}
@@ -187,18 +187,18 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Player {
-			        func __safeDI_cachedItemBuilder(name: String, __safeDI_CachedItem_configuration: CachedItem.SafeDIMockConfiguration) -> CachedItem {
-			            let player: Player = __safeDI_player(__safeDI_Player_configuration: __safeDI_CachedItem_configuration.player, __safeDI_CachedItem_configuration_nearest: __safeDI_CachedItem_configuration)
-			            return if let safeDIBuilder = __safeDI_CachedItem_configuration.safeDIBuilder { safeDIBuilder(player, name) } else { CachedItem(player: player, name: name) }
-			        }
-			        func __safeDI_player(__safeDI_Player_configuration: Player.SafeDIMockConfiguration, __safeDI_CachedItem_configuration_nearest: CachedItem.SafeDIMockConfiguration?) -> Player {
-			            let cachedItemBuilder = Instantiator<CachedItem> {
-			                __safeDI_cachedItemBuilder(name: $0, __safeDI_CachedItem_configuration: __safeDI_CachedItem_configuration_nearest ?? CachedItem.SafeDIMockConfiguration())
+			        func __safeDI_cachedItemBuilder(name: String) -> CachedItem {
+			            func __safeDI_player() -> Player {
+			                let cachedItemBuilder = Instantiator<CachedItem> {
+			                    __safeDI_cachedItemBuilder(name: $0)
+			                }
+			                return if let safeDIBuilder = safeDIOverrides.cachedItemBuilder.player.safeDIBuilder { safeDIBuilder(cachedItemBuilder) } else { Player(cachedItemBuilder: cachedItemBuilder) }
 			            }
-			            return if let safeDIBuilder = __safeDI_Player_configuration.safeDIBuilder { safeDIBuilder(cachedItemBuilder) } else { Player(cachedItemBuilder: cachedItemBuilder) }
+			            let player: Player = __safeDI_player()
+			            return if let safeDIBuilder = safeDIOverrides.cachedItemBuilder.safeDIBuilder { safeDIBuilder(player, name) } else { CachedItem(player: player, name: name) }
 			        }
 			        let cachedItemBuilder = Instantiator<CachedItem> {
-			            __safeDI_cachedItemBuilder(name: $0, __safeDI_CachedItem_configuration: safeDIOverrides.cachedItemBuilder)
+			            __safeDI_cachedItemBuilder(name: $0)
 			        }
 			        return Player(cachedItemBuilder: cachedItemBuilder)
 			    }
@@ -280,6 +280,47 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 					public struct C: Instantiable {
 					    public init(a: A) { self.a = a }
 					    @Instantiated let a: A
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_saysDeclaringReceivedPropertyClosesCycle_whenOptionalFormIsRequiredInTreeOfDeclarationStillBeingBuilt() async {
+		// A mock binds every property its tree receives from above it, so a required receive is unfulfillable there only
+		// where the declaration that would answer its non-optional form is still being built, as `parent: Parent` is where
+		// its tree builds Child.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"\(fixtures["Child.swift"]):4:5: error: @Received property `parent: Parent?` is not @Instantiated or @Forwarded in chain: Screen -> Parent -> Child. Declaring `@Instantiated let parent: Parent` would close a dependency cycle wherever it is declared, because the tree of `Parent` requires `parent`, which is still being built there. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required."
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public final class Screen: Instantiable {
+					    public init(parent: Parent) { self.parent = parent }
+					    @Instantiated let parent: Parent
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Parent: Instantiable {
+					    public init(child: Child) { self.child = child }
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(parent: Parent?) { self.parent = parent }
+					    @Received let parent: Parent?
 					}
 					""",
 				],

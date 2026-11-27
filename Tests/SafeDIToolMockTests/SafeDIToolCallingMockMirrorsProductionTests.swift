@@ -955,12 +955,10 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		        apiBuilder: (() -> any Api)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_log(__safeDI_Log_configuration: (() -> Log)?) -> Log {
-		            if let safeDIBuilder = __safeDI_Log_configuration { safeDIBuilder() } else { Log() }
+		        func __safeDI_log() -> Log {
+		            if let safeDIBuilder = safeDIOverrides.log { safeDIBuilder() } else { Log() }
 		        }
-		        let log = LazilyInstantiated<Log> {
-		            __safeDI_log(__safeDI_Log_configuration: safeDIOverrides.log)
-		        }
+		        let log = LazilyInstantiated<Log>(__safeDI_log)
 		        func __safeDI_f() -> F {
 		            func __safeDI_apiBuilder_F_api(_ scope: F.SafeDIMockScope_Api.api_Values) -> any Api {
 		                func __safeDI_api() -> Live {
@@ -1549,19 +1547,17 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		    ) -> Screen {
 		        let __safeDI_api2Builder = api2Builder
 		        let __safeDI_apiBuilder = apiBuilder
+		        _ = F.__safeDI_F_mock_1F67931C545189ED.self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        func __safeDI_f() -> F {
-		            _ = F.__safeDI_F_mock_1F67931C545189ED.self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            let api2Builder: () -> any Api2 = __safeDI_api2Builder
 		            let apiBuilder: () -> any Api = __safeDI_apiBuilder
 		            return F.__safeDI_mock(api2Builder: .init(__safeDI_noScope: api2Builder), apiBuilder: .init(__safeDI_noScope: apiBuilder), safeDIOverrides: safeDIOverrides.f)
 		        }
 		        let f: F = __safeDI_f()
-		        func __safeDI_log(__safeDI_Log_configuration: (() -> Log)?) -> Log {
-		            if let safeDIBuilder = __safeDI_Log_configuration { safeDIBuilder() } else { Log() }
+		        func __safeDI_log() -> Log {
+		            if let safeDIBuilder = safeDIOverrides.log { safeDIBuilder() } else { Log() }
 		        }
-		        let log = LazilyInstantiated<Log> {
-		            __safeDI_log(__safeDI_Log_configuration: safeDIOverrides.log)
-		        }
+		        let log = LazilyInstantiated<Log>(__safeDI_log)
 		        return Screen(log: log, f: f)
 		    }
 		}
@@ -1791,9 +1787,9 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		    ) -> Mid {
 		        let __safeDI_apiBuilder = apiBuilder
 		        let __safeDI_otherBuilder = otherBuilder
-		        let log: Log? = if let safeDIBuilder = safeDIOverrides.log { safeDIBuilder() } else { Log() }
+		        let log = if let safeDIBuilder = safeDIOverrides.log { safeDIBuilder() } else { Log() }
+		        \(Self.guardLine(calledType: "5DD5A60BEFB14B01"))
 		        func __safeDI_f() -> F {
-		            \(Self.guardLine(calledType: "5DD5A60BEFB14B01"))
 		            let apiBuilder: () -> any Api = __safeDI_apiBuilder
 		            let otherBuilder: () -> any Other = __safeDI_otherBuilder
 		            return F.__safeDI_mock(apiBuilder: .init(__safeDI_noScope: apiBuilder), otherBuilder: .init(__safeDI_noScope: otherBuilder), log: log, safeDIOverrides: safeDIOverrides.f)
@@ -1880,23 +1876,21 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		    ) -> Root {
 		        let __safeDI_apiBuilder = apiBuilder
 		        let __safeDI_otherBuilder = otherBuilder
-		        func __safeDI_log(__safeDI_Log_configuration: (() -> Log)?) -> Log {
-		            if let safeDIBuilder = __safeDI_Log_configuration { safeDIBuilder() } else { Log() }
+		        func __safeDI_log() -> Log {
+		            if let safeDIBuilder = safeDIOverrides.log { safeDIBuilder() } else { Log() }
 		        }
-		        let log = LazilyInstantiated<Log> {
-		            __safeDI_log(__safeDI_Log_configuration: safeDIOverrides.log)
-		        }
-		        func __safeDI_f() -> F {
+		        let log = LazilyInstantiated<Log>(__safeDI_log)
+		        func __safeDI_mid() -> Mid {
 		            \(Self.guardLine(calledType: "5DD5A60BEFB14B01"))
-		            let apiBuilder: () -> any Api = __safeDI_apiBuilder
-		            let otherBuilder: () -> any Other = __safeDI_otherBuilder
-		            return F.__safeDI_mock(apiBuilder: .init(__safeDI_noScope: apiBuilder), otherBuilder: .init(__safeDI_noScope: otherBuilder), log: log.instance, safeDIOverrides: safeDIOverrides.mid.f)
-		        }
-		        func __safeDI_mid(__safeDI_Mid_configuration: Mid.SafeDIMockConfiguration) -> Mid {
+		            func __safeDI_f() -> F {
+		                let apiBuilder: () -> any Api = __safeDI_apiBuilder
+		                let otherBuilder: () -> any Other = __safeDI_otherBuilder
+		                return F.__safeDI_mock(apiBuilder: .init(__safeDI_noScope: apiBuilder), otherBuilder: .init(__safeDI_noScope: otherBuilder), log: log.instance, safeDIOverrides: safeDIOverrides.mid.f)
+		            }
 		            let f: F = __safeDI_f()
-		            return if let safeDIBuilder = __safeDI_Mid_configuration.safeDIBuilder { safeDIBuilder(f) } else { Mid(f: f) }
+		            return if let safeDIBuilder = safeDIOverrides.mid.safeDIBuilder { safeDIBuilder(f) } else { Mid(f: f) }
 		        }
-		        let mid: Mid = __safeDI_mid(__safeDI_Mid_configuration: safeDIOverrides.mid)
+		        let mid: Mid = __safeDI_mid()
 		        return Root(log: log, mid: mid)
 		    }
 		}
@@ -1973,14 +1967,12 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        let __safeDI_serviceBuilder = serviceBuilder
-			        func __safeDI_token(__safeDI_Token_configuration: (() -> Token)?) -> Token {
-			            if let safeDIBuilder = __safeDI_Token_configuration { safeDIBuilder() } else { Token() }
+			        func __safeDI_token() -> Token {
+			            if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
 			        }
-			        let token = LazilyInstantiated<Token> {
-			            __safeDI_token(__safeDI_Token_configuration: safeDIOverrides.token)
-			        }
+			        let token = LazilyInstantiated<Token>(__safeDI_token)
+			        \(guardLine)
 			        func __safeDI_page() -> Page {
-			            \(guardLine)
 			            let serviceBuilder: () -> any Service = __safeDI_serviceBuilder
 			            return if let safeDIBuilder = safeDIOverrides.page { safeDIBuilder(serviceBuilder) } else { Page.__safeDI_mock(serviceBuilder: .init(__safeDI_noScope: serviceBuilder)) }
 			        }
@@ -3333,14 +3325,6 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 			logBinding = "        let __safeDI_log__safeDIBuilder = safeDIOverrides.log\n        @Sendable nonisolated func __safeDI_log() -> Log {\n            if let safeDIBuilder = __safeDI_log__safeDIBuilder { safeDIBuilder() } else { Log() }\n        }\n"
 		}
 		logBinding += "        let log = \(wrapper.name)<Log>(__safeDI_log)\n"
-		// An internal mock builds `log` with a function that takes its override, which the wrapper's closure hands it.
-		var internalLogBinding = "        \(sendable.isEmpty ? "" : "@Sendable nonisolated ")func __safeDI_log(__safeDI_Log_configuration: (\(sendable)() -> Log)?) -> Log {\n            if let safeDIBuilder = __safeDI_Log_configuration { safeDIBuilder() } else { Log() }\n        }\n"
-		if wrapper == .sendableLazilyInstantiated {
-			internalLogBinding += "        let __safeDI_log____safeDI_Log_configuration: (@Sendable () -> Log)? = safeDIOverrides.log\n"
-			internalLogBinding += "        let log = \(wrapper.name)<Log> {\n            __safeDI_log(__safeDI_Log_configuration: __safeDI_log____safeDI_Log_configuration)\n        }\n"
-		} else {
-			internalLogBinding += "        let log = \(wrapper.name)<Log> {\n            __safeDI_log(__safeDI_Log_configuration: safeDIOverrides.log)\n        }\n"
-		}
 		let label = call.label
 		let type = call.type
 		var section = "#if DEBUG\nextension Root {\n"
@@ -3401,9 +3385,9 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 			for builder in builders {
 				section += "        let __safeDI_\(builder.label) = \(builder.label)\n"
 			}
-			section += internalLogBinding
+			section += logBinding
+			section += "        \(guardLine(calledType: guards.calledType, call: call))\n"
 			section += "        func __safeDI_\(label)() -> \(type) {\n"
-			section += "            \(guardLine(calledType: guards.calledType, call: call))\n"
 			for builder in builders {
 				section += "            let \(builder.label): \(builder.readableType) = __safeDI_\(builder.label)\n"
 			}
@@ -7878,8 +7862,8 @@ enum MockConditionCaller: CustomTestStringConvertible {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        let __safeDI_serviceBuilder = serviceBuilder
+			        _ = Panel.__safeDI_Panel_mock_9A2B32943A6C59F5.self // If this line does not compile, compile the code SafeDI generates for module Up into Up: under Bazel, add Up’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			        func __safeDI_panel() -> Panel {
-			            _ = Panel.__safeDI_Panel_mock_9A2B32943A6C59F5.self // If this line does not compile, compile the code SafeDI generates for module Up into Up: under Bazel, add Up’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			            let serviceBuilder: () -> any Service = __safeDI_serviceBuilder
 			            return Panel.__safeDI_mock(serviceBuilder: .init(__safeDI_noScope: serviceBuilder), safeDIOverrides: safeDIOverrides.panel)
 			        }

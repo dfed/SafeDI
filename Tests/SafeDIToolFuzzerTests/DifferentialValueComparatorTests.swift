@@ -2782,7 +2782,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func compare_seesADefaultTheGeneratedCallLeavesInPlace_onlyWhenTheFuzzersFixtureStoresEveryParameter() async throws {
 		// Seed 0's extension-based type takes `title: String = "default"`, a root's tree builds it, and the tool accepts
-		// the graph. Seed 0 also draws `DiamondHost`'s tree (`addingSharedSubtreeShapes`), with `DiamondRoot` building it. The feature path's fixture declares another default, which a generated call leaves in place.
+		// the graph. The feature path's fixture declares another default, which a generated call leaves in place.
 		let fixture = GraphFuzzerGenerator.fixture(forSeed: 0)
 		let storingFixture = GraphFuzzerGenerator.fixture(forSeed: 0, storingEveryParameter: true)
 		func path(of fixture: GraphFuzzerFixture, replacingDefault: Bool) async throws -> (path: DifferentialValuePath, probes: [DifferentialValueProbe]) {
@@ -2798,7 +2798,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 			}), probes)
 		}
 		let knownRight = try await path(of: fixture, replacingDefault: false)
-		#expect(knownRight.probes == [DifferentialValueProbe("S0_Root0()"), DifferentialValueProbe("S0_Root1()"), DifferentialValueProbe("S0_Root2()"), DifferentialValueProbe("S0_DiamondRoot()"), DifferentialValueProbe("S0_DiamondHost.mock()"), DifferentialValueProbe("S0_Ext.mock()"), DifferentialValueProbe("S0_Service.mock()"), DifferentialValueProbe("S0_TupleHost.mock()"), DifferentialValueProbe("S0_WrapKindsHost.mock()")])
+		#expect(knownRight.probes == [DifferentialValueProbe("S0_Root0()"), DifferentialValueProbe("S0_Root1()"), DifferentialValueProbe("S0_Root2()"), DifferentialValueProbe("S0_Ext.mock()"), DifferentialValueProbe("S0_Service.mock()"), DifferentialValueProbe("S0_TupleHost.mock()"), DifferentialValueProbe("S0_WrapKindsHost.mock()")])
 
 		let blindComparison = try await DifferentialValueOracle.compare(
 			feature: try path(of: fixture, replacingDefault: true).path,

@@ -29,14 +29,18 @@ import Testing
 enum ConstructionMemoChecks {
 	/// An observer that records an issue for each tree whose builds with and without the memo differ, then hands both
 	/// builds to `enclosingObserver`.
+	/// It also checks the places of the build without the memo against the tree's graph of per-type facts
+	/// (`TypeFactsChecks`).
 	static func recordingDifferences(
-		handingOn enclosingObserver: (@Sendable (any Sendable, any Sendable) -> Void)?,
-	) -> @Sendable (any Sendable, any Sendable) -> Void {
-		{ treeBuiltWithMemo, treeBuiltWithoutMemo in
+		handingOn enclosingObserver: (@Sendable (any Sendable, any Sendable, TypeFactsReport) -> Void)?,
+	) -> @Sendable (any Sendable, any Sendable, TypeFactsReport) -> Void {
+		{ treeBuiltWithMemo, treeBuiltWithoutMemo, typeFacts in
 			if let difference = difference(between: treeBuiltWithMemo, and: treeBuiltWithoutMemo) {
 				Issue.record(Comment(rawValue: difference))
 			}
-			enclosingObserver?(treeBuiltWithMemo, treeBuiltWithoutMemo)
+			TypeFactsChecks.check(typeFacts)
+			TypeFactsDOTChecks.check(typeFacts)
+			enclosingObserver?(treeBuiltWithMemo, treeBuiltWithoutMemo, typeFacts)
 		}
 	}
 

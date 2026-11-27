@@ -1125,17 +1125,15 @@ struct SafeDIToolMockPassedNilByPlaceTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> A {
-		        func __safeDI_token(__safeDI_Token_configuration: (() -> Token)?) -> Token {
-		            if let safeDIBuilder = __safeDI_Token_configuration { safeDIBuilder() } else { Token() }
+		        func __safeDI_token() -> Token {
+		            if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
 		        }
-		        let token = LazilyInstantiated<Token> {
-		            __safeDI_token(__safeDI_Token_configuration: safeDIOverrides.token)
+		        let token = LazilyInstantiated<Token>(__safeDI_token)
+		        func __safeDI_source() -> Source {
+		            let leaf = if let safeDIBuilder = safeDIOverrides.source.leaf { safeDIBuilder(nil) } else { Leaf(token: nil) }
+		            return if let safeDIBuilder = safeDIOverrides.source.safeDIBuilder { safeDIBuilder(token.instance, leaf) } else { Source(token: token.instance, leaf: leaf) }
 		        }
-		        func __safeDI_source(__safeDI_Source_configuration: Source.SafeDIMockConfiguration) -> Source {
-		            let leaf = if let safeDIBuilder = __safeDI_Source_configuration.leaf { safeDIBuilder(nil) } else { Leaf(token: nil) }
-		            return if let safeDIBuilder = __safeDI_Source_configuration.safeDIBuilder { safeDIBuilder(token.instance, leaf) } else { Source(token: token.instance, leaf: leaf) }
-		        }
-		        let source: Source = __safeDI_source(__safeDI_Source_configuration: safeDIOverrides.source)
+		        let source: Source = __safeDI_source()
 		        let leaf = if let safeDIBuilder = safeDIOverrides.leaf { safeDIBuilder(nil) } else { Leaf(token: nil) }
 		        return A(token: token, source: source, leaf: leaf)
 		    }

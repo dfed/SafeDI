@@ -406,12 +406,10 @@ struct SafeDIToolCallingMockOnlyIfAvailableReentryTests: ~Copyable {
 			        fill_AnyHoleBuilder: ErasedInstantiator<Int, AnyHole>.Builder? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        func __safeDI_session(__safeDI_Session_configuration: (() -> Session)?) -> Session {
-			            if let safeDIBuilder = __safeDI_Session_configuration { safeDIBuilder() } else { Session.instantiate() }
+			        func __safeDI_session() -> Session {
+			            if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session.instantiate() }
 			        }
-			        let session = LazilyInstantiated<Session> {
-			            __safeDI_session(__safeDI_Session_configuration: safeDIOverrides.session)
-			        }
+			        let session = LazilyInstantiated<Session>(__safeDI_session)
 			        func __safeDI_screen() -> Screen {
 			            func __safeDI_fill_AnyHoleBuilder_Screen_holeBuilder(session: LazilyInstantiated<Session>?) -> ErasedInstantiator<Int, AnyHole>.Builder {
 			                func __safeDI_holeBuilder(ticket: Int) -> Fill {
@@ -566,13 +564,11 @@ struct SafeDIToolCallingMockOnlyIfAvailableReentryTests: ~Copyable {
 			        fill_AnyHoleBuilder: ErasedInstantiator<Int, AnyHole>.Builder? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        @Sendable nonisolated func __safeDI_session(__safeDI_Session_configuration: (@Sendable () -> Session)?) -> Session {
-			            if let safeDIBuilder = __safeDI_Session_configuration { safeDIBuilder() } else { Session.instantiate() }
+			        let __safeDI_session__safeDIBuilder = safeDIOverrides.session
+			        @Sendable nonisolated func __safeDI_session() -> Session {
+			            if let safeDIBuilder = __safeDI_session__safeDIBuilder { safeDIBuilder() } else { Session.instantiate() }
 			        }
-			        let __safeDI_session____safeDI_Session_configuration: (@Sendable () -> Session)? = safeDIOverrides.session
-			        let session = SendableLazilyInstantiated<Session> {
-			            __safeDI_session(__safeDI_Session_configuration: __safeDI_session____safeDI_Session_configuration)
-			        }
+			        let session = SendableLazilyInstantiated<Session>(__safeDI_session)
 			        func __safeDI_screen() -> Screen {
 			            func __safeDI_fill_AnyHoleBuilder_Screen_holeBuilder(session: SendableLazilyInstantiated<Session>?) -> ErasedInstantiator<Int, AnyHole>.Builder {
 			                func __safeDI_holeBuilder(ticket: Int) -> Fill {
@@ -728,7 +724,7 @@ struct SafeDIToolCallingMockOnlyIfAvailableReentryTests: ~Copyable {
 			        fill_AnyHoleBuilder: ErasedInstantiator<Int, AnyHole>.Builder? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        let session: Session = if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session.instantiate() }
+			        let session = if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session.instantiate() }
 			        func __safeDI_screen() -> Screen {
 			            func __safeDI_fill_AnyHoleBuilder_Screen_holeBuilder(session: Session?) -> ErasedInstantiator<Int, AnyHole>.Builder {
 			                func __safeDI_holeBuilder(ticket: Int) -> Fill {

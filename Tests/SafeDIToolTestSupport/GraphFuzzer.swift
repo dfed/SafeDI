@@ -2971,10 +2971,10 @@ enum GraphFuzzerGenerator {
 			wrapperKindsRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.wrapperKindsRandomSeedMask)
 			actorArgumentRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.actorArgumentRandomSeedMask)
 			instantiatedOnlyIfAvailableRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.instantiatedOnlyIfAvailableRandomSeedMask)
+			instantiatedOnlyIfAvailableErasureRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.instantiatedOnlyIfAvailableErasureRandomSeedMask)
 			optionalPlaceRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.optionalPlaceRandomSeedMask)
 			nestedCycleRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.nestedCycleRandomSeedMask)
-			sharedSubtreeRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.sharedSubtreeRandomSeedMask)
-			mockNodeKeyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.mockNodeKeyRandomSeedMask)
+			renamedLazyReaderRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.renamedLazyReaderRandomSeedMask)
 			seamDependencyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ GraphFuzzerSeamDependencyDraw.seamRandomSeedMask)
 			prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
 			// One draw decides, so graphs that are not mixed draw exactly what they drew before mixed graphs existed.
@@ -3061,9 +3061,7 @@ enum GraphFuzzerGenerator {
 			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
 			finalDeclarations = addingTypeBuiltAgainThroughSecondLazyCycle(to: finalDeclarations)
 			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
-			finalDeclarations = addingSharedSubtreeShapes(to: finalDeclarations)
-			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
-			finalDeclarations = addingMockNodeKeyShapes(to: finalDeclarations)
+			finalDeclarations = addingReadersOfRenamedLazyInstance(to: finalDeclarations)
 			// In a graph split across modules, every file names its module and imports the seam's, so that a type of the
 			// caller can name what the seam's module declares, such as the creation stamps' counter.
 			let isSplit = finalDeclarations.contains { $0.module == .seamModule }
@@ -3550,17 +3548,18 @@ enum GraphFuzzerGenerator {
 		/// Draws only `addingDependencyInstantiatedOnlyIfAvailable`'s choices: whether a graph gains `IfAvailableRoot`'s
 		/// tree, and every shape of that tree.
 		private var instantiatedOnlyIfAvailableRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only whether `addingDependencyInstantiatedOnlyIfAvailable`'s fulfilled token is erased, so that every other
+		/// choice of the draw is drawn as before.
+		private var instantiatedOnlyIfAvailableErasureRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only `addingOptionalPlaceShapes`' choices: whether a split graph gains `OptionalPlaceRoot`'s tree, and every
 		/// shape of that tree.
 		private var optionalPlaceRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only `addingTypeBuiltAgainThroughSecondLazyCycle`'s choices: whether a graph gains `NestRoot`'s tree, and
 		/// every shape of that tree.
 		private var nestedCycleRandom: GraphFuzzerRandomNumberGenerator
-		/// Draws only `addingSharedSubtreeShapes`' choices: whether a graph gains `DiamondHost`'s tree, and every shape of that
-		/// tree.
-		private var sharedSubtreeRandom: GraphFuzzerRandomNumberGenerator
-		/// Draws only `addingMockNodeKeyShapes`' choices: whether a graph gains its mocks, and every shape of them.
-		private var mockNodeKeyRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only `addingReadersOfRenamedLazyInstance`'s choices: whether a graph gains `RenamedLazyTop`'s tree, and
+		/// every shape of that tree.
+		private var renamedLazyReaderRandom: GraphFuzzerRandomNumberGenerator
 		/// The files `markerFreeFileRandom` moved a declaration into: each named, holding the declaration alone, and in the
 		/// module of the type, `ownerName`, whose file it was drawn in.
 		private var markerFreeFiles = [(ownerName: String, fileName: String, declaration: String)]()
@@ -7984,7 +7983,7 @@ enum GraphFuzzerGenerator {
 			let badgeValue = "\(badgeName)(repeatBadgeDetail: \(badgeDetailValue))"
 			let screenProtocolName = "\(screenName)Protocol"
 			let badgeProtocolName = "\(badgeName)Protocol"
-			var root = TypeDeclaration(
+			let root = TypeDeclaration(
 				name: rootName,
 				instantiableArguments: ["generateMock: true"],
 				properties: [PropertyDeclaration(attribute: "@Instantiated", label: "repeatScreen", type: screenProtocolName)],
@@ -8334,9 +8333,12 @@ enum GraphFuzzerGenerator {
 		/// declares, which no declaration fulfills, so production binds the property to `nil` and a mock binds it from an
 		/// override that defaults to `nil`, and takes no parameter, a root's included (`rootMockTakesParameter`). The leaf receives the label in its optional
 		/// form, required or only if available, and where it is only if available the root now and then builds a second
-		/// leaf itself, outside the screen's tree, which is passed `nil`. Now and then the screen's mock is generated. The
-		/// compile and the value oracles judge the tree. `instantiatedOnlyIfAvailableRandom` draws only for this pass, after
-		/// every other, and only in the base corpus.
+		/// leaf itself, outside the screen's tree, which is passed `nil`. Now and then the screen's mock is generated. Half
+		/// the graphs whose token is fulfilled erase it, on a stream of their own (`instantiatedOnlyIfAvailableErasureRandom`):
+		/// the screen instantiates `ifAvailableToken: AnyIfAvailableToken?` with `fulfilledByType:` and
+		/// `erasedToConcreteExistential: true`, which the leaf receives, so a mock wraps the token in the erasing type without
+		/// its optionality, as production does (`AnyT?(…)` does not compile). The compile and the value oracles judge the
+		/// tree. `instantiatedOnlyIfAvailableRandom` draws only for this pass, after every other, and only in the base corpus.
 		private mutating func addingDependencyInstantiatedOnlyIfAvailable(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
 			guard !omitsDrawsOlderReleasesReject, features.isEmpty, instantiatedOnlyIfAvailableRandom.percentChance(16) else { return declarations }
 			var declarations = declarations
@@ -8347,6 +8349,7 @@ enum GraphFuzzerGenerator {
 			let screenGeneratesMock = instantiatedOnlyIfAvailableRandom.percentChance(40)
 			let tokenIsFulfilled = instantiatedOnlyIfAvailableRandom.percentChance(60)
 			let rootBuildsLeaf = rootMayBuildLeaf && !leafRequiresToken
+			let tokenIsErased = tokenIsFulfilled && instantiatedOnlyIfAvailableErasureRandom.percentChance(50)
 			func append(_ name: String, arguments: [String] = [], _ properties: [PropertyDeclaration]) {
 				declarations.append(TypeDeclaration(
 					name: name,
@@ -8359,19 +8362,28 @@ enum GraphFuzzerGenerator {
 			let tokenName = "\(prefix)IfAvailableToken"
 			let leafName = "\(prefix)IfAvailableLeaf"
 			let screenName = "\(prefix)IfAvailableScreen"
+			let erasedTokenName = "\(prefix)AnyIfAvailableToken"
+			let receivedTokenType = tokenIsErased ? erasedTokenName : tokenName
 			if tokenIsFulfilled {
 				append(tokenName, [])
 			}
 			append(leafName, [leafRequiresToken
-					? PropertyDeclaration(attribute: "@Received", label: "ifAvailableToken", type: "\(tokenName)?")
-					: PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "ifAvailableToken", type: "\(tokenName)?")])
-			let token = PropertyDeclaration(attribute: "@Instantiated(onlyIfAvailable: true)", label: "ifAvailableToken", type: "\(tokenName)?")
+					? PropertyDeclaration(attribute: "@Received", label: "ifAvailableToken", type: "\(receivedTokenType)?")
+					: PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "ifAvailableToken", type: "\(receivedTokenType)?")])
+			let token = tokenIsErased
+				? PropertyDeclaration(attribute: "@Instantiated(fulfilledByType: \"\(tokenName)\", erasedToConcreteExistential: true, onlyIfAvailable: true)", label: "ifAvailableToken", type: "\(erasedTokenName)?")
+				: PropertyDeclaration(attribute: "@Instantiated(onlyIfAvailable: true)", label: "ifAvailableToken", type: "\(tokenName)?")
 			let leaf = leafIsBuiltByInstantiator
 				? PropertyDeclaration(attribute: "@Instantiated", label: "ifAvailableLeafBuilder", type: "\(sendability == .sendable ? "SendableInstantiator" : "Instantiator")<\(leafName)>")
 				: PropertyDeclaration(attribute: "@Instantiated", label: "ifAvailableLeaf", type: leafName)
 			append(screenName, arguments: screenGeneratesMock ? ["generateMock: true"] : [], tokenComesFirst ? [token, leaf] : [leaf, token])
 			if !tokenIsFulfilled {
 				declarations[declarations.count - 1].additionalDeclarations.append("public final class \(tokenName): Sendable {}")
+			}
+			if tokenIsErased {
+				declarations[declarations.count - 1].additionalDeclarations.append(
+					"public struct \(erasedTokenName)\(helperTypesAreSendable ? ": Sendable" : "") {\n\tpublic init(_ value: \(tokenName)) {\n\t\tself.value = value\n\t}\n\n\tpublic let value: \(tokenName)\n}",
+				)
 			}
 			var rootProperties = [PropertyDeclaration(attribute: "@Instantiated", label: "ifAvailableScreen", type: screenName)]
 			if rootBuildsLeaf {
@@ -8382,6 +8394,7 @@ enum GraphFuzzerGenerator {
 		}
 
 		private static let instantiatedOnlyIfAvailableRandomSeedMask: UInt64 = 0x4966417661696C21
+		private static let instantiatedOnlyIfAvailableErasureRandomSeedMask: UInt64 = 0x4966417661696C45
 
 		// MARK: A type built again through a second lazy cycle
 
@@ -8438,228 +8451,56 @@ enum GraphFuzzerGenerator {
 
 		private static let nestedCycleRandomSeedMask: UInt64 = 0x6E657374437963
 
-		// MARK: A subtree a mock meets on several paths
+		// MARK: Readers of a renamed lazy instance
 
-		/// The base corpus's draw, in three graphs of ten, of a type with children that a mock's tree builds beneath two or
-		/// three parents, with no cycle, so that the mock's walk meets one subtree on several paths and shares its work
-		/// (`MockLowering.SubtreeSharing`), which no other draw does in more than a graph in hundreds. `DiamondHost`, whose
-		/// mock is generated, instantiates `DiamondLeft`, `DiamondRight` and now and then `DiamondMiddle`, each by value,
-		/// through an instantiator, or lazily, and each instantiates `DiamondCard`, which builds `DiamondLeaf`, directly or
-		/// through `DiamondRow`, and now and then `DiamondBadge`. The leaf reads nothing, or receives `diamondToken`, required
-		/// or only if available; the host now and then declares the token, before or after its parents, and each parent
-		/// now and then declares its own, before or after its card, so that the card's subtree reads another declaration,
-		/// or `nil`, on another path; where the leaf reads it, half the time the token receives `DiamondFollower` only if
-		/// available, which requires the card and which each parent that declares its own token declares too, so that the
-		/// card's subtree is built with the token generated later on some paths and not others (the key's `ChildContext`).
-		/// Half the time `DiamondRoot`, a root, builds the host. Every run of the tool lowers the
-		/// host's mock again without sharing and compares the two (`MockSubtreeSharingChecks`), so a key that misses a part
-		/// of the walk state the subtree reads fails the graph; the floor of graphs judged is
-		/// `sharedSubtreeSeeds_judgeSubtreeSharing_inGraphsWhoseMocksMeetASubtreeAgain`. `sharedSubtreeRandom` draws only
-		/// for this pass, after every other, and only in the base corpus.
-		private mutating func addingSharedSubtreeShapes(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
-			guard features.isEmpty, sharedSubtreeRandom.percentChance(30) else { return declarations }
+		/// The base corpus's draw, in one graph of eight, of a choice between declarations of one type, decided by where
+		/// each is declared. `RenamedLazyTop`, a root, instantiates a lazily instantiated `RenamedLazyValue` and
+		/// `RenamedLazyOwner`, which renames it under six labels and instantiates `RenamedLazyReader`, which receives
+		/// the instance under every one of them, in an order drawn apart from the labels'. So creating `RenamedLazyTop`
+		/// creates the value, and the warning that says so names the reader's receive declared first
+		/// (`InstantiationAnalysis`' `recordReads(whileCreating:)`), never the first label. The multi-module partition
+		/// puts the reader in a module beneath the root's when it splits the tree, where a run over module info files that
+		/// store positions apart reads the receives' places by their order in the reader's file alone, and must name the
+		/// same one (`SplitPositionsRun`). `renamedLazyReaderRandom` draws only for this pass, after every other, and only
+		/// in the base corpus.
+		private mutating func addingReadersOfRenamedLazyInstance(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			guard features.isEmpty, renamedLazyReaderRandom.percentChance(12) else { return declarations }
 			var declarations = declarations
-			let parentNames = sharedSubtreeRandom.percentChance(30) ? ["Left", "Middle", "Right"] : ["Left", "Right"]
-			let cardBuildsLeafThroughRow = sharedSubtreeRandom.percentChance(35)
-			let cardBuildsBadge = sharedSubtreeRandom.percentChance(40)
-			let leafReadRoll = sharedSubtreeRandom.integer(in: 0...99)
-			let leafReadsToken = leafReadRoll >= 25
-			let leafRequiresToken = leafReadRoll >= 25 && leafReadRoll < 55
-			let hostDeclaresToken = leafRequiresToken || (leafReadsToken && sharedSubtreeRandom.percentChance(70))
-			let hostDeclaresTokenFirst = sharedSubtreeRandom.percentChance(50)
-			let rootBuildsHost = sharedSubtreeRandom.percentChance(50)
-			// The token receives `DiamondFollower`, which requires the card, only if available, so each parent that declares
-			// its own token and a follower orders its card, token and follower around a cycle of edges only if available,
-			// which leaves the token unavailable to the card's subtree on some paths and not others.
-			let tokenReadsFollower = leafReadsToken && sharedSubtreeRandom.percentChance(50)
-			func append(_ name: String, arguments: [String] = [], _ properties: [PropertyDeclaration]) {
+			// Six, so that a choice made in any other order than the reader's declarations' differs on nearly every run.
+			let labels = ["renamedLazyFirst", "renamedLazySecond", "renamedLazyThird", "renamedLazyFourth", "renamedLazyFifth", "renamedLazySixth"]
+			var readOrder = Array(labels)
+			for index in readOrder.indices.dropLast() {
+				readOrder.swapAt(index, renamedLazyReaderRandom.integer(in: index...(readOrder.count - 1)))
+			}
+			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
+			func append(_ name: String, isRoot: Bool = false, _ properties: [PropertyDeclaration]) {
 				declarations.append(TypeDeclaration(
 					name: name,
-					instantiableArguments: arguments,
+					instantiableArguments: isRoot ? ["isRoot: true"] : [],
 					properties: properties,
 					declaresHelperTypes: false,
-					additionalConformances: sendability == .mixed ? ["@unchecked Sendable"] : [],
+					additionalConformances: conformances,
 				))
 			}
-			let tokenName = "\(prefix)DiamondToken"
-			let leafName = "\(prefix)DiamondLeaf"
-			let rowName = "\(prefix)DiamondRow"
-			let badgeName = "\(prefix)DiamondBadge"
-			let cardName = "\(prefix)DiamondCard"
-			let hostName = "\(prefix)DiamondHost"
-			let instantiatorName = sendability == .sendable ? "SendableInstantiator" : "Instantiator"
-			let lazyName = sendability == .sendable ? "SendableLazilyInstantiated" : "LazilyInstantiated"
-			let token = PropertyDeclaration(attribute: "@Instantiated", label: "diamondToken", type: tokenName)
-			let followerName = "\(prefix)DiamondFollower"
-			if leafReadsToken || hostDeclaresToken {
-				append(tokenName, tokenReadsFollower ? [PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "diamondFollower", type: "\(followerName)?")] : [])
-			}
-			if tokenReadsFollower {
-				append(followerName, [PropertyDeclaration(attribute: "@Received", label: "diamondCard", type: "\(prefix)DiamondCard")])
-			}
-			if !leafReadsToken {
-				append(leafName, [])
-			} else if leafRequiresToken {
-				append(leafName, [PropertyDeclaration(attribute: "@Received", label: "diamondToken", type: tokenName)])
-			} else {
-				append(leafName, [PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "diamondToken", type: "\(tokenName)?")])
-			}
-			var cardProperties = [PropertyDeclaration]()
-			if cardBuildsLeafThroughRow {
-				append(rowName, [PropertyDeclaration(attribute: "@Instantiated", label: "diamondLeaf", type: leafName)])
-				cardProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "diamondRow", type: rowName))
-			} else {
-				cardProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "diamondLeaf", type: leafName))
-			}
-			if cardBuildsBadge {
-				append(badgeName, [])
-				cardProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "diamondBadge", type: badgeName))
-			}
-			append(cardName, cardProperties)
-			let card = PropertyDeclaration(attribute: "@Instantiated", label: "diamondCard", type: cardName)
-			var hostProperties = [PropertyDeclaration]()
-			for parentName in parentNames {
-				let declaresOwnToken = leafReadsToken && sharedSubtreeRandom.percentChance(30)
-				let declaresTokenAfterCard = sharedSubtreeRandom.percentChance(50)
-				let holdRoll = sharedSubtreeRandom.integer(in: 0...99)
-				var parentProperties = [card]
-				if declaresOwnToken {
-					parentProperties.insert(token, at: declaresTokenAfterCard ? 1 : 0)
-					if tokenReadsFollower {
-						parentProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "diamondFollower", type: followerName))
-					}
-				}
-				let typeName = "\(prefix)Diamond\(parentName)"
-				append(typeName, parentProperties)
-				let label = "diamond\(parentName)"
-				if holdRoll < 65 {
-					hostProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: label, type: typeName))
-				} else if holdRoll < 90 {
-					hostProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "\(label)Builder", type: "\(instantiatorName)<\(typeName)>"))
-				} else {
-					hostProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: label, type: "\(lazyName)<\(typeName)>"))
-				}
-			}
-			if hostDeclaresToken {
-				hostProperties.insert(token, at: hostDeclaresTokenFirst ? 0 : hostProperties.count)
-			}
-			append(hostName, arguments: ["generateMock: true"], hostProperties)
-			if rootBuildsHost {
-				append("\(prefix)DiamondRoot", arguments: ["isRoot: true"], [PropertyDeclaration(attribute: "@Instantiated", label: "diamondHost", type: hostName)])
-			}
+			let valueName = "\(prefix)RenamedLazyValue"
+			let wrapped = "\(lazilyInstantiatedWrapper(isSendable: sendability == .sendable))<\(valueName)>"
+			append(valueName, [])
+			append("\(prefix)RenamedLazyReader", readOrder.map { PropertyDeclaration(attribute: "@Received", label: $0, type: valueName) })
+			append("\(prefix)RenamedLazyOwner", labels.map {
+				PropertyDeclaration(attribute: "@Received(fulfilledByDependencyNamed: \"renamedLazyValue\", ofType: \(wrapped).self)", label: $0, type: wrapped)
+			} + [PropertyDeclaration(attribute: "@Instantiated", label: "renamedLazyReader", type: "\(prefix)RenamedLazyReader")])
+			// The value, the reader and the owner come first, and the root last, so that the multi-module partition, which
+			// deals the files out to modules in that order, puts the reader in a module beneath the root's wherever it
+			// makes more than one.
+			declarations = declarations.suffix(3) + declarations.dropLast(3)
+			append("\(prefix)RenamedLazyTop", isRoot: true, [
+				PropertyDeclaration(attribute: "@Instantiated", label: "renamedLazyValue", type: wrapped),
+				PropertyDeclaration(attribute: "@Instantiated", label: "renamedLazyOwner", type: "\(prefix)RenamedLazyOwner"),
+			])
 			return declarations
 		}
 
-		private static let sharedSubtreeRandomSeedMask: UInt64 = 0x7368617265645374
-
-		/// Draws, beside the rest of a base graph, a mock whose places differ in one part of their records alone, so that a
-		/// laid out mock that gives two of them one node (`MockLowering.SharedRecordKey`) or one configuration parameter name
-		/// (`MockLowering.ConfigurationParameterNames`) builds other values than its walk, or does not compile. Each shape is
-		/// drawn on its own: `KeyOrderRoot`, whose two features declare the same siblings in other orders beneath
-		/// `SendableInstantiator`s, so that a leaf beneath one receives the feature's `keyX` and beneath the other `nil`;
-		/// `KeyRenameRoot`, two of whose places beneath `SendableInstantiator`s differ only in the value a receive of
-		/// `keyConfig` is handed, the feature's own beneath one and `mock()`'s parameter, named apart from a sibling's
-		/// `keyConfig` of another type, beneath the other; `KeyActorRoot`, whose actor and class each declare an
-		/// `Instantiator` of one leaf, whose override closure is `@Sendable` only beneath the actor; and `KeyLabelRoot`, a property of which is labeled as the parameter its sibling's
-		/// builder function takes its type's configuration under. A nested type beside a top-level type whose names join to one
-		/// identifier (`Outer.Inner` beside `Outer_Inner`) is not drawn: the base corpus's mirror model reads no qualified
-		/// spelling, so it would not compare such a mock, and `SafeDIToolMockTypeKeyConfigurationNameTests` holds that
-		/// meeting. `mockNodeKeyRandom` draws only for this pass, after every other, and only in the base corpus.
-		private mutating func addingMockNodeKeyShapes(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
-			guard features.isEmpty, mockNodeKeyRandom.percentChance(30) else { return declarations }
-			var declarations = declarations
-			let drawsOrder = sendability != .nonSendable && mockNodeKeyRandom.percentChance(45)
-			let drawsRename = sendability != .nonSendable && mockNodeKeyRandom.percentChance(45)
-			// 2.3.0 rejects an `@Instantiable` actor, so release acceptance leaves the actor out after the roll, which keeps
-			// the rest of the pass drawn as the corpus draws it.
-			let rollsActor = sendability != .sendable && mockNodeKeyRandom.percentChance(45)
-			let drawsActor = rollsActor && !omitsDrawsOlderReleasesReject
-			let drawsLabel = mockNodeKeyRandom.percentChance(35)
-			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
-			func declaration(_ name: String, arguments: [String] = [], conformances extraConformances: [String] = [], _ properties: [PropertyDeclaration]) -> TypeDeclaration {
-				TypeDeclaration(
-					name: name,
-					instantiableArguments: arguments,
-					properties: properties,
-					declaresHelperTypes: false,
-					additionalConformances: extraConformances + conformances,
-				)
-			}
-			func instantiated(_ label: String, _ type: String) -> PropertyDeclaration {
-				PropertyDeclaration(attribute: "@Instantiated", label: label, type: type)
-			}
-			let leafName = "\(prefix)KeyLeaf"
-			if drawsActor || drawsLabel {
-				declarations.append(declaration(leafName, []))
-			}
-			if drawsOrder {
-				let xName = "\(prefix)KeyX"
-				let screenName = "\(prefix)KeyScreen"
-				let screenBuilder = instantiated("keyScreenBuilder", "SendableInstantiator<\(screenName)>")
-				let x = instantiated("keyX", xName)
-				declarations.append(declaration(xName, [PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "keyScreenBuilder", type: "SendableInstantiator<\(screenName)>?")]))
-				declarations.append(declaration("\(prefix)KeyOrderLeaf", [PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "keyX", type: "\(xName)?")]))
-				declarations.append(declaration("\(prefix)KeyOrderPanel", [instantiated("keyOrderLeaf", "\(prefix)KeyOrderLeaf")]))
-				declarations.append(declaration(screenName, [instantiated("keyOrderPanel", "\(prefix)KeyOrderPanel")]))
-				declarations.append(declaration("\(prefix)KeyFirstFeature", [x, screenBuilder]))
-				declarations.append(declaration("\(prefix)KeySecondFeature", [screenBuilder, x]))
-				declarations.append(declaration("\(prefix)KeyOrderRoot", arguments: ["generateMock: true"], [
-					instantiated("keySecondFeature", "\(prefix)KeySecondFeature"),
-					instantiated("keyFirstFeature", "\(prefix)KeyFirstFeature"),
-				]))
-			}
-			if drawsRename {
-				let configName = "\(prefix)KeyConfig"
-				let otherConfigName = "\(prefix)KeyOtherConfig"
-				let sendable = helperTypesAreSendable ? ", Sendable" : ""
-				let screenName = "\(prefix)KeyRenameScreen"
-				let screenBuilder = instantiated("keyRenameScreenBuilder", "SendableInstantiator<\(screenName)>")
-				var live = declaration("\(prefix)KeyLiveConfig", conformances: [configName], [])
-				live.additionalDeclarations = [
-					"public protocol \(configName): AnyObject\(sendable) {}",
-					"public protocol \(otherConfigName): AnyObject\(sendable) {}",
-				]
-				declarations.append(live)
-				declarations.append(declaration("\(prefix)KeyModel", [PropertyDeclaration(attribute: "@Received", label: "keyConfig", type: "any \(configName)")]))
-				declarations.append(declaration("\(prefix)KeyRenamePanel", [instantiated("keyModel", "\(prefix)KeyModel")]))
-				declarations.append(declaration(screenName, [instantiated("keyRenamePanel", "\(prefix)KeyRenamePanel")]))
-				declarations.append(declaration("\(prefix)KeyBareFeature", [screenBuilder]))
-				declarations.append(declaration("\(prefix)KeyConfiguredFeature", [
-					PropertyDeclaration(attribute: "@Instantiated(fulfilledByType: \"\(prefix)KeyLiveConfig\")", label: "keyConfig", type: "any \(configName)"),
-					screenBuilder,
-				]))
-				declarations.append(declaration("\(prefix)KeyOtherReader", [PropertyDeclaration(attribute: "@Received", label: "keyConfig", type: "any \(otherConfigName)")]))
-				declarations.append(declaration("\(prefix)KeyRenameRoot", arguments: ["generateMock: true"], [
-					instantiated("keyConfiguredFeature", "\(prefix)KeyConfiguredFeature"),
-					instantiated("keyBareFeature", "\(prefix)KeyBareFeature"),
-					instantiated("keyOtherReader", "\(prefix)KeyOtherReader"),
-				]))
-			}
-			if drawsActor {
-				let leafBuilder = instantiated("keyLeafBuilder", "Instantiator<\(leafName)>")
-				var store = declaration("\(prefix)KeyActorStore", [leafBuilder])
-				store.isActor = true
-				declarations.append(store)
-				declarations.append(declaration("\(prefix)KeyClassStore", [leafBuilder]))
-				let actorFirst = mockNodeKeyRandom.percentChance(50)
-				let stores = [instantiated("keyActorStore", "\(prefix)KeyActorStore"), instantiated("keyClassStore", "\(prefix)KeyClassStore")]
-				declarations.append(declaration("\(prefix)KeyActorRoot", arguments: ["generateMock: true"], actorFirst ? stores : stores.reversed()))
-			}
-			if drawsLabel {
-				let configuredName = "\(prefix)KeyConfigured"
-				let parameterLabel = "\(configuredName)_configuration"
-				let holderName = "\(prefix)KeyLabelHolder"
-				declarations.append(declaration(holderName, [instantiated("keyLeaf", leafName)]))
-				declarations.append(declaration(configuredName, [instantiated(parameterLabel, holderName)]))
-				declarations.append(declaration("\(prefix)KeyLabelRoot", arguments: ["generateMock: true"], [
-					instantiated("keyConfigured", configuredName),
-					instantiated(parameterLabel, holderName),
-				]))
-			}
-			return declarations
-		}
-
-		private static let mockNodeKeyRandomSeedMask: UInt64 = 0x6D6F636B4E6F6465
+		private static let renamedLazyReaderRandomSeedMask: UInt64 = 0x52656E4C617A79
 
 		// MARK: Cycle parameters
 
@@ -9301,8 +9142,7 @@ enum GraphFuzzerGenerator {
 		/// keeps alive too. The instantiators are `Sendable` as the graph's sendability allows, and then the place is in the
 		/// `@Sendable` family, whose cases carry no values, so the fill reads nothing. Four in ten hold `RetainLeaf`'s place in
 		/// an erased instantiator, `ErasedInstantiator` or its `Sendable` twin as the instantiators are, which `RetainLive`
-		/// fills forwarding `retainTicket`, so the oracle holds the builder that wrapper keeps. Four in ten roots also build
-		/// `RetainHome` through an instantiator, so that the root function oracle compares the dispatchers both builds reach.
+		/// fills forwarding `retainTicket`, so the oracle holds the builder that wrapper keeps.
 		///
 		/// `retentionRandom` draws only for this pass, which runs after every other pass and only in a graph another pass
 		/// split, so that every graph in one module, and every other draw of a graph it draws in, draws as before.
@@ -9317,12 +9157,6 @@ enum GraphFuzzerGenerator {
 			// `RetainLeaf`'s place held in an erased instantiator, which `RetainLive` fills forwarding `retainTicket`: a place
 			// whose builder takes the value it forwards (`retentionSeamValueBeforeBuilderForwardingPlace`).
 			let leafPlaceForwards = retentionRandom.percentChance(40)
-			// A second build of `RetainHome` from the root, through an instantiator, so that the root reaches each dispatcher
-			// it declares once at its top from two calls of one key, which the root function oracle compares
-			// (`GraphFuzzerToolRuns.rootFunctionKeyFailure`); a `SendableInstantiator` reaches the dispatchers in the other
-			// family. A second by-value build would not: the type key builds both in one shared function, which the root's plan
-			// reaches once.
-			let rootBuildsHomeTwice = retentionRandom.percentChance(40)
 			let isSendable = switch sendability {
 			case .nonSendable: false
 			case .sendable: true
@@ -9372,9 +9206,6 @@ enum GraphFuzzerGenerator {
 				live.properties.append(PropertyDeclaration(attribute: "@Received", label: "retainNavigator", type: navigator.name))
 			}
 			var root = instantiable("RetainRoot", module: .samePackageCaller, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "retainHome", type: home.name)])
-			if rootBuildsHomeTwice {
-				root.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "retainHomeBuilder", type: "\(instantiator)<\(home.name)>"))
-			}
 			root.instantiableArguments = ["isRoot: true"]
 			return declarations + [navigator, leaf, detail, home, live, root]
 		}
@@ -11659,9 +11490,14 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		let content: Substring
 		var block = [GeneratedCodeLine]()
 
+		/// The line without the `@inline(never)` a seam's tree declares its local functions with.
+		var contentAfterInlining: Substring {
+			content.hasPrefix("@inline(never) ") ? content.dropFirst("@inline(never) ".count) : content
+		}
+
 		/// The name of the builder function the line declares, when it declares one.
 		var declaredBuilderFunctionName: Substring? {
-			let declaration = content.hasPrefix("@Sendable nonisolated ") ? content.dropFirst("@Sendable nonisolated ".count) : content
+			let declaration = contentAfterInlining.hasPrefix("@Sendable nonisolated ") ? contentAfterInlining.dropFirst("@Sendable nonisolated ".count) : contentAfterInlining
 			guard declaration.hasPrefix("func __safeDI_") else { return nil }
 			return declaration.dropFirst("func ".count).prefix { $0.isLetter || $0.isNumber || $0 == "_" }
 		}
@@ -11732,7 +11568,7 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 				guard let name = line.declaredBuilderFunctionName else { continue }
 				// A function wrapping a sibling's, which it calls last, with the cycle arguments its scope passes.
 				if siblingNames.contains(where: { name != $0 && name.hasPrefix($0 + "_received") && line.block.last?.content.contains($0 + "(") == true }) {
-					features.insert(line.content.hasPrefix("@Sendable ") ? .sendableReceivedLoopMemberWithCycleParameters : .receivedLoopMemberWithCycleParameters)
+					features.insert(line.contentAfterInlining.hasPrefix("@Sendable ") ? .sendableReceivedLoopMemberWithCycleParameters : .receivedLoopMemberWithCycleParameters)
 				}
 				let ownFunctionNames = Set(line.block.compactMap(\.declaredBuilderFunctionName))
 				let instantiatedLabels = line.returnedTypeName.map { instantiatedLabelsByTypeName[String($0), default: []] } ?? []
@@ -14885,6 +14721,14 @@ struct GraphFuzzerFailure: Equatable {
 		/// `query graph` names other suppliers for a receive than the generated code hands it, or the oracle cannot follow
 		/// a read of the generated code (`GraphFuzzerToolRuns.querySuppliersFailure`).
 		case querySuppliersDifferFromGeneratedCode = "query graph names other suppliers for a receive than the generated code hands it"
+		/// `query graph` marks a dependency unfulfilled that neither `generate` reports nor it reports once each type no
+		/// declaration fulfills is declared, or marks none where its trees are partial or one where they are not, or leaves
+		/// a dependency `generate` reports unmarked (`GraphFuzzerToolRuns.queryUnfulfilledFailure`).
+		case queryMarksOtherDependenciesUnfulfilled = "query graph marks other dependencies unfulfilled than the errors generate reports name"
+		/// `query graph`'s export of a graph the tool accepts, with a type's declaration or a property that provides a value
+		/// deleted, is not the graph's own export but for what read the deleted declaration
+		/// (`GraphFuzzerToolRuns.queryDeletionFailure`).
+		case queryProvenanceMovesWhenDeclarationIsDeleted = "query graph moves what a receive is handed when another declaration is deleted"
 		/// The graph names a type no declaration SafeDI reads declares, and its read twin (`GraphFuzzerFixture.readTwin`),
 		/// which declares that type `public` where SafeDI reads it, gets another verdict, other diagnostics, or other
 		/// generated code: SafeDI counts the type otherwise than as `public` (decision 54).
@@ -15116,7 +14960,6 @@ struct GraphFuzzerResult {
 		isComparedWithoutSecondHolePlace: Bool = false,
 		isComparedWithoutSecondPath: Bool = false,
 		isComparedWithCleanSubtreeSkipOff: Bool = false,
-		isJudgedByRootFunctionKeyOracle: Bool = false,
 		retentionCounts: GraphFuzzerRetentionCounts = GraphFuzzerRetentionCounts(),
 		valueOracle: GraphFuzzerValueOracleRun? = nil,
 		remedyRuns: [GraphFuzzerRemedyRun] = [],
@@ -15129,7 +14972,6 @@ struct GraphFuzzerResult {
 		self.isComparedWithoutSecondHolePlace = isComparedWithoutSecondHolePlace
 		self.isComparedWithoutSecondPath = isComparedWithoutSecondPath
 		self.isComparedWithCleanSubtreeSkipOff = isComparedWithCleanSubtreeSkipOff
-		self.isJudgedByRootFunctionKeyOracle = isJudgedByRootFunctionKeyOracle
 		self.remedyRuns = remedyRuns
 		self.fixture = fixture
 		self.outcome = outcome
@@ -15194,9 +15036,6 @@ struct GraphFuzzerResult {
 	/// Whether the oracle ran the graph again with no skip of a clean subtree in the validation walk and compared the two
 	/// (`GraphFuzzerToolRuns.cleanSubtreeSkipFailure`): its first run skipped one.
 	let isComparedWithCleanSubtreeSkipOff: Bool
-	/// Whether the root function oracle compared two texts of one key in the graph (`GraphFuzzerToolRuns.rootFunctionKeyFailure`):
-	/// some root reached one key twice.
-	let isJudgedByRootFunctionKeyOracle: Bool
 	/// What the retention oracle judged of the graph (`GraphFuzzerOracle.ValueComparisons.retentionCounts`), each count
 	/// 0 or 1 but the unpaired experiments'.
 	let retentionCounts: GraphFuzzerRetentionCounts
@@ -15776,6 +15615,14 @@ struct GraphFuzzerToolRuns {
 	///     (`GraphFuzzerGenerator.drawnHolePlaces(forSeed:features:)`), which the builder surface's floors count.
 	///   - queryExport: The JSON `query graph` exports for a graph in one module the tool accepts, which
 	///     `querySuppliersFailure` compares with the generated code.
+	///   - rejectedQueryExport: The JSON `query graph` exports for a graph in one module the tool rejects, which
+	///     `queryUnfulfilledFailure` judges.
+	///   - missingTypesDeclaredOutcome: The outcome of that graph with an empty declaration of each type the export marks
+	///     missing, with no seam, where the export has partial trees built around such a type.
+	///   - queryDeletion: The declaration the deletion oracle deletes from a graph in one module the tool accepts, with
+	///     the JSON `query graph` exports for the graph without it, which `queryDeletionFailure` judges.
+	///   - queryProviderDeletion: The property that provides a value the deletion oracle deletes from that graph, with
+	///     the JSON `query graph` exports for the graph without it, which `queryDeletionFailure` judges too.
 	init(
 		fixture: GraphFuzzerFixture,
 		firstOutcome: GraphFuzzerToolOutcome,
@@ -15794,7 +15641,6 @@ struct GraphFuzzerToolRuns {
 		withoutSecondHolePlaceOutcome: (place: String, outcome: GraphFuzzerToolOutcome)? = nil,
 		placeLevelDisagreements: [String] = [],
 		rootFunctionKeyDisagreements: [String] = [],
-		rootFunctionKeysCompared: Int = 0,
 		fillsOfCalls: [SeamFillSharing.FillsOfCall] = [],
 		placeFacts: GraphFuzzerPlaceFacts = GraphFuzzerPlaceFacts(),
 		withoutSecondPath: GraphFuzzerSecondPathRun? = nil,
@@ -15802,14 +15648,21 @@ struct GraphFuzzerToolRuns {
 		builderSurfaceRuns: [GraphFuzzerBuilderSurfaceRun] = [],
 		drawnHolePlaces: [GraphFuzzerDrawnHolePlace] = [],
 		queryExport: String? = nil,
+		rejectedQueryExport: String? = nil,
+		missingTypesDeclaredOutcome: GraphFuzzerUnfulfilledDependencies.OutcomeWithMissingTypesDeclared? = nil,
+		queryDeletion: (deletion: GraphFuzzerQueryDeletion, export: String)? = nil,
+		queryProviderDeletion: (deletion: GraphFuzzerQueryProviderDeletion, export: String)? = nil,
 	) {
 		self.queryExport = queryExport
+		self.rejectedQueryExport = rejectedQueryExport
+		self.missingTypesDeclaredOutcome = missingTypesDeclaredOutcome
+		self.queryDeletion = queryDeletion
+		self.queryProviderDeletion = queryProviderDeletion
 		self.builderSurfaceRuns = builderSurfaceRuns
 		self.drawnHolePlaces = drawnHolePlaces
 		self.withoutSecondHolePlaceOutcome = withoutSecondHolePlaceOutcome
 		self.placeLevelDisagreements = placeLevelDisagreements
 		self.rootFunctionKeyDisagreements = rootFunctionKeyDisagreements
-		self.rootFunctionKeysCompared = rootFunctionKeysCompared
 		self.fillsOfCalls = fillsOfCalls
 		self.placeFacts = placeFacts
 		self.withoutSecondPath = withoutSecondPath
@@ -15851,8 +15704,6 @@ struct GraphFuzzerToolRuns {
 	let placeLevelDisagreements: [String]
 	/// Each key a root reaches root functions of with two texts (`collectingRootFunctionKeyDisagreements(during:)`).
 	let rootFunctionKeyDisagreements: [String]
-	/// The keys a root reached root functions of more than once, each of whose texts the oracle compared.
-	let rootFunctionKeysCompared: Int
 	/// What each seam call that fills a place built in the first run (`SeamFillSharing.observer`).
 	let fillsOfCalls: [SeamFillSharing.FillsOfCall]
 	let placeFacts: GraphFuzzerPlaceFacts
@@ -15861,6 +15712,10 @@ struct GraphFuzzerToolRuns {
 	let builderSurfaceRuns: [GraphFuzzerBuilderSurfaceRun]
 	let drawnHolePlaces: [GraphFuzzerDrawnHolePlace]
 	let queryExport: String?
+	let rejectedQueryExport: String?
+	let missingTypesDeclaredOutcome: GraphFuzzerUnfulfilledDependencies.OutcomeWithMissingTypesDeclared?
+	let queryDeletion: (deletion: GraphFuzzerQueryDeletion, export: String)?
+	let queryProviderDeletion: (deletion: GraphFuzzerQueryProviderDeletion, export: String)?
 
 	/// The failure of a graph some place of whose seam's tree has a path that repeats a declaration, or `nil`: the tree
 	/// closes a cycle where a declaration is already being built above, and a build that closes a cycle is the first build,
@@ -16694,7 +16549,7 @@ enum GraphFuzzerOracle {
 			let renamedGraphFailures = runs.renamedGraphFailures(refutingOrderOf: valueComparisons.listOrderRefutations[runs.fixture.seed] ?? [:])
 			var failures = [runs.runsDifferFailure, runs.cleanSubtreeSkipFailure, runs.differentialFailure, runs.acceptanceDifferentialFailure, runs.integrationsDisagreeFailure, runs.storedSeamSignaturesDisagreeFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.seamRejectedWhereInlineAcceptsFailure, runs.nilArgumentFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.publicMockRootLevelFailure, runs.publicMockOverrideClosureFailure, runs.publicMockOverridesOrderFailure, runs.omittedValueFailure, codeCompilationFailures[runs.fixture.seed], runs.valueOracleFixtureFailure].compactMap(\.self)
 			failures.append(contentsOf: valueComparisons.failures[runs.fixture.seed] ?? [])
-			failures.append(contentsOf: [runs.wrapperParameterFailure, runs.generatedCodeCallsEntryMeantForPeopleFailure, runs.generatedOnlyInitializerTakesDefaultFailure, runs.carrierMemberReadApartFailure, runs.configurationStorageFailure, runs.handWrittenMockBypassFailure, runs.readTwinFailure, runs.holeNameStabilityFailure, runs.builderSurfaceFailure, builderCallFailures[runs.fixture.seed], runs.builderLabelFailure, runs.sameSupplyFailure, runs.sameSupplyEditRejectedFailure, runs.addedSupplyFailure, runs.forwardedValuesFailure, runs.forwardingRemedyFailure, runs.remedyBuildersFailure, runs.callingMockFailure, runs.placeLevelsFailure, runs.rootFunctionKeyFailure, runs.placesJudgedByAnotherPlacesFillFailure, runs.placeChainFailure, runs.secondPathFailure, runs.multiModuleFailures.first, runs.remedyFailure, runs.querySuppliersFailure].compactMap(\.self))
+			failures.append(contentsOf: [runs.wrapperParameterFailure, runs.generatedCodeCallsEntryMeantForPeopleFailure, runs.generatedOnlyInitializerTakesDefaultFailure, runs.carrierMemberReadApartFailure, runs.configurationStorageFailure, runs.handWrittenMockBypassFailure, runs.readTwinFailure, runs.holeNameStabilityFailure, runs.builderSurfaceFailure, builderCallFailures[runs.fixture.seed], runs.builderLabelFailure, runs.sameSupplyFailure, runs.sameSupplyEditRejectedFailure, runs.addedSupplyFailure, runs.forwardedValuesFailure, runs.forwardingRemedyFailure, runs.remedyBuildersFailure, runs.callingMockFailure, runs.placeLevelsFailure, runs.rootFunctionKeyFailure, runs.placesJudgedByAnotherPlacesFillFailure, runs.placeChainFailure, runs.secondPathFailure, runs.multiModuleFailures.first, runs.remedyFailure, runs.querySuppliersFailure, runs.queryUnfulfilledFailure, runs.queryDeletionFailure].compactMap(\.self))
 			failures.append(contentsOf: runs.scopeCaseFailures)
 			// Whether a closure a level function returns keeps a level's values, read from the generated text, so it judges
 			// with compiles and without.
@@ -16732,7 +16587,6 @@ enum GraphFuzzerOracle {
 				isComparedWithoutSecondHolePlace: runs.isComparedWithoutSecondHolePlace,
 				isComparedWithoutSecondPath: runs.isComparedWithoutSecondPath,
 				isComparedWithCleanSubtreeSkipOff: runs.cleanSubtreeSkipOffOutcome != nil,
-				isJudgedByRootFunctionKeyOracle: runs.rootFunctionKeysCompared > 0,
 				retentionCounts: valueComparisons.retentionCounts[runs.fixture.seed] ?? GraphFuzzerRetentionCounts(),
 				valueOracle: runs.valueOracle,
 				remedyRuns: runs.remedyRuns,
@@ -17529,7 +17383,7 @@ enum GraphFuzzerOracle {
 		// The call of `addingPlacesOfOneCaseShapes`' seam must build one fill per kind of place
 		// (`placesJudgedByAnotherPlacesFillFailure`).
 		let (fillsOfCallsStream, fillsOfCallsContinuation) = AsyncStream.makeStream(of: SeamFillSharing.FillsOfCall.self)
-		let (((firstOutcome, placeLevelDisagreements), placeFacts), rootFunctionKeyDisagreements, rootFunctionKeysCompared) = try await collectingRootFunctionKeyDisagreements(during: {
+		let (((firstOutcome, placeLevelDisagreements), placeFacts), rootFunctionKeyDisagreements) = try await collectingRootFunctionKeyDisagreements(during: {
 			try await collectingPlaceFacts(during: {
 				try await collectingPlaceLevelDisagreements(during: {
 					try await ValidationWalkObservation.$observer.withValue({ observation in
@@ -17644,8 +17498,32 @@ enum GraphFuzzerOracle {
 		// A graph in one module the tool accepts is exported by `query graph`, whose suppliers must be what the generated code
 		// hands each receive (`querySuppliersFailure`).
 		var queryExport: String?
-		if fixture.modules == nil, !drawnFeatures.contains(.generateMockPublic), case .accepted = firstOutcome {
-			queryExport = try await GraphFuzzerQuerySupplies.export(of: fixture)
+		// A graph in one module the tool rejects is exported too, whose dependencies marked unfulfilled must be where the
+		// errors it reports are (`queryUnfulfilledFailure`).
+		var rejectedQueryExport: String?
+		var missingTypesDeclaredOutcome: GraphFuzzerUnfulfilledDependencies.OutcomeWithMissingTypesDeclared?
+		var queryDeletion: (deletion: GraphFuzzerQueryDeletion, export: String)?
+		var queryProviderDeletion: (deletion: GraphFuzzerQueryProviderDeletion, export: String)?
+		if fixture.modules == nil, !drawnFeatures.contains(.generateMockPublic) {
+			switch firstOutcome {
+			case .accepted:
+				let export = try await GraphFuzzerQuerySupplies.export(of: fixture)
+				queryExport = export
+				// The graph is exported again without one of its declarations, which must move no other receive's suppliers
+				// (`queryDeletionFailure`).
+				if let deletion = try? GraphFuzzerQueryDeletion(exportedJSON: export, fixture: fixture) {
+					queryDeletion = try await (deletion, GraphFuzzerQuerySupplies.export(of: deletion.fixtureWithoutDeclaration))
+				}
+				if let deletion = try? GraphFuzzerQueryProviderDeletion(exportedJSON: export, fixture: fixture) {
+					queryProviderDeletion = try await (deletion, GraphFuzzerQuerySupplies.export(of: deletion.fixtureWithoutProperty))
+				}
+			case .rejected:
+				let export = try await GraphFuzzerQuerySupplies.export(of: fixture)
+				rejectedQueryExport = export
+				// Where the export has partial trees built around a missing type, the graph is run again with each missing
+				// type declared: its errors are the further marks, and the export marks every one of them.
+				missingTypesDeclaredOutcome = try await (try? GraphFuzzerUnfulfilledDependencies(exportedJSON: export))?.outcomeWithMissingTypesDeclared(of: fixture)
+			}
 		}
 		return try await GraphFuzzerToolRuns(
 			fixture: fixture,
@@ -17682,7 +17560,6 @@ enum GraphFuzzerOracle {
 			withoutSecondHolePlaceOutcome: withoutSecondHolePlaceOutcome,
 			placeLevelDisagreements: placeLevelDisagreements,
 			rootFunctionKeyDisagreements: rootFunctionKeyDisagreements,
-			rootFunctionKeysCompared: rootFunctionKeysCompared,
 			fillsOfCalls: fillsOfCalls,
 			placeFacts: placeFacts,
 			withoutSecondPath: withoutSecondPath,
@@ -17690,6 +17567,10 @@ enum GraphFuzzerOracle {
 			builderSurfaceRuns: builderSurfaceRuns,
 			drawnHolePlaces: drawnHolePlaces,
 			queryExport: queryExport,
+			rejectedQueryExport: rejectedQueryExport,
+			missingTypesDeclaredOutcome: missingTypesDeclaredOutcome,
+			queryDeletion: queryDeletion,
+			queryProviderDeletion: queryProviderDeletion,
 		)
 	}
 

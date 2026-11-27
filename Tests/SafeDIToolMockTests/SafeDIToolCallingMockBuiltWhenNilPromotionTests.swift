@@ -196,7 +196,7 @@ struct SafeDIToolCallingMockBuiltWhenNilPromotionTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        let clock: (any Clock)? = if let safeDIBuilder = safeDIOverrides.clock { safeDIBuilder() } else { Meter() }
+		        let clock: any Clock = if let safeDIBuilder = safeDIOverrides.clock { safeDIBuilder() } else { Meter() }
 		        _ = Step.__safeDI_Step_mock_8588565361AFA7ED.self // If this line does not compile, \(guardComment)
 		        let step = Step.__safeDI_mock(clock: clock, safeDIOverrides: safeDIOverrides.step)
 		        return Screen(step: step)
@@ -238,7 +238,7 @@ struct SafeDIToolCallingMockBuiltWhenNilPromotionTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        let clock: (any Clock)? = if let safeDIBuilder = safeDIOverrides.clock { safeDIBuilder() } else { FakeClock.mock() }
+		        let clock: any Clock = if let safeDIBuilder = safeDIOverrides.clock { safeDIBuilder() } else { FakeClock.mock() }
 		        _ = Step.__safeDI_Step_mock_8588565361AFA7ED.self // If this line does not compile, \(guardComment)
 		        let step = Step.__safeDI_mock(clock: clock, safeDIOverrides: safeDIOverrides.step)
 		        return Screen(step: step)

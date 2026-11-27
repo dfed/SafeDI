@@ -1963,11 +1963,11 @@ struct SafeDIToolConditionalCompilationTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_feature(__safeDI_Feature_mockConfiguration: Feature.SafeDIMockConfiguration) -> Feature {
-		            let store = if let safeDIBuilder = __safeDI_Feature_mockConfiguration.store { safeDIBuilder() } else { Store() }
-		            return if let safeDIBuilder = __safeDI_Feature_mockConfiguration.safeDIBuilder { safeDIBuilder(store) } else { Feature.mock(store: store) }
+		        func __safeDI_feature() -> Feature {
+		            let store = if let safeDIBuilder = safeDIOverrides.feature.store { safeDIBuilder() } else { Store() }
+		            return if let safeDIBuilder = safeDIOverrides.feature.safeDIBuilder { safeDIBuilder(store) } else { Feature.mock(store: store) }
 		        }
-		        let feature: Feature = __safeDI_feature(__safeDI_Feature_mockConfiguration: safeDIOverrides.feature)
+		        let feature: Feature = __safeDI_feature()
 		        return Root(feature: feature)
 		    }
 		}

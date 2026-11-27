@@ -116,18 +116,16 @@ struct SafeDIToolMockSendableConfigurationLocalTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        @Sendable nonisolated func __safeDI_header(__safeDI_Header_configuration: Header.SafeDIMockConfiguration) -> Header {
-			            if let safeDIBuilder = __safeDI_Header_configuration.safeDIBuilder { safeDIBuilder(__safeDI_Header_configuration.title()) } else { Header(title: __safeDI_Header_configuration.title()) }
+			        let __safeDI_screenBuilder__overrides = safeDIOverrides.screenBuilder
+			        @Sendable nonisolated func __safeDI_screenBuilder() -> Screen {
+			            func __safeDI_header() -> Header {
+			                return if let safeDIBuilder = __safeDI_screenBuilder__overrides.header.safeDIBuilder { safeDIBuilder(__safeDI_screenBuilder__overrides.header.title()) } else { Header(title: __safeDI_screenBuilder__overrides.header.title()) }
+			            }
+			            let header: Header = __safeDI_header()
+			            let footer = if let safeDIBuilder = __safeDI_screenBuilder__overrides.footer { safeDIBuilder() } else { Footer() }
+			            return if let safeDIBuilder = __safeDI_screenBuilder__overrides.safeDIBuilder { safeDIBuilder(header, footer, __safeDI_screenBuilder__overrides.retries()) } else { Screen(header: header, footer: footer, retries: __safeDI_screenBuilder__overrides.retries()) }
 			        }
-			        @Sendable nonisolated func __safeDI_screenBuilder(__safeDI_Screen_configuration: Screen.SafeDIMockConfiguration) -> Screen {
-			            let header: Header = __safeDI_header(__safeDI_Header_configuration: __safeDI_Screen_configuration.header)
-			            let footer = if let safeDIBuilder = __safeDI_Screen_configuration.footer { safeDIBuilder() } else { Footer() }
-			            return if let safeDIBuilder = __safeDI_Screen_configuration.safeDIBuilder { safeDIBuilder(header, footer, __safeDI_Screen_configuration.retries()) } else { Screen(header: header, footer: footer, retries: __safeDI_Screen_configuration.retries()) }
-			        }
-			        let __safeDI_screenBuilder____safeDI_Screen_configuration: Screen.SafeDIMockConfiguration = safeDIOverrides.screenBuilder
-			        let screenBuilder = SendableInstantiator<Screen> {
-			            __safeDI_screenBuilder(__safeDI_Screen_configuration: __safeDI_screenBuilder____safeDI_Screen_configuration)
-			        }
+			        let screenBuilder = SendableInstantiator<Screen>(__safeDI_screenBuilder)
 			        return Root(screenBuilder: screenBuilder)
 			    }
 			}

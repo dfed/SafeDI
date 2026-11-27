@@ -2279,14 +2279,12 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        let __safeDI_serviceBuilder = serviceBuilder
-			        func __safeDI_token(__safeDI_Token_configuration: (() -> Token)?) -> Token {
-			            if let safeDIBuilder = __safeDI_Token_configuration { safeDIBuilder() } else { Token() }
+			        func __safeDI_token() -> Token {
+			            if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
 			        }
-			        let token = LazilyInstantiated<Token> {
-			            __safeDI_token(__safeDI_Token_configuration: safeDIOverrides.token)
-			        }
+			        let token = LazilyInstantiated<Token>(__safeDI_token)
+			        _ = Page.__safeDI_Page_mock_4A57B09DFB8A9D2C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
 			        func __safeDI_page() -> Page {
-			            _ = Page.__safeDI_Page_mock_4A57B09DFB8A9D2C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
 			            let serviceBuilder: () -> any Service = __safeDI_serviceBuilder
 			            return if let safeDIBuilder = safeDIOverrides.page { safeDIBuilder(serviceBuilder) } else { Page.__safeDI_mock(serviceBuilder: .init(__safeDI_noScope: serviceBuilder)) }
 			        }

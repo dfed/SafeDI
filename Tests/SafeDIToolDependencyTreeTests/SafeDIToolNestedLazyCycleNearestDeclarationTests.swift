@@ -624,7 +624,7 @@ struct SafeDIToolNestedLazyCycleNearestDeclarationTests: ~Copyable {
 				    /// Code you write and code SafeDI generates can both call this initializer.
 				    public convenience init() {
 				        let l = L()
-				        func __safeDI_wBuilder(l: L) -> W {
+				        @inline(never) func __safeDI_wBuilder(l: L) -> W {
 				            let uBuilder = Instantiator<U> {
 				                __safeDI_uBuilder(l: l)
 				            }
@@ -633,21 +633,21 @@ struct SafeDIToolNestedLazyCycleNearestDeclarationTests: ~Copyable {
 				            }
 				            return W(uBuilder: uBuilder, vBuilder: vBuilder)
 				        }
-				        func __safeDI_uBuilder(l: L) -> U {
+				        @inline(never) func __safeDI_uBuilder(l: L) -> U {
 				            let pBuilder = Instantiator<P>(__safeDI_pBuilder)
 				            let wBuilder = Instantiator<W> {
 				                __safeDI_wBuilder(l: l)
 				            }
 				            return U(pBuilder: pBuilder, wBuilder: wBuilder)
 				        }
-				        func __safeDI_pBuilder() -> P {
+				        @inline(never) func __safeDI_pBuilder() -> P {
 				            let l = L()
 				            let uBuilder = Instantiator<U> {
 				                __safeDI_uBuilder(l: l)
 				            }
 				            return P(l: l, uBuilder: uBuilder)
 				        }
-				        func __safeDI_vBuilder(l: L) -> V {
+				        @inline(never) func __safeDI_vBuilder(l: L) -> V {
 				            V(l: l)
 				        }
 				        let wBuilder = Instantiator<W> {
@@ -682,7 +682,7 @@ struct SafeDIToolNestedLazyCycleNearestDeclarationTests: ~Copyable {
 		)
 	}
 
-	/// `Root` generates its mock, whose builder functions are declared once per type: each takes the label as the production functions do and the configuration of its type's nearest build, so the override of `V` is handed the value `V` would be.
+	/// `Root` generates its mock, whose builder functions are nested: each takes the label as the production functions do, and the override of `V` is handed the value `V` would be.
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_passesNearestDeclaration_whenReceiverIsReachedOnlyThroughSecondCycleClosedInsideFirst() async throws {
@@ -765,36 +765,32 @@ struct SafeDIToolNestedLazyCycleNearestDeclarationTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
 			        let l = if let safeDIBuilder = safeDIOverrides.l { safeDIBuilder() } else { L() }
-			        func __safeDI_wBuilder(l: L, __safeDI_W_configuration: W.SafeDIMockConfiguration) -> W {
+			        func __safeDI_wBuilder(l: L) -> W {
+			            func __safeDI_uBuilder(l: L) -> U {
+			                func __safeDI_pBuilder() -> P {
+			                    let l = L()
+			                    let uBuilder = Instantiator<U> {
+			                        __safeDI_uBuilder(l: l)
+			                    }
+			                    return P(l: l, uBuilder: uBuilder)
+			                }
+			                let pBuilder = Instantiator<P>(__safeDI_pBuilder)
+			                let wBuilder = Instantiator<W> {
+			                    __safeDI_wBuilder(l: l)
+			                }
+			                return U(pBuilder: pBuilder, wBuilder: wBuilder)
+			            }
 			            let uBuilder = Instantiator<U> {
-			                __safeDI_uBuilder(l: l, __safeDI_U_configuration: U.SafeDIMockConfiguration(), __safeDI_W_configuration_nearest: __safeDI_W_configuration)
+			                __safeDI_uBuilder(l: l)
 			            }
-			            let vBuilder = Instantiator<V> {
-			                __safeDI_vBuilder(l: l, __safeDI_V_configuration: __safeDI_W_configuration.vBuilder)
+			            func __safeDI_vBuilder() -> V {
+			                if let safeDIBuilder = safeDIOverrides.wBuilder.vBuilder { safeDIBuilder(l) } else { V(l: l) }
 			            }
-			            return if let safeDIBuilder = __safeDI_W_configuration.safeDIBuilder { safeDIBuilder(uBuilder, vBuilder) } else { W(uBuilder: uBuilder, vBuilder: vBuilder) }
-			        }
-			        func __safeDI_uBuilder(l: L, __safeDI_U_configuration: U.SafeDIMockConfiguration, __safeDI_W_configuration_nearest: W.SafeDIMockConfiguration?) -> U {
-			            let pBuilder = Instantiator<P> {
-			                __safeDI_pBuilder(__safeDI_P_configuration: P.SafeDIMockConfiguration(), __safeDI_W_configuration_nearest: __safeDI_W_configuration_nearest, __safeDI_U_configuration_nearest: __safeDI_U_configuration)
-			            }
-			            let wBuilder = Instantiator<W> {
-			                __safeDI_wBuilder(l: l, __safeDI_W_configuration: __safeDI_W_configuration_nearest ?? W.SafeDIMockConfiguration())
-			            }
-			            return if let safeDIBuilder = __safeDI_U_configuration.safeDIBuilder { safeDIBuilder(pBuilder, wBuilder) } else { U(pBuilder: pBuilder, wBuilder: wBuilder) }
-			        }
-			        func __safeDI_pBuilder(__safeDI_P_configuration: P.SafeDIMockConfiguration, __safeDI_W_configuration_nearest: W.SafeDIMockConfiguration?, __safeDI_U_configuration_nearest: U.SafeDIMockConfiguration?) -> P {
-			            let l = if let safeDIBuilder = __safeDI_P_configuration.l { safeDIBuilder() } else { L() }
-			            let uBuilder = Instantiator<U> {
-			                __safeDI_uBuilder(l: l, __safeDI_U_configuration: __safeDI_U_configuration_nearest ?? U.SafeDIMockConfiguration(), __safeDI_W_configuration_nearest: __safeDI_W_configuration_nearest)
-			            }
-			            return if let safeDIBuilder = __safeDI_P_configuration.safeDIBuilder { safeDIBuilder(l, uBuilder) } else { P(l: l, uBuilder: uBuilder) }
-			        }
-			        func __safeDI_vBuilder(l: L, __safeDI_V_configuration: ((L) -> V)?) -> V {
-			            if let safeDIBuilder = __safeDI_V_configuration { safeDIBuilder(l) } else { V(l: l) }
+			            let vBuilder = Instantiator<V>(__safeDI_vBuilder)
+			            return if let safeDIBuilder = safeDIOverrides.wBuilder.safeDIBuilder { safeDIBuilder(uBuilder, vBuilder) } else { W(uBuilder: uBuilder, vBuilder: vBuilder) }
 			        }
 			        let wBuilder = Instantiator<W> {
-			            __safeDI_wBuilder(l: l, __safeDI_W_configuration: safeDIOverrides.wBuilder)
+			            __safeDI_wBuilder(l: l)
 			        }
 			        return Root(l: l, wBuilder: wBuilder)
 			    }

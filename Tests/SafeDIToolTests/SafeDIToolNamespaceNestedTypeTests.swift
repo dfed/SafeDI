@@ -188,10 +188,10 @@ struct SafeDIToolNamespaceNestedTypeTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        func __safeDI_child(__safeDI_Feature_Child_configuration: Feature.Child.SafeDIMockConfiguration) -> Feature.Child {
-			            if let safeDIBuilder = __safeDI_Feature_Child_configuration.safeDIBuilder { safeDIBuilder(__safeDI_Feature_Child_configuration.mode) } else { Feature.Child(mode: __safeDI_Feature_Child_configuration.mode) }
+			        func __safeDI_child() -> Feature.Child {
+			            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(safeDIOverrides.child.mode) } else { Feature.Child(mode: safeDIOverrides.child.mode) }
 			        }
-			        let child: Feature.Child = __safeDI_child(__safeDI_Feature_Child_configuration: safeDIOverrides.child)
+			        let child: Feature.Child = __safeDI_child()
 			        return Root(child: child)
 			    }
 			}
@@ -338,11 +338,11 @@ struct SafeDIToolNamespaceNestedTypeTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        func __safeDI_childBuilder(fallback: Feature.Mode?, mode: Feature.Mode, __safeDI_Feature_Child_configuration: ((Feature.Mode, Feature.Mode?) -> Feature.Child)?) -> Feature.Child {
-			            if let safeDIBuilder = __safeDI_Feature_Child_configuration { safeDIBuilder(mode, fallback) } else { Feature.Child(mode: mode, fallback: fallback) }
+			        func __safeDI_childBuilder(fallback: Feature.Mode?, mode: Feature.Mode) -> Feature.Child {
+			            if let safeDIBuilder = safeDIOverrides.childBuilder { safeDIBuilder(mode, fallback) } else { Feature.Child(mode: mode, fallback: fallback) }
 			        }
 			        let childBuilder = Instantiator<Feature.Child> {
-			            __safeDI_childBuilder(fallback: $0.fallback, mode: $0.mode, __safeDI_Feature_Child_configuration: safeDIOverrides.childBuilder)
+			            __safeDI_childBuilder(fallback: $0.fallback, mode: $0.mode)
 			        }
 			        return Root(childBuilder: childBuilder)
 			    }
@@ -533,12 +533,12 @@ struct SafeDIToolNamespaceNestedTypeTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        func __safeDI_parentBuilder(mode: Feature.Mode, __safeDI_Feature_Parent_configuration: Feature.Parent.SafeDIMockConfiguration) -> Feature.Parent {
-			            let child = if let safeDIBuilder = __safeDI_Feature_Parent_configuration.child { safeDIBuilder(mode) } else { Feature.Child(mode: mode) }
-			            return if let safeDIBuilder = __safeDI_Feature_Parent_configuration.safeDIBuilder { safeDIBuilder(mode, child) } else { Feature.Parent(mode: mode, child: child) }
+			        func __safeDI_parentBuilder(mode: Feature.Mode) -> Feature.Parent {
+			            let child = if let safeDIBuilder = safeDIOverrides.parentBuilder.child { safeDIBuilder(mode) } else { Feature.Child(mode: mode) }
+			            return if let safeDIBuilder = safeDIOverrides.parentBuilder.safeDIBuilder { safeDIBuilder(mode, child) } else { Feature.Parent(mode: mode, child: child) }
 			        }
 			        let parentBuilder = Instantiator<Feature.Parent> {
-			            __safeDI_parentBuilder(mode: $0, __safeDI_Feature_Parent_configuration: safeDIOverrides.parentBuilder)
+			            __safeDI_parentBuilder(mode: $0)
 			        }
 			        return Root(parentBuilder: parentBuilder)
 			    }
@@ -639,11 +639,11 @@ struct SafeDIToolNamespaceNestedTypeTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        func __safeDI_childBuilder(mode: Feature.Child.Mode, __safeDI_Feature_Child_configuration: Feature.Child.SafeDIMockConfiguration) -> Feature.Child {
-			            if let safeDIBuilder = __safeDI_Feature_Child_configuration.safeDIBuilder { safeDIBuilder(mode, __safeDI_Feature_Child_configuration.style) } else { Feature.Child(mode: mode, style: __safeDI_Feature_Child_configuration.style) }
+			        func __safeDI_childBuilder(mode: Feature.Child.Mode) -> Feature.Child {
+			            if let safeDIBuilder = safeDIOverrides.childBuilder.safeDIBuilder { safeDIBuilder(mode, safeDIOverrides.childBuilder.style) } else { Feature.Child(mode: mode, style: safeDIOverrides.childBuilder.style) }
 			        }
 			        let childBuilder = Instantiator<Feature.Child> {
-			            __safeDI_childBuilder(mode: $0, __safeDI_Feature_Child_configuration: safeDIOverrides.childBuilder)
+			            __safeDI_childBuilder(mode: $0)
 			        }
 			        return Root(childBuilder: childBuilder)
 			    }
@@ -782,11 +782,11 @@ struct SafeDIToolNamespaceNestedTypeTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        func __safeDI_parent(__safeDI_Feature_Parent_configuration: Feature.Parent.SafeDIMockConfiguration) -> Feature.Parent {
-			            let service = if let safeDIBuilder = __safeDI_Feature_Parent_configuration.service { safeDIBuilder() } else { Feature.AnyService(Feature.Impl()) }
-			            return if let safeDIBuilder = __safeDI_Feature_Parent_configuration.safeDIBuilder { safeDIBuilder(service) } else { Feature.Parent(service: service) }
+			        func __safeDI_parent() -> Feature.Parent {
+			            let service = if let safeDIBuilder = safeDIOverrides.parent.service { safeDIBuilder() } else { Feature.AnyService(Feature.Impl()) }
+			            return if let safeDIBuilder = safeDIOverrides.parent.safeDIBuilder { safeDIBuilder(service) } else { Feature.Parent(service: service) }
 			        }
-			        let parent: Feature.Parent = __safeDI_parent(__safeDI_Feature_Parent_configuration: safeDIOverrides.parent)
+			        let parent: Feature.Parent = __safeDI_parent()
 			        return Root(parent: parent)
 			    }
 			}
@@ -1064,11 +1064,11 @@ struct SafeDIToolNamespaceNestedTypeTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        func __safeDI_childBuilder(mode: Feature.Mode, __safeDI_Feature_Child_configuration: Feature.Child.SafeDIMockConfiguration) -> Feature.Child {
-			            if let safeDIBuilder = __safeDI_Feature_Child_configuration.safeDIBuilder { safeDIBuilder(mode, __safeDI_Feature_Child_configuration.other) } else { Feature.Child(mode: mode, other: __safeDI_Feature_Child_configuration.other) }
+			        func __safeDI_childBuilder(mode: Feature.Mode) -> Feature.Child {
+			            if let safeDIBuilder = safeDIOverrides.childBuilder.safeDIBuilder { safeDIBuilder(mode, safeDIOverrides.childBuilder.other) } else { Feature.Child(mode: mode, other: safeDIOverrides.childBuilder.other) }
 			        }
 			        let childBuilder = Instantiator<Feature.Child> {
-			            __safeDI_childBuilder(mode: $0, __safeDI_Feature_Child_configuration: safeDIOverrides.childBuilder)
+			            __safeDI_childBuilder(mode: $0)
 			        }
 			        return Root(childBuilder: childBuilder)
 			    }
@@ -1234,10 +1234,10 @@ struct SafeDIToolNamespaceNestedTypeTests: ~Copyable {
 			        mode: Mode,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Parent {
-			        func __safeDI_gadget(__safeDI_Feature_Gadget_configuration: Feature.Gadget.SafeDIMockConfiguration) -> Feature.Gadget {
-			            if let safeDIBuilder = __safeDI_Feature_Gadget_configuration.safeDIBuilder { safeDIBuilder(mode, __safeDI_Feature_Gadget_configuration.style) } else { Feature.Gadget.instantiate(mode: mode, style: __safeDI_Feature_Gadget_configuration.style) }
+			        func __safeDI_gadget() -> Feature.Gadget {
+			            return if let safeDIBuilder = safeDIOverrides.gadget.safeDIBuilder { safeDIBuilder(mode, safeDIOverrides.gadget.style) } else { Feature.Gadget.instantiate(mode: mode, style: safeDIOverrides.gadget.style) }
 			        }
-			        let gadget: Feature.Gadget = __safeDI_gadget(__safeDI_Feature_Gadget_configuration: safeDIOverrides.gadget)
+			        let gadget: Feature.Gadget = __safeDI_gadget()
 			        return Parent(mode: mode, gadget: gadget)
 			    }
 			}
@@ -1309,15 +1309,15 @@ struct SafeDIToolNamespaceNestedTypeTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        func __safeDI_gadget(mode: Mode, __safeDI_Feature_Gadget_configuration: Feature.Gadget.SafeDIMockConfiguration) -> Feature.Gadget {
-			            if let safeDIBuilder = __safeDI_Feature_Gadget_configuration.safeDIBuilder { safeDIBuilder(mode, __safeDI_Feature_Gadget_configuration.style) } else { Feature.Gadget.instantiate(mode: mode, style: __safeDI_Feature_Gadget_configuration.style) }
-			        }
-			        func __safeDI_parentBuilder(mode: Mode, __safeDI_Parent_configuration: Parent.SafeDIMockConfiguration) -> Parent {
-			            let gadget: Feature.Gadget = __safeDI_gadget(mode: mode, __safeDI_Feature_Gadget_configuration: __safeDI_Parent_configuration.gadget)
-			            return if let safeDIBuilder = __safeDI_Parent_configuration.safeDIBuilder { safeDIBuilder(mode, gadget) } else { Parent(mode: mode, gadget: gadget) }
+			        func __safeDI_parentBuilder(mode: Mode) -> Parent {
+			            func __safeDI_gadget() -> Feature.Gadget {
+			                return if let safeDIBuilder = safeDIOverrides.parentBuilder.gadget.safeDIBuilder { safeDIBuilder(mode, safeDIOverrides.parentBuilder.gadget.style) } else { Feature.Gadget.instantiate(mode: mode, style: safeDIOverrides.parentBuilder.gadget.style) }
+			            }
+			            let gadget: Feature.Gadget = __safeDI_gadget()
+			            return if let safeDIBuilder = safeDIOverrides.parentBuilder.safeDIBuilder { safeDIBuilder(mode, gadget) } else { Parent(mode: mode, gadget: gadget) }
 			        }
 			        let parentBuilder = Instantiator<Parent> {
-			            __safeDI_parentBuilder(mode: $0, __safeDI_Parent_configuration: safeDIOverrides.parentBuilder)
+			            __safeDI_parentBuilder(mode: $0)
 			        }
 			        return Root(parentBuilder: parentBuilder)
 			    }

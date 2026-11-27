@@ -88,21 +88,19 @@ struct SafeDIToolMockActorValueTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Store {
-		        func __safeDI_tracker(__safeDI_Tracker_configuration: Tracker.SafeDIMockConfiguration) -> Tracker {
-		            if let safeDIBuilder = __safeDI_Tracker_configuration.safeDIBuilder { safeDIBuilder(__safeDI_Tracker_configuration.name()) } else { Tracker(name: __safeDI_Tracker_configuration.name()) }
-		        }
-		        func __safeDI_childBuilder(tracker: Tracker, __safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
-		            if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(tracker, __safeDI_Child_configuration.name()) } else { Child(tracker: tracker, name: __safeDI_Child_configuration.name()) }
-		        }
-		        func __safeDI_worker(__safeDI_Worker_configuration: Worker.SafeDIMockConfiguration) -> Worker {
-		            let tracker: Tracker = __safeDI_tracker(__safeDI_Tracker_configuration: __safeDI_Worker_configuration.tracker)
-		            let childBuilder = Instantiator<Child> {
-		                __safeDI_childBuilder(tracker: tracker, __safeDI_Child_configuration: __safeDI_Worker_configuration.childBuilder)
+		        let __safeDI_worker__overrides = safeDIOverrides.worker
+		        func __safeDI_worker() -> Worker {
+		            func __safeDI_tracker() -> Tracker {
+		                return if let safeDIBuilder = __safeDI_worker__overrides.tracker.safeDIBuilder { safeDIBuilder(__safeDI_worker__overrides.tracker.name()) } else { Tracker(name: __safeDI_worker__overrides.tracker.name()) }
 		            }
-		            return if let safeDIBuilder = __safeDI_Worker_configuration.safeDIBuilder { safeDIBuilder(tracker, childBuilder) } else { Worker(tracker: tracker, childBuilder: childBuilder) }
+		            let tracker: Tracker = __safeDI_tracker()
+		            func __safeDI_childBuilder() -> Child {
+		                if let safeDIBuilder = __safeDI_worker__overrides.childBuilder.safeDIBuilder { safeDIBuilder(tracker, __safeDI_worker__overrides.childBuilder.name()) } else { Child(tracker: tracker, name: __safeDI_worker__overrides.childBuilder.name()) }
+		            }
+		            let childBuilder = Instantiator<Child>(__safeDI_childBuilder)
+		            return if let safeDIBuilder = __safeDI_worker__overrides.safeDIBuilder { safeDIBuilder(tracker, childBuilder) } else { Worker(tracker: tracker, childBuilder: childBuilder) }
 		        }
-		        let __safeDI_worker____safeDI_Worker_configuration: Worker.SafeDIMockConfiguration = safeDIOverrides.worker
-		        let worker: Worker = __safeDI_worker(__safeDI_Worker_configuration: __safeDI_worker____safeDI_Worker_configuration)
+		        let worker: Worker = __safeDI_worker()
 		        let config = if let safeDIBuilder = safeDIOverrides.config { safeDIBuilder() } else { Config() }
 		        return Store(config: config, worker: worker)
 		    }

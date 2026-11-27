@@ -183,9 +183,9 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 			    public init(__safeDI_tag: @autoclosure @escaping () -> Tag, __safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 			        let tag = LazilyInstantiated<Tag>(__safeDI_tag)
 			        let __safeDI_apiBuilder_aBuilder = __safeDI_apiBuilder.aBuilder(tag)
-			        func __safeDI_aBuilder(tag: Tag) -> A {
+			        @inline(never) func __safeDI_aBuilder(tag: Tag) -> A {
 			            let reader = TagReader(tag: tag)
-			            func __safeDI_bBuilder(tag: Tag) -> B {
+			            @inline(never) func __safeDI_bBuilder(tag: Tag) -> B {
 			                let aBuilder = Instantiator<A> {
 			                    __safeDI_aBuilder(tag: tag)
 			                }
@@ -281,9 +281,9 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 			    public init(__safeDI_tag: @autoclosure @escaping () -> Tag?, __safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 			        let tag = LazilyInstantiated<Tag?>(__safeDI_tag)
 			        let __safeDI_apiBuilder_aBuilder = __safeDI_apiBuilder.aBuilder(tag)
-			        func __safeDI_aBuilder(tag: Tag?) -> A {
+			        @inline(never) func __safeDI_aBuilder(tag: Tag?) -> A {
 			            let reader = TagReader(tag: tag)
-			            func __safeDI_bBuilder(tag: Tag) -> B {
+			            @inline(never) func __safeDI_bBuilder(tag: Tag) -> B {
 			                let aBuilder = Instantiator<A> {
 			                    __safeDI_aBuilder(tag: tag)
 			                }
@@ -378,9 +378,9 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		    public init(__safeDI_tag: @autoclosure @escaping () -> Tag, __safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 		        let tag = LazilyInstantiated<Tag>(__safeDI_tag)
 		        let __safeDI_apiBuilder_a = __safeDI_apiBuilder.a(tag)
-		        func __safeDI_a(tag: Tag) -> A {
+		        @inline(never) func __safeDI_a(tag: Tag) -> A {
 		            let reader = TagReader(tag: tag)
-		            func __safeDI_bBuilder(tag: Tag) -> B {
+		            @inline(never) func __safeDI_bBuilder(tag: Tag) -> B {
 		                let a = LazilyInstantiated<A> {
 		                    __safeDI_a(tag: tag)
 		                }
@@ -477,10 +477,10 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_tag: @autoclosure @escaping @Sendable () -> Tag, __safeDI_apiSendableBuilder: __safeDI_ApiSendableCarrier<any Api>) {
 			        let tag = SendableLazilyInstantiated<Tag>(__safeDI_tag)
-			        @Sendable nonisolated func __safeDI_aBuilder(tag: Tag) -> A {
+			        @inline(never) @Sendable nonisolated func __safeDI_aBuilder(tag: Tag) -> A {
 			            let __safeDI_apiSendableBuilder_aBuilder = __safeDI_apiSendableBuilder.aBuilder()
 			            let reader = TagReader(tag: tag)
-			            @Sendable nonisolated func __safeDI_bBuilder(tag: Tag) -> B {
+			            @inline(never) @Sendable nonisolated func __safeDI_bBuilder(tag: Tag) -> B {
 			                let aBuilder = SendableInstantiator<A> {
 			                    __safeDI_aBuilder(tag: tag)
 			                }
@@ -576,9 +576,9 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 			    public init(__safeDI_tag: @autoclosure @escaping () -> Tag, __safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 			        let tag = LazilyInstantiated<Tag>(__safeDI_tag)
 			        let __safeDI_apiBuilder_aBuilder = __safeDI_apiBuilder.aBuilder(tag)
-			        func __safeDI_aBuilder(tag: Tag) -> A {
+			        @inline(never) func __safeDI_aBuilder(tag: Tag) -> A {
 			            let reader = TagReader(tag: tag)
-			            func __safeDI_bBuilder(tag: Tag) -> B {
+			            @inline(never) func __safeDI_bBuilder(tag: Tag) -> B {
 			                let aBuilder = Instantiator<A> {
 			                    __safeDI_aBuilder(tag: tag)
 			                }
@@ -674,10 +674,10 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_tag: @autoclosure @escaping @Sendable () -> Tag, __safeDI_apiSendableBuilder: __safeDI_ApiSendableCarrier<any Api>) {
 			        let tag = SendableLazilyInstantiated<Tag>(__safeDI_tag)
-			        @Sendable nonisolated func __safeDI_aBuilder(tag: Tag) -> A {
+			        @inline(never) @Sendable nonisolated func __safeDI_aBuilder(tag: Tag) -> A {
 			            let __safeDI_apiSendableBuilder_aBuilder = __safeDI_apiSendableBuilder.aBuilder()
 			            let reader = TagReader(tag: tag)
-			            @Sendable nonisolated func __safeDI_bBuilder(tag: Tag) -> B {
+			            @inline(never) @Sendable nonisolated func __safeDI_bBuilder(tag: Tag) -> B {
 			                let aBuilder = SendableInstantiator<A> {
 			                    __safeDI_aBuilder(tag: tag)
 			                }
@@ -792,9 +792,9 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 			    public init(__safeDI_tag: @autoclosure @escaping () -> Tag, __safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 			        let tag = LazilyInstantiated<Tag>(__safeDI_tag)
 			        let __safeDI_apiBuilder_aBuilder = __safeDI_apiBuilder.aBuilder(tag)
-			        func __safeDI_aBuilder(tag: Tag) -> A {
+			        @inline(never) func __safeDI_aBuilder(tag: Tag) -> A {
 			            let reader = TagReader(tag: tag)
-			            func __safeDI_bBuilder(tag: Tag) -> B {
+			            @inline(never) func __safeDI_bBuilder(tag: Tag) -> B {
 			                let aBuilder = Instantiator<A> {
 			                    __safeDI_aBuilder(tag: tag)
 			                }
@@ -855,22 +855,22 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Hub {
 			        let tag = if let safeDIBuilder = safeDIOverrides.tag { safeDIBuilder() } else { Tag() }
-			        func __safeDI_aBuilder(tag: Tag, __safeDI_A_configuration: A.SafeDIMockConfiguration) -> A {
+			        func __safeDI_aBuilder(tag: Tag) -> A {
 			            let api: any Api = apiBuilder()
-			            let reader = if let safeDIBuilder = __safeDI_A_configuration.reader { safeDIBuilder(tag) } else { TagReader(tag: tag) }
+			            let reader = if let safeDIBuilder = safeDIOverrides.aBuilder.reader { safeDIBuilder(tag) } else { TagReader(tag: tag) }
+			            func __safeDI_bBuilder(tag: Tag) -> B {
+			                let aBuilder = Instantiator<A> {
+			                    __safeDI_aBuilder(tag: tag)
+			                }
+			                return if let safeDIBuilder = safeDIOverrides.aBuilder.bBuilder.safeDIBuilder { safeDIBuilder(tag, aBuilder) } else { B(tag: tag, aBuilder: aBuilder) }
+			            }
 			            let bBuilder = Instantiator<B> {
-			                __safeDI_bBuilder(tag: $0, __safeDI_B_configuration: __safeDI_A_configuration.bBuilder, __safeDI_A_configuration_nearest: __safeDI_A_configuration)
+			                __safeDI_bBuilder(tag: $0)
 			            }
-			            return if let safeDIBuilder = __safeDI_A_configuration.safeDIBuilder { safeDIBuilder(reader, api, bBuilder) } else { A(reader: reader, api: api, bBuilder: bBuilder) }
-			        }
-			        func __safeDI_bBuilder(tag: Tag, __safeDI_B_configuration: B.SafeDIMockConfiguration, __safeDI_A_configuration_nearest: A.SafeDIMockConfiguration?) -> B {
-			            let aBuilder = Instantiator<A> {
-			                __safeDI_aBuilder(tag: tag, __safeDI_A_configuration: __safeDI_A_configuration_nearest ?? A.SafeDIMockConfiguration())
-			            }
-			            return if let safeDIBuilder = __safeDI_B_configuration.safeDIBuilder { safeDIBuilder(tag, aBuilder) } else { B(tag: tag, aBuilder: aBuilder) }
+			            return if let safeDIBuilder = safeDIOverrides.aBuilder.safeDIBuilder { safeDIBuilder(reader, api, bBuilder) } else { A(reader: reader, api: api, bBuilder: bBuilder) }
 			        }
 			        let aBuilder = Instantiator<A> {
-			            __safeDI_aBuilder(tag: tag, __safeDI_A_configuration: safeDIOverrides.aBuilder)
+			            __safeDI_aBuilder(tag: tag)
 			        }
 			        return Hub(aBuilder: aBuilder)
 			    }
@@ -1026,9 +1026,9 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 			    package init(__safeDI_tag: @autoclosure @escaping () -> Tag, __safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 			        let tag = LazilyInstantiated<Tag>(__safeDI_tag)
 			        let __safeDI_apiBuilder_aBuilder = __safeDI_apiBuilder.aBuilder(tag)
-			        func __safeDI_aBuilder(tag: Tag) -> A {
+			        @inline(never) func __safeDI_aBuilder(tag: Tag) -> A {
 			            let reader = TagReader(tag: tag)
-			            func __safeDI_bBuilder(tag: Tag) -> B {
+			            @inline(never) func __safeDI_bBuilder(tag: Tag) -> B {
 			                let aBuilder = Instantiator<A> {
 			                    __safeDI_aBuilder(tag: tag)
 			                }
@@ -1189,14 +1189,14 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		    public init(__safeDI_tag: @autoclosure @escaping () -> Tag, __safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 		        let tag = LazilyInstantiated<Tag>(__safeDI_tag)
 		        let __safeDI_apiBuilder_aBuilder = __safeDI_apiBuilder.aBuilder(tag)
-		        func __safeDI_aBuilder(tag: Tag) -> A {
+		        @inline(never) func __safeDI_aBuilder(tag: Tag) -> A {
 		            let reader = TagReader(tag: tag)
-		            func __safeDI_inner() -> Inner {
+		            @inline(never) func __safeDI_inner() -> Inner {
 		                _ = Inner.__safeDI_Inner_5483833909C8FF8D.self\(innerCallComment)
 		                return Inner(__safeDI_tag: tag, __safeDI_apiBuilder: __safeDI_apiBuilder_aBuilder.inner)
 		            }
 		            let inner: Inner = __safeDI_inner()
-		            func __safeDI_bBuilder(tag: Tag) -> B {
+		            @inline(never) func __safeDI_bBuilder(tag: Tag) -> B {
 		                let aBuilder = Instantiator<A> {
 		                    __safeDI_aBuilder(tag: tag)
 		                }

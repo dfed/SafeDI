@@ -260,12 +260,10 @@ struct SafeDIToolCallingMockOptionalWrapperFillTests: ~Copyable {
 		        fill_AnyHoleBuilder: ErasedInstantiator<Int, AnyHole>.Builder? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_session(__safeDI_Session_configuration: (() -> Session)?) -> Session {
-		            if let safeDIBuilder = __safeDI_Session_configuration { safeDIBuilder() } else { Session.instantiate() }
+		        func __safeDI_session() -> Session {
+		            if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session.instantiate() }
 		        }
-		        let session = LazilyInstantiated<Session> {
-		            __safeDI_session(__safeDI_Session_configuration: safeDIOverrides.session)
-		        }
+		        let session = LazilyInstantiated<Session>(__safeDI_session)
 		        func __safeDI_screen() -> Screen {
 		            func __safeDI_fill_AnyHoleBuilder_Screen_holeBuilder(session: LazilyInstantiated<Session>?) -> ErasedInstantiator<Int, AnyHole>.Builder {
 		                func __safeDI_holeBuilder(ticket: Int) -> Fill {
@@ -407,12 +405,10 @@ struct SafeDIToolCallingMockOptionalWrapperFillTests: ~Copyable {
 		        fill_AnyHoleBuilder: ErasedInstantiator<Int, AnyHole>.Builder? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_session(__safeDI_Session_configuration: (() -> Session)?) -> Session {
-		            if let safeDIBuilder = __safeDI_Session_configuration { safeDIBuilder() } else { Session.instantiate() }
+		        func __safeDI_session() -> Session {
+		            if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session.instantiate() }
 		        }
-		        let session = LazilyInstantiated<Session> {
-		            __safeDI_session(__safeDI_Session_configuration: safeDIOverrides.session)
-		        }
+		        let session = LazilyInstantiated<Session>(__safeDI_session)
 		        func __safeDI_screen() -> Screen {
 		            func __safeDI_fill_AnyHoleBuilder_Screen_holeBuilder(session: LazilyInstantiated<Session>) -> ErasedInstantiator<Int, AnyHole>.Builder {
 		                func __safeDI_holeBuilder(ticket: Int) -> Fill {

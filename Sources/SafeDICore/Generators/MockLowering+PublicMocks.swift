@@ -318,11 +318,8 @@ extension MockLowering.ConstantNode {
 		// An instantiator's builder function writes `return` only before statements of its own, as `builderFunctionEndLines`
 		// says, its defaults' reads included.
 		let returnPrefix = hasChildren || !receiverBindings.isEmpty || !sendableAutoclosureBindings.isEmpty || !isWrapped ? "return " : ""
-		let erasedTo: TypeDescription? = if isErased {
-			isWrapped ? property.typeDescription.asInstantiatedTypeSpelledAsDeclared : property.typeDescription
-		} else {
-			nil
-		}
+		// The type the property instantiates, as the internal mock's `erasedTypeSource` spells it.
+		let erasedTo: TypeDescription? = isErased ? property.typeDescription.asInstantiatedTypeSpelledAsDeclared : nil
 		let call = MockLowering.publicConstructionCall(of: record, arguments: arguments.map(\.value), builderRead: overridePath, erasedTo: erasedTo)
 		var lines = ["\(bodyIndent)\(returnPrefix)\(call)"]
 		lines.append("\(indent)}")
@@ -351,13 +348,16 @@ extension MockLowering.Walk {
 		pendingRenamedFunctionName = nil
 		// The site calls its place's member on the struct its route leads to, handed the values in scope there, as a
 		// seam's site does.
-		let siteCode = ScopeGenerator.buildSiteCode(
-			of: property,
-			at: site,
-			functionName: holeFunctionName,
-			readingInstancesOf: generator.mockLoweringCallSiteLazilyInstantiatedInstanceProperties,
-		)
-		lines.append(GeneratedCodeText.indentingNonEmptyLines(of: siteCode, by: indent))
+		lines.append(GeneratedCodeText.indentingNonEmptyLines(
+			of: ScopeGenerator.buildSiteCode(
+				of: property,
+				at: site,
+				routeMembers: generator.siteRouteMembers,
+				functionName: holeFunctionName,
+				readingInstancesOf: generator.mockLoweringCallSiteLazilyInstantiatedInstanceProperties,
+			),
+			by: indent,
+		))
 		// The site binds its property from the builder, as an alias binds its own: no override reads it.
 		return .alias(MockLowering.AliasBinding(
 			property: property,

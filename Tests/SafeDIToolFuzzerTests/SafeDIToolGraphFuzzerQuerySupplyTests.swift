@@ -71,6 +71,31 @@ struct SafeDIToolGraphFuzzerQuerySupplyTests {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func problems_reportMark_whenExportMarksDependencyInstantiatedOnlyIfAvailable() throws {
+		// With dependencies instantiated only if available marked too, no graph of the first 2,500 base corpus seeds or the
+		// first 1,000 seam corpus seeds fails, so the marks oracle's check of such a mark is shown to fire here, on an
+		// export written by hand.
+		let marks = try GraphFuzzerUnfulfilledDependencies(exportedJSON: """
+		{
+		  "completeness" : "partialTrees",
+		  "declarations" : [
+		    { "id" : "M.Root", "typeName" : "Root", "dependencies" : [
+		      { "source" : "instantiated", "label" : "service", "plainType" : "Service", "isUnfulfilled" : true, "filePath" : "/fixture/File0.swift", "line" : 5 },
+		      { "source" : "instantiated", "label" : "optionalService", "plainType" : "Service", "isOnlyIfAvailable" : true, "isUnfulfilled" : true, "filePath" : "/fixture/File0.swift", "line" : 6 }
+		    ] }
+		  ]
+		}
+		""")
+
+		#expect(marks.problems(
+			generateErrorLocations: ["File0.swift:5", "File0.swift:6"],
+			errorLocationsWithMissingTypesDeclared: nil,
+			fixture: GraphFuzzerFixture(seed: 1, swiftFileContent: []),
+		) == ["The export marks the dependency at File0.swift:6 unfulfilled, which is instantiated only if available and so is `nil`."])
+	}
+
+	@Test
 	func kindsByLabelByType_namesEachKind_whenExportListsEverySourceAndLifetime() throws {
 		let kinds = try GraphFuzzerQuerySupplies.kindsByLabelByType(exportedJSON: """
 		{
@@ -79,6 +104,7 @@ struct SafeDIToolGraphFuzzerQuerySupplyTests {
 		      { "source" : "instantiated", "lifetime" : "eager", "label" : "model" },
 		      { "source" : "instantiated", "lifetime" : "lazy", "label" : "cache" },
 		      { "source" : "instantiated", "lifetime" : "builder", "label" : "stepBuilder" },
+		      { "source" : "instantiated", "lifetime" : "eager", "label" : "analytics", "isOnlyIfAvailable" : true },
 		      { "source" : "forwarded", "label" : "id" },
 		      { "source" : "received", "label" : "session" },
 		      { "source" : "received", "label" : "currentSession", "aliasOf" : { "label" : "session" } }
@@ -91,6 +117,7 @@ struct SafeDIToolGraphFuzzerQuerySupplyTests {
 			"model": "instantiated",
 			"cache": "lazy",
 			"stepBuilder": "builder",
+			"analytics": "absent",
 			"id": "forwarded",
 			"session": "received",
 			"currentSession": "alias",

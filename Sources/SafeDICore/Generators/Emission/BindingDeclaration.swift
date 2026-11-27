@@ -50,14 +50,8 @@ struct BindingDeclaration: Hashable, Sendable {
 	let property: Property
 	let rule: AnnotationRule
 
-	/// `let label` or `let label: Type`. A property received as an opaque parameter's `some P` is annotated `any P`, which
-	/// the parameter accepts: a local cannot spell `some P` for a value of the existential an override closure returns.
+	/// `let label` or `let label: Type`.
 	var spelled: String {
-		guard rule.annotates else { return "let \(property.label)" }
-		return if case let .some(constraint) = property.typeDescription {
-			"let \(property.label): \(TypeDescription.any(constraint).asSource)"
-		} else {
-			"let \(property.asSource)"
-		}
+		rule.annotates ? "let \(property.asSource)" : "let \(property.label)"
 	}
 }

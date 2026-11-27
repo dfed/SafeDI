@@ -308,7 +308,7 @@ struct SafeDIToolMockKeywordLabelTests: ~Copyable {
 		    ) -> Root {
 		        let Protocol: Kind? = safeDIOverrides.Protocol
 		        let `self` = if let safeDIBuilder = safeDIOverrides.`self` { safeDIBuilder() } else { Kind() }
-		        let gadget: Gadget = if let safeDIBuilder = safeDIOverrides.gadget { safeDIBuilder(`self`) } else { Gadget.instantiate(self: `self`) }
+		        let gadget = if let safeDIBuilder = safeDIOverrides.gadget { safeDIBuilder(`self`) } else { Gadget.instantiate(self: `self`) }
 		        return Root(gadget: gadget, Protocol: Protocol)
 		    }
 		}
@@ -373,15 +373,15 @@ struct SafeDIToolMockKeywordLabelTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_holder(__safeDI_Holder_configuration: Holder.SafeDIMockConfiguration) -> Holder {
-		            let Type = if let safeDIBuilder = __safeDI_Holder_configuration.Type { safeDIBuilder() } else { Kind() }
-		            let Protocol = if let safeDIBuilder = __safeDI_Holder_configuration.Protocol { safeDIBuilder() } else { Kind() }
-		            let `Self` = if let safeDIBuilder = __safeDI_Holder_configuration.`Self` { safeDIBuilder() } else { Kind() }
-		            let `init` = if let safeDIBuilder = __safeDI_Holder_configuration.`init` { safeDIBuilder() } else { Kind() }
-		            let `my leaf` = if let safeDIBuilder = __safeDI_Holder_configuration.`my leaf` { safeDIBuilder() } else { Kind() }
-		            return if let safeDIBuilder = __safeDI_Holder_configuration.safeDIBuilder { safeDIBuilder(Type, Protocol, `Self`, `init`, `my leaf`, __safeDI_Holder_configuration.`default`) } else { Holder(Type: Type, Protocol: Protocol, Self: `Self`, init: `init`, `my leaf`: `my leaf`, default: __safeDI_Holder_configuration.`default`) }
+		        func __safeDI_holder() -> Holder {
+		            let Type = if let safeDIBuilder = safeDIOverrides.holder.Type { safeDIBuilder() } else { Kind() }
+		            let Protocol = if let safeDIBuilder = safeDIOverrides.holder.Protocol { safeDIBuilder() } else { Kind() }
+		            let `Self` = if let safeDIBuilder = safeDIOverrides.holder.`Self` { safeDIBuilder() } else { Kind() }
+		            let `init` = if let safeDIBuilder = safeDIOverrides.holder.`init` { safeDIBuilder() } else { Kind() }
+		            let `my leaf` = if let safeDIBuilder = safeDIOverrides.holder.`my leaf` { safeDIBuilder() } else { Kind() }
+		            return if let safeDIBuilder = safeDIOverrides.holder.safeDIBuilder { safeDIBuilder(Type, Protocol, `Self`, `init`, `my leaf`, safeDIOverrides.holder.`default`) } else { Holder(Type: Type, Protocol: Protocol, Self: `Self`, init: `init`, `my leaf`: `my leaf`, default: safeDIOverrides.holder.`default`) }
 		        }
-		        let holder: Holder = __safeDI_holder(__safeDI_Holder_configuration: safeDIOverrides.holder)
+		        let holder: Holder = __safeDI_holder()
 		        return Root(holder: holder)
 		    }
 		}

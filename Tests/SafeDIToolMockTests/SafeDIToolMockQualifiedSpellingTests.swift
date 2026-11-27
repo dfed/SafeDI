@@ -123,45 +123,37 @@ struct SafeDIToolMockQualifiedSpellingTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let session = if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session() }
-		        func __safeDI_screenBuilder(__safeDI_Screen_configuration: ((Session) -> Screen)?) -> Screen {
-		            if let safeDIBuilder = __safeDI_Screen_configuration { safeDIBuilder(session) } else { Screen(session: session) }
+		        func __safeDI_screenBuilder() -> Screen {
+		            if let safeDIBuilder = safeDIOverrides.screenBuilder { safeDIBuilder(session) } else { Screen(session: session) }
 		        }
-		        let screenBuilder = Instantiator<Screen> {
-		            __safeDI_screenBuilder(__safeDI_Screen_configuration: safeDIOverrides.screenBuilder)
+		        let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
+		        let __safeDI_sendableScreenBuilder__safeDIBuilder = safeDIOverrides.sendableScreenBuilder
+		        @Sendable nonisolated func __safeDI_sendableScreenBuilder() -> Screen {
+		            if let safeDIBuilder = __safeDI_sendableScreenBuilder__safeDIBuilder { safeDIBuilder(session) } else { Screen(session: session) }
 		        }
-		        @Sendable nonisolated func __safeDI_sendableScreenBuilder(__safeDI_Screen_configuration: (@Sendable (Session) -> Screen)?) -> Screen {
-		            if let safeDIBuilder = __safeDI_Screen_configuration { safeDIBuilder(session) } else { Screen(session: session) }
-		        }
-		        let __safeDI_sendableScreenBuilder____safeDI_Screen_configuration: (@Sendable (Session) -> Screen)? = safeDIOverrides.sendableScreenBuilder
-		        let sendableScreenBuilder = SendableInstantiator<Screen> {
-		            __safeDI_sendableScreenBuilder(__safeDI_Screen_configuration: __safeDI_sendableScreenBuilder____safeDI_Screen_configuration)
-		        }
-		        func __safeDI_profileBuilder(user: User, __safeDI_Profile_configuration: ((User) -> AnyObject)?) -> AnyObject {
-		            if let safeDIBuilder = __safeDI_Profile_configuration { safeDIBuilder(user) } else { Profile(user: user) }
+		        let sendableScreenBuilder = SendableInstantiator<Screen>(__safeDI_sendableScreenBuilder)
+		        func __safeDI_profileBuilder(user: User) -> AnyObject {
+		            if let safeDIBuilder = safeDIOverrides.profileBuilder { safeDIBuilder(user) } else { Profile(user: user) }
 		        }
 		        let profileBuilder = ErasedInstantiator<User, AnyObject> {
-		            __safeDI_profileBuilder(user: $0, __safeDI_Profile_configuration: safeDIOverrides.profileBuilder)
+		            __safeDI_profileBuilder(user: $0)
 		        }
-		        @Sendable nonisolated func __safeDI_sendableProfileBuilder(user: User, __safeDI_Profile_configuration: (@Sendable (User) -> Profile)?) -> Profile {
-		            if let safeDIBuilder = __safeDI_Profile_configuration { safeDIBuilder(user) } else { Profile(user: user) }
+		        let __safeDI_sendableProfileBuilder__safeDIBuilder = safeDIOverrides.sendableProfileBuilder
+		        @Sendable nonisolated func __safeDI_sendableProfileBuilder(user: User) -> Profile {
+		            if let safeDIBuilder = __safeDI_sendableProfileBuilder__safeDIBuilder { safeDIBuilder(user) } else { Profile(user: user) }
 		        }
-		        let __safeDI_sendableProfileBuilder____safeDI_Profile_configuration: (@Sendable (User) -> Profile)? = safeDIOverrides.sendableProfileBuilder
 		        let sendableProfileBuilder = SendableErasedInstantiator<User, Profile> {
-		            __safeDI_sendableProfileBuilder(user: $0, __safeDI_Profile_configuration: __safeDI_sendableProfileBuilder____safeDI_Profile_configuration)
+		            __safeDI_sendableProfileBuilder(user: $0)
 		        }
-		        func __safeDI_settings(__safeDI_Settings_configuration: (() -> Settings)?) -> Settings {
-		            if let safeDIBuilder = __safeDI_Settings_configuration { safeDIBuilder() } else { Settings() }
+		        func __safeDI_settings() -> Settings {
+		            if let safeDIBuilder = safeDIOverrides.settings { safeDIBuilder() } else { Settings() }
 		        }
-		        let settings = LazilyInstantiated<Settings> {
-		            __safeDI_settings(__safeDI_Settings_configuration: safeDIOverrides.settings)
+		        let settings = LazilyInstantiated<Settings>(__safeDI_settings)
+		        let __safeDI_sendableSettings__safeDIBuilder = safeDIOverrides.sendableSettings
+		        @Sendable nonisolated func __safeDI_sendableSettings() -> Settings {
+		            if let safeDIBuilder = __safeDI_sendableSettings__safeDIBuilder { safeDIBuilder() } else { Settings() }
 		        }
-		        @Sendable nonisolated func __safeDI_sendableSettings(__safeDI_Settings_configuration: (@Sendable () -> Settings)?) -> Settings {
-		            if let safeDIBuilder = __safeDI_Settings_configuration { safeDIBuilder() } else { Settings() }
-		        }
-		        let __safeDI_sendableSettings____safeDI_Settings_configuration: (@Sendable () -> Settings)? = safeDIOverrides.sendableSettings
-		        let sendableSettings = SendableLazilyInstantiated<Settings> {
-		            __safeDI_sendableSettings(__safeDI_Settings_configuration: __safeDI_sendableSettings____safeDI_Settings_configuration)
-		        }
+		        let sendableSettings = SendableLazilyInstantiated<Settings>(__safeDI_sendableSettings)
 		        return Root(session: session, screenBuilder: screenBuilder, sendableScreenBuilder: sendableScreenBuilder, profileBuilder: profileBuilder, sendableProfileBuilder: sendableProfileBuilder, settings: settings, sendableSettings: sendableSettings)
 		    }
 		}

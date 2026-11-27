@@ -66,13 +66,11 @@ struct SafeDIToolPublicMockHoleLabelTests: ~Copyable {
 		        gizmo: \(renamedHole.type),
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        func __safeDI_settingsBuilder(__safeDI_Settings_configuration: ((Instantiator<Widget>) -> Settings)?) -> Settings {
+		        func __safeDI_settingsBuilder() -> Settings {
 		            let gizmo: Instantiator<Widget> = gizmo_Instantiator__Widget
-		            return if let safeDIBuilder = __safeDI_Settings_configuration { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
+		            return if let safeDIBuilder = safeDIOverrides.settingsBuilder { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
 		        }
-		        let settingsBuilder = Instantiator<Settings> {
-		            __safeDI_settingsBuilder(__safeDI_Settings_configuration: safeDIOverrides.settingsBuilder)
-		        }
+		        let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
 		        return Screen(settingsBuilder: settingsBuilder, gizmo: gizmo)
 		    }
 		"""
@@ -134,13 +132,11 @@ struct SafeDIToolPublicMockHoleLabelTests: ~Copyable {
 		        gadget: Gadget,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        func __safeDI_settingsBuilder(__safeDI_Settings_configuration: ((Instantiator<Widget>) -> Settings)?) -> Settings {
+		        func __safeDI_settingsBuilder() -> Settings {
 		            let gizmo: Instantiator<Widget> = gizmo_Instantiator__Widget
-		            return if let safeDIBuilder = __safeDI_Settings_configuration { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
+		            return if let safeDIBuilder = safeDIOverrides.settingsBuilder { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
 		        }
-		        let settingsBuilder = Instantiator<Settings> {
-		            __safeDI_settingsBuilder(__safeDI_Settings_configuration: safeDIOverrides.settingsBuilder)
-		        }
+		        let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
 		        return Screen(settingsBuilder: settingsBuilder, gizmo: gizmo, gadget: gadget)
 		    }
 		"""
@@ -355,13 +351,11 @@ struct SafeDIToolPublicMockHoleLabelTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		\(panel.internalBinding)
-		        func __safeDI_settingsBuilder(__safeDI_Settings_configuration: ((Instantiator<Widget>) -> Settings)?) -> Settings {
+		        func __safeDI_settingsBuilder() -> Settings {
 		            let gizmo: Instantiator<Widget> = gizmo_Instantiator__Widget
-		            return if let safeDIBuilder = __safeDI_Settings_configuration { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
+		            return if let safeDIBuilder = safeDIOverrides.settingsBuilder { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
 		        }
-		        let settingsBuilder = Instantiator<Settings> {
-		            __safeDI_settingsBuilder(__safeDI_Settings_configuration: safeDIOverrides.settingsBuilder)
-		        }
+		        let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
 		        return Screen(settingsBuilder: settingsBuilder, gizmo: gizmo, panel: panel)
 		    }
 		"""
@@ -767,12 +761,10 @@ enum PlaceHolder: CaseIterable, CustomTestStringConvertible {
 			"        let panel = if let safeDIBuilder = safeDIOverrides.panel { safeDIBuilder(gadget) } else { Panel(gadget: gadget) }"
 		case .instantiator, .lazilyInstantiated:
 			"""
-			        func __safeDI_panel(__safeDI_Panel_configuration: ((Gadget) -> Panel)?) -> Panel {
-			            if let safeDIBuilder = __safeDI_Panel_configuration { safeDIBuilder(gadget) } else { Panel(gadget: gadget) }
+			        func __safeDI_panel() -> Panel {
+			            if let safeDIBuilder = safeDIOverrides.panel { safeDIBuilder(gadget) } else { Panel(gadget: gadget) }
 			        }
-			        let panel = \(type) {
-			            __safeDI_panel(__safeDI_Panel_configuration: safeDIOverrides.panel)
-			        }
+			        let panel = \(type)(__safeDI_panel)
 			"""
 		}
 	}

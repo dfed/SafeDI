@@ -167,11 +167,11 @@ struct SafeDIToolQueryTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Feature {
 		        let logger = if let safeDIBuilder = safeDIOverrides.logger { safeDIBuilder() } else { Logger() }
-		        func __safeDI_service(__safeDI_Service_configuration: Service.SafeDIMockConfiguration) -> Service {
-		            let cache = if let safeDIBuilder = __safeDI_Service_configuration.cache { safeDIBuilder() } else { Cache() }
-		            return if let safeDIBuilder = __safeDI_Service_configuration.safeDIBuilder { safeDIBuilder(cache, logger) } else { Service(cache: cache, logger: logger) }
+		        func __safeDI_service() -> Service {
+		            let cache = if let safeDIBuilder = safeDIOverrides.service.cache { safeDIBuilder() } else { Cache() }
+		            return if let safeDIBuilder = safeDIOverrides.service.safeDIBuilder { safeDIBuilder(cache, logger) } else { Service(cache: cache, logger: logger) }
 		        }
-		        let service: Service = __safeDI_service(__safeDI_Service_configuration: safeDIOverrides.service)
+		        let service: Service = __safeDI_service()
 		        return Feature(service: service, logger: logger)
 		    }
 		}
@@ -807,99 +807,6 @@ struct SafeDIToolQueryTests: ~Copyable {
 		    No @Instantiable declaration fulfills `Session`.
 
 		Defaulted parameters of `Screen.mock()` that no @Instantiable declaration removes:
-		  (none)
-		""")
-	}
-
-	/// `Profile` declares the erased `api`, which `Settings` receives, so `Home.mock()` builds `api` at its root too, and
-	/// the construction memo gives that node and `Profile`'s one generator. The walk that names the mock's tree meets the
-	/// generator first beneath `profile` where `profile` is declared first, and still lists the root's node, whose
-	/// erasure the query reads, in either order.
-	@Test(arguments: [true, false])
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func query_listsErasureOfMocksRootNode_whenSameGeneratorIsMetFirstBeneathAnotherChild(profileIsDeclaredFirst: Bool) async throws {
-		let homeProperties = [
-			"@Instantiated private let profileBuilder: Instantiator<Profile>",
-			"@Instantiated private let settingsBuilder: Instantiator<Settings>",
-		]
-		let output = try await executeSafeDIToolQuery(
-			typeName: "Home",
-			modules: [
-				QueryTestModule("Feat", [
-					"""
-					public protocol Api {}
-
-					public struct AnyApi: Api {
-					    public init(_ api: some Api) {}
-					}
-					""",
-					"""
-					@Instantiable
-					public final class LiveApi: Api, Instantiable {
-					    public init() {}
-					}
-					""",
-					"""
-					@Instantiable
-					public final class Profile: Instantiable {
-					    public init(api: AnyApi) {
-					        self.api = api
-					    }
-					    @Instantiated(fulfilledByType: "LiveApi", erasedToConcreteExistential: true) private let api: AnyApi
-					}
-					""",
-					"""
-					@Instantiable
-					public final class Settings: Instantiable {
-					    public init(api: AnyApi) {
-					        self.api = api
-					    }
-					    @Received private let api: AnyApi
-					}
-					""",
-					"""
-					@Instantiable(generateMock: true)
-					public final class Home: Instantiable {
-					    public init(profileBuilder: Instantiator<Profile>, settingsBuilder: Instantiator<Settings>) {
-					        self.profileBuilder = profileBuilder
-					        self.settingsBuilder = settingsBuilder
-					    }
-					    \((profileIsDeclaredFirst ? homeProperties : homeProperties.reversed()).joined(separator: "\n    "))
-					}
-					""",
-				]),
-			],
-			filesToDelete: &filesToDelete,
-		)
-
-		#expect(output.formatted == """
-		`Home` is built from declarations in 1 module:
-
-		Feat
-		  @Instantiable Home
-		  @Instantiable LiveApi
-		  @Instantiable Profile
-		  @Instantiated(erasedToConcreteExistential: true) api: AnyApi on Profile, which builds AnyApi as LiveApi
-		  @Instantiable Settings
-
-		@Forwarded parameters of `Home`:
-		  (none)
-
-		Dependencies of `Home` no @Instantiable declaration fulfills:
-		  (none)
-
-		`Home.mock()` is generated in Feat from the same declarations.
-
-		Required @Forwarded parameters of `Home.mock()`:
-		  (none)
-
-		Defaulted @Forwarded parameters of `Home.mock()`:
-		  (none)
-
-		Required parameters of `Home.mock()` that no @Instantiable declaration removes:
-		  (none)
-
-		Defaulted parameters of `Home.mock()` that no @Instantiable declaration removes:
 		  (none)
 		""")
 	}

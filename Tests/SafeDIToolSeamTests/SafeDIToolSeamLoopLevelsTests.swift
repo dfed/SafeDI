@@ -118,7 +118,7 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			            __safeDI_apiBuilder_screenBBuilder: __safeDI_apiBuilder.screenBBuilder,
 			            __safeDI_apiBuilder_screenCBuilder: __safeDI_apiBuilder.screenCBuilder
 			        )
-			        func __safeDI_screenABuilder(id: Int) -> ScreenA {
+			        @inline(never) func __safeDI_screenABuilder(id: Int) -> ScreenA {
 			            let __safeDI_apiBuilder_screenABuilder = __safeDI_screenABuilder_loopLevels.__safeDI_apiBuilder_screenABuilder
 			            let screenBBuilder = Instantiator<ScreenB> {
 			                __safeDI_screenBBuilder(id: $0)
@@ -129,7 +129,7 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			        let screenABuilder = Instantiator<ScreenA> {
 			            __safeDI_screenABuilder(id: $0)
 			        }
-			        func __safeDI_screenBBuilder(id: Int) -> ScreenB {
+			        @inline(never) func __safeDI_screenBBuilder(id: Int) -> ScreenB {
 			            let __safeDI_apiBuilder_screenBBuilder = __safeDI_screenABuilder_loopLevels.__safeDI_apiBuilder_screenBBuilder
 			            let screenCBuilder = Instantiator<ScreenC> {
 			                __safeDI_screenCBuilder(id: $0)
@@ -140,7 +140,7 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			        let screenBBuilder = Instantiator<ScreenB> {
 			            __safeDI_screenBBuilder(id: $0)
 			        }
-			        func __safeDI_screenCBuilder(id: Int) -> ScreenC {
+			        @inline(never) func __safeDI_screenCBuilder(id: Int) -> ScreenC {
 			            let __safeDI_apiBuilder_screenCBuilder = __safeDI_screenABuilder_loopLevels.__safeDI_apiBuilder_screenCBuilder
 			            let screenABuilder = Instantiator<ScreenA> {
 			                __safeDI_screenABuilder(id: $0)
@@ -372,7 +372,7 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			            __safeDI_apiBuilder_screenABuilder: __safeDI_apiBuilder.screenABuilder,
 			            __safeDI_apiBuilder_screenBBuilder: __safeDI_apiBuilder.screenBBuilder
 			        )
-			        func __safeDI_screenABuilder() -> ScreenA {
+			        @inline(never) func __safeDI_screenABuilder() -> ScreenA {
 			            let __safeDI_apiBuilder_screenABuilder = __safeDI_screenABuilder_loopLevels.__safeDI_apiBuilder_screenABuilder
 			            let screenBBuilder = Instantiator<ScreenB>(__safeDI_screenBBuilder)
 			            let api: any Api = __safeDI_apiBuilder_screenABuilder.api(screenBBuilder)
@@ -380,14 +380,14 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			                __safeDI_apiBuilder_tabXBuilder: __safeDI_apiBuilder_screenABuilder.tabXBuilder(screenBBuilder, api),
 			                __safeDI_apiBuilder_tabYBuilder: __safeDI_apiBuilder_screenABuilder.tabYBuilder(screenBBuilder, api)
 			            )
-			            func __safeDI_tabXBuilder() -> TabX {
+			            @inline(never) func __safeDI_tabXBuilder() -> TabX {
 			                let __safeDI_apiBuilder_tabXBuilder = __safeDI_tabXBuilder_loopLevels.__safeDI_apiBuilder_tabXBuilder
 			                let tabYBuilder = Instantiator<TabY>(__safeDI_tabYBuilder)
 			                let api: any Api = __safeDI_apiBuilder_tabXBuilder.api(tabYBuilder)
 			                return TabX(api: api, tabYBuilder: tabYBuilder)
 			            }
 			            let tabXBuilder = Instantiator<TabX>(__safeDI_tabXBuilder)
-			            func __safeDI_tabYBuilder() -> TabY {
+			            @inline(never) func __safeDI_tabYBuilder() -> TabY {
 			                let __safeDI_apiBuilder_tabYBuilder = __safeDI_tabXBuilder_loopLevels.__safeDI_apiBuilder_tabYBuilder
 			                let tabXBuilder = Instantiator<TabX>(__safeDI_tabXBuilder)
 			                let api: any Api = __safeDI_apiBuilder_tabYBuilder.api(tabXBuilder)
@@ -397,7 +397,7 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			            return ScreenA(api: api, screenBBuilder: screenBBuilder, tabXBuilder: tabXBuilder, tabYBuilder: tabYBuilder)
 			        }
 			        let screenABuilder = Instantiator<ScreenA>(__safeDI_screenABuilder)
-			        func __safeDI_screenBBuilder() -> ScreenB {
+			        @inline(never) func __safeDI_screenBBuilder() -> ScreenB {
 			            let __safeDI_apiBuilder_screenBBuilder = __safeDI_screenABuilder_loopLevels.__safeDI_apiBuilder_screenBBuilder
 			            let screenABuilder = Instantiator<ScreenA>(__safeDI_screenABuilder)
 			            let api: any Api = __safeDI_apiBuilder_screenBBuilder.api(screenABuilder)
@@ -586,12 +586,12 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public convenience init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 			        let __safeDI_apiBuilder_flowBuilder = __safeDI_apiBuilder.flowBuilder
-			        func __safeDI_flowBuilder() -> Flow {
+			        @inline(never) func __safeDI_flowBuilder() -> Flow {
 			            let __safeDI_aBuilder_loopLevels = __safeDI_LoopLevels_9EAC39336BC1DA07(
 			                __safeDI_apiBuilder_aBuilder: __safeDI_apiBuilder_flowBuilder.aBuilder,
 			                __safeDI_apiBuilder_bBuilder: __safeDI_apiBuilder_flowBuilder.bBuilder
 			            )
-			            func __safeDI_aBuilder() -> A {
+			            @inline(never) func __safeDI_aBuilder() -> A {
 			                let __safeDI_apiBuilder_aBuilder = __safeDI_aBuilder_loopLevels.__safeDI_apiBuilder_aBuilder
 			                let bBuilder = Instantiator<B>(__safeDI_bBuilder)
 			                let flowBuilder = Instantiator<Flow>(__safeDI_flowBuilder)
@@ -599,7 +599,7 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			                return A(api: api, bBuilder: bBuilder, flowBuilder: flowBuilder)
 			            }
 			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-			            func __safeDI_bBuilder() -> B {
+			            @inline(never) func __safeDI_bBuilder() -> B {
 			                let __safeDI_apiBuilder_bBuilder = __safeDI_aBuilder_loopLevels.__safeDI_apiBuilder_bBuilder
 			                let aBuilder = Instantiator<A>(__safeDI_aBuilder)
 			                let api: any Api = __safeDI_apiBuilder_bBuilder.api(aBuilder)
@@ -756,14 +756,14 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			            __safeDI_apiBuilder_screenABuilder: __safeDI_apiBuilder.screenABuilder,
 			            __safeDI_apiBuilder_screenBBuilder: __safeDI_apiBuilder.screenBBuilder
 			        )
-			        func __safeDI_screenABuilder() -> ScreenA {
+			        @inline(never) func __safeDI_screenABuilder() -> ScreenA {
 			            let __safeDI_apiBuilder_screenABuilder = __safeDI_screenABuilder_loopLevels.__safeDI_apiBuilder_screenABuilder
 			            let screenBBuilder = Instantiator<ScreenB>(__safeDI_screenBBuilder)
 			            let api: any Api = __safeDI_apiBuilder_screenABuilder.api(screenBBuilder)
 			            return ScreenA(api: api, screenBBuilder: screenBBuilder)
 			        }
 			        let screenABuilder = Instantiator<ScreenA>(__safeDI_screenABuilder)
-			        func __safeDI_screenBBuilder() -> ScreenB {
+			        @inline(never) func __safeDI_screenBBuilder() -> ScreenB {
 			            let __safeDI_apiBuilder_screenBBuilder = __safeDI_screenABuilder_loopLevels.__safeDI_apiBuilder_screenBBuilder
 			            let screenABuilder = Instantiator<ScreenA>(__safeDI_screenABuilder)
 			            let api: any Api = __safeDI_apiBuilder_screenBBuilder.api(screenABuilder)
@@ -873,19 +873,19 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public convenience init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 			        let __safeDI_apiBuilder_flowA = __safeDI_apiBuilder.flowA
-			        func __safeDI_flowA() -> Flow {
+			        @inline(never) func __safeDI_flowA() -> Flow {
 			            let __safeDI_aBuilder_loopLevels = __safeDI_LoopLevels_9EAC39336BC1DA07(
 			                __safeDI_apiBuilder_aBuilder: __safeDI_apiBuilder_flowA.aBuilder,
 			                __safeDI_apiBuilder_bBuilder: __safeDI_apiBuilder_flowA.bBuilder
 			            )
-			            func __safeDI_aBuilder() -> A {
+			            @inline(never) func __safeDI_aBuilder() -> A {
 			                let __safeDI_apiBuilder_aBuilder = __safeDI_aBuilder_loopLevels.__safeDI_apiBuilder_aBuilder
 			                let bBuilder = Instantiator<B>(__safeDI_bBuilder)
 			                let api: any Api = __safeDI_apiBuilder_aBuilder.api(bBuilder)
 			                return A(api: api, bBuilder: bBuilder)
 			            }
 			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-			            func __safeDI_bBuilder() -> B {
+			            @inline(never) func __safeDI_bBuilder() -> B {
 			                let __safeDI_apiBuilder_bBuilder = __safeDI_aBuilder_loopLevels.__safeDI_apiBuilder_bBuilder
 			                let aBuilder = Instantiator<A>(__safeDI_aBuilder)
 			                let api: any Api = __safeDI_apiBuilder_bBuilder.api(aBuilder)
@@ -896,19 +896,19 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			        }
 			        let flowA: Flow = __safeDI_flowA()
 			        let __safeDI_apiBuilder_flowB = __safeDI_apiBuilder.flowB(flowA)
-			        func __safeDI_flowB() -> Flow {
+			        @inline(never) func __safeDI_flowB() -> Flow {
 			            let __safeDI_aBuilder_loopLevels = __safeDI_LoopLevels_9EAC39336BC1DA07(
 			                __safeDI_apiBuilder_aBuilder: __safeDI_apiBuilder_flowB.aBuilder,
 			                __safeDI_apiBuilder_bBuilder: __safeDI_apiBuilder_flowB.bBuilder
 			            )
-			            func __safeDI_aBuilder() -> A {
+			            @inline(never) func __safeDI_aBuilder() -> A {
 			                let __safeDI_apiBuilder_aBuilder = __safeDI_aBuilder_loopLevels.__safeDI_apiBuilder_aBuilder
 			                let bBuilder = Instantiator<B>(__safeDI_bBuilder)
 			                let api: any Api = __safeDI_apiBuilder_aBuilder.api(bBuilder)
 			                return A(api: api, bBuilder: bBuilder)
 			            }
 			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-			            func __safeDI_bBuilder() -> B {
+			            @inline(never) func __safeDI_bBuilder() -> B {
 			                let __safeDI_apiBuilder_bBuilder = __safeDI_aBuilder_loopLevels.__safeDI_apiBuilder_bBuilder
 			                let aBuilder = Instantiator<A>(__safeDI_aBuilder)
 			                let api: any Api = __safeDI_apiBuilder_bBuilder.api(aBuilder)
@@ -1128,22 +1128,22 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public convenience init(__safeDI_gadgetBuilder: SafeDIScope_Gadget.__safeDI_Builder<any Gadget>) {
 			        let __safeDI_gadgetBuilder_inner_serviceBuilder = __safeDI_gadgetBuilder.inner_serviceBuilder(SafeDIScope_Gadget.inner_serviceBuilder_Values())
-			        func __safeDI_inner() -> Inner {
+			        @inline(never) func __safeDI_inner() -> Inner {
 			            _ = Inner.__safeDI_Inner_99BD917DA5EDFC3D.self // If this line does not compile, add the SafeDI plugin to the target that declares Inner.
-			            func __safeDI_serviceBuilder_Inner_service(__safeDI_inner_serviceBuilder: SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>) -> any Service {
-			                func __safeDI_service() -> DefaultService {
+			            @inline(never) func __safeDI_serviceBuilder_Inner_service(__safeDI_inner_serviceBuilder: SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>) -> any Service {
+			                @inline(never) func __safeDI_service() -> DefaultService {
 			                    let __safeDI_aBuilder_loopLevels = __safeDI_LoopLevels_A5B9BE4983B4B4E1(
 			                        __safeDI_gadgetBuilder_aBuilder: __safeDI_inner_serviceBuilder.aBuilder(SafeDIScope_Gadget.DefaultService_Scope.aBuilder_Values()),
 			                        __safeDI_gadgetBuilder_bBuilder: __safeDI_inner_serviceBuilder.bBuilder(SafeDIScope_Gadget.DefaultService_Scope.bBuilder_Values())
 			                    )
-			                    func __safeDI_aBuilder() -> LoopA {
+			                    @inline(never) func __safeDI_aBuilder() -> LoopA {
 			                        let __safeDI_gadgetBuilder_aBuilder = __safeDI_aBuilder_loopLevels.__safeDI_gadgetBuilder_aBuilder
 			                        let bBuilder = Instantiator<LoopB>(__safeDI_bBuilder)
 			                        let gadget: any Gadget = __safeDI_gadgetBuilder_aBuilder.gadget(SafeDIScope_Gadget.LoopA_Scope.gadget_Values(bBuilder: bBuilder))
 			                        return LoopA(gadget: gadget, bBuilder: bBuilder)
 			                    }
 			                    let aBuilder = Instantiator<LoopA>(__safeDI_aBuilder)
-			                    func __safeDI_bBuilder() -> LoopB {
+			                    @inline(never) func __safeDI_bBuilder() -> LoopB {
 			                        let __safeDI_gadgetBuilder_bBuilder = __safeDI_aBuilder_loopLevels.__safeDI_gadgetBuilder_bBuilder
 			                        let aBuilder = Instantiator<LoopA>(__safeDI_aBuilder)
 			                        let gadget: any Gadget = __safeDI_gadgetBuilder_bBuilder.gadget(SafeDIScope_Gadget.LoopB_Scope.gadget_Values(aBuilder: aBuilder))
@@ -1155,7 +1155,7 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			                let service: any Service = __safeDI_service()
 			                return service
 			            }
-			            func __safeDI_serviceBuilder_Inner(up: Inner.__safeDI_ServiceCarrier<SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>>) -> Inner.__safeDI_ServiceCarrier<any Service> {
+			            @inline(never) func __safeDI_serviceBuilder_Inner(up: Inner.__safeDI_ServiceCarrier<SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>>) -> Inner.__safeDI_ServiceCarrier<any Service> {
 			                .init(service: { __safeDI_serviceBuilder_Inner_service(__safeDI_inner_serviceBuilder: up.service()) })
 			            }
 			            return Inner(__safeDI_serviceBuilder: __safeDI_serviceBuilder_Inner(up: __safeDI_gadgetBuilder_inner_serviceBuilder))
@@ -1412,37 +1412,37 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			        serviceBuilder: (() -> any Service)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        func __safeDI_inner() -> Inner {
-			            func __safeDI_serviceBuilder_Inner_service() -> any Service {
-			                func __safeDI_service() -> DefaultService {
-			                    func __safeDI_aBuilder() -> LoopA {
-			                        let bBuilder = Instantiator<LoopB>(__safeDI_bBuilder)
-			                        let gadget: any Gadget = LiveGadget()
-			                        return LoopA(gadget: gadget, bBuilder: bBuilder)
-			                    }
-			                    let aBuilder = Instantiator<LoopA>(__safeDI_aBuilder)
-			                    func __safeDI_bBuilder() -> LoopB {
+			        func __safeDI_outer() -> Outer {
+			            func __safeDI_inner() -> Inner {
+			                func __safeDI_serviceBuilder_Inner_service() -> any Service {
+			                    func __safeDI_service() -> DefaultService {
+			                        func __safeDI_aBuilder() -> LoopA {
+			                            let bBuilder = Instantiator<LoopB>(__safeDI_bBuilder)
+			                            let gadget: any Gadget = LiveGadget()
+			                            return LoopA(gadget: gadget, bBuilder: bBuilder)
+			                        }
 			                        let aBuilder = Instantiator<LoopA>(__safeDI_aBuilder)
-			                        let gadget: any Gadget = LiveGadget()
-			                        return LoopB(gadget: gadget, aBuilder: aBuilder)
+			                        func __safeDI_bBuilder() -> LoopB {
+			                            let aBuilder = Instantiator<LoopA>(__safeDI_aBuilder)
+			                            let gadget: any Gadget = LiveGadget()
+			                            return LoopB(gadget: gadget, aBuilder: aBuilder)
+			                        }
+			                        let bBuilder = Instantiator<LoopB>(__safeDI_bBuilder)
+			                        return DefaultService(aBuilder: aBuilder, bBuilder: bBuilder)
 			                    }
-			                    let bBuilder = Instantiator<LoopB>(__safeDI_bBuilder)
-			                    return DefaultService(aBuilder: aBuilder, bBuilder: bBuilder)
+			                    let service: any Service = __safeDI_service()
+			                    return service
 			                }
-			                let service: any Service = __safeDI_service()
-			                return service
+			                func __safeDI_serviceBuilder_Inner() -> Inner.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
+			                    .init(service: { _ in __safeDI_serviceBuilder_Inner_service() })
+			                }
+			                _ = Inner.__safeDI_Inner_mock_E789692848368FB8.self // If this line does not compile, add the SafeDI plugin to the target that declares Inner.
+			                return if let safeDIBuilder = safeDIOverrides.outer.inner { safeDIBuilder({ if let serviceBuilder { serviceBuilder() } else { __safeDI_serviceBuilder_Inner_service() } }) } else { Inner.__safeDI_mock(serviceBuilder: serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Inner()) }
 			            }
-			            func __safeDI_serviceBuilder_Inner() -> Inner.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
-			                .init(service: { _ in __safeDI_serviceBuilder_Inner_service() })
-			            }
-			            _ = Inner.__safeDI_Inner_mock_E789692848368FB8.self // If this line does not compile, add the SafeDI plugin to the target that declares Inner.
-			            return if let safeDIBuilder = safeDIOverrides.outer.inner { safeDIBuilder({ if let serviceBuilder { serviceBuilder() } else { __safeDI_serviceBuilder_Inner_service() } }) } else { Inner.__safeDI_mock(serviceBuilder: serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Inner()) }
-			        }
-			        func __safeDI_outer(__safeDI_Outer_configuration: Outer.SafeDIMockConfiguration) -> Outer {
 			            let inner: Inner = __safeDI_inner()
-			            return if let safeDIBuilder = __safeDI_Outer_configuration.safeDIBuilder { safeDIBuilder(inner) } else { Outer(inner: inner) }
+			            return if let safeDIBuilder = safeDIOverrides.outer.safeDIBuilder { safeDIBuilder(inner) } else { Outer(inner: inner) }
 			        }
-			        let outer: Outer = __safeDI_outer(__safeDI_Outer_configuration: safeDIOverrides.outer)
+			        let outer: Outer = __safeDI_outer()
 			        return Root(outer: outer)
 			    }
 			}

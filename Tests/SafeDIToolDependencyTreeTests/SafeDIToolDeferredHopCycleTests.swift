@@ -552,25 +552,19 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        func __safeDI_a(__safeDI_A_configuration: A.SafeDIMockConfiguration) -> A {
-			            let b: B = __safeDI_b(__safeDI_B_configuration: __safeDI_A_configuration.b, __safeDI_A_configuration_nearest: __safeDI_A_configuration)
-			            return if let safeDIBuilder = __safeDI_A_configuration.safeDIBuilder { safeDIBuilder(b) } else { A(b: b) }
-			        }
-			        func __safeDI_b(__safeDI_B_configuration: B.SafeDIMockConfiguration, __safeDI_A_configuration_nearest: A.SafeDIMockConfiguration?) -> B {
-			            let cBuilder = Instantiator<C> {
-			                __safeDI_cBuilder(__safeDI_C_configuration: __safeDI_B_configuration.cBuilder, __safeDI_A_configuration_nearest: __safeDI_A_configuration_nearest)
+			        func __safeDI_a() -> A {
+			            func __safeDI_b() -> B {
+			                func __safeDI_cBuilder() -> C {
+			                    let a = LazilyInstantiated<A>(__safeDI_a)
+			                    return if let safeDIBuilder = safeDIOverrides.a.b.cBuilder.safeDIBuilder { safeDIBuilder(a) } else { C(a: a) }
+			                }
+			                let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+			                return if let safeDIBuilder = safeDIOverrides.a.b.safeDIBuilder { safeDIBuilder(cBuilder) } else { B(cBuilder: cBuilder) }
 			            }
-			            return if let safeDIBuilder = __safeDI_B_configuration.safeDIBuilder { safeDIBuilder(cBuilder) } else { B(cBuilder: cBuilder) }
+			            let b: B = __safeDI_b()
+			            return if let safeDIBuilder = safeDIOverrides.a.safeDIBuilder { safeDIBuilder(b) } else { A(b: b) }
 			        }
-			        func __safeDI_cBuilder(__safeDI_C_configuration: C.SafeDIMockConfiguration, __safeDI_A_configuration_nearest: A.SafeDIMockConfiguration?) -> C {
-			            let a = LazilyInstantiated<A> {
-			                __safeDI_a(__safeDI_A_configuration: __safeDI_A_configuration_nearest ?? A.SafeDIMockConfiguration())
-			            }
-			            return if let safeDIBuilder = __safeDI_C_configuration.safeDIBuilder { safeDIBuilder(a) } else { C(a: a) }
-			        }
-			        let a = LazilyInstantiated<A> {
-			            __safeDI_a(__safeDI_A_configuration: safeDIOverrides.a)
-			        }
+			        let a = LazilyInstantiated<A>(__safeDI_a)
 			        return Root(a: a)
 			    }
 			}
@@ -637,23 +631,19 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        func __safeDI_a(__safeDI_A_configuration: A.SafeDIMockConfiguration) -> A {
-			            let b: B = __safeDI_b(__safeDI_B_configuration: __safeDI_A_configuration.b, __safeDI_A_configuration_nearest: __safeDI_A_configuration)
-			            return if let safeDIBuilder = __safeDI_A_configuration.safeDIBuilder { safeDIBuilder(b) } else { A(b: b) }
-			        }
-			        func __safeDI_b(__safeDI_B_configuration: B.SafeDIMockConfiguration, __safeDI_A_configuration_nearest: A.SafeDIMockConfiguration?) -> B {
-			            let cBuilder = Instantiator<C> {
-			                __safeDI_cBuilder(__safeDI_C_configuration: __safeDI_B_configuration.cBuilder, __safeDI_A_configuration_nearest: __safeDI_A_configuration_nearest)
+			        func __safeDI_a() -> A {
+			            func __safeDI_b() -> B {
+			                func __safeDI_cBuilder() -> C {
+			                    let a: A = __safeDI_a()
+			                    return if let safeDIBuilder = safeDIOverrides.a.b.cBuilder.safeDIBuilder { safeDIBuilder(a) } else { C(a: a) }
+			                }
+			                let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+			                return if let safeDIBuilder = safeDIOverrides.a.b.safeDIBuilder { safeDIBuilder(cBuilder) } else { B(cBuilder: cBuilder) }
 			            }
-			            return if let safeDIBuilder = __safeDI_B_configuration.safeDIBuilder { safeDIBuilder(cBuilder) } else { B(cBuilder: cBuilder) }
+			            let b: B = __safeDI_b()
+			            return if let safeDIBuilder = safeDIOverrides.a.safeDIBuilder { safeDIBuilder(b) } else { A(b: b) }
 			        }
-			        func __safeDI_cBuilder(__safeDI_C_configuration: C.SafeDIMockConfiguration, __safeDI_A_configuration_nearest: A.SafeDIMockConfiguration?) -> C {
-			            let a: A = __safeDI_a(__safeDI_A_configuration: __safeDI_A_configuration_nearest ?? A.SafeDIMockConfiguration())
-			            return if let safeDIBuilder = __safeDI_C_configuration.safeDIBuilder { safeDIBuilder(a) } else { C(a: a) }
-			        }
-			        let a = LazilyInstantiated<A> {
-			            __safeDI_a(__safeDI_A_configuration: safeDIOverrides.a)
-			        }
+			        let a = LazilyInstantiated<A>(__safeDI_a)
 			        return Root(a: a)
 			    }
 			}
@@ -753,22 +743,20 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> A {
 			        let session = if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session() }
-			        func __safeDI_b(session: Session, __safeDI_B_configuration: B.SafeDIMockConfiguration) -> B {
-			            let cBuilder = Instantiator<C> {
-			                __safeDI_cBuilder(__safeDI_C_configuration: __safeDI_B_configuration.cBuilder, __safeDI_B_configuration_nearest: __safeDI_B_configuration)
+			        func __safeDI_b(session: Session) -> B {
+			            func __safeDI_cBuilder() -> C {
+			                let session = if let safeDIBuilder = safeDIOverrides.b.cBuilder.session { safeDIBuilder() } else { Session() }
+			                func __safeDI_a() -> A {
+			                    let b: B = __safeDI_b(session: session)
+			                    return A(b: b)
+			                }
+			                let a: A = __safeDI_a()
+			                return if let safeDIBuilder = safeDIOverrides.b.cBuilder.safeDIBuilder { safeDIBuilder(session, a) } else { C(session: session, a: a) }
 			            }
-			            return if let safeDIBuilder = __safeDI_B_configuration.safeDIBuilder { safeDIBuilder(session, cBuilder) } else { B(session: session, cBuilder: cBuilder) }
+			            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+			            return if let safeDIBuilder = safeDIOverrides.b.safeDIBuilder { safeDIBuilder(session, cBuilder) } else { B(session: session, cBuilder: cBuilder) }
 			        }
-			        func __safeDI_cBuilder(__safeDI_C_configuration: C.SafeDIMockConfiguration, __safeDI_B_configuration_nearest: B.SafeDIMockConfiguration?) -> C {
-			            let session = if let safeDIBuilder = __safeDI_C_configuration.session { safeDIBuilder() } else { Session() }
-			            let a: A = __safeDI_a(session: session, __safeDI_A_configuration: A.SafeDIMockConfiguration(), __safeDI_B_configuration_nearest: __safeDI_B_configuration_nearest)
-			            return if let safeDIBuilder = __safeDI_C_configuration.safeDIBuilder { safeDIBuilder(session, a) } else { C(session: session, a: a) }
-			        }
-			        func __safeDI_a(session: Session, __safeDI_A_configuration: A.SafeDIMockConfiguration, __safeDI_B_configuration_nearest: B.SafeDIMockConfiguration?) -> A {
-			            let b: B = __safeDI_b(session: session, __safeDI_B_configuration: __safeDI_B_configuration_nearest ?? B.SafeDIMockConfiguration())
-			            return if let safeDIBuilder = __safeDI_A_configuration.safeDIBuilder { safeDIBuilder(b) } else { A(b: b) }
-			        }
-			        let b: B = __safeDI_b(session: session, __safeDI_B_configuration: safeDIOverrides.b)
+			        let b: B = __safeDI_b(session: session)
 			        return A(b: b)
 			    }
 			}
@@ -1139,21 +1127,19 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> A {
-			        func __safeDI_b(__safeDI_B_configuration: B.SafeDIMockConfiguration) -> B {
-			            let cBuilder = Instantiator<C> {
-			                __safeDI_cBuilder(__safeDI_C_configuration: __safeDI_B_configuration.cBuilder, __safeDI_B_configuration_nearest: __safeDI_B_configuration)
+			        func __safeDI_b() -> B {
+			            func __safeDI_cBuilder() -> C {
+			                func __safeDI_a() -> A {
+			                    let b: B = __safeDI_b()
+			                    return A(b: b)
+			                }
+			                let a: A = __safeDI_a()
+			                return if let safeDIBuilder = safeDIOverrides.b.cBuilder.safeDIBuilder { safeDIBuilder(a) } else { C(a: a) }
 			            }
-			            return if let safeDIBuilder = __safeDI_B_configuration.safeDIBuilder { safeDIBuilder(cBuilder) } else { B(cBuilder: cBuilder) }
+			            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+			            return if let safeDIBuilder = safeDIOverrides.b.safeDIBuilder { safeDIBuilder(cBuilder) } else { B(cBuilder: cBuilder) }
 			        }
-			        func __safeDI_cBuilder(__safeDI_C_configuration: C.SafeDIMockConfiguration, __safeDI_B_configuration_nearest: B.SafeDIMockConfiguration?) -> C {
-			            let a: A = __safeDI_a(__safeDI_A_configuration: A.SafeDIMockConfiguration(), __safeDI_B_configuration_nearest: __safeDI_B_configuration_nearest)
-			            return if let safeDIBuilder = __safeDI_C_configuration.safeDIBuilder { safeDIBuilder(a) } else { C(a: a) }
-			        }
-			        func __safeDI_a(__safeDI_A_configuration: A.SafeDIMockConfiguration, __safeDI_B_configuration_nearest: B.SafeDIMockConfiguration?) -> A {
-			            let b: B = __safeDI_b(__safeDI_B_configuration: __safeDI_B_configuration_nearest ?? B.SafeDIMockConfiguration())
-			            return if let safeDIBuilder = __safeDI_A_configuration.safeDIBuilder { safeDIBuilder(b) } else { A(b: b) }
-			        }
-			        let b: B = __safeDI_b(__safeDI_B_configuration: safeDIOverrides.b)
+			        let b: B = __safeDI_b()
 			        return A(b: b)
 			    }
 			}
@@ -1324,21 +1310,19 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> C {
-			        func __safeDI_a(__safeDI_A_configuration: A.SafeDIMockConfiguration) -> A {
-			            let b: B = __safeDI_b(__safeDI_B_configuration: __safeDI_A_configuration.b, __safeDI_A_configuration_nearest: __safeDI_A_configuration)
-			            return if let safeDIBuilder = __safeDI_A_configuration.safeDIBuilder { safeDIBuilder(b) } else { A(b: b) }
-			        }
-			        func __safeDI_b(__safeDI_B_configuration: B.SafeDIMockConfiguration, __safeDI_A_configuration_nearest: A.SafeDIMockConfiguration?) -> B {
-			            let cBuilder = Instantiator<C> {
-			                __safeDI_cBuilder(__safeDI_C_configuration: __safeDI_B_configuration.cBuilder, __safeDI_A_configuration_nearest: __safeDI_A_configuration_nearest)
+			        func __safeDI_a() -> A {
+			            func __safeDI_b() -> B {
+			                func __safeDI_cBuilder() -> C {
+			                    let a: A = __safeDI_a()
+			                    return if let safeDIBuilder = safeDIOverrides.a.b.cBuilder.safeDIBuilder { safeDIBuilder(a) } else { C(a: a) }
+			                }
+			                let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+			                return if let safeDIBuilder = safeDIOverrides.a.b.safeDIBuilder { safeDIBuilder(cBuilder) } else { B(cBuilder: cBuilder) }
 			            }
-			            return if let safeDIBuilder = __safeDI_B_configuration.safeDIBuilder { safeDIBuilder(cBuilder) } else { B(cBuilder: cBuilder) }
+			            let b: B = __safeDI_b()
+			            return if let safeDIBuilder = safeDIOverrides.a.safeDIBuilder { safeDIBuilder(b) } else { A(b: b) }
 			        }
-			        func __safeDI_cBuilder(__safeDI_C_configuration: C.SafeDIMockConfiguration, __safeDI_A_configuration_nearest: A.SafeDIMockConfiguration?) -> C {
-			            let a: A = __safeDI_a(__safeDI_A_configuration: __safeDI_A_configuration_nearest ?? A.SafeDIMockConfiguration())
-			            return if let safeDIBuilder = __safeDI_C_configuration.safeDIBuilder { safeDIBuilder(a) } else { C(a: a) }
-			        }
-			        let a: A = __safeDI_a(__safeDI_A_configuration: safeDIOverrides.a)
+			        let a: A = __safeDI_a()
 			        return C(a: a)
 			    }
 			}
@@ -1508,23 +1492,19 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> B {
-			        func __safeDI_cBuilder(__safeDI_C_configuration: C.SafeDIMockConfiguration) -> C {
-			            let a: A = __safeDI_a(__safeDI_A_configuration: A.SafeDIMockConfiguration(), __safeDI_C_configuration_nearest: __safeDI_C_configuration)
-			            return if let safeDIBuilder = __safeDI_C_configuration.safeDIBuilder { safeDIBuilder(a) } else { C(a: a) }
-			        }
-			        func __safeDI_a(__safeDI_A_configuration: A.SafeDIMockConfiguration, __safeDI_C_configuration_nearest: C.SafeDIMockConfiguration?) -> A {
-			            let b: B = __safeDI_b(__safeDI_B_configuration: __safeDI_A_configuration.b, __safeDI_C_configuration_nearest: __safeDI_C_configuration_nearest)
-			            return if let safeDIBuilder = __safeDI_A_configuration.safeDIBuilder { safeDIBuilder(b) } else { A(b: b) }
-			        }
-			        func __safeDI_b(__safeDI_B_configuration: B.SafeDIMockConfiguration, __safeDI_C_configuration_nearest: C.SafeDIMockConfiguration?) -> B {
-			            let cBuilder = Instantiator<C> {
-			                __safeDI_cBuilder(__safeDI_C_configuration: __safeDI_C_configuration_nearest ?? C.SafeDIMockConfiguration())
+			        func __safeDI_cBuilder() -> C {
+			            func __safeDI_a() -> A {
+			                func __safeDI_b() -> B {
+			                    let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+			                    return B(cBuilder: cBuilder)
+			                }
+			                let b: B = __safeDI_b()
+			                return A(b: b)
 			            }
-			            return if let safeDIBuilder = __safeDI_B_configuration.safeDIBuilder { safeDIBuilder(cBuilder) } else { B(cBuilder: cBuilder) }
+			            let a: A = __safeDI_a()
+			            return if let safeDIBuilder = safeDIOverrides.cBuilder.safeDIBuilder { safeDIBuilder(a) } else { C(a: a) }
 			        }
-			        let cBuilder = Instantiator<C> {
-			            __safeDI_cBuilder(__safeDI_C_configuration: safeDIOverrides.cBuilder)
-			        }
+			        let cBuilder = Instantiator<C>(__safeDI_cBuilder)
 			        return B(cBuilder: cBuilder)
 			    }
 			}
@@ -1679,21 +1659,19 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> A {
-			        func __safeDI_b(__safeDI_B_configuration: B.SafeDIMockConfiguration) -> B {
-			            let cBuilder = Instantiator<C> {
-			                __safeDI_cBuilder(__safeDI_C_configuration: __safeDI_B_configuration.cBuilder, __safeDI_B_configuration_nearest: __safeDI_B_configuration)
+			        func __safeDI_b() -> B {
+			            func __safeDI_cBuilder() -> C {
+			                func __safeDI_a() -> A {
+			                    let b: B = __safeDI_b()
+			                    return A(b: b)
+			                }
+			                let a: A = __safeDI_a()
+			                return if let safeDIBuilder = safeDIOverrides.b.cBuilder.safeDIBuilder { safeDIBuilder(a) } else { C(a: a) }
 			            }
-			            return if let safeDIBuilder = __safeDI_B_configuration.safeDIBuilder { safeDIBuilder(cBuilder) } else { B(cBuilder: cBuilder) }
+			            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+			            return if let safeDIBuilder = safeDIOverrides.b.safeDIBuilder { safeDIBuilder(cBuilder) } else { B(cBuilder: cBuilder) }
 			        }
-			        func __safeDI_cBuilder(__safeDI_C_configuration: C.SafeDIMockConfiguration, __safeDI_B_configuration_nearest: B.SafeDIMockConfiguration?) -> C {
-			            let a: A = __safeDI_a(__safeDI_A_configuration: A.SafeDIMockConfiguration(), __safeDI_B_configuration_nearest: __safeDI_B_configuration_nearest)
-			            return if let safeDIBuilder = __safeDI_C_configuration.safeDIBuilder { safeDIBuilder(a) } else { C(a: a) }
-			        }
-			        func __safeDI_a(__safeDI_A_configuration: A.SafeDIMockConfiguration, __safeDI_B_configuration_nearest: B.SafeDIMockConfiguration?) -> A {
-			            let b: B = __safeDI_b(__safeDI_B_configuration: __safeDI_B_configuration_nearest ?? B.SafeDIMockConfiguration())
-			            return if let safeDIBuilder = __safeDI_A_configuration.safeDIBuilder { safeDIBuilder(b) } else { A(b: b) }
-			        }
-			        let b: B = __safeDI_b(__safeDI_B_configuration: safeDIOverrides.b)
+			        let b: B = __safeDI_b()
 			        return A(b: b)
 			    }
 			}
@@ -1766,21 +1744,19 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> C {
-			        func __safeDI_a(__safeDI_A_configuration: A.SafeDIMockConfiguration) -> A {
-			            let b: B = __safeDI_b(__safeDI_B_configuration: __safeDI_A_configuration.b, __safeDI_A_configuration_nearest: __safeDI_A_configuration)
-			            return if let safeDIBuilder = __safeDI_A_configuration.safeDIBuilder { safeDIBuilder(b) } else { A(b: b) }
-			        }
-			        func __safeDI_b(__safeDI_B_configuration: B.SafeDIMockConfiguration, __safeDI_A_configuration_nearest: A.SafeDIMockConfiguration?) -> B {
-			            let cBuilder = Instantiator<C> {
-			                __safeDI_cBuilder(__safeDI_C_configuration: __safeDI_B_configuration.cBuilder, __safeDI_A_configuration_nearest: __safeDI_A_configuration_nearest)
+			        func __safeDI_a() -> A {
+			            func __safeDI_b() -> B {
+			                func __safeDI_cBuilder() -> C {
+			                    let a: A = __safeDI_a()
+			                    return if let safeDIBuilder = safeDIOverrides.a.b.cBuilder.safeDIBuilder { safeDIBuilder(a) } else { C(a: a) }
+			                }
+			                let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+			                return if let safeDIBuilder = safeDIOverrides.a.b.safeDIBuilder { safeDIBuilder(cBuilder) } else { B(cBuilder: cBuilder) }
 			            }
-			            return if let safeDIBuilder = __safeDI_B_configuration.safeDIBuilder { safeDIBuilder(cBuilder) } else { B(cBuilder: cBuilder) }
+			            let b: B = __safeDI_b()
+			            return if let safeDIBuilder = safeDIOverrides.a.safeDIBuilder { safeDIBuilder(b) } else { A(b: b) }
 			        }
-			        func __safeDI_cBuilder(__safeDI_C_configuration: C.SafeDIMockConfiguration, __safeDI_A_configuration_nearest: A.SafeDIMockConfiguration?) -> C {
-			            let a: A = __safeDI_a(__safeDI_A_configuration: __safeDI_A_configuration_nearest ?? A.SafeDIMockConfiguration())
-			            return if let safeDIBuilder = __safeDI_C_configuration.safeDIBuilder { safeDIBuilder(a) } else { C(a: a) }
-			        }
-			        let a: A = __safeDI_a(__safeDI_A_configuration: safeDIOverrides.a)
+			        let a: A = __safeDI_a()
 			        return C(a: a)
 			    }
 			}
@@ -2044,24 +2020,20 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> A {
-			        @Sendable nonisolated func __safeDI_b(__safeDI_B_configuration: B.SafeDIMockConfiguration) -> B {
-			            let cBuilder = SendableInstantiator<C> {
-			                __safeDI_cBuilder(__safeDI_C_configuration: __safeDI_B_configuration.cBuilder, __safeDI_B_configuration_nearest: __safeDI_B_configuration)
+			        let __safeDI_b__overrides = safeDIOverrides.b
+			        @Sendable nonisolated func __safeDI_b() -> B {
+			            @Sendable nonisolated func __safeDI_cBuilder() -> C {
+			                @Sendable nonisolated func __safeDI_a() -> A {
+			                    let b: B = __safeDI_b()
+			                    return A(b: b)
+			                }
+			                let a = SendableLazilyInstantiated<A>(__safeDI_a)
+			                return if let safeDIBuilder = __safeDI_b__overrides.cBuilder.safeDIBuilder { safeDIBuilder(a) } else { C(a: a) }
 			            }
-			            return if let safeDIBuilder = __safeDI_B_configuration.safeDIBuilder { safeDIBuilder(cBuilder) } else { B(cBuilder: cBuilder) }
+			            let cBuilder = SendableInstantiator<C>(__safeDI_cBuilder)
+			            return if let safeDIBuilder = __safeDI_b__overrides.safeDIBuilder { safeDIBuilder(cBuilder) } else { B(cBuilder: cBuilder) }
 			        }
-			        @Sendable nonisolated func __safeDI_cBuilder(__safeDI_C_configuration: C.SafeDIMockConfiguration, __safeDI_B_configuration_nearest: B.SafeDIMockConfiguration?) -> C {
-			            let a = SendableLazilyInstantiated<A> {
-			                __safeDI_a(__safeDI_A_configuration: A.SafeDIMockConfiguration(), __safeDI_B_configuration_nearest: __safeDI_B_configuration_nearest)
-			            }
-			            return if let safeDIBuilder = __safeDI_C_configuration.safeDIBuilder { safeDIBuilder(a) } else { C(a: a) }
-			        }
-			        @Sendable nonisolated func __safeDI_a(__safeDI_A_configuration: A.SafeDIMockConfiguration, __safeDI_B_configuration_nearest: B.SafeDIMockConfiguration?) -> A {
-			            let b: B = __safeDI_b(__safeDI_B_configuration: __safeDI_B_configuration_nearest ?? B.SafeDIMockConfiguration())
-			            return if let safeDIBuilder = __safeDI_A_configuration.safeDIBuilder { safeDIBuilder(b) } else { A(b: b) }
-			        }
-			        let __safeDI_b____safeDI_B_configuration: B.SafeDIMockConfiguration = safeDIOverrides.b
-			        let b: B = __safeDI_b(__safeDI_B_configuration: __safeDI_b____safeDI_B_configuration)
+			        let b: B = __safeDI_b()
 			        return A(b: b)
 			    }
 			}
@@ -2233,24 +2205,20 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> A {
-			        @Sendable nonisolated func __safeDI_b(__safeDI_B_configuration: B.SafeDIMockConfiguration) -> B {
-			            let cBuilder = SendableInstantiator<C> {
-			                __safeDI_cBuilder(__safeDI_C_configuration: __safeDI_B_configuration.cBuilder, __safeDI_B_configuration_nearest: __safeDI_B_configuration)
+			        let __safeDI_b__overrides = safeDIOverrides.b
+			        @Sendable nonisolated func __safeDI_b() -> B {
+			            @Sendable nonisolated func __safeDI_cBuilder() -> C {
+			                @Sendable nonisolated func __safeDI_a() -> A {
+			                    let b: B = __safeDI_b()
+			                    return A(b: b)
+			                }
+			                let a = SendableLazilyInstantiated<A>(__safeDI_a)
+			                return if let safeDIBuilder = __safeDI_b__overrides.cBuilder.safeDIBuilder { safeDIBuilder(a) } else { C(a: a) }
 			            }
-			            return if let safeDIBuilder = __safeDI_B_configuration.safeDIBuilder { safeDIBuilder(cBuilder) } else { B(cBuilder: cBuilder) }
+			            let cBuilder = SendableInstantiator<C>(__safeDI_cBuilder)
+			            return if let safeDIBuilder = __safeDI_b__overrides.safeDIBuilder { safeDIBuilder(cBuilder) } else { B(cBuilder: cBuilder) }
 			        }
-			        @Sendable nonisolated func __safeDI_cBuilder(__safeDI_C_configuration: C.SafeDIMockConfiguration, __safeDI_B_configuration_nearest: B.SafeDIMockConfiguration?) -> C {
-			            let a = SendableLazilyInstantiated<A> {
-			                __safeDI_a(__safeDI_A_configuration: A.SafeDIMockConfiguration(), __safeDI_B_configuration_nearest: __safeDI_B_configuration_nearest)
-			            }
-			            return if let safeDIBuilder = __safeDI_C_configuration.safeDIBuilder { safeDIBuilder(a) } else { C(a: a) }
-			        }
-			        @Sendable nonisolated func __safeDI_a(__safeDI_A_configuration: A.SafeDIMockConfiguration, __safeDI_B_configuration_nearest: B.SafeDIMockConfiguration?) -> A {
-			            let b: B = __safeDI_b(__safeDI_B_configuration: __safeDI_B_configuration_nearest ?? B.SafeDIMockConfiguration())
-			            return if let safeDIBuilder = __safeDI_A_configuration.safeDIBuilder { safeDIBuilder(b) } else { A(b: b) }
-			        }
-			        let __safeDI_b____safeDI_B_configuration: B.SafeDIMockConfiguration = safeDIOverrides.b
-			        let b: B = __safeDI_b(__safeDI_B_configuration: __safeDI_b____safeDI_B_configuration)
+			        let b: B = __safeDI_b()
 			        return A(b: b)
 			    }
 			}
@@ -2431,25 +2399,21 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> A {
-			        @Sendable nonisolated func __safeDI_b(__safeDI_B_configuration: B.SafeDIMockConfiguration) -> B {
-			            let cBuilder = SendableInstantiator<C> {
-			                __safeDI_cBuilder(__safeDI_C_configuration: __safeDI_B_configuration.cBuilder, __safeDI_B_configuration_nearest: __safeDI_B_configuration)
+			        let __safeDI_b__overrides = safeDIOverrides.b
+			        @Sendable nonisolated func __safeDI_b() -> B {
+			            @Sendable nonisolated func __safeDI_cBuilder() -> C {
+			                @Sendable nonisolated func __safeDI_a() -> A {
+			                    let b: B = __safeDI_b()
+			                    let x = X()
+			                    return A(b: b, x: x)
+			                }
+			                let a = SendableLazilyInstantiated<A>(__safeDI_a)
+			                return if let safeDIBuilder = __safeDI_b__overrides.cBuilder.safeDIBuilder { safeDIBuilder(a) } else { C(a: a) }
 			            }
-			            return if let safeDIBuilder = __safeDI_B_configuration.safeDIBuilder { safeDIBuilder(cBuilder) } else { B(cBuilder: cBuilder) }
+			            let cBuilder = SendableInstantiator<C>(__safeDI_cBuilder)
+			            return if let safeDIBuilder = __safeDI_b__overrides.safeDIBuilder { safeDIBuilder(cBuilder) } else { B(cBuilder: cBuilder) }
 			        }
-			        @Sendable nonisolated func __safeDI_cBuilder(__safeDI_C_configuration: C.SafeDIMockConfiguration, __safeDI_B_configuration_nearest: B.SafeDIMockConfiguration?) -> C {
-			            let a = SendableLazilyInstantiated<A> {
-			                __safeDI_a(__safeDI_A_configuration: A.SafeDIMockConfiguration(), __safeDI_B_configuration_nearest: __safeDI_B_configuration_nearest)
-			            }
-			            return if let safeDIBuilder = __safeDI_C_configuration.safeDIBuilder { safeDIBuilder(a) } else { C(a: a) }
-			        }
-			        @Sendable nonisolated func __safeDI_a(__safeDI_A_configuration: A.SafeDIMockConfiguration, __safeDI_B_configuration_nearest: B.SafeDIMockConfiguration?) -> A {
-			            let b: B = __safeDI_b(__safeDI_B_configuration: __safeDI_B_configuration_nearest ?? B.SafeDIMockConfiguration())
-			            let x = if let safeDIBuilder = __safeDI_A_configuration.x { safeDIBuilder() } else { X() }
-			            return if let safeDIBuilder = __safeDI_A_configuration.safeDIBuilder { safeDIBuilder(b, x) } else { A(b: b, x: x) }
-			        }
-			        let __safeDI_b____safeDI_B_configuration: B.SafeDIMockConfiguration = safeDIOverrides.b
-			        let b: B = __safeDI_b(__safeDI_B_configuration: __safeDI_b____safeDI_B_configuration)
+			        let b: B = __safeDI_b()
 			        let x = if let safeDIBuilder = safeDIOverrides.x { safeDIBuilder() } else { X() }
 			        return A(b: b, x: x)
 			    }
@@ -2543,24 +2507,20 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> A {
-			        @Sendable nonisolated func __safeDI_b(__safeDI_B_configuration: B.SafeDIMockConfiguration) -> B {
-			            let cBuilder = Instantiator<C> {
-			                __safeDI_cBuilder(__safeDI_C_configuration: __safeDI_B_configuration.cBuilder, __safeDI_B_configuration_nearest: __safeDI_B_configuration)
+			        let __safeDI_b__overrides = safeDIOverrides.b
+			        @Sendable nonisolated func __safeDI_b() -> B {
+			            func __safeDI_cBuilder() -> C {
+			                @Sendable nonisolated func __safeDI_a() -> A {
+			                    let b: B = __safeDI_b()
+			                    return A(b: b)
+			                }
+			                let a = SendableLazilyInstantiated<A>(__safeDI_a)
+			                return if let safeDIBuilder = __safeDI_b__overrides.cBuilder.safeDIBuilder { safeDIBuilder(a) } else { C(a: a) }
 			            }
-			            return if let safeDIBuilder = __safeDI_B_configuration.safeDIBuilder { safeDIBuilder(cBuilder) } else { B(cBuilder: cBuilder) }
+			            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+			            return if let safeDIBuilder = __safeDI_b__overrides.safeDIBuilder { safeDIBuilder(cBuilder) } else { B(cBuilder: cBuilder) }
 			        }
-			        @Sendable nonisolated func __safeDI_cBuilder(__safeDI_C_configuration: C.SafeDIMockConfiguration, __safeDI_B_configuration_nearest: B.SafeDIMockConfiguration?) -> C {
-			            let a = SendableLazilyInstantiated<A> {
-			                __safeDI_a(__safeDI_A_configuration: A.SafeDIMockConfiguration(), __safeDI_B_configuration_nearest: __safeDI_B_configuration_nearest)
-			            }
-			            return if let safeDIBuilder = __safeDI_C_configuration.safeDIBuilder { safeDIBuilder(a) } else { C(a: a) }
-			        }
-			        @Sendable nonisolated func __safeDI_a(__safeDI_A_configuration: A.SafeDIMockConfiguration, __safeDI_B_configuration_nearest: B.SafeDIMockConfiguration?) -> A {
-			            let b: B = __safeDI_b(__safeDI_B_configuration: __safeDI_B_configuration_nearest ?? B.SafeDIMockConfiguration())
-			            return if let safeDIBuilder = __safeDI_A_configuration.safeDIBuilder { safeDIBuilder(b) } else { A(b: b) }
-			        }
-			        let __safeDI_b____safeDI_B_configuration: B.SafeDIMockConfiguration = safeDIOverrides.b
-			        let b: B = __safeDI_b(__safeDI_B_configuration: __safeDI_b____safeDI_B_configuration)
+			        let b: B = __safeDI_b()
 			        return A(b: b)
 			    }
 			}
@@ -2798,13 +2758,11 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> LoggedInFlow {
-			        func __safeDI_settingsBuilder(__safeDI_Settings_configuration: Settings.SafeDIMockConfiguration) -> Settings {
-			            let flow: Flow = if let safeDIBuilder = __safeDI_Settings_configuration.flow { safeDIBuilder() } else { SettingsFlow() }
-			            return if let safeDIBuilder = __safeDI_Settings_configuration.safeDIBuilder { safeDIBuilder(flow) } else { Settings(flow: flow) }
+			        func __safeDI_settingsBuilder() -> Settings {
+			            let flow: Flow = if let safeDIBuilder = safeDIOverrides.settingsBuilder.flow { safeDIBuilder() } else { SettingsFlow() }
+			            return if let safeDIBuilder = safeDIOverrides.settingsBuilder.safeDIBuilder { safeDIBuilder(flow) } else { Settings(flow: flow) }
 			        }
-			        let settingsBuilder = Instantiator<Settings> {
-			            __safeDI_settingsBuilder(__safeDI_Settings_configuration: safeDIOverrides.settingsBuilder)
-			        }
+			        let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
 			        return LoggedInFlow(settingsBuilder: settingsBuilder)
 			    }
 			}
@@ -2893,17 +2851,15 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        func __safeDI_settingsBuilder(__safeDI_Settings_configuration: Settings.SafeDIMockConfiguration) -> Settings {
-			            let flow: Flow = if let safeDIBuilder = __safeDI_Settings_configuration.flow { safeDIBuilder() } else { SettingsFlow() }
-			            return if let safeDIBuilder = __safeDI_Settings_configuration.safeDIBuilder { safeDIBuilder(flow) } else { Settings(flow: flow) }
-			        }
-			        func __safeDI_flow(__safeDI_LoggedInFlow_configuration: LoggedInFlow.SafeDIMockConfiguration) -> Flow {
-			            let settingsBuilder = Instantiator<Settings> {
-			                __safeDI_settingsBuilder(__safeDI_Settings_configuration: __safeDI_LoggedInFlow_configuration.settingsBuilder)
+			        func __safeDI_flow() -> Flow {
+			            func __safeDI_settingsBuilder() -> Settings {
+			                let flow: Flow = if let safeDIBuilder = safeDIOverrides.flow.settingsBuilder.flow { safeDIBuilder() } else { SettingsFlow() }
+			                return if let safeDIBuilder = safeDIOverrides.flow.settingsBuilder.safeDIBuilder { safeDIBuilder(flow) } else { Settings(flow: flow) }
 			            }
-			            return if let safeDIBuilder = __safeDI_LoggedInFlow_configuration.safeDIBuilder { safeDIBuilder(settingsBuilder) } else { LoggedInFlow(settingsBuilder: settingsBuilder) }
+			            let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
+			            return if let safeDIBuilder = safeDIOverrides.flow.safeDIBuilder { safeDIBuilder(settingsBuilder) } else { LoggedInFlow(settingsBuilder: settingsBuilder) }
 			        }
-			        let flow: Flow = __safeDI_flow(__safeDI_LoggedInFlow_configuration: safeDIOverrides.flow)
+			        let flow: Flow = __safeDI_flow()
 			        return Root(flow: flow)
 			    }
 			}
@@ -3183,21 +3139,19 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        func __safeDI_flow(__safeDI_LoggedInFlow_configuration: LoggedInFlow.SafeDIMockConfiguration) -> Flow {
-			            let settingsBuilder = Instantiator<Settings> {
-			                __safeDI_settingsBuilder(__safeDI_Settings_configuration: __safeDI_LoggedInFlow_configuration.settingsBuilder, __safeDI_LoggedInFlow_configuration_nearest: __safeDI_LoggedInFlow_configuration)
+			        func __safeDI_flow() -> Flow {
+			            func __safeDI_settingsBuilder() -> Settings {
+			                func __safeDI_flow_Flow() -> Flow {
+			                    let flow: Flow = __safeDI_flow()
+			                    return if let safeDIBuilder = safeDIOverrides.flow.settingsBuilder.flow.safeDIBuilder { safeDIBuilder(flow) } else { SettingsFlow(flow: flow) }
+			                }
+			                let flow: Flow = __safeDI_flow_Flow()
+			                return if let safeDIBuilder = safeDIOverrides.flow.settingsBuilder.safeDIBuilder { safeDIBuilder(flow) } else { Settings(flow: flow) }
 			            }
-			            return if let safeDIBuilder = __safeDI_LoggedInFlow_configuration.safeDIBuilder { safeDIBuilder(settingsBuilder) } else { LoggedInFlow(settingsBuilder: settingsBuilder) }
+			            let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
+			            return if let safeDIBuilder = safeDIOverrides.flow.safeDIBuilder { safeDIBuilder(settingsBuilder) } else { LoggedInFlow(settingsBuilder: settingsBuilder) }
 			        }
-			        func __safeDI_settingsBuilder(__safeDI_Settings_configuration: Settings.SafeDIMockConfiguration, __safeDI_LoggedInFlow_configuration_nearest: LoggedInFlow.SafeDIMockConfiguration?) -> Settings {
-			            let flow: Flow = __safeDI_flow_(__safeDI_SettingsFlow_configuration: __safeDI_Settings_configuration.flow, __safeDI_LoggedInFlow_configuration_nearest: __safeDI_LoggedInFlow_configuration_nearest)
-			            return if let safeDIBuilder = __safeDI_Settings_configuration.safeDIBuilder { safeDIBuilder(flow) } else { Settings(flow: flow) }
-			        }
-			        func __safeDI_flow_(__safeDI_SettingsFlow_configuration: SettingsFlow.SafeDIMockConfiguration, __safeDI_LoggedInFlow_configuration_nearest: LoggedInFlow.SafeDIMockConfiguration?) -> Flow {
-			            let flow: Flow = __safeDI_flow(__safeDI_LoggedInFlow_configuration: __safeDI_LoggedInFlow_configuration_nearest ?? LoggedInFlow.SafeDIMockConfiguration())
-			            return if let safeDIBuilder = __safeDI_SettingsFlow_configuration.safeDIBuilder { safeDIBuilder(flow) } else { SettingsFlow(flow: flow) }
-			        }
-			        let flow: Flow = __safeDI_flow(__safeDI_LoggedInFlow_configuration: safeDIOverrides.flow)
+			        let flow: Flow = __safeDI_flow()
 			        return Root(flow: flow)
 			    }
 			}
@@ -3261,21 +3215,19 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Settings {
-			        func __safeDI_flow(__safeDI_SettingsFlow_configuration: SettingsFlow.SafeDIMockConfiguration) -> Flow {
-			            let flow: Flow = __safeDI_flow_(__safeDI_LoggedInFlow_configuration: LoggedInFlow.SafeDIMockConfiguration(), __safeDI_SettingsFlow_configuration_nearest: __safeDI_SettingsFlow_configuration)
-			            return if let safeDIBuilder = __safeDI_SettingsFlow_configuration.safeDIBuilder { safeDIBuilder(flow) } else { SettingsFlow(flow: flow) }
-			        }
-			        func __safeDI_flow_(__safeDI_LoggedInFlow_configuration: LoggedInFlow.SafeDIMockConfiguration, __safeDI_SettingsFlow_configuration_nearest: SettingsFlow.SafeDIMockConfiguration?) -> Flow {
-			            let settingsBuilder = Instantiator<Settings> {
-			                __safeDI_settingsBuilder(__safeDI_Settings_configuration: __safeDI_LoggedInFlow_configuration.settingsBuilder, __safeDI_SettingsFlow_configuration_nearest: __safeDI_SettingsFlow_configuration_nearest)
+			        func __safeDI_flow() -> Flow {
+			            func __safeDI_flow_Flow() -> Flow {
+			                func __safeDI_settingsBuilder() -> Settings {
+			                    let flow: Flow = __safeDI_flow()
+			                    return Settings(flow: flow)
+			                }
+			                let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
+			                return LoggedInFlow(settingsBuilder: settingsBuilder)
 			            }
-			            return if let safeDIBuilder = __safeDI_LoggedInFlow_configuration.safeDIBuilder { safeDIBuilder(settingsBuilder) } else { LoggedInFlow(settingsBuilder: settingsBuilder) }
+			            let flow: Flow = __safeDI_flow_Flow()
+			            return if let safeDIBuilder = safeDIOverrides.flow.safeDIBuilder { safeDIBuilder(flow) } else { SettingsFlow(flow: flow) }
 			        }
-			        func __safeDI_settingsBuilder(__safeDI_Settings_configuration: Settings.SafeDIMockConfiguration, __safeDI_SettingsFlow_configuration_nearest: SettingsFlow.SafeDIMockConfiguration?) -> Settings {
-			            let flow: Flow = __safeDI_flow(__safeDI_SettingsFlow_configuration: __safeDI_SettingsFlow_configuration_nearest ?? SettingsFlow.SafeDIMockConfiguration())
-			            return if let safeDIBuilder = __safeDI_Settings_configuration.safeDIBuilder { safeDIBuilder(flow) } else { Settings(flow: flow) }
-			        }
-			        let flow: Flow = __safeDI_flow(__safeDI_SettingsFlow_configuration: safeDIOverrides.flow)
+			        let flow: Flow = __safeDI_flow()
 			        return Settings(flow: flow)
 			    }
 			}
@@ -3746,17 +3698,17 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        func __safeDI_bBuilder(a: A, __safeDI_B_configuration: B.SafeDIMockConfiguration) -> B {
-			            let c = if let safeDIBuilder = __safeDI_B_configuration.c { safeDIBuilder(a) } else { C(a: a) }
-			            return if let safeDIBuilder = __safeDI_B_configuration.safeDIBuilder { safeDIBuilder(a, c) } else { B(a: a, c: c) }
-			        }
-			        func __safeDI_a(__safeDI_A_configuration: A.SafeDIMockConfiguration) -> A {
-			            let bBuilder = Instantiator<B> {
-			                __safeDI_bBuilder(a: $0, __safeDI_B_configuration: __safeDI_A_configuration.bBuilder)
+			        func __safeDI_a() -> A {
+			            func __safeDI_bBuilder(a: A) -> B {
+			                let c = if let safeDIBuilder = safeDIOverrides.a.bBuilder.c { safeDIBuilder(a) } else { C(a: a) }
+			                return if let safeDIBuilder = safeDIOverrides.a.bBuilder.safeDIBuilder { safeDIBuilder(a, c) } else { B(a: a, c: c) }
 			            }
-			            return if let safeDIBuilder = __safeDI_A_configuration.safeDIBuilder { safeDIBuilder(bBuilder) } else { A(bBuilder: bBuilder) }
+			            let bBuilder = Instantiator<B> {
+			                __safeDI_bBuilder(a: $0)
+			            }
+			            return if let safeDIBuilder = safeDIOverrides.a.safeDIBuilder { safeDIBuilder(bBuilder) } else { A(bBuilder: bBuilder) }
 			        }
-			        let a: A = __safeDI_a(__safeDI_A_configuration: safeDIOverrides.a)
+			        let a: A = __safeDI_a()
 			        return Root(a: a)
 			    }
 			}
@@ -3857,22 +3809,20 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> C {
-			        func __safeDI_a(__safeDI_A_configuration: A.SafeDIMockConfiguration) -> A {
-			            let b: B = __safeDI_b(__safeDI_B_configuration: __safeDI_A_configuration.b, __safeDI_A_configuration_nearest: __safeDI_A_configuration)
-			            return if let safeDIBuilder = __safeDI_A_configuration.safeDIBuilder { safeDIBuilder(b) } else { A(b: b) }
-			        }
-			        func __safeDI_b(__safeDI_B_configuration: B.SafeDIMockConfiguration, __safeDI_A_configuration_nearest: A.SafeDIMockConfiguration?) -> B {
-			            let cBuilder = Instantiator<C> {
-			                __safeDI_cBuilder(__safeDI_C_configuration: __safeDI_B_configuration.cBuilder, __safeDI_A_configuration_nearest: __safeDI_A_configuration_nearest)
+			        func __safeDI_a() -> A {
+			            func __safeDI_b() -> B {
+			                func __safeDI_cBuilder() -> C {
+			                    let a: A = __safeDI_a()
+			                    let d = if let safeDIBuilder = safeDIOverrides.a.b.cBuilder.d { safeDIBuilder(a) } else { D(a: a) }
+			                    return if let safeDIBuilder = safeDIOverrides.a.b.cBuilder.safeDIBuilder { safeDIBuilder(a, d) } else { C(a: a, d: d) }
+			                }
+			                let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+			                return if let safeDIBuilder = safeDIOverrides.a.b.safeDIBuilder { safeDIBuilder(cBuilder) } else { B(cBuilder: cBuilder) }
 			            }
-			            return if let safeDIBuilder = __safeDI_B_configuration.safeDIBuilder { safeDIBuilder(cBuilder) } else { B(cBuilder: cBuilder) }
+			            let b: B = __safeDI_b()
+			            return if let safeDIBuilder = safeDIOverrides.a.safeDIBuilder { safeDIBuilder(b) } else { A(b: b) }
 			        }
-			        func __safeDI_cBuilder(__safeDI_C_configuration: C.SafeDIMockConfiguration, __safeDI_A_configuration_nearest: A.SafeDIMockConfiguration?) -> C {
-			            let a: A = __safeDI_a(__safeDI_A_configuration: __safeDI_A_configuration_nearest ?? A.SafeDIMockConfiguration())
-			            let d = if let safeDIBuilder = __safeDI_C_configuration.d { safeDIBuilder(a) } else { D(a: a) }
-			            return if let safeDIBuilder = __safeDI_C_configuration.safeDIBuilder { safeDIBuilder(a, d) } else { C(a: a, d: d) }
-			        }
-			        let a: A = __safeDI_a(__safeDI_A_configuration: safeDIOverrides.a)
+			        let a: A = __safeDI_a()
 			        let d = if let safeDIBuilder = safeDIOverrides.d { safeDIBuilder(a) } else { D(a: a) }
 			        return C(a: a, d: d)
 			    }
@@ -3975,22 +3925,20 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> A {
-			        func __safeDI_b(__safeDI_B_configuration: B.SafeDIMockConfiguration) -> B {
-			            let cBuilder = Instantiator<C> {
-			                __safeDI_cBuilder(__safeDI_C_configuration: __safeDI_B_configuration.cBuilder, __safeDI_B_configuration_nearest: __safeDI_B_configuration)
+			        func __safeDI_b() -> B {
+			            func __safeDI_cBuilder() -> C {
+			                func __safeDI_a() -> A {
+			                    let b: B = __safeDI_b()
+			                    return A(b: b)
+			                }
+			                let a: A = __safeDI_a()
+			                let d = if let safeDIBuilder = safeDIOverrides.b.cBuilder.d { safeDIBuilder(a) } else { D(a: a) }
+			                return if let safeDIBuilder = safeDIOverrides.b.cBuilder.safeDIBuilder { safeDIBuilder(a, d) } else { C(a: a, d: d) }
 			            }
-			            return if let safeDIBuilder = __safeDI_B_configuration.safeDIBuilder { safeDIBuilder(cBuilder) } else { B(cBuilder: cBuilder) }
+			            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+			            return if let safeDIBuilder = safeDIOverrides.b.safeDIBuilder { safeDIBuilder(cBuilder) } else { B(cBuilder: cBuilder) }
 			        }
-			        func __safeDI_cBuilder(__safeDI_C_configuration: C.SafeDIMockConfiguration, __safeDI_B_configuration_nearest: B.SafeDIMockConfiguration?) -> C {
-			            let a: A = __safeDI_a(__safeDI_A_configuration: A.SafeDIMockConfiguration(), __safeDI_B_configuration_nearest: __safeDI_B_configuration_nearest)
-			            let d = if let safeDIBuilder = __safeDI_C_configuration.d { safeDIBuilder(a) } else { D(a: a) }
-			            return if let safeDIBuilder = __safeDI_C_configuration.safeDIBuilder { safeDIBuilder(a, d) } else { C(a: a, d: d) }
-			        }
-			        func __safeDI_a(__safeDI_A_configuration: A.SafeDIMockConfiguration, __safeDI_B_configuration_nearest: B.SafeDIMockConfiguration?) -> A {
-			            let b: B = __safeDI_b(__safeDI_B_configuration: __safeDI_B_configuration_nearest ?? B.SafeDIMockConfiguration())
-			            return if let safeDIBuilder = __safeDI_A_configuration.safeDIBuilder { safeDIBuilder(b) } else { A(b: b) }
-			        }
-			        let b: B = __safeDI_b(__safeDI_B_configuration: safeDIOverrides.b)
+			        let b: B = __safeDI_b()
 			        return A(b: b)
 			    }
 			}

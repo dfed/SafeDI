@@ -9381,24 +9381,24 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_child(source: Source, __safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
-		            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
-		            let first: FirstGreeter? = source
-		            #sourceLocation()
-		            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 5)
-		            let second: SecondGreeter? = source
-		            #sourceLocation()
-		            let firstReceiver = if let safeDIBuilder = __safeDI_Child_configuration.firstReceiver { safeDIBuilder(first) } else { FirstReceiver(first: first) }
-		            let secondReceiver = if let safeDIBuilder = __safeDI_Child_configuration.secondReceiver { safeDIBuilder(second) } else { SecondReceiver(second: second) }
-		            return if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(first, second, firstReceiver, secondReceiver) } else { Child(first: first, second: second, firstReceiver: firstReceiver, secondReceiver: secondReceiver) }
-		        }
-		        func __safeDI_parentBuilder(session: Session, __safeDI_Parent_configuration: Parent.SafeDIMockConfiguration) -> Parent {
-		            let source = if let safeDIBuilder = __safeDI_Parent_configuration.source { safeDIBuilder(session) } else { Source(session: session) }
-		            let child: Child = __safeDI_child(source: source, __safeDI_Child_configuration: __safeDI_Parent_configuration.child)
-		            return if let safeDIBuilder = __safeDI_Parent_configuration.safeDIBuilder { safeDIBuilder(session, child, source) } else { Parent(session: session, child: child, source: source) }
+		        func __safeDI_parentBuilder(session: Session) -> Parent {
+		            let source = if let safeDIBuilder = safeDIOverrides.parentBuilder.source { safeDIBuilder(session) } else { Source(session: session) }
+		            func __safeDI_child() -> Child {
+		                #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
+		                let first: FirstGreeter? = source
+		                #sourceLocation()
+		                #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 5)
+		                let second: SecondGreeter? = source
+		                #sourceLocation()
+		                let firstReceiver = if let safeDIBuilder = safeDIOverrides.parentBuilder.child.firstReceiver { safeDIBuilder(first) } else { FirstReceiver(first: first) }
+		                let secondReceiver = if let safeDIBuilder = safeDIOverrides.parentBuilder.child.secondReceiver { safeDIBuilder(second) } else { SecondReceiver(second: second) }
+		                return if let safeDIBuilder = safeDIOverrides.parentBuilder.child.safeDIBuilder { safeDIBuilder(first, second, firstReceiver, secondReceiver) } else { Child(first: first, second: second, firstReceiver: firstReceiver, secondReceiver: secondReceiver) }
+		            }
+		            let child: Child = __safeDI_child()
+		            return if let safeDIBuilder = safeDIOverrides.parentBuilder.safeDIBuilder { safeDIBuilder(session, child, source) } else { Parent(session: session, child: child, source: source) }
 		        }
 		        let parentBuilder = Instantiator<Parent> {
-		            __safeDI_parentBuilder(session: $0, __safeDI_Parent_configuration: safeDIOverrides.parentBuilder)
+		            __safeDI_parentBuilder(session: $0)
 		        }
 		        return Root(parentBuilder: parentBuilder)
 		    }

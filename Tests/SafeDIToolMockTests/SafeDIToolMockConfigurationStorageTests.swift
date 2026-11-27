@@ -114,11 +114,11 @@ struct SafeDIToolMockConfigurationStorageTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        func __safeDI_child(__safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
-			            let grand = if let safeDIBuilder = __safeDI_Child_configuration.grand { safeDIBuilder() } else { Grand() }
-			            return if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(grand, __safeDI_Child_configuration.capacity) } else { Child(grand: grand, capacity: __safeDI_Child_configuration.capacity) }
+			        func __safeDI_child() -> Child {
+			            let grand = if let safeDIBuilder = safeDIOverrides.child.grand { safeDIBuilder() } else { Grand() }
+			            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(grand, safeDIOverrides.child.capacity) } else { Child(grand: grand, capacity: safeDIOverrides.child.capacity) }
 			        }
-			        let child: Child = __safeDI_child(__safeDI_Child_configuration: safeDIOverrides.child)
+			        let child: Child = __safeDI_child()
 			        let service = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { Service() }
 			        return Root(child: child, service: service)
 			    }
@@ -248,14 +248,12 @@ struct SafeDIToolMockConfigurationStorageTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        @Sendable nonisolated func __safeDI_childBuilder(__safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
-			            let grand = if let safeDIBuilder = __safeDI_Child_configuration.grand { safeDIBuilder() } else { Grand() }
-			            return if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(grand, __safeDI_Child_configuration.capacity()) } else { Child(grand: grand, capacity: __safeDI_Child_configuration.capacity()) }
+			        let __safeDI_childBuilder__overrides = safeDIOverrides.childBuilder
+			        @Sendable nonisolated func __safeDI_childBuilder() -> Child {
+			            let grand = if let safeDIBuilder = __safeDI_childBuilder__overrides.grand { safeDIBuilder() } else { Grand() }
+			            return if let safeDIBuilder = __safeDI_childBuilder__overrides.safeDIBuilder { safeDIBuilder(grand, __safeDI_childBuilder__overrides.capacity()) } else { Child(grand: grand, capacity: __safeDI_childBuilder__overrides.capacity()) }
 			        }
-			        let __safeDI_childBuilder____safeDI_Child_configuration: Child.SafeDIMockConfiguration = safeDIOverrides.childBuilder
-			        let childBuilder = SendableInstantiator<Child> {
-			            __safeDI_childBuilder(__safeDI_Child_configuration: __safeDI_childBuilder____safeDI_Child_configuration)
-			        }
+			        let childBuilder = SendableInstantiator<Child>(__safeDI_childBuilder)
 			        return Root(childBuilder: childBuilder)
 			    }
 			}
@@ -375,13 +373,11 @@ struct SafeDIToolMockConfigurationStorageTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        @Sendable nonisolated func __safeDI_childBuilder(__safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
-			            if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(__safeDI_Child_configuration.capacity()) } else { Child(capacity: __safeDI_Child_configuration.capacity()) }
+			        let __safeDI_childBuilder__overrides = safeDIOverrides.childBuilder
+			        @Sendable nonisolated func __safeDI_childBuilder() -> Child {
+			            if let safeDIBuilder = __safeDI_childBuilder__overrides.safeDIBuilder { safeDIBuilder(__safeDI_childBuilder__overrides.capacity()) } else { Child(capacity: __safeDI_childBuilder__overrides.capacity()) }
 			        }
-			        let __safeDI_childBuilder____safeDI_Child_configuration: Child.SafeDIMockConfiguration = safeDIOverrides.childBuilder
-			        let childBuilder = SendableInstantiator<Child> {
-			            __safeDI_childBuilder(__safeDI_Child_configuration: __safeDI_childBuilder____safeDI_Child_configuration)
-			        }
+			        let childBuilder = SendableInstantiator<Child>(__safeDI_childBuilder)
 			        let service = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { Service() }
 			        return Root(childBuilder: childBuilder, service: service)
 			    }
@@ -508,13 +504,11 @@ struct SafeDIToolMockConfigurationStorageTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
 			        let user: User? = safeDIOverrides.user
-			        @Sendable nonisolated func __safeDI_childBuilder(__safeDI_Child_configuration: (@Sendable () -> Child)?) -> Child {
-			            if let safeDIBuilder = __safeDI_Child_configuration { safeDIBuilder() } else { Child() }
+			        let __safeDI_childBuilder__safeDIBuilder = safeDIOverrides.childBuilder
+			        @Sendable nonisolated func __safeDI_childBuilder() -> Child {
+			            if let safeDIBuilder = __safeDI_childBuilder__safeDIBuilder { safeDIBuilder() } else { Child() }
 			        }
-			        let __safeDI_childBuilder____safeDI_Child_configuration: (@Sendable () -> Child)? = safeDIOverrides.childBuilder
-			        let childBuilder = SendableInstantiator<Child> {
-			            __safeDI_childBuilder(__safeDI_Child_configuration: __safeDI_childBuilder____safeDI_Child_configuration)
-			        }
+			        let childBuilder = SendableInstantiator<Child>(__safeDI_childBuilder)
 			        return Root(childBuilder: childBuilder, user: user)
 			    }
 			}
@@ -641,11 +635,11 @@ struct SafeDIToolMockConfigurationStorageTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        func __safeDI_child(__safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
-			            let grand = if let safeDIBuilder = __safeDI_Child_configuration.grand { safeDIBuilder() } else { Grand() }
-			            return if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(grand, __safeDI_Child_configuration.capacity) } else { Child(grand: grand, capacity: __safeDI_Child_configuration.capacity) }
+			        func __safeDI_child() -> Child {
+			            let grand = if let safeDIBuilder = safeDIOverrides.child.grand { safeDIBuilder() } else { Grand() }
+			            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(grand, safeDIOverrides.child.capacity) } else { Child(grand: grand, capacity: safeDIOverrides.child.capacity) }
 			        }
-			        let child: Child = __safeDI_child(__safeDI_Child_configuration: safeDIOverrides.child)
+			        let child: Child = __safeDI_child()
 			        return Root(child: child)
 			    }
 			}
@@ -848,8 +842,8 @@ struct SafeDIToolMockConfigurationStorageTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_compilesWithinMemoryLimit_whenTwentyFourChainedSeamsEachBuildThreeOfTheNextLayer() async throws {
-		// Six layers of four seams, each seam building three of the next layer's. A mock that built one builder function per
-		// path through them, each capturing the overrides, with a configuration copied by value into each, made the
+		// Six layers of four seams, each seam building three of the next layer's: the mock builds one builder function
+		// per path through them, each of which captures the overrides. A configuration copied by value into each made the
 		// compiler's memory grow with the square of the paths, past 12 GB at this depth.
 		let layerCount = 6
 		let output = try await executeSafeDIToolTest(
@@ -859,11 +853,11 @@ struct SafeDIToolMockConfigurationStorageTests: ~Copyable {
 			verificationCompilerSettings: VerificationCompilerSettings(memoryLimitInMegabytes: Self.chainedSeamsMemoryLimitInMegabytes),
 		)
 
-		// The mock is long, so its count of builder functions stands in for it: one for each seam, four in each layer, since
-		// the mock builds each type with one function that every path calls, handed the path's configuration.
+		// The mock is thousands of lines long, so its count of builder functions stands in for it: one for each path from
+		// the root to a seam, four in the first layer and three times as many in each layer after it.
 		let mock = try #require(output.generatedFiles?["Root+SafeDIMock.swift"])
 		let builderFunctionCount = mock.split(separator: "\n").count { $0.trimmingCharacters(in: .whitespaces).hasPrefix("func __safeDI_screen") }
-		#expect(builderFunctionCount == layerCount * 4)
+		#expect(builderFunctionCount == (0..<layerCount).reduce(into: (count: 0, layerPathCount: 4)) { result, _ in result = (result.count + result.layerPathCount, result.layerPathCount * 3) }.count)
 	}
 
 	// MARK: Private

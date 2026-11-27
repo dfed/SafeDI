@@ -170,8 +170,8 @@ struct SafeDIToolCallingMockInstantiatedOnlyIfAvailableShapeTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Home {
 			        let __safeDI_analyticsOptionalBuilder = analyticsOptionalBuilder
+			        _ = Screen.__safeDI_Screen_mock_6C25C81712F913A1.self // If this line does not compile, add the SafeDI plugin to the target that declares Screen.
 			        func __safeDI_screen() -> Screen {
-			            _ = Screen.__safeDI_Screen_mock_6C25C81712F913A1.self // If this line does not compile, add the SafeDI plugin to the target that declares Screen.
 			            let analyticsOptionalBuilder: () -> (any Analytics)? = __safeDI_analyticsOptionalBuilder
 			            return if let safeDIBuilder = safeDIOverrides.screen { safeDIBuilder(analyticsOptionalBuilder) } else { Screen.__safeDI_mock(analyticsOptionalBuilder: .init(__safeDI_noScope: analyticsOptionalBuilder)) }
 			        }
@@ -761,8 +761,8 @@ struct SafeDIToolCallingMockInstantiatedOnlyIfAvailableShapeTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Home {
 		        let __safeDI_analyticsOptionalBuilder = analyticsOptionalBuilder
+		        _ = Panel.__safeDI_Panel_mock_24B606DDA22B1C0C.self // If this line does not compile, compile the code SafeDI generates for module Shelf into Shelf: under Bazel, add Shelf’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        func __safeDI_panel() -> Panel {
-		            _ = Panel.__safeDI_Panel_mock_24B606DDA22B1C0C.self // If this line does not compile, compile the code SafeDI generates for module Shelf into Shelf: under Bazel, add Shelf’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            let analyticsOptionalBuilder: () -> (any Analytics)? = __safeDI_analyticsOptionalBuilder
 		            return Panel.__safeDI_mock(analyticsOptionalBuilder: .init(__safeDI_noScope: analyticsOptionalBuilder), safeDIOverrides: safeDIOverrides.panel)
 		        }

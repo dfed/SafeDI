@@ -67,6 +67,26 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	}
 
 	@Test
+	func binaryReader_readsLocationWithoutTrapping_whenOrderFieldIsSmallestInteger() throws {
+		var writer = BinaryWriter()
+		writer.write("File.swift")
+		writer.write(Int.min)
+		writer.write(3)
+		writer.write(5)
+		let encoded = writer.encoded
+
+		let location = try encoded.withUnsafeBytes { bytes in
+			var reader = try BinaryReader(bytes: bytes)
+			let location = try reader.readLocation()
+			try reader.finish()
+			return location
+		}
+
+		#expect(location == Dependency.DeclarationLocation(filePath: "File.swift", order: -4_611_686_018_427_387_903, placement: .here(line: 3, column: 5)))
+		#expect(location.order == -4_611_686_018_427_387_903)
+	}
+
+	@Test
 	func binaryWriter_writesSharedValueOnce_whenValueRepeats() throws {
 		var writer = BinaryWriter()
 		writer.write([BinaryShared(["a", "b"]), BinaryShared(["c"]), BinaryShared(["a", "b"])])
@@ -106,6 +126,23 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		// reference to the first.
 		#expect(encoded == [3, 1, 97, 1, 98, 1, 99] + [5, 0, 2, 0, 1, 1, 0, 1, 2, 1, 1])
 		#expect(values.map(\.value) == [["a", "b"], ["a", "b"], ["c"], ["a", "b"], ["a", "b"]])
+	}
+
+	@Test
+	func binaryWriter_writesValueOnceMoreToCompareIt_onlyAtTheFirstWriteOfEachStorage() {
+		// Two equal values in storages of their own, each written three times. The first write of the first storage
+		// writes its element twice, once to look the value up and once in place; the first write of the second storage
+		// writes it once, to find it equal to the first. A later write of either storage is known by its storage, so it
+		// writes the element no more. A writer that compared every write would write the element seven times.
+		let writes = WriteCount()
+		let first = [CountedElement(name: "a", writes: writes)]
+		let second = [CountedElement(name: "a", writes: writes)]
+		var writer = BinaryWriter()
+		writer.write([BinaryShared(first), BinaryShared(second), BinaryShared(second), BinaryShared(first), BinaryShared(first), BinaryShared(second)])
+
+		#expect(writes.count == 3)
+		// The string table (one string), then six elements: the first written in full, every other a reference to it.
+		#expect(writer.encoded == [1, 1, 97] + [6, 0, 1, 0, 1, 1, 1, 1, 1])
 	}
 
 	@Test
@@ -595,7 +632,6 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		try signatureWriter.write([SeamSignature.Hole.sample(isDistinct: true)])
 		signatureWriter.write([SeamSignature.Builder]())
 		signatureWriter.write([SeamSignature.ScopeEnum]())
-		signatureWriter.write([SeamSignature.CallRoute]())
 		signatureWriter.write(Set<TypeDescription>())
 		let signature: SeamSignature = try read(signatureWriter.encoded)
 		let signatures = try [StoredSeamSignature(seamType: TypeDescription.sample(isDistinct: true), signature: signature), StoredSeamSignature.sample(isDistinct: false)]
@@ -619,10 +655,10 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		// The body `moduleInfoData` wrote of copies of these signatures with every position `nil`, captured when SafeDITool
 		// still made those copies, and captured again when format version 3 moved the signatures into an encoding of their
 		// own; the public mock plans that follow the signatures were added by hand, as were the two fields a cycle re-entry
-		// declaration gained (no called seam, and a place in no further `@Sendable` function), and format version 4 doubled the count of each list of siblings written whole (`writeDifference(of:in:)`). The comparison leaves out the header, whose schema fingerprint every layout change moves.
+		// declaration gained (no called seam, and a place in no further `@Sendable` function), and format version 4 doubled the count of each list of siblings written whole (`writeDifference(of:in:)`). When a hole's field took field flags, the one field these signatures write in full lost seven bytes, its four absent optionals and four false Booleans becoming one byte of flags, and the encoding's length went from 235 to 228. When a signature stopped holding its seam's call routes, the signature these write in full lost the byte of its empty list of them. The comparison leaves out the header, whose schema fingerprint every layout change moves.
 		let bodyWithoutPositions: [UInt8] = [
 			0x02, 0x06, 0x4D, 0x6F, 0x64, 0x75, 0x6C, 0x65, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-			0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x01, 0x01, 0x00, 0x00, 0x00, 0xED, 0x01, 0x03, 0x00, 0x08,
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x01, 0x01, 0x00, 0x00, 0x00, 0xE5, 0x01, 0x03, 0x00, 0x08,
 			0x64, 0x69, 0x73, 0x74, 0x69, 0x6E, 0x63, 0x74, 0x11, 0x5F, 0x5F, 0x73, 0x61, 0x66, 0x65, 0x44,
 			0x49, 0x5F, 0x64, 0x69, 0x73, 0x74, 0x69, 0x6E, 0x63, 0x74, 0x02, 0x00, 0x01, 0x00, 0x00, 0x01,
 			0x01, 0x01, 0x01, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x01, 0x01, 0x01, 0x01, 0x00, 0x01,
@@ -630,14 +666,14 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 			0x01, 0x01, 0x01, 0x00, 0x01, 0x01, 0x00, 0x02, 0x01, 0x00, 0x02, 0x00, 0x00, 0x01, 0x00, 0x02,
 			0x01, 0x02, 0x01, 0x01, 0x00, 0x00, 0x01, 0x01, 0x01, 0x00, 0x01, 0x00, 0x01, 0x02, 0x00, 0x01,
 			0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00,
-			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x01, 0x00, 0x02,
-			0x00, 0x02, 0x00, 0x02, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-			0x00, 0x00, 0x01, 0x00, 0x02, 0x02, 0x00, 0x00, 0x00, 0x02, 0x02, 0x02, 0x02, 0x00, 0x00, 0x01,
-			0x00, 0x02, 0x02, 0x00, 0x02, 0x02, 0x00, 0x02, 0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x02, 0x02,
-			0x02, 0x02, 0x00, 0x02, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x03, 0x02, 0x02,
-			0x00, 0x02, 0x02, 0x00, 0x00, 0x00, 0x00, 0x02, 0x02, 0x02, 0x02, 0x00, 0x02, 0x02, 0x00, 0x00,
-			0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x02, 0x02, 0x00, 0x02, 0x02, 0x01, 0x02, 0x01, 0x00,
-			0x02, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00,
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x01, 0x00, 0x02, 0x00, 0x02, 0x00, 0x02, 0x02, 0x00, 0x00,
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x02, 0x02, 0x00,
+			0x00, 0x00, 0x02, 0x02, 0x02, 0x02, 0x00, 0x00, 0x01, 0x00, 0x02, 0x02, 0x00, 0x02, 0x02, 0x00,
+			0x02, 0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x02, 0x02, 0x02, 0x02, 0x00, 0x02, 0x02, 0x00, 0x00,
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x03, 0x02, 0x02, 0x00, 0x02, 0x02, 0x00, 0x00, 0x00, 0x00,
+			0x02, 0x02, 0x02, 0x02, 0x00, 0x02, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00,
+			0x02, 0x02, 0x00, 0x02, 0x02, 0x01, 0x02, 0x01, 0x00, 0x02, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00,
+			0x02, 0x00,
 			// No public mock plans: no mocked type, `compilesGeneratedMocks` false, and an encoding of no plan.
 			0x00, 0x00, 0x02, 0x00, 0x00,
 			// The empty view.
@@ -698,12 +734,10 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		SeamSignature.Hole.PathType.self,
 		SeamSignature.Hole.EnumPlace.self,
 		SeamSignature.Hole.RouteStep.self,
-		SeamSignature.Hole.RouteStep.Member.self,
 		SeamSignature.Hole.RouteStep.Values.self,
 		SeamSignature.Hole.RouteStep.InnerScope.self,
 		SeamSignature.Hole.DeclaredProperty.self,
 		SeamSignature.Hole.Site.self,
-		SeamSignature.CallRoute.self,
 		SeamSignature.HoleType.self,
 		SeamSignature.ScopeEnum.self,
 		SeamSignature.ScopeEnum.Key.self,
@@ -2980,12 +3014,10 @@ extension SeamSignature.Hole.DeclarationHiddenByField: BinarySample {}
 extension SeamSignature.Hole.PathType: BinarySample {}
 extension SeamSignature.Hole.EnumPlace: BinarySample {}
 extension SeamSignature.Hole.RouteStep: BinarySample {}
-extension SeamSignature.Hole.RouteStep.Member: BinarySample {}
 extension SeamSignature.Hole.RouteStep.Values: BinarySample {}
 extension SeamSignature.Hole.RouteStep.InnerScope: BinarySample {}
 extension SeamSignature.Hole.DeclaredProperty: BinarySample {}
 extension SeamSignature.Hole.Site: BinarySample {}
-extension SeamSignature.CallRoute: BinarySample {}
 extension SeamSignature.HoleType: BinarySample {}
 extension SeamSignature.ScopeEnum: BinarySample {}
 extension SeamSignature.ScopeEnum.Key: BinarySample {}
@@ -3030,5 +3062,44 @@ private struct ListWrittenAsDifference: BinaryCodable, Equatable {
 
 	func write(to writer: inout BinaryWriter) {
 		writer.writeDifference(of: list, in: .labelsBoundLater)
+	}
+}
+
+/// How many times the elements that share it were written.
+private final class WriteCount {
+	private(set) var count = 0
+
+	func increment() {
+		count += 1
+	}
+}
+
+/// An element that counts each time it is written, so that a test can tell a value the writer wrote to compare it from
+/// one the writer knew by its storage. Two elements are equal when their names are.
+private struct CountedElement: BinaryCodable, Hashable {
+	init(name: String, writes: WriteCount) {
+		self.name = name
+		self.writes = writes
+	}
+
+	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		name = try reader.readString()
+		writes = WriteCount()
+	}
+
+	let name: String
+	let writes: WriteCount
+
+	func write(to writer: inout BinaryWriter) {
+		writes.increment()
+		writer.writeString(name)
+	}
+
+	static func == (lhs: Self, rhs: Self) -> Bool {
+		lhs.name == rhs.name
+	}
+
+	func hash(into hasher: inout Hasher) {
+		hasher.combine(name)
 	}
 }

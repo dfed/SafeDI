@@ -2297,10 +2297,10 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Other {
-			        func __safeDI_child(__safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
-			            if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(__safeDI_Child_configuration.theme) } else { Child(theme: __safeDI_Child_configuration.theme) }
+			        func __safeDI_child() -> Child {
+			            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(safeDIOverrides.child.theme) } else { Child(theme: safeDIOverrides.child.theme) }
 			        }
-			        let child: Child = __safeDI_child(__safeDI_Child_configuration: safeDIOverrides.child)
+			        let child: Child = __safeDI_child()
 			        return Other(child: child)
 			    }
 			}

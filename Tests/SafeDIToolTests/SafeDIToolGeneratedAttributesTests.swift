@@ -306,12 +306,10 @@ struct SafeDIToolGeneratedAttributesTests: ~Copyable {
 		    @MainActor static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Parent {
-		        func __safeDI_childBuilder(__safeDI_Child_configuration: (() -> Child)?) -> Child {
-		            if let safeDIBuilder = __safeDI_Child_configuration { safeDIBuilder() } else { Child() }
+		        func __safeDI_childBuilder() -> Child {
+		            if let safeDIBuilder = safeDIOverrides.childBuilder { safeDIBuilder() } else { Child() }
 		        }
-		        let childBuilder = Instantiator<Child> {
-		            __safeDI_childBuilder(__safeDI_Child_configuration: safeDIOverrides.childBuilder)
-		        }
+		        let childBuilder = Instantiator<Child>(__safeDI_childBuilder)
 		        return Parent(childBuilder: childBuilder)
 		    }
 		}
@@ -759,7 +757,7 @@ struct SafeDIToolGeneratedAttributesTests: ~Copyable {
 			extension Outer {
 			    /// Code you write and code SafeDI generates can both call this initializer.
 			    @MainActor public init() {
-			        func __safeDI_inner() -> Inner {
+			        @inline(never) func __safeDI_inner() -> Inner {
 			            _ = Inner.__safeDI_Inner_CBF29CE484222325.self
 			            return Inner()
 			        }

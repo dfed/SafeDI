@@ -120,7 +120,8 @@ Everything SafeDI produces must be identical on every run over the same inputs: 
 ## Pull requests
 
 - The title and description become the squash commit: write them for a newcomer reading `git log` a year later. Say what changes in SafeDI's user-facing terms and why, the tests in a sentence, and the leftovers; no local paths, scratch files, decision identifiers, review rounds or history. Update the description with every push. A fix found in passing gets its own pull request.
-- Each "Found and not fixed" item states its plan: a named pull request, a named later release and why, or left and why. A leftover earns a pull request only if it generates code that does not compile, or a wrong value, in a shape a real adopter writes.
+- Each "Found and not fixed" item states its plan: a named pull request, a near-term follow-up release and why (never a version number), or left and why. A leftover earns a pull request only if it generates code that does not compile, or a wrong value, in a shape a real adopter writes.
+- A "Found and not fixed" item whose fix is an open pull request links it, and that pull request links back.
 - Work planned as several pull requests starts only after the whole plan is reviewed for soundness (rework, design coherence, scope, dependencies, risk), never on a plan assembled piece by piece.
 
 ## Where the rest lives
@@ -151,8 +152,6 @@ If your session started outside the worktree you are editing, scoped rules and n
 | `generateDependencyTree: true` (seams) | `.claude/rules/seams.md`, `seam-access-proof.md`, `seam-generation.md`, `seam-builder-structs.md`, `seam-carriers.md`, `seam-holes.md`, `seam-hole-fills.md`, `seam-signature-passes.md` |
 | a seam's or public mock's design: the contract, retention, hand-written builders | `.claude/rules/seam-and-mock-contract.md` |
 | a generator's design: type spelling, cost, captures, parallel work, runtime safety | `.claude/rules/generator-design.md` |
-| a mock's body laid out by the type key: its walk's records, a root that falls back, `laidOut` | `.claude/rules/mock-type-key-layout.md` |
-| sharing repeated subtrees in an internal mock's walk (`SubtreeKey`) | `.claude/rules/mock-subtree-sharing.md` |
 | the construction memo; a decision made while code is emitted | `.claude/rules/construction-memo.md`, `construction-memo-calls.md`, `emission-decisions.md` |
 | a source rule, `SourceRuleTests`, a waiver | `.claude/rules/source-rules.md` |
 | a change's tests, before writing them | `.claude/rules/test-design.md` |

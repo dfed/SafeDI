@@ -209,12 +209,10 @@ struct SafeDIToolPublicMockGeneratedOnlyCallTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        func __safeDI_session(__safeDI_Session_configuration: (() -> Session)?) -> Session {
-			            if let safeDIBuilder = __safeDI_Session_configuration { safeDIBuilder() } else { Session() }
+			        func __safeDI_session() -> Session {
+			            if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session() }
 			        }
-			        let session = LazilyInstantiated<Session> {
-			            __safeDI_session(__safeDI_Session_configuration: safeDIOverrides.session)
-			        }
+			        let session = LazilyInstantiated<Session>(__safeDI_session)
 			        _ = Screen.__safeDI_Screen_mock_5183E61012439F1A.self // If this line does not compile, compile the code SafeDI generates for module Feed into Feed: under Bazel, add Feed’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			        let screen = Screen.__safeDI_mock(session: session, safeDIOverrides: safeDIOverrides.screen)
 			        return Root(session: session, screen: screen)

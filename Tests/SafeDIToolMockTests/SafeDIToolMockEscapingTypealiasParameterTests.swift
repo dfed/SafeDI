@@ -133,11 +133,11 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_screenBuilder(onTap: @escaping OnTap, __safeDI_Screen_configuration: ((@escaping OnTap) -> Screen)?) -> Screen {
-		            if let safeDIBuilder = __safeDI_Screen_configuration { safeDIBuilder(onTap) } else { Screen(onTap: onTap) }
+		        func __safeDI_screenBuilder(onTap: @escaping OnTap) -> Screen {
+		            if let safeDIBuilder = safeDIOverrides.screenBuilder { safeDIBuilder(onTap) } else { Screen(onTap: onTap) }
 		        }
 		        let screenBuilder = Instantiator<Screen> {
-		            __safeDI_screenBuilder(onTap: $0, __safeDI_Screen_configuration: safeDIOverrides.screenBuilder)
+		            __safeDI_screenBuilder(onTap: $0)
 		        }
 		        return Root(screenBuilder: screenBuilder)
 		    }
@@ -329,12 +329,12 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_parentBuilder(count: Int, onTap: @escaping OnTap, __safeDI_Parent_configuration: Parent.SafeDIMockConfiguration) -> Parent {
-		            let screen = if let safeDIBuilder = __safeDI_Parent_configuration.screen { safeDIBuilder(onTap) } else { Screen(onTap: onTap) }
-		            return if let safeDIBuilder = __safeDI_Parent_configuration.safeDIBuilder { safeDIBuilder(onTap, count, screen) } else { Parent(onTap: onTap, count: count, screen: screen) }
+		        func __safeDI_parentBuilder(count: Int, onTap: @escaping OnTap) -> Parent {
+		            let screen = if let safeDIBuilder = safeDIOverrides.parentBuilder.screen { safeDIBuilder(onTap) } else { Screen(onTap: onTap) }
+		            return if let safeDIBuilder = safeDIOverrides.parentBuilder.safeDIBuilder { safeDIBuilder(onTap, count, screen) } else { Parent(onTap: onTap, count: count, screen: screen) }
 		        }
 		        let parentBuilder = Instantiator<Parent> {
-		            __safeDI_parentBuilder(count: $0.count, onTap: $0.onTap, __safeDI_Parent_configuration: safeDIOverrides.parentBuilder)
+		            __safeDI_parentBuilder(count: $0.count, onTap: $0.onTap)
 		        }
 		        return Root(parentBuilder: parentBuilder)
 		    }
@@ -556,7 +556,7 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 		        onTap: @escaping () -> Void,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Parent {
-		        let screen: Screen = if let safeDIBuilder = safeDIOverrides.screen { safeDIBuilder(onTap) } else { Screen.instantiate(onTap: onTap) }
+		        let screen = if let safeDIBuilder = safeDIOverrides.screen { safeDIBuilder(onTap) } else { Screen.instantiate(onTap: onTap) }
 		        return Parent(onTap: onTap, screen: screen)
 		    }
 		}
@@ -633,12 +633,12 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_parentBuilder(onTap: @escaping () -> Void, __safeDI_Parent_configuration: Parent.SafeDIMockConfiguration) -> Parent {
-		            let screen: Screen = if let safeDIBuilder = __safeDI_Parent_configuration.screen { safeDIBuilder(onTap) } else { Screen.instantiate(onTap: onTap) }
-		            return if let safeDIBuilder = __safeDI_Parent_configuration.safeDIBuilder { safeDIBuilder(onTap, screen) } else { Parent(onTap: onTap, screen: screen) }
+		        func __safeDI_parentBuilder(onTap: @escaping () -> Void) -> Parent {
+		            let screen = if let safeDIBuilder = safeDIOverrides.parentBuilder.screen { safeDIBuilder(onTap) } else { Screen.instantiate(onTap: onTap) }
+		            return if let safeDIBuilder = safeDIOverrides.parentBuilder.safeDIBuilder { safeDIBuilder(onTap, screen) } else { Parent(onTap: onTap, screen: screen) }
 		        }
 		        let parentBuilder = Instantiator<Parent> {
-		            __safeDI_parentBuilder(onTap: $0, __safeDI_Parent_configuration: safeDIOverrides.parentBuilder)
+		            __safeDI_parentBuilder(onTap: $0)
 		        }
 		        return Root(parentBuilder: parentBuilder)
 		    }
@@ -754,7 +754,7 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 		        onTap: @escaping OnTap,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Parent {
-		        let screen: Screen = if let safeDIBuilder = safeDIOverrides.screen { safeDIBuilder(onTap) } else { Screen.instantiate(onTap: onTap) }
+		        let screen = if let safeDIBuilder = safeDIOverrides.screen { safeDIBuilder(onTap) } else { Screen.instantiate(onTap: onTap) }
 		        return Parent(onTap: onTap, screen: screen)
 		    }
 		}
@@ -831,12 +831,12 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_parentBuilder(onTap: @escaping OnTap, __safeDI_Parent_configuration: Parent.SafeDIMockConfiguration) -> Parent {
-		            let screen: Screen = if let safeDIBuilder = __safeDI_Parent_configuration.screen { safeDIBuilder(onTap) } else { Screen.instantiate(onTap: onTap) }
-		            return if let safeDIBuilder = __safeDI_Parent_configuration.safeDIBuilder { safeDIBuilder(onTap, screen) } else { Parent(onTap: onTap, screen: screen) }
+		        func __safeDI_parentBuilder(onTap: @escaping OnTap) -> Parent {
+		            let screen = if let safeDIBuilder = safeDIOverrides.parentBuilder.screen { safeDIBuilder(onTap) } else { Screen.instantiate(onTap: onTap) }
+		            return if let safeDIBuilder = safeDIOverrides.parentBuilder.safeDIBuilder { safeDIBuilder(onTap, screen) } else { Parent(onTap: onTap, screen: screen) }
 		        }
 		        let parentBuilder = Instantiator<Parent> {
-		            __safeDI_parentBuilder(onTap: $0, __safeDI_Parent_configuration: safeDIOverrides.parentBuilder)
+		            __safeDI_parentBuilder(onTap: $0)
 		        }
 		        return Root(parentBuilder: parentBuilder)
 		    }
@@ -1791,7 +1791,7 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_onTap: @autoclosure @escaping () -> OnTap) {
 		        let onTap = LazilyInstantiated<OnTap>(__safeDI_onTap)
-		        func __safeDI_inner() -> Inner {
+		        @inline(never) func __safeDI_inner() -> Inner {
 		            _ = Inner.__safeDI_Inner_620B4A759064B3AE.self // \(Self.guardComment(under: integration, moduleName: "Feature", typeName: "Inner"))
 		            return Inner(__safeDI_onTap: onTap.instance)
 		        }

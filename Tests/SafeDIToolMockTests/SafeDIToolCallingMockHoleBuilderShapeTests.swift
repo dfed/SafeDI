@@ -894,14 +894,14 @@ struct SafeDIToolCallingMockHoleBuilderShapeTests: ~Copyable {
 			    ) -> Screen {
 			        let __safeDI_gizmoBuilder = gizmoBuilder
 			        let __safeDI_gizmoBuilder_: Instantiator<Gizmo>.Builder = { _ in __safeDI_gizmoBuilder() }
+			        _ = First.__safeDI_First_mock_F35A1ABA2A8BD0CD.self\(pluginComment)
 			        func __safeDI_first() -> First {
-			            _ = First.__safeDI_First_mock_F35A1ABA2A8BD0CD.self\(pluginComment)
 			            let gizmoBuilder: Instantiator<Gizmo>.Builder = __safeDI_gizmoBuilder_
 			            return if let safeDIBuilder = safeDIOverrides.first { safeDIBuilder(gizmoBuilder) } else { First.__safeDI_mock(gizmoBuilder: .init(__safeDI_noScope: gizmoBuilder)) }
 			        }
 			        let first: First = __safeDI_first()
+			        _ = Second.__safeDI_Second_mock_4AA306DE1EA05F15.self\(pluginComment)
 			        func __safeDI_second() -> Second {
-			            _ = Second.__safeDI_Second_mock_4AA306DE1EA05F15.self\(pluginComment)
 			            let gizmoBuilder: () -> Gizmo = __safeDI_gizmoBuilder
 			            return if let safeDIBuilder = safeDIOverrides.second { safeDIBuilder(gizmoBuilder) } else { Second.__safeDI_mock(gizmoBuilder: .init(__safeDI_noScope: gizmoBuilder)) }
 			        }
