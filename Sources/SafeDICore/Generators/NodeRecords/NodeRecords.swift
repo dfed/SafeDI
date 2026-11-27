@@ -24,6 +24,17 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	/// The node is built by anything but its type's initializer or `instantiate()`: a seam's or a public mock's call, a
 	/// hand-written mock, a construction function or a fill.
 	case construction
+	/// A mock root's node takes a parameter with a default value, which a mock holds in the type's configuration, or its
+	/// type has a hand-written mock, whose defaults that configuration takes too.
+	case mockDefaultValuedParameter
+	/// A mock root's node is an actor, whose arguments a mock sends it.
+	case mockActor
+	/// A mock root's node whose override is not its parent's field under the node's own label: two children of one node
+	/// share a label, which a mock root names apart.
+	case mockOverrideNotParentField
+	/// A mock root binds a value that is no node of its world before its tree, or names one apart: a parameter of
+	/// `mock()`, an override of a value its tree receives only if available, a builder, a wrapper around an instance.
+	case mockRootBindsOtherThanNodes
 	/// The node is built in a `@Sendable` function of its own: a `SendableInstantiator`, erased or not, or a
 	/// `SendableLazilyInstantiated`.
 	case sendable
@@ -57,6 +68,8 @@ protocol NodeRecordSources: TypeFactsWorld {
 	func scope(of declaration: DeclarationID) -> ConstructionScope
 	/// The property the declaration is built as, `nil` for the root.
 	func property(of declaration: DeclarationID) -> Property?
+	/// Whether the world is a mock root's, each of whose nodes reads its override.
+	var isMockWorld: Bool { get }
 }
 
 extension TypeFactsGraph: NodeRecordSources {
@@ -129,6 +142,8 @@ struct NodeRecords: Sendable {
 			let record = switch kinds[Int(declaration)] {
 			case .builtByInitializer:
 				try Self.builtByInitializerRecord(of: declaration, variant: variant, in: world, typesDeclaredEscaping: escaping, children: children)
+			case .mockConstruction:
+				try Self.mockConstructionRecord(of: declaration, variant: variant, in: world, typesDeclaredEscaping: escaping, children: children)
 			}
 			typesDeclaredEscaping[Int(variant)] = escaping
 			records[Int(variant)] = record
@@ -203,8 +218,9 @@ struct NodeRecords: Sendable {
 	/// the order of `NodeRecordKind`'s cases, calling its file's classifier, `<kind>Kind(of:in:)`, which returns `nil` for
 	/// a node not of its kind and throws a refusal for a node of its kind it cannot make:
 	/// `if let kind = try <kind>Kind(of: declaration, in: world) { return kind }`.
-	private static func claimedKind(of _: DeclarationID, in _: some NodeRecordSources) throws(NodeRecordRefusal) -> NodeRecordKind? {
-		nil
+	private static func claimedKind(of declaration: DeclarationID, in world: some NodeRecordSources) throws(NodeRecordRefusal) -> NodeRecordKind? {
+		// Asked last: it claims every node of a mock root's world that no kind before it claimed.
+		try mockConstructionKind(of: declaration, in: world)
 	}
 }
 
@@ -216,4 +232,7 @@ enum NodeRecordKind: Sendable {
 	/// A constant or an `Instantiator` built by its type's initializer or `instantiate()`, off every cycle, with nothing
 	/// erased, lazy, `@Sendable`, received only if available, renamed or filled in its scope (stage 1).
 	case builtByInitializer
+	/// A node of a mock root's world that stage 1 would make in a production root's, which reads its override before it
+	/// calls its type's initializer (`NodeRecords+MockConstruction.swift`).
+	case mockConstruction
 }

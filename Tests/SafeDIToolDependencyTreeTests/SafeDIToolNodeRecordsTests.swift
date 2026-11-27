@@ -180,11 +180,12 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 		// Soundness rule 2: a record is made from per-type facts, never from a tree's generator or text it spelled. Only
 		// the static helpers of `ScopeGenerator` listed here are called, until they move: a new one is a decision. The
 		// generator's hook (`DependencyTreeGenerator+NodeRecords.swift`) also calls `rootInitializer(of:)`, and plans the
-		// tree beside the records for the comparison.
+		// tree beside the records for the comparison. A mock world's records (`NodeRecords+MockConstruction.swift`) read two
+		// more, both facts of one type: its default-valued parameters, and the name of the configuration it declares.
 		let directory = URL(fileURLWithPath: #filePath)
 			.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
 			.appendingPathComponent("Sources/SafeDICore/Generators/NodeRecords")
-		let staticHelpers: Set = ["functionName", "standardIndent", "provides"]
+		let staticHelpers: Set = ["functionName", "standardIndent", "provides", "DefaultParameter", "mockConfigurationStructName"]
 		let files = try FileManager.default.contentsOfDirectory(atPath: directory.path).filter { $0.hasSuffix(".swift") && $0 != "DependencyTreeGenerator+NodeRecords.swift" }.sorted()
 		#expect(files.count >= 4)
 		for file in files {

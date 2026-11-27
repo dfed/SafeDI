@@ -605,6 +605,7 @@ struct TypeFactsGraph: Sendable {
 		}
 
 		self.graph = graph
+		isMockWorld = forMockGeneration
 		self.constructions = constructions
 		self.kinds = kinds
 		self.nodeProperties = nodeProperties
@@ -823,6 +824,8 @@ struct TypeFactsGraph: Sendable {
 
 	/// Each node's kind: the form of the property it is built as.
 	let kinds: [TypeFactsKind]
+	/// Whether the world is a mock root's (`init(root:forMockGeneration:)`).
+	let isMockWorld: Bool
 	/// How each node's type comes to exist.
 	let constructions: [TypeFactsConstruction]
 	/// The world's ID of the property each node is built as, or -1 for the root.
