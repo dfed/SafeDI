@@ -232,6 +232,9 @@ indirect enum ValuePath: Hashable, Sendable {
 	/// A call of the member `name` of a value, spelled `<value>.<name>(<argumentsWrapper>(<label>: <source>, …))`, or
 	/// `<value>.<name>(<label>: <source>, …)` where `argumentsWrapper` is `nil`: each argument a read the engine checks.
 	case call(String, of: ValuePath, arguments: [PlaceRead], argumentsWrapper: TypeDescription?)
+	/// A call of the implicit member `name` of the type the value is passed as, spelled `.<name>(<label>: <source>, …)`:
+	/// each argument a read the engine checks.
+	case implicitMemberCall(String, arguments: [PlaceRead])
 	/// A new value of a type made by its initializer that takes no argument, spelled `<type>()`: it reads no declaration,
 	/// so it is a value of every call alike, and keyed as itself.
 	case emptyInitialization(TypeDescription)

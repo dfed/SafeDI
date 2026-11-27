@@ -27,8 +27,11 @@ struct MockRootNames: Sendable {
 	///   - unavailableDependencyOverrides: Each property instantiated only if available that nothing fulfills and that
 	///     `mock()` takes an override of, with the override's name, in the order `SafeDIOverrides` declares the overrides
 	///     (`MockLowering.RootSignature.unavailableDependencyOverrideNames`).
-	init(namesApart: [String: [TypeDescription: String]] = [:], unavailableDependencyOverrides: [(property: Property, name: String)] = []) {
+	///   - passedUpBuilderNames: The name `mock()` binds each builder under that a call of another module's public mock passes
+	///     up, by the property the call's leaf receives it as (`MockLowering.RootSignature.passedUpBuilderNames`).
+	init(namesApart: [String: [TypeDescription: String]] = [:], unavailableDependencyOverrides: [(property: Property, name: String)] = [], passedUpBuilderNames: [Property: String] = [:]) {
 		self.namesApart = namesApart
+		self.passedUpBuilderNames = passedUpBuilderNames
 		unavailableDependencyOverrideNamesInOrder = unavailableDependencyOverrides.map(\.name)
 		unavailableDependencyOverrideNames = Dictionary(unavailableDependencyOverrides.map { ($0.property, $0.name) }) { first, _ in first }
 	}
@@ -52,6 +55,14 @@ struct MockRootNames: Sendable {
 
 	/// The names of the overrides `mock()` takes of properties nothing fulfills, in the order `SafeDIOverrides` declares them.
 	let unavailableDependencyOverrideNamesInOrder: [String]
+
+	/// The name `mock()` binds the builder under that a call's leaf receives as `property`, and `nil` where `mock()` takes no
+	/// builder the leaf receives so.
+	func passedUpBuilderName(of property: Property) -> String? {
+		passedUpBuilderNames[property]
+	}
+
+	private let passedUpBuilderNames: [Property: String]
 
 	private let namesApart: [String: [TypeDescription: String]]
 	private let unavailableDependencyOverrideNames: [Property: String]
