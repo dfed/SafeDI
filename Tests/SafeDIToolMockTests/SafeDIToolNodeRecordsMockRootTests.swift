@@ -1401,6 +1401,93 @@ struct SafeDIToolNodeRecordsMockRootTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_spellsUnlabeledArgumentAsProductionSpellsIt_whenInitializerTakesDependencyWithoutLabel() async throws {
+		let fixture = [
+			"""
+			@Instantiable(isRoot: true, generateMock: true)
+			public struct Root: Instantiable {
+			    public init(child: Child) { self.child = child }
+			    @Instantiated let child: Child
+			}
+			""",
+			"""
+			@Instantiable
+			public struct Child: Instantiable {
+			    public init(_ leaf: Leaf) { self.leaf = leaf }
+			    @Instantiated let leaf: Leaf
+			}
+			""",
+			"""
+			@Instantiable
+			public struct Leaf: Instantiable {
+			    public init() {}
+			}
+			""",
+		]
+		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+
+		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [true])
+		// The root’s own initializer and its mock build `Child` with the same call: an argument without a label is written
+		// `_:`, where the mock’s walk writes the value alone.
+		#expect(output.generatedFiles?["Root+SafeDI.swift"] == generatedFileHeader + """
+		extension Root {
+		    public init() {
+		        func __safeDI_child() -> Child {
+		            let leaf = Leaf()
+		            return Child(_: leaf)
+		        }
+		        let child: Child = __safeDI_child()
+		        self.init(child: child)
+		    }
+		}
+		""", "Unexpected output \(output.generatedFiles?["Root+SafeDI.swift"] ?? "")")
+		#expect(output.mockFiles["Root+SafeDIMock.swift"] == generatedFileHeader + """
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            child: Child.SafeDIMockConfiguration = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                child: child
+		            )
+		        }
+
+		        var child: Child.SafeDIMockConfiguration { __safeDI_storage.child }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                child: Child.SafeDIMockConfiguration
+		            ) {
+		                self.child = child
+		            }
+
+		            let child: Child.SafeDIMockConfiguration
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        func __safeDI_child(safeDIOverrides: Child.SafeDIMockConfiguration) -> Child {
+		            let leaf = if let safeDIBuilder = safeDIOverrides.leaf { safeDIBuilder() } else { Leaf() }
+		            return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(leaf) } else { Child(_: leaf) }
+		        }
+		        let child: Child = __safeDI_child(safeDIOverrides: safeDIOverrides.child)
+		        return Root(child: child)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Root+SafeDIMock.swift"] ?? "")")
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
