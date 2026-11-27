@@ -194,7 +194,7 @@ public enum SeamPlacesOracle {
 				}
 				casesInTreePathByDeclaration[key] = casesInTreePathByDeclaration[key] ?? (path, uncarried.property.asSource)
 			}
-			// Compared as sets: the graph answers re-entries label by label (`Places.cycleReentries(ofLevel:beneath:context:excluding:statesVisited:)`),
+			// Compared as sets: the graph answers re-entries label by label (`Places.cycleReentries(ofLevel:beneath:context:)`),
 			// and every reader takes a label's first.
 			compare("cycle re-entries", at: path, today: hole.cycleReentryDeclarations.map { json($0) }.sorted(), graph: answers.cycleReentries.map { json($0) }.sorted(), into: &report)
 			compare("declarations hidden by fields", at: path, today: hole.declarationsHiddenByFields.map { json($0) }, graph: answers.hiddenByFields.map { json($0) }, into: &report)
@@ -276,12 +276,12 @@ public enum SeamPlacesOracle {
 			for site in sites {
 				let levels = observation.routeBySite[site].levels
 				for (parent, level) in zip(levels, levels.dropFirst()) {
-					reentryLabels.formUnion(reentriesAlongRoutes.reentries(ofLevel: level, beneath: parent, excluding: []).map(\.property.label))
+					reentryLabels.formUnion(reentriesAlongRoutes.reentries(ofLevel: level, beneath: parent).map(\.property.label))
 				}
 			}
 			for label in reentryLabels.sorted() {
 				let today = Set(siteHoles.map { hole in hole.cycleReentryDeclarations.first { $0.property.label == label }.map { json($0) } ?? "none" })
-				let graph = Set((query.cycleReentryDeclarations(ofLabel: label, at: caseIndex) ?? []).map { $0.map { json($0) } ?? "none" })
+				let graph = Set(query.cycleReentryDeclarations(ofLabel: label, at: caseIndex).map { $0.map { json($0) } ?? "none" })
 				compare("cycle re-entries of \(label)", at: path, today: today.sorted(), graph: graph.sorted(), into: &report)
 			}
 
@@ -741,9 +741,8 @@ public enum SeamPlacesOracle {
 			// A cycle that closes on a level below the root hands its type, built again, what a scope between declares, the
 			// outermost such level first per label, where the place's nearest declaration of the label is outside the level.
 			var reenteredLabels = Set<String>()
-			let entriesAlongRoute = places.stackEntries(along: route.levels)
 			for (position, level) in route.levels.enumerated() where position > 0 {
-				for reentry in reentriesAlongRoutes.reentries(ofLevel: level, beneath: route.levels[position - 1], excluding: entriesAlongRoute[position])
+				for reentry in reentriesAlongRoutes.reentries(ofLevel: level, beneath: route.levels[position - 1])
 					where reentry.property.label != siteProperty.label
 					&& !reenteredLabels.contains(reentry.property.label)
 					&& !(nearest[reentry.property.label].map { $0.position >= position } ?? false)

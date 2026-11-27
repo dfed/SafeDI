@@ -2834,13 +2834,11 @@ extension DependencyTreeGenerator {
 				}
 				return forms.map { SeamSignature.Places.StackEntry(property: $0, concreteType: builtType) }
 			}
-			// A question past the query's state limit (`Places.Query.defaultStateLimit`) answers nothing here yet: no finding
-			// names it.
 			// The open scopes some route of the case closes a cycle at, whose subtrees those routes never build.
 			var closingAtSomeRoute = Set<SeamSignature.Places.StackEntry>()
 			for read in reads.reads {
 				guard case let .openScope(scope) = read else { continue }
-				for entry in closedOnEntries(of: scope.property, builtAs: scope.builtType) where caseIndices.contains(where: { !(query.depthsBelowOwner(ofProperty: entry.property, builtAs: entry.concreteType, at: $0) ?? []).isEmpty }) {
+				for entry in closedOnEntries(of: scope.property, builtAs: scope.builtType) where caseIndices.contains(where: { !query.depthsBelowOwner(ofProperty: entry.property, builtAs: entry.concreteType, at: $0).isEmpty }) {
 					closingAtSomeRoute.insert(entry)
 				}
 			}
@@ -2863,7 +2861,7 @@ extension DependencyTreeGenerator {
 				let scopeQuery = excludingQuery(closingEntriesAbove(scope.fillAncestors))
 				for caseIndex in caseIndices {
 					for entry in closedOnEntries(of: scope.property, builtAs: scope.builtType) where closingAtSomeRoute.contains(entry) {
-						for (depth, route) in scopeQuery.depthsBelowOwner(ofProperty: entry.property, builtAs: entry.concreteType, at: caseIndex) ?? [] {
+						for (depth, route) in scopeQuery.depthsBelowOwner(ofProperty: entry.property, builtAs: entry.concreteType, at: caseIndex) {
 							let hole = routedHole(casePlace(at: caseIndex), along: route, in: scopeQuery)
 							findings.append(.init(hole: hole, kind: .closesCycleInSeamTree(
 								closingProperty: scope.property,
@@ -2950,7 +2948,7 @@ extension DependencyTreeGenerator {
 					}
 					let labelQuery = excludingQuery(excluded)
 					for caseIndex in caseIndices {
-						for variant in labelQuery.labelVariants(ofLabel: label, at: caseIndex) ?? [] {
+						for variant in labelQuery.labelVariants(ofLabel: label, at: caseIndex) {
 							// A read that leaves the holding seam's tree on a route with no re-entry of its own is read past each call that
 							// presents the place, where a cycle around the call re-enters it as the per-site walk finds (`holesPassedUp`):
 							// each such re-entry stands in the variant's place, as a place's own re-entry precedes its other facts.

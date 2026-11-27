@@ -21,6 +21,17 @@
 import SafeDICore
 import Testing
 
+/// Test only, deleted with the per-site walk: whether the observer compares the place graph's answers along each route
+/// with the per-site walk's (`placesOracleMismatches`, `placeVariantMismatches`). The query answers over every route of
+/// the graph, and the way down from a scope a cycle closes on is read from the graph alone, so on a tangle of cycles no
+/// type always encloses, where which member a call closes on depends on the members above it, the graph answers routes
+/// no tree builds and the walk's answers along a tree's route can differ. Only such a tangle's tests turn it off; the
+/// values a fill reads on a tangle are asserted against the inline build (`SafeDIToolSeamHoleOnCycleTests`, "Laps
+/// around a ring").
+enum SeamPlaceTreeRoutes {
+	@TaskLocal static var areCompared = true
+}
+
 extension SeamPlaceLevels {
 	/// A description of each place whose levels, read nearest first, do not hold exactly the fields of its scope struct and
 	/// the declarations it carries no field of: each label is decided by the nearest level that declares it, a field where
@@ -100,7 +111,8 @@ extension SeamPlaceLevels {
 	static func checkingPathStructs(handingOn enclosingObserver: (@Sendable (SeamPlaceLevels) -> Void)?) -> @Sendable (SeamPlaceLevels) -> Void {
 		{ placeLevels in
 			// Test only, deleted before merge: the place graph must answer as the per-site walk (`SeamPlacesOracle`).
-			for mismatch in placeLevels.pathStructMismatches + placeLevels.placesOracleMismatches + placeLevels.routeStepMismatches + placeLevels.placeVariantMismatches + placeLevels.callShapeComparisonMismatches + placeLevels.callShapeFoldMismatches + placeLevels.placeCaseFactMismatches + placeLevels.fillJudgementMismatches + placeLevels.caseFieldsMismatches {
+			let routeAnswerMismatches = SeamPlaceTreeRoutes.areCompared ? placeLevels.placesOracleMismatches + placeLevels.placeVariantMismatches : []
+			for mismatch in placeLevels.pathStructMismatches + routeAnswerMismatches + placeLevels.routeStepMismatches + placeLevels.callShapeComparisonMismatches + placeLevels.callShapeFoldMismatches + placeLevels.placeCaseFactMismatches + placeLevels.fillJudgementMismatches + placeLevels.caseFieldsMismatches {
 				Issue.record(Comment(rawValue: mismatch))
 			}
 			enclosingObserver?(placeLevels)
