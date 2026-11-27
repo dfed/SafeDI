@@ -373,13 +373,16 @@ public final class FileVisitor: SyntaxVisitor {
 	private var recordsOfClausesWhereMockConditionIsInactive = [SyntaxIdentifier: (plainTypeDeclarations: [PlainTypeDeclaration], plainTypeDeclarationDecisions: [GuardedPlainTypeNames])]()
 
 	/// Records the instantiables `instantiableVisitor` found at the walk's position, each marked with whether a block
-	/// whose condition only the compiler decides encloses it.
-	private func appendInstantiables(of instantiableVisitor: InstantiableVisitor) {
+	/// whose condition only the compiler decides encloses it. A type declaration's are recorded with what `unstatedGlobalActorIsolation` found in it, which `generate` reports.
+	private func appendInstantiables(of instantiableVisitor: InstantiableVisitor, unstatedGlobalActorIsolation: Instantiable.UnstatedGlobalActorIsolation? = nil) {
 		let isInsideCompilerDecidedBlock = enclosingBlocksNameConditionOnlyTheCompilerDecides.contains(true)
 		let firstIndex = instantiables.endIndex
 		instantiables.append(contentsOf: instantiableVisitor.instantiables)
 		for index in firstIndex..<instantiables.endIndex {
 			instantiables[index].isInsideCompilerDecidedBlock = isInsideCompilerDecidedBlock
+			if let unstatedGlobalActorIsolation {
+				instantiables[index].unstatedGlobalActorIsolation = unstatedGlobalActorIsolation
+			}
 			if let sourceFilePath {
 				instantiables[index].sourceFilePath = sourceFilePath
 			}
@@ -396,7 +399,7 @@ public final class FileVisitor: SyntaxVisitor {
 			sourceLocationConverter: sourceLocationConverter,
 		)
 		instantiableVisitor.walk(node)
-		appendInstantiables(of: instantiableVisitor)
+		appendInstantiables(of: instantiableVisitor, unstatedGlobalActorIsolation: instantiableVisitor.unstatedGlobalActorIsolation)
 		record(instantiableVisitor.conditionalCompilationDecisions)
 		consultedCompilationConditions.formUnion(instantiableVisitor.consultedCompilationConditions)
 		// Finding the attribute compares the name of each, so it is found once.

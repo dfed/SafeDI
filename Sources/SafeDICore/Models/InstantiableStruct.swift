@@ -255,6 +255,15 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		}
 	}
 
+	/// The declarations SafeDI generates for this type that call a `@MainActor` declaration while the type, and the
+	/// attribute text each reads, state no isolation, as `FileVisitor` reads them from the type's own declaration.
+	/// `generate` reports each whose text the module's declared `defaultIsolation` does not fill. `nil` where there is
+	/// none, and in a module info file, which carries no positions: only the module's own run reports them.
+	public var unstatedGlobalActorIsolation: UnstatedGlobalActorIsolation? {
+		get { rarelySetFields?.fields.unstatedGlobalActorIsolation }
+		set { updateRarelySetFields { $0.unstatedGlobalActorIsolation = newValue } }
+	}
+
 	/// Whether this declaration exists solely for mock generation (user provides a hand-written mock method).
 	/// When `true`, no `init`/`instantiate()` or `Instantiable` conformance is required.
 	public var mockOnly: Bool {
@@ -524,6 +533,58 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		set { updateFields { $0.dependencyLabelsInsideConditionalBlocks = newValue } }
 	}
 
+	/// The declarations SafeDI generates for a type – a root’s `init()`, a seam’s initializers, a `mock()` – that call a
+	/// declaration spelling `@MainActor` while neither the type nor the attribute text each reads states an isolation,
+	/// with the `@Instantiable` attribute that a fix-it rewrites.
+	public struct UnstatedGlobalActorIsolation: Codable, Hashable, Sendable {
+		public init(typeName: String, attributeRange: Dependency.SourceRange, findings: [Finding], attributeFixingEveryFinding: String) {
+			self.typeName = typeName
+			self.attributeRange = attributeRange
+			self.findings = findings
+			self.attributeFixingEveryFinding = attributeFixingEveryFinding
+		}
+
+		/// The type’s name as its declaration spells it, without the types enclosing it.
+		public let typeName: String
+		/// The range of the `@Instantiable` attribute, which the fix-it replaces.
+		public let attributeRange: Dependency.SourceRange
+		/// The generated declarations that need an isolation, the type’s initializers before its `mock()`.
+		public let findings: [Finding]
+		/// The attribute with `@MainActor` added to every argument a finding reads, each once.
+		public let attributeFixingEveryFinding: String
+
+		/// A generated declaration that calls a `@MainActor` callee.
+		public struct Finding: Codable, Hashable, Sendable {
+			public init(generatedDeclaration: GeneratedDeclaration, handWrittenMockName: String?, argumentLabel: String, attributeFixingFinding: String) {
+				self.generatedDeclaration = generatedDeclaration
+				self.handWrittenMockName = handWrittenMockName
+				self.argumentLabel = argumentLabel
+				self.attributeFixingFinding = attributeFixingFinding
+			}
+
+			/// What SafeDI generates that calls the callee.
+			public let generatedDeclaration: GeneratedDeclaration
+			/// The name of the hand-written mock the generated `mock()` calls, or `nil` when the callee is the type’s
+			/// initializer.
+			public let handWrittenMockName: String?
+			/// The attribute argument whose text the generated declaration reads: `generatedAttributes` when the
+			/// declaration spells it, else the argument of the declaration’s kind.
+			public let argumentLabel: String
+			/// The attribute with `@MainActor` added to `argumentLabel` alone.
+			public let attributeFixingFinding: String
+		}
+
+		/// A declaration SafeDI generates for an `@Instantiable` type.
+		public enum GeneratedDeclaration: String, Codable, Hashable, Sendable {
+			/// A root’s `init()`.
+			case rootInitializer
+			/// The initializers of a type with `generateDependencyTree: true`.
+			case seamInitializers
+			/// A generated `mock()`.
+			case mock
+		}
+	}
+
 	/// A dependency label a member declares in an `#if` clause SafeDITool's evaluation did not select, with that clause.
 	public struct DependencyLabelInUnselectedClause: Codable, Hashable, Sendable {
 		public init(label: String, clause: String, clauseLocation: Dependency.DeclarationLocation?, isDeclaredDirectlyInClause: Bool) {
@@ -657,6 +718,7 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		var mockDeclarationModuleName: String?
 		var mockDeclarationPackageName: String?
 		var declaredName: TypeDescription?
+		var unstatedGlobalActorIsolation: UnstatedGlobalActorIsolation?
 	}
 
 	/// `RarelySetFields` behind a reference, compared and hashed by its fields, so an `Instantiable` equals another
@@ -749,6 +811,7 @@ extension Instantiable {
 		case dependencyLabelsInUnselectedClauses
 		case dependencyLabelsInsideConditionalBlocks
 		case declaredName
+		case unstatedGlobalActorIsolation
 		case sourceFilePath
 		case declarationLocation
 	}
@@ -770,6 +833,7 @@ extension Instantiable {
 				mockDeclarationModuleName: container.decodeIfPresent(String.self, forKey: .mockDeclarationModuleName),
 				mockDeclarationPackageName: container.decodeIfPresent(String.self, forKey: .mockDeclarationPackageName),
 				declaredName: container.decodeIfPresent(TypeDescription.self, forKey: .declaredName),
+				unstatedGlobalActorIsolation: container.decodeIfPresent(UnstatedGlobalActorIsolation.self, forKey: .unstatedGlobalActorIsolation),
 			)),
 			isRoot: container.decode(Bool.self, forKey: .isRoot),
 			generatesDependencyTree: container.decode(Bool.self, forKey: .generatesDependencyTree),
@@ -839,6 +903,7 @@ extension Instantiable {
 		try container.encode(dependencyLabelsInUnselectedClauses, forKey: .dependencyLabelsInUnselectedClauses)
 		try container.encode(dependencyLabelsInsideConditionalBlocks, forKey: .dependencyLabelsInsideConditionalBlocks)
 		try container.encodeIfPresent(declaredName, forKey: .declaredName)
+		try container.encodeIfPresent(unstatedGlobalActorIsolation, forKey: .unstatedGlobalActorIsolation)
 		try container.encodeIfPresent(sourceFilePath, forKey: .sourceFilePath)
 		try container.encodeIfPresent(declarationLocation, forKey: .declarationLocation)
 	}

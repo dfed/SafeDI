@@ -524,6 +524,7 @@ extension Instantiable: BinarySchemaMember {
 				BinaryLayoutField("isInsideCompilerDecidedBlock", \.isInsideCompilerDecidedBlock),
 				BinaryLayoutField("conformanceListNamesSendable", \.conformanceListNamesSendable),
 				BinaryLayoutField("conformanceListNamesOtherTypes", \.conformanceListNamesOtherTypes),
+				BinaryLayoutField("unstatedGlobalActorIsolation", \.unstatedGlobalActorIsolation),
 				BinaryLayoutField("dependencyLabelsInUnselectedClauses", \.dependencyLabelsInUnselectedClauses),
 				BinaryLayoutField("dependencyLabelsInsideConditionalBlocks", \.dependencyLabelsInsideConditionalBlocks),
 			],
@@ -570,6 +571,7 @@ extension Instantiable: BinarySchemaMember {
 		isInsideCompilerDecidedBlock = fieldFlags.next()
 		conformanceListNamesSendable = fieldFlags.next()
 		conformanceListNamesOtherTypes = fieldFlags.next()
+		unstatedGlobalActorIsolation = try reader.readOptional(flaggedIn: &fieldFlags) as UnstatedGlobalActorIsolation?
 		dependencyLabelsInUnselectedClauses = try reader.read()
 		dependencyLabelsInsideConditionalBlocks = try reader.read()
 		try fieldFlags.finish()
@@ -612,6 +614,7 @@ extension Instantiable: BinarySchemaMember {
 			fieldFlags.append(isInsideCompilerDecidedBlock)
 			fieldFlags.append(conformanceListNamesSendable)
 			fieldFlags.append(conformanceListNamesOtherTypes)
+			writer.writeOptional(unstatedGlobalActorIsolation, flaggedIn: &fieldFlags)
 			writer.write(dependencyLabelsInUnselectedClauses)
 			writer.write(dependencyLabelsInsideConditionalBlocks)
 		}
@@ -689,6 +692,101 @@ extension Instantiable.DependencyLabelInUnselectedClause: BinarySchemaMember {
 		writer.writeOptional(clauseLocation, flaggedIn: &fieldFlags)
 		fieldFlags.append(isDeclaredDirectlyInClause)
 		writer.finishFields(fieldFlags, startingAt: fieldsStart)
+	}
+}
+
+extension Instantiable.UnstatedGlobalActorIsolation: BinarySchemaMember {
+	static var binaryLayout: BinaryLayout<Self> {
+		.structure(
+			fields: [
+				BinaryLayoutField("typeName", \.typeName),
+				BinaryLayoutField("attributeRange", \.attributeRange),
+				BinaryLayoutField("findings", \.findings),
+				BinaryLayoutField("attributeFixingEveryFinding", \.attributeFixingEveryFinding),
+			],
+			unwrittenProperties: [],
+		)
+	}
+
+	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		try self.init(
+			typeName: reader.read(),
+			attributeRange: reader.read(),
+			findings: reader.read(),
+			attributeFixingEveryFinding: reader.read(),
+		)
+	}
+
+	func write(to writer: inout BinaryWriter) {
+		writer.write(typeName)
+		writer.write(attributeRange)
+		writer.write(findings)
+		writer.write(attributeFixingEveryFinding)
+	}
+}
+
+extension Instantiable.UnstatedGlobalActorIsolation.Finding: BinarySchemaMember {
+	static let writesFieldFlags = true
+
+	static var binaryLayout: BinaryLayout<Self> {
+		.structure(
+			fields: [
+				BinaryLayoutField("generatedDeclaration", \.generatedDeclaration),
+				BinaryLayoutField("handWrittenMockName", \.handWrittenMockName),
+				BinaryLayoutField("argumentLabel", \.argumentLabel),
+				BinaryLayoutField("attributeFixingFinding", \.attributeFixingFinding),
+			],
+			unwrittenProperties: [],
+		)
+	}
+
+	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		var fieldFlags = try reader.readFieldFlags()
+		try self.init(
+			generatedDeclaration: reader.read(),
+			handWrittenMockName: reader.readOptional(flaggedIn: &fieldFlags) as String?,
+			argumentLabel: reader.read(),
+			attributeFixingFinding: reader.read(),
+		)
+		try fieldFlags.finish()
+	}
+
+	func write(to writer: inout BinaryWriter) {
+		var fieldFlags = BinaryFieldFlags()
+		let fieldsStart = writer.startFields()
+		writer.write(generatedDeclaration)
+		writer.writeOptional(handWrittenMockName, flaggedIn: &fieldFlags)
+		writer.write(argumentLabel)
+		writer.write(attributeFixingFinding)
+		writer.finishFields(fieldFlags, startingAt: fieldsStart)
+	}
+}
+
+extension Instantiable.UnstatedGlobalActorIsolation.GeneratedDeclaration: BinarySchemaMember {
+	static var binaryLayout: BinaryLayout<Self> {
+		.enumeration(writtenAs: Tag.self) { _ in [] }
+	}
+
+	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		self = switch try reader.readTag() as Tag {
+		case .rootInitializer: .rootInitializer
+		case .seamInitializers: .seamInitializers
+		case .mock: .mock
+		}
+	}
+
+	func write(to writer: inout BinaryWriter) {
+		switch self {
+		case .rootInitializer: writer.writeTag(Tag.rootInitializer)
+		case .seamInitializers: writer.writeTag(Tag.seamInitializers)
+		case .mock: writer.writeTag(Tag.mock)
+		}
+	}
+
+	enum Tag: UInt8, BinaryTag {
+		case rootInitializer
+		case seamInitializers
+		case mock
 	}
 }
 

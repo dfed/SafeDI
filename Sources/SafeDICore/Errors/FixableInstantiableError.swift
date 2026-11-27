@@ -92,45 +92,6 @@ public enum FixableInstantiableError: DiagnosticError {
 	/// A `@Received(fulfilledByDependencyNamed:ofType:)` declaration, `label`, is fulfilled by its own label, spelled as
 	/// `spelling` says.
 	case renameOfItself(label: String, spelling: RenameOfItselfSpelling)
-	/// A declaration SafeDI generates, `generatedDeclaration`, calls `callee`, which is bound to `globalActor`, while
-	/// neither the type nor the attribute argument the generated declaration reads, `argumentLabel`, states an isolation.
-	/// The fix-it adds `globalActor` to each of `fixItArgumentLabels`: `argumentLabel`, and the label of every other
-	/// declaration the same check reports, so that one fix-it fixes them all and no two fix-its edit one attribute.
-	case unstatedGlobalActorIsolation(
-		globalActor: String,
-		callee: IsolatedCallee,
-		generatedDeclaration: GeneratedIsolatedDeclaration,
-		argumentLabel: String,
-		fixItArgumentLabels: [String],
-	)
-
-	/// What a declaration SafeDI generates calls.
-	public enum IsolatedCallee: Sendable {
-		/// The type’s initializer.
-		case initializer(typeName: String)
-		/// The hand-written mock method `methodName`.
-		case handWrittenMock(methodName: String)
-	}
-
-	/// A declaration SafeDI generates for an `@Instantiable` type.
-	public enum GeneratedIsolatedDeclaration: Sendable {
-		/// A root’s `init()`.
-		case rootInitializer
-		/// The initializers of a type with `generateDependencyTree: true`.
-		case seamInitializers
-		/// A generated `mock()`.
-		case mock
-
-		/// The attribute argument whose text the declaration carries, other than `generatedAttributes`.
-		public var argumentLabel: String {
-			switch self {
-			case .rootInitializer, .seamInitializers:
-				"generatedInitializerAttributes"
-			case .mock:
-				"mockAttributes"
-			}
-		}
-	}
 
 	/// What a rename of another rename of the same declaration names instead: the property the renames start from.
 	public enum RenameOfRenameRemedy: Sendable {
@@ -307,8 +268,6 @@ public enum FixableInstantiableError: DiagnosticError {
 			case .onlyIfAvailableOptional:
 				"`\(label)` is renamed from itself, made optional only if available, which is what `@\(Dependency.Source.receivedRawValue)(onlyIfAvailable: true)` does. Receive it with `@\(Dependency.Source.receivedRawValue)(onlyIfAvailable: true)`."
 			}
-		case let .unstatedGlobalActorIsolation(globalActor, callee, generatedDeclaration, argumentLabel, _):
-			"\(callee.sentenceStart) is `\(globalActor)`, and \(generatedDeclaration.callsClause), so \(generatedDeclaration.mustBeClause) `\(globalActor)` too. SafeDI does not infer the isolation of the code it generates: add `\(globalActor)` to `\(argumentLabel)`."
 		}
 	}
 
@@ -363,8 +322,7 @@ public enum FixableInstantiableError: DiagnosticError {
 			     .unnamedInstantiateDependency,
 			     .namesEncodedDifferently,
 			     .renameOfRename,
-			     .renameOfItself,
-			     .unstatedGlobalActorIsolation:
+			     .renameOfItself:
 				.error
 			case .mockAttributesOnMockOnly,
 			     .nestedTypeSpelledThroughSelf:
@@ -487,56 +445,12 @@ public enum FixableInstantiableError: DiagnosticError {
 				case .onlyIfAvailableOptional:
 					"Replace with `@\(Dependency.Source.receivedRawValue)(onlyIfAvailable: true)`"
 				}
-			case let .unstatedGlobalActorIsolation(globalActor, _, _, _, fixItArgumentLabels):
-				"Add `\(globalActor)` to \(fixItArgumentLabels.map { "`\($0)`" }.joinedAsList)"
 			}
 			fixItID = MessageID(domain: "\(Self.self)", id: error.description)
 		}
 
 		let message: String
 		let fixItID: MessageID
-	}
-}
-
-// MARK: - IsolatedCallee
-
-extension FixableInstantiableError.IsolatedCallee {
-	/// The callee, as the subject that begins a sentence.
-	fileprivate var sentenceStart: String {
-		switch self {
-		case let .initializer(typeName):
-			"`\(typeName)`’s initializer"
-		case let .handWrittenMock(methodName):
-			"The hand-written mock `\(methodName)(…)`"
-		}
-	}
-}
-
-// MARK: - GeneratedIsolatedDeclaration
-
-extension FixableInstantiableError.GeneratedIsolatedDeclaration {
-	/// The clause that says the generated declaration calls the callee.
-	fileprivate var callsClause: String {
-		switch self {
-		case .rootInitializer:
-			"the `init()` SafeDI generates for this root calls it"
-		case .seamInitializers:
-			"the initializers SafeDI generates for this type with `generateDependencyTree: true` call it"
-		case .mock:
-			"the `mock()` SafeDI generates calls it"
-		}
-	}
-
-	/// The clause that names the generated declaration as what must be bound to the global actor, before the actor.
-	fileprivate var mustBeClause: String {
-		switch self {
-		case .rootInitializer:
-			"that `init()` must be"
-		case .seamInitializers:
-			"they must be"
-		case .mock:
-			"that `mock()` must be"
-		}
 	}
 }
 

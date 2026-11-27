@@ -277,15 +277,6 @@ public struct InstantiableMacro: MemberMacro {
 				))
 			}
 
-			if let instantiableMacro = declaration.attributes.instantiableMacro {
-				Self.diagnoseUnstatedGlobalActorIsolation(
-					of: concreteDeclaration,
-					instantiableMacro: instantiableMacro,
-					visitor: visitor,
-					context: context,
-				)
-			}
-
 			if visitor.isRoot, let instantiableType = visitor.instantiableType {
 				let inheritedDependencies = visitor.dependencies.filter {
 					switch $0.source {

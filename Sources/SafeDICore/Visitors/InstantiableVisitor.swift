@@ -746,7 +746,10 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	private let enclosingTypeAccess: [AccessDeclaration]
 	private let enclosingExtensionAccess: AccessDeclaration?
 	private let conditionalCompilation: ConditionalCompilationHandling
-	private let sourceLocationConverter: SourceLocationConverter?
+	let sourceLocationConverter: SourceLocationConverter?
+	/// The decorated type declaration's `@Instantiable` attribute, its attributes and its name, recorded when it is
+	/// visited, which `unstatedGlobalActorIsolation` reads.
+	private(set) var instantiableDeclarationSyntax: (macro: AttributeSyntax, attributes: AttributeListSyntax, name: String)?
 	/// The `#if` clauses the evaluator selected for scanning.
 	private var activeIfConfigClauses = Set<SyntaxIdentifier>()
 
@@ -758,7 +761,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	/// See `Instantiable.conformanceListNamesSendable`.
 	private var conformanceListNamesSendable = false
 	/// See `Instantiable.conformanceListNamesOtherTypes`.
-	public private(set) var conformanceListNamesOtherTypes = false
+	private(set) var conformanceListNamesOtherTypes = false
 
 	/// Whether the walk reports `diagnostics`, which only the macro reads: SafeDITool, which evaluates `#if` blocks, trusts
 	/// what the macro rejects, so its walk skips the checks whose only result is a diagnostic.
@@ -909,6 +912,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 		instantiableConstruction = .initializer(ConstructionInitializerCandidates(declaration: node))
 		instantiableDeclarationType = node.declType
 		instantiableDeclarationLocation = declarationLocation(of: node)
+		instantiableDeclarationSyntax = (macro, node.attributes, node.name.text)
 
 		instantiableType = nodeDeclarationType
 		processAttributes(node.attributes, on: macro)
