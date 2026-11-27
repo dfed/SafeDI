@@ -279,15 +279,16 @@ extension TypeKeyLayout {
 
 	/// The arguments of a construction made before the statement at `index` of `owner`'s body, each read as the receiver
 	/// declares it.
-	/// `forwardedProperties` are the parameters of the function the values are spelled in, which a read of one of their
-	/// labels reads by name.
+	/// `forwardedProperties` are the parameters of the function the values are spelled in, which a read of one of them
+	/// reads by name.
 	func spelledArgumentValues(_ reads: [PlaceRead], replacedAt replacements: [Int: ValuePath], inClass owner: Int, before index: Int, forwardedProperties: [Property] = [], sourceAtMember: (Int, Int) -> ArgumentSource?) -> [String]? {
 		var values = [String]()
 		let members = owner == 0 ? [0] : membersByClass[owner]
 		for (position, read) in reads.enumerated() {
 			let value: String
-			if forwardedProperties.contains(where: { $0.label == read.label }) {
-				// The read is of the forwarded property itself: its type's own dependency, which the parameter declares.
+			if forwardedProperties.contains(read.property) {
+				// The read is of the forwarded property itself, which the parameter declares. A read of another form of its
+				// label, such as its instance or its optional, is spelled from its declaration as any other read is.
 				value = read.label
 			} else if let path = replacements[position] {
 				guard let spelled = spelledValuePath(path, inClass: owner, before: index) else { return nil }
