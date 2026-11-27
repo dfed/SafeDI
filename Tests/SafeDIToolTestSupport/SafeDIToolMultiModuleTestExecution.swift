@@ -922,13 +922,14 @@ enum SplitPositionsRun {
 			splitArguments.append("--module-info-positions-in-own-file")
 		}
 		// Detached, so the run inherits none of the observers a test sets around its own run, which count each layer and
-		// step of one run. Whether node records lay a root out is no count but the mode the whole run generated in, so the
-		// split run takes it again; a mock root has records only where an observer is set, so it is handed one that keeps
-		// nothing, and the test sees the whole run's reports alone.
-		let laysOutRoots = NodeRecordsObservation.laysOutRoots
-		let laysOutMockRoots = NodeRecordsObservation.laysOutMockRoots
+		// step of one run. Whether node records lay a root out is no count but the mode the whole run generated in, a
+		// test's or the sweep's switch's (`NodeRecordsChecks.laysOutMockRoots`), so the split run takes it again; a mock
+		// root has records only where an observer is set, so it is handed one that keeps nothing, and the test sees the
+		// whole run's reports alone.
+		let laysOutRoots = NodeRecordsChecks.laysOutRoots
+		let laysOutMockRoots = NodeRecordsChecks.laysOutMockRoots
 		var nodeRecordsObserver: (@Sendable (NodeRecordsReport) -> Void)?
-		if NodeRecordsObservation.observer != nil {
+		if laysOutMockRoots || NodeRecordsObservation.observer != nil {
 			nodeRecordsObserver = { _ in }
 		}
 		let splitObserver = nodeRecordsObserver
