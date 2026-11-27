@@ -473,7 +473,6 @@ struct SafeDIToolSeamPassedUpValuesTests: ~Copyable {
 		}
 	}
 
-
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_handsEachRouteItsLazyValueOrNone_whenRootFillsPlaceOnTwoRoutesOfOneCaseOnlyOneOfWhichInstantiatesItLazily() async throws {
@@ -514,6 +513,7 @@ struct SafeDIToolSeamPassedUpValuesTests: ~Copyable {
 			""")
 		}
 	}
+
 	@Test
 	mutating func generate_takesPassedUpBuilderUnderHoleTypesLabel_whenOuterSeamPassesUpPlaceOnTwoRoutesOfOneCase() async throws {
 		// `Home` holds a place of `Api` under `first` and under `second`, one case, and `Shell` passes it up. Both modules
