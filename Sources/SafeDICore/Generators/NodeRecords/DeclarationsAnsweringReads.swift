@@ -48,14 +48,26 @@
 /// counts, so a stage that admits a receive passed `nil`, which captures nothing, keeps the tree of more worlds than the
 /// tree reports until it reads that answer here.
 ///
+/// A seam's own root is handed what its initializer binds above its tree (`rootInstanceProperties`): the memo of each
+/// deferred parameter and the instance of each non-optional wrapper parameter, which the tree reads through those
+/// wrappers (`DependencyTreeGenerator.seamRootDeclarations(of:seamRoot:)`). A seam's parameters are reads of the root,
+/// which no declaration of the world binds, so the root answers each of its reads of such a label with the memo
+/// (`rootMemo`), and a read handed it is of the wrapper's instance, as a read a declared wrapper answers is; a declaration
+/// nearer the reader binds the read itself, so it hides the memo, as the nearer `let` does in the tree.
+///
 /// Memory: a set per variant, each empty unless the variant's tree reads a wrapper's instance, for as long as
 /// `NodeRecords.init` makes the records; none in a world that declares no lazily instantiated property and opens no
 /// `@Sendable` function. The declaration that answers each read, one ID per key of every variant, lives only while the
 /// sets are made.
 struct DeclarationsAnsweringReads: Sendable {
-	init(world: some NodeRecordSources) {
+	/// - Parameters:
+	///   - world: The world whose reads are answered.
+	///   - rootInstanceProperties: The by-value properties a seam's own root reads through the wrappers its initializer
+	///     binds above its tree (`DependencyTreeGenerator.RootScopeInfo.SeamTree.rootLazilyInstantiatedInstanceProperties`);
+	///     empty for any other root.
+	init(world: some NodeRecordSources, rootInstanceProperties: Set<Property> = []) {
 		let declarations = 0..<Int32(world.declarationCount)
-		guard declarations.contains(where: { declaration in
+		guard !rootInstanceProperties.isEmpty || declarations.contains(where: { declaration in
 			!world.scope(of: declaration).declaredLazilyInstantiatedInstanceProperties.isEmpty
 				|| world.edgeFacts(from: declaration).contains { Self.opensSendableFunction($0) }
 		}) else {
@@ -65,12 +77,20 @@ struct DeclarationsAnsweringReads: Sendable {
 			return
 		}
 		var lazilyInstantiatedInstancePropertiesByVariant = [Set<Property>](repeating: [], count: world.variantCount)
+		// The root's body reads what the seam's initializer binds above it as those wrappers' instances, so a rename the
+		// root declares of one is found below as a rename of a wrapper's instance is.
+		lazilyInstantiatedInstancePropertiesByVariant[0] = rootInstanceProperties
 		var sendableFunctionCapturesWrapper = false
 		var renameReadsWrappersInstance = false
 		// For each variant reached, the declaration that answers each of its reads, -1 where none does. Nothing is above
 		// the root, so nothing answers what its tree reads.
 		var answeringDeclarations = [[DeclarationID]?](repeating: nil, count: world.variantCount)
-		answeringDeclarations[0] = [DeclarationID](repeating: -1, count: world.reads(of: world.declaration(of: 0)).count)
+		// What a seam's initializer binds above its tree answers the root's reads of its labels.
+		let rootMemoLabels = Set(rootInstanceProperties.map(\.label))
+		answeringDeclarations[0] = world.reads(of: world.declaration(of: 0)).map { readID in
+			let read = world.read(readID)
+			return read.channel.asksAboutLabel && rootMemoLabels.contains(world.text(ofLabel: read.label)) ? Self.rootMemo : -1
+		}
 		// A stack, since a tree can be as deep as the module has types.
 		var stack: [VariantID] = [0]
 		while let caller = stack.popLast() {
@@ -100,6 +120,18 @@ struct DeclarationsAnsweringReads: Sendable {
 					}
 					calleeAnsweringDeclarations.append(answeringDeclaration)
 					let read = world.read(readID)
+					// The caller passes the read through to the root's own, which asks about this label (`rootMemoLabels`).
+					guard answeringDeclaration != Self.rootMemo else {
+						let label = world.text(ofLabel: read.label)
+						if Self.isHandedNearestDeclaration(read.channel) {
+							for property in rootInstanceProperties where property.label == label {
+								lazilyInstantiatedInstancePropertiesByVariant[Int(callee)].insert(property)
+							}
+						}
+						// A memo read inside a `@Sendable` function is a `SendableLazilyInstantiated`; a wrapper parameter that is not
+						// `Sendable` read there is the seam's own error, which its tree reports before any code is made.
+						continue
+					}
 					guard answeringDeclaration >= 0, read.channel.asksAboutLabel else { continue }
 					let scope = world.scope(of: answeringDeclaration)
 					let instanceProperties = Self.isHandedNearestDeclaration(read.channel) ? scope.declaredLazilyInstantiatedInstanceProperties : []
@@ -133,6 +165,10 @@ struct DeclarationsAnsweringReads: Sendable {
 
 	/// Whether a rename of the world is fulfilled by a property its scope reads as a wrapper's instance.
 	let renameReadsWrappersInstance: Bool
+
+	/// The declaration that answers a seam root's read with what its initializer binds above its tree, which is no
+	/// declaration of the world.
+	private static let rootMemo: DeclarationID = -2
 
 	/// By variant; empty in a world that declares no lazily instantiated property and opens no `@Sendable` function.
 	private let lazilyInstantiatedInstancePropertiesByVariant: [Set<Property>]

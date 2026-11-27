@@ -53,8 +53,8 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	case cycle
 	/// The node is built as a `LazilyInstantiated`, which `lazyClaim(of:in:)` discharges: its record is
 	/// `NodeRecordKind.lazy`'s. Also a world whose records read a wrapper's instance where no record does yet: a rename
-	/// fulfilled by one (`DeclarationsAnsweringReads.renameReadsWrappersInstance`), a seam's own root handed one, and a
-	/// mock root's scope that declares or forwards a lazily instantiated property.
+	/// fulfilled by one (`DeclarationsAnsweringReads.renameReadsWrappersInstance`), a seam's memo of a deferred parameter
+	/// included, and a mock root's scope that declares or forwards a lazily instantiated property.
 	case lazy
 	/// The node's type receives a property only if available.
 	case onlyIfAvailable
@@ -148,7 +148,7 @@ struct NodeRecords: Sendable {
 		}
 		let order = try NodeBuildOrder(world: world)
 		let onlyIfAvailableAnswers = try OnlyIfAvailableAnswers(world: world, rootParameters: seamTree?.parameters ?? [])
-		let answeringDeclarations = DeclarationsAnsweringReads(world: world)
+		let answeringDeclarations = DeclarationsAnsweringReads(world: world, rootInstanceProperties: seamTree?.rootLazilyInstantiatedInstanceProperties ?? [])
 		// The tree reports the capture as an error, which the records cannot.
 		guard !answeringDeclarations.sendableFunctionCapturesWrapper else { throw NodeRecordRefusal.sendableFunctionCapturesWrapper }
 		// A rename's record binds it from its fulfilling property's label, never from a wrapper's instance.
@@ -289,7 +289,7 @@ struct NodeRecords: Sendable {
 		} catch {
 			refusals.insert(error)
 		}
-		let answeringDeclarations = DeclarationsAnsweringReads(world: world)
+		let answeringDeclarations = DeclarationsAnsweringReads(world: world, rootInstanceProperties: seamTree?.rootLazilyInstantiatedInstanceProperties ?? [])
 		if answeringDeclarations.sendableFunctionCapturesWrapper {
 			refusals.insert(.sendableFunctionCapturesWrapper)
 		}
@@ -299,26 +299,12 @@ struct NodeRecords: Sendable {
 		return NodeRecordRefusal.allCases.filter(refusals.contains)
 	}
 
-	/// Refuses `declaration`'s world where its type reads what a seam's root is handed as stage 1 does not write it: as
-	/// the lazy stage's, a receive or a rename of one of the instances of `LazilyInstantiated` properties the root is
-	/// handed, which its tree reads through the wrapper and stage 1 would read as a binding of the label; as a rename's,
-	/// the seam's own rename that keeps a deferred parameter's label, which the tree binds from the parameter's
-	/// autoclosure and writes no record of.
+	/// Refuses `declaration`'s world where its type reads what a seam's root is handed as stage 1 does not write it: the
+	/// seam's own rename that keeps a deferred parameter's label, which the tree binds from the parameter's autoclosure and
+	/// writes no record of. A read of a memo the seam's initializer binds is answered at the root (`DeclarationsAnsweringReads`).
 	private static func checkReadsNoSeamRootValue(of seamTree: DependencyTreeGenerator.RootScopeInfo.SeamTree?, _ declaration: DeclarationID, in world: some NodeRecordSources) throws(NodeRecordRefusal) {
-		guard let seamTree else { return }
-		let readsAnInstance = world.scope(of: declaration).instantiable.dependencies.contains { dependency in
-			switch dependency.source {
-			case .received:
-				seamTree.rootLazilyInstantiatedInstanceProperties.contains(dependency.property.asUnwrappedProperty)
-			case let .aliased(fulfillingProperty, _, _):
-				seamTree.rootLazilyInstantiatedInstanceProperties.contains(fulfillingProperty.asUnwrappedProperty)
-			case .instantiated, .forwarded:
-				false
-			}
-		}
-		guard !readsAnInstance else { throw .lazy }
 		// The root declares no rename through a variant of its own, so it is the scope of each rename among its edges.
-		guard declaration == 0 else { return }
+		guard let seamTree, declaration == 0 else { return }
 		let readsAnAutoclosure = world.edges(from: declaration).contains { edge in
 			world.kind(of: edge) == .alias && world.property(of: edge).map { seamTree.autoclosureLabels.contains($0.label) } == true
 		}
