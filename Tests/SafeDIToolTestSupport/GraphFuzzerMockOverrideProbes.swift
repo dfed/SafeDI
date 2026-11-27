@@ -31,6 +31,33 @@ struct GraphFuzzerOverrideCandidate: Equatable {
 	let builtTypeName: String
 	/// The type of the dependency's property, without `any` or the types it is nested in.
 	let propertyTypeName: String
+	let kind: GraphFuzzerOverrideCandidateKind
+}
+
+/// The kind of dependency whose `SafeDIOverrides` field the override oracle passes its sentinel through, which decides
+/// where production holds the instance the sentinel takes the place of.
+enum GraphFuzzerOverrideCandidateKind: String, CaseIterable, Comparable {
+	/// A constant, which production holds under the label.
+	case constant
+	/// A `LazilyInstantiated` or `SendableLazilyInstantiated`, whose instance production creates on its first read: the
+	/// sentinel is built when the mock's wrapper is first read, so each side reads its record after the rest of the probe.
+	case lazilyInstantiated
+
+	/// The kind of a non-optional dependency of `type`, or `nil` for a kind the oracle does not judge.
+	init?(propertyType type: String) {
+		switch GraphFuzzerMirrorTypes.kindOrder(of: type) {
+		case 0:
+			self = .constant
+		case 5, 6:
+			self = .lazilyInstantiated
+		default:
+			return nil
+		}
+	}
+
+	static func < (lhs: GraphFuzzerOverrideCandidateKind, rhs: GraphFuzzerOverrideCandidateKind) -> Bool {
+		lhs.rawValue < rhs.rawValue
+	}
 }
 
 /// The form of the `SafeDIOverrides` field the override oracle passes its sentinel through.
@@ -56,12 +83,15 @@ struct GraphFuzzerOverrideProbe: Equatable {
 	let mockedTypeName: String
 	let label: String
 	let builtTypeName: String
+	let candidateKind: GraphFuzzerOverrideCandidateKind
 	let fieldKind: GraphFuzzerOverrideFieldKind
 	let pair: DifferentialValueProbePair
 }
 
 /// The enum the value-oracle fixture declares beside its mirrors, which records the instance the override oracle's
-/// builder built last. It is not `@Instantiable`, so the tool reads nothing of it, and its name sorts after every type
+/// builder built first: a node a cycle builds again beneath an instantiator reads the override of the nearest node of
+/// its type around it (`mock-generation.md`), so the builder builds again each time the describer calls such an
+/// instantiator, which for a lazily instantiated dependency it does before the record is read (base corpus seed 209). It is not `@Instantiable`, so the tool reads nothing of it, and its name sorts after every type
 /// name of the graph, as a mirror's does.
 enum GraphFuzzerOverrideSentinel {
 	static func typeName(typeNamePrefix: String) -> String {
@@ -86,7 +116,9 @@ enum GraphFuzzerOverrideSentinel {
 			}
 
 			static func recorded<Value>(_ value: Value) -> Value {
-				\(typeName(typeNamePrefix: typeNamePrefix)).value = value
+				if \(typeName(typeNamePrefix: typeNamePrefix)).value == nil {
+					\(typeName(typeNamePrefix: typeNamePrefix)).value = value
+				}
 				return value
 			}
 		}
@@ -121,10 +153,10 @@ extension GraphFuzzerValueOraclePlan {
 				guard declaration.alias == nil,
 				      let builtTypeName = declaration.builtTypeName,
 				      !declaration.attribute.contains("erasedToConcreteExistential: true"),
-				      GraphFuzzerMirrorTypes.kindOrder(of: declaration.property.type) == 0,
-				      !declaration.property.isOptional
+				      !declaration.property.isOptional,
+				      let kind = GraphFuzzerOverrideCandidateKind(propertyType: declaration.property.type)
 				else { return nil }
-				return GraphFuzzerOverrideCandidate(label: declaration.property.label, builtTypeName: builtTypeName, propertyTypeName: GraphFuzzerMockMirrorModel.unqualifiedName(of: declaration.property.type))
+				return GraphFuzzerOverrideCandidate(label: declaration.property.label, builtTypeName: builtTypeName, propertyTypeName: GraphFuzzerMockMirrorModel.unqualifiedName(of: GraphFuzzerMirrorTypes.instantiatedType(of: declaration.property.type)), kind: kind)
 			}
 			if let probe = overrideProbe(
 				mockedTypeName: mirror.mockedTypeName,
@@ -167,6 +199,9 @@ extension GraphFuzzerValueOraclePlan {
 			      !actorTypeNames.contains(candidate.builtTypeName),
 			      let field = fields.first(where: { $0.label == candidate.label })
 			else { return nil }
+			// A lazily instantiated dependency's instance is created where the mocked type's value reads it, so only one the
+			// mocked type holds, as the wrapper or its instance, is created on both sides (base corpus seed 691).
+			guard candidate.kind != .lazilyInstantiated || dependenciesByTypeName[mockedTypeName]?.contains(where: { $0.property.label == candidate.label }) == true else { return nil }
 			// A field of another type than the one built – an erased or fulfilled-by-type protocol – takes a builder that
 			// the built type's initializer is not.
 			if field.type == "\(candidate.builtTypeName).SafeDIMockConfiguration" {
@@ -199,15 +234,25 @@ extension GraphFuzzerValueOraclePlan {
 		case .configuration:
 			".init(\(builder))"
 		}
+		// What each side records: the sentinel the mock built, and the instance production holds under the label.
+		let (featureRecord, knownRightRecord) = switch candidate.kind {
+		case .constant:
+			("\(sentinel).value", "known.\(candidate.label) as Any?")
+		case .lazilyInstantiated:
+			// The instance is created on the wrapper's first read, which the describer makes after the rest of the
+			// probe's value, so each record is read after it too, through a wrapper of its own.
+			("LazilyInstantiated<Any?> { \(sentinel).value }", "LazilyInstantiated<Any?> { known.\(candidate.label).instance as Any? }")
+		}
 		return GraphFuzzerOverrideProbe(
 			mockedTypeName: mockedTypeName,
 			label: candidate.label,
 			builtTypeName: candidate.builtTypeName,
+			candidateKind: candidate.kind,
 			fieldKind: kind,
 			pair: DifferentialValueProbePair(
 				name: "\(mockedTypeName).mock(safeDIOverrides: .init(\(candidate.label): sentinel))",
-				featureExpression: "{ \(sentinel).value = nil; let value = \(mockedTypeName).mock(\((mockArguments + ["safeDIOverrides: .init(\(candidate.label): \(argument))"]).joined(separator: ", "))); return (value, \(sentinel).value) }()",
-				knownRightExpression: "{ let known = \(knownRightConstruction); return (known\(knownRightValuePath), known.\(candidate.label) as Any?) }()",
+				featureExpression: "{ \(sentinel).value = nil; let value = \(mockedTypeName).mock(\((mockArguments + ["safeDIOverrides: .init(\(candidate.label): \(argument))"]).joined(separator: ", "))); return (value, \(featureRecord)) }()",
+				knownRightExpression: "{ let known = \(knownRightConstruction); return (known\(knownRightValuePath), \(knownRightRecord)) }()",
 			),
 		)
 	}

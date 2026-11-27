@@ -323,6 +323,8 @@ struct SafeDIToolGraphFuzzerTests {
 		#expect(counts.mirroredPairCount > 0)
 		// The override oracle passes a sentinel through each kind of field.
 		#expect(GraphFuzzerOverrideFieldKind.allCases.filter { counts.overrideFieldKindCounts[$0, default: 0] == 0 } == [])
+		// And through each kind of dependency it judges.
+		#expect(GraphFuzzerOverrideCandidateKind.allCases.filter { counts.overrideCandidateKindCounts[$0, default: 0] == 0 } == [])
 		let shapesTheCorpusShows = GraphFuzzerValueOracleShape.allCases.filter { Self.corpusValueOracleCounts.shapeCounts[$0, default: 0] > 0 }
 		#expect(shapesTheCorpusShows.filter { counts.shapeCounts[$0, default: 0] == 0 } == [])
 	}
@@ -7409,11 +7411,15 @@ struct SafeDIToolGraphFuzzerTests {
 		drawnMocksMatchingOnlyAfterNormalizationCount: 945,
 		mirroredPairsTakingSamplesCount: 972,
 		forwardedPropertiesSampleCount: 2_727,
-		overridePairCount: 7_185,
-		overridePairsSum: GraphFuzzerSeedSetSum(value: 0x6C607198519E6265),
+		overridePairCount: 7_382,
+		overridePairsSum: GraphFuzzerSeedSetSum(value: 0x1C92C1C5936BC551),
 		overrideFieldKindCounts: [
-			.builder: 4_532,
-			.configuration: 2_653,
+			.builder: 4_734,
+			.configuration: 2_648,
+		],
+		overrideCandidateKindCounts: [
+			.constant: 6_784,
+			.lazilyInstantiated: 598,
 		],
 		pinnedPlacePairCount: 105,
 		nestedCyclePairCount: 92,

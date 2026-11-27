@@ -984,6 +984,7 @@ struct SafeDIToolGraphFuzzerValueOracleTests {
 				mockedTypeName: "S1_Root",
 				label: "screen",
 				builtTypeName: "S1_Screen",
+				candidateKind: .constant,
 				fieldKind: .configuration,
 				pair: DifferentialValueProbePair(
 					name: "S1_Root.mock(safeDIOverrides: .init(screen: sentinel))",
@@ -995,6 +996,7 @@ struct SafeDIToolGraphFuzzerValueOracleTests {
 				mockedTypeName: "S1_Screen",
 				label: "detail",
 				builtTypeName: "S1_Detail",
+				candidateKind: .constant,
 				fieldKind: .builder,
 				pair: DifferentialValueProbePair(
 					name: "S1_Screen.mock(safeDIOverrides: .init(detail: sentinel))",
@@ -1018,6 +1020,54 @@ struct SafeDIToolGraphFuzzerValueOracleTests {
 				knownRightExpression: "{ let known = S1_ZMirror0(); return (known.differentialMirrorValue, known.store as Any?) }()",
 			),
 		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func overrideProbes_readEachSidesRecordAfterTheRestOfTheProbe_whenOverriddenDependencyIsLazilyInstantiated() async throws {
+		// Seed 1 takes the root's second field, `lazyStore`, and the mirror's only one, the promoted `lazyStore`. The
+		// instance is created on the wrapper's first read, which the describer makes after the rest of the probe's value,
+		// so each side's record is a wrapper too, read after it.
+		let runs = try await Self.valueOracleToolRuns(of: Self.lazyStoreFixture)
+
+		#expect(try #require(runs.valueOracle).overrideProbes == [
+			GraphFuzzerOverrideProbe(
+				mockedTypeName: "S1_Root",
+				label: "lazyStore",
+				builtTypeName: "S1_Store",
+				candidateKind: .lazilyInstantiated,
+				fieldKind: .builder,
+				pair: DifferentialValueProbePair(
+					name: "S1_Root.mock(safeDIOverrides: .init(lazyStore: sentinel))",
+					featureExpression: "{ S1_ZOverrideSentinel.value = nil; let value = S1_Root.mock(safeDIOverrides: .init(lazyStore: S1_ZOverrideSentinel.recording(S1_Store.init))); return (value, LazilyInstantiated<Any?> { S1_ZOverrideSentinel.value }) }()",
+					knownRightExpression: "{ let known = S1_Root(); return (known, LazilyInstantiated<Any?> { known.lazyStore.instance as Any? }) }()",
+				),
+			),
+			GraphFuzzerOverrideProbe(
+				mockedTypeName: "S1_Screen",
+				label: "lazyStore",
+				builtTypeName: "S1_Store",
+				candidateKind: .lazilyInstantiated,
+				fieldKind: .builder,
+				pair: DifferentialValueProbePair(
+					name: "S1_Screen.mock(safeDIOverrides: .init(lazyStore: sentinel))",
+					featureExpression: "{ S1_ZOverrideSentinel.value = nil; let value = S1_Screen.mock(safeDIOverrides: .init(lazyStore: S1_ZOverrideSentinel.recording(S1_Store.init))); return (value, LazilyInstantiated<Any?> { S1_ZOverrideSentinel.value }) }()",
+					knownRightExpression: "{ let known = S1_ZMirror0(); return (known.differentialMirrorValue, LazilyInstantiated<Any?> { known.lazyStore.instance as Any? }) }()",
+				),
+			),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func overrideProbes_omitLazilyInstantiatedDependency_whenMockedTypeHoldsNoFormOfIt() async throws {
+		// The mock promotes `lazyStore` for `S1_Editor`, which `S1_Screen` does not hold, so its instance is created only
+		// where something reads the editor's wrapper, which production's `known.lazyStore.instance` would read regardless
+		// (base corpus seed 691).
+		let runs = try await Self.valueOracleToolRuns(of: Self.promotedLazyStoreFixture)
+
+		let probes = try #require(runs.valueOracle).overrideProbes
+		#expect(probes.map { "\($0.mockedTypeName).\($0.label)" } == ["S1_Screen.editor"])
 	}
 
 	@Test
@@ -1161,6 +1211,7 @@ struct SafeDIToolGraphFuzzerValueOracleTests {
 		counts.add(try #require(runs.valueOracle), isCompared: true)
 		#expect(counts.overridePairCount == 2)
 		#expect(counts.overrideFieldKindCounts == [.builder: 2])
+		#expect(counts.overrideCandidateKindCounts == [.constant: 2])
 	}
 
 	// MARK: Values
@@ -1183,6 +1234,30 @@ struct SafeDIToolGraphFuzzerValueOracleTests {
 			probe `S1_Screen.mock(safeDIOverrides: .init(store: sentinel))` at (S1_Screen, Optional<Any>) > .1:
 			  feature:     .1: nil
 			  known right: .1: <4> S1_Store (seen, first at (S1_Screen, Optional<Any>) > .0 > detailBuilder > instantiate() > store)
+			""",
+		])
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, "The value oracle compiles generated code only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func valueComparisons_reportOtherValues_whenGeneratedMockIgnoresLazilyInstantiatedOverride() async throws {
+		let runs = try await Self.valueOracleRuns(
+			of: Self.lazyStoreFixture,
+			editingMockOf: "S1_Screen",
+			replacing: "if let safeDIBuilder = safeDIOverrides.lazyStore { safeDIBuilder() } else { S1_Store() }",
+			with: "S1_Store()",
+		)
+
+		// The mock's wrapper builds an instance of its own, so the sentinel is never built, where production's wrapper holds
+		// the instance the describer read first.
+		let failure = try #require(try await GraphFuzzerOracle.valueComparisons(of: [runs]).failures[1]?.first)
+
+		#expect(failure.kind == .mockBuildsOtherValuesThanProduction)
+		#expect(failure.valueDifferences == [
+			"""
+			probe `S1_Screen.mock(safeDIOverrides: .init(lazyStore: sentinel))` at <3>.instance:
+			  feature:     <3>.instance: nil
+			  known right: <3>.instance: <4> S1_Store (seen, first at <2>.instance)
 			""",
 		])
 	}
@@ -1435,6 +1510,21 @@ struct SafeDIToolGraphFuzzerValueOracleTests {
 	private static let overriddenStoreFixture = fixture([
 		type("S1_Screen", arguments: "generateMock: true", properties: ["@Instantiated let detailBuilder: Instantiator<S1_Detail>", "@Received let store: S1_Store"]),
 		type("S1_Detail", properties: ["@Received let store: S1_Store"]),
+		type("S1_Store", properties: []),
+	])
+
+	/// A root that builds a mocked type and lazily instantiates a dependency it receives as the wrapper: the override
+	/// oracle's lazily instantiated field of each mock.
+	private static let lazyStoreFixture = fixture([
+		type("S1_Root", arguments: "isRoot: true", properties: ["@Instantiated let screen: S1_Screen", "@Instantiated let lazyStore: LazilyInstantiated<S1_Store>"]),
+		type("S1_Screen", arguments: "generateMock: true", properties: ["@Received let lazyStore: LazilyInstantiated<S1_Store>"]),
+		type("S1_Store", properties: []),
+	])
+
+	/// A mocked type that receives a type that receives `lazyStore` lazily, which the mock promotes.
+	private static let promotedLazyStoreFixture = fixture([
+		type("S1_Screen", arguments: "generateMock: true", properties: ["@Received let editor: S1_Editor"]),
+		type("S1_Editor", properties: ["@Received let lazyStore: LazilyInstantiated<S1_Store>"]),
 		type("S1_Store", properties: []),
 	])
 

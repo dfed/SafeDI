@@ -1690,6 +1690,7 @@ struct GraphFuzzerValueOraclePlan {
 		self.storingFixture = storingFixture ?? GraphFuzzerGenerator.fixture(forSeed: fixture.seed, storingEveryParameter: true)
 		rootTypeNames = model.typeOrder.filter { model.types[$0]?.isRoot == true }
 		actorTypeNames = model.actorTypeNames
+		dependenciesByTypeName = model.types.mapValues(\.dependencies)
 		let mockFileSuffix = "+SafeDIMock.swift"
 		var mirrors = [GraphFuzzerMockMirror]()
 		var skips = [(typeName: String, skip: GraphFuzzerMirrorSkip)]()
@@ -1742,10 +1743,10 @@ struct GraphFuzzerValueOraclePlan {
 			rootOverrideCandidates[rootTypeName] = model.propertiesToGenerate(ofTypeNamed: rootTypeName).compactMap { propertyToGenerate in
 				guard case let .instantiated(property, scopeTypeName, isErased) = propertyToGenerate,
 				      !isErased,
-				      GraphFuzzerMirrorTypes.kindOrder(of: property.type) == 0,
-				      !property.isOptional
+				      !property.isOptional,
+				      let kind = GraphFuzzerOverrideCandidateKind(propertyType: property.type)
 				else { return nil }
-				return GraphFuzzerOverrideCandidate(label: property.label, builtTypeName: scopeTypeName, propertyTypeName: GraphFuzzerMockMirrorModel.unqualifiedName(of: property.type))
+				return GraphFuzzerOverrideCandidate(label: property.label, builtTypeName: scopeTypeName, propertyTypeName: GraphFuzzerMockMirrorModel.unqualifiedName(of: GraphFuzzerMirrorTypes.instantiatedType(of: property.type)), kind: kind)
 			}
 		}
 		self.rootOverrideCandidates = rootOverrideCandidates
@@ -1793,6 +1794,8 @@ struct GraphFuzzerValueOraclePlan {
 	let rootTypeNames: [String]
 	/// The graph's `actor` types, which no override sentinel builds.
 	let actorTypeNames: Set<String>
+	/// The dependencies each type of the graph declares, by the type's name.
+	let dependenciesByTypeName: [String: [GraphFuzzerMockMirrorModel.Dependency]]
 	/// The mock files the tool generated for the graph as drawn, by name, which the value-oracle run must generate alike
 	/// (R6).
 	let drawnMockFiles: [String: String]
@@ -2290,7 +2293,7 @@ extension GraphFuzzerMockOverrides {
 /// normalizes them (`GraphFuzzerValueOracleRun.drawnMockFileNamesMatchingOnlyAfterNormalization`); and, of the
 /// compared graphs, the mirrored pairs whose mock takes sample values, the types whose `ForwardedProperties` have a
 /// sample the describer calls their instantiators with, and the override oracle's pairs, as a count, as a set sum over
-/// `<seed>:<type>:<label>`, and per field kind.
+/// `<seed>:<type>:<label>`, per field kind and per candidate kind.
 struct GraphFuzzerValueOracleCounts: Equatable {
 	var rootPairCount = 0
 	var rootPairsSum = GraphFuzzerSeedSetSum()
@@ -2304,6 +2307,7 @@ struct GraphFuzzerValueOracleCounts: Equatable {
 	var overridePairCount = 0
 	var overridePairsSum = GraphFuzzerSeedSetSum()
 	var overrideFieldKindCounts = [GraphFuzzerOverrideFieldKind: Int]()
+	var overrideCandidateKindCounts = [GraphFuzzerOverrideCandidateKind: Int]()
 	/// The compared pairs of a mock of a type built twice with differing pins against production's build of it
 	/// (`GraphFuzzerValueOraclePlan.pinnedPlacePair`).
 	var pinnedPlacePairCount = 0
@@ -2339,6 +2343,7 @@ struct GraphFuzzerValueOracleCounts: Equatable {
 			overridePairCount += 1
 			overridePairsSum.add(member: "\(plan.fixture.seed):\(probe.mockedTypeName):\(probe.label)")
 			overrideFieldKindCounts[probe.fieldKind, default: 0] += 1
+			overrideCandidateKindCounts[probe.candidateKind, default: 0] += 1
 		}
 		if plan.pinnedPlacePair != nil {
 			pinnedPlacePairCount += 1
@@ -2365,6 +2370,7 @@ struct GraphFuzzerValueOracleCounts: Equatable {
 		fields.append("overridePairs=\(overridePairCount)")
 		fields.append("overridePairsSum=0x\(String(overridePairsSum.value, radix: 16, uppercase: true))")
 		fields += GraphFuzzerOverrideFieldKind.allCases.map { "override.\($0.rawValue)=\(overrideFieldKindCounts[$0, default: 0])" }
+		fields += GraphFuzzerOverrideCandidateKind.allCases.map { "overrideCandidate.\($0.rawValue)=\(overrideCandidateKindCounts[$0, default: 0])" }
 		fields.append("pinnedPlacePairs=\(pinnedPlacePairCount)")
 		fields.append("nestedCyclePairs=\(nestedCyclePairCount)")
 		return fields.joined(separator: ",")
