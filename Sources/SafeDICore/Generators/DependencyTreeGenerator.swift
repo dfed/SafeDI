@@ -443,11 +443,34 @@ public actor DependencyTreeGenerator {
 				for rootInfo in rootScopeGenerators {
 					taskGroup.addTask {
 						let code = try await Self.plannedRootCode(of: rootInfo, declaredTypeNames: declaredTypeNames)
-						return await PlannedRoot(
+						// The imports are the root's union fact, read from its declarations, not from its generator tree.
+						let fulfillers = TypeFactsImports(root: rootInfo.rootScope).fulfillers
+						if let observer = TypeFactsImportsObservation.comparesWalk, let tree = rootInfo.observedTree {
+							let walkedFulfillers = await GenerationWork.$observer.withValue(nil) {
+								await tree.fulfillersOfTree(buildingMock: false)
+							}
+							observer(TypeFactsImportsComparison(root: rootInfo.typeDescription.asSource, foldedFulfillers: fulfillers, walkedFulfillers: walkedFulfillers))
+						}
+						if let observer = TypeFactsReceivedValueSuppliesObservation.comparesWalk, let tree = rootInfo.observedTree {
+							await GenerationWork.$observer.withValue(nil) {
+								let folded = TypeFactsReceivedValueSupplies(root: rootInfo.rootScope)
+								// A tree `generate` plans is built around no receive nothing provides, which the walk always judges.
+								let walked = await tree.receivedValueSupplies(
+									ofTreeRootedAt: rootInfo.instantiable,
+									unfulfilledReceives: ScopeGenerator.UnfulfilledReceives(locations: [], labels: []),
+								)
+								observer(TypeFactsReceivedValueSuppliesComparison(
+									root: rootInfo.typeDescription.asSource,
+									folded: ReceivedValueSupplies(supplies: folded.supplies, constructedTypes: folded.constructedTypes),
+									walked: walked.map { ReceivedValueSupplies(supplies: $0.supplies.uniqued(), constructedTypes: $0.constructedTypes.uniqued()) },
+								))
+							}
+						}
+						return PlannedRoot(
 							typeDescription: rootInfo.typeDescription,
 							sourceFilePath: rootInfo.sourceFilePath,
 							code: code,
-							fulfillers: rootInfo.fulfillers(),
+							fulfillers: fulfillers,
 						)
 					}
 				}
@@ -591,9 +614,10 @@ public actor DependencyTreeGenerator {
 		let instantiable: Instantiable
 		let sourceFilePath: String?
 		let built: Built
-		/// The root's scope, frozen, where node records may lay its code out (`NodeRecords`): a production root, of a module
-		/// with seams or without, or a seam's own root, whose records a test only compares.
-		var constructionScope: ConstructionScope?
+		/// The root's scope, frozen, from which its tree is built, whose declarations the imports read (`TypeFactsImports`),
+		/// and from whose node records its code may be laid out (`NodeRecords`): a production root, of a module with seams
+		/// or without, or a seam's own root, whose records a test only compares.
+		let rootScope: ConstructionScope
 		/// For a seam's own tree, what node records read of it beside its world; `nil` for every other root.
 		var seamTree: SeamTree?
 
@@ -619,16 +643,12 @@ public actor DependencyTreeGenerator {
 		/// What made this run build the root's tree (`TreeForcer`); empty where it built none.
 		var treeForcers: [TreeForcer] = [.seamWorld]
 
-		init(typeDescription: TypeDescription, instantiable: Instantiable, sourceFilePath: String?, scopeGenerator: ScopeGenerator) {
-			self.init(typeDescription: typeDescription, instantiable: instantiable, sourceFilePath: sourceFilePath, built: .tree(scopeGenerator))
-		}
-
-		init(typeDescription: TypeDescription, instantiable: Instantiable, sourceFilePath: String?, built: Built, constructionScope: ConstructionScope? = nil, seamTree: SeamTree? = nil, treeForcers: [TreeForcer] = [.seamWorld]) {
+		init(typeDescription: TypeDescription, instantiable: Instantiable, sourceFilePath: String?, built: Built, rootScope: ConstructionScope, seamTree: SeamTree? = nil, treeForcers: [TreeForcer] = [.seamWorld]) {
 			self.typeDescription = typeDescription
 			self.instantiable = instantiable
 			self.sourceFilePath = sourceFilePath
 			self.built = built
-			self.constructionScope = constructionScope
+			self.rootScope = rootScope
 			self.seamTree = seamTree
 			self.treeForcers = treeForcers
 		}
@@ -643,13 +663,14 @@ public actor DependencyTreeGenerator {
 			}
 		}
 
-		/// What the root's generated file imports: the declarations its tree builds.
-		func fulfillers() async -> Set<FulfillerImports.Fulfiller> {
+		/// The root's place tree, where this run built one: for its code, or beside its node records for a test that
+		/// compares them.
+		var observedTree: ScopeGenerator? {
 			switch built {
 			case let .tree(scopeGenerator):
-				await scopeGenerator.fulfillersOfTree(buildingMock: false)
-			case let .nodeRecords(layout, _):
-				layout.fulfillers
+				scopeGenerator
+			case let .nodeRecords(_, comparisonTree):
+				comparisonTree
 			}
 		}
 
@@ -768,7 +789,6 @@ public actor DependencyTreeGenerator {
 					cache: &receivedPropertiesCache,
 					validation: &childrenRequiringEachOtherValidation,
 				)
-				try validateCyclesFromRootsOfForeignSeamsWithHoles(in: typeDescriptionToScopeMap, foreignSeamRoots: foreignSeamRoots, receivedPropertiesCache: &receivedPropertiesCache)
 			} catch let error as DependencyTreeGeneratorError {
 				// The trees build each foreign seam inline with the fills of its holes, which the seam's module calls
 				// through its builders. Only membership in what each fill declares is read, so the seams' order is moot.
@@ -822,7 +842,7 @@ public actor DependencyTreeGenerator {
 						instantiable: scope.instantiable,
 						sourceFilePath: typeDescriptionToFulfillingInstantiableMap[typeDescription]?.sourceFilePath,
 						built: built,
-						constructionScope: constructionScope,
+						rootScope: constructionScope,
 						treeForcers: treeForcers,
 					))
 				}

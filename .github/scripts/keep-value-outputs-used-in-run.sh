@@ -50,7 +50,7 @@ keep() {
 	case "$outcome" in
 	success | failure) ;;
 	*)
-		echo "Value comparison outputs: the tests did not run to their end (outcome ‘$outcome’), so the cache keeps all $before here."
+		echo "Value comparison outputs: the tests did not run to their end (outcome ‘${outcome}’), so the cache keeps all $before here."
 		return 0
 		;;
 	esac
@@ -115,10 +115,22 @@ self_test() {
 			left=$(find "$directory/value-outputs" -type f -exec basename {} \; | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')
 		fi
 		if [ "$left" != "$expected" ]; then
-			echo "keep-value-outputs-used-in-run.sh: case $cases (outcome $outcome) left ‘$left’, expected ‘$expected’." >&2
+			echo "keep-value-outputs-used-in-run.sh: case $cases (outcome $outcome) left ‘${left}’, expected ‘${expected}’." >&2
 			exit 1
 		fi
 	}
+	# macOS runners run this with bash 3.2, which reads a byte above ASCII just
+	# after `$name` as part of the name: a message that quoted the outcome
+	# with a curly apostrophe failed there with "unbound variable" and passed
+	# on Linux. So no shell script or workflow under `.github` may write such a
+	# byte after an unbraced name.
+	local unbraced
+	unbraced=$(LC_ALL=C grep -rnE --include='*.sh' --include='*.yml' "\\\$[A-Za-z_][A-Za-z_0-9]*[^ -~$(printf '\t')]" "$(dirname "$0")/.." || true)
+	if [ -n "$unbraced" ]; then
+		echo "keep-value-outputs-used-in-run.sh: a byte above ASCII follows an unbraced variable name, which bash 3.2 reads as part of the name; write \${name}:" >&2
+		echo "$unbraced" >&2
+		exit 1
+	fi
 	# Keeps what the run used and what the newest artifacts hold, after tests
 	# that passed or failed.
 	check success "$key1.txt $key2.txt"
