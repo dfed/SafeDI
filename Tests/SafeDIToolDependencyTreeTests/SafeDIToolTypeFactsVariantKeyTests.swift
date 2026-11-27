@@ -281,6 +281,42 @@ struct SafeDIToolTypeFactsVariantKeyTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_answersBoundButNotProvided_whenMockRootForwardsAnotherTypeUnderALabelItsTreeReceives() async throws {
+		// A mock root's forwarded properties hide nothing its tree receives, so `Screen`'s `gizmo: Gizmo` is named only by the
+		// mock root's bindings, no declaration of the tree. The `Settings` the mock builds receives `gizmo:
+		// Instantiator<Widget>`, which the mock takes apart: the bound `gizmo` provides no form it reads.
+		let report = try await rootReport(of: [
+			"""
+			@Instantiable(generateMock: .public)
+			public final class Screen: Instantiable {
+			    public init(gizmo: Gizmo, settingsBuilder: Instantiator<Settings>, gadget: Gadget) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			    @Forwarded public let gizmo: Gizmo
+			    @Received public let settingsBuilder: Instantiator<Settings>
+			    @Instantiated public let gadget: Gadget
+			}
+			@Instantiable
+			public final class Settings: Instantiable {
+			    public init(gizmo: Instantiator<Widget>) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			    @Received public let gizmo: Instantiator<Widget>
+			}
+			public final class Gizmo: Instantiable { public init() {} }
+			public final class Widget: Instantiable { public init() {} }
+			public final class Gadget: Instantiable { public init() {} }
+			""",
+		], root: "Screen", forMockGeneration: true)
+
+		// The mock root's call of `Settings` answers `settingsBuilder` as being built and `gizmo` by the forwarded `gizmo`.
+		#expect(report.world.contains("calls [1, 2] sources [[], [\"bound beingBuilt\", \"bound declared not provided\"]]"), "\(report.world)")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_ordersParametersAsBodyFirstReceives_whenAnEarlierSiblingReadsALaterLabelFirst() async throws {
 		// `Early` reads `alpha` before the world reaches `Ring0`, so the world's reads order `alpha` first (and read
 		// `ring0Builder`, the label of the cycle `Ring1` closes, which is no parameter), while
@@ -308,12 +344,39 @@ struct SafeDIToolTypeFactsVariantKeyTests: ~Copyable {
 		#expect(labelTexts(graph.parameterOrder(of: Int32(ring1))) == ["zeta", "alpha"])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_ordersParametersAsBodyFirstReceives_whenTheBodyReceivesALabelThroughARename() async throws {
+		// As above, with `Ring0` receiving `zeta` through a rename: the rename receives `zeta` itself, before its `leaf`
+		// receives `alpha`, so `zeta` still comes first.
+		let report = try await rootReport(of: [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let entry0: Entry0"]),
+			seamFixtureType(named: "Entry0", isFinalClass: true, declarations: ["@Instantiated let alpha: Alpha", "@Instantiated let zeta: Zeta", "@Instantiated let early: Early", "@Instantiated let ring0Builder: Instantiator<Ring0>"]),
+			seamFixtureType(named: "Early", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let alpha: Alpha?"]),
+			seamFixtureType(named: "Ring0", isFinalClass: true, declarations: ["@Received(fulfilledByDependencyNamed: \"zeta\", ofType: Zeta.self) let renamedZeta: Zeta", "@Instantiated let leaf: Leaf", "@Instantiated let ring1Builder: Instantiator<Ring1>"]),
+			seamFixtureType(named: "Leaf", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let alpha: Alpha?"]),
+			seamFixtureType(named: "Ring1", isFinalClass: true, declarations: ["@Instantiated let ring0Builder: Instantiator<Ring0>"]),
+			seamFixtureType(named: "Alpha", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "Zeta", isFinalClass: true, declarations: []),
+		])
+		let graph = report.graph
+		func labelTexts(_ labels: some Sequence<WorldLabelID>) -> [String] {
+			labels.map { graph.labelTexts[Int($0)] }
+		}
+		let ring0 = try #require(report.nodes.firstIndex { $0.description.hasPrefix("Ring0 ") })
+		let ring1 = try #require(report.nodes.firstIndex { $0.description.hasPrefix("Ring1 ") })
+
+		#expect(labelTexts(graph.labels(of: Int32(ring0))) == ["zeta", "alpha", "ring0Builder"])
+		#expect(labelTexts(graph.parameterOrder(of: Int32(ring0))) == ["zeta", "alpha"])
+		#expect(labelTexts(graph.parameterOrder(of: Int32(ring1))) == ["zeta", "alpha"])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
 
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	private func rootReport(of types: [String], skipCompileVerification: Bool = false) async throws -> TypeFactsReport {
+	private func rootReport(of types: [String], root: String = "Root", forMockGeneration: Bool = false, skipCompileVerification: Bool = false) async throws -> TypeFactsReport {
 		let (stream, continuation) = AsyncStream.makeStream(of: TypeFactsReport.self)
 		_ = try await ConstructionMemoOracle.$observer.withValue({ _, _, report in continuation.yield(report) }) {
 			var filesToDelete = [URL]()
@@ -326,7 +389,7 @@ struct SafeDIToolTypeFactsVariantKeyTests: ~Copyable {
 		}
 		continuation.finish()
 		var reports = [TypeFactsReport]()
-		for await report in stream where report.root == "Root" && !report.forMockGeneration {
+		for await report in stream where report.root == root && report.forMockGeneration == forMockGeneration {
 			reports.append(report)
 		}
 		return try #require(reports.last)
