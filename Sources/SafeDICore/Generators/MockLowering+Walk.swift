@@ -187,12 +187,14 @@ extension ScopeGenerator {
 			rootRenames[label, default: [:]].merge(names) { _, wrapperName in wrapperName }
 		}
 		var rootReceiverBindingLines = [String]()
+		var rootReceivesBoundAgain = [Property]()
 		for dependency in instantiable.dependencies where dependency.source.isReceived {
 			guard let names = signature.renamesByLabelAndType[dependency.property.label],
 			      let name = names[dependency.property.typeDescription] ?? names[dependency.property.asUnwrappedProperty.typeDescription],
 			      !rootLevelBindingNames.contains(dependency.property.label)
 			else { continue }
 			rootReceiverBindingLines.append("\(bodyIndent)let \(dependency.property.label): \(dependency.property.typeDescription.asSource) = \(name)")
+			rootReceivesBoundAgain.append(dependency.property)
 			rootRenames[dependency.property.label]?[dependency.property.typeDescription] = nil
 		}
 		let linesBoundBesideNodes = signature.lazilyInstantiatedBindingLines(indent: bodyIndent) + rootReceiverBindingLines
@@ -217,24 +219,26 @@ extension ScopeGenerator {
 			// parameter handed to the type that instantiates it, is no declaration the records read.
 			let overridesBoundBeforeNodes = signature.onlyIfAvailableOverrides.filter { signature.unavailableDependencyOverrideNames[$0.receivedProperty] == nil }
 			// A builder a call passes up is a parameter of `mock()`, bound again under the name the calls read it by, which the
-			// call's record binds again under its label (`NodeRecords.publicMockCallRecord`); an adapter of one, a builder of a
-			// seam's own places and a builder of a call's fills are not.
+			// call's node binds again under its label (`NodeRecords.mockReceivesBoundAgain(in:)`); an adapter of one, a builder
+			// of a seam's own places and a builder of a call's fills are not.
 			let bindsOnlyPassedUpBuilders = signature.placeOnlyBuilderDeclarations.isEmpty
 				&& walk.filledCallBuilders.builderBindingLines.isEmpty
 				&& signature.passedUpBuilders.allSatisfy(\.adapters.isEmpty)
 			let bindingsBeforeNodes = builderBindingCount + overridesBoundBeforeNodes.count
+			// A parameter or override named apart is a declaration under its name, which the nodes that receive it bind again
+			// under its label (`NodeRecords.mockReceivesBoundAgain(in:)`), and the mocked type's own receive of it is bound
+			// again before the nodes, as the walk binds it.
 			let bindsOnlyNodes = rootReceiverBindingIndex == bindingsBeforeNodes
-				&& linesBoundBesideNodes.isEmpty
+				&& signature.lazilyInstantiatedBindings.isEmpty
 				&& signature.uncoveredParameters.isEmpty
-				&& signature.parameters.allSatisfy { $0.name == $0.property.label }
-				// The override of a property nothing fulfills is read by the record of the type that declares it; every
-				// other override is bound before the nodes, under its label.
-				&& signature.onlyIfAvailableOverrides.allSatisfy { signature.unavailableDependencyOverrideNames[$0.receivedProperty] != nil || $0.name == $0.receivedProperty.label }
 				&& bindsOnlyPassedUpBuilders
-				// A node the root's level names apart is bound under that name by its record; any other name is no node's.
-				&& rootRenames.values.allSatisfy { $0.values.allSatisfy(walk.rootPropertyNodeBindingNames.contains) }
+				// A node the root's level names apart is bound under that name by its record, and a parameter or override
+				// under the name `mock()` gives it; any other name is neither's.
+				&& rootRenames.allSatisfy { label, names in
+					names.allSatisfy { type, name in walk.rootPropertyNodeBindingNames.contains(name) || signature.renamesByLabelAndType[label]?[type] == name }
+				}
 				&& rootInstancesReadByValue.isEmpty
-			var outerDeclarations = signature.parameters.map(\.property)
+			var outerDeclarations = signature.parameters.map { Property(label: $0.name, typeDescription: $0.property.typeDescription) }
 			for builder in signature.passedUpBuilders {
 				for property in builder.properties.prefix(1) {
 					let builderType = property.typeDescription.strippingEscaping
@@ -245,6 +249,7 @@ extension ScopeGenerator {
 				}
 			}
 			outerDeclarations += overridesBoundBeforeNodes.map { Property(label: $0.name, typeDescription: $0.typeDescription) }
+			outerDeclarations += rootReceivesBoundAgain
 			if let statements = try Self.nodeRecordsMockStatements(
 				of: instantiable,
 				worldRoot: worldRoot,
@@ -257,8 +262,9 @@ extension ScopeGenerator {
 				),
 				outerDeclarations: outerDeclarations,
 			) {
-				// The builders' and the overrides' bindings stay before the nodes that read them.
-				bindingLines = Array(bindingLines.prefix(bindingsBeforeNodes)) + (statements.isEmpty ? [] : [statements])
+				// The builders' and the overrides' bindings, and the mocked type's own receives bound again, stay before the nodes
+				// that read them.
+				bindingLines = Array(bindingLines.prefix(bindingsBeforeNodes + rootReceiverBindingLines.count)) + (statements.isEmpty ? [] : [statements])
 			}
 		}
 		// A public mock's tiers, overrides and guard (`MockLowering+PublicMocks.swift`).

@@ -50,7 +50,7 @@ extension NodeRecords {
 		// A `Sendable` wrapper erased to its property's type is made as `mockErased` makes an erased node:
 		// `builtByInitializer` refuses it as `sendable` alone. An erased `LazilyInstantiated`'s override returns the erased
 		// type, as an erased node's does, so its record is the erased kind's too
-		// (`mockErasedRecord(of:variant:in:unavailableProperties:lazilyInstantiatedInstanceProperties:typesDeclaredEscaping:children:)`).
+		// (`mockErasedRecord(of:variant:in:unavailableProperties:lazilyInstantiatedInstanceProperties:receivesBoundAgain:typesDeclaredEscaping:children:)`).
 		let kind: NodeRecordKind = erasedDischarges.isEmpty && !isErasedSendableWrapper(declaration, in: world) && (lazyDischarges.isEmpty || !world.isErased(declaration)) ? .mockConstruction : .mockErased
 		var refusals = rename.refusals + mockSendableRefusals(of: declaration, in: world)
 		let instantiable = world.scope(of: declaration).instantiable
@@ -103,14 +103,14 @@ extension NodeRecords {
 		in world: some NodeRecordSources,
 		unavailableProperties: Set<Property>,
 		lazilyInstantiatedInstanceProperties: Set<Property>,
+		receivesBoundAgain: [MockReceiveBoundAgain],
 		typesDeclaredEscaping: Set<TypeDescription>,
 		children: [GeneratedCode],
 	) throws -> BuiltPlaceRecord {
 		let instantiable = world.scope(of: declaration).instantiable
-		// A child the mock root names apart is bound, and overridden, under that name, and a type that receives one binds
-		// it again under its label before its own children.
-		let nameApart = world.property(of: declaration).flatMap(world.mockRootNames.nameApart(of:))
-		let placesBindingNamesApartAgain = placesBindingNamesApartAgain(in: declaration, of: world)
+		// A child of the root's level the mock root names apart is bound, and overridden, under that name, and a type that
+		// receives a value named apart binds it again under its label before its own children (`mockReceivesBoundAgain(in:)`).
+		let nameApart = world.edges(from: 0).contains(declaration) ? world.property(of: declaration).flatMap(world.mockRootNames.nameApart(of:)) : nil
 		let handWrittenMock: (function: Initializer, target: ConstructionTarget)? = if world.construction(of: declaration) == .handWrittenMock, let mockInitializer = instantiable.mockInitializer {
 			(mockInitializer, .mock(instantiable.concreteInstantiable, name: instantiable.customMockName ?? InstantiableVisitor.mockMethodName))
 		} else {
@@ -138,7 +138,7 @@ extension NodeRecords {
 			argumentsOfOtherValues: fieldArguments,
 			alwaysDeclaresFunction: !fieldArguments.isEmpty,
 			typesDeclaredEscaping: typesDeclaredEscaping,
-			children: placesBindingNamesApartAgain + children,
+			children: receivesBoundAgain.map(\.place) + children,
 		)
 		// A constant built in a function for its configuration's fields writes `return`, as the walk writes it.
 		record.functionAlwaysWritesReturn = !fieldArguments.isEmpty && record.property.propertyType.isConstant

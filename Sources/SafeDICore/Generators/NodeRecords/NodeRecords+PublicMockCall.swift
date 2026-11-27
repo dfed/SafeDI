@@ -119,6 +119,7 @@ extension NodeRecords {
 		of declaration: DeclarationID,
 		variant: VariantID,
 		in world: some NodeRecordSources,
+		receivesBoundAgain: [MockReceiveBoundAgain],
 		typesDeclaredEscaping: Set<TypeDescription>,
 		children _: [GeneratedCode],
 	) throws -> BuiltPlaceRecord {
@@ -133,15 +134,14 @@ extension NodeRecords {
 		let calledType = instantiable.concreteInstantiable
 		var arguments = [PlaceRead]()
 		// Each builder the call passes up is bound again under the label the leaf receives it as, first in the call's function,
-		// from the name `mock()` binds it apart by (`MockLowering.Walk.publicMockCallNode`).
-		var placesBindingBuildersAgain = [GeneratedCode]()
+		// from the name `mock()` binds it apart by (`mockReceivesBoundAgain(in:)`).
 		var builderStructValues = [Int: ValuePath]()
 		for calledArgument in initializer.arguments {
 			// The leaf receives a builder the call passes up as its label alone, which no argument's type matches: the called
 			// mock takes the builder's struct (`MockLowering.Walk.publicMockCallNode` matches it by label too).
 			if let dependency = instantiable.dependencies.first(where: { $0.property.label == calledArgument.innerLabel }),
 			   call.passesUpBuilder(receivedAs: dependency.property),
-			   let name = world.mockRootNames.passedUpBuilderName(of: dependency.property)
+			   world.mockRootNames.passedUpBuilderName(of: dependency.property) != nil
 			{
 				// The called mock takes the builder's struct, made of the builder alone.
 				builderStructValues[arguments.count] = .implicitMemberCall("init", arguments: [PlaceRead(
@@ -156,15 +156,6 @@ extension NodeRecords {
 					property: dependency.property,
 					source: .binding(label: dependency.property.label),
 				))
-				if name != dependency.property.label {
-					let builderType = dependency.property.typeDescription.strippingEscaping
-					let record = AliasPlaceRecord(
-						property: Property(label: dependency.property.label, typeDescription: builderType),
-						fulfillingProperty: Property(label: name, typeDescription: builderType),
-						text: "let \(dependency.property.label): \(builderType.asSource) = \(name)",
-					)
-					placesBindingBuildersAgain.append(.indented(.place(PlacePlan(code: .text(record.text), record: .alias(record))), by: ScopeGenerator.standardIndent))
-				}
 				continue
 			}
 			for (argument, dependency) in try Initializer(arguments: [calledArgument]).createInitializerArguments(given: instantiable.dependencies) {
@@ -176,7 +167,7 @@ extension NodeRecords {
 		}
 		// An `Instantiator` declares the builder function it holds, as does a call that binds a builder again; any other
 		// constant call is made where it is bound.
-		let hasFunction = world.kind(of: declaration) == .instantiator || !placesBindingBuildersAgain.isEmpty
+		let hasFunction = world.kind(of: declaration) == .instantiator || !receivesBoundAgain.isEmpty
 		let argumentValues: [Int: ValuePath]
 		let alternatives: [ConstructionAlternative]
 		let passedArguments: [PassedArgument]
@@ -229,7 +220,7 @@ extension NodeRecords {
 			typesDeclaredEscaping: typesDeclaredEscaping.union(call.typesDeclaredEscaping),
 			lineEnd: "",
 			hasFunction: hasFunction,
-			children: placesBindingBuildersAgain,
+			children: receivesBoundAgain.map(\.place),
 			node: PlanNode(),
 		)
 		record.sharingFields = PlaceSharingFields(passedArguments: passedArguments, constructionValue: nil, alternatives: alternatives, argumentValues: argumentValues)

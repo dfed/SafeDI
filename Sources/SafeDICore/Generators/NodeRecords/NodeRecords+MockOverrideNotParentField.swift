@@ -62,9 +62,21 @@ struct MockRootNames: Sendable {
 		passedUpBuilderNames[property]
 	}
 
-	private let passedUpBuilderNames: [Property: String]
+	/// The name of each value of the root's level a node binds again under its label where it receives it, by label and
+	/// then type: each value the root names apart, and each builder a call passes up that `mock()` binds under another name
+	/// (`NodeRecords.mockReceivesBoundAgain(in:)`).
+	var namesBoundAgain: [String: [TypeDescription: String]] {
+		var names = namesApart
+		for (property, name) in passedUpBuilderNames where name != property.label {
+			names[property.label, default: [:]][property.typeDescription] = name
+		}
+		return names
+	}
 
-	private let namesApart: [String: [TypeDescription: String]]
+	/// The name the root gives each value of its level it names apart, by label and then type.
+	let namesApart: [String: [TypeDescription: String]]
+
+	private let passedUpBuilderNames: [Property: String]
 	private let unavailableDependencyOverrideNames: [Property: String]
 }
 
@@ -72,14 +84,15 @@ extension NodeRecords {
 	/// The refusal `declaration`, a node of a mock root's world, holds for a label the root names apart, or none.
 	///
 	/// A mock root promotes each form of a label its tree receives and names the forms apart
-	/// (`ScopeGenerator.disambiguatePropertyLabels(forProperties:besideParametersKeepingTheirLabels:reservedNames:)`), so
-	/// the override of such a child is the root's field under the name, and each type that receives the label binds the
-	/// name again under the label at the top of its function. The records make that where every read of the label is a
-	/// receive of a form the root names apart, with nothing between the root and the receive declaring the label again.
-	/// Refused, and left to the walk: two children of one label under any other node, or under a root that was handed no
-	/// name for one; a child named apart whose property is optional, which the walk binds as the value it builds; a node beneath the root that instantiates, forwards or renames such a label, which hides the name
-	/// from what it builds; and a receive of the label in a form the root does not name apart, which reads the label by
-	/// name where the walk hands the name on (`MockLowering.receiveReadsLabelByName`).
+	/// (`ScopeGenerator.disambiguatePropertyLabels(forProperties:besideParametersKeepingTheirLabels:reservedNames:)`), and
+	/// names apart a parameter of `mock()` or an override beside another form of its label, so the override of such a child
+	/// is the root's field under the name, and each type that receives the label where no declaration between hides it binds
+	/// the name again under the label at the top of its function (`mockReceivesBoundAgain(in:)`). Refused, and left to the
+	/// walk: two children of one label under any other node, or under a root that was handed no name for one; a child of the
+	/// root named apart whose property is optional, which the walk binds as the value it builds; a rename of such a label
+	/// or from one, whose binding the walk reads otherwise; and a receive of the label only if available, which reads the name or `nil`
+	/// by its place, since a required receive of another form above a place pins the label there
+	/// (`MockLowering.receiveReadsLabelByName`), and one function serves every place.
 	static func refusalOfNamingApart(_ declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordRefusal? {
 		let mockRootNames = world.mockRootNames
 		var labels = Set<String>()
@@ -87,7 +100,7 @@ extension NodeRecords {
 			guard let property = world.property(of: child) else { continue }
 			// The walk binds an optional form the root names apart without its type, so the binding is not optional; a
 			// record's binding declares the property's type.
-			guard mockRootNames.nameApart(of: property) == nil || !property.typeDescription.isOptional else { return .mockOverrideNotParentField }
+			guard declaration != 0 || mockRootNames.nameApart(of: property) == nil || !property.typeDescription.isOptional else { return .mockOverrideNotParentField }
 			guard !labels.insert(property.label).inserted else { continue }
 			// Both children of the label are named apart, or neither is.
 			guard declaration == 0, mockRootNames.namesApart(label: property.label) else { return .mockOverrideNotParentField }
@@ -95,15 +108,14 @@ extension NodeRecords {
 		guard declaration != 0 else { return nil }
 		for dependency in world.scope(of: declaration).instantiable.dependencies {
 			switch dependency.source {
-			case .received:
-				guard mockRootNames.namesApart(label: dependency.property.label) else { continue }
-				// A receive only if available of the type a name apart holds is refused with the other forms: whether it
-				// reads the name or `nil` is its place's, since a required receive of another form above a place pins the
-				// label there (`MockLowering.receiveReadsLabelByName`), and one function serves every place.
-				guard mockRootNames.nameApart(of: dependency.property) != nil else { return .mockOverrideNotParentField }
-			case .instantiated, .forwarded, .aliased:
-				// A type that declares a rename is left unclaimed (`NodeRecordRefusal.renameOrHole`), so none is asked here.
-				guard !mockRootNames.namesApart(label: dependency.property.label) else { return .mockOverrideNotParentField }
+			case let .received(onlyIfAvailable):
+				guard !onlyIfAvailable || !mockRootNames.namesApart(label: dependency.property.label) else { return .mockOverrideNotParentField }
+			case let .aliased(fulfillingProperty, _, _):
+				// A rename reads its fulfilling label by name, which the walk resolves past a receive bound again.
+				guard !mockRootNames.namesApart(label: dependency.property.label), !mockRootNames.namesApart(label: fulfillingProperty.label) else { return .mockOverrideNotParentField }
+			case .instantiated, .forwarded:
+				// A declaration of the label hides the name from what the node builds (`mockReceivesBoundAgain(in:)`).
+				break
 			}
 		}
 		return nil
@@ -115,21 +127,5 @@ extension NodeRecords {
 	static func callTakesLabelNamedApart(_ declaration: DeclarationID, in world: some NodeRecordSources) -> Bool {
 		let mockRootNames = world.mockRootNames
 		return world.scope(of: declaration).instantiable.dependencies.contains { mockRootNames.namesApart(label: $0.property.label) }
-	}
-
-	/// The places that bind again, under its label, each child of the mock root named apart that `declaration`'s type
-	/// receives: the first statements of its function, in the order its type declares the receives, each written as the
-	/// walk writes it and read as a rename of the name is, so the function is handed the name as it is any value it reads.
-	static func placesBindingNamesApartAgain(in declaration: DeclarationID, of world: some NodeRecordSources) -> [GeneratedCode] {
-		let mockRootNames = world.mockRootNames
-		return world.scope(of: declaration).instantiable.dependencies.compactMap { dependency in
-			guard case .received = dependency.source, let name = mockRootNames.nameApart(of: dependency.property) else { return nil }
-			let record = AliasPlaceRecord(
-				property: dependency.property,
-				fulfillingProperty: Property(label: name, typeDescription: dependency.property.typeDescription),
-				text: "let \(dependency.property.label): \(dependency.property.typeDescription.asSource) = \(name)",
-			)
-			return .indented(.place(PlacePlan(code: .text(record.text), record: .alias(record))), by: ScopeGenerator.standardIndent)
-		}
 	}
 }

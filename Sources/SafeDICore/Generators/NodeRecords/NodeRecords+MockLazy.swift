@@ -22,7 +22,7 @@ extension NodeRecords {
 	/// What a node of a mock root's world built as a `LazilyInstantiated`, erased or not, discharges of stage 1's
 	/// refusals: the wrapper is made of its builder function as in a production root's world (`lazyClaim(of:in:)`), and
 	/// the function first tries the node's override
-	/// (`mockConstructionRecord(of:variant:in:unavailableProperties:lazilyInstantiatedInstanceProperties:typesDeclaredEscaping:children:)`).
+	/// (`mockConstructionRecord(of:variant:in:unavailableProperties:lazilyInstantiatedInstanceProperties:receivesBoundAgain:typesDeclaredEscaping:children:)`).
 	/// An erased wrapper's override returns the erased type, so its record is the erased kind's, whose function erases the
 	/// construction it falls back to. Empty for a node of any other kind.
 	static func mockLazyDischarges(of declaration: DeclarationID, in world: some NodeRecordSources) -> Set<NodeRecordRefusal> {

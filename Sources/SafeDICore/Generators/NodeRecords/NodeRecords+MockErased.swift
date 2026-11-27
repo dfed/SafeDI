@@ -37,6 +37,7 @@ extension NodeRecords {
 		in world: some NodeRecordSources,
 		unavailableProperties: Set<Property>,
 		lazilyInstantiatedInstanceProperties: Set<Property>,
+		receivesBoundAgain: [MockReceiveBoundAgain],
 		typesDeclaredEscaping: Set<TypeDescription>,
 		children: [GeneratedCode],
 	) throws -> BuiltPlaceRecord {
@@ -46,6 +47,7 @@ extension NodeRecords {
 			in: world,
 			unavailableProperties: unavailableProperties,
 			lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
+			receivesBoundAgain: receivesBoundAgain,
 			typesDeclaredEscaping: typesDeclaredEscaping,
 			children: children,
 		)
