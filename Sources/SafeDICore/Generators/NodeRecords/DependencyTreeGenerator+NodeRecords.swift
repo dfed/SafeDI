@@ -42,7 +42,7 @@ extension DependencyTreeGenerator {
 	static func nodeRecordRefusal(ofSeamWorldRoot rootInfo: RootScopeInfo) -> [TreeForcer] {
 		guard rootInfo.treeForcers.contains(.seamWorld), let constructionScope = rootInfo.constructionScope else { return [] }
 		let world = TypeFactsGraph(root: constructionScope, forMockGeneration: false)
-		let records = Result { () throws -> NodeRecords in try NodeRecords(world: world, rootLazilyInstantiatedInstanceProperties: rootInfo.seamTree?.rootLazilyInstantiatedInstanceProperties ?? []) }
+		let records = Result { () throws -> NodeRecords in try NodeRecords(world: world, seamTree: rootInfo.seamTree) }
 		switch records {
 		case let .success(nodeRecords):
 			// A call of a seam, whose guard line the engine does not spell yet, keeps the root from being laid out.
@@ -71,17 +71,17 @@ extension DependencyTreeGenerator {
 			guard let constructionScope = rootInfo.constructionScope, let observer = NodeRecordsObservation.observer else {
 				return try await scopeGenerator.generatePlan()
 			}
-			let rootLazilyInstantiatedInstanceProperties = rootInfo.seamTree?.rootLazilyInstantiatedInstanceProperties ?? []
+			let seamTree = rootInfo.seamTree
 			// The work of making the records is no run's, so the tests that count a run's work count none of it.
 			let (world, records) = GenerationWork.$observer.withValue(nil) {
 				let world = TypeFactsGraph(root: constructionScope, forMockGeneration: false)
-				return (world, Result { () throws -> NodeRecords in try NodeRecords(world: world, rootLazilyInstantiatedInstanceProperties: rootLazilyInstantiatedInstanceProperties) })
+				return (world, Result { () throws -> NodeRecords in try NodeRecords(world: world, seamTree: seamTree) })
 			}
 			let nodeRecords: NodeRecords
 			do {
 				nodeRecords = try records.get()
 			} catch let refusal as NodeRecordRefusal {
-				let everyRefusal = GenerationWork.$observer.withValue(nil) { NodeRecords.refusals(in: world, rootLazilyInstantiatedInstanceProperties: rootLazilyInstantiatedInstanceProperties) }
+				let everyRefusal = GenerationWork.$observer.withValue(nil) { NodeRecords.refusals(in: world, seamTree: seamTree) }
 				observer(NodeRecordsReport(root: root, refusal: refusal.rawValue, everyRefusal: everyRefusal.map(\.rawValue), isLaidOutFromNodeRecords: false, differences: [], recordCount: 0, treePlaceCount: 0, treeForcers: rootInfo.treeForcers))
 				return try await scopeGenerator.generatePlan()
 			}

@@ -100,17 +100,18 @@ extension TypeFactsGraph: NodeRecordSources {
 struct NodeRecords: Sendable {
 	/// - Parameters:
 	///   - world: A production root's world.
-	///   - rootLazilyInstantiatedInstanceProperties: What the root is handed as instances of `LazilyInstantiated` properties:
-	///     a seam's deferred parameters, which its tree reads through their memos. Empty for any other root.
+	///   - seamTree: What a seam's own root is handed: its parameters, the nearest declarations of their labels, and the
+	///     instances of `LazilyInstantiated` properties among them, a deferred parameter's memo included, which its tree
+	///     reads through their wrappers. `nil` for any other root.
 	/// - Throws: A `NodeRecordRefusal` where the world holds a kind stage 1 does not make, or what an initializer's
 	///   arguments throw.
-	init(world: some NodeRecordSources, rootLazilyInstantiatedInstanceProperties: Set<Property> = []) throws {
+	init(world: some NodeRecordSources, seamTree: DependencyTreeGenerator.RootScopeInfo.SeamTree? = nil) throws {
 		let declarationCount = world.declarationCount
 		var kinds = [NodeRecordKind]()
 		kinds.reserveCapacity(declarationCount)
 		for declaration in 0..<Int32(declarationCount) {
 			try kinds.append(Self.kind(of: declaration, in: world))
-			try Self.checkReadsNoInstance(of: rootLazilyInstantiatedInstanceProperties, declaration, in: world)
+			try Self.checkReadsNoSeamRootValue(of: seamTree, declaration, in: world)
 		}
 		var variantByDeclaration = [VariantID](repeating: -1, count: declarationCount)
 		for variant in 0..<Int32(world.variantCount) {
@@ -119,7 +120,7 @@ struct NodeRecords: Sendable {
 			variantByDeclaration[declaration] = variant
 		}
 		let order = try NodeBuildOrder(world: world)
-		let onlyIfAvailableAnswers = try OnlyIfAvailableAnswers(world: world)
+		let onlyIfAvailableAnswers = try OnlyIfAvailableAnswers(world: world, rootParameters: seamTree?.parameters ?? [])
 		// A node's place holds its children's places, so each is made after its children: a post-order walk from the root,
 		// with a stack, since a tree can be as deep as the module has types.
 		var places = [GeneratedCode?](repeating: nil, count: world.variantCount)
@@ -214,12 +215,12 @@ struct NodeRecords: Sendable {
 
 	/// Every refusal `world` holds, each once, in the order of `NodeRecordRefusal`'s cases: what a test reports of a world, so
 	/// that each stage counts the worlds it frees.
-	static func refusals(in world: some NodeRecordSources, rootLazilyInstantiatedInstanceProperties: Set<Property> = []) -> [NodeRecordRefusal] {
+	static func refusals(in world: some NodeRecordSources, seamTree: DependencyTreeGenerator.RootScopeInfo.SeamTree? = nil) -> [NodeRecordRefusal] {
 		var refusals = Set<NodeRecordRefusal>()
 		for declaration in 0..<Int32(world.declarationCount) {
 			refusals.formUnion(kindAndRefusals(of: declaration, in: world).refusals)
 			do {
-				try checkReadsNoInstance(of: rootLazilyInstantiatedInstanceProperties, declaration, in: world)
+				try checkReadsNoSeamRootValue(of: seamTree, declaration, in: world)
 			} catch {
 				refusals.insert(error)
 			}
@@ -234,24 +235,37 @@ struct NodeRecords: Sendable {
 			refusals.insert(error)
 		}
 		do {
-			_ = try OnlyIfAvailableAnswers(world: world)
+			_ = try OnlyIfAvailableAnswers(world: world, rootParameters: seamTree?.parameters ?? [])
 		} catch {
 			refusals.insert(error)
 		}
 		return NodeRecordRefusal.allCases.filter(refusals.contains)
 	}
 
-	/// Refuses `declaration`'s world, as the lazy stage's, where its type receives one of `instanceProperties`, the instances
-	/// of `LazilyInstantiated` properties the root is handed, which its tree reads through the wrapper and stage 1 would read
-	/// as a binding of the label.
-	private static func checkReadsNoInstance(of instanceProperties: Set<Property>, _ declaration: DeclarationID, in world: some NodeRecordSources) throws(NodeRecordRefusal) {
-		guard !instanceProperties.isEmpty else { return }
-		// A rename's fulfilling property is a read too, which stage 1 refuses as a rename.
-		let receivesAnInstance = world.scope(of: declaration).instantiable.dependencies.contains { dependency in
-			(dependency.source == .received(onlyIfAvailable: false) || dependency.source == .received(onlyIfAvailable: true))
-				&& instanceProperties.contains(dependency.property.asUnwrappedProperty)
+	/// Refuses `declaration`'s world where its type reads what a seam's root is handed as stage 1 does not write it: as
+	/// the lazy stage's, a receive or a rename of one of the instances of `LazilyInstantiated` properties the root is
+	/// handed, which its tree reads through the wrapper and stage 1 would read as a binding of the label; as a rename's,
+	/// the seam's own rename that keeps a deferred parameter's label, which the tree binds from the parameter's
+	/// autoclosure and writes no record of.
+	private static func checkReadsNoSeamRootValue(of seamTree: DependencyTreeGenerator.RootScopeInfo.SeamTree?, _ declaration: DeclarationID, in world: some NodeRecordSources) throws(NodeRecordRefusal) {
+		guard let seamTree else { return }
+		let readsAnInstance = world.scope(of: declaration).instantiable.dependencies.contains { dependency in
+			switch dependency.source {
+			case .received:
+				seamTree.rootLazilyInstantiatedInstanceProperties.contains(dependency.property.asUnwrappedProperty)
+			case let .aliased(fulfillingProperty, _, _):
+				seamTree.rootLazilyInstantiatedInstanceProperties.contains(fulfillingProperty.asUnwrappedProperty)
+			case .instantiated, .forwarded:
+				false
+			}
 		}
-		guard !receivesAnInstance else { throw .lazy }
+		guard !readsAnInstance else { throw .lazy }
+		// The root declares no rename through a variant of its own, so it is the scope of each rename among its edges.
+		guard declaration == 0 else { return }
+		let readsAnAutoclosure = world.edges(from: declaration).contains { edge in
+			world.kind(of: edge) == .alias && world.property(of: edge).map { seamTree.autoclosureLabels.contains($0.label) } == true
+		}
+		guard !readsAnAutoclosure else { throw .renameOrHole }
 	}
 
 	/// The kind of record `declaration` is made as, or the first refusal it holds (`kindAndRefusals(of:in:)`).

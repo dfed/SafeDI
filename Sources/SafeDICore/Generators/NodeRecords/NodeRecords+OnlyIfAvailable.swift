@@ -79,8 +79,11 @@ extension NodeRecords {
 ///
 /// Holds, per variant, the set of the properties it is passed `nil` for, for as long as the world's records are made.
 struct OnlyIfAvailableAnswers: Sendable {
-	/// - Parameter world: A world each of whose nodes is of a kind `NodeRecords` makes, off every cycle.
-	init(world: some NodeRecordSources) throws(NodeRecordRefusal) {
+	/// - Parameters:
+	///   - world: A world each of whose nodes is of a kind `NodeRecords` makes, off every cycle.
+	///   - rootParameters: A seam's parameters, which its root is handed as the nearest declarations of their labels
+	///     (`DependencyTreeGenerator.seamRootDeclarations(of:seamRoot:)`); empty for any other root.
+	init(world: some NodeRecordSources, rootParameters: [Property] = []) throws(NodeRecordRefusal) {
 		var labels = Set<String>()
 		for declaration in 0..<Int32(world.declarationCount) where world.kind(of: declaration) != .alias && world.kind(of: declaration) != .hole {
 			for dependency in world.scope(of: declaration).instantiable.dependencies {
@@ -104,7 +107,12 @@ struct OnlyIfAvailableAnswers: Sendable {
 		// What each variant's construction sees of each followed label: what the call that reaches it sees, with the
 		// declarations of the node that calls it, in the order that node builds its children.
 		var contextByVariant = [[String: [Binding]]?](repeating: nil, count: world.variantCount)
-		contextByVariant[0] = [:]
+		// A seam's parameters are available throughout its tree, each the nearest declaration of its label.
+		var rootContext = [String: [Binding]]()
+		for parameter in rootParameters where labels.contains(parameter.label) {
+			rootContext[parameter.label] = [Binding(property: parameter, state: .available)]
+		}
+		contextByVariant[0] = rootContext
 		var variantsToVisit: [VariantID] = [0]
 		while let variant = variantsToVisit.popLast() {
 			let declaration = world.declaration(of: variant)
