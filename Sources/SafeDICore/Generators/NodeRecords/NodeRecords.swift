@@ -561,11 +561,11 @@ struct NodeRecords: Sendable {
 	}
 
 	/// Whether a producer of the facts still owes `declaration`'s answers (`TypeFactsWorld.owedFacts(of:)`), which refuses
-	/// its world as `readAnsweredTwoWays`. The mock root's bits are not owed where a test lays mock roots out from their
+	/// its world as `readAnsweredTwoWays`. The mock root's records and bindings are not owed where a test lays mock roots out from their
 	/// records (`NodeRecordsObservation.laysOutMockRoots`), a mode no run of `generate` turns on; every run of it refuses
 	/// every mock world.
 	private static func owesFacts(_ declaration: DeclarationID, in world: some NodeRecordSources) -> Bool {
-		let owedOnlyOutsideTests: TypeFactsOwedFacts = NodeRecordsObservation.laysOutMockRoots ? [.mockRootPin, .mockRootRecord, .mockRootBinding] : []
+		let owedOnlyOutsideTests: TypeFactsOwedFacts = NodeRecordsObservation.laysOutMockRoots ? [.mockRootRecord, .mockRootBinding] : []
 		return !world.owedFacts(of: declaration).subtracting(owedOnlyOutsideTests).isEmpty
 	}
 

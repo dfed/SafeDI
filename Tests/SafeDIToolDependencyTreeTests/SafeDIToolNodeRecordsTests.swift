@@ -813,9 +813,9 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_refusesMockWorldAsReadAnsweredTwoWays_whenTheMockRootsPinsRecordsAndBindingsAreOwed() async throws {
-		// The facts still owe every declaration of a mock root's world its pins, required-receive records and bindings
-		// (`mockRootPin`, `mockRootRecord`, `mockRootBinding`), which are set together.
+	mutating func generate_refusesMockWorldAsReadAnsweredTwoWays_whenTheMockRootsRecordsAndBindingsAreOwed() async throws {
+		// The facts still owe every declaration of a mock root's world its required-receive records and bindings
+		// (`mockRootRecord`, `mockRootBinding`), which are set together.
 		let (_, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
 			try await executeSafeDIToolTest(swiftFileContent: [
 				"""

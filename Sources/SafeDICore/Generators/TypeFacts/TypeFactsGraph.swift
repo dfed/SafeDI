@@ -783,7 +783,10 @@ struct TypeFactsGraph: Sendable {
 		self.readOffsets = readOffsets
 		self.labelColumn = labelColumn
 		self.labelOffsets = labelOffsets
-		let answers = Self.answers(of: graph, reads: reads, readTable: readInterner.values, labels: labels, bindings: bindings, bindingOffsets: bindingOffsets, bindingsBefore: bindingsBefore, properties: properties, madeAgain: madeAgain.map { ($0, madeAgainByNode, loopParentByMember) })
+		let mockRootPins = forMockGeneration ? TypeFactsMockRootPins(graph: graph, edgeIsFill: edgeIsFill, labels: labels) : nil
+		self.mockRootPins = mockRootPins
+		let answers = Self.answers(of: graph, reads: reads, readTable: readInterner.values, labels: labels, bindings: bindings, bindingOffsets: bindingOffsets, bindingsBefore: bindingsBefore, properties: properties, madeAgain: madeAgain.map { ($0, madeAgainByNode, loopParentByMember) }, mockRootPins: mockRootPins)
+		mockPinContexts = answers.mockPinContexts
 		answerIsBeingBuilt = answers.isBeingBuilt
 		answerIsMadeAgain = answers.isMadeAgain
 		answerTexts = answers.texts
@@ -835,6 +838,12 @@ struct TypeFactsGraph: Sendable {
 
 	/// The variants of the world's bodies, answered by what each node binds at its edges (`answers(of:reads:…)`).
 	let variants: TypeFactsVariants
+
+	/// What a mock root's world pins (`TypeFactsMockRootPins`), `nil` for a production root's world.
+	let mockRootPins: TypeFactsMockRootPins?
+
+	/// The context each answer ID of a mock read stands for, which is also its key.
+	let mockPinContexts: [Int32: TypeFactsMockRootPins.Context]
 
 	/// What each read of each variant comes to in its body.
 	let outcomes: TypeFactsOutcomes
@@ -936,7 +945,8 @@ struct TypeFactsGraph: Sendable {
 		bindingsBefore: [Int32],
 		properties: TypeFactsInterner<Property>,
 		madeAgain: (edges: MadeAgainEdges, targetsByNode: [[LoopTarget]], parentByMember: [Int32])?,
-	) -> (variants: TypeFactsVariants, isBeingBuilt: [Bool], isMadeAgain: [Bool], texts: [String], keys: [Int32], properties: [Int32]) {
+		mockRootPins: TypeFactsMockRootPins?,
+	) -> (variants: TypeFactsVariants, isBeingBuilt: [Bool], isMadeAgain: [Bool], texts: [String], keys: [Int32], properties: [Int32], mockPinContexts: [Int32: TypeFactsMockRootPins.Context]) {
 		var answerIDByText = [String: Int32]()
 		var texts = [String]()
 		var isBeingBuilt = [Bool]()
@@ -974,6 +984,20 @@ struct TypeFactsGraph: Sendable {
 			keys.append(keyID)
 			answerProperties.append(property)
 			return id
+		}
+		// A mock read is answered by what the mock root pins above the place (`TypeFactsMockRootPins.Context`), a key of its
+		// own text, so the answer is its key.
+		var mockPinContexts = [Int32: TypeFactsMockRootPins.Context]()
+		func mockAnswer(_ context: TypeFactsMockRootPins.Context, declaration: Int) -> VariantBinding {
+			let text = switch context {
+			case .nearer:
+				"\(ReadChannel.mock.name) nearer declaration"
+			case let .root(pinnedAbove):
+				"\(ReadChannel.mock.name) root pinned above \(pinnedAbove)"
+			}
+			let id = answer(text: text, beingBuilt: false, keyText: text, kind: .constant, property: -1)
+			mockPinContexts[id] = context
+			return VariantBinding(answer: id, declaration: Int32(declaration))
 		}
 		var sourceByEdge = [Int32]()
 		// Each node's declarations by label, as its scope spells them, with the forms each provides: the world's property IDs
@@ -1014,18 +1038,40 @@ struct TypeFactsGraph: Sendable {
 			guard read.channel.asksAboutLabel, !reboundByLabelByNode.isEmpty, let declaration = reboundByLabelByNode[node][read.label] else {
 				return nil
 			}
+			// A label a member rebinds at its top is declared nearer than the mock root's declaration, which pins nothing there.
+			guard read.channel != .mock else {
+				return mockRootPins?.isPinnable(read.label) == true ? mockAnswer(.nearer, declaration: node) : nil
+			}
 			let keyText = "\(read.channel.name) \(declaration.forms)"
 			return VariantBinding(answer: answer(text: "\(keyText) made again", beingBuilt: false, madeAgain: true, keyText: keyText, kind: declaration.kind, property: declaration.property), declaration: Int32(node))
 		}
 		let variants = TypeFactsVariants(
 			graph: graph,
 			reads: reads,
-			rootAnswer: { _ in nil },
+			rootAnswer: { readID in
+				// The root's own receives read the mock root's declarations, above which nothing pins.
+				let read = readTable[Int(readID)]
+				guard read.channel == .mock, let mockRootPins, mockRootPins.isPinnable(read.label) else { return nil }
+				return mockAnswer(.root(pinnedAbove: []), declaration: 0)
+			},
 			binding: { edge, readID in
 				// Every read the graph interns asks about a label: `ownReads` makes only value, optional and mock reads.
 				let read = readTable[Int(readID)]
 				let node = Int(sourceByEdge[edge])
 				let child = graph.nodes[Int(edgeTargets[edge])]
+				if read.channel == .mock {
+					// The root's edges hand its own context; a node that declares the label hides the root's declaration from
+					// every place beneath it, as `NearestDeclarations.replaceLabels(of:)` does; any other node hands on its
+					// caller's, which `refine` adds its required receives to.
+					guard let mockRootPins, mockRootPins.isPinnable(read.label) else { return nil }
+					if node == 0 {
+						return mockAnswer(mockRootPins.rootContext(atEdge: edge - graph.edgeOffset(of: 0), label: read.label), declaration: 0)
+					} else if declarationsByLabelByNode[node][read.label] != nil {
+						return mockAnswer(.nearer, declaration: node)
+					} else {
+						return nil
+					}
+				}
 				// A child answers its own label's read as the declaration being built, by the property it is built as; any
 				// other label by the last of its parent's bindings bound before the edge, so a declaration bound after the
 				// call does not answer it, and else by the member the node rebinds at its top under the label.
@@ -1081,8 +1127,16 @@ struct TypeFactsGraph: Sendable {
 			madeAgain: madeAgain.map { madeAgain in
 				(madeAgain.edges, { node, readID in madeAgainAnswer(at: node, for: readTable[Int(readID)]) })
 			},
+			refine: mockRootPins.map { mockRootPins in
+				{ edge, readID, callerKey in
+					let read = readTable[Int(readID)]
+					guard read.channel == .mock, let context = mockPinContexts[callerKey] else { return nil }
+					let node = Int(sourceByEdge[edge])
+					return mockRootPins.context(handedOnBy: node, label: read.label, from: context).map { mockAnswer($0, declaration: node).answer }
+				}
+			},
 		)
-		return (variants, isBeingBuilt, isMadeAgain, texts, keys, answerProperties)
+		return (variants, isBeingBuilt, isMadeAgain, texts, keys, answerProperties, mockPinContexts)
 	}
 
 	/// The declarations in the order a walk of the root's edges, depth first, first reaches each. A node keeps its scope
@@ -1103,6 +1157,22 @@ struct TypeFactsGraph: Sendable {
 	/// Whether the world is a mock root's (`forMockGeneration`).
 	var isMockWorld: Bool {
 		forMockGeneration
+	}
+
+	/// The properties the variant's own type's dependencies receive only if available that a mock passes `nil`, as
+	/// production always does (`TypeFactsMockRootPins`): empty outside a mock root's world. What `ScopeGenerator`'s
+	/// `receivesPassedNil` holds at each place of the variant.
+	func receivesPassedNil(of variant: VariantID) -> Set<Property> {
+		let node = Int(declaration(of: variant))
+		guard let mockRootPins, graph.nodes[node].key.leaf == .none else { return [] }
+		var contextByLabel = [String: TypeFactsMockRootPins.Context]()
+		for (read, key) in zip(readColumn[Int(readOffsets[node])..<Int(readOffsets[node + 1])], keys(of: variant)) where readTable[Int(read)].channel == .mock {
+			if let context = mockPinContexts[key] {
+				contextByLabel[labelTexts[Int(readTable[Int(read)].label)]] = context
+			}
+		}
+		let scope = graph.nodes[node].scope
+		return mockRootPins.receivesPassedNil(at: node, type: scope.instantiable.concreteInstantiable, scope: scope) { contextByLabel[$0] }
 	}
 
 	/// How each node's type comes to exist.

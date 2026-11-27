@@ -268,6 +268,15 @@ enum TypeFactsChecks {
 				}
 			}
 		}
+		// Check 33: each place of a mock passes `nil` to the receives only if available its variant says it pins.
+		var comparedPins = 0
+		for (index, variant) in factsVariantByPlace.enumerated() where report.forMockGeneration && !places[index].closesCycle {
+			guard let variant else { continue }
+			comparedPins += 1
+			if places[index].receivesPassedNil != report.variantReceivesPassedNil[variant] {
+				add(33, "place \(index) \(places[index].declaration) passes `nil` to \(places[index].receivesPassedNil) where its variant \(variant) pins \(report.variantReceivesPassedNil[variant])")
+			}
+		}
 		var answerFormsByNodeAndLabel = [Int: [String: Set<Character>]]()
 		for place in places {
 			guard let node = place.node else { continue }
@@ -328,6 +337,7 @@ enum TypeFactsChecks {
 		}
 		var compared = [Int: Int]()
 		columnChecks(of: report, subtreeClosesCycle: subtreeClosesCycle, closedOnPlace: closedOnPlace, childrenByPlace: childrenByPlace, add: add, compared: &compared)
+		compared[33] = comparedPins
 		result.comparedByCheck = compared
 		let unwalkedNodes = report.nodes.count - nodesSeen.count - report.nodes.count(where: \.isLeaf)
 		let twinNodes = report.nodes.count { $0.twin >= 0 }
@@ -365,7 +375,8 @@ enum TypeFactsChecks {
 	}
 
 	/// The facts a producer still owes that tell apart the answers two places of one variant give, the symmetric
-	/// difference of their keyed answers: per read, `mockRootPin` for a mock read; for two answers of one read, the first
+	/// difference of their keyed answers: per read, `mockRootPin` for a mock read, which no node owes since the pins'
+	/// producer (`TypeFactsMockRootPins`) answers it, so a difference there counts as unowed; for two answers of one read, the first
 	/// field that differs names it (`fillBeingBuilt` for being built at one only, `mockRootRecord` for what is pinned or
 	/// read above, `mockRootBinding` for what the mock root binds, `madeAgain` for a builder's bindings); `unowed`
 	/// otherwise, a read one place asks among them.
@@ -439,7 +450,7 @@ enum TypeFactsChecks {
 		return reads
 	}
 
-	static let lastCheck = 32
+	static let lastCheck = 33
 
 	/// Checks 11 to 31: each column of the graph against what the generator decided at each place.
 	///
@@ -468,6 +479,9 @@ enum TypeFactsChecks {
 	/// 32. Oracle B: each member a variant makes again is called as the variant that each body calling the maker calls for
 	///     that member at its own edge, and the maker has such a body. It reads the variants alone, so it runs on every tree
 	///     with a loop of builders, refused or not.
+	///
+	/// Check 33, beside check 10, reads each place's variant: a place of a mock passes `nil` to exactly the receives only if
+	/// available its variant pins (`TypeFactsMockRootPins`), as the walk judged them.
 	private static func columnChecks(
 		of report: TypeFactsReport,
 		subtreeClosesCycle: [Bool],

@@ -1197,6 +1197,20 @@ extension DependencyTreeGenerator {
 		}
 	}
 
+	/// The receives only if available of the type of `scope` that read from above it, as `receivesPassedNilInMockTree`
+	/// walks them: each with the property it receives (an alias's fulfilling property) and its dependency.
+	static func onlyIfAvailableReceivesFromAbove(of scope: ConstructionScope) -> [(property: Property, dependency: Dependency)] {
+		declaredLabelsAndReceivesFromAbove(of: scope.instantiable, publicMockCall: scope.publicMockCall).receives.compactMap { receive in
+			receive.isRequired ? nil : (receive.property, receive.dependency)
+		}
+	}
+
+	/// The labels the type of `scope` declares, as `receivesPassedNilInMockTree` walks them: the types it builds receive
+	/// those from it, so no receive of one beneath it reads the declaration above it.
+	static func labelsDeclared(by scope: ConstructionScope) -> Set<String> {
+		declaredLabelsAndReceivesFromAbove(of: scope.instantiable, publicMockCall: scope.publicMockCall).declaredLabels
+	}
+
 	/// Whether a required receive that reads `requiredReceivePropertiesRead` pins the declaration a receive only if
 	/// available of `dependency` reads to a form it cannot read, so that production passes it `nil`, as
 	/// `receivesPassedNilInMockTree` judges it.
