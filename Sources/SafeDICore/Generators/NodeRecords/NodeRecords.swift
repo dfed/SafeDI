@@ -197,6 +197,8 @@ struct NodeRecords: Sendable {
 				escaping.formUnion(typesDeclaredEscaping[callee] ?? [])
 				children.append(.indented(places[callee] ?? .empty, by: ScopeGenerator.standardIndent))
 			}
+			// A place of a seam's own mock is bound from its builder before the node's children, which read it.
+			children.insert(contentsOf: Self.mockPlaceBuilderBindings(of: declaration, in: world).map(\.place), at: 0)
 			// What a receive by value reads as a wrapper's instance, which every record of a construction passes its arguments.
 			let instanceProperties = answeringDeclarations.lazilyInstantiatedInstanceProperties(readBy: variant)
 			let record: PlaceRecord = switch kinds[Int(declaration)] {

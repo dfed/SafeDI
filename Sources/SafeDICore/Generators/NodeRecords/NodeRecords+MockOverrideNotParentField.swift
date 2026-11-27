@@ -18,6 +18,28 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+/// How the type that instantiates a place of a seam's own mock binds it from the builder `mock()` takes for the place, as
+/// the walk binds it at the top of the type's function (`ScopeGenerator.SendableAutoclosureParameter.binding`).
+struct MockPlaceBuilderBinding: Sendable {
+	/// The place's property, as the type that instantiates it declares it.
+	let dependency: Property
+	/// The place, under the name the binding declares.
+	let property: Property
+	/// The builder, under the name `mock()` binds it.
+	let builder: Property
+	/// The binding's statement.
+	let text: String
+
+	/// The place of the binding in a node's function, read as a rename of the builder is, so that what the node builds
+	/// reads the place as any value the node declares.
+	var place: GeneratedCode {
+		.indented(
+			.place(PlacePlan(code: .text(text), record: .alias(AliasPlaceRecord(property: property, fulfillingProperty: builder, text: text)))),
+			by: ScopeGenerator.standardIndent,
+		)
+	}
+}
+
 /// What a mock root's lowering names that the records of its world read: values of the root's level, which no fact of
 /// the world holds, so the world is made with them (`TypeFactsGraph.mockRootNames`). Empty for every production root's world.
 struct MockRootNames: Sendable {
@@ -32,8 +54,11 @@ struct MockRootNames: Sendable {
 	///   - uncoveredParameterNames: The name of the parameter `mock()` takes as a plain value for each dependency a type of the
 	///     tree instantiates that the mock cannot build, by the dependency's property, its label where it is not named apart
 	///     (`MockLowering.RootSignature.uncoveredParameters`); a `@Sendable` autoclosure parameter is none.
-	init(namesApart: [String: [TypeDescription: String]] = [:], unavailableDependencyOverrides: [(property: Property, name: String)] = [], passedUpBuilderNames: [Property: String] = [:], uncoveredParameterNames: [Property: String] = [:]) {
+	///   - placeBuilderBindings: The binding of each place of a seam's own mock from the builder `mock()` takes for it, by the
+	///     place's property (`MockLowering.RootSignature.PassedUpBuilder.places`).
+	init(namesApart: [String: [TypeDescription: String]] = [:], unavailableDependencyOverrides: [(property: Property, name: String)] = [], passedUpBuilderNames: [Property: String] = [:], uncoveredParameterNames: [Property: String] = [:], placeBuilderBindings: [Property: MockPlaceBuilderBinding] = [:]) {
 		self.namesApart = namesApart
+		self.placeBuilderBindings = placeBuilderBindings
 		self.passedUpBuilderNames = passedUpBuilderNames
 		self.uncoveredParameterNames = uncoveredParameterNames
 		unavailableDependencyOverrideNamesInOrder = unavailableDependencyOverrides.map(\.name)
@@ -92,6 +117,14 @@ struct MockRootNames: Sendable {
 	}
 
 	private let uncoveredParameterNames: [Property: String]
+
+	/// The binding of `property`, a place of a seam's own mock, from the builder `mock()` takes for it, and `nil` where
+	/// `mock()` takes no builder that builds it.
+	func placeBuilderBinding(of property: Property) -> MockPlaceBuilderBinding? {
+		placeBuilderBindings[property]
+	}
+
+	private let placeBuilderBindings: [Property: MockPlaceBuilderBinding]
 
 	private let passedUpBuilderNames: [Property: String]
 	private let unavailableDependencyOverrideNames: [Property: String]

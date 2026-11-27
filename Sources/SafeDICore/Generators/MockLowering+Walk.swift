@@ -221,10 +221,11 @@ extension ScopeGenerator {
 			// A builder a call passes up is a parameter of `mock()`, bound again under the name the calls read it by, which the
 			// call's node binds again under its label (`NodeRecords.mockReceivesBoundAgain(in:)`); an adapter of one, a builder
 			// of a seam's own places and a builder of a call's fills are not.
-			let bindsOnlyPassedUpBuilders = signature.placeOnlyBuilderDeclarations.isEmpty
-				&& walk.filledCallBuilders.builderBindingLines.isEmpty
+			let bindsOnlyPassedUpBuilders = walk.filledCallBuilders.builderBindingLines.isEmpty
 				&& signature.passedUpBuilders.allSatisfy(\.adapters.isEmpty)
-			let bindingsBeforeNodes = builderBindingCount + overridesBoundBeforeNodes.count
+			// The mocked type's own places of a seam's own mock, each bound from its builder before the nodes.
+			let rootPlaces = mockedTypeUncoveredProperties.filter { property in signature.passedUpBuilders.contains { $0.places.contains { $0.property == property } } }
+			let bindingsBeforeNodes = builderBindingCount + rootPlaces.count + overridesBoundBeforeNodes.count
 			// A parameter or override named apart is a declaration under its name, which the nodes that receive it bind again
 			// under its label (`NodeRecords.mockReceivesBoundAgain(in:)`), and the mocked type's own receive of it is bound
 			// again before the nodes, as the walk binds it.
@@ -254,6 +255,27 @@ extension ScopeGenerator {
 					}
 				}
 			}
+			// A builder of a seam's own places is a parameter of `mock()` too, which the type that instantiates a place calls
+			// (`NodeRecords.mockPlaceBuilderBindings(of:in:)`).
+			var placeBuilderBindings = [Property: MockPlaceBuilderBinding]()
+			for builder in signature.passedUpBuilders where !builder.places.isEmpty {
+				let builderType = builder.parameterType.strippingEscaping
+				if builder.properties.isEmpty {
+					outerDeclarations.append(Property(label: builder.label, typeDescription: builderType))
+					if builder.internalName != builder.label {
+						outerDeclarations.append(Property(label: builder.internalName, typeDescription: builderType))
+					}
+				}
+				for place in builder.places {
+					placeBuilderBindings[place.property] = MockPlaceBuilderBinding(
+						dependency: place.property,
+						property: Property(label: place.label, typeDescription: place.property.typeDescription),
+						builder: Property(label: builder.internalName, typeDescription: builderType),
+						text: SendableAutoclosureParameter(name: place.label, localName: builder.internalName, valueType: place.property.typeDescription).binding,
+					)
+				}
+			}
+			outerDeclarations += rootPlaces.compactMap { placeBuilderBindings[$0]?.property }
 			outerDeclarations += overridesBoundBeforeNodes.map { Property(label: $0.name, typeDescription: $0.typeDescription) }
 			outerDeclarations += rootReceivesBoundAgain
 			if let statements = try Self.nodeRecordsMockStatements(
@@ -269,6 +291,7 @@ extension ScopeGenerator {
 						signature.uncoveredRootParameters.filter { !$0.isSendableAutoclosure }.map { ($0.property, $0.label) },
 						uniquingKeysWith: { first, _ in first },
 					),
+					placeBuilderBindings: placeBuilderBindings,
 				),
 				outerDeclarations: outerDeclarations,
 			) {
