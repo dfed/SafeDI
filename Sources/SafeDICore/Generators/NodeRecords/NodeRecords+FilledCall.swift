@@ -60,9 +60,10 @@ struct FilledCallRecords: Sendable {
 		let innerScopes = try FillInnerScopes.of(call: call, in: world, seamTree: nil)
 		// What the root dispatcher hands each parameter of the caller's scope a fill takes: the first fill that reads it bound.
 		var callerArguments = [Property: ArgumentSource]()
+		let callerSources = FillCallerSources(world: world)
 		for facts in allFacts {
-			let declarations = FillCallerSources.declarations(facts: facts, call: call, variant: variant, in: world)
-			let sources = FillCallerSources.of(facts: facts, call: call, variant: variant, in: world)
+			let declarations = callerSources.declarations(facts: facts, call: call, variant: variant)
+			let sources = callerSources.of(facts: facts, call: call, variant: variant)
 			for (read, (declared, (parameter, source))) in zip(facts.callerReads, zip(declarations, zip(facts.parametersTakenOfCallerReads, sources))) {
 				// A form of the label the fill's tree receives only if available that the caller's declaration does not provide is
 				// unavailable to it; a label every form of which is unavailable is passed `nil`, unless another fill finds it.
