@@ -43,7 +43,7 @@ extension NodeRecords {
 		// so none captures `mock()`'s overrides, as the walk's read of them into a local before each function keeps its own
 		// from doing.
 		// The root's own default-valued parameters are parameters of `mock()`, which the root's lowering judges
-		// (`ScopeGenerator.nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:sendableConfigurationTypeNames:rootNames:)`).
+		// (`ScopeGenerator.nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:sendableConfigurationTypeNames:rootNames:outerDeclarations:)`).
 		if declaration != 0, mockConstructionFunction(of: declaration, in: world).map({ passesValueNoRecordMakes($0, given: instantiable.dependencies) }) ?? false {
 			refusals.append(.mockDefaultValuedParameter)
 		}
