@@ -76,6 +76,12 @@ enum SourceRule: String, CaseIterable {
 	/// and knows no feature, so a feature that needs something of it records a fact in general terms on the place, and
 	/// the layout reads the fact.
 	case engineFeatureName
+	/// A scan of a string's characters in a generator: `split`, `replacingOccurrences` or `components(separatedBy:)`
+	/// called on anything, or `contains` given a string literal. A generator's code runs per place or per node, and such
+	/// a scan reads every character of its text there, which grew `generate` with the square of the tree where the text
+	/// held a subtree's code. A text transform at every node goes over UTF-8 bytes (`GeneratedCodeText`); a site that
+	/// runs a bounded number of times, or over a few elements (an `[String]` of attributes), is waived with why.
+	case stringScan
 
 	/// Whether the rule applies to the file at `path`, relative to the repository root. SafeDI ships its sources and
 	/// plugins, so neither traps; the Tuist plugin's build script prints SafeDI's errors too, so it spells their
@@ -100,6 +106,8 @@ enum SourceRule: String, CaseIterable {
 			path.hasPrefix("Sources/") || path.hasPrefix("Plugins/")
 		case .engineFeatureName:
 			path.hasPrefix("Sources/SafeDICore/Generators/Emission/TypeKeyBody") || path == "Sources/SafeDICore/Generators/Emission/PlaceRecord.swift"
+		case .stringScan:
+			path.hasPrefix("Sources/SafeDICore/Generators/")
 		}
 	}
 }
@@ -277,6 +285,12 @@ private final class SourceRuleVisitor: SyntaxVisitor {
 	}
 
 	override func visit(_ node: FunctionCallExprSyntax) -> SyntaxVisitorContinueKind {
+		if let memberName = node.calledExpression.as(MemberAccessExprSyntax.self)?.declName.baseName,
+		   Self.stringScanFunctionNames.contains(memberName.text)
+		   || (memberName.text == "contains" && node.arguments.contains { $0.expression.is(StringLiteralExprSyntax.self) })
+		{
+			record(.stringScan, at: memberName, "`\(memberName.text)` reads every character of its text, and a generator’s code runs per place or per node: go over UTF-8 bytes (`GeneratedCodeText`), or waive a site that runs a bounded number of times with why")
+		}
 		if let calledName = node.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
 		   Self.taskGroupFunctionNames.contains(calledName),
 		   let elementType = node.arguments.first(where: { $0.label?.text == "of" })?.expression,
@@ -286,6 +300,9 @@ private final class SourceRuleVisitor: SyntaxVisitor {
 		}
 		return .visitChildren
 	}
+
+	/// The members that scan every character of a string whatever their arguments.
+	private static let stringScanFunctionNames: Set<String> = ["split", "replacingOccurrences", "components"]
 
 	/// The functions that make a task group whose element type their `of:` argument names.
 	private static let taskGroupFunctionNames: Set<String> = ["withTaskGroup", "withThrowingTaskGroup"]
