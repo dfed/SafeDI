@@ -153,8 +153,8 @@ struct TypeFactsReceived: Equatable, Sendable {
 	let isRequiredThroughAlias: Bool
 }
 
-/// One receive a node's own type makes: the read it makes, the properties that fulfill it as a run of
-/// `acceptedProperties(of:)`, whether it is required, and the alias it is read through.
+/// One receive a node's own type makes: the read it makes, the properties that fulfill it (which no world reports yet),
+/// whether it is required, and the alias it is read through.
 struct TypeFactsReceive: Equatable, Sendable {
 	let read: ReadID
 	let acceptedStart: Int32
@@ -196,8 +196,8 @@ struct TypeFactsAnswer: Equatable, Sendable {
 struct TypeFactsOwedFacts: OptionSet, Sendable {
 	let rawValue: UInt8
 
-	/// The seam fill producer: whether a hole's property is still being built inside its own fill. Set on a fill and
-	/// on every declaration beneath one.
+	/// The fill channel (track C): whether a hole's property is still being built inside its own fill. Set on a fill the
+	/// channel refuses (`TypeFactsFillRefusal`) and on every declaration beneath one.
 	static let fillBeingBuilt = TypeFactsOwedFacts(rawValue: 1 << 0)
 	/// The mock root's pins: whether a mock read is pinned. Set on every declaration of a mock world.
 	static let mockRootPin = TypeFactsOwedFacts(rawValue: 1 << 1)
@@ -249,8 +249,6 @@ protocol TypeFactsWorld {
 	/// The receives the declaration's own type makes, in declaration order; `reads(of:)` is its subtree's. Owed by the
 	/// table-side columns.
 	func receives(of declaration: DeclarationID) -> ArraySlice<TypeFactsReceive>
-	/// The properties that fulfill a receive. Owed by the table-side columns.
-	func acceptedProperties(of receive: TypeFactsReceive) -> ArraySlice<PropertyID>
 
 	/// What the node's subtree reads from above it, by read ID in increasing order.
 	func reads(of declaration: DeclarationID) -> ArraySlice<ReadID>
@@ -274,8 +272,6 @@ protocol TypeFactsWorld {
 	/// The forms an answer's declaration provides, by value, interned apart from the channel that reads them. Owed with
 	/// answers interned by ID (answers are interned by text tonight).
 	func forms(of answer: AnswerID) -> ArraySlice<PropertyID>
-	/// Whether the answer's declaration provides `property`. Owed with `forms(of:)`: `false` until then.
-	func provides(_ answer: AnswerID, _ property: PropertyID) -> Bool
 	/// The variant each edge of the variant's declaration calls, in edge order.
 	func calls(of variant: VariantID) -> ArraySlice<VariantID>
 	/// Where each answer a call hands its callee comes from, in the callee's read order.
@@ -308,6 +304,15 @@ protocol TypeFactsWorld {
 	/// received, never on their spelling.
 	/// Walked when asked, never while the world is built.
 	func parameterOrder(of declaration: DeclarationID) -> [WorldLabelID]
+
+	// The fill channel: the fills each call passes, in edge order.
+	var fillCount: Int { get }
+	/// The fill at `index`: its edge, the seam it fills a place of, and why the channel does not model it yet, if it does not.
+	func fill(_ index: Int) -> TypeFactsFill
+	/// The fields the fill at `index` binds for its tree, in their declared order: the call's edge to the fill answers a read
+	/// of one, and every other read of the fill's tree but its place's own label, which the fill builds, goes on to the
+	/// call's caller.
+	func fields(ofFill index: Int) -> ArraySlice<TypeFactsFillField>
 }
 
 extension TypeFactsGraph: TypeFactsWorld {
@@ -384,16 +389,8 @@ extension TypeFactsGraph: TypeFactsWorld {
 		[]
 	}
 
-	func acceptedProperties(of _: TypeFactsReceive) -> ArraySlice<PropertyID> {
-		[]
-	}
-
 	func forms(of _: AnswerID) -> ArraySlice<PropertyID> {
 		[]
-	}
-
-	func provides(_: AnswerID, _: PropertyID) -> Bool {
-		false
 	}
 
 	var rootCount: Int {
@@ -554,11 +551,12 @@ extension TypeFactsGraph: TypeFactsWorld {
 		if forMockGeneration {
 			owed.formUnion([.mockRootPin, .mockRootRecord, .mockRootBinding])
 		}
-		// A declaration is beneath a fill where any of its routes enters one: a walk up its parents.
+		// A declaration is beneath a fill the channel refuses where any of its routes enters one: a walk up its parents, past
+		// the fills it models.
 		var visited: Set = [declaration]
 		var pending = [declaration]
 		while let current = pending.popLast() {
-			guard !graph.nodes[Int(current)].key.isFill else {
+			guard !isRefusedFill(current) else {
 				owed.insert(.fillBeingBuilt)
 				break
 			}
@@ -567,5 +565,33 @@ extension TypeFactsGraph: TypeFactsWorld {
 			}
 		}
 		return owed
+	}
+
+	/// Whether `declaration` is a fill the channel refuses: a search of the sorted column.
+	private func isRefusedFill(_ declaration: DeclarationID) -> Bool {
+		var low = 0
+		var high = refusedFillDeclarations.count
+		while low < high {
+			let middle = (low + high) / 2
+			if refusedFillDeclarations[middle] < declaration {
+				low = middle + 1
+			} else {
+				high = middle
+			}
+		}
+		return low < refusedFillDeclarations.count && refusedFillDeclarations[low] == declaration
+	}
+
+	var fillCount: Int {
+		fills.count
+	}
+
+	func fill(_ index: Int) -> TypeFactsFill {
+		fills[index]
+	}
+
+	func fields(ofFill index: Int) -> ArraySlice<TypeFactsFillField> {
+		let fill = fills[index]
+		return fillFields[Int(fill.fieldStart)..<Int(fill.fieldStart + fill.fieldCount)]
 	}
 }

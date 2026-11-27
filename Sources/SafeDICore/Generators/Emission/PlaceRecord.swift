@@ -98,6 +98,14 @@ struct BuiltPlaceRecord: Sendable {
 	/// What a place that calls another module's code records beyond a built place (`CallFields`), in a box of its own
 	/// that every other place leaves `nil`.
 	var callFields: CallFields?
+	/// Whether the place's function returns the property's type, its construction erased to it where the place is erased,
+	/// so that its call erases nothing: a mock's erased node, whose override returns the property's type
+	/// (`NodeRecords+MockErased.swift`). Every other place's function returns `concreteType`.
+	var returnsPropertyType = false
+	/// Whether the place's function writes `return` before its value though its body holds no statement: a constant a kind
+	/// builds in a function of its own whatever its body holds (`NodeRecords+MockConstruction.swift`). Every other
+	/// function writes it only after statements (`BuilderBody.returnKeyword`).
+	var functionAlwaysWritesReturn = false
 
 	/// The statement the place's builder function begins with, before its children.
 	var leadingStatement: CallGuard? {
@@ -250,6 +258,9 @@ indirect enum ValuePath: Hashable, Sendable {
 	/// A call of the member `name` of a value, spelled `<value>.<name>(<argumentsWrapper>(<label>: <source>, …))`, or
 	/// `<value>.<name>(<label>: <source>, …)` where `argumentsWrapper` is `nil`: each argument a read the engine checks.
 	case call(String, of: ValuePath, arguments: [PlaceRead], argumentsWrapper: TypeDescription?)
+	/// A call of the implicit member `name` of the type the value is passed as, spelled `.<name>(<label>: <source>, …)`:
+	/// each argument a read the engine checks.
+	case implicitMemberCall(String, arguments: [PlaceRead])
 	/// A new value of a type made by its initializer that takes no argument, spelled `<type>()`: it reads no declaration,
 	/// so it is a value of every call alike, and keyed as itself.
 	case emptyInitialization(TypeDescription)

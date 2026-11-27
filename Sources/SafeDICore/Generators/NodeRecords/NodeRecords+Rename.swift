@@ -30,6 +30,7 @@ extension NodeRecords {
 		.cycle,
 		.unavailableOrInlineSeam,
 		.fill,
+		.uncoveredDependency,
 		.onlyIfAvailable,
 		.noInitializer,
 	]
@@ -61,7 +62,11 @@ extension NodeRecords {
 
 	/// The record of `declaration`'s place in `variant`, a rename: its declaration, bound from its fulfilling property, the
 	/// instance of the wrapper of its label where `readsWrappersInstance` (`DeclarationsAnsweringReads`), or, only if
-	/// available, to `nil` where `answers` finds no declaration it reads available, as the tree writes it.
+	/// available, to `nil` where `answers` finds no declaration it reads available, as the tree writes it. In a mock root's
+	/// world, an erased rename only if available maps over its fulfilling value wherever it is bound, as the mock's walk
+	/// binds it (`MockLowering.AliasBinding`), rather than only where the declaration it reads is optional, as a production
+	/// tree binds it: a fact of the world, which no production world answers. A rename reads no override, so a mock root's
+	/// world decorates its record with nothing.
 	/// - Parameter autoclosureCall: Where the rename is a seam's own that keeps a deferred parameter's label, the call of
 	///   the parameter's autoclosure it is bound from (`ScopeGenerator.SeamRoot.autoclosureCallByLabel(of:)`), which reads
 	///   no declaration.
@@ -80,7 +85,7 @@ extension NodeRecords {
 			let text = ScopeGenerator.referencingDeclaration(of: "let \(property.asSource) = nil", by: declarationReference)
 			return AliasPlaceRecord(property: property, fulfillingProperty: nil, text: text, reads: [])
 		case let .bound(fulfillingBindingIsOptional):
-			return renameRecord(of: property, fulfilledBy: fulfillingProperty, readsWrappersInstance: readsWrappersInstance, autoclosureCall: autoclosureCall, erasedToConcreteExistential: erasedToConcreteExistential, fulfillingBindingIsOptional: fulfillingBindingIsOptional, declarationReference: declarationReference)
+			return renameRecord(of: property, fulfilledBy: fulfillingProperty, readsWrappersInstance: readsWrappersInstance, autoclosureCall: autoclosureCall, erasedToConcreteExistential: erasedToConcreteExistential, fulfillingBindingIsOptional: fulfillingBindingIsOptional || world.isMockWorld, declarationReference: declarationReference)
 		case nil:
 			// A required rename is bound from its fulfilling property, which its scope requires.
 			return renameRecord(of: property, fulfilledBy: fulfillingProperty, readsWrappersInstance: readsWrappersInstance, autoclosureCall: autoclosureCall, erasedToConcreteExistential: erasedToConcreteExistential, fulfillingBindingIsOptional: false, declarationReference: declarationReference)

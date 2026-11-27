@@ -156,6 +156,9 @@ public enum ReservedName: Hashable, Sendable {
 	/// The start of the name of each private final class a seam declares beside its initializers when its tree holds a
 	/// loop's levels in one box, which the hash of what the class holds follows (`ScopeGenerator.LoopLevelsType`).
 	static let loopLevelsTypeName = "\(builderFunctionNamePrefix)LoopLevels"
+	/// The name of the struct a generated `mock()` whose tree holds a cycle declares: the places the functions on a path
+	/// have entered, a slot for each property a path can close on (`MockEnteredSlot.mockEnteredPlacesDeclaration`).
+	static let mockEnteredPlacesTypeName = "\(builderFunctionNamePrefix)EnteredPlaces"
 
 	/// The name of the parameter through which a function building a hole held in an instantiator takes the value the
 	/// instantiator forwards.

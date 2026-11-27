@@ -69,14 +69,14 @@ struct FillInnerScopes: Sendable {
 		var fills = [Fill]()
 		var seenCaseKeys = Set<String>()
 		let calledBuilders = scope.seamCall?.calledBuilders
-		guard let signature = seamTree?.signature, !signature.holes.isEmpty else {
+		guard let seamTree, !seamTree.signature.holes.isEmpty else {
 			for case let .fill(hole, _, _) in scope.holeArguments where seenCaseKeys.insert(ScopeGenerator.fillCaseKey(of: hole)).inserted {
 				fills.append(Fill(caseKey: ScopeGenerator.fillCaseKey(of: hole), fillKey: ScopeGenerator.fillKey(of: hole), innerScopeParameters: []))
 			}
 			return FillInnerScopes(fills: fills, enums: [], callingSeam: nil)
 		}
 		guard let callPath = Self.onlyPath(to: call, callers: callers, in: world) else { throw .fill }
-		let seamHoles = SeamHoles(seamType: signature.seamType, holes: signature.holes, builders: signature.builders, parameters: signature.parameters, callRoutes: signature.callRoutes, scopeEnums: signature.scopeEnums, holdsLoopPayloadsInBoxes: true)
+		let seamHoles = SeamHoles(of: seamTree.seamRoot, seamType: seamTree.seamType)
 		for case let .fill(hole, _, _) in scope.holeArguments where seenCaseKeys.insert(ScopeGenerator.fillCaseKey(of: hole)).inserted {
 			let calledRootKey = calledBuilders?.keyOfFirstBuilderReaching(hole)
 			let innerKey = calledRootKey.flatMap { seamHoles.carriesStruct(at: callPath, innerKey: $0) ? $0 : nil } ?? SeamSignature.ScopeEnum.rootKey(of: hole)
@@ -172,7 +172,9 @@ struct FillDispatchers: Sendable {
 	///   - fillParameters: What each fill of the call takes after its case's values, by the fill's key
 	///     (`ScopeGenerator.fillKey(of:)`), in the order of the call's hole arguments.
 	///   - innerScopes: `FillInnerScopes.of(call:in:seamTree:)` of the call.
-	static func of(call: DeclarationID, in world: some NodeRecordSources, fillParameters: [(fillKey: String, parameters: [SeamSignature.Hole.Field])], innerScopes: FillInnerScopes) -> FillDispatchers {
+	///   - names: The call's names (`FillNames`), which its dispatchers and their cases' targets are named by; placeholders
+	///     where `nil`, which no record's identity reads.
+	static func of(call: DeclarationID, in world: some NodeRecordSources, fillParameters: [(fillKey: String, parameters: [SeamSignature.Hole.Field])], innerScopes: FillInnerScopes, names callNames: FillNames? = nil) -> FillDispatchers {
 		let scope = world.scope(of: call)
 		guard let calledBuilders = scope.seamCall?.calledBuilders else { return FillDispatchers(dispatchers: [], builtClosures: []) }
 		var filledSites = Set<SeamSignature.Hole.Site>()
@@ -180,7 +182,7 @@ struct FillDispatchers: Sendable {
 		for case let .fill(hole, _, _) in scope.holeArguments {
 			filledSites.insert(hole.site)
 			let fillKey = ScopeGenerator.fillKey(of: hole)
-			fillNames[fillKey] = "fill \(fillKey)"
+			fillNames[fillKey] = callNames?.functionName(ofFill: ScopeGenerator.fillCaseKey(of: hole)) ?? "fill \(fillKey)"
 		}
 		var innerScopeNameByKey = [SeamSignature.ScopeEnum.Key: String]()
 		var carriedInnerScopesByKey = [SeamSignature.ScopeEnum.Key: [(name: String, type: TypeDescription)]]()
@@ -188,8 +190,10 @@ struct FillDispatchers: Sendable {
 			innerScopeNameByKey[scopeEnum.key] = scopeEnum.innerScopeName
 			carriedInnerScopesByKey[scopeEnum.key] = scopeEnum.carriedInnerScopes?.map { (name: $0.label, type: $0.type) }
 		}
-		// Placeholder names: no name reaches a record's identity.
-		var names = GeneratedNameAllocator(reserving: Set<String>())
+		// The call's names claim its fills' functions before its dispatchers', each dispatcher's in the order the call declares
+		// them, which `FillDispatcher.dispatchers` claims them in: an allocator holding the fills' names claims the same.
+		// Placeholder names otherwise: no name reaches a record's identity.
+		var names = GeneratedNameAllocator(reserving: callNames.map { Set($0.reservedNames).union($0.fills.map(\.functionName)) } ?? [])
 		let dispatchers = ScopeGenerator.FillDispatcher.dispatchers(
 			of: calledBuilders,
 			filledSites: filledSites,

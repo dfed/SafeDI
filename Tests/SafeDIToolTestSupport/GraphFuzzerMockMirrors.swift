@@ -2155,8 +2155,9 @@ enum GraphFuzzerMockOverrides {
 	}
 
 	/// The type each field of `fields` builds beside the mocked type, by its concrete type's name: the configured type
-	/// of a configuration field, or the return type of a builder closure field, with an erased type `AnyT<n>` named by
-	/// the concrete type it erases, `T<n>`, as every erasure of the base corpus does.
+	/// of a configuration field, or the return type of a builder closure field, with each erased type of the base corpus
+	/// named by the concrete type it erases: `AnyT<n>` and `AnyTupleChild` by `T<n>` and `TupleChild`, and
+	/// `AnyIfAvailableToken` by `IfAvailableToken`.
 	static func builtTypeNames(of fields: [(label: String, type: String)], typeNamePrefix: String) -> [String] {
 		fields.compactMap { field -> String? in
 			let builtType: String
@@ -2167,7 +2168,9 @@ enum GraphFuzzerMockOverrides {
 			} else {
 				return nil
 			}
-			return builtType.replacingOccurrences(of: "\(typeNamePrefix)AnyT", with: "\(typeNamePrefix)T")
+			return builtType
+				.replacingOccurrences(of: "\(typeNamePrefix)AnyT", with: "\(typeNamePrefix)T")
+				.replacingOccurrences(of: "\(typeNamePrefix)AnyIfAvailableToken", with: "\(typeNamePrefix)IfAvailableToken")
 		}.sorted()
 	}
 
