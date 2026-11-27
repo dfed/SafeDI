@@ -173,7 +173,7 @@ public enum NodeRecordsObservation {
 
 	/// Whether each argument of `nodeRecords` is `tree`'s, or reads the nearest declaration of its label where `tree`'s,
 	/// the same argument otherwise, reads `nil`.
-	private static func differOnlyWhereTreeReadsNilOfLabel(_ tree: [PlaceRead], _ nodeRecords: [PlaceRead]) -> Bool {
+	static func differOnlyWhereTreeReadsNilOfLabel(_ tree: [PlaceRead], _ nodeRecords: [PlaceRead]) -> Bool {
 		guard tree.count == nodeRecords.count else { return false }
 		for (treeRead, nodeRecordsRead) in zip(tree, nodeRecords) where treeRead != nodeRecordsRead {
 			let treeReadWithRecordsSource = PlaceRead(argumentLabel: treeRead.argumentLabel, label: treeRead.label, property: treeRead.property, source: .binding(label: treeRead.label), staysOutsideSendableFunctions: treeRead.staysOutsideSendableFunctions)
