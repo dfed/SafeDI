@@ -963,9 +963,10 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 	}
 
 	@Test
-	mutating func generate_laysOutASeamCallAsTheTreeDoes_whenAnInstantiatorOfTheSeamForwardsItAValue() async throws {
+	mutating func generate_refusesASeamCallAsConstruction_whenAnInstantiatorOfTheSeamForwardsItAValue() async throws {
 		// `Screen` forwards `token`, so `Root`'s `Instantiator<Screen>` hands the call the value it is forwarded, which the
-		// call's function takes as a parameter.
+		// call's function takes as a parameter. The tree writes no record of such a call yet, so node records refuse it and
+		// the root keeps the tree's text.
 		let files = [
 			seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let screenBuilder: Instantiator<Screen>"]),
 			seamFixtureType(named: "Screen", isSeam: true, declarations: ["@Forwarded let token: Token", "@Instantiated let detail: Detail"]),
@@ -990,8 +991,8 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 		}
 		""")
 		let rootReports = reports.filter { $0.root == "Root" }
-		#expect(rootReports.map(\.refusal) == [nil])
-		#expect(rootReports.map(\.isLaidOutFromNodeRecords) == [true])
+		#expect(rootReports.map(\.refusal) == ["construction"])
+		#expect(rootReports.map(\.isLaidOutFromNodeRecords) == [false])
 		#expect(reports.flatMap(\.differences) == [])
 	}
 
