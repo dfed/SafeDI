@@ -273,17 +273,17 @@ extension DependencyTreeGenerator {
 			)
 			GenerationLayerObservation.record(.seamSignatures(ofModule: seams.currentModule.moduleName, inCallersView: true), inRunOf: seams.currentModule.moduleName)
 			let verdicts = try await callersView.verdicts(interningIn: internerSpace)
-			errors.append(contentsOf: verdicts.compactMap { $0.error })
+			errors.append(contentsOf: verdicts.compactMap(\.error))
 			if let comparesProducers = SeamCallersViewObservation.comparesProducers {
 				// Computed again for the test that compares two producers of the callers' view, as no layer of the run, in a
 				// space of its own that starts from this one's IDs, since only this run's serial code holds this one.
 				let builder = internerSpace.copyOfBuilder()
 				comparesProducers(SeamCallersView(
 					moduleName: seams.currentModule.moduleName,
-					verdicts: verdicts.map { $0.observed },
+					verdicts: verdicts.map(\.observed),
 					recomputed: {
 						try await GenerationLayerObservation.$observer.withValue(nil) {
-							try await callersView.verdicts(interningIn: ConstructionInternerSpace(copying: builder)).map { $0.observed }
+							try await callersView.verdicts(interningIn: ConstructionInternerSpace(copying: builder)).map(\.observed)
 						}
 					},
 				))
