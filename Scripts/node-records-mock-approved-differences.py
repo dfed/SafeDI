@@ -87,6 +87,8 @@ def split_top(t):
         else: cur+=c
     if cur.strip(): parts.append(cur.strip())
     return parts
+# a parameter whose type is written optional, either way Swift spells it
+OPTIONAL_PARAMETER=re.compile(r': (?:.*\?|(?:Swift\.)?Optional<.*>)\s*$')
 def declares_again(body,label):
     """whether a function's body declares its parameter's name again: a binding, a closure's parameter, or a
     nested function's parameter of that name"""
@@ -179,7 +181,7 @@ def expand(lines,hoisted,base_indent,entered={},nearest={},visible=frozenset(),r
                 absent=lab.strip('`')+': nil'
                 if ident in alist: alist.remove(ident)
                 elif bare in alist: alist.remove(bare)
-                elif absent in alist and pp.rstrip().endswith('?') and not declares_again(body,lab):
+                elif absent in alist and OPTIONAL_PARAMETER.search(pp) and not declares_again(body,lab):
                     # entry 13's channel in a mock: one function with an optional parameter serves a place that
                     # hands a value and a place that hands nothing; the walk's copy for the place that hands
                     # nothing has no parameter and writes nil where the parameter was read. The nil is the
