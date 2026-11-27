@@ -304,6 +304,63 @@ struct SafeDIToolNodeRecordsMockActorTests: ~Copyable {
 		#expect(output.generatedFiles == walkOutput.generatedFiles)
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_keepsTheWalksStatements_whenActorAndClassBuildSameInstantiatorOfLeaf() async throws {
+		// The actor is sent the `Instantiator` it builds. Laid out, the instantiator's closure would call the leaf's
+		// function, which the class's instantiator shares, with a field of the actor's configuration, and so capture a
+		// configuration that is not `Sendable`: "sending 'leafBuilder' risks causing data races". The walk reads the field
+		// into a local before the closure, so the world is refused, and the walk writes it.
+		let fixture = [
+			"""
+			@Instantiable(generateMock: true)
+			public final class Root: Instantiable {
+			    public init(a: A, b: B) {
+			        self.a = a
+			        self.b = b
+			    }
+
+			    @Instantiated let a: A
+			    @Instantiated let b: B
+			}
+			""",
+			"""
+			@Instantiable
+			public actor A: Instantiable {
+			    public init(leafBuilder: Instantiator<Leaf>) {
+			        self.leafBuilder = leafBuilder
+			    }
+
+			    @Instantiated let leafBuilder: Instantiator<Leaf>
+			}
+			""",
+			"""
+			@Instantiable
+			public final class B: Instantiable {
+			    public init(leafBuilder: Instantiator<Leaf>) {
+			        self.leafBuilder = leafBuilder
+			    }
+
+			    @Instantiated let leafBuilder: Instantiator<Leaf>
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Leaf: Instantiable {
+			    public init() {}
+			}
+			""",
+		]
+		let walkOutput = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+
+		#expect(reports.filter(\.isMockRoot).map(\.everyRefusal) == [["mockActor"]])
+		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [false])
+		#expect(output.generatedFiles == walkOutput.generatedFiles)
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
