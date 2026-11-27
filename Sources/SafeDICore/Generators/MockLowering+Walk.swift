@@ -219,21 +219,23 @@ extension ScopeGenerator {
 			// parameter handed to the type that instantiates it, is no declaration the records read.
 			let overridesBoundBeforeNodes = signature.onlyIfAvailableOverrides.filter { signature.unavailableDependencyOverrideNames[$0.receivedProperty] == nil }
 			// A builder a call passes up is a parameter of `mock()`, bound again under the name the calls read it by, which the
-			// call's node binds again under its label (`NodeRecords.mockReceivesBoundAgain(in:)`); an adapter of one, a builder
+			// call's node binds again under its label (`NodeRecords.mockNamesReadApart(in:)`); an adapter of one, a builder
 			// of a seam's own places and a builder of a call's fills are not.
 			// A place of another module's public mock the tree builds inline reads such a builder too, which no record reads.
-			let bindsOnlyPassedUpBuilders = signature.placeOnlyBuilderDeclarations.isEmpty
-				&& walk.filledCallBuilders.builderBindingLines.isEmpty
+			let bindsOnlyPassedUpBuilders = walk.filledCallBuilders.builderBindingLines.isEmpty
 				&& signature.passedUpBuilders.allSatisfy(\.adapters.isEmpty)
 				&& walk.filledCallBuilders.holeBuildersByInlinePlace.isEmpty
-			let bindingsBeforeNodes = builderBindingCount + overridesBoundBeforeNodes.count
+			// The mocked type's own places of a seam's own mock, each bound from its builder before the nodes.
+			let rootPlaces = mockedTypeUncoveredProperties.filter { property in signature.passedUpBuilders.contains { $0.places.contains { $0.property == property } } }
+			let bindingsBeforeNodes = builderBindingCount + rootPlaces.count + overridesBoundBeforeNodes.count
 			// A parameter or override named apart is a declaration under its name, which the nodes that receive it bind again
-			// under its label (`NodeRecords.mockReceivesBoundAgain(in:)`), and the mocked type's own receive of it is bound
+			// under its label (`NodeRecords.mockNamesReadApart(in:)`), and the mocked type's own receive of it is bound
 			// again before the nodes, as the walk binds it.
 			// A dependency the mock cannot build is a parameter of `mock()`, which the type that instantiates it reads by its
 			// name; one taken as a `@Sendable` autoclosure is read into a local before the nodes and bound again by that type.
+			// A lazy wrapper `mock()` makes of an instance it takes is bound before the nodes, which are passed it by name
+			// (`NodeRecords.mockNamesReadApart(in:)`).
 			let bindsOnlyNodes = rootReceiverBindingIndex == bindingsBeforeNodes
-				&& signature.lazilyInstantiatedBindings.isEmpty
 				&& !signature.uncoveredRootParameters.contains(where: \.isSendableAutoclosure)
 				&& bindsOnlyPassedUpBuilders
 				// A node the root's level names apart is bound under that name by its record, and a parameter or override
@@ -243,9 +245,9 @@ extension ScopeGenerator {
 						walk.rootPropertyNodeBindingNames.contains(name)
 							|| signature.renamesByLabelAndType[label]?[type] == name
 							|| signature.uncoveredParameterNamesByLabelAndType[label]?[type] == name
+							|| signature.lazilyInstantiatedBindingNamesByLabelAndType[label]?[type] == name
 					}
 				}
-				&& rootInstancesReadByValue.isEmpty
 			var outerDeclarations = signature.parameters.map { Property(label: $0.name, typeDescription: $0.property.typeDescription) }
 			for builder in signature.passedUpBuilders {
 				for property in builder.properties.prefix(1) {
@@ -256,6 +258,27 @@ extension ScopeGenerator {
 					}
 				}
 			}
+			// A builder of a seam's own places is a parameter of `mock()` too, which the type that instantiates a place calls
+			// (`NodeRecords.mockPlaceBuilderBindings(of:in:)`).
+			var placeBuilderBindings = [Property: MockPlaceBuilderBinding]()
+			for builder in signature.passedUpBuilders where !builder.places.isEmpty {
+				let builderType = builder.parameterType.strippingEscaping
+				if builder.properties.isEmpty {
+					outerDeclarations.append(Property(label: builder.label, typeDescription: builderType))
+					if builder.internalName != builder.label {
+						outerDeclarations.append(Property(label: builder.internalName, typeDescription: builderType))
+					}
+				}
+				for place in builder.places {
+					placeBuilderBindings[place.property] = MockPlaceBuilderBinding(
+						dependency: place.property,
+						property: Property(label: place.label, typeDescription: place.property.typeDescription),
+						builder: Property(label: builder.internalName, typeDescription: builderType),
+						text: SendableAutoclosureParameter(name: place.label, localName: builder.internalName, valueType: place.property.typeDescription).binding,
+					)
+				}
+			}
+			outerDeclarations += rootPlaces.compactMap { placeBuilderBindings[$0]?.property }
 			outerDeclarations += overridesBoundBeforeNodes.map { Property(label: $0.name, typeDescription: $0.typeDescription) }
 			// The override of a property instantiated only if available that nothing fulfills is an ordinary read from above
 			// in the records, so `mock()` binds it before its nodes too, where the walk has the type that declares the
@@ -263,6 +286,8 @@ extension ScopeGenerator {
 			let unavailableDependencyOverrides = signature.onlyIfAvailableOverrides.filter { signature.unavailableDependencyOverrideNames[$0.receivedProperty] != nil }
 			outerDeclarations += unavailableDependencyOverrides.map { Property(label: $0.name, typeDescription: $0.typeDescription) }
 			outerDeclarations += rootReceivesBoundAgain
+			// Each lazy wrapper `mock()` makes of an instance it takes, under the name it binds it by.
+			outerDeclarations += signature.lazilyInstantiatedBindings.map { Property(label: $0.name, typeDescription: $0.boundType) }
 			if let statements = Self.nodeRecordsMockStatements(
 				of: instantiable,
 				worldRoot: worldRoot,
@@ -276,6 +301,9 @@ extension ScopeGenerator {
 						signature.uncoveredRootParameters.filter { !$0.isSendableAutoclosure }.map { ($0.property, $0.label) },
 						uniquingKeysWith: { first, _ in first },
 					),
+					edgesConfigurationsLeaveOut: context.cycleEdges,
+					placeBuilderBindings: placeBuilderBindings,
+					wrapperBindingNames: signature.lazilyInstantiatedBindingNamesByLabelAndType,
 				),
 				outerDeclarations: outerDeclarations,
 			) {
@@ -284,7 +312,7 @@ extension ScopeGenerator {
 				let unavailableDependencyOverrideLines = unavailableDependencyOverrides.map { override in
 					"\(bodyIndent)let \(override.name): \(override.typeDescription.asSource) = \(ReservedName.mockOverridesParameterName).\(override.name)"
 				}
-				bindingLines = bindingLines.prefix(bindingsBeforeNodes) + unavailableDependencyOverrideLines + bindingLines.dropFirst(bindingsBeforeNodes).prefix(rootReceiverBindingLines.count) + (statements.isEmpty ? [] : [statements])
+				bindingLines = bindingLines.prefix(bindingsBeforeNodes) + unavailableDependencyOverrideLines + bindingLines.dropFirst(bindingsBeforeNodes).prefix(linesBoundBesideNodes.count) + (statements.isEmpty ? [] : [statements])
 			}
 		}
 		// A public mock's tiers, overrides and guard (`MockLowering+PublicMocks.swift`).

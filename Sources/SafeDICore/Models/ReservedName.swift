@@ -76,6 +76,11 @@ public enum ReservedName: Hashable, Sendable {
 	/// The name of the property, and initializer parameter, of each generated `SafeDIMockConfiguration` that
 	/// overrides how its type is built, and of the binding of that override in a construction expression.
 	public static let configurationBuilderPropertyName = "safeDIBuilder"
+	/// The name of the argument through which a function on a cycle of a generated mock's tree takes the places the
+	/// functions above it entered, and hands on its own.
+	public static let mockEnteredPlacesParameterName = "__safeDI_entered"
+	/// The name such a function binds the place it builds under, in the first line of its body.
+	public static let mockEnteredPlaceName = "__safeDI_place"
 
 	/// `name`, which must begin with `builderFunctionNamePrefix`, without the prefix.
 	public static func removingBuilderFunctionNamePrefix(from name: String) -> String {
@@ -145,6 +150,13 @@ public enum ReservedName: Hashable, Sendable {
 	/// the member hands, which passes them (see `ScopeGenerator.ReceivedBuilderLoops`).
 	static func receivedBuilderFunctionName(of functionName: String) -> String {
 		"\(functionName)_received".spelledAsJoinedIdentifier
+	}
+
+	/// The name of the parameter under which a mock's function of a member of a loop of builders takes the overrides of the
+	/// loop's level, a node of the type `typeIdentifier` names, or `mock()` itself, whose overrides every member's
+	/// configuration is a field of (`NodeRecords.mockLoopLevelArgument(of:in:levels:)`).
+	static func loopLevelConfigurationParameterName(ofTypeIdentifier typeIdentifier: String) -> String {
+		"\(builderFunctionNamePrefix)\(typeIdentifier)_loopConfiguration".spelledAsJoinedIdentifier
 	}
 
 	/// The name of the box a scope binds the levels and payloads of a loop of builders in, beside the builder function

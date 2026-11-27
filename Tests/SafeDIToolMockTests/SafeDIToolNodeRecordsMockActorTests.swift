@@ -272,8 +272,9 @@ struct SafeDIToolNodeRecordsMockActorTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_keepsTheWalksStatements_whenActorIsOnLazyCycle() async throws {
-		// The acceptance case of the kind that lays out a cycle's closer: an actor whose argument builds the actor again
-		// through an `Instantiator`. Until that kind is made the world is refused for the cycle, and the walk writes it.
+		// An actor whose argument builds the actor again through an `Instantiator`. A function on the cycle is handed the
+		// places entered, which are not `Sendable`, so the worker it builds cannot be sent to the actor, and the walk
+		// writes the world.
 		let fixture = [
 			"""
 			@Instantiable(generateMock: true)
@@ -301,7 +302,7 @@ struct SafeDIToolNodeRecordsMockActorTests: ~Copyable {
 			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		}
 
-		#expect(reports.filter(\.isMockRoot).map(\.everyRefusal) == [["cycle"]])
+		#expect(reports.filter(\.isMockRoot).map(\.everyRefusal) == [["mockActor"]])
 		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [false])
 		#expect(output.generatedFiles == walkOutput.generatedFiles)
 	}

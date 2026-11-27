@@ -158,11 +158,11 @@ extension NodeRecords {
 	}
 
 	/// Whether a node of a mock root's world has a configuration, as its record's override type says
-	/// (`mockConstructionRecord(of:variant:in:unavailableProperties:lazilyInstantiatedInstanceProperties:receivesBoundAgain:typesDeclaredEscaping:children:)`):
+	/// (`mockConstructionRecord(of:variant:in:unavailableProperties:lazilyInstantiatedInstanceProperties:receivesBoundAgain:wrapperArgumentNames:typesDeclaredEscaping:children:)`):
 	/// whether it builds a child with an override of its own (`buildsMockChildWithOverride(_:in:)`), or passes its
 	/// construction a field of its configuration (`mockConfigurationFieldArguments(of:in:)`). A node whose children are
 	/// all renames has none, so the local its override is bound to is named as a closure's.
-	private static func isConfigured(_ declaration: DeclarationID, in world: some NodeRecordSources) -> Bool {
+	static func isConfigured(_ declaration: DeclarationID, in world: some NodeRecordSources) -> Bool {
 		buildsMockChildWithOverride(declaration, in: world) || !mockConfigurationFieldArguments(of: declaration, in: world).isEmpty
 	}
 
@@ -193,13 +193,17 @@ extension NodeRecords {
 	static func isWrapperSentToActor(_ declaration: DeclarationID, in world: some NodeRecordSources) -> Bool {
 		switch world.kind(of: declaration) {
 		case .instantiator, .erasedInstantiator, .lazy:
-			world.parents(of: declaration).contains { parent in
-				let instantiable = world.scope(of: parent.parent).instantiable
-				return instantiable.declarationType == .actorType && !(world.construction(of: parent.parent) == .handWrittenMock && instantiable.mockInitializer != nil)
-			}
+			world.parents(of: declaration).contains { isActorBuiltWithInitializer($0.parent, in: world) }
 		case .constant, .sendableInstantiator, .sendableErasedInstantiator, .sendableLazy, .alias, .hole:
 			false
 		}
+	}
+
+	/// Whether a node of a mock root's world, or its root, is an actor the mock builds with its initializer, which is
+	/// sent each of its arguments.
+	static func isActorBuiltWithInitializer(_ declaration: DeclarationID, in world: some NodeRecordSources) -> Bool {
+		let instantiable = world.scope(of: declaration).instantiable
+		return instantiable.declarationType == .actorType && !(world.construction(of: declaration) == .handWrittenMock && instantiable.mockInitializer != nil)
 	}
 
 	/// Whether a node is built in a function of its own: a wrapper's, or a constant's that builds children, as its record

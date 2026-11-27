@@ -168,9 +168,12 @@ extension PassedArgument {
 			"passed|\(parameterName)|\(type.asSource)|passed:\(name)"
 		case .emptyInitialization:
 			shape
+		case .member,
+		     .optionalMember:
+			// A member of a value that reads no declaration, such as a member of a value the function was handed or a loop
+			// member's field of its level's configuration, is the same text at every member.
+			value.reads.isEmpty ? shape : nil
 		case .rootDeclaration,
-		     .member,
-		     .optionalMember,
 		     .call,
 		     .implicitMemberCall:
 			nil

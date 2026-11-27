@@ -86,7 +86,8 @@ extension TypeKeyLayout {
 				guard let construction = spelledConstruction(of: representative, call: value.spelled, argumentValues: argumentValues, inClass: owner, before: statements(ofClass: owner).count) else { return nil }
 				value = .spelledConstruction(construction)
 			}
-			var builderBody = BuilderBody(statements: body)
+			// A statement a kind supplies comes first in the function's body, before the functions declared in it.
+			var builderBody = BuilderBody(statements: (representative.leadingStatement?.spelledLines ?? []).map { .text("\(ScopeGenerator.standardIndent)\($0)") } + body)
 			builderBody.alwaysWritesReturn = representative.functionAlwaysWritesReturn
 			functionCode[owner] = BuilderNode(
 				name: functionNames[owner],
@@ -161,8 +162,8 @@ extension TypeKeyLayout {
 			return memberCall.record.arguments[position].source
 		}) else { return nil }
 		var statements = call.statementsBeforeLeadingStatement
-		if let leadingStatement = record.leadingStatement {
-			statements.append(.text("\(ScopeGenerator.standardIndent)\(leadingStatement.spelled)"))
+		for line in record.leadingStatement?.spelledLines ?? [] {
+			statements.append(.text("\(ScopeGenerator.standardIndent)\(line)"))
 		}
 		statements += call.statementsAfterLeadingStatement
 		let function = SafeDICore.Statement.function(BuilderNode(
