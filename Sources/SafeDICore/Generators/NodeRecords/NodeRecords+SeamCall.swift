@@ -23,7 +23,9 @@ extension NodeRecords {
 	/// discharges stage 1's refusal of a construction other than an initializer, and its refusal of a call that passes
 	/// builders where the call passes each builder up from the seam whose tree makes it (`ConstructionScope.HoleArgument.passUp`);
 	/// `nil` for any other node, and for every node of a mock root's world, which builds every seam inline. Every other
-	/// check of stage 1 still runs on it, so a call that fills a place is still refused as `fill`. The engine binds a call in
+	/// check of stage 1 still runs on it, so a call that fills a place is still refused as `fill`. It discharges the refusal
+	/// of a receive only if available too: the leaf receives only if available each parameter the seam takes so, which the
+	/// call is passed `nil` for where `OnlyIfAvailableAnswers` finds it unavailable. The engine binds a call in
 	/// place as a built place of its form, a wrapper of its function where the property is one (`InPlaceCall`); a call that
 	/// forwards values, which a wrapper binds inside its function, is refused as `construction`.
 	static func seamCallClaim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
@@ -43,7 +45,7 @@ extension NodeRecords {
 		let wrapperDischarges = (erasedClaim(of: declaration, in: world) ?? lazyClaim(of: declaration, in: world) ?? sendableClaim(of: declaration, in: world))?.discharges ?? []
 		return NodeRecordClaim(
 			kind: .seamCall,
-			discharges: (passesEveryBuilderUp ? Set<NodeRecordRefusal>([.construction, .fill]) : [.construction]).union(wrapperDischarges),
+			discharges: (passesEveryBuilderUp ? Set<NodeRecordRefusal>([.construction, .fill, .onlyIfAvailable]) : [.construction, .onlyIfAvailable]).union(wrapperDischarges),
 			refusals: forwardsValues ? [.construction] : [],
 		)
 	}
@@ -53,20 +55,23 @@ extension NodeRecords {
 	/// `children` after it, and whose construction calls the seam's tier's initializer (the scope's instantiable is the
 	/// seam's leaf) with `builtByInitializerRecord`'s arguments and, where the call passes builders up, the member of the
 	/// struct it passes each (`SeamCallRoutes`). Its `text` is empty: the engine spells the call from the record.
-	/// - Parameter lazilyInstantiatedInstanceProperties: The by-value properties the call passes as the instance of a lazily
-	///   instantiated property declared above it.
+	/// - Parameters:
+	///   - answers: Which of the parameters the call's leaf receives only if available the call is passed `nil` for.
+	///   - lazilyInstantiatedInstanceProperties: The by-value properties the call passes as the instance of a lazily
+	///     instantiated property declared above it.
 	/// - Throws: `NodeRecordRefusal.fill` where the call passes a builder up that `routes` holds no one read for.
 	static func seamCallRecord(
 		of declaration: DeclarationID,
 		variant: VariantID,
 		in world: some NodeRecordSources,
 		routes: SeamCallRoutes,
+		answers: OnlyIfAvailableAnswers,
 		lazilyInstantiatedInstanceProperties: Set<Property>,
 		typesDeclaredEscaping: Set<TypeDescription>,
 		children: [GeneratedCode],
 	) throws -> AliasPlaceRecord {
 		let scope = world.scope(of: declaration)
-		let construction = try builtByInitializerRecord(of: declaration, variant: variant, in: world, lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties, typesDeclaredEscaping: typesDeclaredEscaping, children: [], declaresFunction: true)
+		let construction = try builtByInitializerRecord(of: declaration, variant: variant, in: world, unavailableProperties: answers.unavailableProperties(of: variant), lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties, typesDeclaredEscaping: typesDeclaredEscaping, children: [], declaresFunction: true)
 		var arguments = construction.arguments
 		var reads = construction.arguments
 		var argumentValues = [Int: ValuePath]()

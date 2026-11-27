@@ -61,11 +61,15 @@ extension NodeRecords {
 
 	/// The record of `declaration`'s place in `variant`, a rename: its declaration, bound from its fulfilling property, or,
 	/// only if available, to `nil` where `answers` finds no declaration it reads available, as the tree writes it.
+	/// - Parameter readsWrappersInstance: Whether the rename's scope reads its fulfilling property as a wrapper's instance
+	///   (`DeclarationsAnsweringReads.renameReadsWrappersInstance(_:)`), which the rename is then bound from, as the tree
+	///   binds it (`ScopeGenerator`'s `aliasCode`).
 	static func renameRecord(
 		of declaration: DeclarationID,
 		variant: VariantID,
 		in world: some NodeRecordSources,
 		answers: OnlyIfAvailableAnswers,
+		readsWrappersInstance: Bool = false,
 	) throws(NodeRecordRefusal) -> AliasPlaceRecord {
 		guard let (property, fulfillingProperty, erasedToConcreteExistential, declarationReference) = rename(of: declaration, in: world) else { throw .renameOrHole }
 		switch answers.renameBinding(of: variant) {
@@ -74,10 +78,10 @@ extension NodeRecords {
 			let text = ScopeGenerator.referencingDeclaration(of: "let \(property.asSource) = nil", by: declarationReference)
 			return AliasPlaceRecord(property: property, fulfillingProperty: nil, text: text, reads: [])
 		case let .bound(fulfillingBindingIsOptional):
-			return renameRecord(of: property, fulfilledBy: fulfillingProperty, erasedToConcreteExistential: erasedToConcreteExistential, fulfillingBindingIsOptional: fulfillingBindingIsOptional, declarationReference: declarationReference)
+			return renameRecord(of: property, fulfilledBy: fulfillingProperty, erasedToConcreteExistential: erasedToConcreteExistential, fulfillingBindingIsOptional: fulfillingBindingIsOptional, readsWrappersInstance: readsWrappersInstance, declarationReference: declarationReference)
 		case nil:
 			// A required rename is bound from its fulfilling property, which its scope requires.
-			return renameRecord(of: property, fulfilledBy: fulfillingProperty, erasedToConcreteExistential: erasedToConcreteExistential, fulfillingBindingIsOptional: false, declarationReference: declarationReference)
+			return renameRecord(of: property, fulfilledBy: fulfillingProperty, erasedToConcreteExistential: erasedToConcreteExistential, fulfillingBindingIsOptional: false, readsWrappersInstance: readsWrappersInstance, declarationReference: declarationReference)
 		}
 	}
 
@@ -86,12 +90,15 @@ extension NodeRecords {
 		fulfilledBy fulfillingProperty: Property,
 		erasedToConcreteExistential: Bool,
 		fulfillingBindingIsOptional: Bool,
+		readsWrappersInstance: Bool,
 		declarationReference: AliasDeclarationReferences.Reference?,
 	) -> AliasPlaceRecord {
 		let text = ScopeGenerator.referencingDeclaration(
 			of: ScopeGenerator.aliasDeclaration(
 				of: property,
-				fulfilledBy: fulfillingProperty.label,
+				fulfilledBy: readsWrappersInstance
+					? "\(fulfillingProperty.label).\(Dependency.lazilyInstantiatedInstancePropertyName)"
+					: fulfillingProperty.label,
 				ofType: fulfillingProperty.typeDescription,
 				erasedToConcreteExistential: erasedToConcreteExistential,
 				fulfillingValueMayBeOptional: fulfillingBindingIsOptional,
