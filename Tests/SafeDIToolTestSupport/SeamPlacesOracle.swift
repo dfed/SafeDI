@@ -129,6 +129,7 @@ public enum SeamPlacesOracle {
 
 		// 1. Per site, along its route.
 		var routeAnswersBySite = [Int: RouteAnswers]()
+		let reentriesAlongRoutes = CycleReentriesAlongRoutes(of: places)
 		var siteFacts = [Int: SiteFacts]()
 		var casesInTreeByDeclaration = [String: Set<Int>]()
 		var casesInTreePathByDeclaration = [String: (path: String, property: String)]()
@@ -137,7 +138,7 @@ public enum SeamPlacesOracle {
 			let route = observation.routeBySite[site]
 			guard checkRoute(route, of: hole, caseIndex: caseIndex, places: places, into: &report) else { continue }
 			report.siteQuestions += 1
-			let answers = RouteAnswers(route: route, siteProperty: hole.property, siteOpensSendableFunction: places.cases[caseIndex].siteOpensSendableFunction, places: places)
+			let answers = RouteAnswers(route: route, siteProperty: hole.property, siteOpensSendableFunction: places.cases[caseIndex].siteOpensSendableFunction, places: places, reentriesAlongRoutes: reentriesAlongRoutes)
 			routeAnswersBySite[site] = answers
 			let path = spelled(hole.sitePath)
 
@@ -193,7 +194,9 @@ public enum SeamPlacesOracle {
 				}
 				casesInTreePathByDeclaration[key] = casesInTreePathByDeclaration[key] ?? (path, uncarried.property.asSource)
 			}
-			compare("cycle re-entries", at: path, today: hole.cycleReentryDeclarations.map { json($0) }, graph: answers.cycleReentries.map { json($0) }, into: &report)
+			// Compared as sets: the graph answers re-entries label by label (`Places.cycleReentries(ofLevel:beneath:context:excluding:statesVisited:)`),
+			// and every reader takes a label's first.
+			compare("cycle re-entries", at: path, today: hole.cycleReentryDeclarations.map { json($0) }.sorted(), graph: answers.cycleReentries.map { json($0) }.sorted(), into: &report)
 			compare("declarations hidden by fields", at: path, today: hole.declarationsHiddenByFields.map { json($0) }, graph: answers.hiddenByFields.map { json($0) }, into: &report)
 		}
 
@@ -271,13 +274,14 @@ public enum SeamPlacesOracle {
 
 			var reentryLabels = Set(siteHoles.flatMap { $0.cycleReentryDeclarations.map(\.property.label) })
 			for site in sites {
-				for level in observation.routeBySite[site].levels {
-					reentryLabels.formUnion(places.levels[level].cycleReentries.map(\.property.label))
+				let levels = observation.routeBySite[site].levels
+				for (parent, level) in zip(levels, levels.dropFirst()) {
+					reentryLabels.formUnion(reentriesAlongRoutes.reentries(ofLevel: level, beneath: parent, excluding: []).map(\.property.label))
 				}
 			}
 			for label in reentryLabels.sorted() {
 				let today = Set(siteHoles.map { hole in hole.cycleReentryDeclarations.first { $0.property.label == label }.map { json($0) } ?? "none" })
-				let graph = Set(query.cycleReentryDeclarations(ofLabel: label, at: caseIndex).map { $0.map { json($0) } ?? "none" })
+				let graph = Set((query.cycleReentryDeclarations(ofLabel: label, at: caseIndex) ?? []).map { $0.map { json($0) } ?? "none" })
 				compare("cycle re-entries of \(label)", at: path, today: today.sorted(), graph: graph.sorted(), into: &report)
 			}
 
@@ -675,7 +679,7 @@ public enum SeamPlacesOracle {
 		/// The labels whose nearest declaration is a fill's field bound from a parameter of the filled seam.
 		var labelsOfFillFieldsHiding = Set<String>()
 
-		init(route: SeamSignature.Places.Route, siteProperty: Property, siteOpensSendableFunction: Bool, places: SeamSignature.Places) {
+		init(route: SeamSignature.Places.Route, siteProperty: Property, siteOpensSendableFunction: Bool, places: SeamSignature.Places, reentriesAlongRoutes: CycleReentriesAlongRoutes) {
 			self.route = route
 			// The nearest declaration of each label, by its position on the route, and the order the labels are bound in: a
 			// label bound again moves to its later place.
@@ -737,8 +741,9 @@ public enum SeamPlacesOracle {
 			// A cycle that closes on a level below the root hands its type, built again, what a scope between declares, the
 			// outermost such level first per label, where the place's nearest declaration of the label is outside the level.
 			var reenteredLabels = Set<String>()
+			let entriesAlongRoute = places.stackEntries(along: route.levels)
 			for (position, level) in route.levels.enumerated() where position > 0 {
-				for reentry in places.levels[level].cycleReentries
+				for reentry in reentriesAlongRoutes.reentries(ofLevel: level, beneath: route.levels[position - 1], excluding: entriesAlongRoute[position])
 					where reentry.property.label != siteProperty.label
 					&& !reenteredLabels.contains(reentry.property.label)
 					&& !(nearest[reentry.property.label].map { $0.position >= position } ?? false)
@@ -754,6 +759,7 @@ public enum SeamPlacesOracle {
 						closedOnBuiltType: reentry.closedOnBuiltType,
 						closedOnDeclaringType: declaringLevel.key.builtType ?? declaringLevel.fillOwnerType ?? .void(.tuple),
 						reenteringType: reentry.reenteringType,
+						placeIsInFurtherSendableFunction: siteOpensSendableFunction || openingPositions.contains { $0 > position },
 					))
 				}
 			}

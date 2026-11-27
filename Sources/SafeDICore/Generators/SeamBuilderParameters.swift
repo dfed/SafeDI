@@ -390,7 +390,6 @@ extension DependencyTreeGenerator {
 				key: SeamSignature.Places.LevelKey(builtType: presentation.innerSeamType, nextProperty: nil, isSeamRoot: false, isInFill: levels.last?.key.isInFill ?? false, filledType: nil),
 				declarations: [],
 				opensSendableFunction: opensSendableFunction,
-				cycleReentries: [],
 				fillBaseStack: [],
 				fillOwnerType: nil,
 				pathSegment: [presentation.callProperty],
@@ -1547,7 +1546,6 @@ extension DependencyTreeGenerator {
 			let key: SeamSignature.Places.LevelKey
 			let declarations: [PathDeclaration]
 			let opensSendableFunction: SeamSignature.Places.SendableFunctionOpened?
-			var cycleReentries = [SeamSignature.Places.CycleReentry]()
 			let fillBaseStack: [SeamSignature.Places.StackEntry]
 			let fillOwnerType: TypeDescription?
 			let pathSegment: [Property]
@@ -2058,19 +2056,6 @@ extension DependencyTreeGenerator {
 			declarationsBetweenByClosedOnScope[ObjectIdentifier(generator)] = declarationsBetween
 			if let levelIndex = levelIndexByClosedOnFrameLevel[level], levelIndex < levels.count {
 				levels[levelIndex].reentryDeclarations = declarationsBetween.map(\.property)
-				if draftsPlaceLevels {
-					placeLevelsInProgress[levelIndex].cycleReentries = declarationsBetween.map { between in
-						SeamSignature.Places.CycleReentry(
-							property: between.property,
-							declaringType: between.declaringType,
-							declarationLocation: between.declarationLocation,
-							parameterTakingType: between.parameterTakingType,
-							closedOnProperty: between.closedOnProperty,
-							closedOnBuiltType: closedOnDeclaration.concreteType,
-							reenteringType: between.reenteringType,
-						)
-					}
-				}
 			}
 			/// Whether the site reads the value of `label` bound inside the function. A place nested by type reads a parameter
 			/// of a builder function from its type's level, which carries every one any build of the type declares.
@@ -2136,7 +2121,6 @@ extension DependencyTreeGenerator {
 					)
 				},
 				opensSendableFunction: level.opensSendableFunction,
-				cycleReentries: level.cycleReentries,
 				fillBaseStack: level.fillBaseStack,
 				fillOwnerType: level.fillOwnerType,
 				pathSegment: level.pathSegment,
@@ -2228,7 +2212,6 @@ extension DependencyTreeGenerator {
 		beneath scope: ScopeGenerator,
 		building scopeType: TypeDescription,
 		nestedCycles: [ObjectIdentifier: [DeclarationOnCyclePath]]?,
-		countedBy step: GenerationWork.Step?,
 	) -> [(declaration: DeclarationOnCyclePath, reenteringType: TypeDescription)] {
 		// `nil` for a generator no path beneath which reaches such a scope.
 		var declarationsBeneath = [ObjectIdentifier: DeclarationsToCycleClosingScopes?]()
@@ -2307,7 +2290,7 @@ extension DependencyTreeGenerator {
 				}
 			}
 		}
-		GenerationWork.record(generatorsRead, by: step)
+		GenerationWork.record(generatorsRead, by: .collectingDeclarationsOfACycle)
 		return joined(scope.children, of: scopeType, declaring: [])?.declarations ?? []
 	}
 
@@ -2323,9 +2306,7 @@ extension DependencyTreeGenerator {
 	///
 	/// The work grows with the scope generators of the tree and the cycles nested in it, never with the paths through
 	/// them: sixteen screens that each build three others hold tens of thousands of paths.
-	/// - Parameter step: The step the walk's work counts under (`GenerationWork`): `nil` for the place graph's draft, which
-	///   only a test that observes the graph makes, so that the work counted is the generator's own.
-	static func declarationsBetween(closedOnScope: ScopeGenerator, closedOnDeclaration: ScopeGenerator.BuiltDeclaration, countedBy step: GenerationWork.Step? = .collectingDeclarationsOfACycle) -> [DeclarationBetween] {
+	static func declarationsBetween(closedOnScope: ScopeGenerator, closedOnDeclaration: ScopeGenerator.BuiltDeclaration) -> [DeclarationBetween] {
 		let closedOnProperty = closedOnDeclaration.property
 		var ownLabels: Set<String> = [closedOnProperty.label]
 		for declaration in declarationsBound(by: closedOnScope, includingForwardedProperties: true, reason: .other) {
@@ -2357,7 +2338,6 @@ extension DependencyTreeGenerator {
 				beneath: nestedScope,
 				building: type,
 				nestedCycles: memo.declarationsOfNestedCycles,
-				countedBy: step,
 			).map(\.declaration)
 		}
 		return declarationsToScopes(
@@ -2365,7 +2345,6 @@ extension DependencyTreeGenerator {
 			beneath: closedOnScope,
 			building: closedOnDeclaration.concreteType,
 			nestedCycles: memo.declarationsOfNestedCycles,
-			countedBy: step,
 		).compactMap { pathDeclaration, reenteringType in
 			guard !ownLabels.contains(pathDeclaration.declaration.property.label) else { return nil }
 			// A nested cycle's parameter is bound by a declaration beneath the scope that takes it, so the chain ends.
@@ -2374,7 +2353,7 @@ extension DependencyTreeGenerator {
 			      let declaration = scope.declarationACycleClosesOn, let type = scope.builtInstantiable?.concreteInstantiable
 			{
 				let declarationsOnPaths = memo.declarationsOnPathsOfNestedCycles[scopeIdentifier]
-					?? declarationsToScopes(closingCycleOn: declaration, beneath: scope, building: type, nestedCycles: nil, countedBy: step).map(\.declaration)
+					?? declarationsToScopes(closingCycleOn: declaration, beneath: scope, building: type, nestedCycles: nil).map(\.declaration)
 				memo.declarationsOnPathsOfNestedCycles[scopeIdentifier] = declarationsOnPaths
 				guard let next = declarationsOnPaths.first(where: { $0.declaration.property.label == binding.declaration.property.label }) else { break }
 				binding = next
@@ -2844,11 +2823,13 @@ extension DependencyTreeGenerator {
 				}
 				return forms.map { SeamSignature.Places.StackEntry(property: $0, concreteType: builtType) }
 			}
+			// A question past the query's state limit (`Places.Query.defaultStateLimit`) answers nothing here yet: no finding
+			// names it.
 			// The open scopes some route of the case closes a cycle at, whose subtrees those routes never build.
 			var closingAtSomeRoute = Set<SeamSignature.Places.StackEntry>()
 			for read in reads.reads {
 				guard case let .openScope(scope) = read else { continue }
-				for entry in closedOnEntries(of: scope.property, builtAs: scope.builtType) where caseIndices.contains(where: { !query.depthsBelowOwner(ofProperty: entry.property, builtAs: entry.concreteType, at: $0).isEmpty }) {
+				for entry in closedOnEntries(of: scope.property, builtAs: scope.builtType) where caseIndices.contains(where: { !(query.depthsBelowOwner(ofProperty: entry.property, builtAs: entry.concreteType, at: $0) ?? []).isEmpty }) {
 					closingAtSomeRoute.insert(entry)
 				}
 			}
@@ -2871,7 +2852,7 @@ extension DependencyTreeGenerator {
 				let scopeQuery = excludingQuery(closingEntriesAbove(scope.fillAncestors))
 				for caseIndex in caseIndices {
 					for entry in closedOnEntries(of: scope.property, builtAs: scope.builtType) where closingAtSomeRoute.contains(entry) {
-						for (depth, route) in scopeQuery.depthsBelowOwner(ofProperty: entry.property, builtAs: entry.concreteType, at: caseIndex) {
+						for (depth, route) in scopeQuery.depthsBelowOwner(ofProperty: entry.property, builtAs: entry.concreteType, at: caseIndex) ?? [] {
 							let hole = routedHole(casePlace(at: caseIndex), along: route, in: scopeQuery)
 							findings.append(.init(hole: hole, kind: .closesCycleInSeamTree(
 								closingProperty: scope.property,
@@ -2958,7 +2939,7 @@ extension DependencyTreeGenerator {
 					}
 					let labelQuery = excludingQuery(excluded)
 					for caseIndex in caseIndices {
-						for variant in labelQuery.labelVariants(ofLabel: label, at: caseIndex) {
+						for variant in labelQuery.labelVariants(ofLabel: label, at: caseIndex) ?? [] {
 							let hole = judgedHole(casePlace(at: caseIndex), ofLabel: label, as: variant, at: caseIndex, in: labelQuery, callerBindsArgument: callerBindsArgument, resolvingBuildability: resolvingBuildability)
 							findings += findingsOfFill(of: hole, fill: emitting.fill, reads: labelReads, call: call, hidden: hidden, requirement: AccessLevel.required(toConstructFrom: callerModule, declaredIn: hole.scopeSeamModule, isOwnFile: false), callerModule: callerModule, compilesGeneratedMocks: compilesGeneratedMocks, seamTreeReceives: &seamTreeReceives)
 						}

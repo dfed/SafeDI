@@ -308,45 +308,6 @@ extension SeamSignature.Places.ChildFacts: BinarySchemaMember {
 	}
 }
 
-extension SeamSignature.Places.CycleReentry: BinarySchemaMember {
-	static var binaryLayout: BinaryLayout<Self> {
-		.structure(
-			fields: [
-				BinaryLayoutField("property", \.property),
-				BinaryLayoutField("declaringType", \.declaringType),
-				BinaryLayoutField("declarationLocation", \.declarationLocation),
-				BinaryLayoutField("parameterTakingType", \.parameterTakingType),
-				BinaryLayoutField("closedOnProperty", \.closedOnProperty),
-				BinaryLayoutField("closedOnBuiltType", \.closedOnBuiltType),
-				BinaryLayoutField("reenteringType", \.reenteringType),
-			],
-			unwrittenProperties: [],
-		)
-	}
-
-	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
-		try self.init(
-			property: reader.read(),
-			declaringType: reader.read(),
-			declarationLocation: reader.read() as Dependency.DeclarationLocation?,
-			parameterTakingType: reader.read() as TypeDescription?,
-			closedOnProperty: reader.read(),
-			closedOnBuiltType: reader.read(),
-			reenteringType: reader.read(),
-		)
-	}
-
-	func write(to writer: inout BinaryWriter) {
-		writer.write(property)
-		writer.write(declaringType)
-		writer.write(declarationLocation)
-		writer.write(parameterTakingType)
-		writer.write(closedOnProperty)
-		writer.write(closedOnBuiltType)
-		writer.write(reenteringType)
-	}
-}
-
 extension SeamSignature.Places.Level: BinarySchemaMember {
 	static let writesFieldFlags = true
 
@@ -358,7 +319,6 @@ extension SeamSignature.Places.Level: BinarySchemaMember {
 				BinaryLayoutField("nextPosition", \.nextPosition),
 				BinaryLayoutField("nextLoop", \.nextLoop),
 				BinaryLayoutField("opensSendableFunction", \.opensSendableFunction),
-				BinaryLayoutField("cycleReentries", absentWhenEmpty: \.cycleReentries),
 				BinaryLayoutField("fillBaseStack", absentWhenEmpty: \.fillBaseStack),
 				BinaryLayoutField("fillOwnerType", \.fillOwnerType),
 				BinaryLayoutField("pathSegment", absentWhenEmpty: \.pathSegment),
@@ -379,7 +339,6 @@ extension SeamSignature.Places.Level: BinarySchemaMember {
 			nextPosition: reader.readOptional(flaggedIn: &fieldFlags) as Int?,
 			nextLoop: reader.readOptional(flaggedIn: &fieldFlags) as Int?,
 			opensSendableFunction: reader.readOptional(flaggedIn: &fieldFlags) as SeamSignature.Places.SendableFunctionOpened?,
-			cycleReentries: reader.readAbsentWhenEmpty(flaggedIn: &fieldFlags),
 			fillBaseStack: reader.readAbsentWhenEmpty(flaggedIn: &fieldFlags),
 			fillOwnerType: reader.readOptional(flaggedIn: &fieldFlags) as TypeDescription?,
 			pathSegment: reader.readAbsentWhenEmpty(flaggedIn: &fieldFlags),
@@ -399,7 +358,6 @@ extension SeamSignature.Places.Level: BinarySchemaMember {
 		writer.writeOptional(nextPosition, flaggedIn: &fieldFlags)
 		writer.writeOptional(nextLoop, flaggedIn: &fieldFlags)
 		writer.writeOptional(opensSendableFunction, flaggedIn: &fieldFlags)
-		writer.writeAbsentWhenEmpty(cycleReentries, flaggedIn: &fieldFlags)
 		writer.writeAbsentWhenEmpty(fillBaseStack, flaggedIn: &fieldFlags)
 		writer.writeOptional(fillOwnerType, flaggedIn: &fieldFlags)
 		writer.writeAbsentWhenEmpty(pathSegment, flaggedIn: &fieldFlags)

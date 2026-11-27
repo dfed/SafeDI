@@ -32,12 +32,43 @@ extension SeamPlaceLevels {
 	}
 }
 
+/// What a cycle re-entering a level beneath a parent hands, on routes that stack given entries above it, each asked once
+/// (`Places.cycleReentries(ofLevel:beneath:context:excluding:statesVisited:)`), for the checks that evaluate every route.
+final class CycleReentriesAlongRoutes {
+	init(of places: SeamSignature.Places) {
+		self.places = places
+		context = places.cycleContext()
+	}
+
+	func reentries(ofLevel level: Int, beneath parent: Int, excluding entriesAbove: Set<SeamSignature.Places.StackEntry>) -> [SeamSignature.Places.CycleReentry] {
+		let key = Key(level: level, parent: parent, entriesAbove: entriesAbove)
+		if let known = reentriesByKey[key] {
+			return known
+		}
+		var statesVisited = 0
+		let reentries = places.cycleReentries(ofLevel: level, beneath: parent, context: context, excluding: entriesAbove, statesVisited: &statesVisited)
+		reentriesByKey[key] = reentries
+		return reentries
+	}
+
+	private struct Key: Hashable {
+		let level: Int
+		let parent: Int
+		let entriesAbove: Set<SeamSignature.Places.StackEntry>
+	}
+
+	private let places: SeamSignature.Places
+	private let context: SeamSignature.Places.CycleContext
+	private var reentriesByKey = [Key: [SeamSignature.Places.CycleReentry]]()
+}
+
 enum SeamPlaceVariantChecks {
 	static let siteLimit = 256
 
 	static func mismatches(of observation: SeamSignature.Places.Observation) -> [String] {
 		let places = observation.places
 		let query = SeamSignature.Places.Query(of: places)
+		let reentriesAlongRoutes = CycleReentriesAlongRoutes(of: places)
 		var routesByCase = [Int: [SeamSignature.Places.Route]]()
 		for (caseIndex, route) in zip(observation.caseIndexBySite, observation.routeBySite) where caseIndex >= 0 {
 			routesByCase[caseIndex, default: []].append(route)
@@ -49,7 +80,7 @@ enum SeamPlaceVariantChecks {
 		var mismatches = [String]()
 		for caseIndex in routesByCase.keys.sorted() {
 			let routes = routesByCase[caseIndex] ?? []
-			mismatches += self.mismatches(of: caseIndex, routes: routes, query: query, observation: observation, excluding: [])
+			mismatches += self.mismatches(of: caseIndex, routes: routes, query: query, observation: observation, excluding: [], reentriesAlongRoutes: reentriesAlongRoutes)
 			// The routes whose stack holds none of a few of the entries the case's routes stack.
 			var entries = [SeamSignature.Places.StackEntry]()
 			for route in routes {
@@ -60,27 +91,30 @@ enum SeamPlaceVariantChecks {
 			for entry in entries.prefix(4) {
 				let kept = routes.filter { !query.stack(along: $0).contains(entry) }
 				let excludingQuery = SeamSignature.Places.Query(of: places, excludingRoutesWhoseStackHolds: [entry])
-				mismatches += self.mismatches(of: caseIndex, routes: kept, query: excludingQuery, observation: observation, excluding: [entry])
+				mismatches += self.mismatches(of: caseIndex, routes: kept, query: excludingQuery, observation: observation, excluding: [entry], reentriesAlongRoutes: reentriesAlongRoutes)
 			}
 		}
 		return mismatches
 	}
 
-	static func mismatches(of caseIndex: Int, routes: [SeamSignature.Places.Route], query: SeamSignature.Places.Query, observation: SeamSignature.Places.Observation, excluding excluded: [SeamSignature.Places.StackEntry]) -> [String] {
+	static func mismatches(of caseIndex: Int, routes: [SeamSignature.Places.Route], query: SeamSignature.Places.Query, observation: SeamSignature.Places.Observation, excluding excluded: [SeamSignature.Places.StackEntry], reentriesAlongRoutes: CycleReentriesAlongRoutes) -> [String] {
 		let places = observation.places
 		var mismatches = [String]()
 		do {
 			let excluding = excluded.isEmpty ? "" : " excluding \(excluded.map { "\($0.property.asSource)@\($0.concreteType.asSource)" })"
 			let naming = (query.representativeRoute(of: caseIndex).map { query.sitePath(along: $0).map(\.label).joined(separator: ".") } ?? "?") + excluding
 			guard !routes.isEmpty else {
-				let variants = query.labels(reaching: caseIndex).flatMap { query.labelVariants(ofLabel: $0, at: caseIndex) }
+				let variants = query.labels(reaching: caseIndex).flatMap { query.labelVariants(ofLabel: $0, at: caseIndex) ?? [] }
 				return variants.isEmpty ? [] : ["The label variants at \(naming) in \(observation.seamType.asSource) list \(variants.count) values where every route is excluded"]
 			}
 			for label in query.labels(reaching: caseIndex) {
-				let variants = query.labelVariants(ofLabel: label, at: caseIndex)
-				let valueByRoute = routes.map { (route: $0, value: value(ofLabel: label, along: $0, at: caseIndex, in: places)) }
+				guard let variants = query.labelVariants(ofLabel: label, at: caseIndex) else {
+					mismatches.append("The label variants of \(label) at \(naming) in \(observation.seamType.asSource) are past the state limit")
+					continue
+				}
+				let valueByRoute = routes.map { (route: $0, value: value(ofLabel: label, along: $0, at: caseIndex, in: places, reentriesAlongRoutes: reentriesAlongRoutes)) }
 				let distinctValues = Set(valueByRoute.map(\.value))
-				let variantValues = variants.map { value(ofLabel: label, along: $0.leastRoute, at: caseIndex, in: places) }
+				let variantValues = variants.map { value(ofLabel: label, along: $0.leastRoute, at: caseIndex, in: places, reentriesAlongRoutes: reentriesAlongRoutes) }
 				if Set(variantValues).count != variants.count || Set(variantValues) != distinctValues {
 					mismatches.append("The label variants of \(label) at \(naming) in \(observation.seamType.asSource) are \(variants.count) over \(Set(variantValues).count) values; its places' routes read \(distinctValues.count)")
 					continue
@@ -107,7 +141,10 @@ enum SeamPlaceVariantChecks {
 			}
 			for entry in entries {
 				let expected = depthsByEntry[entry] ?? [:]
-				let depths = query.depthsBelowOwner(ofProperty: entry.property, builtAs: entry.concreteType, at: caseIndex)
+				guard let depths = query.depthsBelowOwner(ofProperty: entry.property, builtAs: entry.concreteType, at: caseIndex) else {
+					mismatches.append("The depths of \(entry.property.asSource) below \(naming) in \(observation.seamType.asSource) are past the state limit")
+					continue
+				}
 				let leastByDepth = expected.mapValues { $0.min { precedes($0, $1, query) } }
 				let matches = Set(depths.map(\.depth)) == Set(expected.keys) && depths.count == expected.count && depths.allSatisfy { depth in
 					leastByDepth[depth.depth].flatMap(\.self).map { sortKeys(of: $0, query) } == sortKeys(of: depth.leastRoute, query)
@@ -123,18 +160,26 @@ enum SeamPlaceVariantChecks {
 	/// What a place at the end of `route` reads of `label`, evaluated along the route alone.
 	struct Value: Hashable {
 		let answer: SeamSignature.Places.Answer
-		/// The level, re-entry and parent of the outermost re-entry below the label's declaration.
-		let reentry: [Int]
+		/// The outermost re-entry below the label's declaration: its level, its parent and what it hands the type built
+		/// again, which the route's stack decides.
+		let reentry: Reentry?
 		/// The field and the declaration it hides.
 		let hidden: [Int]
+
+		struct Reentry: Hashable {
+			let level: Int
+			let parent: Int
+			let reentry: SeamSignature.Places.CycleReentry
+		}
 	}
 
-	static func value(ofLabel label: String, along route: SeamSignature.Places.Route, at caseIndex: Int, in places: SeamSignature.Places) -> Value {
+	static func value(ofLabel label: String, along route: SeamSignature.Places.Route, at caseIndex: Int, in places: SeamSignature.Places, reentriesAlongRoutes: CycleReentriesAlongRoutes) -> Value {
 		let placeCase = places.cases[caseIndex]
 		let tracksReentry = places.levels[placeCase.ownerLevel].key.nextProperty?.label != label
 		var function: Int? = placeCase.siteOpensSendableFunction ? SeamSignature.Places.Answer.siteFunction : nil
-		var reentry = [Int]()
+		var reentry: Value.Reentry?
 		let levels = Array(route.levels.reversed())
+		let entriesAlongRoute = Array(places.stackEntries(along: route.levels).reversed())
 		for (position, level) in levels.enumerated() {
 			let declarations = places.declarations(ofLevel: level)
 			if let index = declarations.lastIndex(where: { $0.field.property.label == label }) {
@@ -163,8 +208,8 @@ enum SeamPlaceVariantChecks {
 				return Value(answer: answer, reentry: reentry, hidden: hidden)
 			}
 			guard position + 1 < levels.count else { break }
-			if tracksReentry, let own = places.levels[level].cycleReentries.firstIndex(where: { $0.property.label == label }) {
-				reentry = [level, own, levels[position + 1]]
+			if tracksReentry, let own = reentriesAlongRoutes.reentries(ofLevel: level, beneath: levels[position + 1], excluding: entriesAlongRoute[position]).first(where: { $0.property.label == label }) {
+				reentry = Value.Reentry(level: level, parent: levels[position + 1], reentry: own)
 			}
 			if function == nil, places.levels[level].opensSendableFunction != nil {
 				function = level
