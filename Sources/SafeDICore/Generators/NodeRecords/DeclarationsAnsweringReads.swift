@@ -74,6 +74,9 @@ struct DeclarationsAnsweringReads: Sendable {
 		// the root, so nothing answers what its tree reads.
 		var answeringDeclarations = [[DeclarationID]?](repeating: nil, count: world.variantCount)
 		answeringDeclarations[0] = [DeclarationID](repeating: -1, count: world.reads(of: world.declaration(of: 0)).count)
+		// Each variant's caller, the first call a walk from the root meets, -1 for the root: a production world refused
+		// for no variant of several (`NodeRecordRefusal.nodeHasSeveralVariants`) has one path to each variant.
+		var callerByVariant = [VariantID](repeating: -1, count: world.variantCount)
 		// A stack, since a tree can be as deep as the module has types.
 		var stack: [VariantID] = [0]
 		while let caller = stack.popLast() {
@@ -126,11 +129,12 @@ struct DeclarationsAnsweringReads: Sendable {
 					}
 					if opensSendableFunction, scope.sortedDeclaredPropertyForms.contains(where: { declared in
 						declared.property.label == label && !declared.property.propertyType.isConstant && !declared.property.propertyType.isSendable
-					}) {
+					}), !Self.isPassedNil(read.channel, of: label, answeredBy: answeringDeclaration, aboveCallOf: callee, by: caller, callerByVariant: callerByVariant, in: world) {
 						sendableFunctionCapturesWrapper = true
 					}
 				}
 				answeringDeclarations[Int(callee)] = calleeAnsweringDeclarations
+				callerByVariant[Int(callee)] = caller
 				stack.append(callee)
 			}
 		}
@@ -157,6 +161,37 @@ struct DeclarationsAnsweringReads: Sendable {
 
 	/// By variant; empty in a world that declares no lazily instantiated property and opens no `@Sendable` function.
 	private let lazilyInstantiatedInstancePropertiesByVariant: [Set<Property>]
+
+	/// Whether every read of `label` through `channel` that `callee`'s tree makes is passed `nil` where `answeringDeclaration`,
+	/// the scope that declares the label, answers it: a read only if available (`optional`, `optionalValue`) of the
+	/// declaration still being built around the call, the node of the label that `answeringDeclaration` builds on the path
+	/// to `callee`, which captures nothing (`NearestDeclarations.resolvingBinding(of:)`). A required read of the label reads
+	/// `value` beside it, which is judged on its own.
+	private static func isPassedNil(
+		_ channel: ReadChannel,
+		of label: String,
+		answeredBy answeringDeclaration: DeclarationID,
+		aboveCallOf callee: VariantID,
+		by caller: VariantID,
+		callerByVariant: [VariantID],
+		in world: some NodeRecordSources,
+	) -> Bool {
+		switch channel {
+		case .optional, .optionalValue:
+			var child = callee
+			var parent = caller
+			while parent >= 0 {
+				if world.declaration(of: parent) == answeringDeclaration {
+					return world.property(of: world.declaration(of: child))?.label == label
+				}
+				child = parent
+				parent = callerByVariant[Int(parent)]
+			}
+			return false
+		case .value, .alias, .madeAgain, .mock, .carrier, .fill, .family, .override:
+			return false
+		}
+	}
 
 	/// Whether a read of `channel` is handed the nearest declaration of its label, in the form that declaration has: a
 	/// required receive, and a receive only if available where it is handed a value.
