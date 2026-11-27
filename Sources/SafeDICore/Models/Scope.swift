@@ -1055,206 +1055,22 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		// pass names both, fills first, then dispatchers, apart from what encloses the call: the
 		// fills and dispatchers enclosing it, and the names the seam whose tree holds it binds for its builders, which a call
 		// inside it passes by name and which a closer declaration would shadow.
-		var fillsOfThisCall = [(fill: Fill, scope: ConstructionScope, context: ScopeRecord.FillContext)]()
-		var dispatchersOfThisCall = [ScopeGenerator.FillDispatcher]()
-		var namesOfThisCall = GeneratedNameAllocator(reserving: [])
-		if !holeArguments.isEmpty {
-			let callPath = self.sitePath
-			// The names are asked of each set in turn, never of their union: a union made for every call holds every name the
-			// seam whose tree holds the calls binds, so a seam's tree that calls another seam at every place grew with its
-			// square.
-			var names = GeneratedNameAllocator(reserving: GenerationWork.taking(
-				NamesConsultedInTurn([GenerationWork.taking(enclosingFillNames, by: .reservingNamesOfACall), seamHoles.namesBoundForBuilders]),
-				by: .reservingNamesOfACall,
-			))
-			defer { namesOfThisCall = names }
-			var fillNames = enclosingFills
-			// Every other place of a case nested by type is filled by one function, the first place's: it can read whatever
-			// field any place of the case carries, each from the case or from the dispatchers that lead to it, in the form every
-			// route can hand it (`ScopeGenerator.caseFields(of:)`).
-			var placesByCaseKey = [String: [SeamSignature.Hole]]()
-			for case let .fill(hole, _, _) in holeArguments where hole.enumPlace != nil {
-				placesByCaseKey[ScopeGenerator.fillCaseKey(of: hole), default: []].append(hole)
-			}
-			// A place inside a fill of an inner seam's builder reads, through the scope value the inner seam handed that fill, a
-			// label that some route of the inner seam's enum holds and another does not: on that other route inline reads the
-			// caller's declaration, as for a label one place of the case carries and another does not.
-			let innerScopeReaders = scope.calledBuilders.map { InnerScopeReaders(enumsByKey: $0.enumsByKey) }
-			var caseFieldsByCaseKey = placesByCaseKey.mapValues { places in
-				var caseFields = ScopeGenerator.caseFields(of: places)
-				if let innerScopeReaders {
-					let fieldLabels = Set(caseFields.fields.map(\.property.label))
-					for place in places {
-						caseFields.callerReadLabels.formUnion(innerScopeReaders.labelsSomeInnerRouteLacks(of: place).intersection(fieldLabels))
-					}
-				}
-				return caseFields
-			}
-			// A public mock's caller decides per route, and a route whose nearest type binds another form of a value its fill
-			// reads converts it, so the fill takes each value its case's payload does not carry in the form it reads
-			// (`parameterField(of:reading:)`). A route on which no type binds the value hands the fill the caller's, which the root
-			// level function takes (`PublicMockLevelFunctions`).
-			// But a value the call hands the called mock from the caller's scope, which the called mock's root binds as its copy,
-			// is the caller's own, as a seam's deferred parameter is (see `fillUnderConstruction`): a fill whose places' nearest
-			// declaration of its label is that copy, and whose case's payload does not carry it, reads the caller's declaration,
-			// so its tree reads the caller's wrapper, as inline and the twin do, and no level function takes the value
-			// (`callersOwnLabels(amongLabelsOf:carrying:at:reading:handedFrom:by:whereFillsReenterCall:)`). A label the payload
-			// carries the fill binds from the payload, the called mock's copy, which holds the caller's value, unless the copy does
-			// not provide every form the fill reads and no fill re-enters the call.
-			var mockRootBindingByLabelByCaseKey = [String: [String: Property]]()
-			var fillsReenterCall = false
-			if scope.publicMockCall != nil, let calledBuilders = scope.calledBuilders {
-				fillsReenterCall = Self.callsInsideFills(of: holeArguments, reenter: calledBuilders)
-			}
-			if let publicMockCall = scope.publicMockCall {
-				for (caseKey, places) in placesByCaseKey {
-					guard var caseFields = caseFieldsByCaseKey[caseKey] else { continue }
-					let carriedLabels = Set(places.flatMap { $0.enumPlace?.values.map(\.property.label) ?? [] })
-					let reads = places.reduce(into: Set<Property>()) { reads, place in
-						reads.formUnion(scope.fillReceivedProperties[place.site] ?? [])
-					}
-					caseFields.fields = caseFields.fields.map { field in
-						let label = field.property.label
-						guard !carriedLabels.contains(label) else { return field }
-						let fieldsOfLabel = places.flatMap { $0.fields.filter { $0.property.label == label } }
-						return Self.parameterField(of: fieldsOfLabel, reading: reads.filter { $0.label == label }) ?? field
-					}
-					let callersOwnLabels = Self.callersOwnLabels(amongLabelsOf: caseFields.fields, carrying: carriedLabels, at: places, reading: reads, handedFrom: childNearestDeclarations, by: publicMockCall, whereFillsReenterCall: fillsReenterCall, log: &log)
-					caseFields.fields.removeAll { callersOwnLabels.labels.contains($0.property.label) }
-					caseFields.callerReadLabels.subtract(callersOwnLabels.labels)
-					mockRootBindingByLabelByCaseKey[caseKey] = callersOwnLabels.mockRootBindingByLabel
-					caseFieldsByCaseKey[caseKey] = caseFields
-				}
-			}
-			// A call inside a fill of this call that re-enters one of its level functions hands that function what it reads of
-			// its own scope (`PublicMockLevelFunctions.Reentry`), so a value a fill reads of the caller's scope that no place of
-			// its case carries is the fill's to take too, rather than the declaration enclosing this call that the fill's
-			// function would capture: inline reads the declaration nearest the place, which for a place the re-entering call
-			// reaches is the one nearest that call. Each such label is typed as `ScopeGenerator.FillDispatcher` types a
-			// dispatcher's parameter, by a form that is no optional, then in `Property` order. Without such a call the fill
-			// reads the same declaration either way, and keeps capturing it. A caller's own value (above) is such a label too:
-			// the re-entering call hands its own nearest declaration, which is the one inline reads at the places it reaches.
-			// The levels hand the fill the called mock's by-value copy of it, which holds the same value: a fill that reads the
-			// caller's wrapper beside its place's fields, which the copy does not provide, is passed up where its called type is
-			// re-entered, directly or through the fills of the calls its fills make, before any fill is built
-			// (`DependencyTreeGenerator.holeTypesTheFillGatesPassUp(of:in:lazilyHeldValues:)`), and an optional copy where a
-			// fill requires the value is an error.
-			if fillsReenterCall {
-				for (caseKey, places) in placesByCaseKey {
-					guard var caseFields = caseFieldsByCaseKey[caseKey], let firstPlace = places.first else { continue }
-					let fieldLabels = Set(caseFields.fields.map(\.property.label))
-					var formsByLabel = [String: Set<Property>]()
-					for place in places {
-						for property in scope.fillReceivedProperties[place.site] ?? [] where !fieldLabels.contains(property.label) {
-							formsByLabel[property.label, default: []].insert(property)
-						}
-					}
-					for label in formsByLabel.keys.sorted() {
-						let forms = formsByLabel[label, default: []].sorted()
-						guard let property = forms.first(where: { !$0.typeDescription.isOptional }) ?? forms.first else { continue }
-						caseFields.fields.append(SeamSignature.Hole.Field(property: property, access: .public, declaringType: firstPlace.scopeSeamType, declarationLocation: nil))
-						caseFields.callerReadLabels.insert(label)
-					}
-					caseFieldsByCaseKey[caseKey] = caseFields
-				}
-			}
-			var functionNameByCaseKey = [String: String]()
-			for case let .fill(hole, fulfillingScope, fillContext) in holeArguments where enclosingFills[ScopeGenerator.fillKey(of: hole)] == nil {
-				let key = ScopeGenerator.fillKey(of: hole)
-				let caseKey = ScopeGenerator.fillCaseKey(of: hole)
-				if let functionName = functionNameByCaseKey[caseKey] {
-					fillNames[key] = functionName
-					fillsOfThisCall.append((Fill(hole: hole, key: key, functionName: functionName, fields: hole.fields, emitsCode: false, caseHoles: [hole]), fulfillingScope, fillContext))
-					continue
-				}
-				let functionName = names.claim(ScopeGenerator.fillFunctionName(of: hole))
-				fillNames[key] = functionName
-				if hole.enumPlace != nil {
-					functionNameByCaseKey[caseKey] = functionName
-				}
-				let caseFields = caseFieldsByCaseKey[caseKey]
-				var fill = Fill(
-					hole: hole,
-					key: key,
-					functionName: functionName,
-					fields: caseFields?.fields ?? hole.fields,
-					emitsCode: true,
-					caseHoles: placesByCaseKey[caseKey] ?? [hole],
-					callerReadLabels: caseFields?.callerReadLabels ?? [],
-				)
-				fill.innerScopeParameters = Self.innerScopeParameters(ofFillOf: hole, seamHoles: seamHoles, callPath: callPath, calledBuilders: scope.calledBuilders)
-				fill.carrierUse = scope.calledBuilders?.carrierUse(ofPlace: hole)
-				fill.mockRootBindingByLabel = mockRootBindingByLabelByCaseKey[caseKey] ?? [:]
-				// A label a route binds as a `LazilyInstantiated` and the caller hands from its own scope stays the wrapper, so the
-				// instance is created where the fill's tree reads it, as inline; where every read of it is only if available, the
-				// fill takes it optionally (`Scope.fillLabelsReadOnlyIfAvailable`, set for the places whose fields hold a wrapper,
-				// each filled by the same type).
-				for field in fill.fields where fill.callerReadLabels.contains(field.property.label) && field.property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding != nil {
-					let places = placesByCaseKey[caseKey] ?? [hole]
-					if places.contains(where: { scope.fillLabelsReadOnlyIfAvailable[$0.site]?.contains(field.property.label) == true }) {
-						fill.optionalLazilyInstantiatedLabels.insert(field.property.label)
-					}
-				}
-				fillsOfThisCall.append((fill, fulfillingScope, fillContext))
-			}
-			if let calledBuilders = scope.calledBuilders {
-				dispatchersOfThisCall = ScopeGenerator.FillDispatcher.dispatchers(
-					of: calledBuilders,
-					filledSites: Self.filledSites(of: holeArguments),
-					enclosingDispatchers: enclosingFills,
-					fillNames: fillNames,
-					names: &names,
-					innerScopeNameByKey: Dictionary(calledBuilders.scopeEnums.compactMap { scopeEnum in
-						seamHoles.innerScope(at: callPath, innerKey: scopeEnum.key).map { (scopeEnum.key, $0.name) }
-					}, uniquingKeysWith: { first, _ in first }),
-					// Where the call's case returns the called seam's struct, the call's level functions are handed it, one per hole
-					// type and family of this seam whose places the fill holds.
-					carriedInnerScopesByKey: Dictionary(calledBuilders.scopeEnums.compactMap { scopeEnum in
-						guard seamHoles.carriesStruct(at: callPath, innerKey: scopeEnum.key) else { return nil }
-						return (scopeEnum.key, seamHoles.innerScopes(at: callPath, innerKey: scopeEnum.key).map { (name: $0.name, type: $0.enumType) })
-					}, uniquingKeysWith: { first, _ in first }),
-					enclosingCarriedInnerScopes: enclosingCarriedInnerScopes,
-					decidesPerRoute: scope.publicMockCall != nil,
-				)
-			}
-			// A level on a carried route binds a deferred parameter from a call the caller's seam makes, whose memo holds what that
-			// call passed, which no declaration of the caller's is (`FillDispatcher.Case.carriesDeferredFields`). A fill some route
-			// hands such a memo takes a memo, so the value is created when its tree reads it on every route, as inline: its field
-			// is that parameter's, which it binds as the memo (`fillUnderConstruction`), and a route that hands another form makes
-			// the memo of what it hands (`FillDispatcher.memosHanded(toFillOf:labels:readingSendableWrapper:among:)`). A public mock's caller hands values.
-			// A fill whose tree reads a label only as the place's own field of it, the wrapper a type further out declares, takes
-			// that field, which the pass before found (`ScopeGenerator.fillLabelsReadOnlyAsPlaceField`): inline reads that
-			// declaration, which the levels hand on past the deferring seam's (`FillDispatcher.Case.handsOn(_:)`).
-			if scope.publicMockCall == nil, dispatchersOfThisCall.contains(where: { dispatcher in
-				dispatcher.cases.contains { $0.carriesDeferredFields && $0.values?.contains(where: \.isDeferredParameter) == true }
-			}) {
-				for index in fillsOfThisCall.indices where fillsOfThisCall[index].fill.emitsCode {
-					let fill = fillsOfThisCall[index].fill
-					let payloadLabels = Set(fill.hole.enumPlace?.values.map(\.property.label) ?? [])
-					let labelsReadOnlyAsPlaceField = previousPassGenerator?.fillLabelsReadOnlyAsPlaceField[fill.key] ?? []
-					let handedMemos = ScopeGenerator.FillDispatcher.memosHanded(
-						toFillOf: fill.key,
-						labels: Set(fill.fields.filter { !$0.isDeferredParameter && !payloadLabels.contains($0.property.label) && !labelsReadOnlyAsPlaceField.contains($0.property.label) }.map(\.property.label)),
-						readingSendableWrapper: previousPassGenerator?.fillSendableWrapperReads[fill.key] ?? [:],
-						among: dispatchersOfThisCall,
-					)
-					fillsOfThisCall[index].fill.fields = fill.fields.map { field in
-						handedMemos.memoByLabel[field.property.label].map { field.handedAsMemo($0) } ?? field
-					}
-					fillsOfThisCall[index].fill.labelsHandedAsMemo = Set(handedMemos.memoByLabel.keys)
-					fillsOfThisCall[index].fill.plainMemoRoutesOfSendableWrapperReads = handedMemos.plainMemoRoutesOfSendableWrapperReads
-					fillsOfThisCall[index].fill.memoOriginsByLabel = handedMemos.memoOriginsByLabel
-				}
-			}
-			// A fill a level function calls of an instantiator's place returns the builder its wrapper keeps: every fill of a
-			// public mock's call, whose dispatchers are all level functions (`PublicMockLevelFunctions`).
-			for index in fillsOfThisCall.indices where fillsOfThisCall[index].fill.hole.property.propertyType.isAnyInstantiator {
-				let key = fillsOfThisCall[index].fill.key
-				fillsOfThisCall[index].fill.returnsWrapperBuilder = dispatchersOfThisCall.contains { dispatcher in
-					(dispatcher.returnsBuilderStruct || dispatcher.decidesPerRoute) && dispatcher.cases.contains { $0.target?.key == key }
-				}
-			}
-		}
+		let callFills = holeArguments.isEmpty ? CallFills() : Self.callFills(
+			of: scope,
+			holeArguments: holeArguments,
+			callPath: self.sitePath,
+			enclosingFills: enclosingFills,
+			enclosingFillNames: enclosingFillNames,
+			enclosingCarriedInnerScopes: enclosingCarriedInnerScopes,
+			seamHoles: seamHoles,
+			childNearestDeclarations: childNearestDeclarations,
+			fillLabelsReadOnlyAsPlaceField: { previousPassGenerator?.fillLabelsReadOnlyAsPlaceField[$0] ?? [] },
+			fillSendableWrapperReads: { previousPassGenerator?.fillSendableWrapperReads[$0] ?? [:] },
+			log: &log,
+		)
+		let fillsOfThisCall = callFills.fills
+		let dispatchersOfThisCall = callFills.dispatchers
+		let namesOfThisCall = callFills.names
 		self.fillsOfThisCall = fillsOfThisCall
 		self.dispatchersOfThisCall = dispatchersOfThisCall
 		self.namesOfThisCall = namesOfThisCall
@@ -1303,6 +1119,237 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		if !holeArguments.isEmpty {
 			isCall = true
 		}
+	}
+
+	/// The fills and dispatchers of a call that passes fills, and the names the call's one pass gave them.
+	struct CallFills {
+		var fills = [(fill: Fill, scope: ConstructionScope, context: ScopeRecord.FillContext)]()
+		var dispatchers = [ScopeGenerator.FillDispatcher]()
+		var names = GeneratedNameAllocator(reserving: [])
+	}
+
+	/// The fills and dispatchers of the call `scope` makes, which passes `holeArguments`, at `callPath` in the tree of the
+	/// seam `seamHoles` holds, beneath the declarations `childNearestDeclarations` holds: its own fills are those no
+	/// enclosing call fills, and its own dispatchers those no enclosing call declares. One pass names both, fills first,
+	/// then dispatchers, apart from what encloses the call: the fills and dispatchers enclosing it, and the names the seam
+	/// whose tree holds it binds for its builders, which a call inside it passes by name and which a closer declaration
+	/// would shadow. A static function of the call's facts, so that node records make the same fills from a world.
+	/// - Parameters:
+	///   - fillLabelsReadOnlyAsPlaceField: What the pass before found of each fill, by key
+	///     (`ScopeGenerator.fillLabelsReadOnlyAsPlaceField`); empty without a pass before.
+	///   - fillSendableWrapperReads: What the pass before found of each fill, by key
+	///     (`ScopeGenerator.fillSendableWrapperReads`); empty without a pass before.
+	static func callFills(
+		of scope: ConstructionScope,
+		holeArguments: [ConstructionScope.HoleArgument],
+		callPath: [Property],
+		enclosingFills: [String: String],
+		enclosingFillNames: GenerationWork.Shared<Set<String>>,
+		enclosingCarriedInnerScopes: [String: [ScopeGenerator.FillDispatcher.CarriedInnerScope]],
+		seamHoles: SeamHoles,
+		childNearestDeclarations: NearestDeclarations,
+		fillLabelsReadOnlyAsPlaceField: (String) -> Set<String>,
+		fillSendableWrapperReads: (String) -> [String: Property],
+		log: inout ConstructionLog,
+	) -> CallFills {
+		var fillsOfThisCall = [(fill: Fill, scope: ConstructionScope, context: ScopeRecord.FillContext)]()
+		var dispatchersOfThisCall = [ScopeGenerator.FillDispatcher]()
+		var namesOfThisCall = GeneratedNameAllocator(reserving: [])
+		// The names are asked of each set in turn, never of their union: a union made for every call holds every name the
+		// seam whose tree holds the calls binds, so a seam's tree that calls another seam at every place grew with its
+		// square.
+		var names = GeneratedNameAllocator(reserving: GenerationWork.taking(
+			NamesConsultedInTurn([GenerationWork.taking(enclosingFillNames, by: .reservingNamesOfACall), seamHoles.namesBoundForBuilders]),
+			by: .reservingNamesOfACall,
+		))
+		defer { namesOfThisCall = names }
+		var fillNames = enclosingFills
+		// Every other place of a case nested by type is filled by one function, the first place's: it can read whatever
+		// field any place of the case carries, each from the case or from the dispatchers that lead to it, in the form every
+		// route can hand it (`ScopeGenerator.caseFields(of:)`).
+		var placesByCaseKey = [String: [SeamSignature.Hole]]()
+		for case let .fill(hole, _, _) in holeArguments where hole.enumPlace != nil {
+			placesByCaseKey[ScopeGenerator.fillCaseKey(of: hole), default: []].append(hole)
+		}
+		// A place inside a fill of an inner seam's builder reads, through the scope value the inner seam handed that fill, a
+		// label that some route of the inner seam's enum holds and another does not: on that other route inline reads the
+		// caller's declaration, as for a label one place of the case carries and another does not.
+		let innerScopeReaders = scope.calledBuilders.map { InnerScopeReaders(enumsByKey: $0.enumsByKey) }
+		var caseFieldsByCaseKey = placesByCaseKey.mapValues { places in
+			var caseFields = ScopeGenerator.caseFields(of: places)
+			if let innerScopeReaders {
+				let fieldLabels = Set(caseFields.fields.map(\.property.label))
+				for place in places {
+					caseFields.callerReadLabels.formUnion(innerScopeReaders.labelsSomeInnerRouteLacks(of: place).intersection(fieldLabels))
+				}
+			}
+			return caseFields
+		}
+		// A public mock's caller decides per route, and a route whose nearest type binds another form of a value its fill
+		// reads converts it, so the fill takes each value its case's payload does not carry in the form it reads
+		// (`parameterField(of:reading:)`). A route on which no type binds the value hands the fill the caller's, which the root
+		// level function takes (`PublicMockLevelFunctions`).
+		// But a value the call hands the called mock from the caller's scope, which the called mock's root binds as its copy,
+		// is the caller's own, as a seam's deferred parameter is (see `fillUnderConstruction`): a fill whose places' nearest
+		// declaration of its label is that copy, and whose case's payload does not carry it, reads the caller's declaration,
+		// so its tree reads the caller's wrapper, as inline and the twin do, and no level function takes the value
+		// (`callersOwnLabels(amongLabelsOf:carrying:at:reading:handedFrom:by:whereFillsReenterCall:)`). A label the payload
+		// carries the fill binds from the payload, the called mock's copy, which holds the caller's value, unless the copy does
+		// not provide every form the fill reads and no fill re-enters the call.
+		var mockRootBindingByLabelByCaseKey = [String: [String: Property]]()
+		var fillsReenterCall = false
+		if scope.publicMockCall != nil, let calledBuilders = scope.calledBuilders {
+			fillsReenterCall = Self.callsInsideFills(of: holeArguments, reenter: calledBuilders)
+		}
+		if let publicMockCall = scope.publicMockCall {
+			for (caseKey, places) in placesByCaseKey {
+				guard var caseFields = caseFieldsByCaseKey[caseKey] else { continue }
+				let carriedLabels = Set(places.flatMap { $0.enumPlace?.values.map(\.property.label) ?? [] })
+				let reads = places.reduce(into: Set<Property>()) { reads, place in
+					reads.formUnion(scope.fillReceivedProperties[place.site] ?? [])
+				}
+				caseFields.fields = caseFields.fields.map { field in
+					let label = field.property.label
+					guard !carriedLabels.contains(label) else { return field }
+					let fieldsOfLabel = places.flatMap { $0.fields.filter { $0.property.label == label } }
+					return Self.parameterField(of: fieldsOfLabel, reading: reads.filter { $0.label == label }) ?? field
+				}
+				let callersOwnLabels = Self.callersOwnLabels(amongLabelsOf: caseFields.fields, carrying: carriedLabels, at: places, reading: reads, handedFrom: childNearestDeclarations, by: publicMockCall, whereFillsReenterCall: fillsReenterCall, log: &log)
+				caseFields.fields.removeAll { callersOwnLabels.labels.contains($0.property.label) }
+				caseFields.callerReadLabels.subtract(callersOwnLabels.labels)
+				mockRootBindingByLabelByCaseKey[caseKey] = callersOwnLabels.mockRootBindingByLabel
+				caseFieldsByCaseKey[caseKey] = caseFields
+			}
+		}
+		// A call inside a fill of this call that re-enters one of its level functions hands that function what it reads of
+		// its own scope (`PublicMockLevelFunctions.Reentry`), so a value a fill reads of the caller's scope that no place of
+		// its case carries is the fill's to take too, rather than the declaration enclosing this call that the fill's
+		// function would capture: inline reads the declaration nearest the place, which for a place the re-entering call
+		// reaches is the one nearest that call. Each such label is typed as `ScopeGenerator.FillDispatcher` types a
+		// dispatcher's parameter, by a form that is no optional, then in `Property` order. Without such a call the fill
+		// reads the same declaration either way, and keeps capturing it. A caller's own value (above) is such a label too:
+		// the re-entering call hands its own nearest declaration, which is the one inline reads at the places it reaches.
+		// The levels hand the fill the called mock's by-value copy of it, which holds the same value: a fill that reads the
+		// caller's wrapper beside its place's fields, which the copy does not provide, is passed up where its called type is
+		// re-entered, directly or through the fills of the calls its fills make, before any fill is built
+		// (`DependencyTreeGenerator.holeTypesTheFillGatesPassUp(of:in:lazilyHeldValues:)`), and an optional copy where a
+		// fill requires the value is an error.
+		if fillsReenterCall {
+			for (caseKey, places) in placesByCaseKey {
+				guard var caseFields = caseFieldsByCaseKey[caseKey], let firstPlace = places.first else { continue }
+				let fieldLabels = Set(caseFields.fields.map(\.property.label))
+				var formsByLabel = [String: Set<Property>]()
+				for place in places {
+					for property in scope.fillReceivedProperties[place.site] ?? [] where !fieldLabels.contains(property.label) {
+						formsByLabel[property.label, default: []].insert(property)
+					}
+				}
+				for label in formsByLabel.keys.sorted() {
+					let forms = formsByLabel[label, default: []].sorted()
+					guard let property = forms.first(where: { !$0.typeDescription.isOptional }) ?? forms.first else { continue }
+					caseFields.fields.append(SeamSignature.Hole.Field(property: property, access: .public, declaringType: firstPlace.scopeSeamType, declarationLocation: nil))
+					caseFields.callerReadLabels.insert(label)
+				}
+				caseFieldsByCaseKey[caseKey] = caseFields
+			}
+		}
+		var functionNameByCaseKey = [String: String]()
+		for case let .fill(hole, fulfillingScope, fillContext) in holeArguments where enclosingFills[ScopeGenerator.fillKey(of: hole)] == nil {
+			let key = ScopeGenerator.fillKey(of: hole)
+			let caseKey = ScopeGenerator.fillCaseKey(of: hole)
+			if let functionName = functionNameByCaseKey[caseKey] {
+				fillNames[key] = functionName
+				fillsOfThisCall.append((Fill(hole: hole, key: key, functionName: functionName, fields: hole.fields, emitsCode: false, caseHoles: [hole]), fulfillingScope, fillContext))
+				continue
+			}
+			let functionName = names.claim(ScopeGenerator.fillFunctionName(of: hole))
+			fillNames[key] = functionName
+			if hole.enumPlace != nil {
+				functionNameByCaseKey[caseKey] = functionName
+			}
+			let caseFields = caseFieldsByCaseKey[caseKey]
+			var fill = Fill(
+				hole: hole,
+				key: key,
+				functionName: functionName,
+				fields: caseFields?.fields ?? hole.fields,
+				emitsCode: true,
+				caseHoles: placesByCaseKey[caseKey] ?? [hole],
+				callerReadLabels: caseFields?.callerReadLabels ?? [],
+			)
+			fill.innerScopeParameters = Self.innerScopeParameters(ofFillOf: hole, seamHoles: seamHoles, callPath: callPath, calledBuilders: scope.calledBuilders)
+			fill.carrierUse = scope.calledBuilders?.carrierUse(ofPlace: hole)
+			fill.mockRootBindingByLabel = mockRootBindingByLabelByCaseKey[caseKey] ?? [:]
+			// A label a route binds as a `LazilyInstantiated` and the caller hands from its own scope stays the wrapper, so the
+			// instance is created where the fill's tree reads it, as inline; where every read of it is only if available, the
+			// fill takes it optionally (`Scope.fillLabelsReadOnlyIfAvailable`, set for the places whose fields hold a wrapper,
+			// each filled by the same type).
+			for field in fill.fields where fill.callerReadLabels.contains(field.property.label) && field.property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding != nil {
+				let places = placesByCaseKey[caseKey] ?? [hole]
+				if places.contains(where: { scope.fillLabelsReadOnlyIfAvailable[$0.site]?.contains(field.property.label) == true }) {
+					fill.optionalLazilyInstantiatedLabels.insert(field.property.label)
+				}
+			}
+			fillsOfThisCall.append((fill, fulfillingScope, fillContext))
+		}
+		if let calledBuilders = scope.calledBuilders {
+			dispatchersOfThisCall = ScopeGenerator.FillDispatcher.dispatchers(
+				of: calledBuilders,
+				filledSites: Self.filledSites(of: holeArguments),
+				enclosingDispatchers: enclosingFills,
+				fillNames: fillNames,
+				names: &names,
+				innerScopeNameByKey: Dictionary(calledBuilders.scopeEnums.compactMap { scopeEnum in
+					seamHoles.innerScope(at: callPath, innerKey: scopeEnum.key).map { (scopeEnum.key, $0.name) }
+				}, uniquingKeysWith: { first, _ in first }),
+				// Where the call's case returns the called seam's struct, the call's level functions are handed it, one per hole
+				// type and family of this seam whose places the fill holds.
+				carriedInnerScopesByKey: Dictionary(calledBuilders.scopeEnums.compactMap { scopeEnum in
+					guard seamHoles.carriesStruct(at: callPath, innerKey: scopeEnum.key) else { return nil }
+					return (scopeEnum.key, seamHoles.innerScopes(at: callPath, innerKey: scopeEnum.key).map { (name: $0.name, type: $0.enumType) })
+				}, uniquingKeysWith: { first, _ in first }),
+				enclosingCarriedInnerScopes: enclosingCarriedInnerScopes,
+				decidesPerRoute: scope.publicMockCall != nil,
+			)
+		}
+		// A level on a carried route binds a deferred parameter from a call the caller's seam makes, whose memo holds what that
+		// call passed, which no declaration of the caller's is (`FillDispatcher.Case.carriesDeferredFields`). A fill some route
+		// hands such a memo takes a memo, so the value is created when its tree reads it on every route, as inline: its field
+		// is that parameter's, which it binds as the memo (`fillUnderConstruction`), and a route that hands another form makes
+		// the memo of what it hands (`FillDispatcher.memosHanded(toFillOf:labels:readingSendableWrapper:among:)`). A public mock's caller hands values.
+		// A fill whose tree reads a label only as the place's own field of it, the wrapper a type further out declares, takes
+		// that field, which the pass before found (`ScopeGenerator.fillLabelsReadOnlyAsPlaceField`): inline reads that
+		// declaration, which the levels hand on past the deferring seam's (`FillDispatcher.Case.handsOn(_:)`).
+		if scope.publicMockCall == nil, dispatchersOfThisCall.contains(where: { dispatcher in
+			dispatcher.cases.contains { $0.carriesDeferredFields && $0.values?.contains(where: \.isDeferredParameter) == true }
+		}) {
+			for index in fillsOfThisCall.indices where fillsOfThisCall[index].fill.emitsCode {
+				let fill = fillsOfThisCall[index].fill
+				let payloadLabels = Set(fill.hole.enumPlace?.values.map(\.property.label) ?? [])
+				let labelsReadOnlyAsPlaceField = fillLabelsReadOnlyAsPlaceField(fill.key)
+				let handedMemos = ScopeGenerator.FillDispatcher.memosHanded(
+					toFillOf: fill.key,
+					labels: Set(fill.fields.filter { !$0.isDeferredParameter && !payloadLabels.contains($0.property.label) && !labelsReadOnlyAsPlaceField.contains($0.property.label) }.map(\.property.label)),
+					readingSendableWrapper: fillSendableWrapperReads(fill.key),
+					among: dispatchersOfThisCall,
+				)
+				fillsOfThisCall[index].fill.fields = fill.fields.map { field in
+					handedMemos.memoByLabel[field.property.label].map { field.handedAsMemo($0) } ?? field
+				}
+				fillsOfThisCall[index].fill.labelsHandedAsMemo = Set(handedMemos.memoByLabel.keys)
+				fillsOfThisCall[index].fill.plainMemoRoutesOfSendableWrapperReads = handedMemos.plainMemoRoutesOfSendableWrapperReads
+				fillsOfThisCall[index].fill.memoOriginsByLabel = handedMemos.memoOriginsByLabel
+			}
+		}
+		// A fill a level function calls of an instantiator's place returns the builder its wrapper keeps: every fill of a
+		// public mock's call, whose dispatchers are all level functions (`PublicMockLevelFunctions`).
+		for index in fillsOfThisCall.indices where fillsOfThisCall[index].fill.hole.property.propertyType.isAnyInstantiator {
+			let key = fillsOfThisCall[index].fill.key
+			fillsOfThisCall[index].fill.returnsWrapperBuilder = dispatchersOfThisCall.contains { dispatcher in
+				(dispatcher.returnsBuilderStruct || dispatcher.decidesPerRoute) && dispatcher.cases.contains { $0.target?.key == key }
+			}
+		}
+		return CallFills(fills: fillsOfThisCall, dispatchers: dispatchersOfThisCall, names: namesOfThisCall)
 	}
 
 	/// The nearest declaration of `label` among `nearestDeclarations`, logged in `log`.
