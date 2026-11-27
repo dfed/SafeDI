@@ -72,7 +72,7 @@ extension NodeRecords {
 		let configuration: ValuePath = if mockConfigurationLeavesOut(declaration, builtBy: parent, in: world) {
 			.emptyInitialization(configurationType)
 		} else {
-			.member(label.spelledAsMemberDeclarationName, of: mockOverridesOfChildren(of: parent, in: world, slots: slots))
+			.member(label, of: mockOverridesOfChildren(of: parent, in: world, slots: slots))
 		}
 		let entered: ValuePath = takesMockEnteredPlaces(parent, in: slots)
 			? .passedArgument(ReservedName.mockEnteredPlacesParameterName)

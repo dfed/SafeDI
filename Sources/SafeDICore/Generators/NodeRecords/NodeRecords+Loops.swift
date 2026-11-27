@@ -179,7 +179,7 @@ extension NodeRecords {
 			arguments.append(PassedArgument(
 				parameterName: ReservedName.mockOverridesParameterName,
 				type: type,
-				value: .member(property.label.spelledAsMemberDeclarationName, of: .passedArgument(level.parameterName)),
+				value: .member(property.label, of: .passedArgument(level.parameterName)),
 				staysOutsideSendableFunctions: true,
 			))
 		}

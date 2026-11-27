@@ -201,7 +201,7 @@ extension NodeRecords {
 		// and is handed elsewhere. A wrapper an actor is sent reads its value so too, since its closure is sent with it.
 		guard !isSendable, !isWrapperSentToActor(declaration, in: world) else { return mockSendableOverrideSlot(of: declaration, labeled: label, typed: type, in: world) }
 		if !handsOverridesToChildren, world.parents(of: declaration).allSatisfy({ $0.parent == 0 }) {
-			return (.member(label.spelledAsMemberDeclarationName, of: .rootDeclaration(ReservedName.mockOverridesParameterName)), [])
+			return (.member(label, of: .rootDeclaration(ReservedName.mockOverridesParameterName)), [])
 		} else {
 			// The overrides are not `Sendable`: no call inside a `@Sendable` function hands them on.
 			return (
@@ -217,6 +217,6 @@ extension NodeRecords {
 	/// node with more than one parent has no parent built in a `@Sendable` function (`mockSendableRefusals(of:in:)`), so
 	/// its first parent's is every parent's.
 	static func mockConfigurationField(of declaration: DeclarationID, named label: String, in world: some NodeRecordSources, slots: MockEnteredSlots?) -> ValuePath {
-		.member(label.spelledAsMemberDeclarationName, of: mockOverridesOfChildren(of: world.parents(of: declaration).first?.parent ?? 0, in: world, slots: slots))
+		.member(label, of: mockOverridesOfChildren(of: world.parents(of: declaration).first?.parent ?? 0, in: world, slots: slots))
 	}
 }
