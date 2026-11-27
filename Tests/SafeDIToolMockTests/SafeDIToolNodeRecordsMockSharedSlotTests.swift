@@ -393,6 +393,34 @@ struct SafeDIToolNodeRecordsMockSharedSlotTests: ~Copyable {
 		#expect(comparison.differences.isEmpty, "\(comparison.report)")
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_writesNoMoreLinesPerTypePerMockThanWalk_whenEveryTypeOfCycleIsMocked() async throws {
+		// Every mock of a cycle of n types declares a function per type, so the mocks' lines grow as a·n² + b·n + c, and
+		// three sizes ten apart give a: lines(30) − 2·lines(20) + lines(10) = 200·a. Laid out from node records, a
+		// function may cost a mock no more lines than the walk's does.
+		var walkLineCounts = [Int]()
+		var laidOutLineCounts = [Int]()
+		for size in [10, 20, 30] {
+			let names = (0..<size).map { "Ring\($0)" }
+			let fixtureFiles = Self.ring(names)
+			let walk = try await NodeRecordsObservation.$laysOutMockRoots.withValue(false) {
+				try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixtureFiles, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete, skipCompileVerification: true)
+			}
+			let (laidOut, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
+				try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixtureFiles, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete, skipCompileVerification: true)
+			}
+			#expect(reports.count(where: { $0.isMockRoot && $0.isLaidOutFromNodeRecords }) == size)
+			walkLineCounts.append(Self.lineCount(of: try #require(walk.generatedFiles)))
+			laidOutLineCounts.append(Self.lineCount(of: try #require(laidOut.generatedFiles)))
+		}
+		let walkLinesPerTypePerMock = (walkLineCounts[2] - 2 * walkLineCounts[1] + walkLineCounts[0]) / 200
+		let laidOutLinesPerTypePerMock = (laidOutLineCounts[2] - 2 * laidOutLineCounts[1] + laidOutLineCounts[0]) / 200
+
+		#expect(walkLinesPerTypePerMock == 4)
+		#expect(laidOutLinesPerTypePerMock <= walkLinesPerTypePerMock, "lines of the walk’s mocks: \(walkLineCounts), laid out: \(laidOutLineCounts)")
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -507,6 +535,11 @@ struct SafeDIToolNodeRecordsMockSharedSlotTests: ~Copyable {
 			reports.append(report)
 		}
 		return (output, reports.sorted { $0.root < $1.root })
+	}
+
+	/// The lines of every generated file together.
+	private static func lineCount(of generatedFiles: [String: String]) -> Int {
+		generatedFiles.values.reduce(0) { $0 + $1.utf8.count(where: { $0 == UInt8(ascii: "\n") }) }
 	}
 
 	/// A box that carries a probe's value out of the main actor, which the probes' program runs on.
