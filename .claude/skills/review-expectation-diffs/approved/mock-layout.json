@@ -4,12 +4,12 @@
   {
    "id": "9-keyword-member-in-backticks",
    "ruling": "lead 11-27 9:31 AM PT",
-   "summary": "An override member named like a keyword goes in backticks.",
+   "summary": "An override member named like a keyword goes in backticks: the base's bare keyword member is read backticked, so a head that drops backticks still shows.",
    "steps": [
     {
-     "line": "(safeDIOverrides(?:\\.(?:\\w+|`[^`]+`))*)\\.`(\\w+)`",
-     "replacement": "\\1.\\2",
-     "side": "head",
+     "line": "(safeDIOverrides(?:\\.(?:\\w+|`[^`]+`))*)\\.(Any|Protocol|Self|Type|as|associatedtype|await|break|case|catch|class|continue|default|defer|deinit|do|else|enum|extension|fallthrough|false|fileprivate|for|func|guard|if|import|in|init|inout|internal|is|let|nil|open|operator|private|precedencegroup|protocol|public|repeat|rethrows|return|self|static|struct|subscript|super|switch|throw|throws|true|try|typealias|var|where|while|_)(?![\\w`])",
+     "replacement": "\\1.`\\2`",
+     "side": "base",
      "repeat": true
     }
    ],
@@ -234,15 +234,6 @@
    "shapes": [
     "changed: let X1 {+ : X2 ? +} = if",
     "changed: X1 : {- any -}{+ some +} X2 ."
-   ],
-   "status": "notApproved"
-  },
-  {
-   "id": "not-approved-keyword-member-loses-backticks",
-   "ruling": "Not approved: a defect for the mock writer (lead, 2026-11-27)",
-   "summary": "An override member named with a keyword (`default`) is read without its backticks.",
-   "shapes": [
-    "changed: safeDIOverrides . {- `default` -}{+ default +} ) } … safeDIOverrides . {- `default` -}{+ default +} ) }"
    ],
    "status": "notApproved"
   },
