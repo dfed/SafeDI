@@ -597,6 +597,8 @@ extension SeamSignature.Hole.CycleReentryDeclaration: BinarySchemaMember {
 				BinaryLayoutField("closedOnBuiltType", \.closedOnBuiltType),
 				BinaryLayoutField("closedOnDeclaringType", \.closedOnDeclaringType),
 				BinaryLayoutField("reenteringType", \.reenteringType),
+				BinaryLayoutField("calledSeamType", \.calledSeamType),
+				BinaryLayoutField("placeIsInFurtherSendableFunction", \.placeIsInFurtherSendableFunction),
 			],
 			unwrittenProperties: [],
 		)
@@ -612,6 +614,8 @@ extension SeamSignature.Hole.CycleReentryDeclaration: BinarySchemaMember {
 			closedOnBuiltType: reader.read(),
 			closedOnDeclaringType: reader.read(),
 			reenteringType: reader.read(),
+			calledSeamType: reader.read() as TypeDescription?,
+			placeIsInFurtherSendableFunction: reader.read(),
 		)
 	}
 
@@ -624,6 +628,8 @@ extension SeamSignature.Hole.CycleReentryDeclaration: BinarySchemaMember {
 		writer.write(closedOnBuiltType)
 		writer.write(closedOnDeclaringType)
 		writer.write(reenteringType)
+		writer.write(calledSeamType)
+		writer.write(placeIsInFurtherSendableFunction)
 	}
 }
 

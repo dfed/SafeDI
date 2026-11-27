@@ -120,7 +120,8 @@ Everything SafeDI produces must be identical on every run over the same inputs: 
 ## Pull requests
 
 - The title and description become the squash commit: write them for a newcomer reading `git log` a year later. Say what changes in SafeDI's user-facing terms and why, the tests in a sentence, and the leftovers; no local paths, scratch files, decision identifiers, review rounds or history. Update the description with every push. A fix found in passing gets its own pull request.
-- Each "Found and not fixed" item states its plan: a named pull request, a named later release and why, or left and why. A leftover earns a pull request only if it generates code that does not compile, or a wrong value, in a shape a real adopter writes.
+- Each "Found and not fixed" item states its plan: a named pull request, a near-term follow-up release and why (never a version number), or left and why. A leftover earns a pull request only if it generates code that does not compile, or a wrong value, in a shape a real adopter writes.
+- A "Found and not fixed" item whose fix is an open pull request links it, and that pull request links back.
 - Work planned as several pull requests starts only after the whole plan is reviewed for soundness (rework, design coherence, scope, dependencies, risk), never on a plan assembled piece by piece.
 
 ## Where the rest lives
@@ -157,7 +158,7 @@ If your session started outside the worktree you are editing, scoped rules and n
 | a new test file, a fixture's file name, a temporary or expected path in a test | `.claude/rules/test-infrastructure.md` |
 | `Documentation/`, `README.md` | `.claude/rules/documentation.md` |
 | a breaking-change judgment, release notes, `publish.yml`, packaging | `.claude/rules/releases-and-packaging.md` |
-| "Graph fuzzer" | `.claude/rules/fuzzer-overview.md`, then `fuzzer-known-issues.md`, `fuzzer-seam-draws.md`, `fuzzer-seam-oracles.md`, `fuzzer-builder-surface.md`, `fuzzer-gating-checks.md`, `fuzzer-corpora.md`, `fuzzer-seam-dependencies.md`, `fuzzer-value-oracles.md`, `fuzzer-remedy-oracle.md`, `fuzzer-calling-mocks.md`, `fuzzer-calling-mock-draw.md`, `fuzzer-calling-mock-limits.md`, `fuzzer-query-oracle.md`, `fuzzer-public-mock-corpus.md`, `fuzzer-release-acceptance.md`, `fuzzer-base-comparison.md` |
+| "Graph fuzzer" | `.claude/rules/fuzzer-overview.md`, then `fuzzer-known-issues.md`, `fuzzer-seam-draws.md`, `fuzzer-seam-oracles.md`, `fuzzer-builder-surface.md`, `fuzzer-gating-checks.md`, `fuzzer-corpora.md`, `fuzzer-seam-dependencies.md`, `fuzzer-value-oracles.md`, `fuzzer-remedy-oracle.md`, `fuzzer-calling-mocks.md`, `fuzzer-calling-mock-draw.md`, `fuzzer-calling-mock-limits.md`, `fuzzer-query-oracle.md`, `fuzzer-public-mock-corpus.md`, `fuzzer-release-acceptance.md`, `fuzzer-base-comparison.md`, `fuzzer-nested-cycle-hole.md` |
 | Bazel rules | `bazel/CLAUDE.md` |
 | the macro target's sources (what it compiles of SafeDICore) | `Sources/SafeDIMacros/CLAUDE.md` |
 | the Tuist plugin | `TuistPlugins/CLAUDE.md` |

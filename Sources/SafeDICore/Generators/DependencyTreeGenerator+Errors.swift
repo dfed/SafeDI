@@ -791,19 +791,15 @@ extension DependencyTreeGenerator {
 			/// in source order, then the one whose constructed type is declared first. Two constructions that tie need one
 			/// declaration to widen for one type, and the error reads the same whichever it names.
 			private func isNamedBefore(_ other: InaccessibleConstruction, inTreeOf seamType: TypeDescription) -> Bool {
-				// Whether the construction is of the seam, then each location's file and its line and column as one number.
-				func sortKey(of construction: InaccessibleConstruction) -> (Int, String, Int, String, Int) {
-					let declarationLocation = construction.accessNeed.access.declarationStartLocation
-					let typeLocation = construction.constructedTypeDeclarationLocation
-					return (
-						construction.constructedType == seamType ? 1 : 0,
-						declarationLocation?.filePath ?? "",
-						((declarationLocation?.line ?? 0) << 32) | (declarationLocation?.column ?? 0),
-						typeLocation?.filePath ?? "",
-						((typeLocation?.line ?? 0) << 32) | (typeLocation?.column ?? 0),
-					)
-				}
-				return sortKey(of: self) < sortKey(of: other)
+				// Whether the construction is of the seam, then where the declaration begins, then where the type is declared, each
+				// in source order with a missing location first.
+				let (isOfSeam, otherIsOfSeam) = (constructedType == seamType, other.constructedType == seamType)
+				guard isOfSeam == otherIsOfSeam else { return otherIsOfSeam }
+				let locationPairs = [
+					(accessNeed.access.declarationStartLocation, other.accessNeed.access.declarationStartLocation),
+					(constructedTypeDeclarationLocation, other.constructedTypeDeclarationLocation),
+				]
+				return locationPairs.first { $0.0 != $0.1 }.map { Dependency.DeclarationLocation.precedesInSourceOrderWithMissingFirst($0.0, $0.1) } ?? false
 			}
 
 			/// The error about the seam `seamType`, which a production tree builds inline because SafeDI cannot name the
@@ -1028,15 +1024,7 @@ extension DependencyTreeGenerator {
 				if let readableDeclarationLocation {
 					// A modifier is replaced, and one is inserted where the declaration begins when it spells none.
 					let fixIt = accessNeed.access.modifierRange.map { SourceDiagnostic.FixIt(range: $0, replacement: level) }
-						?? SourceDiagnostic.FixIt(
-							range: Dependency.SourceRange(
-								startLine: readableDeclarationLocation.line,
-								startColumn: readableDeclarationLocation.column,
-								endLine: readableDeclarationLocation.line,
-								endColumn: readableDeclarationLocation.column,
-							),
-							replacement: "\(level) ",
-						)
+						?? SourceDiagnostic.FixIt(range: .insertionPoint(at: readableDeclarationLocation), replacement: "\(level) ")
 					return SourceDiagnostic(severity: .error, location: readableDeclarationLocation, message: message, fixIts: [fixIt])
 				} else {
 					return SourceDiagnostic(severity: .error, location: referenceLocation, message: message)

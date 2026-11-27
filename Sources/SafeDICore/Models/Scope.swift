@@ -419,6 +419,7 @@ extension ScopeRecord {
 		declaredTypeNames: DeclaredTypeNames,
 		constructionMemo: inout ConstructionMemo,
 	) throws -> ScopeGenerator {
+		var unrecordedPlaces: TypeFactsPlaces?
 		let scopeGenerator = try createdTree(
 			in: table,
 			nearestDeclarations: nearestDeclarations,
@@ -430,6 +431,7 @@ extension ScopeRecord {
 			validatesForwardedProperties: validatesForwardedProperties,
 			declaredTypeNames: declaredTypeNames,
 			constructionMemo: &constructionMemo,
+			typeFactsPlaces: &unrecordedPlaces,
 		)
 		if let observer = ConstructionMemoOracle.observer {
 			// The build with the memo shares it across every tree created with this memo, whatever the memo's own sharing,
@@ -447,11 +449,14 @@ extension ScopeRecord {
 					validatesForwardedProperties: validatesForwardedProperties,
 					declaredTypeNames: declaredTypeNames,
 					constructionMemo: &oracleMemo,
+					typeFactsPlaces: &unrecordedPlaces,
 				)
 			} }
 			constructionMemo.oracleMemo = oracleMemo
 			// The reference tree is built with neither the memo nor the settled cycle parameter seed, so every
 			// graph compares the seeded build with the plain pass loop as well.
+			// It reuses nothing, so it walks every place, which it records for the graph of per-type facts to be compared with.
+			var places: TypeFactsPlaces? = TypeFactsPlaces()
 			let treeBuiltWithoutMemo = try ConstructionMemo.$isEnabled.withValue(false) { try CycleParameterPlan.$isEnabled.withValue(false) {
 				var unusedMemo = ConstructionMemo()
 				return try createdTree(
@@ -465,9 +470,10 @@ extension ScopeRecord {
 					validatesForwardedProperties: validatesForwardedProperties,
 					declaredTypeNames: declaredTypeNames,
 					constructionMemo: &unusedMemo,
+					typeFactsPlaces: &places,
 				)
 			} }
-			observer(treeBuiltWithMemo, treeBuiltWithoutMemo)
+			observer(treeBuiltWithMemo, treeBuiltWithoutMemo, TypeFactsReport(root: ConstructionScope(table: table, record: self), places: places ?? TypeFactsPlaces(), forMockGeneration: forMockGeneration))
 		}
 		return scopeGenerator
 	}
@@ -484,6 +490,7 @@ extension ScopeRecord {
 		validatesForwardedProperties: Bool,
 		declaredTypeNames: DeclaredTypeNames,
 		constructionMemo: inout ConstructionMemo,
+		typeFactsPlaces: inout TypeFactsPlaces?,
 	) throws -> ScopeGenerator {
 		var previousPassGenerator: ScopeGenerator?
 		// The cycle parameters settled on the first pass's tree, which the second pass is built with in place of the first
@@ -523,6 +530,7 @@ extension ScopeRecord {
 			if previousPassGenerator == nil, ConstructionMemo.isEnabled, ConstructionSharingSchedule.current?.offersLaterPlacesCandidates == true {
 				// The sharing oracle offers each place what a place after it built: the first pass starts from what a
 				// discarded build of the same pass stored, which the schedule asks newest first.
+				var discardedPlaces: TypeFactsPlaces?
 				_ = try createScopeGenerator(
 					nearestDeclarations: nearestDeclarations,
 					lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
@@ -539,8 +547,11 @@ extension ScopeRecord {
 					settledPassMemo: nil,
 					root: root,
 					scopesBuiltAtOnePlace: scopesBuiltAtOnePlace,
+					typeFactsPlaces: &discardedPlaces,
 				)
 			}
+			// A recorded tree keeps the places of its last pass, which is the tree.
+			var passPlaces: TypeFactsPlaces? = typeFactsPlaces == nil ? nil : TypeFactsPlaces()
 			scopeGenerator = try createScopeGenerator(
 				nearestDeclarations: nearestDeclarations,
 				lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
@@ -557,7 +568,11 @@ extension ScopeRecord {
 				settledPassMemo: settledPassMemo,
 				root: root,
 				scopesBuiltAtOnePlace: scopesBuiltAtOnePlace,
+				typeFactsPlaces: &passPlaces,
 			)
+			if passPlaces != nil {
+				typeFactsPlaces = passPlaces
+			}
 			if previousPassGenerator == nil {
 				cycleParameterSeed = Self.cycleParameterSeed(
 					ofFirstPassTree: scopeGenerator,
@@ -644,7 +659,10 @@ extension ScopeRecord {
 		settledPassMemo: ConstructionMemo?,
 		root: ConstructionScope,
 		scopesBuiltAtOnePlace: ScopesBuiltAtOnePlace?,
+		typeFactsPlaces: inout TypeFactsPlaces?,
 	) throws -> ScopeGenerator {
+		// The position of each scope under construction among the places recorded, where a test records them.
+		var placeIndices = [typeFactsPlaces?.start(TypeFactsDeclaration(scope: root, property: nil, propertyID: nil, erasedToConcreteExistential: false, isFill: false), parent: nil)]
 		var scopeGeneratorsUnderConstruction = [ScopeGeneratorUnderConstruction(
 			scope: root,
 			property: nil,
@@ -666,8 +684,8 @@ extension ScopeRecord {
 			cycleParameterSeed: cycleParameterSeed,
 			cycleParameterContexts: [:],
 			placeHoldingPropertiesByType: placeHoldingPropertiesByType,
-			// A root's place is never stored.
-			recordsReads: false,
+			// A root's place is never stored, so only a recorded place keeps what its subtree read.
+			recordsReads: typeFactsPlaces != nil,
 		)]
 		let reusesGenerators = ConstructionMemo.isEnabled
 		// The sharing oracle's schedule, test only, and how many lookups it has drawn for (`ConstructionSharingSchedule`).
@@ -710,6 +728,7 @@ extension ScopeRecord {
 						)
 						child.memoKey = key
 						scopeGeneratorsUnderConstruction.append(child)
+						placeIndices.append(typeFactsPlaces?.start(TypeFactsDeclaration(scope: scope, property: property, propertyID: propertyID, erasedToConcreteExistential: erasedToConcreteExistential, isFill: false), parent: placeIndices[index]))
 					}
 				case let .aliased(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable, declarationReference):
 					scopeGeneratorsUnderConstruction[index].addAliasGenerator(
@@ -731,9 +750,17 @@ extension ScopeRecord {
 					scope: fill.scope,
 					context: fill.context,
 				))
+				placeIndices.append(typeFactsPlaces?.start(TypeFactsDeclaration(scope: fill.scope, property: fill.fill.hole.property, propertyID: fill.context.propertyID, erasedToConcreteExistential: false, isFill: true), parent: placeIndices[index]))
 			} else {
 				var createdScope = scopeGeneratorsUnderConstruction.removeLast()
+				let placeIndex = placeIndices.removeLast()
+				if let placeIndex {
+					typeFactsPlaces?.finish(placeIndex, closesCycle: createdScope.closesCycle, reads: createdScope.readsAnsweredAbove)
+				}
 				let scopeGenerator = createdScope.scopeGenerator()
+				if let placeIndex {
+					typeFactsPlaces?.record(placeIndex, generator: scopeGenerator)
+				}
 				let callGenerators = createdScope.callGenerators(including: scopeGenerator)
 				callGeneratorsInTree.formUnion(callGenerators)
 				if scopeGeneratorsUnderConstruction.isEmpty {
@@ -1501,6 +1528,11 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		!isCall && childrenAreSettled && ConstructionMemo.foundAlike(by: generator, asBy: previousPassGenerator, builtWithCycleParameters: ownCycleParameters)
 	}
 
+	/// Whether the scope closes a cycle on a declaration above it, and so builds no children.
+	var closesCycle: Bool {
+		isPropertyCycle
+	}
+
 	/// What this scope's subtree read of the context above this scope (see `ConstructionMemo`).
 	var readsAnsweredAbove: ConstructionLog {
 		log.reads(answeredAbove: depth)
@@ -1986,14 +2018,14 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	///   spelling names: for a fill, that of the seam that holds the hole (`SeamSignature.Hole.declaringModuleNames`).
 	private func validateForwardedProperties(
 		of property: Property,
-		declaredAt declarationLocation: Dependency.DeclarationLocation?,
+		declaredAt declarationLocation: @autoclosure () -> Dependency.DeclarationLocation?,
 		on parent: TypeDescription,
 		seeingThroughModulesNamed declaringModuleNames: [String],
 		building builtInstantiable: Instantiable,
 	) throws {
 		guard validatesForwardedProperties, let error = ErasedInstantiatorForwardedPropertiesMismatchError(
 			property: property,
-			declarationLocation: declarationLocation,
+			declarationLocation: declarationLocation(),
 			parent: parent,
 			builtInstantiable: builtInstantiable,
 			declaringModuleNames: declaringModuleNames,
@@ -2294,24 +2326,22 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	/// passes as its leaf's dependency of the builder's label: an empty value here, or the parameter called with the scope.
 	private mutating func builderCallArguments(fillNames: [String: String]) -> [ScopeGenerator.BuilderCallArgument] {
 		guard let calledBuilders = scope.calledBuilders, !holeArguments.isEmpty else { return [] }
-		let filledSites = Self.filledSites(of: holeArguments)
-		let enumsByKey = calledBuilders.enumsByKey
+		let filledSites = calledBuilders.siteNumbers(of: Self.filledSites(of: holeArguments))
 		// A seam's caller calls the initializer only generated code calls, under its prefixed labels; a public mock's
 		// caller passes each builder by the leaf's argument of its label.
 		let isPublicMockCall = scope.publicMockCall != nil
 		return calledBuilders.builders.map { builder in
 			let label = isPublicMockCall ? builder.label : builder.generatedOnlyArgumentLabel
 			let enumKey = builder.enumKey
-			let reachedSites = isPublicMockCall
-				? calledBuilders.sitesReachedOnItsRoutes(by: builder, in: enumsByKey)
-				: SeamSignature.ScopeEnum.sitesReached(from: enumKey, in: enumsByKey)
+			// A public mock's caller reads only the sites on the builder's routes (`CalledBuilders.routesReachOnly(_:by:)`).
+			let reachesFilledSite = calledBuilders.reaches(anyOf: filledSites, from: enumKey, onRoutesOf: isPublicMockCall ? enumKey : nil)
 			// In a tree built to compute the signature, which generates nothing, the case is not settled yet.
 			let route = seamHoles.routeCase(at: sitePath, innerKey: enumKey)
 			/// The struct a public mock's caller passes up of the called mock's root level: the member of the caller's own struct for
 			/// the call, or, as an internal mock, the struct of the builder the caller takes under the label it takes it by.
 			let receivedLabel = scope.publicMockCall?.passedParameters.first { $0.builder?.enumKey == enumKey }?.dependency.property.label ?? builder.label
 			let publicMockUpValue = route.map { $0.memberCall ?? "" } ?? ".init(\(ReservedName.noScopeArgumentLabel): \(receivedLabel))"
-			guard !reachedSites.isDisjoint(with: filledSites) else {
+			guard reachesFilledSite else {
 				// The call hands on what the call's own member of the seam's or public mock's struct returns.
 				if let memberCall = route?.memberCall {
 					return .init(label: label, value: memberCall, passedUpStruct: route?.passedUpStruct)
@@ -2687,10 +2717,11 @@ extension Instantiable {
 /// `@Forwarded` properties of the type it builds. Reported at the property's declaration.
 struct ErasedInstantiatorForwardedPropertiesMismatchError: SourceLocatedError {
 	/// The error for `property`, declared on `parent` at `declarationLocation` to build `builtInstantiable`, or
-	/// `nil` when `property` is not an erased instantiator or its first generic argument matches.
+	/// `nil` when `property` is not an erased instantiator or its first generic argument matches. The location is found
+	/// only for an error: finding it reads the parent's dependencies, and a check runs for every child.
 	init?(
 		property: Property,
-		declarationLocation: Dependency.DeclarationLocation?,
+		declarationLocation: @autoclosure () -> Dependency.DeclarationLocation?,
 		parent: TypeDescription,
 		builtInstantiable: Instantiable,
 		declaringModuleNames: [String],
@@ -2698,7 +2729,7 @@ struct ErasedInstantiatorForwardedPropertiesMismatchError: SourceLocatedError {
 	) {
 		guard !property.firstGenericMatchesForwardedProperties(of: builtInstantiable, declaringModuleNames: declaringModuleNames, declaredTypeNames: declaredTypeNames) else { return nil }
 		self.property = property
-		self.declarationLocation = declarationLocation
+		self.declarationLocation = declarationLocation()
 		self.parent = parent
 		builtType = builtInstantiable.concreteInstantiable
 		// The forwarded properties are spelled out rather than as `ForwardedProperties` on the built type, which the
@@ -2836,6 +2867,22 @@ struct SeamHoles: Sendable {
 		var valuesBindingsByName = [[Property]: [String: ValuesBinding]]()
 		var innerScopesByCall = [RouteCall: [SeamSignature.Hole.RouteStep.InnerScope]]()
 		var carriedStructsByCall = [RouteCall: [String: String]]()
+		// The seam's own enums, signatures settled and their cases marked `indirect`, which decide whether a member on a
+		// route, or a call's own member, is a carrier's `let` child: a level in a loop through other seams' carriers is
+		// `indirect`, which only the settled enums of every seam of the module say.
+		var scopeEnumByType = [TypeDescription: SeamSignature.ScopeEnum]()
+		for scopeEnum in scopeEnums where scopeEnum.key.seamType == seamType {
+			let type = SeamSignature.ScopeEnum.nestedType(named: scopeEnum.typeName, in: scopeEnum.rootTypeName)
+			if scopeEnumByType[type] == nil {
+				scopeEnumByType[type] = scopeEnum
+			}
+		}
+		// Whether the member of the case `caseName`, handed `memberValuesType`, nested in the case's enum, is a carrier's
+		// `let` child, read, not called.
+		func isLetChild(ofCaseNamed caseName: String, handed memberValuesType: TypeDescription) -> Bool {
+			guard case let .nested(_, enumType, _) = memberValuesType, ReservedName.seamCarrier(ofEnum: enumType) != nil, let scopeEnum = scopeEnumByType[enumType] else { return false }
+			return scopeEnum.cases.first { $0.name == caseName }?.isLetChildOfCarrier(inSendableEnum: scopeEnum.key.isSendable) ?? false
+		}
 		// Where the enums declare builder structs, each case on a route is a member call on the struct the step before it
 		// returned, the root's builder's for the first, bound before the step's property, or at the top of its builder
 		// function (`RouteStep.Member`). A route's steps lead to one place, so each step's parent is a fact of its path.
@@ -2849,7 +2896,7 @@ struct SeamHoles: Sendable {
 					innerScopesByCall[routeCall, default: []].append(innerScope)
 				}
 				if let member {
-					valuesBindingsByName[member.bindingPath(onRouteTo: sitePath), default: [:]][member.bindingName] = ValuesBinding(member: member, parentName: parentName, caseName: step.caseName)
+					valuesBindingsByName[member.bindingPath(onRouteTo: sitePath), default: [:]][member.bindingName] = ValuesBinding(member: member, parentName: parentName, caseName: step.caseName, isLetChild: isLetChild(ofCaseNamed: step.caseName, handed: member.valuesType))
 					parentName = member.bindingName
 					// A call's case for a builder it fills returns the called seam's struct, which the call's level functions are
 					// handed; inside the fill, the struct of the fill's own level, which the fill is handed, leads on.
@@ -2858,15 +2905,6 @@ struct SeamHoles: Sendable {
 						parentName = innerScope.name
 					}
 				}
-			}
-		}
-		// The seam's own enums, signatures settled and their cases marked `indirect`, which decide whether a call's own member
-		// is a carrier's `let` child.
-		var scopeEnumByType = [TypeDescription: SeamSignature.ScopeEnum]()
-		for scopeEnum in scopeEnums where scopeEnum.key.seamType == seamType {
-			let type = SeamSignature.ScopeEnum.nestedType(named: scopeEnum.typeName, in: scopeEnum.rootTypeName)
-			if scopeEnumByType[type] == nil {
-				scopeEnumByType[type] = scopeEnum
 			}
 		}
 		for callRoute in callRoutes {
@@ -2901,10 +2939,7 @@ struct SeamHoles: Sendable {
 					let parentName = parentStep?.innerScope?.name ?? parentMember?.bindingName ?? builderName
 					if case let .nested(_, enumType, _) = memberValuesType, ReservedName.seamCarrier(ofEnum: enumType) != nil {
 						// A carrier's member for a call's own case takes no values: a `let` child is read, any other member called.
-						let isLetChild = scopeEnumByType[enumType].flatMap { scopeEnum in
-							scopeEnum.cases.first { $0.name == callRoute.caseName }?.isLetChildOfCarrier(inSendableEnum: scopeEnum.key.isSendable)
-						} ?? false
-						return isLetChild ? "\(parentName).\(callRoute.caseName)" : "\(parentName).\(callRoute.caseName)()"
+						return isLetChild(ofCaseNamed: callRoute.caseName, handed: memberValuesType) ? "\(parentName).\(callRoute.caseName)" : "\(parentName).\(callRoute.caseName)()"
 					} else {
 						return "\(parentName).\(callRoute.caseName)(\(memberValuesType.asSource)())"
 					}
@@ -3072,14 +3107,14 @@ struct SeamHoles: Sendable {
 	/// on a route to a place nested by type, called on the struct `memberCall`'s parent name is bound to, with the case's
 	/// payload: its binding's name, the payload struct's type and its fields.
 	struct ValuesBinding: Sendable {
-		init(member: SeamSignature.Hole.RouteStep.Member, parentName: String, caseName: String) {
+		init(member: SeamSignature.Hole.RouteStep.Member, parentName: String, caseName: String, isLetChild: Bool) {
 			bindingName = member.bindingName
 			type = member.valuesType
 			boundType = member.levelType
 			fields = member.fields
 			memberCall = (parentName, caseName)
 			isCalledInsideFunction = member.isCalledInsideFunction
-			isLetChild = member.isLetChild
+			self.isLetChild = isLetChild
 			carrierUse = nil
 			formsRunAfter = nil
 		}

@@ -70,6 +70,115 @@ struct SafeDIToolCleanSubtreeTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_validatesScopesInNumbersThatGrowLinearlyWithLayers_whenScreensOfAlternateLayersRenameServiceThatTheOthersReceive() async throws {
+		// Every screen of an odd layer renames `service`, and every screen of the even layers below the first receives the
+		// rename only if available. A walk beneath a screen reads the rename declared closest above it, which the screen
+		// of the layer above declares on each of its paths: a key holds of it whether the child of that screen the
+		// subtree is built inside is the `service` it is bound from, never the path to that screen. With that path in the key,
+		// the walk with the skip validates 23, 79, 87 and 351 scopes.
+		var skippingCounts = [Int]()
+		var walkingCounts = [Int]()
+		for layerCount in [4, 5, 6, 7] {
+			let fixture = Self.layeredScreensRenamingServiceInAlternateLayers(
+				layerCount: layerCount,
+				renameDeclaration: "@Received(fulfilledByDependencyNamed: \"service\", ofType: Service.self) let renamedService: Service",
+				readDeclaration: "@Received(onlyIfAvailable: true) let renamedService: Service?",
+			)
+			let skipping = try await run(fixture, skippingCleanSubtrees: true)
+			let walking = try await run(fixture, skippingCleanSubtrees: false)
+			#expect(skipping.outcome == walking.outcome)
+			skippingCounts.append(skipping.validatedScopeCount)
+			walkingCounts.append(walking.validatedScopeCount)
+		}
+		#expect(walkingCounts == [42, 123, 366, 1_095])
+		#expect(skippingCounts == [23, 47, 55, 83])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_validatesScopesInNumbersThatGrowLinearlyWithLayers_whenScreensOfAlternateLayersRenameServiceOnlyIfAvailableThatTheOthersRequire() async throws {
+		// Every screen of an odd layer renames `service` only if available, bound from the root's `service`, and every
+		// screen of the even layers below the first requires the rename. The cycle check of that receive walks what
+		// `Service` receives from the screen of the layer above, and reads of the path to that screen only the entries
+		// that walk can reach, of which there are none: a key holds no more of the path than that. With the whole path in the
+		// key, the walk with the skip validates 23, 79, 87 and 351 scopes.
+		var skippingCounts = [Int]()
+		var walkingCounts = [Int]()
+		for layerCount in [4, 5, 6, 7] {
+			let fixture = Self.layeredScreensRenamingServiceInAlternateLayers(
+				layerCount: layerCount,
+				renameDeclaration: "@Received(fulfilledByDependencyNamed: \"service\", ofType: Service.self, onlyIfAvailable: true) let renamedService: Service?",
+				readDeclaration: "@Received let renamedService: Service?",
+			)
+			let skipping = try await run(fixture, skippingCleanSubtrees: true)
+			let walking = try await run(fixture, skippingCleanSubtrees: false)
+			#expect(skipping.outcome == walking.outcome)
+			skippingCounts.append(skipping.validatedScopeCount)
+			walkingCounts.append(walking.validatedScopeCount)
+		}
+		#expect(walkingCounts == [42, 123, 366, 1_095])
+		#expect(skippingCounts == [23, 47, 55, 83])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_validatesScopesInNumbersThatGrowLinearlyWithLayers_whenEveryScreenReceivesBuilderOfScreenAboveAtItsOwnPosition() async throws {
+		// Layers of three screens, each opening the three screens of the next layer; a screen receives the builder of the
+		// screen at its own position in the layer above, which is the instantiator still building it beneath that screen and
+		// a built sibling beneath the other two. A receive of an instantiator still being built judges nothing, so a walk
+		// that meets one is remembered, and a screen is walked in two contexts however many paths reach it.
+		let distinctContextCount = 2
+		var skippingCounts = [Int]()
+		var walkingCounts = [Int]()
+		for layerCount in [4, 5, 6] {
+			let fixture = Self.layeredScreensReceivingBuilderOfLayerAbove(layerCount: layerCount)
+			let skipping = try await run(fixture, skippingCleanSubtrees: true)
+			let walking = try await run(fixture, skippingCleanSubtrees: false)
+			#expect(walking.isGenerated)
+			#expect(skipping.outcome == walking.outcome)
+			skippingCounts.append(skipping.validatedScopeCount)
+			walkingCounts.append(walking.validatedScopeCount)
+		}
+		for (smaller, larger) in zip(walkingCounts, walkingCounts.dropFirst()) {
+			// Without the skip each layer triples the paths beneath the screen above it.
+			#expect(Double(larger) / Double(smaller) > 2.5, "Without the skip the walk validates \(walkingCounts) scopes")
+		}
+		for (smaller, larger) in zip(skippingCounts, skippingCounts.dropFirst()) {
+			// Each layer adds three screens, each walked once for each context and at most twice more.
+			#expect(larger - smaller <= 3 * (distinctContextCount + 2), "With the skip the walk validates \(skippingCounts) scopes")
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_validatesScopesInNumbersThatGrowLinearlyWithLayers_whenEveryScreenReceivesBuilderThatBuildsIt() async throws {
+		// The same layers, but each screen receives its own builder: the instantiator that is building it, on every path. A
+		// receive of the instantiator building its receiver judges nothing, so a walk that meets one is remembered, and a
+		// screen is walked in one context however many paths reach it.
+		let distinctContextCount = 1
+		var skippingCounts = [Int]()
+		var walkingCounts = [Int]()
+		for layerCount in [4, 5, 6] {
+			let fixture = Self.layeredScreensReceivingBuilderOfLayerAbove(layerCount: layerCount, screensReceiveOwnBuilder: true)
+			let skipping = try await run(fixture, skippingCleanSubtrees: true)
+			let walking = try await run(fixture, skippingCleanSubtrees: false)
+			#expect(walking.isGenerated)
+			#expect(skipping.outcome == walking.outcome)
+			skippingCounts.append(skipping.validatedScopeCount)
+			walkingCounts.append(walking.validatedScopeCount)
+		}
+		for (smaller, larger) in zip(walkingCounts, walkingCounts.dropFirst()) {
+			// Without the skip each layer triples the paths beneath the screen above it.
+			#expect(Double(larger) / Double(smaller) > 2.5, "Without the skip the walk validates \(walkingCounts) scopes")
+		}
+		for (smaller, larger) in zip(skippingCounts, skippingCounts.dropFirst()) {
+			// Each layer adds three screens, each walked once for each context and at most twice more.
+			#expect(larger - smaller <= 3 * (distinctContextCount + 2), "With the skip the walk validates \(skippingCounts) scopes")
+		}
+	}
+
 	// MARK: Tests – Diagnostics
 
 	@Test
@@ -148,6 +257,52 @@ struct SafeDIToolCleanSubtreeTests: ~Copyable {
 		#expect(skipping.outcome == .error(Self.receivedCycleError))
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsUnfulfillableErrorOfPathWithoutBuilder_whenSharedSubtreeReceivesBuilderStillBeingBuiltOnPathsWalkedBefore() async throws {
+		// `Leaf`, beneath `Shared`, receives `aBuilder`. Beneath `A`, and beneath `E` and `F`, which `A` builds, it is the
+		// instantiator still being built, which its builder function wraps again: that receive judges nothing, so `E`'s walk
+		// of `Shared`, the second, is remembered and `F`'s is skipped. Beneath `C` it is `M`'s `aBuilder`, built; beneath `D`
+		// nothing provides it, and that walk must not be skipped.
+		let fixture = [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let mBuilder: Instantiator<M>", "@Instantiated let dBuilder: Instantiator<D>"]),
+			seamFixtureType(named: "M", isFinalClass: true, declarations: ["@Instantiated let aBuilder: Instantiator<A>", "@Instantiated let cBuilder: Instantiator<C>"]),
+			seamFixtureType(named: "A", isFinalClass: true, declarations: ["@Instantiated let sharedBuilder: Instantiator<Shared>", "@Instantiated let eBuilder: Instantiator<E>", "@Instantiated let fBuilder: Instantiator<F>"]),
+			seamFixtureType(named: "E", isFinalClass: true, declarations: ["@Instantiated let sharedBuilder: Instantiator<Shared>"]),
+			seamFixtureType(named: "F", isFinalClass: true, declarations: ["@Instantiated let sharedBuilder: Instantiator<Shared>"]),
+			seamFixtureType(named: "C", isFinalClass: true, declarations: ["@Instantiated let sharedBuilder: Instantiator<Shared>"]),
+			seamFixtureType(named: "D", isFinalClass: true, declarations: ["@Instantiated let sharedBuilder: Instantiator<Shared>"]),
+			seamFixtureType(named: "Shared", isFinalClass: true, declarations: ["@Instantiated let leaf: Leaf"]),
+			seamFixtureType(named: "Leaf", isFinalClass: true, declarations: ["@Received let aBuilder: Instantiator<A>"]),
+		]
+		let skipping = try await run(fixture, skippingCleanSubtrees: true)
+		let walking = try await run(fixture, skippingCleanSubtrees: false)
+		#expect(skipping.skippedSubtreeCount == 1)
+		#expect(skipping.outcome == walking.outcome)
+		#expect(skipping.outcome == .error(Self.unfulfillableBuilderError))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsUnfulfillableErrorOfEveryChain_whenWalkThatRecordedOneIsReachedAgainInEqualContext() async throws {
+		// `Leaf` receives `x`, which nothing provides, beneath `A`, `B` and `C` alike. A scope is keyed from its second
+		// reach: `B`'s walk of `Leaf` records an error, so it is not remembered, and `C`'s walk, whose key is equal, is not
+		// skipped.
+		let fixture = [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let aBuilder: Instantiator<A>", "@Instantiated let bBuilder: Instantiator<B>", "@Instantiated let cBuilder: Instantiator<C>"]),
+			seamFixtureType(named: "A", isFinalClass: true, declarations: ["@Instantiated let leafBuilder: Instantiator<Leaf>"]),
+			seamFixtureType(named: "B", isFinalClass: true, declarations: ["@Instantiated let leafBuilder: Instantiator<Leaf>"]),
+			seamFixtureType(named: "C", isFinalClass: true, declarations: ["@Instantiated let leafBuilder: Instantiator<Leaf>"]),
+			seamFixtureType(named: "Leaf", isFinalClass: true, declarations: ["@Received let x: X"]),
+			seamFixtureType(named: "X", isFinalClass: true, declarations: []),
+		]
+		let skipping = try await run(fixture, skippingCleanSubtrees: true)
+		let walking = try await run(fixture, skippingCleanSubtrees: false)
+		#expect(skipping.skippedSubtreeCount == 0)
+		#expect(skipping.outcome == walking.outcome)
+		#expect(skipping.outcome == .error(Self.unfulfillableOnEveryChainError))
+	}
+
 	// MARK: Tests – Dependency trees
 
 	@Test
@@ -195,6 +350,168 @@ struct SafeDIToolCleanSubtreeTests: ~Copyable {
 		}
 		#expect(walkingCounts == [3_280, 48_634])
 		#expect(skippingCounts == [40, 57])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_validatesScopesInNumbersThatGrowLinearlyWithLayers_whenScreenOfCycleDeclaresOnlyIfAvailableAliasNothingReads() async throws {
+		// The layers above, where `Screen5` renames `service` only if available. No scope receives the rename or renames
+		// it in turn, so no walk beneath `Screen5` looks the alias up, and a key holds nothing of it: each screen is still
+		// walked once beneath the root's context and once beneath a screen's.
+		var skippingCounts = [Int]()
+		var walkingCounts = [Int]()
+		for layerCount in [3, 4] {
+			let fixture = Self.layeredScreensOpeningFirstLayerAgain(layerCount: layerCount, screenDeclarations: [5: ["@Received(fulfilledByDependencyNamed: \"service\", ofType: Service.self, onlyIfAvailable: true) let renamedService: Service?"]])
+			let skipping = try await run(fixture, skippingCleanSubtrees: true)
+			let walking = try await run(fixture, skippingCleanSubtrees: false)
+			#expect(skipping.outcome == walking.outcome)
+			skippingCounts.append(skipping.validatedScopeCount)
+			walkingCounts.append(walking.validatedScopeCount)
+		}
+		#expect(walkingCounts == [3_280, 48_634])
+		#expect(skippingCounts == [40, 57])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_validatesScopesInNumbersThatGrowLinearlyWithLayers_whenModelsRequireOnlyIfAvailableAliasDeclaredAboveCycle() async throws {
+		// The layers above, where the root renames its `service` only if available and every model requires the rename.
+		// A walk beneath a screen reads the alias, and of the path only whether the root's child it is built inside is
+		// the `service` the alias is bound from, which no screen is: a key holds that, never the whole path.
+		var skippingCounts = [Int]()
+		var walkingCounts = [Int]()
+		for layerCount in [3, 4] {
+			let fixture = Self.layeredScreensOpeningFirstLayerAgain(
+				layerCount: layerCount,
+				rootDeclarations: ["@Received(fulfilledByDependencyNamed: \"service\", ofType: Service.self, onlyIfAvailable: true) let renamedService: Service?"],
+				modelDeclarations: ["@Received let renamedService: Service?"],
+			)
+			let skipping = try await run(fixture, skippingCleanSubtrees: true)
+			let walking = try await run(fixture, skippingCleanSubtrees: false)
+			#expect(skipping.outcome == walking.outcome)
+			skippingCounts.append(skipping.validatedScopeCount)
+			walkingCounts.append(walking.validatedScopeCount)
+		}
+		#expect(walkingCounts == [3_280, 48_634])
+		#expect(skippingCounts == [40, 57])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsCycleError_whenSharedSubtreeRequiresOnlyIfAvailableAliasInsideItsFulfillingSiblingOnOnePath() async throws {
+		// `Leaf`, beneath `Shared`, requires `Root`'s alias of `service`. Beneath `A`, `B` and `C` the alias is bound from
+		// the `service` built before them; beneath `Service` it is built inside the `service` the alias is bound from.
+		// `C`'s walk of `Shared` is skipped, `Service`'s is not.
+		let fixture = [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: [
+				"@Instantiated let aBuilder: Instantiator<A>",
+				"@Instantiated let bBuilder: Instantiator<B>",
+				"@Instantiated let cBuilder: Instantiator<C>",
+				"@Instantiated let service: Service",
+				"@Received(fulfilledByDependencyNamed: \"service\", ofType: Service.self, onlyIfAvailable: true) let renamedService: Service?",
+			]),
+			seamFixtureType(named: "A", isFinalClass: true, declarations: ["@Instantiated let sharedBuilder: Instantiator<Shared>"]),
+			seamFixtureType(named: "B", isFinalClass: true, declarations: ["@Instantiated let sharedBuilder: Instantiator<Shared>"]),
+			seamFixtureType(named: "C", isFinalClass: true, declarations: ["@Instantiated let sharedBuilder: Instantiator<Shared>"]),
+			seamFixtureType(named: "Service", isFinalClass: true, declarations: ["@Instantiated let sharedBuilder: Instantiator<Shared>"]),
+			seamFixtureType(named: "Shared", isFinalClass: true, declarations: ["@Instantiated let leaf: Leaf"]),
+			seamFixtureType(named: "Leaf", isFinalClass: true, declarations: ["@Received let renamedService: Service?"]),
+		]
+		let skipping = try await run(fixture, skippingCleanSubtrees: true)
+		let walking = try await run(fixture, skippingCleanSubtrees: false)
+		#expect(skipping.skippedSubtreeCount == 1)
+		#expect(skipping.outcome == walking.outcome)
+		#expect(skipping.outcome == .error(Self.requiredAliasCycleError))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsCycleErrorOfRenamesWalk_whenLastPathToSharedSubtreeBuildsRenameInsidePropertyItsServiceReceives() async throws {
+		// `D` renames `service` only if available, and `Leaf`, beneath `Shared`, requires the rename, so the rename's
+		// cycle check walks what `Service` receives: `x`. `Hall` builds `D` beneath `b`, `c`, `e` and `a`'s `x`; only beneath
+		// `x` is `D` built inside the `x` that `Service` receives. `Shared` is first reached beneath `b`, kept beneath `c`
+		// and skipped beneath `e`; beneath `x` its key holds `D`'s path up to `x`, so its walk is not skipped and throws.
+		let fixture = Self.hallBuildingRenameOnFourPaths(service: "@Received let x: X", hall: ["@Forwarded let x: X"], fourthPath: ("a", "A", ["@Instantiated let x: X"]))
+		let skipping = try await run(fixture, skippingCleanSubtrees: true)
+		let walking = try await run(fixture, skippingCleanSubtrees: false)
+		#expect(skipping.skippedSubtreeCount == 1)
+		#expect(skipping.outcome == walking.outcome)
+		#expect(skipping.outcome == .error(Self.renameBuiltInsideReceivedPropertyCycleError))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_generatesCode_whenNoPathToSharedSubtreeBuildsRenameInsidePropertyItsServiceReceives() async throws {
+		// The graph above with `a` building `D` directly: no path to `D` holds the `x` that `Service` receives.
+		let fixture = Self.hallBuildingRenameOnFourPaths(service: "@Received let x: X", hall: ["@Forwarded let x: X"], fourthPath: ("a", "A", ["@Instantiated let d: D"]))
+		let skipping = try await run(fixture, skippingCleanSubtrees: true)
+		let walking = try await run(fixture, skippingCleanSubtrees: false)
+		#expect(skipping.skippedSubtreeCount == 2)
+		#expect(skipping.outcome == walking.outcome)
+		guard case .generated = skipping.outcome else {
+			Issue.record("Expected generated code, got \(skipping.outcome)")
+			return
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsCycleErrorOfRenamesWalk_whenLastPathToSharedSubtreeBuildsRenameAsPropertyItsServiceReceives() async throws {
+		// `Service` receives `d: D`, and `Hall` builds `D` as `e: D` beneath `b`, `c` and `e`, and as `d: D` beneath `a`:
+		// the first entry of `D`'s path, which `Shared`'s key holds, is what the rename's cycle check finds there.
+		let fixture = Self.hallBuildingRenameOnFourPaths(service: "@Received let d: D", hall: ["@Forwarded let d: D"], fourthPath: ("a", "A", ["@Instantiated let d: D"]), dLabel: "e")
+		let skipping = try await run(fixture, skippingCleanSubtrees: true)
+		let walking = try await run(fixture, skippingCleanSubtrees: false)
+		#expect(skipping.skippedSubtreeCount == 1)
+		#expect(skipping.outcome == walking.outcome)
+		#expect(skipping.outcome == .error(Self.renameBuiltAsReceivedPropertyCycleError))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsCycleErrorOfRenamesWalk_whenLastPathToSharedSubtreeBuildsRenameOfRenameInsidePropertyItsServiceReceives() async throws {
+		// The first graph, with `D` building `Mid`, which renames `D`'s rename only if available, and `Leaf` beneath `Mid`
+		// requiring the second rename: the cycle check walks what the first rename's `service` receives.
+		let fixture = Self.hallBuildingRenameOnFourPaths(service: "@Received let x: X", hall: ["@Forwarded let x: X"], fourthPath: ("a", "A", ["@Instantiated let x: X"]), renamesRename: true)
+		let skipping = try await run(fixture, skippingCleanSubtrees: true)
+		let walking = try await run(fixture, skippingCleanSubtrees: false)
+		#expect(skipping.skippedSubtreeCount == 1)
+		#expect(skipping.outcome == walking.outcome)
+		#expect(skipping.outcome == .error(Self.renameOfRenameBuiltInsideReceivedPropertyCycleError))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsCycleErrorOfRenamesWalk_whenLastPathToSharedSubtreeBuildsErasedRenameInsidePropertyItsServiceReceives() async throws {
+		// `D` renames `service` only if available as an erased `AnyService?`, whose type leads to no scope, so no label
+		// beneath `Shared` names `x`: only the rename's declaring stack, which the key holds up to `x`, tells `Shared`
+		// beneath `x` from `Shared` kept beneath `cBuilder`. `Shared` is first reached beneath `bBuilder` and skipped beneath
+		// `eBuilder`.
+		let fixture = [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: [
+				"@Instantiated let bBuilder: Instantiator<B>",
+				"@Instantiated let cBuilder: Instantiator<C>",
+				"@Instantiated let eBuilder: Instantiator<E>",
+				"@Instantiated let x: X",
+				"@Instantiated let service: Service",
+			]),
+			seamFixtureType(named: "B", isFinalClass: true, declarations: ["@Instantiated let d: D"]),
+			seamFixtureType(named: "C", isFinalClass: true, declarations: ["@Instantiated let d: D"]),
+			seamFixtureType(named: "E", isFinalClass: true, declarations: ["@Instantiated let d: D"]),
+			seamFixtureType(named: "X", isFinalClass: true, declarations: ["@Instantiated let d: D"]),
+			seamFixtureType(named: "D", isFinalClass: true, declarations: [
+				"@Received(fulfilledByDependencyNamed: \"service\", ofType: Service.self, erasedToConcreteExistential: true, onlyIfAvailable: true) let renamedService: AnyService?",
+				"@Instantiated let shared: Shared",
+			]),
+			seamFixtureType(named: "Shared", isFinalClass: true, declarations: ["@Instantiated let leaf: Leaf"]),
+			seamFixtureType(named: "Leaf", isFinalClass: true, declarations: ["@Received let renamedService: AnyService?"]),
+			seamFixtureType(named: "Service", isFinalClass: true, declarations: ["@Received let x: X"]),
+		]
+		let skipping = try await run(fixture, skippingCleanSubtrees: true)
+		let walking = try await run(fixture, skippingCleanSubtrees: false)
+		#expect(skipping.skippedSubtreeCount == 1)
+		#expect(skipping.outcome == walking.outcome)
+		#expect(skipping.outcome == .error(Self.erasedRenameBuiltInsideReceivedPropertyCycleError))
 	}
 
 	@Test
@@ -460,6 +777,68 @@ struct SafeDIToolCleanSubtreeTests: ~Copyable {
 		#expect(skippingCounts == [136, 192, 248, 304])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_validatesScopesInNumbersThatGrowLinearlyWithLayers_whenTypeBeneathEachErasedScreenReceivesItsModel() async throws {
+		// The same layers, each screen also building a panel that receives the screen's `model`. A screen of a deep layer is
+		// reached with the `model` of every screen above it on the path receivable, a different set on every path, and its
+		// panel reads what is receivable under `model`: only whether its own screen's model is, which every path answers
+		// alike. The screen's key holds that property alone, so all but one walk of each screen are skipped. With every
+		// property of the label in the key, the same walks validated 256, 536, 1,248 and 3,256 scopes.
+		var skippingCounts = [Int]()
+		var walkingCounts = [Int]()
+		for layerCount in [3, 4, 5, 6] {
+			let modules = Self.layeredErasedSeamModules(layerCount: layerCount, panelsReceiveModel: true)
+			let skipping = try await run(modules, skippingCleanSubtrees: true)
+			let walking = try await run(modules, skippingCleanSubtrees: false)
+			#expect(skipping.outcome == walking.outcome)
+			skippingCounts.append(skipping.validatedScopeCount)
+			walkingCounts.append(walking.validatedScopeCount)
+		}
+		for (smaller, larger) in zip(walkingCounts, walkingCounts.dropFirst()) {
+			#expect(Double(larger) / Double(smaller) > 2, "Without the skip the walk validates \(walkingCounts) scopes")
+		}
+		// Each layer adds four screens, each walked once with its model, its session and its panel.
+		#expect(skippingCounts == [192, 272, 352, 432])
+	}
+
+	@Test(arguments: [FeatureState.instantiated, .forwarded, .lazilyInstantiated, .renamed, .renamedByEntry])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_validatesScopesInNumbersThatDoNotGrowWithLinks_whenLastScreenOfFeaturesThatOpenOneAnotherOpensItsEntryAgain(state: FeatureState) async throws {
+		// Six features open one another, and each declares `state` with a type of its own, which only its own screens read.
+		// The last screen of the first `linkCount` features opens its feature's entry again. No screen can read another
+		// feature's state, since its own entry declares the label above it on every path, so a tree a link builds again
+		// has nothing to judge, and a screen reads nothing of the features its own is opened beneath. With `state` counted
+		// as a label the tree built again can judge, every link blocked every walk above it and walked its tree again; and
+		// with every feature's state in a screen's key, a screen had another key beneath each set of features: 179, 775
+		// and 6,046 scopes at one, three and six links where the entries instantiate the state, with a further 144, 972
+		// and 8,028 in the trees built again. An entry that also renames its own state reads the label, but only from
+		// itself, so that read is hidden by no feature's declaration either. Two shapes are left as they were, and still
+		// double with each link. A state the screens receive only if available makes the optional form receivable beneath
+		// the receive, so a first screen built again beneath its own feature's last screen is given a property its first
+		// build was not, and its key differs. And a second label that a screen between the entry and the link declares is
+		// declared again on the path from the entry to the link that opens it again.
+		var skippingCounts = [Int]()
+		for linkCount in 1...6 {
+			let skipping = try await run(Self.featuresOpeningOneAnother(linkCount: linkCount, state: state), skippingCleanSubtrees: true)
+			#expect(skipping.isGenerated)
+			skippingCounts.append(skipping.validatedScopeCount)
+		}
+		#expect(skippingCounts == state.validatedScopeCounts)
+	}
+
+	@Test(arguments: FeatureState.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsWhatWalkWithoutSkipReports_whenLastScreenOfFeaturesThatOpenOneAnotherOpensItsEntryAgain(state: FeatureState) async throws {
+		// The graph above with two links, small enough to walk without the skip.
+		let fixture = Self.featuresOpeningOneAnother(linkCount: 2, state: state)
+		let skipping = try await run(fixture, skippingCleanSubtrees: true)
+		let walking = try await run(fixture, skippingCleanSubtrees: false)
+		#expect(walking.isGenerated)
+		#expect(skipping.outcome == walking.outcome)
+		#expect(walking.skippedSubtreeCount == 0)
+	}
+
 	// MARK: Tests – A label declared with different types
 
 	@Test(arguments: LabelAbove.allCases, LabelBeneath.allCases)
@@ -506,6 +885,31 @@ struct SafeDIToolCleanSubtreeTests: ~Copyable {
 			#expect(expected.error == nil)
 		case let .error(description):
 			#expect(description.split(separator: "\n").first.map(String.init) == expected.error)
+		}
+	}
+
+	// MARK: Tests – A required only-if-available alias above a shared subtree
+
+	@Test(arguments: RequiredAliasAboveSharedSubtree.allCases, DeclarationOrder.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsWhatWalkWithoutSkipReports_whenSharedSubtreeRequiresOnlyIfAvailableAliasThatOnePathCannotBuildFirst(graph: RequiredAliasAboveSharedSubtree, order: DeclarationOrder) async throws {
+		// A receive beneath a shared subtree requires an only-if-available alias, so the property the alias is bound from
+		// must be built before the scope that declares it. On one path it cannot be, and of that path the subtree's walk
+		// reads only what its key holds of the alias: the path to the declaring scope, how the alias is bound, the child
+		// of the declaring scope the subtree is built inside, and the alias the alias itself renames. Each rejected graph
+		// is one a key without one of those accepts, or reports through a later check with another text, in the orders
+		// that reach two clean paths first; each has a twin every path of which is clean.
+		let fixture = graph.fixture(order: order)
+		let skipping = try await run(fixture, skippingCleanSubtrees: true)
+		let walking = try await run(fixture, skippingCleanSubtrees: false)
+		#expect(skipping.outcome == walking.outcome)
+		switch (skipping.outcome, graph.expectedError) {
+		case let (.error(description), expectedError?):
+			#expect(description == expectedError)
+		case (.generated, nil):
+			break
+		case (.error, nil), (.generated, _?):
+			Issue.record("\(graph), \(order): \(skipping.outcome)")
 		}
 	}
 
@@ -560,7 +964,65 @@ struct SafeDIToolCleanSubtreeTests: ~Copyable {
 			}
 		}
 		let counts = [acceptedCount, rejectedCount, skippingCount]
-		#expect(counts == [72, 128, 149])
+		#expect(counts == [72, 128, 159])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsWhatWalkWithoutSkipReports_whenScreensWithOnlyIfAvailableAliasesAreDrawnFromEachSeed() async throws {
+		// The draw of `SafeDIToolReceivedPropertiesByComponentTests`: screens in a ring that rename `service` only if
+		// available, receive the rename or build a reader of it, beneath roots and entries that may rename it too. Every
+		// graph is run with the skip and without it. The counts are the graphs the tool accepts, those it rejects, those
+		// it rejects for a dependency cycle, and those whose walk skipped a subtree. Each part of a subtree's key that
+		// only a rename's outcome shows fails a seed when it is left out by hand: the path to the scope that declares
+		// the last rename, seed 10 and nine more; what the rename is bound to, seed 68; the last fulfilling property of
+		// a rename of a rename, in place of the first, seeds 28, 60 and 98.
+		var acceptedCount = 0
+		var rejectedCount = 0
+		var dependencyCycleCount = 0
+		var skippingCount = 0
+		for seed in 0..<SafeDIToolReceivedPropertiesByComponentTests.aliasDrawSeedCount {
+			let fixture = SafeDIToolReceivedPropertiesByComponentTests.screensWithOnlyIfAvailableAliases(seed: seed)
+			let skipping = try await run(fixture, skippingCleanSubtrees: true)
+			let walking = try await run(fixture, skippingCleanSubtrees: false)
+			#expect(skipping.outcome == walking.outcome, "seed \(seed)")
+			switch walking.outcome {
+			case .generated:
+				acceptedCount += 1
+			case let .error(description):
+				rejectedCount += 1
+				if description.contains("error: Dependency cycle") {
+					dependencyCycleCount += 1
+				}
+			}
+			if skipping.skippedSubtreeCount > 0 {
+				skippingCount += 1
+			}
+		}
+		let counts = [acceptedCount, rejectedCount, dependencyCycleCount, skippingCount]
+		#expect(counts == [28, 122, 59, 102])
+	}
+
+	// MARK: Tests – One graph for each part of the key
+
+	@Test(arguments: GraphForKeyPart.allCases, DeclarationOrder.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsWhatWalkWithoutSkipReports_whenGraphNeedsOnePartOfKey(graph: GraphForKeyPart, order: DeclarationOrder) async throws {
+		// Each graph is one a search over seeded graphs found and shrank, or, for a form a scope asks the receivable
+		// properties for, one written by hand: with the part of the key its case names left out by hand, the run that skips
+		// reports other diagnostics than the run that skips nothing, in the order the declarations are written in, and a
+		// handwritten one in each order. The other orders are run too, since which path reaches a scope first follows them.
+		let fixture = graph.fixture(order: order)
+		let skipping = try await run(fixture, skippingCleanSubtrees: true)
+		let walking = try await run(fixture, skippingCleanSubtrees: false)
+		#expect(skipping.outcome == walking.outcome)
+		guard case let .error(description) = walking.outcome else {
+			Issue.record("Every graph of this test holds an error the walk reports")
+			return
+		}
+		#expect(description.components(separatedBy: "error: ").count - 1 == graph.errorCount)
+		// The key was asked, and told the paths apart.
+		#expect(skipping.keyedSubtreeCount > 0)
 	}
 
 	// MARK: Private
@@ -578,6 +1040,14 @@ struct SafeDIToolCleanSubtreeTests: ~Copyable {
 		let validatedScopeCount: Int
 		let skippedSubtreeCount: Int
 		let keyedSubtreeCount: Int
+
+		/// Whether `generate` accepted the graph.
+		var isGenerated: Bool {
+			switch outcome {
+			case .generated: true
+			case .error: false
+			}
+		}
 	}
 
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
@@ -646,12 +1116,99 @@ struct SafeDIToolCleanSubtreeTests: ~Copyable {
 		}.joined(separator: "\n")
 	}
 
+	@Test(arguments: [8, 24])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_validatesScopeAtMostOncePerDistinctContextAndTwiceMore_whenParentsReachChainOfScopesAlongManyPaths(parentCount: Int) async throws {
+		// Each parent opens the same chain of links, whose leaf receives `x` and `y` only if available; a parent declares
+		// neither, `x`, `y` or both, in turn, so a link is walked in four contexts however many parents reach it. Its first
+		// walk is not remembered, since a scope is keyed only from its second reach, so a link is walked once for each
+		// context and at most twice more: a bound for each scope, not for each path to it. A chain one link longer validates
+		// as many scopes more as one link is walked.
+		let distinctContextCount = 4
+		var validatedCounts = [Int]()
+		for linkCount in 1...4 {
+			let fixture = Self.chainOfLinksBeneathParents(parentCount: parentCount, linkCount: linkCount)
+			let skipping = try await run(fixture, skippingCleanSubtrees: true)
+			let walking = try await run(fixture, skippingCleanSubtrees: false)
+			#expect(walking.isGenerated)
+			#expect(skipping.outcome == walking.outcome)
+			// Without the skip, every parent walks the links, the leaf, and each of `x` and `y` it declares.
+			#expect(walking.validatedScopeCount == 1 + parentCount * (linkCount + 3))
+			validatedCounts.append(skipping.validatedScopeCount)
+		}
+		for (shorter, longer) in zip(validatedCounts, validatedCounts.dropFirst()) {
+			#expect(longer - shorter <= distinctContextCount + 2, "With the skip the walk validates \(validatedCounts) scopes")
+		}
+		// The root, the parents, and the leaf, a link, `X` and `Y`, each of which is walked no more often for more parents.
+		#expect(validatedCounts[0] - parentCount == 15)
+	}
+
+	/// `parentCount` parents beneath a root, each opening `Link0`, the first of a chain of `linkCount` links, the last of
+	/// which opens `Leaf`. `Leaf` receives `x` and `y` only if available; the parents declare neither, `x`, `y`, or both,
+	/// in turn.
+	private static func chainOfLinksBeneathParents(parentCount: Int, linkCount: Int) -> [String] {
+		var fixture = [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: (0..<parentCount).map { "@Instantiated let parent\($0)Builder: Instantiator<Parent\($0)>" }),
+			seamFixtureType(named: "Leaf", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let x: X?", "@Received(onlyIfAvailable: true) let y: Y?"]),
+			seamFixtureType(named: "X", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "Y", isFinalClass: true, declarations: []),
+		]
+		for index in 0..<parentCount {
+			var declarations = [String]()
+			if index % 2 == 1 {
+				declarations.append("@Instantiated let x: X")
+			}
+			if index % 4 >= 2 {
+				declarations.append("@Instantiated let y: Y")
+			}
+			declarations.append("@Instantiated let link0Builder: Instantiator<Link0>")
+			fixture.append(seamFixtureType(named: "Parent\(index)", isFinalClass: true, declarations: declarations))
+		}
+		for index in 0..<linkCount {
+			let opened = index == linkCount - 1 ? "@Instantiated let leafBuilder: Instantiator<Leaf>" : "@Instantiated let link\(index + 1)Builder: Instantiator<Link\(index + 1)>"
+			fixture.append(seamFixtureType(named: "Link\(index)", isFinalClass: true, declarations: [opened]))
+		}
+		return fixture
+	}
+
+	/// `layerCount` layers of three screens beneath a root: each receives the root's `Service` and, below the first layer,
+	/// the builder of the screen at its own position in the layer above, and opens the three screens of the next layer
+	/// through an `Instantiator`. With `screensReceiveOwnBuilder`, each screen of every layer receives the builder that
+	/// builds it instead.
+	private static func layeredScreensReceivingBuilderOfLayerAbove(layerCount: Int, screensReceiveOwnBuilder: Bool = false) -> [String] {
+		var fixture = [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let service: Service"] + (0..<3).map { "@Instantiated let screen\($0)Builder: Instantiator<Screen\($0)>" }),
+			seamFixtureType(named: "Service", isFinalClass: true, declarations: []),
+		]
+		for index in 0..<(layerCount * 3) {
+			let layer = index / 3
+			var declarations = ["@Received let service: Service"]
+			if screensReceiveOwnBuilder {
+				declarations.append("@Received let screen\(index)Builder: Instantiator<Screen\(index)>")
+			} else if layer > 0 {
+				declarations.append("@Received let screen\(index - 3)Builder: Instantiator<Screen\(index - 3)>")
+			}
+			if layer < layerCount - 1 {
+				declarations += (0..<3).map { "@Instantiated let screen\((layer + 1) * 3 + $0)Builder: Instantiator<Screen\((layer + 1) * 3 + $0)>" }
+			}
+			fixture.append(seamFixtureType(named: "Screen\(index)", isFinalClass: true, declarations: declarations))
+		}
+		return fixture
+	}
+
 	/// `layerCount` layers of four screens beneath a root: each forwards an `id`, receives the root's `Service`, instantiates
 	/// a model of its own and opens the three screens of the next layer but the one at its own position through an
 	/// `Instantiator`; a screen of the last layer opens `Screen0` and the first layer's screen at its own position.
-	private static func layeredScreensOpeningFirstLayerAgain(layerCount: Int) -> [String] {
+	/// The root also declares `rootDeclarations`, each model `modelDeclarations`, and the screen at each index of
+	/// `screenDeclarations` what it holds there.
+	private static func layeredScreensOpeningFirstLayerAgain(
+		layerCount: Int,
+		rootDeclarations: [String] = [],
+		screenDeclarations: [Int: [String]] = [:],
+		modelDeclarations: [String] = [],
+	) -> [String] {
 		var fixture = [
-			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let service: Service"] + (0..<4).map { "@Instantiated let screen\($0)Builder: Instantiator<Screen\($0)>" }),
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let service: Service"] + (0..<4).map { "@Instantiated let screen\($0)Builder: Instantiator<Screen\($0)>" } + rootDeclarations),
 			seamFixtureType(named: "Service", isFinalClass: true, declarations: []),
 		]
 		for index in 0..<(layerCount * 4) {
@@ -661,9 +1218,121 @@ struct SafeDIToolCleanSubtreeTests: ~Copyable {
 				named: "Screen\(index)",
 				isFinalClass: true,
 				declarations: ["@Forwarded let id: Int", "@Received let service: Service", "@Instantiated let model\(index): Model\(index)"]
-					+ opened.map { "@Instantiated let screen\($0)Builder: Instantiator<Screen\($0)>" },
+					+ opened.map { "@Instantiated let screen\($0)Builder: Instantiator<Screen\($0)>" }
+					+ screenDeclarations[index, default: []],
 			))
-			fixture.append(seamFixtureType(named: "Model\(index)", isFinalClass: true, declarations: ["@Received let id: Int", "@Received let service: Service"]))
+			fixture.append(seamFixtureType(named: "Model\(index)", isFinalClass: true, declarations: ["@Received let id: Int", "@Received let service: Service"] + modelDeclarations))
+		}
+		return fixture
+	}
+
+	/// How each feature of `featuresOpeningOneAnother(linkCount:state:)` declares its state and how its screens read it.
+	enum FeatureState: CaseIterable {
+		/// The entry instantiates the state, and each screen receives it.
+		case instantiated
+		/// The entry forwards the state, and each screen receives it.
+		case forwarded
+		/// The entry instantiates the state lazily, and each screen receives its instance.
+		case lazilyInstantiated
+		/// The entry instantiates the state, and each screen renames it.
+		case renamed
+		/// The entry instantiates the state and renames it itself, and each screen receives it.
+		case renamedByEntry
+		/// The entry instantiates the state, and each screen receives it. Each first screen also instantiates a state of its
+		/// feature's screens, a second label with a type per feature, which each last screen receives beside the first.
+		case instantiatedBesideScreenState
+		/// The entry instantiates the state, and each screen receives it only if available.
+		case receivedOnlyIfAvailable
+
+		func entryDeclarations(feature: Int) -> [String] {
+			switch self {
+			case .instantiated, .renamed, .receivedOnlyIfAvailable, .instantiatedBesideScreenState:
+				["@Instantiated let state: State\(feature)"]
+			case .forwarded:
+				["@Forwarded let state: State\(feature)"]
+			case .lazilyInstantiated:
+				["@Instantiated let state: LazilyInstantiated<State\(feature)>"]
+			case .renamedByEntry:
+				[
+					"@Instantiated let state: State\(feature)",
+					"@Received(fulfilledByDependencyNamed: \"state\", ofType: State\(feature).self) let renamedState: State\(feature)",
+				]
+			}
+		}
+
+		func firstScreenDeclarations(feature: Int) -> [String] {
+			switch self {
+			case .instantiated, .forwarded, .lazilyInstantiated, .renamed, .renamedByEntry, .receivedOnlyIfAvailable:
+				lastScreenDeclarations(feature: feature)
+			case .instantiatedBesideScreenState:
+				["@Received let state: State\(feature)", "@Instantiated let screenState: ScreenState\(feature)"]
+			}
+		}
+
+		func lastScreenDeclarations(feature: Int) -> [String] {
+			switch self {
+			case .instantiated, .forwarded, .lazilyInstantiated, .renamedByEntry:
+				["@Received let state: State\(feature)"]
+			case .renamed:
+				["@Received(fulfilledByDependencyNamed: \"state\", ofType: State\(feature).self) let renamedState: State\(feature)"]
+			case .receivedOnlyIfAvailable:
+				["@Received(onlyIfAvailable: true) let state: State\(feature)?"]
+			case .instantiatedBesideScreenState:
+				["@Received let state: State\(feature)", "@Received let screenState: ScreenState\(feature)"]
+			}
+		}
+
+		/// The scopes the walk validates at one to six links: two more for each link, the entry the link opens again and
+		/// the state it instantiates, or one more where the entry forwards its state. An entry that renames its own state
+		/// is keyed by the declaration of the label above it, which its rename is looked up in, so it is walked once
+		/// beneath each feature that opens it, and no more with the links than that. `nil` where the count still doubles
+		/// with each link.
+		var validatedScopeCounts: [Int]? {
+			switch self {
+			case .instantiated, .lazilyInstantiated, .renamed:
+				[51, 53, 55, 57, 59, 61]
+			case .renamedByEntry:
+				[71, 71, 71, 72, 73, 77]
+			case .forwarded:
+				[44, 45, 46, 47, 48, 49]
+			case .receivedOnlyIfAvailable, .instantiatedBesideScreenState:
+				nil
+			}
+		}
+	}
+
+	/// `Root` opens the entry of each of six features. Each entry declares its feature's state, opens its feature's two
+	/// first screens, and opens the entries of the feature before its own and of the feature three before. Each first
+	/// screen reads the state and opens the feature's two last screens, which read it too; and in the first `linkCount`
+	/// features the last screen opens its feature's entry again.
+	private static func featuresOpeningOneAnother(linkCount: Int, state: FeatureState) -> [String] {
+		let featureCount = 6
+		var fixture = [seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: (0..<featureCount).map { "@Instantiated let feature\($0)Builder: Instantiator<Entry\($0)>" })]
+		for feature in 0..<featureCount {
+			fixture.append(seamFixtureType(named: "State\(feature)", isFinalClass: true, declarations: []))
+			if state == .instantiatedBesideScreenState {
+				fixture.append(seamFixtureType(named: "ScreenState\(feature)", isFinalClass: true, declarations: []))
+			}
+			fixture.append(seamFixtureType(
+				named: "Entry\(feature)",
+				isFinalClass: true,
+				declarations: state.entryDeclarations(feature: feature)
+					+ (0..<2).map { "@Instantiated let first\($0)Builder: Instantiator<First\(feature)x\($0)>" }
+					+ [feature - 1, feature - 3].filter { $0 >= 0 }.map { "@Instantiated let feature\($0)Builder: Instantiator<Entry\($0)>" },
+			))
+			for position in 0..<2 {
+				fixture.append(seamFixtureType(
+					named: "First\(feature)x\(position)",
+					isFinalClass: true,
+					declarations: state.firstScreenDeclarations(feature: feature) + (0..<2).map { "@Instantiated let last\($0)Builder: Instantiator<Last\(feature)x\($0)>" },
+				))
+				fixture.append(seamFixtureType(
+					named: "Last\(feature)x\(position)",
+					isFinalClass: true,
+					declarations: state.lastScreenDeclarations(feature: feature)
+						+ (position == 1 && feature < linkCount ? ["@Instantiated let entryBuilder: Instantiator<Entry\(feature)>"] : []),
+				))
+			}
 		}
 		return fixture
 	}
@@ -687,6 +1356,67 @@ struct SafeDIToolCleanSubtreeTests: ~Copyable {
 		fixture.append(seamFixtureType(named: "Service", isFinalClass: true, declarations: []))
 		fixture.append(seamFixtureType(named: "Home", isSeam: true, isFinalClass: true, declarations: (0..<4).map { "@Instantiated let screen\($0)Builder: Instantiator<Screen\($0)>" }))
 		fixture.append(seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let service: Service", "@Instantiated let home: Home"]))
+		return fixture
+	}
+
+	/// A root opening `Hall`, which forwards `hall`'s declarations and builds `service`, then `b`, `c`, `e` and the
+	/// fourth path, each building `D` (as `dLabel`, or `d`); `D` renames `service` only if available and builds `Shared`,
+	/// which builds `Leaf`, which requires the rename. With `renamesRename`, `D` builds `Mid` in place of `Shared`, which
+	/// renames the rename only if available and builds `Shared`, whose `Leaf` requires the second rename. `Service` holds
+	/// `service`.
+	private static func hallBuildingRenameOnFourPaths(
+		service: String,
+		hall: [String],
+		fourthPath: (label: String, type: String, declarations: [String]),
+		dLabel: String = "d",
+		renamesRename: Bool = false,
+	) -> [String] {
+		[
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let hallBuilder: Instantiator<Hall>"]),
+			seamFixtureType(named: "Hall", isFinalClass: true, declarations: hall + [
+				"@Instantiated let service: Service",
+				"@Instantiated let b: B",
+				"@Instantiated let c: C",
+				"@Instantiated let e: E",
+				"@Instantiated let \(fourthPath.label): \(fourthPath.type)",
+			]),
+			seamFixtureType(named: fourthPath.type, isFinalClass: true, declarations: fourthPath.declarations),
+			seamFixtureType(named: "X", isFinalClass: true, declarations: ["@Instantiated let d: D"]),
+			seamFixtureType(named: "B", isFinalClass: true, declarations: ["@Instantiated let \(dLabel): D"]),
+			seamFixtureType(named: "C", isFinalClass: true, declarations: ["@Instantiated let \(dLabel): D"]),
+			seamFixtureType(named: "E", isFinalClass: true, declarations: ["@Instantiated let \(dLabel): D"]),
+			seamFixtureType(named: "D", isFinalClass: true, declarations: [
+				"@Received(fulfilledByDependencyNamed: \"service\", ofType: Service.self, onlyIfAvailable: true) let renamedService: Service?",
+				renamesRename ? "@Instantiated let mid: Mid" : "@Instantiated let shared: Shared",
+			]),
+			seamFixtureType(named: "Mid", isFinalClass: true, declarations: [
+				"@Received(fulfilledByDependencyNamed: \"renamedService\", ofType: Service?.self, onlyIfAvailable: true) let again: Service?",
+				"@Instantiated let shared: Shared",
+			]),
+			seamFixtureType(named: "Shared", isFinalClass: true, declarations: ["@Instantiated let leaf: Leaf"]),
+			seamFixtureType(named: "Leaf", isFinalClass: true, declarations: [renamesRename ? "@Received let again: Service?" : "@Received let renamedService: Service?"]),
+			seamFixtureType(named: "Service", isFinalClass: true, declarations: [service]),
+		]
+	}
+
+	/// `layerCount` layers of four screens beneath a root that instantiates `service`: each receives `service` and opens
+	/// the three screens of the next layer from its own position on through an `Instantiator`; each screen of an odd layer
+	/// also holds `renameDeclaration`, and each screen of an even layer but the first `readDeclaration`.
+	private static func layeredScreensRenamingServiceInAlternateLayers(layerCount: Int, renameDeclaration: String, readDeclaration: String) -> [String] {
+		var fixture = [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let service: Service", "@Instantiated let screen0: Screen0"]),
+			seamFixtureType(named: "Service", isFinalClass: true, declarations: []),
+		]
+		for index in 0..<(layerCount * 4) {
+			let layer = index / 4
+			let opened = layer < layerCount - 1 ? (0..<3).map { (layer + 1) * 4 + (index + $0) % 4 } : []
+			let renameDeclarations = layer % 2 == 1 ? [renameDeclaration] : layer > 0 ? [readDeclaration] : []
+			fixture.append(seamFixtureType(
+				named: "Screen\(index)",
+				isFinalClass: true,
+				declarations: ["@Received let service: Service"] + renameDeclarations + opened.map { "@Instantiated let screen\($0)Builder: Instantiator<Screen\($0)>" },
+			))
+		}
 		return fixture
 	}
 
@@ -716,8 +1446,9 @@ struct SafeDIToolCleanSubtreeTests: ~Copyable {
 	/// next layer but the one at its own position through erased instantiators, and builds an internal model that receives
 	/// the screen's forwarded `id` and lazily builds a session; `App`'s root opens the first layer. The shape of the
 	/// erased-screens benchmark. A builder is named for the screen it opens, or, with `namingBuildersByPosition`, for that
-	/// screen's position in its layer, so that every layer declares the same four labels.
-	private static func layeredErasedSeamModules(layerCount: Int, namingBuildersByPosition: Bool = false) -> [ModuleFixture] {
+	/// screen's position in its layer, so that every layer declares the same four labels. With `panelsReceiveModel`, each
+	/// screen also builds an internal panel that receives the screen's model.
+	private static func layeredErasedSeamModules(layerCount: Int, namingBuildersByPosition: Bool = false, panelsReceiveModel: Bool = false) -> [ModuleFixture] {
 		func erasedBuilder(of screen: Int) -> String {
 			"@Instantiated(fulfilledByType: \"Screen\(screen)\", erasedToConcreteExistential: true) public let \(namingBuildersByPosition ? "child\(screen % 4)" : "screen\(screen)")Builder: ErasedInstantiator<Int, AnyScreen>"
 		}
@@ -735,10 +1466,12 @@ struct SafeDIToolCleanSubtreeTests: ~Copyable {
 						named: "Screen\(index)",
 						isSeam: true,
 						isFinalClass: true,
-						declarations: ["@Forwarded public let id: Int", "@Received public let service: Service", "@Instantiated let model: Model\(index)"] + opened.map(erasedBuilder(of:)),
+						declarations: ["@Forwarded public let id: Int", "@Received public let service: Service", "@Instantiated let model: Model\(index)"]
+							+ (panelsReceiveModel ? ["@Instantiated let panel: Panel\(index)"] : [])
+							+ opened.map(erasedBuilder(of:)),
 					),
 					"import Core\n\n" + seamFixtureType(named: "Model\(index)", isFinalClass: true, declarations: ["@Received public let id: Int", "@Received public let service: Service", "@Instantiated public let session: LazilyInstantiated<Session>"]),
-				],
+				] + (panelsReceiveModel ? [seamFixtureType(named: "Panel\(index)", isFinalClass: true, declarations: ["@Received let model: Model\(index)"])] : []),
 				dependencies: ["Core"] + opened.map { "Screen\($0)Module" },
 			))
 		}
@@ -927,14 +1660,17 @@ struct SafeDIToolCleanSubtreeTests: ~Copyable {
 	/// constants `X` and `Y`, built on several paths. Where `Shared` only declares `x`, or forwards it to a `Leaf` that
 	/// requires it, `Shared` is skipped beneath every parent after `B`, whatever the parent declares `x` as. Where `Leaf`
 	/// reads `x` from above, the paths that lack `x: X` or hide it are never remembered, and the first of them is reported.
+	/// Where `Shared` declares `x: X` or forwards it and `Leaf` receives that, the key of `Leaf` holds, of what is receivable
+	/// under `x`, only the forms of `x: X` it asks for: it is skipped beneath a parent that declares `x: Y` after a walk
+	/// beneath one that declares `x: X` or nothing.
 	private static func expectedOutcome(above: LabelAbove, beneath: LabelBeneath) -> (skippedSubtreeCount: Int, error: String?) {
 		let skippedSubtreeCounts: [Int] = switch above {
 		case .parentsAlternateTypes:
-			[8, 3, 5, 3, 5, 6, 5, 8]
+			[8, 3, 5, 3, 5, 6, 6, 9]
 		case .parentsDeclareOneTypeOrOtherOrNothing:
-			[6, 1, 2, 1, 2, 4, 3, 7]
+			[6, 1, 2, 1, 2, 4, 4, 7]
 		case .rootDeclaresAndEveryOtherParentDeclaresAnotherType:
-			[6, 2, 2, 2, 2, 5, 4, 6]
+			[6, 2, 2, 2, 2, 5, 5, 6]
 		case .rootDeclaresAnotherTypeThanEveryOtherParent:
 			[7, 2, 4, 2, 4, 5, 5, 8]
 		}
@@ -979,6 +1715,124 @@ struct SafeDIToolCleanSubtreeTests: ~Copyable {
 				isRoot ? Array(declarations.dropFirst() + declarations.prefix(1)) : declarations
 			case .rootRotatedAndOthersReversed:
 				isRoot ? Array(declarations.dropFirst() + declarations.prefix(1)) : declarations.reversed()
+			}
+		}
+	}
+
+	/// Graphs in which `Leaf`, beneath `Shared`, requires an only-if-available alias of `service` that several paths
+	/// reach, with what main reports for each.
+	enum RequiredAliasAboveSharedSubtree: CaseIterable {
+		/// `B`, `C` and `K` each build `D`, which renames `service` and builds `Shared`. `Service` receives `k`, so beneath
+		/// `K` the alias's fulfilling property receives a property on the path to `D`; beneath `B` and `C` it does not.
+		/// Nothing beneath `Shared` names `k`, so only the alias's declaring path tells the paths apart.
+		case declaringPathHoldsPropertyServiceReceives
+		/// The same graph with a `Service` that receives nothing.
+		case declaringPathHoldsNothingServiceReceives
+		/// Three roots each hold `dBuilder`, and only `RootC` builds `service`, which receives `dBuilder`: beneath `RootA`
+		/// and `RootB` the alias is bound to `nil`, beneath `RootC` from a `service` that receives the builder `D` is
+		/// built inside. Only the alias's binding tells the roots' paths apart.
+		case aliasIsBoundBeneathOneRootOnly
+		/// The same graph without `RootC`.
+		case aliasIsBoundBeneathNoRoot
+		/// `Root` renames `service`, and `M` renames that alias again; `A`, `B`, `C` and `Service` each build `M`. Beneath
+		/// `Service`, `M` is built inside the property the last alias of the chain is bound from.
+		case aliasOfAliasIsRequiredInsideFulfillingSibling
+		/// The same graph with a `Service` that does not build `M`.
+		case aliasOfAliasIsRequiredOutsideFulfillingSibling
+		/// `Root` renames `service`; `A`, `B`, `C` and `Service` each hold a builder of `Shared`. Beneath `Service`,
+		/// `Shared` is built inside the property the alias is bound from.
+		case aliasIsRequiredInsideFulfillingSibling
+		/// The same graph with a `Leaf` that receives the alias only if available.
+		case aliasIsReceivedOnlyIfAvailableInsideFulfillingSibling
+
+		private static let renamedService = "@Received(fulfilledByDependencyNamed: \"service\", ofType: Service.self, onlyIfAvailable: true) let renamedService: Service?"
+		private static let renamedAgain = "@Received(fulfilledByDependencyNamed: \"renamedService\", ofType: Service?.self, onlyIfAvailable: true) let again: Service?"
+
+		private var types: [(name: String, declarations: [String])] {
+			let sharedBeneathRenamingD = [
+				("D", [Self.renamedService, "@Instantiated let shared: Shared"]),
+				("Shared", ["@Instantiated let leaf: Leaf"]),
+				("Leaf", ["@Received let renamedService: Service?"]),
+			]
+			let sharedBeneathRenamingM = [
+				("M", [Self.renamedAgain, "@Instantiated let shared: Shared"]),
+				("Shared", ["@Instantiated let leaf: Leaf"]),
+				("Leaf", ["@Received let again: Service?"]),
+			]
+			let rootRenamingService = ("Root", [
+				"@Instantiated let aBuilder: Instantiator<A>",
+				"@Instantiated let bBuilder: Instantiator<B>",
+				"@Instantiated let cBuilder: Instantiator<C>",
+				"@Instantiated let service: Service",
+				Self.renamedService,
+			])
+			return switch self {
+			case .declaringPathHoldsPropertyServiceReceives, .declaringPathHoldsNothingServiceReceives:
+				[
+					("Root", ["@Instantiated let b: B", "@Instantiated let c: C", "@Instantiated let k: K", "@Instantiated let service: Service"]),
+					("B", ["@Instantiated let d: D"]),
+					("C", ["@Instantiated let d: D"]),
+					("K", ["@Instantiated let d: D"]),
+					("Service", self == .declaringPathHoldsPropertyServiceReceives ? ["@Received let k: K"] : []),
+				] + sharedBeneathRenamingD
+			case .aliasIsBoundBeneathOneRootOnly, .aliasIsBoundBeneathNoRoot:
+				[
+					("RootA", ["@Instantiated let dBuilder: Instantiator<D>"]),
+					("RootB", ["@Instantiated let dBuilder: Instantiator<D>"]),
+				] + (self == .aliasIsBoundBeneathOneRootOnly ? [("RootC", ["@Instantiated let dBuilder: Instantiator<D>", "@Instantiated let service: Service"])] : []) + [
+					("Service", ["@Received let dBuilder: Instantiator<D>"]),
+				] + sharedBeneathRenamingD
+			case .aliasOfAliasIsRequiredInsideFulfillingSibling, .aliasOfAliasIsRequiredOutsideFulfillingSibling:
+				[
+					rootRenamingService,
+					("A", ["@Instantiated let m: M"]),
+					("B", ["@Instantiated let m: M"]),
+					("C", ["@Instantiated let m: M"]),
+					("Service", self == .aliasOfAliasIsRequiredInsideFulfillingSibling ? ["@Instantiated let m: M"] : []),
+				] + sharedBeneathRenamingM
+			case .aliasIsRequiredInsideFulfillingSibling, .aliasIsReceivedOnlyIfAvailableInsideFulfillingSibling:
+				[
+					rootRenamingService,
+					("A", ["@Instantiated let sharedBuilder: Instantiator<Shared>"]),
+					("B", ["@Instantiated let sharedBuilder: Instantiator<Shared>"]),
+					("C", ["@Instantiated let sharedBuilder: Instantiator<Shared>"]),
+					("Service", ["@Instantiated let sharedBuilder: Instantiator<Shared>"]),
+					("Shared", ["@Instantiated let leaf: Leaf"]),
+					("Leaf", [self == .aliasIsRequiredInsideFulfillingSibling ? "@Received let renamedService: Service?" : "@Received(onlyIfAvailable: true) let renamedService: Service?"]),
+				]
+			}
+		}
+
+		/// What main reports for the graph, in every order: `nil` where it generates.
+		var expectedError: String? {
+			switch self {
+			case .declaringPathHoldsPropertyServiceReceives:
+				"""
+				Service.swift:7:5: error: Dependency cycle: `K` -> `D` -> `Service?` -> `Service` -> `K`. `Service` receives `k: K`, which is still being built when `Service` is built. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				K.swift:1:1: note: `K` is part of the cycle
+				D.swift:1:1: note: `D` is part of the cycle
+				Service.swift:1:1: note: `Service` is part of the cycle
+				"""
+			case .aliasIsBoundBeneathOneRootOnly:
+				"""
+				Service.swift:7:5: error: Dependency cycle: @Instantiated `dBuilder: Instantiator<D>` -> @Received `renamedService: Service?` -> @Received `service: Service` -> @Received `dBuilder: Instantiator<D>`. `dBuilder: Instantiator<D>` is received while it is still being instantiated. `renamedService: Service?` renames `service: Service` only if available, so a type that receives `renamedService` without `onlyIfAvailable` must be built after `service: Service`. Receive `renamedService` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `service: Service` cannot be built first.
+				"""
+			case .aliasOfAliasIsRequiredInsideFulfillingSibling:
+				"""
+				Leaf.swift:7:5: error: Dependency cycle: @Instantiated `service: Service` -> @Received `again: Service?` -> @Received `renamedService: Service?` -> @Received `service: Service`. `service: Service` is received while it is still being instantiated. `again: Service?` renames `renamedService: Service?` only if available, so a type that receives `again` without `onlyIfAvailable` must be built after `renamedService: Service?`. Receive `again` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `renamedService: Service?` cannot be built first. `renamedService: Service?` renames `service: Service` only if available, so a type that receives `renamedService` without `onlyIfAvailable` must be built after `service: Service`. Receive `renamedService` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `service: Service` cannot be built first.
+				"""
+			case .aliasIsRequiredInsideFulfillingSibling:
+				"""
+				Leaf.swift:7:5: error: Dependency cycle: @Instantiated `service: Service` -> @Received `renamedService: Service?` -> @Received `service: Service`. `service: Service` is received while it is still being instantiated. `renamedService: Service?` renames `service: Service` only if available, so a type that receives `renamedService` without `onlyIfAvailable` must be built after `service: Service`. Receive `renamedService` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `service: Service` cannot be built first.
+				"""
+			case .declaringPathHoldsNothingServiceReceives, .aliasIsBoundBeneathNoRoot, .aliasOfAliasIsRequiredOutsideFulfillingSibling, .aliasIsReceivedOnlyIfAvailableInsideFulfillingSibling:
+				nil
+			}
+		}
+
+		func fixture(order: DeclarationOrder) -> [String] {
+			types.map { name, declarations in
+				seamFixtureType(named: name, isRoot: name.hasPrefix("Root"), isFinalClass: true, declarations: order.ordered(declarations, ofRoot: name.hasPrefix("Root")))
 			}
 		}
 	}
@@ -1180,6 +2034,169 @@ struct SafeDIToolCleanSubtreeTests: ~Copyable {
 		}
 	}
 
+	/// Graphs that each need one part of the key (`CleanSubtreeKey`, `cleanSubtreeKeyLabels(of:)`) or of the bookkeeping
+	/// of subtrees found clean beneath a scope still being walked.
+	enum GraphForKeyPart: CaseIterable {
+		/// A label that only one non-optional property is received under beneath a scope still keeps its receivable
+		/// properties in the key while a type beneath reads it from above the scope. `Screen` receives `b: Screen`, which
+		/// nothing declares, and is reached beneath `Direct` and, through a cycle of builders, beneath `Loop`: each path
+		/// reports the receive. With the label left out as "fulfilled beneath", the path through `Loop` is skipped.
+		case labelReadFromAboveKeepsItsReceivableProperties
+		/// The key holds the root's context: which checks its walk runs. `MockedFlow`'s mock is a root of its own, whose walk
+		/// reports that `Hider`'s `f0: Shadow` hides the `f0: Value?` that `MockedLeaf` receives only if available; the walk
+		/// of `Root`, which reaches the same types first, does not judge that. With one context for every root, the
+		/// subtree found clean beneath `Root` is skipped beneath the mock and the error is lost.
+		case rootContext
+		/// A subtree skipped because it was found clean beneath a scope still being walked hands that scope's depth up, so
+		/// that what is above it is kept only once that scope's walk completes clean. `Leaf` receives `x: Value?`, which
+		/// nothing declares, beneath `D`, which the cycles through `A`, `B` and `C` reach along four paths. With the depth
+		/// not handed up, a path is skipped and its diagnostic is lost.
+		case pendingSubtreeHandsItsDepthUp
+		/// The key holds the property a scope beneath requires, of the receivable properties of its label. `B`, `C` and `D`
+		/// receive `y: Z`, which nothing declares, and so hand it down to `Shared`, whose `Leaf` receives it; `A` and `E`
+		/// receive nothing, so beneath them `Leaf`'s receive is unfulfillable. With the property not asked for, `Shared`,
+		/// found clean beneath one of the others, is skipped beneath `A` or `E`, whichever order `Root` builds them in.
+		case requiredReceiveAsksForItsProperty
+		/// The same with `y: Z?`: the key holds the optional property itself, and not only its unwrapped form.
+		case requiredReceiveAsksForItsOptionalProperty
+		/// The same with `Leaf` renaming `y: Z`: the key holds the property a rename is fulfilled by.
+		case renameAsksForItsFulfillingProperty
+		/// The same with `Leaf` renaming `y: Z?`: the key holds the optional property a rename is fulfilled by, and not
+		/// only its unwrapped form.
+		case renameAsksForItsOptionalFulfillingProperty
+		/// The key holds the property a scope beneath receives only if available. Every path declares `y: Y` just above
+		/// `Shared`, the closest declaration of `y`, and only `A` and `E` forward `y: Z?` above that. `Leaf` receives `y: Z?`
+		/// only if available: `nil` where nothing provides it, and hidden by the `y: Y` beneath `A` and beneath `E`. With
+		/// the property not asked for, `Shared`, found clean on another path, is skipped on those two.
+		case onlyIfAvailableReceiveAsksForItsProperty
+		/// The same with `A` and `E` declaring `y: Z`, which a receive of `y: Z?` only if available reads too: the key holds
+		/// the unwrapped form of such a property.
+		case onlyIfAvailableReceiveAsksForUnwrappedFormOfItsProperty
+		/// The same with `Leaf` renaming `y: Z` only if available: the key holds the property such a rename is fulfilled by.
+		case onlyIfAvailableRenameAsksForItsFulfillingProperty
+		/// The same with `A` and `E` forwarding `y: Z?`, which a rename of `y: Z` only if available reads too: the key holds
+		/// the optional form of the property such a rename is fulfilled by.
+		case onlyIfAvailableRenameAsksForOptionalFormOfItsFulfillingProperty
+
+		/// The number of errors the walk reports.
+		var errorCount: Int {
+			switch self {
+			case .labelReadFromAboveKeepsItsReceivableProperties: 2
+			case .rootContext: 1
+			case .pendingSubtreeHandsItsDepthUp: 4
+			case .requiredReceiveAsksForItsProperty, .requiredReceiveAsksForItsOptionalProperty, .renameAsksForItsFulfillingProperty,
+			     .renameAsksForItsOptionalFulfillingProperty: 5
+			case .onlyIfAvailableReceiveAsksForItsProperty, .onlyIfAvailableReceiveAsksForUnwrappedFormOfItsProperty,
+			     .onlyIfAvailableRenameAsksForItsFulfillingProperty, .onlyIfAvailableRenameAsksForOptionalFormOfItsFulfillingProperty: 2
+			}
+		}
+
+		/// `Root` builds `B`, `A`, `C`, `E` and `D`, which each build `Shared`, which builds `Leaf`. `A` and `E` differ from the
+		/// others, so in each order of `Root`'s declarations a walk beneath one of the others is kept before one of the two
+		/// is reached: the walk a key that holds too little skips.
+		private static let parents = ["B", "A", "C", "E", "D"]
+		private static let parentsThatDiffer: Set = ["A", "E"]
+		private static let root = ("Root", "(isRoot: true)", parents.map { "@Instantiated let \($0.lowercased())Builder: Instantiator<\($0)>" })
+
+		/// `Leaf` beneath parents that each declare `parentDeclaration`, but for `A` and `E`.
+		private static func sharedLeaf(declaring leafDeclaration: String, beneathParentsDeclaring parentDeclaration: String) -> [(name: String, arguments: String, declarations: [String])] {
+			var types: [(name: String, arguments: String, declarations: [String])] = [root]
+			for parent in parents {
+				types.append((parent, "", (parentsThatDiffer.contains(parent) ? [] : [parentDeclaration]) + ["@Instantiated let sharedBuilder: Instantiator<Shared>"]))
+			}
+			types.append(("Shared", "", ["@Instantiated let leafBuilder: Instantiator<Leaf>"]))
+			types.append(("Leaf", "", [leafDeclaration]))
+			types.append(("Z", "", []))
+			return types
+		}
+
+		/// `Leaf` beneath parents that each build a type that declares `y: Y`, the closest declaration of `y` on every path,
+		/// where `A` and `E` alone declare `declarationAbove` above it.
+		private static func sharedLeaf(declaring leafDeclaration: String, beneathCloserDeclarationAnd declarationAbove: String) -> [(name: String, arguments: String, declarations: [String])] {
+			var types: [(name: String, arguments: String, declarations: [String])] = [root]
+			for parent in parents {
+				types.append((parent, "", (parentsThatDiffer.contains(parent) ? [declarationAbove] : []) + ["@Instantiated let nextBuilder: Instantiator<\(parent)2>"]))
+				types.append(("\(parent)2", "", ["@Instantiated let y: Y", "@Instantiated let sharedBuilder: Instantiator<Shared>"]))
+			}
+			types.append(("Shared", "", ["@Instantiated let leafBuilder: Instantiator<Leaf>"]))
+			types.append(("Leaf", "", [leafDeclaration]))
+			types.append(("Y", "", []))
+			types.append(("Z", "", []))
+			return types
+		}
+
+		private var types: [(name: String, arguments: String, declarations: [String])] {
+			switch self {
+			case .labelReadFromAboveKeepsItsReceivableProperties:
+				[
+					("Root", "(isRoot: true)", ["@Instantiated let c: Direct", "@Instantiated let a: Instantiator<Loop>"]),
+					("Loop", "", ["@Instantiated let c: Instantiator<Screen>"]),
+					("Direct", "", ["@Instantiated let a: Screen"]),
+					("Screen", "", ["@Received let b: Screen", "@Instantiated let a: Instantiator<Loop>"]),
+				]
+			case .rootContext:
+				[
+					("Root", "(isRoot: true)", ["@Instantiated let child3: Instantiator<Entry>"]),
+					("Entry", "", ["@Instantiated let child3: Instantiator<MockedFlow>"]),
+					("MockedFlow", "(generateMock: true)", ["@Instantiated let child3: Step"]),
+					("Step", "", ["@Instantiated let child3: Instantiator<Fork>"]),
+					("Fork", "", ["@Instantiated let child3: Plain", "@Instantiated let child2: Instantiator<Hider>"]),
+					("Plain", "", ["@Instantiated let child3: Instantiator<MockedLeaf>"]),
+					("Hider", "", ["@Instantiated let child1: MockedLeaf", "@Instantiated let f0: Shadow"]),
+					("MockedLeaf", "(generateMock: true)", ["@Received(onlyIfAvailable: true) let f0: Value?"]),
+					("Shadow", "", []),
+					("Value", "", []),
+				]
+			case .pendingSubtreeHandsItsDepthUp:
+				[
+					("Root", "(isRoot: true)", ["@Instantiated let r2: Instantiator<C>", "@Instantiated let r3: Instantiator<D>"]),
+					("A", "", ["@Instantiated let b1: Instantiator<B>"]),
+					("B", "", ["@Instantiated let b3: Instantiator<C>", "@Instantiated let b2: Instantiator<A>"]),
+					("C", "", ["@Instantiated let b2: Instantiator<D>"]),
+					("D", "", ["@Instantiated let b0: Instantiator<B>", "@Instantiated let b2: Instantiator<Leaf>"]),
+					("Leaf", "", ["@Received let x: Value?"]),
+					("Value", "", []),
+				]
+			case .requiredReceiveAsksForItsProperty:
+				Self.sharedLeaf(declaring: "@Received let y: Z", beneathParentsDeclaring: "@Received let y: Z")
+			case .requiredReceiveAsksForItsOptionalProperty:
+				Self.sharedLeaf(declaring: "@Received let y: Z?", beneathParentsDeclaring: "@Received let y: Z?")
+			case .renameAsksForItsFulfillingProperty:
+				Self.sharedLeaf(declaring: "@Received(fulfilledByDependencyNamed: \"y\", ofType: Z.self) let renamed: Z", beneathParentsDeclaring: "@Received let y: Z")
+			case .renameAsksForItsOptionalFulfillingProperty:
+				Self.sharedLeaf(declaring: "@Received(fulfilledByDependencyNamed: \"y\", ofType: Z?.self) let renamed: Z?", beneathParentsDeclaring: "@Received let y: Z?")
+			case .onlyIfAvailableReceiveAsksForItsProperty:
+				Self.sharedLeaf(declaring: "@Received(onlyIfAvailable: true) let y: Z?", beneathCloserDeclarationAnd: "@Forwarded let y: Z?")
+			case .onlyIfAvailableReceiveAsksForUnwrappedFormOfItsProperty:
+				Self.sharedLeaf(declaring: "@Received(onlyIfAvailable: true) let y: Z?", beneathCloserDeclarationAnd: "@Instantiated let y: Z")
+			case .onlyIfAvailableRenameAsksForItsFulfillingProperty:
+				Self.sharedLeaf(declaring: "@Received(fulfilledByDependencyNamed: \"y\", ofType: Z.self, onlyIfAvailable: true) let renamed: Z?", beneathCloserDeclarationAnd: "@Instantiated let y: Z")
+			case .onlyIfAvailableRenameAsksForOptionalFormOfItsFulfillingProperty:
+				Self.sharedLeaf(declaring: "@Received(fulfilledByDependencyNamed: \"y\", ofType: Z.self, onlyIfAvailable: true) let renamed: Z?", beneathCloserDeclarationAnd: "@Forwarded let y: Z?")
+			}
+		}
+
+		func fixture(order: DeclarationOrder) -> [String] {
+			types.map { name, arguments, declarations in
+				let ordered = order.ordered(declarations, ofRoot: name == "Root")
+				let properties = ordered.map { declaration -> (label: String, type: String) in
+					let property = declaration[declaration.range(of: " let ")!.upperBound...]
+					return (String(property.prefix { $0 != ":" }), property.drop { $0 != ":" }.dropFirst().trimmingCharacters(in: .whitespaces))
+				}
+				return """
+				@Instantiable\(arguments)
+				public final class \(name): Instantiable {
+				    public init(\(properties.map { "\($0.label): \($0.type)" }.joined(separator: ", "))) {
+				\(properties.map { "        self.\($0.label) = \($0.label)" }.joined(separator: "\n"))
+				    }
+
+				\(ordered.map { "    \($0)" }.joined(separator: "\n"))
+				}
+				"""
+			}
+		}
+	}
+
 	/// `Shared` beneath `A`, `B`, `C` and `D`, which `Root` builds in `order`: only `B` declares `x: Y`, which hides the `x: X`
 	/// that `Leaf`, beneath `Shared`, receives.
 	private static func hiddenOnOnePath(order: [String]) -> [String] {
@@ -1245,6 +2262,45 @@ struct SafeDIToolCleanSubtreeTests: ~Copyable {
 	Leaf.swift:7:5: error: @Received property `x: X` is hidden in chain: Root -> Instantiator<B> -> Instantiator<Shared> -> Leaf. `B` declares `x: Y` with the same label, so the types below `B` receive `x: Y` instead. Give `x: Y` on `B` a different label to fix.
 	B.swift:8:5: note: `x: Y` is declared here
 	"""
+	private static let renameBuiltInsideReceivedPropertyCycleError = """
+	Service.swift:7:5: error: Dependency cycle: `X` -> `D` -> `Service?` -> `Service` -> `X`. `Service` receives `x: X`, which is still being built when `Service` is built. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+	X.swift:1:1: note: `X` is part of the cycle
+	D.swift:1:1: note: `D` is part of the cycle
+	Service.swift:1:1: note: `Service` is part of the cycle
+	"""
+
+	private static let renameBuiltAsReceivedPropertyCycleError = """
+	Service.swift:7:5: error: Dependency cycle: @Instantiated `d: D` -> @Received `renamedService: Service?` -> @Received `service: Service` -> @Received `d: D`. `d: D` is received while it is still being instantiated. `renamedService: Service?` renames `service: Service` only if available, so a type that receives `renamedService` without `onlyIfAvailable` must be built after `service: Service`. Receive `renamedService` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `service: Service` cannot be built first.
+	"""
+
+	private static let renameOfRenameBuiltInsideReceivedPropertyCycleError = """
+	Service.swift:7:5: error: Dependency cycle: `X` -> `D` -> `Service?` -> `Service?` -> `Service` -> `X`. `Service` receives `x: X`, which is still being built when `Service` is built. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+	X.swift:1:1: note: `X` is part of the cycle
+	D.swift:1:1: note: `D` is part of the cycle
+	Service.swift:1:1: note: `Service` is part of the cycle
+	"""
+
+	private static let erasedRenameBuiltInsideReceivedPropertyCycleError = """
+	Service.swift:7:5: error: Dependency cycle: `X` -> `D` -> `AnyService?` -> `Service` -> `X`. `Service` receives `x: X`, which is still being built when `Service` is built. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+	X.swift:1:1: note: `X` is part of the cycle
+	D.swift:1:1: note: `D` is part of the cycle
+	Service.swift:1:1: note: `Service` is part of the cycle
+	"""
+
+	private static let requiredAliasCycleError = """
+	Leaf.swift:7:5: error: Dependency cycle: @Instantiated `service: Service` -> @Received `renamedService: Service?` -> @Received `service: Service`. `service: Service` is received while it is still being instantiated. `renamedService: Service?` renames `service: Service` only if available, so a type that receives `renamedService` without `onlyIfAvailable` must be built after `service: Service`. Receive `renamedService` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `service: Service` cannot be built first.
+	"""
+
+	private static let unfulfillableBuilderError = """
+	Leaf.swift:7:5: error: @Received property `aBuilder: Instantiator<A>` is not @Instantiated or @Forwarded in chain: Root -> Instantiator<D> -> Instantiator<Shared> -> Leaf. Declare `@Instantiated let aBuilder: Instantiator<A>` on `Root` or on another type in the chain to fix.
+	"""
+
+	private static let unfulfillableOnEveryChainError = """
+	Leaf.swift:7:5: error: @Received property `x: X` is not @Instantiated or @Forwarded in chain: Root -> Instantiator<A> -> Leaf. Declare `@Instantiated let x: X` on `Root` or on another type in the chain to fix.
+	Leaf.swift:7:5: error: @Received property `x: X` is not @Instantiated or @Forwarded in chain: Root -> Instantiator<B> -> Leaf. Declare `@Instantiated let x: X` on `Root` or on another type in the chain to fix.
+	Leaf.swift:7:5: error: @Received property `x: X` is not @Instantiated or @Forwarded in chain: Root -> Instantiator<C> -> Leaf. Declare `@Instantiated let x: X` on `Root` or on another type in the chain to fix.
+	"""
+
 	private static let receivedCycleError = """
 	Leaf.swift:7:5: error: Dependency cycle: `A` -> `Instantiator<Shared>` -> `Leaf` -> `A`. `Leaf` receives `a: A`, which is still being built when `Leaf` is built. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 	A.swift:1:1: note: `A` is part of the cycle
