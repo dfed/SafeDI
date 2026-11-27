@@ -101,6 +101,8 @@ def expand(lines,hoisted,base_indent,entered={},nearest={},visible=frozenset(),r
         for name in hoisted:
             if name in line:
                 r=find_call_arg(line,name)
+                # two equal keys are one value only because every configuration in these lines was written out
+                # in terms of the enclosing scope before the level's calls are collected here
                 if r and r[3] is not None: level.add((name,r[2],r[3]))
     members=[]
     while i<len(lines):
@@ -369,6 +371,8 @@ def e11(text,walk):
     # function of the same name hides the outer one. Whether the walk names it apart too is a fact read
     # from the walk's text of the same mock.
     for name in sorted(set(re.findall(r'func (__safeDI_\w+?_)\(',text))):
+        # a name the walk tells apart by a type suffix stays apart here, for entry 21 to rename as one name
+        if re.search(r'func '+re.escape(name.rstrip('_'))+r'_\w+\(',walk): continue
         if not re.search(r'(?<!\w)'+re.escape(name)+r'\(',walk):
             text=re.sub(r'(?<![\w.])'+re.escape(name)+r'(?=[(),\n])',name[:-1],text)
     return text
@@ -421,19 +425,22 @@ def e5(text,walk):
 UNAVAILABLE=re.compile(r'^ +let (\w+): (.+\?) = safeDIOverrides\.(\w+)$')
 def e21(text,walk):
     # entry 21: the walk names a nested cycle function apart by its type (__safeDI_x_Type) where the records'
-    # function is __safeDI_x. Line by line, a name of the records is given the walk's suffix only where the walk
-    # declares a function of that longer name, and the mock's texts must otherwise have the same lines.
+    # function is __safeDI_x or __safeDI_x_. Line by line, a name of the records is given the walk's name only
+    # where the walk declares a function of that longer name, the mock's texts must otherwise have the same
+    # lines, and one name of the records becomes one name of the walk everywhere in the mock: a call that
+    # names another function than the walk's call does leaves the texts different.
     lines=text.split('\n');walk_lines=walk.split('\n')
     if len(lines)!=len(walk_lines): return text
     declared=set(FUNC.match(l).group(3) for l in walk_lines if FUNC.match(l))
     name=re.compile(r'(?<![\w.])__safeDI_\w+')
-    for i,(ours,theirs) in enumerate(zip(lines,walk_lines)):
-        if ours==theirs: continue
+    renamed={}
+    for ours,theirs in zip(lines,walk_lines):
         a=name.findall(ours);b=name.findall(theirs)
-        if len(a)!=len(b) or not all(x==y or (y.startswith(x if x.endswith('_') else x+'_') and len(y)>len(x) and y in declared) for x,y in zip(a,b)): continue
-        names=iter(b)
-        lines[i]=name.sub(lambda _:next(names),ours)
-    return '\n'.join(lines)
+        if len(a)!=len(b): return text
+        for x,y in zip(a,b):
+            if not (x==y or (y.startswith(x.rstrip('_')+'_') and len(y)>len(x) and y in declared)): return text
+            if renamed.setdefault(x,y)!=y: return text
+    return '\n'.join(name.sub(lambda found:renamed[found.group(0)],line) for line in lines)
 e21=per_mock(e21)
 e3=per_mock(e3)
 e5=per_mock(e5)
@@ -515,6 +522,17 @@ if __name__ == '__main__':
     # a chain of functions nests as deep as the tree
     sys.setrecursionlimit(1000000)
     threading.stack_size(1024 * 1024 * 1024)
-    thread = threading.Thread(target=main)
+    # sys.exit in a thread ends only the thread, so the thread hands its status back
+    status = [1]
+
+    def run():
+        try:
+            main()
+            status[0] = 0
+        except SystemExit as stop:
+            status[0] = stop.code if isinstance(stop.code, int) else 1
+
+    thread = threading.Thread(target=run)
     thread.start()
     thread.join()
+    sys.exit(status[0])
