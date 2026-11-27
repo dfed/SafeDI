@@ -132,6 +132,7 @@ public struct TypeFactsReport: Sendable {
 			variantCounts[Int(graph.declaration(of: VariantID(variant)))] += 1
 		}
 		variantCountsByNode = variantCounts
+		fillRefusals = graph.fills.map { $0.refusal?.rawValue }
 		variantNodes = (0..<graph.variantCount).map { Int(graph.declaration(of: VariantID($0))) }
 		variantCalls = (0..<graph.variantCount).map { graph.calls(of: VariantID($0)).map(Int.init) }
 		variantMadeAgainCalls = (0..<graph.variantCount).map { graph.madeAgainCalls(of: VariantID($0)).map(Int.init) }
@@ -409,6 +410,9 @@ public struct TypeFactsReport: Sendable {
 	public let world: String
 	/// How many variants each node has, by node position.
 	public let variantCountsByNode: [Int]
+	/// Why the fill channel does not model each fill yet (`TypeFactsFillRefusal`), in the order of the world's fills, `nil`
+	/// where it does.
+	public let fillRefusals: [String?]
 	/// Each variant's node.
 	public let variantNodes: [Int]
 	/// The variant each edge of a variant's node calls, in edge order.
