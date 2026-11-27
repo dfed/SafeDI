@@ -515,8 +515,16 @@ struct ParsedQueryModule {
 		}
 		// A file that cannot be opened reports the file system's error as `generate` does.
 		let data = try Data(contentsOf: path.asFileURL)
+		// The query prints lines, so it reads the positions file beside a module info file that stores them in one. Where
+		// that file is missing or does not pair, the report leaves out the lines and columns it would have read there, as
+		// it does for any declaration whose line it does not know, rather than print a stale one or fail.
 		do {
-			return try ModuleInfoFile(moduleInfoDataWithoutView: data)
+			return try ModuleInfoFile.reading(
+				moduleInfoData: data,
+				readingView: false,
+				positionsData: try? Data(contentsOf: ModuleInfoFile.positionsFilePath(ofModuleInfoAt: path).asFileURL),
+				reattachesPositions: true,
+			).file
 		} catch {
 			throw QueryError.moduleInfoNotReadable(path: path, reason: "\(error) \(BinaryFile.unreadableFileExplanation)")
 		}
@@ -728,8 +736,8 @@ public struct QueryErrorReport: Encodable, Sendable {
 		init(_ diagnostic: SourceDiagnostic) {
 			severity = diagnostic.severity.rawValue
 			filePath = diagnostic.location?.filePath
-			line = diagnostic.location?.line
-			column = diagnostic.location?.column
+			line = diagnostic.location?.lineAndColumn?.line
+			column = diagnostic.location?.lineAndColumn?.column
 			message = diagnostic.message
 		}
 

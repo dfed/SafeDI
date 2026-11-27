@@ -2017,14 +2017,14 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	///   spelling names: for a fill, that of the seam that holds the hole (`SeamSignature.Hole.declaringModuleNames`).
 	private func validateForwardedProperties(
 		of property: Property,
-		declaredAt declarationLocation: Dependency.DeclarationLocation?,
+		declaredAt declarationLocation: @autoclosure () -> Dependency.DeclarationLocation?,
 		on parent: TypeDescription,
 		seeingThroughModulesNamed declaringModuleNames: [String],
 		building builtInstantiable: Instantiable,
 	) throws {
 		guard validatesForwardedProperties, let error = ErasedInstantiatorForwardedPropertiesMismatchError(
 			property: property,
-			declarationLocation: declarationLocation,
+			declarationLocation: declarationLocation(),
 			parent: parent,
 			builtInstantiable: builtInstantiable,
 			declaringModuleNames: declaringModuleNames,
@@ -2719,10 +2719,11 @@ extension Instantiable {
 /// `@Forwarded` properties of the type it builds. Reported at the property's declaration.
 struct ErasedInstantiatorForwardedPropertiesMismatchError: SourceLocatedError {
 	/// The error for `property`, declared on `parent` at `declarationLocation` to build `builtInstantiable`, or
-	/// `nil` when `property` is not an erased instantiator or its first generic argument matches.
+	/// `nil` when `property` is not an erased instantiator or its first generic argument matches. The location is found
+	/// only for an error: finding it reads the parent's dependencies, and a check runs for every child.
 	init?(
 		property: Property,
-		declarationLocation: Dependency.DeclarationLocation?,
+		declarationLocation: @autoclosure () -> Dependency.DeclarationLocation?,
 		parent: TypeDescription,
 		builtInstantiable: Instantiable,
 		declaringModuleNames: [String],
@@ -2730,7 +2731,7 @@ struct ErasedInstantiatorForwardedPropertiesMismatchError: SourceLocatedError {
 	) {
 		guard !property.firstGenericMatchesForwardedProperties(of: builtInstantiable, declaringModuleNames: declaringModuleNames, declaredTypeNames: declaredTypeNames) else { return nil }
 		self.property = property
-		self.declarationLocation = declarationLocation
+		self.declarationLocation = declarationLocation()
 		self.parent = parent
 		builtType = builtInstantiable.concreteInstantiable
 		// The forwarded properties are spelled out rather than as `ForwardedProperties` on the built type, which the

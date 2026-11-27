@@ -121,7 +121,7 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_onTap: @autoclosure @escaping () -> (() -> Void)?) {
 			        let onTap = LazilyInstantiated<(() -> Void)?>(__safeDI_onTap)
-			        func __safeDI_row() -> Row {
+			        @inline(never) func __safeDI_row() -> Row {
 			            #sourceLocation(file: "\(output.fixtures["Row.swift"])", line: 7)
 			            let action: (() -> Void)? = onTap.instance
 			            #sourceLocation()
@@ -505,7 +505,7 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 			extension List {
 			    /// Code you write and code SafeDI generates can both call this initializer.
 			    public init() {
-			        func __safeDI_rowBuilder(onTap: @escaping () -> Void) -> Row {
+			        @inline(never) func __safeDI_rowBuilder(onTap: @escaping () -> Void) -> Row {
 			            let analytics = Analytics()
 			            return Row(onTap: onTap, analytics: analytics)
 			        }

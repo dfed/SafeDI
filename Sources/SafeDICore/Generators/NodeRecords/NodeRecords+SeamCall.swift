@@ -50,17 +50,20 @@ extension NodeRecords {
 	/// `children` after it, and whose construction calls the seam's tier's initializer (the scope's instantiable is the
 	/// seam's leaf) with `builtByInitializerRecord`'s arguments and, where the call passes builders up, the member of the
 	/// struct it passes each (`SeamCallRoutes`). Its `text` is empty: the engine spells the call from the record.
+	/// - Parameter lazilyInstantiatedInstanceProperties: The by-value properties the call passes as the instance of a lazily
+	///   instantiated property declared above it.
 	/// - Throws: `NodeRecordRefusal.fill` where the call passes a builder up that `routes` holds no one read for.
 	static func seamCallRecord(
 		of declaration: DeclarationID,
 		variant: VariantID,
 		in world: some NodeRecordSources,
 		routes: SeamCallRoutes,
+		lazilyInstantiatedInstanceProperties: Set<Property>,
 		typesDeclaredEscaping: Set<TypeDescription>,
 		children: [GeneratedCode],
 	) throws -> AliasPlaceRecord {
 		let scope = world.scope(of: declaration)
-		let construction = try builtByInitializerRecord(of: declaration, variant: variant, in: world, typesDeclaredEscaping: typesDeclaredEscaping, children: [], declaresFunction: true)
+		let construction = try builtByInitializerRecord(of: declaration, variant: variant, in: world, lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties, typesDeclaredEscaping: typesDeclaredEscaping, children: [], declaresFunction: true)
 		var arguments = construction.arguments
 		var reads = construction.arguments
 		var argumentValues = [Int: ValuePath]()
