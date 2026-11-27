@@ -69,7 +69,8 @@ extension NodeRecords {
 
 	/// The record of `declaration`'s place, a node of kind `mockConstruction`: the record stage 1 makes of it, built with
 	/// its type's hand-written mock where the world says so (`TypeFactsConstruction.handWrittenMock`), which first tries
-	/// the closure that overrides it (`mockOverrideSlot(ofNodeLabeled:typed:hasFunction:)`), called with its
+	/// the closure that overrides it (`mockOverrideSlot(of:labeled:typed:in:hasFunction:handsOverridesToChildren:isSendable:)`),
+	/// called with its
 	/// construction's arguments. A node that builds children is configured: its override is the builder of the
 	/// configuration its function is handed, whose fields its children read. The closure of a node that is not
 	/// configured returns the property's type, so every node's function does, as the walk's does.
@@ -105,7 +106,15 @@ extension NodeRecords {
 			// The closure's type as the configuration that holds it spells it (`MockLowering.ConstantNode.builderClosureType`).
 			.unknown(text: "((\(MockLowering.BuilderParameters(of: instantiable, usesMockInitializer: handWrittenMock != nil).spelled)) -> \(record.property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource))?")
 		}
-		let slot = mockOverrideSlot(ofNodeLabeled: record.property.label, typed: slotType, hasFunction: record.hasFunction)
+		let slot = mockOverrideSlot(
+			of: declaration,
+			labeled: record.property.label,
+			typed: slotType,
+			in: world,
+			hasFunction: record.hasFunction,
+			handsOverridesToChildren: isConfigured,
+			isSendable: record.isSendable,
+		)
 		record.passedArguments = slot.passedArguments
 		record.alternatives = [ConstructionAlternative(
 			closure: isConfigured ? .member(ReservedName.configurationBuilderPropertyName, of: slot.value) : slot.value,
@@ -117,23 +126,40 @@ extension NodeRecords {
 		return record
 	}
 
-	/// Where a node of a mock root's world built as the property labeled `label` reads its override, a value of
-	/// `type`: the field of its parent's configuration under its label. Every function is declared in the root's body,
-	/// where it can capture no other function's argument, so a node with a function of its own is handed the value as a
-	/// passed argument named as `mock()`'s own overrides are, which its body reads as the root's reads `mock()`'s; a
-	/// node built in place reads the field where it is built. Each record of a mock root's world takes its override from
-	/// here, so that no record spells the path.
+	/// Where `declaration`, a node of a mock root's world built as the property labeled `label`, reads its override, a
+	/// value of `type`: the field of its parent's configuration under its label. Every function is declared in the root's
+	/// body, where it can capture no other function's argument, so a node with a function of its own is handed the value
+	/// as a passed argument named as `mock()`'s own overrides are, which its body reads as the root's reads `mock()`'s; a
+	/// node built in place reads the field where it is built. A function that only the root's body calls, and whose body
+	/// alone reads the value, captures `mock()`'s own overrides instead and takes no argument, as the walk writes it: its
+	/// one parent's configuration is `mock()`'s. A function that hands its overrides to its children keeps the argument,
+	/// since a child built under two parents reads one name in both, and so does a `@Sendable` function, which cannot
+	/// capture the overrides. Each record of a mock root's world takes its override from here, so that no record spells
+	/// the path.
+	/// - Parameters:
+	///   - hasFunction: Whether the node is built in a function of its own.
+	///   - handsOverridesToChildren: Whether the value is a configuration whose fields the node's children read.
+	///   - isSendable: Whether the node's function is `@Sendable`.
 	/// - Returns: The value the node's own construction reads, and what each call of its function hands it.
-	static func mockOverrideSlot(ofNodeLabeled label: String, typed type: TypeDescription, hasFunction: Bool) -> (value: ValuePath, passedArguments: [PassedArgument]) {
+	static func mockOverrideSlot(
+		of declaration: DeclarationID,
+		labeled label: String,
+		typed type: TypeDescription,
+		in world: some NodeRecordSources,
+		hasFunction: Bool,
+		handsOverridesToChildren: Bool,
+		isSendable: Bool,
+	) -> (value: ValuePath, passedArguments: [PassedArgument]) {
 		let field = mockConfigurationField(named: label)
-		if hasFunction {
+		guard hasFunction else { return (field, []) }
+		if !handsOverridesToChildren, !isSendable, world.parents(of: declaration).allSatisfy({ $0.parent == 0 }) {
+			return (.member(label.spelledAsMemberDeclarationName, of: .rootDeclaration(ReservedName.mockOverridesParameterName)), [])
+		} else {
 			// The overrides are not `Sendable`: no call inside a `@Sendable` function hands them on.
 			return (
 				.passedArgument(ReservedName.mockOverridesParameterName),
 				[PassedArgument(parameterName: ReservedName.mockOverridesParameterName, type: type, value: field, staysOutsideSendableFunctions: true)],
 			)
-		} else {
-			return (field, [])
 		}
 	}
 
