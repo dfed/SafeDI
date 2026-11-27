@@ -615,7 +615,6 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		try signatureWriter.write([SeamSignature.Hole.sample(isDistinct: true)])
 		signatureWriter.write([SeamSignature.Builder]())
 		signatureWriter.write([SeamSignature.ScopeEnum]())
-		signatureWriter.write([SeamSignature.CallRoute]())
 		signatureWriter.write(Set<TypeDescription>())
 		let signature: SeamSignature = try read(signatureWriter.encoded)
 		let signatures = try [StoredSeamSignature(seamType: TypeDescription.sample(isDistinct: true), signature: signature), StoredSeamSignature.sample(isDistinct: false)]
@@ -639,10 +638,10 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		// The body `moduleInfoData` wrote of copies of these signatures with every position `nil`, captured when SafeDITool
 		// still made those copies, and captured again when format version 3 moved the signatures into an encoding of their
 		// own; the public mock plans that follow the signatures were added by hand, as were the two fields a cycle re-entry
-		// declaration gained (no called seam, and a place in no further `@Sendable` function), and format version 4 doubled the count of each list of siblings written whole (`writeDifference(of:in:)`). When a hole's field took field flags, the one field these signatures write in full lost seven bytes, its four absent optionals and four false Booleans becoming one byte of flags, and the encoding's length went from 235 to 228. The comparison leaves out the header, whose schema fingerprint every layout change moves.
+		// declaration gained (no called seam, and a place in no further `@Sendable` function), and format version 4 doubled the count of each list of siblings written whole (`writeDifference(of:in:)`). When a hole's field took field flags, the one field these signatures write in full lost seven bytes, its four absent optionals and four false Booleans becoming one byte of flags, and the encoding's length went from 235 to 228. When a signature stopped holding its seam's call routes, the signature these write in full lost the byte of its empty list of them. The comparison leaves out the header, whose schema fingerprint every layout change moves.
 		let bodyWithoutPositions: [UInt8] = [
 			0x02, 0x06, 0x4D, 0x6F, 0x64, 0x75, 0x6C, 0x65, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-			0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x01, 0x01, 0x00, 0x00, 0x00, 0xE6, 0x01, 0x03, 0x00, 0x08,
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x01, 0x01, 0x00, 0x00, 0x00, 0xE5, 0x01, 0x03, 0x00, 0x08,
 			0x64, 0x69, 0x73, 0x74, 0x69, 0x6E, 0x63, 0x74, 0x11, 0x5F, 0x5F, 0x73, 0x61, 0x66, 0x65, 0x44,
 			0x49, 0x5F, 0x64, 0x69, 0x73, 0x74, 0x69, 0x6E, 0x63, 0x74, 0x02, 0x00, 0x01, 0x00, 0x00, 0x01,
 			0x01, 0x01, 0x01, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x01, 0x01, 0x01, 0x01, 0x00, 0x01,
@@ -657,7 +656,7 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 			0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x03, 0x02, 0x02, 0x00, 0x02, 0x02, 0x00, 0x00, 0x00, 0x00,
 			0x02, 0x02, 0x02, 0x02, 0x00, 0x02, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00,
 			0x02, 0x02, 0x00, 0x02, 0x02, 0x01, 0x02, 0x01, 0x00, 0x02, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00,
-			0x00, 0x02, 0x00,
+			0x02, 0x00,
 			// No public mock plans: no mocked type, `compilesGeneratedMocks` false, and an encoding of no plan.
 			0x00, 0x00, 0x02, 0x00, 0x00,
 			// The empty view.
@@ -723,7 +722,6 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		SeamSignature.Hole.RouteStep.InnerScope.self,
 		SeamSignature.Hole.DeclaredProperty.self,
 		SeamSignature.Hole.Site.self,
-		SeamSignature.CallRoute.self,
 		SeamSignature.HoleType.self,
 		SeamSignature.ScopeEnum.self,
 		SeamSignature.ScopeEnum.Key.self,
@@ -3005,7 +3003,6 @@ extension SeamSignature.Hole.RouteStep.Values: BinarySample {}
 extension SeamSignature.Hole.RouteStep.InnerScope: BinarySample {}
 extension SeamSignature.Hole.DeclaredProperty: BinarySample {}
 extension SeamSignature.Hole.Site: BinarySample {}
-extension SeamSignature.CallRoute: BinarySample {}
 extension SeamSignature.HoleType: BinarySample {}
 extension SeamSignature.ScopeEnum: BinarySample {}
 extension SeamSignature.ScopeEnum.Key: BinarySample {}

@@ -1456,7 +1456,7 @@ public struct SeamSignature: Sendable {
 		}
 	}
 
-	public init(seamType: TypeDescription, parameters: [Parameter], tiers: [AccessLevel], noTierParameters: [Parameter] = [], holes: [Hole] = [], builders: [Builder] = [], scopeEnums: [ScopeEnum] = [], callRoutes: [CallRoute] = [], typesDeclaredEscaping: Set<TypeDescription> = []) {
+	public init(seamType: TypeDescription, parameters: [Parameter], tiers: [AccessLevel], noTierParameters: [Parameter] = [], holes: [Hole] = [], builders: [Builder] = [], scopeEnums: [ScopeEnum] = [], typesDeclaredEscaping: Set<TypeDescription> = []) {
 		self.seamType = seamType
 		self.parameters = parameters
 		self.tiers = tiers
@@ -1464,7 +1464,6 @@ public struct SeamSignature: Sendable {
 		self.holes = holes
 		self.builders = builders
 		self.scopeEnums = scopeEnums
-		self.callRoutes = callRoutes
 		self.typesDeclaredEscaping = typesDeclaredEscaping
 		callShape = Self.callShape(parameters: parameters, holes: holes, builders: builders, scopeEnums: scopeEnums, tiers: tiers)
 		guardTypeName = Self.guardTypeName(of: seamType, callShape: callShape)
@@ -1472,8 +1471,10 @@ public struct SeamSignature: Sendable {
 
 	/// How the seam's tree hands an inner seam's enum up from a call whose case is in an enum nested by type: the call's path,
 	/// the inner enum, the cases that lead from the root enum to the call's case, and the values the call's owner binds
-	/// before it, which the closure the call passes builds.
-	public struct CallRoute: Codable, Sendable {
+	/// before it, which the closure the call passes builds. Only the seam's own generation reads a route, never a call, so
+	/// it is no field of a signature, which a module info file stores: the root of the seam's tree holds the seam's routes
+	/// (`ScopeGenerator.SeamRoot.callRoutes`), and neither the call shape nor the guard covers them.
+	public struct CallRoute: Sendable {
 		public init(sitePath: [Property], innerKey: ScopeEnum.Key, rootKey: ScopeEnum.Key, route: [Hole.RouteStep], caseName: String, memberValuesType: TypeDescription? = nil, handsFillLevelStruct: Bool = false, reentersEnclosingFill: Bool = false) {
 			self.sitePath = sitePath
 			self.innerKey = innerKey
@@ -1506,10 +1507,6 @@ public struct SeamSignature: Sendable {
 		/// case of its own (`caseName` is empty) and hands up nothing.
 		public let reentersEnclosingFill: Bool
 	}
-
-	/// How the seam's tree hands each inner seam's enum up from a call whose case is in an enum nested by type. Read by the
-	/// seam's own generation, never by a call, so neither the call shape nor the guard holds it.
-	public let callRoutes: [CallRoute]
 
 	/// The seam's concrete type.
 	public let seamType: TypeDescription
@@ -2130,7 +2127,6 @@ extension SeamSignature: Codable {
 			holes: container.decode([Hole].self, forKey: .holes),
 			builders: container.decode([Builder].self, forKey: .builders),
 			scopeEnums: container.decode([ScopeEnum].self, forKey: .scopeEnums),
-			callRoutes: container.decode([CallRoute].self, forKey: .callRoutes),
 			typesDeclaredEscaping: container.decode(Set<TypeDescription>.self, forKey: .typesDeclaredEscaping),
 		)
 	}
@@ -2144,7 +2140,6 @@ extension SeamSignature: Codable {
 		try container.encode(holes, forKey: .holes)
 		try container.encode(builders, forKey: .builders)
 		try container.encode(scopeEnums, forKey: .scopeEnums)
-		try container.encode(callRoutes, forKey: .callRoutes)
 		try container.encode(typesDeclaredEscaping.sorted(), forKey: .typesDeclaredEscaping)
 	}
 
@@ -2157,7 +2152,6 @@ extension SeamSignature: Codable {
 		case holes
 		case builders
 		case scopeEnums
-		case callRoutes
 		case typesDeclaredEscaping
 	}
 }
