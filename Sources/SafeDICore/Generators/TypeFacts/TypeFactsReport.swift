@@ -363,7 +363,9 @@ public struct TypeFactsReport: Sendable {
 			line += " type \(world.builtType(of: declaration).raw) cycle \(world.cycle(of: declaration)) component \(world.component(of: declaration))"
 			line += world.isOnCycle(declaration) ? " on cycle" : ""
 			line += " route \(world.firstRoute(to: declaration)) edges \(Array(world.edges(from: declaration)))"
-			line += " facts \(world.edgeFacts(from: declaration).count) bindings \(world.bindings(of: declaration).count)"
+			let bindings = world.bindings(of: declaration)
+			// No answer provides a property: what `provides` says of none, by each binding's property.
+			line += " facts \(world.edgeFacts(from: declaration).count) bindings \(bindings.count) none provides \(bindings.contains { world.provides(-1, $0.property) })"
 			line += " parents \(world.parents(of: declaration).count) hole \(world.hole(declaration) != nil) received \(world.received(by: declaration).count)"
 			line += " receives \(world.receives(of: declaration).map { world.acceptedProperties(of: $0).count })"
 			line += " reads [\(world.reads(of: declaration).map { "\(world.read($0).channel.name)" }.joined(separator: ", "))]"
@@ -376,12 +378,22 @@ public struct TypeFactsReport: Sendable {
 			var line = "v\(index) d\(world.declaration(of: variant)) \(world.family(of: variant))"
 			line += " keys [\(world.keys(of: variant).map { "\(world.answer($0).form) \(world.forms(of: $0).count)" }.joined(separator: ", "))]"
 			let calls = world.calls(of: variant)
-			line += " calls \(Array(calls)) sources [\(calls.indices.map { "\(world.sources(ofCall: $0 - calls.startIndex, of: variant).map(\.kind))" }.joined(separator: ", "))]"
+			line += " calls \(Array(calls)) sources [\(calls.indices.map { "\(world.sources(ofCall: $0 - calls.startIndex, of: variant).map { Self.description(of: $0, in: world) })" }.joined(separator: ", "))]"
 			line += world.isCalledOnce(variant) ? " once" : ""
 			line += " outcomes \(world.outcomes(of: variant).map { "\($0)" }) bound before \(Array(world.boundBefore(of: variant)))"
 			lines.append(line)
 		}
 		return lines.joined(separator: "\n")
+	}
+
+	/// A call's source as the projection spells it: its kind, and for a bound answer its form.
+	private static func description(of source: AnswerSource, in world: some TypeFactsWorld) -> String {
+		switch source.kind {
+		case .none, .passedThrough:
+			"\(source.kind)"
+		case .bound:
+			"bound \(world.answer(source.answer).form)"
+		}
 	}
 }
 

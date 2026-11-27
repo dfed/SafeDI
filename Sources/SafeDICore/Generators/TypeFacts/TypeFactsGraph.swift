@@ -746,7 +746,8 @@ struct TypeFactsGraph: Sendable {
 				keyID = Int32(texts.count)
 				answerIDByText[keyText] = keyID
 				texts.append(keyText)
-				isBeingBuilt.append(false)
+				// A constant's key text is its full text, so this entry is the answer itself where the texts are equal.
+				isBeingBuilt.append(text == keyText && beingBuilt)
 				kinds.append(kind)
 				keys.append(keyID)
 			}
