@@ -450,7 +450,16 @@ struct NodeRecords: Sendable {
 			for parameter in cycleParameters(of: variant) {
 				parametersInFunction[parameter.property.label] = parameter
 			}
-			instancePropertiesInFunction[Int(variant)] = applying(parametersInFunction, to: answeringDeclarations.lazilyInstantiatedInstanceProperties(readBy: variant))
+			// Rule 3: a variant keyed with a wrapper where some call passes `nil` takes the optional wrapper, which its own
+			// construction reads through (`theme?.instance`), whichever call resolved it. Its children read their own.
+			var parametersOfConstruction = parametersInFunction
+			let keys = world.keys(of: variant)
+			if keys.contains(TypeFactsGraph.optionalLazilyInstantiatedParameterKey) || keys.contains(TypeFactsGraph.optionalSendableLazilyInstantiatedParameterKey) {
+				for parameter in world.parameters(of: variant, arrivals: arrivals()) where parameter.readsInstanceOfWrapper && parameter.property.typeDescription.isOptional {
+					parametersOfConstruction[parameter.property.label] = parameter
+				}
+			}
+			instancePropertiesInFunction[Int(variant)] = applying(parametersOfConstruction, to: answeringDeclarations.lazilyInstantiatedInstanceProperties(readBy: variant))
 			// A label the place declares is its own children's nearest declaration.
 			for label in Self.labelsDeclared(by: world.declaration(of: variant), in: world) {
 				parametersInFunction[label] = nil
