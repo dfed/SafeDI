@@ -171,6 +171,17 @@ public enum NodeRecordsObservation {
 		return differences
 	}
 
+	/// Whether each argument of `nodeRecords` is `tree`'s, or reads the nearest declaration of its label where `tree`'s,
+	/// the same argument otherwise, reads `nil`.
+	static func differOnlyWhereTreeReadsNilOfLabel(_ tree: [PlaceRead], _ nodeRecords: [PlaceRead]) -> Bool {
+		guard tree.count == nodeRecords.count else { return false }
+		for (treeRead, nodeRecordsRead) in zip(tree, nodeRecords) where treeRead != nodeRecordsRead {
+			let treeReadWithRecordsSource = PlaceRead(argumentLabel: treeRead.argumentLabel, label: treeRead.label, property: treeRead.property, source: .binding(label: treeRead.label), staysOutsideSendableFunctions: treeRead.staysOutsideSendableFunctions)
+			guard treeRead.source == .nil, treeReadWithRecordsSource == nodeRecordsRead else { return false }
+		}
+		return true
+	}
+
 	/// The fields of `nodeRecords` that differ from `tree`'s, children aside.
 	private static func fieldDifferences(between tree: BuiltPlaceRecord, and nodeRecords: BuiltPlaceRecord) -> [String] {
 		var differences = [String]()
@@ -183,7 +194,11 @@ public enum NodeRecordsObservation {
 		compare("concreteType", tree.concreteType, nodeRecords.concreteType)
 		compare("isExtension", tree.isExtension, nodeRecords.isExtension)
 		compare("target", tree.target, nodeRecords.target)
-		compare("arguments", tree.arguments, nodeRecords.arguments)
+		// Where one function serves a call that answers a read only if available and a call that does not, its record
+		// reads the declaration at each argument the tree's place at the second call reads `nil` at, and the two write the
+		// same code, the call passing `nil`: such a difference has a name of its own, which a test may approve where the
+		// two texts are equal. Any other difference of the arguments keeps the plain name.
+		compare(differOnlyWhereTreeReadsNilOfLabel(tree.arguments, nodeRecords.arguments) ? NodeRecordsReport.argumentsOfOptionalParameterDifferenceName : "arguments", tree.arguments, nodeRecords.arguments)
 		compare("forwardedProperties", tree.forwardedProperties, nodeRecords.forwardedProperties)
 		compare("cycleParameters", tree.cycleParameters, nodeRecords.cycleParameters)
 		compare("callCycleArguments", tree.callCycleArguments, nodeRecords.callCycleArguments)
@@ -201,6 +216,11 @@ public enum NodeRecordsObservation {
 
 /// One production root's node records, beside its tree's places (`NodeRecordsObservation`).
 public struct NodeRecordsReport: Sendable {
+	/// The name, in a line of `differences`, of a place's arguments where they differ only as one function with an
+	/// optional parameter makes them differ: the tree's place reads `nil` where the records read the nearest declaration
+	/// of the argument's label.
+	public static let argumentsOfOptionalParameterDifferenceName = "arguments of an optional parameter"
+
 	/// The root's concrete type.
 	public let root: String
 	/// Why node records refused the root's world (`NodeRecordRefusal`), or `nil` where they made its records.

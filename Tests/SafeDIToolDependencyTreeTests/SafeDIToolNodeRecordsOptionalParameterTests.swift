@@ -19,8 +19,8 @@
 // SOFTWARE.
 
 import Foundation
-import SafeDICore
 import Testing
+@testable import SafeDICore
 @testable import SafeDIToolLibrary
 @testable import SafeDIToolTestSupport
 
@@ -103,6 +103,74 @@ struct SafeDIToolNodeRecordsOptionalParameterTests: ~Copyable {
 		#expect(reports.map(\.refusal) == [nil])
 		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
 		#expect(output.dependencyTreeFiles == treeOutput.dependencyTreeFiles)
+	}
+
+	@Test(arguments: [
+		"root.a.viewModel: arguments is [] in the tree, [] by node records",
+		"root.a.viewModel: callCycleArguments is [] in the tree, [] by node records",
+	])
+	func outcome_failsRootsDifferences_whenItsTextsAreEqualAndADifferenceIsNoOptionalParameters(difference: String) {
+		// Beside a difference the optional parameter makes, any other difference of the arguments or of another field fails
+		// the root, though its two texts are equal.
+		var report = NodeRecordsReport(root: "Root", refusal: nil, everyRefusal: [], isLaidOutFromNodeRecords: true, differences: ["root.b.viewModel: arguments of an optional parameter is [] in the tree, [] by node records", difference], recordCount: 2, treePlaceCount: 2, treeForcers: [])
+		report.comparedTexts = NodeRecordsComparedTexts(tree: "text", nodeRecords: "text")
+		let outcome = NodeRecordsChecks.outcome(of: report)
+		#expect(outcome.differences == report.differences)
+		#expect(outcome.approvedEntries == [])
+	}
+
+	@Test
+	func outcome_failsNoDifference_whenItsTextsAreEqualAndEveryDifferenceIsAnOptionalParameters() {
+		var report = NodeRecordsReport(root: "Root", refusal: nil, everyRefusal: [], isLaidOutFromNodeRecords: true, differences: ["root.b.viewModel: arguments of an optional parameter is [] in the tree, [] by node records"], recordCount: 2, treePlaceCount: 2, treeForcers: [])
+		report.comparedTexts = NodeRecordsComparedTexts(tree: "text", nodeRecords: "text")
+		let outcome = NodeRecordsChecks.outcome(of: report)
+		#expect(outcome.differences == [])
+		#expect(outcome.approvedEntries == [])
+	}
+
+	/// What the records read where the tree reads `nil` of `mark`, with whether the comparison names the difference an
+	/// optional parameter's.
+	enum RecordsArguments: CaseIterable {
+		case theSame
+		case declarationOfTheLabel
+		case declarationOfAnotherLabel
+		case lazyInstanceOfTheLabel
+		case anotherArgumentLabel
+		case oneArgumentMore
+		case noArgument
+
+		var isOfAnOptionalParameter: Bool {
+			switch self {
+			case .theSame, .declarationOfTheLabel:
+				true
+			case .declarationOfAnotherLabel, .lazyInstanceOfTheLabel, .anotherArgumentLabel, .oneArgumentMore, .noArgument:
+				false
+			}
+		}
+	}
+
+	@Test(arguments: RecordsArguments.allCases)
+	func differOnlyWhereTreeReadsNilOfLabel_namesOnlyTheDeclarationOfTheLabelReadWhereTheTreeReadsNil(recordsArguments: RecordsArguments) {
+		let property = Property(label: "mark", typeDescription: .optional(.simple(name: "Mark")))
+		let unchanged = PlaceRead(argumentLabel: "name", label: "name", property: Property(label: "name", typeDescription: .simple(name: "Name")), source: .binding(label: "name"))
+		let tree = [unchanged, PlaceRead(argumentLabel: "mark", label: "mark", property: property, source: .nil)]
+		let nodeRecords: [PlaceRead] = switch recordsArguments {
+		case .theSame:
+			tree
+		case .declarationOfTheLabel:
+			[unchanged, PlaceRead(argumentLabel: "mark", label: "mark", property: property, source: .binding(label: "mark"))]
+		case .declarationOfAnotherLabel:
+			[unchanged, PlaceRead(argumentLabel: "mark", label: "mark", property: property, source: .binding(label: "name"))]
+		case .lazyInstanceOfTheLabel:
+			[unchanged, PlaceRead(argumentLabel: "mark", label: "mark", property: property, source: .lazyInstance(label: "mark", throughOptional: false))]
+		case .anotherArgumentLabel:
+			[unchanged, PlaceRead(argumentLabel: "other", label: "mark", property: property, source: .binding(label: "mark"))]
+		case .oneArgumentMore:
+			tree + [PlaceRead(argumentLabel: "mark", label: "mark", property: property, source: .binding(label: "mark"))]
+		case .noArgument:
+			[]
+		}
+		#expect(NodeRecordsObservation.differOnlyWhereTreeReadsNilOfLabel(tree, nodeRecords) == recordsArguments.isOfAnOptionalParameter)
 	}
 
 	@Test(arguments: ShapeRefused.allCases)
