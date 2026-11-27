@@ -728,6 +728,16 @@ struct TypeFactsGraph: Sendable {
 		}
 	}
 
+	/// Whether a declaration of this kind is a twin of a cycle identity: a value or a lazy wrapper of its label.
+	private static func isTwin(_ kind: Property.PropertyType) -> Bool {
+		switch kind {
+		case .constant, .lazilyInstantiated, .sendableLazilyInstantiated:
+			true
+		case .instantiator, .sendableInstantiator, .erasedInstantiator, .sendableErasedInstantiator:
+			false
+		}
+	}
+
 	/// What answers each read at each edge, by value: a node answers a read of a label with the forms of the last of its
 	/// bindings of that label bound before the edge (`bindingsBefore`), and the edge's child answers its own label as
 	/// the property it is built as, being built. Interned at the edge, where the graph is built from the table; the
@@ -814,8 +824,19 @@ struct TypeFactsGraph: Sendable {
 				let kind = declaration.property.propertyType
 				let declarationForms = declaration.forms
 				let text = "\(read.channel.name) \(declarationForms)\(beingBuilt ? " being built" : "")"
-				// Rule 2: a wrapper still being built is passed and made again at the call, so it keys as the wrapper.
-				let keyText = kind.isConstant ? text : "\(read.channel.name) \(declarationForms)"
+				// Rule 3, case 2: a value, `LazilyInstantiated` or `SendableLazilyInstantiated` being built is one cycle
+				// identity whichever twin the path entered, which 2.4.0 builds in one function and passes no parameter. The
+				// key names the label alone, not the type and label a cycle identity names elsewhere: a node declares a label
+				// once, and a being-built answer gives no parameter whose type could tell two keys apart.
+				let keyText: String
+				if beingBuilt, isTwin(kind) {
+					keyText = "\(read.channel.name) twin \(bound.label) being built"
+				} else if kind.isConstant {
+					keyText = text
+				} else {
+					// Rule 2: a wrapper still being built is passed and made again at the call, so it keys as the wrapper.
+					keyText = "\(read.channel.name) \(declarationForms)"
+				}
 				return VariantBinding(answer: answer(text: text, beingBuilt: beingBuilt, keyText: keyText, kind: kind), declaration: Int32(node))
 			},
 			// Production bodies have one variant, `@Sendable` a mark folded over call edges; the family a seam's cases,
@@ -824,8 +845,13 @@ struct TypeFactsGraph: Sendable {
 			key: { readID, answer in
 				switch readTable[Int(readID)].channel {
 				case .optional, .optionalValue:
-					// Rule 1.
-					optionalParameterKey(of: answer < 0 ? nil : kinds[Int(answer)])
+					if answer >= 0, isBeingBuilt[Int(answer)], isTwin(kinds[Int(answer)]) {
+						// Rule 3, case 2: rule 1 keys only answers that are not being built.
+						keys[Int(answer)]
+					} else {
+						// Rule 1.
+						optionalParameterKey(of: answer < 0 ? nil : kinds[Int(answer)])
+					}
 				case .value, .alias, .madeAgain, .mock, .carrier, .fill, .family, .override:
 					answer < 0 ? answer : keys[Int(answer)]
 				}
