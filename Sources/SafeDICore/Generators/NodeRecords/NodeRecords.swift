@@ -334,6 +334,12 @@ struct NodeRecords: Sendable {
 				built.passedArguments.append(level)
 				record = .built(built)
 			}
+			// A member of a mock root's loop of builders that nothing outside its loop reads has its function declared and its
+			// wrapper bound nowhere, as the walk writes it (`ScopeGenerator.loopMembersReadOnlyInsideTheirLoop`).
+			if case var .built(built) = record, world.parents(of: declaration).contains(where: { $0.parent == 0 }), world.mockRootNames.loopMembersBoundNowhere.contains(built.property) {
+				built.declaresOnlyItsFunction = true
+				record = .built(built)
+			}
 			let place: GeneratedCode = switch record {
 			case let .alias(aliasRecord):
 				// A place written as text: the engine copies it as written. A property nothing fulfills that `mock()` binds

@@ -62,7 +62,11 @@ struct MockRootNames: Sendable {
 	///   - wrapperBindingNames: The name `mock()` binds each lazy wrapper under that it makes of an instance it takes, by the
 	///     wrapper's label and then type (`MockLowering.RootSignature.lazilyInstantiatedBindingNamesByLabelAndType`), which
 	///     every receive of the wrapper is passed by name.
-	init(namesApart: [String: [TypeDescription: String]] = [:], unavailableDependencyOverrides: [(property: Property, name: String)] = [], passedUpBuilderNames: [Property: String] = [:], uncoveredParameterNames: [Property: String] = [:], edgesConfigurationsLeaveOut: Set<ScopeGenerator.CycleEdge> = [], placeBuilderBindings: [Property: MockPlaceBuilderBinding] = [:], wrapperBindingNames: [String: [TypeDescription: String]] = [:]) {
+	///   - loopMembersBoundNowhere: The members of the root's loops of builders that nothing outside their loop reads,
+	///     whose function the root declares and whose wrapper it binds nowhere, as the walk writes them
+	///     (`ScopeGenerator.loopMembersReadOnlyInsideTheirLoop`).
+	init(namesApart: [String: [TypeDescription: String]] = [:], unavailableDependencyOverrides: [(property: Property, name: String)] = [], passedUpBuilderNames: [Property: String] = [:], uncoveredParameterNames: [Property: String] = [:], edgesConfigurationsLeaveOut: Set<ScopeGenerator.CycleEdge> = [], placeBuilderBindings: [Property: MockPlaceBuilderBinding] = [:], wrapperBindingNames: [String: [TypeDescription: String]] = [:], loopMembersBoundNowhere: Set<Property> = []) {
+		self.loopMembersBoundNowhere = loopMembersBoundNowhere
 		self.namesApart = namesApart
 		self.edgesConfigurationsLeaveOut = edgesConfigurationsLeaveOut
 		self.placeBuilderBindings = placeBuilderBindings
@@ -71,6 +75,9 @@ struct MockRootNames: Sendable {
 		self.uncoveredParameterNames = uncoveredParameterNames
 		unavailableDependencyOverrideNames = Dictionary(unavailableDependencyOverrides.map { ($0.property, $0.name) }) { first, _ in first }
 	}
+
+	/// The members of the root's loops of builders whose wrapper the root binds nowhere (`init`'s `loopMembersBoundNowhere`).
+	let loopMembersBoundNowhere: Set<Property>
 
 	/// The name the mock root binds `property` under where it names it apart from a sibling of its label, and `nil`
 	/// where the root binds the property under its label or does not bind it.
