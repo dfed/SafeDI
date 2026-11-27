@@ -624,6 +624,8 @@ extension MockLowering {
 		/// The places around the walk, by their properties' labels, nearest last, with the closers beneath each that close on
 		/// it, whose records take the configuration the place is handed once it is known (`MockLowering+ClosersAndDefaults.swift`).
 		var closedOnPlacesByLabel = [String: [ClosedOnPlace]]()
+		/// The path of the place each closer closes on, by the closer's path (`leaveClosedOnPlace(of:readsOverride:)`).
+		var closedOnPathByCloserPath = [[Int]: [Int]]()
 		/// The field of each closer's parent's configuration named as the closer is bound, read where the closer's call is
 		/// made, by the closer's path, where its parent reads a configuration: a built place of its type and label hands it
 		/// that field, and the closer hands it the same where no place of its type is above.

@@ -73,8 +73,10 @@ extension MockLowering.Walk {
 
 	/// The configuration of each member of a loop of builders whose function the walk recorded, by its path, as
 	/// `rebindingCodes(of:…)` and `handLevelConfiguration(of:toBuiltPlaceAt:)` hand it. A member is left out where the walk
-	/// recorded no function for it, such as a call of another module's public mock, or where its level's configuration has
-	/// no field for it, and so is every member a closer of whose closes on one left out: its place keeps the walk's body.
+	/// recorded no function for it, such as a call of another module's public mock, where its level's configuration has
+	/// no field for it, or where its function takes more than its own configuration and a cycle's closer beneath another
+	/// function closes on it, and so is every member a closer of whose closes on one left out: its place keeps the walk's
+	/// body.
 	mutating func loopMemberConfigurations() -> [[Int]: MockLowering.LoopMemberConfiguration] {
 		guard !loopRebindings.isEmpty else { return [:] }
 		var memberPaths = Set<[Int]>()
@@ -154,6 +156,14 @@ extension MockLowering.Walk {
 				configurations[path]?.level = nil
 				configurations[path]?.handsMembers = true
 				configurations[path]?.reachedPaths = reached[path, default: []].sorted { $0.lexicographicallyPrecedes($1) }
+			}
+		}
+		// A cycle's closer at the top of a member's own function hands that function what it takes beside its own
+		// configuration from its own parameters (`argumentsHandedToItself(among:)`). A closer beneath another function takes
+		// none of them, so a member such a closer closes on is left out where its function takes any.
+		for (closerPath, closedOnPath) in closedOnPathByCloserPath where Array(closerPath.dropLast()) != closedOnPath {
+			if let configuration = configurations[closedOnPath], configuration.level != nil || !configuration.reachedPaths.isEmpty {
+				configurations[closedOnPath] = nil
 			}
 		}
 		// A member a closer of whose closes on a member left out is left out too.
@@ -254,6 +264,18 @@ extension MockLowering {
 				arguments.append(PassedArgument(parameterName: reached.memberParameterName, type: reached.own.type, value: handedValue(path, reached), staysOutsideSendableFunctions: reached.own.staysOutsideSendableFunctions))
 			}
 			return arguments
+		}
+
+		/// What a cycle's closer at the top of the member's own function at `memberPath` hands that function beside its own
+		/// configuration: each configuration the function takes beside its own, read from its own parameter of it.
+		func argumentsHandedToItself(at memberPath: [Int], among configurations: [[Int]: LoopMemberConfiguration]) -> [PassedArgument] {
+			if handsMembers {
+				Array(arguments(at: memberPath, among: configurations) { _, handed in .passedArgument(handed.memberParameterName) }.dropFirst())
+			} else if let level {
+				Array(arguments(readingLevelAt: .passedArgument(level.parameterName)).dropFirst())
+			} else {
+				[]
+			}
 		}
 
 		/// The passed arguments a closer hands the member's function where the level's configuration reads `levelRead`.

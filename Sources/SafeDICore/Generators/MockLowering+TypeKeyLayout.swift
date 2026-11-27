@@ -208,6 +208,13 @@ extension MockLowering.Walk {
 				closerAndDefaultRecords[path] = .closer(record)
 				closerParentFieldReads[path] = nil
 			}
+			// A closer at the top of a loop member's own function hands it what it takes beside its own configuration.
+			if let closedOnPath = closedOnPathByCloserPath[path], Array(path.dropLast()) == closedOnPath,
+			   let configuration = loopConfigurations[closedOnPath], case var .closer(record)? = closerAndDefaultRecords[path], !record.passedArguments.isEmpty
+			{
+				record.passedArguments.insert(contentsOf: configuration.argumentsHandedToItself(at: closedOnPath, among: loopConfigurations), at: 1)
+				closerAndDefaultRecords[path] = .closer(record)
+			}
 			guard let call = builtPlaceCalls[path] else { continue }
 			guard !pathsNamedApart.contains(path) else {
 				unrecordedReasons[path] = "namedApart"

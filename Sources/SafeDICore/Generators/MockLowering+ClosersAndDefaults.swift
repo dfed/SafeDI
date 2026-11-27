@@ -65,7 +65,11 @@ extension MockLowering.Walk {
 	/// its override closure, read where the place reads its override (`readsOverride`). A public mock's places take another
 	/// configuration, which its own records hand.
 	mutating func leaveClosedOnPlace(of node: MockLowering.ConstantNode, readsOverride: Bool) {
-		guard let place = closedOnPlacesByLabel[node.property.label]?.popLast(), !place.closerPaths.isEmpty, !buildsPublicMock else { return }
+		guard let place = closedOnPlacesByLabel[node.property.label]?.popLast(), !place.closerPaths.isEmpty else { return }
+		for closerPath in place.closerPaths {
+			closedOnPathByCloserPath[closerPath] = childIndexPath
+		}
+		guard !buildsPublicMock else { return }
 		let configurationType = MockLowering.configurationType(of: node.configuration)
 		// A place a closer beneath closes on has a child, so it has a configuration struct, which crosses into a `@Sendable`
 		// function only in its `Sendable` form.

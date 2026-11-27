@@ -144,6 +144,61 @@ struct SafeDIToolMockTypeKeyLoopValueTests: ~Copyable {
 		])
 	}
 
+	@Test
+	mutating func mock_compilesAndBuildsWalksValues_whenCycleClosesOnLoopMemberThatTakesOtherMembersConfigurations() async throws {
+		// `T2` and the `T5` behind `anyT5Builder` receive each other's `Sendable` builders, so each member's function takes the
+		// other's configuration, and `T2` also builds itself: the closer of that cycle calls `T2`'s function with its own
+		// configuration only, so `T2`'s place keeps the walk's body.
+		let fixtureFiles = [
+			"Root.swift": Self.type("Root", generateMock: true, conformances: ", Sendable", properties: [
+				"@Instantiated let t2Builder: SendableInstantiator<T2>",
+				#"@Instantiated(fulfilledByType: "T5", erasedToConcreteExistential: true) let anyT5Builder: SendableErasedInstantiator<(), AnyT5>"#,
+			]),
+			"T2.swift": Self.type("T2", conformances: ", Sendable", properties: [
+				"@Instantiated let t2Builder: SendableInstantiator<T2>",
+				"@Received(onlyIfAvailable: true) let anyT5Builder: SendableErasedInstantiator<(), AnyT5>?",
+			]),
+			"T5.swift": Self.type("T5", conformances: ", Sendable", properties: ["@Received let t2Builder: SendableInstantiator<T2>"]),
+			"AnyT5.swift": """
+			public final class AnyT5: Sendable {
+			    public init(_ value: T5) {
+			        self.value = value
+			    }
+
+			    public let value: T5
+			}
+			""",
+		]
+		let mocks = try await generatedMocks(of: fixtureFiles)
+
+		#expect(mocks.outcomes == ["Root: laidOut"])
+		try await expectLaidOutValuesEqualWalks(mocks, fixtureFiles: fixtureFiles, probes: [
+			DifferentialValueProbe("Root.mock().t2Builder.instantiate().t2Builder.instantiate().anyT5Builder?.instantiate().value.t2Builder.instantiate().anyT5Builder != nil"),
+			DifferentialValueProbe("Root.mock().anyT5Builder.instantiate().value.t2Builder.instantiate().t2Builder.instantiate().anyT5Builder != nil"),
+		])
+	}
+
+	@Test(arguments: [("Instantiator", true), ("Instantiator", false), ("SendableInstantiator", false)])
+	mutating func mock_handsLoopMemberWhatItTakes_whenCycleClosesOnMemberAtTopOfItsOwnFunction(wrapper: String, levelIsRoot: Bool) async throws {
+		// `A` and `B` receive each other's builders, and `A` builds itself again: the closer of that cycle, at the top of
+		// `A`'s function, hands that function what it takes beside its own configuration from its own parameters.
+		let fixtureFiles = Self.loopWhoseMemberBuildsItself(wrapper: wrapper, levelIsRoot: levelIsRoot, closesThroughChild: false)
+		let mocks = try await generatedMocks(of: fixtureFiles)
+
+		#expect(mocks.outcomes == ["Root: laidOut"])
+		try await expectLaidOutValuesEqualWalks(mocks, fixtureFiles: fixtureFiles, probes: Self.probesOfLoopWhoseMemberBuildsItself(levelIsRoot: levelIsRoot, closesThroughChild: false))
+	}
+
+	@Test(arguments: [("Instantiator", false), ("SendableInstantiator", true)])
+	mutating func mock_keepsWalksBody_whenCycleClosesOnLoopMemberBeneathAnotherFunction(wrapper: String, levelIsRoot: Bool) async throws {
+		// `A`'s `X` builds `A` again: the closer of that cycle is in `X`'s function, which takes nothing of `A`'s loop.
+		let fixtureFiles = Self.loopWhoseMemberBuildsItself(wrapper: wrapper, levelIsRoot: levelIsRoot, closesThroughChild: true)
+		let mocks = try await generatedMocks(of: fixtureFiles)
+
+		#expect(mocks.outcomes == ["Root: unrecorded:loopMemberUnrecorded"])
+		try await expectLaidOutValuesEqualWalks(mocks, fixtureFiles: fixtureFiles, probes: Self.probesOfLoopWhoseMemberBuildsItself(levelIsRoot: levelIsRoot, closesThroughChild: true))
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -183,6 +238,49 @@ struct SafeDIToolMockTypeKeyLoopValueTests: ~Copyable {
 			    let value: Int
 			}
 			""",
+		]
+	}
+
+	/// `Root`, or the `P` it builds, declares `aBuilder` and `bBuilder`, of `wrapper`, which receive each other. `A` builds
+	/// itself again through its own `aBuilder`, or through the `aBuilder` of an `X` it builds, and a `Leaf`, whose `value`
+	/// defaults to 3.
+	private static func loopWhoseMemberBuildsItself(wrapper: String, levelIsRoot: Bool, closesThroughChild: Bool) -> [String: String] {
+		let conformances = wrapper.hasPrefix("Sendable") ? ", Sendable" : ""
+		let members = ["@Instantiated let aBuilder: \(wrapper)<A>", "@Instantiated let bBuilder: \(wrapper)<B>"]
+		var files = [
+			"Root.swift": type("Root", generateMock: true, conformances: conformances, properties: levelIsRoot ? members : ["@Instantiated let p: P"]),
+			"A.swift": type("A", conformances: conformances, properties: ["@Received let bBuilder: \(wrapper)<B>", closesThroughChild ? "@Instantiated let x: X" : "@Instantiated let aBuilder: \(wrapper)<A>", "@Instantiated let leaf: Leaf"]),
+			"B.swift": type("B", conformances: conformances, properties: ["@Received let aBuilder: \(wrapper)<A>"]),
+			"Leaf.swift": """
+			@Instantiable
+			public final class Leaf: Instantiable\(conformances) {
+			    public init(value: Int = 3) {
+			        self.value = value
+			    }
+
+			    let value: Int
+			}
+			""",
+		]
+		if !levelIsRoot {
+			files["P.swift"] = type("P", conformances: conformances, properties: members)
+		}
+		if closesThroughChild {
+			files["X.swift"] = type("X", conformances: conformances, properties: ["@Instantiated let aBuilder: \(wrapper)<A>"])
+		}
+		return files
+	}
+
+	/// Probes of `loopWhoseMemberBuildsItself(wrapper:levelIsRoot:closesThroughChild:)` with an override of the `Leaf`
+	/// beneath the level's `aBuilder`, on the first turn and on later ones.
+	private static func probesOfLoopWhoseMemberBuildsItself(levelIsRoot: Bool, closesThroughChild: Bool) -> [DifferentialValueProbe] {
+		let level = levelIsRoot ? "Root.mock(safeDIOverrides: .init(aBuilder: .init(leaf: .init(value: 7))))" : "Root.mock(safeDIOverrides: .init(p: .init(aBuilder: .init(leaf: .init(value: 7))))).p"
+		let again = closesThroughChild ? "x.aBuilder" : "aBuilder"
+		return [
+			DifferentialValueProbe("\(level).aBuilder.instantiate().leaf.value"),
+			DifferentialValueProbe("\(level).aBuilder.instantiate().\(again).instantiate().leaf.value"),
+			DifferentialValueProbe("\(level).bBuilder.instantiate().aBuilder.instantiate().\(again).instantiate().bBuilder.instantiate().aBuilder.instantiate().leaf.value"),
+			DifferentialValueProbe("\(level).aBuilder.instantiate().\(again).instantiate().\(again).instantiate().bBuilder.instantiate().aBuilder.instantiate().leaf.value"),
 		]
 	}
 
