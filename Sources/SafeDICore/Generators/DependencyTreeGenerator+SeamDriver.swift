@@ -1579,11 +1579,17 @@ extension DependencyTreeGenerator {
 		// Which labels each fill reads only if available, once every scope's tree is complete, for a place whose fields hold a
 		// `LazilyInstantiated`: a fill takes such a wrapper optionally where the caller hands it
 		// (`Scope.Fill.optionalLazilyInstantiatedLabels`). No other fill's parameters depend on it, so no other fill is walked.
-		// The walk enters the fills of the seam calls inside the fulfilling type's tree, which receive from the fill's scope as
-		// the fill's tree does.
+		// A call handed one place per case holds the case's other routes only in its place graph, where a route the handed place
+		// is not on can hold the wrapper the case's fill takes: such a call's every fill is walked where any level of the graph
+		// declares a wrapper. The walk enters the fills of the seam calls inside the fulfilling type's tree, which receive from
+		// the fill's scope as the fill's tree does.
 		var receivedPropertiesCache = ReceivedPropertiesCache(walksSeamCallFills: true)
-		for scope in scopes where scope.seamCall != nil {
-			for case let .fill(hole, fulfillingScope) in scope.holeArguments where hole.fields.contains(where: { $0.property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding != nil }) {
+		for scope in scopes {
+			guard let places = scope.seamCall?.calledBuilders.places else { continue }
+			let placesDeclareWrapper = places.levels.indices.contains { level in
+				places.declarations(ofLevel: level).contains { $0.field.property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding != nil }
+			}
+			for case let .fill(hole, fulfillingScope) in scope.holeArguments where placesDeclareWrapper || hole.fields.contains(where: { $0.property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding != nil }) {
 				let received = Self.collectReceivedProperties(from: fulfillingScope, cache: &receivedPropertiesCache)
 				let requiredLabels = Set(received.received.subtracting(received.onlyIfAvailable).map(\.label))
 				scope.fillLabelsReadOnlyIfAvailable[hole.site] = Set(received.received.map(\.label)).subtracting(requiredLabels)

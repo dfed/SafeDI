@@ -152,6 +152,7 @@ extension DependencyTreeGenerator {
 			let label: String
 			let suffixTypes: [TypeDescription]
 		}
+		let (passedUpNamingCandidates, namingCandidateByPassedUpHole) = Self.namingCandidates(amongPassedUpHoles: passedUpHoles.map(\.hole))
 		let candidates = siteContents.map { content in
 			Candidate(
 				label: "\(content.site.property.label)Builder".spelledAsJoinedIdentifier,
@@ -162,8 +163,9 @@ extension DependencyTreeGenerator {
 					.simple(name: content.site.pathLabels, generics: []),
 				],
 			)
-		} + passedUpHoles.map { passedUp in
-			Candidate(
+		} + passedUpNamingCandidates.map { passedUpIndex in
+			let passedUp = passedUpHoles[passedUpIndex]
+			return Candidate(
 				label: passedUp.hole.builderLabel,
 				suffixTypes: [
 					passedUp.hole.ownerType,
@@ -439,7 +441,7 @@ extension DependencyTreeGenerator {
 			}
 		}
 		for (offset, passedUp) in passedUpHoles.enumerated() {
-			let builderLabel = builderLabels[siteContents.count + offset]
+			let builderLabel = builderLabels[siteContents.count + namingCandidateByPassedUpHole[offset]]
 			let inner = passedUp.hole
 			let builderAccess = accessOfBuilder(passingUp: inner)
 			var passedUpHole = SeamSignature.Hole(
@@ -701,6 +703,36 @@ extension DependencyTreeGenerator {
 		} else {
 			.other
 		}
+	}
+
+	/// The passed-up holes that name this seam's builders for the places it passes up, as indices into `passedUpHoles`, and,
+	/// by each passed-up hole, the index among those candidates of the one whose name its builder takes.
+	///
+	/// RULING OPEN (lead, 2026-11-26): one candidate per case of the called seam, the first hole of each case
+	/// (`ScopeGenerator.fillCaseKey(of:)`), so a label is named apart only from builders of other cases, whatever number of
+	/// places the called seam hands, and a run that is handed one place per case names as one handed every place. Main
+	/// names apart one candidate per place: that body returns every index for both lists. A swap is an edit of this
+	/// function alone.
+	private static func namingCandidates(amongPassedUpHoles passedUpHoles: [SeamSignature.Hole]) -> (candidates: [Int], candidateByHole: [Int]) {
+		var candidates = [Int]()
+		var candidateByCaseKey = [String: Int]()
+		var candidateByHole = [Int]()
+		for (index, hole) in passedUpHoles.enumerated() {
+			guard hole.enumPlace != nil else {
+				candidateByHole.append(candidates.count)
+				candidates.append(index)
+				continue
+			}
+			let caseKey = ScopeGenerator.fillCaseKey(of: hole)
+			if let candidate = candidateByCaseKey[caseKey] {
+				candidateByHole.append(candidate)
+			} else {
+				candidateByCaseKey[caseKey] = candidates.count
+				candidateByHole.append(candidates.count)
+				candidates.append(index)
+			}
+		}
+		return (candidates, candidateByHole)
 	}
 
 	/// The holes of the seams the tree `generator` roots calls whose builders it passes up, one per site whatever route
@@ -2456,16 +2488,36 @@ extension DependencyTreeGenerator {
 		let hidden: FillReentryHidings
 	}
 
-	/// EXPERIMENT: the places of each case of one call judged by the call's place graph: the tree of the case's emitting fill
-	/// (`ScopeGenerator.fillJudgementTree`, else the fill) once per label it reads and per joint value the case's routes read
-	/// of that label (`SeamSignature.Places.Query.labelVariants(ofLabel:at:)`), each against the emitting place with that
-	/// label's facts and naming route the variant's. A cycle a fill closes on the seam's path is judged per place still. A
-	/// case some of whose places have no graph case, and every case of a call with no graph, is judged per label by place.
+	/// EXPERIMENT: the places of each case of one call judged by the place graph of the seam whose tree holds them
+	/// (`CalledBuilders.holdingCase(ofSite:in:)`), the call's own for a case of the called seam's own places: the tree of the
+	/// case's emitting fill (`ScopeGenerator.fillJudgementTree`, else the fill) once per label it reads and per joint value the
+	/// case's routes read of that label (`SeamSignature.Places.Query.labelVariants(ofLabel:at:)`), each against the emitting
+	/// place with that label's facts and naming route the variant's. A cycle a fill closes on the seam's path is judged by the
+	/// graph's depths for a case of the called seam's own places, and at each place for a place the call passes up, whose
+	/// path runs through the seams that pass it up. A case some of whose places have no holding case, and every case of a call
+	/// with no graph, is judged per label by place.
 	private static func caseJudgement(of entries: [CaseJudgementEntry], call: ScopeGenerator, callerModule: ModuleIdentity, compilesGeneratedMocks: Bool, seamTreeReceives: inout SeamTreeReceives) -> [DependencyTreeGeneratorError.FillFinding] {
 		guard let calledBuilders = call.calledBuilders, !calledBuilders.places.cases.isEmpty else {
 			return placeCaseJudgement(of: entries, call: call, callerModule: callerModule, compilesGeneratedMocks: compilesGeneratedMocks, seamTreeReceives: &seamTreeReceives)
 		}
-		let query = SeamSignature.Places.Query(of: calledBuilders.places)
+		let callQuery = calledBuilders.placesQuery
+		// The first site of the call's places of each case, in the call's graph and in the graph of the seam whose tree holds
+		// the place, found the first time a declaration's buildability asks.
+		var siteByHoldingCase: [HoldingCaseKey: SeamSignature.Hole.Site]?
+		func site(ofCase holding: SeamSignature.Places.Query.ResolvedCase) -> SeamSignature.Hole.Site? {
+			if siteByHoldingCase == nil {
+				var sites = [HoldingCaseKey: SeamSignature.Hole.Site]()
+				for hole in calledBuilders.holes {
+					guard let caseIndex = calledBuilders.caseIndexBySite[hole.site] else { continue }
+					let keys = [HoldingCaseKey(graph: ObjectIdentifier(callQuery), caseIndex: caseIndex)] + [calledBuilders.holdingCase(ofSite: hole.site, in: callQuery).map(HoldingCaseKey.init)].compactMap(\.self)
+					for key in keys where sites[key] == nil {
+						sites[key] = hole.site
+					}
+				}
+				siteByHoldingCase = sites
+			}
+			return siteByHoldingCase?[HoldingCaseKey(holding)]
+		}
 		var groupKeys = [String]()
 		var groups = [String: [CaseJudgementEntry]]()
 		for (index, entry) in entries.enumerated() {
@@ -2478,21 +2530,35 @@ extension DependencyTreeGenerator {
 		var findings = [DependencyTreeGeneratorError.FillFinding]()
 		for key in groupKeys {
 			guard let group = groups[key] else { continue }
-			var caseIndices = [Int]()
-			for entry in group {
-				if let caseIndex = calledBuilders.ownCaseIndex(ofSite: entry.hole.site), !caseIndices.contains(caseIndex) {
-					caseIndices.append(caseIndex)
-				}
-			}
-			guard !caseIndices.isEmpty, group.allSatisfy({ calledBuilders.ownCaseIndex(ofSite: $0.hole.site) != nil }) else {
+			// Every place of a case is held by one seam's tree, whose graph answers them all.
+			guard let holdingCases = calledBuilders.holdingCases(ofSites: group.map(\.hole.site), in: callQuery),
+			      let query = holdingCases.first?.query,
+			      holdingCases.allSatisfy({ $0.query === query })
+			else {
 				findings += placeCaseJudgement(of: group, call: call, callerModule: callerModule, compilesGeneratedMocks: compilesGeneratedMocks, seamTreeReceives: &seamTreeReceives)
 				continue
 			}
+			let caseIndices = holdingCases.map(\.caseIndex)
+			let isPassedUp = query !== callQuery
 			guard let emitting = group.first(where: { $0.fill.fillEmitsCode }) ?? group.first, let child = (emitting.fill.fillJudgementTree ?? emitting.fill).children.first else { continue }
-			let reads = FillTreeReads(walking: child, recordsOpenScopes: true)
+			let reads = FillTreeReads(walking: child, recordsOpenScopes: !isPassedUp)
 			// The case's own place names its builder, of its own family.
 			func casePlace(at caseIndex: Int) -> SeamSignature.Hole {
-				group.first { calledBuilders.ownCaseIndex(ofSite: $0.hole.site) == caseIndex }?.hole ?? emitting.hole
+				group.first { calledBuilders.holdingCase(ofSite: $0.hole.site, in: callQuery)?.caseIndex == caseIndex }?.hole ?? emitting.hole
+			}
+			// A cycle a fill of a place the call passes up closes is judged at each place, whose path runs through the seams that
+			// pass it up, past the graph of the seam whose tree holds it.
+			if isPassedUp {
+				for entry in group {
+					guard let entryChild = entry.fill.children.first else { continue }
+					findings += findingsOfFill(of: entry.hole, fill: entry.fill, reads: FillTreeReads(walking: entryChild).keeping {
+						if case .closer = $0 {
+							true
+						} else {
+							false
+						}
+					}, call: call, hidden: entry.hidden, requirement: AccessLevel.required(toConstructFrom: callerModule, declaredIn: entry.hole.scopeSeamModule, isOwnFile: false), callerModule: callerModule, compilesGeneratedMocks: compilesGeneratedMocks, seamTreeReceives: &seamTreeReceives)
+				}
 			}
 			// The entries of the seam's path a scope of the fill closes a cycle on where a route's path holds one: its property
 			// as cycle validation sees it, built for its type, in each form a path stacks it in.
@@ -2523,7 +2589,7 @@ extension DependencyTreeGenerator {
 				if let memoized = queriesByExclusion[excluded] {
 					return memoized
 				}
-				let made = SeamSignature.Places.Query(of: calledBuilders.places, excludingRoutesWhoseStackHolds: excluded)
+				let made = SeamSignature.Places.Query(of: query.places, excludingRoutesWhoseStackHolds: excluded)
 				queriesByExclusion[excluded] = made
 				return made
 			}
@@ -2583,25 +2649,19 @@ extension DependencyTreeGenerator {
 					callerBindsArgument[declaration.property] = !entry.hole.uncarriedDeclarations.contains(declaration)
 				}
 			}
-			// The cases' fills, each judged at the case's first place the call holds.
-			var siteByCaseIndex = [Int: SeamSignature.Hole.Site]()
-			for hole in calledBuilders.holes {
-				if let caseIndex = calledBuilders.ownCaseIndex(ofSite: hole.site), siteByCaseIndex[caseIndex] == nil {
-					siteByCaseIndex[caseIndex] = hole.site
-				}
-			}
 			// A declaration the caller could build above the seam stays so only where the fill of each case its tree holds
 			// receives only what the caller would hold there (`resolvingBuildabilityAboveSeam(fillsOfCall:)`, by case).
 			func resolvingBuildability(_ declaration: SeamSignature.Hole.UncarriedDeclaration, _ answer: SeamSignature.Places.Answer) -> SeamSignature.Hole.UncarriedDeclaration {
 				let graphDeclaration: SeamSignature.Places.Declaration? = switch answer {
 				case let .uncarried(level, index), let .boundOutsideSendableFunction(level, index, _):
-					calledBuilders.places.declaration(level: level, declaration: index)
+					query.places.declaration(level: level, declaration: index)
 				case .field, .callersOwn:
 					nil
 				}
 				guard declaration.isBuildableAboveSeam, let buildability = graphDeclaration?.buildability, !buildability.placesInTree.isEmpty else { return declaration }
 				var resolved = declaration
-				let fulfillingScopes = buildability.placesInTree.map { caseIndex in siteByCaseIndex[caseIndex].flatMap { call.fill(judgingPlaceAt: $0)?.children.first } }
+				// The cases' fills, each judged at the case's first place the call holds.
+				let fulfillingScopes = buildability.placesInTree.map { caseIndex in site(ofCase: .init(query: query, caseIndex: caseIndex)).flatMap { call.fill(judgingPlaceAt: $0)?.children.first } }
 				resolved.holdsPlaceFilledElsewhere = fulfillingScopes.contains { $0 == nil }
 				resolved.isBuildableAboveSeam = fulfillingScopes.allSatisfy { fulfillingScope in
 					fulfillingScope?.receivedProperties.allSatisfy { declaration.labelsHeldAboveSeam.contains($0.label) } ?? false
@@ -2644,9 +2704,10 @@ extension DependencyTreeGenerator {
 		if case let .field(level, declaration) = variant.answer {
 			fields.append(query.places.declaration(level: level, declaration: declaration).field)
 		}
-		// The place's own declaration of the label is the one the graph answers; the declarations a call on the way presents
-		// besides (`boundByPassingUpSeam`, copies a called place carries) stay. A declaration some place of the case carries
-		// keeps that place's buildability, which the graph's leaves out.
+		// The place's own declarations of the label are the ones the graph answers, never the place's, which for a place a call
+		// passes up are its first route's; the declarations a call on the way presents besides (`boundByPassingUpSeam`, copies a
+		// called place carries) stay. A declaration some place of the case carries keeps that place's buildability, which the
+		// graph's leaves out.
 		func sameDeclaration(_ lhs: SeamSignature.Hole.UncarriedDeclaration, _ rhs: SeamSignature.Hole.UncarriedDeclaration) -> Bool {
 			lhs.property == rhs.property && lhs.declaringType == rhs.declaringType && lhs.reason == rhs.reason
 		}
@@ -2664,7 +2725,7 @@ extension DependencyTreeGenerator {
 		var uncarriedDeclarations = [SeamSignature.Hole.UncarriedDeclaration]()
 		var placedVariant = false
 		for declaration in hole.uncarriedDeclarations {
-			guard declaration.property.label == label, graphDeclarations.contains(where: { sameDeclaration($0, declaration) }) else {
+			guard declaration.property.label == label, graphDeclarations.contains(where: { sameDeclaration($0, declaration) }) || !declaration.isPresentedByCall else {
 				uncarriedDeclarations.append(declaration)
 				continue
 			}
@@ -2797,7 +2858,15 @@ extension DependencyTreeGenerator {
 		parts.append(String(describing: hole.fields.filter { $0.property.label == label }))
 		parts.append(String(describing: hole.uncarriedDeclarations.filter { $0.property.label == label }))
 		parts.append(String(describing: hole.cycleReentryDeclarations.filter { $0.property.label == label }))
+		parts.append(String(describing: hole.reenteringCallDeclarations.filter { $0.property.label == label }))
+		parts.append(String(describing: hole.reenteringPlaceFields.filter { $0.carried.field.property.label == label }))
 		parts.append(String(describing: hole.declarationsHiddenByFields.filter { $0.property.label == label }))
+		parts.append(String(describing: entry.hidden.pathDeclarations[label]))
+		parts.append(String(describing: entry.hidden.calledCopyDeclarations[label]))
+		parts.append(String(describing: entry.hidden.fieldsOfReenteringPlaces[label]))
+		// What the place's own fill binds in the field's place, which its generator, not the hole, says.
+		parts.append(String(describing: entry.fill.fillMemoOriginsByLabel[label]))
+		parts.append(String(describing: entry.fill.fillBoundFields.filter { $0.property.label == label }))
 		for read in reads.reads {
 			if case let .receive(receive) = read {
 				parts.append("\(receive.property)@\(receive.readerType.asSource)@\(String(describing: receive.declarationLocation))@\(receive.onlyIfAvailable)@\(String(describing: receive.passingCall))")
@@ -2844,10 +2913,11 @@ extension DependencyTreeGenerator {
 		var findings = [DependencyTreeGeneratorError.FillFinding]()
 		for caseKey in caseKeys {
 			guard let places = placesByCaseKey[caseKey], let firstPlace = places.first, let child = emittingFillByCaseKey[caseKey]?.children.first else { continue }
-			// EXPERIMENT: over every route of the place graph where the call holds one.
-			let caseIndices = places.compactMap { calledBuilders?.ownCaseIndex(ofSite: $0.site) }
-			let irreconcilableFields = if let calledBuilders, !calledBuilders.places.cases.isEmpty, caseIndices.count == places.count {
-				ScopeGenerator.irreconcilableFields(ofCasesAt: caseIndices, hole: firstPlace, in: SeamSignature.Places.Query(of: calledBuilders.places))
+			// EXPERIMENT: over every route of the place graph where the call holds one, a place the call passes up over the
+			// routes of the graph of the seam whose tree holds it.
+			let holdingCases = calledBuilders.flatMap { $0.places.cases.isEmpty ? nil : $0.holdingCases(ofSites: places.map(\.site), in: $0.placesQuery) }
+			let irreconcilableFields = if let holdingCases {
+				ScopeGenerator.irreconcilableFields(ofResolvedCases: holdingCases, hole: firstPlace)
 			} else {
 				ScopeGenerator.irreconcilableFields(of: places)
 			}
@@ -4386,6 +4456,17 @@ extension SeamSignature.Hole.ReenteringPlaceField {
 }
 
 extension SeamSignature.Hole.UncarriedDeclaration {
+	/// Whether a seam that passes the place up binds it on a path to a call that presents the place
+	/// (`Reason.boundByPassingUpSeam`), which a place's own graph does not answer.
+	var isPresentedByCall: Bool {
+		switch reason {
+		case .boundByPassingUpSeam:
+			true
+		case .receivesPathScopeOnlyIfAvailable, .requiresOtherCarrier, .instantiatorBuildingSite, .other, .boundOutsideSendableFunction:
+			false
+		}
+	}
+
 	/// This declaration, bound after the site for `reason`.
 	func with(reason: Reason) -> SeamSignature.Hole.UncarriedDeclaration {
 		var declaration = SeamSignature.Hole.UncarriedDeclaration(property: property, declaringType: declaringType, declarationLocation: declarationLocation, parameterTakingType: parameterTakingType, builtAfter: builtAfter, reason: reason)

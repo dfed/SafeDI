@@ -781,7 +781,18 @@ extension ScopeRecord {
 /// the generators of the scopes it creates exist.
 /// A case of a place graph, told apart from another graph's case of the same index by the graph's query, whose identity
 /// orders nothing.
-private struct HoldingCaseKey: Hashable {
+/// A case of a place graph as a set tells it apart: its indices are its own graph's, so two graphs' cases are told apart by
+/// the graph's identity, which orders nothing.
+struct HoldingCaseKey: Hashable {
+	init(graph: ObjectIdentifier, caseIndex: Int) {
+		self.graph = graph
+		self.caseIndex = caseIndex
+	}
+
+	init(_ resolved: SeamSignature.Places.Query.ResolvedCase) {
+		self.init(graph: ObjectIdentifier(resolved.query), caseIndex: resolved.caseIndex)
+	}
+
 	let graph: ObjectIdentifier
 	let caseIndex: Int
 }
@@ -2562,9 +2573,6 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		// Both read the caller's declarations, which they log.
 		let builderCallArguments = builderCallArguments(fillNames: fillNames)
 		let enclosingLevelCalls = scope.publicMockCall == nil ? [:] : enclosingLevelCalls()
-		if builtFillCount > 0, let observer = SeamFillSharing.observer {
-			observer(SeamFillSharing.FillsOfCall(calledType: scope.instantiable.concreteInstantiable.asSource, builtFillCount: builtFillCount, placeStoodForCount: fillsStoodFor.count, fillJudgementTreeCount: fillJudgementTreeCount))
-		}
 		let builtGenerator = ScopeGenerator(
 			instantiable: scope.instantiable,
 			property: property,
@@ -2645,6 +2653,12 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			previousPassBuildsFillOfEveryPlace: previousPassGenerator?.buildsFillOfEveryPlace ?? false,
 			cycleClosingRedeclaredLabels: &cycleClosingRedeclaredLabels,
 		)
+		if builtFillCount > 0, let observer = SeamFillSharing.observer {
+			let bindings = builtGenerator.children.compactMap { fill in
+				fill.fillHole.flatMap { hole in builtGenerator.fillBinding(of: fill).map { (sitePath: hole.sitePath, binding: $0) } }
+			}
+			observer(SeamFillSharing.FillsOfCall(calledType: scope.instantiable.concreteInstantiable.asSource, builtFillCount: builtFillCount, placeStoodForCount: fillsStoodFor.count, fillJudgementTreeCount: fillJudgementTreeCount, bindings: bindings))
+		}
 		return if let fill {
 			ScopeGenerator(
 				fill: fill.hole,

@@ -1893,16 +1893,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		return irreconcilableFields(among: places.flatMap(\.fields), payloadOf: firstPlace)
 	}
 
-	/// `irreconcilableFields(of:)` read over every route to the cases at `caseIndices` of `query`'s place graph, the graph's
-	/// cases of one case nested by type whose emitting place is `hole`: the field answers of each label's routes
-	/// (`SeamSignature.Places.Query.answers(ofLabel:at:)`) in place of the fields of its places.
-	static func irreconcilableFields(ofCasesAt caseIndices: [Int], hole: SeamSignature.Hole, in query: SeamSignature.Places.Query) -> [String: [SeamSignature.Hole.Field]] {
+	/// `irreconcilableFields(of:)` read over every route to `cases`, the cases of one case nested by type whose emitting place
+	/// is `hole`, each in the graph of the seam whose tree holds it (`CalledBuilders.holdingCase(ofSite:in:)`): the field
+	/// answers of each label's routes (`SeamSignature.Places.Query.answers(ofLabel:at:)`) in place of the fields of its places.
+	static func irreconcilableFields(ofResolvedCases cases: [SeamSignature.Places.Query.ResolvedCase], hole: SeamSignature.Hole) -> [String: [SeamSignature.Hole.Field]] {
 		var fields = [SeamSignature.Hole.Field]()
-		for caseIndex in caseIndices {
-			for label in query.labels(reaching: caseIndex) {
-				for answer in query.answers(ofLabel: label, at: caseIndex) {
+		for resolved in cases {
+			for label in resolved.query.labels(reaching: resolved.caseIndex) {
+				for answer in resolved.query.answers(ofLabel: label, at: resolved.caseIndex) {
 					guard case let .field(level, declaration) = answer else { continue }
-					fields.append(query.places.declaration(level: level, declaration: declaration).field)
+					fields.append(resolved.query.places.declaration(level: level, declaration: declaration).field)
 				}
 			}
 		}
@@ -4915,16 +4915,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	/// EXPERIMENT: `captures`, the captures of the fill of `hole`, with each capture of a field `hole` carries made again of
-	/// that label's field on every route of the place graph to `hole`'s case that another type declares: one fill fills the
-	/// case for every route, and each capture names the declaration it reads. Found only where a capture is, so a fill that
-	/// captures nothing asks the graph nothing.
+	/// that label's field on every route to `hole`'s case that another type declares, in the graph of the seam whose tree
+	/// holds the place (`CalledBuilders.holdingCase(ofSite:in:)`): one fill fills the case for every route, and each capture
+	/// names the declaration it reads. Found only where a capture is, so a fill that captures nothing asks the graph nothing.
 	private func capturesOnEveryRoute(of captures: [NonSendableWrapperCapture], readingFieldsOf hole: SeamSignature.Hole) -> [NonSendableWrapperCapture] {
 		guard !captures.isEmpty,
 		      let calledBuilders,
 		      !calledBuilders.places.cases.isEmpty,
-		      let caseIndex = calledBuilders.ownCaseIndex(ofSite: hole.site)
+		      let holding = calledBuilders.holdingCase(ofSite: hole.site, in: calledBuilders.placesQuery)
 		else { return captures }
-		let query = SeamSignature.Places.Query(of: calledBuilders.places)
+		let query = holding.query
+		let caseIndex = holding.caseIndex
 		var everyRoute = captures
 		for capture in captures {
 			guard let declaringType = capture.wrapperDeclaringType,
@@ -9994,6 +9995,25 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	static func fillFunction(declaredBy declaration: String, body: [GeneratedCode], isSendable: Bool) -> GeneratedCode {
 		let statements = GeneratedCode.lines(body)
 		return .lines([.text(declaration), isSendable ? .sendableFunction(statements) : statements, .text("}")])
+	}
+
+	/// The binding of `fill`, a child of this scope's seam call or public mock call, or `nil` for any other child. A fill
+	/// that generates no code, a place of a case another place's fill generates, has the binding of the fill that does,
+	/// which is the first of this scope's fills of its case.
+	nonisolated func fillBinding(of fill: ScopeGenerator) -> SeamFillBinding? {
+		guard let hole = fill.fillHole else { return nil }
+		let caseKey = Self.fillCaseKey(of: hole)
+		guard fill.fillEmitsCode else {
+			return children.first { $0.fillEmitsCode && $0.fillHole.map(Self.fillCaseKey(of:)) == caseKey }.flatMap { fillBinding(of: $0) }
+		}
+		return SeamFillBinding(
+			caseKey: caseKey,
+			excludedStackEntries: [],
+			boundFields: fill.fillBoundFields + fill.fillParameterFields,
+			irreconcilableLabels: Set(Self.irreconcilableFields(of: fill.fillCaseHoles.isEmpty ? [hole] : fill.fillCaseHoles).keys),
+			isSendable: buildsInSendableFunction(ofFill: fill),
+			isBuiltInSendableFunction: hole.enumPlace?.isBuiltBySendableBuilder ?? hole.isSendable,
+		)
 	}
 
 	/// Whether `fill`, a child of this scope, a fill of its seam call, builds its tree inside a `@Sendable` function: its
