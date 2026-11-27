@@ -87,21 +87,24 @@ extension DependencyTreeGenerator {
 				try await observer(comparison(of: layout, with: comparisonTree, of: rootInfo.instantiable))
 			}
 			return layout.code
-		case let .tree(scopeGenerator):
-			if let rootScope = rootInfo.rootScope {
+		case let .tree(.perType(code, _)):
+			// A root past the per-path limit is laid out from its per-type plan, which no node record stands for yet.
+			return code
+		case let .tree(.perPath(scopeGenerator)):
+			if let rootScope = rootInfo.rootScope, rootInfo.seamTree == nil {
 				// PROTOTYPE (step 3's timing prototype, `FillPrototype`).
-				if FillPrototype.reportPath != nil, rootInfo.seamTree == nil {
+				if FillPrototype.reportPath != nil {
 					var report = FillPrototype.report(ofRoot: root, world: TypeFactsGraph(root: rootScope, forMockGeneration: false))
 					(report.treeFillKeys, report.treeCarrierFillKeys, report.treeDispatcherKeys, report.treeFillSignaturesByKey) = FillPrototype.treeKeys(beneath: scopeGenerator)
 					FillPrototype.append(report)
 				}
-				if FillFactsObservation.observer != nil, rootInfo.seamTree == nil {
+				if FillFactsObservation.observer != nil {
 					// The work of making the facts is no run's, so the tests that count a run's work count none of it.
 					GenerationWork.$observer.withValue(nil) {
 						FillFactsObservation.observe(root: root, world: TypeFactsGraph(root: rootScope, forMockGeneration: false), treeProjections: scopeGenerator.fillFactsProjectionsOfCallsOutsideFills())
 					}
 				}
-				if FilledCallRecordsObservation.observer != nil, rootInfo.seamTree == nil {
+				if FilledCallRecordsObservation.observer != nil {
 					// The work of making the records is no run's, so the tests that count a run's work count none of it.
 					GenerationWork.$observer.withValue(nil) {
 						FilledCallRecordsObservation.observe(root: root, world: TypeFactsGraph(root: rootScope, forMockGeneration: false))

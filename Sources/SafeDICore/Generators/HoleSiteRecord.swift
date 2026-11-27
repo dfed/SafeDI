@@ -28,6 +28,7 @@ enum HoleSitePlaces {
 	/// - Parameters:
 	///   - routeMembers: The member call each step of the site's route makes (`SeamHoles.routeMembers(at:)`).
 	///   - valuesBindings: The payloads the tree binds just before the site (`SeamHoles.CarrierSite.formations`).
+	///   - routeMembers: The member call each step of the site's route makes (`SeamHoles.routeMembers(at:)`).
 	///   - functionName: The name of the function the site builds a wrapper around, where it is renamed.
 	///   - lazilyInstantiatedInstanceProperties: The by-value properties whose labels the site's owner holds only as a
 	///     `LazilyInstantiated` property.

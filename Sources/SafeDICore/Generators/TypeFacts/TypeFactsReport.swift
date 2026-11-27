@@ -500,7 +500,7 @@ extension ConstructionLog.Read {
 			"\(ReadChannel.optional.name)(\(property.label))"
 		case let .passesNil(property, _, _):
 			"\(ReadChannel.mock.name)(\(property.label))"
-		case .declarationClosedOn, .cycleParameterContext:
+		case .declarationClosedOn, .cycleParameterContext, .cycleArgumentBinding:
 			nil
 		}
 	}

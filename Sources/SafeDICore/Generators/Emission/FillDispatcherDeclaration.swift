@@ -31,6 +31,47 @@ extension ScopeGenerator.FillDispatcher {
 		/// Whether the body reads the forwarded value: a fill never reads a forwarded `Void`.
 		let readsForwardedValue: Bool
 		let body: [String]
+
+		init(carriesPayload: Bool, readsScope: Bool, forwardedValueName: String?, readsForwardedValue: Bool, body: [String]) {
+			self.carriesPayload = carriesPayload
+			self.readsScope = readsScope
+			self.forwardedValueName = forwardedValueName
+			self.readsForwardedValue = readsForwardedValue
+			self.body = body
+		}
+
+		/// The body of the fill of `hole`, which builds `builtProperty` and whose function is `code` indented by
+		/// `leadingMemberWhitespace`, as the dispatcher case that calls it holds it: the function's body under the names the
+		/// case binds. `nil` for a fill whose scope parameter is named apart, because its place carries a field or its tree
+		/// reads a value labeled `scope`, which the dispatcher's own parameter would hide: it keeps its function.
+		/// - Parameter carrierUse: How a member of the seam's carrier takes the case's values, where it does.
+		init?(hole: SeamSignature.Hole?, carrierUse: SeamCarrierValues.Use?, builtProperty: Property?, code: String, leadingMemberWhitespace: String) {
+			// A fill is its function's declaration, its body, and the line closing it.
+			let lines = GeneratedCodeText.lines(of: code)
+			let valuesType = hole?.valuesType(qualifiedBy: nil)
+			let carriesPayload = valuesType != nil
+			// A seam's carrier hands the fill the payload's fields as arguments, the first named `scope_<label>`
+			// (`SeamHoles.argumentName(of:inPayloadNamed:)`), where a builder struct hands it the payload named `scope`.
+			let argumentFields: [SeamSignature.Hole.Field]? = if case let .nested(_, enumType, _)? = valuesType, ReservedName.seamCarrier(ofEnum: enumType) != nil {
+				hole.map { $0.enumPlace?.values ?? $0.fields } ?? []
+			} else {
+				nil
+			}
+			let scopePrefix = argumentFields.map { fields in (carrierUse?.parameterNames(of: fields, inPayloadNamed: "scope") ?? fields.map { SeamHoles.argumentName(of: $0, inPayloadNamed: "scope") }).first.map { "(_ \($0): " } ?? "(" } ?? "(_ scope: "
+			guard lines.count > 2,
+			      !carriesPayload || lines[0].contains(scopePrefix),
+			      lines[lines.count - 1] == leadingMemberWhitespace + "}"
+			else { return nil }
+			let body = lines[1..<(lines.count - 1)].map { ScopeGenerator.standardIndent + $0 }
+			// The fill binds the fields its tree reads first, each from the scope; nothing after them reads the scope.
+			// safedi-source-rule: allow stringScan — reads the first line of one inlined fill, once per fill.
+			let readsScope = carriesPayload && lines[1].hasPrefix(leadingMemberWhitespace + ScopeGenerator.standardIndent + "let ") && (lines[1].contains(" = scope.") || (argumentFields != nil && lines[1].contains(" = scope_")))
+			let forwardedValueName = hole?.forwardedType == nil ? nil : builtProperty.map(ScopeGenerator.forwardedValueParameterName(forBuilding:))
+			let readsForwardedValue = forwardedValueName.map { name in
+				body.contains { line in GeneratedCodeText.containsIdentifier(name, in: line) }
+			} ?? false
+			self.init(carriesPayload: carriesPayload, readsScope: readsScope, forwardedValueName: forwardedValueName, readsForwardedValue: readsForwardedValue, body: body)
+		}
 	}
 
 	/// The function of the dispatcher's level, indented by `indent`, `@Sendable` as `isSendable` says, which returns the

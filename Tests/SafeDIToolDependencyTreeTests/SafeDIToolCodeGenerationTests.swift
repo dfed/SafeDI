@@ -14632,18 +14632,18 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_mBuilder(x: X) -> M {
+		            let c: C = __safeDI_c(x: x)
+		            return M(x: x, c: c)
+		        }
+		        func __safeDI_c(x: X) -> C {
+		            #sourceLocation(file: "\(output.fixtures["C.swift"])", line: 4)
+		            let y: X? = x
+		            #sourceLocation()
+		            let d = D(y: y)
+		            return C(y: y, d: d)
+		        }
 		        func __safeDI_p() -> P {
-		            func __safeDI_mBuilder(x: X) -> M {
-		                func __safeDI_c() -> C {
-		                    #sourceLocation(file: "\(output.fixtures["C.swift"])", line: 4)
-		                    let y: X? = x
-		                    #sourceLocation()
-		                    let d = D(y: y)
-		                    return C(y: y, d: d)
-		                }
-		                let c: C = __safeDI_c()
-		                return M(x: x, c: c)
-		            }
 		            let mBuilder = Instantiator<M> {
 		                __safeDI_mBuilder(x: $0)
 		            }
@@ -14728,18 +14728,18 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_mBuilder(x: X) -> M {
+		            let c: C = __safeDI_c(x: x)
+		            return M(x: x, c: c)
+		        }
+		        func __safeDI_c(x: X) -> C {
+		            #sourceLocation(file: "\(output.fixtures["C.swift"])", line: 4)
+		            let y: X? = x
+		            #sourceLocation()
+		            let d = D(y: y)
+		            return C(y: y, d: d)
+		        }
 		        func __safeDI_p() -> P {
-		            func __safeDI_mBuilder(x: X) -> M {
-		                func __safeDI_c() -> C {
-		                    #sourceLocation(file: "\(output.fixtures["C.swift"])", line: 4)
-		                    let y: X? = x
-		                    #sourceLocation()
-		                    let d = D(y: y)
-		                    return C(y: y, d: d)
-		                }
-		                let c: C = __safeDI_c()
-		                return M(x: x, c: c)
-		            }
 		            let mBuilder = Instantiator<M> {
 		                __safeDI_mBuilder(x: $0)
 		            }

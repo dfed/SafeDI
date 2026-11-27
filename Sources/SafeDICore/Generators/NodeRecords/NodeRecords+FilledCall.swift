@@ -29,6 +29,9 @@ struct FilledCallRecords: Sendable {
 		let signature: FillSignature
 		let functionName: String
 		let scopeParameterName: String
+		/// The declaration visible where the call declares the fill of each label its tree reads from above it, as declared
+		/// there, which the fill's function captures where it takes no parameter of the label.
+		let callerDeclarations: [Property]
 	}
 
 	/// The call's node.
@@ -115,7 +118,13 @@ struct FilledCallRecords: Sendable {
 			      let functionName = names.functionName(ofFill: caseKey),
 			      let scopeParameterName = names.scopeParameterName(ofFill: caseKey)
 			else { continue }
-			fills.append(Fill(facts: facts, signature: signature(of: facts, isSendable: decisions.sendableKeys.contains(facts.key)), functionName: functionName, scopeParameterName: scopeParameterName))
+			fills.append(Fill(
+				facts: facts,
+				signature: signature(of: facts, isSendable: decisions.sendableKeys.contains(facts.key)),
+				functionName: functionName,
+				scopeParameterName: scopeParameterName,
+				callerDeclarations: FillCallerSources.visibleDeclarations(facts: facts, call: call, variant: variant, in: world),
+			))
 		}
 		let dispatchers = levels.dispatchers.map { DispatcherRecord(dispatcher: $0.dispatcher, parameters: $0.parameters, isSendable: decisions.sendableKeys.contains($0.key)) }
 		let dispatcherByKey = Dictionary(dispatchers.map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first })

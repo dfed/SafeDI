@@ -64,6 +64,22 @@ extension TypeKeyLayout {
 	mutating func normalizeCycleParameters() {
 		for body in bodies.indices.dropFirst() {
 			guard let record = bodies[body].record else { continue }
+			if variantBodies.contains(body) {
+				// A variant of the per-type plan is called only by closing statements, each passing every cycle parameter, or
+				// passing nothing for one its function captures, which holds the root's statement every call passes
+				// (`rootStatementsCapturedByVariants()`).
+				for (label, position) in rootStatementsCapturedByVariant[body] ?? [:] {
+					normalizedCycleParameters[body, default: [:]][label] = .statement(body: 0, index: position)
+				}
+				let calls = closersByTarget[body] ?? []
+				for label in bodies[body].cycleParameterLabels.sorted() where rootStatementsCapturedByVariant[body]?[label] == nil {
+					let values = calls.map { normalized(closerValue(of: label, closing: $0, onPlace: body)) }
+					if let first = values.first, values.allSatisfy({ $0 == first }) {
+						normalizedCycleParameters[body, default: [:]][label] = first
+					}
+				}
+				continue
+			}
 			// The call passes each cycle parameter one argument of its label (`ScopeGenerator.cycleParameterReads`).
 			for argument in record.callCycleArguments {
 				let first = normalized(pathValue(of: argument, inBody: bodies[body].parent, before: bodies[body].position))
@@ -120,8 +136,8 @@ extension TypeKeyLayout {
 					let expected = normalized(lookUp(fulfillingProperty.label, inBody: body, before: index))
 					let declaration = typeLookUp(fulfillingProperty.label, inClass: owner, before: index)
 					guard normalized(evaluate(declaration, inBody: body)) == expected,
-					      let typeModeType = type(of: declaration),
-					      let pathType = type(of: expected),
+					      let typeModeType = type(of: declaration, label: fulfillingProperty.label),
+					      let pathType = type(of: expected, label: fulfillingProperty.label),
 					      typeModeType.asSource == pathType.asSource
 					else { return false }
 				case let .built(child):
@@ -161,7 +177,7 @@ extension TypeKeyLayout {
 
 	/// Whether the argument at `position` of the inline place at `index` is `nil` in every member of `owner`'s class. Every
 	/// member's statement at `index` is of one kind, since a class's key holds each statement's shape, which names its kind
-	/// (`statementShape`).
+	/// (`statementPart(_:parts:)`).
 	func isNilAtEveryMember(owner: Int, inlineStatement index: Int, argument position: Int) -> Bool {
 		for case let .inline(record) in statements(at: index, ofEveryMemberOf: owner) where record.arguments[position].source != .nil {
 			return false
@@ -198,7 +214,7 @@ extension TypeKeyLayout {
 	/// The types are compared by exact spelling (`any P` and `P`, `Optional<X>` and `X?`, differ), which is what text
 	/// copied as written needs: a looser match would only share more places, never one the copy reads alike.
 	func readsDeclarationOfSameType(_ read: PlaceRead, inBody body: Int, before index: Int, owner: Int) -> Bool {
-		type(of: typeLookUp(read.label, inClass: owner, before: index))?.asSource == type(of: normalized(pathValue(of: read, inBody: body, before: index)))?.asSource
+		type(of: typeLookUp(read.label, inClass: owner, before: index), label: read.label)?.asSource == type(of: normalized(pathValue(of: read, inBody: body, before: index)), label: read.label)?.asSource
 	}
 
 	/// Whether the call of `place`'s function from the statement at `index` of `body` passes each parameter what the path
@@ -213,7 +229,7 @@ extension TypeKeyLayout {
 			siblingEdges = edges
 		}
 		for label in reads[membersByClass[callee][0]] where outcomes[callee][label] == .passed {
-			let declaration = typeLookUp(label, inClass: owner, before: index)
+			let declaration = passedDeclaration(label, toParameterOf: callee, inClass: owner, before: index)
 			let actual = normalized(evaluate(declaration, inBody: body))
 			if let siblingEdges {
 				// A member of a loop of builders calls a sibling's function: at each of its own places, the sibling its body's
@@ -230,13 +246,13 @@ extension TypeKeyLayout {
 				guard actual == normalized(resolution(of: label, atPlace: place, edge: (parent: body, position: index))) else { return false }
 			} else if bodies[place].cycleParameterLabels.contains(label) {
 				guard actual == normalized(closerValue(of: label, closing: (body: body, index: index), onPlace: place)) else { return false }
-			} else if !passesOwnParameter(declaration, inBody: body, of: place) {
+			} else {
 				// A closer that hands on what the place it calls was passed passes, beneath each edge of that place, what that
-				// edge resolves the label to, which the call at the edge is checked for. Any other value is the one every
-				// edge of the place resolves the label to.
-				for edge in bodies[place].edges {
-					guard actual == normalized(resolution(of: label, atPlace: place, edge: edge)) else { return false }
-				}
+				// edge resolves the label to, which the call at the edge is checked for. A closer that passes anything else
+				// passes a declaration between it and the place, which makes the label a cycle parameter of the place (the
+				// branch above), so no graph of the suite or the fuzzer’s corpora reaches it: the root keeps the path key's body there rather than lay out a call
+				// no test checks.
+				guard passesOwnParameter(declaration, inBody: body, of: place) else { return false }
 			}
 		}
 		return true

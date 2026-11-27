@@ -153,6 +153,9 @@ protocol NodeRecordSources: TypeFactsWorld {
 	var isMockWorld: Bool { get }
 	/// What a mock root's lowering names that the records of its world read; empty for a production root's world.
 	var mockRootNames: MockRootNames { get }
+	/// The records of `call`, a seam call of a root's tree that fills places of the seam it calls (`FilledCallRecords`), or
+	/// why node records leave the call to the tree.
+	func filledCallRecords(of call: DeclarationID) -> Result<FilledCallRecords, NodeRecordRefusal>
 }
 
 extension TypeFactsGraph: NodeRecordSources {
@@ -170,6 +173,12 @@ extension TypeFactsGraph: NodeRecordSources {
 
 	func text(ofLabel label: WorldLabelID) -> String {
 		labelTexts[Int(label)]
+	}
+
+	func filledCallRecords(of call: DeclarationID) -> Result<FilledCallRecords, NodeRecordRefusal> {
+		// A call of a root's tree is reached on one route (`NodeRecordRefusal.fillCallSeveralVariants`).
+		let variant = (0..<Int32(variantCount)).first { declaration(of: $0) == call } ?? 0
+		return Result { () throws(NodeRecordRefusal) -> FilledCallRecords in try FilledCallRecords.of(call: call, variant: variant, in: self, reservedNames: []) }
 	}
 }
 
@@ -237,10 +246,12 @@ struct NodeRecords: Sendable {
 		let bindsHolesPayloads = seamHoles != nil && kinds.contains(.seamHole)
 		let holdsCycle = (0..<Int32(declarationCount)).contains(where: world.isOnCycle)
 		// A world with a cycle makes a record per variant, each read of its own calls; any other world, one per node.
+		// Each node's one variant, off every cycle; read only there.
+		var variantByDeclaration = [VariantID](repeating: 0, count: declarationCount)
 		if holdsCycle {
 			try Self.checkVariantsPartitionAlike(inWorldWithCycle: world)
 		} else {
-			var variantByDeclaration = [VariantID](repeating: -1, count: declarationCount)
+			variantByDeclaration = [VariantID](repeating: -1, count: declarationCount)
 			for variant in 0..<Int32(world.variantCount) {
 				let declaration = Int(world.declaration(of: variant))
 				guard variantByDeclaration[declaration] < 0 else { throw NodeRecordRefusal.nodeHasSeveralVariants }
@@ -282,6 +293,7 @@ struct NodeRecords: Sendable {
 			declaration: DeclarationID,
 			children: [GeneratedCode],
 			childrensEscaping: Set<TypeDescription>,
+			childPlaces: [(declaration: DeclarationID, place: GeneratedCode)],
 			functionName: String?,
 			isMadeSendable: Bool,
 		) throws -> (place: GeneratedCode, record: PlaceRecord?, escaping: Set<TypeDescription>) {
@@ -310,7 +322,11 @@ struct NodeRecords: Sendable {
 			case .inlineSeam:
 				try .built(Self.inlineSeamRecord(of: declaration, variant: variant, in: world, lazilyInstantiatedInstanceProperties: instanceProperties, typesDeclaredEscaping: escaping, children: children))
 			case .seamCall:
-				try .alias(Self.seamCallRecord(of: declaration, variant: variant, in: world, routes: seamCallRoutes, lazilyInstantiatedInstanceProperties: instanceProperties, typesDeclaredEscaping: escaping, children: children))
+				// A filled call's record holds its fills and dispatchers (`filledSeamCallRecord`), in a world with one variant
+				// per node, whose escaping types it reads by declaration; a world with a cycle keeps a filled call's tree.
+				try .alias(Self.fillsAPlace(declaration, in: world)
+					? Self.filledSeamCallRecord(of: declaration, variant: variant, in: world, isInSeamTree: seamTree != nil || holdsCycle, lazilyInstantiatedInstanceProperties: instanceProperties, typesDeclaredEscaping: escaping, childPlaces: childPlaces, typesDeclaredEscapingOf: { typesDeclaredEscaping[Int(variantByDeclaration[Int($0)])] })
+					: Self.seamCallRecord(of: declaration, variant: variant, in: world, routes: seamCallRoutes, lazilyInstantiatedInstanceProperties: instanceProperties, typesDeclaredEscaping: escaping, children: children))
 			case .receivesOnlyIfAvailable:
 				try .built(Self.receivesOnlyIfAvailableRecord(
 					of: declaration,
@@ -337,9 +353,20 @@ struct NodeRecords: Sendable {
 			let record = Self.record(madeRecord, functionName: functionName, isMadeSendable: isMadeSendable)
 			let place: GeneratedCode = switch record {
 			case let .alias(aliasRecord):
-				// A place written as text: the engine copies it as written. A property nothing fulfills that `mock()` binds
-				// before its nodes is no place.
-				Self.isBoundBeforeMockNodes(declaration, in: world) ? .sequence([]) : .place(PlacePlan(code: .text(aliasRecord.text), record: record))
+				if Self.isBoundBeforeMockNodes(declaration, in: world) {
+					// A property nothing fulfills that `mock()` binds before its nodes is no place.
+					.sequence([])
+				} else if let call = aliasRecord.call, case let statements = call.statementsBeforeLeadingStatement + call.statementsAfterLeadingStatement, statements.contains(where: \.holdsRootFunction) {
+					// A call written in place whose function declares a root function (a filled call's dispatcher): the place
+					// holds its statements, so the root finds the function to declare once (`RootFunctionHoisting`).
+					.place(PlacePlan(code: .sequence(statements), record: record))
+				} else {
+					// A place written as text: the engine copies it as written.
+					.place(PlacePlan(code: .text(aliasRecord.text), record: record))
+				}
+			case let .built(builtRecord) where builtRecord.children.contains(where: \.holdsRootFunction):
+				// A place whose tree holds a root function holds its children, so the root finds the function to declare once.
+				.place(PlacePlan(code: .sequence(builtRecord.children), record: record))
 			case .built, .closer:
 				.place(PlacePlan(code: .empty, record: record))
 			}
@@ -424,9 +451,11 @@ struct NodeRecords: Sendable {
 		var records = [PlaceRecord?](repeating: nil, count: world.variantCount)
 		var typesDeclaredEscaping = [Set<TypeDescription>](repeating: [], count: world.variantCount)
 		var closedOnFromSendableFunction = [Set<VariantID>](repeating: [], count: world.variantCount)
-		func body(of variant: VariantID) throws -> (children: [GeneratedCode], escaping: Set<TypeDescription>, closedOnFromSendableFunction: Set<VariantID>, closedOn: Set<VariantID>) {
+		func body(of variant: VariantID) throws -> (children: [GeneratedCode], childPlaces: [(declaration: DeclarationID, place: GeneratedCode)], escaping: Set<TypeDescription>, closedOnFromSendableFunction: Set<VariantID>, closedOn: Set<VariantID>) {
 			let indentation = variant == 0 ? TypeKeyBody.rootStatementIndentation : ScopeGenerator.standardIndent
 			var children = [GeneratedCode]()
+			// Each child's declaration and place before it is indented, which a filled call's fills are built from.
+			var childPlaces = [(declaration: DeclarationID, place: GeneratedCode)]()
 			var escaping = Set<TypeDescription>()
 			var fromSendableFunction = Set<VariantID>()
 			var closedOn = Set<VariantID>()
@@ -445,12 +474,13 @@ struct NodeRecords: Sendable {
 				case let .place(callee):
 					let place = Self.mockPlace(places[Int(callee)], record: records[Int(callee)], of: world.declaration(of: callee), builtBy: world.declaration(of: variant), in: world, slots: enteredSlots)
 					children.append(.indented(place, by: indentation))
+					childPlaces.append((world.declaration(of: callee), place))
 					escaping.formUnion(typesDeclaredEscaping[Int(callee)])
 					closedOn.formUnion(variantsClosedOn[Int(callee)])
 					fromSendableFunction.formUnion(closedOnFromSendableFunction[Int(callee)])
 				}
 			}
-			return (children, escaping, fromSendableFunction, closedOn)
+			return (children, childPlaces, escaping, fromSendableFunction, closedOn)
 		}
 		for variant in postOrder {
 			let declaration = world.declaration(of: variant)
@@ -470,6 +500,7 @@ struct NodeRecords: Sendable {
 				declaration: declaration,
 				children: body.children,
 				childrensEscaping: body.escaping,
+				childPlaces: body.childPlaces,
 				functionName: functionNames?.functionName(of: variant),
 				isMadeSendable: isMadeSendable,
 			)
@@ -704,6 +735,7 @@ struct NodeRecords: Sendable {
 				?? filledSeamCallClaim(of: declaration, in: world)
 				?? seamCallClaim(of: declaration, in: world)
 			let answerReadingClaim = seamClaim
+				?? fillClaim(of: declaration, in: world)
 				?? unavailableDependencyClaim(of: declaration, in: world)
 				?? receivesOnlyIfAvailableClaim(of: declaration, in: world)
 				?? renameClaim(of: declaration, in: world)

@@ -240,7 +240,7 @@ struct ReadsFromAbove: Sendable {
 		var edgeMask = RowAccumulator(columnCount: own.columnCount)
 		/// Adds `row` of `source`, without what the node `node` hides and what the edge at `edgeIndex` hides, to `accumulator`,
 		/// and returns whether that set any bit the accumulator lacked.
-		func add(row: Int, of source: BitRows, excludingAt edgeIndex: Int, of node: Int) -> Bool {
+		func accumulate(row: Int, of source: BitRows, excludingAt edgeIndex: Int, of node: Int) -> Bool {
 			guard let hiddenAtEdge, hiddenAtEdge.wordCount(ofRow: edgeIndex) > 0 else {
 				return source.add(row: row, to: &accumulator, excluding: mask)
 			}
@@ -279,7 +279,7 @@ struct ReadsFromAbove: Sendable {
 				for edgeIndex in graph.edgeIndices(from: index) where followsEdge(edgeIndex) {
 					let target = graph.edgeTargets[edgeIndex]
 					work += rows.wordCount(ofRow: Int(target))
-					_ = add(row: Int(target), of: rows, excludingAt: edgeIndex, of: index)
+					_ = accumulate(row: Int(target), of: rows, excludingAt: edgeIndex, of: index)
 				}
 				mask.drain { _, _ in }
 				if let madeAgain {
@@ -329,12 +329,12 @@ struct ReadsFromAbove: Sendable {
 							let targetSlot = memberSlotByNode[Int(target)]
 							if targetSlot >= 0 {
 								work += previousPass.wordCount(ofRow: Int(targetSlot))
-								if add(row: Int(targetSlot), of: previousPass, excludingAt: edgeIndex, of: Int(index)) {
+								if accumulate(row: Int(targetSlot), of: previousPass, excludingAt: edgeIndex, of: Int(index)) {
 									changed = true
 								}
 							} else {
 								work += rows.wordCount(ofRow: Int(target))
-								if add(row: Int(target), of: rows, excludingAt: edgeIndex, of: Int(index)) {
+								if accumulate(row: Int(target), of: rows, excludingAt: edgeIndex, of: Int(index)) {
 									changed = true
 								}
 							}
