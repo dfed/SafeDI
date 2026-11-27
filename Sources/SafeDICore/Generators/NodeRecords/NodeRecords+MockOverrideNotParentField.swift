@@ -59,10 +59,14 @@ struct MockRootNames: Sendable {
 	///     no field for the child. A fact of the module's types together, which no root's world holds.
 	///   - placeBuilderBindings: The binding of each place of a seam's own mock from the builder `mock()` takes for it, by the
 	///     place's property (`MockLowering.RootSignature.PassedUpBuilder.places`).
-	init(namesApart: [String: [TypeDescription: String]] = [:], unavailableDependencyOverrides: [(property: Property, name: String)] = [], passedUpBuilderNames: [Property: String] = [:], uncoveredParameterNames: [Property: String] = [:], edgesConfigurationsLeaveOut: Set<ScopeGenerator.CycleEdge> = [], placeBuilderBindings: [Property: MockPlaceBuilderBinding] = [:]) {
+	///   - wrapperBindingNames: The name `mock()` binds each lazy wrapper under that it makes of an instance it takes, by the
+	///     wrapper's label and then type (`MockLowering.RootSignature.lazilyInstantiatedBindingNamesByLabelAndType`), which
+	///     every receive of the wrapper is passed by name.
+	init(namesApart: [String: [TypeDescription: String]] = [:], unavailableDependencyOverrides: [(property: Property, name: String)] = [], passedUpBuilderNames: [Property: String] = [:], uncoveredParameterNames: [Property: String] = [:], edgesConfigurationsLeaveOut: Set<ScopeGenerator.CycleEdge> = [], placeBuilderBindings: [Property: MockPlaceBuilderBinding] = [:], wrapperBindingNames: [String: [TypeDescription: String]] = [:]) {
 		self.namesApart = namesApart
 		self.edgesConfigurationsLeaveOut = edgesConfigurationsLeaveOut
 		self.placeBuilderBindings = placeBuilderBindings
+		self.wrapperBindingNames = wrapperBindingNames
 		self.passedUpBuilderNames = passedUpBuilderNames
 		self.uncoveredParameterNames = uncoveredParameterNames
 		unavailableDependencyOverrideNames = Dictionary(unavailableDependencyOverrides.map { ($0.property, $0.name) }) { first, _ in first }
@@ -96,7 +100,7 @@ struct MockRootNames: Sendable {
 
 	/// The name of each value of the root's level a node binds again under its label where it receives it, by label and
 	/// then type: each value the root names apart, and each builder a call passes up that `mock()` binds under another name
-	/// (`NodeRecords.mockReceivesBoundAgain(in:)`).
+	/// (`NodeRecords.mockNamesReadApart(in:)`).
 	var namesBoundAgain: [String: [TypeDescription: String]] {
 		var names = namesApart
 		for (property, name) in passedUpBuilderNames where name != property.label {
@@ -121,6 +125,10 @@ struct MockRootNames: Sendable {
 
 	private let uncoveredParameterNames: [Property: String]
 
+	/// The name `mock()` binds each lazy wrapper under that it makes of an instance it takes, by label and then type, which
+	/// a node passes every receive of the wrapper (`NodeRecords.mockNamesReadApart(in:)`).
+	let wrapperBindingNames: [String: [TypeDescription: String]]
+
 	/// The binding of `property`, a place of a seam's own mock, from the builder `mock()` takes for it, and `nil` where
 	/// `mock()` takes no builder that builds it.
 	func placeBuilderBinding(of property: Property) -> MockPlaceBuilderBinding? {
@@ -140,7 +148,7 @@ extension NodeRecords {
 	/// (`ScopeGenerator.disambiguatePropertyLabels(forProperties:besideParametersKeepingTheirLabels:reservedNames:)`), and
 	/// names apart a parameter of `mock()` or an override beside another form of its label, so the override of such a child
 	/// is the root's field under the name, and each type that receives the label where no declaration between hides it binds
-	/// the name again under the label at the top of its function (`mockReceivesBoundAgain(in:)`). Refused, and left to the
+	/// the name again under the label at the top of its function (`mockNamesReadApart(in:)`). Refused, and left to the
 	/// walk: two children of one label under any other node, or under a root that was handed no name for one; a child of the
 	/// root named apart whose property is optional, which the walk binds as the value it builds; a rename of such a label
 	/// or from one, whose binding the walk reads otherwise; and a receive of the label only if available, which reads the name or `nil`
@@ -167,7 +175,7 @@ extension NodeRecords {
 				// A rename reads its fulfilling label by name, which the walk resolves past a receive bound again.
 				guard !mockRootNames.namesApart(label: dependency.property.label), !mockRootNames.namesApart(label: fulfillingProperty.label) else { return .mockOverrideNotParentField }
 			case .instantiated, .forwarded:
-				// A declaration of the label hides the name from what the node builds (`mockReceivesBoundAgain(in:)`).
+				// A declaration of the label hides the name from what the node builds (`mockNamesReadApart(in:)`).
 				break
 			}
 		}
