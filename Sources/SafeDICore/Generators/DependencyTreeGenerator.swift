@@ -632,7 +632,7 @@ public actor DependencyTreeGenerator {
 		/// table is freed with the build. A production root, of a module with seams or without, or a seam's own root,
 		/// whose records a test only compares.
 		let rootScope: ConstructionScope?
-		/// For a seam's own tree, its root; `nil` for every other root.
+		/// For a seam's own tree, its root, held only where `rootScope` is; `nil` for every other root.
 		let ownSeamRoot: ScopeGenerator.SeamRoot?
 
 		/// Whether a root's scope is kept after its tree is built (`rootScope`): set where the run names what node records
@@ -646,20 +646,43 @@ public actor DependencyTreeGenerator {
 		}
 
 		/// What node records read of a seam's own tree beside its world.
-		struct SeamTree {
+		struct SeamTree: Sendable {
 			/// What the seam's root is handed as instances of `LazilyInstantiated` properties, which its tree reads through
 			/// their wrappers (`DependencyTreeGenerator.seamRootDeclarations(of:seamRoot:)`).
 			let rootLazilyInstantiatedInstanceProperties: Set<Property>
+			/// The labels of what the seam's root is handed in a wrapper that is not `Sendable`, which a `@Sendable` function
+			/// of its tree would capture (`DependencyTreeGenerator.seamRootDeclarations(of:seamRoot:)`).
+			let rootNonSendableWrapperLabels: Set<String>
 			/// The seam's parameters, the nearest declarations of their labels in its tree, in signature order.
 			let parameters: [Property]
 			/// The labels of the deferred parameters the seam's own rename of the label reads from the autoclosure
 			/// (`ScopeGenerator.SeamRoot.autoclosureCallByLabel(of:)`).
 			let autoclosureLabels: Set<String>
+			/// The seam's signature, whose call routes say how its tree passes its builders' structs up to the seams it calls.
+			let signature: SeamSignature
+			/// The seam's root, from which a test makes the seam's holes (`SeamHoles(of:seamType:)`), and the seam's type.
+			let seamRoot: ScopeGenerator.SeamRoot
+			let seamType: TypeDescription
 
 			init(seam: Instantiable, seamRoot: ScopeGenerator.SeamRoot) {
-				rootLazilyInstantiatedInstanceProperties = DependencyTreeGenerator.seamRootDeclarations(of: seam, seamRoot: seamRoot).lazilyInstantiatedInstanceProperties
+				let declarations = DependencyTreeGenerator.seamRootDeclarations(of: seam, seamRoot: seamRoot)
+				rootLazilyInstantiatedInstanceProperties = declarations.lazilyInstantiatedInstanceProperties
+				rootNonSendableWrapperLabels = declarations.nonSendableWrapperLabels
 				parameters = seamRoot.signature.parameters.map(\.property)
 				autoclosureLabels = Set(seamRoot.autoclosureCallByLabel(of: seam).keys)
+				signature = seamRoot.signature
+				self.seamRoot = seamRoot
+				seamType = seam.concreteInstantiable
+			}
+
+			/// How the seam's tree hands each inner seam's enum up from a call (`ScopeGenerator.SeamRoot.callRoutes`).
+			var callRoutes: [SeamSignature.CallRoute] {
+				seamRoot.callRoutes
+			}
+
+			/// The seam's holes, by path (`SeamHoles(of:seamType:)`).
+			func makeSeamHoles() -> SeamHoles {
+				SeamHoles(of: seamRoot, seamType: seamType)
 			}
 		}
 

@@ -51,13 +51,15 @@ extension NodeRecords {
 
 	/// The record of `declaration`'s place in `variant`, a rename of a mock root's world: production's record, but that an
 	/// erased rename only if available maps over its fulfilling value wherever it is bound, as the mock's walk binds it,
-	/// whether or not the declaration it reads is optional. A rename reads no override.
+	/// whether or not the declaration it reads is optional. A rename reads no override, and reads a wrapper's instance
+	/// where production's would (`readsWrappersInstance`).
 	static func mockRenameRecord(
 		of declaration: DeclarationID,
 		variant: VariantID,
 		in world: some NodeRecordSources,
 		answers: OnlyIfAvailableAnswers,
+		readsWrappersInstance: Bool,
 	) throws(NodeRecordRefusal) -> AliasPlaceRecord {
-		try renameRecord(of: declaration, variant: variant, in: world, answers: answers, mapsWhereBoundOnlyIfAvailable: true)
+		try renameRecord(of: declaration, variant: variant, in: world, answers: answers, readsWrappersInstance: readsWrappersInstance, mapsWhereBoundOnlyIfAvailable: true)
 	}
 }

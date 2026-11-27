@@ -39,7 +39,10 @@ extension NodeRecords {
 			refusals.append(.erased)
 		case .lazy:
 			refusals.append(.lazy)
-		case .alias, .hole:
+		case .hole:
+			// A hole's scope is the one that declares it, whose own node is checked for what it holds.
+			return [.renameOrHole]
+		case .alias:
 			refusals.append(.renameOrHole)
 		}
 		if world.isOnCycle(declaration) {
@@ -59,7 +62,10 @@ extension NodeRecords {
 			switch propertyToGenerate {
 			case .instantiated:
 				break
-			case .hole, .aliased:
+			case .hole:
+				// A hole is a node of its own, whose kind is checked there.
+				break
+			case .aliased:
 				refusals.append(.renameOrHole)
 			}
 		}
@@ -90,6 +96,8 @@ extension NodeRecords {
 	/// - Parameter argumentsOfOtherValues: The construction's arguments no dependency fulfills whose values a kind sets
 	///   (`BuiltPlaceRecord.argumentValues`), each with its position among the arguments the call passes.
 	/// - Parameter alwaysDeclaresFunction: Whether a kind builds the node in a function of its own whatever its body holds.
+	/// - Parameter declaresFunction: Whether the caller's kind begins the builder function with a statement of its own, so
+	///   that a constant declares it too.
 	static func builtByInitializerRecord(
 		of declaration: DeclarationID,
 		variant _: VariantID,
@@ -104,6 +112,7 @@ extension NodeRecords {
 		typesDeclaredEscaping: Set<TypeDescription>,
 		children: [GeneratedCode],
 		lineEnd: String = "",
+		declaresFunction: Bool = false,
 	) throws -> BuiltPlaceRecord {
 		let instantiable = world.scope(of: declaration).instantiable
 		// Every node but the root is built as a property, and has an initializer (`refusalsOfBuiltByInitializer(_:in:)`)
@@ -129,8 +138,9 @@ extension NodeRecords {
 		for (position, argument) in argumentsOfOtherValues {
 			reads.insert(PlaceRead(argumentLabel: argument.label, label: argument.innerLabel, property: argument.asProperty, source: .binding(label: argument.innerLabel)), at: min(position, reads.count))
 		}
-		// A wrapper always declares its builder function; a constant only where its body has a statement, or a kind says so.
-		let hasFunction = isWrapper || alwaysDeclaresFunction || !children.isEmpty
+		// A wrapper always declares its builder function; a constant only where its body has a statement, where a kind says
+		// so, or where the caller's kind begins it with one (`declaresFunction`).
+		let hasFunction = declaresFunction || isWrapper || alwaysDeclaresFunction || !children.isEmpty
 		return BuiltPlaceRecord(
 			property: property,
 			isErased: world.isErased(declaration),
