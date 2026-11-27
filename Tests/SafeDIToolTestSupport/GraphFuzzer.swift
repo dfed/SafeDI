@@ -11472,9 +11472,14 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		let content: Substring
 		var block = [GeneratedCodeLine]()
 
+		/// The line without the `@inline(never)` a seam's tree declares its local functions with.
+		var contentAfterInlining: Substring {
+			content.hasPrefix("@inline(never) ") ? content.dropFirst("@inline(never) ".count) : content
+		}
+
 		/// The name of the builder function the line declares, when it declares one.
 		var declaredBuilderFunctionName: Substring? {
-			let declaration = content.hasPrefix("@Sendable nonisolated ") ? content.dropFirst("@Sendable nonisolated ".count) : content
+			let declaration = contentAfterInlining.hasPrefix("@Sendable nonisolated ") ? contentAfterInlining.dropFirst("@Sendable nonisolated ".count) : contentAfterInlining
 			guard declaration.hasPrefix("func __safeDI_") else { return nil }
 			return declaration.dropFirst("func ".count).prefix { $0.isLetter || $0.isNumber || $0 == "_" }
 		}
@@ -11545,7 +11550,7 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 				guard let name = line.declaredBuilderFunctionName else { continue }
 				// A function wrapping a sibling's, which it calls last, with the cycle arguments its scope passes.
 				if siblingNames.contains(where: { name != $0 && name.hasPrefix($0 + "_received") && line.block.last?.content.contains($0 + "(") == true }) {
-					features.insert(line.content.hasPrefix("@Sendable ") ? .sendableReceivedLoopMemberWithCycleParameters : .receivedLoopMemberWithCycleParameters)
+					features.insert(line.contentAfterInlining.hasPrefix("@Sendable ") ? .sendableReceivedLoopMemberWithCycleParameters : .receivedLoopMemberWithCycleParameters)
 				}
 				let ownFunctionNames = Set(line.block.compactMap(\.declaredBuilderFunctionName))
 				let instantiatedLabels = line.returnedTypeName.map { instantiatedLabelsByTypeName[String($0), default: []] } ?? []

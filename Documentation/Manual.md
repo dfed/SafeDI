@@ -923,7 +923,7 @@ extension Service {
     public init(__safeDI_userServiceBuilder: __safeDI_UserServiceCarrier<any UserService>) {
         let analytics = Analytics()
         let __safeDI_userServiceBuilder_profile = __safeDI_userServiceBuilder.profile(analytics)
-        func __safeDI_profile() -> Profile {
+        @inline(never) func __safeDI_profile() -> Profile {
             let userService: any UserService = __safeDI_userServiceBuilder_profile.userService()
             return Profile(userService: userService, analytics: analytics)
         }

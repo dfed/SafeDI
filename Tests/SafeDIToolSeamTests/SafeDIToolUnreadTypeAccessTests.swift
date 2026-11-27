@@ -2626,7 +2626,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_window: @autoclosure @escaping () -> Window) {
 		        let window = LazilyInstantiated<Window>(__safeDI_window)
-		        func __safeDI_screen() -> Screen {
+		        @inline(never) func __safeDI_screen() -> Screen {
 		            _ = Screen.__safeDI_Screen_564C5E6539CF6AA0.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Screen(__safeDI_window: window.instance)
 		        }
