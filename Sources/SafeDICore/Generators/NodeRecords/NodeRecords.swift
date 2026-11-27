@@ -297,12 +297,10 @@ struct NodeRecords: Sendable {
 	/// The kind a lane's classifier claims `declaration` as, or `nil` where none does. Each lane adds one line here, in
 	/// the order of `NodeRecordKind`'s cases, calling its file's classifier, `<kind>Kind(of:in:)`, which returns `nil` for
 	/// a node not of its kind and throws a refusal for a node of its kind it cannot make:
-	/// `if let kind = try <kind>Kind(of: declaration, in: world) { return kind }`.
+	/// `if let kind = try <kind>Kind(of: declaration, in: world) { return kind }`, with the last lane's answer returned in the
+	/// final `else`. While the cycle lane's is the only classifier, its answer is returned.
 	private static func claimedKind(of declaration: DeclarationID, in world: some NodeRecordSources) throws(NodeRecordRefusal) -> NodeRecordKind? {
-		if let kind = try cycleKind(of: declaration, in: world) {
-			return kind
-		}
-		return nil
+		try cycleKind(of: declaration, in: world)
 	}
 }
 
