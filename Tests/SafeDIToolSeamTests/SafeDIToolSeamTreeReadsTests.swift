@@ -72,24 +72,14 @@ struct SafeDIToolSeamTreeReadsTests: ~Copyable {
 			["token: Token"]
 		case .typesDeclaredEscaping:
 			["OnTap"]
-		case .parameterReads:
-			[
-				"clock: read true, inside a @Sendable function true",
-				"config: read true, inside a @Sendable function false",
-				"onTap: read true, inside a @Sendable function false",
-				"session: read true, inside a @Sendable function true",
-				"theme: read true, inside a @Sendable function false",
-				"token: read true, inside a @Sendable function false",
-			]
 		}
-		// `Panel`'s tree holds no alias and no escaping type, and its `clock` is read where `Screen`'s is.
+		// `Panel`'s tree holds no alias and no escaping type.
 		let screenComparisons = comparisons.filter { $0.seam == "Screen" }
 		#expect(!screenComparisons.isEmpty)
 		for comparison in screenComparisons {
 			#expect(comparison.differences.map(\.field) == [field.rawValue])
 			#expect(comparison.differences.map(\.tree) == [tree])
-			// An emptied `ParameterReads` reads no label.
-			#expect(comparison.differences.map(\.facts) == [field == .parameterReads ? tree.map { $0.replacingOccurrences(of: "true", with: "false") } : []])
+			#expect(comparison.differences.map(\.facts) == [[]])
 		}
 	}
 
