@@ -29,11 +29,24 @@ import Testing
 /// `SAFEDI_NODE_RECORDS_LAY_OUT_MOCKS` is `1`, every internal mock root: a sweep's switches, under which a test that
 /// compares a file with a function fails on the other text, and what is read is what does not compile.
 enum NodeRecordsChecks {
+	/// Whether a run lays out from node records every production root they accept: a test said so, or the sweep's switch
+	/// did. A run started outside `checking(_:)`, as the run over split module info files is, reads it too, so that it
+	/// generates in the mode of the run it is compared with.
+	static var laysOutRoots: Bool {
+		NodeRecordsObservation.laysOutRoots || ProcessInfo.processInfo.environment["SAFEDI_NODE_RECORDS_LAY_OUT"] == "1"
+	}
+
+	/// Whether a run lays out from node records every internal mock root they accept, as `laysOutRoots` says of
+	/// production roots.
+	static var laysOutMockRoots: Bool {
+		NodeRecordsObservation.laysOutMockRoots || ProcessInfo.processInfo.environment["SAFEDI_NODE_RECORDS_LAY_OUT_MOCKS"] == "1"
+	}
+
 	static func checking<Result>(_ body: () async throws -> Result) async rethrows -> Result {
 		let reportPath = ProcessInfo.processInfo.environment["SAFEDI_NODE_RECORDS_REPORT"]
 		let testName = Test.current?.name ?? "unknown test"
-		let laysOutRoots = NodeRecordsObservation.laysOutRoots || ProcessInfo.processInfo.environment["SAFEDI_NODE_RECORDS_LAY_OUT"] == "1"
-		let laysOutMockRoots = NodeRecordsObservation.laysOutMockRoots || ProcessInfo.processInfo.environment["SAFEDI_NODE_RECORDS_LAY_OUT_MOCKS"] == "1"
+		let laysOutRoots = laysOutRoots
+		let laysOutMockRoots = laysOutMockRoots
 		let enclosingObserver = NodeRecordsObservation.observer
 		let enclosingSeamCallObserver = SeamCallRecordObservation.observer
 		// A seam call's record, as the engine is to spell it, must list what its text reads, binds and declares, and spell
