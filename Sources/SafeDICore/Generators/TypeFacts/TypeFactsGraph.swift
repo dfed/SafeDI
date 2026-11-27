@@ -915,6 +915,10 @@ struct TypeFactsGraph: Sendable {
 	let kinds: [TypeFactsKind]
 	/// How each node's type comes to exist.
 	let constructions: [TypeFactsConstruction]
+	/// The columns from here to `propertyFacts`, and the four tables after `labelTexts`, state how a validated tree is
+	/// generated. A world of several roots is built before validation, where no order of siblings or of bindings is a fact
+	/// yet, so it leaves each of them empty (`init(roots:intern:)`, `generationSideElementCount`).
+	///
 	/// The world's ID of the property each node is built as, or -1 for the root.
 	let nodeProperties: [Int32]
 	/// The world's ID of the type each node builds: a leaf's, the type its property instantiates.
@@ -956,17 +960,20 @@ struct TypeFactsGraph: Sendable {
 	/// Each declaration location ID's location.
 	let declarationLocations: [Dependency.DeclarationLocation]
 
-	/// The facts of the node's edges, parallel to `graph.edges(from:)`.
+	/// The facts of the node's edges, parallel to `graph.edges(from:)`. Nothing in a world of several roots: it is built
+	/// before validation, and an edge's facts state how a validated tree is generated.
 	func edgeFacts(from index: Int) -> ArraySlice<TypeFactsEdge> {
 		edgeFacts.isEmpty ? [] : edgeFacts[graph.edgeIndices(from: index)]
 	}
 
-	/// The node's bindings, in the order its scope binds them.
+	/// The node's bindings, in the order its scope binds them. Nothing in a world of several roots: it is built before
+	/// validation, where the order a scope binds in is no fact yet.
 	func worldBindings(of index: Int) -> ArraySlice<TypeFactsWorldBinding> {
 		bindings[Int(bindingOffsets[index])..<Int(bindingOffsets[index + 1])]
 	}
 
-	/// The node's parents, in the order the walk meets their edges to it.
+	/// The node's parents, in the order the walk meets their edges to it. Nothing in a world of several roots: it is built
+	/// before validation, and a parent's facts state how a validated tree is generated.
 	func parents(of index: Int) -> ArraySlice<TypeFactsParent> {
 		parents[Int(parentOffsets[index])..<Int(parentOffsets[index + 1])]
 	}

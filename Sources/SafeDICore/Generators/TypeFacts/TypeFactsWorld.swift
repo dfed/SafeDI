@@ -204,6 +204,8 @@ protocol TypeFactsWorld {
 	func firstRoute(to declaration: DeclarationID) -> [DeclarationID]
 
 	func edges(from declaration: DeclarationID) -> ArraySlice<Int32>
+	/// Nothing in a world of several roots, as `bindings(of:)` and `parents(of:)` answer nothing there: that world is
+	/// built before validation, and these state how a validated tree is generated.
 	func edgeFacts(from declaration: DeclarationID) -> ArraySlice<TypeFactsEdge>
 	/// Owed: the graph's bindings carry the world's IDs (`TypeFactsGraph.worldBindings(of:)`) until the snapshot looks a
 	/// value up to its run ID.

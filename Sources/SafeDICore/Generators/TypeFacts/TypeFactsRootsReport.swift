@@ -69,6 +69,7 @@ public struct TypeFactsRootsReport: Sendable {
 		}
 		self.receives = receives
 		columnElementCount = graph.columnElementCount
+		generationSideElementCount = graph.generationSideElementCount
 		readCount = graph.readColumn.count
 		edgeCount = graph.graph.edgeCount
 		answerCount = graph.answerSets?.answers.count ?? 0
@@ -134,6 +135,9 @@ public struct TypeFactsRootsReport: Sendable {
 	public let answerStepCount: Int
 	/// The 32-bit elements of the world's columns.
 	public let columnElementCount: Int
+	/// The elements of the columns that state how a validated tree is generated, with what each node's accessors of them
+	/// answer: the world is built before validation and leaves them empty.
+	public let generationSideElementCount: Int
 	/// How many values the world's build interned that the run did not hold: the forms and accepted properties no
 	/// declaration spells.
 	public let internedForWorldCount: Int

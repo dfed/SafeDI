@@ -164,6 +164,20 @@ extension TypeFactsGraph {
 		declarationLocations = []
 	}
 
+	/// The elements of the columns that state how a validated tree is generated, and what each node's accessors of them
+	/// answer: none in a world of several roots, which is built before validation and whose validation reads none of
+	/// them. The bit rows of what a subtree receives and holds beneath it are not counted: that world gives them no row.
+	var generationSideElementCount: Int {
+		var count = nodeProperties.count + builtTypes.count + edgeFacts.count + bindings.count + twins.count
+		count += parents.count + fills.count + fillPathEntries.count
+		count += propertyFacts.labels.count + propertyFacts.formsRead.count + propertyFacts.formsProvided.count
+		count += propertyTable.count + typeTable.count + moduleNames.count + declarationLocations.count
+		for index in graph.nodes.indices {
+			count += edgeFacts(from: index).count + worldBindings(of: index).count + parents(of: index).count
+		}
+		return count
+	}
+
 	/// Whether the node stands for no declaration: node 0 of a world of several roots, or a frame.
 	func isFrame(_ index: Int) -> Bool {
 		graph.nodes[index].key.frame != TypeFactsDeclaration.noFrame

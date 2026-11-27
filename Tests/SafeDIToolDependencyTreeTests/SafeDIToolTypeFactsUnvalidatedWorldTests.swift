@@ -476,6 +476,18 @@ struct SafeDIToolTypeFactsUnvalidatedWorldTests {
 		#expect(TypeFactsChecks.disagreements(ofRootAt: 1, in: world, with: report) == ["the world has no root 1"])
 	}
 
+	// MARK: Generation-side columns
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func unvalidatedWorld_holdsNoGenerationSideFact_whenWorldIsBuiltBeforeValidation() async throws {
+		// A graph whose validated worlds hold edge facts, bindings, parents and property facts: a hub of instantiators
+		// that close cycles, and a leaf that receives a label of each member.
+		let world = try await observe(Self.hubMembersRow(memberCount: 4)).firstWorld
+
+		#expect(world.generationSideElementCount == 0)
+	}
+
 	// MARK: Storage
 
 	@Test
