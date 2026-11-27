@@ -87,6 +87,11 @@ public struct GenerationWork: Sendable {
 		/// at every place, a tree of n layers of screens that each build every screen of the next layer was visited once per
 		/// path.
 		case collectingTypesOfATree
+		/// Finding the value each receive in a root's tree is handed (`TypeFactsReceivedValueSupplies`), for `query graph`:
+		/// each edge into a node, in each pass over its component, for each label a receive reads, and each declaration a
+		/// receive can read. A node stands for every place of its declaration, so a tree of n layers of screens that each
+		/// open screens of the next layer counts its edges, not its paths, which the walk it replaced entered each of.
+		case findingReceivedValueSupplies
 		/// Collecting what the scopes of a lazy cycle in a seam's tree declare between the builder function the cycle closes
 		/// on and the scopes that call it again (`DependencyTreeGenerator.declarationsBetween(closedOnScope:closedOnDeclaration:)`):
 		/// each generator a walk reads. A walk reads a generator once, so the generators count, not the paths through

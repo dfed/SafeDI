@@ -3734,7 +3734,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// type is constructed, in the order the tree's code is generated, or `nil` where generation passes `nil`
 	/// (`unavailableProperties`). Where that declaration is a parameter of a builder function a lazy cycle closes on, the
 	/// value is the one each call of the function passes (see `OmissionFindings`). Also returns the concrete type of each
-	/// scope the tree constructs, in the order the walk meets them.
+	/// scope the tree constructs, in the order the walk meets them. `query graph` runs it only for trees built around
+	/// received dependencies nothing provides, which the fold that replaced it does not read yet, and otherwise only the
+	/// fold's oracle runs it (`TypeFactsReceivedValueSuppliesObservation`), since it enters every path of the tree.
 	///
 	/// A receive `unfulfilledReceives` holds is one the tree was built around although nothing provides it in some place
 	/// (`DependencyTreeGenerator.unfulfilledReceiveLocations`). Where nothing provides it, it is handed nothing, and an
