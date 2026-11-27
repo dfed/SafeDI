@@ -70,8 +70,10 @@ extension NodeRecords {
 		guard level == 0 || !world.isOnCycle(level) else { return false }
 		// A member another level builds too has one function, whose level's argument is typed as this level's and which
 		// the other level's body would hand its own configuration, so the loop keeps the walk, which writes a function
-		// per level.
-		guard members.allSatisfy({ member in world.parents(of: member).allSatisfy { $0.parent == level } }) else { return false }
+		// per level. A member that makes only itself again takes no level (`mockLoopLevels(in:)`), so any level builds it.
+		guard members.allSatisfy({ member in
+			world.madeAgain(from: member) == [member] || world.parents(of: member).allSatisfy { $0.parent == level }
+		}) else { return false }
 		return members.allSatisfy { member in
 			world.property(of: member)?.propertyType.isSendable == false
 				&& world.scope(of: member).publicMockCall == nil

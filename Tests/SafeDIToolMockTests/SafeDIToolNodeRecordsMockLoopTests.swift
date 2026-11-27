@@ -679,37 +679,49 @@ struct SafeDIToolNodeRecordsMockLoopTests: ~Copyable {
 		""")
 	}
 
-	/// A member that takes its level’s overrides and is built at two levels stays refused: its one function would take
-	/// one level’s type, and the other level would hand it its own configuration.
+	/// A loop of two members that take their level’s overrides, built at two levels, stays refused: each one function
+	/// would take one level’s type, and the other level would hand it its own configuration.
 	@Test
-	mutating func mock_refusesLoop_whenMemberTakingItsLevelsOverridesIsBuiltAtTwoLevels() async throws {
+	mutating func mock_refusesLoop_whenMembersTakingTheirLevelsOverridesAreBuiltAtTwoLevels() async throws {
 		let fixture = [
 			"""
 			@Instantiable(generateMock: true)
 			public final class Root: Instantiable {
-			    public init(holder: Holder, loopBuilder: Instantiator<Loop>) {
+			    public init(holder: Holder, aBuilder: Instantiator<A>, bBuilder: Instantiator<B>) {
 			        fatalError("SafeDI doesn't inspect the initializer body")
 			    }
 			    @Instantiated let holder: Holder
-			    @Instantiated let loopBuilder: Instantiator<Loop>
+			    @Instantiated let aBuilder: Instantiator<A>
+			    @Instantiated let bBuilder: Instantiator<B>
 			}
 			""",
 			"""
 			@Instantiable
 			public final class Holder: Instantiable {
-			    public init(loopBuilder: Instantiator<Loop>) {
+			    public init(aBuilder: Instantiator<A>, bBuilder: Instantiator<B>) {
 			        fatalError("SafeDI doesn't inspect the initializer body")
 			    }
-			    @Instantiated let loopBuilder: Instantiator<Loop>
+			    @Instantiated let aBuilder: Instantiator<A>
+			    @Instantiated let bBuilder: Instantiator<B>
 			}
 			""",
 			"""
 			@Instantiable
-			public final class Loop: Instantiable {
-			    public init(loopBuilder: Instantiator<Loop>, leaf: Leaf) {
+			public final class A: Instantiable {
+			    public init(bBuilder: Instantiator<B>, leaf: Leaf) {
 			        fatalError("SafeDI doesn't inspect the initializer body")
 			    }
-			    @Received let loopBuilder: Instantiator<Loop>
+			    @Received let bBuilder: Instantiator<B>
+			    @Instantiated let leaf: Leaf
+			}
+			""",
+			"""
+			@Instantiable
+			public final class B: Instantiable {
+			    public init(aBuilder: Instantiator<A>, leaf: Leaf) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+			    @Received let aBuilder: Instantiator<A>
 			    @Instantiated let leaf: Leaf
 			}
 			""",
