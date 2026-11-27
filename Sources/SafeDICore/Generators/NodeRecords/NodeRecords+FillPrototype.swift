@@ -40,6 +40,7 @@ struct FillPrototypeReport: Sendable {
 	/// The fills piece A made facts of, and the caller reads it found sources for.
 	let factsMade: Int
 	let callerSourcesMade: Int
+	let rowLine: String
 	var treeFillSignaturesByKey: [String: String] = [:]
 	var treeFillKeys: [String] = []
 	var treeCarrierFillKeys: [String] = []
@@ -58,6 +59,7 @@ struct FillPrototypeReport: Sendable {
 			comparison("dispatchers", dispatcherKeys, treeDispatcherKeys),
 			"  fill bound values and parameters: \(fillSignaturesByKey.filter { treeFillSignaturesByKey[$0.key] == $0.value }.count) of \(fillSignaturesByKey.count) agree\(fillSignaturesByKey.sorted { $0.key < $1.key }.filter { treeFillSignaturesByKey[$0.key] != $0.value }.prefix(5).map { "; \($0.key): records \($0.value), tree \(treeFillSignaturesByKey[$0.key] ?? "none")" }.joined())",
 			"  fill facts made \(factsMade), caller sources \(callerSourcesMade)",
+			"  \(rowLine)",
 			"  refused filled calls: \(refusedCallsByReason.isEmpty ? "none" : refusedCallsByReason.map { "\($0.reason) \($0.count)" }.joined(separator: ", "))",
 			"  world refusals: \(worldRefusals.isEmpty ? "none" : worldRefusals.joined(separator: ", "))",
 		] + [""]).joined(separator: "\n")
@@ -81,6 +83,11 @@ enum FillPrototype {
 		var dispatcherKeys = Set<String>()
 		var filledCalls = 0
 		var factsMade = 0
+		var dispatchersMade = 0
+		var recordDispatcherKeys = Set<String>()
+		var inlinedFills = 0
+		var rootFunctionDispatchers = 0
+		var sendableKeys = 0
 		var callerSourcesMade = 0
 		var fillSignaturesByKey = [String: String]()
 		for declaration in 0..<Int32(world.declarationCount) where world.construction(of: declaration) == .seamCall {
@@ -115,10 +122,50 @@ enum FillPrototype {
 			switch FillFacts.of(call: declaration, in: world) {
 			case let .facts(allFacts):
 				let variant = (0..<Int32(world.variantCount)).first { world.declaration(of: $0) == declaration } ?? 0
+				// Rows 1 and 3 (seam calls lane), then row 4 (hole records lane), on placeholder names.
+				let innerScopes: FillInnerScopes
+				do {
+					innerScopes = try FillInnerScopes.of(call: declaration, in: world, seamTree: nil)
+				} catch {
+					refused["innerScopes \(error.rawValue)", default: 0] += 1
+					continue
+				}
+				var callerArguments = [Property: ArgumentSource]()
 				for facts in allFacts {
 					factsMade += 1
-					callerSourcesMade += FillCallerSources.of(facts: facts, call: declaration, variant: variant, in: world).count
+					let sources = FillCallerSources.of(facts: facts, call: declaration, variant: variant, in: world)
+					callerSourcesMade += sources.count
+					for (parameter, source) in zip(facts.parametersTakenOfCallerReads, sources) where callerArguments[parameter] == nil || callerArguments[parameter] == .nil {
+						callerArguments[parameter] = source
+					}
 				}
+				let levels = FillDispatchers.of(call: declaration, in: world, fillParameters: allFacts.map { (fillKey: $0.key, parameters: $0.memberParameters) }, innerScopes: innerScopes)
+				let decisions = FillEmissionDecisions.of(
+					fills: allFacts.map { facts in
+						FillEmissionDecisions.Fill(
+							key: facts.key,
+							hole: facts.hole,
+							carrierUse: facts.carrierUse,
+							takesPayloadFields: facts.takesPayloadFields,
+							labelsReadOrDeclared: Set(facts.labelsReadOrDeclared),
+							boundLabels: Set(facts.boundLabels),
+							parameters: facts.memberParameters,
+							// No fill of an accepted root call reads its inner scopes (`FillFacts.readsInnerScopes`); row 1's levels are
+							// `FillInnerScopes.Field`s, which a fill reading them would take as hole fields.
+							innerScopeParameters: [],
+							declaresFunction: facts.declaresFunction,
+							readLabels: Set(facts.readLabels),
+						)
+					},
+					dispatchers: levels.dispatchers,
+					callerArguments: callerArguments,
+					callerMemoArguments: [:],
+				)
+				dispatchersMade += levels.dispatchers.count
+				recordDispatcherKeys.formUnion(levels.dispatchers.map(\.key))
+				inlinedFills += decisions.inlinedFillKeys.count
+				rootFunctionDispatchers += decisions.rootFunctionDispatcherKeys.count
+				sendableKeys += decisions.sendableKeys.count
 			case let .refused(refusal):
 				refused[refusal.rawValue, default: 0] += 1
 			}
@@ -179,6 +226,7 @@ enum FillPrototype {
 			fillSignaturesByKey: fillSignaturesByKey,
 			factsMade: factsMade,
 			callerSourcesMade: callerSourcesMade,
+			rowLine: "rows 1, 3, 4: dispatchers made \(dispatchersMade) (\(recordDispatcherKeys.count) keys, \(recordDispatcherKeys.isSubset(of: dispatcherKeys) && dispatcherKeys.isSubset(of: recordDispatcherKeys) ? "the same as callFills'" : "differing from callFills'")), inlined fills \(inlinedFills), root-function dispatchers \(rootFunctionDispatchers), sendable \(sendableKeys)",
 		)
 	}
 
