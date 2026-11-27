@@ -253,8 +253,8 @@ extension TypeKeyLayout {
 	/// it, then the body's own function. `nil` where no place's function has the name, or a place written as text declares
 	/// it.
 	func resolvedFunction(named name: String, from body: Int) -> ResolvedFunction? {
-		var body = body
-		while true {
+		var next: Int? = body
+		while let body = next {
 			switch declaredFunctionsByBody[body]?[name] {
 			case let .statement(index, record):
 				return .statement(body: body, index: index, record: record)
@@ -264,12 +264,14 @@ extension TypeKeyLayout {
 				break
 			}
 			if body == 0 {
-				return nil
+				next = nil
 			} else if bodies[body].record?.functionName == name {
 				return .enclosing(body)
+			} else {
+				next = bodies[body].parent
 			}
-			body = bodies[body].parent
 		}
+		return nil
 	}
 
 	/// The labels the functions named `names` read outside them, which a place whose closers call them, made in `body`,
