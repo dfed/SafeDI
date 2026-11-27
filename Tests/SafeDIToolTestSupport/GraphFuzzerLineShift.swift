@@ -51,10 +51,10 @@ enum GraphFuzzerLineShift {
 		return shiftedLines.joined(separator: "\n")
 	}
 
-	/// `text` with the line and column after each Swift file's path reduced to `<position>`: a diagnostic about a
-	/// moved declaration is reported where it now is.
+	/// `text` with the line and column after each Swift file's path, and the end of a fix-it's range after them,
+	/// reduced to `<position>`: a diagnostic about a moved declaration is reported where it now is.
 	static func reducingPositions(in text: String) -> String {
-		text.replacingOccurrences(of: #"(\.swift):[0-9]+(:[0-9]+)?"#, with: "$1:<position>", options: .regularExpression)
+		text.replacingOccurrences(of: #"(\.swift):[0-9]+(:[0-9]+)?(-[0-9]+:[0-9]+)?"#, with: "$1:<position>", options: .regularExpression)
 	}
 
 	/// A `.safedi` file's bytes as text that compares as the bytes do, one character per byte, with each occurrence of
@@ -86,7 +86,7 @@ enum GraphFuzzerLineShift {
 				differences.append("the module that rejects it (\(run.rejectingModuleName ?? "its one module") against \(shiftedRun.rejectingModuleName ?? "its one module"))")
 			}
 			if reducingPositions(in: diagnostics) != reducingPositions(in: shiftedDiagnostics) {
-				differences.append("its diagnostics")
+				differences.append("its diagnostics (\(firstDifferingLine(of: reducingPositions(in: diagnostics), and: reducingPositions(in: shiftedDiagnostics))))")
 			}
 		case let (.accepted(generatedFiles, warnings), .accepted(shiftedGeneratedFiles, shiftedWarnings)):
 			differences += codeDifferences(between: generatedFiles, and: shiftedGeneratedFiles)
@@ -113,7 +113,7 @@ enum GraphFuzzerLineShift {
 				break
 			case let (.rejected(diagnostics), .rejected(shiftedDiagnostics)):
 				if reducingPositions(in: diagnostics) != reducingPositions(in: shiftedDiagnostics) {
-					differences.append("the diagnostics of \(verdict.moduleName)")
+					differences.append("the diagnostics of \(verdict.moduleName) (\(firstDifferingLine(of: reducingPositions(in: diagnostics), and: reducingPositions(in: shiftedDiagnostics))))")
 				}
 			case let (.accepted(module), .accepted(shiftedModule)):
 				differences += codeDifferences(between: module.units, and: shiftedModule.units).map { "\($0) in \(verdict.moduleName)" }
