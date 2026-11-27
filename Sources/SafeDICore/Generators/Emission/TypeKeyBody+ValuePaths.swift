@@ -253,12 +253,13 @@ extension TypeKeyLayout {
 		}
 	}
 
-	/// Whether every value path of every place names only passed arguments its function takes, the root's names none, and
-	/// each ordinary read in a path reads in the type key's code what it reads in the path key's.
+	/// Whether every value path of every place names only passed arguments its function takes, the root's only those of
+	/// `rootPassedArgumentNames`, and each ordinary read in a path reads in the type key's code what it reads in the path
+	/// key's.
 	func checkValuePaths() -> Bool {
 		for body in bodies.indices {
 			let owner = classByBody[body]
-			let takenNames = Set(representative(of: owner)?.passedArguments.map(\.parameterName) ?? [])
+			let takenNames = owner == 0 ? rootPassedArgumentNames : Set(representative(of: owner)?.passedArguments.map(\.parameterName) ?? [])
 			let statements = bodies[body].statements
 			func check(_ path: ValuePath, before index: Int) -> Bool {
 				guard path.passedArgumentNames.allSatisfy(takenNames.contains),

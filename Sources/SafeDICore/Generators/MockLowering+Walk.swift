@@ -24,7 +24,8 @@
 /// overflows a thread's stack nor releases a chain of nested nodes.
 extension ScopeGenerator {
 	/// The mock of `instantiable`, the mocked type of this root, whose tree is its generator's children.
-	func lowerMockRootWithTree(of instantiable: Instantiable, context: MockContext) async throws -> MockLowering.Result {
+	/// `worldRoot` is the root of the mock root's world, where a test observes node records.
+	func lowerMockRootWithTree(of instantiable: Instantiable, context: MockContext, worldRoot: ConstructionScope? = nil) async throws -> MockLowering.Result {
 		// The mocked type's hand-written mock builds it, internal or public (`MockLowering+HandWrittenMocks.swift`), and every
 		// dependency is a node of its tree, a parameter of `mock()`, an override's binding or passed `nil`.
 		// The parameters `mock()` takes before its overrides (`lowerRootSignature(of:context:)`).
@@ -194,7 +195,8 @@ extension ScopeGenerator {
 			rootReceiverBindingLines.append("\(bodyIndent)let \(dependency.property.label): \(dependency.property.typeDescription.asSource) = \(name)")
 			rootRenames[dependency.property.label]?[dependency.property.typeDescription] = nil
 		}
-		bindingLines.insert(contentsOf: signature.lazilyInstantiatedBindingLines(indent: bodyIndent) + rootReceiverBindingLines, at: rootReceiverBindingIndex)
+		let linesBoundBesideNodes = signature.lazilyInstantiatedBindingLines(indent: bodyIndent) + rootReceiverBindingLines
+		bindingLines.insert(contentsOf: linesBoundBesideNodes, at: rootReceiverBindingIndex)
 		// The mocked type's own receive or instantiation of a lazy wrapper's instance is passed the
 		// wrapper's instance, and a receive only if available of the optional form of a node or a parameter of `mock()` is passed
 		// that binding, as `generateReturnArgumentList` passes them.
@@ -206,12 +208,27 @@ extension ScopeGenerator {
 		for (label, names) in MockLowering.rootOptionalFormRenames(of: rootOptionalForms, renames: rootRenames) {
 			rootRenames[label, default: [:]].merge(names) { renamed, _ in renamed }
 		}
+		let builders = (walk.filledCallBuilders.parameters + signature.placeOnlyBuilderDeclarations).sorted { $0.label < $1.label }
+		// Where a test observes node records, an internal mock that binds nothing but its nodes has the statements that build
+		// them laid out from the records of its world (`nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:)`).
+		if let worldRoot {
+			let bindsOnlyNodes = rootReceiverBindingIndex == 0
+				&& linesBoundBesideNodes.isEmpty
+				&& signature.parameters.isEmpty
+				&& signature.onlyIfAvailableOverrides.isEmpty
+				&& builders.isEmpty
+				&& rootRenames.values.allSatisfy(\.isEmpty)
+				&& rootInstancesReadByValue.isEmpty
+			if let statements = Self.nodeRecordsMockStatements(of: instantiable, worldRoot: worldRoot, bindsOnlyNodes: bindsOnlyNodes) {
+				bindingLines = [statements]
+			}
+		}
 		// A public mock's tiers, overrides and guard (`MockLowering+PublicMocks.swift`).
 		if let publicMockRoot {
 			// A public mock's parameters named apart and its values passed `nil`, as the internal mock's.
 			return publicMockWithTree(of: instantiable, plan: publicMockRoot.plan, publicMockContext: publicMockRoot.context, signature: signature, nodes: nodes, bindingLines: bindingLines, rootRenames: rootRenames, unavailableProperties: unavailableOptionalProperties, instancesReadByValue: rootInstancesReadByValue, configurations: walk.configurationRecords, context: context)
 		} else {
-			return MockLowering.Result(code: Self.mockWithTree(of: instantiable, signature: signature, nodes: nodes, inlineOrderedNodes: inlineOrdered(nodes, property: \.property), bindingLines: bindingLines, builders: (walk.filledCallBuilders.parameters + signature.placeOnlyBuilderDeclarations).sorted { $0.label < $1.label }, rootRenames: rootRenames, unavailableProperties: unavailableOptionalProperties, instancesReadByValue: rootInstancesReadByValue, context: context), configurations: walk.configurationRecords)
+			return MockLowering.Result(code: Self.mockWithTree(of: instantiable, signature: signature, nodes: nodes, inlineOrderedNodes: inlineOrdered(nodes, property: \.property), bindingLines: bindingLines, builders: builders, rootRenames: rootRenames, unavailableProperties: unavailableOptionalProperties, instancesReadByValue: rootInstancesReadByValue, context: context), configurations: walk.configurationRecords)
 		}
 	}
 
@@ -1565,9 +1582,10 @@ extension MockLowering {
 			return isErased ? "\(erasedTypeSource)(\(unerasedConstruction))" : unerasedConstruction
 		}
 
-		/// The type an erased node wraps what it builds in: its property's, or the type a wrapper builds.
+		/// The type an erased node wraps what it builds in: the type its property instantiates, which is the property's type
+		/// without the optionality of one instantiated only if available, or the type a wrapper builds, as production wraps it.
 		private var erasedTypeSource: String {
-			isWrapped ? property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource : property.typeDescription.asSource
+			property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource
 		}
 
 		// The name the node's level renames its builder function to, apart from an enclosing function

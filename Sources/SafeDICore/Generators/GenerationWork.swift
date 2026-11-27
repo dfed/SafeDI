@@ -82,11 +82,18 @@ public struct GenerationWork: Sendable {
 		/// once per class and reads each member once; asked for every member, it read the members of a class of n members
 		/// n² times.
 		case checkingReadsAtEveryMember
-		/// Collecting the types a tree builds, for the imports of its file (`ScopeGenerator.fulfillersOfTree(buildingMock:)`)
-		/// and for the public mocks a mock tree reaches (`concreteTypesOfTree()`): each generator the walk visits. A walk
-		/// visits a generator once, so the generators count, not the places that share them; entered at every place, a
-		/// tree of n layers of screens that each build every screen of the next layer was visited once per path.
+		/// Collecting the types a tree builds: for the imports of a root's file, each declaration its world reaches
+		/// (`TypeFactsImports`); for the imports of a mock's file (`ScopeGenerator.fulfillersOfTree(buildingMock:)`) and the
+		/// public mocks a mock tree reaches (`concreteTypesOfTree()`), each generator the walk visits. A declaration stands
+		/// for every place of it, and a walk visits a generator once, so neither counts the places that share them; entered
+		/// at every place, a tree of n layers of screens that each build every screen of the next layer was visited once per
+		/// path.
 		case collectingTypesOfATree
+		/// Finding the value each receive in a root's tree is handed (`TypeFactsReceivedValueSupplies`), for `query graph`:
+		/// each edge into a node, in each pass over its component, for each label a receive reads, and each declaration a
+		/// receive can read. A node stands for every place of its declaration, so a tree of n layers of screens that each
+		/// open screens of the next layer counts its edges, not its paths, which the walk it replaced entered each of.
+		case findingReceivedValueSupplies
 		/// Collecting what the scopes of a lazy cycle in a seam's tree declare between the builder function the cycle closes
 		/// on and the scopes that call it again (`DependencyTreeGenerator.declarationsBetween(closedOnScope:closedOnDeclaration:)`):
 		/// each generator a walk reads. A walk reads a generator once, so the generators count, not the paths through
