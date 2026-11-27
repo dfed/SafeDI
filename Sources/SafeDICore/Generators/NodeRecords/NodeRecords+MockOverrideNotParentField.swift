@@ -32,8 +32,12 @@ struct MockRootNames: Sendable {
 	///   - uncoveredParameterNames: The name of the parameter `mock()` takes as a plain value for each dependency a type of the
 	///     tree instantiates that the mock cannot build, by the dependency's property, its label where it is not named apart
 	///     (`MockLowering.RootSignature.uncoveredParameters`); a `@Sendable` autoclosure parameter is none.
-	init(namesApart: [String: [TypeDescription: String]] = [:], unavailableDependencyOverrides: [(property: Property, name: String)] = [], passedUpBuilderNames: [Property: String] = [:], uncoveredParameterNames: [Property: String] = [:]) {
+	///   - edgesConfigurationsLeaveOut: The edges between two types of a cycle that the module's configurations leave out,
+	///     so that no configuration holds itself (`ScopeGenerator.MockContext.cycleEdges`): the parent's configuration has
+	///     no field for the child. A fact of the module's types together, which no root's world holds.
+	init(namesApart: [String: [TypeDescription: String]] = [:], unavailableDependencyOverrides: [(property: Property, name: String)] = [], passedUpBuilderNames: [Property: String] = [:], uncoveredParameterNames: [Property: String] = [:], edgesConfigurationsLeaveOut: Set<ScopeGenerator.CycleEdge> = []) {
 		self.namesApart = namesApart
+		self.edgesConfigurationsLeaveOut = edgesConfigurationsLeaveOut
 		self.passedUpBuilderNames = passedUpBuilderNames
 		self.uncoveredParameterNames = uncoveredParameterNames
 		unavailableDependencyOverrideNames = Dictionary(unavailableDependencyOverrides.map { ($0.property, $0.name) }) { first, _ in first }
@@ -55,6 +59,9 @@ struct MockRootNames: Sendable {
 	func unavailableDependencyOverrideName(of property: Property) -> String? {
 		unavailableDependencyOverrideNames[property]
 	}
+
+	/// The edges between two types of a cycle that the module's configurations leave out (`NodeRecords+MockCycle.swift`).
+	let edgesConfigurationsLeaveOut: Set<ScopeGenerator.CycleEdge>
 
 	/// The name `mock()` binds the builder under that a call's leaf receives as `property`, and `nil` where `mock()` takes no
 	/// builder the leaf receives so.
