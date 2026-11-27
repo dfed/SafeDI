@@ -445,6 +445,7 @@ extension ScopeRecord {
 		constructionMemo: inout ConstructionMemo,
 		scopeGeneratorLimit: ScopeGeneratorLimit? = nil,
 	) throws -> ScopeGenerator {
+		var unrecordedPlaces: TypeFactsPlaces?
 		let scopeGenerator = try createdTree(
 			in: table,
 			nearestDeclarations: nearestDeclarations,
@@ -456,6 +457,7 @@ extension ScopeRecord {
 			validatesForwardedProperties: validatesForwardedProperties,
 			declaredTypeNames: declaredTypeNames,
 			constructionMemo: &constructionMemo,
+			typeFactsPlaces: &unrecordedPlaces,
 			scopeGeneratorLimit: scopeGeneratorLimit,
 		)
 		if let observer = ConstructionMemoOracle.observer {
@@ -474,12 +476,15 @@ extension ScopeRecord {
 					validatesForwardedProperties: validatesForwardedProperties,
 					declaredTypeNames: declaredTypeNames,
 					constructionMemo: &oracleMemo,
+					typeFactsPlaces: &unrecordedPlaces,
 					scopeGeneratorLimit: nil,
 				)
 			} }
 			constructionMemo.oracleMemo = oracleMemo
 			// The reference tree is built with neither the memo nor the settled cycle parameter seed, so every
 			// graph compares the seeded build with the plain pass loop as well.
+			// It reuses nothing, so it walks every place, which it records for the graph of per-type facts to be compared with.
+			var places: TypeFactsPlaces? = TypeFactsPlaces()
 			let treeBuiltWithoutMemo = try ConstructionMemo.$isEnabled.withValue(false) { try CycleParameterPlan.$isEnabled.withValue(false) {
 				var unusedMemo = ConstructionMemo()
 				return try createdTree(
@@ -493,10 +498,11 @@ extension ScopeRecord {
 					validatesForwardedProperties: validatesForwardedProperties,
 					declaredTypeNames: declaredTypeNames,
 					constructionMemo: &unusedMemo,
+					typeFactsPlaces: &places,
 					scopeGeneratorLimit: nil,
 				)
 			} }
-			observer(treeBuiltWithMemo, treeBuiltWithoutMemo)
+			observer(treeBuiltWithMemo, treeBuiltWithoutMemo, TypeFactsReport(root: ConstructionScope(table: table, record: self), places: places ?? TypeFactsPlaces(), forMockGeneration: forMockGeneration))
 		}
 		return scopeGenerator
 	}
@@ -516,6 +522,7 @@ extension ScopeRecord {
 		validatesForwardedProperties: Bool,
 		declaredTypeNames: DeclaredTypeNames,
 		constructionMemo: inout ConstructionMemo,
+		typeFactsPlaces: inout TypeFactsPlaces?,
 		scopeGeneratorLimit: ScopeGeneratorLimit?,
 	) throws -> ScopeGenerator {
 		// The places every pass so far has built or reused, which `scopeGeneratorLimit` bounds until its caller keeps the
@@ -569,6 +576,7 @@ extension ScopeRecord {
 			if previousPassGenerator == nil, ConstructionMemo.isEnabled, ConstructionSharingSchedule.current?.offersLaterPlacesCandidates == true {
 				// The sharing oracle offers each place what a place after it built: the first pass starts from what a
 				// discarded build of the same pass stored, which the schedule asks newest first.
+				var discardedPlaces: TypeFactsPlaces?
 				var discardedCount = 0
 				var discardedLimit: ScopeGeneratorLimit?
 				_ = try createScopeGenerator(
@@ -587,11 +595,14 @@ extension ScopeRecord {
 					settledPassMemo: nil,
 					root: root,
 					scopesBuiltAtOnePlace: scopesBuiltAtOnePlace,
+					typeFactsPlaces: &discardedPlaces,
 					placeReadLabels: placeReadLabels,
 					scopeGeneratorLimit: &discardedLimit,
 					scopeGeneratorCount: &discardedCount,
 				)
 			}
+			// A recorded tree keeps the places of its last pass, which is the tree.
+			var passPlaces: TypeFactsPlaces? = typeFactsPlaces == nil ? nil : TypeFactsPlaces()
 			scopeGenerator = try createScopeGenerator(
 				nearestDeclarations: nearestDeclarations,
 				lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
@@ -608,10 +619,14 @@ extension ScopeRecord {
 				settledPassMemo: settledPassMemo,
 				root: root,
 				scopesBuiltAtOnePlace: scopesBuiltAtOnePlace,
+				typeFactsPlaces: &passPlaces,
 				placeReadLabels: placeReadLabels,
 				scopeGeneratorLimit: &scopeGeneratorLimit,
 				scopeGeneratorCount: &scopeGeneratorCount,
 			)
+			if passPlaces != nil {
+				typeFactsPlaces = passPlaces
+			}
 			if previousPassGenerator == nil {
 				cycleParameterSeed = Self.cycleParameterSeed(
 					ofFirstPassTree: scopeGenerator,
@@ -698,10 +713,13 @@ extension ScopeRecord {
 		settledPassMemo: ConstructionMemo?,
 		root: ConstructionScope,
 		scopesBuiltAtOnePlace: ScopesBuiltAtOnePlace?,
+		typeFactsPlaces: inout TypeFactsPlaces?,
 		placeReadLabels: PlaceReadLabels?,
 		scopeGeneratorLimit: inout ScopeGeneratorLimit?,
 		scopeGeneratorCount: inout Int,
 	) throws -> ScopeGenerator {
+		// The position of each scope under construction among the places recorded, where a test records them.
+		var placeIndices = [typeFactsPlaces?.start(TypeFactsDeclaration(scope: root, property: nil, propertyID: -1, erasedToConcreteExistential: false, isFill: false), parent: nil)]
 		var scopeGeneratorsUnderConstruction = [ScopeGeneratorUnderConstruction(
 			scope: root,
 			property: nil,
@@ -723,8 +741,8 @@ extension ScopeRecord {
 			cycleParameterSeed: cycleParameterSeed,
 			cycleParameterContexts: [:],
 			placeHoldingPropertiesByType: placeHoldingPropertiesByType,
-			// A root's place is never stored.
-			recordsReads: false,
+			// A root's place is never stored, so only a recorded place keeps what its subtree read.
+			recordsReads: typeFactsPlaces != nil,
 		)]
 		let reusesGenerators = ConstructionMemo.isEnabled
 		// The sharing oracle's schedule, test only, and how many lookups it has drawn for (`ConstructionSharingSchedule`).
@@ -781,6 +799,7 @@ extension ScopeRecord {
 						)
 						child.memoKey = key
 						scopeGeneratorsUnderConstruction.append(child)
+						placeIndices.append(typeFactsPlaces?.start(TypeFactsDeclaration(scope: scope, property: property, propertyID: propertyID.raw, erasedToConcreteExistential: erasedToConcreteExistential, isFill: false), parent: placeIndices[index]))
 					}
 				case let .aliased(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable, declarationReference):
 					scopeGeneratorsUnderConstruction[index].addAliasGenerator(
@@ -802,8 +821,12 @@ extension ScopeRecord {
 					scope: fill.scope,
 					context: fill.context,
 				))
+				placeIndices.append(typeFactsPlaces?.start(TypeFactsDeclaration(scope: fill.scope, property: fill.fill.hole.property, propertyID: fill.context.propertyID.raw, erasedToConcreteExistential: false, isFill: true), parent: placeIndices[index]))
 			} else {
 				var createdScope = scopeGeneratorsUnderConstruction.removeLast()
+				if let placeIndex = placeIndices.removeLast() {
+					typeFactsPlaces?.finish(placeIndex, closesCycle: createdScope.closesCycle, reads: createdScope.readsAnsweredAbove)
+				}
 				let scopeGenerator = createdScope.scopeGenerator()
 				let callGenerators = createdScope.callGenerators(including: scopeGenerator)
 				callGeneratorsInTree.formUnion(callGenerators)
@@ -1603,6 +1626,11 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		!isCall && childrenAreSettled && ConstructionMemo.foundAlike(by: generator, asBy: previousPassGenerator, builtWithCycleParameters: ownCycleParameters)
 	}
 
+	/// Whether the scope closes a cycle on a declaration above it, and so builds no children.
+	var closesCycle: Bool {
+		isPropertyCycle
+	}
+
 	/// What this scope's subtree read of the context above this scope (see `ConstructionMemo`).
 	var readsAnsweredAbove: ConstructionLog {
 		log.reads(answeredAbove: depth)
@@ -2395,24 +2423,22 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	/// passes as its leaf's dependency of the builder's label: an empty value here, or the parameter called with the scope.
 	private mutating func builderCallArguments(fillNames: [String: String]) -> [ScopeGenerator.BuilderCallArgument] {
 		guard let calledBuilders = scope.calledBuilders, !holeArguments.isEmpty else { return [] }
-		let filledSites = Self.filledSites(of: holeArguments)
-		let enumsByKey = calledBuilders.enumsByKey
+		let filledSites = calledBuilders.siteNumbers(of: Self.filledSites(of: holeArguments))
 		// A seam's caller calls the initializer only generated code calls, under its prefixed labels; a public mock's
 		// caller passes each builder by the leaf's argument of its label.
 		let isPublicMockCall = scope.publicMockCall != nil
 		return calledBuilders.builders.map { builder in
 			let label = isPublicMockCall ? builder.label : builder.generatedOnlyArgumentLabel
 			let enumKey = builder.enumKey
-			let reachedSites = isPublicMockCall
-				? calledBuilders.sitesReachedOnItsRoutes(by: builder, in: enumsByKey)
-				: SeamSignature.ScopeEnum.sitesReached(from: enumKey, in: enumsByKey)
+			// A public mock's caller reads only the sites on the builder's routes (`CalledBuilders.routesReachOnly(_:by:)`).
+			let reachesFilledSite = calledBuilders.reaches(anyOf: filledSites, from: enumKey, onRoutesOf: isPublicMockCall ? enumKey : nil)
 			// In a tree built to compute the signature, which generates nothing, the case is not settled yet.
 			let route = seamHoles.routeCase(at: sitePath, innerKey: enumKey)
 			/// The struct a public mock's caller passes up of the called mock's root level: the member of the caller's own struct for
 			/// the call, or, as an internal mock, the struct of the builder the caller takes under the label it takes it by.
 			let receivedLabel = scope.publicMockCall?.passedParameters.first { $0.builder?.enumKey == enumKey }?.dependency.property.label ?? builder.label
 			let publicMockUpValue = route.map { $0.memberCall ?? "" } ?? ".init(\(ReservedName.noScopeArgumentLabel): \(receivedLabel))"
-			guard !reachedSites.isDisjoint(with: filledSites) else {
+			guard reachesFilledSite else {
 				// The call hands on what the call's own member of the seam's or public mock's struct returns.
 				if let memberCall = route?.memberCall {
 					return .init(label: label, value: memberCall, passedUpStruct: route?.passedUpStruct)

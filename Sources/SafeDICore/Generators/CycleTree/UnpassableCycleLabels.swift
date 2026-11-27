@@ -57,18 +57,18 @@ extension DependencyTreeGenerator {
 		// The labels the scopes of each component on a cycle declare or forward.
 		var declaredLabelsByComponent = [Int: Set<String>]()
 		for (index, scope) in scopes.enumerated() where graph.isOnCycle(index) {
-			var declaredLabels = declaredLabelsByComponent[graph.componentByNode[index], default: []]
+			var declaredLabels = declaredLabelsByComponent[graph.component(of: index), default: []]
 			for propertyToGenerate in scope.propertiesToGenerate {
 				declaredLabels.insert(propertyToGenerate.property.label)
 			}
 			for dependency in scope.instantiable.dependencies where dependency.source == .forwarded {
 				declaredLabels.insert(dependency.property.label)
 			}
-			declaredLabelsByComponent[graph.componentByNode[index]] = declaredLabels
+			declaredLabelsByComponent[graph.component(of: index)] = declaredLabels
 		}
 		var mayHaveUnpassableCycleLabel = false
 		for (index, scope) in scopes.enumerated() where !mayHaveUnpassableCycleLabel && graph.isOnCycle(index) {
-			let declaredLabels = declaredLabelsByComponent[graph.componentByNode[index], default: []]
+			let declaredLabels = declaredLabelsByComponent[graph.component(of: index), default: []]
 			var formCountByLabel = [String: Int]()
 			for receivedProperty in collectReceivedProperties(from: scope, cache: &cache).received where declaredLabels.contains(receivedProperty.label) {
 				formCountByLabel[receivedProperty.label, default: 0] += 1

@@ -68,7 +68,7 @@ extension DependencyTreeGenerator {
 				var reached: Set = [node]
 				var stack = [node]
 				while let next = stack.popLast() {
-					for target in graph.edges(from: next) where reached.insert(target).inserted {
+					for target in graph.targets(from: next) where reached.insert(target).inserted {
 						stack.append(target)
 					}
 				}
@@ -84,7 +84,7 @@ extension DependencyTreeGenerator {
 			var edge = 0
 			// The graph's edges are these properties, in this order.
 			for case let .instantiated(property, _, _) in scopes[index].propertiesToGenerate {
-				let target = graph.edges(from: index)[edge]
+				let target = graph.targets(from: index)[edge]
 				edge += 1
 				if !property.propertyType.isConstant, receiversByBuilderLabel[property.label] != nil {
 					members.append((property.label, target))
@@ -142,14 +142,14 @@ extension DependencyTreeGenerator {
 			var labelsDeclaredOutsideRoot = Set<String>()
 			for (index, scope) in scopes.enumerated() {
 				if graph.isOnCycle(index) {
-					labelsDeclaredByComponent[graph.componentByNode[index], default: []].formUnion(scope.declaredLabels)
+					labelsDeclaredByComponent[graph.component(of: index), default: []].formUnion(scope.declaredLabels)
 				}
 				if index > 0 {
 					labelsDeclaredOutsideRoot.formUnion(scope.declaredLabels)
 				}
 			}
 			for (index, scope) in scopes.enumerated() where reason == nil && graph.isOnCycle(index) {
-				let labelsDeclaredInComponent = labelsDeclaredByComponent[graph.componentByNode[index], default: []]
+				let labelsDeclaredInComponent = labelsDeclaredByComponent[graph.component(of: index), default: []]
 				let receivesLabelOnlyAnotherScopeDeclares = collectReceivedProperties(from: scope, cache: &cache).received.contains { receivedProperty in
 					!labelsDeclaredInComponent.contains(receivedProperty.label)
 						&& (labelsDeclaredOutsideRoot.contains(receivedProperty.label) || !scopes[0].declaredLabels.contains(receivedProperty.label))

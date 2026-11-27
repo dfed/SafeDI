@@ -531,7 +531,7 @@ public struct SeamSignature: Sendable {
 		/// built again receives that declaration through the function's parameter; a fill, which reads the scope struct or
 		/// the caller's scope, reads the same value at every level of the cycle.
 		public struct CycleReentryDeclaration: Codable, Sendable {
-			public init(property: Property, declaringType: TypeDescription, declarationLocation: Dependency.DeclarationLocation?, parameterTakingType: TypeDescription?, closedOnProperty: Property, closedOnBuiltType: TypeDescription, closedOnDeclaringType: TypeDescription, reenteringType: TypeDescription) {
+			public init(property: Property, declaringType: TypeDescription, declarationLocation: Dependency.DeclarationLocation?, parameterTakingType: TypeDescription?, closedOnProperty: Property, closedOnBuiltType: TypeDescription, closedOnDeclaringType: TypeDescription, reenteringType: TypeDescription, calledSeamType: TypeDescription? = nil, placeIsInFurtherSendableFunction: Bool = false) {
 				self.property = property
 				self.declaringType = declaringType
 				self.declarationLocation = declarationLocation
@@ -540,6 +540,8 @@ public struct SeamSignature: Sendable {
 				self.closedOnBuiltType = closedOnBuiltType
 				self.closedOnDeclaringType = closedOnDeclaringType
 				self.reenteringType = reenteringType
+				self.calledSeamType = calledSeamType
+				self.placeIsInFurtherSendableFunction = placeIsInFurtherSendableFunction
 			}
 
 			/// The declaration between the function and the cycle-closing scope, or, where a scope between takes the label as
@@ -557,6 +559,15 @@ public struct SeamSignature: Sendable {
 			public let closedOnDeclaringType: TypeDescription
 			/// The type that instantiates `closedOnProperty` again, closing the cycle.
 			public let reenteringType: TypeDescription
+			/// Where the cycle is in the tree of a seam that passes the place up, around its call of the seam the place came
+			/// from, the seam whose scope the place's builder takes: that seam's tree, not the cycle's, hands the builder its
+			/// values, so the label reaches each level's builder only as a value that seam receives. `nil` for a cycle in the
+			/// tree of the seam that holds the place.
+			public let calledSeamType: TypeDescription?
+			/// Whether a `@Sendable` function beneath the closed-on scope's own builds the place. A value the closed-on type
+			/// received would be bound outside that function, which hands the place's builder no value bound outside it, so
+			/// the message does not offer that receive.
+			public let placeIsInFurtherSendableFunction: Bool
 		}
 
 		/// A declaration on the path from the root of a fill of the seam call whose tree holds this place, inside another fill
@@ -895,7 +906,7 @@ public struct SeamSignature: Sendable {
 			var uncarriedDeclarations: [UncarriedDeclaration]
 			/// The declarations a cycle in the tree of the seam that holds the site hands the site's owner when it builds it
 			/// again, which a fill cannot read, the first of each label.
-			let cycleReentryDeclarations: [CycleReentryDeclaration]
+			var cycleReentryDeclarations: [CycleReentryDeclaration]
 			/// The declarations on the paths to calls inside fills of the seam call whose tree holds the place that build the
 			/// filled seam again, which a fill of this place cannot read (see `ReenteringCallDeclaration`), every path's, in the
 			/// order of their declarations. A copy a seam passes up keeps them all.
@@ -1126,8 +1137,13 @@ public struct SeamSignature: Sendable {
 
 		/// The declarations a cycle in the tree of the seam that holds the site hands the site's owner when it builds it
 		/// again, which a fill cannot read, the first of each label.
-		public var cycleReentryDeclarations: [CycleReentryDeclaration] {
-			storage.fields.cycleReentryDeclarations
+		public internal(set) var cycleReentryDeclarations: [CycleReentryDeclaration] {
+			get { storage.fields.cycleReentryDeclarations }
+			set {
+				var fields = storage.fields
+				fields.cycleReentryDeclarations = newValue
+				storage = Storage(fields)
+			}
 		}
 
 		/// The declarations on the paths to calls inside fills of the seam call whose tree holds the place that build the
@@ -2316,13 +2332,18 @@ struct CalledBuilders: Sendable {
 		let enumsByKey = Dictionary(scopeEnums.map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first })
 		self.enumsByKey = enumsByKey
 		carrierValuesBySeam = SeamCarrierValues.bySeam(of: scopeEnums)
-		var builderKeyByReachedPlace = [ReachedPlace: SeamSignature.ScopeEnum.Key]()
+		let reach = SiteReach(holes: holes, scopeEnums: scopeEnums, holeBySite: holeBySite)
+		self.reach = reach
+		// The builders of each hole type, in builder order, so each hole asks only its own type's.
+		var builderKeysByHoleType = [SeamSignature.HoleType: [SeamSignature.ScopeEnum.Key]]()
 		for builder in builders {
-			for site in SeamSignature.ScopeEnum.sitesReached(from: builder.enumKey, in: enumsByKey) {
-				let place = ReachedPlace(site: site, holeType: builder.enumKey.holeType)
-				if builderKeyByReachedPlace[place] == nil {
-					builderKeyByReachedPlace[place] = builder.enumKey
-				}
+			builderKeysByHoleType[builder.enumKey.holeType, default: []].append(builder.enumKey)
+		}
+		var builderKeyByReachedPlace = [ReachedPlace: SeamSignature.ScopeEnum.Key]()
+		for (index, hole) in holes.enumerated() {
+			let place = ReachedPlace(site: hole.site, holeType: hole.holeType)
+			if builderKeyByReachedPlace[place] == nil, let key = builderKeysByHoleType[hole.holeType]?.first(where: { reach.reaches(holeAt: index, from: $0) }) {
+				builderKeyByReachedPlace[place] = key
 			}
 		}
 		self.builderKeyByReachedPlace = builderKeyByReachedPlace
@@ -2364,25 +2385,225 @@ struct CalledBuilders: Sendable {
 	/// Each site and hole type, the enum key of the first builder of the hole type, in builder order, whose enum reaches it.
 	private let builderKeyByReachedPlace: [ReachedPlace: SeamSignature.ScopeEnum.Key]
 
-	/// The sites `builder` reaches: those of the places of its enum and of the enums its cases hold.
-	func sitesReached(by builder: SeamSignature.Builder, in enumsByKey: [SeamSignature.ScopeEnum.Key: SeamSignature.ScopeEnum]) -> Set<SeamSignature.Hole.Site> {
-		SeamSignature.ScopeEnum.sitesReached(from: builder.enumKey, in: enumsByKey)
+	/// The holes of `builder`'s hole type whose sites its enum reaches (`SeamSignature.ScopeEnum.sitesReached(from:in:)` over
+	/// `enumsByKey`), in hole order: a bit test per hole, never a walk.
+	func holesOfItsHoleTypeReached(by builder: SeamSignature.Builder) -> [SeamSignature.Hole] {
+		holes.indices.compactMap { index in
+			let hole = holes[index]
+			return hole.holeType == builder.enumKey.holeType && reach.reaches(holeAt: index, from: builder.enumKey) ? hole : nil
+		}
 	}
 
-	/// The sites `builder`'s routes reach: of those it reaches (`sitesReached(by:in:)`), a place of the called seam's own
-	/// inside a `@Sendable` function only where the builder is the `@Sendable` one, and every other place of its own only
-	/// where it is not (`SeamSignature.Hole.EnumPlace.isBuiltBySendableBuilder`). The plain and the `@Sendable` root enum of a
-	/// hole type hold the same enums nested by type, so each reaches the other's places through them, which no value of it
-	/// leads to. A place the seam passes up from a seam it calls is in that seam's enums, which either root may hold.
-	func sitesReachedOnItsRoutes(by builder: SeamSignature.Builder, in enumsByKey: [SeamSignature.ScopeEnum.Key: SeamSignature.ScopeEnum]) -> Set<SeamSignature.Hole.Site> {
-		Self.sites(sitesReached(by: builder, in: enumsByKey), onRoutesOf: builder.enumKey, holeBySite: holeBySite)
+	/// Whether the enum of `key` reaches a site of `sites`, of those on the routes of the root enum of `rootKey` where one
+	/// is given (`sites(_:onRoutesOf:holeBySite:)`).
+	func reaches(anyOf sites: SiteNumbers, from key: SeamSignature.ScopeEnum.Key, onRoutesOf rootKey: SeamSignature.ScopeEnum.Key?) -> Bool {
+		reach.reaches(anyOf: sites.bits, from: key, onRoutesOf: rootKey)
+	}
+
+	/// Whether every site the enum of `key` reaches is one of `sites`, of those on the routes of the root enum of `rootKey`
+	/// where one is given (`sites(_:onRoutesOf:holeBySite:)`).
+	func reachesOnly(_ sites: SiteNumbers, from key: SeamSignature.ScopeEnum.Key, onRoutesOf rootKey: SeamSignature.ScopeEnum.Key?) -> Bool {
+		reach.reachesOnly(sites.bits, from: key, onRoutesOf: rootKey)
+	}
+
+	/// Whether every site `builder`'s routes reach is one of `sites`: of the sites its enum reaches, a place of the called
+	/// seam's own inside a `@Sendable` function only where the builder is the `@Sendable` one, and every other place of its
+	/// own only where it is not (`SeamSignature.Hole.EnumPlace.isBuiltBySendableBuilder`). The plain and the `@Sendable` root
+	/// enum of a hole type hold the same enums nested by type, so each reaches the other's places through them, which no
+	/// value of it leads to. A place the seam passes up from a seam it calls is in that seam's enums, which either root may
+	/// hold.
+	func routesReachOnly(_ sites: SiteNumbers, by builder: SeamSignature.Builder) -> Bool {
+		reachesOnly(sites, from: builder.enumKey, onRoutesOf: builder.enumKey)
+	}
+
+	/// `sites` as numbers of the call's sites, for asking what an enum reaches of them: built once for each set that is
+	/// asked about, never once for each enum asked. A site no hole or enum of the call holds has no number, and no enum of
+	/// the call reaches it.
+	func siteNumbers(of sites: Set<SeamSignature.Hole.Site>) -> SiteNumbers {
+		var bits = SiteBits(count: reach.siteCount)
+		for site in sites {
+			if let number = reach.number(of: site) {
+				bits.insert(number)
+			}
+		}
+		return SiteNumbers(bits: bits)
+	}
+
+	/// A set of a call's sites, by their numbers (`siteNumbers(of:)`).
+	struct SiteNumbers {
+		fileprivate let bits: SiteBits
+	}
+
+	/// A set of a call's site numbers, one bit per site, so that what an enum reaches costs a bit per site the call has,
+	/// and asking whether it reaches any or only sites of a set is a pass over words.
+	fileprivate struct SiteBits: Sendable {
+		init(count: Int) {
+			words = [UInt64](repeating: 0, count: (count + 63) / 64)
+		}
+
+		fileprivate private(set) var words: [UInt64]
+
+		mutating func insert(_ number: Int) {
+			words[number / 64] |= 1 << UInt64(number % 64)
+		}
+
+		func contains(_ number: Int) -> Bool {
+			words[number / 64] & (1 << UInt64(number % 64)) != 0
+		}
+	}
+
+	/// What each enum of the call reaches, found once for the call, which every construction of a place that makes it
+	/// shares, never once for each dispatcher, builder argument or route that asks. Sites are numbered, so that what an enum
+	/// reaches is a set of bits rather than a set of sites, whose paths each insertion would hash. It is held for as long as
+	/// the call's leaf scope lives, which is the whole run: a number per site, and a bit per site for each enum and for
+	/// each seam and family whose builder builds places, so a call with `E` enums, `H` holes, `S` sites and `F` such seams
+	/// and families holds `S + H` numbers and `(E + F) × S` bits.
+	private let reach: SiteReach
+
+	/// The sites a call's enums reach, numbered.
+	private struct SiteReach: Sendable {
+		init(
+			holes: [SeamSignature.Hole],
+			scopeEnums: [SeamSignature.ScopeEnum],
+			holeBySite: [SeamSignature.Hole.Site: SeamSignature.Hole],
+		) {
+			// Each site once, in the order the holes and then the enums' places name them.
+			var numberBySite = [SeamSignature.Hole.Site: Int]()
+			var sites = [SeamSignature.Hole.Site]()
+			func number(of site: SeamSignature.Hole.Site) -> Int {
+				if let number = numberBySite[site] {
+					return number
+				} else {
+					numberBySite[site] = sites.count
+					sites.append(site)
+					return sites.count - 1
+				}
+			}
+			siteNumberByHoleIndex = holes.map { number(of: $0.site) }
+			// Each enum numbered too, the first of each key, as `enumsByKey` keeps it, so the walk below hashes no key.
+			var enumNumberByKey = [SeamSignature.ScopeEnum.Key: Int]()
+			var firstEnums = [SeamSignature.ScopeEnum]()
+			for scopeEnum in scopeEnums where enumNumberByKey[scopeEnum.key] == nil {
+				enumNumberByKey[scopeEnum.key] = firstEnums.count
+				firstEnums.append(scopeEnum)
+			}
+			var ownSiteNumbers = [[Int]]()
+			var heldEnumNumbers = [[Int]]()
+			for scopeEnum in firstEnums {
+				var ownNumbers = [Int]()
+				var heldNumbers = [Int]()
+				for enumCase in scopeEnum.cases {
+					switch enumCase.kind {
+					case let .place(placeSites):
+						ownNumbers += placeSites.map(number(of:))
+					case let .nested(innerKey, _, _),
+					     let .inner(innerKey, _, _),
+					     let .fill(_, _, innerKey, _, _):
+						// A key of no enum of the call reaches nothing.
+						if let heldNumber = enumNumberByKey[innerKey] {
+							heldNumbers.append(heldNumber)
+						}
+					}
+				}
+				ownSiteNumbers.append(ownNumbers)
+				heldEnumNumbers.append(heldNumbers)
+			}
+			self.numberBySite = numberBySite
+			siteCount = sites.count
+			// Each enum's sites, as `SeamSignature.ScopeEnum.sitesReached(from:in:)` finds them, with an explicit stack: cases
+			// can recurse. Each enum is marked with the number of the enum whose walk reached it, so each is taken once per
+			// walk without a set.
+			var enumVisitedBy = [Int](repeating: -1, count: firstEnums.count)
+			var reachedBitsByKey = [SeamSignature.ScopeEnum.Key: SiteBits]()
+			for (start, scopeEnum) in firstEnums.enumerated() {
+				var reachedBits = SiteBits(count: sites.count)
+				enumVisitedBy[start] = start
+				var enumsToVisit = [start]
+				while let visited = enumsToVisit.popLast() {
+					for number in ownSiteNumbers[visited] {
+						reachedBits.insert(number)
+					}
+					for held in heldEnumNumbers[visited] where enumVisitedBy[held] != start {
+						enumVisitedBy[held] = start
+						enumsToVisit.append(held)
+					}
+				}
+				reachedBitsByKey[scopeEnum.key] = reachedBits
+			}
+			self.reachedBitsByKey = reachedBitsByKey
+			noSites = SiteBits(count: sites.count)
+			// The sites a root enum's routes leave out (`CalledBuilders.sites(_:onRoutesOf:holeBySite:)`): each place of a seam's
+			// own that the other family's builder builds. Keyed by the seam and the family that builds the place, so the root key
+			// of any builder finds exactly its own, and a seam with no place of a family leaves out nothing.
+			var offRoutesBitsBySeamFamily = [SeamFamily: SiteBits]()
+			for (number, site) in sites.enumerated() {
+				if let hole = holeBySite[site], let enumPlace = hole.enumPlace {
+					offRoutesBitsBySeamFamily[SeamFamily(seamType: hole.scopeSeamType, isBuiltBySendableBuilder: enumPlace.isBuiltBySendableBuilder), default: SiteBits(count: sites.count)].insert(number)
+				}
+			}
+			self.offRoutesBitsBySeamFamily = offRoutesBitsBySeamFamily
+		}
+
+		let siteCount: Int
+
+		func number(of site: SeamSignature.Hole.Site) -> Int? {
+			numberBySite[site]
+		}
+
+		/// Whether the enum of `key` reaches the site of the call's hole at `index`.
+		func reaches(holeAt index: Int, from key: SeamSignature.ScopeEnum.Key) -> Bool {
+			reachedBits(from: key).contains(siteNumberByHoleIndex[index])
+		}
+
+		/// Whether the enum of `key` reaches a site of `sites`, of those on the routes of `rootKey`'s root enum where given.
+		func reaches(anyOf sites: SiteBits, from key: SeamSignature.ScopeEnum.Key, onRoutesOf rootKey: SeamSignature.ScopeEnum.Key?) -> Bool {
+			let reachedBits = reachedBits(from: key)
+			let offRoutesBits = offRoutesBits(of: rootKey)
+			return reachedBits.words.indices.contains { reachedBits.words[$0] & ~offRoutesBits.words[$0] & sites.words[$0] != 0 }
+		}
+
+		/// Whether every site the enum of `key` reaches is one of `sites`, of those on the routes of `rootKey`'s root enum
+		/// where given.
+		func reachesOnly(_ sites: SiteBits, from key: SeamSignature.ScopeEnum.Key, onRoutesOf rootKey: SeamSignature.ScopeEnum.Key?) -> Bool {
+			let reachedBits = reachedBits(from: key)
+			let offRoutesBits = offRoutesBits(of: rootKey)
+			return !reachedBits.words.indices.contains { reachedBits.words[$0] & ~offRoutesBits.words[$0] & ~sites.words[$0] != 0 }
+		}
+
+		/// The sites the enum of `key` reaches: none for a key of no enum of the call, as
+		/// `SeamSignature.ScopeEnum.sitesReached(from:in:)` finds none, so every question about it is answered as about an
+		/// enum that reaches nothing.
+		private func reachedBits(from key: SeamSignature.ScopeEnum.Key) -> SiteBits {
+			reachedBitsByKey[key, default: noSites]
+		}
+
+		/// The sites the routes of `rootKey`'s root enum leave out: the places of its seam's own that the other family's
+		/// builder builds, none where its seam has no such place, and none where no root key is given.
+		private func offRoutesBits(of rootKey: SeamSignature.ScopeEnum.Key?) -> SiteBits {
+			guard let rootKey else { return noSites }
+			return offRoutesBitsBySeamFamily[SeamFamily(seamType: rootKey.seamType, isBuiltBySendableBuilder: !rootKey.isSendable), default: noSites]
+		}
+
+		/// A seam and a family of its builders, plain or `@Sendable`.
+		private struct SeamFamily: Hashable {
+			let seamType: TypeDescription
+			let isBuiltBySendableBuilder: Bool
+		}
+
+		private let numberBySite: [SeamSignature.Hole.Site: Int]
+		/// The number of each hole's site, by the hole's index in the call's holes.
+		private let siteNumberByHoleIndex: [Int]
+		private let reachedBitsByKey: [SeamSignature.ScopeEnum.Key: SiteBits]
+		/// No site, as many words as any set of the call's sites.
+		private let noSites: SiteBits
+		private let offRoutesBitsBySeamFamily: [SeamFamily: SiteBits]
 	}
 
 	/// Each hole by its site, the first of `holes` at a site: found once for the call, never once for each builder whose
 	/// routes are asked for, which grew a call's construction with the square of its hole types.
 	let holeBySite: [SeamSignature.Hole.Site: SeamSignature.Hole]
 
-	/// The sites of `sites` that a route from the root enum of `rootKey` reaches (see `sitesReachedOnItsRoutes(by:in:)`).
+	/// The sites of `sites` that a route from the root enum of `rootKey` reaches (see `routesReachOnly(_:by:)`).
 	static func sites(_ sites: Set<SeamSignature.Hole.Site>, onRoutesOf rootKey: SeamSignature.ScopeEnum.Key, holeBySite: [SeamSignature.Hole.Site: SeamSignature.Hole]) -> Set<SeamSignature.Hole.Site> {
 		sites.filter { site in
 			guard let hole = holeBySite[site], hole.scopeSeamType == rootKey.seamType, let enumPlace = hole.enumPlace else { return true }

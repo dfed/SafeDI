@@ -100,7 +100,7 @@ struct PerTypePlan: Sendable {
 		var declarationsByIdentity = [TwinKey: [Int]]()
 		for (index, declaration) in graph.nodes.enumerated() where graph.isOnCycle(index) {
 			if let built = declaration.built {
-				let key = TwinKey(component: graph.componentByNode[index], identity: cycleIdentity(of: built, record: declaration.record))
+				let key = TwinKey(component: graph.component(of: index), identity: cycleIdentity(of: built, record: declaration.record))
 				declarationsByIdentity[key, default: []].append(index)
 			}
 		}
@@ -121,12 +121,12 @@ struct PerTypePlan: Sendable {
 				}
 			}
 			if graph.isOnCycle(index) {
-				line.append(" cycle \(graph.componentByNode[index])")
+				line.append(" cycle \(graph.component(of: index))")
 			}
 			if twins.contains(index) {
 				line.append(" twin")
 			}
-			for target in graph.edges(from: index) {
+			for target in graph.targets(from: index) {
 				line.append(" -> \(target)")
 			}
 			lines.append(line)

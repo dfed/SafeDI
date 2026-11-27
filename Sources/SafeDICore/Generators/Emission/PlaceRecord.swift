@@ -99,19 +99,19 @@ struct BuiltPlaceRecord: Sendable {
 	/// The values the place's function is handed on every call (`PassedArgument`), after `cycleParameters`.
 	var passedArguments: [PassedArgument] {
 		get { sharingFields?.passedArguments ?? [] }
-		set { sharingFields = PlaceSharingFields(passedArguments: newValue, constructionValue: constructionValue, alternatives: alternatives, argumentValues: argumentValues) }
+		set { sharingFields = PlaceSharingFields(passedArguments: newValue, constructionValue: constructionValue, alternatives: alternatives, argumentValues: argumentValues, functionReturnType: functionReturnType) }
 	}
 
 	/// Where set, the construction is this value (a `ValuePath.call`) in place of the call of `target`.
 	var constructionValue: ConstructionValue? {
 		get { sharingFields?.constructionValue }
-		set { sharingFields = PlaceSharingFields(passedArguments: passedArguments, constructionValue: newValue, alternatives: alternatives, argumentValues: argumentValues) }
+		set { sharingFields = PlaceSharingFields(passedArguments: passedArguments, constructionValue: newValue, alternatives: alternatives, argumentValues: argumentValues, functionReturnType: functionReturnType) }
 	}
 
 	/// The optional closures the construction tries first, in order, before calling `target` or its construction value.
 	var alternatives: [ConstructionAlternative] {
 		get { sharingFields?.alternatives ?? [] }
-		set { sharingFields = PlaceSharingFields(passedArguments: passedArguments, constructionValue: constructionValue, alternatives: newValue, argumentValues: argumentValues) }
+		set { sharingFields = PlaceSharingFields(passedArguments: passedArguments, constructionValue: constructionValue, alternatives: newValue, argumentValues: argumentValues, functionReturnType: functionReturnType) }
 	}
 
 	/// The values of the construction's arguments that are no read, by the argument's position in `arguments`, whose read
@@ -119,7 +119,15 @@ struct BuiltPlaceRecord: Sendable {
 	/// once, where the argument is passed.
 	var argumentValues: [Int: ValuePath] {
 		get { sharingFields?.argumentValues ?? [:] }
-		set { sharingFields = PlaceSharingFields(passedArguments: passedArguments, constructionValue: constructionValue, alternatives: alternatives, argumentValues: newValue) }
+		set { sharingFields = PlaceSharingFields(passedArguments: passedArguments, constructionValue: constructionValue, alternatives: alternatives, argumentValues: newValue, functionReturnType: functionReturnType) }
+	}
+
+	/// Where set, the type the place's function returns in place of `concreteType`: its construction and every
+	/// alternative are made this type inside the function, an erased place's erasure among them, so its calls read the
+	/// value as it is.
+	var functionReturnType: TypeDescription? {
+		get { sharingFields?.functionReturnType }
+		set { sharingFields = PlaceSharingFields(passedArguments: passedArguments, constructionValue: constructionValue, alternatives: alternatives, argumentValues: argumentValues, functionReturnType: newValue) }
 	}
 }
 
@@ -129,12 +137,14 @@ final class PlaceSharingFields: Sendable {
 	let constructionValue: ConstructionValue?
 	let alternatives: [ConstructionAlternative]
 	let argumentValues: [Int: ValuePath]
+	let functionReturnType: TypeDescription?
 
-	init(passedArguments: [PassedArgument], constructionValue: ConstructionValue?, alternatives: [ConstructionAlternative], argumentValues: [Int: ValuePath]) {
+	init(passedArguments: [PassedArgument], constructionValue: ConstructionValue?, alternatives: [ConstructionAlternative], argumentValues: [Int: ValuePath], functionReturnType: TypeDescription?) {
 		self.passedArguments = passedArguments
 		self.constructionValue = constructionValue
 		self.alternatives = alternatives
 		self.argumentValues = argumentValues
+		self.functionReturnType = functionReturnType
 	}
 }
 
@@ -237,16 +247,70 @@ indirect enum ValuePath: Hashable, Sendable {
 	case read(PlaceRead)
 	/// A passed argument of the enclosing function, by its parameter's name, which the function is handed on every call.
 	case passedArgument(String)
-	/// The member `name` of a value.
-	case member(String, of: ValuePath)
-	/// The member `name` of an optional value, read through the optional.
-	case optionalMember(String, of: ValuePath)
+	/// The member `name` of a value (`member(_:of:)`).
+	case memberRead(String, of: ValuePathBase)
+	/// The member `name` of an optional value, read through the optional (`optionalMember(_:of:)`).
+	case optionalMemberRead(String, of: ValuePathBase)
 	/// A call of the member `name` of a value, spelled `<value>.<name>(<argumentsWrapper>(<label>: <source>, …))`, or
 	/// `<value>.<name>(<label>: <source>, …)` where `argumentsWrapper` is `nil`: each argument a read the engine checks.
 	case call(String, of: ValuePath, arguments: [PlaceRead], argumentsWrapper: TypeDescription?)
 	/// A new value of a type made by its initializer that takes no argument, spelled `<type>()`: it reads no declaration,
 	/// so it is a value of every call alike, and keyed as itself.
 	case emptyInitialization(TypeDescription)
+	/// Values, text and functions spelled one after another, as an argument written as an expression the engine does not
+	/// otherwise model: each value a read the engine checks, each text as written, and each function one a statement
+	/// before the value's in the same body declares (`ValueSegment.declaredFunction`).
+	case spliced([ValueSegment])
+}
+
+extension ValuePath {
+	/// The member `name` of `base`.
+	static func member(_ name: String, of base: ValuePath) -> ValuePath {
+		.memberRead(name, of: ValuePathBase(base))
+	}
+
+	/// The member `name` of the optional `base`, read through the optional.
+	static func optionalMember(_ name: String, of base: ValuePath) -> ValuePath {
+		.optionalMemberRead(name, of: ValuePathBase(base))
+	}
+}
+
+/// The value a member of a value path is read from. A mock's override of a node reads a member of its parent's, so a
+/// path is as deep as the mock's tree, and an indirect case would release each level from within the release of the one
+/// above it, which a concurrency thread's stack cannot hold for a tree thousands of types deep: the base holds its value in
+/// a `DeferredReleaseSlot`, which releases one level at a time.
+final class ValuePathBase: Hashable, Sendable {
+	init(_ value: ValuePath) {
+		slot = DeferredReleaseSlot([value])
+	}
+
+	/// The value the member is read from.
+	var value: ValuePath {
+		// The slot holds the one value `init` stores until the base is released.
+		slot.value[0]
+	}
+
+	static func == (lhs: ValuePathBase, rhs: ValuePathBase) -> Bool {
+		lhs === rhs || lhs.value == rhs.value
+	}
+
+	func hash(into hasher: inout Hasher) {
+		hasher.combine(value)
+	}
+
+	private let slot: DeferredReleaseSlot<[ValuePath]>
+}
+
+/// A segment of a spliced value (`ValuePath.spliced`).
+enum ValueSegment: Hashable, Sendable {
+	/// Text spelled as written, which reads no declaration.
+	case text(String)
+	/// A value, spelled and checked as any value path is.
+	case value(ValuePath)
+	/// The name of a function an earlier statement of the body that holds the reading statement declares
+	/// (`AliasPlaceRecord.declaredFunctionNames`). A name no such statement declares keeps the root one per path: a
+	/// function declared in another body is never in scope where the engine declares the reading statement's function.
+	case declaredFunction(String)
 }
 
 /// A value a call hands the function it calls on every call, which the function never captures: places that share one
@@ -263,6 +327,11 @@ struct PassedArgument: Hashable, Sendable {
 	/// Whether the value cannot cross into a `@Sendable` function: a call made inside one cannot hand it on, so no
 	/// function sharing moves such a call into one.
 	let staysOutsideSendableFunctions: Bool
+	/// Whether the call binds the value to a local of its own before it calls the function, and hands it the local. A
+	/// call made inside a `Sendable` wrapper's closure then captures the local, never what the value reads: so the value
+	/// may read what stays outside `@Sendable` functions only where the local is itself `Sendable`, which whoever sets
+	/// this says.
+	var bindsBeforeCall = false
 }
 
 /// A construction that is a value other than a call of the built type: `value`, wrapped in `resultWrapper` where set.

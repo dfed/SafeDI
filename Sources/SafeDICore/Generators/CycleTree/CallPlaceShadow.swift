@@ -363,7 +363,7 @@ extension DependencyTreeGenerator {
 			var labelsDeclaredByComponent = [Int: Set<String>]()
 			for (index, identifier) in graph.nodes.enumerated() where graph.isOnCycle(index) {
 				if let scope = scopeByIdentifier[identifier] {
-					labelsDeclaredByComponent[graph.componentByNode[index], default: []].formUnion(scope.declaredLabels)
+					labelsDeclaredByComponent[graph.component(of: index), default: []].formUnion(scope.declaredLabels)
 				}
 			}
 			// The names each scope's tree declares `@escaping`, which a call place declares for the tree it stands for: SafeDI
@@ -371,14 +371,14 @@ extension DependencyTreeGenerator {
 			// tree beneath it, as today's `ScopeGenerator.typesDeclaredEscaping` does. A component's set is its members' own
 			// and those of every component it reaches, each numbered below it (`OrderedGraph.componentByNode`).
 			var typesDeclaredEscapingByComponent = [Int: Set<TypeDescription>]()
-			for index in graph.nodes.indices.sorted(by: { graph.componentByNode[$0] < graph.componentByNode[$1] }) {
-				let component = graph.componentByNode[index]
+			for index in graph.nodes.indices.sorted(by: { graph.component(of: $0) < graph.component(of: $1) }) {
+				let component = graph.component(of: index)
 				var typesDeclaredEscaping = typesDeclaredEscapingByComponent[component, default: []]
 				if let scope = scopeByIdentifier[graph.nodes[index]] {
 					typesDeclaredEscaping.formUnion(ScopeGenerator.typesDeclaredEscaping(ownedBy: scope.instantiable, publicMockCall: scope.publicMockCall, seamCall: scope.seamCall))
 				}
-				for target in graph.edges(from: index) where graph.componentByNode[target] != component {
-					typesDeclaredEscaping.formUnion(typesDeclaredEscapingByComponent[graph.componentByNode[target], default: []])
+				for target in graph.targets(from: index) where graph.component(of: target) != component {
+					typesDeclaredEscaping.formUnion(typesDeclaredEscapingByComponent[graph.component(of: target), default: []])
 				}
 				typesDeclaredEscapingByComponent[component] = typesDeclaredEscaping
 			}
@@ -402,14 +402,14 @@ extension DependencyTreeGenerator {
 							instantiable: callPlaceInstantiable(
 								of: scope,
 								receiving: receivedProperties,
-								declaringEscaping: typesDeclaredEscapingByComponent[graph.componentByNode[index], default: []],
+								declaringEscaping: typesDeclaredEscapingByComponent[graph.component(of: index), default: []],
 							),
 							isCallPlace: true,
 							callPlaceRequiredAliasFulfillingProperties: receivedProperties.requiredAliasFulfillingProperties,
 						)
 						callPlaceByIdentifier[identifier] = callPlace
 						calledScopeByCallPlace[ObjectIdentifier(callPlace)] = scope
-						parameterLabelsByCallPlace[ObjectIdentifier(callPlace)] = labelsDeclaredByComponent[graph.componentByNode[index], default: []].subtracting(scope.declaredLabels)
+						parameterLabelsByCallPlace[ObjectIdentifier(callPlace)] = labelsDeclaredByComponent[graph.component(of: index), default: []].subtracting(scope.declaredLabels)
 					}
 				}
 			}

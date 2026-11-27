@@ -1049,13 +1049,13 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 	@Test(arguments: MultiModuleIntegration.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_takesTypeDeclaredInExtensionOnPublicTier_whenExtensionAndTypeArePublic(integration: MultiModuleIntegration) async throws {
-		// EX1: a large production app’s shape: `ChatService.TurnTakingMode`, declared `public` in an unspelled extension of the `public`
-		// `ChatService` in a file without a SafeDI marker, is `public` exactly; no comment, since SafeDI reads it.
+		// EX1: a shape from real use: `SessionService.DeliveryMode`, declared `public` in an unspelled extension of the `public`
+		// `SessionService` in a file without a SafeDI marker, is `public` exactly; no comment, since SafeDI reads it.
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: Self.screenModules(
-				receives: ["@Received let mode: ChatService.TurnTakingMode"],
-				extraFeatureFiles: ["ChatService.swift": "public final class ChatService {\n    public init() {}\n}\n\nextension ChatService {\n    public enum TurnTakingMode {\n        case automatic\n        case manual\n    }\n}"],
-				hostForwards: ["mode: ChatService.TurnTakingMode"],
+				receives: ["@Received let mode: SessionService.DeliveryMode"],
+				extraFeatureFiles: ["SessionService.swift": "public final class SessionService {\n    public init() {}\n}\n\nextension SessionService {\n    public enum DeliveryMode {\n        case automatic\n        case manual\n    }\n}"],
+				hostForwards: ["mode: SessionService.DeliveryMode"],
 			),
 			integration: integration,
 			filesToDelete: &filesToDelete,
@@ -1069,14 +1069,14 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			extension Screen {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public init(__safeDI_mode mode: ChatService.TurnTakingMode) {
+			    public init(__safeDI_mode mode: SessionService.DeliveryMode) {
 			        let cache = Cache()
 			        self.init(mode: mode, cache: cache)
 			    }
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_C474C12E18F8A008 {}
+			    public enum __safeDI_Screen_DED89EA9D64DB0D9 {}
 			}
 			""",
 		])
@@ -4056,7 +4056,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 	@Test(arguments: MultiModuleIntegration.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_takesPublicTier_whenAnotherFileDeclaresTypeWhereMockConditionIsInactive(integration: MultiModuleIntegration) async throws {
-		// IFM15 (Dan's shape): `Core`'s mock-only block declares `Endpoint` with no `#else`, and another file declares it
+		// IFM15 (a real adopter's shape): `Core`'s mock-only block declares `Endpoint` with no `#else`, and another file declares it
 		// under `#if !DEBUG`, both `public`: every build declares it `public`, so the seam's `public` initializer requires it.
 		for isReleaseConfiguration in [false, true] {
 			let output = try await executeSafeDIToolMultiModuleTest(

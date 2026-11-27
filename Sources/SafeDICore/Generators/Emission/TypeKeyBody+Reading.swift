@@ -24,7 +24,7 @@ extension TypeKeyLayout {
 	/// Reads the places of the root's body, `rootBody`, depth first; `false` where a place records nothing.
 	/// Declares the root's body, whose first statements are `properties`, the declarations in scope before it.
 	mutating func declareOuter(_ properties: [Property]) {
-		bodies.append(Body(parent: -1, position: 0, record: nil, isInSendableFamily: false, domainLabels: [], forwardedLabels: [], cycleParameters: []))
+		bodies.append(Body(parent: -1, position: 0, record: nil, isInSendableFamily: false, domainLabels: [], outerView: [:], forwardedLabels: [], cycleParameters: []))
 		for property in properties {
 			bodies[0].positionsByLabel[property.label, default: []].append(bodies[0].statements.count)
 			bodies[0].statements.append(.alias(AliasPlaceRecord(property: property, fulfillingProperty: nil, text: "")))
@@ -76,18 +76,18 @@ extension TypeKeyLayout {
 					// that gives the body its parent; `variantsReadOnlyTheirCycleParameters` gives up on the layout otherwise.
 					let keysByKind = closed.keysByKind
 					var outerView = [String: KeyedDeclaration]()
-					var outerDeclarations = [String: PathValue]()
+					var resolvedOuterView = [String: PathValue]()
 					for label in labels {
-						let declaration = lookUp(label, inBody: body, before: position)
-						outerDeclarations[label] = declaration
-						outerView[label] = keyed(declaration, byKind: keysByKind)
+						let resolved = lookUp(label, inBody: body, before: position)
+						resolvedOuterView[label] = resolved
+						outerView[label] = keyed(resolved, label: label, byKind: keysByKind)
 					}
-					outerDeclarationsByEdge[[body, position]] = outerDeclarations
+					outerDeclarationsByEdge[[body, position]] = resolvedOuterView
 					let key = ViewKey(
 						node: built.node,
 						isInSendableFamily: isInSendableFamily,
 						outerView: outerView,
-						cycleArguments: built.callCycleArguments.map { keyed(pathValue(of: $0, inBody: body, before: position), byKind: keysByKind) },
+						cycleArguments: built.callCycleArguments.map { keyed(pathValue(of: $0, inBody: body, before: position), label: $0.label, byKind: keysByKind) },
 						closedOnStatements: closed.statementKeys,
 						closedOnResolutions: closed.resolutions,
 					)
@@ -103,6 +103,7 @@ extension TypeKeyLayout {
 							record: built,
 							isInSendableFamily: isInSendableFamily,
 							domainLabels: labels,
+							outerView: resolvedOuterView,
 							forwardedLabels: Set(built.parameterProperties.map(\.label)),
 							cycleParameters: built.cycleParameters,
 						))
@@ -137,6 +138,7 @@ extension TypeKeyLayout {
 							record: variant.record,
 							isInSendableFamily: variant.isInSendableFamily,
 							domainLabels: [],
+							outerView: [:],
 							forwardedLabels: Set(variant.record.parameterProperties.map(\.label)),
 							cycleParameters: variant.parameters,
 						))
@@ -169,10 +171,11 @@ extension TypeKeyLayout {
 					}
 				}
 			case let .alias(alias):
-				// A place written as text whose reads are not listed, that binds labels besides its own, or that calls or
-				// refers to a function it does not declare, is never laid out by the type key: two such places of one text can
-				// name different functions, which no read tells apart.
-				guard alias.listsItsReads, alias.otherBindings.isEmpty, alias.calledFunctionNames.isEmpty else { return false }
+				// A place written as text whose reads are not listed is never laid out by the type key, nor one that calls or
+				// refers to a function it does not declare: two such places of one text can name different functions, which
+				// no read tells apart. The labels it binds besides its own are declarations of its position, as its own is
+				// (`declareChildren`).
+				guard alias.listsItsReads, alias.calledFunctionNames.isEmpty else { return false }
 				namesInScope.formUnion(alias.declaredFunctionNames)
 				statement = .alias(alias)
 			}
@@ -215,6 +218,12 @@ extension TypeKeyLayout {
 			case let .alias(alias):
 				for name in alias.declaredFunctionNames where functions[name] == nil {
 					functions[name] = .text
+				}
+				for name in alias.declaredFunctionNames {
+					bodies[body].positionsByDeclaredFunction[name, default: []].append(first + offset)
+				}
+				for binding in alias.otherBindings {
+					bodies[body].positionsByLabel[binding.label, default: []].append(first + offset)
 				}
 			case .closer, nil:
 				break
@@ -305,13 +314,13 @@ extension TypeKeyLayout {
 		let keys = statements.map { statement in
 			var outerView = [String: KeyedDeclaration]()
 			for label in labels {
-				outerView[label] = keyed(lookUp(label, inBody: statement.body, before: statement.index), byKind: keysByKind)
+				outerView[label] = keyed(lookUp(label, inBody: statement.body, before: statement.index), label: label, byKind: keysByKind)
 			}
 			return ClosedOnStatementKey(
 				node: statement.record.node,
 				isInSendableFamily: statement.record.isSendable || bodies[statement.body].isInSendableFamily,
 				outerView: outerView,
-				cycleArguments: statement.record.callCycleArguments.map { keyed(pathValue(of: $0, inBody: statement.body, before: statement.index), byKind: keysByKind) },
+				cycleArguments: statement.record.callCycleArguments.map { keyed(pathValue(of: $0, inBody: statement.body, before: statement.index), label: $0.label, byKind: keysByKind) },
 			)
 		}
 		return (labels, keys, resolutions, keysByKind)
@@ -391,6 +400,7 @@ extension TypeKeyLayout {
 					}
 					alias.listedReads.forEach(lookUp)
 					boundBefore.insert(alias.property.label)
+					boundBefore.formUnion(alias.otherBindings.map(\.label))
 				}
 			}
 			current.constructionReads.forEach(lookUp)
@@ -418,7 +428,7 @@ extension TypeKeyLayout {
 		case .closer:
 			true
 		case let .alias(alias):
-			alias.listsItsReads && alias.otherBindings.isEmpty && alias.calledFunctionNames.isEmpty
+			alias.listsItsReads && alias.calledFunctionNames.isEmpty
 		}
 	}
 
@@ -487,8 +497,8 @@ extension TypeKeyLayout {
 		}
 	}
 
-	/// The property `statement` declares.
-	func property(of statement: Statement) -> Property? {
+	/// The property `statement` declares under `label`: its own, or, for a place written as text, one of the others it binds.
+	func property(of statement: Statement, label: String) -> Property? {
 		switch statement {
 		case let .built(body):
 			bodies[body].record?.property
@@ -497,7 +507,7 @@ extension TypeKeyLayout {
 		case let .closer(record, _):
 			record.property
 		case let .alias(record):
-			record.property
+			record.property.label == label ? record.property : record.otherBindings.first { $0.label == label }
 		}
 	}
 
@@ -512,6 +522,10 @@ extension TypeKeyLayout {
 		      !bodies[body].forwardedLabels.contains(label),
 		      !bodies[body].cycleParameterLabels.contains(label)
 		{
+			// The body's view resolved its domain's labels outside it when the walk reached it.
+			if let resolved = bodies[body].outerView[label] {
+				return resolved
+			}
 			index = bodies[body].position
 			body = bodies[body].parent
 		}
@@ -573,19 +587,19 @@ extension TypeKeyLayout {
 		}
 	}
 
-	/// What a view's key holds of `value`, a declaration outside it: the declaration itself, or, keyed `byKind`, whether
-	/// there is one, and for one outside the root's body its kind and type.
-	func keyed(_ value: PathValue, byKind: Bool) -> KeyedDeclaration {
+	/// What a view's key holds of `value`, the declaration outside it that `label` resolves to: the declaration itself, or,
+	/// keyed `byKind`, whether there is one, and for one outside the root's body its kind and type.
+	func keyed(_ value: PathValue, label: String, byKind: Bool) -> KeyedDeclaration {
 		guard byKind else { return .absolute(value) }
 		switch value {
 		case .none:
 			return .none
 		case let .statement(body, index):
-			return body == 0 ? .root(index: index) : .outside(kind: .statement, type: type(of: value)?.asSource)
+			return body == 0 ? .root(index: index) : .outside(kind: .statement, type: type(of: value, label: label)?.asSource)
 		case .forwarded:
-			return .outside(kind: .forwarded, type: type(of: value)?.asSource)
+			return .outside(kind: .forwarded, type: type(of: value, label: label)?.asSource)
 		case .cycleParameter:
-			return .outside(kind: .cycleParameter, type: type(of: value)?.asSource)
+			return .outside(kind: .cycleParameter, type: type(of: value, label: label)?.asSource)
 		}
 	}
 }

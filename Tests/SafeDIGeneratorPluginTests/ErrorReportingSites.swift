@@ -57,6 +57,12 @@ extension ErrorReportingSite {
 			path: "Sources/SafeDIMacros/Macros/InstantiableMacro.swift",
 			code: "extension Initializer.GenerationError",
 		),
+		// Thrown by the layout of a per-type plan to say why it keeps the path key's body. It is never reported to the
+		// user: no generator calls `statements(ofPlan:)` yet, and the caller a plan brings catches it and keeps that body.
+		"TypeKeyRefusal": ErrorReportingSite(
+			path: "Sources/SafeDICore/Generators/Emission/TypeKeyBody+VariantCalls.swift",
+			code: "throws(TypeKeyRefusal) -> [GeneratedCode]",
+		),
 	]
 
 	/// Caught by each validation of roots and joined with the errors of the roots validated beside it.

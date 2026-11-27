@@ -33,7 +33,7 @@ struct OrderedGraphTests {
 		#expect(graph.nodes == [0, 5, 8, 3])
 		#expect(graph.index(of: 3) == 3)
 		#expect(graph.index(of: 4) == nil)
-		#expect(graph.nodes.indices.map { graph.edges(from: $0) } == [[1, 3, 1], [2], [], [2, 1]])
+		#expect(graph.nodes.indices.map { Array(graph.edges(from: $0)) } == [[1, 3, 1], [2], [], [2, 1]])
 		#expect(graph.nodes.indices.map { graph.isOnCycle($0) } == [false, false, false, false])
 		#expect(graph.componentByNode == [3, 1, 0, 2])
 	}
@@ -60,7 +60,7 @@ struct OrderedGraphTests {
 			let graph = OrderedGraph(root: 0) { node in
 				node == 0 ? rootEdges : edges[node, default: []]
 			}
-			var nodesByComponent = [Int: [Int]]()
+			var nodesByComponent = [Int32: [Int]]()
 			for (index, node) in graph.nodes.enumerated() {
 				nodesByComponent[graph.componentByNode[index], default: []].append(node)
 			}

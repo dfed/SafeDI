@@ -621,6 +621,15 @@ struct ConstructionLog {
 		forEachRead(where: \.isCycleRead) { body($0.read.read, $0.answer) }
 	}
 
+	/// Calls `body` with each read of this log, in the order the reads were added, each read and depth once, with the first
+	/// answer it was added with and the depth that answered it: what a test observes of a place (`TypeFactsObservation`).
+	func forEachRead(_ body: (_ read: Read, _ answer: Answer, _ depth: Int) -> Void) {
+		_ = forEachRead(where: { _ in true }) { recorded in
+			body(recorded.read.read, recorded.answer, recorded.read.depth)
+			return true
+		}
+	}
+
 	/// The labels of the reads of this log that are no cycle reads: what a place's subtree asked of the declarations above
 	/// it (`PlaceReadsObservation`).
 	var labelsOfReadsOfDeclarations: Set<String> {
@@ -895,8 +904,9 @@ extension [String] {
 public enum ConstructionMemoOracle {
 	/// Called each time `Scope.createScopeGenerator` creates a tree, with two more builds of it, neither of which starts
 	/// its code: one with the construction memo, shared across the trees created with one memo, and one without it. The
-	/// two must hold the same data on every path.
-	@TaskLocal public static var observer: (@Sendable (_ treeBuiltWithMemo: any Sendable, _ treeBuiltWithoutMemo: any Sendable) -> Void)?
+	/// two must hold the same data on every path. The build without the memo walks every place, which `typeFacts` holds
+	/// beside the tree's graph of per-type facts, for the test to compare.
+	@TaskLocal public static var observer: (@Sendable (_ treeBuiltWithMemo: any Sendable, _ treeBuiltWithoutMemo: any Sendable, _ typeFacts: TypeFactsReport) -> Void)?
 
 	/// Whether `DependencyTreeGenerator` creates its mock roots in reverse type order, so that a memo shared between them
 	/// carries other trees' generators to each; what it generates must not change.

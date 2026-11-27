@@ -21,22 +21,6 @@
 // The shapes a plan's later parts are written against. Nothing builds them yet: the layout of a plan's functions and
 // the walks of a plan's tree are written against these names while the plan itself is compared with today's tree.
 
-/// What a label of `LabelsReadFromAbove` resolves to at one call of a cyclic declaration's function, by value, never by
-/// a position on a path.
-enum Answer: Hashable, Sendable {
-	/// Nothing above the call provides the label: the function is passed `nil`.
-	case none
-	/// The nearest declaration's property, and whether it is still being built where the call is made.
-	case declared(Property, isBeingBuilt: Bool)
-	/// The nearest declaration's property, a member of a loop of builders that the scope making the call builds after
-	/// the call: no call can read that declaration yet, so the call passes the member's wrapper made again around its
-	/// function, as today's `__safeDI_<label>_received` function does (`ReceivedBuilderLoops`). An argument of a call
-	/// only: the body called is keyed by the declaration (`declared`), which every call of it answers alike.
-	case declaredMadeAgainAtCall(Property)
-	/// The instance of the nearest declaration, a lazily instantiated property.
-	case instance(of: Property)
-}
-
 /// One body to build and emit: a declaration on a cycle, in one family, under one set of answers.
 struct Variant: Hashable, Sendable {
 	/// The declaration's position in `PerTypePlan.graph`.

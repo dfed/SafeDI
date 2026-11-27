@@ -1594,7 +1594,7 @@ extension DependencyTreeGenerator {
 				changed = false
 				// Deepest first, so that a tree with no cycle takes one pass.
 				for index in scopes.indices.reversed() {
-					for target in graph.edges(from: index) {
+					for target in graph.targets(from: index) {
 						let count = byPasses[index].count
 						byPasses[index].formUnion(byPasses[target].subtracting(declaredLabels[index]))
 						changed = changed || byPasses[index].count != count

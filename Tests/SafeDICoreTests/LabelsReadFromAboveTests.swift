@@ -23,7 +23,7 @@ import Testing
 
 struct LabelsReadFromAboveTests {
 	@Test
-	func labels_holdsOwnThenEachTargetsUnboundLabelsInEdgeOrder_whenGraphHasNoCycle() {
+	func labels_holdsOwnAndEachTargetsUnboundLabelsInTheOrderTheyWereFirstGiven_whenGraphHasNoCycle() {
 		// 0 reads "a" and builds 1 and 2; it binds "c", which 1 reads, and "e", which 2's child reads.
 		let graph = OrderedGraph(root: 0) { node in
 			[0: [1, 2, 1], 2: [3]][node, default: []]
@@ -37,7 +37,7 @@ struct LabelsReadFromAboveTests {
 		#expect(graph.nodes.indices.map { labels.labels(of: $0) } == [
 			["a", "b", "d", "f"],
 			["b", "c"],
-			["d", "a", "e", "f"],
+			["a", "d", "e", "f"],
 			["e", "f"],
 		])
 	}
@@ -59,7 +59,7 @@ struct LabelsReadFromAboveTests {
 			["y", "x"],
 			["y", "w", "x"],
 			["w", "x"],
-			["x", "y", "w"],
+			["y", "w", "x"],
 		])
 	}
 
@@ -92,5 +92,108 @@ struct LabelsReadFromAboveTests {
 				4: ["two", "three", "four"],
 			], "\(rootEdges)")
 		}
+	}
+
+	@Test
+	func labels_holdAndFoldWordsInProportionToTheGraph_whenFeaturesWithLabelsOfTheirOwnShareOneTree() {
+		// The shape that made a pass per declaring scope grow with labels times declaring scopes times shared scopes: F
+		// features, each binding K labels of its own types and building 3 screens, the last of which links back to the
+		// feature, every screen reading the feature's labels and opening one shared tree of M types, each of which reads the
+		// root's 6 services. Every axis grows from the first size to the second; the words held and read per element of the
+		// graph (node, edge, read and bound label) must not.
+		var wordsPerElement = [Double]()
+		var workPerElement = [Double]()
+		for (features, labelsPerFeature, sharedTypes) in [(50, 5, 250), (200, 20, 1_000)] {
+			let shape = FeaturesOverSharedTree(features: features, labelsPerFeature: labelsPerFeature, sharedTypes: sharedTypes)
+			let graph = OrderedGraph(root: 0, edges: shape.edges(from:))
+			let labels = LabelsReadFromAbove(
+				graph: graph,
+				own: { shape.own(of: graph.nodes[$0]) },
+				bound: { shape.bound(by: graph.nodes[$0]) },
+			)
+			let elements = graph.nodes.count + graph.edgeCount + graph.nodes.reduce(0) { $0 + shape.own(of: $1).count + shape.bound(by: $1).count }
+			wordsPerElement.append(Double(labels.wordCount) / Double(elements))
+			workPerElement.append(Double(labels.work) / Double(elements))
+
+			let feature = graph.index(of: shape.feature(0)) ?? -1
+			let screen = graph.index(of: shape.screen(2, ofFeature: 0)) ?? -1
+			#expect(labels.labels(of: feature) == FeaturesOverSharedTree.services)
+			#expect(labels.labels(of: screen) == shape.labels(ofFeature: 0) + FeaturesOverSharedTree.services)
+		}
+
+		#expect(wordsPerElement[1] <= wordsPerElement[0] * 1.1, "\(wordsPerElement)")
+		#expect(workPerElement[1] <= workPerElement[0] * 1.1, "\(workPerElement)")
+	}
+}
+
+/// The nodes of the growth row's graph: 0 the root; then per feature its node, its label types and its 3 screens; then
+/// the shared types, a binary tree.
+private struct FeaturesOverSharedTree {
+	static let services = (0..<6).map { "service\($0)" }
+
+	let features: Int
+	let labelsPerFeature: Int
+	let sharedTypes: Int
+
+	func feature(_ feature: Int) -> Int {
+		1 + feature * nodesPerFeature
+	}
+
+	func screen(_ screen: Int, ofFeature feature: Int) -> Int {
+		self.feature(feature) + 1 + labelsPerFeature + screen
+	}
+
+	func labels(ofFeature feature: Int) -> [String] {
+		(0..<labelsPerFeature).map { "feature\(feature)Label\($0)" }
+	}
+
+	func edges(from node: Int) -> [Int] {
+		if node == 0 {
+			return (0..<features).map(feature)
+		} else if node >= firstSharedType {
+			let child = (node - firstSharedType) * 2 + 1
+			return [child, child + 1].filter { $0 < sharedTypes }.map { firstSharedType + $0 }
+		} else {
+			let (feature, offset) = (node - 1).quotientAndRemainder(dividingBy: nodesPerFeature)
+			if offset == 0 {
+				return (1...labelsPerFeature + 3).map { node + $0 }
+			} else if offset <= labelsPerFeature {
+				return []
+			} else if offset == labelsPerFeature + 3 {
+				return [firstSharedType, self.feature(feature)]
+			} else {
+				return [firstSharedType]
+			}
+		}
+	}
+
+	func own(of node: Int) -> [String] {
+		if node >= firstSharedType {
+			return Self.services
+		} else if node == 0 {
+			return []
+		} else {
+			let (feature, offset) = (node - 1).quotientAndRemainder(dividingBy: nodesPerFeature)
+			return offset > labelsPerFeature ? labels(ofFeature: feature) : []
+		}
+	}
+
+	func bound(by node: Int) -> Set<String> {
+		if node == 0 {
+			return Set(Self.services)
+		} else if node >= firstSharedType {
+			return []
+		} else {
+			let (feature, offset) = (node - 1).quotientAndRemainder(dividingBy: nodesPerFeature)
+			return offset == 0 ? Set(labels(ofFeature: feature)) : []
+		}
+	}
+
+	private var nodesPerFeature: Int {
+		1 + labelsPerFeature + 3
+	}
+
+	private var firstSharedType: Int {
+		1 + features * nodesPerFeature
 	}
 }

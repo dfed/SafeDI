@@ -66,7 +66,7 @@ struct PlanVariants: Sendable {
 			for (property, _) in declaration.record.sortedDeclaredPropertyForms where declaredPropertyByLabel[property.label] == nil {
 				declaredPropertyByLabel[property.label] = property
 			}
-			for target in graph.edges(from: bodies[next].declaration) {
+			for target in graph.targets(from: bodies[next].declaration) {
 				let builtLabel = graph.nodes[target].built?.property.label
 				let answers: [LabelAnswer] = labels.labels(of: target).map { label in
 					if let property = declaredPropertyByLabel[label] {

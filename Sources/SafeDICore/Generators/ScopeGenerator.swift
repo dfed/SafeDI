@@ -2329,7 +2329,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		///
 		/// A public mock's caller passes up a place it does not fill, so a dispatcher that reaches one takes `passUp`. The plain
 		/// and the `@Sendable` root enum of a hole type hold the same enums nested by type, but each one's routes reach only its
-		/// own places (`CalledBuilders.sitesReachedOnItsRoutes(by:in:)`). A caller fills every place of a hole type of a call or
+		/// own places (`CalledBuilders.routesReachOnly(_:by:)`). A caller fills every place of a hole type of a call or
 		/// none (`DependencyTreeGenerator.holesFilled(byCallsOf:in:)`), so an enum both roots reach is filled on both roots'
 		/// routes alike, and one dispatcher serves both.
 		/// - Parameters:
@@ -2350,20 +2350,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let holesBySite = calledBuilders.holeBySite
 			let builtTypeByHoleType = calledBuilders.holes.builtTypeByHoleType
 			let calledSeamTypes = Set(calledBuilders.builders.map(\.enumKey.seamType))
-			var sitesReachedByKey = [SeamSignature.ScopeEnum.Key: Set<SeamSignature.Hole.Site>]()
-			func sitesReached(from key: SeamSignature.ScopeEnum.Key) -> Set<SeamSignature.Hole.Site> {
-				if let sites = sitesReachedByKey[key] {
-					return sites
-				}
-				let sites = SeamSignature.ScopeEnum.sitesReached(from: key, in: enumsByKey)
-				sitesReachedByKey[key] = sites
-				return sites
+			let filledSiteNumbers = calledBuilders.siteNumbers(of: filledSites)
+			/// The root enum whose routes from the enum of `key` a dispatcher for `family` serves: none, so every site the enum
+			/// reaches counts, where the call is not of a public mock or the dispatcher serves both families.
+			func routeRootKey(of key: SeamSignature.ScopeEnum.Key, family: Bool?) -> SeamSignature.ScopeEnum.Key? {
+				guard decidesPerRoute, let family else { return nil }
+				return rootKey(ofFamily: family, holeType: key.holeType)
 			}
-			/// The sites the routes of `family`'s root enum reach from the enum of `key`: every site the enum reaches, where the
-			/// call is not of a public mock or the dispatcher serves both families.
-			func sitesReached(from key: SeamSignature.ScopeEnum.Key, onRoutesOf family: Bool?) -> Set<SeamSignature.Hole.Site> {
-				guard decidesPerRoute, let family, let rootKey = rootKey(ofFamily: family, holeType: key.holeType) else { return sitesReached(from: key) }
-				return CalledBuilders.sites(sitesReached(from: key), onRoutesOf: rootKey, holeBySite: holesBySite)
+			/// Whether the routes of `family`'s root enum reach a filled site from the enum of `key`.
+			func reachesFilledSite(from key: SeamSignature.ScopeEnum.Key, onRoutesOf family: Bool?) -> Bool {
+				calledBuilders.reaches(anyOf: filledSiteNumbers, from: key, onRoutesOf: routeRootKey(of: key, family: family))
 			}
 			/// The key of the called seam's root enum of `holeType` of `family`.
 			func rootKey(ofFamily family: Bool, holeType: SeamSignature.HoleType) -> SeamSignature.ScopeEnum.Key? {
@@ -2397,7 +2393,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				var visited = Set<SeamSignature.ScopeEnum.Key>()
 				var keysToVisit = [builder.enumKey]
 				while let key = keysToVisit.popLast() {
-					guard !sitesReached(from: key, onRoutesOf: family).isDisjoint(with: filledSites),
+					guard reachesFilledSite(from: key, onRoutesOf: family),
 					      visited.insert(key).inserted,
 					      enclosingDispatchers[Self.key(of: key, returnsBuilderStruct: returnsBuilderStruct(key))] == nil,
 					      let scopeEnum = enumsByKey[key]
@@ -2413,7 +2409,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 			/// Whether a dispatcher of the enum of `key` for `family`'s routes takes `passUp`.
 			func takesPassUp(_ key: SeamSignature.ScopeEnum.Key, onRoutesOf family: Bool?) -> Bool {
-				!sitesReached(from: key, onRoutesOf: family).isSubset(of: filledSites)
+				!calledBuilders.reachesOnly(filledSiteNumbers, from: key, onRoutesOf: routeRootKey(of: key, family: family))
 			}
 			/// The instance that dispatches the enum of `key`: one serves every family that reaches the enum, which a caller
 			/// fills on every family's routes alike.
@@ -2452,7 +2448,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					     let .inner(innerKey, _, _),
 					     let .fill(_, _, innerKey, _, _):
 						// The routes this dispatcher serves reach the places of the enum the case holds that are on them.
-						let reachedSites = sitesReached(from: innerKey, onRoutesOf: family)
 						let target = dispatcherInstance(of: innerKey)
 						var dispatcherCase = Case(name: enumCase.name, hasForwardedValue: false, target: nil, values: enumCase.values?.fields, labelsBoundLater: enumCase.values?.labelsBoundLater ?? [])
 						dispatcherCase.isLetChild = enumCase.isLetChildOfCarrier(inSendableEnum: scopeEnum.key.isSendable) && ReservedName.seamCarrier(ofEnum: scopeEnum.type) != nil
@@ -2460,7 +2455,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 							dispatcherCase.isFillCase = true
 							dispatcherCase.carriedInnerKey = SeamSignature.ScopeEnum.carriedInnerKey(of: enumCase)
 						}
-						guard !reachedSites.isDisjoint(with: filledSites) else { return dispatcherCase }
+						guard reachesFilledSite(from: innerKey, onRoutesOf: family) else { return dispatcherCase }
 						let targetKey = target.dispatcherKey
 						return Case(
 							name: dispatcherCase.name,
@@ -7843,7 +7838,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// parameter would hide: it keeps its function.
 	private static func inlinedFill(of fill: ScopeGenerator, code: String, leadingMemberWhitespace: String) -> FillDispatcher.InlinedFill? {
 		// A fill is its function's declaration, its body, and the line closing it.
-		let lines = code.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+		let lines = GeneratedCodeText.lines(of: code)
 		let valuesType = fill.fillHole?.valuesType(qualifiedBy: nil)
 		let carriesPayload = valuesType != nil
 		// A seam's carrier hands the fill the payload's fields as arguments, the first named `scope_<label>`
@@ -7864,9 +7859,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let builtProperty = fill.propertiesToGenerate.first?.property
 		let forwardedValueName = fill.fillHole?.forwardedType == nil ? nil : builtProperty.map(Self.forwardedValueParameterName(forBuilding:))
 		let readsForwardedValue = forwardedValueName.map { name in
-			body.contains { line in
-				line.split(whereSeparator: { !($0.isLetter || $0.isNumber || $0 == "_") }).contains(Substring(name))
-			}
+			body.contains { line in GeneratedCodeText.containsIdentifier(name, in: line) }
 		} ?? false
 		return FillDispatcher.InlinedFill(
 			carriesPayload: carriesPayload,
@@ -7946,7 +7939,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	/// `code` with each line indented once more.
 	private static func indented(_ code: String) -> String {
-		code.split(separator: "\n", omittingEmptySubsequences: false).map { standardIndent + $0 }.joined(separator: "\n")
+		GeneratedCodeText.indentingLines(of: code, by: standardIndent)
 	}
 
 	/// The arguments a builder function of a type whose `@Forwarded` properties are `forwardedProperties`, in their order,
@@ -9665,7 +9658,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// it under, where that is not the label.
 		var body = fillCallerReads.mockRootRebindings(rootBindingNames: fillPlaceBindings.rootBindingNames).map { "\(indent)let \($0.label) = \($0.rootBindingName)" }
 		// A fill is hosted as its text until fills are planned (`.claude/rules/emission-decisions.md`).
-		body += GeneratedCode.lines(childCode).spelled().split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+		body += GeneratedCodeText.lines(of: GeneratedCode.lines(childCode).spelled())
 		guard !fillReturnsWrapperBuilder else {
 			// A level function's member hands the fill of an instantiator's place each field it reads, and the fill returns the
 			// builder the wrapper keeps, spelled as the wrapper's own `Builder`: a function type a value it forwards could not
@@ -10225,8 +10218,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				/// they pass it up in other forms.
 				var placeProperties: [Property] {
 					calledBuilders.flatMap { called in
-						let sites = called.calledBuilders.sitesReached(by: called.builder, in: called.calledBuilders.enumsByKey)
-						return called.calledBuilders.holes.filter { sites.contains($0.site) && $0.holeType == called.builder.enumKey.holeType }.map(\.property)
+						called.calledBuilders.holesOfItsHoleTypeReached(by: called.builder).map(\.property)
 					}
 				}
 			}

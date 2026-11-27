@@ -863,10 +863,15 @@ public actor DependencyTreeGenerator {
 							if walksPlansForCaptures, await unplanned.mayCaptureNonSendableWrapper() {
 								// Today's tree reports the capture, as a build with no plan does.
 								perPathReason = .mayCaptureNonSendableWrapper
-							} else if let statements = try await TypeKeyBody.statements(ofPlan: WrittenVariantPlan(planning: unplanned)) {
-								perTypeTree = try .perType(code: ScopeGenerator.rootCode(of: scope.instantiable, writing: statements), bodies: unplanned.generators)
 							} else {
-								perPathReason = .noLayout
+								let plan = try await WrittenVariantPlan(planning: unplanned)
+								switch Result(catching: { () throws(TypeKeyRefusal) in try TypeKeyBody.statements(ofPlan: plan) }) {
+								case let .success(statements):
+									perTypeTree = try .perType(code: ScopeGenerator.rootCode(of: scope.instantiable, writing: statements), bodies: unplanned.generators)
+								case .failure:
+									// The layout's refusal says which stage kept the path key's body; the root keeps today's tree.
+									perPathReason = .noLayout
+								}
 							}
 						case let .perPath(reason):
 							perPathReason = reason
@@ -970,11 +975,13 @@ public actor DependencyTreeGenerator {
 				cache: &receivedPropertiesCache,
 			), let planCodeObserver = PlanCodeObservation.observer {
 				// The root's body laid out from the plan's bodies: one function per body, which the root declares.
-				let statements = try await TypeKeyBody.statements(ofPlan: WrittenVariantPlan(planning: unplannedPlan))
-				try planCodeObserver(
-					scope.instantiable.concreteInstantiable.asSource,
-					statements.map { try ScopeGenerator.rootCode(of: scope.instantiable, writing: $0).spelled() },
-				)
+				let plan = try await WrittenVariantPlan(planning: unplannedPlan)
+				switch Result(catching: { () throws(TypeKeyRefusal) in try TypeKeyBody.statements(ofPlan: plan) }) {
+				case let .success(statements):
+					try planCodeObserver(scope.instantiable.concreteInstantiable.asSource, ScopeGenerator.rootCode(of: scope.instantiable, writing: statements).spelled())
+				case .failure:
+					planCodeObserver(scope.instantiable.concreteInstantiable.asSource, nil)
+				}
 			}
 			// Whether the plan's detector of labels no one parameter can pass keeps the root on today's tree, checked
 			// against what today's tree reports only where a test observes it.
