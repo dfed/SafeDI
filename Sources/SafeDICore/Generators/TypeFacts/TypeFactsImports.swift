@@ -18,8 +18,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-/// What the file generated for a world's root needs imported for the types its tree builds: the union fact of the root
-/// (the design's section 3) over every declaration it reaches, each declaration's own being the modules
+/// What the file generated for a world's root needs imported for the types its tree builds: the union, over every
+/// declaration the root reaches, of each declaration's own fact, which is the modules
 /// `FulfillerImports.Fulfiller.fulfillers(building:forPropertyOfType:callingHandWrittenMock:)` names for building its
 /// type as its property. Read from the declarations alone, never from a generator tree: a node stands for every place
 /// of its declaration, so the union over the nodes is the union over the places, however many paths reach them.
@@ -47,8 +47,8 @@ struct TypeFactsImports: Sendable {
 			return targets
 		}
 		var fulfillers = Set<FulfillerImports.Fulfiller>()
-		// The root is built as no property, so it has no fact of its own.
-		for declaration in graph.nodes.dropFirst() {
+		// The root is built as no property, so it has no fact of its own: it alone reaches the `continue`.
+		for declaration in graph.nodes {
 			guard let property = declaration.property else { continue }
 			fulfillers.formUnion(FulfillerImports.Fulfiller.fulfillers(
 				building: declaration.scope.instantiable,
