@@ -7410,7 +7410,7 @@ struct SafeDIToolGraphFuzzerTests {
 		mirroredPairsTakingSamplesCount: 972,
 		forwardedPropertiesSampleCount: 2_727,
 		overridePairCount: 7_175,
-		overridePairsSum: GraphFuzzerSeedSetSum(value: 0x8BEB47F6B55F0335),
+		overridePairsSum: GraphFuzzerSeedSetSum(value: 0xF109DE5E9C763A40),
 		overrideFieldKindCounts: [
 			.builder: 4_522,
 			.configuration: 2_653,
