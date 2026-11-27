@@ -129,9 +129,13 @@ struct TypeKeyLayout {
 		/// call.
 		let domainLabels: Set<String>
 		var statements = [Statement]()
+		/// The positions of the statements that bind each label, ascending.
 		var positionsByLabel = [String: [Int]]()
 		let forwardedLabels: Set<String>
 		let cycleParameterLabels: Set<String>
+		/// The declaration each label of the body's domain resolves to outside it, at its first place: what a look-up from the
+		/// body or beneath it finds once it leaves the body, without walking further up.
+		var outerDeclarations = [String: PathValue]()
 
 		/// The parent body and statement index of each of the view's places.
 		var edges: [(parent: Int, position: Int)] {
