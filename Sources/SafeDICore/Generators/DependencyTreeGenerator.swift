@@ -430,11 +430,33 @@ public actor DependencyTreeGenerator {
 				for rootInfo in rootScopeGenerators {
 					taskGroup.addTask {
 						let code = try await rootInfo.scopeGenerator.generatePlan()
-						return await PlannedRoot(
+						// The fold's imports, found where the tree was built, are compared with the walk of the tree emitted,
+						// which for a seam whose first signature pass settled is that pass's tree made again.
+						if let observer = TypeFactsImportsObservation.comparesWalk {
+							let walkedFulfillers = await GenerationWork.$observer.withValue(nil) {
+								await rootInfo.scopeGenerator.fulfillersOfTree(buildingMock: false)
+							}
+							observer(TypeFactsImportsComparison(root: rootInfo.typeDescription.asSource, foldedFulfillers: rootInfo.fulfillers, walkedFulfillers: walkedFulfillers))
+						}
+						if let observer = TypeFactsReceivedValueSuppliesObservation.comparesWalk, let folded = rootInfo.receivedValueSupplies {
+							await GenerationWork.$observer.withValue(nil) {
+								// A tree `generate` plans is built around no receive nothing provides, which the walk always judges.
+								let walked = await rootInfo.scopeGenerator.receivedValueSupplies(
+									ofTreeRootedAt: rootInfo.instantiable,
+									unfulfilledReceives: ScopeGenerator.UnfulfilledReceives(locations: [], labels: []),
+								)
+								observer(TypeFactsReceivedValueSuppliesComparison(
+									root: rootInfo.typeDescription.asSource,
+									folded: folded,
+									walked: walked.map { ReceivedValueSupplies(supplies: $0.supplies.uniqued(), constructedTypes: $0.constructedTypes.uniqued()) },
+								))
+							}
+						}
+						return PlannedRoot(
 							typeDescription: rootInfo.typeDescription,
 							sourceFilePath: rootInfo.sourceFilePath,
 							code: code,
-							fulfillers: rootInfo.scopeGenerator.fulfillersOfTree(buildingMock: false),
+							fulfillers: rootInfo.fulfillers,
 						)
 					}
 				}
@@ -567,6 +589,13 @@ public actor DependencyTreeGenerator {
 		let typeDescription: TypeDescription
 		let instantiable: Instantiable
 		let sourceFilePath: String?
+		/// The modules the root's file imports for the types its tree builds, the union over the declarations its tree is
+		/// built from (`TypeFactsImports`). Read where the tree is built, so that the table the root's scope is frozen
+		/// into, a copy of the module's frozen map, is freed with the build rather than kept for every root at once.
+		let fulfillers: Set<FulfillerImports.Fulfiller>
+		/// The supplies of the root's tree, read where the tree is built for the same reason, or `nil` where nothing reads
+		/// them (`TypeFactsReceivedValueSupplies.whereRead(root:)`).
+		let receivedValueSupplies: ReceivedValueSupplies?
 		let scopeGenerator: ScopeGenerator
 	}
 
@@ -677,7 +706,6 @@ public actor DependencyTreeGenerator {
 					cache: &receivedPropertiesCache,
 					validation: &childrenRequiringEachOtherValidation,
 				)
-				try validateCyclesFromRootsOfForeignSeamsWithHoles(in: typeDescriptionToScopeMap, foreignSeamRoots: foreignSeamRoots, receivedPropertiesCache: &receivedPropertiesCache)
 			} catch let error as DependencyTreeGeneratorError {
 				// The trees build each foreign seam inline with the fills of its holes, which the seam's module calls
 				// through its builders. Only membership in what each fill declares is read, so the seams' order is moot.
@@ -706,10 +734,13 @@ public actor DependencyTreeGenerator {
 				var roots = [RootScopeInfo]()
 				for (typeDescription, scope) in rootScopesToGenerate.rootScopes {
 					let (table, record) = validatedWorld.frozenScopeMap.freezing(rootScope: scope)
+					let rootScope = ConstructionScope(table: table, record: record)
 					try roots.append(RootScopeInfo(
 						typeDescription: typeDescription,
 						instantiable: scope.instantiable,
 						sourceFilePath: typeDescriptionToFulfillingInstantiableMap[typeDescription]?.sourceFilePath,
+						fulfillers: TypeFactsImports(root: rootScope).fulfillers,
+						receivedValueSupplies: TypeFactsReceivedValueSupplies.whereRead(root: rootScope),
 						scopeGenerator: record.createScopeGenerator(
 							in: table,
 							lazilyInstantiatedInstanceProperties: [],
