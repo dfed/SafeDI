@@ -75,7 +75,7 @@ public enum NodeRecordsObservation {
 				}
 				let label = switch nodeRecordsRecord {
 				case let .built(record): record.property.label
-				case let .closer(record): record.property.label
+				case let .closer(record): "\(record.property.label) made again"
 				case let .alias(record): record.property.label
 				}
 				let placePath = "\(path).\(label)"
@@ -93,8 +93,8 @@ public enum NodeRecordsObservation {
 					pending.append((tree: treeBuilt.children, nodeRecords: nodeRecordsBuilt.children, path: placePath))
 				case let (.alias(treeAlias), .alias(nodeRecordsAlias)):
 					differences += fieldDifferences(between: treeAlias, and: nodeRecordsAlias).map { "\(placePath): \($0)" }
-				// A closer is compared by no arm yet: node records make none, since they refuse every world with a cycle
-				// (`cycle`), so a tree's closer meets another kind of record here. The kind that makes closers adds its arm.
+				case let (.closer(treeCloser), .closer(nodeRecordsCloser)):
+					differences += fieldDifferences(between: treeCloser, and: nodeRecordsCloser).map { "\(placePath): \($0)" }
 				case (.built, _), (.alias, _), (.closer, _):
 					differences.append("\(placePath): the tree writes another kind of place than node records")
 				}
@@ -111,6 +111,24 @@ public enum NodeRecordsObservation {
 			inner = wrapped
 		}
 		return (indentation, inner)
+	}
+
+	/// The fields of `nodeRecords`, a closing place, that differ from `tree`'s: every field the engine reads of a closer.
+	private static func fieldDifferences(between tree: ClosingPlaceRecord, and nodeRecords: ClosingPlaceRecord) -> [String] {
+		var differences = [String]()
+		func compare<Value: Equatable>(_ name: String, _ treeValue: Value, _ nodeRecordsValue: Value) {
+			guard treeValue != nodeRecordsValue else { return }
+			differences.append("\(name) is \(treeValue) in the tree, \(nodeRecordsValue) by node records")
+		}
+		compare("property", tree.property, nodeRecords.property)
+		compare("isErased", tree.isErased, nodeRecords.isErased)
+		compare("isExtension", tree.isExtension, nodeRecords.isExtension)
+		compare("closedOnFunctionName", tree.closedOnFunctionName, nodeRecords.closedOnFunctionName)
+		compare("forwardedProperties", tree.forwardedProperties, nodeRecords.forwardedProperties)
+		compare("cycleArguments", tree.cycleArguments, nodeRecords.cycleArguments)
+		compare("passedArguments", tree.passedArguments, nodeRecords.passedArguments)
+		compare("rebindsLoopMember", tree.rebindsLoopMember, nodeRecords.rebindsLoopMember)
+		return differences
 	}
 
 	/// `code`'s statements: each piece of a sequence, indented as the sequence is, or `code` where it is no sequence.

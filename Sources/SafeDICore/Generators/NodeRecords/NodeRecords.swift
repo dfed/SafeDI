@@ -78,6 +78,11 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	case readAnsweredTwoWays
 	/// The engine could not lay the root out from the records.
 	case notLaidOut
+	/// A member of a loop of builders under two parents whose loops make different members of it again.
+	case builderLoopSharedApart
+	/// A loop of builders in a seam's own tree, whose levels the tree holds in a box and whose members bind its holes'
+	/// payloads, which node records do not write.
+	case builderLoopBoxed
 }
 
 /// What a world's records read of a node beside the frozen interface (`TypeFactsWorld`): the scope it builds and the
@@ -150,6 +155,7 @@ struct NodeRecords: Sendable {
 		kinds.reserveCapacity(declarationCount)
 		for declaration in 0..<Int32(declarationCount) {
 			try kinds.append(Self.kind(of: declaration, in: world))
+			try Self.checkMakesNoLoopMemberAgain(inSeamTree: seamTree, declaration, in: world)
 			try Self.checkForwardsBuiltTypesProperties(declaration, in: world, declaredTypeNames: declaredTypeNames)
 		}
 		let rootLazilyInstantiatedInstanceProperties = seamTree?.rootLazilyInstantiatedInstanceProperties ?? []
@@ -212,6 +218,9 @@ struct NodeRecords: Sendable {
 				escaping.formUnion(typesDeclaredEscaping[callee] ?? [])
 				children.append(.indented(places[callee] ?? .empty, by: ScopeGenerator.standardIndent))
 			}
+			// A member of a loop of builders first makes again the members its tree receives, whatever its kind
+			// (`NodeRecords+Loops.swift`).
+			children = Self.loopRebindings(of: declaration, in: world) + children
 			// What a receive by value reads as a wrapper's instance, which every record of a construction passes its arguments.
 			let instanceProperties = answeringDeclarations.lazilyInstantiatedInstanceProperties(readBy: variant)
 			let record: PlaceRecord = switch kinds[Int(declaration)] {
@@ -315,6 +324,11 @@ struct NodeRecords: Sendable {
 				refusals.insert(.readAnsweredTwoWays)
 			}
 			do {
+				try checkMakesNoLoopMemberAgain(inSeamTree: seamTree, declaration, in: world)
+			} catch {
+				refusals.insert(error)
+			}
+			do {
 				try checkForwardsBuiltTypesProperties(declaration, in: world, declaredTypeNames: declaredTypeNames)
 			} catch {
 				refusals.insert(error)
@@ -357,6 +371,12 @@ struct NodeRecords: Sendable {
 		return !world.owedFacts(of: declaration).subtracting(owedOnlyOutsideTests).isEmpty
 	}
 
+	/// Refuses `declaration`'s world as `builderLoopBoxed` where it is a seam's own and `declaration` makes a member of a
+	/// loop of builders again.
+	private static func checkMakesNoLoopMemberAgain(inSeamTree seamTree: DependencyTreeGenerator.RootScopeInfo.SeamTree?, _ declaration: DeclarationID, in world: some NodeRecordSources) throws(NodeRecordRefusal) {
+		guard seamTree == nil || world.madeAgain(from: declaration).isEmpty else { throw .builderLoopBoxed }
+	}
+
 	/// Refuses `declaration`'s world where it is an `ErasedInstantiator` or a `SendableErasedInstantiator` whose first
 	/// generic argument is not the `@Forwarded` properties of the type it builds: an error the tree reports where it builds
 	/// the place (`ErasedInstantiatorForwardedPropertiesMismatchError`), which the records cannot, so the world keeps its
@@ -388,7 +408,7 @@ struct NodeRecords: Sendable {
 	private static func kindAndRefusals(of declaration: DeclarationID, in world: some NodeRecordSources) -> (kind: NodeRecordKind, refusals: [NodeRecordRefusal]) {
 		let claim = claim(of: declaration, in: world)
 		let discharged = claim?.discharges ?? []
-		let refusals = (claim?.refusals ?? []) + refusalsOfBuiltByInitializer(declaration, in: world).filter { !discharged.contains($0) }
+		let refusals = (claim?.refusals ?? []) + refusalsOfBuiltByInitializer(declaration, in: world).filter { !discharged.contains($0) } + loopRefusals(of: declaration, in: world)
 		return (claim?.kind ?? .builtByInitializer, refusals)
 	}
 

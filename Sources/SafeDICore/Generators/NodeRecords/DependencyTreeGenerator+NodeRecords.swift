@@ -194,8 +194,11 @@ extension DependencyTreeGenerator {
 	/// cannot lay out every statement of the body.
 	static func laidOutRootCode(of instantiable: Instantiable, body: [GeneratedCode]) throws -> GeneratedCode? {
 		guard let rootInitializer = try ScopeGenerator.rootInitializer(of: instantiable) else { return .empty }
-		// A statement the engine cannot lay out would be copied as its text, which a node records place does not hold.
-		guard body.allSatisfy(\.statementsAreLaidOutByTypeKey), let statements = TypeKeyBody.statements(ofRootBody: body) else { return nil }
+		// A statement the engine cannot lay out would be copied as its text, which a node records place does not hold, so
+		// every loop of builders is laid out, as a mock's are, where the tree keeps the path key's body for one written once.
+		guard body.allSatisfy(\.statementsAreLaidOutByTypeKey),
+		      let statements = TypeKeyBody.statements(ofRootBody: body, laysOutEveryLoop: true, declaresLoopMembersAsThePathKeyDoes: true)
+		else { return nil }
 		return rootInitializer.spelled(writing: BuilderFunctionGraph(body: statements.map(Statement.verbatim)))
 	}
 
