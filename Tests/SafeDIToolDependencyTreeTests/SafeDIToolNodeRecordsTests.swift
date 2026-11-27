@@ -356,11 +356,12 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 		    }
 		}
 		"""])
-		// `Screen`'s own tree reads its deferred parameter through its memo, which node records refuse as lazy.
+		// `Screen`'s own tree reads its deferred parameter through its memo, which node records read as its tree does; a
+		// seam's own tree is compared, not laid out.
 		#expect(reports.map(\.root) == ["Screen", "Root"])
-		#expect(reports.map(\.refusal) == ["lazy", nil])
+		#expect(reports.map(\.refusal) == ["notLaidOut", nil])
 		#expect(reports.map(\.isLaidOutFromNodeRecords) == [false, true])
-		#expect(reports.map(\.recordCount) == [0, 2])
+		#expect(reports.map(\.recordCount) == [1, 2])
 		#expect(reports.flatMap(\.differences) == [])
 	}
 
@@ -407,8 +408,8 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 			)
 		}
 		#expect(reports.map(\.root) == ["Screen", "Home"])
-		// `Screen`'s tree holds its hole; `Home`'s records are made, and a seam's own tree is not laid out.
-		#expect(reports.map(\.refusal) == ["renameOrHole", "notLaidOut"])
+		// The records of `Screen`'s tree, which holds its hole, and of `Home`'s are made, and a seam's own tree is not laid out.
+		#expect(reports.map(\.refusal) == ["notLaidOut", "notLaidOut"])
 		#expect(reports.flatMap(\.differences) == [])
 	}
 
