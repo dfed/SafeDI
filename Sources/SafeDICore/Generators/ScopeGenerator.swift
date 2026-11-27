@@ -8042,6 +8042,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					takesPayloadFields: child.fillReturnsWrapperBuilder,
 					boundLabels: child.fillFields.map(\.property.label).filter(child.fillStructBoundLabels.contains),
 					bound: child.fillFields.filter { child.fillStructBoundLabels.contains($0.property.label) && (treeReads.reads($0.property) || treeReads.fieldsCarriedBySites.contains($0.property)) }.map(\.property.label),
+					memoBoundLabels: Set(child.fillFields.filter(\.bindsMemo).map(\.property.label)),
 					parametersTaken: child.fillParameterFields,
 					memberParameters: child.fillMemberParameterFields(takingPayloadFields: child.fillReturnsWrapperBuilder),
 					callerReads: child.fillCallerReads.parameterByLabel.keys.sorted().map { label in

@@ -45,6 +45,8 @@ struct FillFacts: Sendable {
 	let boundLabels: [String]
 	/// The labels of the fields the fill binds, in field order.
 	let bound: [String]
+	/// The labels of the fields the fill binds as a deferred parameter's memo (`Field.bindsMemo`).
+	let memoBoundLabels: Set<String>
 	/// What the fill takes after its case's values, in order (`ScopeGenerator.fillParameterFields`).
 	let parametersTaken: [SeamSignature.Hole.Field]
 	/// What a level function's member hands the fill (`ScopeGenerator.fillMemberParameterFields(takingPayloadFields:)`):
@@ -224,6 +226,7 @@ struct FillFacts: Sendable {
 			takesPayloadFields: fill.returnsWrapperBuilder,
 			boundLabels: boundFill.fields.map(\.property.label).filter(boundFill.boundLabels.contains),
 			bound: boundFill.fields.filter { boundFill.boundLabels.contains($0.property.label) && treeReads.reads($0.property) }.map(\.property.label),
+			memoBoundLabels: Set(boundFill.fields.filter(\.bindsMemo).map(\.property.label)),
 			parametersTaken: parametersTaken,
 			memberParameters: (fill.returnsWrapperBuilder ? payloadFields : []) + parametersTaken,
 			callerReads: callerReads.parameterByLabel.keys.sorted().map { CallerRead(label: $0, isRequired: requiredLabels.contains($0)) },
@@ -243,16 +246,24 @@ struct FillFacts: Sendable {
 enum FillCallerSources {
 	/// The source of each of `facts`' caller reads, in their order, where `call` is reached as `variant`.
 	static func of(facts: FillFacts, call: DeclarationID, variant: VariantID, in world: TypeFactsGraph) -> [ArgumentSource] {
+		zip(declarations(facts: facts, call: call, variant: variant, in: world), facts.parametersTakenOfCallerReads).map { declared, parameter in
+			declared.map { argument(reading: parameter, declaredAs: $0) } ?? .nil
+		}
+	}
+
+	/// The caller's declaration that answers each of `facts`' caller reads, in their order, where `call` is reached as
+	/// `variant`, or `nil` where none does.
+	static func declarations(facts: FillFacts, call: DeclarationID, variant: VariantID, in world: TypeFactsGraph) -> [Property?] {
 		let edges = world.edges(from: call)
 		let reads = Array(world.reads(of: facts.declaration))
-		guard let edge = edges.firstIndex(of: facts.declaration) else { return facts.callerReads.map { _ in .nil } }
+		guard let edge = edges.firstIndex(of: facts.declaration) else { return facts.callerReads.map { _ in nil } }
 		let sources = Array(world.sources(ofCall: edge - edges.startIndex, of: variant))
-		return zip(facts.callerReads, facts.parametersTakenOfCallerReads).map { callerRead, parameter in
+		return facts.callerReads.map { callerRead in
 			// The read of the label's value, else its read only if available.
 			let readIndex = reads.indices.first { world.read(reads[$0]).channel == .value && world.text(ofLabel: world.read(reads[$0]).label) == callerRead.label }
 				?? reads.indices.first { world.read(reads[$0]).channel == .optionalValue && world.text(ofLabel: world.read(reads[$0]).label) == callerRead.label }
-			guard let readIndex, readIndex < sources.count, let declared = declaration(of: callerRead.label, answering: sources[readIndex], callee: variant, in: world) else { return .nil }
-			return argument(reading: parameter, declaredAs: declared)
+			guard let readIndex, readIndex < sources.count else { return nil }
+			return declaration(of: callerRead.label, answering: sources[readIndex], callee: variant, in: world)
 		}
 	}
 

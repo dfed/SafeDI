@@ -72,7 +72,8 @@ struct FillNames: Sendable {
 	///   - fills: The call's fills, in the order its hole arguments list them, without those an enclosing call fills.
 	///   - dispatchers: The call's dispatchers, in the order it declares them, without those an enclosing call declares.
 	init(reserving reservedNames: some Sequence<String>, fills: [Fill], dispatchers: [Dispatcher]) {
-		var names = GeneratedNameAllocator(reserving: Set(reservedNames))
+		self.reservedNames = Array(reservedNames)
+		var names = GeneratedNameAllocator(reserving: Set(self.reservedNames))
 		var namedFills = [NamedFill]()
 		var fillIndexByCaseKey = [String: Int]()
 		for fill in fills where fillIndexByCaseKey[fill.caseKey] == nil {
@@ -89,6 +90,8 @@ struct FillNames: Sendable {
 		dispatcherIndexByKey = Dictionary(self.dispatchers.enumerated().map { ($0.element.key, $0.offset) }, uniquingKeysWith: { first, _ in first })
 	}
 
+	/// The names enclosing the call, which no function of the call takes.
+	let reservedNames: [String]
 	/// The call's fills, one per case, in the order the call names them.
 	let fills: [NamedFill]
 	/// The call's dispatchers, in the order it declares them.

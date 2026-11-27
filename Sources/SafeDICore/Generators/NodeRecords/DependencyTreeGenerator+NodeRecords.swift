@@ -78,6 +78,12 @@ extension DependencyTreeGenerator {
 					FillFactsObservation.observe(root: root, world: TypeFactsGraph(root: rootInfo.rootScope, forMockGeneration: false), treeProjections: scopeGenerator.fillFactsProjectionsOfCallsOutsideFills())
 				}
 			}
+			if FilledCallRecordsObservation.observer != nil, rootInfo.seamTree == nil {
+				// The work of making the records is no run's, so the tests that count a run's work count none of it.
+				GenerationWork.$observer.withValue(nil) {
+					FilledCallRecordsObservation.observe(root: root, world: TypeFactsGraph(root: rootInfo.rootScope, forMockGeneration: false))
+				}
+			}
 			guard let observer = NodeRecordsObservation.observer else {
 				guard NodeRecordsObservation.laysOutSeamWorldRootsInRun,
 				      let code = try laidOutSeamWorldRootCode(of: rootInfo, declaredTypeNames: declaredTypeNames)
