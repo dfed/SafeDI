@@ -560,11 +560,10 @@ struct SafeDIToolNodeRecordsCycleTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_keepsTheTreesLayout_whenCycleReentersNodeWhoseReceiveAnotherDeclarationAnswers() async throws {
+	mutating func generate_laysOutRootAsTheTreeDoes_whenCycleReentersNodeWhoseReceiveAnotherDeclarationAnswers() async throws {
 		// `Reader` receives `tag`, which the root declares above `A` and `B` declares on the cycle of `A` and `B`: the call
-		// from `B` reaches `A` under another variant, one whose `Reader` reads `B`'s `tag`. The tree closes the cycle on
-		// `A`'s function, which takes `tag` as a parameter, so the records refuse the world for its cycle parameters until
-		// they read the facts' parameters.
+		// from `B` closes the cycle on `A`'s function, which takes `tag` as a parameter, the facts' parameter of `A`, and
+		// is passed the root's `tag` and `B`'s.
 		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -629,7 +628,9 @@ struct SafeDIToolNodeRecordsCycleTests: ~Copyable {
 			}
 			""",
 		])
-		#expect(reports.map(\.refusal) == ["cycleTakesParameters"])
+		#expect(reports.map(\.refusal) == [nil])
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
+		#expect(reports.flatMap(\.differences) == [])
 	}
 
 	@Test

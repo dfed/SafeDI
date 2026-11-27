@@ -72,7 +72,7 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	/// A place between a place on a cycle and the call that closes the cycle on it declares a label some type receives, and
 	/// the facts give the function the call refers to no parameters (`TypeFactsWorld.parameters(of:)`); or the function
 	/// takes a parameter of a label some declaration holds lazily, which a call can find as the wrapper at its site where
-	/// the records read the callee's view; or a call reaches a node the path holds under another variant.
+	/// the records read the callee's view.
 	case cycleTakesParameters
 	/// Two bodies of a world with a cycle name one variant's function apart, or hand the functions its body refers to
 	/// different names (`CycleFunctionNames`), where its one place cannot stand for both.
@@ -107,6 +107,10 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	/// A loop of builders in a seam's own tree, whose levels the tree holds in a box and whose members bind its holes'
 	/// payloads, which node records do not write.
 	case builderLoopBoxed
+	/// A member of a loop of builders whose function takes cycle parameters, or that closes a cycle on a function that
+	/// does: the tree wraps it through a `__safeDI_<label>_received` function its loop's parent declares, which no record
+	/// lays out yet.
+	case builderLoopTakesCycleParameters
 	/// Making the records, or laying the root out from them, threw something other than a refusal
 	/// (`NodeRecords.refusingWhatRecordsThrow(_:)`). The world keeps its tree, which reports whatever it reports.
 	case recordsThrew
@@ -322,24 +326,16 @@ struct NodeRecords: Sendable {
 		var variantsClosedOn = [Set<VariantID>](repeating: [], count: world.variantCount)
 		var cycleVariantsBuilt = [Set<VariantID>](repeating: [], count: world.variantCount)
 		var isOnPath = [Bool](repeating: false, count: world.variantCount)
-		// How many places of each node are on the path, whatever their variants.
-		var placesOnPath = [Int32](repeating: 0, count: declarationCount)
 		var labelsDeclaredBetween = [Set<String>](repeating: [], count: world.variantCount)
 		var variantsBetween = [Set<VariantID>](repeating: [], count: world.variantCount)
 		var twins = TwinsOnPath(world: world, holdsCycle: holdsCycle)
 		var stack = [PlaceFrame(variant: 0, edgeIndices: edgeIndices(of: 0))]
 		isOnPath[0] = true
-		placesOnPath[0] = 1
 		while let top = stack.last {
 			if top.next < top.edgeIndices.count {
 				stack[stack.count - 1].next += 1
 				let calls = world.calls(of: top.variant)
 				let callee = calls[calls.startIndex + top.edgeIndices[top.next]]
-				// A call of a node a place on the path builds under another variant, which reads another answer: the tree
-				// closes on that place's function, which takes the answer as a parameter.
-				guard isOnPath[Int(callee)] || placesOnPath[Int(world.declaration(of: callee))] == 0 else {
-					throw NodeRecordRefusal.cycleTakesParameters
-				}
 				if isOnPath[Int(callee)] {
 					// The places between the place the call closes on and the call: what they declare, and the parameters of
 					// their own functions, are what the closed-on function takes as parameters rather than capturing.
@@ -371,14 +367,12 @@ struct NodeRecords: Sendable {
 				} else {
 					try twins.enter(world.declaration(of: callee))
 					isOnPath[Int(callee)] = true
-					placesOnPath[Int(world.declaration(of: callee))] += 1
 					stack.append(PlaceFrame(variant: callee, edgeIndices: edgeIndices(of: world.declaration(of: callee))))
 				}
 				continue
 			}
 			stack.removeLast()
 			isOnPath[Int(top.variant)] = false
-			placesOnPath[Int(world.declaration(of: top.variant))] -= 1
 			twins.leave(world.declaration(of: top.variant))
 			entries[Int(top.variant)] = top.entries
 			guard let parent = stack.indices.last else { continue }
@@ -438,6 +432,24 @@ struct NodeRecords: Sendable {
 		for variant in postOrder where !variantsBetween[Int(variant)].isEmpty {
 			guard !cycleParameters(of: variant).contains(where: { lazilyHeldLabels.contains($0.property.label) }) else {
 				throw NodeRecordRefusal.cycleTakesParameters
+			}
+		}
+		// A loop member whose function takes cycle parameters, or whose place closes a cycle on such a function, is wrapped
+		// through a `__safeDI_<label>_received` function (`ScopeGenerator`'s loop rebindings).
+		for variant in postOrder where !variantsBetween[Int(variant)].isEmpty && !cycleParameters(of: variant).isEmpty {
+			let isLoopMember = { (declaration: DeclarationID) in
+				world.parents(of: declaration).contains { parent in
+					world.edgeFacts(from: parent.parent).contains { $0.child == declaration && $0.loop >= 0 }
+				}
+			}
+			let closesFromLoopMember = variantsBetween[Int(variant)].contains { between in
+				entries[Int(between)].contains { entry in
+					guard case let .closer(closingOn: callee) = entry, callee == variant else { return false }
+					return world.edgeFacts(from: world.declaration(of: between)).contains { $0.child == world.declaration(of: variant) && $0.loop >= 0 }
+				}
+			}
+			guard !isLoopMember(world.declaration(of: variant)), !closesFromLoopMember else {
+				throw NodeRecordRefusal.builderLoopTakesCycleParameters
 			}
 		}
 		func cycleArguments(of variant: VariantID) -> [PlaceRead] {
