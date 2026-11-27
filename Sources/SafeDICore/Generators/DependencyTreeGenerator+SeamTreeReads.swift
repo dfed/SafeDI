@@ -30,7 +30,7 @@ extension DependencyTreeGenerator {
 	struct SeamTreeReads {
 		/// The properties the tree requires of the seam's caller (`ScopeGenerator.requiredReceivedProperties`), the
 		/// receives inside the fills of its seam calls among them.
-		var requiredReceivedProperties: Set<Property>
+		let requiredReceivedProperties: Set<Property>
 		/// The properties the tree requires through `onlyIfAvailable` aliases
 		/// (`ScopeGenerator.requiredAliasFulfillingProperties`).
 		var requiredAliasFulfillingProperties: Set<Property>
@@ -61,7 +61,7 @@ extension DependencyTreeGenerator {
 			func properties(in rows: BitRows) -> Set<Property> {
 				Set(rows.columns(inRow: 0).map { graph.propertyTable[Int($0)] })
 			}
-			requiredReceivedProperties = properties(in: graph.receives.requiredIncludingFills)
+			requiredReceivedProperties = treeReads.requiredReceivedProperties
 			requiredAliasFulfillingProperties = properties(in: graph.receives.requiredAliasFulfilling)
 			typesDeclaredEscaping = Set(graph.typesDeclaredEscaping.columns(inRow: 0).map { graph.typeTable[Int($0)] })
 			receivers = treeReads.receivers
@@ -80,8 +80,6 @@ extension DependencyTreeGenerator {
 		/// types are spelled as declared, since the signature keeps the ones it holds.
 		func spelling(of field: SeamTreeReadsObservation.FactsField) -> [String] {
 			switch field {
-			case .requiredReceivedProperties:
-				requiredReceivedProperties.map(\.spelledAsEqualityReadsIt).sorted()
 			case .requiredAliasFulfillingProperties:
 				requiredAliasFulfillingProperties.map(\.spelledAsEqualityReadsIt).sorted()
 			case .typesDeclaredEscaping:
@@ -93,8 +91,6 @@ extension DependencyTreeGenerator {
 		func emptying(_ field: SeamTreeReadsObservation.FactsField) -> SeamTreeReads {
 			var reads = self
 			switch field {
-			case .requiredReceivedProperties:
-				reads.requiredReceivedProperties = []
 			case .requiredAliasFulfillingProperties:
 				reads.requiredAliasFulfillingProperties = []
 			case .typesDeclaredEscaping:
@@ -152,9 +148,6 @@ extension DependencyTreeGenerator {
 public enum SeamTreeReadsObservation {
 	/// The fields the facts of a seam's tree produce at its root, which the comparison compares.
 	public enum FactsField: String, CaseIterable, Sendable {
-		/// What the tree requires of the caller, the receives inside the fills of the seam calls it makes among them
-		/// (`TypeFactsReceives.requiredIncludingFills`).
-		case requiredReceivedProperties
 		case requiredAliasFulfillingProperties
 		case typesDeclaredEscaping
 	}
@@ -162,6 +155,10 @@ public enum SeamTreeReadsObservation {
 	/// The fields still read from the tree in both values, which the comparison cannot tell apart yet. What the facts lack
 	/// for each is said in the pull request that moves it to `FactsField`.
 	public enum TreeField: String, CaseIterable, Sendable {
+		/// What the tree requires of the caller, the receives inside the fills of the seam calls it makes among them. The
+		/// facts' `requiredIncludingFills` row lacks two of a fill's per-route facts: the instance a memo the fill is handed
+		/// serves, which its struct-bound row does not hide, and the caller's memo a carried route hands, which it hides.
+		case requiredReceivedProperties
 		/// Each receive's declaring type, alias, module, and the tier facts of the nested seam call that omits it.
 		case receivers
 		/// For each label, whether the tree reads it where a parameter is its nearest declaration, and whether inside a
