@@ -24,12 +24,12 @@
 ///
 /// - `validateFills` and `seamTierOmissions` judge seam calls and fills, which a module without seams has none of. In a
 ///   module with seams, node records refuse every fill (`.fill`), and a production root's world whose seam call omits a
-///   parameter keeps its tree (`SeamCallCheck.tierOmitsParameter`).
-/// - `nonSendableWrapperCaptures` judges a `@Sendable` builder function, which only a `Sendable` wrapper or a cycle makes:
-///   node records refuse a world in which one captures a wrapper (`NodeRecordRefusal.sendableFunctionCapturesWrapper`,
-///   from `DeclarationsAnsweringReads`), and every cycle (`.cycle`), which `unpassableCycleLabelsInTree` judges too. A
-///   seam call that defers a parameter `@Sendable` is one more such function, which no fact reads yet, so a world that
-///   holds one keeps its tree (`SeamCallCheck.defersSendableParameter`).
+///   parameter its leaf finds available keeps its tree (`SeamCallCheck.omitsProvidedValue`), whose walk words the error.
+/// - `nonSendableWrapperCaptures` judges a `@Sendable` builder function, which only a `Sendable` wrapper, a cycle or a seam
+///   call's parameter deferred `@Sendable` makes: node records refuse a world in which one captures a wrapper
+///   (`NodeRecordRefusal.sendableFunctionCapturesWrapper`, from `DeclarationsAnsweringReads`, which reads a call's
+///   `@Sendable` autoclosure as such a function), and every cycle (`.cycle`), which `unpassableCycleLabelsInTree` judges
+///   too.
 /// - `fulfillersOfTree`, the imports, is folded over the root's declarations (`TypeFactsImports`).
 ///
 /// Where a test observes node records, the tree is built beside the records all the same, and each of these is checked
@@ -60,17 +60,14 @@ public enum TreeForcer: Hashable, Sendable, CustomStringConvertible {
 	}
 }
 
-/// What a check of a production root's seam calls reads of its tree before any code is generated, which no fact of its
-/// world answers yet: a root of a module with seams whose world holds such a call keeps its tree, whatever its node
-/// records make, so the check reports what it reports without them.
+/// What a check of a production root's seam calls finds in its world's node records that only its tree's walk words: a
+/// root of a module with seams whose world holds such a call keeps its tree, so the check reports what it reports from
+/// the tree. A run that builds the tree for it fails, since the check reports an error.
 public enum SeamCallCheck: String, Hashable, Sendable {
-	/// A call of a seam's tier omits a parameter, or one no tier takes: `seamTierOmissions` judges, from the tree, whether
-	/// the caller would hand it a value (`validateNoSeamTierOmitsProvidedValue`).
-	case tierOmitsParameter = "seam call omits a parameter"
-	/// A call of a seam's tier hands a parameter the seam defers `@Sendable`, which the call's `@Sendable` closure
-	/// captures: `nonSendableWrapperCaptures` judges, from the tree, whether that captures a wrapper that is not
-	/// `Sendable` (`NonSendableWrapperCapture.capturingSeamType`).
-	case defersSendableParameter = "seam call defers a parameter @Sendable"
+	/// A call of a seam's tier omits a parameter, or one no tier takes, that the call's leaf finds available
+	/// (`NodeRecords.seamCallOmitsAvailableParameter`): the tree would hand it a value, which the call drops
+	/// (`validateNoSeamTierOmitsProvidedValue`).
+	case omitsProvidedValue = "seam call omits a value the tree provides"
 }
 
 /// What a run can read of every root's tree beside its code, which no root's node records stand in for yet.

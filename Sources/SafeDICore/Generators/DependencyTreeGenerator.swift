@@ -419,9 +419,9 @@ public actor DependencyTreeGenerator {
 	/// Runs every whole-module check of `roots`, the trees this module generates, which their code needs to pass.
 	private func validateBeforeGeneratingCode(of roots: [RootScopeInfo]) async throws {
 		// A root laid out from its node records has no tree, and needs none of these checks: node records refuse a world
-		// with a fill (`fill`) and one whose `@Sendable` function captures a wrapper that is not `Sendable`
-		// (`sendableFunctionCapturesWrapper`), and a world with a seam call that omits a parameter or defers one
-		// `@Sendable` keeps its tree (`SeamCallCheck`), so each root these checks could report keeps its tree.
+		// with a fill (`fill`) and one whose `@Sendable` function, a seam call's `@Sendable` autoclosure included, captures a
+		// wrapper that is not `Sendable` (`sendableFunctionCapturesWrapper`), and a world with a seam call that omits a value
+		// its leaf finds available keeps its tree (`SeamCallCheck`), so each root these checks could report keeps its tree.
 		try Self.validateFills(
 			inTreesRootedAt: roots.compactMap(\.scopeGenerator),
 			callerModule: seams.currentModule,

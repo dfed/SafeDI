@@ -47,7 +47,9 @@
 /// alike whatever answers it (rule 1), and `OnlyIfAvailableAnswers`, made before this, refuses a world in which two calls
 /// of one variant see different declarations of a label some receive only if available reads.
 ///
-/// An edge that opens a `@Sendable` function (`TypeFactsEdge.opens`) builds its child inside that function, so every
+/// An edge that opens a `@Sendable` function (`TypeFactsEdge.opens`) builds its child inside that function, and a call of
+/// a seam's tier hands each parameter the seam defers `@Sendable` to a `@Sendable` autoclosure, which reads it there. So
+/// every read of a parameter the call defers `@Sendable`, and every
 /// read of the child's tree that a declaration above the child answers is made from outside the function: a capture
 /// where that declaration is an `Instantiator`, an `ErasedInstantiator` or a `LazilyInstantiated`, read as itself or as
 /// its instance, a parameter of a seam's own root included (`rootNonSendableWrapperLabels`), which its generated
@@ -58,8 +60,8 @@
 ///
 /// Memory: a set per variant, each empty unless the variant's tree reads a wrapper's instance, for as long as
 /// `NodeRecords.init` makes the records; none in a world that declares no lazily instantiated property, whose root is
-/// handed none, and that opens no `@Sendable` function. The declaration that answers each read, one ID per key of every variant, lives only while the
-/// sets are made.
+/// handed none, that opens no `@Sendable` function, and that calls no seam that defers a parameter `@Sendable`. The
+/// declaration that answers each read, one ID per key of every variant, lives only while the sets are made.
 ///
 /// A bridge: a private copy of two of the tree's rules about the answer a read finds, which the facts' answers do not
 /// carry: whether it is a wrapper's instance, and whether a `@Sendable` function captures it. It goes in the change that
@@ -77,6 +79,7 @@ struct DeclarationsAnsweringReads: Sendable {
 		guard !rootLazilyInstantiatedInstanceProperties.isEmpty || declarations.contains(where: { declaration in
 			!world.scope(of: declaration).declaredLazilyInstantiatedInstanceProperties.isEmpty
 				|| world.edgeFacts(from: declaration).contains { Self.opensSendableFunction($0) }
+				|| !Self.labelsDeferredSendable(by: world.scope(of: declaration)).isEmpty
 		}) else {
 			self.lazilyInstantiatedInstancePropertiesByVariant = []
 			self.sendableFunctionCapturesWrapper = false
@@ -134,6 +137,9 @@ struct DeclarationsAnsweringReads: Sendable {
 					renamesReadingWrappersInstance.insert(callee)
 				}
 				let opensSendableFunction = Self.opensSendableFunction(edgeFacts[edgeFacts.startIndex + edgeIndex])
+				// A call of a seam's tier hands each parameter the seam defers `@Sendable` to a `@Sendable` autoclosure, which
+				// captures what it reads (`NonSendableWrapperCapture.capturingSeamType`).
+				let labelsDeferredSendable = Self.labelsDeferredSendable(by: world.scope(of: world.declaration(of: callee)))
 				var calleeAnsweringDeclarations = [DeclarationID]()
 				for (source, readID) in zip(world.sources(ofCall: edgeIndex, of: caller), world.reads(of: world.declaration(of: callee))) {
 					let answeringDeclaration = Self.answeringDeclaration(of: source, among: callerAnsweringDeclarations)
@@ -147,12 +153,12 @@ struct DeclarationsAnsweringReads: Sendable {
 					} else {
 						Set<Property>()
 					}
-					guard opensSendableFunction || !instanceProperties.isEmpty else { continue }
+					guard opensSendableFunction || !instanceProperties.isEmpty || !labelsDeferredSendable.isEmpty else { continue }
 					let label = world.text(ofLabel: read.label)
 					for property in instanceProperties where property.label == label {
 						lazilyInstantiatedInstancePropertiesByVariant[Int(callee)].insert(property)
 					}
-					guard opensSendableFunction else { continue }
+					guard opensSendableFunction || labelsDeferredSendable.contains(label) else { continue }
 					let readsNonSendableWrapper = if let scope {
 						scope.sortedDeclaredPropertyForms.contains { declared in
 							declared.property.label == label && !declared.property.propertyType.isConstant && !declared.property.propertyType.isSendable
@@ -193,11 +199,11 @@ struct DeclarationsAnsweringReads: Sendable {
 	let renamesReadDifferentInstances: Bool
 
 	/// The renames fulfilled by a wrapper's instance; empty in a world that declares no lazily instantiated property, whose
-	/// root is handed none, and that opens no `@Sendable` function.
+	/// root is handed none, that opens no `@Sendable` function, and that calls no seam that defers a parameter `@Sendable`.
 	private let renamesReadingWrappersInstance: Set<VariantID>
 
-	/// By variant; empty in a world that declares no lazily instantiated property, whose root is handed none, and that
-	/// opens no `@Sendable` function.
+	/// By variant; empty in a world that declares no lazily instantiated property, whose root is handed none, that
+	/// opens no `@Sendable` function, and that calls no seam that defers a parameter `@Sendable`.
 	private let lazilyInstantiatedInstancePropertiesByVariant: [Set<Property>]
 
 	/// Whether a read of `channel` is handed the nearest declaration of its label, in the form that declaration has: a
@@ -291,6 +297,17 @@ struct DeclarationsAnsweringReads: Sendable {
 		} else {
 			rootLazilyInstantiatedInstanceProperties.contains(instance)
 		}
+	}
+
+	/// The labels of the parameters a call of a seam's tier, `scope`'s construction, hands a `@Sendable` autoclosure: those
+	/// the seam defers `@Sendable`. Empty for any other construction.
+	private static func labelsDeferredSendable(by scope: ConstructionScope) -> Set<String> {
+		guard let seamCall = scope.seamCall else { return [] }
+		var labels = Set<String>()
+		for parameter in seamCall.parameters where parameter.deferral == .deferred(isSendable: true) {
+			labels.insert(parameter.property.label)
+		}
+		return labels
 	}
 
 	private static func opensSendableFunction(_ edge: TypeFactsEdge) -> Bool {

@@ -276,8 +276,31 @@ struct NodeRecords: Sendable {
 			rootEscaping.formUnion(typesDeclaredEscaping[Int(callee)] ?? [])
 		}
 		rootTypesDeclaredEscaping = rootEscaping
+		seamCallOmitsAvailableParameter = Self.seamCallOmitsAvailableParameter(in: world, kinds: kinds, answers: onlyIfAvailableAnswers)
 		self.records = records
 		declarationByVariant = (0..<Int32(world.variantCount)).map(world.declaration(of:))
+	}
+
+	/// Whether a call of a seam's tier in the world omits a parameter, or one no tier takes, that its leaf, which receives
+	/// it only if available, finds available (`OnlyIfAvailableAnswers`): the value the tree holds there, which the call
+	/// drops, is `ScopeGenerator.seamTierOmissions(ofTreeRootedAt:isOwnFile:)`'s error, whose provider and notes the
+	/// tree's walk names. A world whose seam calls each pass `nil` for every parameter their tiers omit holds none.
+	let seamCallOmitsAvailableParameter: Bool
+
+	private static func seamCallOmitsAvailableParameter(in world: some NodeRecordSources, kinds: [NodeRecordKind], answers: OnlyIfAvailableAnswers) -> Bool {
+		for variant in 0..<Int32(world.variantCount) where kinds[Int(world.declaration(of: variant))] == .seamCall {
+			let scope = world.scope(of: world.declaration(of: variant))
+			guard let seamCall = scope.seamCall else { continue }
+			let unavailableProperties = answers.unavailableProperties(of: variant)
+			for parameter in seamCall.omittedParameters + seamCall.noTierParameters {
+				// The leaf declares the whole signature, an omitted parameter as a receive only if available of its label.
+				let isAvailable = scope.instantiable.dependencies.contains { dependency in
+					dependency.property.label == parameter.property.label && !unavailableProperties.contains(dependency.property)
+				}
+				guard !isAvailable else { return true }
+			}
+		}
+		return false
 	}
 
 	/// The record of `declaration`'s place in `variant`'s body. The root, variant 0, has none.
