@@ -690,7 +690,7 @@ struct TypeFactsGraph: Sendable {
 		self.readOffsets = readOffsets
 		self.labelColumn = labelColumn
 		self.labelOffsets = labelOffsets
-		let answers = Self.answers(of: graph, reads: reads, readTable: readInterner.values, labels: labels, bindings: bindings, bindingOffsets: bindingOffsets, bindingsBefore: bindingsBefore, properties: properties)
+		let answers = Self.answers(of: graph, reads: reads, readTable: readInterner.values, labels: labels, bindings: bindings, bindingOffsets: bindingOffsets, bindingsBefore: bindingsBefore, nodeProperties: nodeProperties, properties: properties)
 		answerIsBeingBuilt = answers.isBeingBuilt
 		answerTexts = answers.texts
 		answerKeys = answers.keys
@@ -800,30 +800,40 @@ struct TypeFactsGraph: Sendable {
 	/// bindings of that label bound before the edge (`bindingsBefore`), and the edge's child answers its own label as
 	/// the property it is built as, being built. Interned at the edge, where the graph is built from the table; the
 	/// worklist sees IDs only.
-	private static func answers(of graph: OrderedGraph<TypeFactsDeclaration>, reads: ReadsFromAbove, readTable: [Read], labels: TypeFactsInterner<String>, bindings: [TypeFactsWorldBinding], bindingOffsets: [Int32], bindingsBefore: [Int32], properties: TypeFactsInterner<Property>) -> (variants: TypeFactsVariants, isBeingBuilt: [Bool], texts: [String], keys: [Int32], properties: [Int32]) {
-		// Each node's declarations by label, as its scope spells them, with the forms each provides by the ID of their text:
-		// the world's property IDs compare two spellings of one type alike, and a body is typed as its parent spells it.
+	private static func answers(of graph: OrderedGraph<TypeFactsDeclaration>, reads: ReadsFromAbove, readTable: [Read], labels: TypeFactsInterner<String>, bindings: [TypeFactsWorldBinding], bindingOffsets: [Int32], bindingsBefore: [Int32], nodeProperties: [Int32], properties: TypeFactsInterner<Property>) -> (variants: TypeFactsVariants, isBeingBuilt: [Bool], texts: [String], keys: [Int32], properties: [Int32]) {
+		// Each node's declarations by label, by the world's ID of the property, with the forms each provides by the ID of
+		// their text as its scope spells them: the world's property IDs compare two spellings of one type alike, and a body
+		// is typed as its parent spells it. A scope's declarations are spelled once, however many nodes build it.
 		var sourceByEdge = [Int32]()
 		var formsIDByText = [String: Int32]()
 		var formsTexts = [String]()
-		var declarationsByLabelByNode = [[Int32: [(property: Property, forms: Int32)]]]()
+		var declarationsByScope = [ObjectIdentifier: [Int32: [(property: Int32, forms: Int32, kind: Property.PropertyType)]]]()
+		var declarationsByLabelByNode = [[Int32: [(property: Int32, forms: Int32, kind: Property.PropertyType)]]]()
 		for index in graph.nodes.indices {
 			for _ in graph.edges(from: index) {
 				sourceByEdge.append(Int32(index))
 			}
-			var declarations = [Int32: [(property: Property, forms: Int32)]]()
-			for (property, forms) in graph.nodes[index].scope.sortedDeclaredPropertyForms {
-				guard let label = labels.existingID(of: property.label) else { continue }
-				let formsText = forms.sorted().map(\.asSource).joined(separator: ", ")
-				let formsID = formsIDByText[formsText] ?? Int32(formsTexts.count)
-				if formsID == formsTexts.count {
-					formsIDByText[formsText] = formsID
-					formsTexts.append(formsText)
+			let scope = graph.nodes[index].scope
+			if let declarations = declarationsByScope[ObjectIdentifier(scope.identity)] {
+				declarationsByLabelByNode.append(declarations)
+			} else {
+				var declarations = [Int32: [(property: Int32, forms: Int32, kind: Property.PropertyType)]]()
+				// A declaration the world never interned is no binding's and no child's, so nothing looks it up.
+				for (property, forms) in scope.sortedDeclaredPropertyForms {
+					guard let label = labels.existingID(of: property.label), let propertyID = properties.existingID(of: property) else { continue }
+					let formsText = forms.sorted().map(\.asSource).joined(separator: ", ")
+					let formsID = formsIDByText[formsText] ?? Int32(formsTexts.count)
+					if formsID == formsTexts.count {
+						formsIDByText[formsText] = formsID
+						formsTexts.append(formsText)
+					}
+					declarations[label, default: []].append((propertyID, formsID, property.propertyType))
 				}
-				declarations[label, default: []].append((property, formsID))
+				declarationsByScope[ObjectIdentifier(scope.identity)] = declarations
+				declarationsByLabelByNode.append(declarations)
 			}
-			declarationsByLabelByNode.append(declarations)
 		}
+		let nodeLabels = graph.nodes.map { node in node.property.flatMap { labels.existingID(of: $0.label) } ?? -1 }
 		// Answers are interned by key, which spells no text: an answer's text is spelled once, when its ID is given.
 		var answerIDByKey = [AnswerKey: Int32]()
 		var texts = [String]()
@@ -879,24 +889,25 @@ struct TypeFactsGraph: Sendable {
 				// Every read the graph interns asks about a label: `ownReads` makes only value, optional and mock reads.
 				let read = readTable[Int(readID)]
 				let node = Int(sourceByEdge[edge])
-				let child = graph.nodes[Int(edgeTargets[edge])]
+				let child = Int(edgeTargets[edge])
 				// A child answers its own label's read as the declaration being built, by the property it is built as; any
 				// other label by the last of its parent's bindings bound before the edge, so a declaration bound after the
 				// call does not answer it.
 				// Every binding, and every child's property, is a declaration of its node's scope, which the lookup finds by its
 				// spelling.
-				let bound: Property?
+				let bound: Int32?
 				let beingBuilt: Bool
-				if let property = child.property, labels.existingID(of: property.label) == read.label {
-					bound = property
+				if nodeLabels[child] == read.label {
+					bound = nodeProperties[child]
 					beingBuilt = true
 				} else {
 					let start = Int(bindingOffsets[node])
-					bound = bindings[start..<start + Int(bindingsBefore[edge])].last { $0.label == read.label }.map { properties.values[Int($0.property)] }
+					bound = bindings[start..<start + Int(bindingsBefore[edge])].last { $0.label == read.label }?.property
 					beingBuilt = false
 				}
-				guard let bound, let declaration = declarationsByLabelByNode[node][read.label]?.first(where: { $0.property == bound }), let property = properties.existingID(of: bound) else { return nil }
-				let kind = declaration.property.propertyType
+				guard let bound, let declaration = declarationsByLabelByNode[node][read.label]?.first(where: { $0.property == bound }) else { return nil }
+				let property = bound
+				let kind = declaration.kind
 				let full = AnswerKey(channel: read.channel, subject: declaration.forms, isTwin: false, beingBuilt: beingBuilt)
 				// Rule 3, case 2: a value, `LazilyInstantiated` or `SendableLazilyInstantiated` being built is one cycle
 				// identity whichever twin the path entered, which 2.4.0 builds in one function and passes no parameter. The
