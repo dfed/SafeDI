@@ -11900,8 +11900,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	/// What the module that declares a public mock built inline sees, resolved once per module and only for a module whose
-	/// public mock a tree builds inline (`SeamResolution.ForeignPublicMock.visibleDeclarations`).
-	private struct DeclaringModulesSight {
+	/// public mock a tree builds inline (`SeamResolution.ForeignPublicMock.visibleDeclarations`), which the walks of the
+	/// places built inline inside and outside fills both read.
+	struct DeclaringModulesSight {
 		/// Whether the module that declares `publicMock` sees an instantiable of `type`: a type it sees is not a hole of it.
 		mutating func sees(_ type: TypeDescription, declaredBesides publicMock: SeamResolution.ForeignPublicMock) throws -> Bool {
 			if let instantiables = instantiablesByModule[publicMock.declaringModule] {

@@ -66,7 +66,9 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 		// scope closing a lazy cycle, which shape E has neither of: the test of layers of screens below counts it.
 		// Finding the value each receive is handed runs for `query graph` alone: `SafeDIToolQueryGraphTests` counts it on
 		// layers of screens that open screens of the next layer.
-		let seamSteps = Set(GenerationWork.Step.allCases).subtracting([.layingOutTypeKeyViews, .findingRootFunctions, .checkingReadsAtEveryMember, .askingMemoCandidates, .filingMemoEntryReads, .collectingTypesOfATree, .collectingDeclarationsOfACycle, .findingCarrierASiblingRequires, .findingSeamTierOmissions, .findingReceivedValueSupplies])
+		// Resolving what a public mock's module sees runs only for a mock beneath another module's public mock built inline:
+		// `SafeDIToolCallingMockInlineHoleBuilderTests` counts it on a public mock that holds many places.
+		let seamSteps = Set(GenerationWork.Step.allCases).subtracting([.layingOutTypeKeyViews, .findingRootFunctions, .checkingReadsAtEveryMember, .askingMemoCandidates, .filingMemoEntryReads, .collectingTypesOfATree, .collectingDeclarationsOfACycle, .findingCarrierASiblingRequires, .findingSeamTierOmissions, .findingReceivedValueSupplies, .resolvingWhatAPublicMocksModuleSees])
 		var countedSteps = Set<GenerationWork.Step>()
 		for shape in Shape.allCases {
 			var measures = [Measure]()

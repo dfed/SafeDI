@@ -124,6 +124,12 @@ public struct GenerationWork: Sendable {
 		/// each place the walk visits. The walk enters no tree that holds no call of a seam tier that omits a parameter, and
 		/// in a tree that holds one only a place whose subtree holds such a call or a scope that closes a lazy cycle.
 		case findingSeamTierOmissions
+		/// Resolving what the module that declares a public mock sees (`SeamResolution.ForeignPublicMock.visibleDeclarations`),
+		/// which reads every declaration of that module and of each module it depends on directly: each resolution counts
+		/// one. A walk of the places built inline resolved it again at each scope beneath the public mock, so a mock root
+		/// beneath another module's public mock spent seconds where every other root spent milliseconds; each walk resolves
+		/// each module once.
+		case resolvingWhatAPublicMocksModuleSees
 	}
 
 	/// The step that did the work.

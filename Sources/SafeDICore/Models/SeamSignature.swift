@@ -2670,7 +2670,10 @@ public struct SeamResolution: Sendable {
 	public struct ForeignPublicMock: Sendable {
 		public init(declaringModule: ModuleIdentity, visibleDeclarations: @escaping @Sendable () throws -> VisibleDeclarations, callComment: SeamCallComment, declaringModuleMockCondition: MockCondition, storedPlans: StoredPublicMockPlans? = nil) {
 			self.declaringModule = declaringModule
-			self.visibleDeclarations = visibleDeclarations
+			self.visibleDeclarations = {
+				GenerationWork.record(1, by: .resolvingWhatAPublicMocksModuleSees)
+				return try visibleDeclarations()
+			}
 			self.callComment = callComment
 			self.declaringModuleMockCondition = declaringModuleMockCondition
 			self.storedPlans = storedPlans
