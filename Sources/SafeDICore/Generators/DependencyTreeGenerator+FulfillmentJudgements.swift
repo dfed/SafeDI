@@ -96,7 +96,9 @@ extension DependencyTreeGenerator {
 	}
 
 	/// Whether a required receive that no scope above provides as it asks, that its own scope does not create, and whose
-	/// scope is no root, is unfulfillable.
+	/// scope is no root, is unfulfillable. It reads only which case the answer is, never the forms the case carries: the
+	/// walk makes those from the read, where a fold hands the forms of the declaration that answers, its lazy instance
+	/// included, so a verdict that read them would differ between the two.
 	/// - Parameters:
 	///   - answer: What the place answers a read of the receive's non-optional form.
 	///   - rootBindsEveryReceive: Whether the tree is a mock's, which binds every property its tree receives from above

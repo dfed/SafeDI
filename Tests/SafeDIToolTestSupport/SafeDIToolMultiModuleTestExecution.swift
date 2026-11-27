@@ -605,7 +605,10 @@ func executeSafeDIToolMultiModuleTest(
 								try await ConstructionInternerObservation.$missObserver.withValue(ConstructionInternerClosure.recordingMissesNotExcluded(handingOn: ConstructionInternerObservation.missObserver)) {
 									try await ConstructionInternerOrder.applying(.fromEnvironment) {
 										try await ReusedSeamTreeChecks.comparing(handingOn: SeamTreeReuseObservation.comparesBuiltTrees) {
-											try await tool.generate()
+											// The fold that decides whether any route is walked must send every graph the walk rejects to the walk (`FulfillmentFoldChecks`).
+											try await ValidationWalkObservation.$foldComparison.withValue(FulfillmentFoldChecks.comparison(handingOn: ValidationWalkObservation.foldComparison)) {
+												try await tool.generate()
+											}
 										}
 									}
 								}

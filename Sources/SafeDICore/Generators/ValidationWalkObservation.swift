@@ -43,4 +43,19 @@ public enum ValidationWalkObservation: Sendable {
 	/// Whether the received properties of the scopes of a cycle are completed in passes over the cycle, before any walk
 	/// along its paths (see `cycle-generation.md`, "Walks"). `false` only where a test compares the two.
 	@TaskLocal public static var completesReceivedPropertiesByComponent = true
+
+	/// Called, when set, once per validation of a module's trees with what the fold over the facts of each type answered
+	/// and what the walk of every route then found (`DependencyTreeGenerator.FulfillmentFold`). Setting it makes the walk
+	/// run where the fold found no route that may fail, so a test holds the fold to its one-way error on every graph it
+	/// generates; the tool never sets it.
+	@TaskLocal public static var foldComparison: (@Sendable (FulfillmentFoldComparison) -> Void)?
+}
+
+/// What the fold over the facts of each type answered for the trees of one validation, beside what the walk of their
+/// routes found.
+public struct FulfillmentFoldComparison: Sendable {
+	/// The judgement the fold found some route may fail, by name, or `nil` where it found no route that may fail.
+	public let routeThatMayFail: String?
+	/// Whether the walk of every route rejected the trees.
+	public let walkRejected: Bool
 }

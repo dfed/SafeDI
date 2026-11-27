@@ -825,9 +825,42 @@ extension DependencyTreeGenerator {
 	/// dependency is hidden by a closer ancestor's property with the same label.
 	/// - Parameter additionalMockRootScopes: The scopes of types whose mock is generated because
 	///   `additionalMocksToGenerate` lists them. Their trees are validated for hidden received dependencies only.
+	///
+	/// The fold over the facts of each type decides first (`FulfillmentFold`): where it finds no route that may fail, no
+	/// route is walked. Otherwise the walk of every route judges the trees and reports what it finds.
 	func validatePropertiesAreFulfillable(
 		onRootScopes rootScopes: [ValidatedRootScope],
 		additionalMockRootScopes: [ValidatedRootScope] = [],
+		typeDescriptionToScopeMap: [TypeDescription: Scope],
+		cyclesOnly: Bool,
+	) throws {
+		let routeThatMayFail = FulfillmentFold(
+			rootScopes: rootScopes,
+			additionalMockRootScopes: additionalMockRootScopes,
+			typeDescriptionToScopeMap: typeDescriptionToScopeMap,
+			cyclesOnly: cyclesOnly,
+		).firstRouteThatMayFail()
+		let comparison = ValidationWalkObservation.foldComparison
+		guard routeThatMayFail != nil || comparison != nil else { return }
+		do {
+			try validateEveryRouteIsFulfillable(
+				onRootScopes: rootScopes,
+				additionalMockRootScopes: additionalMockRootScopes,
+				typeDescriptionToScopeMap: typeDescriptionToScopeMap,
+				cyclesOnly: cyclesOnly,
+			)
+		} catch {
+			comparison?(FulfillmentFoldComparison(routeThatMayFail: routeThatMayFail?.rawValue, walkRejected: true))
+			throw error
+		}
+		comparison?(FulfillmentFoldComparison(routeThatMayFail: routeThatMayFail?.rawValue, walkRejected: false))
+	}
+
+	/// The walk of every route of the trees `validatePropertiesAreFulfillable(onRootScopes:…)` validates, which reports
+	/// what it finds.
+	private func validateEveryRouteIsFulfillable(
+		onRootScopes rootScopes: [ValidatedRootScope],
+		additionalMockRootScopes: [ValidatedRootScope],
 		typeDescriptionToScopeMap: [TypeDescription: Scope],
 		cyclesOnly: Bool,
 	) throws {
