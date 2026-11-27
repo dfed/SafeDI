@@ -104,7 +104,7 @@ on:
         required: false
         default: '30'
       targeted_mocks:
-        description: With `targeted`, compare mocks instead of production roots. `on_commit` is built with .github/scripts/switch-attack/lay-out-mocks.patch applied, gen2.py draws its mock-heavy graphs, approved differences are normalized by number and counted (normalize-mocks.py), and the base and public mock corpora's long runs run on the patched commit for the value oracles.
+        description: With `targeted`, compare mocks instead of production roots. `on_commit` is built with .github/scripts/switch-attack/lay-out-mocks.sh's two edits, gen2.py draws its mock-heavy graphs, approved differences are normalized by number and counted (normalize-mocks.py), and the base and public mock corpora's long runs run on the patched commit for the value oracles.
         type: boolean
         default: false
   # From verify.yml, in whose run the jobs below then run: they read the
@@ -651,10 +651,9 @@ jobs:
       - name: Lay Mocks Out From Node Records
         if: ${{ inputs.targeted_mocks && matrix.side == 'on' }}
         run: |
-          git apply dispatch/.github/scripts/switch-attack/lay-out-mocks.patch
-          git diff --stat
+          dispatch/.github/scripts/switch-attack/lay-out-mocks.sh .
           rm -rf dispatch
-          echo "with lay-out-mocks.patch" >> commit.txt
+          echo "with lay-out-mocks.sh" >> commit.txt
       - name: Build SafeDITool
         run: swift build -c release --product SafeDITool --static-swift-stdlib
       - name: Package the Tool
@@ -767,7 +766,7 @@ jobs:
       - name: Lay Mocks Out From Node Records
         run: |
           git config --global --add safe.directory "$PWD"
-          git apply dispatch/.github/scripts/switch-attack/lay-out-mocks.patch
+          dispatch/.github/scripts/switch-attack/lay-out-mocks.sh .
           rm -rf dispatch
           git rev-parse HEAD
       - name: Build the Tests

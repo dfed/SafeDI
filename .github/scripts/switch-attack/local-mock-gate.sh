@@ -1,7 +1,7 @@
 #!/bin/bash
 # local-mock-gate.sh COMMIT [LAST_SEED]
 # The mock on/off gate on this machine, for a head of the mock kinds integration: builds SafeDITool at COMMIT
-# (off) and at COMMIT with lay-out-mocks.patch applied (on), runs gate.sh's mock-heavy graphs through both for
+# (off) and at COMMIT with lay-out-mocks.sh's edits (on), runs gate.sh's mock-heavy graphs through both for
 # seeds 0...LAST_SEED (default 49999, both declaration orders), and then the base and public mock corpora's long
 # runs over the patched commit, whose value oracles judge the laid-out mocks. Each step's output, and a summary,
 # go to a folder in the user's caches directory, outside the checkout and the system temporary directory, so a
@@ -27,7 +27,7 @@ trap cleanup EXIT
 status=0
 git -C "$repository" worktree add --detach "$off" "$commit" >/dev/null || exit 1
 git -C "$repository" worktree add --detach "$on" "$commit" >/dev/null || exit 1
-git -C "$on" apply "$here/lay-out-mocks.patch" || { echo "lay-out-mocks.patch does not apply to $commit" >&2; exit 1; }
+"$here/lay-out-mocks.sh" "$on" > /dev/null || exit 1
 for side in off on; do
   (cd "$root/$side" && swift build -c release --product SafeDITool > "$root/build-$side.log" 2>&1) &
 done
