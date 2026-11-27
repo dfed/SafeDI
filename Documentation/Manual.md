@@ -899,10 +899,6 @@ extension Service {
         public init(profile: @escaping (Analytics) -> __safeDI_UserServiceCarrier_Profile<__safeDI_Built>) {
             self.profile = profile
         }
-
-        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-            self.init(profile: { _ in .init(__safeDI_noScope: __safeDI_builder) })
-        }
     }
 
     /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -911,10 +907,6 @@ extension Service {
 
         public init(userService: @escaping () -> __safeDI_Built) {
             self.userService = userService
-        }
-
-        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-            self.init(userService: { __safeDI_builder() })
         }
     }
 
