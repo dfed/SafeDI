@@ -243,6 +243,8 @@ struct NodeRecords: Sendable {
 			childrensEscaping: Set<TypeDescription>,
 			functionName: String?,
 			isMadeSendable: Bool,
+			cycleParameters: [Property],
+			callCycleArguments: [PlaceRead],
 		) throws -> (place: GeneratedCode, record: PlaceRecord?, escaping: Set<TypeDescription>) {
 			// A hole's place is its site's code, written as text, and the payloads bound before it: places, not one record.
 			guard kinds[Int(declaration)] != .seamHole else {
@@ -288,7 +290,7 @@ struct NodeRecords: Sendable {
 			case .mockConstruction:
 				try .built(Self.mockConstructionRecord(of: declaration, variant: variant, in: world, typesDeclaredEscaping: escaping, children: children))
 			}
-			let record = Self.record(madeRecord, functionName: functionName, isMadeSendable: isMadeSendable)
+			let record = Self.record(madeRecord, functionName: functionName, isMadeSendable: isMadeSendable, cycleParameters: cycleParameters, callCycleArguments: callCycleArguments)
 			let place: GeneratedCode = switch record {
 			case let .alias(aliasRecord):
 				// A place written as text: the engine copies it as written.
@@ -324,8 +326,10 @@ struct NodeRecords: Sendable {
 				let callee = calls[calls.startIndex + top.edgeIndices[top.next]]
 				if isOnPath[Int(callee)] {
 					if let closedOn = stack.lastIndex(where: { $0.variant == callee }),
-					   stack[(closedOn + 1)...].contains(where: { !labelsReceived.isDisjoint(with: Self.labelsDeclared(by: world.declaration(of: $0.variant), in: world)) })
+					   stack[(closedOn + 1)...].contains(where: { !labelsReceived.isDisjoint(with: Self.labelsDeclared(by: world.declaration(of: $0.variant), in: world)) }),
+					   world.parameters(of: callee).isEmpty
 					{
+						// The function the call refers to may take a parameter the facts do not answer.
 						throw NodeRecordRefusal.cycleTakesParameters
 					}
 					stack[stack.count - 1].entries.append(.closer(closingOn: callee))
@@ -333,6 +337,10 @@ struct NodeRecords: Sendable {
 				} else if isWalked[Int(callee)] {
 					guard variantsClosedOn[Int(callee)].allSatisfy({ isOnPath[Int($0)] }), !cycleVariantsBuilt[Int(callee)].contains(where: { isOnPath[Int($0)] }) else {
 						throw NodeRecordRefusal.cycleMemberBuiltTwoWays
+					}
+					// Today's tree closes the cycle on a place of the declaration above, where the shared place builds it again.
+					guard !cycleVariantsBuilt[Int(callee)].contains(where: { twins.holdsPlace(of: world.declaration(of: $0)) }) else {
+						throw NodeRecordRefusal.cycleVariantsPartitionApart
 					}
 					stack[stack.count - 1].entries.append(.place(callee))
 					stack[stack.count - 1].variantsClosedOn.formUnion(variantsClosedOn[Int(callee)])
@@ -371,6 +379,24 @@ struct NodeRecords: Sendable {
 		var records = [PlaceRecord?](repeating: nil, count: world.variantCount)
 		var typesDeclaredEscaping = [Set<TypeDescription>](repeating: [], count: world.variantCount)
 		var closedOnFromSendableFunction = [Set<VariantID>](repeating: [], count: world.variantCount)
+		// The parameters of the function of each variant a call beneath it closes a cycle on, and what each call of it passes
+		// them, made once per variant (`NodeRecords+CycleParameters.swift`).
+		var cycleParametersByVariant = [[TypeFactsParameter]?](repeating: nil, count: world.variantCount)
+		func cycleParameters(of variant: VariantID) -> [TypeFactsParameter] {
+			if let parameters = cycleParametersByVariant[Int(variant)] {
+				return parameters
+			}
+			let parameters = world.parameters(of: variant)
+			cycleParametersByVariant[Int(variant)] = parameters
+			return parameters
+		}
+		func cycleArguments(of variant: VariantID) -> [PlaceRead] {
+			Self.cycleArguments(
+				of: cycleParameters(of: variant),
+				unavailableProperties: onlyIfAvailableAnswers.unavailableProperties(of: variant),
+				lazilyInstantiatedInstanceProperties: answeringDeclarations.lazilyInstantiatedInstanceProperties(readBy: variant),
+			)
+		}
 		func body(of variant: VariantID) throws -> (children: [GeneratedCode], escaping: Set<TypeDescription>, closedOnFromSendableFunction: Set<VariantID>, closedOn: Set<VariantID>) {
 			let indentation = variant == 0 ? TypeKeyBody.rootStatementIndentation : ScopeGenerator.standardIndent
 			var children = [GeneratedCode]()
@@ -381,7 +407,13 @@ struct NodeRecords: Sendable {
 				switch entry {
 				case let .closer(closingOn: callee):
 					let closedOnDeclaration = world.declaration(of: callee)
-					let closer = try Self.closingRecord(closingOn: closedOnDeclaration, from: variant, functionName: functionNames?.closedOnFunctionName(of: callee, inBodyOf: variant), in: world)
+					let closer = try Self.closingRecord(
+						closingOn: closedOnDeclaration,
+						from: variant,
+						functionName: functionNames?.closedOnFunctionName(of: callee, inBodyOf: variant),
+						cycleArguments: cycleArguments(of: callee),
+						in: world,
+					)
 					children.append(.indented(.place(PlacePlan(code: .empty, record: closer)), by: indentation))
 					closedOn.insert(callee)
 					// A call that hands a `Sendable` wrapper its function refers to the function it closes on from a
@@ -418,6 +450,9 @@ struct NodeRecords: Sendable {
 				childrensEscaping: body.escaping,
 				functionName: functionNames?.functionName(of: variant),
 				isMadeSendable: isMadeSendable,
+				// Only a function a cycle closes on takes parameters; every other captures what it reads.
+				cycleParameters: body.closedOn.contains(variant) ? cycleParameters(of: variant).map(\.property) : [],
+				callCycleArguments: body.closedOn.contains(variant) ? cycleArguments(of: variant) : [],
 			)
 			records[Int(variant)] = record
 			places[Int(variant)] = place

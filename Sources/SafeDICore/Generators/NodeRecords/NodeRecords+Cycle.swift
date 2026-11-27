@@ -29,7 +29,7 @@ extension NodeRecords {
 
 	/// The record of `declaration`'s place, a node of kind `cycle`: built by its initializer as a stage-1 node is, its
 	/// children's places among which a call back to a place being built above it is that call's closing place
-	/// (`closingRecord(closingOn:from:functionName:in:)`).
+	/// (`closingRecord(closingOn:from:functionName:cycleArguments:in:)`).
 	static func cycleRecord(
 		of declaration: DeclarationID,
 		variant: VariantID,
@@ -116,11 +116,11 @@ extension NodeRecords {
 
 	/// The record of the place at which a call closes a cycle on `declaration`, whose place is being built above the call:
 	/// a call of the function that place declares, named `functionName` where the bodies between rename it
-	/// (`CycleFunctionNames`), which forwards what that place's wrapper forwards. The walk refuses a cycle whose function
-	/// could take a parameter for the cycle (`cycleTakesParameters`), so the function takes none
-	/// (`BuiltPlaceRecord.cycleParameters`), and the call passes none. `caller` is the variant whose body holds the call,
+	/// (`CycleFunctionNames`), which forwards what that place's wrapper forwards, and passes the function's parameters
+	/// `cycleArguments` (`cycleArguments(of:unavailableProperties:lazilyInstantiatedInstanceProperties:)`). `caller` is the
+	/// variant whose body holds the call,
 	/// which a production closer reads nothing of; a mock's closer, which passes what its caller binds, takes this site.
-	static func closingRecord(closingOn declaration: DeclarationID, from _: VariantID, functionName: String? = nil, in world: some NodeRecordSources) throws(NodeRecordRefusal) -> PlaceRecord {
+	static func closingRecord(closingOn declaration: DeclarationID, from _: VariantID, functionName: String? = nil, cycleArguments: [PlaceRead] = [], in world: some NodeRecordSources) throws(NodeRecordRefusal) -> PlaceRecord {
 		// Every node a call reaches is built as a property: the root is called by none.
 		guard let property = world.property(of: declaration) else { throw .noInitializer }
 		let instantiable = world.scope(of: declaration).instantiable
@@ -130,18 +130,25 @@ extension NodeRecords {
 			isExtension: instantiable.declarationType.isExtension,
 			closedOnFunctionName: functionName ?? ScopeGenerator.functionName(toBuildPropertyNamed: property.label),
 			forwardedProperties: instantiable.dependencies.filter { $0.source == .forwarded }.map(\.property).sorted(),
-			cycleArguments: [],
+			cycleArguments: cycleArguments,
 		))
 	}
 
 	/// `record`, a place's record as its kind makes it, with its function named `functionName` where its body renames it
-	/// (`CycleFunctionNames`), and `@Sendable` where a call beneath it that closes a cycle on it refers to it from a
-	/// `@Sendable` function (`isMadeSendable`), as today's tree makes it (`ScopeGenerator.cycleClosings`). A place written
-	/// as text keeps its text.
-	static func record(_ record: PlaceRecord, functionName: String?, isMadeSendable: Bool) -> PlaceRecord {
+	/// (`CycleFunctionNames`), `@Sendable` where a call beneath it that closes a cycle on it refers to it from a
+	/// `@Sendable` function (`isMadeSendable`), as today's tree makes it (`ScopeGenerator.cycleClosings`), and taking
+	/// `cycleParameters`, which its binding passes `callCycleArguments`, where a cycle closes on it. A place written as text
+	/// keeps its text.
+	static func record(
+		_ record: PlaceRecord,
+		functionName: String?,
+		isMadeSendable: Bool,
+		cycleParameters: [Property],
+		callCycleArguments: [PlaceRead],
+	) -> PlaceRecord {
 		switch record {
 		case let .built(built):
-			guard functionName != nil || (isMadeSendable && !built.isSendable) else { return record }
+			guard functionName != nil || (isMadeSendable && !built.isSendable) || !cycleParameters.isEmpty else { return record }
 			var named = BuiltPlaceRecord(
 				property: built.property,
 				isErased: built.isErased,
@@ -150,8 +157,8 @@ extension NodeRecords {
 				target: built.target,
 				arguments: built.arguments,
 				forwardedProperties: built.forwardedProperties,
-				cycleParameters: built.cycleParameters,
-				callCycleArguments: built.callCycleArguments,
+				cycleParameters: cycleParameters.isEmpty ? built.cycleParameters : cycleParameters,
+				callCycleArguments: cycleParameters.isEmpty ? built.callCycleArguments : callCycleArguments,
 				functionName: functionName ?? built.functionName,
 				isSendable: built.isSendable || isMadeSendable,
 				typesDeclaredEscaping: built.typesDeclaredEscaping,
@@ -180,18 +187,30 @@ extension NodeRecords {
 		}
 
 		/// Notes that the walk enters a place of `declaration`.
-		/// - Throws: `cycleVariantsPartitionApart` where a place of its twin is on the path.
+		/// - Throws: `cycleVariantsPartitionApart` where a place of its twin, or of another variant of `declaration`, is on
+		///   the path: today's tree closes the cycle on that place, which repeats the declaration's property and type, where
+		///   the facts' variant builds it again.
 		mutating func enter(_ declaration: DeclarationID) throws(NodeRecordRefusal) {
-			guard holdsCycle, let twin = twinKey(of: declaration) else { return }
+			guard holdsCycle else { return }
+			guard placesOnPath[Int(declaration), default: 0] == 0 else { throw .cycleVariantsPartitionApart }
+			placesOnPath[Int(declaration), default: 0] += 1
+			guard let twin = twinKey(of: declaration) else { return }
 			var counts = countsOnPath[twin.key, default: [0, 0, 0]]
 			guard counts.indices.allSatisfy({ $0 == twin.form || counts[$0] == 0 }) else { throw .cycleVariantsPartitionApart }
 			counts[twin.form] += 1
 			countsOnPath[twin.key] = counts
 		}
 
+		/// Whether a place of `declaration` is on the path.
+		func holdsPlace(of declaration: DeclarationID) -> Bool {
+			placesOnPath[Int(declaration), default: 0] > 0
+		}
+
 		/// Notes that the walk leaves the place of `declaration` it entered.
 		mutating func leave(_ declaration: DeclarationID) {
-			guard holdsCycle, let twin = twinKey(of: declaration) else { return }
+			guard holdsCycle else { return }
+			placesOnPath[Int(declaration), default: 0] -= 1
+			guard let twin = twinKey(of: declaration) else { return }
 			countsOnPath[twin.key, default: [0, 0, 0]][twin.form] -= 1
 		}
 
@@ -205,6 +224,8 @@ extension NodeRecords {
 		/// By label and type, how many places of each form are on the path: a constant, a `LazilyInstantiated` and a
 		/// `SendableLazilyInstantiated`.
 		private var countsOnPath = [LabelAndType: [Int]]()
+		/// By declaration, how many of its places are on the path.
+		private var placesOnPath = [Int: Int]()
 
 		/// The label and type `declaration` builds, and its form's index in `countsOnPath`, or `nil` where it is neither a
 		/// constant nor lazily instantiated.
