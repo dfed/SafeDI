@@ -46,7 +46,7 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 	mutating func generate_buildsTreeOnlyForRootNodeRecordsRefuse_whenNothingElseReadsTrees() async throws {
 		let (forcers, heldTaskCounts) = try await treeForcers(of: Self.plainAndLazyRoots)
 		#expect(forcers == """
-		Lazy\tkind onlyIfAvailable
+		Lazy\tkind lazy
 		Plain\tnone
 		roots that built a tree: 1 of 2
 
@@ -60,7 +60,7 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 	mutating func generate_buildsEveryRootsTree_whenRunDrawsDOTGraph() async throws {
 		let (forcers, heldTaskCounts) = try await treeForcers(of: Self.plainAndLazyRoots, buildDOTFileOutput: true)
 		#expect(forcers == """
-		Lazy\tkind onlyIfAvailable, DOT graph
+		Lazy\tkind lazy, DOT graph
 		Plain\tDOT graph
 		roots that built a tree: 2 of 2
 
