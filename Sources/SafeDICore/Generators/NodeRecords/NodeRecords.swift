@@ -86,9 +86,6 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	/// Two bodies of a world with a cycle name one variant's function apart, or hand the functions its body refers to
 	/// different names (`CycleFunctionNames`), where its one place cannot stand for both.
 	case cycleBuilderNameShared
-	/// A function of a mock root's world that is handed the places its cycles enter builds a `LazilyInstantiated`
-	/// (`NodeRecords+MockCycle.swift`).
-	case mockCycleLazy
 	/// The node is built as a `LazilyInstantiated`, which `lazyClaim(of:in:)` discharges: its record is
 	/// `NodeRecordKind.lazy`'s, and in a mock root's world production's term joins the record the node's override decorates
 	/// (`joiningProductionMarks(_:to:of:in:)`). Also a world whose records read a wrapper's instance where no record does
