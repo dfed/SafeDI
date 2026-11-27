@@ -313,6 +313,10 @@ struct NodeRecords: Sendable {
 					guard variantsClosedOn[Int(callee)].allSatisfy({ isOnPath[Int($0)] }), !cycleVariantsBuilt[Int(callee)].contains(where: { isOnPath[Int($0)] }) else {
 						throw NodeRecordRefusal.cycleMemberBuiltTwoWays
 					}
+					// Today's tree closes the cycle on a place of the declaration above, where the shared place builds it again.
+					guard !cycleVariantsBuilt[Int(callee)].contains(where: { twins.holdsPlace(of: world.declaration(of: $0)) }) else {
+						throw NodeRecordRefusal.cycleVariantsPartitionApart
+					}
 					stack[stack.count - 1].entries.append(.place(callee))
 					stack[stack.count - 1].variantsClosedOn.formUnion(variantsClosedOn[Int(callee)])
 					stack[stack.count - 1].cycleVariantsBuilt.formUnion(cycleVariantsBuilt[Int(callee)])

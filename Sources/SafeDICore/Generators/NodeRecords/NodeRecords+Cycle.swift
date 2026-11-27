@@ -187,18 +187,30 @@ extension NodeRecords {
 		}
 
 		/// Notes that the walk enters a place of `declaration`.
-		/// - Throws: `cycleVariantsPartitionApart` where a place of its twin is on the path.
+		/// - Throws: `cycleVariantsPartitionApart` where a place of its twin, or of another variant of `declaration`, is on
+		///   the path: today's tree closes the cycle on that place, which repeats the declaration's property and type, where
+		///   the facts' variant builds it again.
 		mutating func enter(_ declaration: DeclarationID) throws(NodeRecordRefusal) {
-			guard holdsCycle, let twin = twinKey(of: declaration) else { return }
+			guard holdsCycle else { return }
+			guard placesOnPath[Int(declaration), default: 0] == 0 else { throw .cycleVariantsPartitionApart }
+			placesOnPath[Int(declaration), default: 0] += 1
+			guard let twin = twinKey(of: declaration) else { return }
 			var counts = countsOnPath[twin.key, default: [0, 0, 0]]
 			guard counts.indices.allSatisfy({ $0 == twin.form || counts[$0] == 0 }) else { throw .cycleVariantsPartitionApart }
 			counts[twin.form] += 1
 			countsOnPath[twin.key] = counts
 		}
 
+		/// Whether a place of `declaration` is on the path.
+		func holdsPlace(of declaration: DeclarationID) -> Bool {
+			placesOnPath[Int(declaration), default: 0] > 0
+		}
+
 		/// Notes that the walk leaves the place of `declaration` it entered.
 		mutating func leave(_ declaration: DeclarationID) {
-			guard holdsCycle, let twin = twinKey(of: declaration) else { return }
+			guard holdsCycle else { return }
+			placesOnPath[Int(declaration), default: 0] -= 1
+			guard let twin = twinKey(of: declaration) else { return }
 			countsOnPath[twin.key, default: [0, 0, 0]][twin.form] -= 1
 		}
 
@@ -212,6 +224,8 @@ extension NodeRecords {
 		/// By label and type, how many places of each form are on the path: a constant, a `LazilyInstantiated` and a
 		/// `SendableLazilyInstantiated`.
 		private var countsOnPath = [LabelAndType: [Int]]()
+		/// By declaration, how many of its places are on the path.
+		private var placesOnPath = [Int: Int]()
 
 		/// The label and type `declaration` builds, and its form's index in `countsOnPath`, or `nil` where it is neither a
 		/// constant nor lazily instantiated.
