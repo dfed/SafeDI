@@ -367,11 +367,10 @@ struct NodeRecords: Sendable {
 				let callee = calls[calls.startIndex + top.edgeIndices[top.next]]
 				if isOnPath[Int(callee)] {
 					if let closedOn = stack.lastIndex(where: { $0.variant == callee }) {
-						// The closed-on property's own label, and each label its type declares, is the nearest declaration inside
-						// its function, so the function takes neither (`CycleParameter`).
-						let closedOnDeclaration = world.declaration(of: callee)
-						let labelsInsideFunction = Set(Self.labelsDeclared(by: closedOnDeclaration, in: world) + [world.property(of: closedOnDeclaration)?.label].compactMap(\.self))
-						let labelsBetween = stack[(closedOn + 1)...].flatMap { Self.labelsDeclared(by: world.declaration(of: $0.variant), in: world) }.filter { labelsReceived.contains($0) && !labelsInsideFunction.contains($0) }
+						// In a mock's world, the closed-on property's own label is never a parameter of its function: every call is
+						// made inside a tree that builds a declaration of it (`CycleParameter`).
+						let ownLabel = enteredSlots == nil ? nil : world.property(of: world.declaration(of: callee))?.label
+						let labelsBetween = stack[(closedOn + 1)...].flatMap { Self.labelsDeclared(by: world.declaration(of: $0.variant), in: world) }.filter { labelsReceived.contains($0) && $0 != ownLabel }
 						if !labelsBetween.isEmpty {
 							// A mock's function on the cycle takes each such label, which every call hands it from its nearest
 							// declaration, as the walk's function a lazy cycle closes on does (`CycleParameter`).
