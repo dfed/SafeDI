@@ -447,11 +447,14 @@ extension DependencyTreeGenerator {
 	///   - foreignSeamRoots: The signatures of the foreign seams this module's trees reach (`computeForeignSeamRoots()`).
 	///   - unreadTypeComment: The comment the `public` initializers of the seams this module generates carry.
 	///   - ownAccessProof: The proof of every type's access over the module's declarations (`ownAccessProof()`).
+	///   - readersOfEveryTree: What reads every root's tree this run (`TreeForcer.reader`), which keeps a root that is none
+	///     of this module's own seams from being laid out from its node records.
 	func seamWorldRootScopeGenerators(
 		validatedWorld: ValidatedWorld,
 		foreignSeamRoots: [TypeDescription: ScopeGenerator.SeamRoot?],
 		unreadTypeComment: UnreadTypeComment?,
 		ownAccessProof: OwnAccessProof,
+		readersOfEveryTree: [TreeForcer],
 	) async throws -> (roots: [RootScopeInfo], rootsOfOtherModules: [Instantiable], storedSeamSignatures: [StoredSeamSignature]) {
 		var (seamRoots, firstPassTrees) = try await computeSeamRoots(validatedWorld: validatedWorld, foreignSeamRoots: foreignSeamRoots, ownAccessProof: ownAccessProof)
 		// The generated code ends each construction with the comment the validated scopes would carry, the call of a
@@ -498,23 +501,38 @@ extension DependencyTreeGenerator {
 			checkingSeamTrees: generatedSeams.map { (instantiable: $0.seam, scope: $0.rootScope) },
 		)
 		var constructionMemo = ConstructionMemo()
+		// The trees a test builds beside the node records of roots that need none, which keep a memo of their own, so that
+		// the trees a plain run builds share what they share without them.
+		var comparisonMemo = ConstructionMemo()
 		var rootScopeGenerators = [RootScopeInfo]()
 		for (typeDescription, scope) in rootScopesToGenerate.rootScopes {
 			let (table, record) = seamWorld.frozenScopeMap.freezing(rootScope: scope)
-			try rootScopeGenerators.append(RootScopeInfo(
-				typeDescription: typeDescription,
-				instantiable: scope.instantiable,
-				sourceFilePath: typeDescriptionToFulfillingInstantiableMap[typeDescription]?.sourceFilePath,
-				built: .tree(record.createScopeGenerator(
+			let constructionScope = ConstructionScope(table: table, record: record)
+			func tree(memo: inout ConstructionMemo) throws -> ScopeGenerator {
+				try record.createScopeGenerator(
 					in: table,
 					lazilyInstantiatedInstanceProperties: [],
 					erasedToConcreteExistential: false,
 					declaredTypeNames: declaredTypeNames,
-					constructionMemo: &constructionMemo,
-				)),
-				// A test compares the records of a seam world's production root with its tree's places, and no run lays it
-				// out from them until node records make a seam call (`NodeRecords`).
-				rootScope: ConstructionScope(table: table, record: record),
+					constructionMemo: &memo,
+				)
+			}
+			// A root no `TreeForcer` holds of is laid out from its node records and builds no tree, as in a module without
+			// seams; the module's own seams below keep theirs (`TreeForcer.seamWorld`).
+			let (layout, treeForcers) = try Self.seamWorldRootLayout(of: scope.instantiable, constructionScope: constructionScope, declaredTypeNames: declaredTypeNames, readersOfEveryTree: readersOfEveryTree)
+			let built: RootScopeInfo.Built = if let layout {
+				// The work of building it is no run's, so the tests that count a run's work count none of it.
+				try .nodeRecords(layout, comparisonTree: NodeRecordsObservation.observer == nil ? nil : GenerationWork.$observer.withValue(nil) { try tree(memo: &comparisonMemo) })
+			} else {
+				try .tree(tree(memo: &constructionMemo))
+			}
+			rootScopeGenerators.append(RootScopeInfo(
+				typeDescription: typeDescription,
+				instantiable: scope.instantiable,
+				sourceFilePath: typeDescriptionToFulfillingInstantiableMap[typeDescription]?.sourceFilePath,
+				built: built,
+				rootScope: constructionScope,
+				treeForcers: treeForcers,
 			))
 		}
 		for (seam, seamRoot, seamRootScope) in generatedSeams {
