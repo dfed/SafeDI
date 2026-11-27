@@ -3325,10 +3325,49 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	func generateDOT() async -> String {
-		// A fill is drawn as the property it fills, which its child builds, so the seam call's edge leads to that
-		// property's own edges rather than to an edge from the property to itself.
+		Self.drawnTree(of: self)
+	}
+
+	/// The DOT lines of the tree `root` roots, one line per edge of each place, in the order of a depth-first walk of
+	/// what each place draws: `generateDOT()`'s text. Walked on an explicit stack, since a tree is as deep as the module
+	/// has types.
+	nonisolated static func drawnTree(of root: ScopeGenerator) -> String {
+		var lines = [String]()
+		var generators = [root]
+		while let generator = generators.popLast() {
+			let drawing = generator.dotDrawing
+			lines.append(contentsOf: drawing.lines)
+			generators.append(contentsOf: drawing.drawn.reversed().compactMap(\.generator))
+		}
+		return lines.joined(separator: "\n")
+	}
+
+	/// What one place draws of its own in the DOT graph: an edge to each node it draws, in order, then to each property
+	/// it forwards, sorted, and the generator that draws each drawn node's own edges, if any.
+	struct DOTDrawing {
+		/// The place's own node.
+		let node: String
+		let drawn: [(node: String, generator: ScopeGenerator?)]
+		/// The nodes of the properties the place forwards, sorted.
+		let forwarded: [String]
+
+		var lines: [String] {
+			var lines = [String]()
+			for drawnNode in drawn {
+				lines.append("    \(node) -- \(drawnNode.node)")
+			}
+			for forwardedNode in forwarded {
+				lines.append("    \(node) -- \(forwardedNode)")
+			}
+			return lines
+		}
+	}
+
+	/// What this place draws of its own (`DOTDrawing`). A fill is drawn as the property it fills, which its child builds,
+	/// so the seam call's edge leads to that property's own edges rather than to an edge from the property to itself.
+	nonisolated var dotDrawing: DOTDrawing {
 		if case .fill = scopeData, let child = propertiesToGenerate.first {
-			return await child.generateDOT()
+			return child.dotDrawing
 		} else {
 			let orderedPropertiesToGenerate = Array(orderedPropertiesToGenerate)
 			// A place whose fill another place's stands for (`FillStoodFor`) is drawn where its own fill would be, among
@@ -3368,19 +3407,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			for fillStoodFor in fillsStoodForToDraw {
 				drawn.append(("\"\(fillStoodFor.hole.property.asSource)\"", fillsByKey[fillStoodFor.standInKey]))
 			}
-			let instantiatedProperties = drawn.map(\.node)
-			var childDOTs = [String]()
-			for (_, generator) in drawn {
-				if let childDOT = await generator?.generateDOT(), !childDOT.isEmpty {
-					childDOTs.append(childDOT)
-				}
-			}
-
-			let root = scopeData.asDOTNode
-			let forwardedProperties = scopeData.forwardedProperties.sorted().map { "\"\($0.asSource)\"" }
-			return ((instantiatedProperties + forwardedProperties).map {
-				"    \(root) -- \($0)"
-			} + childDOTs).joined(separator: "\n")
+			return DOTDrawing(
+				node: scopeData.asDOTNode,
+				drawn: drawn,
+				forwarded: scopeData.forwardedProperties.sorted().map { "\"\($0.asSource)\"" },
+			)
 		}
 	}
 
@@ -5893,7 +5924,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// ancestor provides it. Receives are considered in sibling order, so the result
 	/// is deterministic, and it matches a plain topological order whenever every
 	/// receive can be honored.
-	private var orderedPropertiesToGenerate: LazyMapSequence<[Int], ScopeGenerator> {
+	nonisolated private var orderedPropertiesToGenerate: LazyMapSequence<[Int], ScopeGenerator> {
 		orderedPropertyToGenerateIndices.lazy.map { self.propertiesToGenerate[$0] }
 	}
 

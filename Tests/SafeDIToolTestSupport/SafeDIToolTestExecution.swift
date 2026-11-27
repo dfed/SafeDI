@@ -74,6 +74,7 @@ func executeSafeDIToolTest(
 	activeCompilationConditions: [String] = [],
 	buildSettingArguments: [String] = [],
 	moduleMembershipArguments: [String] = [],
+	treeForcersOutput: URL? = nil,
 	pluginTargetGraph: ((_ inputSwiftFilePaths: [String]) -> PluginTargetGraph)? = nil,
 	verificationCompilationConditions: [String]? = nil,
 	verificationCompilerSettings: VerificationCompilerSettings = VerificationCompilerSettings(),
@@ -309,6 +310,13 @@ func executeSafeDIToolTest(
 		if buildCombinedOutput {
 			generateArguments += ["--combined-output", combinedOutput.relativePath]
 		}
+		// Where `SAFEDI_TREE_FORCERS_REPORT` names a file, each root's line of `--tree-forcers-output` is appended to it,
+		// after the test's name, so a sweep counts the roots of every test that still build a tree (`TreeForcer`).
+		let treeForcersReportPath = ProcessInfo.processInfo.environment["SAFEDI_TREE_FORCERS_REPORT"]
+		let treeForcersPath = treeForcersOutput ?? treeForcersReportPath.map { _ in TestTemporaryDirectory.uniquePath(prefix: "TreeForcers", pathExtension: "txt") }
+		if let treeForcersPath {
+			generateArguments += ["--tree-forcers-output", treeForcersPath.path]
+		}
 		if compilerReceivesInputPathsUnchanged {
 			generateArguments += ["--compiler-receives-input-paths-unchanged"]
 		}
@@ -361,6 +369,13 @@ func executeSafeDIToolTest(
 			}
 		} catch {
 			throw SafeDIToolTestError(underlyingError: error, fixtures: fixtures, recordingRunDirectories: recordingRunDirectories)
+		}
+		if let treeForcersReportPath, let treeForcersPath, let lines = try? String(contentsOf: treeForcersPath, encoding: .utf8) {
+			let testName = Test.current?.name ?? "unknown test"
+			TreeForcerSweep.append(lines.split(separator: "\n").filter { !$0.hasPrefix("roots that built a tree") }.map { "\(testName)\t\($0)\n" }.joined(), toFileAt: treeForcersReportPath)
+			if treeForcersOutput == nil {
+				try? FileManager.default.removeItem(at: treeForcersPath)
+			}
 		}
 		// With the stored blocks it read, the run must not throw where computing everything does not (`StoredBlockDecodeChecks`).
 		StoredBlockDecodeChecks.expectNoDiscardedRun(throwing: generateOutput.errorOfDiscardedRunThatReadStoredBlocks, inRunOfModuleNamed: moduleName, sourceLocation: sourceLocation)
