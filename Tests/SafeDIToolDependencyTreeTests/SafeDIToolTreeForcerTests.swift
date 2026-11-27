@@ -167,18 +167,15 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 		let output = TestTemporaryDirectory.uniquePath(prefix: "TreeForcers", pathExtension: "txt")
 		filesToDelete.append(output)
 		let (stream, continuation) = AsyncStream.makeStream(of: Int.self)
-		// The switch to node records is on, as it is once it lands: a root they accept builds no tree.
-		_ = try await NodeRecordsObservation.$buildsNoTreeForAcceptedRoots.withValue(true) {
-			try await HeldCodeTasks.$observer.withValue({ continuation.yield($0) }) {
-				try await executeSafeDIToolTest(
-					swiftFileContent: files,
-					buildSwiftOutputDirectory: true,
-					buildDOTFileOutput: buildDOTFileOutput,
-					filesToDelete: &filesToDelete,
-					moduleMembershipArguments: moduleMembershipArguments,
-					treeForcersOutput: output,
-				)
-			}
+		_ = try await HeldCodeTasks.$observer.withValue({ continuation.yield($0) }) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: files,
+				buildSwiftOutputDirectory: true,
+				buildDOTFileOutput: buildDOTFileOutput,
+				filesToDelete: &filesToDelete,
+				moduleMembershipArguments: moduleMembershipArguments,
+				treeForcersOutput: output,
+			)
 		}
 		continuation.finish()
 		var heldTaskCounts = [Int]()
