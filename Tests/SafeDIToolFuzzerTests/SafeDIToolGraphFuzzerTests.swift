@@ -6766,7 +6766,7 @@ struct SafeDIToolGraphFuzzerTests {
 						.map(configuration.seed(at:))
 					nextBatchIndex += 1
 					group.addTask { try await GraphFuzzerPhaseAccount.$current.withValue(phaseContext) {
-						var results = try await GraphFuzzerOracle.results(forSeeds: seeds, features: corpus.features, isolatingValueGraphsOf: corpus.isolatedValueGraphSeeds, concurrentToolRuns: 1) { seed in
+						var results = try await GraphFuzzerOracle.results(forSeeds: seeds, features: corpus.features, isolatingValueGraphsOf: corpus.isolatedValueGraphSeeds, concurrentToolRuns: 1, comparingToolWithItselfForOneSeedInFour: true) { seed in
 							report.append("seed \(seed)")
 						}
 						for index in results.indices where results[index].passesBesidesBuilderSurface

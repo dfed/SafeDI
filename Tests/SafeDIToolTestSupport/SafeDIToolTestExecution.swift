@@ -336,36 +336,9 @@ func executeSafeDIToolTest(
 		}
 		let generateOutput: Generate.Output
 		do {
-			// Every place's levels must hold its scope struct's fields (`SeamPlaceLevels.pathStructMismatches`), and every tree
-			// the same data on every path with the construction memo and without it (`ConstructionMemoChecks`).
-			// Every seam settled without its confirming signature pass must have the signature that pass finds (`SkippedConfirmingPassChecks`).
-			// Every seam tree made again from its first signature pass must generate what a tree built anew does (`ReusedSeamTreeChecks`).
-			generateOutput = try await HoleSiteRecordObservation.$observer.withValue(HoleSiteRecordObservation.checkingRecords(handingOn: HoleSiteRecordObservation.observer)) {
-				try await SeamPlaceLevels.$observer.withValue(SeamPlaceLevels.checkingPathStructs(handingOn: SeamPlaceLevels.observer)) {
-					try await ConstructionMemoOracle.$observer.withValue(ConstructionMemoChecks.recordingDifferences(handingOn: ConstructionMemoOracle.observer)) {
-						try await SeamSignatureObservation.$confirmsSkippedPasses.withValue(SkippedConfirmingPassChecks.recordingDifferences(handingOn: SeamSignatureObservation.confirmsSkippedPasses)) {
-							// Interned in the order `SAFEDI_INTERNER_ORDER` names, if any: the output must not change (`ConstructionInternerOrder`).
-							// Every value a freeze interns must be one the interner is designed to meet there (`ConstructionInternerClosure`).
-							try await ConstructionInternerObservation.$missObserver.withValue(ConstructionInternerClosure.recordingMissesNotExcluded(handingOn: ConstructionInternerObservation.missObserver)) {
-								try await ConstructionInternerOrder.applying(.fromEnvironment) {
-									try await ReusedSeamTreeChecks.comparing(handingOn: SeamTreeReuseObservation.comparesBuiltTrees) {
-										// Every root’s imports from its union fact must equal the walk of its generator tree’s (`TypeFactsImportsChecks`).
-										try await TypeFactsImportsChecks.comparing(handingOn: TypeFactsImportsObservation.comparesWalk) {
-											// Every root’s received values from its per-type graph must equal the walk of its generator tree’s
-											// (`TypeFactsReceivedValueSuppliesChecks`).
-											try await TypeFactsReceivedValueSuppliesChecks.comparing(handingOn: TypeFactsReceivedValueSuppliesObservation.comparesWalk) {
-												// The fold that decides whether any route is walked must send every graph the walk rejects to the walk (`FulfillmentFoldChecks`).
-												try await ValidationWalkObservation.$foldComparison.withValue(FulfillmentFoldChecks.comparison(handingOn: ValidationWalkObservation.foldComparison)) {
-													try await tool.generate()
-												}
-											}
-										}
-									}
-								}
-							}
-						}
-					}
-				}
+			// With every comparison of the tool with itself set around it, where they are made (`ToolComparisonChecks`).
+			generateOutput = try await ToolComparisonChecks.aroundGenerate {
+				try await tool.generate()
 			}
 		} catch {
 			throw SafeDIToolTestError(underlyingError: error, fixtures: fixtures, recordingRunDirectories: recordingRunDirectories)
