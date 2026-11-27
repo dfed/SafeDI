@@ -108,12 +108,44 @@ extension NodeRecords {
 	/// `place`, the place of `declaration` whose record is `record`, as the body of `parent`'s place holds it. One place
 	/// stands for a node in every body that builds it, and a function that takes the places entered is handed by each
 	/// parent a field of that parent's own configuration, or none along an edge the configurations leave out, so each
-	/// body's place hands its own values to the one function (`TypeKeyLayout` keeps the values of each call). Every other
-	/// place is the same in each body.
+	/// body's place hands its own values to the one function (`TypeKeyLayout` keeps the values of each call). A node whose
+	/// function takes no places reads its override as a field of the configuration its first parent's body reads
+	/// (`mockConfigurationField(of:named:in:slots:)`), which a function that takes the places reads of its one argument
+	/// and every other body of the overrides it was handed: where `parent`'s body reads another configuration than the
+	/// first parent's, its place reads the field of its own, in the value it hands the node's function, or, for a node
+	/// built in place, in the closure the construction tries first. Every other place is the same in each body.
 	static func mockPlace(_ place: GeneratedCode, record: PlaceRecord?, of declaration: DeclarationID, builtBy parent: DeclarationID, in world: some NodeRecordSources, slots: MockEnteredSlots?) -> GeneratedCode {
-		guard let slots, takesMockEnteredPlaces(declaration, in: slots), case var .built(built) = record else { return place }
-		let handed = mockArgumentsHanded(to: declaration, labeled: built.property.label, by: parent, in: world, slots: slots)
-		built.passedArguments = handed + built.passedArguments.dropFirst(handed.count)
+		guard let slots, case var .built(built) = record else { return place }
+		if takesMockEnteredPlaces(declaration, in: slots) {
+			let handed = mockArgumentsHanded(to: declaration, labeled: built.property.label, by: parent, in: world, slots: slots)
+			built.passedArguments = handed + built.passedArguments.dropFirst(handed.count)
+		} else {
+			let firstParent = world.parents(of: declaration).first?.parent ?? 0
+			guard takesMockEnteredPlaces(parent, in: slots) != takesMockEnteredPlaces(firstParent, in: slots) else { return place }
+			let label = built.property.label
+			let fieldOfFirstParent = mockConfigurationField(of: declaration, named: label, in: world, slots: slots)
+			let field = ValuePath.member(label, of: mockOverridesOfChildren(of: parent, in: world, slots: slots))
+			if built.hasFunction {
+				built.passedArguments = built.passedArguments.map { argument in
+					PassedArgument(
+						parameterName: argument.parameterName,
+						type: argument.type,
+						value: argument.value == fieldOfFirstParent ? field : argument.value,
+						staysOutsideSendableFunctions: argument.staysOutsideSendableFunctions,
+					)
+				}
+			} else {
+				built.alternatives = built.alternatives.map { alternative in
+					ConstructionAlternative(
+						closure: alternative.closure == fieldOfFirstParent ? field : alternative.closure,
+						bindingName: alternative.bindingName,
+						requiresAbsent: alternative.requiresAbsent,
+						use: alternative.use,
+						resultWrapper: alternative.resultWrapper,
+					)
+				}
+			}
+		}
 		return .place(PlacePlan(code: .empty, record: .built(built)))
 	}
 

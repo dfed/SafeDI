@@ -364,6 +364,94 @@ struct SafeDIToolNodeRecordsMockCycleTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_readsEachParentsOwnField_whenTypeOnCycleAndTypeOffEveryCycleBuildOneProperty() async throws {
+		let fixture = Self.homeFixture.merging([
+			"Root.swift": """
+			@Instantiable(generateMock: true)
+			public final class Root: Instantiable {
+			    public init(homeBuilder: Instantiator<Home>, shed: Shed) {
+			        self.homeBuilder = homeBuilder
+			        self.shed = shed
+			    }
+
+			    @Instantiated let homeBuilder: Instantiator<Home>
+			    @Instantiated let shed: Shed
+			}
+			""",
+			"Home.swift": """
+			@Instantiable
+			public final class Home: Instantiable, Marked {
+			    public init(roomBuilder: Instantiator<Room>, lamp: Lamp, lampBuilder: Instantiator<Lamp>) {
+			        self.roomBuilder = roomBuilder
+			        self.lamp = lamp
+			        self.lampBuilder = lampBuilder
+			    }
+
+			    @Instantiated let roomBuilder: Instantiator<Room>
+			    @Instantiated let lamp: Lamp
+			    @Instantiated let lampBuilder: Instantiator<Lamp>
+			    public var marker = ""
+			}
+			""",
+			"Shed.swift": """
+			@Instantiable
+			public final class Shed: Instantiable {
+			    public init(lamp: Lamp, lampBuilder: Instantiator<Lamp>) {
+			        self.lamp = lamp
+			        self.lampBuilder = lampBuilder
+			    }
+
+			    @Instantiated let lamp: Lamp
+			    @Instantiated let lampBuilder: Instantiator<Lamp>
+			}
+			""",
+			"Lamp.swift": """
+			@Instantiable
+			public final class Lamp: Instantiable, Marked {
+			    public init() {}
+			    public var marker = ""
+			}
+			""",
+		]) { _, replacement in replacement }
+		let walkOutput = try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [true])
+		// One place stands for a lamp, and one for a lamp’s builder, in the body of a home’s function, which takes the
+		// places entered, and in the body of the shed’s, which takes its overrides: each body reads the field of the
+		// configuration its own function was handed.
+		let overridden = """
+		Root.mock(safeDIOverrides: .init(\
+		homeBuilder: .init(lamp: { marked(Lamp(), "home.lamp") }, lampBuilder: { marked(Lamp(), "home.lampBuilder") }), \
+		shed: .init(lamp: { marked(Lamp(), "shed.lamp") }, lampBuilder: { marked(Lamp(), "shed.lampBuilder") })))
+		"""
+		// Every other lap is a home, which holds a lamp and a lamp’s builder.
+		let paths = Self.laps(from: ".homeBuilder.instantiate()").enumerated().flatMap { index, path in
+			index.isMultiple(of: 2) ? [path, "\(path).lampBuilder.instantiate()"] : [path]
+		} + [".shed", ".shed.lampBuilder.instantiate()"]
+		let comparison = try await DifferentialValueOracle.compare(
+			feature: DifferentialValuePath(fixtureFiles: fixture, generatedFiles: #require(output.generatedFiles)),
+			knownRight: DifferentialValuePath(fixtureFiles: fixture, generatedFiles: #require(walkOutput.generatedFiles)),
+			probes: paths.enumerated().flatMap { index, path in
+				[
+					DifferentialValueProbe(name: "path \(index)", expression: "Root.mock()\(path)"),
+					DifferentialValueProbe(name: "overridden path \(index)", expression: "\(overridden)\(path)"),
+				]
+			},
+			filesToDelete: &filesToDelete,
+		)
+		// Nothing is compared where compile verification is off.
+		guard let comparison else { return }
+		#expect(comparison.differences.isEmpty, "\(comparison.report)")
+		// Each override was read: it marks the value its closure built.
+		for marker in ["home.lamp", "home.lampBuilder", "shed.lamp", "shed.lampBuilder"] {
+			#expect(comparison.featureDescription.contains("\"\(marker)\""), "No value is marked \(marker):\n\(comparison.featureDescription)")
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_buildsTheWalksValues_whenTypeOnCycleDeclaresPropertyNothingFulfills() async throws {
 		let fixture = Self.ringFixture.merging([
 			"Child.swift": """
