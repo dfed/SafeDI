@@ -38,7 +38,11 @@ import Testing
 /// 9. As 3, for a place whose subtree closes a cycle, which reads the cycle parameters it passes.
 /// 10. Places the world's variants map to one variant (the root place to the root's, each other to the variant its parent's
 ///     variant calls at the edge the place is built for) answer their declared reads alike, but for what a parameter
-///     carries: a read only if available (rule 1), and whether a wrapper is still being built (rule 2).
+///     carries: a read only if available (rule 1) compares only by the class of what the place passes, `nil`, a value, a
+///     `LazilyInstantiated` or a `SendableLazilyInstantiated`, read from the place's own answer (`Place.answeredReads`,
+///     what the tree's construction log records), never from the variant's key; and whether a wrapper is still being
+///     built (rule 2) is left out. Two places of one variant that pass two classes are a finding: the key merged two
+///     parameter types.
 ///
 /// Findings are recorded as issues only where `SAFEDI_TYPE_FACTS_STRICT` is set, until every graph passes; a run that
 /// sets `SAFEDI_TYPE_FACTS_LOG` to a file appends a line per tree to it, with each check's count of findings and its
@@ -72,6 +76,14 @@ enum TypeFactsChecks {
 		var factsVariantCount = 0
 		/// Pairs of places of one variant that check 10 compared after setting aside a read one of them asks, answered none.
 		var check10ExemptedPairs = 0
+		/// Only-if-available reads one place of a pair asks and passes `nil` or the declared form, which the other does not ask.
+		var check10SilentNilReads = 0
+		/// Estimates of where the variants join `nil` to a function other than 2.4.x's, which passes it to the function of the
+		/// first place that passes anything: the declarations' reads, those where 2.4.x writes fewer functions for the read,
+		/// and the places they hold.
+		var nilOrderReads = 0
+		var nilOrderFewerFunctions = 0
+		var nilOrderPlaces = 0
 		/// Check 10's findings by the fact a producer still owes that tells the two places apart (`owedFacts(answering:)`),
 		/// a finding once per fact. Each fact's count goes to 0 when its producer lands; `unowed` stays 0.
 		var check10OwedByFact = [String: Int]()
@@ -217,6 +229,34 @@ enum TypeFactsChecks {
 			result.worstNode = report.nodes[worst.key].description
 			result.worstNodeVariantCount = worst.value
 		}
+		// The kind every receive only if available of a label declares in a node's subtree, `nil` where two disagree or none does.
+		var declaredKindsByNode = [Int: [String: String?]]()
+		func declaredKind(of label: String, beneath root: Int) -> String? {
+			if let kinds = declaredKindsByNode[root] {
+				return kinds[label] ?? nil
+			}
+			var kinds = [String: String?]()
+			var visited: Set = [root]
+			var stack = [root]
+			while let node = stack.popLast() {
+				for property in report.nodes[node].onlyIfAvailableUnwrapped {
+					let propertyLabel = String(property.prefix { $0 != ":" })
+					let kind = parameterClass(of: "x = \(property)")
+					if let existing = kinds[propertyLabel] {
+						if existing != kind {
+							kinds[propertyLabel] = .some(nil)
+						}
+					} else {
+						kinds[propertyLabel] = kind
+					}
+				}
+				for target in report.nodes[node].edges where visited.insert(target).inserted {
+					stack.append(target)
+				}
+			}
+			declaredKindsByNode[root] = kinds
+			return kinds[label] ?? nil
+		}
 		// Check 10.
 		var factsVariantByPlace = [Int?](repeating: nil, count: places.count)
 		if let root = places.first, root.node == 0, !report.variantNodes.isEmpty {
@@ -252,6 +292,40 @@ enum TypeFactsChecks {
 			if exempted > 0 {
 				result.check10ExemptedPairs += 1
 			}
+			// A read only if available compares by the key rule A gives what each place passes: a value and a wrapper of the
+			// form every receive of the label in the callee's subtree declares share the optional parameter (`declared`), `nil`
+			// passes through any optional parameter (rule A's second stage keys it with a wrapper where no declared form
+			// reaches), and a wrapper answering a read of another form is a class of its own. The declared form is `nil`
+			// where two receives in the subtree disagree; a binding inside the subtree that hides a deeper receive is not set
+			// apart. A read one place asks that the other does not is silent while its class is `declared` or `nil`
+			// (`check10SilentNilReads`), and a finding otherwise.
+			let keyedClass = { (node: Int?, read: String, passed: String) -> String in
+				let label = String(read.dropFirst("optional(".count).dropLast())
+				return passed == "nil" ? "nil" : passed == "value" || passed == node.flatMap { declaredKind(of: label, beneath: $0) } ? "declared" : passed
+			}
+			let classes = passedClasses(of: places[index])
+			let firstClasses = passedClasses(of: places[first])
+			for read in Set(classes.keys).union(firstClasses.keys) {
+				let keyed = classes[read].map { keyedClass(places[index].node, read, $0) }
+				let firstKeyed = firstClasses[read].map { keyedClass(places[first].node, read, $0) }
+				switch (keyed, firstKeyed) {
+				case let (.some(passed), .some(firstPassed)):
+					if passed != "nil", firstPassed != "nil", passed != firstPassed {
+						answers.insert("\(read) passes \(passed)")
+						firstAnswers.insert("\(read) passes \(firstPassed)")
+					}
+				case let (.some(passed), .none), let (.none, .some(passed)):
+					if passed == "declared" || passed == "nil" {
+						result.check10SilentNilReads += 1
+					} else if keyed != nil {
+						answers.insert("\(read) passes \(passed)")
+					} else {
+						firstAnswers.insert("\(read) passes \(passed)")
+					}
+				case (.none, .none):
+					break
+				}
+			}
 			if answers != firstAnswers {
 				let differing = answers.symmetricDifference(firstAnswers)
 				let finding = "places \(first) and \(index) of \(nodeDescription(places[index].node)) share variant \(variant) but answer \(differing.sorted()) otherwise"
@@ -268,6 +342,28 @@ enum TypeFactsChecks {
 				}
 			}
 		}
+		// An alias leaf has no place of its own: the parent's place logs the nearest declaration of the fulfilling label, whose
+		// form (`none`, a value, a lazy wrapper) the leaf's text follows, so places whose variants call one variant of the leaf
+		// must hand it one form.
+		var aliasFormByLeafVariant = [Int: (place: Int, form: String)]()
+		for (index, variant) in factsVariantByPlace.enumerated() {
+			guard let variant, let node = places[index].node else { continue }
+			for (edge, target) in report.nodes[node].edges.enumerated() where report.nodes[target].isLeaf {
+				for read in report.nodes[target].readsFromAbove where read.hasPrefix("alias(") {
+					let label = read.dropFirst("alias(".count).dropLast()
+					guard let answer = places[index].answeredReads.first(where: { $0.hasPrefix("value(\(label)) = ") }) else { continue }
+					let form = aliasForm(of: answer)
+					let leafVariant = report.variantCalls[variant][edge]
+					if let existing = aliasFormByLeafVariant[leafVariant] {
+						if existing.form != form {
+							add(10, "places \(existing.place) and \(index) call variant \(leafVariant) of \(nodeDescription(target)) but hand \(read) \(existing.form) and \(form)")
+						}
+					} else {
+						aliasFormByLeafVariant[leafVariant] = (index, form)
+					}
+				}
+			}
+		}
 		var answerFormsByNodeAndLabel = [Int: [String: Set<Character>]]()
 		for place in places {
 			guard let node = place.node else { continue }
@@ -280,6 +376,44 @@ enum TypeFactsChecks {
 		}
 		for formsByLabel in answerFormsByNodeAndLabel.values where formsByLabel.values.count(where: { $0.isSuperset(of: ["v", "s"]) }) >= 2 {
 			result.sendableGapProxyNodes += 1
+		}
+		// Per declaration and read only if available: 2.4.x's functions (one per class a place passes, `nil` joining the
+		// first place's in declaration order) against the variants' (`nil` joining the class its variant's other places
+		// pass, apart where they pass none).
+		var placesByNodeAndRead = [Int: [String: [(variant: Int?, passed: String)]]]()
+		for (index, place) in places.enumerated() {
+			guard let node = place.node else { continue }
+			for (read, passed) in passedClasses(of: place) {
+				let label = String(read.dropFirst("optional(".count).dropLast())
+				let keyed = passed == "nil" ? "nil" : passed == "value" || passed == declaredKind(of: label, beneath: node) ? "declared" : passed
+				placesByNodeAndRead[node, default: [:]][read, default: []].append((factsVariantByPlace[index], keyed))
+			}
+		}
+		for (_, placesByRead) in placesByNodeAndRead {
+			for (_, readPlaces) in placesByRead where readPlaces.contains(where: { $0.passed == "nil" }) {
+				guard let firstPassed = readPlaces.first(where: { $0.passed != "nil" })?.passed else { continue }
+				var classByVariant = [Int: String]()
+				for place in readPlaces where place.passed != "nil" {
+					if let variant = place.variant {
+						classByVariant[variant] = place.passed
+					}
+				}
+				let joined = readPlaces.map { $0.passed != "nil" ? $0.passed : $0.variant.flatMap { classByVariant[$0] } ?? "nil" }
+				let functions = Set(readPlaces.map(\.passed)).subtracting(["nil"]).count
+				let variantFunctions = Set(joined).count
+				guard zip(readPlaces, joined).contains(where: { $0.passed == "nil" && $1 != firstPassed }) else { continue }
+				result.nilOrderReads += 1
+				result.nilOrderPlaces += readPlaces.count
+				if functions < variantFunctions {
+					result.nilOrderFewerFunctions += 1
+				}
+			}
+		}
+		// Check 33.
+		if !report.forMockGeneration {
+			for line in report.world.split(separator: "\n") where line.hasPrefix("v") && line.contains(" sendable keys ") {
+				add(33, "a production variant keys by family: \(line)")
+			}
 		}
 		result.factsVariantCount = report.variantNodes.count
 		// Check 5.
@@ -335,7 +469,7 @@ enum TypeFactsChecks {
 		for check in 1...lastCheck {
 			line.append(" check\(check)=\(result.findingsByCheck[check]?.count ?? 0)")
 		}
-		line.append(" check10Exempted=\(result.check10ExemptedPairs) sendableGapProxy=\(result.sendableGapProxyNodes)")
+		line.append(" check10Exempted=\(result.check10ExemptedPairs) check10SilentNil=\(result.check10SilentNilReads) nilOrderReads=\(result.nilOrderReads) nilOrderFewerFunctions=\(result.nilOrderFewerFunctions) nilOrderPlaces=\(result.nilOrderPlaces) sendableGapProxy=\(result.sendableGapProxyNodes)")
 		line.append(" check10Owed=\(result.check10OwedByFact.sorted { $0.key < $1.key }.map { "\($0.key):\($0.value)" }.joined(separator: ",")) check10OwedUncovered=\(result.check10OwedUncovered.count) test=\(Test.current?.name ?? "")")
 		for check in 11...lastCheck {
 			line.append(" compared\(check)=\(result.comparedByCheck[check] ?? 0)")
@@ -408,13 +542,54 @@ enum TypeFactsChecks {
 		return rest[..<end]
 	}
 
+	/// The class of what a place passes each read only if available it asks, by read: `nil` where a mock passes it `nil`.
+	private static func passedClasses(of place: TypeFactsReport.Place) -> [String: String] {
+		var classes = [String: String]()
+		for answer in place.answeredReads where answer.hasPrefix("optional(") {
+			classes[readOfAnswer(answer)] = parameterClass(of: answer)
+		}
+		for answer in place.answeredReads where answer.hasPrefix("mock(") && answer.hasSuffix(" = true") {
+			classes["optional(" + readOfAnswer(answer).dropFirst("mock(".count)] = "nil"
+		}
+		return classes
+	}
+
+	/// The class of what a place passes a read only if available, from its answer's text: `nil`, a `LazilyInstantiated`, a
+	/// `SendableLazilyInstantiated`, or a value of any other type.
+	private static func parameterClass(of answer: String) -> String {
+		let passed = answer.drop { $0 != "=" }.dropFirst(2)
+		return if passed == "nil" {
+			"nil"
+		} else if passed.contains("SendableLazilyInstantiated<") {
+			"sendableLazilyInstantiated"
+		} else if passed.contains("LazilyInstantiated<") {
+			"lazilyInstantiated"
+		} else {
+			"value"
+		}
+	}
+
+	/// The form of the nearest declaration an answered value read names, as an alias of its label is bound to it.
+	private static func aliasForm(of answer: String) -> String {
+		let bindings = field("bindings", of: answer)
+		return if answer.hasSuffix(" = none") {
+			"none"
+		} else if bindings.contains("SendableLazilyInstantiated<") {
+			"sendableLazilyInstantiated"
+		} else if bindings.contains("LazilyInstantiated<") {
+			"lazilyInstantiated"
+		} else {
+			"value"
+		}
+	}
+
 	/// The read an answered read names, `value(x)` of `value(x) = none`.
 	private static func readOfAnswer(_ answer: String) -> String {
 		String(answer.prefix { $0 != " " })
 	}
 
-	/// A place's answered reads as a variant's key compares them: a read only if available left out (rule 1), given the
-	/// node's declared reads as the report spells them, and what is
+	/// A place's answered reads as a variant's key compares them: a read only if available by the class of what the place
+	/// passes (rule 1, `parameterClass(of:)`), given the node's declared reads as the report spells them, and what is
 	/// still being built left out of a read whose declaration is a wrapper (rule 2), which the text shows by its type.
 	private static func keyedAnswers(of place: TypeFactsReport.Place, declared: Set<String>) -> Set<String> {
 		var answers = Set<String>()
@@ -439,7 +614,7 @@ enum TypeFactsChecks {
 		return reads
 	}
 
-	static let lastCheck = 31
+	static let lastCheck = 33
 
 	/// Checks 11 to 31: each column of the graph against what the generator decided at each place.
 	///
@@ -465,6 +640,10 @@ enum TypeFactsChecks {
 	/// 30. A node holds a hole beneath exactly when a hole is reachable from it along edges that are not fills.
 	/// 31. How the place is constructed: a seam call, a call of another module's public mock, a type built with its
 	///     hand-written mock.
+	///
+	/// 33, outside the columns (32 is reserved for the made-again oracle): a production world keys no variant by family. One body serves its places inside and
+	/// outside a `@Sendable` function, the mark folded over its calls, as 2.4.x writes it; only seam cases and mock bodies
+	/// key by family.
 	private static func columnChecks(
 		of report: TypeFactsReport,
 		subtreeClosesCycle: [Bool],
