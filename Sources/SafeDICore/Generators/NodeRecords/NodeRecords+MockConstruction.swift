@@ -22,9 +22,15 @@ extension NodeRecords {
 	/// The claim of `declaration` in a mock root's world, and `nil` in a production root's: of kind `mockConstruction`, for a
 	/// node stage 1 makes in a production root's world (`refusalsOfBuiltByInitializer(_:in:)`), whose override is the field
 	/// of its parent's configuration under the node's own label, discharging nothing and holding each refusal of a node
-	/// whose override a later stage reads. A node stage 1 refuses is left unclaimed, so its first refusal is stage 1's.
+	/// whose override a later stage reads. A node stage 1 refuses for anything a mock kind does not discharge is left
+	/// unclaimed, so its first refusal is stage 1's. Each mock kind adds its term to `discharges`, the stage-1 refusals of
+	/// the node its record makes, and the node is of the kind whose term discharged one.
 	static func mockConstructionClaim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
-		guard world.isMockWorld, refusalsOfBuiltByInitializer(declaration, in: world).isEmpty else { return nil }
+		guard world.isMockWorld else { return nil }
+		let erasedDischarges = mockErasedDischarges(of: declaration, in: world)
+		let discharges = erasedDischarges
+		guard refusalsOfBuiltByInitializer(declaration, in: world).allSatisfy(discharges.contains) else { return nil }
+		let kind: NodeRecordKind = erasedDischarges.isEmpty ? .mockConstruction : .mockErased
 		var refusals = [NodeRecordRefusal]()
 		let instantiable = world.scope(of: declaration).instantiable
 		// An actor's arguments are sent to it, and each node built for one reads its override before its function.
@@ -47,7 +53,7 @@ extension NodeRecords {
 			refusals.append(.mockOverrideNotParentField)
 			break
 		}
-		return NodeRecordClaim(kind: .mockConstruction, discharges: [], refusals: refusals)
+		return NodeRecordClaim(kind: kind, discharges: discharges, refusals: refusals)
 	}
 
 	/// The record of `declaration`'s place, a node of kind `mockConstruction`: the record stage 1 makes of it, which

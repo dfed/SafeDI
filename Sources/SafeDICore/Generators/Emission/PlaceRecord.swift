@@ -98,6 +98,10 @@ struct BuiltPlaceRecord: Sendable {
 	/// What a place that calls another module's code records beyond a built place (`CallFields`), in a box of its own
 	/// that every other place leaves `nil`.
 	var callFields: CallFields?
+	/// Whether the place's function returns the property's type, its construction erased to it where the place is erased,
+	/// so that its call erases nothing: a mock's erased node, whose override returns the property's type
+	/// (`NodeRecords+MockErased.swift`). Every other place's function returns `concreteType`.
+	var returnsPropertyType = false
 
 	/// The statement the place's builder function begins with, before its children.
 	var leadingStatement: CallGuard? {
