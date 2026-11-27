@@ -95,7 +95,7 @@ extension TypeKeyLayout {
 				body: BuilderBody(statements: body),
 				value: value,
 				lineEnd: representative.lineEnd,
-			).spelled()
+			).spelled(after: representative.target.leadingLine.map { "\($0)\n" } ?? "")
 		}
 		return spelledStatements(ofClass: 0, indentation: TypeKeyBody.rootStatementIndentation, functionCode: functionCode)
 	}
@@ -136,7 +136,8 @@ extension TypeKeyLayout {
 			)
 			let call = Expression.construction(record.target, arguments: arguments).erased(to: record.property.typeDescription.unwrapped, where: record.isErased).spelled
 			guard let value = spelledConstruction(of: record, call: call, argumentValues: argumentValues, inClass: owner, before: index) else { return nil }
-			return "\(declaration.spelled) = \(value)\(record.lineEnd)"
+			let leadingLine = record.target.leadingLine.map { "\($0)\n" } ?? ""
+			return "\(leadingLine)\(declaration.spelled) = \(value)\(record.lineEnd)"
 		case let .built(child):
 			guard let record = bodies[child].record else { return nil }
 			// A function that returns the property's type has erased what it returns.

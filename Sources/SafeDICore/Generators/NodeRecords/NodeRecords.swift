@@ -24,6 +24,17 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	/// The node is built by anything but its type's initializer or `instantiate()`: a seam's or a public mock's call, a
 	/// hand-written mock, a construction function or a fill.
 	case construction
+	/// The node calls another module's public mock and fills a builder of it: its fills, dispatchers and level functions
+	/// are declared in a builder function of the call's own.
+	case publicMockCallFills
+	/// The node calls another module's public mock and passes a builder up to it, which is bound again under the label the
+	/// leaf receives it as.
+	case publicMockCallPassesUp
+	/// The node calls another module's public mock that takes no `SafeDIOverrides`, so it is configured by an override
+	/// closure, whose arguments read the call's fills.
+	case publicMockCallOverrideClosure
+	/// The node calls another module's public mock and is promoted to the mock's root, which reads the caller's value first.
+	case publicMockCallPromoted
 	/// A mock root's node's type takes, in its initializer or its hand-written mock, a value no dependency fulfills, as a
 	/// parameter with a default value is, which a mock holds in the type's configuration.
 	case mockDefaultValuedParameter
@@ -203,6 +214,8 @@ struct NodeRecords: Sendable {
 				try .built(Self.mockConstructionRecord(of: declaration, variant: variant, in: world, unavailableProperties: onlyIfAvailableAnswers.unavailableProperties(of: variant), typesDeclaredEscaping: escaping, children: children))
 			case .mockErased:
 				try .built(Self.mockErasedRecord(of: declaration, variant: variant, in: world, unavailableProperties: onlyIfAvailableAnswers.unavailableProperties(of: variant), typesDeclaredEscaping: escaping, children: children))
+			case .publicMockCall:
+				try .built(Self.publicMockCallRecord(of: declaration, variant: variant, in: world, typesDeclaredEscaping: escaping, children: children))
 			}
 			typesDeclaredEscaping[Int(variant)] = escaping
 			records[Int(variant)] = record
@@ -351,7 +364,10 @@ struct NodeRecords: Sendable {
 	private static func claim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
 		// A test's claim comes first, so that it can claim a node a lane's kind would.
 		guard !world.isMockWorld else {
-			return testClaim(of: declaration, in: world) ?? mockConstructionClaim(of: declaration, in: world)
+			return publicMockCallClaim(of: declaration, in: world)
+				?? testClaim(of: declaration, in: world)
+				// Asked last: it claims every node of a mock root's world that no kind before it claimed.
+				?? mockConstructionClaim(of: declaration, in: world)
 		}
 		return testClaim(of: declaration, in: world)
 			?? inlineSeamClaim(of: declaration, in: world)
@@ -413,4 +429,7 @@ enum NodeRecordKind: Sendable {
 	/// or a constant or an `Instantiator` erased to its property's type, whose override returns the property's type
 	/// (`NodeRecords+MockErased.swift`).
 	case mockErased
+	/// A constant or an `Instantiator` built by a call of another module's public mock, which passes the called mock its own
+	/// `SafeDIOverrides` and fills no builder (`NodeRecords+PublicMockCall.swift`).
+	case publicMockCall
 }
