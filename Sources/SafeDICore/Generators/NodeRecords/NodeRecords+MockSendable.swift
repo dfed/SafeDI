@@ -99,7 +99,7 @@ extension NodeRecords {
 	/// where the root's body builds it, and so declares both. A wrapper an actor is sent (`isWrapperSentToActor(_:in:)`)
 	/// is built in a function the root's body declares once, before the local, so it is handed the local.
 	private static func capturesOverridesLocal(_ declaration: DeclarationID, in world: some NodeRecordSources) -> Bool {
-		isBuiltInSendableFunction(declaration, in: world) && world.parents(of: declaration).allSatisfy { $0.parent == 0 }
+		!isWrapperSentToActor(declaration, in: world) && world.parents(of: declaration).allSatisfy { $0.parent == 0 }
 	}
 
 	/// Where the children of `parent`, a node of a mock root's world, read their overrides: the local a node built in a
