@@ -7224,9 +7224,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		instantiable: Instantiable,
 		seamCall: SeamCall,
 		erasedToConcreteExistential: Bool,
-		forwardedProperties: [Property] = [],
 		code: GeneratedCode,
 		declaredFunctionName: String?,
+		forwardedProperties: [Property] = [],
 		unavailableProperties: Set<Property>,
 		builderFunctionNames: BuilderFunctionNames,
 		fillPlaceBindings: FillPlaceBindings,
@@ -7243,9 +7243,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		      cycleParameters.isEmpty,
 		      let argumentReads = try initializerArgumentReads(of: instantiable, unavailableProperties: unavailableProperties)
 		else { return nil }
-		var reads = argumentReads
-		let forwardedLabels = Set(forwardedProperties.map(\.label))
-		reads.removeAll { forwardedLabels.contains($0.label) }
+		// A value the call is forwarded is its function's parameter, which no declaration outside it answers.
+		var reads = argumentReads.filter { read in !forwardedProperties.contains { $0.label == read.label } }
 		// A call that passes places up hands the seam a member of the builder or level the caller's tree holds for each: a read
 		// of that struct, typed as the caller's tree binds it. A call that fills a place, or passes a struct no binding of the
 		// tree types, such as one a fill is handed, is not planned.
@@ -7342,7 +7341,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				isExtension: instantiable.declarationType.isExtension,
 				target: .initializer(instantiable.concreteInstantiable),
 				arguments: arguments,
-				forwardedProperties: [],
+				forwardedProperties: forwardedProperties,
 				cycleParameters: [],
 				callCycleArguments: [],
 				functionName: declaredFunctionName,
@@ -8817,6 +8816,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			declarationReference: declarationReference,
 			unavailableProperties: unavailableProperties,
 		)
+		let readsOptionalInstance = fulfillingExpression == "\(fulfillingProperty.label)?.\(Dependency.lazilyInstantiatedInstancePropertyName)"
 		let record: PlaceRecord? = if fulfillingExpression == nil {
 			// An alias bound to `nil` reads nothing, which its record lists, so the type key lays it out as written.
 			if Self.aliasIsBoundToNil(onlyIfAvailable: onlyIfAvailable, fulfillingProperty: fulfillingProperty, unavailableProperties: unavailableProperties) {
@@ -8824,6 +8824,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			} else {
 				.alias(AliasPlaceRecord(property: property, fulfillingProperty: fulfillingProperty, text: aliasCode, readsOnlyIfAvailable: fulfillingBindingIsOptional))
 			}
+		} else if !readsOptionalInstance {
+			// A seam's own alias bound from a deferred parameter's autoclosure (`SeamRoot.autoclosureCallByLabel(of:)`) reads
+			// no declaration: the autoclosure is the initializer's parameter, which nothing else reads.
+			.alias(AliasPlaceRecord(property: property, fulfillingProperty: nil, text: aliasCode, reads: []))
 		} else {
 			nil
 		}
@@ -9282,8 +9286,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					fillPlaceBindings: fillPlaceBindings,
 				) : nil
 			} else if let seamCall {
-				// A wrapped seam call without forwarded values that binds nothing first is spelled where its place is (`InPlaceCall`).
-				try seamCallRecord(of: property, instantiable: instantiable, seamCall: seamCall, erasedToConcreteExistential: erasedToConcreteExistential, forwardedProperties: forwardedProperties, code: code, declaredFunctionName: functionName, unavailableProperties: unavailableProperties, builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings, inlinePlaceBuilder: inlinePlaceBuilder, separatesValuesBindings: separatesValuesBindings, inPlaceStatements: forwardedProperties.isEmpty && valuesBindingLines.isEmpty && unboxingLines.isEmpty && forwardedInnerScopeLines.isEmpty && rebindingLines.isEmpty ? (before: memberCallCode, after: fillPlaceBindingLines + childCode) : nil, lineEnd: constructionLineEnd)
+				// A seam call's forwarded values are bound inside its text, which lists only the reads outside it.
+				// One the engine spells where its place is binds the wrapper of its function as a built place does
+				// (`InPlaceCall`): its body holds the call's guard among its statements, with nothing a loop or a fill binds first,
+				// and its function takes the values the wrapper is forwarded. A call that is forwarded values has no record yet,
+				// in any run, so the type key keeps the text of every root that holds one: laid out by the type key, such a root
+				// declares a lazily instantiated builder function that reads nothing in the root's body, where its text nests
+				// it in the function that uses it. `seamCallClaim(of:in:)` refuses the call to match.
+				forwardedProperties.isEmpty ? try seamCallRecord(of: property, instantiable: instantiable, seamCall: seamCall, erasedToConcreteExistential: erasedToConcreteExistential, code: code, declaredFunctionName: functionName, forwardedProperties: forwardedProperties, unavailableProperties: unavailableProperties, builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings, inlinePlaceBuilder: inlinePlaceBuilder, separatesValuesBindings: separatesValuesBindings, inPlaceStatements: valuesBindingLines.isEmpty && unboxingLines.isEmpty && forwardedInnerScopeLines.isEmpty && rebindingLines.isEmpty ? (before: memberCallCode, after: fillPlaceBindingLines + childCode) : nil, lineEnd: constructionLineEnd) : nil
 			} else {
 				try builtRecord(functionName: functionName, hasFunction: true, rebindings: rebindingLines)
 			}

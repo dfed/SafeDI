@@ -1123,6 +1123,282 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 		#expect(reports.flatMap(\.differences) == [])
 	}
 
+	@Test
+	mutating func generate_laysOutRenamesOfAWrappersInstanceAsTheTreeDoes_whenTheyRenameAMemoOrALazilyInstantiatedValue() async throws {
+		// `Screen` renames its deferred parameter `user`, and so does `Header` beneath it; `Profile`, beneath `Root`, renames the
+		// instance of `Root`'s own `LazilyInstantiated`. The tree binds each rename from the wrapper's instance, and so do the
+		// node records, so both roots are laid out from them.
+		let files = [
+			seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let user: LazilyInstantiated<User>", "@Instantiated let screen: Screen", "@Instantiated let profile: Profile"]),
+			seamFixtureType(named: "Screen", isSeam: true, declarations: ["@Received(fulfilledByDependencyNamed: \"user\", ofType: User.self) let account: User", "@Instantiated let header: Header"]),
+			seamFixtureType(named: "Header", declarations: ["@Received(fulfilledByDependencyNamed: \"user\", ofType: User.self) let owner: User"]),
+			seamFixtureType(named: "Profile", declarations: ["@Received(fulfilledByDependencyNamed: \"user\", ofType: User.self) let owner: User"]),
+			"""
+			@Instantiable
+			public final class User: Instantiable, Sendable {
+			    public init() {}
+			}
+			""",
+		]
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: files, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
+		extension Screen {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public init(__safeDI_user: @autoclosure @escaping () -> User) {
+		        let user = LazilyInstantiated<User>(__safeDI_user)
+		        #sourceLocation(file: "\(output.fixtures["Screen.swift"])", line: 8)
+		        let account: User = user.instance
+		        #sourceLocation()
+		        @inline(never) func __safeDI_header() -> Header {
+		            #sourceLocation(file: "\(output.fixtures["Header.swift"])", line: 7)
+		            let owner: User = user.instance
+		            #sourceLocation()
+		            return Header(owner: owner)
+		        }
+		        let header: Header = __safeDI_header()
+		        self.init(account: account, header: header)
+		    }
+		}
+
+		extension Screen {
+		    public enum __safeDI_Screen_08AA1A656B91D4BA {}
+		}
+		""")
+		#expect(output.dependencyTreeFiles["Root+SafeDI.swift"] == generatedFileHeader + """
+		extension Root {
+		    public init() {
+		        func __safeDI_user() -> User {
+		            User()
+		        }
+		        let user = LazilyInstantiated<User>(__safeDI_user)
+		        func __safeDI_screen() -> Screen {
+		            _ = Screen.__safeDI_Screen_08AA1A656B91D4BA.self
+		            return Screen(__safeDI_user: user.instance)
+		        }
+		        let screen: Screen = __safeDI_screen()
+		        func __safeDI_profile() -> Profile {
+		            #sourceLocation(file: "\(output.fixtures["Profile.swift"])", line: 7)
+		            let owner: User = user.instance
+		            #sourceLocation()
+		            return Profile(owner: owner)
+		        }
+		        let profile: Profile = __safeDI_profile()
+		        self.init(user: user, screen: screen, profile: profile)
+		    }
+		}
+		""")
+		#expect(reports.filter { $0.root == "Screen" || $0.root == "Root" }.map(\.refusal) == [nil, nil])
+		#expect(reports.filter { $0.root == "Screen" || $0.root == "Root" }.map(\.isLaidOutFromNodeRecords) == [true, true])
+		#expect(reports.flatMap(\.differences) == [])
+	}
+
+	@Test
+	mutating func generate_laysOutASeamCallAsTheTreeDoes_whenTheSeamTakesAParameterOnlyIfAvailable() async throws {
+		// `Screen`'s tree receives `token` only if available, so the call passes the caller's `token` where `Root` declares
+		// one and `nil` where `Other` does not.
+		let files = [
+			seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let token: Token", "@Instantiated let screen: Screen"]),
+			seamFixtureType(named: "Other", isRoot: true, declarations: ["@Instantiated let screen: Screen"]),
+			seamFixtureType(named: "Screen", isSeam: true, declarations: ["@Instantiated let detail: Detail"]),
+			seamFixtureType(named: "Detail", declarations: ["@Received(onlyIfAvailable: true) let token: Token?"]),
+			seamFixtureType(named: "Token", declarations: []),
+		]
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: files, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(output.dependencyTreeFiles["Root+SafeDI.swift"] == generatedFileHeader + """
+		extension Root {
+		    public init() {
+		        let token = Token()
+		        func __safeDI_screen() -> Screen {
+		            _ = Screen.__safeDI_Screen_F046DCFB1718557F.self
+		            return Screen(__safeDI_token: token)
+		        }
+		        let screen: Screen = __safeDI_screen()
+		        self.init(token: token, screen: screen)
+		    }
+		}
+		""")
+		#expect(output.dependencyTreeFiles["Other+SafeDI.swift"] == generatedFileHeader + """
+		extension Other {
+		    public init() {
+		        func __safeDI_screen() -> Screen {
+		            _ = Screen.__safeDI_Screen_F046DCFB1718557F.self
+		            return Screen(__safeDI_token: nil)
+		        }
+		        let screen: Screen = __safeDI_screen()
+		        self.init(screen: screen)
+		    }
+		}
+		""")
+		let callerReports = reports.filter { $0.root == "Root" || $0.root == "Other" }
+		#expect(callerReports.map(\.refusal) == [nil, nil])
+		#expect(callerReports.map(\.isLaidOutFromNodeRecords) == [true, true])
+		#expect(reports.flatMap(\.differences) == [])
+	}
+
+	@Test
+	mutating func generate_refusesASeamCallAsConstruction_whenAnInstantiatorOfTheSeamForwardsItAValue() async throws {
+		// `Screen` forwards `token`, so `Root`'s `Instantiator<Screen>` hands the call the value it is forwarded, which the
+		// call's function takes as a parameter. The tree writes no record of such a call yet, so node records refuse it and
+		// the root keeps the tree's text.
+		let files = [
+			seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let screenBuilder: Instantiator<Screen>"]),
+			seamFixtureType(named: "Screen", isSeam: true, declarations: ["@Forwarded let token: Token", "@Instantiated let detail: Detail"]),
+			seamFixtureType(named: "Detail", declarations: ["@Received let token: Token"]),
+			seamFixtureType(named: "Token", declarations: []),
+		]
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: files, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(output.dependencyTreeFiles["Root+SafeDI.swift"] == generatedFileHeader + """
+		extension Root {
+		    public init() {
+		        func __safeDI_screenBuilder(token: Token) -> Screen {
+		            _ = Screen.__safeDI_Screen_1EB503BFA23A82BA.self
+		            return Screen(__safeDI_token: token)
+		        }
+		        let screenBuilder = Instantiator<Screen> {
+		            __safeDI_screenBuilder(token: $0)
+		        }
+		        self.init(screenBuilder: screenBuilder)
+		    }
+		}
+		""")
+		let rootReports = reports.filter { $0.root == "Root" }
+		#expect(rootReports.map(\.refusal) == ["construction"])
+		#expect(rootReports.map(\.isLaidOutFromNodeRecords) == [false])
+		#expect(reports.flatMap(\.differences) == [])
+	}
+
+	@Test
+	mutating func generate_laysOutASeamsOwnRootAsTheTreeDoes_whenItsRenameKeepsADeferredParametersLabel() async throws {
+		// `Screen` retypes its pass-through `token` under its own label, so the rename is the parameter's only reader, bound
+		// from the parameter's autoclosure, with no memo beside it.
+		let files = [
+			seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let token: Secret", "@Instantiated let screen: Screen"]),
+			"""
+			@Instantiable(generateDependencyTree: true)
+			public struct Screen: Instantiable {
+			    public init(token: any Auth, detailBuilder: Instantiator<Detail>) {
+			        self.token = token
+			        self.detailBuilder = detailBuilder
+			    }
+
+			    @Received(fulfilledByDependencyNamed: "token", ofType: Secret.self) let token: any Auth
+			    @Instantiated let detailBuilder: Instantiator<Detail>
+			}
+			""",
+			seamFixtureType(named: "Detail", declarations: ["@Received let token: any Auth"]),
+			"""
+			public protocol Auth: Sendable {}
+
+			@Instantiable
+			public final class Secret: Instantiable, Auth {
+			    public init() {}
+			}
+			""",
+		]
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: files, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
+		extension Screen {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public init(__safeDI_token __safeDI_token_: @autoclosure @escaping () -> Secret) {
+		        #sourceLocation(file: "\(output.fixtures["Screen.swift"])", line: 8)
+		        let token: any Auth = __safeDI_token_()
+		        #sourceLocation()
+		        @inline(never) func __safeDI_detailBuilder() -> Detail {
+		            Detail(token: token)
+		        }
+		        let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
+		        self.init(token: token, detailBuilder: detailBuilder)
+		    }
+		}
+
+		extension Screen {
+		    public enum __safeDI_Screen_55AF83B7D12DE285 {}
+		}
+		""")
+		let screenReports = reports.filter { $0.root == "Screen" }
+		#expect(screenReports.map(\.refusal) == [nil])
+		#expect(screenReports.map(\.isLaidOutFromNodeRecords) == [true])
+		#expect(reports.flatMap(\.differences) == [])
+	}
+
+	/// A wrapper `Root` builds `Reader` in, while `Reader` receives `token` only if available: the declaration `Root` makes
+	/// of it, and the lines the tree writes for it.
+	struct WrappedOnlyIfAvailableReader: Sendable, CustomTestStringConvertible {
+		let declaration: String
+		let lines: String
+
+		var testDescription: String {
+			declaration
+		}
+
+		static let all = [
+			WrappedOnlyIfAvailableReader(declaration: "@Instantiated let reader: SendableInstantiator<Reader>", lines: """
+			        @Sendable nonisolated func __safeDI_reader() -> Reader {
+			            Reader(token: token)
+			        }
+			        let reader = SendableInstantiator<Reader>(__safeDI_reader)
+			"""),
+			WrappedOnlyIfAvailableReader(declaration: "@Instantiated let reader: LazilyInstantiated<Reader>", lines: """
+			        func __safeDI_reader() -> Reader {
+			            Reader(token: token)
+			        }
+			        let reader = LazilyInstantiated<Reader>(__safeDI_reader)
+			"""),
+			WrappedOnlyIfAvailableReader(declaration: #"@Instantiated(fulfilledByType: "Reader", erasedToConcreteExistential: true) let reader: ErasedInstantiator<Void, AnyReader>"#, lines: """
+			        func __safeDI_reader() -> Reader {
+			            Reader(token: token)
+			        }
+			        let reader = ErasedInstantiator<Void, AnyReader> {
+			            AnyReader(__safeDI_reader())
+			        }
+			"""),
+		]
+	}
+
+	@Test(arguments: WrappedOnlyIfAvailableReader.all)
+	mutating func generate_laysOutRootAsTheTreeDoes_whenAWrapperBuildsATypeThatReceivesAValueOnlyIfAvailable(wrappedReader: WrappedOnlyIfAvailableReader) async throws {
+		// `Reader` receives `token` only if available and is built in the function of the wrapper `reader`, which captures the
+		// `token` `Root` declares beside it.
+		let files = [
+			seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let token: Token", wrappedReader.declaration]),
+			seamFixtureType(named: "Reader", declarations: ["@Received(onlyIfAvailable: true) let token: Token?"], conformances: ", ReaderType, Sendable"),
+			seamFixtureType(named: "Token", declarations: [], conformances: ", Sendable"),
+			"""
+			public protocol ReaderType: Sendable {}
+
+			public struct AnyReader: Sendable {
+			    public init(_ reader: some ReaderType) {}
+			}
+			""",
+		]
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: files, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(output.dependencyTreeFiles["Root+SafeDI.swift"] == generatedFileHeader + """
+		extension Root {
+		    public init() {
+		        let token = Token()
+		\(wrappedReader.lines)
+		        self.init(token: token, reader: reader)
+		    }
+		}
+		""")
+		let rootReports = reports.filter { $0.root == "Root" }
+		#expect(rootReports.map(\.refusal) == [nil])
+		#expect(rootReports.map(\.isLaidOutFromNodeRecords) == [true])
+		#expect(reports.flatMap(\.differences) == [])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
