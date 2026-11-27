@@ -362,6 +362,108 @@ struct SafeDIToolNodeRecordsMockRenameTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_bindsErasedRenameWithoutAnnotatingPromotedValue_whenMockBuildsValueForRootsOptionalReceive() async throws {
+		// The mock promotes `token`, which production forwards as `Secret?`, and binds the `Secret` it builds as the walk
+		// binds it, with no annotation: the erased rename maps over it as over an optional value.
+		let fixture = [
+			"""
+			@Instantiable(isRoot: true)
+			public final class Root: Instantiable {
+			    public init(sessionBuilder: Instantiator<Session>) {
+			        self.sessionBuilder = sessionBuilder
+			    }
+
+			    @Instantiated let sessionBuilder: Instantiator<Session>
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Session: Instantiable {
+			    public init(token: Secret?, feature: Feature) {
+			        self.token = token
+			        self.feature = feature
+			    }
+
+			    @Forwarded let token: Secret?
+			    @Instantiated let feature: Feature
+			}
+			""",
+			"""
+			@Instantiable(generateMock: true)
+			public final class Feature: Instantiable {
+			    public init(auth: AnyAuth?) {
+			        self.auth = auth
+			    }
+
+			    @Received(fulfilledByDependencyNamed: "token", ofType: Secret?.self, erasedToConcreteExistential: true) let auth: AnyAuth?
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Secret: Instantiable, Auth {
+			    public init() {}
+			}
+
+			public protocol Auth {}
+
+			public struct AnyAuth: Auth {
+			    public init(_ auth: any Auth) {
+			        self.auth = auth
+			    }
+
+			    public let auth: any Auth
+			}
+			""",
+		]
+		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+
+		#expect(output.mockFiles["Feature+SafeDIMock.swift"] == generatedFileHeader + """
+		#if DEBUG
+		extension Feature {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            token: (() -> Secret)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                token: token
+		            )
+		        }
+
+		        var token: (() -> Secret)? { __safeDI_storage.token }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                token: (() -> Secret)?
+		            ) {
+		                self.token = token
+		            }
+
+		            let token: (() -> Secret)?
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Feature {
+		        let token = if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Secret() }
+		        #sourceLocation(file: "\(output.fixtures["Feature.swift"])", line: 7)
+		        let auth: AnyAuth? = (token as Secret?).map { AnyAuth($0) }
+		        #sourceLocation()
+		        return Feature(auth: auth)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Feature+SafeDIMock.swift"] ?? "")")
+		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [true])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_buildsTheWalksValues_whenEveryPlaceOfTreeWithRenamesIsOverridden() async throws {
 		let walkOutput = try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: Self.valueFixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
