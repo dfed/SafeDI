@@ -36,6 +36,18 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	case fill
 	/// The node is on a cycle.
 	case cycle
+	/// A node on a cycle is built at two places whose trees close the cycle on different places above them, so that one
+	/// place of its variant cannot stand for both.
+	case cycleMemberBuiltTwoWays
+	/// A world with a cycle in which a type receives a builder, whose call today's tree makes through a function it
+	/// declares for the loop of builders it closes.
+	case cycleReceivesBuilder
+	/// A place between a place on a cycle and the call that closes the cycle on it declares a label some type receives, so
+	/// that the function the call refers to may take that label's value as a parameter.
+	case cycleTakesParameters
+	/// Two places of a world with a cycle are bound to one label, and one of them is on a cycle or a builder, so that today's
+	/// tree may name one's function apart.
+	case cycleBuilderNameShared
 	case lazy
 	/// The node's type receives a property only if available.
 	case onlyIfAvailable
@@ -99,51 +111,113 @@ struct NodeRecords: Sendable {
 			guard variantByDeclaration[declaration] < 0 else { throw NodeRecordRefusal.nodeHasSeveralVariants }
 			variantByDeclaration[declaration] = variant
 		}
-		let order = try NodeBuildOrder(world: world)
-		// A node's place holds its children's places, so each is made after its children: a post-order walk from the root,
-		// with a stack, since a tree can be as deep as the module has types.
+		// A world whose edges close a cycle builds each node's children in the order step 0's sibling-order fixed point gives
+		// them (`TypeFactsEdge.buildPosition`), which `NodeBuildOrder` stands in for only off every cycle.
+		let holdsCycle = (0..<Int32(declarationCount)).contains(where: world.isOnCycle)
+		let order: NodeBuildOrder? = holdsCycle ? nil : try NodeBuildOrder(world: world)
+		let labelsReceived = holdsCycle ? try Self.labelsReceived(inWorldWithCycle: world) : []
+		var bindingOfLabel = [String: (variant: VariantID, namesFunction: Bool)]()
+		func edgeIndices(of declaration: DeclarationID) -> [Int] {
+			order?.edgeIndices(of: declaration) ?? world.edgeFacts(from: declaration).enumerated().sorted { $0.element.buildPosition < $1.element.buildPosition }.map(\.offset)
+		}
+		// A node's place holds its children's places, so each is made after its children: a walk from the root, with a
+		// stack, since a tree can be as deep as the module has types. A call of a variant whose place is being built above
+		// it closes the cycle there (`closingRecord(closingOn:in:)`). A variant's place is made once and shared, which holds
+		// only where every place that reads it closes on the same places above: each place notes the variants on a cycle
+		// its tree closes on above it and those it builds, and a second place of the variant must have the first on its
+		// path and none of the second.
 		var places = [GeneratedCode?](repeating: nil, count: world.variantCount)
-		var records = [BuiltPlaceRecord?](repeating: nil, count: world.variantCount)
-		var typesDeclaredEscaping = [Set<TypeDescription>?](repeating: nil, count: world.variantCount)
-		var stack: [(variant: VariantID, childrenPushed: Bool)] = [(0, false)]
-		while let (variant, childrenPushed) = stack.popLast() {
-			let calls = world.calls(of: variant)
-			guard childrenPushed else {
-				stack.append((variant, true))
-				for callee in calls.reversed() where places[Int(callee)] == nil {
-					stack.append((callee, false))
-				}
-				continue
-			}
-			guard variant != 0, places[Int(variant)] == nil else { continue }
+		var records = [PlaceRecord?](repeating: nil, count: world.variantCount)
+		var typesDeclaredEscaping = [Set<TypeDescription>](repeating: [], count: world.variantCount)
+		var variantsClosedOn = [Set<VariantID>](repeating: [], count: world.variantCount)
+		var cycleVariantsBuilt = [Set<VariantID>](repeating: [], count: world.variantCount)
+		var isOnPath = [Bool](repeating: false, count: world.variantCount)
+		func frame(of variant: VariantID) -> PlaceFrame {
 			let declaration = world.declaration(of: variant)
 			let instantiable = world.scope(of: declaration).instantiable
 			var escaping = Set(instantiable.initializer?.typesDeclaredEscaping ?? [])
 			escaping.formUnion(instantiable.mockInitializer?.typesDeclaredEscaping ?? [])
-			var children = [GeneratedCode]()
-			for edgeIndex in order.edgeIndices(of: declaration) {
-				let callee = Int(calls[calls.startIndex + edgeIndex])
-				escaping.formUnion(typesDeclaredEscaping[callee] ?? [])
-				children.append(.indented(places[callee] ?? .empty, by: ScopeGenerator.standardIndent))
+			return PlaceFrame(variant: variant, edgeIndices: edgeIndices(of: declaration), typesDeclaredEscaping: escaping)
+		}
+		var stack = [frame(of: 0)]
+		isOnPath[0] = true
+		var rootBody = [GeneratedCode]()
+		while let top = stack.last {
+			let indentation = top.variant == 0 ? TypeKeyBody.rootStatementIndentation : ScopeGenerator.standardIndent
+			if top.next < top.edgeIndices.count {
+				stack[stack.count - 1].next += 1
+				let calls = world.calls(of: top.variant)
+				let callee = calls[calls.startIndex + top.edgeIndices[top.next]]
+				if isOnPath[Int(callee)] {
+					if let closedOn = stack.lastIndex(where: { $0.variant == callee }),
+					   stack[(closedOn + 1)...].contains(where: { !labelsReceived.isDisjoint(with: Self.labelsDeclared(by: world.declaration(of: $0.variant), in: world)) })
+					{
+						throw NodeRecordRefusal.cycleTakesParameters
+					}
+					let closer = try Self.closingRecord(closingOn: world.declaration(of: callee), in: world)
+					stack[stack.count - 1].children.append(.indented(.place(PlacePlan(code: .empty, record: closer)), by: indentation))
+					stack[stack.count - 1].variantsClosedOn.insert(callee)
+				} else if let place = places[Int(callee)] {
+					guard variantsClosedOn[Int(callee)].allSatisfy({ isOnPath[Int($0)] }), !cycleVariantsBuilt[Int(callee)].contains(where: { isOnPath[Int($0)] }) else {
+						throw NodeRecordRefusal.cycleMemberBuiltTwoWays
+					}
+					stack[stack.count - 1].children.append(.indented(place, by: indentation))
+					stack[stack.count - 1].typesDeclaredEscaping.formUnion(typesDeclaredEscaping[Int(callee)])
+					stack[stack.count - 1].variantsClosedOn.formUnion(variantsClosedOn[Int(callee)])
+					stack[stack.count - 1].cycleVariantsBuilt.formUnion(cycleVariantsBuilt[Int(callee)])
+				} else {
+					if holdsCycle, let property = world.property(of: world.declaration(of: callee)) {
+						let namesFunction = world.isOnCycle(world.declaration(of: callee)) || !property.propertyType.isConstant
+						if let binding = bindingOfLabel[property.label] {
+							guard binding.variant == callee || !(binding.namesFunction || namesFunction) else {
+								throw NodeRecordRefusal.cycleBuilderNameShared
+							}
+						} else {
+							bindingOfLabel[property.label] = (callee, namesFunction)
+						}
+					}
+					isOnPath[Int(callee)] = true
+					stack.append(frame(of: callee))
+				}
+				continue
 			}
+			stack.removeLast()
+			isOnPath[Int(top.variant)] = false
+			guard let parent = stack.indices.last else {
+				rootBody = top.children
+				continue
+			}
+			let declaration = world.declaration(of: top.variant)
 			let record = switch kinds[Int(declaration)] {
 			case .builtByInitializer:
-				try Self.builtByInitializerRecord(of: declaration, variant: variant, in: world, typesDeclaredEscaping: escaping, children: children)
+				try PlaceRecord.built(Self.builtByInitializerRecord(of: declaration, variant: top.variant, in: world, typesDeclaredEscaping: top.typesDeclaredEscaping, children: top.children))
+			case .cycle:
+				try Self.cycleRecord(of: declaration, variant: top.variant, in: world, typesDeclaredEscaping: top.typesDeclaredEscaping, children: top.children)
 			}
-			typesDeclaredEscaping[Int(variant)] = escaping
-			records[Int(variant)] = record
-			places[Int(variant)] = .place(PlacePlan(code: .empty, record: .built(record)))
+			let place = GeneratedCode.place(PlacePlan(code: .empty, record: record))
+			records[Int(top.variant)] = record
+			places[Int(top.variant)] = place
+			typesDeclaredEscaping[Int(top.variant)] = top.typesDeclaredEscaping
+			var closedOn = top.variantsClosedOn
+			closedOn.remove(top.variant)
+			variantsClosedOn[Int(top.variant)] = closedOn
+			var built = top.cycleVariantsBuilt
+			if world.isOnCycle(declaration) {
+				built.insert(top.variant)
+			}
+			cycleVariantsBuilt[Int(top.variant)] = built
+			stack[parent].children.append(.indented(place, by: parent == 0 ? TypeKeyBody.rootStatementIndentation : ScopeGenerator.standardIndent))
+			stack[parent].typesDeclaredEscaping.formUnion(top.typesDeclaredEscaping)
+			stack[parent].variantsClosedOn.formUnion(closedOn)
+			stack[parent].cycleVariantsBuilt.formUnion(built)
 		}
-		let rootCalls = world.calls(of: 0)
-		rootBody = order.edgeIndices(of: 0).map { edgeIndex in
-			.indented(places[Int(rootCalls[rootCalls.startIndex + edgeIndex])] ?? .empty, by: TypeKeyBody.rootStatementIndentation)
-		}
+		self.rootBody = rootBody
 		self.records = records
 		declarationByVariant = (0..<Int32(world.variantCount)).map(world.declaration(of:))
 	}
 
 	/// The record of `declaration`'s place in `variant`'s body. The root, variant 0, has none.
-	func record(of _: DeclarationID, variant: VariantID) -> BuiltPlaceRecord? {
+	func record(of _: DeclarationID, variant: VariantID) -> PlaceRecord? {
 		records[Int(variant)]
 	}
 
@@ -160,7 +234,21 @@ struct NodeRecords: Sendable {
 	private let declarationByVariant: [DeclarationID]
 
 	/// By variant.
-	private let records: [BuiltPlaceRecord?]
+	private let records: [PlaceRecord?]
+
+	/// A place `init(world:)`'s walk is making: its variant, its node's edges in build order and the next to walk, and
+	/// what the places made beneath it so far hand it.
+	private struct PlaceFrame {
+		let variant: VariantID
+		let edgeIndices: [Int]
+		var next = 0
+		var children = [GeneratedCode]()
+		var typesDeclaredEscaping: Set<TypeDescription>
+		/// The variants on a cycle above the place that its tree closes on.
+		var variantsClosedOn = Set<VariantID>()
+		/// The variants on a cycle the place's tree builds.
+		var cycleVariantsBuilt = Set<VariantID>()
+	}
 
 	/// Every refusal `world` holds, each once, in the order of `NodeRecordRefusal`'s cases: what a test reports of a world, so
 	/// that each stage counts the worlds it frees.
@@ -180,10 +268,17 @@ struct NodeRecords: Sendable {
 		for variant in 0..<Int32(world.variantCount) where !declarationsWithAVariant.insert(world.declaration(of: variant)).inserted {
 			refusals.insert(.nodeHasSeveralVariants)
 		}
-		do {
-			_ = try NodeBuildOrder(world: world)
-		} catch {
-			refusals.insert(error)
+		if (0..<Int32(world.declarationCount)).contains(where: world.isOnCycle) {
+			// A world with a cycle is built in step 0's order, and its walk refuses what its places' closing needs.
+			if refusals.isEmpty, case let .failure(refusal as NodeRecordRefusal) = Result(catching: { try NodeRecords(world: world) }) {
+				refusals.insert(refusal)
+			}
+		} else {
+			do {
+				_ = try NodeBuildOrder(world: world)
+			} catch {
+				refusals.insert(error)
+			}
 		}
 		return NodeRecordRefusal.allCases.filter(refusals.contains)
 	}
@@ -203,8 +298,9 @@ struct NodeRecords: Sendable {
 	/// the order of `NodeRecordKind`'s cases, calling its file's classifier, `<kind>Kind(of:in:)`, which returns `nil` for
 	/// a node not of its kind and throws a refusal for a node of its kind it cannot make:
 	/// `if let kind = try <kind>Kind(of: declaration, in: world) { return kind }`.
-	private static func claimedKind(of _: DeclarationID, in _: some NodeRecordSources) throws(NodeRecordRefusal) -> NodeRecordKind? {
-		nil
+	private static func claimedKind(of declaration: DeclarationID, in world: some NodeRecordSources) throws(NodeRecordRefusal) -> NodeRecordKind? {
+		if let kind = try cycleKind(of: declaration, in: world) { return kind }
+		return nil
 	}
 }
 
@@ -216,4 +312,7 @@ enum NodeRecordKind: Sendable {
 	/// A constant or an `Instantiator` built by its type's initializer or `instantiate()`, off every cycle, with nothing
 	/// erased, lazy, `@Sendable`, received only if available, renamed or filled in its scope (stage 1).
 	case builtByInitializer
+	/// A node on a cycle, otherwise of stage 1's kinds, whose children's places include the closing place of each call back
+	/// to a place being built above it (`NodeRecords+Cycle.swift`).
+	case cycle
 }

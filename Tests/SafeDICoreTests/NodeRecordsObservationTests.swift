@@ -62,6 +62,36 @@ struct NodeRecordsObservationTests {
 		#expect(comparison.differences == ["root.a.b: hasFunction is true in the tree, false by node records"])
 	}
 
+	@Test
+	func differences_nameTheKinds_whenTheTreeClosesACycleWhereNodeRecordsBuildThePlace() {
+		let comparison = NodeRecordsObservation.differences(between: [Self.closingPlace(Self.closingRecord("a"))], and: [Self.place(Self.record("a"))])
+		#expect(comparison.differences == ["root.a: the tree closes a cycle where node records build the place"])
+	}
+
+	@Test
+	func differences_nameTheField_whenTheClosingPlacesDiffer() {
+		let comparison = NodeRecordsObservation.differences(between: [Self.closingPlace(Self.closingRecord("a", closedOnFunctionName: "__safeDI_a_"))], and: [Self.closingPlace(Self.closingRecord("a"))])
+		#expect(comparison.differences == ["root.a: closedOnFunctionName is __safeDI_a_ in the tree, __safeDI_a by node records"])
+		#expect(comparison.treePlaceCount == 1)
+	}
+
+	/// `record` as a place that closes a cycle, indented as a child of a builder function is.
+	private static func closingPlace(_ record: ClosingPlaceRecord) -> GeneratedCode {
+		.indented(.place(PlacePlan(code: .empty, record: .closer(record))), by: "    ")
+	}
+
+	/// A place that closes a cycle on the function that builds `<label>: <Label>`.
+	private static func closingRecord(_ label: String, closedOnFunctionName: String? = nil) -> ClosingPlaceRecord {
+		ClosingPlaceRecord(
+			property: Property(label: label, typeDescription: .simple(name: label.uppercased())),
+			isErased: false,
+			isExtension: false,
+			closedOnFunctionName: closedOnFunctionName ?? "__safeDI_\(label)",
+			forwardedProperties: [],
+			cycleArguments: [],
+		)
+	}
+
 	/// `record` as a place, indented as a child of a builder function is.
 	private static func place(_ record: BuiltPlaceRecord) -> GeneratedCode {
 		.indented(.place(PlacePlan(code: .empty, record: .built(record))), by: "    ")

@@ -18,6 +18,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+import Foundation
+
 /// What a test observes of node records (`NodeRecords`): for each production root of a module without seams, whether its
 /// world was refused and why, whether its code was laid out from the records, and every way the records differ from the
 /// records the tree's places made (soundness rule 1: at every place, the record of the place's node).
@@ -51,12 +53,12 @@ public enum NodeRecordsObservation {
 			for (treeCode, nodeRecordsCode) in zip(tree, nodeRecords) {
 				let (treeIndentation, treeInner) = unindented(treeCode)
 				let (nodeRecordsIndentation, nodeRecordsInner) = unindented(nodeRecordsCode)
-				guard case let .place(nodeRecordsPlan) = nodeRecordsInner.node, case let .built(nodeRecordsRecord)? = nodeRecordsPlan.record else {
+				guard case let .place(nodeRecordsPlan) = nodeRecordsInner.node, let nodeRecordsRecord = nodeRecordsPlan.record, nodeRecordsRecord.isBuiltOrClosing else {
 					differences.append("\(path): node records made a statement that is no built place")
 					continue
 				}
-				let placePath = "\(path).\(nodeRecordsRecord.property.label)"
-				guard case let .place(treePlan) = treeInner.node, case let .built(treeRecord)? = treePlan.record else {
+				let placePath = "\(path).\(nodeRecordsRecord.boundProperty.label)"
+				guard case let .place(treePlan) = treeInner.node, let treeRecord = treePlan.record, treeRecord.isBuiltOrClosing else {
 					differences.append("\(placePath): the tree writes no built place’s record")
 					continue
 				}
@@ -64,8 +66,15 @@ public enum NodeRecordsObservation {
 				if treeIndentation != nodeRecordsIndentation {
 					differences.append("\(placePath): indented \(treeIndentation.count) in the tree, \(nodeRecordsIndentation.count) by node records")
 				}
-				differences += fieldDifferences(between: treeRecord, and: nodeRecordsRecord).map { "\(placePath): \($0)" }
-				pending.append((tree: treeRecord.children, nodeRecords: nodeRecordsRecord.children, path: placePath))
+				switch (treeRecord, nodeRecordsRecord) {
+				case let (.built(treeRecord), .built(nodeRecordsRecord)):
+					differences += fieldDifferences(between: treeRecord, and: nodeRecordsRecord).map { "\(placePath): \($0)" }
+					pending.append((tree: treeRecord.children, nodeRecords: nodeRecordsRecord.children, path: placePath))
+				case let (.closer(treeRecord), .closer(nodeRecordsRecord)):
+					differences += fieldDifferences(between: treeRecord, and: nodeRecordsRecord).map { "\(placePath): \($0)" }
+				case (.built, _), (.closer, _), (.alias, _):
+					differences.append("\(placePath): the tree \(treeRecord.isClosing ? "closes a cycle" : "builds the place") where node records \(nodeRecordsRecord.isClosing ? "close a cycle" : "build the place")")
+				}
 			}
 		}
 		return (differences, treePlaceCount)
@@ -79,6 +88,24 @@ public enum NodeRecordsObservation {
 			inner = wrapped
 		}
 		return (indentation, inner)
+	}
+
+	/// The fields of `nodeRecords`, a place that closes a cycle, that differ from `tree`'s.
+	private static func fieldDifferences(between tree: ClosingPlaceRecord, and nodeRecords: ClosingPlaceRecord) -> [String] {
+		var differences = [String]()
+		func compare<Value: Equatable>(_ name: String, _ treeValue: Value, _ nodeRecordsValue: Value) {
+			guard treeValue != nodeRecordsValue else { return }
+			differences.append("\(name) is \(treeValue) in the tree, \(nodeRecordsValue) by node records")
+		}
+		compare("property", tree.property, nodeRecords.property)
+		compare("isErased", tree.isErased, nodeRecords.isErased)
+		compare("isExtension", tree.isExtension, nodeRecords.isExtension)
+		compare("closedOnFunctionName", tree.closedOnFunctionName, nodeRecords.closedOnFunctionName)
+		compare("forwardedProperties", tree.forwardedProperties, nodeRecords.forwardedProperties)
+		compare("cycleArguments", tree.cycleArguments, nodeRecords.cycleArguments)
+		compare("passedArguments", tree.passedArguments, nodeRecords.passedArguments)
+		compare("rebindsLoopMember", tree.rebindsLoopMember, nodeRecords.rebindsLoopMember)
+		return differences
 	}
 
 	/// The fields of `nodeRecords` that differ from `tree`'s, children aside.
@@ -127,4 +154,26 @@ public struct NodeRecordsReport: Sendable {
 	/// What made the run build the root's tree (`TreeForcer`); empty where its code was laid out from node records alone,
 	/// and the tree was built only for the test to compare.
 	public let treeForcers: [TreeForcer]
+}
+
+extension PlaceRecord {
+	/// Whether the record is of a place node records make: one that builds its property or one that closes a cycle.
+	fileprivate var isBuiltOrClosing: Bool {
+		switch self {
+		case .built, .closer:
+			true
+		case .alias:
+			false
+		}
+	}
+
+	/// Whether the record is of a place that closes a cycle.
+	fileprivate var isClosing: Bool {
+		switch self {
+		case .closer:
+			true
+		case .built, .alias:
+			false
+		}
+	}
 }
