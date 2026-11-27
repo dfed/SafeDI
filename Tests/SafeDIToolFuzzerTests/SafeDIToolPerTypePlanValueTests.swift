@@ -168,6 +168,8 @@ struct SafeDIToolPerTypePlanValueTests: ~Copyable {
 		var drawn = 0
 		var accepted = 0
 		var laidOutCount = 0
+		// Laid out graphs with a screen that receives a value only if available.
+		var laidOutReceivingOnlyIfAvailableCount = 0
 		var differingInCodeLines = [String]()
 		var comparedCount = 0
 		var failures = [String]()
@@ -215,6 +217,7 @@ struct SafeDIToolPerTypePlanValueTests: ~Copyable {
 				}
 			}
 			laidOutCount += laidOut.count
+			laidOutReceivingOnlyIfAvailableCount += laidOut.count { $0.graph.shapes.contains("receivesOnlyIfAvailable") }
 			let differingInCode = laidOut.filter { $0.planCode != $0.todaysCode }
 			differingInCodeLines += differingInCode.map { "differs \($0.graph.seed) roots=\($0.rootsLaidOutFromPlan.sorted().joined(separator: ",")) shapes=\($0.graph.shapes.joined(separator: ","))" }
 
@@ -277,7 +280,7 @@ struct SafeDIToolPerTypePlanValueTests: ~Copyable {
 				try? FileManager.default.removeItem(at: fileToDelete)
 			}
 			filesToDelete = []
-			let report = "plan-values drawn=\(drawn) accepted=\(accepted) laid-out=\(laidOutCount) differ-in-code=\(differingInCodeLines.count) compared=\(comparedCount) spent-alike=\(spentAlike.count) failures=\(failures.count) seeds=\(firstSeed)..<\(seed)"
+			let report = "plan-values drawn=\(drawn) accepted=\(accepted) laid-out=\(laidOutCount) laid-out-receiving-only-if-available=\(laidOutReceivingOnlyIfAvailableCount) differ-in-code=\(differingInCodeLines.count) compared=\(comparedCount) spent-alike=\(spentAlike.count) failures=\(failures.count) seeds=\(firstSeed)..<\(seed)"
 			print(report)
 			if let reportPath = environment["SAFEDI_PLAN_VALUE_REPORT"] {
 				try ([report] + differingInCodeLines + spentAlike.map { "spent-alike \($0)" } + failures).joined(separator: "\n").write(toFile: reportPath, atomically: true, encoding: .utf8)
@@ -718,6 +721,7 @@ struct PlanValueGraph {
 		// A few graphs have screens receive a builder of a leaf that the root declares.
 		let drawsReceivedBuilder = odd > 0.86 && odd < 0.93
 		var receivesBuilder = false
+		var receivesOnlyIfAvailable = false
 		for screen in 0..<screenCount {
 			var properties = [Property]()
 			if forwardsClosure[screen] {
@@ -757,6 +761,7 @@ struct PlanValueGraph {
 			}
 			if odd > 0.4, odd < 0.5, random.chance(0.3) {
 				properties.append(Property(attribute: "@Received(onlyIfAvailable: true)", label: "maybe", type: name("Maybe") + "?"))
+				receivesOnlyIfAvailable = true
 			}
 			if odd > 0.5, odd < 0.56, random.chance(0.3) {
 				properties.append(Property(attribute: "@Received(fulfilledByDependencyNamed: \"service0\", ofType: \(name("Service0")).self)", label: "renamed", type: name("Service0")))
@@ -865,6 +870,9 @@ struct PlanValueGraph {
 		}
 		if receivesBuilder {
 			shapes.append("receivesBuilder")
+		}
+		if receivesOnlyIfAvailable {
+			shapes.append("receivesOnlyIfAvailable")
 		}
 		self.shapes = shapes
 	}

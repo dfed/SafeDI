@@ -34,7 +34,8 @@ public enum RootTreeChoiceObservation {
 	public enum PerPathReason: String, Sendable {
 		/// A type of the root’s tree holds a `SendableLazilyInstantiated`.
 		case holdsLazilyInstantiated
-		/// A type of the root's tree receives, renames or instantiates a value only if available, or holds an optional one.
+		/// A type of the root's tree instantiates a value only if available, or a seam it calls receives one, whose omission
+		/// by the call's tier only today's tree checks.
 		case holdsValueOnlyIfAvailable
 		/// A type of the root's tree holds a `@Sendable` function.
 		case holdsSendableFunction

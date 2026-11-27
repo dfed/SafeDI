@@ -575,8 +575,8 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_keepsRootOnTodaysTree_whenTypeReceivesValueOnlyIfAvailable() async throws {
-		// A screen receives a value only if available.
+	mutating func generate_laysRootOutFromItsPlanWithTodaysCode_whenTypeOnCycleReceivesValueOnlyIfAvailable() async throws {
+		// A screen receives a value only if available, which the root declares.
 		let choices = try await choicesGeneratingTodaysCode(of: """
 		@Instantiable(isRoot: true) public final class Root: Instantiable {
 		    @Instantiated let leaf: Leaf
@@ -598,12 +598,39 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 		@Instantiable public final class Leaf: Instantiable { public init() {} }
 		""")
 
+		#expect(choices == ["Root": nil])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsRootOnTodaysTree_whenTypeOnCycleInstantiatesValueOnlyIfAvailable() async throws {
+		// A screen instantiates a value only if available.
+		let choices = try await choicesGeneratingTodaysCode(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(s0Builder: Instantiator<S0>) { self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class S0: Instantiable {
+		    @Instantiated let s1Builder: Instantiator<S1>
+		    public init(s1Builder: Instantiator<S1>) { self.s1Builder = s1Builder }
+		}
+
+		@Instantiable public final class S1: Instantiable {
+		    @Instantiated(onlyIfAvailable: true) let leaf: Leaf?
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(leaf: Leaf?, s0Builder: Instantiator<S0>) { self.leaf = leaf; self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class Leaf: Instantiable { public init() {} }
+		""")
+
 		#expect(choices == ["Root": .holdsValueOnlyIfAvailable])
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_keepsRootOnTodaysTree_whenTypeForwardsOptionalValue() async throws {
+	mutating func generate_laysRootOutFromItsPlanWithTodaysCode_whenTypeOnCycleIsForwardedOptionalValue() async throws {
 		// A screen is forwarded an optional value.
 		let choices = try await choicesGeneratingTodaysCode(of: """
 		@Instantiable(isRoot: true) public final class Root: Instantiable {
@@ -623,7 +650,7 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 		}
 		""")
 
-		#expect(choices == ["Root": .holdsValueOnlyIfAvailable])
+		#expect(choices == ["Root": nil])
 	}
 
 	@Test

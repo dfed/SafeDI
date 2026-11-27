@@ -119,6 +119,11 @@ extension DependencyTreeGenerator {
 			// keeps the root on today's tree.
 			if !scope.holeArguments.isEmpty {
 				reason = .buildsSeam
+			} else if scope.instantiable.generatesDependencyTree, scope.instantiable.dependencies.contains(where: \.isReceivedOnlyIfAvailable) {
+				// A seam's leaf declares each parameter its tier may omit as a receive only if available, and a call that omits
+				// one is found on today's tree (`ScopeGenerator.seamTierOmissions(ofTreeRootedAt:)`), which a planned root has
+				// none of.
+				reason = .holdsValueOnlyIfAvailable
 			}
 			// One label may be declared and received in several forms across the tree: each read takes the form its nearest
 			// declaration provides, on every path, or validation rejects the tree, and a function's body is keyed by the
@@ -166,19 +171,22 @@ extension DependencyTreeGenerator {
 	private static func shapeOutsidePerTypePlan(of dependency: Dependency) -> RootTreeChoiceObservation.PerPathReason? {
 		let property = dependency.property
 		switch dependency.source {
-		case let .aliased(_, _, onlyIfAvailable),
-		     let .received(onlyIfAvailable):
+		case .aliased,
+		     .received:
 			// A rename reads the property it renames, whose form may differ from its own: a builder renamed as `Any` is
 			// a receive of the builder (`receivedBuilderLabel`). Only the wrapper kinds are read of the fulfilling
 			// property, since a scope of the same tree declares it, and that declaration refuses the root where it is
-			// optional or `Sendable`. A lift that admits such a declaration reads that form of the fulfilling property
-			// in the same change.
-			if onlyIfAvailable {
+			// `Sendable`. A lift that admits such a declaration reads that form of the fulfilling property in the same
+			// change. A value received only if available is laid out (`VariantBodies.OptionalParameter`), except at a seam
+			// (the scopes loop above).
+			break
+		case .forwarded:
+			break
+		case .instantiated:
+			// Built where a production declaration fulfills its type and `nil` elsewhere, which the plan does not lay out yet.
+			if dependency.isInstantiatedOnlyIfAvailable {
 				return .holdsValueOnlyIfAvailable
 			}
-		case .forwarded,
-		     .instantiated:
-			break
 		}
 		switch property.propertyType {
 		case .sendableLazilyInstantiated:
@@ -197,9 +205,7 @@ extension DependencyTreeGenerator {
 			// reading what it builds in the same change.
 			break
 		}
-		if property.typeDescription.isOptional {
-			return .holdsValueOnlyIfAvailable
-		} else if property.typeDescription.isSendableFunction {
+		if property.typeDescription.isSendableFunction {
 			// Read from the type's structure, never from its spelling: a type whose name holds the word is no such value.
 			return .holdsSendableFunction
 		} else {
@@ -219,6 +225,18 @@ extension Dependency {
 		case .forwarded,
 		     .instantiated:
 			nil
+		}
+	}
+
+	/// Whether the dependency is received only if available, by its own label or through a rename.
+	fileprivate var isReceivedOnlyIfAvailable: Bool {
+		switch source {
+		case let .received(onlyIfAvailable),
+		     let .aliased(_, _, onlyIfAvailable):
+			onlyIfAvailable
+		case .forwarded,
+		     .instantiated:
+			false
 		}
 	}
 }
