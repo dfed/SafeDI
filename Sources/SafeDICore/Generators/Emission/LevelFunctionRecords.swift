@@ -163,7 +163,8 @@ public struct LevelFunctionRecordsObservation: Sendable {
 
 	init(root: String?, records: LevelFunctionRecords) {
 		self.root = root
-		projection = "\(records)"
+		// A dictionary prints in an order that changes between runs, so the fills' names print by key.
+		projection = "\(records.functions) \(records.functionNames) \(records.fillNames.sorted { $0.key < $1.key })"
 	}
 
 	/// Called with each call's records, when set: by the tests, never by the tool.
