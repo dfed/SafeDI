@@ -21,8 +21,9 @@
 extension ScopeGenerator {
 	/// The statements that build the nodes of `instantiable`'s mock, laid out from the node records of its world, the
 	/// root `worldRoot` builds, or `nil` where the mock's walk writes them: node records refuse the world, the mock binds a
-	/// value that is no node of it (`bindsOnlyNodes` is false), no test turns `NodeRecordsObservation.laysOutMockRoots` on,
-	/// or the engine cannot lay the records out. Each node reads its override from the overrides its body's function was
+	/// value that is no node of it (`bindsOnlyNodes` is false), or the engine cannot lay the records out. Where no test turns
+	/// `NodeRecordsObservation.laysOutMockRoots` on, the records owe the mock root's facts, so node records refuse every
+	/// mock world (`NodeRecords.owesFacts(_:in:)`). Each node reads its override from the overrides its body's function was
 	/// handed (`NodeRecords.mockConfigurationField(named:)`), which the root's body reads of `mock()`'s own parameter. The
 	/// root is reported to the test that observes node records (`NodeRecordsObservation.observer`), which alone hands a
 	/// mock root its world.
@@ -59,10 +60,6 @@ extension ScopeGenerator {
 		// A read of a value the mock binds beside its nodes would resolve to no declaration of the records' body.
 		guard bindsOnlyNodes else {
 			report(refusal: .mockRootBindsOtherThanNodes, everyRefusal: [.mockRootBindsOtherThanNodes], isLaidOut: false, recordCount: 0)
-			return nil
-		}
-		guard NodeRecordsObservation.laysOutMockRoots else {
-			report(refusal: nil, everyRefusal: [], isLaidOut: false, recordCount: nodeRecords.recordCount)
 			return nil
 		}
 		let statements = TypeKeyBody.statements(ofRootBody: nodeRecords.rootBody, rootPassedArgumentNames: [ReservedName.mockOverridesParameterName])
