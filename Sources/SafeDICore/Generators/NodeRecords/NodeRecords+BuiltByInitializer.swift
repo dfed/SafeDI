@@ -82,12 +82,13 @@ extension NodeRecords {
 		return refusals
 	}
 
-	/// The record of `declaration`'s place, a node of kind `builtByInitializer`, whose body builds `children` and whose
-	/// tree declares `typesDeclaredEscaping` `@escaping`.
+	/// The record of `declaration`'s place, a node of kind `builtByInitializer`, whose body builds `children`, whose tree
+	/// declares `typesDeclaredEscaping` `@escaping`, and whose construction is passed `nil` for `unavailableProperties`.
 	static func builtByInitializerRecord(
 		of declaration: DeclarationID,
 		variant _: VariantID,
 		in world: some NodeRecordSources,
+		unavailableProperties: Set<Property> = [],
 		typesDeclaredEscaping: Set<TypeDescription>,
 		children: [GeneratedCode],
 	) throws -> BuiltPlaceRecord {
@@ -96,7 +97,7 @@ extension NodeRecords {
 		guard let property = world.property(of: declaration), let initializer = instantiable.initializer else { throw NodeRecordRefusal.noInitializer }
 		// Never throws: a type's initializer is one that fulfills its dependencies (`InstantiableVisitor`'s
 		// `canonicalConstructionInitializer`, through `Initializer.isValid(forFulfilling:)`, which makes the same binding).
-		let arguments = try initializer.createInitializerArguments(given: instantiable.dependencies)
+		let arguments = try initializer.createInitializerArguments(given: instantiable.dependencies, unavailableProperties: unavailableProperties)
 		let isExtension = instantiable.declarationType.isExtension
 		let isInstantiator = switch world.kind(of: declaration) {
 		case .instantiator, .sendableInstantiator, .erasedInstantiator, .sendableErasedInstantiator:

@@ -78,10 +78,12 @@ extension TypeFactsGraph: NodeRecordSources {
 ///
 /// One variant per node is enough here because a stage-1 record reads no answer: each `PlaceRead.source` is the label
 /// `createInitializerArguments` names, and the engine resolves it per view. That holds only while both key projections
-/// are inert: no receive only if available, and no cycle, so nothing is still being built where it is read. The first
-/// stage that admits either reads what each call hands its callee (`TypeFactsWorld.sources(ofCall:of:)`), never a
-/// variant's keys. Records still carry today's `functionName`, which the engine's allocator names apart; the allocation
-/// moves to node records last, at stage 4.
+/// are inert: no receive only if available, and no cycle, so nothing is still being built where it is read. A node that
+/// receives a property only if available (`receivesOnlyIfAvailable`) reads what each call of its variant finds
+/// (`OnlyIfAvailableAnswers`, from the calls and `TypeFactsEdge.buildPosition`, since the world's answers do not model
+/// sibling order), never a variant's keys, and a world whose calls of one variant find different answers is refused.
+/// Records still carry today's `functionName`, which the engine's allocator names apart; the allocation moves to node
+/// records last, at stage 4.
 struct NodeRecords: Sendable {
 	/// - Parameter world: A production root's world.
 	/// - Throws: A `NodeRecordRefusal` where the world holds a kind stage 1 does not make, or what an initializer's
@@ -100,6 +102,7 @@ struct NodeRecords: Sendable {
 			variantByDeclaration[declaration] = variant
 		}
 		let order = try NodeBuildOrder(world: world)
+		let onlyIfAvailableAnswers = try OnlyIfAvailableAnswers(world: world)
 		// A node's place holds its children's places, so each is made after its children: a post-order walk from the root,
 		// with a stack, since a tree can be as deep as the module has types.
 		var places = [GeneratedCode?](repeating: nil, count: world.variantCount)
@@ -129,6 +132,8 @@ struct NodeRecords: Sendable {
 			let record = switch kinds[Int(declaration)] {
 			case .builtByInitializer:
 				try Self.builtByInitializerRecord(of: declaration, variant: variant, in: world, typesDeclaredEscaping: escaping, children: children)
+			case .receivesOnlyIfAvailable:
+				try Self.receivesOnlyIfAvailableRecord(of: declaration, variant: variant, in: world, answers: onlyIfAvailableAnswers, typesDeclaredEscaping: escaping, children: children)
 			}
 			typesDeclaredEscaping[Int(variant)] = escaping
 			records[Int(variant)] = record
@@ -203,8 +208,9 @@ struct NodeRecords: Sendable {
 	/// the order of `NodeRecordKind`'s cases, calling its file's classifier, `<kind>Kind(of:in:)`, which returns `nil` for
 	/// a node not of its kind and throws a refusal for a node of its kind it cannot make:
 	/// `if let kind = try <kind>Kind(of: declaration, in: world) { return kind }`.
-	private static func claimedKind(of _: DeclarationID, in _: some NodeRecordSources) throws(NodeRecordRefusal) -> NodeRecordKind? {
-		nil
+	private static func claimedKind(of declaration: DeclarationID, in world: some NodeRecordSources) throws(NodeRecordRefusal) -> NodeRecordKind? {
+		if let kind = try receivesOnlyIfAvailableKind(of: declaration, in: world) { return kind }
+		return nil
 	}
 }
 
@@ -216,4 +222,7 @@ enum NodeRecordKind: Sendable {
 	/// A constant or an `Instantiator` built by its type's initializer or `instantiate()`, off every cycle, with nothing
 	/// erased, lazy, `@Sendable`, received only if available, renamed or filled in its scope (stage 1).
 	case builtByInitializer
+	/// A node that would be of kind `builtByInitializer` but that its type receives a property only if available, which its
+	/// construction is passed where the variant's calls find it available, and `nil` where not (`OnlyIfAvailableAnswers`).
+	case receivesOnlyIfAvailable
 }
