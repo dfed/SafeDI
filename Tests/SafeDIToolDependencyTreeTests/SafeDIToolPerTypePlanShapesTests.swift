@@ -335,6 +335,10 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 	mutating func generate_keepsRootOnTodaysTreeWithCodeOfLastRelease_whenTwinsAreErasedToConcreteExistential() async throws {
 		// `Root` and `Detail` build `home: AnyScreen` and `Panel` builds `home: LazilyInstantiated<AnyScreen>`, each fulfilled by
 		// `Home` and erased, twins of one identity: one function builds `Home`, and each declaration wraps its call.
+		// `noLayout` is the layout's refusal of a plan that was built. For twins that are not erased the stage is
+		// `TypeKeyRefusal.bodyBuildsNoPlace`: the path is building the constant, so the wrapper's call is of the constant's
+		// function, whose body is built by the calling scope, `Panel`, which declares no constant `home`. No observation
+		// hands a test the stage, so this test holds the reason only.
 		// Release 2.4.0 generated the text below. The test fails the day the lift that takes this reason lands, and from then
 		// on the text must hold on the plan.
 		let (choices, files) = try await choicesAndFilesGeneratingTodaysCode(of: """
@@ -398,12 +402,14 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_generatesCodeOfLastRelease_whenLazilyInstantiatedTwinIsAcrossSeam() async throws {
+	mutating func generate_generatesCodeOfLastRelease_whenSeamCutsRootsTreeFromTwinsOfItsOwn() async throws {
 		// `Root` and `Detail` build `home: Home`, and `Panel`, which the seam `Feature` builds, builds
-		// `home: LazilyInstantiated<Home>`: the twins are in the seam's own tree, built per path, and `Root`'s tree, which calls
-		// the seam, holds only the constant.
-		// Release 2.4.0 generated the text below. The test fails the day the lift that takes this reason lands, and from then
-		// The test fails the day a seam's own tree is laid out from a plan, and from then on the text must hold on the plan.
+		// `home: LazilyInstantiated<Home>`. A seam cuts the identity: `Root`'s tree calls the seam's generated initializer
+		// and holds only the constant, so it holds no twin and is laid out from its plan. The seam's own tree holds both
+		// declarations, twins of one identity, the lazy one reached first: one function builds `Home`, which the wrapper
+		// wraps and the constant calls. A seam's own tree is always built per path, so no choice is observed for it.
+		// Release 2.4.0 generated the text below for both. The test fails the day a seam's own tree is laid out from a
+		// plan, and from then on the text must hold on the plan.
 		let (choices, files) = try await choicesAndFilesGeneratingTodaysCode(of: """
 		@Instantiable(isRoot: true) public final class Root: Instantiable {
 		    @Instantiated let home: Home
