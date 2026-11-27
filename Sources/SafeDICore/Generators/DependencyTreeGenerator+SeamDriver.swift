@@ -289,14 +289,17 @@ extension DependencyTreeGenerator {
 			errors.append(contentsOf: verdicts.compactMap(\.error))
 			if let comparesProducers = SeamCallersViewObservation.comparesProducers {
 				// Computed again for the test that compares two producers of the callers' view, as no layer of the run, in a
-				// space of its own that starts from this one's IDs, since only this run's serial code holds this one.
+				// space of its own that starts from this one's IDs, since only this run's serial code holds this one, with
+				// each signature pass reading its tree through the facts (`SeamTreeReadsObservation.Producer.facts`).
 				let builder = internerSpace.copyOfBuilder()
 				comparesProducers(SeamCallersView(
 					moduleName: seams.currentModule.moduleName,
 					verdicts: verdicts.map(\.observed),
 					recomputed: {
 						try await GenerationLayerObservation.$observer.withValue(nil) {
-							try await callersView.verdicts(interningIn: ConstructionInternerSpace(copying: builder)).map(\.observed)
+							try await SeamTreeReadsObservation.$producer.withValue(.facts) {
+								try await callersView.verdicts(interningIn: ConstructionInternerSpace(copying: builder)).map(\.observed)
+							}
 						}
 					},
 				))
@@ -1233,6 +1236,7 @@ extension DependencyTreeGenerator {
 					let generator = tree.generator
 					let seamRoot = try Self.seamRoot(
 						of: seam,
+						reads: Self.seamTreeReads(of: seam, generator: generator, rootScope: tree.rootScope, instantiables: instantiables),
 						generator: generator,
 						proof: proof,
 						instantiables: instantiables,
@@ -2219,7 +2223,8 @@ extension DependencyTreeGenerator {
 		}
 	}
 
-	/// What `seam`'s root generator emits, read from `generator`, the generator of its tree: its signature, with the
+	/// What `seam`'s root generator emits, read from `reads`, what its tree holds for its parameters, builder function names
+	/// and escaping types, and from `generator`, the generator of its tree, for its holes and builders: its signature, with the
 	/// seam's own `@Received` and `@Forwarded` properties first, in declaration order, then the pass-throughs in label
 	/// order – each form of a label the tree receives that no parameter provides, as `formsProvided(by:)` decides:
 	/// a required non-optional wrapper provides every by-value form and the optional form of its kind, a by-value
@@ -2229,7 +2234,7 @@ extension DependencyTreeGenerator {
 	///   them: what `shapedBuilders` reads an enum the seam's builders reach from, never a copy another seam carries.
 	/// - Parameter generatesPlainInitializers: Whether the seam's tiers have plain initializers, which a hand-written
 	///   initializer callable with their labels would collide with: the module's `SeamResolution.generatesPlainDependencyTreeInitializers`.
-	private static func seamRoot(of seam: Instantiable, generator: ScopeGenerator, proof: TypeAccessProof, instantiables: [TypeDescription: Instantiable], ownScopeEnums: [SeamSignature.ScopeEnum.Key: SeamSignature.ScopeEnum], generatesPlainInitializers: Bool, declaredTypeNames: DeclaredTypeNames) throws -> ScopeGenerator.SeamRoot? {
+	private static func seamRoot(of seam: Instantiable, reads: SeamTreeReads, generator: ScopeGenerator, proof: TypeAccessProof, instantiables: [TypeDescription: Instantiable], ownScopeEnums: [SeamSignature.ScopeEnum.Key: SeamSignature.ScopeEnum], generatesPlainInitializers: Bool, declaredTypeNames: DeclaredTypeNames) throws -> ScopeGenerator.SeamRoot? {
 		let ownParameters = ownParameters(of: seam, proof: proof)
 		// The seam's own properties are parameters as declared, and provide forms as any parameter does.
 		var ownLabels = Set<String>()
@@ -2246,8 +2251,9 @@ extension DependencyTreeGenerator {
 		// A property required only through an `onlyIfAvailable` alias of it (`requiredAliasFulfillingProperties`) is
 		// not required of the caller: the alias binds `nil` where the caller holds nothing. The caller must still build
 		// it first where it holds it, so the parameter carries `requiredThroughAlias`.
-		let requiredProperties = generator.requiredReceivedProperties
-		let (treeReceivers, parameterReads) = Self.receivers(in: generator, of: seam, instantiables: instantiables)
+		let requiredProperties = reads.requiredReceivedProperties
+		let treeReceivers = reads.receivers
+		let parameterReads = reads.parameterReads
 		func receivers(ofLabel label: String) -> [SeamReceiver] {
 			treeReceivers.filter { $0.property.label == label }
 		}
@@ -2376,7 +2382,7 @@ extension DependencyTreeGenerator {
 			// A requirement through an `onlyIfAvailable` alias that reaches the seam's root – no scope in the tree declares
 			// its label – is satisfied by this parameter, the tree's nearest declaration of the label, where the parameter
 			// provides a form the alias reads; otherwise the alias is `nil`, and nothing is required.
-			let requiredThroughAlias = !isRequired && generator.requiredAliasFulfillingProperties.contains { requiredProperty in
+			let requiredThroughAlias = !isRequired && reads.requiredAliasFulfillingProperties.contains { requiredProperty in
 				requiredProperty.label == label && ScopeGenerator.provides(parameterProperty, aFormReadBy: requiredProperty)
 			}
 			passThroughs.append(SeamSignature.Parameter(
@@ -2407,7 +2413,7 @@ extension DependencyTreeGenerator {
 		// A deferred parameter's autoclosure is named apart from every builder function the tree declares, which, being a
 		// local function, is in scope throughout the initializer's body and would hide it, and from every other deferred
 		// parameter's; the holes' builders are named apart from these names in turn.
-		let builderFunctionNames = Self.builderFunctionNamesOfProperties(in: generator)
+		let builderFunctionNames = reads.builderFunctionNames(includingHoleSites: true)
 		var takenInternalNames = builderFunctionNames
 		let parameters = (ownParameters + passThroughs).map { parameter in
 			var internalName = ScopeGenerator.functionName(toBuildPropertyNamed: parameter.property.label)
@@ -2424,7 +2430,7 @@ extension DependencyTreeGenerator {
 			generator: generator,
 			holesAndPlaces: holesAndPlaces,
 			parameters: parameters,
-			treeFunctionNames: Self.builderFunctionNamesOfProperties(in: generator, includingHoleSites: false),
+			treeFunctionNames: reads.builderFunctionNames(includingHoleSites: false),
 			proof: proof,
 			instantiables: instantiables,
 			ownScopeEnums: ownScopeEnums,
@@ -2530,7 +2536,7 @@ extension DependencyTreeGenerator {
 				holes: holes,
 				builders: shapedBuilders.builders,
 				scopeEnums: shapedBuilders.scopeEnums,
-				typesDeclaredEscaping: generator.typesDeclaredEscaping.intersection(parameters.map(\.property.typeDescription)),
+				typesDeclaredEscaping: reads.typesDeclaredEscaping.intersection(parameters.map(\.property.typeDescription)),
 				places: holesAndPlaces.places,
 				caseIndexByHole: holesAndPlaces.caseIndices(of: holes),
 			),

@@ -363,11 +363,14 @@ func executeSafeDIToolTest(
 												// Every root’s received values from its per-type graph must equal the walk of its generator tree’s
 												// (`TypeFactsReceivedValueSuppliesChecks`).
 												try await TypeFactsReceivedValueSuppliesChecks.comparing(handingOn: TypeFactsReceivedValueSuppliesObservation.comparesWalk) {
-													// The fold that decides whether any route is walked must send every graph the walk rejects to the walk (`FulfillmentFoldChecks`).
-													try await ValidationWalkObservation.$foldComparison.withValue(FulfillmentFoldChecks.comparison(handingOn: ValidationWalkObservation.foldComparison)) {
-														// Every callers’ view a run computes must decide alike when computed again (`SeamCallersViewChecks`).
-														try await SeamCallersViewChecks.comparing(handingOn: SeamCallersViewObservation.comparesProducers) {
-															try await tool.generate()
+													// Every seam's reads its facts produce must equal its tree's (`SeamTreeReadsChecks`).
+													try await SeamTreeReadsChecks.comparing(handingOn: SeamTreeReadsObservation.comparesFacts) {
+														// The fold that decides whether any route is walked must send every graph the walk rejects to the walk (`FulfillmentFoldChecks`).
+														try await ValidationWalkObservation.$foldComparison.withValue(FulfillmentFoldChecks.comparison(handingOn: ValidationWalkObservation.foldComparison)) {
+															// Every callers’ view a run computes must decide alike when computed again (`SeamCallersViewChecks`).
+															try await SeamCallersViewChecks.comparing(handingOn: SeamCallersViewObservation.comparesProducers) {
+																try await tool.generate()
+															}
 														}
 													}
 												}
