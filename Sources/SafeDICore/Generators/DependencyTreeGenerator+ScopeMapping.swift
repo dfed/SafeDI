@@ -69,7 +69,7 @@ extension DependencyTreeGenerator {
 						&& !dependency.isInstantiatedOnlyIfAvailable
 						&& Self.canBeHole(dependency)
 						&& typeDescriptionToFulfillingInstantiableMap[dependency.asInstantiatedType]?.mockOnly != false
-						&& reportedLocations.insert(dependency.declarationLocation.map { "\($0.filePath):\($0.line):\($0.column)" } ?? "\(typeDescription.asSource).\(dependency.property.label)").inserted
+						&& reportedLocations.insert(dependency.declarationLocation.map(\.identity) ?? "\(typeDescription.asSource).\(dependency.property.label)").inserted
 					{
 						holes.append(.init(seam: seam.concreteInstantiable, owner: instantiable.concreteInstantiable, dependency: dependency))
 					}
@@ -203,7 +203,7 @@ extension DependencyTreeGenerator {
 						fulfilledBy: fulfillingProperty,
 						erasedToConcreteExistential: erasedToConcreteExistential,
 						onlyIfAvailable: onlyIfAvailable,
-						declarationReference: dependency.declarationLocation.map(aliasDeclarationReferences.reference(to:)),
+						declarationReference: aliasDeclarationReferences.reference(to: dependency.declarationLocation),
 					))
 				case .forwarded, .received:
 					continue

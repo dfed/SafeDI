@@ -2973,6 +2973,7 @@ enum GraphFuzzerGenerator {
 			instantiatedOnlyIfAvailableRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.instantiatedOnlyIfAvailableRandomSeedMask)
 			optionalPlaceRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.optionalPlaceRandomSeedMask)
 			nestedCycleRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.nestedCycleRandomSeedMask)
+			renamedLazyReaderRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.renamedLazyReaderRandomSeedMask)
 			seamDependencyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ GraphFuzzerSeamDependencyDraw.seamRandomSeedMask)
 			prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
 			// One draw decides, so graphs that are not mixed draw exactly what they drew before mixed graphs existed.
@@ -3058,6 +3059,8 @@ enum GraphFuzzerGenerator {
 			finalDeclarations = addingDependencyInstantiatedOnlyIfAvailable(to: finalDeclarations)
 			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
 			finalDeclarations = addingTypeBuiltAgainThroughSecondLazyCycle(to: finalDeclarations)
+			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
+			finalDeclarations = addingReadersOfRenamedLazyInstance(to: finalDeclarations)
 			// In a graph split across modules, every file names its module and imports the seam's, so that a type of the
 			// caller can name what the seam's module declares, such as the creation stamps' counter.
 			let isSplit = finalDeclarations.contains { $0.module == .seamModule }
@@ -3550,6 +3553,9 @@ enum GraphFuzzerGenerator {
 		/// Draws only `addingTypeBuiltAgainThroughSecondLazyCycle`'s choices: whether a graph gains `NestRoot`'s tree, and
 		/// every shape of that tree.
 		private var nestedCycleRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only `addingReadersOfRenamedLazyInstance`'s choices: whether a graph gains `RenamedLazyTop`'s tree, and
+		/// every shape of that tree.
+		private var renamedLazyReaderRandom: GraphFuzzerRandomNumberGenerator
 		/// The files `markerFreeFileRandom` moved a declaration into: each named, holding the declaration alone, and in the
 		/// module of the type, `ownerName`, whose file it was drawn in.
 		private var markerFreeFiles = [(ownerName: String, fileName: String, declaration: String)]()
@@ -8426,6 +8432,57 @@ enum GraphFuzzerGenerator {
 		}
 
 		private static let nestedCycleRandomSeedMask: UInt64 = 0x6E657374437963
+
+		// MARK: Readers of a renamed lazy instance
+
+		/// The base corpus's draw, in one graph of eight, of a choice between declarations of one type, decided by where
+		/// each is declared. `RenamedLazyTop`, a root, instantiates a lazily instantiated `RenamedLazyValue` and
+		/// `RenamedLazyOwner`, which renames it under six labels and instantiates `RenamedLazyReader`, which receives
+		/// the instance under every one of them, in an order drawn apart from the labels'. So creating `RenamedLazyTop`
+		/// creates the value, and the warning that says so names the reader's receive declared first
+		/// (`InstantiationAnalysis`' `recordReads(whileCreating:)`), never the first label. The multi-module partition
+		/// puts the reader in a module beneath the root's when it splits the tree, where a run over module info files that
+		/// store positions apart reads the receives' places by their order in the reader's file alone, and must name the
+		/// same one (`SplitPositionsRun`). `renamedLazyReaderRandom` draws only for this pass, after every other, and only
+		/// in the base corpus.
+		private mutating func addingReadersOfRenamedLazyInstance(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			guard features.isEmpty, renamedLazyReaderRandom.percentChance(12) else { return declarations }
+			var declarations = declarations
+			// Six, so that a choice made in any other order than the reader's declarations' differs on nearly every run.
+			let labels = ["renamedLazyFirst", "renamedLazySecond", "renamedLazyThird", "renamedLazyFourth", "renamedLazyFifth", "renamedLazySixth"]
+			var readOrder = Array(labels)
+			for index in readOrder.indices.dropLast() {
+				readOrder.swapAt(index, renamedLazyReaderRandom.integer(in: index...(readOrder.count - 1)))
+			}
+			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
+			func append(_ name: String, isRoot: Bool = false, _ properties: [PropertyDeclaration]) {
+				declarations.append(TypeDeclaration(
+					name: name,
+					instantiableArguments: isRoot ? ["isRoot: true"] : [],
+					properties: properties,
+					declaresHelperTypes: false,
+					additionalConformances: conformances,
+				))
+			}
+			let valueName = "\(prefix)RenamedLazyValue"
+			let wrapped = "\(lazilyInstantiatedWrapper(isSendable: sendability == .sendable))<\(valueName)>"
+			append(valueName, [])
+			append("\(prefix)RenamedLazyReader", readOrder.map { PropertyDeclaration(attribute: "@Received", label: $0, type: valueName) })
+			append("\(prefix)RenamedLazyOwner", labels.map {
+				PropertyDeclaration(attribute: "@Received(fulfilledByDependencyNamed: \"renamedLazyValue\", ofType: \(wrapped).self)", label: $0, type: wrapped)
+			} + [PropertyDeclaration(attribute: "@Instantiated", label: "renamedLazyReader", type: "\(prefix)RenamedLazyReader")])
+			// The value, the reader and the owner come first, and the root last, so that the multi-module partition, which
+			// deals the files out to modules in that order, puts the reader in a module beneath the root's wherever it
+			// makes more than one.
+			declarations = declarations.suffix(3) + declarations.dropLast(3)
+			append("\(prefix)RenamedLazyTop", isRoot: true, [
+				PropertyDeclaration(attribute: "@Instantiated", label: "renamedLazyValue", type: wrapped),
+				PropertyDeclaration(attribute: "@Instantiated", label: "renamedLazyOwner", type: "\(prefix)RenamedLazyOwner"),
+			])
+			return declarations
+		}
+
+		private static let renamedLazyReaderRandomSeedMask: UInt64 = 0x52656E4C617A79
 
 		// MARK: Cycle parameters
 

@@ -67,6 +67,26 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	}
 
 	@Test
+	func binaryReader_readsLocationWithoutTrapping_whenOrderFieldIsSmallestInteger() throws {
+		var writer = BinaryWriter()
+		writer.write("File.swift")
+		writer.write(Int.min)
+		writer.write(3)
+		writer.write(5)
+		let encoded = writer.encoded
+
+		let location = try encoded.withUnsafeBytes { bytes in
+			var reader = try BinaryReader(bytes: bytes)
+			let location = try reader.readLocation()
+			try reader.finish()
+			return location
+		}
+
+		#expect(location == Dependency.DeclarationLocation(filePath: "File.swift", order: -4_611_686_018_427_387_903, placement: .here(line: 3, column: 5)))
+		#expect(location.order == -4_611_686_018_427_387_903)
+	}
+
+	@Test
 	func binaryWriter_writesSharedValueOnce_whenValueRepeats() throws {
 		var writer = BinaryWriter()
 		writer.write([BinaryShared(["a", "b"]), BinaryShared(["c"]), BinaryShared(["a", "b"])])

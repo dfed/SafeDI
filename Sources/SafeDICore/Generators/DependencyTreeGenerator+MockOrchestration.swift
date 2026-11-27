@@ -1000,7 +1000,7 @@ extension DependencyTreeGenerator {
 						fulfilledBy: fulfillingProperty,
 						erasedToConcreteExistential: erasedToConcreteExistential,
 						onlyIfAvailable: onlyIfAvailable,
-						declarationReference: dependency.declarationLocation.map(aliasDeclarationReferences.reference(to:)),
+						declarationReference: aliasDeclarationReferences.reference(to: dependency.declarationLocation),
 					))
 				case .forwarded:
 					continue

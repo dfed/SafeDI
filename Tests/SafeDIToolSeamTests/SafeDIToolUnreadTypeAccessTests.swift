@@ -3625,7 +3625,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		#expect(output.modules["Feature"]?.generatedFiles == expectedFiles)
 		if integration == .moduleInfo {
 			#expect(output.modules["Core"]?.moduleInfo?.plainTypeDeclarations.map(\.access.level) == [.package])
-			#expect(output.modules["Core"]?.moduleInfo?.plainTypeDeclarations.map(\.access.declarationStartLocation?.line) == [2])
+			#expect(output.modules["Core"]?.moduleInfo?.plainTypeDeclarations.map(\.access.declarationStartLocation?.lineAndColumn?.line) == [2])
 		}
 	}
 
