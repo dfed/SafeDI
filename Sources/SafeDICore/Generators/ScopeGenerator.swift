@@ -8075,6 +8075,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					memoBoundLabels: Set(child.fillFields.filter(\.bindsMemo).map(\.property.label)),
 					parametersTaken: child.fillParameterFields,
 					memberParameters: child.fillMemberParameterFields(takingPayloadFields: child.fillReturnsWrapperBuilder),
+					// Not projected: only a public mock call's records read it.
+					payloadFields: [],
 					callerReads: child.fillCallerReads.parameterByLabel.keys.sorted().map { label in
 						FillFacts.CallerRead(label: label, isRequired: treeReads.required.contains { $0.label == label })
 					},

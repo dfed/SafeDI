@@ -257,7 +257,8 @@ struct FillDispatchers: Sendable {
 		for builder in calledBuilders.builders where calledBuilders.reaches(anyOf: filledSiteNumbers, from: builder.enumKey, onRoutesOf: nil) {
 			// As the call's builder argument decides it: a builder that takes the called seam's struct is handed its root
 			// level's struct, unless a level of the called seam's hole type keeps its enum form to pass a scope value on.
-			let returnsBuilderStruct = builder.takesBuilderStruct && scope.publicMockCall == nil && !calledBuilders.builders.contains { calledBuilder in
+			// A call of another module's public mock keeps its dispatchers in enum form, from which its level functions are made.
+			let returnsBuilderStruct = scope.publicMockCall == nil && builder.takesBuilderStruct && !calledBuilders.builders.contains { calledBuilder in
 				calledBuilder.enumKey.holeType == builder.enumKey.holeType
 					&& innerScopes.enums.contains { $0.key == calledBuilder.enumKey && $0.innerScopeName != nil && $0.carriedInnerScopes == nil }
 			}

@@ -52,6 +52,9 @@ struct FillFacts: Sendable {
 	/// What a level function's member hands the fill (`ScopeGenerator.fillMemberParameterFields(takingPayloadFields:)`):
 	/// the payload's fields first where `takesPayloadFields`, then `parametersTaken`.
 	let memberParameters: [SeamSignature.Hole.Field]
+	/// The payload's fields a member hands the fill where it takes them by itself, which `memberParameters` lead with where
+	/// `takesPayloadFields`: a call's override closure hands them to a fill that does not (`publicMockOverrideBuilders`).
+	let payloadFields: [SeamSignature.Hole.Field]
 	/// What the fill reads of the caller's scope, by label, in label order.
 	let callerReads: [CallerRead]
 	/// The parameter the fill takes for each of `callerReads`, in their order.
@@ -262,6 +265,7 @@ struct FillFacts: Sendable {
 			memoBoundLabels: Set(boundFill.fields.filter(\.bindsMemo).map(\.property.label)),
 			parametersTaken: parametersTaken,
 			memberParameters: (fill.returnsWrapperBuilder ? payloadFields : []) + parametersTaken,
+			payloadFields: payloadFields,
 			callerReads: callerReads.parameterByLabel.keys.sorted().map { CallerRead(label: $0, isRequired: requiredLabels.contains($0)) },
 			parametersTakenOfCallerReads: callerReads.parameterByLabel.sorted { $0.key < $1.key }.map(\.value.property),
 			readLabels: readLabels.sorted(),
