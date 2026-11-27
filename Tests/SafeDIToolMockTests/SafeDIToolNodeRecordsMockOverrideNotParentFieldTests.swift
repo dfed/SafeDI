@@ -188,6 +188,120 @@ struct SafeDIToolNodeRecordsMockOverrideNotParentFieldTests: ~Copyable {
 		#expect(output.generatedFiles == walkOutput.generatedFiles)
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_bindsNamesInTheWalksOrderOnEveryRun_whenRootNamesTwentyValuesApart() async throws {
+		// Ten labels, each received as a value and as an `Instantiator`: twenty children the root names apart, whose
+		// names the records look up by label and type and never list.
+		let labels = (0..<10).map { "value\($0)" }
+		let fixture = [
+			"""
+			@Instantiable(generateMock: true)
+			public final class Root: Instantiable {
+			    public init(leaf: Leaf) {
+			        self.leaf = leaf
+			    }
+
+			    @Instantiated let leaf: Leaf
+			}
+
+			@Instantiable
+			public final class Leaf: Instantiable {
+			    public init(first: First, second: Second) {
+			        self.first = first
+			        self.second = second
+			    }
+
+			    @Instantiated let first: First
+			    @Instantiated let second: Second
+			}
+
+			@Instantiable
+			public final class First: Instantiable {
+			    public init(\(labels.indices.map { "\(labels[$0]): Thing\($0)" }.joined(separator: ", "))) {
+			\(labels.map { "        self.\($0) = \($0)" }.joined(separator: "\n"))
+			    }
+
+			\(labels.indices.map { "    @Received let \(labels[$0]): Thing\($0)" }.joined(separator: "\n"))
+			}
+
+			@Instantiable
+			public final class Second: Instantiable {
+			    public init(\(labels.indices.map { "\(labels[$0]): Instantiator<Thing\($0)>" }.joined(separator: ", "))) {
+			\(labels.map { "        self.\($0) = \($0)" }.joined(separator: "\n"))
+			    }
+
+			\(labels.indices.map { "    @Received let \(labels[$0]): Instantiator<Thing\($0)>" }.joined(separator: "\n"))
+			}
+
+			\(labels.indices.map { "@Instantiable\npublic final class Thing\($0): Instantiable {\n    public init() {}\n}" }.joined(separator: "\n\n"))
+			""",
+		]
+		let walkOutput = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		var runs = [String]()
+		for _ in 0..<2 {
+			let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
+				try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+			}
+			#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [true])
+			try runs.append(#require(output.mockFiles["Root+SafeDIMock.swift"]))
+		}
+		#expect(runs[0] == runs[1])
+		// The values `mock()`'s body binds, in order: each line of its own indentation that binds a name.
+		func namesBound(in mock: String) -> [String] {
+			mock.split(separator: "\n").compactMap { line in
+				line.hasPrefix("        let ") ? line.dropFirst("        let ".count).prefix { $0 != " " && $0 != ":" }.description : nil
+			}
+		}
+		let expectedNames = labels.indices.map { "\(labels[$0])_Thing\($0)" } + labels.indices.map { "\(labels[$0])_Instantiator__Thing\($0)" } + ["leaf"]
+		#expect(namesBound(in: runs[0]) == expectedNames)
+		#expect(try namesBound(in: #require(walkOutput.mockFiles["Root+SafeDIMock.swift"])) == expectedNames)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_keepsTheWalksStatements_whenTypeReceivesLabelNamedApartOnlyIfAvailable() async throws {
+		// `Third` receives `thing` only if available. Whether it is handed the root's `Thing` or `nil` is its place's: a
+		// required receive of the `Instantiator` above a place pins the label there. One function serves every place, so
+		// the world is refused, and the walk writes it.
+		let fixture = Self.fixture.merging([
+			"Root.swift": """
+			@Instantiable(generateMock: true)
+			public final class Root: Instantiable, Marked {
+			    public init(leaf: Leaf, third: Third) {
+			        self.leaf = leaf
+			        self.third = third
+			    }
+
+			    @Instantiated let leaf: Leaf
+			    @Instantiated let third: Third
+			    public var marker = "built"
+			}
+			""",
+			"Third.swift": """
+			@Instantiable
+			public final class Third: Instantiable, Marked {
+			    public init(thing: Thing?, first: First) {
+			        self.thing = thing
+			        self.first = first
+			    }
+
+			    @Received(onlyIfAvailable: true) let thing: Thing?
+			    @Instantiated let first: First
+			    public var marker = "built"
+			}
+			""",
+		]) { $1 }
+		let walkOutput = try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+
+		#expect(reports.filter(\.isMockRoot).map(\.everyRefusal) == [["mockOverrideNotParentField"]])
+		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [false])
+		#expect(output.generatedFiles == walkOutput.generatedFiles)
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]

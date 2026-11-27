@@ -21,10 +21,16 @@
 /// What a mock root's lowering names that the records of its world read: values of the root's level, which no fact of
 /// the world holds, so the world is made with them (`TypeFactsGraph.mockRootNames`). Empty for every production root's world.
 struct MockRootNames: Sendable {
-	/// - Parameter namesApart: The name the root's level gives each child it names apart, by the child's label and then its
-	///   property's type (`MockLowering.Walk.rootRenames`).
-	init(namesApart: [String: [TypeDescription: String]] = [:]) {
+	/// - Parameters:
+	///   - namesApart: The name the root's level gives each child it names apart, by the child's label and then its
+	///     property's type (`MockLowering.Walk.rootRenames`).
+	///   - unavailableDependencyOverrides: Each property instantiated only if available that nothing fulfills and that
+	///     `mock()` takes an override of, with the override's name, in the order `SafeDIOverrides` declares the overrides
+	///     (`MockLowering.RootSignature.unavailableDependencyOverrideNames`).
+	init(namesApart: [String: [TypeDescription: String]] = [:], unavailableDependencyOverrides: [(property: Property, name: String)] = []) {
 		self.namesApart = namesApart
+		unavailableDependencyOverrideNamesInOrder = unavailableDependencyOverrides.map(\.name)
+		unavailableDependencyOverrideNames = Dictionary(unavailableDependencyOverrides.map { ($0.property, $0.name) }) { first, _ in first }
 	}
 
 	/// The name the mock root binds `property` under where it names it apart from a sibling of its label, and `nil`
@@ -38,7 +44,17 @@ struct MockRootNames: Sendable {
 		namesApart[label].map { !$0.isEmpty } ?? false
 	}
 
+	/// The name of the override `mock()` takes of `property`, one instantiated only if available that nothing fulfills,
+	/// and `nil` where it takes none.
+	func unavailableDependencyOverrideName(of property: Property) -> String? {
+		unavailableDependencyOverrideNames[property]
+	}
+
+	/// The names of the overrides `mock()` takes of properties nothing fulfills, in the order `SafeDIOverrides` declares them.
+	let unavailableDependencyOverrideNamesInOrder: [String]
+
 	private let namesApart: [String: [TypeDescription: String]]
+	private let unavailableDependencyOverrideNames: [Property: String]
 }
 
 extension NodeRecords {
@@ -70,7 +86,10 @@ extension NodeRecords {
 			switch dependency.source {
 			case .received:
 				guard mockRootNames.namesApart(label: dependency.property.label) else { continue }
-				guard nameApartRead(by: dependency, mockRootNames: mockRootNames) != nil else { return .mockOverrideNotParentField }
+				// A receive only if available of the type a name apart holds is refused with the other forms: whether it
+				// reads the name or `nil` is its place's, since a required receive of another form above a place pins the
+				// label there (`MockLowering.receiveReadsLabelByName`), and one function serves every place.
+				guard mockRootNames.nameApart(of: dependency.property) != nil else { return .mockOverrideNotParentField }
 			case .instantiated, .forwarded, .aliased:
 				// A type that declares a rename is left unclaimed (`NodeRecordRefusal.renameOrHole`), so none is asked here.
 				guard !mockRootNames.namesApart(label: dependency.property.label) else { return .mockOverrideNotParentField }
@@ -87,24 +106,16 @@ extension NodeRecords {
 		return world.scope(of: declaration).instantiable.dependencies.contains { mockRootNames.namesApart(label: $0.property.label) }
 	}
 
-	/// The child of the mock root named apart that `dependency`, a receive, reads: the form of its own type, or of the
-	/// type it wraps in an optional, as the walk resolves it. `nil` where the root names no such form apart.
-	private static func nameApartRead(by dependency: Dependency, mockRootNames: MockRootNames) -> (property: Property, name: String)? {
-		[dependency.property, dependency.property.asUnwrappedProperty].lazy.compactMap { property in
-			mockRootNames.nameApart(of: property).map { (property, $0) }
-		}.first
-	}
-
 	/// The places that bind again, under its label, each child of the mock root named apart that `declaration`'s type
 	/// receives: the first statements of its function, in the order its type declares the receives, each written as the
 	/// walk writes it and read as a rename of the name is, so the function is handed the name as it is any value it reads.
 	static func placesBindingNamesApartAgain(in declaration: DeclarationID, of world: some NodeRecordSources) -> [GeneratedCode] {
 		let mockRootNames = world.mockRootNames
 		return world.scope(of: declaration).instantiable.dependencies.compactMap { dependency in
-			guard case .received = dependency.source, let (property, name) = nameApartRead(by: dependency, mockRootNames: mockRootNames) else { return nil }
+			guard case .received = dependency.source, let name = mockRootNames.nameApart(of: dependency.property) else { return nil }
 			let record = AliasPlaceRecord(
 				property: dependency.property,
-				fulfillingProperty: Property(label: name, typeDescription: property.typeDescription),
+				fulfillingProperty: Property(label: name, typeDescription: dependency.property.typeDescription),
 				text: "let \(dependency.property.label): \(dependency.property.typeDescription.asSource) = \(name)",
 			)
 			return .indented(.place(PlacePlan(code: .text(record.text), record: .alias(record))), by: ScopeGenerator.standardIndent)

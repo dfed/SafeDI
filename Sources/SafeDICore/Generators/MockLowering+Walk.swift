@@ -218,7 +218,9 @@ extension ScopeGenerator {
 				&& linesBoundBesideNodes.isEmpty
 				&& signature.uncoveredParameters.isEmpty
 				&& signature.parameters.allSatisfy { $0.name == $0.property.label }
-				&& signature.onlyIfAvailableOverrides.allSatisfy { $0.name == $0.receivedProperty.label }
+				// The override of a property nothing fulfills is read by the record of the type that declares it; every
+				// other override is bound before the nodes, under its label.
+				&& signature.onlyIfAvailableOverrides.allSatisfy { signature.unavailableDependencyOverrideNames[$0.receivedProperty] != nil || $0.name == $0.receivedProperty.label }
 				&& builders.isEmpty
 				// A node the root's level names apart is bound under that name by its record; any other name is no node's.
 				&& rootRenames.values.allSatisfy { $0.values.allSatisfy(walk.rootPropertyNodeBindingNames.contains) }
@@ -229,7 +231,7 @@ extension ScopeGenerator {
 				worldRoot: worldRoot,
 				bindsOnlyNodes: bindsOnlyNodes,
 				sendableConfigurationTypeNames: context.sendableConfigurationTypeNames,
-				rootNames: MockRootNames(namesApart: walk.rootRenames),
+				rootNames: MockRootNames(namesApart: walk.rootRenames, unavailableDependencyOverrides: signature.onlyIfAvailableOverrides.compactMap { override in signature.unavailableDependencyOverrideNames[override.receivedProperty].map { (override.receivedProperty, $0) } }),
 				outerDeclarations: outerDeclarations,
 			) {
 				// The overrides' bindings stay before the nodes that read them.
