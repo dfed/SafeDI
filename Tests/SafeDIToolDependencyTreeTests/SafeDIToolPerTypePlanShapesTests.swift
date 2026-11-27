@@ -408,8 +408,8 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 		// and holds only the constant, so it holds no twin and is laid out from its plan. The seam's own tree holds both
 		// declarations, twins of one identity, the lazy one reached first: one function builds `Home`, which the wrapper
 		// wraps and the constant calls. A seam's own tree is always built per path, so no choice is observed for it.
-		// Release 2.4.0 generated the text below for both. The test fails the day a seam's own tree is laid out from a
-		// plan, and from then on the text must hold on the plan.
+		// Release 2.4.0 generated the text below for both, and 2.4.1 added `@inline(never)` to a seam's functions.
+		// The test fails the day a seam's own tree is laid out from a plan, and from then on the text must hold on the plan.
 		let (choices, files) = try await choicesAndFilesGeneratingTodaysCode(of: """
 		@Instantiable(isRoot: true) public final class Root: Instantiable {
 		    @Instantiated let home: Home
@@ -447,12 +447,12 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 		extension Feature {
 		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public convenience init() {
-		        func __safeDI_home() -> Home {
+		        @inline(never) func __safeDI_home() -> Home {
 		            let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
 		            return Home(detailBuilder: detailBuilder)
 		        }
-		        func __safeDI_detailBuilder() -> Detail {
-		            func __safeDI_feature() -> Feature {
+		        @inline(never) func __safeDI_detailBuilder() -> Detail {
+		            @inline(never) func __safeDI_feature() -> Feature {
 		                _ = Feature.__safeDI_Feature_CBF29CE484222325.self
 		                return Feature()
 		            }
@@ -460,7 +460,7 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 		            let home: Home = __safeDI_home()
 		            return Detail(feature: feature, home: home)
 		        }
-		        func __safeDI_panelBuilder() -> Panel {
+		        @inline(never) func __safeDI_panelBuilder() -> Panel {
 		            let home = LazilyInstantiated<Home>(__safeDI_home)
 		            return Panel(home: home)
 		        }
