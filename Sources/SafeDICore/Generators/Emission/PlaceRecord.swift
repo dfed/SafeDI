@@ -217,13 +217,20 @@ struct AliasPlaceRecord: Sendable {
 
 /// A call written where its place is, in the body that holds it: its builder function, which declares the statements of
 /// its body and returns its construction, then the binding of the function's result. The function stays in that body,
-/// so it reads what it captures there by its label.
-struct InPlaceCall: Sendable {
+/// so it reads what it captures there by its label. A reference, as `CallFields` is, so that an alias place that holds
+/// none, every other, stays as small as it was: each `PlaceRecord` is as large as its largest case.
+final class InPlaceCall: Sendable {
 	/// The construction and the function: its name, `@Sendable` mark, escaping types, leading statement and line end.
 	let record: BuiltPlaceRecord
 	/// The statements of the function's body before its leading statement, and after it, as the tree writes them.
 	let statementsBeforeLeadingStatement: [GeneratedCode]
 	let statementsAfterLeadingStatement: [GeneratedCode]
+
+	init(record: BuiltPlaceRecord, statementsBeforeLeadingStatement: [GeneratedCode], statementsAfterLeadingStatement: [GeneratedCode]) {
+		self.record = record
+		self.statementsBeforeLeadingStatement = statementsBeforeLeadingStatement
+		self.statementsAfterLeadingStatement = statementsAfterLeadingStatement
+	}
 }
 
 /// A value reached from a declaration by members and calls: what a passed argument, an alternative or a construction
