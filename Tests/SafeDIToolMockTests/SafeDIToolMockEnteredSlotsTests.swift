@@ -58,15 +58,15 @@ struct SafeDIToolMockEnteredSlotsTests: ~Copyable {
 		let ring = try declaration(described: "Ring ", in: graph)
 		let ball = try declaration(described: "Ball ", in: graph)
 		let leaves = (0..<Int32(graph.declarationCount)).filter { graph.description(ofNode: Int($0)).hasPrefix("Leaf ") }
-		#expect(NodeRecords.mockEnteredSlot(of: ring, in: graph)?.name == "ringBuilder")
-		#expect(NodeRecords.mockEnteredSlot(of: ball, in: graph)?.name == "ballBuilder")
-		#expect(NodeRecords.takesMockEnteredPlaces(ring, in: graph))
-		#expect(NodeRecords.takesMockEnteredPlaces(ball, in: graph))
+		#expect(NodeRecords.mockEnteredSlot(of: ring, in: MockEnteredSlots(world: graph))?.name == "ringBuilder")
+		#expect(NodeRecords.mockEnteredSlot(of: ball, in: MockEnteredSlots(world: graph))?.name == "ballBuilder")
+		#expect(NodeRecords.takesMockEnteredPlaces(ring, in: MockEnteredSlots(world: graph)))
+		#expect(NodeRecords.takesMockEnteredPlaces(ball, in: MockEnteredSlots(world: graph)))
 		// Neither the root nor a leaf, under the root or on the cycle's member, is entered or hands the places on.
 		#expect(!leaves.isEmpty)
 		for declaration in [0] + leaves {
-			#expect(NodeRecords.mockEnteredSlot(of: declaration, in: graph) == nil)
-			#expect(!NodeRecords.takesMockEnteredPlaces(declaration, in: graph))
+			#expect(NodeRecords.mockEnteredSlot(of: declaration, in: MockEnteredSlots(world: graph)) == nil)
+			#expect(!NodeRecords.takesMockEnteredPlaces(declaration, in: MockEnteredSlots(world: graph)))
 		}
 	}
 
@@ -82,12 +82,30 @@ struct SafeDIToolMockEnteredSlotsTests: ~Copyable {
 
 		let themes = (0..<Int32(graph.declarationCount)).filter { graph.description(ofNode: Int($0)).hasPrefix("Theme ") }
 		try #require(themes.count == 2, "\(graph.description)")
-		// The value is reached first, and is on no cycle; its twin is.
-		#expect(!NodeRecords.takesMockEnteredPlaces(themes[0], in: graph))
-		#expect(NodeRecords.takesMockEnteredPlaces(themes[1], in: graph))
+		// The value is reached first, and is on no cycle; its twin is. A step to the twin returns to the value's place, so
+		// the value enters its slot and hands the places on.
+		#expect(!graph.isOnCycle(themes[0]))
+		#expect(NodeRecords.takesMockEnteredPlaces(themes[0], in: MockEnteredSlots(world: graph)))
+		#expect(NodeRecords.takesMockEnteredPlaces(themes[1], in: MockEnteredSlots(world: graph)))
 		#expect(NodeRecords.mockEnteredSlots(in: graph).map(\.name) == ["theme", "aBuilder", "midBuilder"])
-		#expect(NodeRecords.mockEnteredSlot(of: themes[0], in: graph) == NodeRecords.mockEnteredSlot(of: themes[1], in: graph))
-		#expect(NodeRecords.mockEnteredSlot(of: themes[0], in: graph)?.name == "theme")
+		// One slot per type: the twin off the cycle is reached under the cycle's slot, so no type has a second one.
+		#expect(NodeRecords.mockEnteredSlots(in: graph).map(\.nearestOfTypeSlotName) == [nil, nil, nil])
+		#expect(NodeRecords.mockEnteredSlot(of: themes[0], in: MockEnteredSlots(world: graph)) == NodeRecords.mockEnteredSlot(of: themes[1], in: MockEnteredSlots(world: graph)))
+		#expect(NodeRecords.mockEnteredSlot(of: themes[0], in: MockEnteredSlots(world: graph))?.name == "theme")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mockEnteredSlots_givesTheRootNoSlot_whenTheRootsTypeIsBuiltAgainOnTheCycle() async throws {
+		let graph = try await mockWorld(of: [
+			Self.type(named: "Root", isMockRoot: true, declarations: ["@Instantiated let a: A"]),
+			Self.type(named: "A", declarations: ["@Instantiated let rootBuilder: Instantiator<Root>"]),
+		])
+
+		let slots = MockEnteredSlots(world: graph)
+		#expect(NodeRecords.mockEnteredSlot(of: 0, in: slots) == nil, "\(graph.description)")
+		#expect(!slots.slots.contains { $0.name.isEmpty }, "\(slots.slots)")
+		#expect(slots.slots.map(\.name).contains("rootBuilder"), "\(slots.slots)")
 	}
 
 	@Test
@@ -140,6 +158,71 @@ struct SafeDIToolMockEnteredSlotsTests: ~Copyable {
 		let graph = try await mockWorld(of: types)
 
 		#expect(NodeRecords.mockEnteredSlots(in: graph).map(\.name) == names.map(Self.builderLabel(of:)))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mockNearestOfTypeEntered_namesTheNearestPlaceOffTheCycle_whenTypeAboveTheCycleIsBuiltOnIt() async throws {
+		let graph = try await mockWorld(of: [
+			Self.type(named: "Root", isMockRoot: true, declarations: ["@Instantiated let homeBuilder: Instantiator<Home>"]),
+			Self.type(named: "Home", declarations: ["@Instantiated let roomBuilder: Instantiator<Room>"]),
+			Self.type(named: "Room", declarations: ["@Instantiated let otherHomeBuilder: Instantiator<Home>"]),
+		])
+
+		let slots = MockEnteredSlots(world: graph)
+		// `homeBuilder` is on no cycle; a new `otherHomeBuilder` place reads its configuration, so it enters the nearest
+		// place of `Home` and hands the places on, with no slot of its own.
+		#expect(slots.slots == [
+			MockEnteredSlot(name: "roomBuilder", configurationType: .simple(name: "Room"), nearestOfTypeSlotName: nil),
+			MockEnteredSlot(name: "otherHomeBuilder", configurationType: .simple(name: "Home"), nearestOfTypeSlotName: "__safeDI_nearest1"),
+		])
+		let homes = (0..<Int32(graph.declarationCount)).filter { graph.description(ofNode: Int($0)).hasPrefix("Home ") }
+		try #require(homes.count == 2, "\(graph.description)")
+		#expect(NodeRecords.mockEnteredSlot(of: homes[0], in: slots) == nil)
+		#expect(NodeRecords.mockNearestOfTypeEntered(by: homes[0], in: slots) == "__safeDI_nearest1")
+		#expect(NodeRecords.takesMockEnteredPlaces(homes[0], in: slots))
+		#expect(NodeRecords.mockNearestOfTypeEntered(by: homes[1], in: slots) == nil)
+		#expect(!NodeRecords.takesMockEnteredPlaces(0, in: slots))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func takesMockEnteredPlaces_handsThePlacesOnOnlyToSlots_whenTypeIsBetweenNearestPlaceAndCycleBesideLeaves() async throws {
+		let graph = try await mockWorld(of: [
+			Self.type(named: "Root", isMockRoot: true, declarations: ["@Instantiated let homeBuilder: Instantiator<Home>", "@Instantiated let leaf: Leaf"]),
+			Self.type(named: "Home", declarations: ["@Instantiated let hall: Hall", "@Instantiated let leaf: Leaf"]),
+			Self.type(named: "Hall", declarations: ["@Instantiated let roomBuilder: Instantiator<Room>"]),
+			Self.type(named: "Room", declarations: ["@Instantiated let otherHomeBuilder: Instantiator<Home>"]),
+			Self.type(named: "Leaf", declarations: []),
+		])
+
+		let slots = MockEnteredSlots(world: graph)
+		let halls = (0..<Int32(graph.declarationCount)).filter { graph.description(ofNode: Int($0)).hasPrefix("Hall ") }
+		let leaves = (0..<Int32(graph.declarationCount)).filter { graph.description(ofNode: Int($0)).hasPrefix("Leaf ") }
+		try #require(!halls.isEmpty && !leaves.isEmpty, "\(graph.description)")
+		// `Hall` lies between the nearest `Home` and the cycle beneath it, and the cycle builds `Home` again, so `Hall` is on
+		// the cycle and has a slot of its own; a leaf reaches no slot.
+		#expect(halls.allSatisfy { NodeRecords.takesMockEnteredPlaces($0, in: slots) })
+		#expect(halls.allSatisfy { NodeRecords.mockEnteredSlot(of: $0, in: slots)?.name == "hall" }, "\(slots.slots)")
+		#expect(leaves.allSatisfy { !NodeRecords.takesMockEnteredPlaces($0, in: slots) })
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mockNearestOfTypeEntered_namesNoPlace_whenSecondEntryHasNoTypeAboveTheCycle() async throws {
+		let graph = try await mockWorld(of: [
+			Self.type(named: "Root", isMockRoot: true, declarations: ["@Instantiated let homeBuilder: Instantiator<Home>", "@Instantiated let roomBuilder: Instantiator<Room>"]),
+			Self.type(named: "Home", declarations: ["@Instantiated let roomBuilder: Instantiator<Room>"]),
+			Self.type(named: "Room", declarations: ["@Instantiated let otherHomeBuilder: Instantiator<Home>"]),
+		])
+
+		let slots = MockEnteredSlots(world: graph)
+		// The root's `roomBuilder` enters the cycle with no `Home` above it: a new `otherHomeBuilder` place there reads
+		// the nearest name and finds it empty, while the root's `homeBuilder` enters that place on the other entry.
+		#expect(slots.slots.map(\.name) == ["roomBuilder", "otherHomeBuilder"], "\(slots.slots)")
+		#expect(slots.slots.map(\.nearestOfTypeSlotName) == [nil, "__safeDI_nearest1"])
+		let homes = (0..<Int32(graph.declarationCount)).filter { graph.description(ofNode: Int($0)).hasPrefix("Home ") }
+		#expect(homes.compactMap { NodeRecords.mockNearestOfTypeEntered(by: $0, in: slots) } == ["__safeDI_nearest1"], "\(graph.description)")
 	}
 
 	// MARK: Private
