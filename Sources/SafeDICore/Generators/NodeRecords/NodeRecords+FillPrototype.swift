@@ -131,9 +131,10 @@ enum FillPrototype {
 					continue
 				}
 				var callerArguments = [Property: ArgumentSource]()
+				let callerSources = FillCallerSources(world: world)
 				for facts in allFacts {
 					factsMade += 1
-					let sources = FillCallerSources.of(facts: facts, call: declaration, variant: variant, in: world)
+					let sources = callerSources.of(facts: facts, call: declaration, variant: variant)
 					callerSourcesMade += sources.count
 					for (parameter, source) in zip(facts.parametersTakenOfCallerReads, sources) where callerArguments[parameter] == nil || callerArguments[parameter] == .nil {
 						callerArguments[parameter] = source
