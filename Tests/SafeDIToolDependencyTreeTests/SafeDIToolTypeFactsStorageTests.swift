@@ -19,13 +19,13 @@
 // SOFTWARE.
 
 import Foundation
-#if os(Linux)
-	import Synchronization
-#endif
 import Testing
 @testable import SafeDICore
 @testable import SafeDIToolLibrary
 @testable import SafeDIToolTestSupport
+#if os(Linux)
+	import Synchronization
+#endif
 
 /// A world's graph of per-type facts keeps its facts in flat columns of 32-bit IDs and bit sets (`TypeFactsGraph`), so
 /// what it holds grows with its declarations and edges, never with the paths through them.
@@ -94,9 +94,9 @@ struct SafeDIToolTypeFactsStorageTests: ~Copyable {
 		// holds only flat columns: no array inside a column's elements. Allocations and retains are counted through the
 		// runtime's instrumentation hooks (`_swift_allocObject`, `_swift_retain`) on the thread that builds the graph; where
 		// the runtime has none, only what the graph holds is checked.
-		var reports = [try await report(ofRoot: "Root", in: Self.lifelikeFixture)]
+		var reports = await [try report(ofRoot: "Root", in: Self.lifelikeFixture)]
 		for layerCount in [6, 12] {
-			reports.append(try await report(ofRoot: "Root", in: Self.hubFixture(layerCount: layerCount)))
+			await reports.append(try report(ofRoot: "Root", in: Self.hubFixture(layerCount: layerCount)))
 		}
 		var perElement = [(allocations: Double, retains: Double)]()
 		for report in reports {

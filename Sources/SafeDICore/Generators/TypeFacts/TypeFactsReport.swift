@@ -66,7 +66,11 @@ struct TypeFactsGeneratorFacts: Sendable {
 		}
 		// A call's fills follow the properties its scope lists; a node's fills are edges of their own.
 		let children = generator.propertiesToGenerate.filter { child in
-			if case .fill = child.scopeData { false } else { true }
+			if case .fill = child.scopeData {
+				false
+			} else {
+				true
+			}
 		}
 		childCount = children.count
 		orderedIndices = generator.orderedChildGeneratorsWithIndices.map(\.index).filter { $0 < children.count }
@@ -80,7 +84,11 @@ struct TypeFactsGeneratorFacts: Sendable {
 		typesDeclaredEscaping = generator.typesDeclaredEscaping
 		buildsInSendableFunction = generator.buildsInSendableFunction
 		constructsWithHandWrittenMock = generator.constructsWithHandWrittenMock
-		callsSeam = if case let .property(_, _, _, _, _, seamCall) = generator.scopeData { seamCall != nil } else { false }
+		callsSeam = if case let .property(_, _, _, _, _, seamCall) = generator.scopeData {
+			seamCall != nil
+		} else {
+			false
+		}
 		callsPublicMock = generator.publicMockCall != nil
 	}
 
