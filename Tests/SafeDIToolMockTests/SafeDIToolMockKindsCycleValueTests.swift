@@ -5519,6 +5519,660 @@ struct SafeDIToolMockKindsCycleValueTests: ~Copyable {
 		], filesToDelete: &filesToDelete)
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildsWalksValues_whenReenteredCycleThroughLazyWrapperBuildsFreshDefault() async throws {
+		// h5 through a `LazilyInstantiated`: `Profile` builds `followers` lazily, so each `Profile` the cycle builds again reads a fresh `State` default.
+		try await MockKindsAcceptance.expectLaidOutValuesEqualWalks(fixtureFiles: [
+			"A.swift": #"""
+			import SafeDI
+			public final class State { public init() { } }
+			@Instantiable(generateMock: true)
+			public final class AppScreen: Instantiable {
+			    public init(profile: Profile) { self.profile = profile }
+			    @Instantiated let profile: Profile
+			}
+			@Instantiable(generateMock: true)
+			public final class Profile: Instantiable {
+			    public init(followers: LazilyInstantiated<Followers>, suggestedBuilder: Instantiator<Followers>, state: State = State()) { self.followers = followers; self.suggestedBuilder = suggestedBuilder; self.state = state }
+			    @Instantiated let followers: LazilyInstantiated<Followers>
+			    @Instantiated let suggestedBuilder: Instantiator<Followers>
+			    let state: State
+			}
+			@Instantiable
+			public final class Followers: Instantiable {
+			    public init(profileBuilder: Instantiator<Profile>) { self.profileBuilder = profileBuilder }
+			    @Instantiated let profileBuilder: Instantiator<Profile>
+			}
+			"""#,
+			"Walks.swift": #"""
+			/// What a mock’s overrides recorded, in order: each step of a walk, then each override the step read.
+			public final class Recorder: @unchecked Sendable {
+			    public init() {}
+			    public private(set) var log = [String]()
+			    public func record(_ entry: String) { log.append(entry) }
+			}
+
+			struct WalkGenerator {
+			    var state: UInt64
+			    mutating func next(_ bound: Int) -> Int {
+			        state = state &* 6364136223846793005 &+ 1442695040888963407
+			        return Int((state >> 33) % UInt64(bound))
+			    }
+			}
+
+			func walk(_ value: AppScreen, _ depth: Int, _ generator: inout WalkGenerator, _ recorder: Recorder) {
+			    guard depth > 0 else { return }
+			    switch generator.next(1) {
+			    default: recorder.record("-> profile"); walk(value.profile, depth - 1, &generator, recorder)
+			    }
+			}
+
+			func walk(_ value: Followers, _ depth: Int, _ generator: inout WalkGenerator, _ recorder: Recorder) {
+			    guard depth > 0 else { return }
+			    switch generator.next(1) {
+			    default: recorder.record("-> profileBuilder"); walk(value.profileBuilder.instantiate(), depth - 1, &generator, recorder)
+			    }
+			}
+
+			func walk(_ value: Profile, _ depth: Int, _ generator: inout WalkGenerator, _ recorder: Recorder) {
+			    guard depth > 0 else { return }
+			    switch generator.next(2) {
+			    case 0: recorder.record("-> followers"); walk(value.followers.instance, depth - 1, &generator, recorder)
+			    default: recorder.record("-> suggestedBuilder"); walk(value.suggestedBuilder.instantiate(), depth - 1, &generator, recorder)
+			    }
+			}
+
+			#if DEBUG
+			func overridesAtEveryPlace(_ recorder: Recorder) -> Profile.SafeDIOverrides {
+			    .init(followers: .init({ a0 in recorder.record("followers"); return Followers(profileBuilder: a0) }), suggestedBuilder: .init({ a0 in recorder.record("suggestedBuilder"); return Followers(profileBuilder: a0) }))
+			}
+
+			/// The entered places of each walk of `seeds`, `depth` steps deep, each from a new mock.
+			func walks(seeds: Range<Int>, depth: Int) -> [String] {
+			    let recorder = Recorder()
+			    for seed in seeds {
+			        recorder.record("walk \(seed)")
+			        var generator = WalkGenerator(state: UInt64(seed) &* 0x9E37_79B9_7F4A_7C15 &+ 1)
+			        walk(Profile.mock(safeDIOverrides: overridesAtEveryPlace(recorder)), depth, &generator, recorder)
+			    }
+			    return recorder.log
+			}
+
+			/// How many overrides the walks of `seeds` read, and a digest of every entry they recorded, in order.
+			func walkDigest(seeds: Range<Int>, depth: Int) -> [UInt64] {
+			    var digest: UInt64 = 0xCBF2_9CE4_8422_2325
+			    var reads: UInt64 = 0
+			    for entry in walks(seeds: seeds, depth: depth) {
+			        if !entry.hasPrefix("-> "), !entry.hasPrefix("walk ") { reads += 1 }
+			        for byte in entry.utf8 { digest = (digest ^ UInt64(byte)) &* 0x0000_0100_0000_01B3 }
+			        digest = (digest ^ 10) &* 0x0000_0100_0000_01B3
+			    }
+			    return [reads, digest]
+			}
+			#endif
+			"""#,
+		], probes: [
+			DifferentialValueProbe("walks(seeds: 0 ..< 1, depth: 6)"),
+			DifferentialValueProbe("walks(seeds: 1 ..< 2, depth: 6)"),
+			DifferentialValueProbe("walks(seeds: 2 ..< 3, depth: 6)"),
+			DifferentialValueProbe("walks(seeds: 3 ..< 4, depth: 6)"),
+			DifferentialValueProbe("walks(seeds: 4 ..< 5, depth: 6)"),
+			DifferentialValueProbe("walks(seeds: 5 ..< 6, depth: 6)"),
+			DifferentialValueProbe("walks(seeds: 6 ..< 7, depth: 6)"),
+			DifferentialValueProbe("walks(seeds: 7 ..< 8, depth: 6)"),
+			DifferentialValueProbe("walkDigest(seeds: 0 ..< 400, depth: 6)"),
+			DifferentialValueProbe("walks(seeds: 0 ..< 1, depth: 8)"),
+			DifferentialValueProbe("walks(seeds: 1 ..< 2, depth: 8)"),
+			DifferentialValueProbe("walks(seeds: 2 ..< 3, depth: 8)"),
+			DifferentialValueProbe("walks(seeds: 3 ..< 4, depth: 8)"),
+			DifferentialValueProbe("walks(seeds: 4 ..< 5, depth: 8)"),
+			DifferentialValueProbe("walks(seeds: 5 ..< 6, depth: 8)"),
+			DifferentialValueProbe("walks(seeds: 6 ..< 7, depth: 8)"),
+			DifferentialValueProbe("walks(seeds: 7 ..< 8, depth: 8)"),
+			DifferentialValueProbe("walkDigest(seeds: 0 ..< 400, depth: 8)"),
+			DifferentialValueProbe("{ let p0 = Profile.mock(); let p1 = p0.followers.instance.profileBuilder.instantiate(); let p2 = p1.followers.instance.profileBuilder.instantiate(); let p3 = p2.followers.instance.profileBuilder.instantiate(); return [p0.state === p1.state, p1.state === p2.state, p2.state === p3.state] }()"),
+		], filesToDelete: &filesToDelete)
+	}
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildsWalksValues_whenReenteredCycleThroughLazyWrapperBuildsFreshDefaultBeneathSibling() async throws {
+		// h7 through a `LazilyInstantiated`: the same beneath `settingsBuilder`, with `followers` built lazily.
+		try await MockKindsAcceptance.expectLaidOutValuesEqualWalks(fixtureFiles: [
+			"A.swift": #"""
+			import SafeDI
+			public final class State { public init() { } }
+			@Instantiable(generateMock: true)
+			public final class AppScreen: Instantiable {
+			    public init(profile: Profile) { self.profile = profile }
+			    @Instantiated let profile: Profile
+			}
+			@Instantiable(generateMock: true)
+			public final class Profile: Instantiable {
+			    public init(followers: LazilyInstantiated<Followers>, settingsBuilder: Instantiator<Settings>) { self.followers = followers; self.settingsBuilder = settingsBuilder }
+			    @Instantiated let followers: LazilyInstantiated<Followers>
+			    @Instantiated let settingsBuilder: Instantiator<Settings>
+			}
+			@Instantiable
+			public final class Followers: Instantiable {
+			    public init(profileBuilder: Instantiator<Profile>) { self.profileBuilder = profileBuilder }
+			    @Instantiated let profileBuilder: Instantiator<Profile>
+			}
+			@Instantiable
+			public final class Settings: Instantiable {
+			    public init(state: State = State()) { self.state = state }
+			    let state: State
+			}
+			"""#,
+			"Walks.swift": #"""
+			/// What a mock’s overrides recorded, in order: each step of a walk, then each override the step read.
+			public final class Recorder: @unchecked Sendable {
+			    public init() {}
+			    public private(set) var log = [String]()
+			    public func record(_ entry: String) { log.append(entry) }
+			}
+
+			struct WalkGenerator {
+			    var state: UInt64
+			    mutating func next(_ bound: Int) -> Int {
+			        state = state &* 6364136223846793005 &+ 1442695040888963407
+			        return Int((state >> 33) % UInt64(bound))
+			    }
+			}
+
+			func walk(_ value: AppScreen, _ depth: Int, _ generator: inout WalkGenerator, _ recorder: Recorder) {
+			    guard depth > 0 else { return }
+			    switch generator.next(1) {
+			    default: recorder.record("-> profile"); walk(value.profile, depth - 1, &generator, recorder)
+			    }
+			}
+
+			func walk(_ value: Followers, _ depth: Int, _ generator: inout WalkGenerator, _ recorder: Recorder) {
+			    guard depth > 0 else { return }
+			    switch generator.next(1) {
+			    default: recorder.record("-> profileBuilder"); walk(value.profileBuilder.instantiate(), depth - 1, &generator, recorder)
+			    }
+			}
+
+			func walk(_ value: Profile, _ depth: Int, _ generator: inout WalkGenerator, _ recorder: Recorder) {
+			    guard depth > 0 else { return }
+			    switch generator.next(2) {
+			    case 0: recorder.record("-> followers"); walk(value.followers.instance, depth - 1, &generator, recorder)
+			    default: recorder.record("-> settingsBuilder"); walk(value.settingsBuilder.instantiate(), depth - 1, &generator, recorder)
+			    }
+			}
+
+			func walk(_ value: Settings, _ depth: Int, _ generator: inout WalkGenerator, _ recorder: Recorder) {
+			    _ = (value, depth, generator, recorder)
+			}
+
+			#if DEBUG
+			func overridesAtEveryPlace(_ recorder: Recorder) -> Profile.SafeDIOverrides {
+			    .init(followers: .init({ a0 in recorder.record("followers"); return Followers(profileBuilder: a0) }), settingsBuilder: .init({ a0 in recorder.record("settingsBuilder"); return Settings(state: a0) }))
+			}
+
+			/// The entered places of each walk of `seeds`, `depth` steps deep, each from a new mock.
+			func walks(seeds: Range<Int>, depth: Int) -> [String] {
+			    let recorder = Recorder()
+			    for seed in seeds {
+			        recorder.record("walk \(seed)")
+			        var generator = WalkGenerator(state: UInt64(seed) &* 0x9E37_79B9_7F4A_7C15 &+ 1)
+			        walk(Profile.mock(safeDIOverrides: overridesAtEveryPlace(recorder)), depth, &generator, recorder)
+			    }
+			    return recorder.log
+			}
+
+			/// How many overrides the walks of `seeds` read, and a digest of every entry they recorded, in order.
+			func walkDigest(seeds: Range<Int>, depth: Int) -> [UInt64] {
+			    var digest: UInt64 = 0xCBF2_9CE4_8422_2325
+			    var reads: UInt64 = 0
+			    for entry in walks(seeds: seeds, depth: depth) {
+			        if !entry.hasPrefix("-> "), !entry.hasPrefix("walk ") { reads += 1 }
+			        for byte in entry.utf8 { digest = (digest ^ UInt64(byte)) &* 0x0000_0100_0000_01B3 }
+			        digest = (digest ^ 10) &* 0x0000_0100_0000_01B3
+			    }
+			    return [reads, digest]
+			}
+			#endif
+			"""#,
+		], probes: [
+			DifferentialValueProbe("walks(seeds: 0 ..< 1, depth: 6)"),
+			DifferentialValueProbe("walks(seeds: 1 ..< 2, depth: 6)"),
+			DifferentialValueProbe("walks(seeds: 2 ..< 3, depth: 6)"),
+			DifferentialValueProbe("walks(seeds: 3 ..< 4, depth: 6)"),
+			DifferentialValueProbe("walks(seeds: 4 ..< 5, depth: 6)"),
+			DifferentialValueProbe("walks(seeds: 5 ..< 6, depth: 6)"),
+			DifferentialValueProbe("walks(seeds: 6 ..< 7, depth: 6)"),
+			DifferentialValueProbe("walks(seeds: 7 ..< 8, depth: 6)"),
+			DifferentialValueProbe("walkDigest(seeds: 0 ..< 400, depth: 6)"),
+			DifferentialValueProbe("walks(seeds: 0 ..< 1, depth: 8)"),
+			DifferentialValueProbe("walks(seeds: 1 ..< 2, depth: 8)"),
+			DifferentialValueProbe("walks(seeds: 2 ..< 3, depth: 8)"),
+			DifferentialValueProbe("walks(seeds: 3 ..< 4, depth: 8)"),
+			DifferentialValueProbe("walks(seeds: 4 ..< 5, depth: 8)"),
+			DifferentialValueProbe("walks(seeds: 5 ..< 6, depth: 8)"),
+			DifferentialValueProbe("walks(seeds: 6 ..< 7, depth: 8)"),
+			DifferentialValueProbe("walks(seeds: 7 ..< 8, depth: 8)"),
+			DifferentialValueProbe("walkDigest(seeds: 0 ..< 400, depth: 8)"),
+			DifferentialValueProbe("{ let p0 = Profile.mock(); let p1 = p0.followers.instantiate().profileBuilder.instantiate(); let p2 = p1.followers.instantiate().profileBuilder.instantiate(); return [p0.settingsBuilder.instantiate().state === p1.settingsBuilder.instantiate().state, p1.settingsBuilder.instantiate().state === p2.settingsBuilder.instantiate().state, p2.settingsBuilder.instantiate().state === p2.settingsBuilder.instantiate().state] }()"),
+		], filesToDelete: &filesToDelete)
+	}
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildsWalksValues_whenLazyWrapperIsReachedThroughDeeperPathOnLapTwo() async throws {
+		// Lap two of h11 through a `LazilyInstantiated`: `profile` is built lazily by `Home` and by `Feed`, and each `Profile` reads the override of the nearest place on its path.
+		try await MockKindsAcceptance.expectLaidOutValuesEqualWalks(fixtureFiles: [
+			"G.swift": #"""
+			import SafeDI
+			@Instantiable(generateMock: true) public final class App: Instantiable {
+			  public init(homeBuilder: Instantiator<Home>) { self.homeBuilder = homeBuilder }
+			  @Instantiated public let homeBuilder: Instantiator<Home>
+			}
+			@Instantiable public final class Home: Instantiable {
+			  public init(profile: LazilyInstantiated<Profile>, feedBuilder: Instantiator<Feed>) { self.profile = profile; self.feedBuilder = feedBuilder }
+			  @Instantiated public let profile: LazilyInstantiated<Profile>
+			  @Instantiated public let feedBuilder: Instantiator<Feed>
+			}
+			@Instantiable public final class Feed: Instantiable {
+			  public init(profile: LazilyInstantiated<Profile>) { self.profile = profile }
+			  @Instantiated public let profile: LazilyInstantiated<Profile>
+			}
+			@Instantiable public final class Profile: Instantiable {
+			  public init(homeBuilder: Instantiator<Home>, feedBuilder: Instantiator<Feed>, title: String = "default") { self.homeBuilder = homeBuilder; self.feedBuilder = feedBuilder; self.title = title }
+			  @Instantiated public let homeBuilder: Instantiator<Home>
+			  @Instantiated public let feedBuilder: Instantiator<Feed>
+			  public let title: String
+			}
+			"""#,
+			"Walks.swift": #"""
+			/// What a mock’s overrides recorded, in order: each step of a walk, then each override the step read.
+			public final class Recorder: @unchecked Sendable {
+			    public init() {}
+			    public private(set) var log = [String]()
+			    public func record(_ entry: String) { log.append(entry) }
+			}
+
+			struct WalkGenerator {
+			    var state: UInt64
+			    mutating func next(_ bound: Int) -> Int {
+			        state = state &* 6364136223846793005 &+ 1442695040888963407
+			        return Int((state >> 33) % UInt64(bound))
+			    }
+			}
+
+			func walk(_ value: App, _ depth: Int, _ generator: inout WalkGenerator, _ recorder: Recorder) {
+			    guard depth > 0 else { return }
+			    switch generator.next(1) {
+			    default: recorder.record("-> homeBuilder"); walk(value.homeBuilder.instantiate(), depth - 1, &generator, recorder)
+			    }
+			}
+
+			func walk(_ value: Feed, _ depth: Int, _ generator: inout WalkGenerator, _ recorder: Recorder) {
+			    guard depth > 0 else { return }
+			    switch generator.next(1) {
+			    default: recorder.record("-> profile"); walk(value.profile.instance, depth - 1, &generator, recorder)
+			    }
+			}
+
+			func walk(_ value: Home, _ depth: Int, _ generator: inout WalkGenerator, _ recorder: Recorder) {
+			    guard depth > 0 else { return }
+			    switch generator.next(2) {
+			    case 0: recorder.record("-> profile"); walk(value.profile.instance, depth - 1, &generator, recorder)
+			    default: recorder.record("-> feedBuilder"); walk(value.feedBuilder.instantiate(), depth - 1, &generator, recorder)
+			    }
+			}
+
+			func walk(_ value: Profile, _ depth: Int, _ generator: inout WalkGenerator, _ recorder: Recorder) {
+			    guard depth > 0 else { return }
+			    switch generator.next(2) {
+			    case 0: recorder.record("-> homeBuilder"); walk(value.homeBuilder.instantiate(), depth - 1, &generator, recorder)
+			    default: recorder.record("-> feedBuilder"); walk(value.feedBuilder.instantiate(), depth - 1, &generator, recorder)
+			    }
+			}
+
+			#if DEBUG
+			func overridesAtEveryPlace(_ recorder: Recorder) -> App.SafeDIOverrides {
+			    .init(homeBuilder: .init(profile: .init(title: "homeBuilder.profile.title", { a0, a1, a2 in recorder.record("homeBuilder.profile"); return Profile(homeBuilder: a0, feedBuilder: a1, title: a2) }), feedBuilder: .init(profile: .init(title: "homeBuilder.feedBuilder.profile.title", { a0, a1, a2 in recorder.record("homeBuilder.feedBuilder.profile"); return Profile(homeBuilder: a0, feedBuilder: a1, title: a2) }), { a0 in recorder.record("homeBuilder.feedBuilder"); return Feed(profile: a0) }), { a0, a1 in recorder.record("homeBuilder"); return Home(profile: a0, feedBuilder: a1) }))
+			}
+
+			/// The entered places of each walk of `seeds`, `depth` steps deep, each from a new mock.
+			func walks(seeds: Range<Int>, depth: Int) -> [String] {
+			    let recorder = Recorder()
+			    for seed in seeds {
+			        recorder.record("walk \(seed)")
+			        var generator = WalkGenerator(state: UInt64(seed) &* 0x9E37_79B9_7F4A_7C15 &+ 1)
+			        walk(App.mock(safeDIOverrides: overridesAtEveryPlace(recorder)), depth, &generator, recorder)
+			    }
+			    return recorder.log
+			}
+
+			/// How many overrides the walks of `seeds` read, and a digest of every entry they recorded, in order.
+			func walkDigest(seeds: Range<Int>, depth: Int) -> [UInt64] {
+			    var digest: UInt64 = 0xCBF2_9CE4_8422_2325
+			    var reads: UInt64 = 0
+			    for entry in walks(seeds: seeds, depth: depth) {
+			        if !entry.hasPrefix("-> "), !entry.hasPrefix("walk ") { reads += 1 }
+			        for byte in entry.utf8 { digest = (digest ^ UInt64(byte)) &* 0x0000_0100_0000_01B3 }
+			        digest = (digest ^ 10) &* 0x0000_0100_0000_01B3
+			    }
+			    return [reads, digest]
+			}
+			#endif
+			"""#,
+		], probes: [
+			DifferentialValueProbe("walks(seeds: 0 ..< 1, depth: 9)"),
+			DifferentialValueProbe("walks(seeds: 1 ..< 2, depth: 9)"),
+			DifferentialValueProbe("walks(seeds: 2 ..< 3, depth: 9)"),
+			DifferentialValueProbe("walks(seeds: 3 ..< 4, depth: 9)"),
+			DifferentialValueProbe("walks(seeds: 4 ..< 5, depth: 9)"),
+			DifferentialValueProbe("walks(seeds: 5 ..< 6, depth: 9)"),
+			DifferentialValueProbe("walks(seeds: 6 ..< 7, depth: 9)"),
+			DifferentialValueProbe("walks(seeds: 7 ..< 8, depth: 9)"),
+			DifferentialValueProbe("walkDigest(seeds: 0 ..< 400, depth: 9)"),
+			DifferentialValueProbe("walks(seeds: 0 ..< 1, depth: 12)"),
+			DifferentialValueProbe("walks(seeds: 1 ..< 2, depth: 12)"),
+			DifferentialValueProbe("walks(seeds: 2 ..< 3, depth: 12)"),
+			DifferentialValueProbe("walks(seeds: 3 ..< 4, depth: 12)"),
+			DifferentialValueProbe("walks(seeds: 4 ..< 5, depth: 12)"),
+			DifferentialValueProbe("walks(seeds: 5 ..< 6, depth: 12)"),
+			DifferentialValueProbe("walks(seeds: 6 ..< 7, depth: 12)"),
+			DifferentialValueProbe("walks(seeds: 7 ..< 8, depth: 12)"),
+			DifferentialValueProbe("walkDigest(seeds: 0 ..< 400, depth: 12)"),
+		], filesToDelete: &filesToDelete)
+	}
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildsWalksValues_whenSiblingOfCycleThroughLazyWrapperReadsItsOwnOverrideOnLapTwo() async throws {
+		// Lap two of h16 through a `LazilyInstantiated`: each `Card` builds `detail` lazily, and `header` and `footer` each read their own override.
+		try await MockKindsAcceptance.expectLaidOutValuesEqualWalks(fixtureFiles: [
+			"G.swift": #"""
+			import SafeDI
+			public protocol CardProtocol { var title: String { get }; var detail: LazilyInstantiated<Detail> { get } }
+			@Instantiable(generateMock: true) public final class App: Instantiable {
+			  public init(feed: Feed) { self.feed = feed }
+			  @Instantiated public let feed: Feed
+			}
+			@Instantiable public final class Feed: Instantiable {
+			  public init(header: Card, footer: any CardProtocol) { self.header = header; self.footer = footer }
+			  @Instantiated public let header: Card
+			  @Instantiated public let footer: any CardProtocol
+			}
+			@Instantiable(fulfillingAdditionalTypes: [CardProtocol.self]) public final class Card: Instantiable, CardProtocol {
+			  public init(detail: LazilyInstantiated<Detail>, title: String = "default") { self.detail = detail; self.title = title }
+			  @Instantiated public let detail: LazilyInstantiated<Detail>
+			  public let title: String
+			}
+			@Instantiable public final class Detail: Instantiable {
+			  public init(feedBuilder: Instantiator<Feed>) { self.feedBuilder = feedBuilder }
+			  @Instantiated public let feedBuilder: Instantiator<Feed>
+			}
+			"""#,
+			"Walks.swift": #"""
+			/// What a mock’s overrides recorded, in order: each step of a walk, then each override the step read.
+			public final class Recorder: @unchecked Sendable {
+			    public init() {}
+			    public private(set) var log = [String]()
+			    public func record(_ entry: String) { log.append(entry) }
+			}
+
+			struct WalkGenerator {
+			    var state: UInt64
+			    mutating func next(_ bound: Int) -> Int {
+			        state = state &* 6364136223846793005 &+ 1442695040888963407
+			        return Int((state >> 33) % UInt64(bound))
+			    }
+			}
+
+			func walk(_ value: App, _ depth: Int, _ generator: inout WalkGenerator, _ recorder: Recorder) {
+			    guard depth > 0 else { return }
+			    switch generator.next(1) {
+			    default: recorder.record("-> feed"); walk(value.feed, depth - 1, &generator, recorder)
+			    }
+			}
+
+			func walk(_ value: Card, _ depth: Int, _ generator: inout WalkGenerator, _ recorder: Recorder) {
+			    guard depth > 0 else { return }
+			    switch generator.next(1) {
+			    default: recorder.record("-> detail"); walk(value.detail.instance, depth - 1, &generator, recorder)
+			    }
+			}
+
+			func walk(_ value: Detail, _ depth: Int, _ generator: inout WalkGenerator, _ recorder: Recorder) {
+			    guard depth > 0 else { return }
+			    switch generator.next(1) {
+			    default: recorder.record("-> feedBuilder"); walk(value.feedBuilder.instantiate(), depth - 1, &generator, recorder)
+			    }
+			}
+
+			func walk(_ value: Feed, _ depth: Int, _ generator: inout WalkGenerator, _ recorder: Recorder) {
+			    guard depth > 0 else { return }
+			    switch generator.next(2) {
+			    case 0: recorder.record("-> header"); walk(value.header, depth - 1, &generator, recorder)
+			    default: recorder.record("-> footer"); walk((value.footer as! Card), depth - 1, &generator, recorder)
+			    }
+			}
+
+			#if DEBUG
+			func overridesAtEveryPlace(_ recorder: Recorder) -> App.SafeDIOverrides {
+			    .init(feed: .init(header: .init(detail: .init({ a0 in recorder.record("feed.header.detail"); return Detail(feedBuilder: a0) }), title: "feed.header.title", { a0, a1 in recorder.record("feed.header"); return Card(detail: a0, title: a1) }), footer: .init(detail: .init({ a0 in recorder.record("feed.footer.detail"); return Detail(feedBuilder: a0) }), title: "feed.footer.title", { a0, a1 in recorder.record("feed.footer"); return Card(detail: a0, title: a1) }), { a0, a1 in recorder.record("feed"); return Feed(header: a0, footer: a1) }))
+			}
+
+			/// The entered places of each walk of `seeds`, `depth` steps deep, each from a new mock.
+			func walks(seeds: Range<Int>, depth: Int) -> [String] {
+			    let recorder = Recorder()
+			    for seed in seeds {
+			        recorder.record("walk \(seed)")
+			        var generator = WalkGenerator(state: UInt64(seed) &* 0x9E37_79B9_7F4A_7C15 &+ 1)
+			        walk(App.mock(safeDIOverrides: overridesAtEveryPlace(recorder)), depth, &generator, recorder)
+			    }
+			    return recorder.log
+			}
+
+			/// How many overrides the walks of `seeds` read, and a digest of every entry they recorded, in order.
+			func walkDigest(seeds: Range<Int>, depth: Int) -> [UInt64] {
+			    var digest: UInt64 = 0xCBF2_9CE4_8422_2325
+			    var reads: UInt64 = 0
+			    for entry in walks(seeds: seeds, depth: depth) {
+			        if !entry.hasPrefix("-> "), !entry.hasPrefix("walk ") { reads += 1 }
+			        for byte in entry.utf8 { digest = (digest ^ UInt64(byte)) &* 0x0000_0100_0000_01B3 }
+			        digest = (digest ^ 10) &* 0x0000_0100_0000_01B3
+			    }
+			    return [reads, digest]
+			}
+			#endif
+			"""#,
+		], probes: [
+			DifferentialValueProbe("walks(seeds: 0 ..< 1, depth: 9)"),
+			DifferentialValueProbe("walks(seeds: 1 ..< 2, depth: 9)"),
+			DifferentialValueProbe("walks(seeds: 2 ..< 3, depth: 9)"),
+			DifferentialValueProbe("walks(seeds: 3 ..< 4, depth: 9)"),
+			DifferentialValueProbe("walks(seeds: 4 ..< 5, depth: 9)"),
+			DifferentialValueProbe("walks(seeds: 5 ..< 6, depth: 9)"),
+			DifferentialValueProbe("walks(seeds: 6 ..< 7, depth: 9)"),
+			DifferentialValueProbe("walks(seeds: 7 ..< 8, depth: 9)"),
+			DifferentialValueProbe("walkDigest(seeds: 0 ..< 400, depth: 9)"),
+			DifferentialValueProbe("walks(seeds: 0 ..< 1, depth: 12)"),
+			DifferentialValueProbe("walks(seeds: 1 ..< 2, depth: 12)"),
+			DifferentialValueProbe("walks(seeds: 2 ..< 3, depth: 12)"),
+			DifferentialValueProbe("walks(seeds: 3 ..< 4, depth: 12)"),
+			DifferentialValueProbe("walks(seeds: 4 ..< 5, depth: 12)"),
+			DifferentialValueProbe("walks(seeds: 5 ..< 6, depth: 12)"),
+			DifferentialValueProbe("walks(seeds: 6 ..< 7, depth: 12)"),
+			DifferentialValueProbe("walks(seeds: 7 ..< 8, depth: 12)"),
+			DifferentialValueProbe("walkDigest(seeds: 0 ..< 400, depth: 12)"),
+		], filesToDelete: &filesToDelete)
+	}
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildsWalksValues_whenLazyWrapperAndItsValueTwinShareOneSlotWithKindsSwapped() async throws {
+		// Twins with the kinds swapped: `A` and `C` build `t0` lazily and `B` builds it by value; they are one place, whichever the path entered first.
+		try await MockKindsAcceptance.expectLaidOutValuesEqualWalks(fixtureFiles: [
+			"Types.swift": #"""
+			@Instantiable(generateMock: true)
+			public final class Hub: Instantiable {
+			    public init(aBuilder: Instantiator<A>, bBuilder: Instantiator<B>) {
+			        self.aBuilder = aBuilder
+			        self.bBuilder = bBuilder
+			    }
+
+			    @Instantiated public let aBuilder: Instantiator<A>
+			    @Instantiated public let bBuilder: Instantiator<B>
+			}
+
+			@Instantiable
+			public final class A: Instantiable {
+			    public init(t0: LazilyInstantiated<T0>, cBuilder: Instantiator<C>) {
+			        self.t0 = t0
+			        self.cBuilder = cBuilder
+			    }
+
+			    @Instantiated public let t0: LazilyInstantiated<T0>
+			    @Instantiated public let cBuilder: Instantiator<C>
+			}
+
+			@Instantiable
+			public final class B: Instantiable {
+			    public init(t0: T0, cBuilder: Instantiator<C>) {
+			        self.t0 = t0
+			        self.cBuilder = cBuilder
+			    }
+
+			    @Instantiated public let t0: T0
+			    @Instantiated public let cBuilder: Instantiator<C>
+			}
+
+			@Instantiable
+			public final class C: Instantiable {
+			    public init(t0: LazilyInstantiated<T0>) {
+			        self.t0 = t0
+			    }
+
+			    @Instantiated public let t0: LazilyInstantiated<T0>
+			}
+
+			@Instantiable
+			public final class T0: Instantiable {
+			    public init(aBuilder: Instantiator<A>, bBuilder: Instantiator<B>, again: Instantiator<A>, other: Instantiator<B>) {
+			        self.aBuilder = aBuilder
+			        self.bBuilder = bBuilder
+			        self.again = again
+			        self.other = other
+			    }
+
+			    @Instantiated public let aBuilder: Instantiator<A>
+			    @Instantiated public let bBuilder: Instantiator<B>
+			    @Instantiated public let again: Instantiator<A>
+			    @Instantiated public let other: Instantiator<B>
+			}
+			"""#,
+			"Walks.swift": #"""
+			/// What a mock’s overrides recorded, in order: each step of a walk, then each override the step read.
+			public final class Recorder: @unchecked Sendable {
+			    public init() {}
+			    public private(set) var log = [String]()
+			    public func record(_ entry: String) { log.append(entry) }
+			}
+
+			struct WalkGenerator {
+			    var state: UInt64
+			    mutating func next(_ bound: Int) -> Int {
+			        state = state &* 6364136223846793005 &+ 1442695040888963407
+			        return Int((state >> 33) % UInt64(bound))
+			    }
+			}
+
+			func walk(_ value: A, _ depth: Int, _ generator: inout WalkGenerator, _ recorder: Recorder) {
+			    guard depth > 0 else { return }
+			    switch generator.next(2) {
+			    case 0: recorder.record("-> t0"); walk(value.t0.instance, depth - 1, &generator, recorder)
+			    default: recorder.record("-> cBuilder"); walk(value.cBuilder.instantiate(), depth - 1, &generator, recorder)
+			    }
+			}
+
+			func walk(_ value: B, _ depth: Int, _ generator: inout WalkGenerator, _ recorder: Recorder) {
+			    guard depth > 0 else { return }
+			    switch generator.next(2) {
+			    case 0: recorder.record("-> t0"); walk(value.t0, depth - 1, &generator, recorder)
+			    default: recorder.record("-> cBuilder"); walk(value.cBuilder.instantiate(), depth - 1, &generator, recorder)
+			    }
+			}
+
+			func walk(_ value: C, _ depth: Int, _ generator: inout WalkGenerator, _ recorder: Recorder) {
+			    guard depth > 0 else { return }
+			    switch generator.next(1) {
+			    default: recorder.record("-> t0"); walk(value.t0.instance, depth - 1, &generator, recorder)
+			    }
+			}
+
+			func walk(_ value: Hub, _ depth: Int, _ generator: inout WalkGenerator, _ recorder: Recorder) {
+			    guard depth > 0 else { return }
+			    switch generator.next(2) {
+			    case 0: recorder.record("-> aBuilder"); walk(value.aBuilder.instantiate(), depth - 1, &generator, recorder)
+			    default: recorder.record("-> bBuilder"); walk(value.bBuilder.instantiate(), depth - 1, &generator, recorder)
+			    }
+			}
+
+			func walk(_ value: T0, _ depth: Int, _ generator: inout WalkGenerator, _ recorder: Recorder) {
+			    guard depth > 0 else { return }
+			    switch generator.next(4) {
+			    case 0: recorder.record("-> aBuilder"); walk(value.aBuilder.instantiate(), depth - 1, &generator, recorder)
+			    case 1: recorder.record("-> bBuilder"); walk(value.bBuilder.instantiate(), depth - 1, &generator, recorder)
+			    case 2: recorder.record("-> again"); walk(value.again.instantiate(), depth - 1, &generator, recorder)
+			    default: recorder.record("-> other"); walk(value.other.instantiate(), depth - 1, &generator, recorder)
+			    }
+			}
+
+			#if DEBUG
+			func overridesAtEveryPlace(_ recorder: Recorder) -> Hub.SafeDIOverrides {
+			    .init(aBuilder: .init(t0: .init(bBuilder: .init({ a0, a1 in recorder.record("aBuilder.t0.bBuilder"); return B(t0: a0, cBuilder: a1) }), other: .init({ a0, a1 in recorder.record("aBuilder.t0.other"); return B(t0: a0, cBuilder: a1) }), { a0, a1, a2, a3 in recorder.record("aBuilder.t0"); return T0(aBuilder: a0, bBuilder: a1, again: a2, other: a3) }), cBuilder: .init(t0: .init(bBuilder: .init({ a0, a1 in recorder.record("aBuilder.cBuilder.t0.bBuilder"); return B(t0: a0, cBuilder: a1) }), other: .init({ a0, a1 in recorder.record("aBuilder.cBuilder.t0.other"); return B(t0: a0, cBuilder: a1) }), { a0, a1, a2, a3 in recorder.record("aBuilder.cBuilder.t0"); return T0(aBuilder: a0, bBuilder: a1, again: a2, other: a3) }), { a0 in recorder.record("aBuilder.cBuilder"); return C(t0: a0) }), { a0, a1 in recorder.record("aBuilder"); return A(t0: a0, cBuilder: a1) }), bBuilder: .init({ a0, a1 in recorder.record("bBuilder"); return B(t0: a0, cBuilder: a1) }))
+			}
+
+			/// The entered places of each walk of `seeds`, `depth` steps deep, each from a new mock.
+			func walks(seeds: Range<Int>, depth: Int) -> [String] {
+			    let recorder = Recorder()
+			    for seed in seeds {
+			        recorder.record("walk \(seed)")
+			        var generator = WalkGenerator(state: UInt64(seed) &* 0x9E37_79B9_7F4A_7C15 &+ 1)
+			        walk(Hub.mock(safeDIOverrides: overridesAtEveryPlace(recorder)), depth, &generator, recorder)
+			    }
+			    return recorder.log
+			}
+
+			/// How many overrides the walks of `seeds` read, and a digest of every entry they recorded, in order.
+			func walkDigest(seeds: Range<Int>, depth: Int) -> [UInt64] {
+			    var digest: UInt64 = 0xCBF2_9CE4_8422_2325
+			    var reads: UInt64 = 0
+			    for entry in walks(seeds: seeds, depth: depth) {
+			        if !entry.hasPrefix("-> "), !entry.hasPrefix("walk ") { reads += 1 }
+			        for byte in entry.utf8 { digest = (digest ^ UInt64(byte)) &* 0x0000_0100_0000_01B3 }
+			        digest = (digest ^ 10) &* 0x0000_0100_0000_01B3
+			    }
+			    return [reads, digest]
+			}
+			#endif
+			"""#,
+		], probes: [
+			DifferentialValueProbe("walks(seeds: 0 ..< 1, depth: 12)"),
+			DifferentialValueProbe("walks(seeds: 1 ..< 2, depth: 12)"),
+			DifferentialValueProbe("walks(seeds: 2 ..< 3, depth: 12)"),
+			DifferentialValueProbe("walks(seeds: 3 ..< 4, depth: 12)"),
+			DifferentialValueProbe("walks(seeds: 4 ..< 5, depth: 12)"),
+			DifferentialValueProbe("walks(seeds: 5 ..< 6, depth: 12)"),
+			DifferentialValueProbe("walks(seeds: 6 ..< 7, depth: 12)"),
+			DifferentialValueProbe("walks(seeds: 7 ..< 8, depth: 12)"),
+			DifferentialValueProbe("walkDigest(seeds: 0 ..< 400, depth: 12)"),
+			DifferentialValueProbe("walks(seeds: 0 ..< 1, depth: 16)"),
+			DifferentialValueProbe("walks(seeds: 1 ..< 2, depth: 16)"),
+			DifferentialValueProbe("walks(seeds: 2 ..< 3, depth: 16)"),
+			DifferentialValueProbe("walks(seeds: 3 ..< 4, depth: 16)"),
+			DifferentialValueProbe("walks(seeds: 4 ..< 5, depth: 16)"),
+			DifferentialValueProbe("walks(seeds: 5 ..< 6, depth: 16)"),
+			DifferentialValueProbe("walks(seeds: 6 ..< 7, depth: 16)"),
+			DifferentialValueProbe("walks(seeds: 7 ..< 8, depth: 16)"),
+			DifferentialValueProbe("walkDigest(seeds: 0 ..< 400, depth: 16)"),
+		], filesToDelete: &filesToDelete)
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
