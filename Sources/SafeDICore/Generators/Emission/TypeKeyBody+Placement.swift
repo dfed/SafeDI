@@ -136,15 +136,17 @@ extension TypeKeyLayout {
 			let use = placementIndex[member]
 			var reached: Set = [member]
 			var pending = [member]
-			while let owner = pending.popLast() {
-				for case let .captured(.statement(capturedOwner, index)) in outcomes[owner].values where capturedOwner == declaringOwner && index >= use {
-					return false
+			var capturesOnlyWhatIsBoundBefore = true
+			while capturesOnlyWhatIsBoundBefore, let owner = pending.popLast() {
+				capturesOnlyWhatIsBoundBefore = !outcomes[owner].values.contains { outcome in
+					guard case let .captured(.statement(capturedOwner, index)) = outcome else { return false }
+					return capturedOwner == declaringOwner && index >= use
 				}
 				for callee in calleesByClass[owner] where reached.insert(callee).inserted {
 					pending.append(callee)
 				}
 			}
-			return true
+			return capturesOnlyWhatIsBoundBefore
 		}
 	}
 }
