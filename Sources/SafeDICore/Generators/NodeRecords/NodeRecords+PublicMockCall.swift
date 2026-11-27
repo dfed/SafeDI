@@ -80,7 +80,7 @@ extension NodeRecords {
 	/// (`TypeFactsWorld.sources(ofCall:of:)`), followed up through each call that passes its caller's answer through. A
 	/// declaration still being built, a lazy or optional form, or no declaration at all (where a mock binds its own
 	/// override of the value, which the root's body answers) is a shape this stage does not make. Calls that disagree are
-	/// among these, since every call that does not hand a declaration refuses, so none is `nodeHasSeveralVariants`.
+	/// among these, since every call that does not hand a declaration refuses.
 	private static func passedOnlyIfAvailable(
 		_ dependency: Dependency,
 		by declaration: DeclarationID,

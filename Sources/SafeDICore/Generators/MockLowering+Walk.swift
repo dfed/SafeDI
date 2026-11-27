@@ -304,6 +304,7 @@ extension ScopeGenerator {
 					edgesConfigurationsLeaveOut: context.cycleEdges,
 					placeBuilderBindings: placeBuilderBindings,
 					wrapperBindingNames: signature.lazilyInstantiatedBindingNamesByLabelAndType,
+					loopMembersBoundNowhere: Set(mockLoweringLoopMembersReadOnlyInsideTheirLoop.compactMap { propertiesToGenerate[$0].property }),
 				),
 				outerDeclarations: outerDeclarations,
 			) {
