@@ -612,6 +612,7 @@ public actor DependencyTreeGenerator {
 			/// body of that plan, the root's own first, whose children on a cycle are call places.
 			case perType(code: GeneratedCode, bodies: [ScopeGenerator])
 		}
+
 		/// The root's scope, frozen, where node records may lay its code out (`NodeRecords`): a production root, of a module
 		/// with seams or without, or a seam's own root, whose records a test only compares.
 		var constructionScope: ConstructionScope?
