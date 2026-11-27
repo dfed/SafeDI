@@ -89,6 +89,9 @@ extension NodeRecords {
 	///   return another type than the concrete one; `nil` for the concrete type.
 	/// - Parameter boundProperty: The property the node is bound as, where a kind binds it otherwise than as the world's
 	///   property; `nil` for the world's.
+	/// - Parameter argumentsOfOtherValues: The construction's arguments no dependency fulfills whose values a kind sets
+	///   (`BuiltPlaceRecord.argumentValues`), each with its position among the arguments the call passes.
+	/// - Parameter alwaysDeclaresFunction: Whether a kind builds the node in a function of its own whatever its body holds.
 	static func builtByInitializerRecord(
 		of declaration: DeclarationID,
 		variant _: VariantID,
@@ -98,6 +101,8 @@ extension NodeRecords {
 		construction: (function: Initializer, target: ConstructionTarget)? = nil,
 		typeFunctionReturns: TypeDescription? = nil,
 		boundProperty: Property? = nil,
+		argumentsOfOtherValues: [(position: Int, argument: Initializer.Argument)] = [],
+		alwaysDeclaresFunction: Bool = false,
 		typesDeclaredEscaping: Set<TypeDescription>,
 		children: [GeneratedCode],
 		lineEnd: String = "",
@@ -119,8 +124,15 @@ extension NodeRecords {
 		case .constant, .alias, .hole:
 			(false, false)
 		}
-		// A wrapper always declares its builder function; a constant only where its body has a statement.
-		let hasFunction = isWrapper || !children.isEmpty
+		var reads = arguments.map {
+			PlaceRead(argumentLabel: $0.argument.label, label: $0.dependency.property.label, property: $0.dependency.property, source: $0.argument.source)
+		}
+		// A kind sets the value of each of these, so the read only holds the argument's place and label in the call.
+		for (position, argument) in argumentsOfOtherValues {
+			reads.insert(PlaceRead(argumentLabel: argument.label, label: argument.innerLabel, property: argument.asProperty, source: .binding(label: argument.innerLabel)), at: min(position, reads.count))
+		}
+		// A wrapper always declares its builder function; a constant only where its body has a statement, or a kind says so.
+		let hasFunction = isWrapper || alwaysDeclaresFunction || !children.isEmpty
 		return BuiltPlaceRecord(
 			property: property,
 			isErased: world.isErased(declaration),
@@ -128,9 +140,7 @@ extension NodeRecords {
 			concreteType: hasFunction ? typeFunctionReturns ?? instantiable.concreteInstantiable : instantiable.concreteInstantiable,
 			isExtension: isExtension,
 			target: construction?.target ?? (isExtension ? .instantiate(instantiable.concreteInstantiable) : .initializer(instantiable.concreteInstantiable)),
-			arguments: arguments.map {
-				PlaceRead(argumentLabel: $0.argument.label, label: $0.dependency.property.label, property: $0.dependency.property, source: $0.argument.source)
-			},
+			arguments: reads,
 			forwardedProperties: instantiable.dependencies.filter { $0.source == .forwarded }.map(\.property).sorted(),
 			cycleParameters: [],
 			callCycleArguments: [],
