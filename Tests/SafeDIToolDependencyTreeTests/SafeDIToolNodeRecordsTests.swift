@@ -77,7 +77,7 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_keepsTheTreesLayout_whenTheRootBuildsNothing() async throws {
+	mutating func generate_laysOutRootFromNodeRecords_whenTheRootBuildsNothing() async throws {
 		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
 			try await executeSafeDIToolTest(swiftFileContent: [
 				"""
@@ -89,7 +89,7 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 			], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		}
 		#expect(output.generatedFiles == ["Root+SafeDI.swift": generatedFileHeader])
-		#expect(reports.isEmpty)
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
 	}
 
 	@Test
