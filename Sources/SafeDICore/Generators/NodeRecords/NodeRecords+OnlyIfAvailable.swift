@@ -45,12 +45,14 @@ extension NodeRecords {
 	}
 
 	/// The record of `declaration`'s place in `variant`, a node of kind `receivesOnlyIfAvailable`: a `builtByInitializer`
-	/// record whose construction is passed `nil` for each receive only if available `answers` finds unavailable there.
+	/// record whose construction is passed `nil` for each receive only if available `answers` finds unavailable there, and
+	/// the instance of each of `lazilyInstantiatedInstanceProperties` it receives (`DeclarationsAnsweringReads`).
 	static func receivesOnlyIfAvailableRecord(
 		of declaration: DeclarationID,
 		variant: VariantID,
 		in world: some NodeRecordSources,
 		answers: OnlyIfAvailableAnswers,
+		lazilyInstantiatedInstanceProperties: Set<Property>,
 		typesDeclaredEscaping: Set<TypeDescription>,
 		children: [GeneratedCode],
 	) throws -> BuiltPlaceRecord {
@@ -59,6 +61,7 @@ extension NodeRecords {
 			variant: variant,
 			in: world,
 			unavailableProperties: answers.unavailableProperties(of: variant),
+			lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
 			typesDeclaredEscaping: typesDeclaredEscaping,
 			children: children,
 		)
