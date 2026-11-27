@@ -67,7 +67,11 @@ extension DependencyTreeGenerator {
 		guard !seams.isEmpty, let emittingModule else { return }
 		var omissions = [DependencyTreeGeneratorError.ProvidedValueOmission]()
 		for root in roots {
-			let seamRoot: ScopeGenerator.SeamRoot? = if case let .root(_, seamRoot) = root.scopeGenerator.scopeData { seamRoot } else { nil }
+			let seamRoot: ScopeGenerator.SeamRoot? = if case let .root(_, seamRoot) = root.scopeGenerator.scopeData {
+				seamRoot
+			} else {
+				nil
+			}
 			let folded = TypeFactsSeamTierOmissions(root: root.rootScope, instantiable: root.instantiable, seamRoot: seamRoot, isOwnFile: emittingModule.isOwnFile).omissions
 			if let observer = TypeFactsSeamTierOmissionsObservation.comparesWalk {
 				let walked = await GenerationWork.$observer.withValue(nil) {
