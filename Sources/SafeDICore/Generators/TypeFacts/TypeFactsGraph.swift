@@ -720,7 +720,9 @@ struct TypeFactsGraph: Sendable {
 
 	/// How many columns the declarations hide from the rows of what is required through an alias, over every node: a
 	/// declaration hides the aliases of its label, so this grows with declarations and aliases, never with the properties
-	/// that share a label. For a test to count how the rows' cost grows.
+	/// that share a label. Only tests read it, to count how the rows' cost grows: the rows are built and dropped inside
+	/// `init`, so the count a test needs exists only there, and a stored `Int` on the graph a generation already hands
+	/// tests costs less than a hook threaded through `GenerationWork` for one number.
 	let aliasHiddenColumnCount: Int
 
 	/// Each node's reads from above, in increasing read ID, one run per node at `readOffsets`: what `reads(of:)` slices.
