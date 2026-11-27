@@ -126,15 +126,19 @@ struct NodeRecords: Sendable {
 	///   - seamTree: What a seam's own root is handed: its parameters, the nearest declarations of their labels, and the
 	///     instances of `LazilyInstantiated` properties among them, a deferred parameter's memo included, which its tree
 	///     reads through their wrappers. `nil` for any other root.
+	///   - declaredTypeNames: The names the modules SafeDI read declare types by at file scope, which the check of an erased
+	///     instantiator's first generic argument reads (`checkForwardsBuiltTypesProperties(_:in:declaredTypeNames:)`).
+	///     `nil` for a mock root's world, where no kind claims an erased instantiator and the mock's own tree reports it.
 	/// - Throws: A `NodeRecordRefusal` where the world holds a kind stage 1 does not make, or what an initializer's
 	///   arguments throw.
-	init(world: some NodeRecordSources, seamTree: DependencyTreeGenerator.RootScopeInfo.SeamTree? = nil) throws {
+	init(world: some NodeRecordSources, seamTree: DependencyTreeGenerator.RootScopeInfo.SeamTree? = nil, declaredTypeNames: DeclaredTypeNames?) throws {
 		let declarationCount = world.declarationCount
 		var kinds = [NodeRecordKind]()
 		kinds.reserveCapacity(declarationCount)
 		for declaration in 0..<Int32(declarationCount) {
 			try kinds.append(Self.kind(of: declaration, in: world))
 			try Self.checkReadsNoSeamRootValue(of: seamTree, declaration, in: world)
+			try Self.checkForwardsBuiltTypesProperties(declaration, in: world, declaredTypeNames: declaredTypeNames)
 		}
 		var variantByDeclaration = [VariantID](repeating: -1, count: declarationCount)
 		for variant in 0..<Int32(world.variantCount) {
@@ -240,12 +244,17 @@ struct NodeRecords: Sendable {
 
 	/// Every refusal `world` holds, each once, in the order of `NodeRecordRefusal`'s cases: what a test reports of a world, so
 	/// that each stage counts the worlds it frees.
-	static func refusals(in world: some NodeRecordSources, seamTree: DependencyTreeGenerator.RootScopeInfo.SeamTree? = nil) -> [NodeRecordRefusal] {
+	static func refusals(in world: some NodeRecordSources, seamTree: DependencyTreeGenerator.RootScopeInfo.SeamTree? = nil, declaredTypeNames: DeclaredTypeNames?) -> [NodeRecordRefusal] {
 		var refusals = Set<NodeRecordRefusal>()
 		for declaration in 0..<Int32(world.declarationCount) {
 			refusals.formUnion(kindAndRefusals(of: declaration, in: world).refusals)
 			do {
 				try checkReadsNoSeamRootValue(of: seamTree, declaration, in: world)
+			} catch {
+				refusals.insert(error)
+			}
+			do {
+				try checkForwardsBuiltTypesProperties(declaration, in: world, declaredTypeNames: declaredTypeNames)
 			} catch {
 				refusals.insert(error)
 			}
@@ -298,6 +307,22 @@ struct NodeRecords: Sendable {
 			world.kind(of: edge) == .alias && world.property(of: edge).map { seamTree.autoclosureLabels.contains($0.label) } == true
 		}
 		guard !readsAnAutoclosure else { throw .renameOrHole }
+	}
+
+	/// Refuses `declaration`'s world where it is an `ErasedInstantiator` or a `SendableErasedInstantiator` whose first
+	/// generic argument is not the `@Forwarded` properties of the type it builds: an error the tree reports where it builds
+	/// the place (`ErasedInstantiatorForwardedPropertiesMismatchError`), which the records cannot, so the world keeps its
+	/// tree, in a run no test observes too, which builds no tree beside a root's records. A fill's place, which the tree
+	/// checks seeing through its hole's modules, is checked here without them: its world is refused as a fill's already.
+	private static func checkForwardsBuiltTypesProperties(_ declaration: DeclarationID, in world: some NodeRecordSources, declaredTypeNames: DeclaredTypeNames?) throws(NodeRecordRefusal) {
+		switch world.kind(of: declaration) {
+		case .erasedInstantiator, .sendableErasedInstantiator:
+			guard let declaredTypeNames, let property = world.property(of: declaration) else { return }
+			let forwardsBuiltTypesProperties = property.firstGenericMatchesForwardedProperties(of: world.scope(of: declaration).instantiable, declaringModuleNames: [], declaredTypeNames: declaredTypeNames)
+			guard forwardsBuiltTypesProperties else { throw .erased }
+		case .constant, .instantiator, .sendableInstantiator, .lazy, .sendableLazy, .alias, .hole:
+			break
+		}
 	}
 
 	/// The kind of record `declaration` is made as, or the first refusal it holds (`kindAndRefusals(of:in:)`).

@@ -361,7 +361,7 @@ public actor DependencyTreeGenerator {
 		// The mocks are made only once the trees are released, so a module's root trees and its mock trees are never held
 		// at once: making them beside the plans raised a mock-heavy module's peak memory by a fifth.
 		let treeForcers = TreeForcerReport(forcersByRoot: trees?.roots.map { root in
-			(root: root.instantiable.concreteInstantiable.asSource, forcers: root.treeForcers + (request.namesNodeRecordRefusals ? Self.nodeRecordRefusal(ofSeamWorldRoot: root) : []))
+			(root: root.instantiable.concreteInstantiable.asSource, forcers: root.treeForcers + (request.namesNodeRecordRefusals ? Self.nodeRecordRefusal(ofSeamWorldRoot: root, declaredTypeNames: declaredTypeNames) : []))
 		} ?? [])
 		let storedSeamSignatures = if request.generatesDependencyTrees, let trees {
 			trees.storedSeamSignatures
@@ -430,6 +430,7 @@ public actor DependencyTreeGenerator {
 	/// `rootsOfOtherModules`, the roots another module declares.
 	private func plannedCode(of roots: [RootScopeInfo], rootsOfOtherModules: [Instantiable]) async throws -> [PlannedRoot] {
 		let rootScopeGenerators = roots
+		let declaredTypeNames = declaredTypeNames
 		// A seam's root plans its children at once only where the module plans few trees: each tree is planned on a task
 		// of its own, so many trees keep every processor busy, and planning their children at once too only holds more
 		// frames (1,200 seams of two children each held 13% more peak memory, at the same wall time).
@@ -441,12 +442,35 @@ public actor DependencyTreeGenerator {
 			) { taskGroup in
 				for rootInfo in rootScopeGenerators {
 					taskGroup.addTask {
-						let code = try await Self.plannedRootCode(of: rootInfo)
-						return await PlannedRoot(
+						let code = try await Self.plannedRootCode(of: rootInfo, declaredTypeNames: declaredTypeNames)
+						// The imports are the root's union fact, read from its declarations, not from its generator tree.
+						let fulfillers = TypeFactsImports(root: rootInfo.rootScope).fulfillers
+						if let observer = TypeFactsImportsObservation.comparesWalk, let tree = rootInfo.observedTree {
+							let walkedFulfillers = await GenerationWork.$observer.withValue(nil) {
+								await tree.fulfillersOfTree(buildingMock: false)
+							}
+							observer(TypeFactsImportsComparison(root: rootInfo.typeDescription.asSource, foldedFulfillers: fulfillers, walkedFulfillers: walkedFulfillers))
+						}
+						if let observer = TypeFactsReceivedValueSuppliesObservation.comparesWalk, let tree = rootInfo.observedTree {
+							await GenerationWork.$observer.withValue(nil) {
+								let folded = TypeFactsReceivedValueSupplies(root: rootInfo.rootScope)
+								// A tree `generate` plans is built around no receive nothing provides, which the walk always judges.
+								let walked = await tree.receivedValueSupplies(
+									ofTreeRootedAt: rootInfo.instantiable,
+									unfulfilledReceives: ScopeGenerator.UnfulfilledReceives(locations: [], labels: []),
+								)
+								observer(TypeFactsReceivedValueSuppliesComparison(
+									root: rootInfo.typeDescription.asSource,
+									folded: ReceivedValueSupplies(supplies: folded.supplies, constructedTypes: folded.constructedTypes),
+									walked: walked.map { ReceivedValueSupplies(supplies: $0.supplies.uniqued(), constructedTypes: $0.constructedTypes.uniqued()) },
+								))
+							}
+						}
+						return PlannedRoot(
 							typeDescription: rootInfo.typeDescription,
 							sourceFilePath: rootInfo.sourceFilePath,
 							code: code,
-							fulfillers: rootInfo.fulfillers(),
+							fulfillers: fulfillers,
 						)
 					}
 				}
@@ -581,7 +605,7 @@ public actor DependencyTreeGenerator {
 			/// From its place tree.
 			case tree(ScopeGenerator)
 			/// From its node records, where no `TreeForcer` holds. `comparisonTree` is the tree built beside them only
-			/// where a test observes node records, which compares the two (`plannedRootCode(of:)`); a plain run builds
+			/// where a test observes node records, which compares the two (`plannedRootCode(of:declaredTypeNames:)`); a plain run builds
 			/// none.
 			case nodeRecords(NodeRecordsLayout, comparisonTree: ScopeGenerator?)
 		}
@@ -590,9 +614,10 @@ public actor DependencyTreeGenerator {
 		let instantiable: Instantiable
 		let sourceFilePath: String?
 		let built: Built
-		/// The root's scope, frozen, where node records may lay its code out (`NodeRecords`): a production root, of a module
-		/// with seams or without, or a seam's own root, whose records a test only compares.
-		var constructionScope: ConstructionScope?
+		/// The root's scope, frozen, from which its tree is built, whose declarations the imports read (`TypeFactsImports`),
+		/// and from whose node records its code may be laid out (`NodeRecords`): a production root, of a module with seams
+		/// or without, or a seam's own root, whose records a test only compares.
+		let rootScope: ConstructionScope
 		/// For a seam's own tree, what node records read of it beside its world; `nil` for every other root.
 		var seamTree: SeamTree?
 
@@ -611,16 +636,12 @@ public actor DependencyTreeGenerator {
 		/// What made this run build the root's tree (`TreeForcer`); empty where it built none.
 		var treeForcers: [TreeForcer] = [.seamWorld]
 
-		init(typeDescription: TypeDescription, instantiable: Instantiable, sourceFilePath: String?, scopeGenerator: ScopeGenerator) {
-			self.init(typeDescription: typeDescription, instantiable: instantiable, sourceFilePath: sourceFilePath, built: .tree(scopeGenerator))
-		}
-
-		init(typeDescription: TypeDescription, instantiable: Instantiable, sourceFilePath: String?, built: Built, constructionScope: ConstructionScope? = nil, seamTree: SeamTree? = nil, treeForcers: [TreeForcer] = [.seamWorld]) {
+		init(typeDescription: TypeDescription, instantiable: Instantiable, sourceFilePath: String?, built: Built, rootScope: ConstructionScope, seamTree: SeamTree? = nil, treeForcers: [TreeForcer] = [.seamWorld]) {
 			self.typeDescription = typeDescription
 			self.instantiable = instantiable
 			self.sourceFilePath = sourceFilePath
 			self.built = built
-			self.constructionScope = constructionScope
+			self.rootScope = rootScope
 			self.seamTree = seamTree
 			self.treeForcers = treeForcers
 		}
@@ -635,13 +656,14 @@ public actor DependencyTreeGenerator {
 			}
 		}
 
-		/// What the root's generated file imports: the declarations its tree builds.
-		func fulfillers() async -> Set<FulfillerImports.Fulfiller> {
+		/// The root's place tree, where this run built one: for its code, or beside its node records for a test that
+		/// compares them.
+		var observedTree: ScopeGenerator? {
 			switch built {
 			case let .tree(scopeGenerator):
-				await scopeGenerator.fulfillersOfTree(buildingMock: false)
-			case let .nodeRecords(layout, _):
-				layout.fulfillers
+				scopeGenerator
+			case let .nodeRecords(_, comparisonTree):
+				comparisonTree
 			}
 		}
 
@@ -801,7 +823,7 @@ public actor DependencyTreeGenerator {
 							constructionMemo: &memo,
 						)
 					}
-					let (layout, treeForcers) = try Self.nodeRecordsLayout(of: scope.instantiable, constructionScope: constructionScope, readersOfEveryTree: readersOfEveryTree)
+					let (layout, treeForcers) = try Self.nodeRecordsLayout(of: scope.instantiable, constructionScope: constructionScope, declaredTypeNames: declaredTypeNames, readersOfEveryTree: readersOfEveryTree)
 					let built: RootScopeInfo.Built = if let layout {
 						// The work of building it is no run's, so the tests that count a run's work count none of it.
 						try .nodeRecords(layout, comparisonTree: NodeRecordsObservation.observer == nil ? nil : GenerationWork.$observer.withValue(nil) { try tree(memo: &comparisonMemo) })
@@ -813,7 +835,7 @@ public actor DependencyTreeGenerator {
 						instantiable: scope.instantiable,
 						sourceFilePath: typeDescriptionToFulfillingInstantiableMap[typeDescription]?.sourceFilePath,
 						built: built,
-						constructionScope: constructionScope,
+						rootScope: constructionScope,
 						treeForcers: treeForcers,
 					))
 				}
