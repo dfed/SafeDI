@@ -1218,6 +1218,22 @@ struct SafeDIToolGraphFuzzerValueOracleTests {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func overrideProbes_classifyConstantAsRenamed_whenRenameInMocksTreeReadsIt() async throws {
+		// Seed 1 takes the root's second field, `store`, which `S1_Reader` renames, and the mirror's only one, the
+		// promoted `store`, which the mocked type renames itself.
+		let runs = try await Self.valueOracleToolRuns(of: Self.renamedStoreFixture)
+
+		let probes = try #require(runs.valueOracle).overrideProbes
+		#expect(probes.map { "\($0.mockedTypeName).\($0.label)" } == ["S1_Root.store", "S1_Reader.store"])
+		#expect(probes.map(\.candidateKind) == [.renamed, .renamed])
+		#expect(probes.map(\.pair.knownRightExpression) == [
+			"{ let known = S1_Root(); return (known, known.store as Any?) }()",
+			"{ let known = S1_ZMirror0(); return (known.differentialMirrorValue, known.store as Any?) }()",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func overrideProbes_bindMockedTypesAliasFromValueItsVariantForwards_whenMockedTypeRenamesOverriddenValueOnlyIfAvailable() async throws {
 		// The mock binds `sessionAlias` from the override, so the variant binds it from the value it forwards, as a
 		// rename of exactly that property (base corpus seed 153).
@@ -1717,6 +1733,13 @@ struct SafeDIToolGraphFuzzerValueOracleTests {
 	private static let lazyStoreFixture = fixture([
 		type("S1_Root", arguments: "isRoot: true", properties: ["@Instantiated let screen: S1_Screen", "@Instantiated let lazyStore: LazilyInstantiated<S1_Store>"]),
 		type("S1_Screen", arguments: "generateMock: true", properties: ["@Received let lazyStore: LazilyInstantiated<S1_Store>"]),
+		type("S1_Store", properties: []),
+	])
+
+	/// A root that builds `store` and a mocked type that renames it: the override oracle's renamed field of each mock.
+	private static let renamedStoreFixture = fixture([
+		type("S1_Root", arguments: "isRoot: true", properties: ["@Instantiated let reader: S1_Reader", "@Instantiated let store: S1_Store"]),
+		type("S1_Reader", arguments: "generateMock: true", properties: ["@Received(fulfilledByDependencyNamed: \"store\", ofType: S1_Store.self) let cache: S1_Store"]),
 		type("S1_Store", properties: []),
 	])
 

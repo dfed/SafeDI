@@ -1715,6 +1715,7 @@ struct GraphFuzzerValueOraclePlan {
 		let mockFileSuffix = "+SafeDIMock.swift"
 		var mirrors = [GraphFuzzerMockMirror]()
 		var onlyIfAvailableOverrides = [String: GraphFuzzerOnlyIfAvailableOverride]()
+		var renamedPropertiesByMockedTypeName = [String: Set<GraphFuzzerMirrorProperty>]()
 		var skips = [(typeName: String, skip: GraphFuzzerMirrorSkip)]()
 		var modelFailures = [String]()
 		var cache = GraphFuzzerMockMirrorModel.ReceivedPropertiesCache()
@@ -1746,6 +1747,7 @@ struct GraphFuzzerValueOraclePlan {
 				let forwardedProperties = mirror.declarations.filter { $0.attribute == "@Forwarded" }.map(\.property)
 				let wrappersOfValuesTheMockTakes = Set(forwardedProperties.filter { !requiredParameters.contains($0) })
 				mirror.forwardedPropertiesSample = forwardedProperties.isEmpty ? nil : samples.forwardedPropertiesExpression(of: forwardedProperties, wrappersBuiltAroundInstances: wrappersOfValuesTheMockTakes)
+				renamedPropertiesByMockedTypeName[typeName] = Self.propertiesRenamed(inTypesNamed: mockRoot.typeNamesInTree, model: model)
 				onlyIfAvailableOverrides[typeName] = Self.onlyIfAvailableOverride(of: mirror, mockRoot: mockRoot, mockFile: mockFile, requiredParameters: requiredParameters, model: model, samples: samples)
 				mirrors.append(mirror)
 			case let .failure(.skipped(skip)):
@@ -1772,6 +1774,12 @@ struct GraphFuzzerValueOraclePlan {
 			}
 		}
 		self.rootOverrideCandidates = rootOverrideCandidates
+		// Each root's mock tree, walked apart from the mocked types', whose walks share a cache as the tool's do.
+		var rootCache = GraphFuzzerMockMirrorModel.ReceivedPropertiesCache()
+		for rootTypeName in rootTypeNames {
+			renamedPropertiesByMockedTypeName[rootTypeName] = Self.propertiesRenamed(inTypesNamed: model.mockRoot(ofTypeNamed: rootTypeName, cache: &rootCache).typeNamesInTree, model: model)
+		}
+		self.renamedPropertiesByMockedTypeName = renamedPropertiesByMockedTypeName
 		var instantiateParametersByExtensionTypeName = [String: [String]]()
 		for typeName in model.typeOrder {
 			guard let type = model.types[typeName], type.isExtension else { continue }
@@ -1827,6 +1835,9 @@ struct GraphFuzzerValueOraclePlan {
 	/// sample, the first such override with the mirror's variant that forwards the value (`GraphFuzzerOnlyIfAvailableOverride`),
 	/// by the mocked type's name.
 	let onlyIfAvailableOverrides: [String: GraphFuzzerOnlyIfAvailableOverride]
+	/// The properties a rename in each compared mock's tree reads, non-optional, by the mocked type's name: a root's, or a
+	/// mirrored type's.
+	let renamedPropertiesByMockedTypeName: [String: Set<GraphFuzzerMirrorProperty>]
 	/// The sample value of each type's `ForwardedProperties` that has one, which the describer calls an instantiator of
 	/// the type with.
 	let forwardedPropertiesSamples: [DifferentialValueSample]
@@ -2005,6 +2016,18 @@ struct GraphFuzzerValueOraclePlan {
 			swiftFileContent.append(GraphFuzzerOverrideSentinel.source(typeNamePrefix: fixture.typeNamePrefix))
 		}
 		return GraphFuzzerFixture(seed: fixture.seed, swiftFileContent: swiftFileContent)
+	}
+
+	/// The properties a rename declared by one of `typeNames` reads, each non-optional, as a rename of the optional form
+	/// of a property reads that property.
+	private static func propertiesRenamed(inTypesNamed typeNames: [String], model: GraphFuzzerMockMirrorModel) -> Set<GraphFuzzerMirrorProperty> {
+		var properties = Set<GraphFuzzerMirrorProperty>()
+		for typeName in typeNames {
+			for case let .aliased(fulfillingProperty, _) in (model.types[typeName]?.dependencies ?? []).map(\.source) {
+				properties.insert(fulfillingProperty.unwrapped)
+			}
+		}
+		return properties
 	}
 
 	/// The override oracle's value of the first override `mockFile`'s mock takes of a value its tree receives only if

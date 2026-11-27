@@ -31,7 +31,7 @@ struct GraphFuzzerOverrideCandidate: Equatable {
 	let builtTypeName: String
 	/// The type of the dependency's property, without `any` or the types it is nested in.
 	let propertyTypeName: String
-	let kind: GraphFuzzerOverrideCandidateKind
+	private(set) var kind: GraphFuzzerOverrideCandidateKind
 	/// The dependency's property as declared.
 	let property: GraphFuzzerMirrorProperty
 	/// For an erased dependency, the type of its property as declared, which the mock's builder field returns.
@@ -42,6 +42,16 @@ struct GraphFuzzerOverrideCandidate: Equatable {
 	/// For a value the tree receives only if available, the sample its override is passed and the mirror's variant that
 	/// forwards it.
 	var onlyIfAvailableOverride: GraphFuzzerOnlyIfAvailableOverride?
+
+	/// The candidate, as a renamed constant where it is a constant and `renamedProperties`, the properties a rename in the
+	/// mock's tree reads, hold its property.
+	func classified(renamedProperties: Set<GraphFuzzerMirrorProperty>) -> GraphFuzzerOverrideCandidate {
+		var candidate = self
+		if kind == .constant, renamedProperties.contains(property) {
+			candidate.kind = .renamed
+		}
+		return candidate
+	}
 
 	/// The candidate of `override`, a mirrored mock's override of a value its tree receives only if available.
 	init(onlyIfAvailable override: GraphFuzzerOnlyIfAvailableOverride) {
@@ -63,7 +73,7 @@ struct GraphFuzzerOverrideCandidate: Equatable {
 				kind = .erased
 			case .sendableInstantiator:
 				break
-			case .lazilyInstantiated, .erased, .onlyIfAvailable:
+			case .lazilyInstantiated, .erased, .onlyIfAvailable, .renamed:
 				// An erased lazily instantiated dependency's field is not judged.
 				return nil
 			}
@@ -98,6 +108,9 @@ enum GraphFuzzerOverrideCandidateKind: String, CaseIterable, Comparable {
 	/// passes `nil` where nothing declares it: the override is passed a sample, and the known-right side is the mirror's
 	/// variant that forwards the value with that sample (`GraphFuzzerOnlyIfAvailableOverride`).
 	case onlyIfAvailable
+	/// A constant a rename in the mock's tree reads (`@Received(fulfilledByDependencyNamed:ofType:)`), whose override
+	/// must reach the rename's readers as it reaches the receivers of its own label.
+	case renamed
 
 	/// The kind of a non-optional dependency of `type`, or `nil` for a kind the oracle does not judge.
 	init?(propertyType type: String) {
@@ -204,7 +217,7 @@ extension GraphFuzzerValueOraclePlan {
 		for rootTypeName in rootTypeNames {
 			if let probe = overrideProbe(
 				mockedTypeName: rootTypeName,
-				candidates: rootOverrideCandidates[rootTypeName] ?? [],
+				candidates: (rootOverrideCandidates[rootTypeName] ?? []).map { $0.classified(renamedProperties: renamedPropertiesByMockedTypeName[rootTypeName] ?? []) },
 				mockFile: generatedFiles[rootTypeName + "+SafeDIMock.swift"],
 				ordinal: ordinal,
 				mockArguments: [],
@@ -223,7 +236,8 @@ extension GraphFuzzerValueOraclePlan {
 
 			if let probe = overrideProbe(
 				mockedTypeName: mirror.mockedTypeName,
-				candidates: candidates + [onlyIfAvailableOverrides[mirror.mockedTypeName].map(GraphFuzzerOverrideCandidate.init(onlyIfAvailable:))].compactMap(\.self),
+				candidates: candidates.map { $0.classified(renamedProperties: renamedPropertiesByMockedTypeName[mirror.mockedTypeName] ?? []) }
+					+ [onlyIfAvailableOverrides[mirror.mockedTypeName].map(GraphFuzzerOverrideCandidate.init(onlyIfAvailable:))].compactMap(\.self),
 				mockFile: generatedFiles[mirror.mockedTypeName + "+SafeDIMock.swift"],
 				ordinal: ordinal,
 				mockArguments: mirror.mockArguments,
@@ -320,7 +334,7 @@ extension GraphFuzzerValueOraclePlan {
 		let featureRecord: String
 		let knownRightRecord: String
 		switch candidate.kind {
-		case .constant, .erased:
+		case .constant, .erased, .renamed:
 			featureRecord = "\(sentinel).value"
 			knownRightRecord = "known.\(candidate.label)\(erasedInstancePath) as Any?"
 		case .lazilyInstantiated:

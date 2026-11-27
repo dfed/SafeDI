@@ -7420,11 +7420,12 @@ struct SafeDIToolGraphFuzzerTests {
 			.value: 517,
 		],
 		overrideCandidateKindCounts: [
-			.constant: 6_025,
+			.constant: 5_664,
 			.lazilyInstantiated: 525,
 			.erased: 374,
 			.sendableInstantiator: 899,
 			.onlyIfAvailable: 517,
+			.renamed: 361,
 		],
 		pinnedPlacePairCount: 105,
 		nestedCyclePairCount: 92,
