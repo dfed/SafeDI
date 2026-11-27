@@ -158,9 +158,9 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_keepsRootOnTodaysTree_whenLazilyInstantiatedTwinClosesCycleOnConstant() async throws {
+	mutating func generate_laysRootOutFromItsPlanWithTodaysCode_whenLazilyInstantiatedTwinClosesCycleOnConstant() async throws {
 		// `Root` and `Detail` build `home: Home` and `Panel` builds `home: LazilyInstantiated<Home>`, twins: a path closes
-		// the cycle on whichever of the two it built first, which the layout by type does not write yet.
+		// the cycle on whichever of the two it built first, whose function the scope that declares that twin builds.
 		let choices = try await choicesGeneratingTodaysCode(of: """
 		@Instantiable(isRoot: true) public final class Root: Instantiable {
 		    @Instantiated let home: Home
@@ -184,7 +184,270 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 		}
 		""")
 
-		#expect(choices == ["Root": .noLayout])
+		#expect(choices == ["Root": nil])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysRootOutFromItsPlanWithTodaysCode_whenConstantTwinIsOffCycleLazilyInstantiatedTwinCloses() async throws {
+		// The constant twin is off the cycle the `LazilyInstantiated` twin closes.
+		let choices = try await choicesGeneratingTodaysCode(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let home: Home
+		    public init(home: Home) { self.home = home }
+		}
+
+		@Instantiable public final class Home: Instantiable {
+		    @Instantiated let panelBuilder: Instantiator<Panel>
+		    public init(panelBuilder: Instantiator<Panel>) { self.panelBuilder = panelBuilder }
+		}
+
+		@Instantiable public final class Panel: Instantiable {
+		    @Instantiated let home: LazilyInstantiated<Home>
+		    public init(home: LazilyInstantiated<Home>) { self.home = home }
+		}
+		""")
+
+		#expect(choices == ["Root": nil])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysRootOutFromItsPlanWithTodaysCode_whenHubBuildsTwinsOfMockWritersSpecification() async throws {
+		// The twins of the mock writer's specification, with `Hub` a production root.
+		let choices = try await choicesGeneratingTodaysCode(of: """
+		@Instantiable(isRoot: true) public final class Hub: Instantiable {
+		    @Instantiated let aBuilder: Instantiator<A>
+		    @Instantiated let bBuilder: Instantiator<B>
+		    public init(aBuilder: Instantiator<A>, bBuilder: Instantiator<B>) { self.aBuilder = aBuilder; self.bBuilder = bBuilder }
+		}
+
+		@Instantiable public final class A: Instantiable {
+		    @Instantiated let t0: T0
+		    @Instantiated let cBuilder: Instantiator<C>
+		    public init(t0: T0, cBuilder: Instantiator<C>) { self.t0 = t0; self.cBuilder = cBuilder }
+		}
+
+		@Instantiable public final class B: Instantiable {
+		    @Instantiated let t0: LazilyInstantiated<T0>
+		    @Instantiated let cBuilder: Instantiator<C>
+		    public init(t0: LazilyInstantiated<T0>, cBuilder: Instantiator<C>) { self.t0 = t0; self.cBuilder = cBuilder }
+		}
+
+		@Instantiable public final class C: Instantiable {
+		    @Instantiated let t0: T0
+		    public init(t0: T0) { self.t0 = t0 }
+		}
+
+		@Instantiable public final class T0: Instantiable {
+		    @Instantiated let aBuilder: Instantiator<A>
+		    @Instantiated let bBuilder: Instantiator<B>
+		    @Instantiated let again: Instantiator<A>
+		    @Instantiated let other: Instantiator<B>
+		    public init(aBuilder: Instantiator<A>, bBuilder: Instantiator<B>, again: Instantiator<A>, other: Instantiator<B>) { self.aBuilder = aBuilder; self.bBuilder = bBuilder; self.again = again; self.other = other }
+		}
+		""")
+
+		#expect(choices == ["Hub": nil])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysRootOutFromItsPlanWithTodaysCode_whenConstantTwinClosesCycleOnLazilyInstantiated() async throws {
+		// The `LazilyInstantiated` twin is entered first and the constant closes the cycle on it.
+		let choices = try await choicesGeneratingTodaysCode(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let home: LazilyInstantiated<Home>
+		    public init(home: LazilyInstantiated<Home>) { self.home = home }
+		}
+
+		@Instantiable public final class Home: Instantiable {
+		    @Instantiated let detailBuilder: Instantiator<Detail>
+		    public init(detailBuilder: Instantiator<Detail>) { self.detailBuilder = detailBuilder }
+		}
+
+		@Instantiable public final class Detail: Instantiable {
+		    @Instantiated let home: Home
+		    public init(home: Home) { self.home = home }
+		}
+		""")
+
+		#expect(choices == ["Root": nil])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysRootOutFromItsPlanWithTodaysCode_whenOneTypeOnCycleBuildsBothTwins() async throws {
+		// Both twins are built beneath one type on the cycle.
+		let choices = try await choicesGeneratingTodaysCode(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let screenBuilder: Instantiator<Screen>
+		    public init(screenBuilder: Instantiator<Screen>) { self.screenBuilder = screenBuilder }
+		}
+
+		@Instantiable public final class Screen: Instantiable {
+		    @Instantiated let home: Home
+		    @Instantiated let panel: Panel
+		    public init(home: Home, panel: Panel) { self.home = home; self.panel = panel }
+		}
+
+		@Instantiable public final class Panel: Instantiable {
+		    @Instantiated let home: LazilyInstantiated<Home>
+		    public init(home: LazilyInstantiated<Home>) { self.home = home }
+		}
+
+		@Instantiable public final class Home: Instantiable {
+		    @Instantiated let screenBuilder: Instantiator<Screen>
+		    public init(screenBuilder: Instantiator<Screen>) { self.screenBuilder = screenBuilder }
+		}
+		""")
+
+		#expect(choices == ["Root": nil])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysRootOutFromItsPlanWithTodaysCode_whenTypeBeneathTwinReceivesItsLabelOnlyIfAvailable() async throws {
+		// A type beneath the twinned type receives the twins' label only if available, `nil` while the type is being built.
+		let choices = try await choicesGeneratingTodaysCode(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let home: Home
+		    public init(home: Home) { self.home = home }
+		}
+
+		@Instantiable public final class Home: Instantiable {
+		    @Instantiated let reader: Reader
+		    @Instantiated let detailBuilder: Instantiator<Detail>
+		    public init(reader: Reader, detailBuilder: Instantiator<Detail>) { self.reader = reader; self.detailBuilder = detailBuilder }
+		}
+
+		@Instantiable public final class Reader: Instantiable {
+		    @Received(onlyIfAvailable: true) let home: Home?
+		    public init(home: Home?) { self.home = home }
+		}
+
+		@Instantiable public final class Detail: Instantiable {
+		    @Instantiated let panelBuilder: Instantiator<Panel>
+		    public init(panelBuilder: Instantiator<Panel>) { self.panelBuilder = panelBuilder }
+		}
+
+		@Instantiable public final class Panel: Instantiable {
+		    @Instantiated let home: LazilyInstantiated<Home>
+		    public init(home: LazilyInstantiated<Home>) { self.home = home }
+		}
+		""")
+
+		#expect(choices == ["Root": nil])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysRootOutFromItsPlanWithTodaysCode_whenTypeBeneathLazilyInstantiatedDeclarationsReceivesLabelOnlyIfAvailable() async throws {
+		// As the twin shape with a reader beneath, with both declarations `LazilyInstantiated`: no twin.
+		let choices = try await choicesGeneratingTodaysCode(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let home: LazilyInstantiated<Home>
+		    public init(home: LazilyInstantiated<Home>) { self.home = home }
+		}
+
+		@Instantiable public final class Home: Instantiable {
+		    @Instantiated let reader: Reader
+		    @Instantiated let detailBuilder: Instantiator<Detail>
+		    public init(reader: Reader, detailBuilder: Instantiator<Detail>) { self.reader = reader; self.detailBuilder = detailBuilder }
+		}
+
+		@Instantiable public final class Reader: Instantiable {
+		    @Received(onlyIfAvailable: true) let home: Home?
+		    public init(home: Home?) { self.home = home }
+		}
+
+		@Instantiable public final class Detail: Instantiable {
+		    @Instantiated let panelBuilder: Instantiator<Panel>
+		    public init(panelBuilder: Instantiator<Panel>) { self.panelBuilder = panelBuilder }
+		}
+
+		@Instantiable public final class Panel: Instantiable {
+		    @Instantiated let home: LazilyInstantiated<Home>
+		    public init(home: LazilyInstantiated<Home>) { self.home = home }
+		}
+		""")
+
+		#expect(choices == ["Root": nil])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysRootOutFromItsPlanWithTodaysCode_whenSiblingsBuildTwinsBeneathTheirOwnDeclarationsOfLabelTwinnedTypeReceives() async throws {
+		// Two siblings each declare `theme` and build one twin: each call of the one function passes its own `theme`.
+		let choices = try await choicesGeneratingTodaysCode(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let aBuilder: Instantiator<A>
+		    @Instantiated let bBuilder: Instantiator<B>
+		    public init(aBuilder: Instantiator<A>, bBuilder: Instantiator<B>) { self.aBuilder = aBuilder; self.bBuilder = bBuilder }
+		}
+
+		@Instantiable public final class A: Instantiable {
+		    @Instantiated let theme: Theme
+		    @Instantiated let home: Home
+		    public init(theme: Theme, home: Home) { self.theme = theme; self.home = home }
+		}
+
+		@Instantiable public final class B: Instantiable {
+		    @Instantiated let theme: Theme
+		    @Instantiated let home: LazilyInstantiated<Home>
+		    public init(theme: Theme, home: LazilyInstantiated<Home>) { self.theme = theme; self.home = home }
+		}
+
+		@Instantiable public final class Home: Instantiable {
+		    @Instantiated let reader: Reader
+		    @Instantiated let nextBuilder: Instantiator<Next>
+		    public init(reader: Reader, nextBuilder: Instantiator<Next>) { self.reader = reader; self.nextBuilder = nextBuilder }
+		}
+
+		@Instantiable public final class Reader: Instantiable {
+		    @Received let theme: Theme
+		    public init(theme: Theme) { self.theme = theme }
+		}
+
+		@Instantiable public final class Next: Instantiable {
+		    @Instantiated let home: Home
+		    public init(home: Home) { self.home = home }
+		}
+
+		@Instantiable public final class Theme: Instantiable { public init() {} }
+		""")
+
+		#expect(choices == ["Root": nil])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysRootOutFromItsPlanWithTodaysCode_whenSendableLazilyInstantiatedTwinClosesCycleOnConstant() async throws {
+		// The wrapper twin is a `SendableLazilyInstantiated`, so every function of the cycle is `@Sendable`.
+		let choices = try await choicesGeneratingTodaysCode(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let home: Home
+		    public init(home: Home) { self.home = home }
+		}
+
+		@Instantiable public final class Home: Instantiable {
+		    @Instantiated let detailBuilder: Instantiator<Detail>
+		    public init(detailBuilder: Instantiator<Detail>) { self.detailBuilder = detailBuilder }
+		}
+
+		@Instantiable public final class Detail: Instantiable {
+		    @Instantiated let panelBuilder: Instantiator<Panel>
+		    @Instantiated let home: Home
+		    public init(panelBuilder: Instantiator<Panel>, home: Home) { self.panelBuilder = panelBuilder; self.home = home }
+		}
+
+		@Instantiable public final class Panel: Instantiable {
+		    @Instantiated let home: SendableLazilyInstantiated<Home>
+		    public init(home: SendableLazilyInstantiated<Home>) { self.home = home }
+		}
+		""")
+
+		#expect(choices == ["Root": nil])
 	}
 
 	@Test
