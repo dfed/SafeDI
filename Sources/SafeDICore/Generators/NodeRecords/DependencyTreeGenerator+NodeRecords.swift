@@ -42,7 +42,14 @@ extension DependencyTreeGenerator {
 	static func nodeRecordRefusal(ofSeamWorldRoot rootInfo: RootScopeInfo) -> [TreeForcer] {
 		guard rootInfo.treeForcers.contains(.seamWorld), let constructionScope = rootInfo.constructionScope else { return [] }
 		let world = TypeFactsGraph(root: constructionScope, forMockGeneration: false)
-		let records = Result { () throws -> NodeRecords in try NodeRecords(world: world, rootLazilyInstantiatedInstanceProperties: rootInfo.seamTree?.rootLazilyInstantiatedInstanceProperties ?? [], isSeamRoot: rootInfo.seamTree != nil) }
+		let records = Result { () throws -> NodeRecords in
+			try NodeRecords(
+				world: world,
+				rootLazilyInstantiatedInstanceProperties: rootInfo.seamTree?.rootLazilyInstantiatedInstanceProperties ?? [],
+				rootNonSendableWrapperLabels: rootInfo.seamTree?.rootNonSendableWrapperLabels ?? [],
+				isSeamRoot: rootInfo.seamTree != nil,
+			)
+		}
 		guard case let .failure(error) = records, let refusal = error as? NodeRecordRefusal else { return [] }
 		return [.nodeRecordKind(refusal.rawValue)]
 	}
@@ -66,16 +73,31 @@ extension DependencyTreeGenerator {
 				return try await scopeGenerator.generatePlan()
 			}
 			let rootLazilyInstantiatedInstanceProperties = rootInfo.seamTree?.rootLazilyInstantiatedInstanceProperties ?? []
+			let rootNonSendableWrapperLabels = rootInfo.seamTree?.rootNonSendableWrapperLabels ?? []
 			// The work of making the records is no run's, so the tests that count a run's work count none of it.
 			let (world, records) = GenerationWork.$observer.withValue(nil) {
 				let world = TypeFactsGraph(root: constructionScope, forMockGeneration: false)
-				return (world, Result { () throws -> NodeRecords in try NodeRecords(world: world, rootLazilyInstantiatedInstanceProperties: rootLazilyInstantiatedInstanceProperties, isSeamRoot: rootInfo.seamTree != nil) })
+				return (world, Result { () throws -> NodeRecords in
+					try NodeRecords(
+						world: world,
+						rootLazilyInstantiatedInstanceProperties: rootLazilyInstantiatedInstanceProperties,
+						rootNonSendableWrapperLabels: rootNonSendableWrapperLabels,
+						isSeamRoot: rootInfo.seamTree != nil,
+					)
+				})
 			}
 			let nodeRecords: NodeRecords
 			do {
 				nodeRecords = try records.get()
 			} catch let refusal as NodeRecordRefusal {
-				let everyRefusal = GenerationWork.$observer.withValue(nil) { NodeRecords.refusals(in: world, rootLazilyInstantiatedInstanceProperties: rootLazilyInstantiatedInstanceProperties, isSeamRoot: rootInfo.seamTree != nil) }
+				let everyRefusal = GenerationWork.$observer.withValue(nil) {
+					NodeRecords.refusals(
+						in: world,
+						rootLazilyInstantiatedInstanceProperties: rootLazilyInstantiatedInstanceProperties,
+						rootNonSendableWrapperLabels: rootNonSendableWrapperLabels,
+						isSeamRoot: rootInfo.seamTree != nil,
+					)
+				}
 				observer(NodeRecordsReport(root: root, refusal: refusal.rawValue, everyRefusal: everyRefusal.map(\.rawValue), isLaidOutFromNodeRecords: false, differences: [], recordCount: 0, treePlaceCount: 0, treeForcers: rootInfo.treeForcers))
 				return try await scopeGenerator.generatePlan()
 			}

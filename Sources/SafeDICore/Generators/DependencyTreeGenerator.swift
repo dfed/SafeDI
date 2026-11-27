@@ -592,6 +592,9 @@ public actor DependencyTreeGenerator {
 			/// What the seam's root is handed as instances of `LazilyInstantiated` properties, which its tree reads through
 			/// their wrappers (`DependencyTreeGenerator.seamRootDeclarations(of:seamRoot:)`).
 			let rootLazilyInstantiatedInstanceProperties: Set<Property>
+			/// The labels of what the seam's root is handed in a wrapper that is not `Sendable`, which a `@Sendable` function
+			/// of its tree would capture (`DependencyTreeGenerator.seamRootDeclarations(of:seamRoot:)`).
+			let rootNonSendableWrapperLabels: Set<String>
 		}
 
 		/// What made this run build the root's tree (`TreeForcer`); empty where it built none.

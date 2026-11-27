@@ -127,17 +127,19 @@ struct NodeRecords: Sendable {
 	/// - Parameters:
 	///   - world: A production root's world.
 	///   - rootLazilyInstantiatedInstanceProperties: What the root is handed as instances of `LazilyInstantiated` properties:
-	///     a seam's deferred parameters, which its tree reads through their memos. Empty for any other root.
+	///     a seam's deferred parameters, which its tree reads through their memos, and the instances of the wrappers it is
+	///     handed. Empty for any other root.
+	///   - rootNonSendableWrapperLabels: The labels of what the root is handed in a wrapper a `@Sendable` function cannot
+	///     capture: a seam's parameters and its deferred parameters' memos. Empty for any other root.
 	///   - isSeamRoot: Whether the root is a seam's own, whose tree is handed its values as parameters.
 	/// - Throws: A `NodeRecordRefusal` where the world holds a kind stage 1 does not make, or what an initializer's
 	///   arguments throw.
-	init(world: some NodeRecordSources, rootLazilyInstantiatedInstanceProperties: Set<Property> = [], isSeamRoot: Bool = false) throws {
+	init(world: some NodeRecordSources, rootLazilyInstantiatedInstanceProperties: Set<Property> = [], rootNonSendableWrapperLabels: Set<String> = [], isSeamRoot: Bool = false) throws {
 		let declarationCount = world.declarationCount
 		var kinds = [NodeRecordKind]()
 		kinds.reserveCapacity(declarationCount)
 		for declaration in 0..<Int32(declarationCount) {
 			let kind = try Self.kind(of: declaration, in: world)
-			try Self.checkReadsNoInstance(of: rootLazilyInstantiatedInstanceProperties, declaration, in: world)
 			try Self.checkAnswered(kind, isSeamRoot: isSeamRoot)
 			kinds.append(kind)
 		}
@@ -149,7 +151,11 @@ struct NodeRecords: Sendable {
 		}
 		let order = try NodeBuildOrder(world: world)
 		let onlyIfAvailableAnswers = try OnlyIfAvailableAnswers(world: world)
-		let answeringDeclarations = DeclarationsAnsweringReads(world: world)
+		let answeringDeclarations = DeclarationsAnsweringReads(
+			world: world,
+			rootLazilyInstantiatedInstanceProperties: rootLazilyInstantiatedInstanceProperties,
+			rootNonSendableWrapperLabels: rootNonSendableWrapperLabels,
+		)
 		// The tree reports the capture as an error, which the records cannot.
 		guard !answeringDeclarations.sendableFunctionCapturesWrapper else { throw NodeRecordRefusal.sendableFunctionCapturesWrapper }
 		// A rename's record binds it from its fulfilling property's label, never from a wrapper's instance.
@@ -243,13 +249,17 @@ struct NodeRecords: Sendable {
 
 	/// Every refusal `world` holds, each once, in the order of `NodeRecordRefusal`'s cases: what a test reports of a world, so
 	/// that each stage counts the worlds it frees.
-	static func refusals(in world: some NodeRecordSources, rootLazilyInstantiatedInstanceProperties: Set<Property> = [], isSeamRoot: Bool = false) -> [NodeRecordRefusal] {
+	static func refusals(
+		in world: some NodeRecordSources,
+		rootLazilyInstantiatedInstanceProperties: Set<Property> = [],
+		rootNonSendableWrapperLabels: Set<String> = [],
+		isSeamRoot: Bool = false,
+	) -> [NodeRecordRefusal] {
 		var refusals = Set<NodeRecordRefusal>()
 		for declaration in 0..<Int32(world.declarationCount) {
 			let (kind, kindRefusals) = kindAndRefusals(of: declaration, in: world)
 			refusals.formUnion(kindRefusals)
 			do {
-				try checkReadsNoInstance(of: rootLazilyInstantiatedInstanceProperties, declaration, in: world)
 				try checkAnswered(kind, isSeamRoot: isSeamRoot)
 			} catch {
 				refusals.insert(error)
@@ -269,7 +279,11 @@ struct NodeRecords: Sendable {
 		} catch {
 			refusals.insert(error)
 		}
-		let answeringDeclarations = DeclarationsAnsweringReads(world: world)
+		let answeringDeclarations = DeclarationsAnsweringReads(
+			world: world,
+			rootLazilyInstantiatedInstanceProperties: rootLazilyInstantiatedInstanceProperties,
+			rootNonSendableWrapperLabels: rootNonSendableWrapperLabels,
+		)
 		if answeringDeclarations.sendableFunctionCapturesWrapper {
 			refusals.insert(.sendableFunctionCapturesWrapper)
 		}
@@ -277,19 +291,6 @@ struct NodeRecords: Sendable {
 			refusals.insert(.lazy)
 		}
 		return NodeRecordRefusal.allCases.filter(refusals.contains)
-	}
-
-	/// Refuses `declaration`'s world, as the lazy stage's, where its type receives one of `instanceProperties`, the instances
-	/// of `LazilyInstantiated` properties the root is handed, which its tree reads through the wrapper and stage 1 would read
-	/// as a binding of the label.
-	private static func checkReadsNoInstance(of instanceProperties: Set<Property>, _ declaration: DeclarationID, in world: some NodeRecordSources) throws(NodeRecordRefusal) {
-		guard !instanceProperties.isEmpty else { return }
-		// A rename's fulfilling property is a read too, which stage 1 refuses as a rename.
-		let receivesAnInstance = world.scope(of: declaration).instantiable.dependencies.contains { dependency in
-			(dependency.source == .received(onlyIfAvailable: false) || dependency.source == .received(onlyIfAvailable: true))
-				&& instanceProperties.contains(dependency.property.asUnwrappedProperty)
-		}
-		guard !receivesAnInstance else { throw .lazy }
 	}
 
 	/// Refuses a seam's own root where `kind` reads what each call finds (`NodeRecordRefusal.seamRootAnswers`).
