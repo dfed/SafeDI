@@ -93,13 +93,13 @@ enum TypeFactsChecks {
 		/// place and by a `SendableLazilyInstantiated` at another. Wider than the gap: it does not ask whether the node is
 		/// reached inside a `@Sendable` function, which the report does not say.
 		var sendableGapProxyNodes = 0
-		/// Places check 34 leaves out: a place closes on their function whose variant in the facts is another.
-		var check34ClosedOnByAnotherVariant = 0
-		/// The facts' parameters of the variants check 34 compared that the tree's function does not take, because it
+		/// Places check 35 leaves out: a place closes on their function whose variant in the facts is another.
+		var check35ClosedOnByAnotherVariant = 0
+		/// The facts' parameters of the variants check 35 compared that the tree's function does not take, because it
 		/// captures the value where it is nested, each variant counted at its first place; and the text they would add
 		/// were each a parameter: its declaration in the signature and its argument at each call of the variant.
-		var check34CapturedParameters = 0
-		var check34CapturedParameterBytes = 0
+		var check35CapturedParameters = 0
+		var check35CapturedParameterBytes = 0
 		var line = ""
 	}
 
@@ -416,10 +416,11 @@ enum TypeFactsChecks {
 				}
 			}
 		}
-		// Check 34: a variant's parameters, read from the facts alone, are the cycle parameters of the function the tree
-		// builds at each of its places. A place that closes a cycle builds no function.
+		// Check 35 (34 is the production Sendable mark’s): a variant’s parameters, read from the facts alone, are the
+		// cycle parameters of the function the tree builds at each of its places. A place that closes a cycle builds no
+		// function.
 		// A function a place closes on whose own variant in the facts is another (a member built two ways, which is two
-		// declarations, or a call whose answers key it apart from the function's first call) is two variants in the facts,
+		// declarations, or a call whose answers key it apart from the function’s first call) is two variants in the facts,
 		// which hold its parameters apart: counted, and no finding.
 		var placesClosedOnByAnotherVariant = Set<Int>()
 		var variantsWithParametersTheTreeCaptures = Set<Int>()
@@ -431,10 +432,10 @@ enum TypeFactsChecks {
 		for (index, place) in places.enumerated() {
 			guard !place.closesCycle, let variant = factsVariantByPlace[index], let generator = place.generator, let node = place.node, report.nodes[node].owedFacts.isEmpty else { continue }
 			guard !placesClosedOnByAnotherVariant.contains(index) else {
-				result.check34ClosedOnByAnotherVariant += 1
+				result.check35ClosedOnByAnotherVariant += 1
 				continue
 			}
-			result.comparedByCheck[34, default: 0] += 1
+			result.comparedByCheck[35, default: 0] += 1
 			// The facts' variant takes a parameter for every read its function does not capture, where the tree's function
 			// takes one only for a label declared again inside a cycle that closes on it: the tree's are among the facts',
 			// in the facts' order.
@@ -452,14 +453,14 @@ enum TypeFactsChecks {
 						treeParameters = treeParameters.dropFirst()
 						continue
 					}
-					result.check34CapturedParameters += 1
+					result.check35CapturedParameters += 1
 					// `label: Type, ` in the signature, and `label: label, ` at each call.
 					let label = parameter.prefix { $0 != ":" }
-					result.check34CapturedParameterBytes += parameter.utf8.count + 2 + callCount * (2 * label.utf8.count + 4)
+					result.check35CapturedParameterBytes += parameter.utf8.count + 2 + callCount * (2 * label.utf8.count + 4)
 				}
 			}
 			if !areAmongTheFacts {
-				add(34, "the function of \(nodeDescription(node)) takes \(generator.cycleParameters) where the facts give its variant \(report.variantParameters[variant])")
+				add(35, "the function of \(nodeDescription(node)) takes \(generator.cycleParameters) where the facts give its variant \(report.variantParameters[variant])")
 			}
 		}
 		// Check 33.
@@ -522,7 +523,7 @@ enum TypeFactsChecks {
 		for check in 1...lastCheck {
 			line.append(" check\(check)=\(result.findingsByCheck[check]?.count ?? 0)")
 		}
-		line.append(" check10Exempted=\(result.check10ExemptedPairs) check10SilentNil=\(result.check10SilentNilReads) nilOrderReads=\(result.nilOrderReads) nilOrderFewerFunctions=\(result.nilOrderFewerFunctions) nilOrderPlaces=\(result.nilOrderPlaces) sendableGapProxy=\(result.sendableGapProxyNodes) check34ClosedOnByAnotherVariant=\(result.check34ClosedOnByAnotherVariant) check34CapturedParameters=\(result.check34CapturedParameters) check34CapturedParameterBytes=\(result.check34CapturedParameterBytes)")
+		line.append(" check10Exempted=\(result.check10ExemptedPairs) check10SilentNil=\(result.check10SilentNilReads) nilOrderReads=\(result.nilOrderReads) nilOrderFewerFunctions=\(result.nilOrderFewerFunctions) nilOrderPlaces=\(result.nilOrderPlaces) sendableGapProxy=\(result.sendableGapProxyNodes) check35ClosedOnByAnotherVariant=\(result.check35ClosedOnByAnotherVariant) check35CapturedParameters=\(result.check35CapturedParameters) check35CapturedParameterBytes=\(result.check35CapturedParameterBytes)")
 		line.append(" check10Owed=\(result.check10OwedByFact.sorted { $0.key < $1.key }.map { "\($0.key):\($0.value)" }.joined(separator: ",")) check10OwedUncovered=\(result.check10OwedUncovered.count) test=\(Test.current?.name ?? "")")
 		for check in 11...lastCheck {
 			line.append(" compared\(check)=\(result.comparedByCheck[check] ?? 0)")
@@ -667,7 +668,7 @@ enum TypeFactsChecks {
 		return reads
 	}
 
-	static let lastCheck = 34
+	static let lastCheck = 35
 
 	/// Checks 11 to 31: each column of the graph against what the generator decided at each place.
 	///

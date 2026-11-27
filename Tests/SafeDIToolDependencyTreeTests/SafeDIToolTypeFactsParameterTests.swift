@@ -170,6 +170,12 @@ struct SafeDIToolTypeFactsParameterTests: ~Copyable {
 		for await report in stream where report.root == "Root" && report.forMockGeneration == forMockGeneration {
 			reports.append(report)
 		}
-		return try #require(reports.last)
+		// Where a root's cycles are planned per type, the tree is built in pieces, each observed as a world of its own: the
+		// piece with the most places holds the function the test reads.
+		var largest = try #require(reports.first)
+		for report in reports.dropFirst() where report.places.count > largest.places.count {
+			largest = report
+		}
+		return largest
 	}
 }
