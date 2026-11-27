@@ -381,13 +381,6 @@ extension ModuleInfoFile {
 		}
 	}
 
-	/// Reads the module info file `data` holds without its view, which is left empty.
-	init(moduleInfoDataWithoutView data: Data) throws(BinaryFileReadError) {
-		self = try BinaryFile.value(.moduleInfo, from: data) { (reader: inout BinaryReader) throws(BinaryDecodingError) in
-			try ModuleInfoFile(readingAllButViewFrom: &reader)
-		}
-	}
-
 	/// This module as a module info file.
 	public var moduleInfoData: Data {
 		get throws(BinaryFileWriteError) {

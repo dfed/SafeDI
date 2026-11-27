@@ -1791,7 +1791,7 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_onTap: @autoclosure @escaping () -> OnTap) {
 		        let onTap = LazilyInstantiated<OnTap>(__safeDI_onTap)
-		        func __safeDI_inner() -> Inner {
+		        @inline(never) func __safeDI_inner() -> Inner {
 		            _ = Inner.__safeDI_Inner_620B4A759064B3AE.self // \(Self.guardComment(under: integration, moduleName: "Feature", typeName: "Inner"))
 		            return Inner(__safeDI_onTap: onTap.instance)
 		        }

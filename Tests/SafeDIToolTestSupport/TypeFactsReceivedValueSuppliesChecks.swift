@@ -39,10 +39,14 @@ enum TypeFactsReceivedValueSuppliesChecks {
 		}
 		continuation.finish()
 		for await comparison in comparisons {
+			guard let walked = comparison.walked else {
+				Issue.record(Comment(rawValue: "The walk of \(comparison.root)’s generator tree judged none of it, although `generate` planned it."))
+				continue
+			}
 			let foldedSupplies = Set(comparison.folded.supplies)
-			let walkedSupplies = Set(comparison.walked.supplies)
+			let walkedSupplies = Set(walked.supplies)
 			let foldedTypes = Set(comparison.folded.constructedTypes)
-			let walkedTypes = Set(comparison.walked.constructedTypes)
+			let walkedTypes = Set(walked.constructedTypes)
 			guard foldedSupplies != walkedSupplies || foldedTypes != walkedTypes else { continue }
 			Issue.record(Comment(rawValue: """
 			The received-values fold of \(comparison.root) differs from the walk of its generator tree:

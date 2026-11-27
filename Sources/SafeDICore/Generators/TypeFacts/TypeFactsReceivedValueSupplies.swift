@@ -278,6 +278,6 @@ public struct TypeFactsReceivedValueSuppliesComparison: Sendable {
 	public let root: String
 	/// What the fold finds.
 	public let folded: ReceivedValueSupplies
-	/// What the walk of the root's generator tree finds.
-	public let walked: ReceivedValueSupplies
+	/// What the walk of the root's generator tree finds, or `nil` where it judges none of the tree.
+	public let walked: ReceivedValueSupplies?
 }
