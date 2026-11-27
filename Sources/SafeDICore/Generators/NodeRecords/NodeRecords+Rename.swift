@@ -19,15 +19,30 @@
 // SOFTWARE.
 
 extension NodeRecords {
+	/// Each refusal `refusalsOfBuiltByInitializer(_:in:)` can find of a rename, all of its declaring scope's, which that
+	/// scope's own node holds. A refusal added there later is not discharged for a rename until it is named here.
+	private static let renameDischarges: Set<NodeRecordRefusal> = [
+		.construction,
+		.erased,
+		.sendable,
+		.lazy,
+		.renameOrHole,
+		.cycle,
+		.unavailableOrInlineSeam,
+		.fill,
+		.onlyIfAvailable,
+		.noInitializer,
+	]
+
 	/// The claim of `declaration` where it is a rename (`@Received(fulfilledByDependencyNamed:ofType:)`): of kind `rename`,
-	/// discharging every refusal of stage 1. A rename is a leaf whose scope is the scope that declares it, so each refusal
-	/// stage 1 finds of it is of that scope, which its own node holds; `nil` for any other node.
+	/// discharging each refusal `refusalsOfBuiltByInitializer(_:in:)` finds of it. A rename is a leaf whose scope is the
+	/// scope that declares it, so each such refusal is of that scope, which its own node holds; `nil` for any other node.
 	static func renameClaim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
 		guard world.kind(of: declaration) == .alias else { return nil }
 		// A rename of a builder that does not erase it can be a member of a loop of builders, which the tree rebinds where
 		// the loop holds only builders (`ScopeGenerator.isLoopBuilder(amongSiblings:)`): a loop of builders, refused.
 		let isLoopBuilder = rename(of: declaration, in: world).map { !$0.erasedToConcreteExistential && ScopeGenerator.isBuilder($0.property) } ?? false
-		return NodeRecordClaim(kind: .rename, discharges: Set(NodeRecordRefusal.allCases), refusals: isLoopBuilder ? [.builderLoop] : [])
+		return NodeRecordClaim(kind: .rename, discharges: renameDischarges, refusals: isLoopBuilder ? [.builderLoop] : [])
 	}
 
 	/// The rename `declaration` is, as its scope declares it, under its property (`TypeFactsGraph`).

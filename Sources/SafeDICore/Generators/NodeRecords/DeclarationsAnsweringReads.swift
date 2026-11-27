@@ -52,6 +52,11 @@
 /// `NodeRecords.init` makes the records; none in a world that declares no lazily instantiated property and opens no
 /// `@Sendable` function. The declaration that answers each read, one ID per key of every variant, lives only while the
 /// sets are made.
+///
+/// A bridge: a private copy of two of the tree's rules about the answer a read finds, which the facts' answers do not
+/// carry: whether it is a wrapper's instance, and whether a `@Sendable` function captures it. It goes in the change that
+/// has each answer of the facts carry the form it is read as and whether it is read across a `@Sendable` function,
+/// which records then read instead.
 struct DeclarationsAnsweringReads: Sendable {
 	init(world: some NodeRecordSources) {
 		let declarations = 0..<Int32(world.declarationCount)
