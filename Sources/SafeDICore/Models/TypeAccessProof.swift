@@ -936,9 +936,9 @@ public struct TypeAccessProof: Sendable {
 			.filter { $0.ownLevel.capped(by: proof(of: $0.carrier)) == level }
 			.filter { seen.insert(MemberKey(carrier: $0.carrier, member: $0.member, location: $0.location)).inserted }
 			.sorted { left, right in
-				let leftKey = (left.location?.filePath ?? "\u{10FFFF}", left.location?.line ?? 0, left.location?.column ?? 0)
-				let rightKey = (right.location?.filePath ?? "\u{10FFFF}", right.location?.line ?? 0, right.location?.column ?? 0)
-				return leftKey < rightKey || (leftKey == rightKey && left.carrier < right.carrier)
+				left.location == right.location
+					? left.carrier < right.carrier
+					: Dependency.DeclarationLocation.precedesInSourceOrder(left.location, right.location)
 			}
 			.map { mention in
 				let carrierProof = proof(of: mention.carrier)
@@ -994,9 +994,9 @@ public struct TypeAccessProof: Sendable {
 			.filter { $0.ownLevel.capped(by: proof(of: $0.carrier)) == level }
 			.filter { seen.insert(MemberKey(carrier: $0.carrier, member: $0.member, location: $0.location)).inserted }
 			.sorted { left, right in
-				let leftKey = (left.location?.filePath ?? "\u{10FFFF}", left.location?.line ?? 0, left.location?.column ?? 0)
-				let rightKey = (right.location?.filePath ?? "\u{10FFFF}", right.location?.line ?? 0, right.location?.column ?? 0)
-				return leftKey < rightKey || (leftKey == rightKey && left.carrier < right.carrier)
+				left.location == right.location
+					? left.carrier < right.carrier
+					: Dependency.DeclarationLocation.precedesInSourceOrder(left.location, right.location)
 			}
 			.map { Prover(carrier: $0.carrier, member: $0.member, argumentLabels: $0.argumentLabels, level: level, location: $0.location, cap: nil) }
 	}

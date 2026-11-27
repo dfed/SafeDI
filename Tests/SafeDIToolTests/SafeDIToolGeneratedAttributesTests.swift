@@ -757,7 +757,7 @@ struct SafeDIToolGeneratedAttributesTests: ~Copyable {
 			extension Outer {
 			    /// Code you write and code SafeDI generates can both call this initializer.
 			    @MainActor public init() {
-			        func __safeDI_inner() -> Inner {
+			        @inline(never) func __safeDI_inner() -> Inner {
 			            _ = Inner.__safeDI_Inner_CBF29CE484222325.self
 			            return Inner()
 			        }
