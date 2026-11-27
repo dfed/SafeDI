@@ -602,24 +602,26 @@ func executeSafeDIToolMultiModuleTest(
 				// Every seam tree made again from its first signature pass must generate what a tree built anew does (`ReusedSeamTreeChecks`).
 				generateOutput = try await HoleSiteRecordObservation.$observer.withValue(HoleSiteRecordObservation.checkingRecords(handingOn: HoleSiteRecordObservation.observer)) {
 					try await SeamPlaceLevels.$observer.withValue(SeamPlaceLevels.checkingPathStructs(handingOn: SeamPlaceLevels.observer)) {
-						try await ConstructionMemoOracle.$observer.withValue(ConstructionMemoChecks.recordingDifferences(handingOn: ConstructionMemoOracle.observer)) {
-							try await SeamSignatureObservation.$confirmsSkippedPasses.withValue(SkippedConfirmingPassChecks.recordingDifferences(handingOn: SeamSignatureObservation.confirmsSkippedPasses)) {
-								// Interned in the order `SAFEDI_INTERNER_ORDER` names, if any: the output must not change (`ConstructionInternerOrder`).
-								// Every value a freeze interns must be one the interner is designed to meet there (`ConstructionInternerClosure`).
-								try await ConstructionInternerObservation.$missObserver.withValue(ConstructionInternerClosure.recordingMissesNotExcluded(handingOn: ConstructionInternerObservation.missObserver)) {
-									try await ConstructionInternerOrder.applying(.fromEnvironment) {
-										try await ReusedSeamTreeChecks.comparing(handingOn: SeamTreeReuseObservation.comparesBuiltTrees) {
-											try await LabelsReadFromAboveChecks.comparing(handingOn: LabelsReadFromAboveObservation.observer) {
-												try await CallPlaceOrderChecks.comparing(handingOn: CallPlaceOrderObservation.observer) {
-													try await PlaceReadsChecks.comparing(handingOn: PlaceReadsObservation.observer) {
-														try await VariantBodyChecks.comparing(handingOn: VariantBodyObservation.observer) {
-															try await PlanBodiesChecks.comparing(handingOn: PlanBodiesObservation.observer) {
-																try await MockVariantBodyChecks.comparing {
-																	try await TwinIdentityChecks.comparing(handingOn: TwinIdentityObservation.observer) {
-																		try await PlanSendableChecks.comparing(handingOn: PlanSendableObservation.observer) {
-																			try await PlanCaptureChecks.comparing(handingOn: PlanCaptureObservation.observer) {
-																				try await UnpassableCycleLabelChecks.checking(handingOn: UnpassableCycleLabelObservation.observer) {
-																					try await tool.generate()
+						try await NodeRecordsChecks.checking {
+							try await ConstructionMemoOracle.$observer.withValue(ConstructionMemoChecks.recordingDifferences(handingOn: ConstructionMemoOracle.observer)) {
+								try await SeamSignatureObservation.$confirmsSkippedPasses.withValue(SkippedConfirmingPassChecks.recordingDifferences(handingOn: SeamSignatureObservation.confirmsSkippedPasses)) {
+									// Interned in the order `SAFEDI_INTERNER_ORDER` names, if any: the output must not change (`ConstructionInternerOrder`).
+									// Every value a freeze interns must be one the interner is designed to meet there (`ConstructionInternerClosure`).
+									try await ConstructionInternerObservation.$missObserver.withValue(ConstructionInternerClosure.recordingMissesNotExcluded(handingOn: ConstructionInternerObservation.missObserver)) {
+										try await ConstructionInternerOrder.applying(.fromEnvironment) {
+											try await ReusedSeamTreeChecks.comparing(handingOn: SeamTreeReuseObservation.comparesBuiltTrees) {
+												try await LabelsReadFromAboveChecks.comparing(handingOn: LabelsReadFromAboveObservation.observer) {
+													try await CallPlaceOrderChecks.comparing(handingOn: CallPlaceOrderObservation.observer) {
+														try await PlaceReadsChecks.comparing(handingOn: PlaceReadsObservation.observer) {
+															try await VariantBodyChecks.comparing(handingOn: VariantBodyObservation.observer) {
+																try await PlanBodiesChecks.comparing(handingOn: PlanBodiesObservation.observer) {
+																	try await MockVariantBodyChecks.comparing {
+																		try await TwinIdentityChecks.comparing(handingOn: TwinIdentityObservation.observer) {
+																			try await PlanSendableChecks.comparing(handingOn: PlanSendableObservation.observer) {
+																				try await PlanCaptureChecks.comparing(handingOn: PlanCaptureObservation.observer) {
+																					try await UnpassableCycleLabelChecks.checking(handingOn: UnpassableCycleLabelObservation.observer) {
+																						try await tool.generate()
+																					}
 																				}
 																			}
 																		}

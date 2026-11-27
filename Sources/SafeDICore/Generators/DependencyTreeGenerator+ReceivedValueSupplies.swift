@@ -30,7 +30,7 @@ extension DependencyTreeGenerator {
 	///   judge.
 	/// - Throws: The error `generate` reports when the trees are not valid.
 	public func receivedValueSupplies() async throws -> ReceivedValueSupplies? {
-		let roots = try await dependencyTrees(unreadTypeComment: nil, ownAccessProof: ownAccessProof(), plansCyclesPerType: false).roots
+		let roots = try await dependencyTrees(unreadTypeComment: nil, ownAccessProof: ownAccessProof(), readersOfEveryTree: [.reader(.receivedValueSupplies)], plansCyclesPerType: false).roots
 		var supplies = [ReceivedValueSupply]()
 		var constructedTypes = [TypeDescription]()
 		// Every root's tree is built per path here (`plansCyclesPerType`).
