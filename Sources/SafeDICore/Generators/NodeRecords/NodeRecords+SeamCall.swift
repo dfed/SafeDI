@@ -59,7 +59,7 @@ extension NodeRecords {
 		children: [GeneratedCode],
 	) throws -> AliasPlaceRecord {
 		let scope = world.scope(of: declaration)
-		let construction = try builtByInitializerRecord(of: declaration, variant: variant, in: world, lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties, typesDeclaredEscaping: typesDeclaredEscaping, children: [], declaresFunction: true)
+		let construction = try builtByInitializerRecord(of: declaration, variant: variant, in: world, lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties, alwaysDeclaresFunction: true, typesDeclaredEscaping: typesDeclaredEscaping, children: [])
 		var arguments = construction.arguments
 		var reads = construction.arguments
 		var argumentValues = [Int: ValuePath]()
