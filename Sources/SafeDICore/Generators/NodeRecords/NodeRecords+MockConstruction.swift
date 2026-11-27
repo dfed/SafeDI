@@ -32,7 +32,7 @@ extension NodeRecords {
 			refusals.append(.mockActor)
 		}
 		// The root's own such parameters are parameters of `mock()`, which the root's lowering judges
-		// (`ScopeGenerator.nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:)`). A type's configuration
+		// (`ScopeGenerator.nodeRecordsMockStatements(of:world:bindsOnlyNodes:)`). A type's configuration
 		// takes the defaults its hand-written mock declares too, whichever way a node builds it.
 		if declaration != 0 {
 			let takesDefaultValuedParameter = instantiable.initializer.map { !ScopeGenerator.DefaultParameter.defaultParameters(of: $0, dependencies: instantiable.dependencies).isEmpty } ?? false

@@ -77,10 +77,7 @@ struct NodeBuildOrder: Sendable {
 			// A member of a loop of builders, which the facts find with optional receives too, is rebound in each member's
 			// function, which node records do not make yet.
 			guard edgeFacts.allSatisfy({ $0.loop < 0 }) else { throw .builderLoop }
-			// The facts' build position, which the sibling-order fixed point gives each edge.
-			edgeIndicesByDeclaration[Int(declaration)] = edgeFacts.enumerated()
-				.sorted { $0.element.buildPosition < $1.element.buildPosition }
-				.map(\.offset)
+			edgeIndicesByDeclaration[Int(declaration)] = Self.edgeIndices(inOrderOf: edgeFacts)
 		}
 		self.edgeIndicesByDeclaration = edgeIndicesByDeclaration
 	}
@@ -88,6 +85,14 @@ struct NodeBuildOrder: Sendable {
 	/// The indices of `declaration`'s edges, in the order it builds their children.
 	func edgeIndices(of declaration: DeclarationID) -> [Int] {
 		edgeIndicesByDeclaration[Int(declaration)]
+	}
+
+	/// The indices of a node's edges, whose facts are `edgeFacts`, in the order it builds their children: the facts' build
+	/// position, which the sibling-order fixed point gives each edge.
+	static func edgeIndices(inOrderOf edgeFacts: ArraySlice<TypeFactsEdge>) -> [Int] {
+		edgeFacts.enumerated()
+			.sorted { $0.element.buildPosition < $1.element.buildPosition }
+			.map(\.offset)
 	}
 
 	private let edgeIndicesByDeclaration: [[Int]]

@@ -47,5 +47,10 @@ struct RunFactsInterning: Sendable {
 		declarationIDs.existingID(of: declaration)
 	}
 
+	/// The declaration whose ID is `id`, one this interning gave.
+	func declaration(ofID id: Int32) -> TypeFactsDeclaration {
+		declarationIDs.values[Int(id)]
+	}
+
 	private var declarationIDs = TypeFactsInterner<TypeFactsDeclaration>()
 }

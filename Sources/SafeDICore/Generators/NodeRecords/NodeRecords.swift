@@ -152,9 +152,20 @@ struct NodeRecords: Sendable {
 	///   - declaredTypeNames: The names the modules SafeDI read declare types by at file scope, which the check of an erased
 	///     instantiator's first generic argument reads (`checkForwardsBuiltTypesProperties(_:in:declaredTypeNames:)`).
 	///     `nil` for a mock root's world, where no kind claims an erased instantiator and the mock's own tree reports it.
+	///   - sharedRecordByVariant: The record of each variant that a mock world takes from the mock worlds' table
+	///     (`MockWorldsTable.sharedRecords`), `nil` for one it makes itself; empty where it makes every record. A shared
+	///     variant's children are shared rows too, so its subtree is not walked.
+	///   - refusesOwedFacts: Whether a declaration whose answers a producer still owes refuses the world. `false` only where
+	///     the caller checks that itself (`owesFacts(in:)`), after comparing two builds of the world's records.
 	/// - Throws: A `NodeRecordRefusal` where the world holds a kind node records do not make, or what an initializer's
 	///   arguments throw.
-	init(world: some NodeRecordSources, seamTree: DependencyTreeGenerator.RootScopeInfo.SeamTree? = nil, declaredTypeNames: DeclaredTypeNames?) throws {
+	init(
+		world: some NodeRecordSources,
+		seamTree: DependencyTreeGenerator.RootScopeInfo.SeamTree? = nil,
+		declaredTypeNames: DeclaredTypeNames?,
+		sharedRecordByVariant: [BuiltPlaceRecord?] = [],
+		refusesOwedFacts: Bool = true,
+	) throws {
 		let declarationCount = world.declarationCount
 		var kinds = [NodeRecordKind]()
 		kinds.reserveCapacity(declarationCount)
@@ -188,24 +199,25 @@ struct NodeRecords: Sendable {
 		var stack: [(variant: VariantID, childrenPushed: Bool)] = [(0, false)]
 		while let (variant, childrenPushed) = stack.popLast() {
 			let calls = world.calls(of: variant)
+			let sharedRecord = Int(variant) < sharedRecordByVariant.count ? sharedRecordByVariant[Int(variant)] : nil
 			guard childrenPushed else {
 				stack.append((variant, true))
-				for callee in calls.reversed() where places[Int(callee)] == nil {
+				// A shared record holds its children's places already.
+				for callee in calls.reversed() where sharedRecord == nil && places[Int(callee)] == nil {
 					stack.append((callee, false))
 				}
 				continue
 			}
 			guard variant != 0, places[Int(variant)] == nil else { continue }
-			let declaration = world.declaration(of: variant)
-			let instantiable = world.scope(of: declaration).instantiable
-			var escaping = Set(instantiable.initializer?.typesDeclaredEscaping ?? [])
-			escaping.formUnion(instantiable.mockInitializer?.typesDeclaredEscaping ?? [])
-			var children = [GeneratedCode]()
-			for edgeIndex in order.edgeIndices(of: declaration) {
-				let callee = Int(calls[calls.startIndex + edgeIndex])
-				escaping.formUnion(typesDeclaredEscaping[callee] ?? [])
-				children.append(.indented(places[callee] ?? .empty, by: ScopeGenerator.standardIndent))
+			if let sharedRecord {
+				typesDeclaredEscaping[Int(variant)] = sharedRecord.typesDeclaredEscaping
+				records[Int(variant)] = .built(sharedRecord)
+				places[Int(variant)] = .place(PlacePlan(code: .empty, record: .built(sharedRecord)))
+				continue
 			}
+			let declaration = world.declaration(of: variant)
+			var escaping = Self.typesDeclaredEscaping(byConstructionsOf: world.scope(of: declaration).instantiable)
+			let children = Self.children(ofCalls: calls, inOrder: order.edgeIndices(of: declaration), escaping: &escaping) { (places[Int($0)], typesDeclaredEscaping[Int($0)]) }
 			// What a receive by value reads as a wrapper's instance, which every record of a construction passes its arguments.
 			let instanceProperties = answeringDeclarations.lazilyInstantiatedInstanceProperties(readBy: variant)
 			let record: PlaceRecord = switch kinds[Int(declaration)] {
@@ -242,7 +254,7 @@ struct NodeRecords: Sendable {
 			}
 		}
 		// Last, so that a world refused for a kind reports that kind first.
-		for declaration in 0..<Int32(declarationCount) where Self.owesFacts(declaration, in: world) {
+		if refusesOwedFacts, Self.owesFacts(in: world) {
 			throw NodeRecordRefusal.readAnsweredTwoWays
 		}
 		let rootCalls = world.calls(of: 0)
@@ -261,6 +273,44 @@ struct NodeRecords: Sendable {
 	/// The root's body: a place for each of the root's children, in the order the root builds them, indented as a root's
 	/// statements are.
 	let rootBody: [GeneratedCode]
+
+	/// The built records of the world's variants, in variant order.
+	var builtRecords: [BuiltPlaceRecord] {
+		records.compactMap { record in
+			switch record {
+			case let .built(built):
+				built
+			case .alias, .closer, nil:
+				nil
+			}
+		}
+	}
+
+	/// The types the initializer and the hand-written mock of `instantiable` declare `@escaping`, which a place that
+	/// builds it declares, beside its children's.
+	static func typesDeclaredEscaping(byConstructionsOf instantiable: Instantiable) -> Set<TypeDescription> {
+		var escaping = Set(instantiable.initializer?.typesDeclaredEscaping ?? [])
+		escaping.formUnion(instantiable.mockInitializer?.typesDeclaredEscaping ?? [])
+		return escaping
+	}
+
+	/// The places of the children a variant's body builds, each indented as a child of a body, in `order`, the indices of
+	/// its edges, from `calls`, its callees, each callee's place and the types its tree declares `@escaping` given by
+	/// `placeOfCallee`, which `escaping` gains.
+	static func children(
+		ofCalls calls: ArraySlice<VariantID>,
+		inOrder order: [Int],
+		escaping: inout Set<TypeDescription>,
+		placeOfCallee: (VariantID) -> (place: GeneratedCode?, typesDeclaredEscaping: Set<TypeDescription>?),
+	) -> [GeneratedCode] {
+		var children = [GeneratedCode]()
+		for edgeIndex in order {
+			let (place, typesDeclaredEscaping) = placeOfCallee(calls[calls.startIndex + edgeIndex])
+			escaping.formUnion(typesDeclaredEscaping ?? [])
+			children.append(.indented(place ?? .empty, by: ScopeGenerator.standardIndent))
+		}
+		return children
+	}
 
 	/// How many variants have a record, which is every variant but the root's.
 	var recordCount: Int {
@@ -318,6 +368,12 @@ struct NodeRecords: Sendable {
 			refusals.insert(.callsAnswerAVariantApart)
 		}
 		return NodeRecordRefusal.allCases.filter(refusals.contains)
+	}
+
+	/// Whether a producer of the facts still owes any declaration of `world` its answers (`owesFacts(_:in:)`), which
+	/// refuses the world as `readAnsweredTwoWays`.
+	static func owesFacts(in world: some NodeRecordSources) -> Bool {
+		(0..<Int32(world.declarationCount)).contains { owesFacts($0, in: world) }
 	}
 
 	/// Whether a producer of the facts still owes `declaration`'s answers (`TypeFactsWorld.owedFacts(of:)`), which refuses
@@ -383,7 +439,7 @@ struct NodeRecords: Sendable {
 	/// The kind `declaration` is made as, and every refusal it holds: those of the claim a kind makes of it, and
 	/// every check of `builtByInitializer` the claim does not discharge (`refusalsOfBuiltByInitializer(_:in:)`). A node of two kinds,
 	/// one claimed, is still refused for the other.
-	private static func kindAndRefusals(of declaration: DeclarationID, in world: some NodeRecordSources) -> (kind: NodeRecordKind, refusals: [NodeRecordRefusal]) {
+	static func kindAndRefusals(of declaration: DeclarationID, in world: some NodeRecordSources) -> (kind: NodeRecordKind, refusals: [NodeRecordRefusal]) {
 		let claim = claim(of: declaration, in: world)
 		let discharged = claim?.discharges ?? []
 		let refusals = (claim?.refusals ?? []) + refusalsOfBuiltByInitializer(declaration, in: world).filter { !discharged.contains($0) }

@@ -258,25 +258,30 @@ extension DependencyTreeGenerator {
 			foreignPublicMocks: foreignPublicMocks,
 		)
 		let fulfillingInstantiables = typeDescriptionToFulfillingInstantiableMap
-		var recordedWorldRoots = [TypeDescription: ConstructionScope]()
+		var builtWorlds = [TypeDescription: MockWorld]()
 		if let worldRootRecording {
 			worldRootRecording.continuation.finish()
+			var recordedWorldRoots = [TypeDescription: ConstructionScope]()
 			for await (mockedType, worldRoot) in worldRootRecording.stream {
 				recordedWorldRoots[mockedType] = worldRoot
 			}
-			// The mock worlds' table, built whole here, from the worlds in the order their roots are lowered, before any
-			// lowering starts, and only where mock worlds are built at all. Nothing fills a world from it yet: a test reads
-			// its counts.
-			let mockWorldsTable = MockWorldsTable(worlds: mockRoots.compactMap { mockRoot in
+			// The mock worlds' table, built whole here, from the worlds in the order their roots are lowered, and each world
+			// built once from it, with the records the worlds share, before any lowering starts, and only where mock worlds are
+			// built at all. Each root's lowering is handed its world.
+			let worldRoots = mockRoots.compactMap { mockRoot in
 				recordedWorldRoots[mockRoot.instantiable.concreteInstantiable].map { (mockedType: mockRoot.instantiable.concreteInstantiable, root: $0) }
-			})
-			MockWorldsTableObservation.observer?(mockWorldsTable.report)
+			}
+			let mockWorlds = try await MockWorlds.build(roots: worldRoots.map(\.root), table: MockWorldsTable(worlds: worldRoots))
+			MockWorldsTableObservation.observer?(mockWorlds.report)
+			for (worldRoot, world) in zip(worldRoots, mockWorlds.worlds) {
+				builtWorlds[worldRoot.mockedType] = world
+			}
 		}
-		let worldRoots = recordedWorldRoots
+		let worlds = builtWorlds
 		let loweredRoots = try await BoundedConcurrency.map(mockRoots, width: BoundedConcurrency.mockRootWidth) { instantiableAndMockRoot, _ in
 			let (instantiable, mockRoot) = instantiableAndMockRoot
 			async let fulfillers = mockRoot.fulfillersOfMock(mockDefaults: flatParameterMockDefaults)
-			let lowered = try await mockRoot.lowerMockRoot(context: mockContext, worldRoot: worldRoots[instantiable.concreteInstantiable])
+			let lowered = try await mockRoot.lowerMockRoot(context: mockContext, world: worlds[instantiable.concreteInstantiable])
 			return await (
 				root: GeneratedRoot(
 					typeDescription: instantiable.concreteInstantiable,

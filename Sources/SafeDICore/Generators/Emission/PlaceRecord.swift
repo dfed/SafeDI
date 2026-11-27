@@ -254,7 +254,7 @@ struct ConstructionValue: Hashable, Sendable {
 
 /// An optional closure a construction tries before its call: `if let <bindingName> = <closure>, <each absent> == nil {
 /// <closure's result> } else <the next alternative, or the call>`.
-struct ConstructionAlternative: Sendable {
+struct ConstructionAlternative: Equatable, Sendable {
 	/// The closure.
 	let closure: ValuePath
 	/// The name the closure is bound to where it is optional; `nil` where it is not, and is used as read.

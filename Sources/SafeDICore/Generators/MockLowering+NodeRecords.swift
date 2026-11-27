@@ -19,8 +19,8 @@
 // SOFTWARE.
 
 extension ScopeGenerator {
-	/// The statements that build the nodes of `instantiable`'s mock, laid out from the node records of its world, the
-	/// root `worldRoot` builds, or `nil` where the mock's walk writes them: node records refuse the world, the mock binds a
+	/// The statements that build the nodes of `instantiable`'s mock, laid out from the node records of its world, `world`,
+	/// built before the module's mock roots are lowered (`MockWorlds`), or `nil` where the mock's walk writes them: node records refuse the world, the mock binds a
 	/// value that is no node of it (`bindsOnlyNodes` is false), or the engine cannot lay the records out. Where no test turns
 	/// `NodeRecordsObservation.laysOutMockRoots` on, the records owe the mock root's facts, so node records refuse every
 	/// mock world (`NodeRecords.owesFacts(_:in:)`). Each node reads its override from the overrides its body's function was
@@ -31,8 +31,7 @@ extension ScopeGenerator {
 	/// The function awaits nothing and is kept out of the frame of the mock's walk, which every root's lowering holds.
 	/// Anything the records throw refuses the world (`NodeRecords.refusingWhatRecordsThrow(_:)`), whose walk reports it.
 	@inline(never)
-	static func nodeRecordsMockStatements(of instantiable: Instantiable, worldRoot: ConstructionScope, bindsOnlyNodes: Bool) -> String? {
-		let world = TypeFactsGraph(root: worldRoot, forMockGeneration: true)
+	static func nodeRecordsMockStatements(of instantiable: Instantiable, world: MockWorld, bindsOnlyNodes: Bool) -> String? {
 		func report(refusal: NodeRecordRefusal?, everyRefusal: [NodeRecordRefusal], isLaidOut: Bool, recordCount: Int) {
 			var report = NodeRecordsReport(
 				root: instantiable.concreteInstantiable.asSource,
@@ -50,11 +49,11 @@ extension ScopeGenerator {
 		let nodeRecords: NodeRecords
 		// No kind claims an erased instantiator in a mock root's world, so its first generic argument is the mock's tree's to
 		// check.
-		switch NodeRecords.refusingWhatRecordsThrow({ try NodeRecords(world: world, declaredTypeNames: nil) }) {
+		switch world.records {
 		case let .success(made):
 			nodeRecords = made
 		case let .failure(refusal):
-			report(refusal: refusal, everyRefusal: refusal == .recordsThrew ? [.recordsThrew] : NodeRecords.refusals(in: world, declaredTypeNames: nil), isLaidOut: false, recordCount: 0)
+			report(refusal: refusal, everyRefusal: world.everyRefusal, isLaidOut: false, recordCount: 0)
 			return nil
 		}
 		// A read of a value the mock binds beside its nodes would resolve to no declaration of the records' body.

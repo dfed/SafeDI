@@ -22,7 +22,8 @@ import SafeDICore
 import Testing
 
 /// Soundness rule 1 of node records: at every place of every production root they accept, node records' record of the
-/// place's node equals the record the tree's place made (`NodeRecordsObservation`). Where `SAFEDI_NODE_RECORDS_REPORT`
+/// place's node equals the record the tree's place made (`NodeRecordsObservation`); and every mock world built from the
+/// mock worlds' table holds the records it builds without it (`MockWorldsTableReport.differences`). Where `SAFEDI_NODE_RECORDS_REPORT`
 /// names a file, each root's outcome is appended to it as a line: the test, the root, `laid out`, `accepted`, or the
 /// refusal's kind, the count of differences, every refusal the world holds, and `mock` for a mock's root. Where `SAFEDI_NODE_RECORDS_LAY_OUT` is `1`, every root node records accept is laid out from them.
 enum NodeRecordsChecks {
@@ -61,19 +62,33 @@ enum NodeRecordsChecks {
 				try await body()
 			}
 		}
-		return try await NodeRecordsObservation.$laysOutRoots.withValue(laysOutRoots) {
-			try await NodeRecordsObservation.$observer.withValue({ report in
-				for difference in report.differences {
-					Issue.record(Comment(rawValue: "Node records differ from the tree’s records of root \(report.root): \(difference)"))
-				}
-				if let reportPath {
-					let outcome = report.isLaidOutFromNodeRecords ? "laid out" : report.refusal ?? "accepted"
-					append("\(testName)\t\(report.root)\t\(outcome)\t\(report.differences.count)\t\(report.everyRefusal.joined(separator: ","))\t\(report.isMockRoot ? "mock" : "")\n", toFileAt: reportPath)
-				}
-				enclosingObserver?(report)
-			}) {
-				try await body()
+		// Every mock world built from the mock worlds' table must hold, field for field, the records it builds without it.
+		let enclosingTableObserver = MockWorldsTableObservation.observer
+		let tableObserver: @Sendable (MockWorldsTableReport) -> Void = { report in
+			for difference in report.differences {
+				Issue.record(Comment(rawValue: "A mock world’s records built from the mock worlds’ table differ from those it builds without it: \(difference)"))
 			}
+			enclosingTableObserver?(report)
+		}
+		return try await NodeRecordsObservation.$laysOutRoots.withValue(laysOutRoots) {
+			try await MockWorldsTableObservation.$observer.withValue(tableObserver) {
+				try await checkingNodeRecordsOfRoots(reportPath: reportPath, testName: testName, enclosingObserver: enclosingObserver, body)
+			}
+		}
+	}
+
+	private static func checkingNodeRecordsOfRoots<Result>(reportPath: String?, testName: String, enclosingObserver: (@Sendable (NodeRecordsReport) -> Void)?, _ body: () async throws -> Result) async rethrows -> Result {
+		try await NodeRecordsObservation.$observer.withValue({ report in
+			for difference in report.differences {
+				Issue.record(Comment(rawValue: "Node records differ from the tree’s records of root \(report.root): \(difference)"))
+			}
+			if let reportPath {
+				let outcome = report.isLaidOutFromNodeRecords ? "laid out" : report.refusal ?? "accepted"
+				append("\(testName)\t\(report.root)\t\(outcome)\t\(report.differences.count)\t\(report.everyRefusal.joined(separator: ","))\t\(report.isMockRoot ? "mock" : "")\n", toFileAt: reportPath)
+			}
+			enclosingObserver?(report)
+		}) {
+			try await body()
 		}
 	}
 
