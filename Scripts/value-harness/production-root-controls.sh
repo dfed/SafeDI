@@ -18,6 +18,7 @@ export SAFEDI_RELEASE_ACCEPTANCE_RELEASE=older SAFEDI_RELEASE_ACCEPTANCE_TOOL=$O
   SAFEDI_RELEASE_ACCEPTANCE_FIXTURES=$(ls -d "$HERE"/production-root-probes/*/ | sed 's|/$||' | paste -sd: -) \
   MUTATE_ALL_FILES=1 MUTATE_REAL_TOOL=$CURRENT
 run() { # NAME TOOL
+  rm -f "$REPORTS/$1.txt"
   SAFEDI_RELEASE_ACCEPTANCE_REPORT=$REPORTS/$1.txt SAFEDI_RELEASE_ACCEPTANCE_CURRENT_TOOL=$2 SAFEDI_RELEASE_ACCEPTANCE_CURRENT_NAME=$1 \
     "$ROOT/.build/debug/SafeDIPackageTests.xctest" --testing-library swift-testing --filter 'SafeDIToolReleaseAcceptanceTests/longRun' > "$REPORTS/$1.log" 2>&1
 }
