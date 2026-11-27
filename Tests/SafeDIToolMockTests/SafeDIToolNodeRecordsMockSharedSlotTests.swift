@@ -286,6 +286,8 @@ struct SafeDIToolNodeRecordsMockSharedSlotTests: ~Copyable {
 	mutating func mock_releasesWhatOverrideCaptures_whenValuesBuiltAroundMockedCycleAreReleased() async throws {
 		// The places a mock's functions enter hold the configurations, whose overrides capture what the caller's closures
 		// capture. Once every value the mock built is released, nothing may keep a place alive.
+		// It fails where the generated `mock()` is made to keep its overrides in an object that holds itself (the three
+		// lines then read `retained`).
 		let names = ["Alpha", "Bravo", "Charlie"]
 		let fixtureFiles = Self.ring(names)
 		let (laidOut, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
@@ -419,6 +421,123 @@ struct SafeDIToolNodeRecordsMockSharedSlotTests: ~Copyable {
 
 		#expect(walkLinesPerTypePerMock == 4)
 		#expect(laidOutLinesPerTypePerMock <= walkLinesPerTypePerMock, "lines of the walk’s mocks: \(walkLineCounts), laid out: \(laidOutLineCounts)")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_handsEachFunctionOfCycleThePlacesEntered_whenBothTypesOfCycleAreMocked() async throws {
+		// `Alpha`'s mock declares a function for each type of the cycle, its own included, since `Bravo` builds `Alpha`
+		// again. Each is the walk's four lines: it takes the places entered with its own configuration, and hands the
+		// next the places with that function's slot entered, so a second lap returns to the first lap's configuration.
+		let fixtureFiles = Self.ring(["Alpha", "Bravo"])
+		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixtureFiles, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+
+		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [true, true])
+		#expect(output.mockFiles["Alpha+SafeDIMock.swift"] == generatedFileHeader + """
+		#if DEBUG
+		extension Alpha {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            bravoBuilder: Bravo.SafeDIMockConfiguration = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                bravoBuilder: bravoBuilder
+		            )
+		        }
+
+		        var bravoBuilder: Bravo.SafeDIMockConfiguration { __safeDI_storage.bravoBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                bravoBuilder: Bravo.SafeDIMockConfiguration
+		            ) {
+		                self.bravoBuilder = bravoBuilder
+		            }
+
+		            let bravoBuilder: Bravo.SafeDIMockConfiguration
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Alpha {
+		        indirect enum __safeDI_Places {
+		            case none
+		            case entered(slot: String?, entered: Any, above: __safeDI_Places)
+		        }
+		        struct __safeDI_Entered<Configuration> {
+		            let configuration: Configuration
+		            var places = __safeDI_Places.none
+		            func entering<Handed>(_ slot: String, _ handed: Handed, nearestOfType: Bool = false) -> __safeDI_Entered<Handed> {
+		                var nearest: __safeDI_Entered<Handed>?
+		                var above = places
+		                while case let .entered(enteredSlot, entered, next) = above {
+		                    if enteredSlot == slot || nearestOfType && nearest == nil, let entered = entered as? __safeDI_Entered<Handed> {
+		                        if enteredSlot == slot { return .init(configuration: entered.configuration, places: above) }
+		                        nearest = entered
+		                    }
+		                    above = next
+		                }
+		                let entered = __safeDI_Entered<Handed>(configuration: nearest?.configuration ?? handed)
+		                return .init(configuration: entered.configuration, places: .entered(slot: slot, entered: entered, above: places))
+		            }
+		        }
+		        let __safeDI_entered = __safeDI_Entered(configuration: ())
+		        func __safeDI_bravoBuilder(__safeDI_entered: __safeDI_Entered<Bravo.SafeDIMockConfiguration>) -> Bravo {
+		            let alphaBuilder = Instantiator<Alpha> { __safeDI_alphaBuilder(__safeDI_entered: __safeDI_entered.entering("alphaBuilder", Alpha.SafeDIMockConfiguration())) }
+		            return if let safeDIBuilder = __safeDI_entered.configuration.safeDIBuilder { safeDIBuilder(alphaBuilder) } else { Bravo(alphaBuilder: alphaBuilder) }
+		        }
+		        func __safeDI_alphaBuilder(__safeDI_entered: __safeDI_Entered<Alpha.SafeDIMockConfiguration>) -> Alpha {
+		            let bravoBuilder = Instantiator<Bravo> { __safeDI_bravoBuilder(__safeDI_entered: __safeDI_entered.entering("bravoBuilder", __safeDI_entered.configuration.bravoBuilder)) }
+		            return if let safeDIBuilder = __safeDI_entered.configuration.safeDIBuilder { safeDIBuilder(bravoBuilder) } else { Alpha(bravoBuilder: bravoBuilder) }
+		        }
+		        let bravoBuilder = Instantiator<Bravo> { __safeDI_bravoBuilder(__safeDI_entered: __safeDI_entered.entering("bravoBuilder", safeDIOverrides.bravoBuilder)) }
+		        return Alpha(bravoBuilder: bravoBuilder)
+		    }
+		}
+		#endif
+
+		#if DEBUG
+		extension Alpha {
+		    /// Configuration for how this type is constructed within a mock tree.
+		    struct SafeDIMockConfiguration {
+		        init(
+		            bravoBuilder: Bravo.SafeDIMockConfiguration = .init(),
+		            _ safeDIBuilder: ((Instantiator<Bravo>) -> Alpha)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                bravoBuilder: bravoBuilder,
+		                safeDIBuilder: safeDIBuilder
+		            )
+		        }
+
+		        var bravoBuilder: Bravo.SafeDIMockConfiguration { __safeDI_storage.bravoBuilder }
+		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+		        var safeDIBuilder: ((Instantiator<Bravo>) -> Alpha)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                bravoBuilder: Bravo.SafeDIMockConfiguration,
+		                safeDIBuilder: ((Instantiator<Bravo>) -> Alpha)?
+		            ) {
+		                self.bravoBuilder = bravoBuilder
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let bravoBuilder: Bravo.SafeDIMockConfiguration
+		            let safeDIBuilder: ((Instantiator<Bravo>) -> Alpha)?
+		        }
+		    }
+		}
+		#endif
+		""")
 	}
 
 	// MARK: Private
