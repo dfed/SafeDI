@@ -18,9 +18,9 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-/// What a test observes of node records (`NodeRecords`): for each production root of a module without seams, whether its
-/// world was refused and why, whether its code was laid out from the records, and every way the records differ from the
-/// records the tree's places made (soundness rule 1: at every place, the record of the place's node).
+/// What a test observes of node records (`NodeRecords`): for each production root, of a module with seams or without,
+/// whether its world was refused and why, whether its code was laid out from the records, and every way the records
+/// differ from the records the tree's places made (soundness rule 1: at every place, the record of the place's node).
 public enum NodeRecordsObservation {
 	/// Whether a root whose world node records accept is laid out from them, rather than from its tree's places, where
 	/// `observer` is set. Off unless a test turns it on; the tree's places are laid out where the engine cannot lay the

@@ -19,15 +19,17 @@
 // SOFTWARE.
 
 extension NodeRecords {
-	/// Refuses `declaration`'s world with the first kind stage 1 does not make that the node is of.
-	static func checkBuiltByInitializer(_ declaration: DeclarationID, in world: some NodeRecordSources) throws(NodeRecordRefusal) {
-		if let refusal = refusalsOfBuiltByInitializer(declaration, in: world).first {
+	/// Refuses `declaration`'s world with the first kind stage 1 does not make that the node is of. A seam built inline is
+	/// such a kind unless `admittingInlineSeam`.
+	static func checkBuiltByInitializer(_ declaration: DeclarationID, in world: some NodeRecordSources, admittingInlineSeam: Bool = false) throws(NodeRecordRefusal) {
+		if let refusal = refusalsOfBuiltByInitializer(declaration, in: world, admittingInlineSeam: admittingInlineSeam).first {
 			throw refusal
 		}
 	}
 
-	/// Every kind stage 1 does not make that `declaration` is of, in the order they are checked.
-	static func refusalsOfBuiltByInitializer(_ declaration: DeclarationID, in world: some NodeRecordSources) -> [NodeRecordRefusal] {
+	/// Every kind stage 1 does not make that `declaration` is of, in the order they are checked. A seam built inline is such
+	/// a kind unless `admittingInlineSeam`.
+	static func refusalsOfBuiltByInitializer(_ declaration: DeclarationID, in world: some NodeRecordSources, admittingInlineSeam: Bool = false) -> [NodeRecordRefusal] {
 		var refusals = [NodeRecordRefusal]()
 		// Every other construction is a call of another module's code, a hand-written mock or a fill, which a later stage or
 		// another lane's kind makes.
@@ -50,7 +52,7 @@ extension NodeRecords {
 			refusals.append(.cycle)
 		}
 		let scope = world.scope(of: declaration)
-		if scope.isUnavailableDependency || scope.builtInlineSeamComment != nil {
+		if scope.isUnavailableDependency || (scope.builtInlineSeamComment != nil && !admittingInlineSeam) {
 			refusals.append(.unavailableOrInlineSeam)
 		}
 		if !scope.holeArguments.isEmpty {
@@ -82,14 +84,15 @@ extension NodeRecords {
 		return refusals
 	}
 
-	/// The record of `declaration`'s place, a node of kind `builtByInitializer`, whose body builds `children` and whose
-	/// tree declares `typesDeclaredEscaping` `@escaping`.
+	/// The record of `declaration`'s place, a node of kind `builtByInitializer`, whose body builds `children`, whose tree
+	/// declares `typesDeclaredEscaping` `@escaping`, and whose line constructing the type ends with `lineEnd`.
 	static func builtByInitializerRecord(
 		of declaration: DeclarationID,
 		variant _: VariantID,
 		in world: some NodeRecordSources,
 		typesDeclaredEscaping: Set<TypeDescription>,
 		children: [GeneratedCode],
+		lineEnd: String = "",
 	) throws -> BuiltPlaceRecord {
 		let instantiable = world.scope(of: declaration).instantiable
 		// Every node but the root is built as a property, and has an initializer (`checkBuiltByInitializer(_:in:)`).
@@ -119,7 +122,7 @@ extension NodeRecords {
 			functionName: ScopeGenerator.functionName(toBuildPropertyNamed: property.label),
 			isSendable: false,
 			typesDeclaredEscaping: typesDeclaredEscaping,
-			lineEnd: "",
+			lineEnd: lineEnd,
 			// An `Instantiator` always declares its builder function; a constant only where its body has a statement.
 			hasFunction: isInstantiator || !children.isEmpty,
 			children: children,

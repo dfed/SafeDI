@@ -574,8 +574,8 @@ public actor DependencyTreeGenerator {
 		let instantiable: Instantiable
 		let sourceFilePath: String?
 		let built: Built
-		/// The root's scope, frozen, where node records may lay its code out (`NodeRecords`): a production root of a module
-		/// without seams.
+		/// The root's scope, frozen, where node records may lay its code out (`NodeRecords`): a production root, of a module
+		/// with seams or without. A seam's own root has none yet.
 		var constructionScope: ConstructionScope?
 		/// What made this run build the root's tree (`TreeForcer`); empty where it built none.
 		var treeForcers: [TreeForcer] = [.seamWorld]

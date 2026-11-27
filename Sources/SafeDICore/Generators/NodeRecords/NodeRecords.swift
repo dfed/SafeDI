@@ -129,6 +129,8 @@ struct NodeRecords: Sendable {
 			let record = switch kinds[Int(declaration)] {
 			case .builtByInitializer:
 				try Self.builtByInitializerRecord(of: declaration, variant: variant, in: world, typesDeclaredEscaping: escaping, children: children)
+			case .inlineSeam:
+				try Self.inlineSeamRecord(of: declaration, variant: variant, in: world, typesDeclaredEscaping: escaping, children: children)
 			}
 			typesDeclaredEscaping[Int(variant)] = escaping
 			records[Int(variant)] = record
@@ -203,8 +205,11 @@ struct NodeRecords: Sendable {
 	/// the order of `NodeRecordKind`'s cases, calling its file's classifier, `<kind>Kind(of:in:)`, which returns `nil` for
 	/// a node not of its kind and throws a refusal for a node of its kind it cannot make:
 	/// `if let kind = try <kind>Kind(of: declaration, in: world) { return kind }`.
-	private static func claimedKind(of _: DeclarationID, in _: some NodeRecordSources) throws(NodeRecordRefusal) -> NodeRecordKind? {
-		nil
+	private static func claimedKind(of declaration: DeclarationID, in world: some NodeRecordSources) throws(NodeRecordRefusal) -> NodeRecordKind? {
+		if let kind = try inlineSeamKind(of: declaration, in: world) {
+			return kind
+		}
+		return nil
 	}
 }
 
@@ -216,4 +221,7 @@ enum NodeRecordKind: Sendable {
 	/// A constant or an `Instantiator` built by its type's initializer or `instantiate()`, off every cycle, with nothing
 	/// erased, lazy, `@Sendable`, received only if available, renamed or filled in its scope (stage 1).
 	case builtByInitializer
+	/// A seam of another module built inline, because its module generates no tree for the tier this module reaches, and
+	/// otherwise a node `builtByInitializer` makes: its line ends with the comment that says why (`NodeRecords+InlineSeam.swift`).
+	case inlineSeam
 }

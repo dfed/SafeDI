@@ -508,13 +508,16 @@ extension DependencyTreeGenerator {
 				typeDescription: typeDescription,
 				instantiable: scope.instantiable,
 				sourceFilePath: typeDescriptionToFulfillingInstantiableMap[typeDescription]?.sourceFilePath,
-				scopeGenerator: record.createScopeGenerator(
+				built: .tree(record.createScopeGenerator(
 					in: table,
 					lazilyInstantiatedInstanceProperties: [],
 					erasedToConcreteExistential: false,
 					declaredTypeNames: declaredTypeNames,
 					constructionMemo: &constructionMemo,
-				),
+				)),
+				// A test compares the records of a seam world's production root with its tree's places, and no run lays it
+				// out from them until node records make a seam call (`NodeRecords`).
+				constructionScope: ConstructionScope(table: table, record: record),
 			))
 		}
 		for (seam, seamRoot, seamRootScope) in generatedSeams {
