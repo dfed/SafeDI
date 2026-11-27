@@ -998,48 +998,67 @@ struct SafeDIToolNodeRecordsMockRootTests: ~Copyable {
 	}
 
 	@Test(arguments: [
-		// A default-valued parameter is a field of the type's configuration.
+		// A configuration some root of the module builds inside a `@Sendable` function stores each field that is no function
+		// as a `@Sendable` closure, which every root's construction calls.
 		(
 			"""
 			@Instantiable
-			public struct Leaf: Instantiable {
+			public struct Leaf: Instantiable, Sendable {
 			    public init(level: Int = 1) {
 			        self.level = level
 			    }
 
 			    let level: Int
 			}
+
+			@Instantiable(generateMock: true)
+			public struct Other: Instantiable {
+			    public init(leafBuilder: SendableInstantiator<Leaf>) {
+			        self.leafBuilder = leafBuilder
+			    }
+
+			    @Instantiated let leafBuilder: SendableInstantiator<Leaf>
+			}
 			""",
 			"mockDefaultValuedParameter",
 		),
-		// A hand-written mock's default-valued parameter is a field of the type's configuration too.
+		// A `@Sendable` `@autoclosure` parameter is passed a local the node's function reads its configuration into.
+		(
+			"""
+			@Instantiable
+			public final class Leaf: Instantiable, Sendable {
+			    public init(tag: @autoclosure @escaping @Sendable () -> String = "tag") {
+			        self.tag = tag
+			    }
+
+			    let tag: @Sendable () -> String
+			}
+			""",
+			"mockDefaultValuedParameter",
+		),
+		// A parameter of a `mockOnly` declaration's mock that a dependency's label names is passed that dependency, also where
+		// the dependency's type is another.
 		(
 			"""
 			@Instantiable
 			public struct Leaf: Instantiable {
+			    public init(shared: Shared) {
+			        self.shared = shared
+			    }
+
+			    @Received let shared: Shared
+			}
+
+			@Instantiable(mockOnly: true)
+			extension Leaf {
+			    public static func mock(shared: Shared? = nil) -> Leaf {
+			        Leaf(shared: shared ?? Shared())
+			    }
+			}
+
+			@Instantiable
+			public struct Shared: Instantiable {
 			    public init() {}
-
-			    public static func mock(level: Int = 1) -> Leaf {
-			        Leaf()
-			    }
-			}
-			""",
-			"mockDefaultValuedParameter",
-		),
-		// So is a default-valued parameter of the initializer of a type its hand-written mock builds.
-		(
-			"""
-			@Instantiable
-			public struct Leaf: Instantiable {
-			    public init(level: Int = 1) {
-			        self.level = level
-			    }
-
-			    public static func mock() -> Leaf {
-			        Leaf()
-			    }
-
-			    let level: Int
 			}
 			""",
 			"mockDefaultValuedParameter",
@@ -1119,8 +1138,9 @@ struct SafeDIToolNodeRecordsMockRootTests: ~Copyable {
 		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
 			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		}
-		#expect(reports.filter(\.isMockRoot).map(\.refusal) == [refusal])
-		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [false])
+		let rootReports = reports.filter { $0.isMockRoot && $0.root == "Root" }
+		#expect(rootReports.map(\.refusal) == [refusal])
+		#expect(rootReports.map(\.isLaidOutFromNodeRecords) == [false])
 		#expect(output.generatedFiles == walkOutput.generatedFiles)
 	}
 

@@ -44,16 +44,18 @@ extension NodeRecords {
 		// there as the property's type.
 		guard record.hasFunction else { return record }
 		record.returnsPropertyType = true
-		if record.isErased, !children.isEmpty {
-			record.alternatives = record.alternatives.map {
-				ConstructionAlternative(
-					closure: $0.closure,
-					bindingName: $0.bindingName,
-					requiresAbsent: $0.requiresAbsent,
-					use: $0.use,
-					resultWrapper: record.property.typeDescription.asInstantiatedTypeSpelledAsDeclared,
-				)
-			}
+		guard record.isErased else { return record }
+		// A configuration's builder returns the concrete type, whether the node is configured for its children or for a
+		// field its own construction reads; a closure that overrides the node itself returns the property's.
+		record.alternatives = record.alternatives.map { alternative in
+			guard case .member(ReservedName.configurationBuilderPropertyName, _) = alternative.closure else { return alternative }
+			return ConstructionAlternative(
+				closure: alternative.closure,
+				bindingName: alternative.bindingName,
+				requiresAbsent: alternative.requiresAbsent,
+				use: alternative.use,
+				resultWrapper: record.property.typeDescription.asInstantiatedTypeSpelledAsDeclared,
+			)
 		}
 		return record
 	}

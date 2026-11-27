@@ -86,13 +86,15 @@ extension TypeKeyLayout {
 				guard let construction = spelledConstruction(of: representative, call: value.spelled, argumentValues: argumentValues, inClass: owner, before: statements(ofClass: owner).count) else { return nil }
 				value = .spelledConstruction(construction)
 			}
+			var builderBody = BuilderBody(statements: body)
+			builderBody.alwaysWritesReturn = representative.property.propertyType.isConstant
 			functionCode[owner] = BuilderNode(
 				name: functionNames[owner],
 				isSendable: isDecorated[owner],
 				parameters: parameters,
 				typesDeclaredEscaping: typesDeclaredEscaping,
 				returnType: returnType,
-				body: BuilderBody(statements: body),
+				body: builderBody,
 				value: value,
 				lineEnd: representative.lineEnd,
 			).spelled(after: representative.target.leadingLine.map { "\($0)\n" } ?? "")
