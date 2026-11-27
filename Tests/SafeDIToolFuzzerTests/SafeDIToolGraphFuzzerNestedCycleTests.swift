@@ -78,6 +78,7 @@ struct SafeDIToolGraphFuzzerNestedCycleTests {
 		}
 	}
 
+	// OWED (C1, by 2026-11-30): seed 222's fill reads a label a lazy cycle nested between passes as a parameter, which the place graph derives no re-entry of (#1115), so the passed-up query (#1109) finds none around the call either and the tool accepts the graph. Never a known issue: this mark goes when the test passes.
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func toolRuns_rejectFillWithDeclarationBoundOnCycleReentry_whenSeamCalledInsideNestedCyclesPassesPlaceUp() async throws {

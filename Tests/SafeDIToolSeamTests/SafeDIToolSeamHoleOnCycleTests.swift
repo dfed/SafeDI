@@ -157,7 +157,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 		}
 	}
 
-	// OWED (C2, by 2026-11-30): the place graph holds no re-entry of a cycle around a call that passes a place up (#1109, `calledSeamType`), so the judge that reads it throws nothing. Never a known issue: this mark goes when the test passes.
+	// OWED (C2, by 2026-11-30): the `throughSecondCycle` case reads a label a lazy cycle nested between passes as a parameter, which the place graph derives no re-entry of (#1115), so the passed-up query (#1109) finds none around the call either and the judge throws nothing. Never a known issue: this mark goes when the test passes.
 	@Test(arguments: [false, true])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsFillReadsValueACycleDeclaresAgain_whenSeamPassesUpPlaceOfCallInsideCycleOfItsOwnTree(throughSecondCycle: Bool) async {
@@ -198,7 +198,6 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 		}
 	}
 
-	// OWED (C2, by 2026-11-30): the place graph holds no re-entry of a cycle around a call that passes a place up (#1109, `calledSeamType`), so the judge that reads it throws nothing. Never a known issue: this mark goes when the test passes.
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsFillReadsValueACycleDeclaresAgain_whenSecondSeamPassesOnPlacePassedUpFromInsideCycle() async {

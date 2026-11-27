@@ -191,11 +191,16 @@ extension SeamSignature.Places {
 		/// every distinct one over the routes: the outermost re-entered level between the place and the nearest declaration of
 		/// the label. `nil` stands for a route on which none does.
 		public func cycleReentryDeclarations(ofLabel label: String, at caseIndex: Int) -> [SeamSignature.Hole.CycleReentryDeclaration?] {
+			cycleReentryElements(ofLabel: label, at: caseIndex).map { cycleReentryDeclaration(of: $0) }
+		}
+
+		/// What `cycleReentryDeclarations(ofLabel:at:)` lists, as the fold finds it.
+		private func cycleReentryElements(ofLabel label: String, at caseIndex: Int) -> [ReentryElement] {
 			let placeCase = places.cases[caseIndex]
 			guard let start = startState(of: placeCase) else { return [] }
 			// The place's own label is never re-entered: every call is made inside a tree that builds a declaration of it.
-			guard places.levels[placeCase.ownerLevel].key.nextProperty?.label != label else { return [nil] }
-			let reached = reentryFold.value(
+			guard places.levels[placeCase.ownerLevel].key.nextProperty?.label != label else { return [.none] }
+			return reentryFold.value(
 				of: StateKey(level: placeCase.ownerLevel, label: label, state: start),
 				direct: { [unowned self] key in
 					if lastDeclarationIndexByLabel[key.level][key.label] != nil || places.levels[key.level].parents.isEmpty {
@@ -213,11 +218,11 @@ extension SeamSignature.Places {
 					}
 				},
 			)
-			return reached.map(cycleReentryDeclaration(of:))
 		}
 
-		/// The declaration a re-entry hands the type built again, or `nil` for a route on which none does.
-		private func cycleReentryDeclaration(of element: ReentryElement) -> SeamSignature.Hole.CycleReentryDeclaration? {
+		/// The declaration a re-entry hands the type built again, or `nil` for a route on which none does. `calledSeamType`
+		/// names the seam whose tree holds the place, where the cycle builds again a call that presents it.
+		private func cycleReentryDeclaration(of element: ReentryElement, calledSeamType: TypeDescription? = nil) -> SeamSignature.Hole.CycleReentryDeclaration? {
 			guard case let .reentry(level, index, declaringParent) = element else { return nil }
 			let reentry = reentries(ofLevel: level, beneath: declaringParent).list[index]
 			return SeamSignature.Hole.CycleReentryDeclaration(
@@ -229,6 +234,7 @@ extension SeamSignature.Places {
 				closedOnBuiltType: reentry.closedOnBuiltType,
 				closedOnDeclaringType: declaringType(ofPropertyAfter: declaringParent),
 				reenteringType: reentry.reenteringType,
+				calledSeamType: calledSeamType,
 			)
 		}
 
@@ -1125,6 +1131,46 @@ extension SeamSignature.Places {
 			return answers
 		}
 
+		/// For `label`, read of the places of the case at `caseIndex` where the graph of the seam that holds them answers
+		/// `answer`, what a cycle around a call that presents them hands the call's type built again, every distinct one: a
+		/// cycle a passing-up seam's tree closes on a scope above its call builds the call again beneath what the scopes
+		/// between declare, as it builds a place of its own again (`cycleReentryDeclarations(ofLabel:at:)` at the call's case),
+		/// while the builder hands the place the same values at every level. Each names the holding seam as the seam the call
+		/// builds (`CycleReentryDeclaration.calledSeamType`), whose receive of the label carries it to the place. The calls are
+		/// asked as `presentedAnswers(ofLabel:at:)` asks them: those of the holding seam first, and a seam above another only
+		/// where a read leaves the seam beneath. Empty where `answer` stays in the holding seam's tree, for the place's own
+		/// label, for a case of the seam's own places, or where the run does not hold the graph of a seam on a way.
+		public func presentedCycleReentryDeclarations(ofLabel label: String, reading answer: SeamSignature.Places.Answer, at caseIndex: Int) -> [SeamSignature.Hole.CycleReentryDeclaration] {
+			guard let presentation = presentation(of: caseIndex) else { return [] }
+			let holding = holdingCase(of: presentation)
+			let holdingCase = holding.query.places.cases[holding.caseIndex]
+			guard holding.query.leavesHoldingSeam(answer),
+			      holding.query.places.levels[holdingCase.ownerLevel].key.nextProperty?.label != label,
+			      let holdingSeam = holding.query.ownSeam
+			else { return [] }
+			var calls = presentation.callsOfHoldingSeam
+			var seamsLeft = Set(presentation.holdingSeam.map { [$0] } ?? [])
+			var declarations = [SeamSignature.Hole.CycleReentryDeclaration]()
+			// Each re-entry once, by its graph and its place there.
+			var seen = Set<PresentedReentry>()
+			var callIndex = 0
+			while callIndex < calls.count {
+				let call = calls[callIndex]
+				callIndex += 1
+				let query = presentation.seams[call.seam].query ?? self
+				for element in query.cycleReentryElements(ofLabel: label, at: call.caseIndex) where seen.insert(PresentedReentry(graph: ObjectIdentifier(query), element: element)).inserted {
+					if let declaration = query.cycleReentryDeclaration(of: element, calledSeamType: holdingSeam.seamType) {
+						declarations.append(declaration)
+					}
+				}
+				// A read the seam asked leaves its tree goes on at the calls of it.
+				if query.answers(ofLabel: label, at: call.caseIndex).contains(where: query.leavesPresentingSeam), seamsLeft.insert(call.seam).inserted {
+					calls += presentation.seams[call.seam].calls
+				}
+			}
+			return declarations
+		}
+
 		/// Whether a read that `answer` answers at a case of this seam's own places is answered above the seam: the caller's
 		/// own, and a value a public mock's root binds from its caller's argument, which a declaration on a path to a call of
 		/// the mock stands in place of (`Case.uncarriedReplacedOnPathsToCalls`).
@@ -1298,6 +1344,11 @@ extension SeamSignature.Places {
 			/// `nil` for the seam whose query is asked.
 			let seam: CalledSeam?
 			let firstCase: Int
+		}
+
+		private struct PresentedReentry: Hashable {
+			let graph: ObjectIdentifier
+			let element: ReentryElement
 		}
 
 		private struct BoundOnPathToCallKey: Hashable {
