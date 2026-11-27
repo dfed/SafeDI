@@ -655,10 +655,16 @@ struct ReleaseAcceptanceLongRunConfiguration {
 				let names = listedNames ?? ((try? FileManager.default.contentsOfDirectory(atPath: directory)) ?? [])
 					.filter { $0.hasSuffix(".swift") && $0 != "main.swift" && !$0.hasSuffix(".gen.swift") && !$0.hasPrefix(".") }
 					.sorted()
-				// Each file names itself on its first line (`GraphFuzzerFixture.fileNameMarker`), since a hand-written
-				// file need not spell its first type's `@Instantiable` on a line of its own, by which the harness names one.
+				// Each file names itself (`GraphFuzzerFixture.fileNameMarker`), since a hand-written file need not spell its
+				// first type's `@Instantiable` on a line of its own, by which the harness names one: on its first line, or,
+				// in a file whose first line names its module (`GraphFuzzerModule.marker`), which a graph split across
+				// modules needs there, on its second.
 				let files = names.compactMap { name in
-					(try? String(contentsOfFile: "\(directory)/\(name)", encoding: .utf8)).map { GraphFuzzerFixture.fileNameMarker + name + "\n" + $0 }
+					(try? String(contentsOfFile: "\(directory)/\(name)", encoding: .utf8)).map { content in
+						let fileLine = GraphFuzzerFixture.fileNameMarker + name + "\n"
+						guard content.hasPrefix(GraphFuzzerModule.marker), let moduleLineEnd = content.firstIndex(of: "\n") else { return fileLine + content }
+						return String(content[...moduleLineEnd]) + fileLine + String(content[content.index(after: moduleLineEnd)...])
+					}
 				}
 				guard !files.isEmpty, files.count == names.count else {
 					problems.append("SAFEDI_RELEASE_ACCEPTANCE_FIXTURES names \(directory), which holds no readable fixture file.")

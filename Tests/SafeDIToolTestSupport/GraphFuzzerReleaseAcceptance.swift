@@ -438,11 +438,12 @@ enum GraphFuzzerReleaseAcceptance {
 	) async throws -> GraphFuzzerReleaseRun {
 		let toolOutcome: GraphFuzzerToolOutcome = switch release.tool {
 		case .inProcess:
-			// A hand-written fixture's files each name themselves on their first line, which the harness names a corpus
-			// graph's files by only where they declare no `@Instantiable` type.
+			// A hand-written fixture's files each name themselves on their first line, or on their second after the line
+			// that names their module, which the harness names a corpus graph's files by only where they declare no
+			// `@Instantiable` type.
 			try await GraphFuzzerOracle.toolOutcome(
 				of: fixture,
-				fileNames: fixture.swiftFileContent.allSatisfy { $0.hasPrefix(GraphFuzzerFixture.fileNameMarker) } ? fixture.fileNames : nil,
+				fileNames: fixture.swiftFileContent.allSatisfy { $0.split(separator: "\n").prefix(2).contains { $0.hasPrefix(GraphFuzzerFixture.fileNameMarker) } } ? fixture.fileNames : nil,
 			)
 		case let .executable(toolURL):
 			if let modules = fixture.modules {

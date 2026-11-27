@@ -6,6 +6,9 @@
 # The written-calls fixtures keep the Manual’s spellings (`ErasedInstantiator<(), …>`) and the type annotations that
 # check what each call returns (`let _: Screen = …`), and a released copy must never change.
 --exclude Scripts/release-checks/written-calls
+# The value harness's production-root probes are written by Scripts/value-harness/production-root-probes.py, whose
+# property lines its fixture reader reads one to a line.
+--exclude Scripts/value-harness/production-root-probes
 
 # format options
 --indent tab
