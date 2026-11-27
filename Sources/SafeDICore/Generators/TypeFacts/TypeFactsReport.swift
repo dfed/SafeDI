@@ -434,11 +434,9 @@ public struct TypeFactsReport: Sendable {
 			line += " type \(world.builtType(of: declaration).raw) cycle \(world.cycle(of: declaration)) component \(world.component(of: declaration))"
 			line += world.isOnCycle(declaration) ? " on cycle" : ""
 			line += " route \(world.firstRoute(to: declaration)) edges \(Array(world.edges(from: declaration)))"
-			let bindings = world.bindings(of: declaration)
-			// No answer provides a property: what `provides` says of none, by each binding's property.
-			line += " facts \(world.edgeFacts(from: declaration).count) bindings \(bindings.count) none provides \(bindings.contains { world.provides(-1, $0.property) })"
+			line += " facts \(world.edgeFacts(from: declaration).count) bindings \(world.bindings(of: declaration).count)"
 			line += " parents \(world.parents(of: declaration).count) hole \(world.hole(declaration) != nil) received \(world.received(by: declaration).count)"
-			line += " receives \(world.receives(of: declaration).map { world.acceptedProperties(of: $0).count })"
+			line += " receives \(world.receives(of: declaration).count)"
 			line += " reads [\(world.reads(of: declaration).map { "\(world.read($0).channel.name)" }.joined(separator: ", "))]"
 			line += " labels \(Array(world.labels(of: declaration)))"
 			lines.append(line)

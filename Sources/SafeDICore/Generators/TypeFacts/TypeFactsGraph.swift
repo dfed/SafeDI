@@ -1019,10 +1019,8 @@ struct TypeFactsGraph: Sendable {
 			reads: reads,
 			rootAnswer: { _ in nil },
 			binding: { edge, readID in
+				// Every read the graph interns asks about a label: `ownReads` makes only value, optional and mock reads.
 				let read = readTable[Int(readID)]
-				guard read.channel.asksAboutLabel else {
-					return nil
-				}
 				let node = Int(sourceByEdge[edge])
 				let child = graph.nodes[Int(edgeTargets[edge])]
 				// A child answers its own label's read as the declaration being built, by the property it is built as; any

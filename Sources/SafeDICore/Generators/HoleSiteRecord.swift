@@ -27,12 +27,14 @@ enum HoleSitePlaces {
 	/// them (`loopBindsPayloads`), then the site's own place.
 	/// - Parameters:
 	///   - valuesBindings: The payloads the tree binds just before the site (`SeamHoles.CarrierSite.formations`).
+	///   - routeMembers: The member call each step of the site's route makes (`SeamHoles.routeMembers(at:)`).
 	///   - functionName: The name of the function the site builds a wrapper around, where it is renamed.
 	///   - lazilyInstantiatedInstanceProperties: The by-value properties whose labels the site's owner holds only as a
 	///     `LazilyInstantiated` property.
 	static func place(
 		of property: Property,
 		at site: SeamSignature.Hole?,
+		routeMembers: [SeamSignature.Hole.RouteStep.Member?],
 		functionName: String?,
 		valuesBindings: [SeamHoles.ValuesBinding],
 		carrierUse: SeamCarrierValues.Use?,
@@ -52,9 +54,10 @@ enum HoleSitePlaces {
 		let bindingPlaces = loopBindsPayloads ? nil : valuesBindingPlaces(of: valuesBindings, readingInstancesOf: lazilyInstantiatedInstanceProperties)
 		let bindingLines = bindingPlaces == nil ? valuesBindings.map { "\($0.line(readingInstancesOf: lazilyInstantiatedInstanceProperties))\n" }.joined() : ""
 		let sitePlace = holeSitePlace(
-			text: bindingLines + buildSiteCode(of: property, at: site, functionName: functionName, readingInstancesOf: lazilyInstantiatedInstanceProperties, carrierUse: carrierUse),
+			text: bindingLines + buildSiteCode(of: property, at: site, routeMembers: routeMembers, functionName: functionName, readingInstancesOf: lazilyInstantiatedInstanceProperties, carrierUse: carrierUse),
 			of: property,
 			at: site,
+			routeMembers: routeMembers,
 			functionName: functionName,
 			valuesBindings: valuesBindings,
 			readingInstancesOf: lazilyInstantiatedInstanceProperties,
@@ -100,7 +103,7 @@ enum HoleSitePlaces {
 	///     (`SeamHoles.valuesArguments(of:readingInstancesOf:bindingNamesPassedByName:lazilyInstantiatedBindingNames:)`).
 	// Kept out of `generatePropertyCode`'s async frame, as the functions that write a property's scope are.
 	@inline(never)
-	static func buildSiteCode(of property: Property, at site: SeamSignature.Hole, functionName: String?, readingInstancesOf lazilyInstantiatedInstanceProperties: Set<Property> = [], lazilyInstantiatedBindingNames: [String: [TypeDescription: String]] = [:], carrierUse: SeamCarrierValues.Use? = nil) -> String {
+	static func buildSiteCode(of property: Property, at site: SeamSignature.Hole, routeMembers: [SeamSignature.Hole.RouteStep.Member?], functionName: String?, readingInstancesOf lazilyInstantiatedInstanceProperties: Set<Property> = [], lazilyInstantiatedBindingNames: [String: [TypeDescription: String]] = [:], carrierUse: SeamCarrierValues.Use? = nil) -> String {
 		// A place nested by type is handed what its owner binds before it; the cases that lead to it carry what each type on
 		// the way binds, which the tree bound before building the next. A place in a `@Sendable` enum held in a `Sendable`
 		// wrapper carries nothing.
@@ -116,7 +119,8 @@ enum HoleSitePlaces {
 		let valuesType = TypeDescription.nested(name: memberValuesTypeName, parentType: enumPlace.enumType(qualifiedBy: nil), generics: [])
 		// Inside a fill whose call's case leads on, the fill is handed the struct of its own level.
 		let lastStep = enumPlace.route.last
-		let parentName = (lastStep?.member == nil ? nil : lastStep?.innerScope?.name) ?? lastStep?.member?.bindingName ?? site.internalName
+		let lastMember = routeMembers.last ?? nil
+		let parentName = (lastMember == nil ? nil : lastStep?.innerScope?.name) ?? lastMember?.bindingName ?? site.internalName
 		let buildExpression = if ReservedName.seamCarrier(ofEnum: enumPlace.enumType(qualifiedBy: nil)) != nil {
 			// A seam's carrier takes the place's values as its member's arguments.
 			"\(parentName).\(enumPlace.caseName)(\(SeamHoles.carrierArguments(of: fields, use: carrierUse, readingInstancesOf: lazilyInstantiatedInstanceProperties, lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames)))"
@@ -159,12 +163,13 @@ enum HoleSitePlaces {
 		text: String,
 		of property: Property,
 		at site: SeamSignature.Hole,
+		routeMembers: [SeamSignature.Hole.RouteStep.Member?],
 		functionName: String?,
 		valuesBindings: [SeamHoles.ValuesBinding],
 		readingInstancesOf lazilyInstantiatedInstanceProperties: Set<Property>,
 		carrierUse: SeamCarrierValues.Use?,
 	) -> GeneratedCode {
-		var recorder = HoleSiteReads(site: site, lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties, carrierUse: carrierUse)
+		var recorder = HoleSiteReads(site: site, routeMembers: routeMembers, lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties, carrierUse: carrierUse)
 		for binding in valuesBindings {
 			recorder.type(binding)
 		}
@@ -186,14 +191,15 @@ enum HoleSitePlaces {
 
 /// The reads a hole's site makes, as `holeSitePlace` records them, in the order its text makes them, each name once.
 private struct HoleSiteReads {
-	init(site: SeamSignature.Hole, lazilyInstantiatedInstanceProperties: Set<Property>, carrierUse: SeamCarrierValues.Use?) {
+	init(site: SeamSignature.Hole, routeMembers: [SeamSignature.Hole.RouteStep.Member?], lazilyInstantiatedInstanceProperties: Set<Property>, carrierUse: SeamCarrierValues.Use?) {
 		self.site = site
+		lastMember = routeMembers.last ?? nil
 		self.lazilyInstantiatedInstanceProperties = lazilyInstantiatedInstanceProperties
 		self.carrierUse = carrierUse
 		// The type of each struct a member call is made on by name: the root builder's, and each level its route binds. A
 		// level's type is spelled over the type the builder builds, which is the root's too.
 		guard let enumPlace = site.enumPlace else { return }
-		let members = enumPlace.route.compactMap(\.member)
+		let members = routeMembers.compactMap(\.self)
 		// A level is spelled over the type the builder builds, its innermost generic argument (`ReservedName.levelType(ofEnum:built:)`).
 		let builtType = members.lazy.compactMap(\.levelType.genericArgumentsOfThisAndEnclosingTypes.last).first ?? site.builtType
 		let rootEnumType = TypeDescription.simple(name: enumPlace.rootEnumTypeName ?? enumPlace.enumTypeName, generics: [])
@@ -219,11 +225,11 @@ private struct HoleSiteReads {
 		guard let enumPlace = site.enumPlace, enumPlace.memberValuesTypeName != nil else { return nil }
 		let fields = enumPlace.values
 		let lastStep = enumPlace.route.last
-		if lastStep?.member != nil, lastStep?.innerScope != nil {
+		if lastMember != nil, lastStep?.innerScope != nil {
 			// The struct of a fill's own level, which the fill is handed.
 			reads = nil
 		} else {
-			let parentName = lastStep?.member?.bindingName ?? site.internalName
+			let parentName = lastMember?.bindingName ?? site.internalName
 			readStruct(named: parentName, ofType: levelTypesByName[parentName])
 		}
 		if ReservedName.seamCarrier(ofEnum: enumPlace.enumType(qualifiedBy: nil)) != nil {
@@ -239,6 +245,8 @@ private struct HoleSiteReads {
 	// MARK: Private
 
 	private let site: SeamSignature.Hole
+	/// The member call the last step of the site's route makes, whose result the site's own member is called on.
+	private let lastMember: SeamSignature.Hole.RouteStep.Member?
 	private let lazilyInstantiatedInstanceProperties: Set<Property>
 	private let carrierUse: SeamCarrierValues.Use?
 	private var levelTypesByName = [String: TypeDescription]()

@@ -118,15 +118,16 @@ struct SeamCallRoutes: Sendable {
 		readsByCall = [:]
 	}
 
-	/// The routes of `signature`'s tree, whose world is `world`.
-	init(world: some NodeRecordSources, signature: SeamSignature) {
-		guard !signature.callRoutes.isEmpty else {
+	/// The routes of `seamTree`'s tree, whose world is `world`.
+	init(world: some NodeRecordSources, seamTree: DependencyTreeGenerator.RootScopeInfo.SeamTree) {
+		let callRoutes = seamTree.seamRoot.callRoutes
+		guard !callRoutes.isEmpty else {
 			readsByCall = [:]
 			return
 		}
-		let seamHoles = SeamHoles(seamType: signature.seamType, holes: signature.holes, builders: signature.builders, parameters: signature.parameters, callRoutes: signature.callRoutes, scopeEnums: signature.scopeEnums, holdsLoopPayloadsInBoxes: true)
+		let seamHoles = SeamHoles(of: seamTree.seamRoot, seamType: seamTree.seamType)
 		var routesByCall = [Call: (read: PassedUp?, count: Int)]()
-		for callRoute in signature.callRoutes where !callRoute.reentersEnclosingFill {
+		for callRoute in callRoutes where !callRoute.reentersEnclosingFill {
 			// The node at the end of the route's path: each step the child of the step before built as the step's property. A
 			// path into a fill names no edge's property, and leaves its call without a read.
 			var declaration: DeclarationID = 0

@@ -72,6 +72,10 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	case builderLoop
 	/// A node has more than one variant, so its record would not be a function of the node alone.
 	case nodeHasSeveralVariants
+	/// Two calls of one variant answer one of its reads apart, in its source, its form, whether it is optional or erased,
+	/// or whether it is passed or captured (`DeclarationsAnsweringReads.callsAnswerAVariantApart`): the variant's key is
+	/// too coarse to tell the two apart, so its one record would be wrong at one of them, and the world keeps its tree.
+	case callsAnswerAVariantApart
 	/// A declaration whose answers a producer of the facts still owes (`TypeFactsWorld.owedFacts(of:)`): two places of one
 	/// of its variants can answer a read apart, which one record per variant cannot write. The whole world is refused,
 	/// whatever its kinds, until each producer lands and clears its bit.
@@ -83,6 +87,9 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	/// A loop of builders in a seam's own tree, whose levels the tree holds in a box and whose members bind its holes'
 	/// payloads, which node records do not write.
 	case builderLoopBoxed
+	/// Making the records, or laying the root out from them, threw something other than a refusal
+	/// (`NodeRecords.refusingWhatRecordsThrow(_:)`). The world keeps its tree, which reports whatever it reports.
+	case recordsThrew
 }
 
 /// What a world's records read of a node beside the frozen interface (`TypeFactsWorld`): the scope it builds and the
@@ -136,6 +143,20 @@ extension TypeFactsGraph: NodeRecordSources {
 /// world whose calls of one variant find different answers is refused. Records still carry today's `functionName`, which
 /// the engine's allocator names apart.
 struct NodeRecords: Sendable {
+	/// What `body`, which makes records or lays a root out from them, returns, or the refusal it throws; anything else it
+	/// throws is `NodeRecordRefusal.recordsThrew`. While the tree exists, the records' path never rejects a world: a world
+	/// the records cannot make keeps its tree, which reports the world's errors as it always has. Each call that throws
+	/// is fixed, and this rule goes, once no accepted graph reports `recordsThrew` and the tree goes.
+	static func refusingWhatRecordsThrow<Value>(_ body: () throws -> Value) -> Result<Value, NodeRecordRefusal> {
+		do {
+			return try .success(body())
+		} catch let refusal as NodeRecordRefusal {
+			return .failure(refusal)
+		} catch {
+			return .failure(.recordsThrew)
+		}
+	}
+
 	/// - Parameters:
 	///   - world: A production root's world.
 	///   - seamTree: What a seam's own root is handed: its parameters, the nearest declarations of their labels, the
@@ -177,6 +198,10 @@ struct NodeRecords: Sendable {
 		)
 		// The tree reports the capture as an error, which the records cannot.
 		guard !answeringDeclarations.sendableFunctionCapturesWrapper else { throw NodeRecordRefusal.sendableFunctionCapturesWrapper }
+		// A variant's one record is right only where every call into it answers its reads as the call it was written from.
+		// Checked before what the records read of the call that resolved each variant, so that which call that is does not
+		// change the refusal.
+		guard !answeringDeclarations.callsAnswerAVariantApart else { throw NodeRecordRefusal.callsAnswerAVariantApart }
 		// A rename's record binds it from its fulfilling property's label, or from a wrapper's instance as the tree's rule
 		// reads it, never from an instance read otherwise.
 		guard !answeringDeclarations.renameReadsWrappersInstance else { throw NodeRecordRefusal.lazy }
@@ -185,7 +210,7 @@ struct NodeRecords: Sendable {
 		var places = [GeneratedCode?](repeating: nil, count: world.variantCount)
 		var records = [PlaceRecord?](repeating: nil, count: world.variantCount)
 		var typesDeclaredEscaping = [Set<TypeDescription>?](repeating: nil, count: world.variantCount)
-		let seamCallRoutes = seamTree.map { SeamCallRoutes(world: world, signature: $0.signature) } ?? SeamCallRoutes()
+		let seamCallRoutes = seamTree.map { SeamCallRoutes(world: world, seamTree: $0) } ?? SeamCallRoutes()
 		var stack: [(variant: VariantID, childrenPushed: Bool)] = [(0, false)]
 		while let (variant, childrenPushed) = stack.popLast() {
 			let calls = world.calls(of: variant)
@@ -343,6 +368,9 @@ struct NodeRecords: Sendable {
 		}
 		if answeringDeclarations.renameReadsWrappersInstance {
 			refusals.insert(.lazy)
+		}
+		if answeringDeclarations.callsAnswerAVariantApart {
+			refusals.insert(.callsAnswerAVariantApart)
 		}
 		return NodeRecordRefusal.allCases.filter(refusals.contains)
 	}
