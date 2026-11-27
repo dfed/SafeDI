@@ -150,6 +150,13 @@ alternating runs after one untimed run of each graph. A run still going after 30
                                first-layer screen holding `Instantiator`s of three second-layer screens and each
                                second-layer screen one of the next first-layer screen, so the screens form one ring
                                of cycles through `Instantiator`s that grows with the width, not the depth.
+  WL-ring-of-screens-receiving-labels
+                               one module: a root that instantiates 400 services, each under a label of its own, and
+                               holds an `Instantiator` of the first of a ring of screens, fifty for each of the row's
+                               number. Each screen receives two of the services, in turn, and holds an `Instantiator`
+                               of the next screen, the last one's of the first, so every screen is a level deeper on
+                               one cycle and looks its services up past every screen above it. Its larger graph is
+                               twice its smaller one.
   BM-mocks-of-cycles-through-instantiators
                                the same graph with `generateMock: true` on every screen and on the root.
   F9-public-mock-seam-chain
@@ -746,6 +753,21 @@ def shape_w(width):
     return [("App", [], source)]
 
 
+def shape_ring_receiving_labels(screens, labels=400):
+    """One module: a root that instantiates `labels` services and the first of `screens` screens on one cycle of
+    `Instantiator`s. Screen i receives services 2i and 2i + 1, modulo `labels`, and holds an `Instantiator` of the next
+    screen, so each screen's reads are looked up past every screen above it."""
+    source = "import SafeDI\n\n"
+    for service in range(labels):
+        source += declaration("@Instantiable", f"Service{service}", [])
+    for screen in range(screens):
+        received = [("@Received", f"service{index % labels}", f"Service{index % labels}") for index in (2 * screen, 2 * screen + 1)]
+        source += declaration("@Instantiable", f"Screen{screen}", received + [builder((screen + 1) % screens)])
+    root = [("@Instantiated", f"service{service}", f"Service{service}") for service in range(labels)]
+    source += declaration("@Instantiable(isRoot: true)", "Root", root + [builder(0)])
+    return [("App", [], source)]
+
+
 SHAPES = {
     "E16-seam": lambda: shape_e(16, seam=True),
     "E24-seam": lambda: shape_e(24, seam=True),
@@ -795,6 +817,10 @@ GROWTH_ROWS = {
     # layers with its limits' removal: from two layers to four, work that grows with the graph doubles.
     "B-cycles-through-instantiators": (lambda layers: shape_b(layers, mocks=False), 3, {"time": 27.0, "memory": 3.6}),
     "W-ring-of-screens-that-open-each-other": (lambda width: shape_w(width), 10, {"time": 4.0}),
+    # WL's graph is twice as large at the larger size, 100 and 200 screens: 0.64 s and 2.77 s (4.36), 65 MB and 130 MB
+    # (1.98), 50,201 and 76,701 bytes of code (1.53). Its time grows with the depth of each look-up and with the key of
+    # each subtree its validation remembers.
+    "WL-ring-of-screens-receiving-labels": (lambda layers: shape_ring_receiving_labels(50 * layers), 2, {"time": 5.5, "memory": 2.4}),
     "BM-mocks-of-cycles-through-instantiators": (lambda layers: shape_b(layers, mocks=True), 2, {"time": 48.0, "memory": 6.5, "code": 275.0}),
     # Three and five modules, not four and six: at six this row alone takes 21 s and 1.2 GB on main today (30 times
     # four's time). 0.26 s and 3.17 s (12.4), 38 MB and 196 MB (5.1), 122,250 and 4,137,809 bytes of `.safedi` (33.8),
@@ -814,16 +840,17 @@ GROWTH_ROWS = {
     "PRS-seam-parents-router": (lambda layers: shape_parent_router(layers, seam=True), 8, {}),
     # T's graph is three times as large at the larger size, a chain 100 and 300 screens long, and TS's and TC's twice,
     # so each limit is that multiple with room: T 0.78 s and 3.08 s (3.94), 108 MB and 189 MB (1.74), 321,956 and 997,756
-    # bytes of `.safedi` (3.10), 419,959 and 1,288,909 bytes of code (3.07); TS 1.15 s and 2.77 s (2.40), 120 MB and
-    # 201 MB (1.67), 510,636 and 1,035,436 bytes of `.safedi` (2.03), 565,355 and 1,150,955 bytes of code (2.04); TC
+    # bytes of `.safedi` (3.10), 419,959 and 1,288,909 bytes of code (3.07); TS 0.97 s and 2.02 s (2.08), 143 MB and
+    # 248 MB (1.73), 510,636 and 1,035,436 bytes of `.safedi` (2.03), 565,355 and 1,150,955 bytes of code (2.04); TC
     # 1.06 s and 2.87 s (2.69), 104 MB and 175 MB (1.68), 317,424 and 653,424 bytes of `.safedi` (2.06), 455,533 and
-    # 915,033 bytes of code (2.01). Only the times are growth to remove, which the tool had before these rows: T's and
-    # TC's grow faster than the chain, and TS's faster than its screens' width. What the rows hold: a walk remembered by
+    # 915,033 bytes of code (2.01). Only T's and TC's times are growth to remove, which the tool had before these rows:
+    # they grow faster than the chain. TS's time grew faster than its screens' width, 2.40, until the type key's look-ups
+    # read a body's positions by label rather than scanning its statements. What the rows hold: a walk remembered by
     # its whole context, with no key until its scope was reached again, took 146 MB and 662 MB on T (4.53) and 139 MB
     # and 337 MB on TC (2.42), and one whose context was computed again along its path where its scope was next reached
     # took 4.15 s and 15.91 s on TS (3.84).
     "T-leaves-reached-twice-at-depth": (lambda layers: shape_leaves_reached_twice(100 * layers), 1, {"time": 6.0, "memory": 3.8, "size": 3.5, "code": 3.5}),
-    "TS-leaves-reached-from-two-screens": (lambda layers: shape_leaves_reached_from_two_screens(800 * layers), 2, {"time": 3.0, "memory": 2.8, "size": 2.3, "code": 2.3}),
+    "TS-leaves-reached-from-two-screens": (lambda layers: shape_leaves_reached_from_two_screens(800 * layers), 2, {"time": 2.3, "memory": 2.8, "size": 2.3, "code": 2.3}),
     "TC-leaves-reached-three-times-down-chain": (lambda layers: shape_leaves_reached_three_times_down_chain(250 * layers), 2, {"time": 3.6, "memory": 2.1, "size": 2.3, "code": 2.3}),
     # TW's graph is twice as large at the larger size, 50 and 100 components to a screen, and nothing in it is more than
     # three scopes from the root: 1.58 s and 3.09 s (1.96), 167 MB and 243 MB to 292 MB (1.46 to 1.73 in two
