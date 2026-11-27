@@ -212,7 +212,7 @@ extension ScopeGenerator {
 		}
 		let builders = (walk.filledCallBuilders.parameters + signature.placeOnlyBuilderDeclarations).sorted { $0.label < $1.label }
 		// Where a test observes node records, an internal mock that binds nothing but its nodes has the statements that build
-		// them laid out from the records of its world (`nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:sendableConfigurationTypeNames:rootNames:outerDeclarations:)`).
+		// them laid out from the records of its world (`nodeRecordsMockStatements(of:worldRoot:mockRootHoles:bindsOnlyNodes:sendableConfigurationTypeNames:rootNames:outerDeclarations:)`).
 		if let worldRoot {
 			// `mock()`'s parameters and the overrides it binds before the nodes are the declarations the nodes' reads resolve
 			// to, as a seam's parameters are for its root's body, each by its label: one named apart, or an uncovered
@@ -263,20 +263,35 @@ extension ScopeGenerator {
 			let unavailableDependencyOverrides = signature.onlyIfAvailableOverrides.filter { signature.unavailableDependencyOverrideNames[$0.receivedProperty] != nil }
 			outerDeclarations += unavailableDependencyOverrides.map { Property(label: $0.name, typeDescription: $0.typeDescription) }
 			outerDeclarations += rootReceivesBoundAgain
-			if let statements = Self.nodeRecordsMockStatements(
+			let rootNames = MockRootNames(
+				namesApart: walk.rootRenames,
+				unavailableDependencyOverrides: signature.onlyIfAvailableOverrides.compactMap { override in signature.unavailableDependencyOverrideNames[override.receivedProperty].map { (override.receivedProperty, $0) } },
+				passedUpBuilderNames: signature.passedUpBuilderNames,
+				uncoveredParameterNames: Dictionary(
+					signature.uncoveredRootParameters.filter { !$0.isSendableAutoclosure }.map { ($0.property, $0.label) },
+					uniquingKeysWith: { first, _ in first },
+				),
+			)
+			// A public mock whose tree holds places is built with builders, whose holes its calls' fills read the levels of, as a
+			// seam's tree's calls do.
+			let mockRootHoles = mockBuilders.flatMap { builders in
+				builders.holes.isEmpty ? nil : SeamHoles(seamType: instantiable.concreteInstantiable, holes: builders.holes, builders: builders.builders, callRoutes: builders.callRoutes, routeMembersBySite: builders.routeMembersBySite)
+			}
+			// A public mock's root is observed, never laid out from its records: only its calls' level functions are made from
+			// them, and it is kept out of node records' reports, whose count of mock bodies laid out it is no part of yet.
+			if publicMockRoot != nil {
+				LevelFunctionRecordsObservation.observe(
+					root: instantiable.concreteInstantiable.asSource,
+					world: TypeFactsGraph(root: worldRoot, forMockGeneration: true, mockRootNames: rootNames),
+					mockRootHoles: mockRootHoles,
+				)
+			} else if let statements = Self.nodeRecordsMockStatements(
 				of: instantiable,
 				worldRoot: worldRoot,
+				mockRootHoles: mockRootHoles,
 				bindsOnlyNodes: bindsOnlyNodes,
 				sendableConfigurationTypeNames: context.sendableConfigurationTypeNames,
-				rootNames: MockRootNames(
-					namesApart: walk.rootRenames,
-					unavailableDependencyOverrides: signature.onlyIfAvailableOverrides.compactMap { override in signature.unavailableDependencyOverrideNames[override.receivedProperty].map { (override.receivedProperty, $0) } },
-					passedUpBuilderNames: signature.passedUpBuilderNames,
-					uncoveredParameterNames: Dictionary(
-						signature.uncoveredRootParameters.filter { !$0.isSendableAutoclosure }.map { ($0.property, $0.label) },
-						uniquingKeysWith: { first, _ in first },
-					),
-				),
+				rootNames: rootNames,
 				outerDeclarations: outerDeclarations,
 			) {
 				// The builders' and the overrides' bindings, and the mocked type's own receives bound again, stay before the nodes

@@ -70,7 +70,7 @@ extension NodeRecords {
 			}
 		}
 		// A mock root's own receive only if available is no node's: `mock()` binds its override before the nodes, which the
-		// root's lowering judges (`ScopeGenerator.nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:sendableConfigurationTypeNames:rootNames:outerDeclarations:)`).
+		// root's lowering judges (`ScopeGenerator.nodeRecordsMockStatements(of:worldRoot:mockRootHoles:bindsOnlyNodes:sendableConfigurationTypeNames:rootNames:outerDeclarations:)`).
 		let receivesOnlyIfAvailableOfANode = declaration != 0 || !world.isMockWorld
 		for dependency in scope.instantiable.dependencies where receivesOnlyIfAvailableOfANode && dependency.source == .received(onlyIfAvailable: true) {
 			refusals.append(.onlyIfAvailable)

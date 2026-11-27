@@ -20,8 +20,11 @@
 
 extension LevelFunctionRecordsObservation {
 	/// Hands the observer, where one is set, the level functions node records make of each call of another module's public
-	/// mock in `world`, a mock root's, that fills a place and that no fill encloses (`levelFunctionRecords(of:variant:in:)`).
-	static func observe(root: String, world: TypeFactsGraph) {
+	/// mock in `world`, a mock root's, that fills a place and that no fill encloses
+	/// (`levelFunctionRecords(of:variant:in:mockRootHoles:)`).
+	/// - Parameter mockRootHoles: The mock root's holes, where it is a public mock whose tree holds places
+	///   (`FillInnerScopes.ofPublicMockCall(_:in:mockRootHoles:)`).
+	static func observe(root: String, world: TypeFactsGraph, mockRootHoles: SeamHoles?) {
 		guard let observer else { return }
 		for declaration in 0..<Int32(world.declarationCount) where world.construction(of: declaration) == .publicMockCall {
 			let fills = world.scope(of: declaration).holeArguments.contains { argument in
@@ -32,7 +35,7 @@ extension LevelFunctionRecordsObservation {
 			}
 			guard fills, let variant = (0..<Int32(world.variantCount)).first(where: { world.declaration(of: $0) == declaration }) else { continue }
 			do {
-				try observer(LevelFunctionRecordsObservation(root: root, records: levelFunctionRecords(of: declaration, variant: variant, in: world)))
+				try observer(LevelFunctionRecordsObservation(root: root, records: levelFunctionRecords(of: declaration, variant: variant, in: world, mockRootHoles: mockRootHoles)))
 			} catch {
 				// A call node records leave to the tree has no records to compare.
 			}
@@ -42,15 +45,15 @@ extension LevelFunctionRecordsObservation {
 	/// The level functions of `call`, a call of another module's public mock in `world` that fills a place, reached as
 	/// `variant`, as the tree records them (`PublicMockLevelFunctions.records`), made from the world alone.
 	/// - Throws: The refusal of a call whose fills' facts node records leave to the tree, or that a fill encloses.
-	static func levelFunctionRecords(of call: DeclarationID, variant: VariantID, in world: TypeFactsGraph) throws(NodeRecordRefusal) -> LevelFunctionRecords {
+	static func levelFunctionRecords(of call: DeclarationID, variant: VariantID, in world: TypeFactsGraph, mockRootHoles: SeamHoles?) throws(NodeRecordRefusal) -> LevelFunctionRecords {
+		let innerScopes = try FillInnerScopes.ofPublicMockCall(call, in: world, mockRootHoles: mockRootHoles)
 		let allFacts: [FillFacts]
-		switch FillFacts.of(call: call, in: world) {
+		switch FillFacts.of(call: call, in: world, levelsOfCallingTree: innerScopes.levelsOfCallingTree) {
 		case let .facts(facts):
 			allFacts = facts
 		case let .refused(refusal):
 			throw refusal
 		}
-		let innerScopes = try FillInnerScopes.ofPublicMockCall(call, in: world)
 		// What the root level functions read of the caller's scope, by label: the form no fill reads optionally first, then
 		// in `Property` order, as `ScopeGenerator.publicMockLevelFunctions` chooses it.
 		var callerReadFormsByLabel = [String: [Property: (field: SeamSignature.Hole.Field, argument: String)]]()
@@ -89,7 +92,7 @@ extension LevelFunctionRecordsObservation {
 					labelsReadOrDeclared: Set(facts.labelsReadOrDeclared),
 					boundLabels: Set(facts.boundLabels),
 					parameters: facts.memberParameters,
-					innerScopeParameters: [],
+					innerScopeParameters: facts.innerScopeParameters,
 					declaresFunction: facts.declaresFunction,
 					readLabels: Set(facts.readLabels),
 				)
@@ -105,7 +108,7 @@ extension LevelFunctionRecordsObservation {
 		let levelFunctions = PublicMockLevelFunctions(
 			dispatchers: levels.dispatchers.map(\.dispatcher),
 			fillParametersByKey: fillParametersByKey,
-			roots: levels.builtClosures.map { PublicMockLevelFunctions.Root(label: $0.label, dispatcherKey: $0.rootDispatcherKey, carriedStructs: [:]) },
+			roots: levels.builtClosures.map { PublicMockLevelFunctions.Root(label: $0.label, dispatcherKey: $0.rootDispatcherKey, carriedStructs: $0.carriedStructNames) },
 			reservedNames: Set(names.fills.map(\.functionName)),
 			callerReads: callerReads,
 			enclosingLevelCalls: [:],
