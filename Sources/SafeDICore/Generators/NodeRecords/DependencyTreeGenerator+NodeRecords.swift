@@ -88,8 +88,10 @@ extension DependencyTreeGenerator {
 			}
 			// A seam's own tree is compared and never laid out here: its initializers are written around its body. A root its
 			// records cannot lay out keeps its tree's code.
-			let laidOutCode: GeneratedCode? = if NodeRecordsObservation.laysOutRoots, rootInfo.ownSeamRoot == nil {
-				try? NodeRecords.refusingWhatRecordsThrow { try laidOutRootCode(of: rootInfo.instantiable, body: nodeRecords.rootBody) }.get()
+			let laidOutCode: GeneratedCode? = if NodeRecordsObservation.laysOutRoots, rootInfo.ownSeamRoot == nil,
+			                                     case let .success(code) = NodeRecords.refusingWhatRecordsThrow({ try laidOutRootCode(of: rootInfo.instantiable, body: nodeRecords.rootBody) })
+			{
+				code
 			} else {
 				nil
 			}
