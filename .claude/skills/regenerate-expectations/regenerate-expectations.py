@@ -48,7 +48,8 @@ A changed literal is explained when normalize(rewrite(rename(old))) == normalize
 the residual difference of those two strings, which is what no rule predicts. A rules file whose pattern can match
 the empty string, whose rename key is empty, or whose names repeat is rejected.
 
-Report. REPORT/report.txt, in path and line order: counts, changed outputs no literal matched, each rule's hits,
+Report. REPORT/literals.json lists every changed literal (path, line, tests, outcome: explained, unexplained or
+manual). REPORT/report.txt, in path and line order: counts, changed outputs no literal matched, each rule's hits,
 unexplained residual diffs, manual items with their reasons, base records no literal matched, changed literals
 whose call skipped compile verification, a sample of N explained literals (--sample, default 5), and how many test
 functions and records were mapped. Two runs over the same inputs write the same bytes.
@@ -91,6 +92,8 @@ import re
 import sys
 
 MANIFEST_NAME = "tests-manifest.json"
+# The file of the report directory that lists every changed literal with its tests and outcome.
+LITERALS_NAME = "literals.json"
 HEADER_NAME = "generated-file-header.txt"
 # The file `ExpectationRecording` writes into a record directory when the run has compile verification off. Keep in
 # step with `ExpectationRecording.compileVerificationSkippedFileName`.
@@ -778,7 +781,6 @@ FRAGMENTS_AMBIGUOUS = "literals tile the output as fragments in more than one wa
 FRAGMENT_BOUNDARY_CHANGED = "literals tile the output as fragments, but the change touches what lies around them: the header, the imports or the blank lines between"
 FRAGMENT_DECLARATIONS_CHANGED = "literals tile the output as fragments, but a line that opens or closes a top-level declaration was added, removed or changed, so a declaration may be either neighbor’s"
 FRAGMENT_UNBALANCED = "literals tile the output as fragments, but a fragment does not start and end at the top level of the output"
-UNTILED_UNCHANGED = "unchanged, and no literal it could be compared with changes, so it was not tiled as fragments"
 FRAGMENTS_TOO_MANY = "literals tile the output as more fragments than the script follows"
 
 
@@ -803,6 +805,17 @@ def tile_fragments(literals, content, header):
             line_ends.extend(match.start() for match in re.finditer("\n", content[start:]))
             line_ends.append(len(content) - start)
         return [start + end for end in line_ends if start + end > position]
+    non_whitespace_prefix = []  # made when the first interpolated literal needs it
+
+    def non_whitespace_before(position):
+        """How many characters other than whitespace `content` holds before `position`."""
+        if not non_whitespace_prefix:
+            count = 0
+            non_whitespace_prefix.append(0)
+            for character in content:
+                count += not character.isspace()
+                non_whitespace_prefix.append(count)
+        return non_whitespace_prefix[position]
     solutions = {}  # position → (count of tilings from it, capped at two; the first)
     fragments_at = {}  # position → [(fragment, the position after it)] for each fragment a tiling from it starts with
 
@@ -817,10 +830,20 @@ def tile_fragments(literals, content, header):
                     text = literal.plain_text
                     ends = [position + len(text)] if content.startswith(text, position) and non_whitespace_count(text) >= SHORTEST_ANCHOR else []
                 elif literal.parts[0][1] and content.startswith(literal.parts[0][1], position):
-                    # `match_literal` takes only a body that ends with the literal's last text, so the other line
-                    # ends are left out before it runs: an output of thousands of lines has as many.
+                    # `match_literal` takes only a body that ends with the literal's last text, and whose captures
+                    # hold no more characters other than whitespace than its own text does, so a body holds at most
+                    # twice the text's. Every other line end is left out before its regular expression runs, which
+                    # otherwise backtracks through every way of splitting a body thousands of lines long: on 14,760
+                    # records of one suite, this took the run from more than half an hour to half a minute.
                     last = literal.parts[-1][1]
-                    ends = [end for end in ends_after(position) if content.endswith(last, position, end)]
+                    anchor = non_whitespace_count(literal.plain_text)
+                    ends = []
+                    if anchor >= SHORTEST_ANCHOR:
+                        for end in ends_after(position):
+                            if non_whitespace_before(end) - non_whitespace_before(position) > 2 * anchor:
+                                break
+                            if content.endswith(last, position, end):
+                                ends.append(end)
                 else:
                     ends = []
                 for end in ends:
@@ -1379,7 +1402,9 @@ def apply(arguments):
             literals_by_scope[relative_path] = by_function
         return literals_by_scope[relative_path].get(function, [])
 
-    def fragment_candidates(record):
+    for record in sorted(base_generation, key=lambda record: record["key"]):
+        if record["key"] in mapped_record_keys:
+            continue
         call_path = resolver.resolve(record["fileID"])
         scopes = [(call_path, files[call_path].test_function_of_line(record["line"]))]
         if record.get("testFileID") and record.get("testLine"):
@@ -1389,31 +1414,6 @@ def apply(arguments):
         for relative_path, function in scopes:
             for literal in literals_in(relative_path, function) + (literals_in(relative_path, None) if function is not None else []):
                 path_of_literal.setdefault(id(literal), (relative_path, literal))
-        return path_of_literal
-
-    # Tiling is most of the run's time, and a record whose output did not change can only ask that the literals it
-    # tiles stay as they are, which matters only where another record or an assertion would change one of them. So an
-    # unchanged record is tiled only when one of its candidate literals is a literal something else may change: one a
-    # whole match changes, a candidate of a changed record's tiling, or the literal of a head assertion.
-    unfragmented = [record for record in sorted(base_generation, key=lambda record: record["key"]) if record["key"] not in mapped_record_keys]
-    candidates_of = {record["key"]: fragment_candidates(record) for record in unfragmented}
-    changing_literals = {id(outcome.literal) for outcome in outcomes.values() if any(match[5] is not None and match[5] != match[2] for match in outcome.matches)}
-    for record in unfragmented:
-        head = head_by_key.get(record["key"])
-        if head is None or head["content"] != record["content"]:
-            changing_literals |= set(candidates_of[record["key"]])
-    for record in head_assertions:
-        literal, _ = find_assertion_literal(files[resolver.resolve(record["fileID"])], record)
-        if literal is not None:
-            changing_literals.add(id(literal))
-    untiled_record_keys = set()
-    for record in unfragmented:
-        path_of_literal = candidates_of[record["key"]]
-        head = head_by_key.get(record["key"])
-        if path_of_literal and head is not None and head["content"] == record["content"] and not changing_literals & set(path_of_literal):
-            untiled_record_keys.add(record["key"])
-            fragment_reasons[record["key"]] = UNTILED_UNCHANGED
-            continue
         candidates = sorted(path_of_literal.values(), key=lambda candidate: (candidate[0], candidate[1].start))
         tiling, reason = tile_fragments([literal for _, literal in candidates], record["content"], header)
         if tiling is None:
@@ -1594,7 +1594,6 @@ def apply(arguments):
             with open(current.path, "w", encoding="utf-8") as source_file:
                 source_file.write(source)
     summary["fragmentRecords"] = len(fragment_record_keys)
-    summary["untiledUnchangedRecords"] = len(untiled_record_keys)
     write_report(arguments, rules, summary, explained, unexplained, manual, assertion_outcomes, no_head, unmapped_reasons, changed_without_literal, base_generation, mapped_record_keys, outcomes, resolver)
     summary["manualReasons"] = sorted(item[3] for item in manual) + sorted(outcome[2] for outcome in assertion_outcomes if outcome[2] is not None)
     status = 0 if not unexplained and summary["manual"] == 0 else 1
@@ -1673,13 +1672,20 @@ def write_report(arguments, rules, summary, explained, unexplained, manual, asse
         lines.append(f"--- {relative_path}:{line} ({', '.join(test_names)})")
         lines.append(diff.rstrip("\n"))
     lines.append("")
-    lines.extend(mapping_statistics(base_generation, mapped_record_keys, unmapped_reasons, outcomes, resolver, summary["fragmentRecords"], summary["untiledUnchangedRecords"]))
+    lines.extend(mapping_statistics(base_generation, mapped_record_keys, unmapped_reasons, outcomes, resolver, summary["fragmentRecords"]))
     os.makedirs(arguments.report, exist_ok=True)
     with open(os.path.join(arguments.report, "report.txt"), "w", encoding="utf-8") as report_file:
         report_file.write("\n".join(lines) + "\n")
+    # Which tests each changed literal belongs to, for review-expectation-diffs: a test that fails with none of its
+    # literals here fails for a reason no expectation shows.
+    literals = [{"path": item[0], "line": item[1], "tests": list(item[2]), "outcome": outcome}
+                for outcome, items in (("explained", explained), ("unexplained", unexplained), ("manual", manual)) for item in items]
+    with open(os.path.join(arguments.report, LITERALS_NAME), "w", encoding="utf-8") as literals_file:
+        json.dump(sorted(literals, key=lambda literal: (literal["path"], literal["line"])), literals_file, indent=1, ensure_ascii=False)
+        literals_file.write("\n")
 
 
-def mapping_statistics(base_generation, mapped_record_keys, unmapped_reasons, outcomes, resolver, fragment_records, untiled_records):
+def mapping_statistics(base_generation, mapped_record_keys, unmapped_reasons, outcomes, resolver, fragment_records):
     functions = {}
     for record in base_generation:
         functions.setdefault((resolver.resolve(record["fileID"]), record.get("testName", "")), []).append(record)
@@ -1706,7 +1712,6 @@ def mapping_statistics(base_generation, mapped_record_keys, unmapped_reasons, ou
         f"  Test functions with a base record that have a literal mapped: {share(mapped_functions, len(functions))}",
         f"  Base records mapped to a literal: {share(mapped_records, record_count)}",
         f"  Base records mapped to literals as fragments, of those mapped: {fragment_records}",
-        f"  Unchanged base records not tiled, since no literal they could be compared with changes: {untiled_records}",
         f"  Base records mapped, of those not unmapped for a named reason: {share(mapped_records, record_count - named)}",
         f"  Literals matched: {len(outcomes)} ({len(plain)} plain, {len(interpolated)} interpolated, holding {sum(outcome.literal.interpolation_count for outcome in interpolated)} interpolations)",
         "  Matched literals that would be manual if they changed:",

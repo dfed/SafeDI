@@ -136,6 +136,6 @@ if [ "$fast" = 1 ]; then regenerate+=(--allow-compile-skipped-records); fi
 	|| [ $? = 1 ] || { echo "error: regenerate-expectations failed; see $out/regenerate.log" >&2; exit 2; }
 status=0
 python3 -I "$here/review-expectation-diffs.py" --base-records "$out/base/records" --head-records "$out/head/records" \
-	--approved "$approved" --report "$out/review" --failed-tests "$out/head/failed-tests.txt" || status=$?
+	--approved "$approved" --report "$out/review" --failed-tests "$out/head/failed-tests.txt" --regenerate-report "$out/regenerate" || status=$?
 echo "done in $(( $(date +%s) - start ))s: read $out/review/report.txt, then $out/regenerate/report.txt"
 exit "$status"

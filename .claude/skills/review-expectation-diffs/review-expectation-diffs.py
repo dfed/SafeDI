@@ -40,7 +40,9 @@ snippet from the report into the file. Ids are unique; a pattern that can match 
 Report. REPORT/report.txt and REPORT/classes.json: the counts, every accepted test with the entries it needed,
 every new class (its shapes, how many tests and outputs, its tests, one example's leftover lines and its raw
 difference, an `approve` snippet), and, with --failed-tests (one test name per line), each failed test with no
-changed output or only accepted ones, which fails for a reason no output shows (read the test). With
+changed output, which fails for a reason no output shows (read the test). With --regenerate-report (a report
+directory of regenerate-expectations.py, whose literals.json names each changed literal's tests), that list is
+instead each failed test none of whose literals changed: one that compares two outputs, a count or a refusal. With
 --expected-classes (JSON: test name -> label) the report also prints how the tool's classes match those labels.
 Two runs over the same inputs write the same bytes.
 
@@ -460,7 +462,7 @@ def raw_difference(base_text, head_text, limit=60):
     return lines[:limit] + (["… %d more lines" % (len(lines) - limit)] if len(lines) > limit else [])
 
 
-def report(by_test, entries, failed_tests, passing, expected, examples, directory):
+def report(by_test, entries, failed_tests, passing, literal_tests, expected, examples, directory):
     order = [entry["id"] for entry in entries]
     accepted = {test: item for test, item in by_test.items() if not item["new"]}
     classes = collections.defaultdict(list)
@@ -502,11 +504,18 @@ def report(by_test, entries, failed_tests, passing, expected, examples, director
                    "shapes": list(shapes)}
         out.append("   approve: " + json.dumps(approve, ensure_ascii=False))
         json_classes.append({"labels": list(labels), "shapes": list(shapes), "tests": tests, "outputs": outputs})
+    quiet = []
     if failed_tests is not None:
-        quiet = sorted(test for test in failed_tests if test not in by_test)
-        out.append("")
-        out.append("== Failed tests with no changed output (%d): they fail for a reason no output shows, read each"
-                   % len(quiet))
+        if literal_tests is None:
+            quiet = sorted(test for test in failed_tests if test not in by_test)
+            out.append("")
+            out.append("== Failed tests with no changed output (%d): they fail for a reason no output shows, read each"
+                       % len(quiet))
+        else:
+            quiet = sorted(test for test in failed_tests if test not in literal_tests)
+            out.append("")
+            out.append("== Failed tests none of whose literals changed (%d): they fail for a reason no expectation "
+                       "shows (a comparison of two outputs, a count, a refusal), read each" % len(quiet))
         for test in quiet:
             out.append("   " + test)
         out.append("== Tests whose outputs changed and that did not fail (%d): no literal compares those outputs, "
@@ -518,6 +527,8 @@ def report(by_test, entries, failed_tests, passing, expected, examples, director
         for test, item in by_test.items():
             tool_label[test] = ("new class %d" % class_number[test] if item["new"]
                                 else "accepted: " + ", ".join(sorted(item["needed"], key=order.index)))
+        for test in quiet:
+            tool_label[test] = "read the test (%s)" % tool_label.get(test, "no changed output")
         table = collections.Counter((label, tool_label.get(test, "(no changed output)"))
                                     for test, label in expected.items())
         for (label, mine), count in sorted(table.items()):
@@ -540,6 +551,7 @@ def main(arguments):
     parser.add_argument("--report")
     parser.add_argument("--failed-tests")
     parser.add_argument("--expected-classes")
+    parser.add_argument("--regenerate-report")
     parser.add_argument("--examples", type=int, default=1)
     parser.add_argument("--self-test")
     options = parser.parse_args(arguments)
@@ -563,7 +575,11 @@ def main(arguments):
             expected = json.load(file)
     by_test = classify(changes, entries, set(failed) if failed is not None else None)
     passing = sorted({change[0] for change in changes} - set(failed)) if failed is not None else []
-    new = report(by_test, entries, failed, passing, expected, options.examples, options.report)
+    literal_tests = None
+    if options.regenerate_report:
+        with open(os.path.join(options.regenerate_report, "literals.json"), encoding="utf-8") as file:
+            literal_tests = {test.split("(")[0] for literal in json.load(file) for test in literal["tests"]}
+    new = report(by_test, entries, failed, passing, literal_tests, expected, options.examples, options.report)
     with open(os.path.join(options.report, "report.txt"), encoding="utf-8") as file:
         print(file.read().split("\n\n")[0])
     return 1 if new else 0
