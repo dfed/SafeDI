@@ -115,13 +115,9 @@ struct FillSignature: Sendable {
 	let returnsBoundValue: Bool
 
 	/// The fill's function's first line, named `functionName`, then each line binding a value of its case, indented by
-	/// `indent`: what precedes the fill's tree.
-	func spelledSignature(functionName: String, indent: String, typesDeclaredEscaping: Set<TypeDescription>) -> [String] {
-		// The parameter is named apart from what the tree reads by name, which it would hide.
-		var scopeParameterName = "scope"
-		while labelsReadOrDeclared.contains(scopeParameterName) {
-			scopeParameterName += "_"
-		}
+	/// `indent`: what precedes the fill's tree. The function takes its case's values under `scopeParameterName`
+	/// (`FillNames.scopeParameterName(ofFill:)`).
+	func spelledSignature(functionName: String, scopeParameterName: String, indent: String, typesDeclaredEscaping: Set<TypeDescription>) -> [String] {
 		let prefix = ScopeGenerator.localFunctionPrefix(isSendable: isSendable)
 		let caseValues = hole.enumPlace?.values ?? hole.fields
 		var parameterList: [String]
@@ -167,6 +163,9 @@ struct FillSignature: Sendable {
 public struct FillSignatureObservation: Sendable {
 	public let written: [String]
 	public let spelledFromRecord: [String]
+	/// The parameter the tree names the fill's case's values, beside the one `FillNames` names from the fill's record.
+	public let writtenScopeParameterName: String
+	public let scopeParameterNameFromRecord: String
 
 	/// Called with each fill as its function is written, when set: by the tests, never by the tool.
 	@TaskLocal public static var observer: (@Sendable (FillSignatureObservation) -> Void)?

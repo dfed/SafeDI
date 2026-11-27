@@ -2045,6 +2045,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		let key: String
 		let functionName: String
+		/// What the call's allocator was asked to claim for `functionName`, which names the dispatcher apart from the call's
+		/// fills and the dispatchers claimed before it (`FillNames`).
+		let functionNameStem: String
 		let enumType: TypeDescription
 		let returnType: TypeDescription
 		let isSendableFamily: Bool
@@ -2431,11 +2434,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 			let instancesToDeclare = reachedKeys.map(dispatcherInstance(of:))
 			var dispatcherNames = enclosingDispatchers
+			var dispatcherNameStems = [String: String]()
 			for instance in instancesToDeclare {
 				guard let scopeEnum = enumsByKey[instance.enumKey] else { continue }
 				// An enum nested by type is named after its own enum too.
 				let enumName = scopeEnum.rootTypeName == nil ? "" : "_\(scopeEnum.typeName)"
-				dispatcherNames[instance.dispatcherKey] = names.claim(ScopeGenerator.functionName(toBuildPropertyNamed: "\(scopeEnum.builderLabel.spelledWithoutBackticks)_\(DependencyTreeGenerator.seamStem(of: instance.enumKey.seamType))\(enumName)".spelledAsIdentifier))
+				let stem = ScopeGenerator.functionName(toBuildPropertyNamed: "\(scopeEnum.builderLabel.spelledWithoutBackticks)_\(DependencyTreeGenerator.seamStem(of: instance.enumKey.seamType))\(enumName)".spelledAsIdentifier)
+				dispatcherNameStems[instance.dispatcherKey] = stem
+				dispatcherNames[instance.dispatcherKey] = names.claim(stem)
 			}
 			// The places a case nested by type stands for are filled by the fill of the first that the builders reach.
 			let holeIndexBySite = Dictionary(calledBuilders.holes.enumerated().map { ($0.element.site, $0.offset) }, uniquingKeysWith: { first, _ in first })
@@ -2488,6 +2494,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				var dispatcher = FillDispatcher(
 					key: dispatcherKey,
 					functionName: dispatcherNames[dispatcherKey] ?? "",
+					functionNameStem: dispatcherNameStems[dispatcherKey] ?? "",
 					enumType: scopeEnum.type,
 					// The most explicit of the places' spellings, as the called seam's builder spells it (`builtTypeByHoleType`).
 					returnType: builtTypeByHoleType[key.holeType] ?? key.holeType.builtType,
@@ -2605,11 +2612,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					if declaredLevels.insert(level).inserted {
 						let unclaimedName = unclaimedFunctionName(of: level, nearestFillLevelKey: nearestFillLevelKey, fillLevelEnum: fillLevelEnum, scopeEnum: scopeEnum, qualifiesEnum: false)
 						let qualifiesEnum = enumKeysByUnclaimedFunctionName[unclaimedName, default: []].count > 1
-						let functionName = names.claim(ScopeGenerator.functionName(toBuildPropertyNamed: unclaimedFunctionName(of: level, nearestFillLevelKey: nearestFillLevelKey, fillLevelEnum: fillLevelEnum, scopeEnum: scopeEnum, qualifiesEnum: qualifiesEnum).spelledAsIdentifier))
+						let functionNameStem = ScopeGenerator.functionName(toBuildPropertyNamed: unclaimedFunctionName(of: level, nearestFillLevelKey: nearestFillLevelKey, fillLevelEnum: fillLevelEnum, scopeEnum: scopeEnum, qualifiesEnum: qualifiesEnum).spelledAsIdentifier)
+						let functionName = names.claim(functionNameStem)
 						let index = carriedDispatchers.count
 						carriedDispatchers.append(FillDispatcher(
 							key: key,
 							functionName: functionName,
+							functionNameStem: functionNameStem,
 							enumType: scopeEnum.type,
 							returnType: returnType,
 							isSendableFamily: level.key.isSendable,
@@ -9815,7 +9824,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				labelsReadOrDeclared: labelsReadInFill,
 				returnsBoundValue: property.propertyType.isConstant,
 			)
-			observer(FillSignatureObservation(written: written, spelledFromRecord: record.spelledSignature(functionName: functionName, indent: indent, typesDeclaredEscaping: typesDeclaredEscaping)))
+			let names = FillNames(reserving: NamesConsultedInTurn([]), fills: [FillNames.Fill(caseKey: Self.fillCaseKey(of: hole), functionNameStem: Self.fillFunctionName(of: hole), labelsReadOrDeclared: labelsReadInFill)], dispatchers: [])
+			let scopeParameterNameFromRecord = names.scopeParameterName(ofFill: Self.fillCaseKey(of: hole)) ?? ""
+			observer(FillSignatureObservation(
+				written: written,
+				spelledFromRecord: record.spelledSignature(functionName: functionName, scopeParameterName: scopeParameterNameFromRecord, indent: indent, typesDeclaredEscaping: typesDeclaredEscaping),
+				writtenScopeParameterName: scopeParameterName,
+				scopeParameterNameFromRecord: scopeParameterNameFromRecord,
+			))
 		}
 		let childCode = try await generateProperties(
 			codeGeneration: codeGeneration,
