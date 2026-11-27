@@ -34,8 +34,10 @@ extension DependencyTreeGenerator {
 		/// The properties the tree requires through `onlyIfAvailable` aliases
 		/// (`ScopeGenerator.requiredAliasFulfillingProperties`).
 		var requiredAliasFulfillingProperties: Set<Property>
-		/// Every receive that leaves the seam, and the reads of its parameters (`receivers(in:of:instantiables:)`).
+		/// Every receive that leaves the seam (`receivers(in:of:instantiables:)`).
 		let receivers: [SeamReceiver]
+		/// The reads of the seam's parameters its tree makes, which decide a by-value pass-through's deferral and whether
+		/// it is `@Sendable` (`receivers(in:of:instantiables:)`).
 		let parameterReads: ParameterReads
 		/// The names the tree's declarations declare `@escaping` (`ScopeGenerator.typesDeclaredEscaping`).
 		var typesDeclaredEscaping: Set<TypeDescription>
@@ -158,7 +160,10 @@ public enum SeamTreeReadsObservation {
 		case requiredReceivedProperties
 		/// Each receive's declaring type, alias, module, and the tier facts of the nested seam call that omits it.
 		case receivers
-		/// The labels the tree reads, those read inside a `@Sendable` function, and the labels around each hole site.
+		/// For each label, whether the tree reads it where a parameter is its nearest declaration, and whether inside a
+		/// `@Sendable` function. The facts lack the labels a nested seam call takes `@Sendable`, the labels a fill binds
+		/// from its struct, a fill the sendable-fill worklist makes `@Sendable`, and a builder function a cycle makes
+		/// `@Sendable`.
 		case parameterReads
 		/// The builder function names, with and without the hole sites' wrappers.
 		case builderFunctionNames
