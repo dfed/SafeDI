@@ -89,7 +89,7 @@ struct TypeFactsVariants: Sendable {
 	///     edges, `OrderedGraph.edgeOffset(of:)` plus its index), or `nil` where it binds nothing for it there and the
 	///     caller's own answer passes through.
 	///   - family: The family a call at the edge builds its callee in, given the caller's. A world whose bodies are one per
-	///     node whatever encloses them (production: `@Sendable` is a mark folded over call edges, lead 11-26 20:26Z)
+	///     node whatever encloses them (production: `@Sendable` is a mark folded over call edges)
 	///     returns the caller's, so the root's `.plain` reaches every node; only seam contracts and mocks whose parameter
 	///     types differ by family key on it.
 	///   - key: The value of an answer to a read that a variant is told apart by. The two parameter rules live here: a
