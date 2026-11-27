@@ -2137,10 +2137,12 @@ jobs:
       # runs "Build Tests on Linux" names; 15 to 20 in Verify's runs of the
       # suite in one process, as verify.yml says) and 7.5 with the checks
       # skipped (run 43765011597); the 2.3.0 stack's suite took 34.9 (run
-      # 44545790927), and run 44573505588 passed 40 still running.
+      # 44545790927), and run 44573505588 passed 40 still running. Over
+      # nine later runs it took 23.2 to 60.5 minutes (runs 45880961000 and
+      # 45757312407; 45.5 in 45766677692), so the limit is twice 60.
       - name: Test
         id: tests
-        timeout-minutes: 70
+        timeout-minutes: 120
         env:
           SAFEDI_COMPILE_CHECK_PASSED_CACHE: ${{ github.workspace }}/.compile-check-cache/passed.txt
           LLVM_PROFILE_FILE: ${{ runner.temp }}/unit-suite-profiles/unit-suite-%p.profraw
@@ -2433,9 +2435,15 @@ jobs:
       # since (run 44034763455). The 2.3.0 stack's suite, 6,735 tests, took
       # 12.5 to 16.1 minutes a pass (run 44243231996), and 13.0 in run
       # 44545790927, whose other two passes the old limit of 17 cut off
-      # seven tests from the end; the limit is about twice the slowest, 18.
+      # seven tests from the end; the limit then was twice the slowest, 18.
+      # With 7,824 tests three passes of run 45907962627 took 20.0, 27.6 and
+      # 32.3 minutes, and the old limit of 36 cut off the fourth with no
+      # test failed; over the nine runs before it a pass took 17.1 to 32.0.
+      # The limit is twice 36. Every test starts when the pass does, and the
+      # seam smoke tests end it: they took 1,923 of that 32.3 minute pass's
+      # 1,932 seconds.
       - name: Run Tests
-        timeout-minutes: 36
+        timeout-minutes: 72
         env:
           SAFEDI_SKIP_COMPILE_CHECK: 1
           LLVM_PROFILE_FILE: ${{ runner.temp }}/repeat-tests-%p.profraw
@@ -2975,7 +2983,7 @@ jobs:
     # than the longest the job's other steps have taken, so that a shard that
     # runs out of time still uploads: one job spent 11 minutes initializing
     # its container (run 43879263598).
-    timeout-minutes: 45
+    timeout-minutes: 60
     permissions:
       contents: read
     strategy:
@@ -3110,10 +3118,12 @@ jobs:
       # its report; the job's limit would cancel those steps too. A shard's
       # fuzzer took 4.4 to 10.1 minutes when the corpora were split this way
       # (runs 43762600658, 43774447047), and up to 12.8 over ten runs since
-      # (run 44095267353, the newest and the longest); the limit is twice
-      # that.
+      # (run 44095267353, the newest and the longest). Over ten later runs
+      # the slowest shard of each took 14.1 to 20.5 minutes (runs
+      # 45779351174 and 45895711547; 18.4 in 45800264261), so the limit is
+      # twice 20.5.
       - name: Run Graph Fuzzer
-        timeout-minutes: 26
+        timeout-minutes: 41
         env:
           SAFEDI_GRAPH_FUZZER_ITERATIONS: ${{ matrix.iterations }}
           SAFEDI_GRAPH_FUZZER_STARTING_SEED: ${{ matrix.starting-seed }}
@@ -3558,9 +3568,12 @@ jobs:
       # from nothing took 4.2 minutes on the 4-core Linux runner, 2.5
       # minutes on a restored build whose sources were not stamped, and 7
       # seconds on one whose sources were (run 44189733147, 2026-11-17); the
-      # limit is about twice the first.
+      # limit was about twice the first. With seven groups building at
+      # once the slowest build of each of five runs took 5.7 to 7.1 minutes
+      # (runs 45757312407 and 45907962627; 6.3, 5.7 and 6.6 between), so the
+      # limit is twice 7.1.
       - name: Build Tests
-        timeout-minutes: 10
+        timeout-minutes: 14
         run: swift build --build-tests --traits sourceBuild
       # One group saves, since all seven build the same thing.
       - name: Save Build Directory
@@ -3586,8 +3599,13 @@ jobs:
       # compiles every test's generated code on every run, so a check the
       # pinned jobs skip because it passed in an earlier run is still
       # compiled once per run, by a third compiler.
+      #
+      # Over ten later runs the slowest group, fuzzer-seam-smoke in eight
+      # of them, took 15.6 to 32.0 minutes (runs 45779105193 and
+      # 45907962627; 30.1 in 45895711547 and 27.2 in 45766677692), so the
+      # limit is twice 32.
       - name: Build and Test Framework
-        timeout-minutes: 35
+        timeout-minutes: 64
         shell: bash
         env:
           SELECTION: ${{ matrix.selection }}
