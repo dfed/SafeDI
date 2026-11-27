@@ -8831,16 +8831,19 @@ enum GraphFuzzerGenerator {
 			guard !seamIndices.isEmpty, callersViewRandom.percentChance(40) else { return declarations }
 			var declarations = declarations
 			let seamIndex = callersViewRandom.element(of: seamIndices)
+			// The three shapes the tool rejects beside the corpus's `public` seams take three rolls in a hundred each: each
+			// rejected graph is one the corpus's other draws are no longer judged in, and at fifteen each they cost the
+			// corpus a tenth of its accepted graphs.
 			let shapeRoll = callersViewRandom.integer(in: 0...99)
-			let shape: CallersViewShape = if shapeRoll < 15 {
+			let shape: CallersViewShape = if shapeRoll < 25 {
 				.unreached
-			} else if shapeRoll < 30 {
+			} else if shapeRoll < 50 {
 				.besideSeam
-			} else if shapeRoll < 55 {
+			} else if shapeRoll < 91 {
 				.receivedBySeam
-			} else if shapeRoll < 70 {
+			} else if shapeRoll < 94 {
 				.packageDeclarationReceivedBySeam
-			} else if shapeRoll < 85 {
+			} else if shapeRoll < 97 {
 				.typeInExtensionOfAddedPlainDeclaration
 			} else {
 				.instantiatedBySeam
