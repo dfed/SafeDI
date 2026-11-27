@@ -1,0 +1,804 @@
+// Distributed under the MIT License
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+import Foundation
+import SafeDICore
+import Testing
+@testable import SafeDIToolLibrary
+@testable import SafeDIToolTestSupport
+
+/// The mock worlds' table (`MockWorldsTable`): one entry per distinct declaration of a module's mock worlds, and which
+/// of them a world may take from the table, read through `MockWorldsTableObservation`.
+struct SafeDIToolMockWorldsTableTests: ~Copyable {
+	// MARK: Initialization
+
+	init() {
+		filesToDelete = [URL]()
+	}
+
+	deinit {
+		for fileToDelete in filesToDelete {
+			try! FileManager.default.removeItem(at: fileToDelete)
+		}
+	}
+
+	// MARK: Tests
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_countsEachSharedDeclarationOnce_whenMockRootsShareSubtree() async throws {
+		let reports = try await Self.tableReports(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public struct AlphaScreen: Instantiable {
+					    public init(store: SessionStore) {
+					        self.store = store
+					    }
+
+					    @Instantiated let store: SessionStore
+					}
+					""",
+					"""
+					@Instantiable(generateMock: true)
+					public struct BetaScreen: Instantiable {
+					    public init(store: SessionStore) {
+					        self.store = store
+					    }
+
+					    @Instantiated let store: SessionStore
+					}
+					""",
+					"""
+					@Instantiable(generateMock: true)
+					public struct GammaScreen: Instantiable {
+					    public init(store: SessionStore) {
+					        self.store = store
+					    }
+
+					    @Instantiated let store: SessionStore
+					}
+					""",
+					"""
+					@Instantiable
+					public struct SessionStore: Instantiable {
+					    public init(clock: Clock) {
+					        self.clock = clock
+					    }
+
+					    @Instantiated let clock: Clock
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Clock: Instantiable {
+					    public init() {}
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		// Each world holds its root, `store` and `clock`: nine declarations, of which `store` and `clock` are the same two
+		// in every world, whose two records every world shares. A world holds `store`'s shared record, which holds `clock`'s,
+		// where without the table it builds both.
+		#expect(reports == [
+			MockWorldsTableReport(
+				declarationCount: 5,
+				shareableDeclarationCount: 2,
+				sharedRecordCount: 2,
+				rows: ["1: store: SessionStore, every parent the root", "2: clock: Clock"],
+				differences: [],
+				worlds: [
+					.init(mockedType: "AlphaScreen", rootDeclaration: 0, declarationCount: 3, shareableDeclarationCount: 2, recordCount: 1, sharedRecordCount: 1, recordCountWithoutTable: 2, declarationKeys: [1, 3, 4]),
+					.init(mockedType: "BetaScreen", rootDeclaration: 3, declarationCount: 3, shareableDeclarationCount: 2, recordCount: 1, sharedRecordCount: 1, recordCountWithoutTable: 2, declarationKeys: [7, 3, 4]),
+					.init(mockedType: "GammaScreen", rootDeclaration: 4, declarationCount: 3, shareableDeclarationCount: 2, recordCount: 1, sharedRecordCount: 1, recordCountWithoutTable: 2, declarationKeys: [9, 3, 4]),
+				],
+			),
+		])
+		#expect(reports.map { $0.worlds.map(\.declarationCount).reduce(0, +) } == [9])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_makesExactlyDeclarationsReachingCycleUnshareable_whenSubtreeHoldsCycle() async throws {
+		let reports = try await Self.tableReports(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public struct Dashboard: Instantiable {
+					    public init(holder: Holder, banner: Banner) {
+					        self.holder = holder
+					        self.banner = banner
+					    }
+
+					    @Instantiated let holder: Holder
+					    @Instantiated let banner: Banner
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Holder: Instantiable {
+					    public init(editor: Editor) {
+					        self.editor = editor
+					    }
+
+					    @Instantiated let editor: Editor
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Editor: Instantiable {
+					    public init(previewBuilder: Instantiator<Preview>) {
+					        self.previewBuilder = previewBuilder
+					    }
+
+					    @Instantiated let previewBuilder: Instantiator<Preview>
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Preview: Instantiable {
+					    public init(editor: Editor) {
+					        self.editor = editor
+					    }
+
+					    @Instantiated let editor: Editor
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Banner: Instantiable {
+					    public init(icon: Icon) {
+					        self.icon = icon
+					    }
+
+					    @Instantiated let icon: Icon
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Icon: Instantiable {
+					    public init() {}
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		// `editor` and `previewBuilder` form the cycle, which `holder` reaches; `banner` and `icon` reach none, and the root
+		// is its world's own. The cycle refuses the world's records, but `banner` and `icon` are rows all the same.
+		#expect(reports == [
+			MockWorldsTableReport(
+				declarationCount: 6,
+				shareableDeclarationCount: 2,
+				sharedRecordCount: 2,
+				rows: ["4: banner: Banner, every parent the root", "5: icon: Icon"],
+				differences: [],
+				worlds: [
+					.init(mockedType: "Dashboard", rootDeclaration: 0, declarationCount: 6, shareableDeclarationCount: 2, recordCount: 0, sharedRecordCount: 0, recordCountWithoutTable: 0, declarationKeys: [1, 3, 9, 4, 10, 6]),
+				],
+			),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_makesDeclarationsReachingHoleUnshareable_whenPublicMockHoldsHole() async throws {
+		let reports = try await Self.tableReports(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: .public)
+					public struct Screen: Instantiable {
+					    public init(panel: Panel, badge: Badge) {
+					        self.panel = panel
+					        self.badge = badge
+					    }
+
+					    @Instantiated let panel: Panel
+					    @Instantiated let badge: Badge
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Panel: Instantiable {
+					    public init(gadget: Gadget) {
+					        self.gadget = gadget
+					    }
+
+					    @Instantiated let gadget: Gadget
+					}
+					""",
+					"""
+					public struct Gadget {}
+					""",
+					"""
+					@Instantiable
+					public struct Badge: Instantiable {
+					    public init() {}
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		// Nothing the module sees fulfills `gadget`, so the public mock's world holds it as a hole, a place its mock's
+		// builder fills: `panel` reaches it, and only `badge` is shareable.
+		#expect(reports == [
+			MockWorldsTableReport(
+				declarationCount: 4,
+				shareableDeclarationCount: 1,
+				sharedRecordCount: 1,
+				rows: ["3: badge: Badge, every parent the root"],
+				differences: [],
+				worlds: [
+					.init(mockedType: "Screen", rootDeclaration: 0, declarationCount: 4, shareableDeclarationCount: 1, recordCount: 0, sharedRecordCount: 0, recordCountWithoutTable: 0, declarationKeys: [1, 3, 7, 4]),
+				],
+			),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_givesSameCountsAndIDsInMockRootOrder_whenTypesSourceOrderIsReversed() async throws {
+		// Twenty-two mock roots: the even ones build `store`, the odd ones `feed`, and both build `clock`.
+		var declarations = (0..<22).map { index in
+			let name = "Screen" + (index < 10 ? "0" : "") + String(index)
+			let (label, type) = index.isMultiple(of: 2) ? ("store", "Store") : ("feed", "Feed")
+			return """
+			@Instantiable(generateMock: true)
+			public struct \(name): Instantiable {
+			    public init(\(label): \(type)) {
+			        self.\(label) = \(label)
+			    }
+
+			    @Instantiated let \(label): \(type)
+			}
+			"""
+		}
+		for type in ["Store", "Feed"] {
+			declarations.append("""
+			@Instantiable
+			public struct \(type): Instantiable {
+			    public init(clock: Clock) {
+			        self.clock = clock
+			    }
+
+			    @Instantiated let clock: Clock
+			}
+			""")
+		}
+		declarations.append("""
+		@Instantiable
+		public struct Clock: Instantiable {
+		    public init() {}
+		}
+		""")
+		var reports = [[MockWorldsTableReport]]()
+		for orderedDeclarations in [declarations, declarations.reversed()] {
+			let source = orderedDeclarations.joined(separator: "\n\n")
+			await reports.append(try Self.tableReports(filesToDelete: &filesToDelete) { filesToDelete in
+				try await executeSafeDIToolTest(
+					swiftFileContent: [],
+					swiftFileContentByFilePath: ["Screens.swift": source],
+					buildSwiftOutputDirectory: true,
+					filesToDelete: &filesToDelete,
+				)
+			})
+		}
+		// The first world meets its root, `store` and `clock`, the second its root and `feed`, and every later world only
+		// its root, in the order the mock roots are lowered.
+		var worlds = [MockWorldsTableReport.World]()
+		for index in 0..<22 {
+			let rootDeclaration = switch index {
+			case 0: 0
+			case 1: 3
+			default: index + 3
+			}
+			let rootKey = Int32(rootDeclaration * 2 + 1)
+			let childKey: Int32 = index.isMultiple(of: 2) ? 3 : 9
+			worlds.append(.init(mockedType: "Screen" + (index < 10 ? "0" : "") + String(index), rootDeclaration: rootDeclaration, declarationCount: 3, shareableDeclarationCount: 2, recordCount: 1, sharedRecordCount: 1, recordCountWithoutTable: 2, declarationKeys: [rootKey, childKey, 4]))
+		}
+		// `store` and `feed` are each only their root's child, and `clock` never is: three rows.
+		let expected = [MockWorldsTableReport(declarationCount: 25, shareableDeclarationCount: 3, sharedRecordCount: 3, rows: ["1: store: Store, every parent the root", "2: clock: Clock", "4: feed: Feed, every parent the root"], differences: [], worlds: worlds)]
+		#expect(reports == [expected, expected])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsEachSharedRecordOnceForTheRun_whenEightMockRootsShareSubtree() async throws {
+		var declarations = (0..<8).map { index in
+			"""
+			@Instantiable(generateMock: true)
+			public struct Screen\(index): Instantiable {
+			    public init(store: SessionStore) {
+			        self.store = store
+			    }
+
+			    @Instantiated let store: SessionStore
+			}
+			"""
+		}
+		declarations += [
+			"""
+			@Instantiable
+			public struct SessionStore: Instantiable {
+			    public init(clock: Clock, logger: Logger) {
+			        self.clock = clock
+			        self.logger = logger
+			    }
+
+			    @Instantiated let clock: Clock
+			    @Instantiated let logger: Logger
+			}
+			""",
+			"""
+			@Instantiable
+			public struct Clock: Instantiable {
+			    public init() {}
+			}
+			""",
+			"""
+			@Instantiable
+			public struct Logger: Instantiable {
+			    public init() {}
+			}
+			""",
+		]
+		let source = declarations.joined(separator: "\n\n")
+		let reports = try await Self.tableReports(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(
+				swiftFileContent: [],
+				swiftFileContentByFilePath: ["Screens.swift": source],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		// `store`, `clock` and `logger` are three rows, each record built once for the run; each world holds `store`'s,
+		// which holds the other two, where without the table each world builds all three.
+		var worlds = [MockWorldsTableReport.World]()
+		for index in 0..<8 {
+			let rootDeclaration = index == 0 ? 0 : index + 3
+			let rootKey = Int32(rootDeclaration * 2 + 1)
+			worlds.append(MockWorldsTableReport.World(mockedType: "Screen\(index)", rootDeclaration: rootDeclaration, declarationCount: 4, shareableDeclarationCount: 3, recordCount: 1, sharedRecordCount: 1, recordCountWithoutTable: 3, declarationKeys: [rootKey, 3, 4, 6]))
+		}
+		#expect(reports == [MockWorldsTableReport(declarationCount: 11, shareableDeclarationCount: 3, sharedRecordCount: 3, rows: ["1: store: SessionStore, every parent the root", "2: clock: Clock", "3: logger: Logger"], differences: [], worlds: worlds)])
+		#expect(reports.map { $0.sharedRecordCount + $0.worlds.map { $0.recordCount - $0.sharedRecordCount }.reduce(0, +) } == [3])
+		#expect(reports.map { $0.worlds.map(\.recordCountWithoutTable).reduce(0, +) } == [24])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_makesTwoRowsOfOneDeclaration_whenOneWorldBuildsItAtItsRootAndAnotherDeeper() async throws {
+		let reports = try await Self.tableReports(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public struct AlphaScreen: Instantiable {
+					    public init(clock: Clock) {
+					        self.clock = clock
+					    }
+
+					    @Instantiated let clock: Clock
+					}
+					""",
+					"""
+					@Instantiable(generateMock: true)
+					public struct BetaScreen: Instantiable {
+					    public init(store: SessionStore) {
+					        self.store = store
+					    }
+
+					    @Instantiated let store: SessionStore
+					}
+					""",
+					"""
+					@Instantiable
+					public struct SessionStore: Instantiable {
+					    public init(clock: Clock) {
+					        self.clock = clock
+					    }
+
+					    @Instantiated let clock: Clock
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Clock: Instantiable {
+					    public init() {}
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		// `clock` is one declaration, the root's child in `AlphaScreen`'s world and `store`'s in `BetaScreen`'s: two rows,
+		// beside `store`'s.
+		#expect(reports == [
+			MockWorldsTableReport(
+				declarationCount: 4,
+				shareableDeclarationCount: 2,
+				sharedRecordCount: 3,
+				rows: ["1: clock: Clock, every parent the root", "3: store: SessionStore, every parent the root", "1: clock: Clock"],
+				differences: [],
+				worlds: [
+					.init(mockedType: "AlphaScreen", rootDeclaration: 0, declarationCount: 2, shareableDeclarationCount: 1, recordCount: 1, sharedRecordCount: 1, recordCountWithoutTable: 1, declarationKeys: [1, 3]),
+					.init(mockedType: "BetaScreen", rootDeclaration: 2, declarationCount: 3, shareableDeclarationCount: 2, recordCount: 1, sharedRecordCount: 1, recordCountWithoutTable: 2, declarationKeys: [5, 7, 2]),
+				],
+			),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsLoopMembersOutOfRows_whenBuilderLoopIsAboveSharedSubtree() async throws {
+		let reports = try await Self.tableReports(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public struct Root: Instantiable {
+					    public init(alphaBuilder: Instantiator<Alpha>, betaBuilder: Instantiator<Beta>) {
+					        self.alphaBuilder = alphaBuilder
+					        self.betaBuilder = betaBuilder
+					    }
+
+					    @Instantiated let alphaBuilder: Instantiator<Alpha>
+					    @Instantiated let betaBuilder: Instantiator<Beta>
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Alpha: Instantiable {
+					    public init(betaBuilder: Instantiator<Beta>, clock: Clock) {
+					        self.betaBuilder = betaBuilder
+					        self.clock = clock
+					    }
+
+					    @Received let betaBuilder: Instantiator<Beta>
+					    @Instantiated let clock: Clock
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Beta: Instantiable {
+					    public init(alphaBuilder: Instantiator<Alpha>) {
+					        self.alphaBuilder = alphaBuilder
+					    }
+
+					    @Received let alphaBuilder: Instantiator<Alpha>
+					}
+					""",
+					"""
+					@Instantiable(generateMock: true)
+					public struct Other: Instantiable {
+					    public init(helper: Helper) {
+					        self.helper = helper
+					    }
+
+					    @Instantiated let helper: Helper
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Helper: Instantiable {
+					    public init(clock: Clock) {
+					        self.clock = clock
+					    }
+
+					    @Instantiated let clock: Clock
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Clock: Instantiable {
+					    public init() {}
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		// The table sees no cycle, so `alphaBuilder` and `betaBuilder` are shareable, but each is a member of `Root`'s world's
+		// loop of builders, so neither is a row; `clock`, beneath `alphaBuilder`, is the row `Other`'s world's `clock` is.
+		// The loop refuses `Root`'s world's records, so only `Other`'s world takes rows: `helper`'s, holding `clock`'s.
+		#expect(reports == [
+			MockWorldsTableReport(
+				declarationCount: 6,
+				shareableDeclarationCount: 4,
+				sharedRecordCount: 2,
+				rows: ["1: helper: Helper, every parent the root", "2: clock: Clock"],
+				differences: [],
+				worlds: [
+					.init(mockedType: "Other", rootDeclaration: 0, declarationCount: 3, shareableDeclarationCount: 2, recordCount: 1, sharedRecordCount: 1, recordCountWithoutTable: 2, declarationKeys: [1, 3, 4]),
+					.init(mockedType: "Root", rootDeclaration: 3, declarationCount: 4, shareableDeclarationCount: 3, recordCount: 0, sharedRecordCount: 0, recordCountWithoutTable: 0, declarationKeys: [7, 9, 11, 4]),
+				],
+			),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_makesFillUnshareable_whenMockCallsAnotherModulesPublicMock() async throws {
+		let reports = try await Self.tableReports(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(name: "Feature", packageName: "Feature", swiftFileContentByFilePath: ["FeatureTypes.swift": """
+					import SafeDI
+
+					public protocol Api: AnyObject {}
+
+					@Instantiable(generateMock: .public)
+					public final class Panel: Instantiable {
+					    init(api: any Api) { self.api = api }
+					    @Instantiated public let api: any Api
+					}
+					"""]),
+					ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: ["AppTypes.swift": """
+					import Feature
+					import SafeDI
+
+					@Instantiable(fulfillingAdditionalTypes: [Api.self])
+					public final class LiveApi: Api, Instantiable {
+					    public init(clock: Clock) { self.clock = clock }
+					    @Instantiated let clock: Clock
+					}
+
+					@Instantiable
+					public final class Clock: Instantiable {
+					    public init() {}
+					}
+
+					@Instantiable(generateMock: true)
+					public final class Root: Instantiable {
+					    public init(panel: Panel) { self.panel = panel }
+					    @Instantiated let panel: Panel
+					}
+					"""], dependencies: ["Feature"], activeCompilationConditions: ["DEBUG"]),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		// `Feature`'s run: `api` is a hole of `Panel`'s public mock. `App`'s run: `Root`'s mock calls `Panel`'s, passing a fill
+		// that builds `LiveApi`, which reads the scope of the call, so the fill and `panel` are built per world, and only
+		// `clock`, beneath the fill, is shareable.
+		#expect(reports == [
+			MockWorldsTableReport(
+				declarationCount: 2,
+				shareableDeclarationCount: 0,
+				sharedRecordCount: 0,
+				rows: [],
+				differences: [],
+				worlds: [
+					.init(mockedType: "Panel", rootDeclaration: 0, declarationCount: 2, shareableDeclarationCount: 0, recordCount: 0, sharedRecordCount: 0, recordCountWithoutTable: 0, declarationKeys: [1, 3]),
+				],
+			),
+			MockWorldsTableReport(
+				declarationCount: 4,
+				shareableDeclarationCount: 1,
+				sharedRecordCount: 1,
+				rows: ["3: clock: Clock"],
+				differences: [],
+				worlds: [
+					.init(mockedType: "Root", rootDeclaration: 0, declarationCount: 4, shareableDeclarationCount: 1, recordCount: 0, sharedRecordCount: 0, recordCountWithoutTable: 0, declarationKeys: [1, 3, 4, 6]),
+				],
+			),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsRecordsApart_whenTestClaimsSharedDeclaration() async throws {
+		let reports = try await NodeRecordsObservation.$claimsForTesting.withValue(["Clock": []]) {
+			try await Self.tableReports(filesToDelete: &filesToDelete) { filesToDelete in
+				try await executeSafeDIToolTest(
+					swiftFileContent: [
+						"""
+						@Instantiable(generateMock: true)
+						public struct AlphaScreen: Instantiable {
+						    public init(store: SessionStore) {
+						        self.store = store
+						    }
+
+						    @Instantiated let store: SessionStore
+						}
+						""",
+						"""
+						@Instantiable
+						public struct SessionStore: Instantiable {
+						    public init(clock: Clock) {
+						        self.clock = clock
+						    }
+
+						    @Instantiated let clock: Clock
+						}
+						""",
+						"""
+						@Instantiable
+						public struct Clock: Instantiable {
+						    public init() {}
+						}
+						""",
+					],
+					buildSwiftOutputDirectory: true,
+					filesToDelete: &filesToDelete,
+				)
+			}
+		}
+		// A claim makes `clock` no mock construction, so it is no row, nor is `store`, which calls it: the world builds both
+		// records itself, as it does without the table.
+		#expect(reports == [
+			MockWorldsTableReport(
+				declarationCount: 3,
+				shareableDeclarationCount: 2,
+				sharedRecordCount: 0,
+				rows: [],
+				differences: [],
+				worlds: [
+					.init(mockedType: "AlphaScreen", rootDeclaration: 0, declarationCount: 3, shareableDeclarationCount: 2, recordCount: 2, sharedRecordCount: 0, recordCountWithoutTable: 2, declarationKeys: [1, 3, 4]),
+				],
+			),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_givesDeclarationOnCycleOneKeyInEveryWorld_whenTwoMockRootsReachTheCycle() async throws {
+		let reports = try await Self.tableReports(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public struct AlphaScreen: Instantiable {
+					    public init(holder: Holder) {
+					        self.holder = holder
+					    }
+
+					    @Instantiated let holder: Holder
+					}
+					""",
+					"""
+					@Instantiable(generateMock: true)
+					public struct BetaScreen: Instantiable {
+					    public init(holder: Holder) {
+					        self.holder = holder
+					    }
+
+					    @Instantiated let holder: Holder
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Holder: Instantiable {
+					    public init(editor: Editor) {
+					        self.editor = editor
+					    }
+
+					    @Instantiated let editor: Editor
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Editor: Instantiable {
+					    public init(previewBuilder: Instantiator<Preview>) {
+					        self.previewBuilder = previewBuilder
+					    }
+
+					    @Instantiated let previewBuilder: Instantiator<Preview>
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Preview: Instantiable {
+					    public init(editor: Editor) {
+					        self.editor = editor
+					    }
+
+					    @Instantiated let editor: Editor
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		// `editor` and `previewBuilder` form a cycle, so nothing is shareable and no variant is a row, yet every variant has
+		// a key, and `editor`, on the cycle, has the key 4 (declaration 2, beneath `holder`) in both worlds, as do `holder`
+		// (3) and `previewBuilder` (6). Only the roots' keys differ.
+		#expect(reports == [
+			MockWorldsTableReport(
+				declarationCount: 5,
+				shareableDeclarationCount: 0,
+				sharedRecordCount: 0,
+				rows: [],
+				differences: [],
+				worlds: [
+					.init(mockedType: "AlphaScreen", rootDeclaration: 0, declarationCount: 4, shareableDeclarationCount: 0, recordCount: 0, sharedRecordCount: 0, recordCountWithoutTable: 0, declarationKeys: [1, 3, 4, 6]),
+					.init(mockedType: "BetaScreen", rootDeclaration: 4, declarationCount: 4, shareableDeclarationCount: 0, recordCount: 0, sharedRecordCount: 0, recordCountWithoutTable: 0, declarationKeys: [9, 3, 4, 6]),
+				],
+			),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsNoMockWorldsTable_whenNoTestObservesNodeRecords() async throws {
+		let reports = try await NodeRecordsChecks.$observesNodeRecords.withValue(false) {
+			try await Self.tableReports(filesToDelete: &filesToDelete) { filesToDelete in
+				try await executeSafeDIToolTest(
+					swiftFileContent: [
+						"""
+						@Instantiable(generateMock: true)
+						public struct AlphaScreen: Instantiable {
+						    public init(clock: Clock) {
+						        self.clock = clock
+						    }
+
+						    @Instantiated let clock: Clock
+						}
+						""",
+						"""
+						@Instantiable
+						public struct Clock: Instantiable {
+						    public init() {}
+						}
+						""",
+					],
+					buildSwiftOutputDirectory: true,
+					filesToDelete: &filesToDelete,
+				)
+			}
+		}
+		#expect(reports.isEmpty)
+	}
+
+	// MARK: Private
+
+	private var filesToDelete: [URL]
+
+	/// The reports of the mock worlds' table `body`'s runs hand the observer.
+	private static func tableReports(
+		filesToDelete: inout [URL],
+		_ body: (inout [URL]) async throws -> some Any,
+	) async throws -> [MockWorldsTableReport] {
+		let (stream, continuation) = AsyncStream.makeStream(of: MockWorldsTableReport.self)
+		var filesMade = [URL]()
+		defer { filesToDelete += filesMade }
+		_ = try await MockWorldsTableObservation.$observer.withValue({ continuation.yield($0) }) {
+			try await body(&filesMade)
+		}
+		continuation.finish()
+		var reports = [MockWorldsTableReport]()
+		for await report in stream {
+			reports.append(report)
+		}
+		return reports
+	}
+}

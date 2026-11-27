@@ -24,8 +24,8 @@
 /// overflows a thread's stack nor releases a chain of nested nodes.
 extension ScopeGenerator {
 	/// The mock of `instantiable`, the mocked type of this root, whose tree is its generator's children.
-	/// `worldRoot` is the root of the mock root's world, where a test observes node records.
-	func lowerMockRootWithTree(of instantiable: Instantiable, context: MockContext, worldRoot: ConstructionScope? = nil) async throws -> MockLowering.Result {
+	/// `world` is the mock root's world, where a test observes node records.
+	func lowerMockRootWithTree(of instantiable: Instantiable, context: MockContext, world: MockWorld? = nil) async throws -> MockLowering.Result {
 		// The mocked type's hand-written mock builds it, internal or public (`MockLowering+HandWrittenMocks.swift`), and every
 		// dependency is a node of its tree, a parameter of `mock()`, an override's binding or passed `nil`.
 		// The parameters `mock()` takes before its overrides (`lowerRootSignature(of:context:)`).
@@ -208,8 +208,8 @@ extension ScopeGenerator {
 		}
 		let builders = (walk.filledCallBuilders.parameters + signature.placeOnlyBuilderDeclarations).sorted { $0.label < $1.label }
 		// Where a test observes node records, an internal mock that binds nothing but its nodes has the statements that build
-		// them laid out from the records of its world (`nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:)`).
-		if let worldRoot {
+		// them laid out from the records of its world (`nodeRecordsMockStatements(of:world:bindsOnlyNodes:)`).
+		if let world {
 			let bindsOnlyNodes = rootReceiverBindingIndex == 0
 				&& linesBoundBesideNodes.isEmpty
 				&& signature.parameters.isEmpty
@@ -217,7 +217,7 @@ extension ScopeGenerator {
 				&& builders.isEmpty
 				&& rootRenames.values.allSatisfy(\.isEmpty)
 				&& rootInstancesReadByValue.isEmpty
-			if let statements = Self.nodeRecordsMockStatements(of: instantiable, worldRoot: worldRoot, bindsOnlyNodes: bindsOnlyNodes) {
+			if let statements = Self.nodeRecordsMockStatements(of: instantiable, world: world, bindsOnlyNodes: bindsOnlyNodes) {
 				bindingLines = [statements]
 			}
 		}

@@ -57,8 +57,10 @@ public enum NodeRecordsObservation {
 
 	/// The ways `nodeRecordsBody`, the root's body node records make, differs from `treeBody`, the body the tree's places
 	/// make: a line per difference, each naming the place by the labels on its path, and how many places the tree's body
-	/// holds, each place a shared plan reaches counted once per path.
-	static func differences(between treeBody: [GeneratedCode], and nodeRecordsBody: [GeneratedCode]) -> (differences: [String], treePlaceCount: Int) {
+	/// holds, each place a shared plan reaches counted once per path. `comparingSharingFields` also compares what a built
+	/// place records in its sharing fields (`BuiltPlaceRecord.sharingFields`), which the mock worlds' table compares and the
+	/// tree's places, which hold other values there, do not yet.
+	static func differences(between treeBody: [GeneratedCode], and nodeRecordsBody: [GeneratedCode], comparingSharingFields: Bool = false) -> (differences: [String], treePlaceCount: Int) {
 		var differences = [String]()
 		var treePlaceCount = 0
 		var pending = [(tree: treeBody, nodeRecords: nodeRecordsBody, path: "root")]
@@ -94,10 +96,10 @@ public enum NodeRecordsObservation {
 				}
 				switch (treeRecord, nodeRecordsRecord) {
 				case let (.built(treeBuilt), .built(nodeRecordsBuilt)):
-					differences += fieldDifferences(between: treeBuilt, and: nodeRecordsBuilt).map { "\(placePath): \($0)" }
+					differences += fieldDifferences(between: treeBuilt, and: nodeRecordsBuilt, comparingSharingFields: comparingSharingFields).map { "\(placePath): \($0)" }
 					pending.append((tree: treeBuilt.children, nodeRecords: nodeRecordsBuilt.children, path: placePath))
 				case let (.alias(treeAlias), .alias(nodeRecordsAlias)):
-					differences += fieldDifferences(between: treeAlias, and: nodeRecordsAlias).map { "\(placePath): \($0)" }
+					differences += fieldDifferences(between: treeAlias, and: nodeRecordsAlias, comparingSharingFields: comparingSharingFields).map { "\(placePath): \($0)" }
 				case let (.closer(treeCloser), .closer(nodeRecordsCloser)):
 					differences += fieldDifferences(between: treeCloser, and: nodeRecordsCloser).map { "\(placePath): \($0)" }
 				case (.built, _), (.alias, _), (.closer, _):
@@ -143,8 +145,9 @@ public enum NodeRecordsObservation {
 		return pieces.flatMap { statements(of: .indented($0, by: indentation)) }
 	}
 
-	/// The fields of `nodeRecords`, a rename or a hole's place, that differ from `tree`'s.
-	private static func fieldDifferences(between tree: AliasPlaceRecord, and nodeRecords: AliasPlaceRecord) -> [String] {
+	/// The fields of `nodeRecords`, a rename or a hole's place, that differ from `tree`'s, the sharing fields of the call it
+	/// holds only where `comparingSharingFields`.
+	private static func fieldDifferences(between tree: AliasPlaceRecord, and nodeRecords: AliasPlaceRecord, comparingSharingFields: Bool) -> [String] {
 		var differences = [String]()
 		func compare<Value: Equatable>(_ name: String, _ treeValue: Value, _ nodeRecordsValue: Value) {
 			guard treeValue != nodeRecordsValue else { return }
@@ -163,7 +166,7 @@ public enum NodeRecordsObservation {
 		compare("calledRootFunctionNames", tree.calledRootFunctionNames, nodeRecords.calledRootFunctionNames)
 		compare("holdsCall", tree.call != nil, nodeRecords.call != nil)
 		if let treeCall = tree.call, let nodeRecordsCall = nodeRecords.call {
-			differences += fieldDifferences(between: treeCall.record, and: nodeRecordsCall.record).map { "call: \($0)" }
+			differences += fieldDifferences(between: treeCall.record, and: nodeRecordsCall.record, comparingSharingFields: comparingSharingFields).map { "call: \($0)" }
 			compare("call: argumentValues", treeCall.record.argumentValues, nodeRecordsCall.record.argumentValues)
 			compare("call: statements before the leading statement", treeCall.statementsBeforeLeadingStatement.count, nodeRecordsCall.statementsBeforeLeadingStatement.count)
 			compare("call: statements after the leading statement", treeCall.statementsAfterLeadingStatement.count, nodeRecordsCall.statementsAfterLeadingStatement.count)
@@ -171,8 +174,9 @@ public enum NodeRecordsObservation {
 		return differences
 	}
 
-	/// The fields of `nodeRecords` that differ from `tree`'s, children aside.
-	private static func fieldDifferences(between tree: BuiltPlaceRecord, and nodeRecords: BuiltPlaceRecord) -> [String] {
+	/// The fields of `nodeRecords` that differ from `tree`'s, children aside, the sharing fields' values only where
+	/// `comparingSharingFields`.
+	private static func fieldDifferences(between tree: BuiltPlaceRecord, and nodeRecords: BuiltPlaceRecord, comparingSharingFields: Bool) -> [String] {
 		var differences = [String]()
 		func compare<Value: Equatable>(_ name: String, _ treeValue: Value, _ nodeRecordsValue: Value) {
 			guard treeValue != nodeRecordsValue else { return }
@@ -195,6 +199,12 @@ public enum NodeRecordsObservation {
 		compare("holdsSharingFields", tree.sharingFields != nil, nodeRecords.sharingFields != nil)
 		compare("leadingStatement", tree.leadingStatement, nodeRecords.leadingStatement)
 		compare("closureArguments", tree.closureArguments, nodeRecords.closureArguments)
+		if comparingSharingFields {
+			compare("passedArguments", tree.passedArguments, nodeRecords.passedArguments)
+			compare("constructionValue", tree.constructionValue, nodeRecords.constructionValue)
+			compare("alternatives", tree.alternatives, nodeRecords.alternatives)
+			compare("argumentValues", tree.argumentValues, nodeRecords.argumentValues)
+		}
 		return differences
 	}
 }
