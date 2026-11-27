@@ -423,7 +423,7 @@ public actor DependencyTreeGenerator {
 			) { taskGroup in
 				for rootInfo in rootScopeGenerators {
 					taskGroup.addTask {
-						let code = try await rootInfo.scopeGenerator.generatePlan()
+						let code = try await Self.plannedRootCode(of: rootInfo)
 						return await PlannedRoot(
 							typeDescription: rootInfo.typeDescription,
 							sourceFilePath: rootInfo.sourceFilePath,
@@ -559,6 +559,9 @@ public actor DependencyTreeGenerator {
 		let instantiable: Instantiable
 		let sourceFilePath: String?
 		let scopeGenerator: ScopeGenerator
+		/// The root's scope, frozen, where node records may lay its code out (`NodeRecords`): a production root of a module
+		/// without seams.
+		var constructionScope: ConstructionScope?
 	}
 
 	/// The validated scopes, frozen. Made only in this file, once `dependencyTrees(unreadTypeComment:)` has validated them,
@@ -708,6 +711,8 @@ public actor DependencyTreeGenerator {
 							declaredTypeNames: declaredTypeNames,
 							constructionMemo: &constructionMemo,
 						),
+
+						constructionScope: ConstructionScope(table: table, record: record),
 					))
 				}
 				rootScopeGenerators = roots
