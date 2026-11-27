@@ -1598,6 +1598,52 @@ struct SafeDIToolNodeRecordsMockRootTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_keepsTheWalksStatements_whenMockBindsWrapperBesideItsNodesAndRootReadsItsInstance() async throws {
+		// `Home` receives the wrapper, so the mock binds it once beside its nodes, and `Screen`, the mocked type, is passed
+		// its instance: a read no record of the world makes, in a world whose records refuse nothing.
+		let fixture = [
+			"""
+			@Instantiable(generateMock: true)
+			public final class Screen: Instantiable {
+			    public init(analytics: Analytics, home: Home) {
+			        self.analytics = analytics
+			        self.home = home
+			    }
+
+			    @Received let analytics: Analytics
+			    @Instantiated let home: Home
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Home: Instantiable {
+			    public init(analytics: LazilyInstantiated<Analytics>) {
+			        self.analytics = analytics
+			    }
+
+			    @Received let analytics: LazilyInstantiated<Analytics>
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Analytics: Instantiable {
+			    public init() {}
+			}
+			""",
+		]
+		let walkOutput = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		let rootReports = reports.filter { $0.isMockRoot && $0.root == "Screen" }
+		#expect(rootReports.map(\.refusal) == ["mockRootBindsOtherThanNodes"])
+		#expect(rootReports.map(\.everyRefusal) == [["mockRootBindsOtherThanNodes"]])
+		#expect(rootReports.map(\.isLaidOutFromNodeRecords) == [false])
+		#expect(output.generatedFiles == walkOutput.generatedFiles)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_returnsPropertysTypeFromErasedNodesFunction_whenNodesAreErasedAtEveryDepth() async throws {
 		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
 			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: Self.erasedValueFixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)

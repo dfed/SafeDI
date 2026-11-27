@@ -20,10 +20,11 @@
 
 extension ScopeGenerator {
 	/// The statements that build the nodes of `instantiable`'s mock, laid out from the node records of its world, the
-	/// root `worldRoot` builds, or `nil` where the mock's walk writes them: node records refuse the world, the mock binds a
-	/// value that is no node of it (`bindsOnlyNodes` is false), a node's configuration is among
-	/// `sendableConfigurationTypeNames` and holds a field its construction reads, no test turns
-	/// `NodeRecordsObservation.laysOutMockRoots` on, or the engine cannot lay the records out. Each node reads its override from the overrides its body's function was
+	/// root `worldRoot` builds, or `nil` where the mock's walk writes them: node records refuse the world, as they refuse
+	/// every mock root's where no test turns `NodeRecordsObservation.laysOutMockRoots` on (the mock root's facts are
+	/// owed there), the mock binds a value that is no node of it (`bindsOnlyNodes` is false), a node's configuration is
+	/// among `sendableConfigurationTypeNames` and holds a field its construction reads, or the engine cannot lay the
+	/// records out. Each node reads its override from the overrides its body's function was
 	/// handed (`NodeRecords.mockConfigurationField(named:)`), which the root's body reads of `mock()`'s own parameter. The
 	/// root is reported to the test that observes node records (`NodeRecordsObservation.observer`), which alone hands a
 	/// mock root its world. The world answers its records `rootNames`, the names the root's level binds its nodes apart under.
@@ -72,10 +73,6 @@ extension ScopeGenerator {
 		}
 		guard !readsFieldStoredAsClosure else {
 			report(refusal: .mockDefaultValuedParameter, everyRefusal: [.mockDefaultValuedParameter], isLaidOut: false, recordCount: 0)
-			return nil
-		}
-		guard NodeRecordsObservation.laysOutMockRoots else {
-			report(refusal: nil, everyRefusal: [], isLaidOut: false, recordCount: nodeRecords.recordCount)
 			return nil
 		}
 		let statements = TypeKeyBody.statements(ofRootBody: nodeRecords.rootBody, outerDeclarations: outerDeclarations, namesInScope: Set(outerDeclarations.map(\.label)), rootPassedArgumentNames: [ReservedName.mockOverridesParameterName])
