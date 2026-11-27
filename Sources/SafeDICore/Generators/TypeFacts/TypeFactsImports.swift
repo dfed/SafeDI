@@ -34,7 +34,18 @@
 /// long as its owner keeps it.
 struct TypeFactsImports: Sendable {
 	init(root: ConstructionScope) {
-		let (graph, _) = TypeFactsGraph.declarations(reachedFrom: root)
+		// The declarations the root builds: the properties each instantiates, then the fills it passes. An alias or a hole
+		// builds no type, so it imports nothing.
+		let graph = OrderedGraph(root: TypeFactsDeclaration(scope: root, property: nil, propertyID: nil, erasedToConcreteExistential: false, isFill: false)) { declaration in
+			var targets = [TypeFactsDeclaration]()
+			for case let .instantiated(property, child, erasedToConcreteExistential, propertyID) in declaration.scope.propertiesToGenerate {
+				targets.append(TypeFactsDeclaration(scope: child, property: property, propertyID: propertyID, erasedToConcreteExistential: erasedToConcreteExistential, isFill: false))
+			}
+			for case let .fill(hole, child, fillContext) in declaration.scope.holeArguments {
+				targets.append(TypeFactsDeclaration(scope: child, property: hole.property, propertyID: fillContext.propertyID, erasedToConcreteExistential: false, isFill: true))
+			}
+			return targets
+		}
 		var fulfillers = Set<FulfillerImports.Fulfiller>()
 		// The root is built as no property, so it has no fact of its own.
 		for declaration in graph.nodes.dropFirst() {
