@@ -75,7 +75,7 @@ struct SafeDIToolMockEnteredPlacesDeclarationTests: ~Copyable {
 	}
 
 	@Test
-	func mockEnteredPlacesDeclaration_declaresOneNearestOfTypeMemberWhichEachOfItsSlotsSets_whenTwoPropertiesBuildOneType() {
+	func mockEnteredPlacesDeclaration_declaresOneNearestOfTypeMemberWhichEachOfItsSlotsAndAFunctionOfItsOwnSet_whenTwoPropertiesBuildOneType() {
 		#expect(MockEnteredSlot.mockEnteredPlacesDeclaration(slots: Self.slotsWithTwoPropertiesOfHome, isSendable: false).joined(separator: "\n") == """
 		struct __safeDI_EnteredPlaces {
 		    final class Place<Configuration> {
@@ -104,6 +104,11 @@ struct SafeDIToolMockEnteredPlacesDeclarationTests: ~Copyable {
 		    func entering(otherHomeBuilder place: Place<Home.SafeDIMockConfiguration>) -> Self {
 		        var entered = self
 		        entered.otherHomeBuilder = place
+		        entered.nearestHome = place
+		        return entered
+		    }
+		    func entering(nearestHome place: Place<Home.SafeDIMockConfiguration>) -> Self {
+		        var entered = self
 		        entered.nearestHome = place
 		        return entered
 		    }
@@ -137,14 +142,15 @@ struct SafeDIToolMockEnteredPlacesDeclarationTests: ~Copyable {
 	@Test
 	func mockEnteredPlacesDeclaration_keepsTheOrderOfTheSlots_whenTwentySlotsAreListedAgainstTheirNames() {
 		// Twenty slots whose names and types sort in another order than the list's, each type built by two properties, so
-		// that an order taken from a set or from names shows in the members, the nearest-of-type members or the functions.
+		// that an order taken from a set or from names shows in the members or the functions, of slots or of nearest-of-type
+		// members.
 		let order = [13, 4, 17, 0, 9, 19, 6, 2, 15, 11, 8, 1, 18, 5, 12, 3, 16, 7, 14, 10]
 		let slots = order.map { MockEnteredSlot(name: "builder\($0)", configurationType: .simple(name: "Type\(19 - $0 / 2)", generics: []), nearestOfTypeSlotName: "nearest\($0 / 2)") }
 		let lines = MockEnteredSlot.mockEnteredPlacesDeclaration(slots: slots, isSendable: false)
 		let members = lines.filter { $0.hasPrefix("    var ") }.map { String($0.dropFirst(8).prefix { $0 != ":" }) }
 		let functions = lines.filter { $0.hasPrefix("    func ") }.map { String($0.dropFirst(18).prefix { $0 != " " }) }
 		#expect(members == order.map { "builder\($0)" } + [6, 2, 8, 0, 4, 9, 3, 1, 7, 5].map { "nearest\($0)" })
-		#expect(functions == order.map { "builder\($0)" })
+		#expect(functions == order.map { "builder\($0)" } + [6, 2, 8, 0, 4, 9, 3, 1, 7, 5].map { "nearest\($0)" })
 	}
 
 	@Test
@@ -193,6 +199,32 @@ struct SafeDIToolMockEnteredPlacesDeclarationTests: ~Copyable {
 		""")
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func enteredPlaces_enterAPropertyWithTheConfigurationOfAFunctionOnNoCycle_whenThatFunctionBuildsThePropertysTypeAboveIt() async throws {
+		// `homeBuilder` is on no cycle and has no slot; it enters only the nearest place of `Home`. Beneath it `roomBuilder`
+		// and `otherHomeBuilder`, which builds `Home` too, call each other: `otherHomeBuilder` reads `homeBuilder`'s
+		// configuration at its first place, and again after the route closes on `roomBuilder`, since `homeBuilder`'s place
+		// is above `roomBuilder`'s and is kept.
+		let slots = [
+			MockEnteredSlot(name: "roomBuilder", configurationType: .simple(name: "Room", generics: []), nearestOfTypeSlotName: nil),
+			MockEnteredSlot(name: "otherHomeBuilder", configurationType: .simple(name: "Home", generics: []), nearestOfTypeSlotName: "nearestHome"),
+		]
+		let printed = try await printedReads(
+			slots: slots,
+			functionsOnNoCycle: [MockEnteredSlot(name: "homeBuilder", configurationType: .simple(name: "Home", generics: []), nearestOfTypeSlotName: "nearestHome")],
+			routes: [["homeBuilder", "roomBuilder", "otherHomeBuilder", "roomBuilder", "otherHomeBuilder"]],
+		)
+		#expect(printed == nil || printed == """
+		homeBuilder reads root.homeBuilder
+		roomBuilder reads root.homeBuilder.roomBuilder
+		otherHomeBuilder reads root.homeBuilder
+		roomBuilder reads root.homeBuilder.roomBuilder
+		otherHomeBuilder reads root.homeBuilder
+
+		""")
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -212,26 +244,29 @@ struct SafeDIToolMockEnteredPlacesDeclarationTests: ~Copyable {
 	/// read through and has a field per slot, and a function `reads(along:)` whose body holds the declaration and a
 	/// function per slot. Each of those begins with the three statements of a function on a cycle (it finds its place in
 	/// its slot, or enters one with the nearest configuration of its type, else the one it is handed), records the
-	/// configuration it then reads, and calls the function the route names next with its own field for it.
+	/// configuration it then reads, and calls the function the route names next with its own field for it. A function
+	/// of `functionsOnNoCycle` has no slot: it begins with the one statement that enters the nearest place of its type
+	/// (its `nearestOfTypeSlotName`) with the configuration it is handed.
 	/// - Returns: What the program printed, or `nil` when compile verification is disabled.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	private mutating func printedReads(slots: [MockEnteredSlot], routes: [[String]]) async throws -> String? {
+	private mutating func printedReads(slots: [MockEnteredSlot], functionsOnNoCycle: [MockEnteredSlot] = [], routes: [[String]]) async throws -> String? {
+		let functions = slots + functionsOnNoCycle
 		func configurationType(of typeName: String) -> [String] {
 			["enum \(typeName) {", "    struct SafeDIMockConfiguration {", "        let name: String"]
-				+ slots.map { "        var \($0.name): \($0.configurationType.asSource).SafeDIMockConfiguration { .init(name: name + \".\($0.name)\") }" }
+				+ functions.map { "        var \($0.name): \($0.configurationType.asSource).SafeDIMockConfiguration { .init(name: name + \".\($0.name)\") }" }
 				+ ["    }", "}"]
 		}
 		func calls(on configuration: String, indent: String) -> [String] {
 			["\(indent)switch route.first {"]
-				+ slots.flatMap { [
+				+ functions.flatMap { [
 					"\(indent)case \"\($0.name)\":",
 					"\(indent)    __safeDI_\($0.name)(safeDIOverrides: \(configuration).\($0.name), __safeDI_entered: __safeDI_entered, route: route.dropFirst())",
 				] }
 				+ ["\(indent)default:", "\(indent)    break", "\(indent)}"]
 		}
 		var typeNames = ["Root"]
-		for slot in slots where !typeNames.contains(slot.configurationType.asSource) {
-			typeNames.append(slot.configurationType.asSource)
+		for function in functions where !typeNames.contains(function.configurationType.asSource) {
+			typeNames.append(function.configurationType.asSource)
 		}
 		var lines = typeNames.flatMap(configurationType(of:))
 		lines.append("func reads(along route: ArraySlice<String>) -> [String] {")
@@ -245,6 +280,15 @@ struct SafeDIToolMockEnteredPlacesDeclarationTests: ~Copyable {
 				"        let safeDIOverrides = __safeDI_place.configuration",
 				"        let __safeDI_entered = __safeDI_place.enteredAbove.entering(\(slot.name): __safeDI_place)",
 				"        reads.append(\"\(slot.name) reads \\(safeDIOverrides.name)\")",
+			]
+			lines += calls(on: "safeDIOverrides", indent: "        ")
+			lines.append("    }")
+		}
+		for function in functionsOnNoCycle {
+			lines += [
+				"    func __safeDI_\(function.name)(safeDIOverrides: \(function.configurationType.asSource).SafeDIMockConfiguration, __safeDI_entered: __safeDI_EnteredPlaces, route: ArraySlice<String>) {",
+				"        let __safeDI_entered = __safeDI_entered.entering(\(function.nearestOfTypeSlotName ?? ""): .init(safeDIOverrides, above: __safeDI_entered))",
+				"        reads.append(\"\(function.name) reads \\(safeDIOverrides.name)\")",
 			]
 			lines += calls(on: "safeDIOverrides", indent: "        ")
 			lines.append("    }")

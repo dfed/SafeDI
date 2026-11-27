@@ -35,7 +35,8 @@ struct MockEnteredSlot: Hashable, Sendable {
 	/// nearest-of-type member, in the order `slots` first names each. `Place` holds the configuration a place was
 	/// entered with and the places entered above it, so a function that finds its place there returns to both. A value
 	/// with no place entered is `.init()`, and `entering(<slot>:)` returns the value with one more place entered, which
-	/// is also the nearest of its type.
+	/// is also the nearest of its type. `entering(<nearest-of-type member>:)` returns the value with that member alone
+	/// set, for a function on no cycle whose configuration is the nearest of its type for a slot beneath it.
 	///
 	/// The text follows `slots` and nothing else, so one list is one text on every run.
 	/// - Parameter isSendable: Whether a function that is handed the places is `@Sendable`. The struct and `Place` are
@@ -61,10 +62,15 @@ struct MockEnteredSlot: Hashable, Sendable {
 		for slot in slots {
 			lines.append("\(indent)var \(slot.name): \(placeType(of: slot))?")
 		}
-		var declaredNearestOfTypeSlotNames = Set<String>()
+		// Each nearest-of-type member once, with the first slot that names it, whose type is every such slot's.
+		var nearestOfTypeMembers = [(name: String, slot: MockEnteredSlot)]()
+		var nearestOfTypeSlotNames = Set<String>()
 		for slot in slots {
-			guard let nearestOfTypeSlotName = slot.nearestOfTypeSlotName, declaredNearestOfTypeSlotNames.insert(nearestOfTypeSlotName).inserted else { continue }
-			lines.append("\(indent)var \(nearestOfTypeSlotName): \(placeType(of: slot))?")
+			guard let nearestOfTypeSlotName = slot.nearestOfTypeSlotName, nearestOfTypeSlotNames.insert(nearestOfTypeSlotName).inserted else { continue }
+			nearestOfTypeMembers.append((name: nearestOfTypeSlotName, slot: slot))
+		}
+		for member in nearestOfTypeMembers {
+			lines.append("\(indent)var \(member.name): \(placeType(of: member.slot))?")
 		}
 		for slot in slots {
 			lines.append("\(indent)func entering(\(slot.name.spelledAsArgumentLabel) place: \(placeType(of: slot))) -> Self {")
@@ -73,6 +79,13 @@ struct MockEnteredSlot: Hashable, Sendable {
 			if let nearestOfTypeSlotName = slot.nearestOfTypeSlotName {
 				lines.append("\(indent)\(indent)entered.\(nearestOfTypeSlotName) = place")
 			}
+			lines.append("\(indent)\(indent)return entered")
+			lines.append("\(indent)}")
+		}
+		for member in nearestOfTypeMembers {
+			lines.append("\(indent)func entering(\(member.name.spelledAsArgumentLabel) place: \(placeType(of: member.slot))) -> Self {")
+			lines.append("\(indent)\(indent)var entered = self")
+			lines.append("\(indent)\(indent)entered.\(member.name) = place")
 			lines.append("\(indent)\(indent)return entered")
 			lines.append("\(indent)}")
 		}
