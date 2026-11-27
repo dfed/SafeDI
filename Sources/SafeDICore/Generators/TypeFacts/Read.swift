@@ -31,6 +31,10 @@ enum ReadChannel: UInt8, Sendable {
 	/// Whether a receive of a label only if available is handed a value or `nil`: the declaration may be built later, or
 	/// still be building. Today `NearestDeclarations.resolvingBinding(of:)`.
 	case optional
+	/// The nearest declaration of a label as a receive only if available reads it: its form, and whether it is still
+	/// being built, all of which the optional parameter it is passed carries (rule 1). A required receive of the label
+	/// reads `value` beside it, whose answer keys in full. Logged as `value`'s read is.
+	case optionalValue
 	/// What a renamed receive is bound from where its alias is declared, and whether that sibling is still being built.
 	case alias
 	/// Whether a member of a loop of builders, or one of two twins, is made again where the place is built: a value the
@@ -52,7 +56,7 @@ enum ReadChannel: UInt8, Sendable {
 	/// Whether a read of the channel asks about a label.
 	var asksAboutLabel: Bool {
 		switch self {
-		case .value, .optional, .alias, .madeAgain, .mock, .carrier, .fill:
+		case .value, .optional, .optionalValue, .alias, .madeAgain, .mock, .carrier, .fill:
 			true
 		case .family, .override:
 			false
@@ -64,7 +68,7 @@ enum ReadChannel: UInt8, Sendable {
 	/// pins.
 	var carriesValue: Bool {
 		switch self {
-		case .value, .optional, .alias, .madeAgain, .override, .fill:
+		case .value, .optional, .optionalValue, .alias, .madeAgain, .override, .fill:
 			true
 		case .family, .carrier, .mock:
 			false
@@ -78,6 +82,8 @@ enum ReadChannel: UInt8, Sendable {
 			"value"
 		case .optional:
 			"optional"
+		case .optionalValue:
+			"optionalValue"
 		case .alias:
 			"alias"
 		case .madeAgain:

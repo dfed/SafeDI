@@ -229,11 +229,10 @@ protocol TypeFactsWorld {
 	func sources(ofCall edgeIndex: Int, of variant: VariantID) -> ArraySlice<AnswerSource>
 	/// Called by exactly one call and off every cycle; not whether the body is a function (`BuiltPlaceRecord.hasFunction`).
 	func isCalledOnce(_ variant: VariantID) -> Bool
-	/// What each read of the variant comes to, parallel to `keys(of:)`. Owed by the outcomes fold.
+	/// What each read of the variant comes to, parallel to `keys(of:)` (the outcomes fold).
 	func outcomes(of variant: VariantID) -> ArraySlice<TypeFactsOutcome>
 	/// For each read of the variant, parallel to `keys(of:)`: the offset of the edge that opens the `@Sendable` function a
-	/// `readBeforeSendableFunction` read is bound before (the outermost such edge), -1 for every other outcome. Owed by the
-	/// outcomes fold.
+	/// `readBeforeSendableFunction` read is bound before (the outermost such edge), -1 for every other outcome.
 	func boundBefore(of variant: VariantID) -> ArraySlice<Int32>
 }
 
@@ -399,11 +398,11 @@ extension TypeFactsGraph: TypeFactsWorld {
 		variants.isCalledOnce[Int(variant)]
 	}
 
-	func outcomes(of _: VariantID) -> ArraySlice<TypeFactsOutcome> {
-		[]
+	func outcomes(of variant: VariantID) -> ArraySlice<TypeFactsOutcome> {
+		outcomes.forms(of: variant)
 	}
 
-	func boundBefore(of _: VariantID) -> ArraySlice<Int32> {
-		[]
+	func boundBefore(of variant: VariantID) -> ArraySlice<Int32> {
+		outcomes.boundBefore(of: variant)
 	}
 }

@@ -148,7 +148,7 @@ enum TypeFactsChecks {
 		var declaredReadsByNode = [Int: Set<String>]()
 		for (index, place) in places.enumerated() {
 			guard let node = place.node else { continue }
-			let declared = declaredReadsByNode[node] ?? Set(report.nodes[node].readsFromAbove)
+			let declared = declaredReadsByNode[node] ?? declaredReads(of: report.nodes[node])
 			declaredReadsByNode[node] = declared
 			let undeclared = Set(place.reads).subtracting(declared).sorted()
 			if !undeclared.isEmpty {
@@ -222,8 +222,9 @@ enum TypeFactsChecks {
 				firstPlaceByFactsVariant[variant] = index
 				continue
 			}
-			let answers = keyedAnswers(of: places[index])
-			let firstAnswers = keyedAnswers(of: places[first])
+			let declared = places[index].node.map { Set(report.nodes[$0].readsFromAbove) } ?? []
+			let answers = keyedAnswers(of: places[index], declared: declared)
+			let firstAnswers = keyedAnswers(of: places[first], declared: declared)
 			if answers != firstAnswers {
 				add(10, "places \(first) and \(index) of \(nodeDescription(places[index].node)) share variant \(variant) but answer \(answers.symmetricDifference(firstAnswers).sorted()) otherwise")
 			}
@@ -287,15 +288,30 @@ enum TypeFactsChecks {
 		return result
 	}
 
-	/// A place's answered reads as a variant's key compares them: a read only if available left out (rule 1), and what is
+	/// A place's answered reads as a variant's key compares them: a read only if available left out (rule 1), given the
+	/// node's declared reads as the report spells them, and what is
 	/// still being built left out of a read whose declaration is a wrapper (rule 2), which the text shows by its type.
-	private static func keyedAnswers(of place: TypeFactsReport.Place) -> Set<String> {
+	private static func keyedAnswers(of place: TypeFactsReport.Place, declared: Set<String>) -> Set<String> {
 		var answers = Set<String>()
 		for answer in place.answeredReads where !answer.hasPrefix("optional(") {
+			// A nearest declaration that only receives only if available read (`optionalValue`) keys by rule 1 too.
+			let read = String(answer.prefix { $0 != " " })
+			if read.hasPrefix("value("), !declared.contains(read), declared.contains("optionalValue(" + read.dropFirst("value(".count)) {
+				continue
+			}
 			let isWrapper = answer.contains("Instantiator<") || answer.contains("LazilyInstantiated<")
 			answers.insert(isWrapper ? answer.replacingOccurrences(of: #" being built \[[^\]]*\]"#, with: "", options: .regularExpression) : answer)
 		}
 		return answers
+	}
+
+	/// A node's declared reads as a logged read is spelled: an `optionalValue` read is logged as `value`'s is.
+	private static func declaredReads(of node: TypeFactsReport.Node) -> Set<String> {
+		var reads = Set(node.readsFromAbove)
+		for read in node.readsFromAbove where read.hasPrefix("optionalValue(") {
+			reads.insert("value(" + read.dropFirst("optionalValue(".count))
+		}
+		return reads
 	}
 
 	private static func append(_ line: String, toFileAt path: String) {
