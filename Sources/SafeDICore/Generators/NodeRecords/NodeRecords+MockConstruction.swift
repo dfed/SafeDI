@@ -33,9 +33,14 @@ extension NodeRecords {
 		var discharges: Set<NodeRecordRefusal> = buildsWithHandWrittenMock ? [.construction, .noInitializer] : []
 		discharges.formUnion(mockOnlyIfAvailableDischarges(of: declaration))
 		discharges.formUnion(erasedDischarges)
+		// A node built in a `@Sendable` function of its own reads its override from a local bound before the function
+		// (`NodeRecords+MockSendable.swift`).
+		discharges.formUnion(mockSendableDischarges(of: declaration, in: world))
 		guard refusalsOfBuiltByInitializer(declaration, in: world).allSatisfy(discharges.contains) else { return nil }
-		let kind: NodeRecordKind = erasedDischarges.isEmpty ? .mockConstruction : .mockErased
-		var refusals = [NodeRecordRefusal]()
+		// A `Sendable` wrapper erased to its property's type is made as `mockErased` makes an erased node: stage 1 refuses it
+		// as `sendable` alone.
+		let kind: NodeRecordKind = erasedDischarges.isEmpty && !isErasedSendableWrapper(declaration, in: world) ? .mockConstruction : .mockErased
+		var refusals = mockSendableRefusals(of: declaration, in: world)
 		let instantiable = world.scope(of: declaration).instantiable
 		// An actor is claimed as any node is. The closure that overrides it takes each argument `sending`
 		// (`MockLowering.BuilderParameters`), and what it is sent is built by functions that are each handed their
@@ -112,12 +117,7 @@ extension NodeRecords {
 		// A constant built in a function for its configuration's fields writes `return`, as the walk writes it.
 		record.functionAlwaysWritesReturn = !fieldArguments.isEmpty && record.property.propertyType.isConstant
 		let isConfigured = !children.isEmpty || !fieldArguments.isEmpty
-		let slotType: TypeDescription = if isConfigured {
-			.nested(name: ScopeGenerator.mockConfigurationStructName, parentType: instantiable.concreteInstantiable, generics: [])
-		} else {
-			// The closure's type as the configuration that holds it spells it (`MockLowering.ConstantNode.builderClosureType`).
-			.unknown(text: "((\(MockLowering.BuilderParameters(of: instantiable, usesMockInitializer: handWrittenMock != nil).spelled)) -> \(record.property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource))?")
-		}
+		let slotType = mockOverrideType(of: record, usesHandWrittenMock: handWrittenMock != nil, isConfigured: isConfigured, instantiable: instantiable)
 		let slot = mockOverrideSlot(
 			of: declaration,
 			labeled: record.property.label,
@@ -141,6 +141,17 @@ extension NodeRecords {
 		return record
 	}
 
+	/// The type of the override of `record`'s node, of `instantiable`'s type: its configuration where `isConfigured`, and
+	/// otherwise its override closure, as the configuration that holds it spells it
+	/// (`MockLowering.ConstantNode.builderClosureType`), `@Sendable` where a `@Sendable` function captures it.
+	static func mockOverrideType(of record: BuiltPlaceRecord, usesHandWrittenMock: Bool, isConfigured: Bool, instantiable: Instantiable) -> TypeDescription {
+		if isConfigured {
+			mockConfigurationType(of: instantiable)
+		} else {
+			.unknown(text: "(\(record.isSendable ? "@Sendable " : "")(\(MockLowering.BuilderParameters(of: instantiable, usesMockInitializer: usesHandWrittenMock).spelled)) -> \(record.property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource))?")
+		}
+	}
+
 	/// Where `declaration`, a node of a mock root's world built as the property labeled `label`, reads its override, a
 	/// value of `type`: the field of its parent's configuration under its label. Every function is declared in the root's
 	/// body, where it can capture no other function's argument, so a node with a function of its own is handed the value
@@ -148,9 +159,10 @@ extension NodeRecords {
 	/// node built in place reads the field where it is built. A function that only the root's body calls, and whose body
 	/// alone reads the value, captures `mock()`'s own overrides instead and takes no argument, as the walk writes it: its
 	/// one parent's configuration is `mock()`'s. A function that hands its overrides to its children keeps the argument,
-	/// since a child built under two parents reads one name in both, and so does a `@Sendable` function, which cannot
-	/// capture the overrides. Each record of a mock root's world takes its override from here, so that no record spells
-	/// the path.
+	/// since a child built under two parents reads one name in both. A `@Sendable` function can neither capture the
+	/// overrides nor be handed them, so it reads the local its parent's body binds the value to before it, as the walk
+	/// writes it (`NodeRecords+MockSendable.swift`). Each record of a mock root's world takes its override from here, so
+	/// that no record spells the path.
 	/// - Parameters:
 	///   - hasFunction: Whether the node is built in a function of its own.
 	///   - handsOverridesToChildren: Whether the value is a configuration whose fields the node's children read.
@@ -165,9 +177,13 @@ extension NodeRecords {
 		handsOverridesToChildren: Bool,
 		isSendable: Bool,
 	) -> (value: ValuePath, passedArguments: [PassedArgument]) {
-		let field = mockConfigurationField(named: label)
+		let field = mockConfigurationField(of: declaration, named: label, in: world)
 		guard hasFunction else { return (field, []) }
-		if !handsOverridesToChildren, !isSendable, world.parents(of: declaration).allSatisfy({ $0.parent == 0 }) {
+		// A `@Sendable` function can neither capture the overrides nor be handed them: its value is read into a local before
+		// it (`mockOverridesBindingPlace(of:record:in:)`), which the function captures where the root's body declares both,
+		// and is handed elsewhere.
+		guard !isSendable else { return mockSendableOverrideSlot(of: declaration, labeled: label, typed: type, in: world, handsOverridesToChildren: handsOverridesToChildren) }
+		if !handsOverridesToChildren, world.parents(of: declaration).allSatisfy({ $0.parent == 0 }) {
 			return (.member(label.spelledAsMemberDeclarationName, of: .rootDeclaration(ReservedName.mockOverridesParameterName)), [])
 		} else {
 			// The overrides are not `Sendable`: no call inside a `@Sendable` function hands them on.
@@ -178,10 +194,12 @@ extension NodeRecords {
 		}
 	}
 
-	/// The override of the node built as the property labeled `label`, as the body that builds the node reads it: the
-	/// field under that label of the overrides the body's function was handed, which the root's body reads of `mock()`'s
-	/// own.
-	static func mockConfigurationField(named label: String) -> ValuePath {
-		.member(label.spelledAsMemberDeclarationName, of: .passedArgument(ReservedName.mockOverridesParameterName))
+	/// The override of `declaration`, the node built as the property labeled `label`, as the body that builds the node
+	/// reads it: the field under that label of the overrides the body's function was handed, which the root's body reads
+	/// of `mock()`'s own, and a `@Sendable` function's of the local it captures (`mockOverridesOfChildren(of:in:)`). A
+	/// node with more than one parent has no parent built in a `@Sendable` function (`mockSendableRefusals(of:in:)`), so
+	/// its first parent's is every parent's.
+	static func mockConfigurationField(of declaration: DeclarationID, named label: String, in world: some NodeRecordSources) -> ValuePath {
+		.member(label.spelledAsMemberDeclarationName, of: mockOverridesOfChildren(of: world.parents(of: declaration).first?.parent ?? 0, in: world))
 	}
 }
