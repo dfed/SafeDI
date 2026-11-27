@@ -258,6 +258,56 @@ struct SafeDIToolTypeFactsVariantKeyTests: ~Copyable {
 		#expect(variantCount(ofNodeDeclaring: "Leaf as leaf: Leaf", in: report) == 2, "\(report.world)")
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_answersBoundButNotProvided_whenNearestDeclarationOfLabelIsAnotherType() async throws {
+		// `Entry0` binds `mark: OtherMark` before it builds `ring0Builder`, whose `Ring0` receives `mark: Mark?` only if
+		// available: the answer at the edge is bound, but provides no form the subtree reads, so the call passes `nil`, as
+		// the generated `Ring0(ring1Builder: ring1Builder, mark: nil)` does. A farther `mark: Mark` above `Entry0` would be
+		// rejected as hidden in the chain, so nothing farther is handed.
+		let report = try await rootReport(of: [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let entry0: Entry0"]),
+			seamFixtureType(named: "Entry0", isFinalClass: true, declarations: ["@Instantiated let mark: OtherMark", "@Instantiated let ring0Builder: Instantiator<Ring0>"]),
+			seamFixtureType(named: "Ring0", isFinalClass: true, declarations: ["@Instantiated let ring1Builder: Instantiator<Ring1>", "@Received(onlyIfAvailable: true) let mark: Mark?"]),
+			seamFixtureType(named: "Ring1", isFinalClass: true, declarations: ["@Instantiated let ring0Builder: Instantiator<Ring0>"]),
+			seamFixtureType(named: "Mark", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "OtherMark", isFinalClass: true, declarations: []),
+		])
+
+		// The call of `Ring0` answers its two reads of `mark` (only if available, and optional) by `mark: OtherMark`.
+		#expect(report.world.contains("[\"bound beingBuilt\", \"bound declared not provided\", \"bound declared not provided\"]"), "\(report.world)")
+		#expect(report.world.components(separatedBy: "not provided").count == 3, "\(report.world)")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_ordersParametersAsBodyFirstReceives_whenAnEarlierSiblingReadsALaterLabelFirst() async throws {
+		// `Early` reads `alpha` before the world reaches `Ring0`, so the world's reads order `alpha` first (and read
+		// `ring0Builder`, the label of the cycle `Ring1` closes, which is no parameter), while
+		// `Ring0`'s body receives `zeta` itself before its `leaf` receives `alpha`: the generated functions are
+		// `__safeDI_ring0Builder(zeta: Zeta?, alpha: Alpha?)` and `__safeDI_ring1Builder(zeta: Zeta?, alpha: Alpha?)`.
+		let report = try await rootReport(of: [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let entry0: Entry0"]),
+			seamFixtureType(named: "Entry0", isFinalClass: true, declarations: ["@Instantiated let alpha: Alpha", "@Instantiated let zeta: Zeta", "@Instantiated let early: Early", "@Instantiated let ring0Builder: Instantiator<Ring0>"]),
+			seamFixtureType(named: "Early", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let alpha: Alpha?"]),
+			seamFixtureType(named: "Ring0", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let zeta: Zeta?", "@Instantiated let leaf: Leaf", "@Instantiated let ring1Builder: Instantiator<Ring1>"]),
+			seamFixtureType(named: "Leaf", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let alpha: Alpha?"]),
+			seamFixtureType(named: "Ring1", isFinalClass: true, declarations: ["@Instantiated let ring0Builder: Instantiator<Ring0>"]),
+			seamFixtureType(named: "Alpha", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "Zeta", isFinalClass: true, declarations: []),
+		])
+		let graph = report.graph
+		func labelTexts(_ labels: some Sequence<WorldLabelID>) -> [String] {
+			labels.map { graph.labelTexts[Int($0)] }
+		}
+		let ring0 = try #require(report.nodes.firstIndex { $0.description.hasPrefix("Ring0 ") })
+		let ring1 = try #require(report.nodes.firstIndex { $0.description.hasPrefix("Ring1 ") })
+
+		#expect(labelTexts(graph.labels(of: Int32(ring0))) == ["alpha", "ring0Builder", "zeta"])
+		#expect(labelTexts(graph.parameterOrder(of: Int32(ring0))) == ["zeta", "alpha"])
+		#expect(labelTexts(graph.parameterOrder(of: Int32(ring1))) == ["zeta", "alpha"])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]

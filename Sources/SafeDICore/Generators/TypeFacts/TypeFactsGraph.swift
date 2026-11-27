@@ -653,10 +653,11 @@ struct TypeFactsGraph: Sendable {
 		self.readOffsets = readOffsets
 		self.labelColumn = labelColumn
 		self.labelOffsets = labelOffsets
-		let answers = Self.answers(of: graph, reads: reads, readTable: readInterner.values, labels: labels, bindings: bindings, bindingOffsets: bindingOffsets, bindingsBefore: bindingsBefore, propertyTable: properties.values)
+		let answers = Self.answers(of: graph, reads: reads, readTable: readInterner.values, labels: labels, bindings: bindings, bindingOffsets: bindingOffsets, bindingsBefore: bindingsBefore, properties: properties)
 		answerIsBeingBuilt = answers.isBeingBuilt
 		answerTexts = answers.texts
 		answerKeys = answers.keys
+		answerProperties = answers.properties
 		variants = answers.variants
 		let isBeingBuilt = answers.isBeingBuilt
 		let variantsOfAnswers = answers.variants
@@ -690,6 +691,9 @@ struct TypeFactsGraph: Sendable {
 
 	/// Each answer ID's key: the answer without what a parameter carries.
 	let answerKeys: [Int32]
+
+	/// Each answer ID's declaration, by the world's property ID: what `providesFormRead(by:_:beneath:)` compares.
+	let answerProperties: [Int32]
 
 	/// The variants of the world's bodies, answered by what each node binds at its edges (`answers(of:reads:…)`).
 	let variants: TypeFactsVariants
@@ -742,13 +746,14 @@ struct TypeFactsGraph: Sendable {
 	/// bindings of that label bound before the edge (`bindingsBefore`), and the edge's child answers its own label as
 	/// the property it is built as, being built. Interned at the edge, where the graph is built from the table; the
 	/// worklist sees IDs only.
-	private static func answers(of graph: OrderedGraph<TypeFactsDeclaration>, reads: ReadsFromAbove, readTable: [Read], labels: TypeFactsInterner<String>, bindings: [TypeFactsWorldBinding], bindingOffsets: [Int32], bindingsBefore: [Int32], propertyTable: [Property]) -> (variants: TypeFactsVariants, isBeingBuilt: [Bool], texts: [String], keys: [Int32]) {
+	private static func answers(of graph: OrderedGraph<TypeFactsDeclaration>, reads: ReadsFromAbove, readTable: [Read], labels: TypeFactsInterner<String>, bindings: [TypeFactsWorldBinding], bindingOffsets: [Int32], bindingsBefore: [Int32], properties: TypeFactsInterner<Property>) -> (variants: TypeFactsVariants, isBeingBuilt: [Bool], texts: [String], keys: [Int32], properties: [Int32]) {
 		var answerIDByText = [String: Int32]()
 		var texts = [String]()
 		var isBeingBuilt = [Bool]()
 		var keys = [Int32]()
 		var kinds = [Property.PropertyType]()
-		func answer(text: String, beingBuilt: Bool, keyText: String, kind: Property.PropertyType) -> Int32 {
+		var answerProperties = [Int32]()
+		func answer(text: String, beingBuilt: Bool, keyText: String, kind: Property.PropertyType, property: Int32) -> Int32 {
 			let keyID: Int32
 			if let existing = answerIDByText[keyText] {
 				keyID = existing
@@ -760,6 +765,7 @@ struct TypeFactsGraph: Sendable {
 				isBeingBuilt.append(text == keyText && beingBuilt)
 				kinds.append(kind)
 				keys.append(keyID)
+				answerProperties.append(property)
 			}
 			guard text != keyText else {
 				return keyID
@@ -773,6 +779,7 @@ struct TypeFactsGraph: Sendable {
 			isBeingBuilt.append(beingBuilt)
 			kinds.append(kind)
 			keys.append(keyID)
+			answerProperties.append(property)
 			return id
 		}
 		var sourceByEdge = [Int32]()
@@ -817,10 +824,10 @@ struct TypeFactsGraph: Sendable {
 					beingBuilt = true
 				} else {
 					let start = Int(bindingOffsets[node])
-					bound = bindings[start..<start + Int(bindingsBefore[edge])].last { $0.label == read.label }.map { propertyTable[Int($0.property)] }
+					bound = bindings[start..<start + Int(bindingsBefore[edge])].last { $0.label == read.label }.map { properties.values[Int($0.property)] }
 					beingBuilt = false
 				}
-				guard let bound, let declaration = declarationsByLabelByNode[node][read.label]?.first(where: { $0.property == bound }) else { return nil }
+				guard let bound, let declaration = declarationsByLabelByNode[node][read.label]?.first(where: { $0.property == bound }), let property = properties.existingID(of: bound) else { return nil }
 				let kind = declaration.property.propertyType
 				let declarationForms = declaration.forms
 				let text = "\(read.channel.name) \(declarationForms)\(beingBuilt ? " being built" : "")"
@@ -837,7 +844,7 @@ struct TypeFactsGraph: Sendable {
 					// Rule 2: a wrapper still being built is passed and made again at the call, so it keys as the wrapper.
 					keyText = "\(read.channel.name) \(declarationForms)"
 				}
-				return VariantBinding(answer: answer(text: text, beingBuilt: beingBuilt, keyText: keyText, kind: kind), declaration: Int32(node))
+				return VariantBinding(answer: answer(text: text, beingBuilt: beingBuilt, keyText: keyText, kind: kind, property: property), declaration: Int32(node))
 			},
 			// Production bodies have one variant, `@Sendable` a mark folded over call edges; the family a seam's cases,
 			// builders and mock bodies key by is the edge facts' `opens`, which no producer feeds here yet.
@@ -857,7 +864,7 @@ struct TypeFactsGraph: Sendable {
 				}
 			},
 		)
-		return (variants, isBeingBuilt, texts, keys)
+		return (variants, isBeingBuilt, texts, keys, answerProperties)
 	}
 
 	/// The declarations in the order a walk of the root's edges, depth first, first reaches each. A node keeps its scope
