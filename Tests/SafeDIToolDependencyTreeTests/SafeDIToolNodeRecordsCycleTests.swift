@@ -497,6 +497,80 @@ struct SafeDIToolNodeRecordsCycleTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsTheTreesLayout_whenCycleReentersNodeWhoseReceiveAnotherDeclarationAnswers() async throws {
+		// `Reader` receives `tag`, which the root declares above `A` and `B` declares on the cycle of `A` and `B`: the call
+		// from `B` reaches `A` under another variant, one whose `Reader` reads `B`'s `tag`. The tree closes the cycle on
+		// `A`'s function, which takes `tag` as a parameter, so the records refuse the world for its cycle parameters until
+		// they read the facts' parameters.
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true) public final class Root: Instantiable {
+					    @Instantiated let tag: Instantiator<Tag>
+					    @Instantiated let aBuilder: Instantiator<A>
+					    public init(tag: Instantiator<Tag>, aBuilder: Instantiator<A>) { self.tag = tag; self.aBuilder = aBuilder }
+					}
+
+					@Instantiable public final class A: Instantiable {
+					    @Instantiated let reader: Reader
+					    @Instantiated let b: B
+					    public init(reader: Reader, b: B) { self.reader = reader; self.b = b }
+					}
+
+					@Instantiable public final class B: Instantiable {
+					    @Instantiated let tag: Instantiator<Tag>
+					    @Instantiated let aBuilder: Instantiator<A>
+					    public init(tag: Instantiator<Tag>, aBuilder: Instantiator<A>) { self.tag = tag; self.aBuilder = aBuilder }
+					}
+
+					@Instantiable public final class Reader: Instantiable {
+					    @Received let tag: Instantiator<Tag>
+					    public init(tag: Instantiator<Tag>) { self.tag = tag }
+					}
+
+					@Instantiable public final class Tag: Instantiable {
+					    public init() {}
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_tag() -> Tag {
+			            Tag()
+			        }
+			        let tag = Instantiator<Tag>(__safeDI_tag)
+			        func __safeDI_aBuilder(tag: Instantiator<Tag>) -> A {
+			            let reader = Reader(tag: tag)
+			            let b: B = __safeDI_b()
+			            return A(reader: reader, b: b)
+			        }
+			        func __safeDI_b() -> B {
+			            let tag = Instantiator<Tag>(__safeDI_tag)
+			            let aBuilder = Instantiator<A> {
+			                __safeDI_aBuilder(tag: tag)
+			            }
+			            return B(tag: tag, aBuilder: aBuilder)
+			        }
+			        let aBuilder = Instantiator<A> {
+			            __safeDI_aBuilder(tag: tag)
+			        }
+			        self.init(tag: tag, aBuilder: aBuilder)
+			    }
+			}
+			""",
+		])
+		#expect(reports.map(\.refusal) == ["cycleTakesParameters"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_laysOutRootAsTheTreeDoes_whenBuilderOfAnotherTypeSharesCycleMembersLabel() async throws {
 		// `Other`'s `aBuilder` builds `Leaf`, and the root's `aBuilder` builds `A`, on the cycle of `A` and `B`. No call
 		// that closes the cycle is beneath `Other`, so its body keeps the name, and the root's functions are named apart
