@@ -378,7 +378,7 @@ enum TypeFactsChecks {
 			} else if answers.count == 2 {
 				let (first, second) = (answers[0], answers[1])
 				let differs = { (field: String) in self.field(field, of: first) != self.field(field, of: second) }
-				if (self.field("being built", of: first) == "[]") != (self.field("being built", of: second) == "[]") {
+				if (field("being built", of: first) == "[]") != (field("being built", of: second) == "[]") {
 					owed.insert("fillBeingBuilt")
 				} else if differs("pinned above") || differs("read above") {
 					owed.insert("mockRootRecord")
