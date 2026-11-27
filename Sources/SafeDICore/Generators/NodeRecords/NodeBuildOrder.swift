@@ -74,8 +74,12 @@ struct NodeBuildOrder: Sendable {
 				(property: world.property(of: child), received: receivedByDeclaration[Int(child)] ?? [])
 			}
 			try Self.checkNoBuilderLoop(among: children)
+			let edgeFacts = world.edgeFacts(from: declaration)
+			// A member of a loop of builders, which step 0 finds with optional receives too, is rebound in each member's
+			// function: the loops lane's kind.
+			guard edgeFacts.allSatisfy({ $0.loop < 0 }) else { throw .builderLoop }
 			// Step 0's build position, which the sibling-order fixed point gives each edge.
-			edgeIndicesByDeclaration[Int(declaration)] = world.edgeFacts(from: declaration).enumerated()
+			edgeIndicesByDeclaration[Int(declaration)] = edgeFacts.enumerated()
 				.sorted { $0.element.buildPosition < $1.element.buildPosition }
 				.map(\.offset)
 		}

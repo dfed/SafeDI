@@ -23,8 +23,7 @@ extension NodeRecords {
 	/// of kind `receivesOnlyIfAvailable`, discharging `onlyIfAvailable` and `renameOrHole`, which it still holds where its
 	/// scope declares a hole or an instantiated dependency it does not build; `nil` for any other node.
 	static func receivesOnlyIfAvailableClaim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
-		// A mock root's world reads each node's override, which these records do not yet.
-		guard !world.isMockWorld, world.kind(of: declaration) != .alias, world.kind(of: declaration) != .hole else { return nil }
+		guard world.kind(of: declaration) != .alias, world.kind(of: declaration) != .hole else { return nil }
 		let scope = world.scope(of: declaration)
 		let declaresRename = scope.propertiesToGenerate.contains {
 			if case .aliased = $0 {
