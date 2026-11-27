@@ -30,11 +30,6 @@ public enum NodeRecordsObservation {
 	/// plan before it is turned on for every run, or generate time doubles.
 	@TaskLocal public static var laysOutRoots = false
 
-	/// Whether a run no test observes lays out each root of a module with seams, a seam's own root included, from its node
-	/// records where they accept its world and the engine lays every statement out, without planning its tree's body. A
-	/// prototype's switch, for timing such a module: off unless the tool's environment turns it on.
-	@TaskLocal public static var laysOutSeamWorldRootsInRun = false
-
 	/// Whether `generate` lays out a root whose world node records accept from them and builds no tree for it
 	/// (`DependencyTreeGenerator.nodeRecordsLayout`). Off until the switch to node records lands: only a test turns it on.
 	@TaskLocal public static var buildsNoTreeForAcceptedRoots = false

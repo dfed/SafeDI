@@ -56,7 +56,7 @@ extension DependencyTreeGenerator {
 	/// tree's at every place, and a root laid out from them is compared with the tree built beside them: its code, its
 	/// imports, and the checks its records stand in for (`TreeForcer`). A forced root whose world node records accept is
 	/// laid out from them where the test turns `NodeRecordsObservation.laysOutRoots` on. A run no test observes builds
-	/// no tree beside the records.
+	/// no tree beside the records, and lays out a seam's own root from its records where they accept its world.
 	static func plannedRootCode(of rootInfo: RootScopeInfo, declaredTypeNames: DeclaredTypeNames) async throws -> GeneratedCode {
 		let root = rootInfo.instantiable.concreteInstantiable.asSource
 		switch rootInfo.built {
@@ -67,8 +67,10 @@ extension DependencyTreeGenerator {
 			return layout.code
 		case let .tree(scopeGenerator):
 			guard let observer = NodeRecordsObservation.observer else {
-				guard NodeRecordsObservation.laysOutSeamWorldRootsInRun,
-				      let code = try laidOutSeamWorldRootCode(of: rootInfo, declaredTypeNames: declaredTypeNames)
+				// A seam's own root is laid out from its node records where they accept its world; its tree is still built,
+				// for its signature and the checks that read it, but its places are not planned.
+				guard let ownSeamRoot = rootInfo.ownSeamRoot,
+				      let code = try laidOutOwnSeamRootCode(of: rootInfo, ownSeamRoot: ownSeamRoot, declaredTypeNames: declaredTypeNames)
 				else { return try await scopeGenerator.generatePlan() }
 				return code
 			}
@@ -198,9 +200,9 @@ extension DependencyTreeGenerator {
 		return rootInitializer.spelled(writing: BuilderFunctionGraph(body: statements.map(Statement.verbatim)))
 	}
 
-	/// The code of `rootInfo`, a root of a module with seams or a seam's own root, laid out from its world's node records, or
-	/// `nil` where they refuse its world or the engine cannot lay every statement out.
-	private static func laidOutSeamWorldRootCode(of rootInfo: RootScopeInfo, declaredTypeNames: DeclaredTypeNames) throws -> GeneratedCode? {
+	/// The code of `rootInfo`, a seam's own root whose tree's root is `ownSeamRoot`, laid out from its world's node records,
+	/// or `nil` where they refuse its world or the engine cannot lay every statement out.
+	private static func laidOutOwnSeamRootCode(of rootInfo: RootScopeInfo, ownSeamRoot: ScopeGenerator.SeamRoot, declaredTypeNames: DeclaredTypeNames) throws -> GeneratedCode? {
 		let world = TypeFactsGraph(root: rootInfo.rootScope, forMockGeneration: false)
 		let seamTree = rootInfo.seamTree
 		let nodeRecords: NodeRecords
@@ -209,11 +211,7 @@ extension DependencyTreeGenerator {
 		} catch is NodeRecordRefusal {
 			return nil
 		}
-		if let ownSeamRoot = rootInfo.ownSeamRoot {
-			return try laidOutSeamRootCode(of: rootInfo.instantiable, seamRoot: ownSeamRoot, nodeRecords: nodeRecords)
-		} else {
-			return try laidOutRootCode(of: rootInfo.instantiable, body: nodeRecords.rootBody)
-		}
+		return try laidOutSeamRootCode(of: rootInfo.instantiable, seamRoot: ownSeamRoot, nodeRecords: nodeRecords)
 	}
 
 	/// The initializers and guard enum of `instantiable`, a seam this module generates, written around its tree's body laid
