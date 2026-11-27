@@ -23,9 +23,9 @@ extension NodeRecords {
 	/// discharges stage 1's refusal of a construction other than an initializer, and its refusal of a call that passes
 	/// builders where the call passes each builder up from the seam whose tree makes it (`ConstructionScope.HoleArgument.passUp`);
 	/// `nil` for any other node, and for every node of a mock root's world, which builds every seam inline. Every other
-	/// check of stage 1 still runs on it, so a call that fills a place is still refused as `fill`. The engine spells a call
-	/// in place only as a constant (`InPlaceCall`): any other call, and one that forwards values, which it binds inside its
-	/// function, are refused as `construction`.
+	/// check of stage 1 still runs on it, so a call that fills a place is still refused as `fill`. The engine binds a call in
+	/// place as a built place of its form, a wrapper of its function where the property is one (`InPlaceCall`); a call that
+	/// forwards values, which a wrapper binds inside its function, is refused as `construction`.
 	static func seamCallClaim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
 		guard !world.isMockWorld, world.construction(of: declaration) == .seamCall else { return nil }
 		let scope = world.scope(of: declaration)
@@ -38,14 +38,17 @@ extension NodeRecords {
 				false
 			}
 		}
+		// A call held in a wrapper, erased or not, or in a `@Sendable` function is bound as a built place of its form is, which
+		// discharges what that form's claim does.
+		let wrapperDischarges = (erasedClaim(of: declaration, in: world) ?? lazyClaim(of: declaration, in: world) ?? sendableClaim(of: declaration, in: world))?.discharges ?? []
 		return NodeRecordClaim(
 			kind: .seamCall,
-			discharges: passesEveryBuilderUp ? [.construction, .fill] : [.construction],
-			refusals: forwardsValues || world.kind(of: declaration) != .constant ? [.construction] : [],
+			discharges: (passesEveryBuilderUp ? Set<NodeRecordRefusal>([.construction, .fill]) : [.construction]).union(wrapperDischarges),
+			refusals: forwardsValues ? [.construction] : [],
 		)
 	}
 
-	/// The record of `declaration`'s place, a node of kind `seamCall`, a constant: a call the engine spells where its place is
+	/// The record of `declaration`'s place, a node of kind `seamCall`, in any form: a call the engine spells where its place is
 	/// written (`InPlaceCall`), whose function begins with the call's guard line (`CallFields.leadingStatement`) and builds
 	/// `children` after it, and whose construction calls the seam's tier's initializer (the scope's instantiable is the
 	/// seam's leaf) with `builtByInitializerRecord`'s arguments and, where the call passes builders up, the member of the
@@ -84,7 +87,7 @@ extension NodeRecords {
 		}
 		var record = BuiltPlaceRecord(
 			property: construction.property,
-			isErased: false,
+			isErased: construction.isErased,
 			concreteType: construction.concreteType,
 			isExtension: construction.isExtension,
 			target: .initializer(construction.concreteType),
@@ -93,7 +96,7 @@ extension NodeRecords {
 			cycleParameters: [],
 			callCycleArguments: [],
 			functionName: construction.functionName,
-			isSendable: false,
+			isSendable: construction.isSendable,
 			typesDeclaredEscaping: typesDeclaredEscaping,
 			lineEnd: "",
 			hasFunction: true,

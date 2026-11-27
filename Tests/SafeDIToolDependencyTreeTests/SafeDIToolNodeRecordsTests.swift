@@ -364,6 +364,147 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 		#expect(reports.flatMap(\.differences) == [])
 	}
 
+	/// A seam call held in each form of SafeDI's wrappers: the declaration `Root` makes of it, and the lines the tree writes
+	/// for it.
+	struct WrappedSeamCall: Sendable, CustomTestStringConvertible {
+		let declaration: String
+		let lines: String
+
+		var testDescription: String {
+			declaration
+		}
+
+		static let all = [
+			WrappedSeamCall(declaration: "@Instantiated let screen: Instantiator<Screen>", lines: """
+			        func __safeDI_screen() -> Screen {
+			            GUARD
+			            return Screen(__safeDI_session: session)
+			        }
+			        let screen = Instantiator<Screen>(__safeDI_screen)
+			"""),
+			WrappedSeamCall(declaration: "@Instantiated let screen: SendableInstantiator<Screen>", lines: """
+			        @Sendable nonisolated func __safeDI_screen() -> Screen {
+			            GUARD
+			            return Screen(__safeDI_session: session)
+			        }
+			        let screen = SendableInstantiator<Screen>(__safeDI_screen)
+			"""),
+			WrappedSeamCall(declaration: #"@Instantiated(fulfilledByType: "Screen", erasedToConcreteExistential: true) let screen: ErasedInstantiator<Void, AnyScreen>"#, lines: """
+			        func __safeDI_screen() -> Screen {
+			            GUARD
+			            return Screen(__safeDI_session: session)
+			        }
+			        let screen = ErasedInstantiator<Void, AnyScreen> {
+			            AnyScreen(__safeDI_screen())
+			        }
+			"""),
+			WrappedSeamCall(declaration: #"@Instantiated(fulfilledByType: "Screen", erasedToConcreteExistential: true) let screen: SendableErasedInstantiator<Void, AnyScreen>"#, lines: """
+			        @Sendable nonisolated func __safeDI_screen() -> Screen {
+			            GUARD
+			            return Screen(__safeDI_session: session)
+			        }
+			        let screen = SendableErasedInstantiator<Void, AnyScreen> {
+			            AnyScreen(__safeDI_screen())
+			        }
+			"""),
+			WrappedSeamCall(declaration: "@Instantiated let screen: LazilyInstantiated<Screen>", lines: """
+			        func __safeDI_screen() -> Screen {
+			            GUARD
+			            return Screen(__safeDI_session: session)
+			        }
+			        let screen = LazilyInstantiated<Screen>(__safeDI_screen)
+			"""),
+			WrappedSeamCall(declaration: "@Instantiated let screen: SendableLazilyInstantiated<Screen>", lines: """
+			        @Sendable nonisolated func __safeDI_screen() -> Screen {
+			            GUARD
+			            return Screen(__safeDI_session: session)
+			        }
+			        let screen = SendableLazilyInstantiated<Screen>(__safeDI_screen)
+			"""),
+		]
+	}
+
+	@Test(arguments: WrappedSeamCall.all)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysOutASeamCallAsTheTreeDoes_whenAWrapperHoldsTheCall(wrappedCall: WrappedSeamCall) async throws {
+		// `Root` holds its call of `Feature`'s seam `Screen` in a wrapper: node records bind the wrapper of the call's
+		// function, its guard line first, as the tree binds a built place of the wrapper's form.
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(name: "Feature", packageName: "App", swiftFileContent: [
+						"""
+						@Instantiable
+						public struct Session: Instantiable, Sendable {
+						    public init() {}
+						}
+						""",
+						"""
+						public protocol ScreenType: Sendable {}
+
+						public struct AnyScreen: Sendable {
+						    public init(_ screen: some ScreenType) {}
+						}
+
+						@Instantiable(generateDependencyTree: true)
+						public struct Screen: Instantiable, ScreenType, Sendable {
+						    public init(detail: Detail) {
+						        self.detail = detail
+						    }
+
+						    @Instantiated let detail: Detail
+						}
+						""",
+						"""
+						@Instantiable
+						public struct Detail: Instantiable, Sendable {
+						    public init(session: Session) {
+						        self.session = session
+						    }
+
+						    @Received let session: Session
+						}
+						""",
+					], dependencies: []),
+					ModuleFixture(name: "App", packageName: "App", swiftFileContent: [
+						"""
+						import Feature
+
+						@Instantiable(isRoot: true)
+						public struct Root: Instantiable {
+						    public init(session: Session, screen: \(wrappedCall.declaration.components(separatedBy: ": ").last ?? "")) {
+						        self.session = session
+						        self.screen = screen
+						    }
+
+						    @Instantiated let session: Session
+						    \(wrappedCall.declaration)
+						}
+						""",
+					], dependencies: ["Feature"]),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+
+		extension Root {
+		    public init() {
+		        let session = Session()
+		\(wrappedCall.lines.replacingOccurrences(of: "GUARD", with: "_ = Screen.__safeDI_Screen_1E2B55CC1D77755A.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes."))
+		        self.init(session: session, screen: screen)
+		    }
+		}
+		"""])
+		#expect(reports.map(\.root) == ["Screen", "Root"])
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [false, true])
+		#expect(reports.flatMap(\.differences) == [])
+	}
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_makesTheRecordOfASeamCallAsTheTreeDoes_whenTheCallPassesABuilderUp() async throws {
@@ -532,7 +673,7 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 		// the static helpers of `ScopeGenerator` listed here are called, until they move: a new one is a decision. The
 		// generator's hook (`DependencyTreeGenerator+NodeRecords.swift`) also calls `rootInitializer(of:)`, and plans the
 		// tree beside the records for the comparison. A mock world's records (`NodeRecords+MockConstruction.swift`) read two
-		// more, both facts of one type: its default-valued parameters, and the name of the configuration it declares.
+		// more, both facts of one type: its default-valued parameters, and the name of the configuration it declares. 
 		let directory = URL(fileURLWithPath: #filePath)
 			.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
 			.appendingPathComponent("Sources/SafeDICore/Generators/NodeRecords")

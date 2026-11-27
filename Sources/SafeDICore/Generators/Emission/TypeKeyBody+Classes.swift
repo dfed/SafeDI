@@ -146,6 +146,8 @@ extension TypeKeyLayout {
 	func inPlaceCallShape(_ call: InPlaceCall) -> String {
 		let record = call.record
 		var shape = [
+			// The property's form, which decides the wrapper the call is bound in (`bindingOfInPlaceCall(of:)`).
+			"\(record.property.propertyType)",
 			record.property.asSource,
 			record.concreteType.asSource,
 			record.target.callee,
