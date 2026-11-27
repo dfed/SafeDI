@@ -60,11 +60,12 @@ struct SafeDIToolTypeFactsLoopTests: ~Copyable {
 		#expect(!report.nodes[a].isOnCycle && !report.nodes[b].isOnCycle, "\(report.world)")
 		#expect(report.variantCountsByNode[a] == 1 && report.variantCountsByNode[b] == 1, "\(report.world)")
 		expectMadeAgainCallsNameTheParentsCalls(in: report)
-		// Each member's receive of the other reads the rebinding at its top, so each reads only the label it is built as,
-		// and the member made again is handed its label made again.
-		#expect(report.nodes[a].readsFromAbove == ["value(aBuilder)"] && report.nodes[b].readsFromAbove == ["value(bBuilder)"], "\(report.world)")
+		// Each member reads the label it is built as and its receive of the other, which the root's edge to it answers as
+		// the member's rebinding. The member made again is handed what the root hands it at its own edge: its rebinding
+		// of the other, and its own label being built.
+		#expect(report.nodes[a].readsFromAbove == ["value(aBuilder)", "value(bBuilder)"] && report.nodes[b].readsFromAbove == ["value(aBuilder)", "value(bBuilder)"], "\(report.world)")
 		let callOfB = try #require(report.variantMadeAgainCallSources[variant(of: a, in: report)].first)
-		#expect(callOfB == ["bound madeAgain"], "\(report.world)")
+		#expect(callOfB == ["bound madeAgain", "bound beingBuilt"], "\(report.world)")
 		// A made-again call is a call: each member is called by its parent and made again by the other.
 		#expect(try !report.variantIsCalledOnce[variant(of: a, in: report)] && !report.variantIsCalledOnce[variant(of: b, in: report)], "\(report.world)")
 	}
@@ -82,9 +83,10 @@ struct SafeDIToolTypeFactsLoopTests: ~Copyable {
 
 		#expect(members.map { report.nodes[$0].madeAgain } == [[members[1]], [members[2]], [members[0]]], "\(report.world)")
 		#expect(members.allSatisfy { !report.nodes[$0].isOnCycle }, "\(report.world)")
-		// Each member's receive reads its rebinding, and what the member it makes again reads but for that rebinding is
-		// the label it is built as, which the next member rebinds: each member reads only its own label.
-		#expect(members.map { report.nodes[$0].readsFromAbove } == [["value(aBuilder)"], ["value(bBuilder)"], ["value(cBuilder)"]], "\(report.world)")
+		// Each member reads its own label and its receive, which the root's edge to it answers as its rebinding. What the
+		// member it makes again reads, the root answers at that member's own edge, so no member reads further round the
+		// ring.
+		#expect(members.map { report.nodes[$0].readsFromAbove } == [["value(aBuilder)", "value(bBuilder)"], ["value(bBuilder)", "value(cBuilder)"], ["value(aBuilder)", "value(cBuilder)"]], "\(report.world)")
 		#expect(members.allSatisfy { report.variantCountsByNode[$0] == 1 }, "\(report.world)")
 		expectMadeAgainCallsNameTheParentsCalls(in: report)
 	}
@@ -107,9 +109,11 @@ struct SafeDIToolTypeFactsLoopTests: ~Copyable {
 		#expect(report.variantCountsByNode[s0] == 1, "\(report.world)")
 		expectMadeAgainCallsNameTheParentsCalls(in: report)
 		let callOfS1 = try #require(report.variantCallSources[variant(of: s0, in: report)].first)
-		// `S1` reads `s0Builder`, then its own label, which `S0` declares.
+		// `S1` reads `s0Builder`, then its own label, which `S0` declares. `S0` passes `s0Builder` through: the root's edge
+		// to `S0` answers it as `S0`'s rebinding.
 		#expect(report.nodes[s1].readsFromAbove == ["value(s0Builder)", "value(s1)"], "\(report.world)")
-		#expect(callOfS1.first == "bound madeAgain", "\(report.world)")
+		#expect(callOfS1.first == "passedThrough", "\(report.world)")
+		#expect(report.variantCallSources[0].first == ["bound madeAgain"], "\(report.world)")
 	}
 
 	@Test
@@ -267,8 +271,8 @@ struct SafeDIToolTypeFactsLoopTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_keepsVariantsPerNodeFixed_whenRingGrows() async throws {
-		// A ring of n members, each receiving the next. Each member reads only the label it is built as, so the ring's keys
-		// total n, with one variant per node, however long the ring.
+		// A ring of n members, each receiving the next. Each member reads the label it is built as and its receive, so the
+		// ring's keys total 2n, with one variant per node, however long the ring.
 		for memberCount in [4, 8, 16] {
 			var rootDeclarations = [String]()
 			var types = [String]()
@@ -279,7 +283,7 @@ struct SafeDIToolTypeFactsLoopTests: ~Copyable {
 			types.append(seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: rootDeclarations))
 			let report = try await rootReport(of: types, skipCompileVerification: true)
 
-			#expect(report.nodes.dropFirst().allSatisfy { $0.madeAgain.count == 1 && !$0.isOnCycle && $0.readsFromAbove.count == 1 }, "\(memberCount): \(report.world)")
+			#expect(report.nodes.dropFirst().allSatisfy { $0.madeAgain.count == 1 && !$0.isOnCycle && $0.readsFromAbove.count == 2 }, "\(memberCount): \(report.world)")
 			#expect(report.variantCountsByNode.allSatisfy { $0 == 1 }, "\(memberCount): \(report.world)")
 		}
 	}
@@ -301,8 +305,11 @@ struct SafeDIToolTypeFactsLoopTests: ~Copyable {
 
 		#expect(report.nodes[a].madeAgain == [b] && report.nodes[b].madeAgain == [a], "\(report.world)")
 		#expect(report.variantCountsByNode[a] == 1 && report.variantCountsByNode[b] == 1, "\(report.world)")
-		#expect(report.nodes[a].readsFromAbove == ["value(aBuilder)"], "\(report.world)")
-		#expect(try report.variantMadeAgainCallSources[variant(of: a, in: report)] == [["bound madeAgain"]], "\(report.world)")
+		// `A`'s receive stays among its reads, and the root's edge to it answers it as `A`'s rebinding.
+		#expect(report.nodes[a].readsFromAbove == ["value(aBuilder)", "optionalValue(bBuilder)", "optional(bBuilder)"], "\(report.world)")
+		#expect(report.variantCallSources[0][siblingIsDeclaredFirst ? 1 : 0] == ["bound beingBuilt", "bound madeAgain", "bound madeAgain"], "\(report.world)")
+		// `B` reads its own label being built and `aBuilder` made again, in the order of `B`'s reads.
+		#expect(try report.variantMadeAgainCallSources[variant(of: a, in: report)] == [siblingIsDeclaredFirst ? ["bound beingBuilt", "bound madeAgain"] : ["bound madeAgain", "bound beingBuilt"]], "\(report.world)")
 		expectMadeAgainCallsNameTheParentsCalls(in: report)
 	}
 
@@ -310,9 +317,9 @@ struct SafeDIToolTypeFactsLoopTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_answersOptionalReadMadeAgain_whenTypeReceivesInstantiatorThatBuildsItOnlyIfAvailable() async throws {
 		// A loop of one: `Editor` receives `editorBuilder`, the `Instantiator` being built around it, only if available.
-		// `Editor`'s function begins by making `editorBuilder` again, so its construction reads that. Its reads of its own
-		// label reach above, answered by the root's declaration being built, which keys as the rebinding does (rule 2),
-		// never as nil.
+		// `Editor`'s function begins by making `editorBuilder` again, so its construction reads that: the root's edge to it
+		// answers every read of its own label as the rebinding, which keys as a wrapper being built does (rule 2), never
+		// as nil, and the root's call and the made-again call agree.
 		let report = try await rootReport(of: [
 			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let editorBuilder: Instantiator<Editor>"]),
 			seamFixtureType(named: "Editor", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let editorBuilder: Instantiator<Editor>?"]),
@@ -322,7 +329,7 @@ struct SafeDIToolTypeFactsLoopTests: ~Copyable {
 		#expect(report.nodes[editor].madeAgain == [editor], "\(report.world)")
 		#expect(report.variantCountsByNode[editor] == 1, "\(report.world)")
 		#expect(report.nodes[editor].readsFromAbove == ["value(editorBuilder)", "optionalValue(editorBuilder)", "optional(editorBuilder)"], "\(report.world)")
-		#expect(report.variantCallSources[0] == [["bound beingBuilt", "bound beingBuilt", "bound beingBuilt"]], "\(report.world)")
+		#expect(report.variantCallSources[0] == [["bound madeAgain", "bound madeAgain", "bound madeAgain"]], "\(report.world)")
 		#expect(try report.variantMadeAgainCallSources[variant(of: editor, in: report)] == [["bound madeAgain", "bound madeAgain", "bound madeAgain"]], "\(report.world)")
 		expectMadeAgainCallsNameTheParentsCalls(in: report)
 	}
@@ -351,9 +358,9 @@ struct SafeDIToolTypeFactsLoopTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_listsMemberSharedApart_whenAnotherParentBuildsTheMembersTypeOffTheLoop() async throws {
 		// `Other` builds `A` as `aBuilder` too, beside no `bBuilder`: one node, which the root's loop makes `bBuilder` again
-		// in and `Other` does not, so the root's call reads the rebinding where `Other`'s reads the root's `bBuilder`. The
-		// facts make nothing again in `A` and list it shared apart, which node records refuse; its optional reads key
-		// alike either way (rule 1), so it has one variant.
+		// in and `Other` does not, so the root's call reads the rebinding where `Other`'s reads the root's `bBuilder`. Its
+		// optional reads key alike either way (rule 1), but it has a variant per parent, told apart by the set each makes
+		// again. By node it makes nothing again and is listed shared apart, which node records refuse.
 		let report = try await rootReport(of: [
 			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let aBuilder: Instantiator<A>", "@Instantiated let bBuilder: Instantiator<B>", "@Instantiated let other: Other"]),
 			seamFixtureType(named: "Other", isFinalClass: true, declarations: ["@Instantiated let aBuilder: Instantiator<A>"]),
@@ -365,8 +372,9 @@ struct SafeDIToolTypeFactsLoopTests: ~Copyable {
 		#expect(report.places.count(where: { $0.node == a }) == 2, "\(report.world)")
 		#expect(report.loopMembersSharedApart.contains(a) && report.nodes[a].madeAgain.isEmpty, "\(report.world)")
 		#expect(report.nodes[a].readsFromAbove == ["value(aBuilder)", "optionalValue(bBuilder)", "optional(bBuilder)"], "\(report.world)")
-		#expect(report.variantCallSources[0].first == ["bound beingBuilt", "none", "none"], "\(report.world)")
-		#expect(report.variantCountsByNode[a] == 1, "\(report.world)")
+		#expect(report.variantCallSources[0].first == ["bound beingBuilt", "bound madeAgain", "bound madeAgain"], "\(report.world)")
+		#expect(report.variantCountsByNode[a] == 2, "\(report.world)")
+		#expect(Set(report.variantNodes.indices.filter { report.variantNodes[$0] == a }.map { report.variantMadeAgain[$0] }) == [[], [try node(declaring: "B as bBuilder: Instantiator<B>", in: report)]], "\(report.world)")
 	}
 
 	// MARK: Private

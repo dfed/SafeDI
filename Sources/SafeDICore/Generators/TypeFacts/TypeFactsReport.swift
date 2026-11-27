@@ -135,6 +135,8 @@ public struct TypeFactsReport: Sendable {
 		variantNodes = (0..<graph.variantCount).map { Int(graph.declaration(of: VariantID($0))) }
 		variantCalls = (0..<graph.variantCount).map { graph.calls(of: VariantID($0)).map(Int.init) }
 		variantMadeAgainCalls = (0..<graph.variantCount).map { graph.madeAgainCalls(of: VariantID($0)).map(Int.init) }
+		variantMadeAgain = (0..<graph.variantCount).map { graph.madeAgain(of: VariantID($0)).map(Int.init) }
+		variantMadeAgainLabels = (0..<graph.variantCount).map { graph.madeAgainLabels(of: VariantID($0)).map { graph.labelTexts[Int($0)] } }
 		variantIsCalledOnce = (0..<graph.variantCount).map { graph.isCalledOnce(VariantID($0)) }
 		func sourceDescriptions(_ sources: ArraySlice<AnswerSource>) -> [String] {
 			sources.map { source in
@@ -415,6 +417,10 @@ public struct TypeFactsReport: Sendable {
 	public let variantCalls: [[Int]]
 	/// The variant each made-again call of a variant calls, in the order its node rebinds the members.
 	public let variantMadeAgainCalls: [[Int]]
+	/// The node of each member a variant makes again, in the order it rebinds them.
+	public let variantMadeAgain: [[Int]]
+	/// The label a variant rebinds each member of `variantMadeAgain` as.
+	public let variantMadeAgainLabels: [[String]]
 	/// Whether each variant is called by exactly one call, a made-again call counted, and off every cycle.
 	public let variantIsCalledOnce: [Bool]
 	/// For each call of each variant, in edge order, where each answer it hands comes from: `none`, `passedThrough`, or
@@ -469,7 +475,7 @@ public struct TypeFactsReport: Sendable {
 			lines.append(line)
 			let madeAgainCalls = world.madeAgainCalls(of: variant)
 			if !madeAgainCalls.isEmpty {
-				lines.append("v\(index) makes again \(Array(madeAgainCalls)) sources [\(madeAgainCalls.indices.map { "\(world.sources(ofMadeAgainCall: $0 - madeAgainCalls.startIndex, of: variant).map(\.kind))" }.joined(separator: ", "))]")
+				lines.append("v\(index) makes again \(Array(world.madeAgain(of: variant))) as \(Array(madeAgainCalls)) sources [\(madeAgainCalls.indices.map { "\(world.sources(ofMadeAgainCall: $0 - madeAgainCalls.startIndex, of: variant).map(\.kind))" }.joined(separator: ", "))]")
 			}
 		}
 		return lines.joined(separator: "\n")
