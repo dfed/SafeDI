@@ -283,6 +283,96 @@ struct SafeDIToolNodeRecordsMockCycleWalkTests: ~Copyable {
 		)
 	}
 
+	/// `Screen`'s function takes `session`, which `Step` declares again before the call that closes the cycle: `Root` and
+	/// `Hub`, which takes no places, each enter the cycle handing their own, and `Mid`, between `Screen` and `Step`, reads
+	/// the one its `Screen` took, on every lap from either entry.
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildsTheWalksValues_whenCycleTakesParameterFromEachEntryAndTypeBetweenReadsIt() async throws {
+		try await expectWalksValues(
+			fixture: [
+				"Root.swift": """
+				@Instantiable(generateMock: true)
+				public final class Root: Instantiable, Marked {
+				    public init(session: Session, screenBuilder: Instantiator<Screen>, hubBuilder: Instantiator<Hub>) {
+				        self.session = session
+				        self.screenBuilder = screenBuilder
+				        self.hubBuilder = hubBuilder
+				    }
+				    @Instantiated let session: Session
+				    @Instantiated let screenBuilder: Instantiator<Screen>
+				    @Instantiated let hubBuilder: Instantiator<Hub>
+				    public var marker = ""
+				}
+				""",
+				"Session.swift": """
+				@Instantiable
+				public final class Session: Instantiable, Marked {
+				    public init() {}
+				    public var marker = ""
+				}
+				""",
+				"Hub.swift": """
+				@Instantiable
+				public final class Hub: Instantiable, Marked {
+				    public init(session: Session, screenBuilder: Instantiator<Screen>) {
+				        self.session = session
+				        self.screenBuilder = screenBuilder
+				    }
+				    @Instantiated let session: Session
+				    @Instantiated let screenBuilder: Instantiator<Screen>
+				    public var marker = ""
+				}
+				""",
+				"Screen.swift": """
+				@Instantiable
+				public final class Screen: Instantiable, Marked {
+				    public init(session: Session, midBuilder: Instantiator<Mid>) {
+				        self.session = session
+				        self.midBuilder = midBuilder
+				    }
+				    @Received let session: Session
+				    @Instantiated let midBuilder: Instantiator<Mid>
+				    public var marker = ""
+				}
+				""",
+				"Mid.swift": """
+				@Instantiable
+				public final class Mid: Instantiable, Marked {
+				    public init(session: Session, stepBuilder: Instantiator<Step>) {
+				        self.session = session
+				        self.stepBuilder = stepBuilder
+				    }
+				    @Received let session: Session
+				    @Instantiated let stepBuilder: Instantiator<Step>
+				    public var marker = ""
+				}
+				""",
+				"Step.swift": """
+				@Instantiable
+				public final class Step: Instantiable, Marked {
+				    public init(session: Session, screenBuilder: Instantiator<Screen>) {
+				        self.session = session
+				        self.screenBuilder = screenBuilder
+				    }
+				    @Instantiated let session: Session
+				    @Instantiated let screenBuilder: Instantiator<Screen>
+				    public var marker = ""
+				}
+				""",
+			],
+			probes: [
+				DifferentialValueProbe("Root.mock().screenBuilder.instantiate().midBuilder.instantiate().stepBuilder.instantiate().screenBuilder.instantiate().midBuilder.instantiate().stepBuilder.instantiate().screenBuilder.instantiate()"),
+				DifferentialValueProbe("Root.mock().hubBuilder.instantiate().screenBuilder.instantiate().midBuilder.instantiate().stepBuilder.instantiate().screenBuilder.instantiate().midBuilder.instantiate().stepBuilder.instantiate().screenBuilder.instantiate()"),
+				DifferentialValueProbe(name: "overridden.screenBuilder.instantiate().midBuilder.instantiate()", expression: "Root.mock(safeDIOverrides: \(Self.parameterOverrides)).screenBuilder.instantiate().midBuilder.instantiate()"),
+				DifferentialValueProbe(name: "overridden.hubBuilder.instantiate().screenBuilder.instantiate().midBuilder.instantiate()", expression: "Root.mock(safeDIOverrides: \(Self.parameterOverrides)).hubBuilder.instantiate().screenBuilder.instantiate().midBuilder.instantiate()"),
+				DifferentialValueProbe(name: "overridden.screenBuilder.instantiate().midBuilder.instantiate().stepBuilder.instantiate().screenBuilder.instantiate().midBuilder.instantiate()", expression: "Root.mock(safeDIOverrides: \(Self.parameterOverrides)).screenBuilder.instantiate().midBuilder.instantiate().stepBuilder.instantiate().screenBuilder.instantiate().midBuilder.instantiate()"),
+				DifferentialValueProbe(name: "overridden.hubBuilder.instantiate().screenBuilder.instantiate().midBuilder.instantiate().stepBuilder.instantiate().screenBuilder.instantiate().midBuilder.instantiate()", expression: "Root.mock(safeDIOverrides: \(Self.parameterOverrides)).hubBuilder.instantiate().screenBuilder.instantiate().midBuilder.instantiate().stepBuilder.instantiate().screenBuilder.instantiate().midBuilder.instantiate()"),
+			],
+			markers: ["session", "hub.session", "step.session"],
+		)
+	}
+
 	/// `B`, on the cycle of `A` and `B`, receives `session` only if available, so its variants key it as an optional
 	/// parameter (`cycleVariantsPartitionApart`): every lap's `B` holds the root's `session`.
 	@Test
@@ -497,6 +587,81 @@ struct SafeDIToolNodeRecordsMockCycleWalkTests: ~Copyable {
 		)
 	}
 
+	/// `Node`, closed on through its own `Instantiator`, is a child of `Host`'s level named apart from the `node` its
+	/// sibling `Peer` receives, so its function is `__safeDI_node_Node`, which the call that closes the cycle names; it
+	/// takes no parameter for `node`, its own label. `Node` also declares `token`, which nothing fulfills.
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildsTheWalksValues_whenCycleClosesOnRootChildNamedApart() async throws {
+		try await expectWalksValues(
+			fixture: [
+				"Host.swift": """
+				@Instantiable(generateMock: true)
+				public final class Host: Instantiable, Marked {
+				    public init(node: Node, peer: Peer) {
+				        self.node = node
+				        self.peer = peer
+				    }
+				    @Instantiated let node: Node
+				    @Received let peer: Peer
+				    public var marker = ""
+				}
+				""",
+				"Node.swift": """
+				@Instantiable
+				public final class Node: Instantiable, Marked {
+				    public init(loopBuilder: Instantiator<Loop>, token: Token?) {
+				        self.loopBuilder = loopBuilder
+				        self.token = token
+				    }
+				    @Instantiated let loopBuilder: Instantiator<Loop>
+				    @Instantiated(onlyIfAvailable: true) let token: Token?
+				    public var marker = ""
+				}
+				""",
+				"Loop.swift": """
+				@Instantiable
+				public final class Loop: Instantiable, Marked {
+				    public init(node: Node) {
+				        self.node = node
+				    }
+				    @Instantiated let node: Node
+				    public var marker = ""
+				}
+				""",
+				"Peer.swift": """
+				@Instantiable
+				public final class Peer: Instantiable, Marked {
+				    public init(node: Other) {
+				        self.node = node
+				    }
+				    @Received let node: Other
+				    public var marker = ""
+				}
+				""",
+				"Other.swift": """
+				@Instantiable
+				public final class Other: Instantiable, Marked {
+				    public init() {}
+				    public var marker = ""
+				}
+
+				public final class Token: Marked {
+				    public init() {}
+				    public var marker = ""
+				}
+				""",
+			],
+			probes: [
+				DifferentialValueProbe("Host.mock().node.loopBuilder.instantiate().node.loopBuilder.instantiate().node"),
+				DifferentialValueProbe("Host.mock().peer"),
+				DifferentialValueProbe(name: "overridden.node.loopBuilder.instantiate().node.loopBuilder.instantiate().node", expression: "Host.mock(safeDIOverrides: \(Self.namedApartOverrides)).node.loopBuilder.instantiate().node.loopBuilder.instantiate().node"),
+				DifferentialValueProbe(name: "overridden.peer", expression: "Host.mock(safeDIOverrides: \(Self.namedApartOverrides)).peer"),
+			],
+			markers: ["node", "loop", "other", "token"],
+		)
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -506,6 +671,12 @@ struct SafeDIToolNodeRecordsMockCycleWalkTests: ~Copyable {
 
 	/// Overrides of the places of `B` beneath `Root` and beneath `A`, and of `A` and its `session`.
 	private static let partitionOverrides = #".init(bBuilder: .init({ marked(B(session: $0, cBuilder: $1), "b") }), aBuilder: .init(session: { marked(Session(), "a.session") }, bBuilder: .init({ marked(B(session: $0, cBuilder: $1), "a.b") }), { marked(A(session: $0, bBuilder: $1), "a") }))"#
+
+	/// Overrides of the `session` `Root`, `Hub` and the first lap's `Step` each declare.
+	private static let parameterOverrides = #".init(session: { marked(Session(), "session") }, screenBuilder: .init(midBuilder: .init(stepBuilder: .init(session: { marked(Session(), "step.session") }))), hubBuilder: .init(session: { marked(Session(), "hub.session") }))"#
+
+	/// Overrides of `Host`'s `node`, which every lap's `Node` reads, its `Loop`, the `Other` `Peer` receives, and `token`.
+	private static let namedApartOverrides = #".init(node_Node: .init(loopBuilder: .init({ marked(Loop(node: $0), "loop") }), { marked(Node(loopBuilder: $0, token: $1), "node") }), node_Other: { marked(Other(), "other") }, token: marked(Token(), "token"))"#
 
 	private static let markedFile = """
 	public protocol Marked: AnyObject {

@@ -114,13 +114,50 @@ extension NodeRecords {
 		}
 	}
 
+	/// What each variant's function takes, in a mock's world, for the labels `labelsByVariant` names: a cycle that closes
+	/// on the variant's place beneath a declaration of the label that a type of the world receives. Each is read of its
+	/// label's nearest declaration, where the variant's place calls the function and where each call closes the cycle, so
+	/// the type the cycle builds again holds the value declared nearest the call, as the walk's function a lazy cycle closes
+	/// on passes it (`CycleParameter`).
+	/// - Throws: `cycleTakesParameters` where the world declares the label in another form than one value, or in two, which
+	///   no one parameter takes.
+	static func mockCycleParameters(labelsByVariant: [[String]], in world: some NodeRecordSources, outerDeclarations: [Property]) throws(NodeRecordRefusal) -> [[PlaceRead]] {
+		var propertyByLabel = [String: Property]()
+		return try labelsByVariant.map { labels throws(NodeRecordRefusal) in
+			try labels.map { label throws(NodeRecordRefusal) in
+				let property: Property
+				if let known = propertyByLabel[label] {
+					property = known
+				} else {
+					var declared = Set(outerDeclarations.filter { $0.label == label })
+					for declaration in 0..<Int32(world.declarationCount) {
+						for dependency in world.scope(of: declaration).instantiable.dependencies where dependency.property.label == label {
+							switch dependency.source {
+							case .instantiated, .forwarded:
+								declared.insert(dependency.property)
+							case .aliased:
+								throw .cycleTakesParameters
+							case .received:
+								break
+							}
+						}
+					}
+					guard declared.count == 1, let only = declared.first, only.propertyType.isConstant else { throw .cycleTakesParameters }
+					property = only
+					propertyByLabel[label] = only
+				}
+				return PlaceRead(argumentLabel: label, label: label, property: property, source: .binding(label: label))
+			}
+		}
+	}
+
 	/// The record of the place at which a call closes a cycle on `declaration`, whose place is being built above the call:
 	/// a call of the function that place declares, named `functionName` where the bodies between rename it
 	/// (`CycleFunctionNames`), which forwards what that place's wrapper forwards. The walk refuses a cycle whose function
 	/// could take a parameter for the cycle (`cycleTakesParameters`), so the function takes none
 	/// (`BuiltPlaceRecord.cycleParameters`), and the call passes none. `caller` is the variant whose body holds the call,
 	/// which a production closer reads nothing of; a mock's closer, which passes what its caller binds, takes this site.
-	static func closingRecord(closingOn declaration: DeclarationID, from caller: VariantID, functionName: String? = nil, in world: some NodeRecordSources, enteredSlots: MockEnteredSlots? = nil) throws(NodeRecordRefusal) -> PlaceRecord {
+	static func closingRecord(closingOn declaration: DeclarationID, from caller: VariantID, functionName: String? = nil, in world: some NodeRecordSources, enteredSlots: MockEnteredSlots? = nil, cycleArguments: [PlaceRead] = []) throws(NodeRecordRefusal) -> PlaceRecord {
 		// Every node a call reaches is built as a property: the root is called by none.
 		guard let property = world.property(of: declaration) else { throw .noInitializer }
 		let instantiable = world.scope(of: declaration).instantiable
@@ -130,7 +167,7 @@ extension NodeRecords {
 			isExtension: instantiable.declarationType.isExtension,
 			closedOnFunctionName: functionName ?? ScopeGenerator.functionName(toBuildPropertyNamed: property.label),
 			forwardedProperties: instantiable.dependencies.filter { $0.source == .forwarded }.map(\.property).sorted(),
-			cycleArguments: [],
+			cycleArguments: cycleArguments,
 		)
 		// A mock's function on a cycle is handed its overrides and the places entered by every call, as its own place hands
 		// them (`mockArgumentsHanded(to:labeled:by:in:slots:)`).
@@ -144,10 +181,10 @@ extension NodeRecords {
 	/// (`CycleFunctionNames`), and `@Sendable` where a call beneath it that closes a cycle on it refers to it from a
 	/// `@Sendable` function (`isMadeSendable`), as today's tree makes it (`ScopeGenerator.cycleClosings`). A place written
 	/// as text keeps its text.
-	static func record(_ record: PlaceRecord, functionName: String?, isMadeSendable: Bool) -> PlaceRecord {
+	static func record(_ record: PlaceRecord, functionName: String?, isMadeSendable: Bool, cycleParameters: [PlaceRead] = []) -> PlaceRecord {
 		switch record {
 		case let .built(built):
-			guard functionName != nil || (isMadeSendable && !built.isSendable) else { return record }
+			guard functionName != nil || (isMadeSendable && !built.isSendable) || !cycleParameters.isEmpty else { return record }
 			var named = BuiltPlaceRecord(
 				property: built.property,
 				isErased: built.isErased,
@@ -156,8 +193,8 @@ extension NodeRecords {
 				target: built.target,
 				arguments: built.arguments,
 				forwardedProperties: built.forwardedProperties,
-				cycleParameters: built.cycleParameters,
-				callCycleArguments: built.callCycleArguments,
+				cycleParameters: cycleParameters.isEmpty ? built.cycleParameters : cycleParameters.map(\.property),
+				callCycleArguments: cycleParameters.isEmpty ? built.callCycleArguments : cycleParameters,
 				functionName: functionName ?? built.functionName,
 				isSendable: built.isSendable || isMadeSendable,
 				typesDeclaredEscaping: built.typesDeclaredEscaping,
@@ -264,6 +301,12 @@ extension NodeRecords {
 					variantsClosedOn[Int(callee)]
 				}
 			}
+			// The name a place's function takes before any body renames it: a child of the mock root's level that the mock
+			// names apart is built in a function named after that name (`mockConstructionRecord`).
+			func unrenamedFunctionName(of declaration: DeclarationID, property: Property) -> String {
+				let nameApart = isMockWorld && world.edges(from: 0).contains(declaration) ? world.mockRootNames.nameApart(of: property) : nil
+				return ScopeGenerator.functionName(toBuildPropertyNamed: nameApart ?? property.label)
+			}
 			func callee(of entry: BodyEntry) -> VariantID {
 				switch entry {
 				case let .closer(closingOn: callee), let .place(callee):
@@ -280,8 +323,9 @@ extension NodeRecords {
 				var variantsByReferencedName = [String: Set<VariantID>]()
 				for entry in body {
 					for closedOnVariant in closedOn(entry) {
-						if let property = world.property(of: world.declaration(of: closedOnVariant)) {
-							variantsByReferencedName[enclosing[closedOnVariant] ?? ScopeGenerator.functionName(toBuildPropertyNamed: property.label), default: []].insert(closedOnVariant)
+						let closedOnDeclaration = world.declaration(of: closedOnVariant)
+						if let property = world.property(of: closedOnDeclaration) {
+							variantsByReferencedName[enclosing[closedOnVariant] ?? unrenamedFunctionName(of: closedOnDeclaration, property: property), default: []].insert(closedOnVariant)
 						}
 					}
 				}
@@ -293,7 +337,7 @@ extension NodeRecords {
 					switch world.kind(of: declaration) {
 					case .constant, .instantiator, .sendableInstantiator, .erasedInstantiator, .sendableErasedInstantiator, .lazy, .sendableLazy:
 						if let property = world.property(of: declaration) {
-							candidates.append((index, property, ScopeGenerator.functionName(toBuildPropertyNamed: property.label)))
+							candidates.append((index, property, unrenamedFunctionName(of: declaration, property: property)))
 						}
 					case .alias, .hole:
 						break
@@ -320,10 +364,13 @@ extension NodeRecords {
 				for case let (index, .place(child)) in body.enumerated() {
 					let functionName = renamedNameByIndex[index]
 					// A call beneath the child refers to the functions enclosing it, and to the child's own function when the
-					// call closes on it.
+					// call closes on it, by the name it is declared under where that is not the label's.
 					var childEnclosing = variantsClosedOn[Int(child)].isEmpty ? [:] : enclosing
-					if let functionName, entries[Int(child)].contains(where: { closedOn($0).contains(child) }) {
-						childEnclosing[child] = functionName
+					let declaredName = functionName ?? candidates.first(where: { $0.index == index }).flatMap { candidate in
+						candidate.name == ScopeGenerator.functionName(toBuildPropertyNamed: candidate.property.label) ? nil : candidate.name
+					}
+					if let declaredName, entries[Int(child)].contains(where: { closedOn($0).contains(child) }) {
+						childEnclosing[child] = declaredName
 					}
 					if isNamed[Int(child)] {
 						guard isMockWorld || functionNames[Int(child)] == functionName, enclosingFunctionNames[Int(child)] == childEnclosing else {

@@ -271,6 +271,7 @@ struct NodeRecords: Sendable {
 			childrensEscaping: Set<TypeDescription>,
 			functionName: String?,
 			isMadeSendable: Bool,
+			cycleParameters: [PlaceRead],
 		) throws -> (place: GeneratedCode, record: PlaceRecord?, escaping: Set<TypeDescription>) {
 			// A hole's place is its site's code, written as text, and the payloads bound before it: places, not one record.
 			guard kinds[Int(declaration)] != .seamHole else {
@@ -320,7 +321,7 @@ struct NodeRecords: Sendable {
 			case .publicMockCall:
 				try .built(Self.publicMockCallRecord(of: declaration, variant: variant, in: world, receivesBoundAgain: mockReceivesBoundAgain[Int(variant)], typesDeclaredEscaping: escaping, children: children))
 			}
-			let record = Self.record(madeRecord, functionName: functionName, isMadeSendable: isMadeSendable)
+			let record = Self.record(madeRecord, functionName: functionName, isMadeSendable: isMadeSendable, cycleParameters: cycleParameters)
 			let place: GeneratedCode = switch record {
 			case let .alias(aliasRecord):
 				// A place written as text: the engine copies it as written. A property nothing fulfills that `mock()` binds
@@ -353,6 +354,9 @@ struct NodeRecords: Sendable {
 		var variantsClosedOn = [Set<VariantID>](repeating: [], count: world.variantCount)
 		var cycleVariantsBuilt = [Set<VariantID>](repeating: [], count: world.variantCount)
 		var isOnPath = [Bool](repeating: false, count: world.variantCount)
+		// In a mock's world, the labels each variant's function takes for the cycles that close on it, in the order the
+		// walk meets them (`mockCycleParameters`).
+		var cycleParameterLabels = [[String]](repeating: [], count: world.variantCount)
 		var twins = TwinsOnPath(world: world, holdsCycle: holdsCycle)
 		var stack = [PlaceFrame(variant: 0, edgeIndices: edgeIndices(of: 0))]
 		isOnPath[0] = true
@@ -362,10 +366,20 @@ struct NodeRecords: Sendable {
 				let calls = world.calls(of: top.variant)
 				let callee = calls[calls.startIndex + top.edgeIndices[top.next]]
 				if isOnPath[Int(callee)] {
-					if let closedOn = stack.lastIndex(where: { $0.variant == callee }),
-					   stack[(closedOn + 1)...].contains(where: { !labelsReceived.isDisjoint(with: Self.labelsDeclared(by: world.declaration(of: $0.variant), in: world)) })
-					{
-						throw NodeRecordRefusal.cycleTakesParameters
+					if let closedOn = stack.lastIndex(where: { $0.variant == callee }) {
+						// The closed-on property's own label, and each label its type declares, is the nearest declaration inside
+						// its function, so the function takes neither (`CycleParameter`).
+						let closedOnDeclaration = world.declaration(of: callee)
+						let labelsInsideFunction = Set(Self.labelsDeclared(by: closedOnDeclaration, in: world) + [world.property(of: closedOnDeclaration)?.label].compactMap(\.self))
+						let labelsBetween = stack[(closedOn + 1)...].flatMap { Self.labelsDeclared(by: world.declaration(of: $0.variant), in: world) }.filter { labelsReceived.contains($0) && !labelsInsideFunction.contains($0) }
+						if !labelsBetween.isEmpty {
+							// A mock's function on the cycle takes each such label, which every call hands it from its nearest
+							// declaration, as the walk's function a lazy cycle closes on does (`CycleParameter`).
+							guard enteredSlots != nil else { throw NodeRecordRefusal.cycleTakesParameters }
+							for label in labelsBetween where !cycleParameterLabels[Int(callee)].contains(label) {
+								cycleParameterLabels[Int(callee)].append(label)
+							}
+						}
 					}
 					stack[stack.count - 1].entries.append(.closer(closingOn: callee))
 					stack[stack.count - 1].variantsClosedOn.insert(callee)
@@ -404,6 +418,7 @@ struct NodeRecords: Sendable {
 			stack[parent].variantsClosedOn.formUnion(closedOn)
 			stack[parent].cycleVariantsBuilt.formUnion(built)
 		}
+		let cycleParameters = try Self.mockCycleParameters(labelsByVariant: cycleParameterLabels, in: world, outerDeclarations: outerDeclarations)
 		// The names each body gives the functions it declares and refers to, as today's tree names them.
 		let functionNames = try holdsCycle ? CycleFunctionNames(entries: entries, variantsClosedOn: variantsClosedOn, in: world) : nil
 		// Each place, made after the places its body holds.
@@ -422,7 +437,7 @@ struct NodeRecords: Sendable {
 				switch entry {
 				case let .closer(closingOn: callee):
 					let closedOnDeclaration = world.declaration(of: callee)
-					let closer = try Self.closingRecord(closingOn: closedOnDeclaration, from: variant, functionName: functionNames?.closedOnFunctionName(of: callee, inBodyOf: variant), in: world, enteredSlots: enteredSlots)
+					let closer = try Self.closingRecord(closingOn: closedOnDeclaration, from: variant, functionName: functionNames?.closedOnFunctionName(of: callee, inBodyOf: variant), in: world, enteredSlots: enteredSlots, cycleArguments: cycleParameters[Int(callee)])
 					children.append(.indented(.place(PlacePlan(code: .empty, record: closer)), by: indentation))
 					closedOn.insert(callee)
 					// A call that hands a `Sendable` wrapper its function refers to the function it closes on from a
@@ -460,6 +475,7 @@ struct NodeRecords: Sendable {
 				childrensEscaping: body.escaping,
 				functionName: functionNames?.functionName(of: variant),
 				isMadeSendable: isMadeSendable,
+				cycleParameters: cycleParameters[Int(variant)],
 			)
 			records[Int(variant)] = record
 			places[Int(variant)] = place
