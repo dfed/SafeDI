@@ -2621,6 +2621,7 @@ struct ScopeGeneratorUnderConstruction: Sendable {
 			previousPassPublicMockLevelReentries: previousPassGenerator?.publicMockLevelReentries ?? [:],
 			enclosingLevelCalls: enclosingLevelCalls,
 			namesBoundBySeam: GenerationWork.taking(seamHoles.namesBoundBySeam, by: .joiningNamesBoundBySeam),
+			namesBoundForBuilders: property == nil ? seamHoles.namesBoundForBuilders.sorted() : [],
 			placeHoldingProperties: placeHoldingPropertiesByType.map { $0[scope.instantiable.concreteInstantiable] ?? [] },
 			fillsStoodFor: fillsStoodFor,
 			previousPassBuildsFillOfEveryPlace: previousPassGenerator?.buildsFillOfEveryPlace ?? false,

@@ -700,9 +700,9 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_refusesWorldAsReadAnsweredTwoWays_whenADeclarationIsBuiltInsideAFillOfASeamsHole() async throws {
-		// `App`'s root calls `Feature`'s seam `Screen` and fills its hole `api` with `LiveApi`: whether the hole's property
-		// is still being built inside its fill the facts still owe the fill and what it builds (`fillBeingBuilt`).
+	mutating func generate_answersWorldsReadsOneWay_whenADeclarationIsBuiltInsideAFillOfASeamsHole() async throws {
+		// `App`'s root calls `Feature`'s seam `Screen` and fills its hole `api` with `LiveApi`: the fill channel answers
+		// whether the hole's property is still being built inside its fill, so no fact of the fill is owed.
 		let (_, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -744,7 +744,7 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 				filesToDelete: &filesToDelete,
 			)
 		}
-		#expect(reports.filter { $0.root == "Root" }.map { $0.everyRefusal.contains("readAnsweredTwoWays") } == [true])
+		#expect(reports.filter { $0.root == "Root" }.map { $0.everyRefusal.contains("readAnsweredTwoWays") } == [false])
 	}
 
 	@Test

@@ -193,8 +193,8 @@ struct TypeFactsAnswer: Equatable, Sendable {
 struct TypeFactsOwedFacts: OptionSet, Sendable {
 	let rawValue: UInt8
 
-	/// The seam fill producer: whether a hole's property is still being built inside its own fill. Set on a fill and
-	/// on every declaration beneath one.
+	/// The fill channel (track C): whether a hole's property is still being built inside its own fill. Set on a fill the
+	/// channel refuses (`TypeFactsFillRefusal`) and on every declaration beneath one.
 	static let fillBeingBuilt = TypeFactsOwedFacts(rawValue: 1 << 0)
 	/// The mock root's pins: whether a mock read is pinned. Set on every declaration of a mock world.
 	static let mockRootPin = TypeFactsOwedFacts(rawValue: 1 << 1)
@@ -289,6 +289,15 @@ protocol TypeFactsWorld {
 	/// received, never on their spelling.
 	/// Walked when asked, never while the world is built.
 	func parameterOrder(of declaration: DeclarationID) -> [WorldLabelID]
+
+	// The fill channel: the fills each call passes, in edge order.
+	var fillCount: Int { get }
+	/// The fill at `index`: its edge, the seam it fills a place of, and why the channel does not model it yet, if it does not.
+	func fill(_ index: Int) -> TypeFactsFill
+	/// The fields the fill at `index` binds for its tree, in their declared order: the call's edge to the fill answers a read
+	/// of one, and every other read of the fill's tree but its place's own label, which the fill builds, goes on to the
+	/// call's caller.
+	func fields(ofFill index: Int) -> ArraySlice<TypeFactsFillField>
 }
 
 extension TypeFactsGraph: TypeFactsWorld {
@@ -516,11 +525,12 @@ extension TypeFactsGraph: TypeFactsWorld {
 		for parent in parents(of: declaration) where edgeFacts(from: parent.parent).contains(where: { $0.child == declaration && $0.loop >= 0 }) {
 			owed.insert(.madeAgain)
 		}
-		// A declaration is beneath a fill where any of its routes enters one: a walk up its parents.
+		// A declaration is beneath a fill the channel refuses where any of its routes enters one: a walk up its parents, past
+		// the fills it models.
 		var visited: Set = [declaration]
 		var pending = [declaration]
 		while let current = pending.popLast() {
-			guard !graph.nodes[Int(current)].key.isFill else {
+			guard !isRefusedFill(current) else {
 				owed.insert(.fillBeingBuilt)
 				break
 			}
@@ -529,5 +539,33 @@ extension TypeFactsGraph: TypeFactsWorld {
 			}
 		}
 		return owed
+	}
+
+	/// Whether `declaration` is a fill the channel refuses: a search of the sorted column.
+	private func isRefusedFill(_ declaration: DeclarationID) -> Bool {
+		var low = 0
+		var high = refusedFillDeclarations.count
+		while low < high {
+			let middle = (low + high) / 2
+			if refusedFillDeclarations[middle] < declaration {
+				low = middle + 1
+			} else {
+				high = middle
+			}
+		}
+		return low < refusedFillDeclarations.count && refusedFillDeclarations[low] == declaration
+	}
+
+	var fillCount: Int {
+		fills.count
+	}
+
+	func fill(_ index: Int) -> TypeFactsFill {
+		fills[index]
+	}
+
+	func fields(ofFill index: Int) -> ArraySlice<TypeFactsFillField> {
+		let fill = fills[index]
+		return fillFields[Int(fill.fieldStart)..<Int(fill.fieldStart + fill.fieldCount)]
 	}
 }
