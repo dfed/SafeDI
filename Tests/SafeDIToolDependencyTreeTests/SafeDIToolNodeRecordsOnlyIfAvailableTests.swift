@@ -24,7 +24,7 @@ import Testing
 @testable import SafeDIToolLibrary
 @testable import SafeDIToolTestSupport
 
-/// Node records of a type that receives a property only if available (`NodeRecords.receivesOnlyIfAvailableKind(of:in:)`):
+/// Node records of a type that receives a property only if available (`NodeRecords.receivesOnlyIfAvailableClaim(of:in:)`):
 /// each place reads the declaration its call finds, or `nil`, as the tree's place does.
 struct SafeDIToolNodeRecordsOnlyIfAvailableTests: ~Copyable {
 	// MARK: Initialization

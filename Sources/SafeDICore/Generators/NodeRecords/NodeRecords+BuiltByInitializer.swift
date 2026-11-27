@@ -19,13 +19,6 @@
 // SOFTWARE.
 
 extension NodeRecords {
-	/// Refuses `declaration`'s world with the first kind stage 1 does not make that the node is of.
-	static func checkBuiltByInitializer(_ declaration: DeclarationID, in world: some NodeRecordSources) throws(NodeRecordRefusal) {
-		if let refusal = refusalsOfBuiltByInitializer(declaration, in: world).first {
-			throw refusal
-		}
-	}
-
 	/// Every kind stage 1 does not make that `declaration` is of, in the order they are checked.
 	static func refusalsOfBuiltByInitializer(_ declaration: DeclarationID, in world: some NodeRecordSources) -> [NodeRecordRefusal] {
 		var refusals = [NodeRecordRefusal]()
@@ -93,7 +86,7 @@ extension NodeRecords {
 		children: [GeneratedCode],
 	) throws -> BuiltPlaceRecord {
 		let instantiable = world.scope(of: declaration).instantiable
-		// Every node but the root is built as a property, and has an initializer (`checkBuiltByInitializer(_:in:)`).
+		// Every node but the root is built as a property, and has an initializer (`refusalsOfBuiltByInitializer(_:in:)`).
 		guard let property = world.property(of: declaration), let initializer = instantiable.initializer else { throw NodeRecordRefusal.noInitializer }
 		// Never throws: a type's initializer is one that fulfills its dependencies (`InstantiableVisitor`'s
 		// `canonicalConstructionInitializer`, through `Initializer.isValid(forFulfilling:)`, which makes the same binding).

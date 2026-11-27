@@ -94,6 +94,47 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_refusesNodeForItsOtherKind_whenAKindClaimsIt() async throws {
+		// `Child` is built as a `LazilyInstantiated` and builds a `SendableInstantiator`. A claim that makes lazy nodes
+		// discharges only `lazy`, so the world is still refused for `Child`'s `Sendable` builder.
+		let (_, reports) = try await NodeRecordsObservation.$claimsForTesting.withValue(["Root": ["lazy"], "Child": ["lazy"]]) {
+			try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+				try await executeSafeDIToolTest(swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public struct Root: Instantiable {
+					    public init(child: LazilyInstantiated<Child>) {
+					        self.child = child
+					    }
+
+					    @Instantiated let child: LazilyInstantiated<Child>
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Child: Instantiable {
+					    public init(themeBuilder: SendableInstantiator<Theme>) {
+					        self.themeBuilder = themeBuilder
+					    }
+
+					    @Instantiated let themeBuilder: SendableInstantiator<Theme>
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Theme: Instantiable, Sendable {
+					    public init() {}
+					}
+					""",
+				], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+			}
+		}
+		#expect(reports.map(\.refusal) == ["sendable"])
+		#expect(reports.map(\.everyRefusal) == [["sendable"]])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_laysOutTheOrdinaryModuleFromNodeRecords_whenItHasFortyScreens() async throws {
 		// The ordinary module's shape (designs/per-type-facts/ordinary.py): services the root builds, and layers of four
 		// screens, each forwarding an ID to its view model, every third building an avatar, each opening screens of the

@@ -19,13 +19,13 @@
 // SOFTWARE.
 
 extension NodeRecords {
-	/// The kind of `declaration` where it is a node that would be of kind `builtByInitializer` but that its type receives a
-	/// property only if available: `receivesOnlyIfAvailable`, or `nil` for any other node, a node of another kind stage 1
-	/// does not make included, whose refusals stage 1's checks report.
-	static func receivesOnlyIfAvailableKind(of declaration: DeclarationID, in world: some NodeRecordSources) throws(NodeRecordRefusal) -> NodeRecordKind? {
-		let refusals = refusalsOfBuiltByInitializer(declaration, in: world)
-		guard !refusals.isEmpty, refusals.allSatisfy({ $0 == .onlyIfAvailable }) else { return nil }
-		return .receivesOnlyIfAvailable
+	/// The claim of `declaration` where it is a node whose type receives a property only if available: of kind
+	/// `receivesOnlyIfAvailable`, discharging `onlyIfAvailable`; `nil` for any other node.
+	static func receivesOnlyIfAvailableClaim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
+		guard world.kind(of: declaration) != .alias, world.kind(of: declaration) != .hole,
+		      world.scope(of: declaration).instantiable.dependencies.contains(where: { $0.source == .received(onlyIfAvailable: true) })
+		else { return nil }
+		return NodeRecordClaim(kind: .receivesOnlyIfAvailable, discharges: [.onlyIfAvailable])
 	}
 
 	/// The record of `declaration`'s place in `variant`, a node of kind `receivesOnlyIfAvailable`: a `builtByInitializer`
