@@ -52,19 +52,15 @@ extension NodeRecords {
 		// type, as an erased node's does, so its record is the erased kind's too
 		// (`mockErasedRecord(of:variant:in:unavailableProperties:lazilyInstantiatedInstanceProperties:receivesBoundAgain:typesDeclaredEscaping:children:)`).
 		let kind: NodeRecordKind = erasedDischarges.isEmpty && !isErasedSendableWrapper(declaration, in: world) && (lazyDischarges.isEmpty || !world.isErased(declaration)) ? .mockConstruction : .mockErased
-		var refusals = rename.refusals + mockSendableRefusals(of: declaration, in: world)
+		var refusals = rename.refusals + mockSendableRefusals(of: declaration, in: world) + mockActorWrapperRefusals(of: declaration, in: world)
 		let instantiable = world.scope(of: declaration).instantiable
 		// An actor is claimed as any node is. The closure that overrides it takes each argument `sending`
 		// (`MockLowering.BuilderParameters`), and what it is sent is built by functions that are each handed their
 		// configuration, the `Sendable` form beneath an actor (`ScopeGenerator.sendableConfigurationTypeNames(ofMockRootOf:)`),
 		// so none captures `mock()`'s overrides, as the walk's read of them into a local before each function keeps its own
 		// from doing.
-		// An actor that builds a child in a wrapper is refused: the wrapper's closure calls the child's function with a
-		// field of the configuration the actor's function is handed, so it captures that configuration, which is not
-		// `Sendable`, and the wrapper could not be sent. The walk reads the field into a local before the closure.
-		if instantiable.declarationType == .actorType, world.edges(from: declaration).contains(where: { world.property(of: $0)?.propertyType != .constant }) {
-			refusals.append(.mockActor)
-		}
+		// A wrapper the actor builds calls its function in a closure, which would capture the configuration the actor's
+		// function is handed, so its override is read into a local before it (`isWrapperSentToActor(_:in:)`).
 		// The root's own default-valued parameters are parameters of `mock()`, which the root's lowering judges
 		// (`ScopeGenerator.nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:sendableConfigurationTypeNames:rootNames:outerDeclarations:)`).
 		if declaration != 0, mockConstructionFunction(of: declaration, in: world).map({ passesValueNoRecordMakes($0, given: instantiable.dependencies) }) ?? false {
@@ -226,8 +222,8 @@ extension NodeRecords {
 		guard hasFunction else { return (field, []) }
 		// A `@Sendable` function can neither capture the overrides nor be handed them: its value is read into a local before
 		// it (`mockOverridesBindingPlace(of:record:in:)`), which the function captures where the root's body declares both,
-		// and is handed elsewhere.
-		guard !isSendable else { return mockSendableOverrideSlot(of: declaration, labeled: label, typed: type, in: world) }
+		// and is handed elsewhere. A wrapper an actor is sent reads its value so too, since its closure is sent with it.
+		guard !isSendable, !isWrapperSentToActor(declaration, in: world) else { return mockSendableOverrideSlot(of: declaration, labeled: label, typed: type, in: world) }
 		if !handsOverridesToChildren, world.parents(of: declaration).allSatisfy({ $0.parent == 0 }) {
 			return (.member(label.spelledAsMemberDeclarationName, of: .rootDeclaration(ReservedName.mockOverridesParameterName)), [])
 		} else {
