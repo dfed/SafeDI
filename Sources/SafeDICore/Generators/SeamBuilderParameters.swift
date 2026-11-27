@@ -2947,7 +2947,7 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 		/// What identifies the finding: its kind and where it is reported, and, for a label the seam's tree receives in two
 		/// forms, which the seam reports per label at its own declaration, the label.
 		var key: String {
-			let location = sourceDiagnostics.first?.location.map { "\($0.filePath):\($0.line):\($0.column)" } ?? ""
+			let location = sourceDiagnostics.first?.location.map(\.identity) ?? ""
 			if case let .parameterReceivedInAnotherForm(label, _, _, _, _) = kind {
 				return "\(kindName) \(location) \(label)"
 			} else if case let .publicMockHandsOptionalWrapperOfRequiredValue(label, _, _, _, _) = kind {
@@ -3521,7 +3521,7 @@ extension SeamSignature.Hole.UncarriedDeclaration.PresentedPlace {
 extension SeamSignature.Hole.ReenteringCallDeclaration {
 	/// Everything that tells two such declarations apart, which a place's list holds once each.
 	fileprivate var identity: [String] {
-		var identity = [property.label, property.typeDescription.asSource, declaringType.asSource, declarationLocation.map { "\($0.filePath):\($0.line):\($0.column)" } ?? ""]
+		var identity = [property.label, property.typeDescription.asSource, declaringType.asSource, declarationLocation.map(\.identity) ?? ""]
 		identity += pathPlace.nameOrder
 		identity += [callingType.asSource, callProperty.label, callProperty.typeDescription.asSource, calledSeam.asSource]
 		identity += reenteredPlace.nameOrder
@@ -3538,7 +3538,7 @@ extension SeamSignature.Hole.ReenteringCallDeclaration {
 extension SeamSignature.Hole.ReenteringPlaceField {
 	/// Everything that tells two such fields apart, which a place's list holds once each.
 	fileprivate var identity: [String] {
-		var identity = [carried.field.property.label, carried.field.property.typeDescription.asSource, carried.field.declaringType.asSource, carried.field.declarationLocation.map { "\($0.filePath):\($0.line):\($0.column)" } ?? ""]
+		var identity = [carried.field.property.label, carried.field.property.typeDescription.asSource, carried.field.declaringType.asSource, carried.field.declarationLocation.map(\.identity) ?? ""]
 		identity += carried.reenteringPlace.nameOrder
 		identity += [carried.callProperty.label, carried.callProperty.typeDescription.asSource, carried.calledSeam.asSource]
 		identity += reenteredIdentity

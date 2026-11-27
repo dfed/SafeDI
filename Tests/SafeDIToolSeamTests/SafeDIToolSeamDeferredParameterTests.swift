@@ -89,7 +89,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_user: @autoclosure @escaping () -> User) {
 		        let user = LazilyInstantiated<User>(__safeDI_user)
-		        func __safeDI_detailBuilder() -> Detail {
+		        @inline(never) func __safeDI_detailBuilder() -> Detail {
 		            Detail(user: user.instance)
 		        }
 		        let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
@@ -135,7 +135,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_user: @autoclosure @escaping () -> User?) {
 		        let user = LazilyInstantiated<User?>(__safeDI_user)
-		        func __safeDI_detailBuilder() -> Detail {
+		        @inline(never) func __safeDI_detailBuilder() -> Detail {
 		            Detail(user: user.instance)
 		        }
 		        let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
@@ -179,7 +179,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_user user: Instantiator<User>) {
-		        func __safeDI_detailBuilder() -> Detail {
+		        @inline(never) func __safeDI_detailBuilder() -> Detail {
 		            Detail(user: user)
 		        }
 		        let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
@@ -209,7 +209,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_user: @autoclosure @escaping @Sendable () -> User) {
 		        let user = SendableLazilyInstantiated<User>(__safeDI_user)
-		        @Sendable nonisolated func __safeDI_detailBuilder() -> Detail {
+		        @inline(never) @Sendable nonisolated func __safeDI_detailBuilder() -> Detail {
 		            Detail(user: user.instance)
 		        }
 		        let detailBuilder = SendableInstantiator<Detail>(__safeDI_detailBuilder)
@@ -284,13 +284,13 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_user __safeDI_user_: @autoclosure @escaping () -> User) {
 		        let user = LazilyInstantiated<User>(__safeDI_user_)
-		        @Sendable nonisolated func __safeDI_panelBuilder() -> Panel {
+		        @inline(never) @Sendable nonisolated func __safeDI_panelBuilder() -> Panel {
 		            let user = User()
 		            let detail = Detail(user: user)
 		            return Panel(user: user, detail: detail)
 		        }
 		        let panelBuilder = SendableInstantiator<Panel>(__safeDI_panelBuilder)
-		        func __safeDI_detailBuilder() -> Detail {
+		        @inline(never) func __safeDI_detailBuilder() -> Detail {
 		            Detail(user: user.instance)
 		        }
 		        let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
@@ -329,7 +329,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_default: @autoclosure @escaping () -> User) {
 		        let `default` = LazilyInstantiated<User>(__safeDI_default)
-		        func __safeDI_detailBuilder() -> Detail {
+		        @inline(never) func __safeDI_detailBuilder() -> Detail {
 		            Detail(default: `default`.instance)
 		        }
 		        let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
@@ -383,7 +383,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		        #sourceLocation(file: "\(output.fixtures["Screen.swift"])", line: 8)
 		        let token: any Auth = __safeDI_token_()
 		        #sourceLocation()
-		        func __safeDI_detailBuilder() -> Detail {
+		        @inline(never) func __safeDI_detailBuilder() -> Detail {
 		            Detail(token: token)
 		        }
 		        let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
@@ -565,7 +565,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_user: @autoclosure @escaping () -> User) {
 			        let user = LazilyInstantiated<User>(__safeDI_user)
-			        func __safeDI_detailBuilder() -> Detail {
+			        @inline(never) func __safeDI_detailBuilder() -> Detail {
 			            Detail(user: user.instance)
 			        }
 			        let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
@@ -599,7 +599,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_user: @autoclosure @escaping () -> User) {
 			        let user = LazilyInstantiated<User>(__safeDI_user)
-			        func __safeDI_inner() -> Inner {
+			        @inline(never) func __safeDI_inner() -> Inner {
 			            _ = Inner.__safeDI_Inner_08AA1A656B91D4BA.self
 			            return Inner(__safeDI_user: user.instance)
 			        }
@@ -631,7 +631,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_user: @autoclosure @escaping @Sendable () -> User) {
 			        let user = SendableLazilyInstantiated<User>(__safeDI_user)
-			        @Sendable nonisolated func __safeDI_detailBuilder() -> Detail {
+			        @inline(never) @Sendable nonisolated func __safeDI_detailBuilder() -> Detail {
 			            Detail(user: user.instance)
 			        }
 			        let detailBuilder = SendableInstantiator<Detail>(__safeDI_detailBuilder)
@@ -665,7 +665,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_user: @autoclosure @escaping @Sendable () -> User) {
 			        let user = SendableLazilyInstantiated<User>(__safeDI_user)
-			        func __safeDI_inner() -> Inner {
+			        @inline(never) func __safeDI_inner() -> Inner {
 			            _ = Inner.__safeDI_Inner_8EFCFC03F02E0CB8.self
 			            return Inner(__safeDI_user: user.instance)
 			        }
@@ -697,7 +697,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_user: @autoclosure @escaping () -> User) {
 			        let user = LazilyInstantiated<User>(__safeDI_user)
-			        func __safeDI_detailBuilder() -> Detail {
+			        @inline(never) func __safeDI_detailBuilder() -> Detail {
 			            Detail(user: user.instance)
 			        }
 			        let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
@@ -731,7 +731,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_user: @autoclosure @escaping @Sendable () -> User) {
 			        let user = SendableLazilyInstantiated<User>(__safeDI_user)
-			        @Sendable nonisolated func __safeDI_inner() -> Inner {
+			        @inline(never) @Sendable nonisolated func __safeDI_inner() -> Inner {
 			            _ = Inner.__safeDI_Inner_08AA1A656B91D4BA.self
 			            return Inner(__safeDI_user: user.instance)
 			        }
@@ -872,7 +872,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_panelSendableBuilder: __safeDI_PanelSendableCarrier<any Panel>) {
-			        @Sendable nonisolated func __safeDI_panel() -> any Panel {
+			        @inline(never) @Sendable nonisolated func __safeDI_panel() -> any Panel {
 			            __safeDI_panelSendableBuilder.panel()
 			        }
 			        let panel = SendableLazilyInstantiated<any Panel>(__safeDI_panel)
@@ -894,15 +894,15 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_user: @autoclosure @escaping @Sendable () -> User) {
 			        let user = SendableLazilyInstantiated<User>(__safeDI_user)
-			        func __safeDI_inner() -> Inner {
+			        @inline(never) func __safeDI_inner() -> Inner {
 			            _ = Inner.__safeDI_Inner_095B34410D934AEC.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            @Sendable nonisolated func __safeDI_panelSendableBuilder_Inner_panel() -> any Panel {
-			                @Sendable nonisolated func __safeDI_panel() -> DefaultPanel {
+			            @inline(never) @Sendable nonisolated func __safeDI_panelSendableBuilder_Inner_panel() -> any Panel {
+			                @inline(never) @Sendable nonisolated func __safeDI_panel() -> DefaultPanel {
 			                    DefaultPanel(user: user.instance)
 			                }
 			                return __safeDI_panel()
 			            }
-			            @Sendable nonisolated func __safeDI_panelSendableBuilder_Inner() -> Inner.__safeDI_PanelSendableCarrier<any Panel> {
+			            @inline(never) @Sendable nonisolated func __safeDI_panelSendableBuilder_Inner() -> Inner.__safeDI_PanelSendableCarrier<any Panel> {
 			                .init(panel: { __safeDI_panelSendableBuilder_Inner_panel() })
 			            }
 			            return Inner(__safeDI_panelSendableBuilder: __safeDI_panelSendableBuilder_Inner())
@@ -940,15 +940,15 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_user: @autoclosure @escaping @Sendable () -> User) {
 			        let user = SendableLazilyInstantiated<User>(__safeDI_user)
-			        func __safeDI_inner() -> Inner {
+			        @inline(never) func __safeDI_inner() -> Inner {
 			            _ = Inner.__safeDI_Inner_095B34410D934AEC.self // If this line does not compile, add the SafeDI plugin to the target that declares Inner.
-			            @Sendable nonisolated func __safeDI_panelSendableBuilder_Inner_panel() -> any Panel {
-			                @Sendable nonisolated func __safeDI_panel() -> DefaultPanel {
+			            @inline(never) @Sendable nonisolated func __safeDI_panelSendableBuilder_Inner_panel() -> any Panel {
+			                @inline(never) @Sendable nonisolated func __safeDI_panel() -> DefaultPanel {
 			                    DefaultPanel(user: user.instance)
 			                }
 			                return __safeDI_panel()
 			            }
-			            @Sendable nonisolated func __safeDI_panelSendableBuilder_Inner() -> Inner.__safeDI_PanelSendableCarrier<any Panel> {
+			            @inline(never) @Sendable nonisolated func __safeDI_panelSendableBuilder_Inner() -> Inner.__safeDI_PanelSendableCarrier<any Panel> {
 			                .init(panel: { __safeDI_panelSendableBuilder_Inner_panel() })
 			            }
 			            return Inner(__safeDI_panelSendableBuilder: __safeDI_panelSendableBuilder_Inner())
@@ -1013,7 +1013,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_panelSendableBuilder: __safeDI_PanelSendableCarrier<any Panel>) {
-			        @Sendable nonisolated func __safeDI_detailBuilder() -> Detail {
+			        @inline(never) @Sendable nonisolated func __safeDI_detailBuilder() -> Detail {
 			            let __safeDI_panelSendableBuilder_detailBuilder = __safeDI_panelSendableBuilder.detailBuilder()
 			            let panel: any Panel = __safeDI_panelSendableBuilder_detailBuilder.panel()
 			            return Detail(panel: panel)
@@ -1037,12 +1037,12 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_user: @autoclosure @escaping @Sendable () -> User) {
 			        let user = SendableLazilyInstantiated<User>(__safeDI_user)
-			        func __safeDI_inner() -> Inner {
+			        @inline(never) func __safeDI_inner() -> Inner {
 			            _ = Inner.__safeDI_Inner_01DBE6A5364B7290.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            @Sendable nonisolated func __safeDI_panelSendableBuilder_Inner() -> Inner.__safeDI_PanelSendableCarrier<any Panel> {
+			            @inline(never) @Sendable nonisolated func __safeDI_panelSendableBuilder_Inner() -> Inner.__safeDI_PanelSendableCarrier<any Panel> {
 			                .init(detailBuilder: { __safeDI_panelBuilder_Inner_Detail_Scope() })
 			            }
-			            @Sendable nonisolated func __safeDI_panelBuilder_Inner_Detail_Scope() -> Inner.__safeDI_PanelCarrier_Detail<any Panel> {
+			            @inline(never) @Sendable nonisolated func __safeDI_panelBuilder_Inner_Detail_Scope() -> Inner.__safeDI_PanelCarrier_Detail<any Panel> {
 			                .init(panel: {
 			                    let panel: any Panel = DefaultPanel(user: user.instance)
 			                    return panel
@@ -1083,12 +1083,12 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_user: @autoclosure @escaping @Sendable () -> User) {
 			        let user = SendableLazilyInstantiated<User>(__safeDI_user)
-			        func __safeDI_inner() -> Inner {
+			        @inline(never) func __safeDI_inner() -> Inner {
 			            _ = Inner.__safeDI_Inner_01DBE6A5364B7290.self // If this line does not compile, add the SafeDI plugin to the target that declares Inner.
-			            @Sendable nonisolated func __safeDI_panelSendableBuilder_Inner() -> Inner.__safeDI_PanelSendableCarrier<any Panel> {
+			            @inline(never) @Sendable nonisolated func __safeDI_panelSendableBuilder_Inner() -> Inner.__safeDI_PanelSendableCarrier<any Panel> {
 			                .init(detailBuilder: { __safeDI_panelBuilder_Inner_Detail_Scope() })
 			            }
-			            @Sendable nonisolated func __safeDI_panelBuilder_Inner_Detail_Scope() -> Inner.__safeDI_PanelCarrier_Detail<any Panel> {
+			            @inline(never) @Sendable nonisolated func __safeDI_panelBuilder_Inner_Detail_Scope() -> Inner.__safeDI_PanelCarrier_Detail<any Panel> {
 			                .init(panel: {
 			                    let panel: any Panel = DefaultPanel(user: user.instance)
 			                    return panel
@@ -1206,7 +1206,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			    public init(__safeDI_token: @autoclosure @escaping () -> Token, __safeDI_userServiceBuilder: __safeDI_UserServiceCarrier<any UserService>) {
 			        let token = LazilyInstantiated<Token>(__safeDI_token)
 			        let __safeDI_userServiceBuilder_profileBuilder = __safeDI_userServiceBuilder.profileBuilder(token)
-			        func __safeDI_profileBuilder() -> Profile {
+			        @inline(never) func __safeDI_profileBuilder() -> Profile {
 			            let userService: any UserService = __safeDI_userServiceBuilder_profileBuilder.userService()
 			            return Profile(token: token.instance, userService: userService)
 			        }
@@ -1290,8 +1290,8 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public convenience init(__safeDI_token: @autoclosure @escaping () -> Token) {
 			        let token = LazilyInstantiated<Token>(__safeDI_token)
-			        func __safeDI_t0Builder() -> T0 {
-			            func __safeDI_t3Builder() -> T3 {
+			        @inline(never) func __safeDI_t0Builder() -> T0 {
+			            @inline(never) func __safeDI_t3Builder() -> T3 {
 			                _ = T3.__safeDI_T3_F2F345803C710CE2.self
 			                return T3(__safeDI_token: token.instance)
 			            }
@@ -1364,11 +1364,11 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			    package convenience init(__safeDI_theme: @autoclosure @escaping () -> Theme?, __safeDI_title: @autoclosure @escaping () -> Title) {
 			        let theme = LazilyInstantiated<Theme?>(__safeDI_theme)
 			        let title = LazilyInstantiated<Title>(__safeDI_title)
-			        func __safeDI_badgeBuilder() -> Badge {
+			        @inline(never) func __safeDI_badgeBuilder() -> Badge {
 			            Badge(theme: theme.instance)
 			        }
 			        let badgeBuilder = Instantiator<Badge>(__safeDI_badgeBuilder)
-			        func __safeDI_headerBuilder() -> Header {
+			        @inline(never) func __safeDI_headerBuilder() -> Header {
 			            Header(title: title.instance)
 			        }
 			        let headerBuilder = Instantiator<Header>(__safeDI_headerBuilder)
@@ -1459,7 +1459,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		    public init(__safeDI_user user: User, __safeDI_database: @autoclosure @escaping \(sendableAttribute)() -> Database, __safeDI_logger: @autoclosure @escaping \(sendableAttribute)() -> Logger?) {
 		        let database = \(sendablePrefix)LazilyInstantiated<Database>(__safeDI_database)
 		        let logger = \(sendablePrefix)LazilyInstantiated<Logger?>(__safeDI_logger)
-		        \(sendableFunctionAttribute)func __safeDI_cacheBuilder() -> Cache {
+		        @inline(never) \(sendableFunctionAttribute)func __safeDI_cacheBuilder() -> Cache {
 		            Cache(database: database.instance, logger: logger.instance)
 		        }
 		        let cacheBuilder = \(sendablePrefix)Instantiator<Cache>(__safeDI_cacheBuilder)
@@ -1569,7 +1569,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			        #sourceLocation(file: "\(output.fixtures["Screen.swift"])", line: 8)
 			        let auth: any Auth = token.instance
 			        #sourceLocation()
-			        func __safeDI_detailBuilder() -> Detail {
+			        @inline(never) func __safeDI_detailBuilder() -> Detail {
 			            Detail(auth: auth)
 			        }
 			        let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
@@ -1618,7 +1618,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			        #sourceLocation(file: "\(output.fixtures["Screen.swift"])", line: 8)
 			        let token: AnyAuth = AnyAuth(__safeDI_token_())
 			        #sourceLocation()
-			        func __safeDI_detailBuilder() -> Detail {
+			        @inline(never) func __safeDI_detailBuilder() -> Detail {
 			            Detail(token: token)
 			        }
 			        let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
@@ -1678,7 +1678,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			        #sourceLocation(file: "\(output.fixtures["Screen.swift"])", line: 8)
 			        let token: (any Auth)? = __safeDI_token_()
 			        #sourceLocation()
-			        func __safeDI_detailBuilder() -> Detail {
+			        @inline(never) func __safeDI_detailBuilder() -> Detail {
 			            Detail(token: token)
 			        }
 			        let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
@@ -1730,7 +1730,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			        #sourceLocation(file: "\(output.fixtures["Screen.swift"])", line: 8)
 			        let token: \(aliasType) = \(binding)
 			        #sourceLocation()
-			        func __safeDI_detailBuilder() -> Detail {
+			        @inline(never) func __safeDI_detailBuilder() -> Detail {
 			            Detail(token: token)
 			        }
 			        let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
