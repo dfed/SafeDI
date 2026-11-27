@@ -158,6 +158,8 @@ extension TypeKeyLayout {
 			record.lineEnd,
 			record.typesDeclaredEscaping.map(\.asSource).sorted().joined(separator: ","),
 			record.leadingStatement?.spelled ?? "",
+			// The values the call is forwarded, which its function takes as parameters.
+			record.forwardedProperties.map(\.asSource).joined(separator: ","),
 		]
 		for (position, argument) in record.arguments.enumerated() {
 			shape.append("argument|\(argument.argumentLabel)|\(argument.label)|\(argument.property.asSource)|\(record.argumentValues[position].map { "\($0)" } ?? "")")

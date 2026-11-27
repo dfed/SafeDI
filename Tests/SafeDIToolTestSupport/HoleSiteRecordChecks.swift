@@ -59,7 +59,8 @@ extension HoleSiteRecordObservation {
 			mismatches.append("The record of \(place) lists a read of `\(name)` its text does not make:\n\(text)")
 		}
 		let typeNames = Self.withoutBackticks(visitor.calledNames)
-		for name in referenced.subtracting(reads).subtracting(bound).subtracting(typeNames).sorted() where name.first?.isUppercase == false {
+		// A closure's anonymous parameter (`$0`, a wrapper's forwarded value) is no read.
+		for name in referenced.subtracting(reads).subtracting(bound).subtracting(typeNames).sorted() where name.first?.isUppercase == false && name.first != "$" {
 			mismatches.append("The text of \(place) reads `\(name)`, which its record does not list:\n\(text)")
 		}
 		return mismatches
