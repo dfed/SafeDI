@@ -65,8 +65,6 @@ struct SafeDIToolSeamTreeReadsTests: ~Copyable {
 			}
 		}
 		let tree = switch field {
-		case .requiredReceivedProperties:
-			["config: Config", "onTap: OnTap"]
 		case .requiredAliasFulfillingProperties:
 			["token: Token"]
 		case .typesDeclaredEscaping:
