@@ -272,8 +272,11 @@ struct DeclarationsAnsweringReads: Sendable {
 			guard answer != otherAnswer || (answer >= 0 && isCaptured != otherIsCaptured) else { continue }
 			let read = world.read(readID)
 			guard answer >= 0, otherAnswer >= 0 else {
-				// A read only if available, which a call may answer with nothing; a read of any other channel that only one
-				// call answers keeps the two apart, as before.
+				// A read only if available, which a call may answer with nothing. A read of any other channel that only one
+				// call answers keeps the two apart; no world reaches here with one, since the facts key a required read's
+				// answer in full (`ReadChannel.optionalValue`), so two such calls are two variants, which
+				// `NodeRecordRefusal.nodeHasSeveralVariants` refuses first: a seam that receives a label one child declares
+				// again above a type both children build is refused so.
 				guard read.channel == .optional || read.channel == .optionalValue, isCaptured == otherIsCaptured else { return nil }
 				mergedAnswers[index] = max(answer, otherAnswer)
 				continue

@@ -19,8 +19,8 @@
 // SOFTWARE.
 
 import Foundation
-import SafeDICore
 import Testing
+@testable import SafeDICore
 @testable import SafeDIToolLibrary
 @testable import SafeDIToolTestSupport
 
@@ -103,6 +103,29 @@ struct SafeDIToolNodeRecordsOptionalParameterTests: ~Copyable {
 		#expect(reports.map(\.refusal) == [nil])
 		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
 		#expect(output.dependencyTreeFiles == treeOutput.dependencyTreeFiles)
+	}
+
+	@Test(arguments: [
+		"root.a.viewModel: arguments is [] in the tree, [] by node records",
+		"root.a.viewModel: callCycleArguments is [] in the tree, [] by node records",
+	])
+	func outcome_failsRootsDifferences_whenItsTextsAreEqualAndADifferenceIsNoOptionalParameters(difference: String) {
+		// Beside a difference the optional parameter makes, any other difference of the arguments or of another field fails
+		// the root, though its two texts are equal.
+		var report = NodeRecordsReport(root: "Root", refusal: nil, everyRefusal: [], isLaidOutFromNodeRecords: true, differences: ["root.b.viewModel: arguments of an optional parameter is [] in the tree, [] by node records", difference], recordCount: 2, treePlaceCount: 2, treeForcers: [])
+		report.comparedTexts = NodeRecordsComparedTexts(tree: "text", nodeRecords: "text")
+		let outcome = NodeRecordsChecks.outcome(of: report)
+		#expect(outcome.differences == report.differences)
+		#expect(outcome.approvedEntries == [])
+	}
+
+	@Test
+	func outcome_failsNoDifference_whenItsTextsAreEqualAndEveryDifferenceIsAnOptionalParameters() {
+		var report = NodeRecordsReport(root: "Root", refusal: nil, everyRefusal: [], isLaidOutFromNodeRecords: true, differences: ["root.b.viewModel: arguments of an optional parameter is [] in the tree, [] by node records"], recordCount: 2, treePlaceCount: 2, treeForcers: [])
+		report.comparedTexts = NodeRecordsComparedTexts(tree: "text", nodeRecords: "text")
+		let outcome = NodeRecordsChecks.outcome(of: report)
+		#expect(outcome.differences == [])
+		#expect(outcome.approvedEntries == [])
 	}
 
 	@Test(arguments: ShapeRefused.allCases)
