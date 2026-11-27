@@ -85,11 +85,21 @@ extension TypeKeyLayout {
 				placementIndex[member] = index
 				placementDepth[member] = placementDepth[owner] + 1
 			}
-			let site = CallSite(owner: owner, index: index)
-			if isAttached {
-				attachedFunction[site] = members[0]
+			// A loop of builders whose members the root's statements each build once, and nothing else reaches, declares each
+			// member's function right before the statement that builds it, as the path key does: a member's function may call
+			// a later one's, which Swift resolves as no capture intervenes.
+			let sitesByMember = members.map { member in callSitesByClass[member].filter { !memberSet.contains($0.owner) } }
+			if attachesLoopMembers, members.count > 1, sitesByMember.allSatisfy({ $0.count == 1 && $0.first?.owner == owner }) {
+				for (member, sites) in zip(members, sitesByMember) {
+					for site in sites {
+						placementIndex[member] = site.index
+						attachedFunction[site] = member
+					}
+				}
+			} else if isAttached {
+				attachedFunction[CallSite(owner: owner, index: index)] = members[0]
 			} else {
-				hoistedFunctions[site, default: []].append(contentsOf: members)
+				hoistedFunctions[CallSite(owner: owner, index: index), default: []].append(contentsOf: members)
 			}
 		}
 		// Functions declared before one statement are ordered by the first reach of their cycle, then by their own.

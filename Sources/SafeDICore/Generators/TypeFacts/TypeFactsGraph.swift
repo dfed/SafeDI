@@ -447,7 +447,11 @@ struct TypeFactsGraph: Sendable {
 						targets.append((property, LoopTarget(node: Int32(target), label: labels.id(of: property.label), parentEdge: Int32(reboundEdge))))
 					}
 				}
-				let sortedTargets = targets.sorted { $0.property < $1.property }.map(\.target)
+				// In the order the member's body first receives each, as `ScopeGenerator.reboundProperties` rebinds them.
+				let positions = targets.isEmpty ? [:] : Self.firstReceivePositions(of: Set(targets.map(\.property.label)), beneath: member, in: graph)
+				let sortedTargets = targets.sorted {
+					(positions[$0.property.label] ?? Int.max, $0.property) < (positions[$1.property.label] ?? Int.max, $1.property)
+				}.map(\.target)
 				hasLoop = hasLoop || !sortedTargets.isEmpty
 				if let earlier = madeAgainUnderParent[member] {
 					if earlier.map(\.node) != sortedTargets.map(\.node) {
@@ -796,6 +800,27 @@ struct TypeFactsGraph: Sendable {
 	/// The members of loops of builders whose parents' loops make different members again, in node order: they make
 	/// nothing again, and a stage that writes from nodes refuses the world.
 	let loopMembersSharedApart: [Int32]
+
+	/// The position at which the body of `member`'s builder function first receives each of `labels`: its own type's
+	/// receives, then its tree's, depth first in edge order, each node once, as `ScopeGenerator.reboundProperties` walks
+	/// the scope's generators. A rename or a hole is met among the receives of the type that declares it.
+	private static func firstReceivePositions(of labels: Set<String>, beneath member: Int, in graph: OrderedGraph<TypeFactsDeclaration>) -> [String: Int] {
+		var positions = [String: Int]()
+		var visited = Set<Int>()
+		var stack = [member]
+		while positions.count < labels.count, let node = stack.popLast() {
+			guard visited.insert(node).inserted else { continue }
+			if graph.nodes[node].key.leaf == .none {
+				for (property, _) in ScopeGenerator.receivesFromAbove(ofOwnDependencies: graph.nodes[node].scope.instantiable.dependencies)
+					where labels.contains(property.label) && positions[property.label] == nil
+				{
+					positions[property.label] = positions.count
+				}
+			}
+			stack.append(contentsOf: graph.edges(from: node).reversed().map(Int.init))
+		}
+		return positions
+	}
 
 	/// A member of a loop of builders a node makes again: its node, its label, and the parent's edge that builds it.
 	private struct LoopTarget {

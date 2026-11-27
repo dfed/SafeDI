@@ -51,21 +51,38 @@ public enum NodeRecordsObservation {
 			for (treeCode, nodeRecordsCode) in zip(tree, nodeRecords) {
 				let (treeIndentation, treeInner) = unindented(treeCode)
 				let (nodeRecordsIndentation, nodeRecordsInner) = unindented(nodeRecordsCode)
-				guard case let .place(nodeRecordsPlan) = nodeRecordsInner.node, case let .built(nodeRecordsRecord)? = nodeRecordsPlan.record else {
-					differences.append("\(path): node records made a statement that is no built place")
+				guard case let .place(nodeRecordsPlan) = nodeRecordsInner.node, let nodeRecordsPlaceRecord = nodeRecordsPlan.record else {
+					differences.append("\(path): node records made a statement that is no place")
 					continue
 				}
-				let placePath = "\(path).\(nodeRecordsRecord.property.label)"
-				guard case let .place(treePlan) = treeInner.node, case let .built(treeRecord)? = treePlan.record else {
-					differences.append("\(placePath): the tree writes no built place’s record")
-					continue
+				let treePlaceRecord: PlaceRecord? = if case let .place(treePlan) = treeInner.node { treePlan.record } else { nil }
+				switch nodeRecordsPlaceRecord {
+				case let .built(nodeRecordsRecord):
+					let placePath = "\(path).\(nodeRecordsRecord.property.label)"
+					guard case let .built(treeRecord)? = treePlaceRecord else {
+						differences.append("\(placePath): the tree writes no built place’s record")
+						continue
+					}
+					treePlaceCount += 1
+					if treeIndentation != nodeRecordsIndentation {
+						differences.append("\(placePath): indented \(treeIndentation.count) in the tree, \(nodeRecordsIndentation.count) by node records")
+					}
+					differences += fieldDifferences(between: treeRecord, and: nodeRecordsRecord).map { "\(placePath): \($0)" }
+					pending.append((tree: treeRecord.children, nodeRecords: nodeRecordsRecord.children, path: placePath))
+				case let .closer(nodeRecordsCloser):
+					let placePath = "\(path).\(nodeRecordsCloser.property.label) made again"
+					guard case let .closer(treeCloser)? = treePlaceRecord else {
+						differences.append("\(placePath): the tree writes no closing place’s record")
+						continue
+					}
+					treePlaceCount += 1
+					if treeIndentation != nodeRecordsIndentation {
+						differences.append("\(placePath): indented \(treeIndentation.count) in the tree, \(nodeRecordsIndentation.count) by node records")
+					}
+					differences += closerDifferences(between: treeCloser, and: nodeRecordsCloser).map { "\(placePath): \($0)" }
+				case .alias:
+					differences.append("\(path): node records made a rename, which no stage makes")
 				}
-				treePlaceCount += 1
-				if treeIndentation != nodeRecordsIndentation {
-					differences.append("\(placePath): indented \(treeIndentation.count) in the tree, \(nodeRecordsIndentation.count) by node records")
-				}
-				differences += fieldDifferences(between: treeRecord, and: nodeRecordsRecord).map { "\(placePath): \($0)" }
-				pending.append((tree: treeRecord.children, nodeRecords: nodeRecordsRecord.children, path: placePath))
 			}
 		}
 		return (differences, treePlaceCount)
@@ -79,6 +96,24 @@ public enum NodeRecordsObservation {
 			inner = wrapped
 		}
 		return (indentation, inner)
+	}
+
+	/// The fields of the closing place `nodeRecords` that differ from `tree`'s: every field the engine reads of a closer.
+	private static func closerDifferences(between tree: ClosingPlaceRecord, and nodeRecords: ClosingPlaceRecord) -> [String] {
+		var differences = [String]()
+		func compare<Value: Equatable>(_ name: String, _ treeValue: Value, _ nodeRecordsValue: Value) {
+			guard treeValue != nodeRecordsValue else { return }
+			differences.append("\(name) is \(treeValue) in the tree, \(nodeRecordsValue) by node records")
+		}
+		compare("property", tree.property, nodeRecords.property)
+		compare("isErased", tree.isErased, nodeRecords.isErased)
+		compare("isExtension", tree.isExtension, nodeRecords.isExtension)
+		compare("closedOnFunctionName", tree.closedOnFunctionName, nodeRecords.closedOnFunctionName)
+		compare("forwardedProperties", tree.forwardedProperties, nodeRecords.forwardedProperties)
+		compare("cycleArguments", tree.cycleArguments, nodeRecords.cycleArguments)
+		compare("passedArguments", tree.passedArguments, nodeRecords.passedArguments)
+		compare("rebindsLoopMember", tree.rebindsLoopMember, nodeRecords.rebindsLoopMember)
+		return differences
 	}
 
 	/// The fields of `nodeRecords` that differ from `tree`'s, children aside.

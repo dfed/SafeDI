@@ -3205,6 +3205,35 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 	}
 
+	/// The receives a type's own `dependencies` make from above its builder function, in declaration order, each with the
+	/// dependency that makes it: a received property, and the property an alias binds against where the type does not
+	/// declare it. An alias of a property its own type declares reads that declaration, also where a cycle-closing scope
+	/// calls the type's builder function, which binds its own: it receives nothing.
+	nonisolated static func receivesFromAbove(ofOwnDependencies dependencies: [Dependency]) -> [(property: Property, dependency: Dependency)] {
+		var receives = [(property: Property, dependency: Dependency)]()
+		// Read only for a type with an alias, which few are.
+		var ownDeclaredProperties: Set<Property>?
+		for dependency in dependencies {
+			switch dependency.source {
+			case .received:
+				receives.append((dependency.property, dependency))
+			case let .aliased(fulfillingProperty, _, onlyIfAvailable):
+				let declaredProperties = ownDeclaredProperties ?? propertiesDeclared(byOwnDependencies: dependencies)
+				ownDeclaredProperties = declaredProperties
+				guard !declaresFulfillingProperty(
+					of: fulfillingProperty,
+					onlyIfAvailable: onlyIfAvailable,
+					declaredProperties: declaredProperties,
+					forwardedProperties: [],
+				) else { continue }
+				receives.append((fulfillingProperty, dependency))
+			case .instantiated, .forwarded:
+				continue
+			}
+		}
+		return receives
+	}
+
 	/// The properties `dependencies`, a type's own, declare for the scopes the type builds: those it instantiates and
 	/// those it forwards, each lazily instantiated one followed by the property that receives its instance by value. An
 	/// alias of one of them is bound inside the type's builder function, and receives nothing from above it.
@@ -6806,27 +6835,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		/// Meets the receives among `dependencies`, those of the type at `index` in `visitedTypes`.
 		func meet(_ dependencies: [Dependency], ofTypeAt index: Int) {
-			// Read only for a type with an alias, which few are.
-			var ownDeclaredProperties: Set<Property>?
-			for dependency in dependencies {
-				switch dependency.source {
-				case .received:
-					meet(dependency.property.label, receiver: .init(property: dependency.property, declarationLocation: dependency.declarationLocation, chain: chain(endingAt: index)))
-				case let .aliased(fulfillingProperty, _, onlyIfAvailable):
-					// An alias of a property its own type declares reads that declaration, also where a cycle-closing scope
-					// calls the type's builder function, which binds its own: it receives nothing.
-					let declaredProperties = ownDeclaredProperties ?? propertiesDeclared(byOwnDependencies: dependencies)
-					ownDeclaredProperties = declaredProperties
-					guard !declaresFulfillingProperty(
-						of: fulfillingProperty,
-						onlyIfAvailable: onlyIfAvailable,
-						declaredProperties: declaredProperties,
-						forwardedProperties: [],
-					) else { continue }
-					meet(fulfillingProperty.label, receiver: .init(property: fulfillingProperty, declarationLocation: dependency.declarationLocation, chain: chain(endingAt: index)))
-				case .instantiated, .forwarded:
-					continue
-				}
+			for (property, dependency) in receivesFromAbove(ofOwnDependencies: dependencies) {
+				meet(property.label, receiver: .init(property: property, declarationLocation: dependency.declarationLocation, chain: chain(endingAt: index)))
 			}
 		}
 		meet(ownDependencies, ofTypeAt: 0)

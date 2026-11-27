@@ -44,6 +44,8 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	case nodeHasSeveralVariants
 	/// The engine could not lay the root out from the records.
 	case notLaidOut
+	/// A member of a loop of builders under two parents whose loops make different members of it again.
+	case builderLoopSharedApart
 }
 
 /// What a world's records read of a node beside the frozen interface (`TypeFactsWorld`): the scope it builds and the
@@ -124,6 +126,8 @@ struct NodeRecords: Sendable {
 			let record = switch kinds[Int(declaration)] {
 			case .builtByInitializer:
 				try Self.builtByInitializerRecord(of: declaration, in: world, typesDeclaredEscaping: escaping, children: children)
+			case .builtInLoop:
+				try Self.builtByInitializerRecord(of: declaration, in: world, typesDeclaredEscaping: escaping, children: Self.loopRebindings(of: declaration, in: world) + children)
 			}
 			typesDeclaredEscaping[Int(variant)] = escaping
 			records[Int(variant)] = record
@@ -157,6 +161,9 @@ struct NodeRecords: Sendable {
 	/// file's classifier first, which returns `nil` for a node not of its kind, and leaves the refusals of the kinds no
 	/// lane makes yet to `checkBuiltByInitializer(_:in:)`, last.
 	private static func kind(of declaration: DeclarationID, in world: some NodeRecordSources) throws(NodeRecordRefusal) -> NodeRecordKind {
+		if let kind = try loopMemberKind(of: declaration, in: world) {
+			return kind
+		}
 		try checkBuiltByInitializer(declaration, in: world)
 		return .builtByInitializer
 	}
@@ -170,4 +177,7 @@ enum NodeRecordKind: Sendable {
 	/// A constant or an `Instantiator` built by its type's initializer or `instantiate()`, off every cycle, with nothing
 	/// erased, lazy, `@Sendable`, received only if available, renamed or filled in its scope (stage 1).
 	case builtByInitializer
+	/// A node of `builtByInitializer` that is a member of a loop of builders, whose builder function first makes again the
+	/// members its tree receives (`NodeRecords+Loops.swift`).
+	case builtInLoop
 }

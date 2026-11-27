@@ -22,7 +22,8 @@
 /// `TypeFactsEdge.buildPosition` (`TypeFactsWorld.edgeFacts(from:)`), which replaces it once that column is filled, read
 /// from the same facts that column is made of. Each child follows the siblings its tree requires, depth first in edge
 /// order, as `ScopeGenerator.orderedPropertyToGenerateIndices` orders a scope's children where no child is a loop
-/// member, a carrier, lazily instantiated or received only if available, which stage 1 refuses.
+/// member, a carrier, lazily instantiated or received only if available, which stage 1 refuses. A node with a loop member
+/// among its children reads the column already.
 ///
 /// A node's tree receives what its type receives, and what its children's trees receive that the node neither declares
 /// nor forwards (`ScopeGenerator.receives`), made once per node, children first.
@@ -58,10 +59,17 @@ struct NodeBuildOrder: Sendable {
 		}
 		var edgeIndicesByDeclaration = [[Int]](repeating: [], count: declarationCount)
 		for declaration in 0..<Int32(declarationCount) {
-			let children = world.edges(from: declaration).map { child in
-				(property: world.property(of: child), received: receivedByDeclaration[Int(child)] ?? [])
+			// A node that builds a loop of builders builds its children in the edges' positions, which order the loop's
+			// members as `ScopeGenerator.orderedPropertyToGenerateIndices` does.
+			let edgeFacts = world.edgeFacts(from: declaration)
+			if edgeFacts.contains(where: { $0.loop >= 0 }) {
+				edgeIndicesByDeclaration[Int(declaration)] = edgeFacts.indices.sorted { edgeFacts[$0].buildPosition < edgeFacts[$1].buildPosition }.map { $0 - edgeFacts.startIndex }
+			} else {
+				let children = world.edges(from: declaration).map { child in
+					(property: world.property(of: child), received: receivedByDeclaration[Int(child)] ?? [])
+				}
+				edgeIndicesByDeclaration[Int(declaration)] = try Self.order(of: children)
 			}
-			edgeIndicesByDeclaration[Int(declaration)] = try Self.order(of: children)
 		}
 		self.edgeIndicesByDeclaration = edgeIndicesByDeclaration
 	}
