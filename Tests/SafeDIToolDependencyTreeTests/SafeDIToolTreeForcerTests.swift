@@ -161,6 +161,24 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 		""")
 	}
 
+	@Test(arguments: [
+		(analyticsType: "Analytics", analyticsFirst: true),
+		(analyticsType: "Analytics", analyticsFirst: false),
+		(analyticsType: "LazilyInstantiated<Analytics>", analyticsFirst: true),
+		(analyticsType: "LazilyInstantiated<Analytics>", analyticsFirst: false),
+	])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysOutRoot_whenRenameKeepingItsLabelOnlyIfAvailableReadsDeclarationAbove(analyticsType: String, analyticsFirst: Bool) async throws {
+		// `Settings` renames `analytics` only if available under its own label: its optional reads of the label reach past
+		// its scope's own binding to the value or the wrapper above, whichever the root declares first, as the tree reads it.
+		let (forcers, _) = try await treeForcers(of: Self.keepLabelRenames(nestedRename: false, analyticsType: analyticsType, analyticsFirst: analyticsFirst, onlyIfAvailable: true))
+		#expect(forcers == """
+		Root\tnone
+		roots that built a tree: 0 of 1
+
+		""")
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -176,18 +194,19 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 
 	/// A root that instantiates `analytics` as a `LazilyInstantiated<Analytics>` and builds `Settings`, which renames it under
 	/// its own label as an `EventTracker`; with `nestedRename`, `Settings` builds `Detail`, which renames `Settings`' rename
-	/// under the same label as an `AnyTracker`.
-	private static func keepLabelRenames(nestedRename: Bool) -> [String] {
+	/// under the same label as an `AnyTracker`. `analyticsType` is the type the root instantiates `analytics` as,
+	/// `analyticsFirst` orders the root's two properties, and `onlyIfAvailable` makes `Settings`' rename one only if available.
+	private static func keepLabelRenames(nestedRename: Bool, analyticsType: String = "LazilyInstantiated<Analytics>", analyticsFirst: Bool = true, onlyIfAvailable: Bool = false) -> [String] {
+		let rootProperties = ["@Instantiated let analytics: \(analyticsType)", "@Instantiated let settingsBuilder: Instantiator<Settings>"]
 		var files = [
 			"""
 			@Instantiable(isRoot: true)
 			public final class Root: Instantiable {
-			    public init(analytics: LazilyInstantiated<Analytics>, settingsBuilder: Instantiator<Settings>) {
+			    public init(analytics: \(analyticsType), settingsBuilder: Instantiator<Settings>) {
 			        fatalError("SafeDI doesn't inspect the initializer body")
 			    }
 
-			    @Instantiated let analytics: LazilyInstantiated<Analytics>
-			    @Instantiated let settingsBuilder: Instantiator<Settings>
+			    \((analyticsFirst ? rootProperties : rootProperties.reversed()).joined(separator: "\n    "))
 			}
 			""",
 			"""
@@ -229,11 +248,11 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 			files.append("""
 			@Instantiable
 			public final class Settings: Instantiable {
-			    public init(analytics: EventTracker) {
+			    public init(analytics: EventTracker\(onlyIfAvailable ? "?" : "")) {
 			        fatalError("SafeDI doesn't inspect the initializer body")
 			    }
 
-			    @Received(fulfilledByDependencyNamed: "analytics", ofType: Analytics.self) let analytics: EventTracker
+			    @Received(fulfilledByDependencyNamed: "analytics", ofType: Analytics.self\(onlyIfAvailable ? ", onlyIfAvailable: true" : "")) let analytics: EventTracker\(onlyIfAvailable ? "?" : "")
 			}
 			""")
 		}
