@@ -23,8 +23,8 @@ import Testing
 
 /// Soundness rule 1 of node records: at every place of every production root they accept, node records' record of the
 /// place's node equals the record the tree's place made (`NodeRecordsObservation`). Where `SAFEDI_NODE_RECORDS_REPORT`
-/// names a file, each root's outcome is appended to it as a line: the test, the root, and `laid out`, `accepted`, or the
-/// refusal's kind. Where `SAFEDI_NODE_RECORDS_LAY_OUT` is `1`, every root node records accept is laid out from them.
+/// names a file, each root's outcome is appended to it as a line: the test, the root, `laid out`, `accepted`, or the
+/// refusal's kind, the count of differences, and every refusal the world holds. Where `SAFEDI_NODE_RECORDS_LAY_OUT` is `1`, every root node records accept is laid out from them.
 enum NodeRecordsChecks {
 	static func checking<Result>(_ body: () async throws -> Result) async rethrows -> Result {
 		let reportPath = ProcessInfo.processInfo.environment["SAFEDI_NODE_RECORDS_REPORT"]
@@ -38,7 +38,7 @@ enum NodeRecordsChecks {
 				}
 				if let reportPath {
 					let outcome = report.isLaidOutFromNodeRecords ? "laid out" : report.refusal ?? "accepted"
-					append("\(testName)\t\(report.root)\t\(outcome)\t\(report.differences.count)\n", toFileAt: reportPath)
+					append("\(testName)\t\(report.root)\t\(outcome)\t\(report.differences.count)\t\(report.everyRefusal.joined(separator: ","))\n", toFileAt: reportPath)
 				}
 				enclosingObserver?(report)
 			}) {
