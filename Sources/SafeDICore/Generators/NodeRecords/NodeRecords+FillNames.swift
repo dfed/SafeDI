@@ -66,11 +66,13 @@ struct FillNames: Sendable {
 	}
 
 	/// - Parameters:
-	///   - reservedNames: The names enclosing the call, which no function of the call takes.
+	///   - reservedNames: The names enclosing the call, which no function of the call takes: for a call in a seam's tree,
+	///     those the seam binds for its builders (`RootScopeInfo.SeamTree.namesBoundForBuilders`), and for a call inside a
+	///     fill, the names of the fills and dispatchers enclosing it.
 	///   - fills: The call's fills, in the order its hole arguments list them, without those an enclosing call fills.
 	///   - dispatchers: The call's dispatchers, in the order it declares them, without those an enclosing call declares.
-	init(reserving reservedNames: NamesConsultedInTurn, fills: [Fill], dispatchers: [Dispatcher]) {
-		var names = GeneratedNameAllocator(reserving: reservedNames)
+	init(reserving reservedNames: some Sequence<String>, fills: [Fill], dispatchers: [Dispatcher]) {
+		var names = GeneratedNameAllocator(reserving: Set(reservedNames))
 		var namedFills = [NamedFill]()
 		var fillIndexByCaseKey = [String: Int]()
 		for fill in fills where fillIndexByCaseKey[fill.caseKey] == nil {

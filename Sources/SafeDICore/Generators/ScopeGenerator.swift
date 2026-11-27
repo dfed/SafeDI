@@ -9773,7 +9773,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				labelsReadOrDeclared: labelsReadInFill,
 				returnsBoundValue: property.propertyType.isConstant,
 			)
-			let names = FillNames(reserving: NamesConsultedInTurn([]), fills: [FillNames.Fill(caseKey: Self.fillCaseKey(of: hole), functionNameStem: Self.fillFunctionName(of: hole), labelsReadOrDeclared: labelsReadInFill)], dispatchers: [])
+			let names = FillNames(reserving: [], fills: [FillNames.Fill(caseKey: Self.fillCaseKey(of: hole), functionNameStem: Self.fillFunctionName(of: hole), labelsReadOrDeclared: labelsReadInFill)], dispatchers: [])
 			let scopeParameterNameFromRecord = names.scopeParameterName(ofFill: Self.fillCaseKey(of: hole)) ?? ""
 			observer(FillSignatureObservation(
 				written: written,
