@@ -21,8 +21,7 @@
 extension DependencyTreeGenerator {
 	/// The layout of `instantiable`'s code from the node records of its world, the root `constructionScope` builds, and
 	/// what forces its tree (`TreeForcer`): the kind node records refused, then `readersOfEveryTree`. The layout is `nil`
-	/// wherever anything forces the tree, and wherever the switch to node records is off
-	/// (`NodeRecordsObservation.buildsNoTreeForAcceptedRoots`), where nothing but `readersOfEveryTree` is named.
+	/// wherever anything forces the tree.
 	/// - Throws: What an initializer's arguments throw, as the tree's construction of the same place throws it.
 	static func nodeRecordsLayout(
 		of instantiable: Instantiable,
@@ -30,8 +29,6 @@ extension DependencyTreeGenerator {
 		declaredTypeNames: DeclaredTypeNames,
 		readersOfEveryTree: [TreeForcer],
 	) throws -> (layout: NodeRecordsLayout?, treeForcers: [TreeForcer]) {
-		// Until the switch to node records lands, a run makes no records of a root it builds the tree of anyway.
-		guard NodeRecordsObservation.buildsNoTreeForAcceptedRoots else { return (nil, readersOfEveryTree) }
 		let world = TypeFactsGraph(root: constructionScope, forMockGeneration: false)
 		do {
 			let layout = try NodeRecordsLayout(of: instantiable, nodeRecords: NodeRecords(world: world, declaredTypeNames: declaredTypeNames))
