@@ -125,11 +125,10 @@ extension DependencyTreeGenerator {
 	private static func planComparingFillLevels<Planned: Sendable>(in world: TypeFactsGraph, seamTree: RootScopeInfo.SeamTree?, _ plan: () async throws -> Planned) async throws -> (Planned, [String]) {
 		let (stream, continuation) = AsyncStream.makeStream(of: FillLevelsObservation.self)
 		// Typed, as `comparison(of:with:of:)` says why.
-		let planned: Planned = try await FillLevelsObservation.$observer.withValue {
-			continuation.yield($0)
-		} operation: { () async throws -> Planned in
+		let observer: @Sendable (FillLevelsObservation) -> Void = { _ = continuation.yield($0) }
+		let planned: Planned = try await FillLevelsObservation.$observer.withValue(observer, operation: { () async throws -> Planned in
 			try await plan()
-		}
+		})
 		continuation.finish()
 		var observations = [FillLevelsObservation]()
 		for await observation in stream {
