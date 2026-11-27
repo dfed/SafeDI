@@ -654,7 +654,7 @@ struct TypeFactsGraph: Sendable {
 		self.readOffsets = readOffsets
 		self.labelColumn = labelColumn
 		self.labelOffsets = labelOffsets
-		let answers = Self.answers(of: graph, reads: reads, readTable: readInterner.values, labels: labels)
+		let answers = Self.answers(of: graph, reads: reads, readTable: readInterner.values, labels: labels, bindings: bindings, bindingOffsets: bindingOffsets, bindingsBefore: bindingsBefore, propertyTable: properties.values)
 		answerIsBeingBuilt = answers.isBeingBuilt
 		answerTexts = answers.texts
 		answerKeys = answers.keys
@@ -729,11 +729,11 @@ struct TypeFactsGraph: Sendable {
 		}
 	}
 
-	/// What answers each read at each edge, by value: a node answers a read of a label it declares with the forms its
-	/// declaration provides, being built where the edge builds that declaration. Interned at the edge, where the graph
-	/// is built from the table; the worklist sees IDs only. Every declaration a node holds answers at every edge: which
-	/// edges a declaration is bound before is the ordered bindings' column, owed by the table-side columns.
-	private static func answers(of graph: OrderedGraph<TypeFactsDeclaration>, reads: ReadsFromAbove, readTable: [Read], labels: TypeFactsInterner<String>) -> (variants: TypeFactsVariants, isBeingBuilt: [Bool], texts: [String], keys: [Int32]) {
+	/// What answers each read at each edge, by value: a node answers a read of a label with the forms of the last of its
+	/// bindings of that label bound before the edge (`bindingsBefore`), and the edge's child answers its own label as
+	/// the property it is built as, being built. Interned at the edge, where the graph is built from the table; the
+	/// worklist sees IDs only.
+	private static func answers(of graph: OrderedGraph<TypeFactsDeclaration>, reads: ReadsFromAbove, readTable: [Read], labels: TypeFactsInterner<String>, bindings: [TypeFactsWorldBinding], bindingOffsets: [Int32], bindingsBefore: [Int32], propertyTable: [Property]) -> (variants: TypeFactsVariants, isBeingBuilt: [Bool], texts: [String], keys: [Int32]) {
 		var answerIDByText = [String: Int32]()
 		var texts = [String]()
 		var isBeingBuilt = [Bool]()
@@ -767,17 +767,19 @@ struct TypeFactsGraph: Sendable {
 			return id
 		}
 		var sourceByEdge = [Int32]()
-		var declarationByLabelByNode = [[Int32: (forms: String, kind: Property.PropertyType)]]()
+		// Each node's declarations by label, as its scope spells them, with the forms each provides: the world's property IDs
+		// compare two spellings of one type alike, and a body is typed as its parent spells it.
+		var declarationsByLabelByNode = [[Int32: [(property: Property, forms: String)]]]()
 		for index in graph.nodes.indices {
 			for _ in graph.edges(from: index) {
 				sourceByEdge.append(Int32(index))
 			}
-			var declarations = [Int32: (forms: String, kind: Property.PropertyType)]()
+			var declarations = [Int32: [(property: Property, forms: String)]]()
 			for (property, forms) in graph.nodes[index].scope.sortedDeclaredPropertyForms {
 				guard let label = labels.existingID(of: property.label) else { continue }
-				declarations[label] = (forms.sorted().map(\.asSource).joined(separator: ", "), property.propertyType)
+				declarations[label, default: []].append((property, forms.sorted().map(\.asSource).joined(separator: ", ")))
 			}
-			declarationByLabelByNode.append(declarations)
+			declarationsByLabelByNode.append(declarations)
 		}
 		var edgeTargets = [Int32]()
 		for index in graph.nodes.indices {
@@ -789,16 +791,33 @@ struct TypeFactsGraph: Sendable {
 			rootAnswer: { _ in nil },
 			binding: { edge, readID in
 				let read = readTable[Int(readID)]
-				let node = Int(sourceByEdge[edge])
-				guard read.channel.asksAboutLabel, let declaration = declarationByLabelByNode[node][read.label] else {
+				guard read.channel.asksAboutLabel else {
 					return nil
 				}
-				let child = Int(edgeTargets[edge])
-				let beingBuilt = graph.nodes[child].property.map { labels.existingID(of: $0.label) == read.label } ?? false
-				let text = "\(read.channel.name) \(declaration.forms)\(beingBuilt ? " being built" : "")"
+				let node = Int(sourceByEdge[edge])
+				let child = graph.nodes[Int(edgeTargets[edge])]
+				// A child answers its own label's read as the declaration being built, by the property it is built as; any
+				// other label by the last of its parent's bindings bound before the edge, so a declaration bound after the
+				// call does not answer it.
+				// Every binding, and every child's property, is a declaration of its node's scope, which the lookup finds by its
+				// spelling.
+				let bound: Property?
+				let beingBuilt: Bool
+				if let property = child.property, labels.existingID(of: property.label) == read.label {
+					bound = property
+					beingBuilt = true
+				} else {
+					let start = Int(bindingOffsets[node])
+					bound = bindings[start..<start + Int(bindingsBefore[edge])].last { $0.label == read.label }.map { propertyTable[Int($0.property)] }
+					beingBuilt = false
+				}
+				guard let bound, let declaration = declarationsByLabelByNode[node][read.label]?.first(where: { $0.property == bound }) else { return nil }
+				let kind = declaration.property.propertyType
+				let declarationForms = declaration.forms
+				let text = "\(read.channel.name) \(declarationForms)\(beingBuilt ? " being built" : "")"
 				// Rule 2: a wrapper still being built is passed and made again at the call, so it keys as the wrapper.
-				let keyText = declaration.kind.isConstant ? text : "\(read.channel.name) \(declaration.forms)"
-				return VariantBinding(answer: answer(text: text, beingBuilt: beingBuilt, keyText: keyText, kind: declaration.kind), declaration: Int32(node))
+				let keyText = kind.isConstant ? text : "\(read.channel.name) \(declarationForms)"
+				return VariantBinding(answer: answer(text: text, beingBuilt: beingBuilt, keyText: keyText, kind: kind), declaration: Int32(node))
 			},
 			// Production bodies have one variant, `@Sendable` a mark folded over call edges (lead, 11-26 20:26Z); the family
 			// a seam's cases, builders and mock bodies key by is the edge facts' `opens`, owed by the table-side columns.
