@@ -1169,6 +1169,90 @@ struct SafeDIToolGraphFuzzerValueOracleTests {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func overrideProbes_passSampleAndBuildMirrorsVariantForwardingIt_whenOverriddenValueIsReceivedOnlyIfAvailable() async throws {
+		// Seed 1 takes the mirror's second field, the override of `session`, which the tree receives only if available
+		// and production passes `nil`, so the known-right side is the mirror's variant that forwards it, with the sample
+		// the override is passed.
+		let runs = try await Self.valueOracleToolRuns(of: Self.availableSessionFixture)
+		let valueOracle = try #require(runs.valueOracle)
+
+		#expect(valueOracle.overrideProbes == [
+			GraphFuzzerOverrideProbe(
+				mockedTypeName: "S1_Screen",
+				label: "session",
+				builtTypeName: "S1_Session",
+				candidateKind: .onlyIfAvailable,
+				fieldKind: .value,
+				pair: DifferentialValueProbePair(
+					name: "S1_Screen.mock(safeDIOverrides: .init(session: sample))",
+					featureExpression: "{ let sample = differentialValueSample(S1_Session()); let value = S1_Screen.mock(safeDIOverrides: .init(session: sample)); return (value, sample as Any?) }()",
+					knownRightExpression: "{ let known = S1_ZMirror0AvailableHost().mirrorBuilder.instantiate(differentialValueSample(S1_Session())); return (known.differentialMirrorValue, known.session as Any?) }()",
+				),
+			),
+		])
+		#expect(valueOracle.plan.valueOracleFixture(storingEveryParameter: false).swiftFileContent.last == """
+		@Instantiable
+		public final class S1_ZMirror0Available: Instantiable {
+			public init(session: S1_Session, editor: S1_Editor) {
+				self.session = session
+				self.editor = editor
+				differentialMirrorValue = S1_Screen(editor: editor)
+			}
+
+			@Forwarded let session: S1_Session
+			@Instantiated let editor: S1_Editor
+			let differentialMirrorValue: S1_Screen
+		}
+
+		@Instantiable(isRoot: true)
+		public final class S1_ZMirror0AvailableHost: Instantiable {
+			public init(mirrorBuilder: Instantiator<S1_ZMirror0Available>) {
+				self.mirrorBuilder = mirrorBuilder
+			}
+
+			@Instantiated let mirrorBuilder: Instantiator<S1_ZMirror0Available>
+		}
+
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func overrideProbes_bindMockedTypesAliasFromValueItsVariantForwards_whenMockedTypeRenamesOverriddenValueOnlyIfAvailable() async throws {
+		// The mock binds `sessionAlias` from the override, so the variant binds it from the value it forwards, as a
+		// rename of exactly that property (base corpus seed 153).
+		let runs = try await Self.valueOracleToolRuns(of: Self.availableSessionAliasFixture)
+		let valueOracle = try #require(runs.valueOracle)
+
+		#expect(valueOracle.overrideProbes.map(\.pair.name) == ["S1_Screen.mock(safeDIOverrides: .init(session: sample))"])
+		#expect(valueOracle.plan.valueOracleFixture(storingEveryParameter: false).swiftFileContent.last == """
+		@Instantiable
+		public final class S1_ZMirror0Available: Instantiable {
+			public init(session: S1_Session, sessionAlias: S1_Session?) {
+				self.session = session
+				self.sessionAlias = sessionAlias
+				differentialMirrorValue = S1_Screen(sessionAlias: sessionAlias)
+			}
+
+			@Forwarded let session: S1_Session
+			@Received(fulfilledByDependencyNamed: "session", ofType: S1_Session.self, onlyIfAvailable: true) let sessionAlias: S1_Session?
+			let differentialMirrorValue: S1_Screen
+		}
+
+		@Instantiable(isRoot: true)
+		public final class S1_ZMirror0AvailableHost: Instantiable {
+			public init(mirrorBuilder: Instantiator<S1_ZMirror0Available>) {
+				self.mirrorBuilder = mirrorBuilder
+			}
+
+			@Instantiated let mirrorBuilder: Instantiator<S1_ZMirror0Available>
+		}
+
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func overrideProbes_omitLazilyInstantiatedDependency_whenMockedTypeHoldsNoFormOfIt() async throws {
 		// The mock promotes `lazyStore` for `S1_Editor`, which `S1_Screen` does not hold, so its instance is created only
 		// where something reads the editor's wrapper, which production's `known.lazyStore.instance` would read regardless
@@ -1636,11 +1720,26 @@ struct SafeDIToolGraphFuzzerValueOracleTests {
 		type("S1_Store", properties: []),
 	])
 
+	/// A mocked type that receives a type that receives `session` only if available, which nothing provides: the
+	/// override oracle's override of a value received only if available.
+	private static let availableSessionFixture = fixture([
+		type("S1_Screen", arguments: "generateMock: true", properties: ["@Received let editor: S1_Editor"]),
+		type("S1_Editor", properties: ["@Received(onlyIfAvailable: true) let session: S1_Session?"]),
+		type("S1_Session", properties: []),
+	])
+
 	/// A mocked type that receives a type that receives `lazyStore` lazily, which the mock promotes.
 	private static let promotedLazyStoreFixture = fixture([
 		type("S1_Screen", arguments: "generateMock: true", properties: ["@Received let editor: S1_Editor"]),
 		type("S1_Editor", properties: ["@Received let lazyStore: LazilyInstantiated<S1_Store>"]),
 		type("S1_Store", properties: []),
+	])
+
+	/// A mocked type that renames `session`, which nothing provides, only if available: the override oracle's override of
+	/// a value received only if available, which the mocked type's alias reads.
+	private static let availableSessionAliasFixture = fixture([
+		type("S1_Screen", arguments: "generateMock: true", properties: ["@Received(fulfilledByDependencyNamed: \"session\", ofType: S1_Session?.self, onlyIfAvailable: true) let sessionAlias: S1_Session?"]),
+		type("S1_Session", properties: []),
 	])
 
 	/// A mocked type with a required alias of the optional form of a property it receives, which the mock promotes from

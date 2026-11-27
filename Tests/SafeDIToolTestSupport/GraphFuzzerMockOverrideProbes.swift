@@ -39,6 +39,19 @@ struct GraphFuzzerOverrideCandidate: Equatable {
 	/// Whether an erased dependency is `erasedToConcreteExistential: true`, so that production holds an erasing type
 	/// that stores the instance (`value`), rather than the instance as the protocol it fulfills.
 	var isErasedToConcreteExistential = false
+	/// For a value the tree receives only if available, the sample its override is passed and the mirror's variant that
+	/// forwards it.
+	var onlyIfAvailableOverride: GraphFuzzerOnlyIfAvailableOverride?
+
+	/// The candidate of `override`, a mirrored mock's override of a value its tree receives only if available.
+	init(onlyIfAvailable override: GraphFuzzerOnlyIfAvailableOverride) {
+		label = override.property.label
+		builtTypeName = GraphFuzzerMirrorTypes.instantiatedType(of: override.property.type)
+		propertyTypeName = GraphFuzzerMockMirrorModel.unqualifiedName(of: builtTypeName)
+		kind = .onlyIfAvailable
+		property = override.property
+		onlyIfAvailableOverride = override
+	}
 
 	/// A candidate for `property`, which the scope of `builtTypeName` builds and `attribute` declares, or `nil` for one
 	/// the oracle does not judge.
@@ -50,7 +63,7 @@ struct GraphFuzzerOverrideCandidate: Equatable {
 				kind = .erased
 			case .sendableInstantiator:
 				break
-			case .lazilyInstantiated, .erased:
+			case .lazilyInstantiated, .erased, .onlyIfAvailable:
 				// An erased lazily instantiated dependency's field is not judged.
 				return nil
 			}
@@ -81,6 +94,10 @@ enum GraphFuzzerOverrideCandidateKind: String, CaseIterable, Comparable {
 	/// stores, whose builder field or configuration's builder the instantiator's `@Sendable` builder function calls once
 	/// per instance: each side records what one more call of the instantiator the mocked type holds builds.
 	case sendableInstantiator
+	/// A value the mocked type's tree receives only if available, which the mock takes an override of and production
+	/// passes `nil` where nothing declares it: the override is passed a sample, and the known-right side is the mirror's
+	/// variant that forwards the value with that sample (`GraphFuzzerOnlyIfAvailableOverride`).
+	case onlyIfAvailable
 
 	/// The kind of a non-optional dependency of `type`, or `nil` for a kind the oracle does not judge.
 	init?(propertyType type: String) {
@@ -107,6 +124,8 @@ enum GraphFuzzerOverrideFieldKind: String, CaseIterable, Comparable {
 	case builder
 	/// A `T.SafeDIMockConfiguration`, whose unlabeled builder takes the sentinel.
 	case configuration
+	/// An optional value, `T?`, of a value the tree receives only if available.
+	case value
 
 	static func < (lhs: GraphFuzzerOverrideFieldKind, rhs: GraphFuzzerOverrideFieldKind) -> Bool {
 		lhs.rawValue < rhs.rawValue
@@ -201,9 +220,10 @@ extension GraphFuzzerValueOraclePlan {
 				guard declaration.alias == nil, let builtTypeName = declaration.builtTypeName else { return nil }
 				return GraphFuzzerOverrideCandidate(property: declaration.property, attribute: declaration.attribute, builtTypeName: builtTypeName)
 			}
+
 			if let probe = overrideProbe(
 				mockedTypeName: mirror.mockedTypeName,
-				candidates: candidates,
+				candidates: candidates + [onlyIfAvailableOverrides[mirror.mockedTypeName].map(GraphFuzzerOverrideCandidate.init(onlyIfAvailable:))].compactMap(\.self),
 				mockFile: generatedFiles[mirror.mockedTypeName + "+SafeDIMock.swift"],
 				ordinal: ordinal,
 				mockArguments: mirror.mockArguments,
@@ -252,6 +272,9 @@ extension GraphFuzzerValueOraclePlan {
 					&& dependenciesByTypeName[mockedTypeName]?.contains { $0.property == candidate.property } == true
 					&& dependenciesByTypeName[candidate.builtTypeName]?.contains { $0.source == .forwarded } == false)
 			else { return nil }
+			if candidate.kind == .onlyIfAvailable {
+				return field.type == candidate.property.type + "?" ? (candidate, .value) : nil
+			}
 			// The builder field of a dependency of another type than the one built – an erased or fulfilled-by-type
 			// protocol – returns the property's type.
 			if field.type == "\(candidate.builtTypeName).SafeDIMockConfiguration" {
@@ -287,28 +310,37 @@ extension GraphFuzzerValueOraclePlan {
 		} else {
 			"\(sentinel).recording(\(candidate.builtTypeName).init)"
 		}
-		let argument = switch kind {
-		case .builder:
-			builder
-		case .configuration:
-			".init(\(builder))"
-		}
 		// A configuration of an erased dependency builds the instance the erasing type production holds stores.
 		let erasedInstancePath = kind == .configuration && candidate.isErasedToConcreteExistential ? ".value" : ""
-		// What each side records: the sentinel the mock built, and the instance production holds under the label.
-		let (featureRecord, knownRightRecord) = switch candidate.kind {
-		case .constant:
-			("\(sentinel).value", "known.\(candidate.label) as Any?")
+		// What the feature expression does before it calls the mock, what it passes the field, and what each side
+		// records: the sentinel the mock built, and the instance production holds under the label.
+		var prelude = "\(sentinel).value = nil"
+		var argument = kind == .configuration ? ".init(\(builder))" : builder
+		var knownRight = (construction: knownRightConstruction, valuePath: knownRightValuePath)
+		let featureRecord: String
+		let knownRightRecord: String
+		switch candidate.kind {
+		case .constant, .erased:
+			featureRecord = "\(sentinel).value"
+			knownRightRecord = "known.\(candidate.label)\(erasedInstancePath) as Any?"
 		case .lazilyInstantiated:
 			// The instance is created on the wrapper's first read, which the describer makes after the rest of the
 			// probe's value, so each record is read after it too, through a wrapper of its own.
-			("LazilyInstantiated<Any?> { \(sentinel).value }", "LazilyInstantiated<Any?> { known.\(candidate.label).instance as Any? }")
-		case .erased:
-			// A configuration's builder builds the instance the erasing type production holds stores.
-			("\(sentinel).value", "known.\(candidate.label)\(erasedInstancePath) as Any?")
+			featureRecord = "LazilyInstantiated<Any?> { \(sentinel).value }"
+			knownRightRecord = "LazilyInstantiated<Any?> { known.\(candidate.label).instance as Any? }"
 		case .sendableInstantiator:
 			// What one more call builds, on each side.
-			("{ \(sentinel).value = nil; _ = value.\(candidate.label).instantiate(); return \(sentinel).value }()", "known.\(candidate.label).instantiate()\(erasedInstancePath) as Any?")
+			featureRecord = "{ \(sentinel).value = nil; _ = value.\(candidate.label).instantiate(); return \(sentinel).value }()"
+			knownRightRecord = "known.\(candidate.label).instantiate()\(erasedInstancePath) as Any?"
+		case .onlyIfAvailable:
+			// The override is passed a sample, which production's variant of the mirror forwards: each receiver the
+			// override reaches holds the sample, as each receiver holds the forwarded value.
+			guard let override = candidate.onlyIfAvailableOverride else { return nil }
+			prelude = "let sample = \(override.sample)"
+			argument = "sample"
+			featureRecord = "sample as Any?"
+			knownRightRecord = "known.\(candidate.label) as Any?"
+			knownRight.construction = override.variant.knownRightConstruction
 		}
 		return GraphFuzzerOverrideProbe(
 			mockedTypeName: mockedTypeName,
@@ -317,9 +349,9 @@ extension GraphFuzzerValueOraclePlan {
 			candidateKind: candidate.kind,
 			fieldKind: kind,
 			pair: DifferentialValueProbePair(
-				name: "\(mockedTypeName).mock(safeDIOverrides: .init(\(candidate.label): sentinel))",
-				featureExpression: "{ \(sentinel).value = nil; let value = \(mockedTypeName).mock(\((mockArguments + ["safeDIOverrides: .init(\(candidate.label): \(argument))"]).joined(separator: ", "))); return (value, \(featureRecord)) }()",
-				knownRightExpression: "{ let known = \(knownRightConstruction); return (known\(knownRightValuePath), \(knownRightRecord)) }()",
+				name: "\(mockedTypeName).mock(safeDIOverrides: .init(\(candidate.label): \(candidate.kind == .onlyIfAvailable ? "sample" : "sentinel")))",
+				featureExpression: "{ \(prelude); let value = \(mockedTypeName).mock(\((mockArguments + ["safeDIOverrides: .init(\(candidate.label): \(argument))"]).joined(separator: ", "))); return (value, \(featureRecord)) }()",
+				knownRightExpression: "{ let known = \(knownRight.construction); return (known\(knownRight.valuePath), \(knownRightRecord)) }()",
 			),
 		)
 	}

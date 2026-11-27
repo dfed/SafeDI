@@ -1026,6 +1026,17 @@ struct GraphFuzzerMockMirror: Equatable {
 	}
 }
 
+/// A value the override oracle passes a mock's override of a value its tree receives only if available, which
+/// production passes `nil` where nothing declares it: the mirror's variant that forwards the value, `variant`, which a
+/// root of its own builds with a sample of it, is the production build that holds it as the mock should.
+struct GraphFuzzerOnlyIfAvailableOverride: Equatable {
+	/// The value, `x: X`, whose optional the tree receives only if available.
+	let property: GraphFuzzerMirrorProperty
+	/// The sample the override passes.
+	let sample: String
+	let variant: GraphFuzzerMockMirror
+}
+
 /// What the mirror model says a mocked type's generated `mock()` builds beside the mocked type, which the oracle checks
 /// against the mock's `SafeDIOverrides` before it decides whether to compare the mock (R4).
 struct GraphFuzzerMockRootExpectation: Equatable {
@@ -1060,7 +1071,10 @@ extension GraphFuzzerMockMirrorModel {
 	/// The mirror of the mocked type `typeName`, whose mock root is `mockRoot`, named `name`, or why none is compared.
 	/// - Parameter requiredParameters: The mock's parameters without a default value, which the mirror forwards: values
 	///   the mocked type forwards, and dependencies its tree receives that the mock cannot build.
-	func mirror(of mockRoot: MockRoot, mockedTypeName typeName: String, named name: String, forwarding requiredParameters: [GraphFuzzerMirrorProperty] = []) -> Result<GraphFuzzerMockMirror, GraphFuzzerMirrorFailure> {
+	/// - Parameter availableValue: The value the override oracle's variant of a mirror forwards for an override of a value
+	///   the tree receives only if available, which the mirror declares, so the mocked type's aliases of it are bound
+	///   from it, as the mock binds them from the override.
+	func mirror(of mockRoot: MockRoot, mockedTypeName typeName: String, named name: String, forwarding requiredParameters: [GraphFuzzerMirrorProperty] = [], availableValue: GraphFuzzerMirrorProperty? = nil) -> Result<GraphFuzzerMockMirror, GraphFuzzerMirrorFailure> {
 		guard let mockedType = types[typeName] else {
 			return .failure(.modelDisagrees("The model holds no declaration of `\(typeName)`."))
 		}
@@ -1070,7 +1084,9 @@ extension GraphFuzzerMockMirrorModel {
 		// receive, a parameter it names apart from another of its label – which no forwarded declaration stands for.
 		for parameter in requiredParameters {
 			let isForwardedByMockedType = mockedType.dependencies.contains { $0.source == .forwarded && $0.property == parameter }
-			let isReceivedByTree = mockRoot.received.contains(parameter) && !mockedType.dependencies.contains { $0.property.label == parameter.label && $0.attribute.hasPrefix("@Instantiated") }
+			// The override oracle's variant of a mirror forwards a value its tree receives only if available as its optional.
+			let isReceivedByTree = (mockRoot.received.contains(parameter) || (parameter == availableValue && mockRoot.received.contains(GraphFuzzerMirrorProperty(label: parameter.label, type: parameter.type + "?"))))
+				&& !mockedType.dependencies.contains { $0.property.label == parameter.label && $0.attribute.hasPrefix("@Instantiated") }
 			guard isForwardedByMockedType || isReceivedByTree else {
 				return .failure(.skipped(.requiredParameter))
 			}
@@ -1084,6 +1100,9 @@ extension GraphFuzzerMockMirrorModel {
 		// The mirror forwards each value the mocked type forwards, so an alias of one of them is fulfilled in the mirror as
 		// the mock and production bind it, to that value.
 		var declaredProperties = mockedType.forwardedReceivableProperties
+		if let availableValue {
+			declaredProperties.insert(availableValue)
+		}
 		for child in mockRoot.children {
 			if case .instantiated = child {
 				declaredProperties.formUnion(child.receivableProperties.map(\.unwrapped))
@@ -1121,7 +1140,9 @@ extension GraphFuzzerMockMirrorModel {
 				break
 			}
 		}
-		var promotedDeclaredProperties = Set<GraphFuzzerMirrorProperty>()
+		// The available value is declared non-optional as a promoted dependency is, so an alias of its optional form is
+		// retyped as one of a promoted dependency's is (base corpus seed 153).
+		var promotedDeclaredProperties = Set([availableValue].compactMap(\.self))
 		for case let .instantiated(property, _, _) in mockRoot.promotedChildren {
 			promotedDeclaredProperties.formUnion([property.unwrapped] + [property.unwrapped.lazilyInstantiatedInstance].compactMap(\.self))
 		}
@@ -1693,6 +1714,7 @@ struct GraphFuzzerValueOraclePlan {
 		dependenciesByTypeName = model.types.mapValues(\.dependencies)
 		let mockFileSuffix = "+SafeDIMock.swift"
 		var mirrors = [GraphFuzzerMockMirror]()
+		var onlyIfAvailableOverrides = [String: GraphFuzzerOnlyIfAvailableOverride]()
 		var skips = [(typeName: String, skip: GraphFuzzerMirrorSkip)]()
 		var modelFailures = [String]()
 		var cache = GraphFuzzerMockMirrorModel.ReceivedPropertiesCache()
@@ -1724,6 +1746,7 @@ struct GraphFuzzerValueOraclePlan {
 				let forwardedProperties = mirror.declarations.filter { $0.attribute == "@Forwarded" }.map(\.property)
 				let wrappersOfValuesTheMockTakes = Set(forwardedProperties.filter { !requiredParameters.contains($0) })
 				mirror.forwardedPropertiesSample = forwardedProperties.isEmpty ? nil : samples.forwardedPropertiesExpression(of: forwardedProperties, wrappersBuiltAroundInstances: wrappersOfValuesTheMockTakes)
+				onlyIfAvailableOverrides[typeName] = Self.onlyIfAvailableOverride(of: mirror, mockRoot: mockRoot, mockFile: mockFile, requiredParameters: requiredParameters, model: model, samples: samples)
 				mirrors.append(mirror)
 			case let .failure(.skipped(skip)):
 				skips.append((typeName, skip))
@@ -1732,6 +1755,7 @@ struct GraphFuzzerValueOraclePlan {
 			}
 		}
 		self.mirrors = mirrors
+		self.onlyIfAvailableOverrides = onlyIfAvailableOverrides
 		forwardedPropertiesSamples = samples.forwardedPropertiesSamples
 		self.skips = skips
 		self.modelFailures = modelFailures
@@ -1799,6 +1823,10 @@ struct GraphFuzzerValueOraclePlan {
 	let drawnMockFiles: [String: String]
 	/// The mirror of each compared mocked type, in type order.
 	let mirrors: [GraphFuzzerMockMirror]
+	/// For each mirrored mock that takes an override of a value its tree receives only if available, of a type with a
+	/// sample, the first such override with the mirror's variant that forwards the value (`GraphFuzzerOnlyIfAvailableOverride`),
+	/// by the mocked type's name.
+	let onlyIfAvailableOverrides: [String: GraphFuzzerOnlyIfAvailableOverride]
 	/// The sample value of each type's `ForwardedProperties` that has one, which the describer calls an instantiator of
 	/// the type with.
 	let forwardedPropertiesSamples: [DifferentialValueSample]
@@ -1966,6 +1994,7 @@ struct GraphFuzzerValueOraclePlan {
 		let conformance = Self.mirrorConformance(of: fixture)
 		var swiftFileContent = base.swiftFileContent.map { $0.replacingOccurrences(of: "@Instantiable(isRoot: true)\n", with: "@Instantiable(isRoot: true, generateMock: true)\n") }
 		swiftFileContent += mirrors.map { $0.source(conformance: conformance, stamp: stamp) }
+		swiftFileContent += mirrors.compactMap { onlyIfAvailableOverrides[$0.mockedTypeName]?.variant.source(conformance: conformance, stamp: stamp) }
 		if pinnedPlacePair != nil {
 			swiftFileContent.append(Self.pinnedPlaceRootSource(typeNamePrefix: fixture.typeNamePrefix, conformance: conformance, stamp: stamp))
 		}
@@ -1976,6 +2005,38 @@ struct GraphFuzzerValueOraclePlan {
 			swiftFileContent.append(GraphFuzzerOverrideSentinel.source(typeNamePrefix: fixture.typeNamePrefix))
 		}
 		return GraphFuzzerFixture(seed: fixture.seed, swiftFileContent: swiftFileContent)
+	}
+
+	/// The override oracle's value of the first override `mockFile`'s mock takes of a value its tree receives only if
+	/// available, `x: X?`, of a type the harness has a sample of, with the variant of `mirror` that forwards `x: X` with the
+	/// mock's required parameters, or `nil` where the mock takes none or the model skips the variant.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private static func onlyIfAvailableOverride(
+		of mirror: GraphFuzzerMockMirror,
+		mockRoot: GraphFuzzerMockMirrorModel.MockRoot,
+		mockFile: String,
+		requiredParameters: [GraphFuzzerMirrorProperty],
+		model: GraphFuzzerMockMirrorModel,
+		samples: GraphFuzzerSampleValues,
+	) -> GraphFuzzerOnlyIfAvailableOverride? {
+		for field in GraphFuzzerMockOverrides.overrideFields(mockFile) where field.type.hasSuffix("?") && !field.type.hasPrefix("(") {
+			let property = GraphFuzzerMirrorProperty(label: field.label, type: field.type)
+			let value = property.unwrapped
+			// A tree that receives another form of the label, such as its wrapper, would have the variant forward the value
+			// as that form (base corpus seed 126).
+			guard mockRoot.received.contains(property),
+			      !mockRoot.received.contains(where: { $0.label == property.label && $0 != property }),
+			      GraphFuzzerMirrorTypes.kindOrder(of: value.type) == 0,
+			      let sample = samples.expression(ofType: value.type),
+			      case var .success(variant) = model.mirror(of: mockRoot, mockedTypeName: mirror.mockedTypeName, named: "\(mirror.name)Available", forwarding: requiredParameters + [value], availableValue: value)
+			else { continue }
+			let forwardedProperties = variant.declarations.filter { $0.attribute == "@Forwarded" }.map(\.property)
+			let wrappersOfValuesTheMockTakes = Set(forwardedProperties.filter { !requiredParameters.contains($0) && $0 != value })
+			guard let forwardedPropertiesSample = samples.forwardedPropertiesExpression(of: forwardedProperties, wrappersBuiltAroundInstances: wrappersOfValuesTheMockTakes) else { continue }
+			variant.forwardedPropertiesSample = forwardedPropertiesSample
+			return GraphFuzzerOnlyIfAvailableOverride(property: value, sample: sample, variant: variant)
+		}
+		return nil
 	}
 
 	/// The source of the root that builds `PinHost` for `pinnedPlacePair`, which conforms to what the mirrors conform to.
