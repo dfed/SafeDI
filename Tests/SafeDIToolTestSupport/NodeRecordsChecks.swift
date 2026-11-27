@@ -24,19 +24,38 @@ import Testing
 /// Soundness rule 1 of node records: at every place of every production root they accept, node records' record of the
 /// place's node equals the record the tree's place made (`NodeRecordsObservation`). Where `SAFEDI_NODE_RECORDS_REPORT`
 /// names a file, each root's outcome is appended to it as a line: the test, the root, `laid out`, `accepted`, or the
-/// refusal's kind, the count of differences, every refusal the world holds, and `mock` for a mock's root. Where `SAFEDI_NODE_RECORDS_LAY_OUT` is `1`, every root node records accept is laid out from them.
+/// refusal's kind, the count of differences, every refusal the world holds, and `mock` for a mock's root. Where
+/// `SAFEDI_NODE_RECORDS_LAY_OUT` is `1`, every production root node records accept is laid out from them, and where
+/// `SAFEDI_NODE_RECORDS_LAY_OUT_MOCKS` is `1`, every internal mock root: a sweep's switches, under which a test that
+/// compares a file with a function fails on the other text, and what is read is what does not compile.
 enum NodeRecordsChecks {
+	/// Whether a run lays out from node records every production root they accept: a test said so, or the sweep's switch
+	/// did. A run started outside `checking(_:)`, as the run over split module info files is, reads it too, so that it
+	/// generates in the mode of the run it is compared with.
+	static var laysOutRoots: Bool {
+		NodeRecordsObservation.laysOutRoots || ProcessInfo.processInfo.environment["SAFEDI_NODE_RECORDS_LAY_OUT"] == "1"
+	}
+
+	/// Whether a run lays out from node records every internal mock root they accept, as `laysOutRoots` says of
+	/// production roots.
+	static var laysOutMockRoots: Bool {
+		NodeRecordsObservation.laysOutMockRoots || ProcessInfo.processInfo.environment["SAFEDI_NODE_RECORDS_LAY_OUT_MOCKS"] == "1"
+	}
+
 	static func checking<Result>(_ body: () async throws -> Result) async rethrows -> Result {
 		let reportPath = ProcessInfo.processInfo.environment["SAFEDI_NODE_RECORDS_REPORT"]
 		let testName = Test.current?.name ?? "unknown test"
-		let laysOutRoots = NodeRecordsObservation.laysOutRoots || ProcessInfo.processInfo.environment["SAFEDI_NODE_RECORDS_LAY_OUT"] == "1"
+		let laysOutRoots = laysOutRoots
+		let laysOutMockRoots = laysOutMockRoots
 		let enclosingObserver = NodeRecordsObservation.observer
 		let enclosingSeamCallObserver = SeamCallRecordObservation.observer
 		// A seam call's record, as the engine is to spell it, must list what its text reads, binds and declares, and spell
 		// the text's guard line and builder arguments.
 		let seamCallObserver: @Sendable (SeamCallRecordObservation) -> Void = { call in
-			for mismatch in HoleSiteRecordObservation.recordMismatches(text: call.text, readNames: call.readNames, boundNames: call.boundNames, place: "a seam call") {
-				Issue.record(Comment(rawValue: mismatch))
+			if let boundNames = call.boundNames {
+				for mismatch in HoleSiteRecordObservation.recordMismatches(text: call.text, readNames: call.readNames, boundNames: boundNames, place: "a seam call") {
+					Issue.record(Comment(rawValue: mismatch))
+				}
 			}
 			for (spelled, written) in zip(call.spelledFromRecord, call.written) where spelled != written {
 				Issue.record(Comment(rawValue: "The record of a seam call spells `\(spelled)` where its text writes `\(written)`:\n\(call.text)"))
@@ -46,24 +65,46 @@ enum NodeRecordsChecks {
 			}
 			enclosingSeamCallObserver?(call)
 		}
+		let enclosingDispatcherObserver = DispatcherRecordObservation.observer
+		// A dispatcher's declaration, spelled from the call's records alone, must be the text the tree writes.
+		let dispatcherObserver: @Sendable (DispatcherRecordObservation) -> Void = { dispatcher in
+			if dispatcher.spelledFromRecord != dispatcher.text {
+				Issue.record(Comment(rawValue: "The records of a dispatcher spell\n\(dispatcher.spelledFromRecord)\nwhere the tree writes\n\(dispatcher.text)"))
+			}
+			enclosingDispatcherObserver?(dispatcher)
+		}
+		let enclosingFillObserver = FillSignatureObservation.observer
+		// A fill's function, up to its tree, spelled from the fill's record alone, must be the text the tree writes.
+		let fillObserver: @Sendable (FillSignatureObservation) -> Void = { fill in
+			if fill.spelledFromRecord != fill.written {
+				Issue.record(Comment(rawValue: "The record of a fill spells\n\(fill.spelledFromRecord.joined(separator: "\n"))\nwhere the tree writes\n\(fill.written.joined(separator: "\n"))"))
+			}
+			enclosingFillObserver?(fill)
+		}
 		return try await SeamCallRecordObservation.$observer.withValue(seamCallObserver) {
-			try await checkingNodeRecords(laysOutRoots: laysOutRoots, reportPath: reportPath, testName: testName, enclosingObserver: enclosingObserver, body)
+			try await DispatcherRecordObservation.$observer.withValue(dispatcherObserver) {
+				try await FillSignatureObservation.$observer.withValue(fillObserver) {
+					try await checkingNodeRecords(laysOutRoots: laysOutRoots, laysOutMockRoots: laysOutMockRoots, reportPath: reportPath, testName: testName, enclosingObserver: enclosingObserver, body)
+				}
+			}
 		}
 	}
 
-	private static func checkingNodeRecords<Result>(laysOutRoots: Bool, reportPath: String?, testName: String, enclosingObserver: (@Sendable (NodeRecordsReport) -> Void)?, _ body: () async throws -> Result) async rethrows -> Result {
+	private static func checkingNodeRecords<Result>(laysOutRoots: Bool, laysOutMockRoots: Bool, reportPath: String?, testName: String, enclosingObserver: (@Sendable (NodeRecordsReport) -> Void)?, _ body: () async throws -> Result) async rethrows -> Result {
 		try await NodeRecordsObservation.$laysOutRoots.withValue(laysOutRoots) {
-			try await NodeRecordsObservation.$observer.withValue({ report in
-				for difference in report.differences {
-					Issue.record(Comment(rawValue: "Node records differ from the tree’s records of root \(report.root): \(difference)"))
+			try await NodeRecordsObservation.$laysOutMockRoots.withValue(laysOutMockRoots) {
+				try await NodeRecordsObservation.$observer.withValue({ report in
+					for difference in report.differences {
+						Issue.record(Comment(rawValue: "Node records differ from the tree’s records of root \(report.root): \(difference)"))
+					}
+					if let reportPath {
+						let outcome = report.isLaidOutFromNodeRecords ? "laid out" : report.refusal ?? "accepted"
+						append("\(testName)\t\(report.root)\t\(outcome)\t\(report.differences.count)\t\(report.everyRefusal.joined(separator: ","))\t\(report.isMockRoot ? "mock" : "")\n", toFileAt: reportPath)
+					}
+					enclosingObserver?(report)
+				}) {
+					try await body()
 				}
-				if let reportPath {
-					let outcome = report.isLaidOutFromNodeRecords ? "laid out" : report.refusal ?? "accepted"
-					append("\(testName)\t\(report.root)\t\(outcome)\t\(report.differences.count)\t\(report.everyRefusal.joined(separator: ","))\t\(report.isMockRoot ? "mock" : "")\n", toFileAt: reportPath)
-				}
-				enclosingObserver?(report)
-			}) {
-				try await body()
 			}
 		}
 	}

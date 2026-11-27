@@ -20,21 +20,24 @@
 
 extension NodeRecords {
 	/// The claim of `declaration` as `inlineSeam` where it is a seam of another module built inline
-	/// (`ConstructionScope.builtInlineSeamComment`), which discharges the refusal of a seam built inline; `nil` for
-	/// any other node, and for every node of a mock root's world, which builds every seam inline without the comment. Every
+	/// (`ConstructionScope.builtInlineSeamComment`), which discharges the refusal of a seam built inline, and that of the
+	/// wrapper it is built in, which its record reads of the node (`wrapperRefusalsDischarged(of:in:)`); `nil` for any
+	/// other node, and for every node of a mock root's world, which builds every seam inline without the comment. Every
 	/// other check of `refusalsOfBuiltByInitializer(_:in:)` still runs on it.
-	static func inlineSeamClaim(of declaration: DeclarationID, in world: some NodeRecordVariantFacts) -> NodeRecordClaim? {
+	static func inlineSeamClaim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
 		guard !world.isMockWorld, world.scope(of: declaration).builtInlineSeamComment != nil else { return nil }
-		return NodeRecordClaim(kind: .inlineSeam, discharges: [.unavailableOrInlineSeam])
+		return NodeRecordClaim(kind: .inlineSeam, discharges: wrapperRefusalsDischarged(of: declaration, in: world).union([.unavailableOrInlineSeam]))
 	}
 
 	/// The record of `declaration`'s place, a node of kind `inlineSeam`: `builtByInitializerRecord`'s, with the comment that
 	/// ends the line constructing the type, as the tree writes a seam built inline. Its type's receives by value read the
-	/// instance of a lazy wrapper where the variant's key says one answers them.
+	/// instance of each of `lazilyInstantiatedInstanceProperties`, those the variant's key says a lazy wrapper answers
+	/// (`lazilyInstantiatedInstanceProperties(of:variant:in:)`).
 	static func inlineSeamRecord(
 		of declaration: DeclarationID,
 		variant: VariantID,
 		in world: some NodeRecordVariantFacts,
+		lazilyInstantiatedInstanceProperties: Set<Property>,
 		typesDeclaredEscaping: Set<TypeDescription>,
 		children: [GeneratedCode],
 	) throws -> BuiltPlaceRecord {
@@ -44,6 +47,7 @@ extension NodeRecords {
 			of: declaration,
 			variant: variant,
 			in: world,
+			lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
 			typesDeclaredEscaping: typesDeclaredEscaping,
 			children: children,
 			lineEnd: comment,

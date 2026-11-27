@@ -30,6 +30,7 @@ extension NodeRecords {
 		.cycle,
 		.unavailableOrInlineSeam,
 		.fill,
+		.uncoveredDependency,
 		.onlyIfAvailable,
 		.noInitializer,
 	]
@@ -59,8 +60,13 @@ extension NodeRecords {
 		}.first
 	}
 
-	/// The record of `declaration`'s place in `variant`, a rename: its declaration, bound from its fulfilling property, or,
-	/// only if available, to `nil` where `answers` finds no declaration it reads available, as the tree writes it.
+	/// The record of `declaration`'s place in `variant`, a rename: its declaration, bound from its fulfilling property, the
+	/// instance of the wrapper of its label where the variant's key says a lazy wrapper answers its read, or, only if
+	/// available, to `nil` where `answers` finds no declaration it reads available, as the tree writes it. In a mock root's
+	/// world, an erased rename only if available maps over its fulfilling value wherever it is bound, as the mock's walk
+	/// binds it (`MockLowering.AliasBinding`), rather than only where the declaration it reads is optional, as a production
+	/// tree binds it: a fact of the world, which no production world answers. A rename reads no override, so a mock root's
+	/// world decorates its record with nothing.
 	static func renameRecord(
 		of declaration: DeclarationID,
 		variant: VariantID,
@@ -68,10 +74,9 @@ extension NodeRecords {
 		answers: OnlyIfAvailableAnswers,
 	) throws(NodeRecordRefusal) -> AliasPlaceRecord {
 		guard let (property, fulfillingProperty, erasedToConcreteExistential, declarationReference) = rename(of: declaration, in: world) else { throw .renameOrHole }
-		// A rename of the wrapper itself is bound from the wrapper; only one of its value reads the instance.
-		// A rename that keeps its label is the declaration being built where it reads the label, so its key names itself,
-		// not what it renames: refused until the facts key that read past the rename's own declaration.
-		guard fulfillingProperty.label != property.label, let fulfillingKeyIsLazyWrapper = fulfillingKeyIsLazyWrapper(declaration, variant: variant, in: world) else { throw .lazy }
+		// A rename of the wrapper itself is bound from the wrapper; only one of its value reads the instance. A rename that
+		// keeps its label reads the label past its own declaration, so its key names what it renames, as any rename's does.
+		guard let fulfillingKeyIsLazyWrapper = fulfillingKeyIsLazyWrapper(declaration, variant: variant, in: world) else { throw .lazy }
 		let readsWrappersInstance = fulfillingProperty.asUnwrappedProperty.propertyType.isConstant && fulfillingKeyIsLazyWrapper
 		switch answers.renameBinding(of: variant) {
 		case .boundToNil:
@@ -81,10 +86,10 @@ extension NodeRecords {
 		case let .bound(fulfillingBindingIsOptional):
 			// A wrapper's instance is read from a non-optional wrapper, which the tree binds the rename from as itself.
 			guard !(readsWrappersInstance && fulfillingBindingIsOptional) else { throw .lazy }
-			return renameRecord(of: property, fulfilledBy: fulfillingProperty, readingWrappersInstance: readsWrappersInstance, erasedToConcreteExistential: erasedToConcreteExistential, fulfillingBindingIsOptional: fulfillingBindingIsOptional, declarationReference: declarationReference)
+			return renameRecord(of: property, fulfilledBy: fulfillingProperty, readsWrappersInstance: readsWrappersInstance, erasedToConcreteExistential: erasedToConcreteExistential, fulfillingBindingIsOptional: fulfillingBindingIsOptional || world.isMockWorld, declarationReference: declarationReference)
 		case nil:
 			// A required rename is bound from its fulfilling property, which its scope requires.
-			return renameRecord(of: property, fulfilledBy: fulfillingProperty, readingWrappersInstance: readsWrappersInstance, erasedToConcreteExistential: erasedToConcreteExistential, fulfillingBindingIsOptional: false, declarationReference: declarationReference)
+			return renameRecord(of: property, fulfilledBy: fulfillingProperty, readsWrappersInstance: readsWrappersInstance, erasedToConcreteExistential: erasedToConcreteExistential, fulfillingBindingIsOptional: false, declarationReference: declarationReference)
 		}
 	}
 
@@ -106,7 +111,7 @@ extension NodeRecords {
 	private static func renameRecord(
 		of property: Property,
 		fulfilledBy fulfillingProperty: Property,
-		readingWrappersInstance: Bool,
+		readsWrappersInstance: Bool,
 		erasedToConcreteExistential: Bool,
 		fulfillingBindingIsOptional: Bool,
 		declarationReference: AliasDeclarationReferences.Reference?,
@@ -114,7 +119,7 @@ extension NodeRecords {
 		let text = ScopeGenerator.referencingDeclaration(
 			of: ScopeGenerator.aliasDeclaration(
 				of: property,
-				fulfilledBy: readingWrappersInstance ? "\(fulfillingProperty.label).\(Dependency.lazilyInstantiatedInstancePropertyName)" : fulfillingProperty.label,
+				fulfilledBy: readsWrappersInstance ? "\(fulfillingProperty.label).\(Dependency.lazilyInstantiatedInstancePropertyName)" : fulfillingProperty.label,
 				ofType: fulfillingProperty.typeDescription,
 				erasedToConcreteExistential: erasedToConcreteExistential,
 				fulfillingValueMayBeOptional: fulfillingBindingIsOptional,

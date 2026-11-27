@@ -46,7 +46,7 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 	mutating func generate_buildsTreeOnlyForRootNodeRecordsRefuse_whenNothingElseReadsTrees() async throws {
 		let (forcers, heldTaskCounts) = try await treeForcers(of: Self.plainAndLoopingRoots)
 		#expect(forcers == """
-		Looping\tkind cycle
+		Looping\tkind cycleReceivesBuilder
 		Plain\tnone
 		roots that built a tree: 1 of 2
 
@@ -60,7 +60,7 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 	mutating func generate_buildsEveryRootsTree_whenRunDrawsDOTGraph() async throws {
 		let (forcers, heldTaskCounts) = try await treeForcers(of: Self.plainAndLoopingRoots, buildDOTFileOutput: true)
 		#expect(forcers == """
-		Looping\tkind cycle, DOT graph
+		Looping\tkind cycleReceivesBuilder, DOT graph
 		Plain\tDOT graph
 		roots that built a tree: 2 of 2
 
@@ -79,9 +79,9 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 			],
 			moduleMembershipArguments: ["--module-name", "Feature"],
 		)
-		// The root's world calls the seam, which node records refuse as a construction; the seam's own world they accept.
+		// Node records make the records of the root's world, which calls the seam, and of the seam's own world.
 		#expect(forcers == """
-		Root\tseam world, kind construction
+		Root\tseam world
 		Screen\tseam world
 		roots that built a tree: 2 of 2
 
@@ -139,11 +139,12 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 	private var filesToDelete: [URL]
 
 	/// `Plain`, a root node records lay out, and `Looping`, a root they refuse, since a type of its tree builds itself
-	/// again through an `Instantiator`.
+	/// again through an `Instantiator` that a type beneath it receives.
 	private static let plainAndLoopingRoots = [
 		seamFixtureType(named: "Looping", isRoot: true, declarations: ["@Instantiated let stepBuilder: Instantiator<Step>"]),
 		seamFixtureType(named: "Plain", isRoot: true, declarations: ["@Instantiated let service: Service"]),
-		seamFixtureType(named: "Step", declarations: ["@Instantiated let stepBuilder: Instantiator<Step>"]),
+		seamFixtureType(named: "Step", declarations: ["@Instantiated let stepBuilder: Instantiator<Step>", "@Instantiated let detail: Detail"]),
+		seamFixtureType(named: "Detail", declarations: ["@Received let stepBuilder: Instantiator<Step>"]),
 		seamFixtureType(named: "Service", declarations: []),
 	]
 

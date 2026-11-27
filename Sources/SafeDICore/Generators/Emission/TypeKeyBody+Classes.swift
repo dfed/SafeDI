@@ -103,6 +103,18 @@ extension TypeKeyLayout {
 			record.forwardedProperties.map(\.asSource).joined(separator: ","),
 			reads[body].joined(separator: ","),
 		]
+		// A function that begins with a statement of its kind's writes other text than one that does not.
+		if let leadingStatement = record.leadingStatement {
+			key.append("leading|\(leadingStatement)")
+		}
+		// A function that returns the property's type spells it, and erases in its body.
+		if record.returnsPropertyType {
+			key.append("returns|\(record.property.typeDescription.asSource)|\(record.isErased)")
+		}
+		// A function that writes `return` before a lone value is another function's text.
+		if record.functionAlwaysWritesReturn {
+			key.append("writesReturn")
+		}
 		for argument in record.arguments {
 			key.append("argument|\(argument.argumentLabel)|\(argument.label)|\(argument.property.asSource)")
 		}
@@ -129,7 +141,7 @@ extension TypeKeyLayout {
 		switch statement {
 		case let .built(child):
 			guard let record = bodies[child].record else { return "" }
-			return "call|\(record.property.asSource)|\(record.isErased)|\(record.isExtension)"
+			return "call|\(record.property.asSource)|\(record.isErased && !record.returnsPropertyType)|\(record.isExtension)"
 		case let .closer(record, _):
 			return "call|\(record.property.asSource)|\(record.isErased)|\(record.isExtension)"
 		case let .inline(record):
@@ -137,8 +149,32 @@ extension TypeKeyLayout {
 			return "inline|\(record.property.asSource)|\(record.concreteType.asSource)|\(record.target.callee)|\(record.isErased)|\(record.isExtension)|\(record.lineEnd)|\(arguments)|\(record.constructionShape.joined(separator: ";"))"
 		case let .alias(record):
 			let reads = record.listedReads.map { "\($0.label):\($0.property.asSource)" }.joined(separator: ",")
-			return "alias|\(record.text)|\(reads)"
+			guard let call = record.call else { return "alias|\(record.text)|\(reads)" }
+			return "alias|\(inPlaceCallShape(call))|\(reads)"
 		}
+	}
+
+	/// What tells two calls written where their places are apart: everything the engine spells them from, never their text.
+	func inPlaceCallShape(_ call: InPlaceCall) -> String {
+		let record = call.record
+		var shape = [
+			record.property.asSource,
+			record.concreteType.asSource,
+			record.target.callee,
+			"\(record.isErased)",
+			"\(record.isExtension)",
+			"\(record.isSendable)",
+			record.functionName,
+			record.lineEnd,
+			record.typesDeclaredEscaping.map(\.asSource).sorted().joined(separator: ","),
+			record.leadingStatement.map { "\($0)" } ?? "",
+		]
+		for (position, argument) in record.arguments.enumerated() {
+			shape.append("argument|\(argument.argumentLabel)|\(argument.label)|\(argument.property.asSource)|\(record.argumentValues[position].map { "\($0)" } ?? "")")
+		}
+		shape.append("before|\(call.statementsBeforeLeadingStatement.map { $0.spelled() }.joined())")
+		shape.append("after|\(call.statementsAfterLeadingStatement.map { $0.spelled() }.joined())")
+		return shape.joined(separator: ";")
 	}
 
 	/// `classes` refined until alike places' bodies call alike places: a place's class joins the classes its body's calls

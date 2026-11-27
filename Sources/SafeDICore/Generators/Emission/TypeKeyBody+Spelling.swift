@@ -80,21 +80,25 @@ extension TypeKeyLayout {
 					typesDeclaredEscaping.insert(argument.type)
 				}
 			}
-			var value = Expression.construction(representative.target, arguments: arguments)
+			let returnType = representative.returnsPropertyType ? representative.property.typeDescription.asInstantiatedTypeSpelledAsDeclared : representative.concreteType
+			var value = Expression.construction(representative.target, arguments: arguments).erased(to: returnType, where: representative.returnsPropertyType && representative.isErased)
 			if !representative.alternatives.isEmpty || representative.constructionValue != nil {
 				guard let construction = spelledConstruction(of: representative, call: value.spelled, argumentValues: argumentValues, inClass: owner, before: statements(ofClass: owner).count) else { return nil }
 				value = .spelledConstruction(construction)
 			}
+			// A statement a kind supplies comes first in the function's body, before the functions declared in it.
+			var builderBody = BuilderBody(statements: (representative.leadingStatement?.spelledLines ?? []).map { .text("\(ScopeGenerator.standardIndent)\($0)") } + body)
+			builderBody.alwaysWritesReturn = representative.functionAlwaysWritesReturn
 			functionCode[owner] = BuilderNode(
 				name: functionNames[owner],
 				isSendable: isDecorated[owner],
 				parameters: parameters,
 				typesDeclaredEscaping: typesDeclaredEscaping,
-				returnType: representative.concreteType,
-				body: BuilderBody(statements: body),
+				returnType: returnType,
+				body: builderBody,
 				value: value,
 				lineEnd: representative.lineEnd,
-			).spelled()
+			).spelled(after: representative.target.leadingLine.map { "\($0)\n" } ?? "")
 		}
 		return spelledStatements(ofClass: 0, indentation: TypeKeyBody.rootStatementIndentation, functionCode: functionCode)
 	}
@@ -135,15 +139,58 @@ extension TypeKeyLayout {
 			)
 			let call = Expression.construction(record.target, arguments: arguments).erased(to: record.property.typeDescription.unwrapped, where: record.isErased).spelled
 			guard let value = spelledConstruction(of: record, call: call, argumentValues: argumentValues, inClass: owner, before: index) else { return nil }
-			return "\(declaration.spelled) = \(value)\(record.lineEnd)"
+			let leadingLine = record.target.leadingLine.map { "\($0)\n" } ?? ""
+			return "\(leadingLine)\(declaration.spelled) = \(value)\(record.lineEnd)"
 		case let .built(child):
 			guard let record = bodies[child].record else { return nil }
-			return spelledCall(of: classByBody[child], binding: record.property, isErased: record.isErased, isExtension: record.isExtension, inClass: owner, at: index)
+			// A function that returns the property's type has erased what it returns.
+			return spelledCall(of: classByBody[child], binding: record.property, isErased: record.isErased && !record.returnsPropertyType, isExtension: record.isExtension, inClass: owner, at: index)
 		case let .closer(record, target):
 			return spelledCall(of: classByBody[target], binding: record.property, isErased: record.isErased, isExtension: record.isExtension, inClass: owner, at: index)
 		case let .alias(record):
-			return record.text
+			guard let call = record.call else { return record.text }
+			return spelledInPlace(call, inClass: owner, at: index)
 		}
+	}
+
+	/// The text of a call written where its place is, at `index` of `owner`'s body: its builder function, then the binding
+	/// of its result. Each argument is read as the declaration visible there, which the function captures.
+	func spelledInPlace(_ call: InPlaceCall, inClass owner: Int, at index: Int) -> String? {
+		let record = call.record
+		guard let argumentValues = spelledArgumentValues(record.arguments, replacedAt: record.argumentValues, inClass: owner, before: index, sourceAtMember: { member, position in
+			guard case let .alias(memberRecord) = bodies[member].statements[index], let memberCall = memberRecord.call else { return nil }
+			return memberCall.record.arguments[position].source
+		}) else { return nil }
+		var statements = call.statementsBeforeLeadingStatement
+		for line in record.leadingStatement?.spelledLines ?? [] {
+			statements.append(.text("\(ScopeGenerator.standardIndent)\(line)"))
+		}
+		statements += call.statementsAfterLeadingStatement
+		let function = SafeDICore.Statement.function(BuilderNode(
+			name: record.functionName,
+			isSendable: record.isSendable,
+			parameters: [],
+			typesDeclaredEscaping: record.typesDeclaredEscaping,
+			returnType: record.concreteType,
+			body: BuilderBody(statements: statements),
+			value: .construction(record.target, arguments: Self.labeled(argumentValues, of: record.arguments)),
+			lineEnd: record.lineEnd,
+		)).spelled
+		let declaration = BindingDeclaration(
+			property: record.property,
+			rule: .constant(
+				isErased: record.isErased,
+				constructedTypeIsPropertyType: record.concreteType.asSource == record.property.typeDescription.asSource,
+				hasBuilderFunction: true,
+				isExtension: record.isExtension,
+			),
+		)
+		let binding = SafeDICore.Statement.binding(
+			declaration,
+			Expression.call(function: record.functionName, arguments: "").erased(to: record.property.typeDescription.unwrapped, where: record.isErased),
+			lineEnd: "",
+		)
+		return GeneratedCode.sequence([function, binding.spelled, .text("\n")]).spelled()
 	}
 
 	/// The binding of `property` to a call of `callee`'s function, made before the statement at `index` of `owner`'s body.

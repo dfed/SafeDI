@@ -98,15 +98,28 @@ struct BuiltPlaceRecord: Sendable {
 	/// What a place that calls another module's code records beyond a built place (`CallFields`), in a box of its own
 	/// that every other place leaves `nil`.
 	var callFields: CallFields?
+	/// Whether the place's function returns the property's type, its construction erased to it where the place is erased,
+	/// so that its call erases nothing: a mock's erased node, whose override returns the property's type
+	/// (`NodeRecords+MockErased.swift`). Every other place's function returns `concreteType`.
+	var returnsPropertyType = false
+	/// Whether the place's function writes `return` before its value though its body holds no statement: a constant a kind
+	/// builds in a function of its own whatever its body holds (`NodeRecords+MockConstruction.swift`). Every other
+	/// function writes it only after statements (`BuilderBody.returnKeyword`).
+	var functionAlwaysWritesReturn = false
 
 	/// The statement the place's builder function begins with, before its children.
-	var leadingStatement: CallGuard? {
+	var leadingStatement: LeadingStatement? {
 		callFields?.leadingStatement
 	}
 
 	/// What the construction hands each closure parameter after `arguments`.
 	var closureArguments: [ClosureArgumentEntry] {
 		callFields?.closureArguments ?? []
+	}
+
+	/// The closures the place builds for the builders its call hands on (`CallFields.builtClosures`).
+	var builtClosures: [BuiltClosure] {
+		callFields?.builtClosures ?? []
 	}
 
 	/// The values the place's function is handed on every call (`PassedArgument`), after `cycleParameters`.
@@ -205,6 +218,27 @@ struct AliasPlaceRecord: Sendable {
 	/// The names of the root functions the text calls (`RootFunctionRecord`), which the text does not declare: the root
 	/// declares them, from the place's plan, and nothing renames them, so none is among `calledFunctionNames`.
 	var calledRootFunctionNames = [String]()
+	/// The call the engine spells where the place is written, in place of `text`, which it equals; `nil` where the engine
+	/// writes `text`.
+	var call: InPlaceCall?
+}
+
+/// A call written where its place is, in the body that holds it: its builder function, which declares the statements of
+/// its body and returns its construction, then the binding of the function's result. The function stays in that body,
+/// so it reads what it captures there by its label. A reference, as `CallFields` is, so that an alias place that holds
+/// none, every other, stays as small as it was: each `PlaceRecord` is as large as its largest case.
+final class InPlaceCall: Sendable {
+	/// The construction and the function: its name, `@Sendable` mark, escaping types, leading statement and line end.
+	let record: BuiltPlaceRecord
+	/// The statements of the function's body before its leading statement, and after it, as the tree writes them.
+	let statementsBeforeLeadingStatement: [GeneratedCode]
+	let statementsAfterLeadingStatement: [GeneratedCode]
+
+	init(record: BuiltPlaceRecord, statementsBeforeLeadingStatement: [GeneratedCode], statementsAfterLeadingStatement: [GeneratedCode]) {
+		self.record = record
+		self.statementsBeforeLeadingStatement = statementsBeforeLeadingStatement
+		self.statementsAfterLeadingStatement = statementsAfterLeadingStatement
+	}
 }
 
 /// A value reached from a declaration by members and calls: what a passed argument, an alternative or a construction
@@ -224,6 +258,9 @@ indirect enum ValuePath: Hashable, Sendable {
 	/// A call of the member `name` of a value, spelled `<value>.<name>(<argumentsWrapper>(<label>: <source>, …))`, or
 	/// `<value>.<name>(<label>: <source>, …)` where `argumentsWrapper` is `nil`: each argument a read the engine checks.
 	case call(String, of: ValuePath, arguments: [PlaceRead], argumentsWrapper: TypeDescription?)
+	/// A call of the implicit member `name` of the type the value is passed as, spelled `.<name>(<label>: <source>, …)`:
+	/// each argument a read the engine checks.
+	case implicitMemberCall(String, arguments: [PlaceRead])
 	/// A new value of a type made by its initializer that takes no argument, spelled `<type>()`: it reads no declaration,
 	/// so it is a value of every call alike, and keyed as itself.
 	case emptyInitialization(TypeDescription)
