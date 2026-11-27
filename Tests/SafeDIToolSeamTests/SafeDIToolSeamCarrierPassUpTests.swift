@@ -71,7 +71,6 @@ struct SafeDIToolSeamCarrierPassUpTests: ~Copyable {
 		            self.inner = inner
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(inner: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -80,7 +79,7 @@ struct SafeDIToolSeamCarrierPassUpTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
-		        func __safeDI_inner() -> Inner {
+		        @inline(never) func __safeDI_inner() -> Inner {
 		            _ = Inner.__safeDI_Inner_D0290D5B0174CE2A.self
 		            return Inner(__safeDI_apiBuilder: __safeDI_apiBuilder.inner)
 		        }
@@ -102,7 +101,6 @@ struct SafeDIToolSeamCarrierPassUpTests: ~Copyable {
 		            self.detailBuilder = detailBuilder
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(detailBuilder: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -116,7 +114,6 @@ struct SafeDIToolSeamCarrierPassUpTests: ~Copyable {
 		            self.api = api
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { _, _ in __safeDI_builder() })
 		        }
@@ -126,7 +123,7 @@ struct SafeDIToolSeamCarrierPassUpTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 		        let __safeDI_apiBuilder_detailBuilder = __safeDI_apiBuilder.detailBuilder
-		        func __safeDI_detailBuilder(id: Int) -> Detail {
+		        @inline(never) func __safeDI_detailBuilder(id: Int) -> Detail {
 		            let logger: any Logger = LoggerImpl(id: id)
 		            let api: any Api = __safeDI_apiBuilder_detailBuilder.api(id, logger)
 		            return Detail(id: id, api: api, logger: logger)
@@ -203,7 +200,6 @@ struct SafeDIToolSeamCarrierPassUpTests: ~Copyable {
 		            self.screenBuilder = screenBuilder
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(screenBuilder: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -217,7 +213,6 @@ struct SafeDIToolSeamCarrierPassUpTests: ~Copyable {
 		            self.inner = inner
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(inner: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -227,9 +222,9 @@ struct SafeDIToolSeamCarrierPassUpTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 		        let __safeDI_apiBuilder_screenBuilder = __safeDI_apiBuilder.screenBuilder
-		        func __safeDI_screenBuilder(name: String) -> Screen {
+		        @inline(never) func __safeDI_screenBuilder(name: String) -> Screen {
 		            let session = Session()
-		            func __safeDI_inner() -> Inner {
+		            @inline(never) func __safeDI_inner() -> Inner {
 		                _ = Inner.__safeDI_Inner_376D77FD9EAB6893.self
 		                return Inner(__safeDI_apiBuilder: __safeDI_apiBuilder_screenBuilder.inner)
 		            }
@@ -256,7 +251,6 @@ struct SafeDIToolSeamCarrierPassUpTests: ~Copyable {
 		            self.detailBuilder = detailBuilder
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(detailBuilder: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -270,7 +264,6 @@ struct SafeDIToolSeamCarrierPassUpTests: ~Copyable {
 		            self.api = api
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { _ in __safeDI_builder() })
 		        }
@@ -280,7 +273,7 @@ struct SafeDIToolSeamCarrierPassUpTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 		        let __safeDI_apiBuilder_detailBuilder = __safeDI_apiBuilder.detailBuilder
-		        func __safeDI_detailBuilder(id: Int) -> Detail {
+		        @inline(never) func __safeDI_detailBuilder(id: Int) -> Detail {
 		            let api: any Api = __safeDI_apiBuilder_detailBuilder.api(id)
 		            return Detail(id: id, api: api)
 		        }

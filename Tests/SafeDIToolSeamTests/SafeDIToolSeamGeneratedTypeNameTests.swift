@@ -61,7 +61,6 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 		            self.detailBuilder = detailBuilder
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(detailBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -75,7 +74,6 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 		            self.leafBuilder = leafBuilder
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(leafBuilder: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -89,7 +87,6 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 		            self.api = api
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { __safeDI_builder() })
 		        }
@@ -100,11 +97,11 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 		    public convenience init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 		        let detailValues = detailBuilder_Values()
 		        let __safeDI_apiBuilder_detailBuilder = __safeDI_apiBuilder.detailBuilder(detailValues)
-		        func __safeDI_leafBuilder(__safeDI_apiBuilder_leafBuilder: __safeDI_ApiCarrier_Leaf<any Api>) -> Leaf {
+		        @inline(never) func __safeDI_leafBuilder(__safeDI_apiBuilder_leafBuilder: __safeDI_ApiCarrier_Leaf<any Api>) -> Leaf {
 		            let api: any Api = __safeDI_apiBuilder_leafBuilder.api()
 		            return Leaf(api: api)
 		        }
-		        func __safeDI_detailBuilder() -> Detail {
+		        @inline(never) func __safeDI_detailBuilder() -> Detail {
 		            let __safeDI_apiBuilder_leafBuilder = __safeDI_apiBuilder_detailBuilder.leafBuilder
 		            let leafBuilder = Instantiator<Leaf> {
 		                __safeDI_leafBuilder(__safeDI_apiBuilder_leafBuilder: __safeDI_apiBuilder_leafBuilder)
@@ -168,7 +165,6 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 		            self.detailBuilder = detailBuilder
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(detailBuilder: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -182,7 +178,6 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 		            self.scopeBuilder = scopeBuilder
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(scopeBuilder: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -196,7 +191,6 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 		            self.leafBuilder = leafBuilder
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(leafBuilder: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -210,7 +204,6 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 		            self.api = api
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { __safeDI_builder() })
 		        }
@@ -220,18 +213,18 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 		        let __safeDI_apiBuilder_detailBuilder = __safeDI_apiBuilder.detailBuilder
-		        func __safeDI_scopeBuilder(__safeDI_apiBuilder_scopeBuilder: __safeDI_ApiCarrier_Detail_Scope<any Api>) -> Detail_Scope {
+		        @inline(never) func __safeDI_scopeBuilder(__safeDI_apiBuilder_scopeBuilder: __safeDI_ApiCarrier_Detail_Scope<any Api>) -> Detail_Scope {
 		            let __safeDI_apiBuilder_leafBuilder = __safeDI_apiBuilder_scopeBuilder.leafBuilder
 		            let leafBuilder = Instantiator<Leaf> {
 		                __safeDI_leafBuilder(__safeDI_apiBuilder_leafBuilder: __safeDI_apiBuilder_leafBuilder)
 		            }
 		            return Detail_Scope(leafBuilder: leafBuilder)
 		        }
-		        func __safeDI_leafBuilder(__safeDI_apiBuilder_leafBuilder: __safeDI_ApiCarrier_Leaf<any Api>) -> Leaf {
+		        @inline(never) func __safeDI_leafBuilder(__safeDI_apiBuilder_leafBuilder: __safeDI_ApiCarrier_Leaf<any Api>) -> Leaf {
 		            let api: any Api = __safeDI_apiBuilder_leafBuilder.api()
 		            return Leaf(api: api)
 		        }
-		        func __safeDI_detailBuilder() -> Detail {
+		        @inline(never) func __safeDI_detailBuilder() -> Detail {
 		            let __safeDI_apiBuilder_scopeBuilder = __safeDI_apiBuilder_detailBuilder.scopeBuilder
 		            let scopeBuilder = Instantiator<Detail_Scope> {
 		                __safeDI_scopeBuilder(__safeDI_apiBuilder_scopeBuilder: __safeDI_apiBuilder_scopeBuilder)
@@ -298,7 +291,6 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 		            self.detailBuilder = detailBuilder
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(detailBuilder: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -312,7 +304,6 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 		            self.leafBuilder = leafBuilder
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(leafBuilder: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -326,7 +317,6 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 		            self.api = api
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { __safeDI_builder() })
 		        }
@@ -336,11 +326,11 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 		        let __safeDI_apiBuilder_detailBuilder = __safeDI_apiBuilder.detailBuilder
-		        func __safeDI_leafBuilder(__safeDI_apiBuilder_leafBuilder: __safeDI_ApiCarrier_Leaf<any Api>) -> Leaf {
+		        @inline(never) func __safeDI_leafBuilder(__safeDI_apiBuilder_leafBuilder: __safeDI_ApiCarrier_Leaf<any Api>) -> Leaf {
 		            let api: any Api = __safeDI_apiBuilder_leafBuilder.api()
 		            return Leaf(api: api)
 		        }
-		        func __safeDI_detailBuilder() -> Detail {
+		        @inline(never) func __safeDI_detailBuilder() -> Detail {
 		            let __safeDI_apiBuilder_leafBuilder = __safeDI_apiBuilder_detailBuilder.leafBuilder
 		            let leafBuilder = Instantiator<Leaf> {
 		                __safeDI_leafBuilder(__safeDI_apiBuilder_leafBuilder: __safeDI_apiBuilder_leafBuilder)
@@ -405,7 +395,6 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 		            self.detailBuilder = detailBuilder
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Built, __safeDI_Built>.Builder) {
 		            self.init(detailBuilder: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -419,7 +408,6 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 		            self.leafBuilder = leafBuilder
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Built, __safeDI_Built>.Builder) {
 		            self.init(leafBuilder: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -433,7 +421,6 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 		            self.apiBuilder = apiBuilder
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Built, __safeDI_Built>.Builder) {
 		            self.init(apiBuilder: { __safeDI_builder })
 		        }
@@ -443,11 +430,11 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_liveApi_ApiBuilder: __safeDI_LiveApi_ApiCarrier<any Api>) {
 		        let __safeDI_liveApi_ApiBuilder_detailBuilder = __safeDI_liveApi_ApiBuilder.detailBuilder
-		        func __safeDI_leafBuilder(__safeDI_liveApi_ApiBuilder_leafBuilder: __safeDI_LiveApi_ApiCarrier_Leaf<any Api>) -> Leaf {
+		        @inline(never) func __safeDI_leafBuilder(__safeDI_liveApi_ApiBuilder_leafBuilder: __safeDI_LiveApi_ApiCarrier_Leaf<any Api>) -> Leaf {
 		            let apiBuilder = ErasedInstantiator<Built, any Api>(__safeDI_liveApi_ApiBuilder_leafBuilder.apiBuilder())
 		            return Leaf(apiBuilder: apiBuilder)
 		        }
-		        func __safeDI_detailBuilder() -> Detail {
+		        @inline(never) func __safeDI_detailBuilder() -> Detail {
 		            let __safeDI_liveApi_ApiBuilder_leafBuilder = __safeDI_liveApi_ApiBuilder_detailBuilder.leafBuilder
 		            let leafBuilder = Instantiator<Leaf> {
 		                __safeDI_leafBuilder(__safeDI_liveApi_ApiBuilder_leafBuilder: __safeDI_liveApi_ApiBuilder_leafBuilder)
@@ -514,7 +501,6 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 		            self.detailBuilder = detailBuilder
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<(built: Built, id: Int), __safeDI_Built>.Builder) {
 		            self.init(detailBuilder: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -528,7 +514,6 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 		            self.leafBuilder = leafBuilder
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<(built: Built, id: Int), __safeDI_Built>.Builder) {
 		            self.init(leafBuilder: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -542,7 +527,6 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 		            self.apiBuilder = apiBuilder
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<(built: Built, id: Int), __safeDI_Built>.Builder) {
 		            self.init(apiBuilder: { __safeDI_builder })
 		        }
@@ -552,11 +536,11 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_liveApi_ApiBuilder: __safeDI_LiveApi_ApiCarrier<any Api>) {
 		        let __safeDI_liveApi_ApiBuilder_detailBuilder = __safeDI_liveApi_ApiBuilder.detailBuilder
-		        func __safeDI_leafBuilder(__safeDI_liveApi_ApiBuilder_leafBuilder: __safeDI_LiveApi_ApiCarrier_Leaf<any Api>) -> Leaf {
+		        @inline(never) func __safeDI_leafBuilder(__safeDI_liveApi_ApiBuilder_leafBuilder: __safeDI_LiveApi_ApiCarrier_Leaf<any Api>) -> Leaf {
 		            let apiBuilder = ErasedInstantiator<(built: Built, id: Int), any Api>(__safeDI_liveApi_ApiBuilder_leafBuilder.apiBuilder())
 		            return Leaf(apiBuilder: apiBuilder)
 		        }
-		        func __safeDI_detailBuilder() -> Detail {
+		        @inline(never) func __safeDI_detailBuilder() -> Detail {
 		            let __safeDI_liveApi_ApiBuilder_leafBuilder = __safeDI_liveApi_ApiBuilder_detailBuilder.leafBuilder
 		            let leafBuilder = Instantiator<Leaf> {
 		                __safeDI_leafBuilder(__safeDI_liveApi_ApiBuilder_leafBuilder: __safeDI_liveApi_ApiBuilder_leafBuilder)

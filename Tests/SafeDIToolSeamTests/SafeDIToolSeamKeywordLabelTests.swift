@@ -74,7 +74,6 @@ struct SafeDIToolSeamKeywordLabelTests: ~Copyable {
 		            self.Protocol = Protocol
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(Type: { __safeDI_builder() }, Protocol: { __safeDI_builder() })
 		        }
@@ -88,11 +87,11 @@ struct SafeDIToolSeamKeywordLabelTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// From code you write, call the initializer above instead.
 		    public init(__safeDI_gadgetSendableBuilder: __safeDI_GadgetSendableCarrier<any Gadget>) {
-		        @Sendable nonisolated func __safeDI_Type() -> any Gadget {
+		        @inline(never) @Sendable nonisolated func __safeDI_Type() -> any Gadget {
 		            __safeDI_gadgetSendableBuilder.Type()
 		        }
 		        let Type = SendableLazilyInstantiated<any Gadget>(__safeDI_Type)
-		        @Sendable nonisolated func __safeDI_Protocol() -> any Gadget {
+		        @inline(never) @Sendable nonisolated func __safeDI_Protocol() -> any Gadget {
 		            __safeDI_gadgetSendableBuilder.Protocol()
 		        }
 		        let Protocol = SendableLazilyInstantiated<any Gadget>(__safeDI_Protocol)
@@ -155,7 +154,6 @@ struct SafeDIToolSeamKeywordLabelTests: ~Copyable {
 		            self.Type = Type
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(Type: { __safeDI_builder() })
 		        }
@@ -217,7 +215,6 @@ struct SafeDIToolSeamKeywordLabelTests: ~Copyable {
 		            self.Type = Type
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(Type: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -235,7 +232,6 @@ struct SafeDIToolSeamKeywordLabelTests: ~Copyable {
 		            self.`my leaf` = `my leaf`
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(Self: { __safeDI_builder() }, init: { _ in __safeDI_builder() }, `my leaf`: { _, _ in __safeDI_builder() })
 		        }
@@ -249,7 +245,6 @@ struct SafeDIToolSeamKeywordLabelTests: ~Copyable {
 		            self.Protocol = Protocol
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(Protocol: { __safeDI_builder() })
 		        }
@@ -263,7 +258,6 @@ struct SafeDIToolSeamKeywordLabelTests: ~Copyable {
 		            self.Protocol = Protocol
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(Protocol: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -279,14 +273,14 @@ struct SafeDIToolSeamKeywordLabelTests: ~Copyable {
 		    public init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>, __safeDI_gizmoSendableBuilder: __safeDI_GizmoSendableCarrier<any Gizmo>) {
 		        let `default` = Name()
 		        let __safeDI_apiBuilder_Type = __safeDI_apiBuilder.Type(`default`)
-		        func __safeDI_Type() -> Detail {
+		        @inline(never) func __safeDI_Type() -> Detail {
 		            let `Self`: any Api = __safeDI_apiBuilder_Type.`Self`()
 		            let `init`: any Api = __safeDI_apiBuilder_Type.`init`(`Self`)
 		            let `my leaf`: any Api = __safeDI_apiBuilder_Type.`my leaf`(`Self`, `init`)
 		            return Detail(Self: `Self`, init: `init`, `my leaf`: `my leaf`)
 		        }
 		        let Type = Instantiator<Detail>(__safeDI_Type)
-		        @Sendable nonisolated func __safeDI_Protocol() -> Gadget {
+		        @inline(never) @Sendable nonisolated func __safeDI_Protocol() -> Gadget {
 		            let __safeDI_gizmoSendableBuilder_Protocol = __safeDI_gizmoSendableBuilder.Protocol()
 		            let Protocol: any Gizmo = __safeDI_gizmoSendableBuilder_Protocol.Protocol()
 		            return Gadget(Protocol: Protocol)
@@ -375,7 +369,6 @@ struct SafeDIToolSeamKeywordLabelTests: ~Copyable {
 		            self.`default` = `default`
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(Type: { __safeDI_builder() }, default: { _ in __safeDI_builder() })
 		        }
@@ -408,7 +401,6 @@ struct SafeDIToolSeamKeywordLabelTests: ~Copyable {
 		            self.Protocol = Protocol
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(Protocol: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -417,7 +409,7 @@ struct SafeDIToolSeamKeywordLabelTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
-		        func __safeDI_Protocol() -> Inner {
+		        @inline(never) func __safeDI_Protocol() -> Inner {
 		            _ = Inner.__safeDI_Inner_A528D5381761650B.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Inner(__safeDI_apiBuilder: __safeDI_apiBuilder.Protocol)
 		        }

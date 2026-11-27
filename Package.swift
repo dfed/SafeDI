@@ -168,8 +168,8 @@ let package = Package(
 		),
 		.binaryTarget(
 			name: "SafeDIToolBinary",
-			url: "https://github.com/dfed/SafeDI/releases/download/2.3.5/SafeDITool.artifactbundle.zip",
-			checksum: "601847f7fc859a2380bd7e3e5b24b6bb2d5e40bb3fd14bdbe8082976e54893d7",
+			url: "https://github.com/dfed/SafeDI/releases/download/2.4.1/SafeDITool.artifactbundle.zip",
+			checksum: "c6b158f60f0b6f2076913d30ccbd3784429f2aa729a9b0e99b52c73a66766fa6",
 		),
 		// The tool's commands live in a library, and the executable only runs them, so that
 		// what tests the commands depends on a library, which every build system builds

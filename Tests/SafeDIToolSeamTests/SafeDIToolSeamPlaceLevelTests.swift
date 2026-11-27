@@ -160,7 +160,6 @@ struct SafeDIToolSeamPlaceLevelTests: ~Copyable {
 		            self.cBuilder = cBuilder
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(tBuilder: .init(__safeDI_noScope: __safeDI_builder), cBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -176,7 +175,6 @@ struct SafeDIToolSeamPlaceLevelTests: ~Copyable {
 		            self.cBuilder = cBuilder
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { __safeDI_builder() }, cBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -192,7 +190,6 @@ struct SafeDIToolSeamPlaceLevelTests: ~Copyable {
 		            self.tBuilder = tBuilder
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { __safeDI_builder() }, tBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -202,7 +199,7 @@ struct SafeDIToolSeamPlaceLevelTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 		        let __safeDI_apiBuilder_tBuilder = __safeDI_apiBuilder.tBuilder
-		        func __safeDI_tBuilder() -> T {
+		        @inline(never) func __safeDI_tBuilder() -> T {
 		            let api: any Api = __safeDI_apiBuilder_tBuilder.api()
 		            let __safeDI_apiBuilder_cBuilder = __safeDI_apiBuilder_tBuilder.cBuilder(api)
 		            let cBuilder = Instantiator<C> {
@@ -210,14 +207,14 @@ struct SafeDIToolSeamPlaceLevelTests: ~Copyable {
 		            }
 		            return T(api: api, cBuilder: cBuilder)
 		        }
-		        func __safeDI_cBuilder(__safeDI_apiBuilder_cBuilder: __safeDI_ApiCarrier_C<any Api>) -> C {
+		        @inline(never) func __safeDI_cBuilder(__safeDI_apiBuilder_cBuilder: __safeDI_ApiCarrier_C<any Api>) -> C {
 		            let api: any Api = __safeDI_apiBuilder_cBuilder.api()
 		            let tBuilder = Instantiator<T>(__safeDI_tBuilder)
 		            return C(api: api, tBuilder: tBuilder)
 		        }
 		        let tBuilder = Instantiator<T>(__safeDI_tBuilder)
 		        let __safeDI_apiBuilder_cBuilder = __safeDI_apiBuilder.cBuilder(tBuilder)
-		        func __safeDI_cBuilder_() -> C {
+		        @inline(never) func __safeDI_cBuilder_() -> C {
 		            let api: any Api = __safeDI_apiBuilder_cBuilder.api()
 		            let __safeDI_apiBuilder_tBuilder = __safeDI_apiBuilder_cBuilder.tBuilder(api)
 		            let tBuilder = Instantiator<T> {
@@ -225,7 +222,7 @@ struct SafeDIToolSeamPlaceLevelTests: ~Copyable {
 		            }
 		            return C(api: api, tBuilder: tBuilder)
 		        }
-		        func __safeDI_tBuilder_(__safeDI_apiBuilder_tBuilder: __safeDI_ApiCarrier_T<any Api>) -> T {
+		        @inline(never) func __safeDI_tBuilder_(__safeDI_apiBuilder_tBuilder: __safeDI_ApiCarrier_T<any Api>) -> T {
 		            let api: any Api = __safeDI_apiBuilder_tBuilder.api()
 		            let cBuilder = Instantiator<C>(__safeDI_cBuilder_)
 		            return T(api: api, cBuilder: cBuilder)
@@ -323,7 +320,6 @@ struct SafeDIToolSeamPlaceLevelTests: ~Copyable {
 		            self.tBuilder = tBuilder
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(tBuilder: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -339,7 +335,6 @@ struct SafeDIToolSeamPlaceLevelTests: ~Copyable {
 		            self.uBuilder = uBuilder
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(r: { _ in .init(__safeDI_noScope: __safeDI_builder) }, uBuilder: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -353,7 +348,6 @@ struct SafeDIToolSeamPlaceLevelTests: ~Copyable {
 		            self.api = api
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { __safeDI_builder() })
 		        }
@@ -369,7 +363,6 @@ struct SafeDIToolSeamPlaceLevelTests: ~Copyable {
 		            self.otherT = otherT
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { __safeDI_builder() }, otherT: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -379,11 +372,11 @@ struct SafeDIToolSeamPlaceLevelTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 		        let __safeDI_apiBuilder_tBuilder = __safeDI_apiBuilder.tBuilder
-		        func __safeDI_r(__safeDI_apiBuilder_r: __safeDI_ApiCarrier_R<any Api>) -> R {
+		        @inline(never) func __safeDI_r(__safeDI_apiBuilder_r: __safeDI_ApiCarrier_R<any Api>) -> R {
 		            let api: any Api = __safeDI_apiBuilder_r.api()
 		            return R(api: api)
 		        }
-		        func __safeDI_uBuilder(__safeDI_apiBuilder_uBuilder: __safeDI_ApiCarrier_U<any Api>) -> U {
+		        @inline(never) func __safeDI_uBuilder(__safeDI_apiBuilder_uBuilder: __safeDI_ApiCarrier_U<any Api>) -> U {
 		            let api: any Api = __safeDI_apiBuilder_uBuilder.api()
 		            let __safeDI_apiBuilder_otherT = __safeDI_apiBuilder_uBuilder.otherT(api)
 		            let otherT = Instantiator<T> {
@@ -391,7 +384,7 @@ struct SafeDIToolSeamPlaceLevelTests: ~Copyable {
 		            }
 		            return U(api: api, otherT: otherT)
 		        }
-		        func __safeDI_otherT(__safeDI_apiBuilder_otherT: __safeDI_ApiCarrier_T<any Api>, __safeDI_apiBuilder_uBuilder: __safeDI_ApiCarrier_U<any Api>) -> T {
+		        @inline(never) func __safeDI_otherT(__safeDI_apiBuilder_otherT: __safeDI_ApiCarrier_T<any Api>, __safeDI_apiBuilder_uBuilder: __safeDI_ApiCarrier_U<any Api>) -> T {
 		            let q = Q()
 		            let __safeDI_apiBuilder_r = __safeDI_apiBuilder_otherT.r(q)
 		            let r: R = __safeDI_r(__safeDI_apiBuilder_r: __safeDI_apiBuilder_r)
@@ -400,7 +393,7 @@ struct SafeDIToolSeamPlaceLevelTests: ~Copyable {
 		            }
 		            return T(r: r, uBuilder: uBuilder, q: q)
 		        }
-		        func __safeDI_tBuilder() -> T {
+		        @inline(never) func __safeDI_tBuilder() -> T {
 		            let q = Q()
 		            let __safeDI_apiBuilder_r = __safeDI_apiBuilder_tBuilder.r(q)
 		            let r: R = __safeDI_r(__safeDI_apiBuilder_r: __safeDI_apiBuilder_r)

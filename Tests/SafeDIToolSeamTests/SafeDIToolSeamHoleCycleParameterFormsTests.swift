@@ -153,7 +153,6 @@ struct SafeDIToolSeamHoleCycleParameterFormsTests: ~Copyable {
 				            self.aBuilder = aBuilder
 				        }
 
-				        @_alwaysEmitIntoClient
 				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 				            self.init(aBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 				        }
@@ -167,7 +166,6 @@ struct SafeDIToolSeamHoleCycleParameterFormsTests: ~Copyable {
 				            self.api = api
 				        }
 
-				        @_alwaysEmitIntoClient
 				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 				            self.init(api: { _, _, _ in __safeDI_builder() })
 				        }
@@ -176,15 +174,15 @@ struct SafeDIToolSeamHoleCycleParameterFormsTests: ~Copyable {
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 				    public init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
-				        func __safeDI_tag() -> Tag {
+				        @inline(never) func __safeDI_tag() -> Tag {
 				            Tag()
 				        }
 				        let tag = LazilyInstantiated<Tag>(__safeDI_tag)
 				        let __safeDI_apiBuilder_aBuilder = __safeDI_apiBuilder.aBuilder(tag)
-				        func __safeDI_aBuilder(tag: LazilyInstantiated<Tag>?) -> A {
+				        @inline(never) func __safeDI_aBuilder(tag: LazilyInstantiated<Tag>?) -> A {
 				            let reader = Reader(tag: tag)
-				            func __safeDI_bBuilder() -> B {
-				                func __safeDI_tag() -> Tag {
+				            @inline(never) func __safeDI_bBuilder() -> B {
+				                @inline(never) func __safeDI_tag() -> Tag {
 				                    Tag()
 				                }
 				                let tag = LazilyInstantiated<Tag>(__safeDI_tag)
@@ -259,7 +257,6 @@ struct SafeDIToolSeamHoleCycleParameterFormsTests: ~Copyable {
 				            self.aBuilder = aBuilder
 				        }
 
-				        @_alwaysEmitIntoClient
 				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 				            self.init(aBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 				        }
@@ -273,7 +270,6 @@ struct SafeDIToolSeamHoleCycleParameterFormsTests: ~Copyable {
 				            self.api = api
 				        }
 
-				        @_alwaysEmitIntoClient
 				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 				            self.init(api: { _, _, _ in __safeDI_builder() })
 				        }
@@ -282,18 +278,18 @@ struct SafeDIToolSeamHoleCycleParameterFormsTests: ~Copyable {
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 				    public init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
-				        func __safeDI_tag() -> Tag {
+				        @inline(never) func __safeDI_tag() -> Tag {
 				            Tag()
 				        }
 				        let tag = LazilyInstantiated<Tag>(__safeDI_tag)
 				        let __safeDI_apiBuilder_aBuilder = __safeDI_apiBuilder.aBuilder(tag)
-				        func __safeDI_aBuilder(tag: LazilyInstantiated<Tag>) -> A {
+				        @inline(never) func __safeDI_aBuilder(tag: LazilyInstantiated<Tag>) -> A {
 				            let reader = Reader(tag: tag)
 				            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
 				            let api: any Api = __safeDI_apiBuilder_aBuilder.api(tag, reader, bBuilder)
 				            return A(reader: reader, api: api, bBuilder: bBuilder)
 				        }
-				        func __safeDI_bBuilder() -> B {
+				        @inline(never) func __safeDI_bBuilder() -> B {
 				            let tag = LazilyInstantiated<Tag>(__safeDI_tag)
 				            let aBuilder = Instantiator<A> {
 				                __safeDI_aBuilder(tag: tag)

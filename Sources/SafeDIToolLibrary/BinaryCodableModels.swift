@@ -153,7 +153,7 @@ extension FileScan: BinarySchemaMember {
 				BinaryLayoutField("reservedTypeNameDeclarations", \.reservedTypeNameDeclarations),
 			],
 			// A cached scan is one whose module kept its plain type declarations
-			// (`FileScan.keepingPlainTypeDeclarations(ofTypesWithin:keepingThoseOtherModulesCanName:isInReadingModule:)`),
+			// (`FileScan.keepingPlainTypeDeclarations(ofTypesWithin:keepingThoseOtherModulesPackageCanName:isInReadingModule:)`),
 			// which leaves no block undecided.
 			unwrittenProperties: ["plainTypeDeclarationDecisions"],
 		)
@@ -972,6 +972,9 @@ extension Dependency: BinarySchemaMember {
 		let fieldsStart = writer.startFields()
 		writer.write(property)
 		writer.write(source)
+		if case .aliased = source {
+			writer.noteAliasDeclaration(at: declarationLocation)
+		}
 		writer.writeOptional(declarationLocation, flaggedIn: &fieldFlags)
 		writer.writeOptional(identifierRange, flaggedIn: &fieldFlags)
 		writer.writeOptional(typeAnnotationRange, flaggedIn: &fieldFlags)
@@ -1044,59 +1047,90 @@ extension Dependency.SourceRange: BinaryPosition {}
 extension Dependency.DeclarationLocation: BinaryPosition {}
 
 extension Dependency.SourceRange: BinarySchemaMember {
+	/// Each field as its number is written; a range stored elsewhere writes only its start line, `-1`, and the positions
+	/// file holds the four (`BinaryWriter.writeRange(_:)`).
 	static var binaryLayout: BinaryLayout<Self> {
 		.structure(
 			fields: [
-				BinaryLayoutField("startLine", \.startLine),
-				BinaryLayoutField("startColumn", \.startColumn),
-				BinaryLayoutField("endLine", \.endLine),
-				BinaryLayoutField("endColumn", \.endColumn),
+				BinaryLayoutField("startLine", \.binaryStartLine),
+				BinaryLayoutField("startColumn", \.binaryStartColumn),
+				BinaryLayoutField("endLine", \.binaryEndLine),
+				BinaryLayoutField("endColumn", \.binaryEndColumn),
 			],
-			unwrittenProperties: [],
+			// Written as the four fields.
+			unwrittenProperties: ["placement"],
 		)
 	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
-		try self.init(
-			startLine: reader.read(),
-			startColumn: reader.read(),
-			endLine: reader.read(),
-			endColumn: reader.read(),
-		)
+		self = try reader.readRange()
 	}
 
 	func write(to writer: inout BinaryWriter) {
-		writer.write(startLine)
-		writer.write(startColumn)
-		writer.write(endLine)
-		writer.write(endColumn)
+		writer.writeRange(self)
+	}
+
+	/// The range's start and end where it holds them; a range stored elsewhere is written as a start line of -1 alone.
+	private var startAndEnd: (startLine: Int, startColumn: Int, endLine: Int, endColumn: Int)? {
+		guard case let .here(startLine, startColumn, endLine, endColumn) = placement else { return nil }
+		return (startLine, startColumn, endLine, endColumn)
+	}
+
+	var binaryStartLine: Int {
+		startAndEnd?.startLine ?? -1
+	}
+
+	var binaryStartColumn: Int {
+		startAndEnd?.startColumn ?? 0
+	}
+
+	var binaryEndLine: Int {
+		startAndEnd?.endLine ?? 0
+	}
+
+	var binaryEndColumn: Int {
+		startAndEnd?.endColumn ?? 0
 	}
 }
 
 extension Dependency.DeclarationLocation: BinarySchemaMember {
+	/// A location no file ranked is written as its file, line and column. A ranked one writes, in place of the line, its
+	/// order negated and doubled, less one where its line and column are stored elsewhere, which then writes nothing
+	/// more, and otherwise followed by its line and column (`BinaryWriter.writeLocation(_:)`).
 	static var binaryLayout: BinaryLayout<Self> {
 		.structure(
 			fields: [
 				BinaryLayoutField("filePath", \.filePath),
-				BinaryLayoutField("line", \.line),
-				BinaryLayoutField("column", \.column),
+				BinaryLayoutField("lineOrOrder", \.binaryLineOrOrder),
+				BinaryLayoutField("column", \.binaryColumn),
 			],
-			unwrittenProperties: [],
+			// Written as `lineOrOrder` and `column`.
+			unwrittenProperties: ["order", "placement"],
 		)
 	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
-		try self.init(
-			filePath: reader.read(),
-			line: reader.read(),
-			column: reader.read(),
-		)
+		self = try reader.readLocation()
 	}
 
 	func write(to writer: inout BinaryWriter) {
-		writer.write(filePath)
-		writer.write(line)
-		writer.write(column)
+		writer.writeLocation(self)
+	}
+
+	/// The line where nothing ranked the location, and otherwise its order, negated and doubled, less one where the
+	/// line and column are stored elsewhere.
+	var binaryLineOrOrder: Int {
+		switch placement {
+		case let .here(line, _):
+			order == 0 ? line : -2 * order
+		case .storedElsewhere:
+			-2 * order + 1
+		}
+	}
+
+	/// The column, written after the line of a location that holds it, and 0, never written, for one stored elsewhere.
+	var binaryColumn: Int {
+		lineAndColumn?.column ?? 0
 	}
 }
 
@@ -1449,6 +1483,14 @@ extension ModuleInfoFile: BinarySchemaMember {
 
 	/// Writes the file with `writeSeamSignatures` in place of writing `seamSignatures` and `publicMockPlans`.
 	func write(to writer: inout BinaryWriter, writingSeamSignatures writeSeamSignatures: (inout BinaryWriter) -> Void) {
+		writeFieldsBeforeSeamSignatures(to: &writer)
+		writeSeamSignatures(&writer)
+		writer.write(view)
+	}
+
+	/// Writes the fields before the seam signatures: the module's own declarations, which hold every position the file
+	/// writes, since the signatures and plans are written with positions absent and a view holds none.
+	func writeFieldsBeforeSeamSignatures(to writer: inout BinaryWriter) {
 		writer.write(moduleName)
 		writer.write(ownEntryChecksum)
 		writer.write(packageName)
@@ -1461,8 +1503,6 @@ extension ModuleInfoFile: BinarySchemaMember {
 		writer.write(conditionalCompilationDecisions)
 		writer.write(instantiableTypeNamesInAnyClause)
 		writer.write(plainTypeDeclarations)
-		writeSeamSignatures(&writer)
-		writer.write(view)
 	}
 }
 

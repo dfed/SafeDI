@@ -466,8 +466,8 @@ struct SafeDIToolSeamReenteredFillLosesValueTests: ~Copyable {
 				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 				    public init(__safeDI_cart: @autoclosure @escaping () -> Cart?) {
 				        let cart = LazilyInstantiated<Cart?>(__safeDI_cart)
-				        func __safeDI_payments() -> LivePayments {
-				            func __safeDI_retryBuilder() -> Checkout {
+				        @inline(never) func __safeDI_payments() -> LivePayments {
+				            @inline(never) func __safeDI_retryBuilder() -> Checkout {
 				                _ = Checkout.__safeDI_Checkout_EF7D77798DF123F5.self
 				                return Checkout(__safeDI_cart: cart.instance)
 				            }
@@ -475,9 +475,9 @@ struct SafeDIToolSeamReenteredFillLosesValueTests: ~Copyable {
 				            return LivePayments(cart: cart.instance, retryBuilder: retryBuilder)
 				        }
 				        let payments: any Payments = __safeDI_payments()
-				        func __safeDI_cartScreenBuilder(cart: Cart) -> CartScreen {
-				            func __safeDI_payments() -> LivePayments {
-				                func __safeDI_retryBuilder() -> Checkout {
+				        @inline(never) func __safeDI_cartScreenBuilder(cart: Cart) -> CartScreen {
+				            @inline(never) func __safeDI_payments() -> LivePayments {
+				                @inline(never) func __safeDI_retryBuilder() -> Checkout {
 				                    _ = Checkout.__safeDI_Checkout_EF7D77798DF123F5.self
 				                    return Checkout(__safeDI_cart: cart)
 				                }

@@ -207,7 +207,6 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		            self.alphaBuilder = alphaBuilder
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(kiloBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) }, echoBuilder: { _, _ in .init(__safeDI_noScope: __safeDI_builder) }, zuluBuilder: { _, _, _ in .init(__safeDI_noScope: __safeDI_builder) }, alphaBuilder: { _, _, _, _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -225,7 +224,6 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		            self.deltaBuilder = deltaBuilder
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(bravoBuilder: { _, _ in .init(__safeDI_noScope: __safeDI_builder) }, yankeeBuilder: { _, _, _ in .init(__safeDI_noScope: __safeDI_builder) }, deltaBuilder: { _, _, _, _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -243,7 +241,6 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		            self.deltaBuilder = deltaBuilder
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(mikeBuilder: { _, _ in .init(__safeDI_noScope: __safeDI_builder) }, yankeeBuilder: { _, _, _ in .init(__safeDI_noScope: __safeDI_builder) }, deltaBuilder: { _, _, _, _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -261,7 +258,6 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		            self.deltaBuilder = deltaBuilder
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(mikeBuilder: { _, _ in .init(__safeDI_noScope: __safeDI_builder) }, bravoBuilder: { _, _, _ in .init(__safeDI_noScope: __safeDI_builder) }, deltaBuilder: { _, _, _, _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -279,7 +275,6 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		            self.yankeeBuilder = yankeeBuilder
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(mikeBuilder: { _, _ in .init(__safeDI_noScope: __safeDI_builder) }, bravoBuilder: { _, _, _ in .init(__safeDI_noScope: __safeDI_builder) }, yankeeBuilder: { _, _, _, _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -293,7 +288,6 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		            self.bravoModel = bravoModel
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(bravoModel: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -307,7 +301,6 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		            self.yankeeModel = yankeeModel
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(yankeeModel: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -321,7 +314,6 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		            self.deltaModel = deltaModel
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(deltaModel: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -335,7 +327,6 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		            self.mikeModel = mikeModel
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(mikeModel: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -349,7 +340,6 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		            self.api = api
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { __safeDI_builder() })
 		        }
@@ -363,7 +353,6 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		            self.api = api
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { __safeDI_builder() })
 		        }
@@ -377,7 +366,6 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		            self.api = api
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { __safeDI_builder() })
 		        }
@@ -391,7 +379,6 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		            self.api = api
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { __safeDI_builder() })
 		        }
@@ -402,34 +389,34 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		    public convenience init(__safeDI_service: @autoclosure @escaping () -> Service, __safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 		        let service = LazilyInstantiated<Service>(__safeDI_service)
 		        let __safeDI_apiBuilder_kiloBuilder = __safeDI_apiBuilder.kiloBuilder(service)
-		        func __safeDI_bravoBuilder(id: Int, __safeDI_apiBuilder_bravoBuilder: __safeDI_ApiCarrier_Bravo<any Api>) -> Bravo {
+		        @inline(never) func __safeDI_bravoBuilder(id: Int, __safeDI_apiBuilder_bravoBuilder: __safeDI_ApiCarrier_Bravo<any Api>) -> Bravo {
 		            let __safeDI_apiBuilder_bravoModel = __safeDI_apiBuilder_bravoBuilder.bravoModel(id)
 		            let bravoModel: BravoModel = __safeDI_bravoModel(id: id, __safeDI_apiBuilder_bravoModel: __safeDI_apiBuilder_bravoModel)
 		            return Bravo(id: id, service: service.instance, bravoModel: bravoModel)
 		        }
-		        func __safeDI_bravoModel(id: Int, __safeDI_apiBuilder_bravoModel: __safeDI_ApiCarrier_BravoModel<any Api>) -> BravoModel {
+		        @inline(never) func __safeDI_bravoModel(id: Int, __safeDI_apiBuilder_bravoModel: __safeDI_ApiCarrier_BravoModel<any Api>) -> BravoModel {
 		            let api: any Api = __safeDI_apiBuilder_bravoModel.api()
 		            return BravoModel(id: id, service: service.instance, api: api)
 		        }
-		        func __safeDI_yankeeBuilder(id: Int, __safeDI_apiBuilder_yankeeBuilder: __safeDI_ApiCarrier_Yankee<any Api>) -> Yankee {
+		        @inline(never) func __safeDI_yankeeBuilder(id: Int, __safeDI_apiBuilder_yankeeBuilder: __safeDI_ApiCarrier_Yankee<any Api>) -> Yankee {
 		            let __safeDI_apiBuilder_yankeeModel = __safeDI_apiBuilder_yankeeBuilder.yankeeModel(id)
 		            let yankeeModel: YankeeModel = __safeDI_yankeeModel(id: id, __safeDI_apiBuilder_yankeeModel: __safeDI_apiBuilder_yankeeModel)
 		            return Yankee(id: id, service: service.instance, yankeeModel: yankeeModel)
 		        }
-		        func __safeDI_yankeeModel(id: Int, __safeDI_apiBuilder_yankeeModel: __safeDI_ApiCarrier_YankeeModel<any Api>) -> YankeeModel {
+		        @inline(never) func __safeDI_yankeeModel(id: Int, __safeDI_apiBuilder_yankeeModel: __safeDI_ApiCarrier_YankeeModel<any Api>) -> YankeeModel {
 		            let api: any Api = __safeDI_apiBuilder_yankeeModel.api()
 		            return YankeeModel(id: id, service: service.instance, api: api)
 		        }
-		        func __safeDI_deltaBuilder(id: Int, __safeDI_apiBuilder_deltaBuilder: __safeDI_ApiCarrier_Delta<any Api>) -> Delta {
+		        @inline(never) func __safeDI_deltaBuilder(id: Int, __safeDI_apiBuilder_deltaBuilder: __safeDI_ApiCarrier_Delta<any Api>) -> Delta {
 		            let __safeDI_apiBuilder_deltaModel = __safeDI_apiBuilder_deltaBuilder.deltaModel(id)
 		            let deltaModel: DeltaModel = __safeDI_deltaModel(id: id, __safeDI_apiBuilder_deltaModel: __safeDI_apiBuilder_deltaModel)
 		            return Delta(id: id, service: service.instance, deltaModel: deltaModel)
 		        }
-		        func __safeDI_deltaModel(id: Int, __safeDI_apiBuilder_deltaModel: __safeDI_ApiCarrier_DeltaModel<any Api>) -> DeltaModel {
+		        @inline(never) func __safeDI_deltaModel(id: Int, __safeDI_apiBuilder_deltaModel: __safeDI_ApiCarrier_DeltaModel<any Api>) -> DeltaModel {
 		            let api: any Api = __safeDI_apiBuilder_deltaModel.api()
 		            return DeltaModel(id: id, service: service.instance, api: api)
 		        }
-		        func __safeDI_kiloBuilder(id: Int) -> Kilo {
+		        @inline(never) func __safeDI_kiloBuilder(id: Int) -> Kilo {
 		            let kiloModel = KiloModel(id: id, service: service.instance)
 		            let __safeDI_apiBuilder_bravoBuilder = __safeDI_apiBuilder_kiloBuilder.bravoBuilder(id, kiloModel)
 		            let bravoBuilder = Instantiator<Bravo> {
@@ -449,16 +436,16 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		            __safeDI_kiloBuilder(id: $0)
 		        }
 		        let __safeDI_apiBuilder_echoBuilder = __safeDI_apiBuilder.echoBuilder(service, kiloBuilder)
-		        func __safeDI_mikeBuilder(id: Int, __safeDI_apiBuilder_mikeBuilder: __safeDI_ApiCarrier_Mike<any Api>) -> Mike {
+		        @inline(never) func __safeDI_mikeBuilder(id: Int, __safeDI_apiBuilder_mikeBuilder: __safeDI_ApiCarrier_Mike<any Api>) -> Mike {
 		            let __safeDI_apiBuilder_mikeModel = __safeDI_apiBuilder_mikeBuilder.mikeModel(id)
 		            let mikeModel: MikeModel = __safeDI_mikeModel(id: id, __safeDI_apiBuilder_mikeModel: __safeDI_apiBuilder_mikeModel)
 		            return Mike(id: id, service: service.instance, mikeModel: mikeModel)
 		        }
-		        func __safeDI_mikeModel(id: Int, __safeDI_apiBuilder_mikeModel: __safeDI_ApiCarrier_MikeModel<any Api>) -> MikeModel {
+		        @inline(never) func __safeDI_mikeModel(id: Int, __safeDI_apiBuilder_mikeModel: __safeDI_ApiCarrier_MikeModel<any Api>) -> MikeModel {
 		            let api: any Api = __safeDI_apiBuilder_mikeModel.api()
 		            return MikeModel(id: id, service: service.instance, api: api)
 		        }
-		        func __safeDI_echoBuilder(id: Int) -> Echo {
+		        @inline(never) func __safeDI_echoBuilder(id: Int) -> Echo {
 		            let echoModel = EchoModel(id: id, service: service.instance)
 		            let __safeDI_apiBuilder_mikeBuilder = __safeDI_apiBuilder_echoBuilder.mikeBuilder(id, echoModel)
 		            let mikeBuilder = Instantiator<Mike> {
@@ -478,7 +465,7 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		            __safeDI_echoBuilder(id: $0)
 		        }
 		        let __safeDI_apiBuilder_zuluBuilder = __safeDI_apiBuilder.zuluBuilder(service, kiloBuilder, echoBuilder)
-		        func __safeDI_zuluBuilder(id: Int) -> Zulu {
+		        @inline(never) func __safeDI_zuluBuilder(id: Int) -> Zulu {
 		            let zuluModel = ZuluModel(id: id, service: service.instance)
 		            let __safeDI_apiBuilder_mikeBuilder = __safeDI_apiBuilder_zuluBuilder.mikeBuilder(id, zuluModel)
 		            let mikeBuilder = Instantiator<Mike> {
@@ -498,7 +485,7 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		            __safeDI_zuluBuilder(id: $0)
 		        }
 		        let __safeDI_apiBuilder_alphaBuilder = __safeDI_apiBuilder.alphaBuilder(service, kiloBuilder, echoBuilder, zuluBuilder)
-		        func __safeDI_alphaBuilder(id: Int) -> Alpha {
+		        @inline(never) func __safeDI_alphaBuilder(id: Int) -> Alpha {
 		            let alphaModel = AlphaModel(id: id, service: service.instance)
 		            let __safeDI_apiBuilder_mikeBuilder = __safeDI_apiBuilder_alphaBuilder.mikeBuilder(id, alphaModel)
 		            let mikeBuilder = Instantiator<Mike> {
@@ -687,7 +674,6 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		            self.store = store
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(store: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -701,7 +687,6 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		            self.api = api
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { __safeDI_builder() })
 		        }
@@ -711,7 +696,7 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 		        let __safeDI_apiBuilder_store = __safeDI_apiBuilder.store
-		        func __safeDI_store() -> Store {
+		        @inline(never) func __safeDI_store() -> Store {
 		            let api: any Api = __safeDI_apiBuilder_store.api()
 		            return Store(api: api)
 		        }
@@ -784,7 +769,6 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		            self.job = job
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(job: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -798,7 +782,6 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		            self.api = api
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { __safeDI_builder() })
 		        }
@@ -809,7 +792,7 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		    public convenience init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 		        let jobScope = Job_Scope()
 		        let __safeDI_apiBuilder_job = __safeDI_apiBuilder.job(jobScope)
-		        func __safeDI_job() -> Job {
+		        @inline(never) func __safeDI_job() -> Job {
 		            let api: any Api = __safeDI_apiBuilder_job.api()
 		            return Job(api: api)
 		        }
@@ -900,7 +883,6 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		            self.third = third
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(fourth: .init(__safeDI_noScope: __safeDI_builder), second: { _ in .init(__safeDI_noScope: __safeDI_builder) }, sixth: { _, _ in .init(__safeDI_noScope: __safeDI_builder) }, first: { _, _, _ in .init(__safeDI_noScope: __safeDI_builder) }, fifth: { _, _, _, _ in .init(__safeDI_noScope: __safeDI_builder) }, third: { _, _, _, _, _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -914,7 +896,6 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		            self.api = api
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { __safeDI_builder() })
 		        }
@@ -928,7 +909,6 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		            self.api = api
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { __safeDI_builder() })
 		        }
@@ -942,7 +922,6 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		            self.api = api
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { __safeDI_builder() })
 		        }
@@ -956,7 +935,6 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		            self.api = api
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { __safeDI_builder() })
 		        }
@@ -970,7 +948,6 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		            self.api = api
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { __safeDI_builder() })
 		        }
@@ -984,7 +961,6 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		            self.api = api
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { __safeDI_builder() })
 		        }
@@ -994,37 +970,37 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 		        let __safeDI_apiBuilder_fourth = __safeDI_apiBuilder.fourth
-		        func __safeDI_fourth() -> A.B.C_D {
+		        @inline(never) func __safeDI_fourth() -> A.B.C_D {
 		            let api: any Api = __safeDI_apiBuilder_fourth.api()
 		            return A.B.C_D(api: api)
 		        }
 		        let fourth: A.B.C_D = __safeDI_fourth()
 		        let __safeDI_apiBuilder_second = __safeDI_apiBuilder.second(fourth)
-		        func __safeDI_second() -> A_B.C_D {
+		        @inline(never) func __safeDI_second() -> A_B.C_D {
 		            let api: any Api = __safeDI_apiBuilder_second.api()
 		            return A_B.C_D(api: api)
 		        }
 		        let second: A_B.C_D = __safeDI_second()
 		        let __safeDI_apiBuilder_sixth = __safeDI_apiBuilder.sixth(fourth, second)
-		        func __safeDI_sixth() -> A.B_C.D {
+		        @inline(never) func __safeDI_sixth() -> A.B_C.D {
 		            let api: any Api = __safeDI_apiBuilder_sixth.api()
 		            return A.B_C.D(api: api)
 		        }
 		        let sixth: A.B_C.D = __safeDI_sixth()
 		        let __safeDI_apiBuilder_first = __safeDI_apiBuilder.first(fourth, second, sixth)
-		        func __safeDI_first() -> A.B_C_D {
+		        @inline(never) func __safeDI_first() -> A.B_C_D {
 		            let api: any Api = __safeDI_apiBuilder_first.api()
 		            return A.B_C_D(api: api)
 		        }
 		        let first: A.B_C_D = __safeDI_first()
 		        let __safeDI_apiBuilder_fifth = __safeDI_apiBuilder.fifth(fourth, second, sixth, first)
-		        func __safeDI_fifth() -> A_B.C.D {
+		        @inline(never) func __safeDI_fifth() -> A_B.C.D {
 		            let api: any Api = __safeDI_apiBuilder_fifth.api()
 		            return A_B.C.D(api: api)
 		        }
 		        let fifth: A_B.C.D = __safeDI_fifth()
 		        let __safeDI_apiBuilder_third = __safeDI_apiBuilder.third(fourth, second, sixth, first, fifth)
-		        func __safeDI_third() -> A_B_C.D {
+		        @inline(never) func __safeDI_third() -> A_B_C.D {
 		            let api: any Api = __safeDI_apiBuilder_third.api()
 		            return A_B_C.D(api: api)
 		        }
@@ -1146,7 +1122,6 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		                    self.gadget = gadget
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(gadget: { _ in __safeDI_builder() })
 		                }
@@ -1166,7 +1141,6 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		                    self.gadget = gadget
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(gadget: { _ in __safeDI_builder() })
 		                }
@@ -1183,7 +1157,6 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		                self.inner_userServiceBuilder = inner_userServiceBuilder
 		            }
 
-		            @_alwaysEmitIntoClient
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.init(widget: { _ in .init(__safeDI_noScope: __safeDI_builder) }, inner_userServiceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 		            }
@@ -1195,16 +1168,16 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_gadgetBuilder: SafeDIScope_Gadget.__safeDI_Builder<any Gadget>) {
 		        let __safeDI_gadgetBuilder_widget = __safeDI_gadgetBuilder.widget(SafeDIScope_Gadget.widget_Values())
-		        func __safeDI_widget() -> Widget {
+		        @inline(never) func __safeDI_widget() -> Widget {
 		            let gadget: any Gadget = __safeDI_gadgetBuilder_widget.gadget(SafeDIScope_Gadget.Widget_Scope_.gadget_Values())
 		            return Widget(gadget: gadget)
 		        }
 		        let widget: Widget = __safeDI_widget()
 		        let __safeDI_gadgetBuilder_inner_userServiceBuilder = __safeDI_gadgetBuilder.inner_userServiceBuilder(SafeDIScope_Gadget.inner_userServiceBuilder_Values(widget: widget))
-		        func __safeDI_inner() -> Inner {
+		        @inline(never) func __safeDI_inner() -> Inner {
 		            _ = Inner.__safeDI_Inner_9D3BA82D9336C0A4.self // \(Self.moduleInfoComment)
-		            func __safeDI_userServiceBuilder_Inner_Avatar_Scope_userService(__safeDI_inner_userServiceBuilder: SafeDIScope_Gadget.DefaultUserService_Scope.__safeDI_Builder<any Gadget>) -> any UserService {
-		                func __safeDI_userService() -> DefaultUserService {
+		            @inline(never) func __safeDI_userServiceBuilder_Inner_Avatar_Scope_userService(__safeDI_inner_userServiceBuilder: SafeDIScope_Gadget.DefaultUserService_Scope.__safeDI_Builder<any Gadget>) -> any UserService {
+		                @inline(never) func __safeDI_userService() -> DefaultUserService {
 		                    let widgetScope = Widget_Scope()
 		                    let gadget: any Gadget = __safeDI_inner_userServiceBuilder.gadget(SafeDIScope_Gadget.DefaultUserService_Scope.gadget_Values(widgetScope: widgetScope))
 		                    return DefaultUserService(widgetScope: widgetScope, gadget: gadget)
@@ -1212,10 +1185,10 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		                let userService: any UserService = __safeDI_userService()
 		                return userService
 		            }
-		            func __safeDI_userServiceBuilder_Inner(up: Inner.__safeDI_UserServiceCarrier<SafeDIScope_Gadget.DefaultUserService_Scope.__safeDI_Builder<any Gadget>>) -> Inner.__safeDI_UserServiceCarrier<any UserService> {
+		            @inline(never) func __safeDI_userServiceBuilder_Inner(up: Inner.__safeDI_UserServiceCarrier<SafeDIScope_Gadget.DefaultUserService_Scope.__safeDI_Builder<any Gadget>>) -> Inner.__safeDI_UserServiceCarrier<any UserService> {
 		                .init(avatar: __safeDI_userServiceBuilder_Inner_Avatar_Scope(up: up.avatar))
 		            }
-		            func __safeDI_userServiceBuilder_Inner_Avatar_Scope(up: Inner.__safeDI_UserServiceCarrier_Avatar<SafeDIScope_Gadget.DefaultUserService_Scope.__safeDI_Builder<any Gadget>>) -> Inner.__safeDI_UserServiceCarrier_Avatar<any UserService> {
+		            @inline(never) func __safeDI_userServiceBuilder_Inner_Avatar_Scope(up: Inner.__safeDI_UserServiceCarrier_Avatar<SafeDIScope_Gadget.DefaultUserService_Scope.__safeDI_Builder<any Gadget>>) -> Inner.__safeDI_UserServiceCarrier_Avatar<any UserService> {
 		                .init(userService: { __safeDI_userServiceBuilder_Inner_Avatar_Scope_userService(__safeDI_inner_userServiceBuilder: up.userService()) })
 		            }
 		            return Inner(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Inner(up: __safeDI_gadgetBuilder_inner_userServiceBuilder))
@@ -1317,7 +1290,6 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		            self.store = store
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(store: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -1331,7 +1303,6 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		            self.shelf = shelf
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(shelf: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -1345,7 +1316,6 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		            self.api = api
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { __safeDI_builder() })
 		        }
@@ -1356,11 +1326,11 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		    public convenience init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 		        let apiValues_store = Clock()
 		        let __safeDI_apiBuilder_store = __safeDI_apiBuilder.store(apiValues_store)
-		        func __safeDI_shelf(__safeDI_apiBuilder_shelf: __safeDI_ApiCarrier_Shelf<any Api>) -> Shelf {
+		        @inline(never) func __safeDI_shelf(__safeDI_apiBuilder_shelf: __safeDI_ApiCarrier_Shelf<any Api>) -> Shelf {
 		            let api: any Api = __safeDI_apiBuilder_shelf.api()
 		            return Shelf(api: api)
 		        }
-		        func __safeDI_store() -> Store {
+		        @inline(never) func __safeDI_store() -> Store {
 		            let __safeDI_apiBuilder_shelf = __safeDI_apiBuilder_store.shelf
 		            let shelf: Shelf = __safeDI_shelf(__safeDI_apiBuilder_shelf: __safeDI_apiBuilder_shelf)
 		            return Store(shelf: shelf)

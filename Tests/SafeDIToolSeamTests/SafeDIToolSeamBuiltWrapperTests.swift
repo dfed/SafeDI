@@ -112,7 +112,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				            self.part = part
 				        }
 
-				        @_alwaysEmitIntoClient
 				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 				            self.init(part: { _ in __safeDI_builder() })
 				        }
@@ -121,7 +120,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 				    public init(__safeDI_analytics analytics: Analytics, __safeDI_gadgetBuilder: __safeDI_GadgetCarrier<any Gadget>) {
-				        func __safeDI_part() -> any Gadget {
+				        @inline(never) func __safeDI_part() -> any Gadget {
 				            __safeDI_gadgetBuilder.part(analytics)
 				        }
 				        let part = LazilyInstantiated<any Gadget>(__safeDI_part)
@@ -146,7 +145,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				            self.part = part
 				        }
 
-				        @_alwaysEmitIntoClient
 				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 				            self.init(part: { __safeDI_builder() })
 				        }
@@ -155,7 +153,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 				    public init(__safeDI_analytics analytics: Analytics, __safeDI_gadgetSendableBuilder: __safeDI_GadgetSendableCarrier<any Gadget>) {
-				        @Sendable nonisolated func __safeDI_part() -> any Gadget {
+				        @inline(never) @Sendable nonisolated func __safeDI_part() -> any Gadget {
 				            __safeDI_gadgetSendableBuilder.part()
 				        }
 				        let part = SendableLazilyInstantiated<any Gadget>(__safeDI_part)
@@ -180,7 +178,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				            self.part = part
 				        }
 
-				        @_alwaysEmitIntoClient
 				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
 				            self.init(part: { _ in __safeDI_builder })
 				        }
@@ -211,7 +208,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				            self.part = part
 				        }
 
-				        @_alwaysEmitIntoClient
 				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
 				            self.init(part: { __safeDI_builder })
 				        }
@@ -242,7 +238,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				            self.part = part
 				        }
 
-				        @_alwaysEmitIntoClient
 				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<String, __safeDI_Built>.Builder) {
 				            self.init(part: { _ in __safeDI_builder })
 				        }
@@ -273,7 +268,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				            self.part = part
 				        }
 
-				        @_alwaysEmitIntoClient
 				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<String, __safeDI_Built>.Builder) {
 				            self.init(part: { __safeDI_builder })
 				        }
@@ -513,7 +507,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		            self.part = part
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<nonisolated(nonsending) () async -> Void, __safeDI_Built>.Builder) {
 		            self.init(part: { _ in __safeDI_builder })
 		        }
@@ -601,7 +594,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		            self.erased = erased
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<(count: Int, name: String), __safeDI_Built>.Builder) {
 		            self.init(erased: { _ in __safeDI_builder })
 		        }
@@ -615,7 +607,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		            self.held = held
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<PairPanel.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.init(held: { _, _ in __safeDI_builder })
 		        }
@@ -702,7 +693,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		            self.part = part
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(part: { _ in { _ in __safeDI_builder() } })
 		        }
@@ -786,7 +776,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		            self.held = held
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<EmptyPanel.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.init(held: { _ in __safeDI_builder })
 		        }
@@ -980,7 +969,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		            self.held = held
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.init(held: { __safeDI_builder })
 		        }
@@ -994,7 +982,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		            self.ownerBuilder = ownerBuilder
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.init(ownerBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -1003,7 +990,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_analytics analytics: Analytics, __safeDI_panelSendableBuilder: __safeDI_PanelSendableCarrier<Panel>) {
-		        @Sendable nonisolated func __safeDI_ownerBuilder() -> Owner {
+		        @inline(never) @Sendable nonisolated func __safeDI_ownerBuilder() -> Owner {
 		            let __safeDI_panelSendableBuilder_ownerBuilder = __safeDI_panelSendableBuilder.ownerBuilder()
 		            let held = Instantiator<Panel>(__safeDI_panelSendableBuilder_ownerBuilder.held())
 		            return Owner(held: held)
@@ -1093,7 +1080,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		            self.ownerBuilder_Sendable = ownerBuilder_Sendable
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.init(ownerBuilder_Sendable: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -1107,7 +1093,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		            self.held = held
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.init(held: { __safeDI_builder })
 		        }
@@ -1116,7 +1101,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_analytics analytics: Analytics, __safeDI_panelSendableBuilder: __safeDI_PanelSendableCarrier<Panel>) {
-		        @Sendable nonisolated func __safeDI_ownerBuilder() -> Owner {
+		        @inline(never) @Sendable nonisolated func __safeDI_ownerBuilder() -> Owner {
 		            let __safeDI_panelSendableBuilder_ownerBuilder_Sendable = __safeDI_panelSendableBuilder.ownerBuilder_Sendable
 		            let tally = Tally()
 		            let held = SendableInstantiator<Panel>(__safeDI_panelSendableBuilder_ownerBuilder_Sendable.held())
@@ -1216,7 +1201,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		            self.part = part
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.init(part: { __safeDI_builder })
 		        }
@@ -1243,7 +1227,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		            self.inner = inner
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.init(inner: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -1252,7 +1235,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_panelBuilder: __safeDI_PanelCarrier<Panel>) {
-		        func __safeDI_inner() -> Inner {
+		        @inline(never) func __safeDI_inner() -> Inner {
 		            _ = Inner.__safeDI_Inner_5304DA22A233A920.self
 		            return Inner(__safeDI_panelBuilder: __safeDI_panelBuilder.inner)
 		        }
@@ -1346,7 +1329,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			                    self.gadget = gadget
 			                }
 
-			                @_alwaysEmitIntoClient
 			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			                    self.init(gadget: { _ in __safeDI_builder() })
 			                }
@@ -1365,7 +1347,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			                self.inner_widgetSendableBuilder = inner_widgetSendableBuilder
 			            }
 
-			            @_alwaysEmitIntoClient
 			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 			                self.init(inner_widgetSendableBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			            }
@@ -1376,17 +1357,17 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_gadgetSendableBuilder: SafeDISendableScope_Gadget.__safeDI_Builder<any Gadget>) {
-			        func __safeDI_inner() -> Inner {
+			        @inline(never) func __safeDI_inner() -> Inner {
 			            _ = Inner.__safeDI_Inner_6D43C09429362F02.self\(seamCallComment(seam: "Inner"))
-			            @Sendable nonisolated func __safeDI_widgetSendableBuilder_Inner_widget() -> any Widget {
-			                @Sendable nonisolated func __safeDI_widget() -> DefaultWidget {
+			            @inline(never) @Sendable nonisolated func __safeDI_widgetSendableBuilder_Inner_widget() -> any Widget {
+			                @inline(never) @Sendable nonisolated func __safeDI_widget() -> DefaultWidget {
 			                    let __safeDI_gadgetSendableBuilder_inner_widgetSendableBuilder = __safeDI_gadgetSendableBuilder.inner_widgetSendableBuilder(SafeDISendableScope_Gadget.inner_widgetSendableBuilder_Values())
 			                    let gadget: any Gadget = __safeDI_gadgetSendableBuilder_inner_widgetSendableBuilder.gadget(SafeDIScope_Gadget.DefaultWidget_Scope.gadget_Values())
 			                    return DefaultWidget(gadget: gadget)
 			                }
 			                return __safeDI_widget()
 			            }
-			            @Sendable nonisolated func __safeDI_widgetSendableBuilder_Inner() -> Inner.__safeDI_WidgetSendableCarrier<any Widget> {
+			            @inline(never) @Sendable nonisolated func __safeDI_widgetSendableBuilder_Inner() -> Inner.__safeDI_WidgetSendableCarrier<any Widget> {
 			                .init(widget: { __safeDI_widgetSendableBuilder_Inner_widget() })
 			            }
 			            return Inner(__safeDI_widgetSendableBuilder: __safeDI_widgetSendableBuilder_Inner())
@@ -1482,7 +1463,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		            self.part = part
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Label, __safeDI_Built>.Builder) {
 		            self.init(part: { _ in __safeDI_builder })
 		        }
@@ -1510,7 +1490,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		            self.part = part
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Label, __safeDI_Built>.Builder) {
 		            self.init(part: { _ in __safeDI_builder })
 		        }
@@ -1648,7 +1627,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		            self.again = again
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(again: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -1662,7 +1640,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		            self.again = again
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(again: { _ in __safeDI_builder() })
 		        }
@@ -1672,15 +1649,15 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_gadgetBuilder: __safeDI_GadgetCarrier<any Gadget>) {
 		        let __safeDI_gadgetBuilder_again = __safeDI_gadgetBuilder.again
-		        func __safeDI_again() -> Middle {
+		        @inline(never) func __safeDI_again() -> Middle {
 		            let beneath: Beneath = __safeDI_beneath()
-		            func __safeDI_again_Gadget() -> any Gadget {
+		            @inline(never) func __safeDI_again_Gadget() -> any Gadget {
 		                __safeDI_gadgetBuilder_again.again(beneath)
 		            }
 		            let again = LazilyInstantiated<any Gadget>(__safeDI_again_Gadget)
 		            return Middle(again: again, beneath: beneath)
 		        }
-		        func __safeDI_beneath() -> Beneath {
+		        @inline(never) func __safeDI_beneath() -> Beneath {
 		            let again = Instantiator<Middle>(__safeDI_again)
 		            return Beneath(again: again)
 		        }
@@ -1970,7 +1947,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		            self.part = part
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<ActionPanel.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.init(part: { _ in __safeDI_builder })
 		        }
@@ -2044,7 +2020,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		            self.part = part
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<ActionPanel.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.init(part: { __safeDI_builder })
 		        }
@@ -2121,7 +2096,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		            self.part = part
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<ActionPanel.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.init(part: { _ in __safeDI_builder })
 		        }
@@ -2196,7 +2170,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		            self.part = part
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<ActionPanel.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.init(part: { __safeDI_builder })
 		        }
@@ -2272,7 +2245,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		            self.part = part
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<OnTap, __safeDI_Built>.Builder) {
 		            self.init(part: { _ in __safeDI_builder })
 		        }
@@ -2348,7 +2320,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		            self.part = part
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<SendableOnTap, __safeDI_Built>.Builder) {
 		            self.init(part: { __safeDI_builder })
 		        }
@@ -2899,6 +2870,101 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				filesToDelete: &filesToDelete,
 			)
 		}
+	}
+
+	// MARK: A cycle closed beneath a hole’s wrapper function
+
+	@Test
+	mutating func generate_closesCycleOnItsOwnBuilderFunction_whenItsLabelSpellsTheFunctionAHoleSiteBuildsItsWrapperAround() async throws {
+		// The site of `trackerBuilder` names its wrapper’s function `__safeDI_trackerBuilder_`, apart from the builder it
+		// calls, which is the name of the function `trackerBuilder_` builds `B` with, and `D` closes the cycle on that one.
+		let feature = [
+			"public protocol Tracker {}",
+			seamFixtureType(named: "Feature", isSeam: true, declarations: ["@Instantiated let trackerBuilder_: Instantiator<B>"]),
+			seamFixtureType(named: "B", declarations: ["@Instantiated let cBuilder: Instantiator<C>"]),
+			seamFixtureType(named: "C", declarations: ["@Instantiated let trackerBuilder: LazilyInstantiated<any Tracker>", "@Instantiated let dBuilder: Instantiator<D>"]),
+			seamFixtureType(named: "D", declarations: ["@Instantiated let trackerBuilder_: Instantiator<B>"]),
+		]
+		let app = [
+			SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "DefaultTracker", fulfilling: "Tracker", declarations: []),
+			seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let feature: Feature"]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: SafeDIToolSeamBuilderParameterTests.modules(feature: feature, app: app), integration: .moduleInfo, filesToDelete: &filesToDelete)
+		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, [
+			"Feature.swift": generatedFileHeader + """
+			extension Feature {
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public final class __safeDI_TrackerCarrier<__safeDI_Built> {
+			        public let trackerBuilder_: __safeDI_TrackerCarrier_B<__safeDI_Built>
+
+			        public init(trackerBuilder_: __safeDI_TrackerCarrier_B<__safeDI_Built>) {
+			            self.trackerBuilder_ = trackerBuilder_
+			        }
+
+			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			            self.init(trackerBuilder_: .init(__safeDI_noScope: __safeDI_builder))
+			        }
+			    }
+
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public final class __safeDI_TrackerCarrier_B<__safeDI_Built> {
+			        public let cBuilder: __safeDI_TrackerCarrier_C<__safeDI_Built>
+
+			        public init(cBuilder: __safeDI_TrackerCarrier_C<__safeDI_Built>) {
+			            self.cBuilder = cBuilder
+			        }
+
+			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			            self.init(cBuilder: .init(__safeDI_noScope: __safeDI_builder))
+			        }
+			    }
+
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public final class __safeDI_TrackerCarrier_C<__safeDI_Built> {
+			        public let trackerBuilder: (Instantiator<D>) -> __safeDI_Built
+
+			        public init(trackerBuilder: @escaping (Instantiator<D>) -> __safeDI_Built) {
+			            self.trackerBuilder = trackerBuilder
+			        }
+
+			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			            self.init(trackerBuilder: { _ in __safeDI_builder() })
+			        }
+			    }
+
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+			    public init(__safeDI_trackerBuilder: __safeDI_TrackerCarrier<any Tracker>) {
+			        let __safeDI_trackerBuilder_trackerBuilder_ = __safeDI_trackerBuilder.trackerBuilder_
+			        @inline(never) func __safeDI_trackerBuilder_() -> B {
+			            let __safeDI_trackerBuilder_cBuilder = __safeDI_trackerBuilder_trackerBuilder_.cBuilder
+			            let cBuilder = Instantiator<C> {
+			                __safeDI_cBuilder(__safeDI_trackerBuilder_cBuilder: __safeDI_trackerBuilder_cBuilder)
+			            }
+			            return B(cBuilder: cBuilder)
+			        }
+			        @inline(never) func __safeDI_cBuilder(__safeDI_trackerBuilder_cBuilder: __safeDI_TrackerCarrier_C<any Tracker>) -> C {
+			            let dBuilder = Instantiator<D>(__safeDI_dBuilder)
+			            @inline(never) func __safeDI_trackerBuilder__Tracker() -> any Tracker {
+			                __safeDI_trackerBuilder_cBuilder.trackerBuilder(dBuilder)
+			            }
+			            let trackerBuilder = LazilyInstantiated<any Tracker>(__safeDI_trackerBuilder__Tracker)
+			            return C(trackerBuilder: trackerBuilder, dBuilder: dBuilder)
+			        }
+			        @inline(never) func __safeDI_dBuilder() -> D {
+			            let trackerBuilder_ = Instantiator<B>(__safeDI_trackerBuilder_)
+			            return D(trackerBuilder_: trackerBuilder_)
+			        }
+			        let trackerBuilder_ = Instantiator<B>(__safeDI_trackerBuilder_)
+			        self.init(trackerBuilder_: trackerBuilder_)
+			    }
+			}
+
+			extension Feature {
+			    public enum __safeDI_Feature_099A0C5D8D989C5E {}
+			}
+			""",
+		])
 	}
 
 	// MARK: Private

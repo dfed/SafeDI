@@ -7,7 +7,7 @@ generation as a Bazel action.
 
 module(
     name = "safedi",
-    version = "2.3.5",
+    version = "2.4.1",
     compatibility_level = 1,
 )
 

@@ -81,7 +81,6 @@ struct SafeDIToolSeamCarrierIsolationTests: ~Copyable {
 		            self.screenBuilder = screenBuilder
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(screenBuilder: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -97,7 +96,6 @@ struct SafeDIToolSeamCarrierIsolationTests: ~Copyable {
 		            self.detailBuilder = detailBuilder
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { _, _ in __safeDI_builder() }, detailBuilder: { _, _, _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -111,7 +109,6 @@ struct SafeDIToolSeamCarrierIsolationTests: ~Copyable {
 		            self.detailBuilder = detailBuilder
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(detailBuilder: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -125,7 +122,6 @@ struct SafeDIToolSeamCarrierIsolationTests: ~Copyable {
 		            self.api = api
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { __safeDI_builder() })
 		        }
@@ -139,7 +135,6 @@ struct SafeDIToolSeamCarrierIsolationTests: ~Copyable {
 		            self.workBuilder = workBuilder
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(workBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -149,11 +144,11 @@ struct SafeDIToolSeamCarrierIsolationTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>, __safeDI_apiSendableBuilder: __safeDI_ApiSendableCarrier<any Api>) {
 		        let __safeDI_apiBuilder_screenBuilder = __safeDI_apiBuilder.screenBuilder
-		        func __safeDI_detailBuilder(__safeDI_apiBuilder_detailBuilder: __safeDI_ApiCarrier_Detail<any Api>) -> Detail {
+		        @inline(never) func __safeDI_detailBuilder(__safeDI_apiBuilder_detailBuilder: __safeDI_ApiCarrier_Detail<any Api>) -> Detail {
 		            let api: any Api = __safeDI_apiBuilder_detailBuilder.api()
 		            return Detail(api: api)
 		        }
-		        func __safeDI_screenBuilder(id: Int) -> Screen {
+		        @inline(never) func __safeDI_screenBuilder(id: Int) -> Screen {
 		            let model = Model(id: id)
 		            let api: any Api = __safeDI_apiBuilder_screenBuilder.api(id, model)
 		            let __safeDI_apiBuilder_detailBuilder = __safeDI_apiBuilder_screenBuilder.detailBuilder(id, model, api)
@@ -165,11 +160,11 @@ struct SafeDIToolSeamCarrierIsolationTests: ~Copyable {
 		        let screenBuilder = Instantiator<Screen> {
 		            __safeDI_screenBuilder(id: $0)
 		        }
-		        @Sendable nonisolated func __safeDI_detailBuilder_(__safeDI_apiSendableBuilder_detailBuilder: __safeDI_ApiCarrier_Detail<any Api>) -> Detail {
+		        @inline(never) @Sendable nonisolated func __safeDI_detailBuilder_(__safeDI_apiSendableBuilder_detailBuilder: __safeDI_ApiCarrier_Detail<any Api>) -> Detail {
 		            let api: any Api = __safeDI_apiSendableBuilder_detailBuilder.api()
 		            return Detail(api: api)
 		        }
-		        @Sendable nonisolated func __safeDI_workBuilder(id: Int) -> Work {
+		        @inline(never) @Sendable nonisolated func __safeDI_workBuilder(id: Int) -> Work {
 		            let __safeDI_apiSendableBuilder_workBuilder = __safeDI_apiSendableBuilder.workBuilder()
 		            let model = Model(id: id)
 		            let __safeDI_apiSendableBuilder_detailBuilder = __safeDI_apiSendableBuilder_workBuilder.detailBuilder(id, model)

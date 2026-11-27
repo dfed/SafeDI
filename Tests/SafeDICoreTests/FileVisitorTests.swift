@@ -2376,7 +2376,7 @@ struct FileVisitorTests {
 
 	@Test
 	func walk_recordsOnlyClauseMockConditionSelects_whenNoOtherClauseDeclaresAnything() {
-		// PR3 (Dan's shape, the declaring file): the block has no `#else`, or an empty one, so a build where `DEBUG` is
+		// PR3 (a real adopter's shape, the declaring file): the block has no `#else`, or an empty one, so a build where `DEBUG` is
 		// inactive declares nothing here; another file's `#if !DEBUG` may.
 		for elseClause in ["", "#else\n"] {
 			let syntaxTree = Parser.parse(source: """
@@ -2534,17 +2534,17 @@ struct FileVisitorTests {
 				decisions: [ConditionalCompilationDecision(condition: "FLAG", isActive: true)],
 				consultedConditions: ["FLAG"],
 				declaredTypes: [
-					GuardedPlainTypeNames.DeclaredType(name: "Theme", outermostName: "Theme", level: .package, isNested: false),
-					GuardedPlainTypeNames.DeclaredType(name: "Theme", outermostName: "Theme", level: .public, isNested: false),
-					GuardedPlainTypeNames.DeclaredType(name: "Unreachable", outermostName: "Unreachable", level: .public, isNested: false),
+					GuardedPlainTypeNames.DeclaredType(name: "Theme", outermostName: "Theme", level: .package),
+					GuardedPlainTypeNames.DeclaredType(name: "Theme", outermostName: "Theme", level: .public),
+					GuardedPlainTypeNames.DeclaredType(name: "Unreachable", outermostName: "Unreachable", level: .public),
 				],
 			),
 			GuardedPlainTypeNames(
 				decisions: [ConditionalCompilationDecision(condition: "STAGING", isActive: false)],
 				consultedConditions: ["STAGING"],
 				declaredTypes: [
-					GuardedPlainTypeNames.DeclaredType(name: "Theme", outermostName: "Theme", level: .package, isNested: false),
-					GuardedPlainTypeNames.DeclaredType(name: "Theme", outermostName: "Theme", level: .public, isNested: false),
+					GuardedPlainTypeNames.DeclaredType(name: "Theme", outermostName: "Theme", level: .package),
+					GuardedPlainTypeNames.DeclaredType(name: "Theme", outermostName: "Theme", level: .public),
 				],
 			),
 		])
@@ -2582,8 +2582,8 @@ struct FileVisitorTests {
 				decisions: [ConditionalCompilationDecision(condition: "FLAG", isActive: true)],
 				consultedConditions: ["FLAG"],
 				declaredTypes: [
-					GuardedPlainTypeNames.DeclaredType(name: "Token", outermostName: "Token", level: .package, isNested: false),
-					GuardedPlainTypeNames.DeclaredType(name: "Token", outermostName: "Token", level: .public, isNested: false),
+					GuardedPlainTypeNames.DeclaredType(name: "Token", outermostName: "Token", level: .package),
+					GuardedPlainTypeNames.DeclaredType(name: "Token", outermostName: "Token", level: .public),
 				],
 			),
 		])
@@ -2615,14 +2615,14 @@ struct FileVisitorTests {
 				decisions: [ConditionalCompilationDecision(condition: "FLAG", isActive: false)],
 				consultedConditions: ["FLAG"],
 				declaredTypes: [
-					GuardedPlainTypeNames.DeclaredType(name: "Config", outermostName: "Space", level: .internal, isNested: true),
-					GuardedPlainTypeNames.DeclaredType(name: "Config", outermostName: "Space", level: .package, isNested: true),
+					GuardedPlainTypeNames.DeclaredType(name: "Config", outermostName: "Space", level: .internal),
+					GuardedPlainTypeNames.DeclaredType(name: "Config", outermostName: "Space", level: .package),
 				],
 			),
 			GuardedPlainTypeNames(
 				decisions: [ConditionalCompilationDecision(condition: "!OTHER", isActive: true)],
 				consultedConditions: ["OTHER"],
-				declaredTypes: [GuardedPlainTypeNames.DeclaredType(name: "Theme", outermostName: "Theme", level: .public, isNested: false)],
+				declaredTypes: [GuardedPlainTypeNames.DeclaredType(name: "Theme", outermostName: "Theme", level: .public)],
 			),
 		])
 		#expect(fileVisitor.conditionalCompilationDecisions.isEmpty)
@@ -2646,7 +2646,7 @@ struct FileVisitorTests {
 			GuardedPlainTypeNames(
 				decisions: [ConditionalCompilationDecision(condition: "FLAG", isActive: false)],
 				consultedConditions: ["FLAG"],
-				declaredTypes: [GuardedPlainTypeNames.DeclaredType(name: "Token", outermostName: "Token", level: .internal, isNested: false)],
+				declaredTypes: [GuardedPlainTypeNames.DeclaredType(name: "Token", outermostName: "Token", level: .internal)],
 			),
 		])
 	}
@@ -2669,7 +2669,7 @@ struct FileVisitorTests {
 			GuardedPlainTypeNames(
 				decisions: [ConditionalCompilationDecision(condition: "FLAG", isActive: false)],
 				consultedConditions: ["FLAG"],
-				declaredTypes: [GuardedPlainTypeNames.DeclaredType(name: "Token", outermostName: "Token", level: .internal, isNested: false)],
+				declaredTypes: [GuardedPlainTypeNames.DeclaredType(name: "Token", outermostName: "Token", level: .internal)],
 			),
 		])
 	}

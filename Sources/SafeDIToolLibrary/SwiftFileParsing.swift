@@ -303,12 +303,10 @@ func findSwiftFiles(inDirectories directories: [String]) async throws -> Set<Nor
 ///   - configurationFilePaths: The files that belong to the module itself, which are the only ones whose
 ///     `#SafeDIConfiguration` applies. In a multi-module input set these are the current target's files.
 ///   - activeCompilationConditions: The conditions supplied on the command line and through the manifest.
-///   - keepsTypeDeclarationsOtherModulesCanName: Whether the module's plain type declarations that another module names
-///     only through their records (`PlainTypeDeclaration.isNamedByOtherModulesThroughItsRecord`) – those declared
-///     `package`, and the `public` and `open` ones nested in another type – are kept too, wherever they are, for a run
-///     that writes the module's info without a target graph: the modules that read that info cannot tell which of its
-///     types they will name. A top-level `public` or `open` one proves nothing a module that reads no declaration of the
-///     type would not prove, and qualifies no name.
+///   - keepsTypeDeclarationsOtherModulesCanName: Whether the module's plain type declarations that only another module
+///     of its package can name – those declared `package` – are kept too, wherever they are, for a run that writes the
+///     module's info without a target graph: the modules that read that info cannot tell which of its types they will
+///     name. A `public` or `open` one proves nothing a module that reads no declaration of the type would not prove.
 ///   - isReadingModuleFile: Whether the file at a path among `filePaths` is one of the module's own files, rather than one
 ///     of a module it depends on: a mention in the module names an `internal` declaration of its own files only, so a
 ///     decision about another module's is that module's to assert.
@@ -351,7 +349,7 @@ func parseModuleKeepingPlainTypeNames(
 		configurationFilePaths.contains(filePath) && SafeDIConfiguration.isInConventionalFile(atPath: filePath)
 	}
 	let conventionalConfigurationFileReads = try conventionalConfigurationFilePaths.sorted().map { filePath in
-		try (path: filePath, read: readSwiftFile(atPath: filePath, findingTypesOtherModulesCanName: keepsTypeDeclarationsOtherModulesCanName))
+		try (path: filePath, read: readSwiftFile(atPath: filePath, findingPackageAccessModifier: keepsTypeDeclarationsOtherModulesCanName))
 	}
 	let conventionalConfigurationFiles = conventionalConfigurationFileReads.compactMap { file in
 		file.read.syntaxTree.map { (path: file.path, syntaxTree: $0) }
@@ -369,7 +367,7 @@ func parseModuleKeepingPlainTypeNames(
 	let walkedFiles = try await walkFiles(
 		named: filePaths.subtracting(conventionalConfigurationFilePaths),
 		conditionalCompilation: firstPassEvaluator,
-		findingTypesOtherModulesCanName: keepsTypeDeclarationsOtherModulesCanName,
+		findingPackageAccessModifier: keepsTypeDeclarationsOtherModulesCanName,
 	)
 	let fileScans = (firstPassEvaluator == defaultEvaluator
 		? conventionalConfigurationFileScans
@@ -409,15 +407,12 @@ func parseModuleKeepingPlainTypeNames(
 		// A file that was parsed may declare no type of a name, and is not parsed again.
 		mayDeclareTypesNamedBySkippedFilePath[file.path] = file.read.mayDeclareTypesNamed
 	}
-	// A file that may declare a type another module names only through its record – one that holds the word `package`,
-	// or the word `public` or `open` and a type keyword inside braces (`TypeDeclarationWords.mayDeclareTypeOtherModulesCanName`)
-	// – is parsed whatever names the text search found in it: the search misses a name behind a comment, which such a
-	// declaration can have, and a type nested in a namespace no declaration of the module names is read for the modules
-	// that extend the namespace.
-	let skippedFilePathsDeclaringTypesOtherModulesCanName = walkedFiles.skippedFilePathsDeclaringTypesOtherModulesCanName
+	// A file that holds the word `package` is parsed whatever names the text search found in it: the search misses a name
+	// behind a comment, which a `package` declaration other modules read can have.
+	let skippedFilePathsMentioningPackageAccessModifier = walkedFiles.skippedFilePathsMentioningPackageAccessModifier
 		.union(conventionalConfigurationFileReads.filter(\.read.mayDeclareTypeOtherModulesCanName).map(\.path))
 	let typeDeclaringSkippedFilePaths = Set(mayDeclareTypesNamedBySkippedFilePath.filter { !$0.value.isDisjoint(with: keptTypeNames.outermostTypeNames) }.map(\.key))
-		.union(skippedFilePathsDeclaringTypesOtherModulesCanName)
+		.union(skippedFilePathsMentioningPackageAccessModifier)
 	// A file of the module's own that may declare a type whose name begins with a reserved prefix is parsed too, so that
 	// its declarations of such types are reported, as a file that mentions SafeDI reports them. Such a file contributes
 	// nothing else that the search did not parse it for, so the module's declarations are those a parse that read no
@@ -436,7 +431,7 @@ func parseModuleKeepingPlainTypeNames(
 		.concurrentlyMapped { file in
 			file.fileScan.keepingPlainTypeDeclarations(
 				ofTypesWithin: keptTypeNames,
-				keepingThoseOtherModulesCanName: keepsTypeDeclarationsOtherModulesCanName,
+				keepingThoseOtherModulesPackageCanName: keepsTypeDeclarationsOtherModulesCanName,
 				isInReadingModule: file.isInReadingModule,
 			)
 		}
@@ -464,8 +459,8 @@ func parseModuleKeepingPlainTypeNames(
 /// those types alone, as `parseModule` keeps them.
 /// - Parameters:
 ///   - moduleTypeNames: The names of the types the module's other declarations mention (`keptPlainTypeNames(of:)`).
-///   - keepsTypeDeclarationsOtherModulesCanName: Whether the plain declarations another module names only through their
-///     records are kept too, wherever they are, as `parseModule` keeps them for a run that writes the module's info
+///   - keepsTypeDeclarationsOtherModulesCanName: Whether the plain declarations that only another module of the package
+///     can name are kept too, wherever they are, as `parseModule` keeps them for a run that writes the module's info
 ///     without a target graph.
 ///   - isReadingModuleFile: Whether the file at a path among `filePaths` is one of the module's own files, as
 ///     `parseModule` asks it.
@@ -478,18 +473,18 @@ func parseSwiftFilesDeclaringTypes(
 	keepsTypeDeclarationsOtherModulesCanName: Bool = false,
 	isReadingModuleFile: (String) -> Bool,
 ) async throws -> [FileScan] {
-	let walkedFiles = try await walkFiles(named: filePaths, conditionalCompilation: evaluator, findingTypesOtherModulesCanName: keepsTypeDeclarationsOtherModulesCanName)
+	let walkedFiles = try await walkFiles(named: filePaths, conditionalCompilation: evaluator, findingPackageAccessModifier: keepsTypeDeclarationsOtherModulesCanName)
 	let keptTypeNames = moduleTypeNames.union(keptPlainTypeNames(of: walkedFiles.fileScans))
 	return try await (walkedFiles.fileScans + walkFilesDeclaringTypes(
 		among: Set(walkedFiles.mayDeclareTypesNamedBySkippedFilePath.filter { !$0.value.isDisjoint(with: keptTypeNames.outermostTypeNames) }.map(\.key))
-			.union(walkedFiles.skippedFilePathsDeclaringTypesOtherModulesCanName)
+			.union(walkedFiles.skippedFilePathsMentioningPackageAccessModifier)
 			.sorted(),
 		conditionalCompilation: evaluator,
 	))
 	.map { fileScan in
 		fileScan.keepingPlainTypeDeclarations(
 			ofTypesWithin: keptTypeNames,
-			keepingThoseOtherModulesCanName: keepsTypeDeclarationsOtherModulesCanName,
+			keepingThoseOtherModulesPackageCanName: keepsTypeDeclarationsOtherModulesCanName,
 			isInReadingModule: isReadingModuleFile(fileScan.path),
 		)
 	}
@@ -570,11 +565,11 @@ public struct FileScan: Codable, Sendable {
 	let outputFileDeclarations: OutputFileDeclarations
 	/// The file's declarations of types that are not `@Instantiable` (`FileVisitor.plainTypeDeclarations`), outside every
 	/// `#if` block and in the clauses the conditions select, which `consultedCompilationConditions` cover once the module
-	/// keeps them (`keepingPlainTypeDeclarations(ofTypesWithin:keepingThoseOtherModulesCanName:isInReadingModule:)`).
+	/// keeps them (`keepingPlainTypeDeclarations(ofTypesWithin:keepingThoseOtherModulesPackageCanName:isInReadingModule:)`).
 	let plainTypeDeclarations: [PlainTypeDeclaration]
 	/// How the conditions of the file's `#if` blocks that declare a plain type and guard nothing else SafeDI reads were
 	/// evaluated, with the conditions each consulted and the types it declares (`FileVisitor.plainTypeDeclarationDecisions`),
-	/// until `keepingPlainTypeDeclarations(ofTypesWithin:keepingThoseOtherModulesCanName:isInReadingModule:)` adds
+	/// until `keepingPlainTypeDeclarations(ofTypesWithin:keepingThoseOtherModulesPackageCanName:isInReadingModule:)` adds
 	/// the conditions of the blocks that could declare a declaration the module keeps to `consultedCompilationConditions`
 	/// and asserts the decisions a read resolves by, among `conditionalCompilationDecisions`, and drops the rest.
 	let plainTypeDeclarationDecisions: [GuardedPlainTypeNames]
@@ -614,29 +609,26 @@ public struct FileScan: Codable, Sendable {
 	}
 
 	/// This scan, keeping the declarations of `plainTypeDeclarations` of the types `keptTypeNames` keeps, and, when
-	/// `keepingThoseOtherModulesCanName`, those another module names only through their records
-	/// (`PlainTypeDeclaration.isNamedByOtherModulesThroughItsRecord`): the `package` ones, and the `public` and `open` ones
-	/// nested in another type, which a member of an extension of that type in another module names by the nested type's
-	/// own name (`TypeAccessProof.NestedTypeQualifier`). A top-level `public` or `open` declaration of a type no
+	/// `keepingThoseOtherModulesPackageCanName`, those declared `package`. A `public` or `open` declaration of a type no
 	/// declaration of the module mentions is not kept: a type no declaration SafeDI reads declares counts as `public`
-	/// (`TypeAccessProof`), so another module proves it the same without the record, and no name is qualified by it.
+	/// (`TypeAccessProof`), so another module proves it the same without the record.
 	///
 	/// Each block of `plainTypeDeclarationDecisions` that declares, in any clause, a type such a declaration could be of
 	/// decides which of them are read, so its conditions join `consultedCompilationConditions`; the conditions of the rest
 	/// decide nothing the module reads. Its decisions are asserted, among `conditionalCompilationDecisions`, when a read
 	/// the access check makes can resolve to such a declaration (`KeptPlainTypeNames.assertsDecisions(about:isInReadingModule:)`),
-	/// or, when `keepingThoseOtherModulesCanName`, the declaration is one a module that reads the module's info names
-	/// through its record.
+	/// or, when `keepingThoseOtherModulesPackageCanName`, the declaration is `package`, which a module that reads the
+	/// module's info can name.
 	/// - Parameter isInReadingModule: Whether the file is one of the module's own, whose `internal` declarations a mention
 	///   in the module names; a mention in another module names only a declaration that is `package` or wider.
-	func keepingPlainTypeDeclarations(ofTypesWithin keptTypeNames: KeptPlainTypeNames, keepingThoseOtherModulesCanName: Bool, isInReadingModule: Bool) -> FileScan {
+	func keepingPlainTypeDeclarations(ofTypesWithin keptTypeNames: KeptPlainTypeNames, keepingThoseOtherModulesPackageCanName: Bool, isInReadingModule: Bool) -> FileScan {
 		var decisions = conditionalCompilationDecisions
 		var consultedCompilationConditions = consultedCompilationConditions
 		var keptGuardedTypeNames = Set(keptGuardedPlainTypeNames)
 		for guardedNames in plainTypeDeclarationDecisions {
 			let keptTypes = guardedNames.declaredTypes.filter { declaredType in
 				keptTypeNames.outermostTypeNames.contains(declaredType.outermostName)
-					|| (keepingThoseOtherModulesCanName && declaredType.isNamedByOtherModulesThroughItsRecord)
+					|| (keepingThoseOtherModulesPackageCanName && declaredType.level == .package)
 			}
 			guard !keptTypes.isEmpty else { continue }
 			consultedCompilationConditions.formUnion(guardedNames.consultedConditions)
@@ -645,7 +637,7 @@ public struct FileScan: Codable, Sendable {
 			}
 			guard keptTypes.contains(where: { declaredType in
 				keptTypeNames.assertsDecisions(about: declaredType, isInReadingModule: isInReadingModule)
-					|| (keepingThoseOtherModulesCanName && declaredType.isNamedByOtherModulesThroughItsRecord)
+					|| (keepingThoseOtherModulesPackageCanName && declaredType.level == .package)
 			}) else { continue }
 			for decision in guardedNames.decisions where !decisions.contains(decision) {
 				decisions.append(decision)
@@ -665,7 +657,7 @@ public struct FileScan: Codable, Sendable {
 			outputFileDeclarations: outputFileDeclarations,
 			plainTypeDeclarations: plainTypeDeclarations.filter { plainTypeDeclaration in
 				plainTypeDeclaration.typeDescription.outermostTypeName.map { keptTypeNames.outermostTypeNames.contains($0.spelledWithoutBackticks) } == true
-					|| (keepingThoseOtherModulesCanName && plainTypeDeclaration.isNamedByOtherModulesThroughItsRecord)
+					|| (keepingThoseOtherModulesPackageCanName && AccessLevel.normalized(plainTypeDeclaration.levelBeforeExtendedTypeCap) == .package)
 			},
 			plainTypeDeclarationDecisions: [],
 			keptGuardedPlainTypeNames: keptGuardedTypeNames.sorted(),
@@ -923,39 +915,6 @@ struct KeptPlainTypeNames: Codable, Equatable, Sendable {
 	}
 }
 
-extension PlainTypeDeclaration {
-	/// Whether a module that reads this declaration's module only through that module's info names the type only through
-	/// this record (`isNamedByOtherModulesThroughItsRecord(level:isNested:)`), at its level before the type an enclosing
-	/// extension extends caps it, as for every `package` one: a type nested in an extension of a narrower type is kept too.
-	var isNamedByOtherModulesThroughItsRecord: Bool {
-		SafeDIToolLibrary.isNamedByOtherModulesThroughItsRecord(level: AccessLevel.normalized(levelBeforeExtendedTypeCap), isNested: isNested)
-	}
-}
-
-extension GuardedPlainTypeNames.DeclaredType {
-	/// Whether the declaration of this type is one another module names only through its record
-	/// (`isNamedByOtherModulesThroughItsRecord(level:isNested:)`).
-	var isNamedByOtherModulesThroughItsRecord: Bool {
-		SafeDIToolLibrary.isNamedByOtherModulesThroughItsRecord(level: level, isNested: isNested)
-	}
-}
-
-/// Whether a module that reads a declaration's module only through that module's info names the type only through the
-/// declaration's record, for a declaration at `level`, normalized (`AccessLevel.normalized(_:)`): a `package` one, which
-/// another module of the package can name and SafeDI would otherwise count as `public`, or a `public` one nested in
-/// another type, which a member of another module's extension of that type names by its own name, so SafeDI qualifies it
-/// from the record (`TypeAccessProof.NestedTypeQualifier`).
-private func isNamedByOtherModulesThroughItsRecord(level: AccessLevel, isNested: Bool) -> Bool {
-	switch level {
-	case .package:
-		true
-	case .open, .public:
-		isNested
-	case .internal, .fileprivate, .private:
-		false
-	}
-}
-
 /// The names along the chain of the type `typeName` spells, as `OutputFileDeclarations.instantiableTypeNames` records a
 /// type, that can bound it: the outermost type's and each nested type's, without its own unless it is the outermost. The
 /// construction check reads a declaration of each type enclosing it, never another declaration of its own name
@@ -1031,26 +990,26 @@ func insertMentionedTypeNames(of instantiables: [Instantiable], into mentionedTy
 	}
 }
 
-/// What `walkFiles(named:conditionalCompilation:findingTypesOtherModulesCanName:)` found.
+/// What `walkFiles(named:conditionalCompilation:findingPackageAccessModifier:)` found.
 private struct WalkedFiles {
 	/// What each file that mentions SafeDI contributes.
 	var fileScans = [FileScan]()
 	/// The names each file that mentions no SafeDI marker may declare a type of (`ReadSwiftFile.mentionsNoSafeDI`), for
 	/// each such file that may declare one.
 	var mayDeclareTypesNamedBySkippedFilePath = [String: Set<String>]()
-	/// The files that mention no SafeDI marker and may declare a type another module names only through its record
+	/// The files that mention no SafeDI marker and may declare a type only another module of the package can name
 	/// (`ReadSwiftFile.mayDeclareTypeOtherModulesCanName`).
-	var skippedFilePathsDeclaringTypesOtherModulesCanName = Set<String>()
+	var skippedFilePathsMentioningPackageAccessModifier = Set<String>()
 }
 
 /// Reads, parses, and walks every file in parallel under its path, keeping what each file that mentions SafeDI
-/// contributes, and the names of the types each other file may declare, and, when `findingTypesOtherModulesCanName`,
-/// whether it may declare one another module names only through its record.
+/// contributes, and the names of the types each other file may declare, and, when `findingPackageAccessModifier`,
+/// whether it may declare one only another module of the package can name.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 private func walkFiles(
 	named filePaths: Set<String>,
 	conditionalCompilation evaluator: ConditionalCompilationEvaluator,
-	findingTypesOtherModulesCanName: Bool = false,
+	findingPackageAccessModifier: Bool = false,
 ) async throws -> WalkedFiles {
 	try await withTaskGroup(
 		of: WalkedFileRead.self,
@@ -1059,7 +1018,7 @@ private func walkFiles(
 		for filePath in filePaths where !filePath.isEmpty {
 			taskGroup.addTask {
 				do throws(UnreadableSwiftFileError) {
-					let read = try readSwiftFile(atPath: filePath, findingTypesOtherModulesCanName: findingTypesOtherModulesCanName)
+					let read = try readSwiftFile(atPath: filePath, findingPackageAccessModifier: findingPackageAccessModifier)
 					return if let syntaxTree = read.syntaxTree {
 						WalkedFileRead(path: filePath, read: .success(.scanned(walk(syntaxTree, at: filePath, conditionalCompilation: evaluator))))
 					} else {
@@ -1084,7 +1043,7 @@ private func walkFiles(
 					walkedFiles.mayDeclareTypesNamedBySkippedFilePath[file.path] = mayDeclareTypesNamed
 				}
 				if mayDeclareTypeOtherModulesCanName {
-					walkedFiles.skippedFilePathsDeclaringTypesOtherModulesCanName.insert(file.path)
+					walkedFiles.skippedFilePathsMentioningPackageAccessModifier.insert(file.path)
 				}
 			}
 		}
@@ -1098,23 +1057,23 @@ private func walkFiles(
 	.get()
 }
 
-/// What `walkFiles(named:conditionalCompilation:findingTypesOtherModulesCanName:)` read of the file at `path`. A struct, never
+/// What `walkFiles(named:conditionalCompilation:findingPackageAccessModifier:)` read of the file at `path`. A struct, never
 /// a tuple (`taskGroupTupleElement` in `.claude/rules/source-rules.md`).
 private struct WalkedFileRead: Sendable {
 	let path: String
 	let read: Result<WalkedSwiftFile, UnreadableSwiftFileError>
 }
 
-/// What `walkFiles(named:conditionalCompilation:findingTypesOtherModulesCanName:)` found in one file.
+/// What `walkFiles(named:conditionalCompilation:findingPackageAccessModifier:)` found in one file.
 private enum WalkedSwiftFile: Sendable {
 	/// The file mentions SafeDI, and contributes this.
 	case scanned(FileScan)
-	/// The file mentions no SafeDI marker, and may declare types of these names, and one another module names only
-	/// through its record.
+	/// The file mentions no SafeDI marker, and may declare types of these names, and one only another module of the
+	/// package can name.
 	case skipped(mayDeclareTypesNamed: Set<String>, mayDeclareTypeOtherModulesCanName: Bool)
 }
 
-/// What each file at `filePaths` contributes: files `walkFiles(named:conditionalCompilation:findingTypesOtherModulesCanName:)`
+/// What each file at `filePaths` contributes: files `walkFiles(named:conditionalCompilation:findingPackageAccessModifier:)`
 /// did not parse, since their text mentions no SafeDI marker, but whose text may declare a type whose plain declaration
 /// SafeDI reads.
 /// Each contributes its declarations of types that are not `@Instantiable` (`FileVisitor.plainTypeDeclarations`) in the
@@ -1243,15 +1202,15 @@ private struct ReadSwiftFile {
 	/// file.
 	let mayDeclareTypesNamed: Set<String>
 	/// When its text mentions no SafeDI marker, and it was read for the declarations another module can name, whether
-	/// it may declare one another module names only through its record
+	/// it may declare a `package` one: whether it holds the word `package`
 	/// (`TypeDeclarationWords.mayDeclareTypeOtherModulesCanName`). `false` otherwise.
 	var mayDeclareTypeOtherModulesCanName = false
 }
 
 /// Reads the file at `filePath`, and parses it when its text shows it can declare something SafeDI scans for. When
-/// `findingTypesOtherModulesCanName`, a file it does not parse also records whether its text may declare a type another
-/// module names only through its record.
-private func readSwiftFile(atPath filePath: String, findingTypesOtherModulesCanName: Bool) throws(UnreadableSwiftFileError) -> ReadSwiftFile {
+/// `findingPackageAccessModifier`, a file it does not parse also records whether its text may declare a type only
+/// another module of the package can name.
+private func readSwiftFile(atPath filePath: String, findingPackageAccessModifier: Bool) throws(UnreadableSwiftFileError) -> ReadSwiftFile {
 	var content = try swiftFileContents(atPath: filePath)
 	// Searching the bytes rather than the characters is many times faster, and finds the markers wherever a
 	// character search does: no other sequence of characters is equivalent to these ASCII ones. It also finds a
@@ -1269,7 +1228,7 @@ private func readSwiftFile(atPath filePath: String, findingTypesOtherModulesCanN
 			return ReadSwiftFile(
 				syntaxTree: nil,
 				mayDeclareTypesNamed: words.namesFollowingKeywords,
-				mayDeclareTypeOtherModulesCanName: findingTypesOtherModulesCanName && words.mayDeclareTypeOtherModulesCanName,
+				mayDeclareTypeOtherModulesCanName: findingPackageAccessModifier && words.mayDeclareTypeOtherModulesCanName,
 			)
 		}
 	}
@@ -1282,37 +1241,10 @@ struct TypeDeclarationWords {
 	/// (`mentionedTypeNames(of:)`). A superset of the names of the types the text declares.
 	var namesFollowingKeywords = Set<String>()
 	/// Whether the text holds the word `package`, which every declaration only another module of the package can name
-	/// holds – on itself, on a type enclosing it, or on the extension it is directly inside – wherever comments put it.
-	var holdsPackageWord = false
-	/// Whether a type keyword inside braces (`holdsTypeKeywordInsideBraces`) may be one a `public` or `open` modifier
-	/// applies to: the word `public` or `open` came before it, and no word that introduces another declaration – `func`,
-	/// `var`, `let`, `init`, `subscript`, `case`, `deinit`, `import`, `extension`, or a type keyword – came between them,
-	/// unless a `"` or `/` did too, since a comment or a literal between a modifier and its keyword can hold such a word.
-	/// Every `public` or `open` type nested in a type declaration holds the modifier on itself, so a file whose only nested
-	/// types are narrower, such as a `private` `CodingKeys`, is not parsed for them.
-	var holdsPublicOrOpenTypeKeywordInsideBraces = false
-	/// Whether the word `public` or `open` came before the word `extension` with no word that introduces another
-	/// declaration between them (`holdsPublicOrOpenTypeKeywordInsideBraces`): a type nested in such an extension is
-	/// `public` without a modifier of its own.
-	var holdsPublicOrOpenExtension = false
-	/// Whether a type keyword may be inside braces, as a nested type's is: a keyword after an opening brace that no
-	/// closing brace has matched. Braces are counted wherever they are, so one in a comment, a string literal or a regular
-	/// expression literal miscounts them. An opening one there only adds depth. A closing one there could hide a nested
-	/// keyword, and it follows, on its line, the `"` or `/` that opens what holds it, or, anywhere before it, the `"""`,
-	/// `/*` or `#/` that opens a literal or comment spanning lines. After a closing brace one of those precedes, any keyword
-	/// after any opening brace counts, and after a name in backticks that holds a brace, a quotation mark, `/` or `#` –
-	/// backticks a comment or a literal holds, which can hide braces – any keyword counts. A keyword between such backticks
-	/// is not found, as a name there is not (`namesFollowingKeywords`).
-	var holdsTypeKeywordInsideBraces = false
-	/// Whether the text may declare a type another module names only through its record
-	/// (`PlainTypeDeclaration.isNamedByOtherModulesThroughItsRecord`): a `package` one, when it holds the word `package`,
-	/// or a `public` or `open` one nested in another type, when a `public` or `open` modifier may apply to a type keyword
-	/// inside braces, or the text holds a `public` or `open` extension and a type keyword inside braces. A comment or a string literal can hold the words too, so this is `true` whenever the text declares
-	/// such a type, a superset that a parse decides. A top-level `public` or `open` declaration needs no record
-	/// (`keepingPlainTypeDeclarations`).
-	var mayDeclareTypeOtherModulesCanName: Bool {
-		holdsPackageWord || holdsPublicOrOpenTypeKeywordInsideBraces || (holdsPublicOrOpenExtension && holdsTypeKeywordInsideBraces)
-	}
+	/// holds – on itself, on a type enclosing it, or on the extension it is directly inside – wherever comments put it. A
+	/// comment or a string literal can hold the word too, so this is `true` whenever the text declares such a type, a
+	/// superset that a parse decides. A `public` or `open` declaration needs no record (`keepingPlainTypeDeclarations`).
+	var mayDeclareTypeOtherModulesCanName = false
 }
 
 extension UInt8 {
@@ -1321,17 +1253,6 @@ extension UInt8 {
 	fileprivate var isIdentifierByte: Bool {
 		switch self {
 		case UInt8(ascii: "a")...UInt8(ascii: "z"), UInt8(ascii: "A")...UInt8(ascii: "Z"), UInt8(ascii: "0")...UInt8(ascii: "9"), UInt8(ascii: "_"), 0x80...:
-			true
-		default:
-			false
-		}
-	}
-
-	/// Whether this byte, in a name in backticks, may show that the backticks are a comment's or a literal's, which can
-	/// hide a closing brace: a brace, a quotation mark, `/`, or `#`.
-	fileprivate var mayHideBrace: Bool {
-		switch self {
-		case UInt8(ascii: "{"), UInt8(ascii: "}"), UInt8(ascii: "\""), UInt8(ascii: "/"), UInt8(ascii: "#"):
 			true
 		default:
 			false
@@ -1365,20 +1286,6 @@ extension UnsafeBufferPointer<UInt8> {
 		var index = startIndex
 		// Whether the last word introduces a type declaration, and only whitespace followed it since.
 		var followsTypeKeyword = false
-		// The opening braces no closing brace has matched, counted wherever they are
-		// (`TypeDeclarationWords.holdsTypeKeywordInsideBraces`).
-		var braceDepth = 0
-		var holdsOpeningBrace = false
-		// Whether a closing brace may have been in a comment or a literal, so that the count may be too low.
-		var braceDepthMayBeLow = false
-		var lineHoldsQuotationMarkOrSlash = false
-		var holdsMultilineLiteralOrComment = false
-		var previousByte: UInt8 = 0
-		var quotationMarkRun = 0
-		// Whether a `public` or `open` word may apply to the next type keyword or extension
-		// (`TypeDeclarationWords.holdsPublicOrOpenTypeKeywordInsideBraces`), and whether a `"` or `/` came since it.
-		var followsPublicOrOpenWord = false
-		var followsPublicOrOpenWordAcrossCommentOrLiteral = false
 		while index < endIndex {
 			if self[index].isIdentifierByte {
 				let wordStart = index
@@ -1390,69 +1297,17 @@ extension UnsafeBufferPointer<UInt8> {
 					found.namesFollowingKeywords.insert(String(decoding: word, as: UTF8.self))
 				}
 				followsTypeKeyword = word.isTypeDeclarationKeyword
-				if followsTypeKeyword {
-					if braceDepthMayBeLow ? holdsOpeningBrace : braceDepth > 0 {
-						found.holdsTypeKeywordInsideBraces = true
-						if followsPublicOrOpenWord {
-							found.holdsPublicOrOpenTypeKeywordInsideBraces = true
-						}
-					}
-					followsPublicOrOpenWord = false
-				} else if word.spells("package") {
-					found.holdsPackageWord = true
-				} else if word.spells("public") || word.spells("open") {
-					followsPublicOrOpenWord = true
-					followsPublicOrOpenWordAcrossCommentOrLiteral = false
-				} else if followsPublicOrOpenWord, word.spells("extension") {
-					found.holdsPublicOrOpenExtension = true
-					followsPublicOrOpenWord = followsPublicOrOpenWordAcrossCommentOrLiteral
-				} else if followsPublicOrOpenWord, !followsPublicOrOpenWordAcrossCommentOrLiteral, word.introducesDeclarationOtherThanTypeOrExtension {
-					followsPublicOrOpenWord = false
+				if word.spells("package") {
+					found.mayDeclareTypeOtherModulesCanName = true
 				}
-				previousByte = 0
-				quotationMarkRun = 0
 			} else if self[index] == backtickByte, let nameEnd = closingBacktickIndexOnLine(ofBacktickAt: index) {
-				let name = UnsafeBufferPointer(rebasing: self[(index + 1)..<nameEnd])
 				if followsTypeKeyword {
-					found.namesFollowingKeywords.insert(String(decoding: name, as: UTF8.self))
-				}
-				// Backticks a comment or a literal holds can enclose a brace, or what opens a comment or a literal.
-				if name.contains(where: \.mayHideBrace) {
-					braceDepthMayBeLow = true
-					holdsOpeningBrace = true
+					found.namesFollowingKeywords.insert(String(decoding: UnsafeBufferPointer(rebasing: self[(index + 1)..<nameEnd]), as: UTF8.self))
 				}
 				followsTypeKeyword = false
-				previousByte = backtickByte
-				quotationMarkRun = 0
 				index = nameEnd + 1
 			} else {
-				let byte = self[index]
-				followsTypeKeyword = followsTypeKeyword && byte.isWhitespaceByte
-				quotationMarkRun = byte == UInt8(ascii: "\"") ? quotationMarkRun + 1 : 0
-				if byte == UInt8(ascii: "\"") || byte == UInt8(ascii: "/") {
-					followsPublicOrOpenWordAcrossCommentOrLiteral = true
-				}
-				switch byte {
-				case UInt8(ascii: "{"):
-					braceDepth += 1
-					holdsOpeningBrace = true
-				case UInt8(ascii: "}"):
-					braceDepthMayBeLow = braceDepthMayBeLow || lineHoldsQuotationMarkOrSlash || holdsMultilineLiteralOrComment
-					braceDepth = Swift.max(0, braceDepth - 1)
-				case UInt8(ascii: "\""):
-					lineHoldsQuotationMarkOrSlash = true
-					holdsMultilineLiteralOrComment = holdsMultilineLiteralOrComment || quotationMarkRun == 3
-				case UInt8(ascii: "/"):
-					lineHoldsQuotationMarkOrSlash = true
-					holdsMultilineLiteralOrComment = holdsMultilineLiteralOrComment || previousByte == UInt8(ascii: "#")
-				case UInt8(ascii: "*"):
-					holdsMultilineLiteralOrComment = holdsMultilineLiteralOrComment || previousByte == UInt8(ascii: "/")
-				case UInt8(ascii: "\n"):
-					lineHoldsQuotationMarkOrSlash = false
-				default:
-					break
-				}
-				previousByte = byte
+				followsTypeKeyword = followsTypeKeyword && self[index].isWhitespaceByte
 				index += 1
 			}
 		}
@@ -1477,24 +1332,6 @@ extension UnsafeBufferPointer<UInt8> {
 			spells("typealias")
 		case 14:
 			spells("associatedtype")
-		default:
-			false
-		}
-	}
-
-	/// Whether these bytes, a word, are a keyword that introduces a declaration that is neither a type's nor an
-	/// extension's, which a `public` or `open` modifier before it applies to instead of to a later type keyword: `func`,
-	/// `var`, `let`, `init`, `subscript`, `case`, `deinit`, or `import`.
-	private var introducesDeclarationOtherThanTypeOrExtension: Bool {
-		switch count {
-		case 3:
-			spells("var") || spells("let")
-		case 4:
-			spells("func") || spells("init") || spells("case")
-		case 6:
-			spells("deinit") || spells("import")
-		case 9:
-			spells("subscript")
 		default:
 			false
 		}

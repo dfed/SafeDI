@@ -74,7 +74,6 @@ struct SafeDIToolSeamHoleSiteBodyTests: ~Copyable {
 		            self.lazyPanel = lazyPanel
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(panel: .init(__safeDI_noScope: __safeDI_builder), panelBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) }, lazyPanel: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -88,7 +87,6 @@ struct SafeDIToolSeamHoleSiteBodyTests: ~Copyable {
 		            self.api = api
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { __safeDI_builder() })
 		        }
@@ -98,19 +96,19 @@ struct SafeDIToolSeamHoleSiteBodyTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 		        let __safeDI_apiBuilder_panel = __safeDI_apiBuilder.panel
-		        func __safeDI_panel() -> Panel {
+		        @inline(never) func __safeDI_panel() -> Panel {
 		            let api: any Api = __safeDI_apiBuilder_panel.api()
 		            return Panel(api: api)
 		        }
 		        let panel: Panel = __safeDI_panel()
 		        let __safeDI_apiBuilder_panelBuilder = __safeDI_apiBuilder.panelBuilder(panel)
-		        func __safeDI_panelBuilder() -> Panel {
+		        @inline(never) func __safeDI_panelBuilder() -> Panel {
 		            let api: any Api = __safeDI_apiBuilder_panelBuilder.api()
 		            return Panel(api: api)
 		        }
 		        let panelBuilder = Instantiator<Panel>(__safeDI_panelBuilder)
 		        let __safeDI_apiBuilder_lazyPanel = __safeDI_apiBuilder.lazyPanel(panel, panelBuilder)
-		        func __safeDI_lazyPanel() -> Panel {
+		        @inline(never) func __safeDI_lazyPanel() -> Panel {
 		            let api: any Api = __safeDI_apiBuilder_lazyPanel.api()
 		            return Panel(api: api)
 		        }

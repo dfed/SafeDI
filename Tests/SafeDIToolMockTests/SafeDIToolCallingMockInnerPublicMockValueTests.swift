@@ -520,7 +520,6 @@ struct SafeDIToolCallingMockInnerPublicMockValueTests: ~Copyable {
 		            self.api = api
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { _ in __safeDI_builder() })
 		        }
@@ -636,7 +635,6 @@ struct SafeDIToolCallingMockInnerPublicMockValueTests: ~Copyable {
 		            self.inner = inner
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { _, _, _ in __safeDI_builder() }, inner: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -648,7 +646,7 @@ struct SafeDIToolCallingMockInnerPublicMockValueTests: ~Copyable {
 		    public init(__safeDI_db: @autoclosure @escaping () -> Db, __safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 		        let db = LazilyInstantiated<Db>(__safeDI_db)
 		        let k = K(db: db.instance)
-		        func __safeDI_inner() -> Inner {
+		        @inline(never) func __safeDI_inner() -> Inner {
 		            _ = Inner.__safeDI_Inner_FCE996E4E101DCD3.self // If this line does not compile, compile the code SafeDI generates for module InnerMod into InnerMod: under Bazel, add InnerMod’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Inner(__safeDI_db: db.instance, __safeDI_apiBuilder: __safeDI_apiBuilder.inner)
 		        }

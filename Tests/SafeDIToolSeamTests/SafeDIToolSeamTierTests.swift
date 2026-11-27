@@ -1226,7 +1226,7 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 				    public convenience init(__safeDI_logger: @autoclosure @escaping () -> Logger) {
 				        let logger = LazilyInstantiated<Logger>(__safeDI_logger)
-				        func __safeDI_screen() -> Screen {
+				        @inline(never) func __safeDI_screen() -> Screen {
 				            _ = Screen.__safeDI_Screen_4FF58FD9C96A28C4.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 				            return Screen(__safeDI_logger: logger.instance)
 				        }
@@ -1273,7 +1273,7 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 				    public convenience init(__safeDI_logger: @autoclosure @escaping () -> Logger) {
 				        let logger = LazilyInstantiated<Logger>(__safeDI_logger)
-				        func __safeDI_screen() -> Screen {
+				        @inline(never) func __safeDI_screen() -> Screen {
 				            _ = Screen.__safeDI_Screen_4FF58FD9C96A28C4.self // If this line does not compile, add the SafeDI plugin to the target that declares Screen.
 				            return Screen(__safeDI_logger: logger.instance)
 				        }
@@ -1401,7 +1401,6 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(service: { _ in __safeDI_builder() })
 		        }
@@ -1510,7 +1509,6 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(service: { __safeDI_builder() })
 		        }
@@ -1537,7 +1535,7 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 		    package init(__safeDI_serviceBuilder: @autoclosure @escaping () -> Thing?, __safeDI_serviceSendableBuilder: __safeDI_ServiceSendableCarrier<any Service>) {
 		        let serviceBuilder = LazilyInstantiated<Thing?>(__safeDI_serviceBuilder)
 		        let badge = Badge(serviceBuilder: serviceBuilder.instance)
-		        @Sendable nonisolated func __safeDI_service() -> any Service {
+		        @inline(never) @Sendable nonisolated func __safeDI_service() -> any Service {
 		            __safeDI_serviceSendableBuilder.service()
 		        }
 		        let service = SendableLazilyInstantiated<any Service>(__safeDI_service)

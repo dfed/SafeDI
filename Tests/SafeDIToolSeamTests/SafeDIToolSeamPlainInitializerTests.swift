@@ -981,7 +981,7 @@ struct SafeDIToolSeamPlainInitializerTests: ~Copyable {
 		        let a = LazilyInstantiated<User>(__safeDI_a)
 		        let b = LazilyInstantiated<User>(__safeDI_b)
 		        let eager = EagerReader(a: a.instance)
-		        func __safeDI_lazy() -> LazyReader {
+		        @inline(never) func __safeDI_lazy() -> LazyReader {
 		            LazyReader(b: b.instance)
 		        }
 		        let lazy = LazilyInstantiated<LazyReader>(__safeDI_lazy)
@@ -1103,11 +1103,11 @@ struct SafeDIToolSeamPlainInitializerTests: ~Copyable {
 		    internal convenience init(__safeDI_c: @autoclosure @escaping () -> User, __safeDI_secret: @autoclosure @escaping () -> Secret?) {
 		        let c = LazilyInstantiated<User>(__safeDI_c)
 		        let secret = LazilyInstantiated<Secret?>(__safeDI_secret)
-		        func __safeDI_readerBuilder() -> Reader {
+		        @inline(never) func __safeDI_readerBuilder() -> Reader {
 		            Reader(c: c.instance)
 		        }
 		        let readerBuilder = Instantiator<Reader>(__safeDI_readerBuilder)
-		        func __safeDI_secretBuilder() -> SecretReader {
+		        @inline(never) func __safeDI_secretBuilder() -> SecretReader {
 		            SecretReader(secret: secret.instance)
 		        }
 		        let secretBuilder = Instantiator<SecretReader>(__safeDI_secretBuilder)
@@ -1151,11 +1151,11 @@ struct SafeDIToolSeamPlainInitializerTests: ~Copyable {
 		    /// From code you write, call the initializer above instead.
 		    internal convenience init(__safeDI_c c: Instantiator<User>, __safeDI_secret: @autoclosure @escaping () -> Secret?) {
 		        let secret = LazilyInstantiated<Secret?>(__safeDI_secret)
-		        func __safeDI_readerBuilder() -> Reader {
+		        @inline(never) func __safeDI_readerBuilder() -> Reader {
 		            Reader(c: c)
 		        }
 		        let readerBuilder = Instantiator<Reader>(__safeDI_readerBuilder)
-		        func __safeDI_secretBuilder() -> SecretReader {
+		        @inline(never) func __safeDI_secretBuilder() -> SecretReader {
 		            SecretReader(secret: secret.instance)
 		        }
 		        let secretBuilder = Instantiator<SecretReader>(__safeDI_secretBuilder)
@@ -1195,11 +1195,11 @@ struct SafeDIToolSeamPlainInitializerTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// From code you write, call the initializer above instead.
 		    internal convenience init(__safeDI_c c: Instantiator<User>, __safeDI_secret secret: Instantiator<Secret>?) {
-		        func __safeDI_readerBuilder() -> Reader {
+		        @inline(never) func __safeDI_readerBuilder() -> Reader {
 		            Reader(c: c)
 		        }
 		        let readerBuilder = Instantiator<Reader>(__safeDI_readerBuilder)
-		        func __safeDI_secretBuilder() -> SecretReader {
+		        @inline(never) func __safeDI_secretBuilder() -> SecretReader {
 		            SecretReader(secret: secret)
 		        }
 		        let secretBuilder = Instantiator<SecretReader>(__safeDI_secretBuilder)
@@ -1241,11 +1241,11 @@ struct SafeDIToolSeamPlainInitializerTests: ~Copyable {
 		    internal convenience init(__safeDI_c: @autoclosure @escaping @Sendable () -> User, __safeDI_secret: @autoclosure @escaping @Sendable () -> Secret?) {
 		        let c = SendableLazilyInstantiated<User>(__safeDI_c)
 		        let secret = SendableLazilyInstantiated<Secret?>(__safeDI_secret)
-		        @Sendable nonisolated func __safeDI_readerBuilder() -> Reader {
+		        @inline(never) @Sendable nonisolated func __safeDI_readerBuilder() -> Reader {
 		            Reader(c: c.instance)
 		        }
 		        let readerBuilder = SendableInstantiator<Reader>(__safeDI_readerBuilder)
-		        @Sendable nonisolated func __safeDI_secretBuilder() -> SecretReader {
+		        @inline(never) @Sendable nonisolated func __safeDI_secretBuilder() -> SecretReader {
 		            SecretReader(secret: secret.instance)
 		        }
 		        let secretBuilder = SendableInstantiator<SecretReader>(__safeDI_secretBuilder)
@@ -1305,7 +1305,7 @@ struct SafeDIToolSeamPlainInitializerTests: ~Copyable {
 		        let `default` = LazilyInstantiated<User>(__safeDI_default)
 		        let `inout` = LazilyInstantiated<User>(__safeDI_inout)
 		        let `my label` = LazilyInstantiated<User>(`__safeDI_my label`)
-		        func __safeDI_readerBuilder() -> Reader {
+		        @inline(never) func __safeDI_readerBuilder() -> Reader {
 		            Reader(default: `default`.instance, `inout`: `inout`.instance, `my label`: `my label`.instance)
 		        }
 		        let readerBuilder = Instantiator<Reader>(__safeDI_readerBuilder)
@@ -1374,7 +1374,6 @@ struct SafeDIToolSeamPlainInitializerTests: ~Copyable {
 		            self.userService = userService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(userService: { __safeDI_builder() })
 		        }

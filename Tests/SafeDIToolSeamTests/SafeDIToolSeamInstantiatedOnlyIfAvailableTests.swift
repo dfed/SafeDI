@@ -68,7 +68,6 @@ struct SafeDIToolSeamInstantiatedOnlyIfAvailableTests: ~Copyable {
 			            self.detail = detail
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(detail: .init(__safeDI_noScope: __safeDI_builder))
 			        }
@@ -82,7 +81,6 @@ struct SafeDIToolSeamInstantiatedOnlyIfAvailableTests: ~Copyable {
 			            self.analytics = analytics
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(analytics: { __safeDI_builder() })
 			        }
@@ -92,7 +90,7 @@ struct SafeDIToolSeamInstantiatedOnlyIfAvailableTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_analyticsOptionalBuilder: __safeDI_AnalyticsOptionalCarrier<Analytics?>) {
 			        let __safeDI_analyticsOptionalBuilder_detail = __safeDI_analyticsOptionalBuilder.detail
-			        func __safeDI_detail() -> Detail {
+			        @inline(never) func __safeDI_detail() -> Detail {
 			            let analytics: Analytics? = __safeDI_analyticsOptionalBuilder_detail.analytics()
 			            let footer = Footer(analytics: analytics)
 			            return Detail(analytics: analytics, footer: footer)
@@ -226,7 +224,6 @@ struct SafeDIToolSeamInstantiatedOnlyIfAvailableTests: ~Copyable {
 			            self.analytics = analytics
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(analytics: { __safeDI_builder() })
 			        }
@@ -308,7 +305,6 @@ struct SafeDIToolSeamInstantiatedOnlyIfAvailableTests: ~Copyable {
 			            self.screenBuilder = screenBuilder
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(screenBuilder: .init(__safeDI_noScope: __safeDI_builder))
 			        }
@@ -317,7 +313,7 @@ struct SafeDIToolSeamInstantiatedOnlyIfAvailableTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_analyticsOptionalBuilder: __safeDI_AnalyticsOptionalCarrier<Analytics?>) {
-			        func __safeDI_screenBuilder() -> Screen {
+			        @inline(never) func __safeDI_screenBuilder() -> Screen {
 			            _ = Screen.__safeDI_Screen_CFA799E24BD6A85E.self\(Self.callComment(integration, seam: "Screen", module: "Feature"))
 			            return Screen(__safeDI_analyticsOptionalBuilder: __safeDI_analyticsOptionalBuilder.screenBuilder)
 			        }
@@ -475,7 +471,6 @@ struct SafeDIToolSeamInstantiatedOnlyIfAvailableTests: ~Copyable {
 			            self.analyticsOptional = analyticsOptional
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(analyticsOptional: { _ in __safeDI_builder() })
 			        }
@@ -489,7 +484,6 @@ struct SafeDIToolSeamInstantiatedOnlyIfAvailableTests: ~Copyable {
 			            self.analytics = analytics
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(analytics: { __safeDI_builder() })
 			        }
@@ -551,7 +545,6 @@ struct SafeDIToolSeamInstantiatedOnlyIfAvailableTests: ~Copyable {
 			            self.detail = detail
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(detail: .init(__safeDI_noScope: __safeDI_builder))
 			        }
@@ -565,7 +558,6 @@ struct SafeDIToolSeamInstantiatedOnlyIfAvailableTests: ~Copyable {
 			            self.analytics = analytics
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(analytics: { __safeDI_builder() })
 			        }
@@ -575,7 +567,7 @@ struct SafeDIToolSeamInstantiatedOnlyIfAvailableTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_analyticsOptionalBuilder: __safeDI_AnalyticsOptionalCarrier<Analytics?>) {
 			        let __safeDI_analyticsOptionalBuilder_detail = __safeDI_analyticsOptionalBuilder.detail
-			        func __safeDI_detail() -> Detail {
+			        @inline(never) func __safeDI_detail() -> Detail {
 			            let analytics: Analytics? = __safeDI_analyticsOptionalBuilder_detail.analytics()
 			            let footer = Footer(analytics: analytics)
 			            return Detail(analytics: analytics, footer: footer)
@@ -623,7 +615,7 @@ struct SafeDIToolSeamInstantiatedOnlyIfAvailableTests: ~Copyable {
 		extension Screen {
 		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public init() {
-		        func __safeDI_detail() -> Detail {
+		        @inline(never) func __safeDI_detail() -> Detail {
 		            let analytics: Analytics? = nil
 		            let footer = Footer(analytics: analytics)
 		            return Detail(analytics: analytics, footer: footer)
@@ -668,7 +660,6 @@ struct SafeDIToolSeamInstantiatedOnlyIfAvailableTests: ~Copyable {
 			            self.analytics = analytics
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(analytics: { __safeDI_builder() })
 			        }
@@ -682,7 +673,6 @@ struct SafeDIToolSeamInstantiatedOnlyIfAvailableTests: ~Copyable {
 			            self.detailBuilder = detailBuilder
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 			            self.init(detailBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -691,7 +681,7 @@ struct SafeDIToolSeamInstantiatedOnlyIfAvailableTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_analyticsOptionalSendableBuilder: __safeDI_AnalyticsOptionalSendableCarrier<Analytics?>) {
-			        @Sendable nonisolated func __safeDI_detailBuilder() -> Detail {
+			        @inline(never) @Sendable nonisolated func __safeDI_detailBuilder() -> Detail {
 			            let __safeDI_analyticsOptionalSendableBuilder_detailBuilder = __safeDI_analyticsOptionalSendableBuilder.detailBuilder()
 			            let analytics: Analytics? = __safeDI_analyticsOptionalSendableBuilder_detailBuilder.analytics()
 			            let footer = Footer(analytics: analytics)
