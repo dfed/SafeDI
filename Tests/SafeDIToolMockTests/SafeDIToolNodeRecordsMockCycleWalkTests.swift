@@ -341,6 +341,76 @@ struct SafeDIToolNodeRecordsMockCycleWalkTests: ~Copyable {
 		)
 	}
 
+	/// `B`, on the cycle of `B` and `C`, receives `session` only if available, and its one variant is built where nothing
+	/// declares `session` (beneath `Root`) and where `A` does: each lap's `B` holds `nil` or the `session` its own `A` built.
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildsTheWalksValues_whenCycleMemberReceivesValueOnlyIfAvailableWhereOnlySomePathsDeclareIt() async throws {
+		try await expectWalksValues(
+			fixture: [
+				"Root.swift": """
+				@Instantiable(generateMock: true)
+				public final class Root: Instantiable, Marked {
+				    public init(bBuilder: Instantiator<B>, aBuilder: Instantiator<A>) {
+				        self.bBuilder = bBuilder
+				        self.aBuilder = aBuilder
+				    }
+				    @Instantiated let bBuilder: Instantiator<B>
+				    @Instantiated let aBuilder: Instantiator<A>
+				    public var marker = ""
+				}
+				""",
+				"Session.swift": """
+				@Instantiable
+				public final class Session: Instantiable, Marked {
+				    public init() {}
+				    public var marker = ""
+				}
+				""",
+				"A.swift": """
+				@Instantiable
+				public final class A: Instantiable, Marked {
+				    public init(session: Session, bBuilder: Instantiator<B>) {
+				        self.session = session
+				        self.bBuilder = bBuilder
+				    }
+				    @Instantiated let session: Session
+				    @Instantiated let bBuilder: Instantiator<B>
+				    public var marker = ""
+				}
+				""",
+				"B.swift": """
+				@Instantiable
+				public final class B: Instantiable, Marked {
+				    public init(session: Session?, cBuilder: Instantiator<C>) {
+				        self.session = session
+				        self.cBuilder = cBuilder
+				    }
+				    @Received(onlyIfAvailable: true) let session: Session?
+				    @Instantiated let cBuilder: Instantiator<C>
+				    public var marker = ""
+				}
+				""",
+				"C.swift": """
+				@Instantiable
+				public final class C: Instantiable, Marked {
+				    public init(bBuilder: Instantiator<B>) { self.bBuilder = bBuilder }
+				    @Instantiated let bBuilder: Instantiator<B>
+				    public var marker = ""
+				}
+				""",
+			],
+			probes: [
+				DifferentialValueProbe("Root.mock().bBuilder.instantiate().cBuilder.instantiate().bBuilder.instantiate().cBuilder.instantiate()"),
+				DifferentialValueProbe("Root.mock().aBuilder.instantiate().bBuilder.instantiate().cBuilder.instantiate().bBuilder.instantiate().cBuilder.instantiate()"),
+				DifferentialValueProbe(name: "overridden.bBuilder.instantiate().cBuilder.instantiate().bBuilder.instantiate()", expression: "Root.mock(safeDIOverrides: \(Self.partitionOverrides)).bBuilder.instantiate().cBuilder.instantiate().bBuilder.instantiate()"),
+				DifferentialValueProbe(name: "overridden.aBuilder.instantiate()", expression: "Root.mock(safeDIOverrides: \(Self.partitionOverrides)).aBuilder.instantiate()"),
+				DifferentialValueProbe(name: "overridden.aBuilder.instantiate().bBuilder.instantiate().cBuilder.instantiate().bBuilder.instantiate()", expression: "Root.mock(safeDIOverrides: \(Self.partitionOverrides)).aBuilder.instantiate().bBuilder.instantiate().cBuilder.instantiate().bBuilder.instantiate()"),
+			],
+			markers: ["b", "a", "a.session", "a.b"],
+		)
+	}
+
 	/// `Root` builds `b` by value, and `A`, on the cycle `b` closes, builds it again as a `LazilyInstantiated`: one cycle
 	/// identity built both ways, a twin (`cycleVariantsPartitionApart`).
 	@Test
@@ -433,6 +503,9 @@ struct SafeDIToolNodeRecordsMockCycleWalkTests: ~Copyable {
 
 	/// Overrides of each of the three places of the ring two entries give `Root`'s mock.
 	private static let ringOverrides = ".init(parentBuilder: .init({ marked(Parent(childBuilder: $0), \"parent\") }), childBuilder: .init(parentBuilder: .init({ marked(Parent(childBuilder: $0), \"child.parent\") }), { marked(Child(parentBuilder: $0), \"child\") }))"
+
+	/// Overrides of the places of `B` beneath `Root` and beneath `A`, and of `A` and its `session`.
+	private static let partitionOverrides = #".init(bBuilder: .init({ marked(B(session: $0, cBuilder: $1), "b") }), aBuilder: .init(session: { marked(Session(), "a.session") }, bBuilder: .init({ marked(B(session: $0, cBuilder: $1), "a.b") }), { marked(A(session: $0, bBuilder: $1), "a") }))"#
 
 	private static let markedFile = """
 	public protocol Marked: AnyObject {

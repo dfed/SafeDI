@@ -52,7 +52,7 @@ extension NodeRecords {
 	/// body takes the label as an optional parameter there (rule 1), where today's tree may write a body per value or `nil`;
 	/// or where one cycle identity (`cycle(of:)`) is built both as a lazily instantiated wrapper and otherwise: a twin.
 	static func checkVariantsPartitionAlike(inWorldWithCycle world: some NodeRecordSources) throws(NodeRecordRefusal) {
-		for variant in 0..<Int32(world.variantCount) where world.isOnCycle(world.declaration(of: variant)) {
+		for variant in 0..<Int32(world.variantCount) where !world.isMockWorld && world.isOnCycle(world.declaration(of: variant)) {
 			guard !world.keys(of: variant).contains(TypeFactsGraph.optionalParameterKey) else { throw .cycleVariantsPartitionApart }
 		}
 		var isLazyByIdentity = [CycleID: Bool]()
