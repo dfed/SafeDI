@@ -106,8 +106,8 @@ extension NodeRecords {
 	/// nor a property nothing fulfills), or whose construction takes a field of its configuration
 	/// (`mockConfigurationFieldArguments(of:in:)`), is configured: its override is the builder of the configuration its
 	/// function is handed, whose fields its children and its own construction read, a field of an `@autoclosure` parameter
-	/// called once where the node is built. A rename reads no override, and a property nothing fulfills reads one the root
-	/// hands down beside the node's, so a node whose children are all of those two kinds and whose construction takes no
+	/// called once where the node is built. A rename reads no override, and a property nothing fulfills reads one `mock()`
+	/// binds before its nodes, so a node whose children are all of those two kinds and whose construction takes no
 	/// field is not configured. The closure of a node that is not configured returns the property's type, so every node's
 	/// function does, as the walk's does.
 	static func mockConstructionRecord(
@@ -158,7 +158,7 @@ extension NodeRecords {
 		record.functionAlwaysWritesReturn = !fieldArguments.isEmpty && record.property.propertyType.isConstant
 		let isConfiguredForChildren = isConfiguredMockNode(declaration, in: world)
 		// A property nothing fulfills is a child with no override of its own, as a rename is, so neither makes its type a
-		// configuration; its function is still handed the overrides, beside which it takes that property’s.
+		// configuration; its function is still handed the overrides.
 		let isConfigured = buildsMockChildWithOverride(declaration, in: world) || !fieldArguments.isEmpty
 		let slotType = mockOverrideType(of: record, usesHandWrittenMock: handWrittenMock != nil, isConfigured: isConfigured, instantiable: instantiable)
 		let slot = mockOverrideSlot(
@@ -170,9 +170,7 @@ extension NodeRecords {
 			handsOverridesToChildren: isConfiguredForChildren,
 			isSendable: record.isSendable,
 		)
-		// The override `mock()` takes of a property nothing fulfills is handed down to the function of the type that
-		// declares the property (`NodeRecords+MockUnavailableDependency.swift`).
-		record.passedArguments = try slot.passedArguments + unavailableDependencyOverrideArguments(of: declaration, in: world, children: children, isSendable: record.isSendable)
+		record.passedArguments = slot.passedArguments
 		for (position, argument) in fieldArguments {
 			record.argumentValues[position] = mockConfigurationFieldValue(of: argument, readFrom: slot.value)
 		}
