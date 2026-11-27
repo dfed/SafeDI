@@ -8,31 +8,41 @@
 # level binds few values.
 # Moved at main 4f604865 (2026-11-25): the seam generation changes of #1045 to #1048 cut each seam's lines by
 # 27 to 30%, and #1049's fallback initializers added back about 4% of them.
-P1-40 Screens 2491
+# Moved at #1148: seam levels no longer declare a fallback initializer, which removes it from every level.
+P1-40 Screens 2251
 # Carriers replace the scope enums, payload structs and builder structs of the seam that calls the screens.
 # Moved at main 4f604865: #1049's fallback initializers add 3 lines.
-P1-40 Feat 607
+# Moved at #1148: the plain initializer declares a local function for each level it builds from its builder, where
+# each level used to declare a fallback initializer: about 9 lines per screen here, against 6 the screens drop.
+P1-40 Feat 961
 P1-40 App 756
 # As P1-40 Screens: run struct declarations.
 # Moved as P1-40 Screens.
-P1-200 Screens 12411
+# Moved at #1148: seam levels no longer declare a fallback initializer, which removes it from every level.
+P1-200 Screens 11211
 # As P1-40 Feat.
 # Moved at main 4f604865: #1049's fallback initializers add 3 lines.
-P1-200 Feat 2367
+# Moved at #1148: the plain initializer declares a local function for each level it builds from its builder, where
+# each level used to declare a fallback initializer: about 9 lines per screen here, against 6 the screens drop.
+P1-200 Feat 4161
 P1-200 App 3636
 # Carriers take a level's values in run structs, spelled once per level, where builder structs spelled them per case.
 # Moved as P1-40 Screens.
-P2-40 Feat 3160
+# Moved at #1148: seam levels no longer declare a fallback initializer, which removes it from every level.
+P2-40 Feat 2914
 P2-40 App 753
 # As P2-40 Feat.
 # Moved as P1-40 Screens.
-P2-200 Feat 14360
+# Moved at #1148: seam levels no longer declare a fallback initializer, which removes it from every level.
+P2-200 Feat 13154
 P2-200 App 3633
 # Run struct declarations for the loop's levels.
 # Moved as P1-40 Screens.
-N1-40 Feature 1521
+# Moved at #1148: seam levels no longer declare a fallback initializer, which removes it from every level.
+N1-40 Feature 1316
 N1-40 App 264
 # As N1-40 Feature.
 # Moved as P1-40 Screens.
-N1-200 Feature 7441
+# Moved at #1148: seam levels no longer declare a fallback initializer, which removes it from every level.
+N1-200 Feature 6436
 N1-200 App 1224
