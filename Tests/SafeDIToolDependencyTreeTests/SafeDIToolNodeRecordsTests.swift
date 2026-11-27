@@ -810,6 +810,51 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 		#expect(reports.flatMap(\.differences) == [])
 	}
 
+	@Test
+	mutating func generate_laysOutASeamCallAsTheTreeDoes_whenTheSeamTakesAParameterOnlyIfAvailable() async throws {
+		// `Screen`'s tree receives `token` only if available, so the call passes the caller's `token` where `Root` declares
+		// one and `nil` where `Other` does not.
+		let files = [
+			seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let token: Token", "@Instantiated let screen: Screen"]),
+			seamFixtureType(named: "Other", isRoot: true, declarations: ["@Instantiated let screen: Screen"]),
+			seamFixtureType(named: "Screen", isSeam: true, declarations: ["@Instantiated let detail: Detail"]),
+			seamFixtureType(named: "Detail", declarations: ["@Received(onlyIfAvailable: true) let token: Token?"]),
+			seamFixtureType(named: "Token", declarations: []),
+		]
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: files, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(output.dependencyTreeFiles["Root+SafeDI.swift"] == generatedFileHeader + """
+		extension Root {
+		    public init() {
+		        let token = Token()
+		        func __safeDI_screen() -> Screen {
+		            _ = Screen.__safeDI_Screen_F046DCFB1718557F.self
+		            return Screen(__safeDI_token: token)
+		        }
+		        let screen: Screen = __safeDI_screen()
+		        self.init(token: token, screen: screen)
+		    }
+		}
+		""")
+		#expect(output.dependencyTreeFiles["Other+SafeDI.swift"] == generatedFileHeader + """
+		extension Other {
+		    public init() {
+		        func __safeDI_screen() -> Screen {
+		            _ = Screen.__safeDI_Screen_F046DCFB1718557F.self
+		            return Screen(__safeDI_token: nil)
+		        }
+		        let screen: Screen = __safeDI_screen()
+		        self.init(screen: screen)
+		    }
+		}
+		""")
+		let callerReports = reports.filter { $0.root == "Root" || $0.root == "Other" }
+		#expect(callerReports.map(\.refusal) == [nil, nil])
+		#expect(callerReports.map(\.isLaidOutFromNodeRecords) == [true, true])
+		#expect(reports.flatMap(\.differences) == [])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
