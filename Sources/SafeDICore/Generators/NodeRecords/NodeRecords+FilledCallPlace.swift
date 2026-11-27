@@ -122,6 +122,18 @@ extension NodeRecords {
 	}
 }
 
+extension FilledCallRecords.Fill {
+	/// The declarations around the fill's body: what the fill binds of its case and takes as a function's parameters, and
+	/// what it reads of the caller's scope and takes no parameter of, which it captures as the caller declares it.
+	var outerDeclarations: [Property] {
+		let taken = signature.bound.map(\.field.property) + signature.parameters.map(\.property)
+		let takenLabels = Set(taken.map(\.label))
+		let captured = callerDeclarations.filter { !takenLabels.contains($0.label) }
+		let capturedLabels = Set(captured.map(\.label))
+		return captured + facts.parametersTakenOfCallerReads.filter { !takenLabels.contains($0.label) && !capturedLabels.contains($0.label) } + taken
+	}
+}
+
 extension FilledCallRecords {
 	/// The function of `fill`, whose place is `place`, as the tree writes it with no indentation: its lines up to its tree,
 	/// its place laid out with what it binds, takes and captures declared around it, the return of a constant's value, and
@@ -159,15 +171,10 @@ extension FilledCallRecords {
 		return lines
 	}
 
-	/// What a fill's body is laid out with: the declarations around it, and the names in scope where it is declared. The body
-	/// reads what the fill binds of its case and what it takes as a function's parameters, and captures what it reads of
-	/// the caller's scope and takes no parameter of, as the caller declares it.
+	/// What a fill's body is laid out with: the declarations around it (`Fill.outerDeclarations`), and the names in scope
+	/// where it is declared.
 	private func bodyDeclarations(of fill: Fill, namesInScope: Set<String>) -> (outerDeclarations: [Property], namesInScope: Set<String>) {
-		let taken = fill.signature.bound.map(\.field.property) + fill.signature.parameters.map(\.property)
-		let takenLabels = Set(taken.map(\.label))
-		let captured = fill.callerDeclarations.filter { !takenLabels.contains($0.label) }
-		let capturedLabels = Set(captured.map(\.label))
-		let outerDeclarations = captured + fill.facts.parametersTakenOfCallerReads.filter { !takenLabels.contains($0.label) && !capturedLabels.contains($0.label) } + taken
+		let outerDeclarations = fill.outerDeclarations
 		return (outerDeclarations, namesInScope.union(outerDeclarations.map(\.label) + [fill.scopeParameterName]))
 	}
 

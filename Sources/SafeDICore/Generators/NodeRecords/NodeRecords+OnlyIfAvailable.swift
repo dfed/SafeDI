@@ -163,6 +163,15 @@ struct OnlyIfAvailableAnswers: Sendable {
 				for (label, bindings) in childBindingsByLabel {
 					calleeContext[label] = bindings
 				}
+				// A fill's body is a function of its own, which declares what the fill binds, takes and captures around it
+				// (`FilledCallRecords.Fill.outerDeclarations`).
+				if NodeRecordsObservation.recordsFilledCalls, world.construction(of: world.declaration(of: callee)) == .fill, case let .success(records) = world.filledCallRecords(of: declaration),
+				   let fill = records.fills.first(where: { $0.facts.declaration == world.declaration(of: callee) })
+				{
+					for property in fill.outerDeclarations where labels.contains(property.label) {
+						calleeContext[property.label] = [Binding(property: property, state: .available)]
+					}
+				}
 				if let existingContext = contextByVariant[Int(callee)] {
 					guard existingContext == calleeContext else { throw .nodeHasSeveralVariants }
 				} else {
