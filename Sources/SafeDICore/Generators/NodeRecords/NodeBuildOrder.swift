@@ -18,11 +18,10 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-/// The order each node of a stage-1 world builds its children in, by edge index: a stand-in for the table lane's
-/// `TypeFactsEdge.buildPosition` (`TypeFactsWorld.edgeFacts(from:)`), which replaces it once that column is filled, read
-/// from the same facts that column is made of. Each child follows the siblings its tree requires, depth first in edge
+/// The order each node of a world node records make builds its children in, by edge index, from each edge's
+/// `TypeFactsEdge.buildPosition` (`TypeFactsWorld.edgeFacts(from:)`). Each child follows the siblings its tree requires, depth first in edge
 /// order, as `ScopeGenerator.orderedPropertyToGenerateIndices` orders a scope's children where no child is a loop
-/// member, a carrier, lazily instantiated or received only if available, which stage 1 refuses.
+/// member, a carrier, lazily instantiated or received only if available, which node records refuse until they make it.
 ///
 /// A node's tree receives what its type receives, and what its children's trees receive that the node neither declares
 /// nor forwards (`ScopeGenerator.receives`), made once per node, children first.
@@ -75,10 +74,10 @@ struct NodeBuildOrder: Sendable {
 			}
 			try Self.checkNoBuilderLoop(among: children)
 			let edgeFacts = world.edgeFacts(from: declaration)
-			// A member of a loop of builders, which step 0 finds with optional receives too, is rebound in each member's
-			// function: the loops lane's kind.
+			// A member of a loop of builders, which the facts find with optional receives too, is rebound in each member's
+			// function, which node records do not make yet.
 			guard edgeFacts.allSatisfy({ $0.loop < 0 }) else { throw .builderLoop }
-			// Step 0's build position, which the sibling-order fixed point gives each edge.
+			// The facts' build position, which the sibling-order fixed point gives each edge.
 			edgeIndicesByDeclaration[Int(declaration)] = edgeFacts.enumerated()
 				.sorted { $0.element.buildPosition < $1.element.buildPosition }
 				.map(\.offset)
