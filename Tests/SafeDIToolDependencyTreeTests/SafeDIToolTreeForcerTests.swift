@@ -91,12 +91,53 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_buildsTree_whenRecordsOfRootCannotBeLaidOut() async throws {
-		// A root with no dependencies has no generated initializer, so the engine lays out nothing from its records.
+		// `C` declares `y` as an alias of `S`'s forwarded `x` only if available, beside `S`'s own `y`, and `D` beneath `C` receives
+		// `y`. A read of `D`'s laid out by type resolves at its place to another declaration than its view's, so the engine refuses
+		// the root's records and the root keeps its tree.
 		let (forcers, _) = try await treeForcers(of: [
 			"""
 			@Instantiable(isRoot: true)
 			public final class Root: Instantiable {
-			    public init() {}
+			    public init(sBuilder: Instantiator<S>) { self.sBuilder = sBuilder }
+			    @Instantiated let sBuilder: Instantiator<S>
+			}
+			""",
+			"""
+			@Instantiable
+			public final class S: Instantiable {
+			    public init(x: X, b: B, y: X) { self.x = x; self.b = b; self.y = y }
+			    @Forwarded let x: X
+			    @Instantiated let b: B
+			    @Instantiated let y: X
+			}
+			""",
+			"""
+			@Instantiable
+			public final class X: Instantiable {
+			    public init(b: B) { self.b = b }
+			    @Received let b: B
+			}
+			""",
+			"""
+			@Instantiable
+			public final class B: Instantiable {
+			    public init(c: C) { self.c = c }
+			    @Instantiated let c: C
+			}
+			""",
+			"""
+			@Instantiable
+			public final class C: Instantiable {
+			    public init(y: X?, d: D) { self.y = y; self.d = d }
+			    @Received(fulfilledByDependencyNamed: "x", ofType: X?.self, onlyIfAvailable: true) let y: X?
+			    @Instantiated let d: D
+			}
+			""",
+			"""
+			@Instantiable
+			public final class D: Instantiable {
+			    public init(y: X?) { self.y = y }
+			    @Received let y: X?
 			}
 			""",
 		])
