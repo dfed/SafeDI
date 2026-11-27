@@ -1079,45 +1079,6 @@ struct SafeDIToolNodeRecordsMockRootTests: ~Copyable {
 			""",
 			"mockRootBindsOtherThanNodes",
 		),
-		// The mock promotes each form of a label its tree receives, and names the two apart.
-		(
-			"""
-			@Instantiable
-			public struct Leaf: Instantiable {
-			    public init(first: First, second: Second) {
-			        self.first = first
-			        self.second = second
-			    }
-
-			    @Instantiated let first: First
-			    @Instantiated let second: Second
-			}
-
-			@Instantiable
-			public struct First: Instantiable {
-			    public init(thing: Thing) {
-			        self.thing = thing
-			    }
-
-			    @Received let thing: Thing
-			}
-
-			@Instantiable
-			public struct Second: Instantiable {
-			    public init(thing: Instantiator<Thing>) {
-			        self.thing = thing
-			    }
-
-			    @Received let thing: Instantiator<Thing>
-			}
-
-			@Instantiable
-			public struct Thing: Instantiable {
-			    public init() {}
-			}
-			""",
-			"mockOverrideNotParentField",
-		),
 	])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_keepsTheWalksStatements_whenWorldHoldsWhatNoRecordMakesYet(leafDeclarations: String, refusal: String) async throws {

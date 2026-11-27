@@ -43,16 +43,14 @@ extension NodeRecords {
 		// so none captures `mock()`'s overrides, as the walk's read of them into a local before each function keeps its own
 		// from doing.
 		// The root's own default-valued parameters are parameters of `mock()`, which the root's lowering judges
-		// (`ScopeGenerator.nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:sendableConfigurationTypeNames:)`).
+		// (`ScopeGenerator.nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:sendableConfigurationTypeNames:rootNames:)`).
 		if declaration != 0, mockConstructionFunction(of: declaration, in: world).map({ passesValueNoRecordMakes($0, given: instantiable.dependencies) }) ?? false {
 			refusals.append(.mockDefaultValuedParameter)
 		}
-		// Two children of one label are named apart, so neither reads the field of its own label: only a mock root, which
-		// promotes each form of a label its tree receives, builds two.
-		var labels = Set<String>()
-		for child in world.edges(from: declaration) where !labels.insert(world.property(of: child)?.label ?? "").inserted {
-			refusals.append(.mockOverrideNotParentField)
-			break
+		// A child the mock root names apart reads the root's field under that name, where every read of its label is one
+		// the records make (`NodeRecords+MockOverrideNotParentField.swift`).
+		if let refusal = refusalOfNamingApart(declaration, in: world) {
+			refusals.append(refusal)
 		}
 		return NodeRecordClaim(kind: kind, discharges: discharges, refusals: refusals)
 	}
@@ -82,6 +80,10 @@ extension NodeRecords {
 		children: [GeneratedCode],
 	) throws -> BuiltPlaceRecord {
 		let instantiable = world.scope(of: declaration).instantiable
+		// A child the mock root names apart is bound, and overridden, under that name, and a type that receives one binds
+		// it again under its label before its own children.
+		let nameApart = world.property(of: declaration).flatMap(world.mockRootNames.nameApart(of:))
+		let placesBindingNamesApartAgain = placesBindingNamesApartAgain(in: declaration, of: world)
 		let handWrittenMock: (function: Initializer, target: ConstructionTarget)? = if world.construction(of: declaration) == .handWrittenMock, let mockInitializer = instantiable.mockInitializer {
 			(mockInitializer, .mock(instantiable.concreteInstantiable, name: instantiable.customMockName ?? InstantiableVisitor.mockMethodName))
 		} else {
@@ -95,6 +97,9 @@ extension NodeRecords {
 		let boundProperty = world.property(of: declaration).map { property in
 			property.propertyType == .constant && property.typeDescription.isOptional ? Property(label: property.label, typeDescription: property.typeDescription.unwrapped) : property
 		}
+		.map { property in
+			nameApart.map { Property(label: $0, typeDescription: property.typeDescription) } ?? property
+		}
 		var record = try builtByInitializerRecord(
 			of: declaration,
 			variant: variant,
@@ -107,7 +112,7 @@ extension NodeRecords {
 			argumentsOfOtherValues: fieldArguments,
 			alwaysDeclaresFunction: !fieldArguments.isEmpty,
 			typesDeclaredEscaping: typesDeclaredEscaping,
-			children: children,
+			children: placesBindingNamesApartAgain + children,
 		)
 		let isConfigured = !children.isEmpty || !fieldArguments.isEmpty
 		let slotType: TypeDescription = if isConfigured {
