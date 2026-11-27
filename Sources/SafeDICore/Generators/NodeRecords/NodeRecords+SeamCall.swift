@@ -44,10 +44,13 @@ extension NodeRecords {
 		// A call held in a wrapper, erased or not, or in a `@Sendable` function is bound as a built place of its form is, which
 		// discharges what that form's claim does.
 		let wrapperDischarges = (erasedClaim(of: declaration, in: world) ?? lazyClaim(of: declaration, in: world) ?? sendableClaim(of: declaration, in: world))?.discharges ?? []
+		// A call that makes a member of a loop of builders again rebinds it in the call's body, which the tree writes as text
+		// rather than spelling the call where its place is (`ScopeGenerator`'s `seamCallRecord`), and no record holds yet.
+		let rebindsLoopMember = !world.madeAgain(from: declaration).isEmpty
 		return NodeRecordClaim(
 			kind: .seamCall,
 			discharges: (passesEveryBuilderUp ? Set<NodeRecordRefusal>([.construction, .fill, .onlyIfAvailable]) : [.construction, .onlyIfAvailable]).union(wrapperDischarges),
-			refusals: forwardsValues ? [.construction] : [],
+			refusals: (forwardsValues ? [.construction] : []) + (rebindsLoopMember ? [.builderLoop] : []),
 		)
 	}
 
