@@ -693,9 +693,9 @@ struct SafeDIToolNodeRecordsMockCycleWalkTests: ~Copyable {
 
 	/// Generates `fixture` with the walk and with the mock roots laid out from node records, expects the mock root to be
 	/// laid out from them, and compares what each probe builds in the two.
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	/// `cycleParameters` is what the facts answer for each function a cycle closes on, by the type it builds, which the
 	/// stand-in for the cycle parameter fact reads (`CycleParametersForTesting`) until that fact lands.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private mutating func expectWalksValues(fixture: [String: String], probes: [DifferentialValueProbe], markers: [String], cycleParameters: [String: [Property]] = [:]) async throws {
 		var fixtureFiles = fixture
 		fixtureFiles["Marked.swift"] = Self.markedFile
