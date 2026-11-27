@@ -72,20 +72,20 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 				    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 				        let token = LazilyInstantiated<Secret?>(__safeDI_token)
+				        @inline(never) func __safeDI_detail() -> Detail {
+				            #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 8)
+				            let authToken: Secret? = token.instance
+				            #sourceLocation()
+				            let reader: Reader = __safeDI_reader(authToken: authToken)
+				            return Detail(authToken: authToken, reader: reader)
+				        }
+				        @inline(never) func __safeDI_reader(authToken: Secret?) -> Reader {
+				            #sourceLocation(file: "\(output.fixtures["Reader.swift"])", line: 7)
+				            let authToken: (any Auth)? = authToken
+				            #sourceLocation()
+				            return Reader(authToken: authToken)
+				        }
 				        @inline(never) func __safeDI_left() -> Left {
-				            @inline(never) func __safeDI_detail() -> Detail {
-				                #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 8)
-				                let authToken: Secret? = token.instance
-				                #sourceLocation()
-				                @inline(never) func __safeDI_reader() -> Reader {
-				                    #sourceLocation(file: "\(output.fixtures["Reader.swift"])", line: 7)
-				                    let authToken: (any Auth)? = authToken
-				                    #sourceLocation()
-				                    return Reader(authToken: authToken)
-				                }
-				                let reader: Reader = __safeDI_reader()
-				                return Detail(authToken: authToken, reader: reader)
-				            }
 				            let detail: Detail = __safeDI_detail()
 				            return Left(detail: detail)
 				        }
@@ -119,20 +119,20 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 				    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 				        let token = LazilyInstantiated<Secret?>(__safeDI_token)
+				        @inline(never) func __safeDI_detail() -> Detail {
+				            #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 8)
+				            let authToken: Secret? = token.instance
+				            #sourceLocation()
+				            let reader: Reader = __safeDI_reader(authToken: authToken)
+				            return Detail(authToken: authToken, reader: reader)
+				        }
+				        @inline(never) func __safeDI_reader(authToken: Secret?) -> Reader {
+				            #sourceLocation(file: "\(output.fixtures["Reader.swift"])", line: 7)
+				            let authToken: (any Auth)? = authToken
+				            #sourceLocation()
+				            return Reader(authToken: authToken)
+				        }
 				        @inline(never) func __safeDI_left() -> Left {
-				            @inline(never) func __safeDI_detail() -> Detail {
-				                #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 8)
-				                let authToken: Secret? = token.instance
-				                #sourceLocation()
-				                @inline(never) func __safeDI_reader() -> Reader {
-				                    #sourceLocation(file: "\(output.fixtures["Reader.swift"])", line: 7)
-				                    let authToken: (any Auth)? = authToken
-				                    #sourceLocation()
-				                    return Reader(authToken: authToken)
-				                }
-				                let reader: Reader = __safeDI_reader()
-				                return Detail(authToken: authToken, reader: reader)
-				            }
 				            let detail: Detail = __safeDI_detail()
 				            return Left(detail: detail)
 				        }
@@ -166,20 +166,20 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 				    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 				        let token = LazilyInstantiated<Secret?>(__safeDI_token)
+				        @inline(never) func __safeDI_detail() -> Detail {
+				            #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 8)
+				            let authToken: Secret? = token.instance
+				            #sourceLocation()
+				            let reader: Reader = __safeDI_reader(authToken: authToken)
+				            return Detail(authToken: authToken, reader: reader)
+				        }
+				        @inline(never) func __safeDI_reader(authToken: Secret?) -> Reader {
+				            #sourceLocation(file: "\(output.fixtures["Reader.swift"])", line: 7)
+				            let authToken: (any Auth)? = authToken
+				            #sourceLocation()
+				            return Reader(authToken: authToken)
+				        }
 				        @inline(never) func __safeDI_left() -> Left {
-				            @inline(never) func __safeDI_detail() -> Detail {
-				                #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 8)
-				                let authToken: Secret? = token.instance
-				                #sourceLocation()
-				                @inline(never) func __safeDI_reader() -> Reader {
-				                    #sourceLocation(file: "\(output.fixtures["Reader.swift"])", line: 7)
-				                    let authToken: (any Auth)? = authToken
-				                    #sourceLocation()
-				                    return Reader(authToken: authToken)
-				                }
-				                let reader: Reader = __safeDI_reader()
-				                return Detail(authToken: authToken, reader: reader)
-				            }
 				            let detail: Detail = __safeDI_detail()
 				            return Left(detail: detail)
 				        }
@@ -201,24 +201,24 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 				"Root+SafeDI.swift": generatedFileHeader + """
 				extension Root {
 				    public convenience init() {
+				        func __safeDI_left() -> Left {
+				            let detail: Detail = __safeDI_detail()
+				            return Left(detail: detail)
+				        }
+				        func __safeDI_detail() -> Detail {
+				            #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
+				            let authToken: Secret? = nil
+				            #sourceLocation()
+				            let reader: Reader = __safeDI_reader(authToken: authToken)
+				            return Detail(authToken: authToken, reader: reader)
+				        }
+				        func __safeDI_reader(authToken: Secret?) -> Reader {
+				            #sourceLocation(file: "\(inlineOutput.fixtures["Reader.swift"])", line: 7)
+				            let authToken: (any Auth)? = authToken
+				            #sourceLocation()
+				            return Reader(authToken: authToken)
+				        }
 				        func __safeDI_screen() -> Screen {
-				            func __safeDI_left() -> Left {
-				                func __safeDI_detail() -> Detail {
-				                    #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
-				                    let authToken: Secret? = nil
-				                    #sourceLocation()
-				                    func __safeDI_reader() -> Reader {
-				                        #sourceLocation(file: "\(inlineOutput.fixtures["Reader.swift"])", line: 7)
-				                        let authToken: (any Auth)? = authToken
-				                        #sourceLocation()
-				                        return Reader(authToken: authToken)
-				                    }
-				                    let reader: Reader = __safeDI_reader()
-				                    return Detail(authToken: authToken, reader: reader)
-				                }
-				                let detail: Detail = __safeDI_detail()
-				                return Left(detail: detail)
-				            }
 				            let left: Left = __safeDI_left()
 				            return Screen(left: left)
 				        }
@@ -233,24 +233,24 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 				extension Root {
 				    public convenience init() {
 				        let token = Secret()
+				        func __safeDI_left() -> Left {
+				            let detail: Detail = __safeDI_detail()
+				            return Left(detail: detail)
+				        }
+				        func __safeDI_detail() -> Detail {
+				            #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
+				            let authToken: Secret? = token
+				            #sourceLocation()
+				            let reader: Reader = __safeDI_reader(authToken: authToken)
+				            return Detail(authToken: authToken, reader: reader)
+				        }
+				        func __safeDI_reader(authToken: Secret?) -> Reader {
+				            #sourceLocation(file: "\(inlineOutput.fixtures["Reader.swift"])", line: 7)
+				            let authToken: (any Auth)? = authToken
+				            #sourceLocation()
+				            return Reader(authToken: authToken)
+				        }
 				        func __safeDI_screen() -> Screen {
-				            func __safeDI_left() -> Left {
-				                func __safeDI_detail() -> Detail {
-				                    #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
-				                    let authToken: Secret? = token
-				                    #sourceLocation()
-				                    func __safeDI_reader() -> Reader {
-				                        #sourceLocation(file: "\(inlineOutput.fixtures["Reader.swift"])", line: 7)
-				                        let authToken: (any Auth)? = authToken
-				                        #sourceLocation()
-				                        return Reader(authToken: authToken)
-				                    }
-				                    let reader: Reader = __safeDI_reader()
-				                    return Detail(authToken: authToken, reader: reader)
-				                }
-				                let detail: Detail = __safeDI_detail()
-				                return Left(detail: detail)
-				            }
 				            let left: Left = __safeDI_left()
 				            return Screen(left: left)
 				        }
@@ -265,24 +265,24 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 				extension Root {
 				    public convenience init() {
 				        let authToken = Secret()
+				        func __safeDI_left() -> Left {
+				            let detail: Detail = __safeDI_detail()
+				            return Left(detail: detail)
+				        }
+				        func __safeDI_detail() -> Detail {
+				            #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
+				            let authToken: Secret? = nil
+				            #sourceLocation()
+				            let reader: Reader = __safeDI_reader(authToken: authToken)
+				            return Detail(authToken: authToken, reader: reader)
+				        }
+				        func __safeDI_reader(authToken: Secret?) -> Reader {
+				            #sourceLocation(file: "\(inlineOutput.fixtures["Reader.swift"])", line: 7)
+				            let authToken: (any Auth)? = authToken
+				            #sourceLocation()
+				            return Reader(authToken: authToken)
+				        }
 				        func __safeDI_screen() -> Screen {
-				            func __safeDI_left() -> Left {
-				                func __safeDI_detail() -> Detail {
-				                    #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
-				                    let authToken: Secret? = nil
-				                    #sourceLocation()
-				                    func __safeDI_reader() -> Reader {
-				                        #sourceLocation(file: "\(inlineOutput.fixtures["Reader.swift"])", line: 7)
-				                        let authToken: (any Auth)? = authToken
-				                        #sourceLocation()
-				                        return Reader(authToken: authToken)
-				                    }
-				                    let reader: Reader = __safeDI_reader()
-				                    return Detail(authToken: authToken, reader: reader)
-				                }
-				                let detail: Detail = __safeDI_detail()
-				                return Left(detail: detail)
-				            }
 				            let left: Left = __safeDI_left()
 				            return Screen(left: left)
 				        }
@@ -323,21 +323,21 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 			        let token = LazilyInstantiated<Secret?>(__safeDI_token)
+			        @inline(never) func __safeDI_detail() -> Detail {
+			            #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 8)
+			            let authToken: Secret? = token.instance
+			            #sourceLocation()
+			            let sub: Sub = __safeDI_sub(authToken: authToken)
+			            return Detail(authToken: authToken, sub: sub)
+			        }
+			        @inline(never) func __safeDI_sub(authToken: Secret?) -> Sub {
+			            #sourceLocation(file: "\(output.fixtures["Sub.swift"])", line: 8)
+			            let authToken: (any Auth)? = authToken
+			            #sourceLocation()
+			            let reader = Reader(authToken: authToken)
+			            return Sub(authToken: authToken, reader: reader)
+			        }
 			        @inline(never) func __safeDI_left() -> Left {
-			            @inline(never) func __safeDI_detail() -> Detail {
-			                #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 8)
-			                let authToken: Secret? = token.instance
-			                #sourceLocation()
-			                @inline(never) func __safeDI_sub() -> Sub {
-			                    #sourceLocation(file: "\(output.fixtures["Sub.swift"])", line: 8)
-			                    let authToken: (any Auth)? = authToken
-			                    #sourceLocation()
-			                    let reader = Reader(authToken: authToken)
-			                    return Sub(authToken: authToken, reader: reader)
-			                }
-			                let sub: Sub = __safeDI_sub()
-			                return Detail(authToken: authToken, sub: sub)
-			            }
 			            let detail: Detail = __safeDI_detail()
 			            return Left(detail: detail)
 			        }
@@ -357,25 +357,25 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        let authToken = Secret()
+			        func __safeDI_left() -> Left {
+			            let detail: Detail = __safeDI_detail()
+			            return Left(detail: detail)
+			        }
+			        func __safeDI_detail() -> Detail {
+			            #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
+			            let authToken: Secret? = nil
+			            #sourceLocation()
+			            let sub: Sub = __safeDI_sub(authToken: authToken)
+			            return Detail(authToken: authToken, sub: sub)
+			        }
+			        func __safeDI_sub(authToken: Secret?) -> Sub {
+			            #sourceLocation(file: "\(inlineOutput.fixtures["Sub.swift"])", line: 8)
+			            let authToken: (any Auth)? = authToken
+			            #sourceLocation()
+			            let reader = Reader(authToken: authToken)
+			            return Sub(authToken: authToken, reader: reader)
+			        }
 			        func __safeDI_screen() -> Screen {
-			            func __safeDI_left() -> Left {
-			                func __safeDI_detail() -> Detail {
-			                    #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
-			                    let authToken: Secret? = nil
-			                    #sourceLocation()
-			                    func __safeDI_sub() -> Sub {
-			                        #sourceLocation(file: "\(inlineOutput.fixtures["Sub.swift"])", line: 8)
-			                        let authToken: (any Auth)? = authToken
-			                        #sourceLocation()
-			                        let reader = Reader(authToken: authToken)
-			                        return Sub(authToken: authToken, reader: reader)
-			                    }
-			                    let sub: Sub = __safeDI_sub()
-			                    return Detail(authToken: authToken, sub: sub)
-			                }
-			                let detail: Detail = __safeDI_detail()
-			                return Left(detail: detail)
-			            }
 			            let left: Left = __safeDI_left()
 			            return Screen(left: left)
 			        }
@@ -398,21 +398,21 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 			"Root+SafeDI.swift": generatedFileHeader + """
 			extension Root {
 			    public convenience init() {
+			        func __safeDI_detailBuilder() -> Detail {
+			            #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 8)
+			            let authToken: Secret? = nil
+			            #sourceLocation()
+			            let sub: Sub = __safeDI_sub(authToken: authToken)
+			            return Detail(authToken: authToken, sub: sub)
+			        }
+			        func __safeDI_sub(authToken: Secret?) -> Sub {
+			            #sourceLocation(file: "\(output.fixtures["Sub.swift"])", line: 8)
+			            let authToken: (any Auth)? = authToken
+			            #sourceLocation()
+			            let reader = Reader(authToken: authToken)
+			            return Sub(authToken: authToken, reader: reader)
+			        }
 			        func __safeDI_authToken() -> Secret {
-			            func __safeDI_detailBuilder() -> Detail {
-			                #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 8)
-			                let authToken: Secret? = nil
-			                #sourceLocation()
-			                func __safeDI_sub() -> Sub {
-			                    #sourceLocation(file: "\(output.fixtures["Sub.swift"])", line: 8)
-			                    let authToken: (any Auth)? = authToken
-			                    #sourceLocation()
-			                    let reader = Reader(authToken: authToken)
-			                    return Sub(authToken: authToken, reader: reader)
-			                }
-			                let sub: Sub = __safeDI_sub()
-			                return Detail(authToken: authToken, sub: sub)
-			            }
 			            let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
 			            return Secret(detailBuilder: detailBuilder)
 			        }
@@ -430,21 +430,21 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 			extension Screen {
 			    /// Code you write and code SafeDI generates can both call this initializer.
 			    public convenience init() {
+			        @inline(never) func __safeDI_detailBuilder() -> Detail {
+			            #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 8)
+			            let authToken: Secret? = nil
+			            #sourceLocation()
+			            let sub: Sub = __safeDI_sub(authToken: authToken)
+			            return Detail(authToken: authToken, sub: sub)
+			        }
+			        @inline(never) func __safeDI_sub(authToken: Secret?) -> Sub {
+			            #sourceLocation(file: "\(output.fixtures["Sub.swift"])", line: 8)
+			            let authToken: (any Auth)? = authToken
+			            #sourceLocation()
+			            let reader = Reader(authToken: authToken)
+			            return Sub(authToken: authToken, reader: reader)
+			        }
 			        @inline(never) func __safeDI_token() -> Secret {
-			            @inline(never) func __safeDI_detailBuilder() -> Detail {
-			                #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 8)
-			                let authToken: Secret? = nil
-			                #sourceLocation()
-			                @inline(never) func __safeDI_sub() -> Sub {
-			                    #sourceLocation(file: "\(output.fixtures["Sub.swift"])", line: 8)
-			                    let authToken: (any Auth)? = authToken
-			                    #sourceLocation()
-			                    let reader = Reader(authToken: authToken)
-			                    return Sub(authToken: authToken, reader: reader)
-			                }
-			                let sub: Sub = __safeDI_sub()
-			                return Detail(authToken: authToken, sub: sub)
-			            }
 			            let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
 			            return Secret(detailBuilder: detailBuilder)
 			        }
@@ -464,44 +464,26 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_authToken() -> Secret {
-			            func __safeDI_detailBuilder() -> Detail {
-			                #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
-			                let authToken: Secret? = nil
-			                #sourceLocation()
-			                func __safeDI_sub() -> Sub {
-			                    #sourceLocation(file: "\(inlineOutput.fixtures["Sub.swift"])", line: 8)
-			                    let authToken: (any Auth)? = authToken
-			                    #sourceLocation()
-			                    let reader = Reader(authToken: authToken)
-			                    return Sub(authToken: authToken, reader: reader)
-			                }
-			                let sub: Sub = __safeDI_sub()
-			                return Detail(authToken: authToken, sub: sub)
-			            }
 			            let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
 			            return Secret(detailBuilder: detailBuilder)
 			        }
+			        func __safeDI_detailBuilder() -> Detail {
+			            #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
+			            let authToken: Secret? = nil
+			            #sourceLocation()
+			            let sub: Sub = __safeDI_sub(authToken: authToken)
+			            return Detail(authToken: authToken, sub: sub)
+			        }
+			        func __safeDI_sub(authToken: Secret?) -> Sub {
+			            #sourceLocation(file: "\(inlineOutput.fixtures["Sub.swift"])", line: 8)
+			            let authToken: (any Auth)? = authToken
+			            #sourceLocation()
+			            let reader = Reader(authToken: authToken)
+			            return Sub(authToken: authToken, reader: reader)
+			        }
 			        let authToken: Secret = __safeDI_authToken()
 			        func __safeDI_screen() -> Screen {
-			            func __safeDI_token() -> Secret {
-			                func __safeDI_detailBuilder() -> Detail {
-			                    #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
-			                    let authToken: Secret? = nil
-			                    #sourceLocation()
-			                    func __safeDI_sub() -> Sub {
-			                        #sourceLocation(file: "\(inlineOutput.fixtures["Sub.swift"])", line: 8)
-			                        let authToken: (any Auth)? = authToken
-			                        #sourceLocation()
-			                        let reader = Reader(authToken: authToken)
-			                        return Sub(authToken: authToken, reader: reader)
-			                    }
-			                    let sub: Sub = __safeDI_sub()
-			                    return Detail(authToken: authToken, sub: sub)
-			                }
-			                let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
-			                return Secret(detailBuilder: detailBuilder)
-			            }
-			            let token: Secret = __safeDI_token()
+			            let token: Secret = __safeDI_authToken()
 			            return Screen(token: token)
 			        }
 			        let screen: Screen = __safeDI_screen()
@@ -539,20 +521,20 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 			        let token = LazilyInstantiated<Secret?>(__safeDI_token)
+			        @inline(never) func __safeDI_detail() -> Detail {
+			            #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 8)
+			            let authToken: Secret? = token.instance
+			            #sourceLocation()
+			            let reader: Reader = __safeDI_reader(authToken: authToken)
+			            return Detail(authToken: authToken, reader: reader)
+			        }
+			        @inline(never) func __safeDI_reader(authToken: Secret?) -> Reader {
+			            #sourceLocation(file: "\(output.fixtures["Reader.swift"])", line: 7)
+			            let authToken: AnyAuth? = (authToken as Secret?).map { AnyAuth($0) }
+			            #sourceLocation()
+			            return Reader(authToken: authToken)
+			        }
 			        @inline(never) func __safeDI_left() -> Left {
-			            @inline(never) func __safeDI_detail() -> Detail {
-			                #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 8)
-			                let authToken: Secret? = token.instance
-			                #sourceLocation()
-			                @inline(never) func __safeDI_reader() -> Reader {
-			                    #sourceLocation(file: "\(output.fixtures["Reader.swift"])", line: 7)
-			                    let authToken: AnyAuth? = (authToken as Secret?).map { AnyAuth($0) }
-			                    #sourceLocation()
-			                    return Reader(authToken: authToken)
-			                }
-			                let reader: Reader = __safeDI_reader()
-			                return Detail(authToken: authToken, reader: reader)
-			            }
 			            let detail: Detail = __safeDI_detail()
 			            return Left(detail: detail)
 			        }
@@ -572,24 +554,24 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        let authToken = Secret()
+			        func __safeDI_left() -> Left {
+			            let detail: Detail = __safeDI_detail()
+			            return Left(detail: detail)
+			        }
+			        func __safeDI_detail() -> Detail {
+			            #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
+			            let authToken: Secret? = nil
+			            #sourceLocation()
+			            let reader: Reader = __safeDI_reader(authToken: authToken)
+			            return Detail(authToken: authToken, reader: reader)
+			        }
+			        func __safeDI_reader(authToken: Secret?) -> Reader {
+			            #sourceLocation(file: "\(inlineOutput.fixtures["Reader.swift"])", line: 7)
+			            let authToken: AnyAuth? = (authToken as Secret?).map { AnyAuth($0) }
+			            #sourceLocation()
+			            return Reader(authToken: authToken)
+			        }
 			        func __safeDI_screen() -> Screen {
-			            func __safeDI_left() -> Left {
-			                func __safeDI_detail() -> Detail {
-			                    #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
-			                    let authToken: Secret? = nil
-			                    #sourceLocation()
-			                    func __safeDI_reader() -> Reader {
-			                        #sourceLocation(file: "\(inlineOutput.fixtures["Reader.swift"])", line: 7)
-			                        let authToken: AnyAuth? = (authToken as Secret?).map { AnyAuth($0) }
-			                        #sourceLocation()
-			                        return Reader(authToken: authToken)
-			                    }
-			                    let reader: Reader = __safeDI_reader()
-			                    return Detail(authToken: authToken, reader: reader)
-			                }
-			                let detail: Detail = __safeDI_detail()
-			                return Left(detail: detail)
-			            }
 			            let left: Left = __safeDI_left()
 			            return Screen(left: left)
 			        }
@@ -637,20 +619,20 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 			            return Reader(authToken: authToken)
 			        }
 			        let reader: Reader = __safeDI_reader()
+			        @inline(never) func __safeDI_detail() -> Detail {
+			            #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 8)
+			            let authToken: Secret? = token.instance
+			            #sourceLocation()
+			            let reader: Reader = __safeDI_reader_(authToken: authToken)
+			            return Detail(authToken: authToken, reader: reader)
+			        }
+			        @inline(never) func __safeDI_reader_(authToken: Secret?) -> Reader {
+			            #sourceLocation(file: "\(output.fixtures["Reader.swift"])", line: 7)
+			            let authToken: (any Auth)? = authToken
+			            #sourceLocation()
+			            return Reader(authToken: authToken)
+			        }
 			        @inline(never) func __safeDI_left() -> Left {
-			            @inline(never) func __safeDI_detail() -> Detail {
-			                #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 8)
-			                let authToken: Secret? = token.instance
-			                #sourceLocation()
-			                @inline(never) func __safeDI_reader() -> Reader {
-			                    #sourceLocation(file: "\(output.fixtures["Reader.swift"])", line: 7)
-			                    let authToken: (any Auth)? = authToken
-			                    #sourceLocation()
-			                    return Reader(authToken: authToken)
-			                }
-			                let reader: Reader = __safeDI_reader()
-			                return Detail(authToken: authToken, reader: reader)
-			            }
 			            let detail: Detail = __safeDI_detail()
 			            return Left(detail: detail)
 			        }
@@ -735,20 +717,20 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public convenience init(__safeDI_authToken authToken: Secret?, __safeDI_token: @autoclosure @escaping () -> Secret?) {
 			        let token = LazilyInstantiated<Secret?>(__safeDI_token)
+			        @inline(never) func __safeDI_detail() -> Detail {
+			            #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 8)
+			            let authToken: Secret? = token.instance
+			            #sourceLocation()
+			            let reader: Reader = __safeDI_reader(authToken: authToken)
+			            return Detail(authToken: authToken, reader: reader)
+			        }
+			        @inline(never) func __safeDI_reader(authToken: Secret?) -> Reader {
+			            #sourceLocation(file: "\(output.fixtures["Reader.swift"])", line: 7)
+			            let authToken: (any Auth)? = authToken
+			            #sourceLocation()
+			            return Reader(authToken: authToken)
+			        }
 			        @inline(never) func __safeDI_left() -> Left {
-			            @inline(never) func __safeDI_detail() -> Detail {
-			                #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 8)
-			                let authToken: Secret? = token.instance
-			                #sourceLocation()
-			                @inline(never) func __safeDI_reader() -> Reader {
-			                    #sourceLocation(file: "\(output.fixtures["Reader.swift"])", line: 7)
-			                    let authToken: (any Auth)? = authToken
-			                    #sourceLocation()
-			                    return Reader(authToken: authToken)
-			                }
-			                let reader: Reader = __safeDI_reader()
-			                return Detail(authToken: authToken, reader: reader)
-			            }
 			            let detail: Detail = __safeDI_detail()
 			            return Left(detail: detail)
 			        }
@@ -768,24 +750,24 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        let authToken = Secret()
+			        func __safeDI_left() -> Left {
+			            let detail: Detail = __safeDI_detail()
+			            return Left(detail: detail)
+			        }
+			        func __safeDI_detail() -> Detail {
+			            #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
+			            let authToken: Secret? = nil
+			            #sourceLocation()
+			            let reader: Reader = __safeDI_reader(authToken: authToken)
+			            return Detail(authToken: authToken, reader: reader)
+			        }
+			        func __safeDI_reader(authToken: Secret?) -> Reader {
+			            #sourceLocation(file: "\(inlineOutput.fixtures["Reader.swift"])", line: 7)
+			            let authToken: (any Auth)? = authToken
+			            #sourceLocation()
+			            return Reader(authToken: authToken)
+			        }
 			        func __safeDI_screen() -> Screen {
-			            func __safeDI_left() -> Left {
-			                func __safeDI_detail() -> Detail {
-			                    #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
-			                    let authToken: Secret? = nil
-			                    #sourceLocation()
-			                    func __safeDI_reader() -> Reader {
-			                        #sourceLocation(file: "\(inlineOutput.fixtures["Reader.swift"])", line: 7)
-			                        let authToken: (any Auth)? = authToken
-			                        #sourceLocation()
-			                        return Reader(authToken: authToken)
-			                    }
-			                    let reader: Reader = __safeDI_reader()
-			                    return Detail(authToken: authToken, reader: reader)
-			                }
-			                let detail: Detail = __safeDI_detail()
-			                return Left(detail: detail)
-			            }
 			            let left: Left = __safeDI_left()
 			            return Screen(left: left)
 			        }
@@ -2060,20 +2042,20 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 			        let token = LazilyInstantiated<Secret?>(__safeDI_token)
+			        @inline(never) func __safeDI_detail() -> Detail {
+			            #sourceLocation(file: "\(detailPath)", line: 8)
+			            let authToken: Secret? = token.instance
+			            #sourceLocation()
+			            let reader: Reader = __safeDI_reader(authToken: authToken)
+			            return Detail(authToken: authToken, reader: reader)
+			        }
+			        @inline(never) func __safeDI_reader(authToken: Secret?) -> Reader {
+			            #sourceLocation(file: "\(readerPath)", line: 7)
+			            let authToken: (any Auth)? = authToken
+			            #sourceLocation()
+			            return Reader(authToken: authToken)
+			        }
 			        @inline(never) func __safeDI_left() -> Left {
-			            @inline(never) func __safeDI_detail() -> Detail {
-			                #sourceLocation(file: "\(detailPath)", line: 8)
-			                let authToken: Secret? = token.instance
-			                #sourceLocation()
-			                @inline(never) func __safeDI_reader() -> Reader {
-			                    #sourceLocation(file: "\(readerPath)", line: 7)
-			                    let authToken: (any Auth)? = authToken
-			                    #sourceLocation()
-			                    return Reader(authToken: authToken)
-			                }
-			                let reader: Reader = __safeDI_reader()
-			                return Detail(authToken: authToken, reader: reader)
-			            }
 			            let detail: Detail = __safeDI_detail()
 			            return Left(detail: detail)
 			        }
