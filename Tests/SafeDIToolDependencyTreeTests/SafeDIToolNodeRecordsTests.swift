@@ -623,7 +623,8 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 			#expect(reports.map(\.refusal) == ["nodeHasSeveralVariants"])
 			everyRefusal += reports.map(\.everyRefusal)
 		}
-		#expect(everyRefusal == [["lazy", "nodeHasSeveralVariants"], ["lazy", "nodeHasSeveralVariants"]])
+		// A rename that reads a lazy wrapper's instance has a record, so the two variants are all the world is refused for.
+		#expect(everyRefusal == [["nodeHasSeveralVariants"], ["nodeHasSeveralVariants"]])
 	}
 
 	@Test
