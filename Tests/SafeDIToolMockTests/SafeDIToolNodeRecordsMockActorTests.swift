@@ -271,40 +271,119 @@ struct SafeDIToolNodeRecordsMockActorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_keepsTheWalksStatements_whenActorIsOnLazyCycle() async throws {
+	mutating func mock_declaresPlacesEnteredSendable_whenActorIsSentValueFunctionOnCycleBuilds() async throws {
 		// An actor whose argument builds the actor again through an `Instantiator`. A function on the cycle is handed the
-		// places entered, which are not `Sendable`, so the worker it builds cannot be sent to the actor, and the walk
-		// writes the world.
-		let fixture = [
-			"""
-			@Instantiable(generateMock: true)
-			public actor Store: Instantiable {
-			    public init(worker: Worker) {
-			        self.worker = worker
-			    }
-
-			    @Instantiated let worker: Worker
-			}
-			""",
-			"""
-			@Instantiable
-			public final class Worker: Instantiable {
-			    public init(storeBuilder: Instantiator<Store>) {
-			        self.storeBuilder = storeBuilder
-			    }
-
-			    @Instantiated let storeBuilder: Instantiator<Store>
-			}
-			""",
-		]
-		let walkOutput = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		// places entered, and the worker it builds is sent to the actor, so the places are declared in their `Sendable`
+		// form: the worker is then built of nothing that cannot be sent.
 		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
-			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+			try await executeSafeDIToolTest(swiftFileContent: Self.actorOnCycleFixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		}
 
-		#expect(reports.filter(\.isMockRoot).map(\.everyRefusal) == [["mockActor"]])
-		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [false])
-		#expect(output.generatedFiles == walkOutput.generatedFiles)
+		#expect(reports.filter(\.isMockRoot).map(\.everyRefusal) == [[]])
+		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [true])
+		#expect(output.mockFiles["Store+SafeDIMock.swift"] == generatedFileHeader + """
+		#if DEBUG
+		extension Store {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            worker: Worker.SafeDIMockConfiguration = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                worker: worker
+		            )
+		        }
+
+		        var worker: Worker.SafeDIMockConfiguration { __safeDI_storage.worker }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage: Sendable {
+		            init(
+		                worker: Worker.SafeDIMockConfiguration
+		            ) {
+		                self.worker = worker
+		            }
+
+		            let worker: Worker.SafeDIMockConfiguration
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Store {
+		        nonisolated indirect enum __safeDI_Places: Sendable {
+		            case none
+		            case entered(slot: String?, entered: any Sendable, above: __safeDI_Places)
+		        }
+		        nonisolated struct __safeDI_Entered<Configuration: Sendable>: Sendable {
+		            let configuration: Configuration
+		            var places = __safeDI_Places.none
+		            func entering<Handed: Sendable>(_ slot: String, _ handed: Handed, nearestOfType: Bool = false) -> __safeDI_Entered<Handed> {
+		                var nearest: __safeDI_Entered<Handed>?
+		                var above = places
+		                while case let .entered(enteredSlot, entered, next) = above {
+		                    if enteredSlot == slot || nearestOfType && nearest == nil, let entered = entered as? __safeDI_Entered<Handed> {
+		                        if enteredSlot == slot { return .init(configuration: entered.configuration, places: above) }
+		                        nearest = entered
+		                    }
+		                    above = next
+		                }
+		                let entered = __safeDI_Entered<Handed>(configuration: nearest?.configuration ?? handed)
+		                return .init(configuration: entered.configuration, places: .entered(slot: slot, entered: entered, above: places))
+		            }
+		        }
+		        let __safeDI_entered = __safeDI_Entered(configuration: ())
+		        func __safeDI_worker(__safeDI_entered: __safeDI_Entered<Worker.SafeDIMockConfiguration>) -> Worker {
+		            let storeBuilder = Instantiator<Store> { __safeDI_storeBuilder(__safeDI_entered: __safeDI_entered.entering("storeBuilder", Store.SafeDIMockConfiguration())) }
+		            return if let safeDIBuilder = __safeDI_entered.configuration.safeDIBuilder { safeDIBuilder(storeBuilder) } else { Worker(storeBuilder: storeBuilder) }
+		        }
+		        func __safeDI_storeBuilder(__safeDI_entered: __safeDI_Entered<Store.SafeDIMockConfiguration>) -> Store {
+		            let worker: Worker = __safeDI_worker(__safeDI_entered: __safeDI_entered.entering("worker", __safeDI_entered.configuration.worker))
+		            return if let safeDIBuilder = __safeDI_entered.configuration.safeDIBuilder { safeDIBuilder(worker) } else { Store(worker: worker) }
+		        }
+		        let worker: Worker = __safeDI_worker(__safeDI_entered: __safeDI_entered.entering("worker", safeDIOverrides.worker))
+		        return Store(worker: worker)
+		    }
+		}
+		#endif
+
+		#if DEBUG
+		extension Store {
+		    /// Configuration for how this type is constructed within a mock tree.
+		    nonisolated struct SafeDIMockConfiguration: Sendable {
+		        init(
+		            worker: Worker.SafeDIMockConfiguration = .init(),
+		            _ safeDIBuilder: (@Sendable (sending Worker) -> Store)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                worker: worker,
+		                safeDIBuilder: safeDIBuilder
+		            )
+		        }
+
+		        var worker: Worker.SafeDIMockConfiguration { __safeDI_storage.worker }
+		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+		        var safeDIBuilder: (@Sendable (sending Worker) -> Store)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage: Sendable {
+		            init(
+		                worker: Worker.SafeDIMockConfiguration,
+		                safeDIBuilder: (@Sendable (sending Worker) -> Store)?
+		            ) {
+		                self.worker = worker
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let worker: Worker.SafeDIMockConfiguration
+		            let safeDIBuilder: (@Sendable (sending Worker) -> Store)?
+		        }
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Store+SafeDIMock.swift"] ?? "")")
 	}
 
 	@Test
@@ -738,6 +817,30 @@ struct SafeDIToolNodeRecordsMockActorTests: ~Copyable {
 	/// closure sets, and the received actor one its second initializer takes.
 	/// A root that builds an actor and a class, each handed an `Instantiator` of one leaf it builds: the class first
 	/// where `buildsClassFirst`, and a leaf that is a `Sendable` struct where `leafIsSendable`, and a class otherwise.
+	/// An actor whose argument builds the actor again through an `Instantiator`.
+	private static let actorOnCycleFixture = [
+		"""
+		@Instantiable(generateMock: true)
+		public actor Store: Instantiable {
+		    public init(worker: Worker) {
+		        self.worker = worker
+		    }
+
+		    @Instantiated let worker: Worker
+		}
+		""",
+		"""
+		@Instantiable
+		public final class Worker: Instantiable {
+		    public init(storeBuilder: Instantiator<Store>) {
+		        self.storeBuilder = storeBuilder
+		    }
+
+		    @Instantiated let storeBuilder: Instantiator<Store>
+		}
+		""",
+	]
+
 	private static func sharedWrapperFixture(buildsClassFirst: Bool, leafIsSendable: Bool) -> [String: String] {
 		let properties = buildsClassFirst ? [("b", "B"), ("a", "A")] : [("a", "A"), ("b", "B")]
 		return [

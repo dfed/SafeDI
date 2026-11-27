@@ -79,7 +79,16 @@ extension ScopeGenerator {
 		// Where the world's cycles enter places, `mock()` declares what holds them and binds a value with none entered
 		// before its nodes, which its body and every function that takes no places hand a function that takes them
 		// (`NodeRecords+MockCycle.swift`).
-		let enteredPlaces: [GeneratedCode] = (nodeRecords.mockEnteredPlacesUse.map { MockEnteredSlot.mockEnteredPlacesDeclaration(isSendable: false, entersNearest: $0.entersNearest, passes: $0.passes) } ?? [])
+		// Where an actor is sent a value a function handed the places builds, the places take their `Sendable` form, so that
+		// the value is built of nothing that cannot be sent. That form holds only configurations of the `Sendable` form,
+		// which every type built beneath an actor takes: a function handed the places whose type is built beneath none, as
+		// one on another cycle of the mock's is, keeps the walk's statements.
+		let placesAreSendable = nodeRecords.mockConfigurationTypeNamesHandedWithPlacesAnActorIsSentValueOf != nil
+		guard nodeRecords.mockConfigurationTypeNamesHandedWithPlacesAnActorIsSentValueOf?.isSubset(of: sendableConfigurationTypeNames) ?? true else {
+			report(refusal: .mockActor, everyRefusal: [.mockActor], isLaidOut: false, recordCount: 0)
+			return nil
+		}
+		let enteredPlaces: [GeneratedCode] = (nodeRecords.mockEnteredPlacesUse.map { MockEnteredSlot.mockEnteredPlacesDeclaration(isSendable: placesAreSendable, entersNearest: $0.entersNearest, passes: $0.passes) } ?? [])
 			.map { .text("\(TypeKeyBody.rootStatementIndentation)\($0)") }
 		let statements = TypeKeyBody.statements(ofRootBody: nodeRecords.rootBody, outerDeclarations: outerDeclarations, namesInScope: Set(outerDeclarations.map(\.label)), rootPassedArgumentNames: [ReservedName.mockOverridesParameterName], laysOutEveryLoop: true)
 		report(refusal: statements == nil ? .notLaidOut : nil, everyRefusal: [], isLaidOut: statements != nil, recordCount: nodeRecords.recordCount)

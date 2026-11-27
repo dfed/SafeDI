@@ -149,6 +149,24 @@ extension NodeRecords {
 		return .place(PlacePlan(code: .empty, record: .built(built)))
 	}
 
+	/// The types of the configurations the functions of `world`, a mock root's, that take the places entered are handed,
+	/// where an actor the mock builds with its initializer is sent a value such a function builds; `nil` where none is.
+	///
+	/// A value a function builds of an argument that is not `Sendable` cannot be sent, so there `mock()` declares the
+	/// places in their `Sendable` form (`MockEnteredSlot.mockEnteredPlacesDeclaration(isSendable:entersNearest:passes:)`),
+	/// which holds only configurations of the `Sendable` form: the root's lowering, which knows which types take that
+	/// form, refuses the world as `mockActor` where one of these does not
+	/// (`ScopeGenerator.nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:sendableConfigurationTypeNames:rootNames:outerDeclarations:)`).
+	/// The walk builds such a value of what the actor's own function captures.
+	static func mockConfigurationTypeNamesHandedWithPlacesAnActorIsSentValueOf(in world: some NodeRecordSources, slots: MockEnteredSlots) -> Set<String>? {
+		let declarationsHandedPlaces = (1..<Int32(world.declarationCount)).filter { takesMockEnteredPlaces($0, in: slots) }
+		let actorIsSentValue = declarationsHandedPlaces.contains { declaration in
+			world.parents(of: declaration).contains { isActorBuiltWithInitializer($0.parent, in: world) }
+		}
+		guard actorIsSentValue else { return nil }
+		return Set(declarationsHandedPlaces.map { world.scope(of: $0).instantiable.concreteInstantiable.asSource })
+	}
+
 	/// Refuses `world`, a mock root's that holds a cycle, in the shapes the slot form does not make yet.
 	///
 	/// A function that takes the places and is `@Sendable` needs no refusal here: a node built in a `@Sendable` function
@@ -157,9 +175,7 @@ extension NodeRecords {
 	/// place entered. The engine also lays out no `@Sendable` function that is handed a value that stays outside one, as
 	/// the places and the overrides do (`TypeKeyLayout.checkSendableMarks()`).
 	/// - Throws: `mockCycleLazy` where a function that takes the places entered builds a `LazilyInstantiated`, whose
-	///   closing is the lazy kind's to add; `mockActor` where an actor is sent a value such a function builds, which is
-	///   built of the places the function was handed and so cannot be sent, where the walk builds the value of what the
-	///   actor's own function captures; `mockDefaultValuedParameter` where a node built along an edge the
+	///   closing is the lazy kind's to add; `mockDefaultValuedParameter` where a node built along an edge the
 	///   configurations leave out, or beneath one, reads a field of its configuration for a default-valued parameter. The
 	///   empty configuration such a call hands holds one value of the parameter's default, which every node built of it
 	///   and of the place that keeps it would share, where the walk leaves each construction beneath such an edge to its
@@ -181,7 +197,6 @@ extension NodeRecords {
 			case .constant, .instantiator, .sendableInstantiator, .erasedInstantiator, .sendableErasedInstantiator, .alias, .hole:
 				break
 			}
-			guard !world.parents(of: declaration).contains(where: { isActorBuiltWithInitializer($0.parent, in: world) }) else { throw .mockActor }
 		}
 	}
 }

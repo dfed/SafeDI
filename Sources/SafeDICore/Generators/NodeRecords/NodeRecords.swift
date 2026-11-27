@@ -535,6 +535,7 @@ struct NodeRecords: Sendable {
 		self.rootBody = rootBody
 		self.records = records
 		mockEnteredPlacesUse = enteredSlots.flatMap { $0.slots.isEmpty ? nil : $0.use }
+		mockConfigurationTypeNamesHandedWithPlacesAnActorIsSentValueOf = enteredSlots.flatMap { Self.mockConfigurationTypeNamesHandedWithPlacesAnActorIsSentValueOf(in: world, slots: $0) }
 		declarationByVariant = (0..<Int32(world.variantCount)).map(world.declaration(of:))
 	}
 
@@ -551,6 +552,11 @@ struct NodeRecords: Sendable {
 	/// them (`MockEnteredSlot.mockEnteredPlacesDeclaration(isSendable:entersNearest:passes:)`); `nil` for a world with no
 	/// cycle and for a production root's.
 	let mockEnteredPlacesUse: MockEnteredPlacesUse?
+
+	/// The types of the configurations a mock root's functions that take the places entered are handed, where an actor
+	/// is sent a value such a function builds (`mockConfigurationTypeNamesHandedWithPlacesAnActorIsSentValueOf(in:slots:)`);
+	/// `nil` where none is, and for a world with no cycle and a production root's.
+	let mockConfigurationTypeNamesHandedWithPlacesAnActorIsSentValueOf: Set<String>?
 
 	/// How many variants have a record, which is every variant but the root's.
 	var recordCount: Int {
