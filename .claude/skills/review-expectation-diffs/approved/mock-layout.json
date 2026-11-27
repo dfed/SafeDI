@@ -238,6 +238,15 @@
    "status": "notApproved"
   },
   {
+   "id": "not-approved-keyword-member-loses-backticks",
+   "ruling": "Not approved: a defect for the mock writer (lead, 2026-11-27)",
+   "summary": "An override member named with a keyword (`default`) is read without its backticks.",
+   "shapes": [
+    "changed: safeDIOverrides . {- `default` -}{+ default +} ) } … safeDIOverrides . {- `default` -}{+ default +} ) }"
+   ],
+   "status": "notApproved"
+  },
+  {
    "id": "13-optional-channel-rule-a",
    "ruling": "lead 11-27 15:06Z, approved per listed root",
    "summary": "One optional parameter where 2.4.x wrote nil in one body and built a second function; the caller passes the value or nil.",
