@@ -19,12 +19,15 @@ trailing underscore) read one fact from the walk's text. 5 as ruled 17:35Z (a de
 function that declares it in the walk) and 17 (a local only the records read) read one too. Not rewritten, so
 such a pair fails: 12 and 16. 20 (cycle kind, form c) removes the places list's declaration and the calls that
 hand it on; a call of a function the caller is nested in closes on that function, and a fresh configuration
-holds no override.
+holds no override; a function reading the nearest place of its type takes the configuration that place was
+entered with. 21 gives a nested cycle function the type suffix the walk declares it with.
 """
 import collections
 import re
 import sys
 import threading
+NEAREST='\x00nearest'
+CONFIG='\x00configuration'
 FOLD=re.compile(r'if let safeDIBuilder = (?:\w+\.)*\w+\.SafeDIMockConfiguration\(\)(?:\.\w+)* \{ .*? \} else \{ (.*) \}$')
 def fold_empty(line):
     return FOLD.sub(lambda m:m.group(1),line)
@@ -70,13 +73,19 @@ def split_top(t):
         else: cur+=c
     if cur.strip(): parts.append(cur.strip())
     return parts
-def expand(lines,hoisted,base_indent,entered={}):
+def expand(lines,hoisted,base_indent,entered={},nearest={}):
     """lines: body of one function (or root) at base_indent. returns new lines."""
     out=[]
     i=0
     declared=set()
+    nearest=dict(nearest)
     while i<len(lines):
         line=lines[i]
+        if line.strip().startswith(NEAREST):
+            # entry 20: the configuration the nearest place of a type was entered with, for the functions below
+            _,key,value=line.strip().split(' ',2)
+            nearest[key]=value
+            i+=1; continue
         hit=None
         for name in hoisted:
             if name in line:
@@ -98,6 +107,13 @@ def expand(lines,hoisted,base_indent,entered={}):
             continue
         # instantiate
         sig,body,guard=hoisted[name]
+        below=nearest
+        if body and body[0].startswith(CONFIG):
+            # entry 20: a function that takes the nearest place's configuration where one was entered above
+            _,key,own=body[0].split(' ',2)
+            expr=nearest.get(key) or TOKEN.sub(lambda _:expr,own)
+            below=dict(nearest,**{key:expr})
+            body=body[1:]
         m=FUNC.match(sig)
         params=re.sub(r'(^|, )safeDIOverrides: .*$','',m.group(4))
         # a parameter every call hands the value of its own name was a capture
@@ -128,7 +144,7 @@ def expand(lines,hoisted,base_indent,entered={}):
         if guard and base_indent>8: ALSO_USED.append('10')
         inst=([ind+guard.strip()] if guard else [])+[ind+m.group(2)+newname+'('+params+')'+m.group(5)+' {']
         sub=[ (ind+'    '+b if b else b) for b in (fold_empty(TOKEN.sub(lambda _:expr,x)) for x in body)]
-        sub=expand(sub,hoisted,base_indent+4,dict(entered,**{name:newname}))
+        sub=expand(sub,hoisted,base_indent+4,dict(entered,**{name:newname}),below)
         inst+=sub+[ind+'}']
         # find statement start in out
         k=len(out)
@@ -219,11 +235,19 @@ def e20(text,walk=None):
             i=block_end(lines,i)+1; continue
         if line.strip()=='let __safeDI_entered = __safeDI_EnteredPlaces()' or PLACE_LINE.match(line):
             i+=1; continue
+        marked=NEAREST_LINE.match(line)
+        if marked:
+            out.append(marked.group(1)+NEAREST+' '+marked.group(2)+' '+marked.group(3)); i+=1; continue
+        marked=NEAREST_PLACE_LINE.match(line)
+        if marked:
+            out.append(marked.group(1)+CONFIG+' '+marked.group(2)+' '+marked.group(3)); i+=1; continue
         line=re.sub(r'(, )?__safeDI_entered: __safeDI_EnteredPlaces(, )?',lambda m:', ' if m.group(1) and m.group(2) else '',line)
         line=re.sub(r'(, )?__safeDI_entered: __safeDI_entered(, )?',lambda m:', ' if m.group(1) and m.group(2) else '',line)
         out.append(line);i+=1
     return '\n'.join(out)
-PLACE_LINE=re.compile(r'^ +let (?:__safeDI_entered = __safeDI_entered\.entering\(\w+: \.init\(safeDIOverrides(?:\.\w+)*, above: __safeDI_entered\)\)|__safeDI_place = __safeDI_entered\.\w+ \?\? \.init\(safeDIOverrides, above: __safeDI_entered\)|safeDIOverrides = __safeDI_place\.configuration|__safeDI_entered = __safeDI_place\.enteredAbove\.entering\(\w+: __safeDI_place\))$')
+NEAREST_LINE=re.compile(r'^( +)let __safeDI_entered = __safeDI_entered\.entering\((__safeDI_nearest\w+): \.init\((.+), above: __safeDI_entered\)\)$')
+NEAREST_PLACE_LINE=re.compile(r'^( +)let __safeDI_place = __safeDI_entered\.\w+ \?\? \.init\(__safeDI_entered\.(__safeDI_nearest\w+)\?\.configuration \?\? (.+), above: __safeDI_entered\)$')
+PLACE_LINE=re.compile(r'^ +let (?:__safeDI_place = __safeDI_entered\.\w+ \?\? \.init\(safeDIOverrides, above: __safeDI_entered\)|safeDIOverrides = __safeDI_place\.configuration|__safeDI_entered = __safeDI_place\.enteredAbove\.entering\(\w+: __safeDI_place\))$')
 def mock_bodies(text):
     """the text cut before each mock function, so that a fact is read from the walk's text of the same mock"""
     parts=[[]]
@@ -332,10 +356,26 @@ def e5(text,walk):
             i+=1
     return '\n'.join(lines)
 UNAVAILABLE=re.compile(r'^ +let (\w+): (.+\?) = safeDIOverrides\.(\w+)$')
+def e21(text,walk):
+    # entry 21: the walk names a nested cycle function apart by its type (__safeDI_x_Type) where the records'
+    # function is __safeDI_x. Line by line, a name of the records is given the walk's suffix only where the walk
+    # declares a function of that longer name, and the mock's texts must otherwise have the same lines.
+    lines=text.split('\n');walk_lines=walk.split('\n')
+    if len(lines)!=len(walk_lines): return text
+    declared=set(FUNC.match(l).group(3) for l in walk_lines if FUNC.match(l))
+    name=re.compile(r'(?<![\w.])__safeDI_\w+')
+    for i,(ours,theirs) in enumerate(zip(lines,walk_lines)):
+        if ours==theirs: continue
+        a=name.findall(ours);b=name.findall(theirs)
+        if len(a)!=len(b) or not all(x==y or (y.startswith(x if x.endswith('_') else x+'_') and len(y)>len(x) and y in declared) for x,y in zip(a,b)): continue
+        names=iter(b)
+        lines[i]=name.sub(lambda _:next(names),ours)
+    return '\n'.join(lines)
+e21=per_mock(e21)
 e3=per_mock(e3)
 e5=per_mock(e5)
 e11=per_mock(e11)
-REWRITES=[('20',e20),('1+2',unhoist),('11',e11),('5',e5),('3',e3),('8',e8),('9',e9),('6',e6),('4',e4)]
+REWRITES=[('20',e20),('1+2',unhoist),('11',e11),('5',e5),('3',e3),('8',e8),('9',e9),('6',e6),('4',e4),('21',e21)]
 
 
 def rewritten(text, walk):
