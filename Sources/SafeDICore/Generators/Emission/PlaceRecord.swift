@@ -102,6 +102,10 @@ struct BuiltPlaceRecord: Sendable {
 	/// so that its call erases nothing: a mock's erased node, whose override returns the property's type
 	/// (`NodeRecords+MockErased.swift`). Every other place's function returns `concreteType`.
 	var returnsPropertyType = false
+	/// Whether the place's function writes `return` before its value though its body holds no statement: a constant a kind
+	/// builds in a function of its own whatever its body holds (`NodeRecords+MockConstruction.swift`). Every other
+	/// function writes it only after statements (`BuilderBody.returnKeyword`).
+	var functionAlwaysWritesReturn = false
 
 	/// The statement the place's builder function begins with, before its children.
 	var leadingStatement: CallGuard? {

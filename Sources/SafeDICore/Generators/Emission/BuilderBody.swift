@@ -23,9 +23,9 @@
 /// is empty: every scope a body emits writes a line (`.claude/rules/emission-decisions.md`, "Empty chunks").
 struct BuilderBody: Sendable {
 	let statements: [GeneratedCode]
-	/// Whether the body writes `return ` before its value though it writes no statement: a constant's function does,
-	/// which production declares only around statements and a mock also declares for a node whose construction reads a
-	/// field of its configuration.
+	/// Whether the body writes `return ` before its value though it writes no statement: the function of a constant a
+	/// kind builds in a function whatever its body holds (`BuiltPlaceRecord.functionAlwaysWritesReturn`), as a mock does
+	/// for a node whose construction reads a field of its configuration.
 	var alwaysWritesReturn = false
 
 	/// Whether the body writes anything before its value. A constant whose body writes nothing is constructed in place,
@@ -34,9 +34,9 @@ struct BuilderBody: Sendable {
 		!statements.isEmpty
 	}
 
-	/// What precedes the value on the body's last line: `return ` after statements and in a constant's function
-	/// (`alwaysWritesReturn`), and nothing in any other body that is only its value, which Swift returns implicitly. One rule for every builder function the production emitter writes: a
-	/// constant's, an instantiator's, a lazy wrapper's and a loop member's `_received` function. A mock's builder functions
+	/// What precedes the value on the body's last line: `return ` after statements and where a record says so
+	/// (`alwaysWritesReturn`), and nothing in any other body that is only its value, which Swift returns implicitly. One
+	/// rule for every builder function the production emitter writes: a constant's, an instantiator's, a lazy wrapper's and a loop member's `_received` function. A mock's builder functions
 	/// keep a rule of their own, over the six kinds of line they write (`ScopeGenerator.generateInstantiatorBinding`).
 	var returnKeyword: String {
 		hasStatements || alwaysWritesReturn ? "return " : ""
