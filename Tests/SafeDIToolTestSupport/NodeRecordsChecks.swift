@@ -62,12 +62,25 @@ enum NodeRecordsChecks {
 			if fill.spelledFromRecord != fill.written {
 				Issue.record(Comment(rawValue: "The record of a fill spells\n\(fill.spelledFromRecord.joined(separator: "\n"))\nwhere the tree writes\n\(fill.written.joined(separator: "\n"))"))
 			}
+			if fill.scopeParameterNameFromRecord != fill.writtenScopeParameterName {
+				Issue.record(Comment(rawValue: "A fill’s record names its scope parameter `\(fill.scopeParameterNameFromRecord)` where the tree names it `\(fill.writtenScopeParameterName)`:\n\(fill.written.joined(separator: "\n"))"))
+			}
 			enclosingFillObserver?(fill)
+		}
+		let enclosingNamesObserver = FillNamesObservation.observer
+		// A call's names for its fills' and dispatchers' functions, made from its records alone, must be the names it claims.
+		let namesObserver: @Sendable (FillNamesObservation) -> Void = { names in
+			if names.fromRecords != names.claimed {
+				Issue.record(Comment(rawValue: "A call’s records name its fills and dispatchers \(names.fromRecords) where the call claims \(names.claimed)"))
+			}
+			enclosingNamesObserver?(names)
 		}
 		return try await SeamCallRecordObservation.$observer.withValue(seamCallObserver) {
 			try await DispatcherRecordObservation.$observer.withValue(dispatcherObserver) {
 				try await FillSignatureObservation.$observer.withValue(fillObserver) {
-					try await checkingNodeRecords(laysOutRoots: laysOutRoots, reportPath: reportPath, testName: testName, enclosingObserver: enclosingObserver, body)
+					try await FillNamesObservation.$observer.withValue(namesObserver) {
+						try await checkingNodeRecords(laysOutRoots: laysOutRoots, reportPath: reportPath, testName: testName, enclosingObserver: enclosingObserver, body)
+					}
 				}
 			}
 		}

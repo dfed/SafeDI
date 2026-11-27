@@ -1217,6 +1217,22 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 					decidesPerRoute: scope.publicMockCall != nil,
 				)
 			}
+			// Where a test observes them, the call's names are made again from its fills and dispatchers alone.
+			if let observer = FillNamesObservation.observer {
+				let fills = holeArguments.compactMap { argument -> FillNames.Fill? in
+					guard case let .fill(hole, _, _) = argument, enclosingFills[ScopeGenerator.fillKey(of: hole)] == nil else { return nil }
+					return FillNames.Fill(caseKey: ScopeGenerator.fillCaseKey(of: hole), functionNameStem: ScopeGenerator.fillFunctionName(of: hole), labelsReadOrDeclared: [])
+				}
+				let namesFromRecords = FillNames(
+					reserving: NamesConsultedInTurn([GenerationWork.taking(enclosingFillNames, by: nil), seamHoles.namesBoundForBuilders]),
+					fills: fills,
+					dispatchers: dispatchersOfThisCall.map { FillNames.Dispatcher(key: $0.key, functionNameStem: $0.functionNameStem) },
+				)
+				observer(FillNamesObservation(
+					claimed: fillsOfThisCall.map(\.fill.functionName) + dispatchersOfThisCall.map(\.functionName),
+					fromRecords: fills.map { namesFromRecords.functionName(ofFill: $0.caseKey) ?? "" } + dispatchersOfThisCall.map { namesFromRecords.functionName(ofDispatcher: $0.key) ?? "" },
+				))
+			}
 			// A level on a carried route binds a deferred parameter from a call the caller's seam makes, whose memo holds what that
 			// call passed, which no declaration of the caller's is (`FillDispatcher.Case.carriesDeferredFields`). A fill some route
 			// hands such a memo takes a memo, so the value is created when its tree reads it on every route, as inline: its field
