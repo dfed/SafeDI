@@ -65,6 +65,25 @@ struct ApprovedDifferencesTests: ~Copyable {
 	}
 
 	@Test
+	mutating func rewrite_movesNilOnce_whenAnotherReadersFunctionDeclaresOtherWrapperOptional() async throws {
+		let treeText = try await treeText(of: Self.twoReadersFixture)
+		let nodeRecordsText = Self.generatedFilePreamble + Self.twoWrappersValueAndNilUnderRuleA.replacingOccurrences(of: Self.rootInitializerCallOfTwoWrappersValueAndNil, with: Self.secondReaderAsBothTextsWriteIt)
+		#expect(nodeRecordsText != treeText)
+		// `Bud`'s function takes the Sendable lazy wrapper as an optional in the tree, beside `Leaf`'s lazy one. `Leaf`'s
+		// `nil` moves to its lazy function, which the tree's function of that name declares optional, and moves no further:
+		// a choice read from the whole of the tree's text would move it on to the Sendable lazy function and back for ever.
+		#expect(OptionalChannelRewrite.rewritten(nodeRecordsText, treeText: treeText)?.text == treeText)
+		#expect(ApprovedDifferences.normalized(nodeRecordsText: nodeRecordsText, treeText: treeText, by: [ApprovedDifferences.optionalChannel])?.entries == ["13[LazilyInstantiated]"])
+	}
+
+	@Test
+	func retargetCalls_renamesOnlyCallThatPassesNil_whenLineHoldsTwoCalls() {
+		var code = FunctionText("let pair = (__safeDI_leaf_(theme: nil), __safeDI_leaf_(theme: theme))")
+		code.retargetCalls(of: "__safeDI_leaf_", passingNilFor: "theme", to: "__safeDI_leaf")
+		#expect(code.text == "let pair = (__safeDI_leaf(theme: nil), __safeDI_leaf_(theme: theme))")
+	}
+
+	@Test
 	mutating func rewrite_returnsNil_whenTextAlreadyHandsNilToWrapperTreeDeclaresOptional() async throws {
 		// One wrapper and `nil` are one function in both texts: there is no call to move.
 		let treeText = try await treeText(of: Self.twoWrappersValueAndNilFixture)
@@ -135,6 +154,97 @@ struct ApprovedDifferencesTests: ~Copyable {
 	#endif
 
 
+	"""
+
+	/// `twoWrappersValueAndNilFixture` with a second reader, `Bud`, whose read `Fifth` answers with a Sendable lazy
+	/// wrapper and `Sixth` with nothing: one wrapper and nothing, which both texts write as one function.
+	private static let twoReadersFixture = """
+	import SafeDI
+	@Instantiable(isRoot: true) public final class Root: Instantiable {
+	    public init(first: First, second: Second, third: Third, fourth: Fourth, fifth: Fifth, sixth: Sixth) { self.first = first; self.second = second; self.third = third; self.fourth = fourth; self.fifth = fifth; self.sixth = sixth }
+	    @Instantiated let first: First
+	    @Instantiated let second: Second
+	    @Instantiated let third: Third
+	    @Instantiated let fourth: Fourth
+	    @Instantiated let fifth: Fifth
+	    @Instantiated let sixth: Sixth
+	}
+	@Instantiable public final class First: Instantiable {
+	    public init(theme: LazilyInstantiated<Theme>, leafBuilder: Instantiator<Leaf>) { self.theme = theme; self.leafBuilder = leafBuilder }
+	    @Instantiated let theme: LazilyInstantiated<Theme>
+	    @Instantiated let leafBuilder: Instantiator<Leaf>
+	}
+	@Instantiable public final class Leaf: Instantiable {
+	    public init(theme: Theme?, twig: Twig) { self.theme = theme; self.twig = twig }
+	    @Received(onlyIfAvailable: true) let theme: Theme?
+	    @Instantiated let twig: Twig
+	}
+	@Instantiable public final class Twig: Instantiable {
+	    public init(theme: Theme?) { self.theme = theme }
+	    @Received(onlyIfAvailable: true) let theme: Theme?
+	}
+	@Instantiable public final class Theme: Instantiable, Sendable {
+	    public init() {}
+	}
+	@Instantiable public final class Third: Instantiable {
+	    public init(leafBuilder: Instantiator<Leaf>) { self.leafBuilder = leafBuilder }
+	    @Instantiated let leafBuilder: Instantiator<Leaf>
+	}
+	@Instantiable public final class Second: Instantiable {
+	    public init(theme: SendableLazilyInstantiated<Theme>, leafBuilder: Instantiator<Leaf>) { self.theme = theme; self.leafBuilder = leafBuilder }
+	    @Instantiated let theme: SendableLazilyInstantiated<Theme>
+	    @Instantiated let leafBuilder: Instantiator<Leaf>
+	}
+	@Instantiable public final class Fourth: Instantiable {
+	    public init(theme: Theme, leafBuilder: Instantiator<Leaf>) { self.theme = theme; self.leafBuilder = leafBuilder }
+	    @Instantiated let theme: Theme
+	    @Instantiated let leafBuilder: Instantiator<Leaf>
+	}
+	@Instantiable public final class Bud: Instantiable {
+	    public init(theme: Theme?) { self.theme = theme }
+	    @Received(onlyIfAvailable: true) let theme: Theme?
+	}
+	@Instantiable public final class Fifth: Instantiable {
+	    public init(theme: SendableLazilyInstantiated<Theme>, budBuilder: Instantiator<Bud>) { self.theme = theme; self.budBuilder = budBuilder }
+	    @Instantiated let theme: SendableLazilyInstantiated<Theme>
+	    @Instantiated let budBuilder: Instantiator<Bud>
+	}
+	@Instantiable public final class Sixth: Instantiable {
+	    public init(budBuilder: Instantiator<Bud>) { self.budBuilder = budBuilder }
+	    @Instantiated let budBuilder: Instantiator<Bud>
+	}
+	"""
+
+	private static let rootInitializerCallOfTwoWrappersValueAndNil = """
+	        self.init(first: first, second: second, third: third, fourth: fourth)
+	    }
+	}
+	"""
+
+	/// What the tree writes for `Bud`'s places and the root's initializer call of `twoReadersFixture`, which rule A
+	/// writes the same.
+	private static let secondReaderAsBothTextsWriteIt = """
+	        func __safeDI_budBuilder(theme: SendableLazilyInstantiated<Theme>?) -> Bud {
+	            Bud(theme: theme?.instance)
+	        }
+	        func __safeDI_fifth() -> Fifth {
+	            let theme = SendableLazilyInstantiated<Theme>(__safeDI_theme_)
+	            let budBuilder = Instantiator<Bud> {
+	                __safeDI_budBuilder(theme: theme)
+	            }
+	            return Fifth(theme: theme, budBuilder: budBuilder)
+	        }
+	        let fifth: Fifth = __safeDI_fifth()
+	        func __safeDI_sixth() -> Sixth {
+	            let budBuilder = Instantiator<Bud> {
+	                __safeDI_budBuilder(theme: nil)
+	            }
+	            return Sixth(budBuilder: budBuilder)
+	        }
+	        let sixth: Sixth = __safeDI_sixth()
+	        self.init(first: first, second: second, third: third, fourth: fourth, fifth: fifth, sixth: sixth)
+	    }
+	}
 	"""
 
 	/// `Second`, the root's first place, answers `Leaf`'s read of `theme` with a Sendable lazy wrapper, `First` with a

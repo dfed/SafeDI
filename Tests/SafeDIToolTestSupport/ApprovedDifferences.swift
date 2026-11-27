@@ -70,14 +70,20 @@ enum ApprovedDifferences {
 /// The rewrite moves each such call to the wrapper's function the tree declares optional, makes the parameter optional
 /// in it and in every function it hands the wrapper to, makes a wrapper's function that no longer takes `nil`
 /// non-optional, removes each function nothing references any more, declares a function that lost its first call where
-/// its first remaining caller is, and names the functions that remain of a removed one's name as the tree numbers them.
-/// A value and `nil`, or one wrapper and `nil`, are one function in both texts and no difference.
+/// its first remaining caller is, and names the functions that remain of a removed one's name as the tree numbers them
+/// (`FunctionText.renumberFunctions(sharingNameWith:)`). A value and `nil`, or one wrapper and `nil`, are one function in both texts and no difference.
 enum OptionalChannelRewrite {
 	static func rewritten(_ nodeRecordsText: String, treeText: String) -> (text: String, choices: [String])? {
 		var code = FunctionText(nodeRecordsText)
+		let treeFunctions = FunctionText(treeText).functions
 		var sources = [String]()
 		var choices = [String]()
-		while let move = code.nextMove(treeText: treeText) {
+		// A label of one name moves once, and no more calls move than the text declares functions, so the loop ends
+		// whatever the two texts hold.
+		var moved = Set<String>()
+		for _ in code.functions {
+			guard let move = code.nextMove(treeFunctions: treeFunctions, besides: moved) else { break }
+			moved.insert(move.key)
 			code.makeOptional(move.label, wrapperType: move.wrapperType, inFunctionNamed: move.target)
 			code.retargetCalls(of: move.source, passingNilFor: move.label, to: move.target)
 			if let sourceWrapperType = move.sourceWrapperType {
@@ -101,6 +107,8 @@ enum OptionalChannelRewrite {
 		let wrapperType: String
 		/// The wrapper `source` takes `label` as, optional, where it takes a wrapper and not the declared form.
 		let sourceWrapperType: String?
+		/// The name the functions share and the label: what moves once.
+		let key: String
 	}
 
 	/// The wrappers whose instance answers a read of the unwrapped form.
@@ -158,12 +166,15 @@ struct FunctionText {
 	}
 
 	/// The next call to move: a function that takes a label as an optional of a type and is called with `nil` for it,
-	/// beside a function of its name that takes a wrapper of the type, which the tree's text declares optional.
-	func nextMove(treeText: String) -> OptionalChannelRewrite.Move? {
+	/// beside a function of its name that takes a wrapper of the type, which the tree declares optional in a function of
+	/// that name, `treeFunctions` being the functions the tree's text declares. A name and label among `moved` moved
+	/// already.
+	func nextMove(treeFunctions: [Function], besides moved: Set<String>) -> OptionalChannelRewrite.Move? {
 		let functions = functions
 		for source in functions {
 			for (position, parameter) in source.parameters.enumerated() where parameter.type.hasSuffix("?") {
-				guard callsPassNil(for: parameter.label, to: source) else { continue }
+				let key = "\(Self.stem(of: source.name)) \(parameter.label)"
+				guard !moved.contains(key), callsPassNil(for: parameter.label, to: source) else { continue }
 				// The source takes the declared form, or a wrapper of it.
 				let sourceType = String(parameter.type.dropLast())
 				let sourceWrapperName = OptionalChannelRewrite.wrapperNames.first { sourceType.hasPrefix("\($0)<") && sourceType.hasSuffix(">") }
@@ -175,17 +186,24 @@ struct FunctionText {
 						&& candidate.returnType == source.returnType
 						&& candidate.parameters.map(\.label) == source.parameters.map(\.label)
 						&& wrapperTypes.contains(candidate.parameters[position].type)
-						&& treeText.contains("\(parameter.label): \(candidate.parameters[position].type)?")
+						&& treeFunctions.contains { treeFunction in
+							Self.stem(of: treeFunction.name) == Self.stem(of: source.name)
+								&& treeFunction.returnType == source.returnType
+								&& treeFunction.parameters.map(\.label) == source.parameters.map(\.label)
+								&& treeFunction.parameters[position].type == candidate.parameters[position].type + "?"
+						}
 				}
 				guard let target else { continue }
-				return OptionalChannelRewrite.Move(source: source.name, target: target.name, label: parameter.label, wrapperType: target.parameters[position].type, sourceWrapperType: sourceWrapperName == nil ? nil : sourceType)
+				return OptionalChannelRewrite.Move(source: source.name, target: target.name, label: parameter.label, wrapperType: target.parameters[position].type, sourceWrapperType: sourceWrapperName == nil ? nil : sourceType, key: key)
 			}
 		}
 		return nil
 	}
 
 	/// Makes `label`, a parameter of type `wrapperType`, optional in the function named `name` and in every function its
-	/// body hands the parameter to under the same label, and reads the wrapper's instance through the optional.
+	/// body hands the parameter to under the same label, and reads the wrapper's instance through the optional. A function
+	/// that takes the wrapper under another label is not followed: such a text stays different from the tree's, and its
+	/// root fails, where following it would be a guess.
 	mutating func makeOptional(_ label: String, wrapperType: String, inFunctionNamed name: String) {
 		var pending = [name]
 		var visited = Set<String>()
@@ -228,10 +246,14 @@ struct FunctionText {
 		}
 	}
 
-	/// Renames each call of `source` that passes `nil` for `label` to a call of `target`.
+	/// Renames each call of `source` that passes `nil` for `label` to a call of `target`, and no other call on its line.
 	mutating func retargetCalls(of source: String, passingNilFor label: String, to target: String) {
-		for index in lines.indices where Self.arguments(ofCallsTo: source, in: lines[index]).contains(where: { $0.contains("\(label): nil") }) {
-			lines[index] = Self.replacingReferences(to: source, with: target, in: lines[index])
+		for index in lines.indices {
+			var line = lines[index]
+			for call in Self.calls(to: source, in: line).reversed() where call.arguments.contains(where: { $0.contains("\(label): nil") }) {
+				line.replaceSubrange(call.name, with: target)
+			}
+			lines[index] = line
 		}
 	}
 
@@ -271,7 +293,9 @@ struct FunctionText {
 	}
 
 	/// Names the functions that share a name with one of `removedNames`, apart from its trailing underscores, in the order
-	/// the text declares them: the name, then the name with one more underscore each, as names are claimed.
+	/// the text declares them: the name, then the name with one more underscore each. This assumes what holds today: the
+	/// tree claims a function's name where the root's body first declares it, so the functions of one name are numbered
+	/// in the order of their declarations. A body that names functions apart another way stays different, and fails.
 	mutating func renumberFunctions(sharingNameWith removedNames: [String]) {
 		var renames = [String: String]()
 		for stem in Set(removedNames.map(Self.stem)) {
@@ -342,14 +366,19 @@ struct FunctionText {
 		return line
 	}
 
-	/// The argument lists of the calls of `name` in `text`, each split at its top-level commas.
-	private static func arguments(ofCallsTo name: String, in text: String) -> [String] {
-		referenceRanges(of: name, in: text).flatMap { range -> [String] in
+	/// The calls of `name` in `text`: where each names the function, and its arguments, split at their top-level commas.
+	private static func calls(to name: String, in text: String) -> [(name: Range<String.Index>, arguments: [String])] {
+		referenceRanges(of: name, in: text).compactMap { range in
 			guard range.upperBound < text.endIndex, text[range.upperBound] == "(",
 			      let close = matchingParenthesis(in: text[...], openedAt: range.upperBound)
-			else { return [] }
-			return topLevelParts(of: text[text.index(after: range.upperBound)..<close])
+			else { return nil }
+			return (range, topLevelParts(of: text[text.index(after: range.upperBound)..<close]))
 		}
+	}
+
+	/// The arguments of every call of `name` in `text`.
+	private static func arguments(ofCallsTo name: String, in text: String) -> [String] {
+		calls(to: name, in: text).flatMap(\.arguments)
 	}
 
 	private static func matchingParenthesis(in text: Substring, openedAt open: String.Index) -> String.Index? {
