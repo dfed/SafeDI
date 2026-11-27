@@ -708,7 +708,7 @@ jobs:
             echo '```'
             cat "$RUNNER_TEMP/targeted-result.txt"
             echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
           mkdir -p "$RUNNER_TEMP/targeted-report"
           cp "$RUNNER_TEMP/targeted/all.log" "$RUNNER_TEMP/targeted-report/all.log"
           cp "$RUNNER_TEMP/targeted-result.txt" "$RUNNER_TEMP/targeted-report/result.txt"
@@ -788,7 +788,7 @@ jobs:
             grep -c 'no longer fails' "$RUNNER_TEMP/long-run.txt" | sed 's/^/stale known issues: /'
             tail -3 "$RUNNER_TEMP/long-run.txt"
             echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
           exit "$status"
       - name: Upload the Long Run's Output
         if: ${{ !cancelled() }}
@@ -864,7 +864,7 @@ jobs:
               grep ' DIFF ' "$RUNNER_TEMP/all.log" | sed 's/.*\] //' | cut -d' ' -f1-2 | sort | uniq -c | sort -rn | head -30
               echo '```'
             fi
-          } >> "$GITHUB_STEP_SUMMARY"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
           if [ "$graphs" != "$expected" ]; then echo "::error::$graphs of $expected graphs ran."; exit 1; fi
           if [ "$different" -gt 0 ]; then echo "::error::$different graphs differ between the two tools."; exit 1; fi
           if [ "$TARGETED_MOCKS" = "true" ] && [ "$(count APPROVED)" = 0 ]; then echo "::error::No graph's mocks were laid out from node records: the patch did not take."; exit 1; fi
