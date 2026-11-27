@@ -161,9 +161,8 @@ public enum SeamTreeReadsObservation {
 		/// Each receive's declaring type, alias, module, and the tier facts of the nested seam call that omits it.
 		case receivers
 		/// For each label, whether the tree reads it where a parameter is its nearest declaration, and whether inside a
-		/// `@Sendable` function. The facts lack the labels a nested seam call takes `@Sendable`, the labels a fill binds
-		/// from its struct, a fill the sendable-fill worklist makes `@Sendable`, and a builder function a cycle makes
-		/// `@Sendable`.
+		/// `@Sendable` function. The facts lack the labels a fill binds from its struct, a fill the sendable-fill worklist
+		/// makes `@Sendable`, and a builder function a cycle makes `@Sendable`.
 		case parameterReads
 		/// The builder function names, with and without the hole sites' wrappers.
 		case builderFunctionNames
