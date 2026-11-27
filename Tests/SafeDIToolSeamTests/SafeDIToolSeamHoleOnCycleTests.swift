@@ -173,19 +173,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: Self.modules(
-					feature: [
-						"public protocol Api {}",
-						seamFixtureType(named: "L", isFinalClass: true, declarations: []),
-						seamFixtureType(named: "Hub", isSeam: true, declarations: ["@Instantiated public let api: any Api"]),
-						seamFixtureType(named: "Shell", isSeam: true, declarations: ["@Instantiated public let wBuilder: Instantiator<W>"]),
-					] + (throughSecondCycle ? [
-						seamFixtureType(named: "W", declarations: ["@Instantiated public let hub: Hub", "@Instantiated public let uBuilder: Instantiator<U>"]),
-						seamFixtureType(named: "U", declarations: ["@Instantiated public let pBuilder: Instantiator<P>", "@Instantiated public let wBuilder: Instantiator<W>"]),
-						seamFixtureType(named: "P", declarations: ["@Instantiated public let l: L", "@Instantiated public let uBuilder: Instantiator<U>"]),
-					] : [
-						seamFixtureType(named: "W", declarations: ["@Instantiated public let hub: Hub", "@Instantiated public let pBuilder: Instantiator<P>"]),
-						seamFixtureType(named: "P", declarations: ["@Instantiated public let l: L", "@Instantiated public let wBuilder: Instantiator<W>"]),
-					]),
+					feature: Self.shellCallingHubInsideCycle(throughSecondCycle: throughSecondCycle),
 					app: [
 						Self.liveApi(["@Received public let l: L"]),
 						seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated public let l: L", "@Instantiated public let shell: Shell"]),
@@ -195,6 +183,38 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 				filesToDelete: &filesToDelete,
 			)
 		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func presentedCycleReentryDeclarations_answerNothing_whenCallsQuestionVisitsMoreStatesThanItsLimit() async throws {
+		// The re-entries of the cycle around `Shell`'s call of `Hub` are a question of `Shell`'s graph, which a query with no
+		// room for it leaves unanswered, as it leaves its own re-entries, while a query with room names `P`'s `l`, handed to
+		// the `W` built again, whose call builds `Hub`.
+		let modules = Self.modules(
+			feature: Self.shellCallingHubInsideCycle(throughSecondCycle: false),
+			app: [Self.liveApi([]), seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated public let shell: Shell"])],
+		)
+		let (stream, continuation) = AsyncStream.makeStream(of: SeamSignature.Places.Observation.self)
+		_ = try await SeamPlaceLevels.$observer.withValue({ placeLevels in
+			if let observation = placeLevels.placesObservation, observation.seamType.asSource == "Shell" {
+				continuation.yield(observation)
+			}
+		}) {
+			try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+		}
+		continuation.finish()
+		var observationOfShell: SeamSignature.Places.Observation?
+		for await observation in stream {
+			observationOfShell = observation
+		}
+		let shell = try #require(observationOfShell)
+		let caseIndex = try #require(shell.places.cases.indices.first { shell.places.cases[$0].passedUp != nil })
+		let limited = SeamSignature.Places.Query(of: shell.places, calledPlaces: shell.calledPlaces(of:), stateLimit: 0)
+		let unlimited = SeamSignature.Places.Query(of: shell.places, calledPlaces: shell.calledPlaces(of:))
+		#expect(limited.presentedCycleReentryDeclarations(ofLabel: "l", reading: .callersOwn, at: caseIndex) == nil)
+		let declarations = try #require(unlimited.presentedCycleReentryDeclarations(ofLabel: "l", reading: .callersOwn, at: caseIndex))
+		#expect(declarations.map { "\($0.declaringType.asSource) declares \($0.property.asSource); \($0.reenteringType.asSource) closes on \($0.closedOnProperty.asSource); builder of \($0.calledSeamType?.asSource ?? "no seam")" } == ["P declares l: L; P closes on wBuilder: Instantiator<W>; builder of Hub"])
 	}
 
 	@Test
@@ -1304,6 +1324,24 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			}()
 			""",
 		)
+	}
+
+	/// `Feature`'s declarations where `Shell` builds `W`, which calls `Hub` and whose cycle declares `l` again: `P` directly,
+	/// or `P` in a second cycle through `U`. `Hub` holds a place of `Api`, which `Feature` cannot fill.
+	private static func shellCallingHubInsideCycle(throughSecondCycle: Bool) -> [String] {
+		[
+			"public protocol Api {}",
+			seamFixtureType(named: "L", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "Hub", isSeam: true, declarations: ["@Instantiated public let api: any Api"]),
+			seamFixtureType(named: "Shell", isSeam: true, declarations: ["@Instantiated public let wBuilder: Instantiator<W>"]),
+		] + (throughSecondCycle ? [
+			seamFixtureType(named: "W", declarations: ["@Instantiated public let hub: Hub", "@Instantiated public let uBuilder: Instantiator<U>"]),
+			seamFixtureType(named: "U", declarations: ["@Instantiated public let pBuilder: Instantiator<P>", "@Instantiated public let wBuilder: Instantiator<W>"]),
+			seamFixtureType(named: "P", declarations: ["@Instantiated public let l: L", "@Instantiated public let uBuilder: Instantiator<U>"]),
+		] : [
+			seamFixtureType(named: "W", declarations: ["@Instantiated public let hub: Hub", "@Instantiated public let pBuilder: Instantiator<P>"]),
+			seamFixtureType(named: "P", declarations: ["@Instantiated public let l: L", "@Instantiated public let wBuilder: Instantiator<W>"]),
+		])
 	}
 
 	/// `Feature`, in package `Shop`, and `App`, in package `Other`, which imports it.

@@ -2629,6 +2629,8 @@ extension DependencyTreeGenerator {
 		// A seam's two forms of a label are one finding however many of its fills read the label (`SeamTreeReceives`): each fill
 		// records it with no receivers, which `record` merges into one, completed once every fill is walked.
 		var seamTreeReceives = SeamTreeReceives()
+		var walkWork = 0
+		defer { GenerationWork.record(walkWork, by: .walkingTreeForFills) }
 		// A tree that holds no call of another module's seam or public mock, and no fill, has nothing to judge.
 		for root in generators where root.treeHoldsCallOrFill {
 			// Each generator with what the calls inside every fill of its seam call hide from it, when it is such a fill, the
@@ -2677,6 +2679,7 @@ extension DependencyTreeGenerator {
 				for label in declaredLabels {
 					childInheritedCalledCopyDeclarations[label] = nil
 				}
+				walkWork += 1 + generator.children.count + declaredLabels.count + childInheritedCalledCopyDeclarations.count
 				// The children in the order the call's arguments list their places: each place a fill stands for after the fills
 				// built before it.
 				var childrenToVisit = [(child: ScopeGenerator, placeStoodFor: ScopeGenerator.FillStoodFor?)]()
@@ -3357,6 +3360,8 @@ extension DependencyTreeGenerator {
 			var reads = [Read]()
 			typealias Frame = (generator: ScopeGenerator, parent: Instantiable, providedProperties: Set<Property>, fillAncestors: [DependencyTreeGeneratorError.FillFinding.FillAncestor], judgesClosers: Bool)
 			var framesToVisit = [Frame]()
+			var work = 0
+			defer { GenerationWork.record(work, by: .readingFillTrees) }
 			func isProvided(_ property: Property, by providedProperties: Set<Property>) -> Bool {
 				providedProperties.contains(property)
 					|| (property.typeDescription.isOptional && providedProperties.contains(property.asUnwrappedProperty))
@@ -3365,6 +3370,7 @@ extension DependencyTreeGenerator {
 			/// of its own: what it builds is judged for receives as this tree's, and its closers by `validateFills`.
 			func visit(_ generator: ScopeGenerator, parent: Instantiable?, providedProperties: Set<Property>, fillAncestors: [DependencyTreeGeneratorError.FillFinding.FillAncestor], judgesClosers: Bool) {
 				let childProvidedProperties = providedProperties.union(generator.providedProperties)
+				work += 1 + generator.children.count + childProvidedProperties.count
 				if let instantiable = generator.builtInstantiable {
 					// A seam's call receives what it passes on to the seam's tree.
 					let passingCall: DependencyTreeGeneratorError.FillFinding.PassingCall? = if generator.seamCall != nil, let parent, let property = generator.property {
@@ -3373,6 +3379,7 @@ extension DependencyTreeGenerator {
 						nil
 					}
 					let childFillAncestors = fillAncestors + (generator.property.map { [DependencyTreeGeneratorError.FillFinding.FillAncestor(property: $0, builtType: instantiable.concreteInstantiable)] } ?? [])
+					work += instantiable.dependencies.count + childFillAncestors.count
 					for dependency in instantiable.dependencies {
 						switch dependency.source {
 						case let .received(onlyIfAvailable):
@@ -3471,6 +3478,7 @@ extension DependencyTreeGenerator {
 		compilesGeneratedMocks: Bool,
 		seamTreeReceives: inout SeamTreeReceives,
 	) -> [DependencyTreeGeneratorError.FillFinding] {
+		GenerationWork.record(reads.reads.count, by: .readingFillTrees)
 		var findings = [DependencyTreeGeneratorError.FillFinding]()
 		// The hole says which module declares each seam: this run may know a seam only through a module that calls it.
 		let seamModule = hole.scopeSeamModule
@@ -3920,6 +3928,8 @@ extension DependencyTreeGenerator {
 	/// those fills, by the fill's key (see `hiddenByReenteringCalls(ofFillsOf:)`).
 	static func hiddenByReenteringCalls(ofFills children: [ScopeGenerator]) -> [String: FillReentryHidings] {
 		var hiddenByFillKey = [String: FillReentryHidings]()
+		var work = 0
+		defer { GenerationWork.record(work, by: .findingDeclarationsHiddenByReenteringCalls) }
 		// Each seam call's fills in the order their places are declared, here and at every seam call inside a fill, not
 		// the order of their builders' labels, so the first path met for a label, which a diagnostic names, never depends
 		// on names.
@@ -3949,6 +3959,7 @@ extension DependencyTreeGenerator {
 					hiddenByFillKey[fillKey] = hidden
 				}
 				let childPathDeclarations = pathDeclarations + declarationsBound(by: generator, includingForwardedProperties: true, reason: .other)
+				work += 1 + generator.children.count + childPathDeclarations.count
 				let childCallingType = generator.builtInstantiable?.concreteInstantiable ?? callingType
 				generatorsToVisit.append(contentsOf: generator.children.withFillsSortedByDeclarationLocations.reversed().map { ($0, childCallingType, childPathDeclarations) })
 			}

@@ -64,6 +64,9 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 		// below counts it on a seam whose own type builds many children.
 		// The walk that finds the values a seam tier omits enters only a subtree that holds a call omitting a parameter or a
 		// scope closing a lazy cycle, which shape E has neither of: the test of layers of screens below counts it.
+		// Reading a fill's tree and finding what calls inside a fill hide hand each scope a copy of what is above it, so their
+		// work grows with the paths times the layers, as 2.4.1's walks of the same trees did; the fill channel of the per-type
+		// facts (`TypeFactsGraph`), which judges fills without the tree, removes both walks.
 		let seamSteps = Set(GenerationWork.Step.allCases).subtracting([.layingOutTypeKeyViews, .findingRootFunctions, .checkingReadsAtEveryMember, .askingMemoCandidates, .filingMemoEntryReads, .collectingTypesOfATree, .collectingDeclarationsOfACycle, .findingCarrierASiblingRequires, .findingSeamTierOmissions])
 		var countedSteps = Set<GenerationWork.Step>()
 		for shape in Shape.allCases {
@@ -74,6 +77,7 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 			}
 			for (smaller, larger) in zip(measures, measures.dropFirst()) {
 				let pathGrowth = Double(larger.pathCount) / Double(smaller.pathCount)
+				let layerGrowth = Double(larger.layerCount) / Double(smaller.layerCount)
 				for step in GenerationWork.Step.allCases where seamSteps.contains(step) {
 					let smallerWork = smaller.workByStep[step, default: 0]
 					let largerWork = larger.workByStep[step, default: 0]
@@ -83,8 +87,9 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 					}
 					countedSteps.insert(step)
 					let workGrowth = Double(largerWork) / Double(smallerWork)
+					let growthOfWhatTheStepVisits = Self.stepsCopyingWhatIsAbove.contains(step) ? pathGrowth * layerGrowth : pathGrowth
 					#expect(
-						workGrowth <= pathGrowth * Self.maximumWorkGrowthPerPathGrowth,
+						workGrowth <= growthOfWhatTheStepVisits * Self.maximumWorkGrowthPerPathGrowth,
 						"\(shape): \(step.rawValue) does \(smallerWork) units of work along \(smaller.pathCount) paths and \(largerWork) along \(larger.pathCount): \(String(format: "%.2f", workGrowth))× the work for \(String(format: "%.2f", pathGrowth))× the paths",
 					)
 				}
@@ -378,11 +383,13 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 		return visitsByLayerCount
 	}
 
-	/// A shape measured: shape E, its places in the fills of an inner seam, and both with every path's screens its own.
+	/// A shape measured: shape E, its places in the fills of an inner seam, both with every path's screens its own, and shape
+	/// E built by the fill of another module's seam.
 	private enum Shape: String, CaseIterable, CustomStringConvertible {
 		case shapeE = "Shape E"
 		case placesInFillsOfInnerSeam = "Shape E with its places in the fills of an inner seam"
 		case placesInFillsOfInnerSeamAlongPathsOfTheirOwn = "Shape E with its places in the fills of an inner seam, every path opening screens of its own"
+		case builtByFill = "Shape E built by the fill of a seam's hole, its places in the fills of an inner seam"
 
 		var description: String {
 			rawValue
@@ -393,7 +400,8 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 			case .shapeE:
 				false
 			case .placesInFillsOfInnerSeam,
-			     .placesInFillsOfInnerSeamAlongPathsOfTheirOwn:
+			     .placesInFillsOfInnerSeamAlongPathsOfTheirOwn,
+			     .builtByFill:
 				true
 			}
 		}
@@ -401,10 +409,23 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 		var opensScreensOfItsOwn: Bool {
 			switch self {
 			case .shapeE,
-			     .placesInFillsOfInnerSeam:
+			     .placesInFillsOfInnerSeam,
+			     .builtByFill:
 				false
 			case .placesInFillsOfInnerSeamAlongPathsOfTheirOwn:
 				true
+			}
+		}
+
+		/// The modules of the shape with `screenCount` screens.
+		func modules(screenCount: Int) -> [ModuleFixture] {
+			switch self {
+			case .shapeE,
+			     .placesInFillsOfInnerSeam,
+			     .placesInFillsOfInnerSeamAlongPathsOfTheirOwn:
+				SafeDIToolSeamScopeByTypeTests.shapeEModules(screenCount: screenCount, placesInFillsOfInnerSeam: modulesHavePlacesInFillsOfInnerSeam, opensScreensOfItsOwn: opensScreensOfItsOwn)
+			case .builtByFill:
+				SafeDIToolSeamGenerationWorkTests.layeredFeatureInFillModules(screenCount: screenCount)
 			}
 		}
 	}
@@ -412,6 +433,7 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 	/// The work of every counted step for a shape with `screenCount / 4` layers, and the paths to its places.
 	private struct Measure {
 		let pathCount: Int
+		let layerCount: Int
 		let workByStep: [GenerationWork.Step: Int]
 	}
 
@@ -424,16 +446,16 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 	/// step whose work grows with the square of the places grows three times as fast.
 	private static let maximumWorkGrowthPerPathGrowth = 1.1
 
+	/// The steps whose walks hand each scope a copy of what is above it, so that their work grows with the paths times the
+	/// layers: 2.4.1's walks of the same trees, which the fill channel of the per-type facts removes.
+	private static let stepsCopyingWhatIsAbove: Set<GenerationWork.Step> = [.readingFillTrees, .findingDeclarationsHiddenByReenteringCalls]
+
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private mutating func measure(screenCount: Int, shape: Shape) async throws -> Measure {
 		let (stream, continuation) = AsyncStream.makeStream(of: GenerationWork.self)
 		try await GenerationWork.$observer.withValue({ continuation.yield($0) }) {
 			_ = try await executeSafeDIToolMultiModuleTest(
-				modules: SafeDIToolSeamScopeByTypeTests.shapeEModules(
-					screenCount: screenCount,
-					placesInFillsOfInnerSeam: shape.modulesHavePlacesInFillsOfInnerSeam,
-					opensScreensOfItsOwn: shape.opensScreensOfItsOwn,
-				),
+				modules: shape.modules(screenCount: screenCount),
 				integration: .moduleInfo,
 				// The smallest shape is compiled, so that the work the check measures is that of code that compiles.
 				compileVerification: screenCount == Self.screenCounts.first ? .recordingIssues : .skipped,
@@ -448,6 +470,44 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 		// Each screen of a layer but the last opens three of the next layer's screens, and the first layer's four are `Home`'s,
 		// whether the screens are shared or every path's own.
 		let pathCount = 4 * Int(pow(3, Double(screenCount / 4 - 1)))
-		return Measure(pathCount: pathCount, workByStep: workByStep)
+		return Measure(pathCount: pathCount, layerCount: screenCount / 4, workByStep: workByStep)
+	}
+
+	/// Shape E's layered screens built by `LiveEntry`, which `App` fills the hole `entry: any Entry` of seam `Shell`, in module
+	/// `Inner`, with: the screens a fill's tree, every screen and model receiving `service` from `Root`'s scope above the call,
+	/// and each model of the last layer calling seam `ApiHolder`, of `Inner` too, whose hole `client: any Client` `App`
+	/// fills with `LiveClient`, a fill nested in `LiveEntry`'s. The fill's tree is built inline, so each path to the last
+	/// layer is a scope of its own, and each walk that judges the fills visits every one.
+	static func layeredFeatureInFillModules(screenCount: Int) -> [ModuleFixture] {
+		let layerCount = screenCount / 4
+		var app = [
+			seamFixtureType(named: "Service", declarations: []),
+			"public protocol Api {}",
+			SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "LiveApi", fulfilling: "Api", declarations: ["@Received let id: Int", "@Received let service: Service"]),
+			SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "LiveClient", fulfilling: "Client", declarations: ["@Received let id: Int", "@Received let service: Service", "@Instantiated let api: any Api"]),
+			SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "LiveEntry", fulfilling: "Entry", declarations: (0..<4).map { "@Instantiated let screen\($0)Builder: Instantiator<Screen\($0)>" }),
+			seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let service: Service", "@Instantiated let shell: Shell"]),
+		]
+		for index in 0..<screenCount {
+			let layer = index / 4
+			let opened = layer < layerCount - 1 ? (0..<4).filter { $0 != index % 4 }.map { (layer + 1) * 4 + $0 } : []
+			app.append(seamFixtureType(
+				named: "Screen\(index)",
+				declarations: ["@Forwarded let id: Int", "@Received let service: Service", "@Instantiated let model\(index): Model\(index)"] + opened.map { "@Instantiated let screen\($0)Builder: Instantiator<Screen\($0)>" },
+			))
+			app.append(seamFixtureType(
+				named: "Model\(index)",
+				declarations: ["@Received let id: Int", "@Received let service: Service"] + (opened.isEmpty ? ["@Instantiated let apiHolder: ApiHolder"] : []),
+			))
+		}
+		return [
+			ModuleFixture(name: "Inner", packageName: "Shop", swiftFileContent: [
+				"public protocol Entry {}",
+				"public protocol Client {}",
+				seamFixtureType(named: "Shell", isSeam: true, declarations: ["@Instantiated let entry: any Entry"]),
+				seamFixtureType(named: "ApiHolder", isSeam: true, declarations: ["@Instantiated let client: any Client"]),
+			]),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: app.map { "import Inner\n\n" + $0 }, dependencies: ["Inner"]),
+		]
 	}
 }
