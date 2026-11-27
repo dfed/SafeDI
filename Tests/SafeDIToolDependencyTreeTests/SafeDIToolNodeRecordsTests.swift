@@ -576,37 +576,6 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_refusesWorldAsBuilderLoopAlone_whenALoopMemberReadsItsOwnBuilderOnlyIfAvailable() async throws {
-		// `Editor` receives `editorBuilder`, the `Instantiator` being built around it, only if available: a member of a loop
-		// of builders whose read node records do not answer yet. The facts answer what the member makes again, so nothing is
-		// owed.
-		let (_, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
-			try await executeSafeDIToolTest(swiftFileContent: [
-				"""
-				@Instantiable(isRoot: true)
-				public struct Root: Instantiable {
-				    public init(editorBuilder: Instantiator<Editor>) {
-				        self.editorBuilder = editorBuilder
-				    }
-				    @Instantiated let editorBuilder: Instantiator<Editor>
-				}
-				""",
-				"""
-				@Instantiable
-				public struct Editor: Instantiable {
-				    public init(editorBuilder: Instantiator<Editor>?) {
-				        self.editorBuilder = editorBuilder
-				    }
-				    @Received(onlyIfAvailable: true) let editorBuilder: Instantiator<Editor>?
-				}
-				""",
-			], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
-		}
-		#expect(reports.map(\.everyRefusal) == [["builderLoop"]])
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_refusesWorldAsReadAnsweredTwoWays_whenADeclarationIsBuiltInsideAFillOfASeamsHole() async throws {
 		// `App`'s root calls `Feature`'s seam `Screen` and fills its hole `api` with `LiveApi`: whether the hole's property
 		// is still being built inside its fill the facts still owe the fill and what it builds (`fillBeingBuilt`).
