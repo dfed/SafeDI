@@ -28,6 +28,11 @@ struct TypeID: Hashable, Sendable {
 	let raw: Int32
 }
 
+extension TypeID {
+	/// An ID no value has: a lookup spells a child it finds no ID for with it, so that the key misses.
+	fileprivate static let notInterned = TypeID(-1)
+}
+
 /// A type as `TypeDescription.==` and `hash` compare it: two types have one class ID exactly when `==` holds.
 struct TypeClassID: Hashable, Sendable {
 	fileprivate init(_ index: Int) {
@@ -53,6 +58,11 @@ struct LabelID: Hashable, Sendable {
 	}
 
 	let raw: Int32
+}
+
+extension LabelID {
+	/// An ID no label has: a property's lookup spells a label it finds no ID for with it, so that the key misses.
+	fileprivate static let notInterned = LabelID(-1)
 }
 
 /// A label as `String.==` compares it, which reads canonically equivalent spellings as one.
@@ -142,6 +152,7 @@ struct ChunkedTable<Element: Sendable>: Sendable {
 /// of the same builder answers every ID an earlier one gave as it did, since the builder never renumbers.
 final class ConstructionInterner: Sendable {
 	fileprivate init(
+		index: ExactIndex,
 		typeClass: ChunkedTable<TypeClassID>,
 		typeAlike: ChunkedTable<TypeAlikeID>,
 		labelClass: ChunkedTable<LabelClassID>,
@@ -149,7 +160,10 @@ final class ConstructionInterner: Sendable {
 		propertyValidatedForDependencyCycles: ChunkedTable<PropertyID>,
 		propertyLazilyInstantiatedInstance: ChunkedTable<PropertyID>,
 		propertyIsLazilyInstantiated: ChunkedTable<Bool>,
+		propertyLabel: ChunkedTable<LabelID>,
+		propertyType: ChunkedTable<TypeID>,
 	) {
+		self.index = index
 		self.typeClass = typeClass
 		self.typeAlike = typeAlike
 		self.labelClass = labelClass
@@ -157,6 +171,39 @@ final class ConstructionInterner: Sendable {
 		self.propertyValidatedForDependencyCycles = propertyValidatedForDependencyCycles
 		self.propertyLazilyInstantiatedInstance = propertyLazilyInstantiatedInstance
 		self.propertyIsLazilyInstantiated = propertyIsLazilyInstantiated
+		self.propertyLabel = propertyLabel
+		self.propertyType = propertyType
+	}
+
+	/// The ID the builder gave `type`, spelled exactly so, before this snapshot was published, or `nil` when it gave none.
+	func id(of type: TypeDescription) -> TypeID? {
+		index.typeID(for: Self.exactKey(of: type) { id(of: $0) ?? .notInterned })
+	}
+
+	/// The ID the builder gave a label of exactly `label`’s bytes before this snapshot was published, or `nil`.
+	func id(ofLabel label: String) -> LabelID? {
+		index.labelID(for: Array(label.utf8))
+	}
+
+	/// The ID the builder gave `property`, its label’s bytes and its type’s spelling, before this snapshot was published,
+	/// or `nil`.
+	func id(of property: Property) -> PropertyID? {
+		index.propertyID(for: PropertyExactKey(label: id(ofLabel: property.label) ?? .notInterned, type: id(of: property.typeDescription) ?? .notInterned))
+	}
+
+	/// The label of `property`.
+	func label(of property: PropertyID) -> LabelID {
+		propertyLabel[Int(property.raw)]
+	}
+
+	/// The type of `property`.
+	func type(of property: PropertyID) -> TypeID {
+		propertyType[Int(property.raw)]
+	}
+
+	/// How many frozen layers the snapshot’s lookups read.
+	var layerCount: Int {
+		index.layers.count
 	}
 
 	/// The class of `type`.
@@ -203,14 +250,173 @@ final class ConstructionInterner: Sendable {
 	/// Outside `propertyIsLazilyInstantiated`'s domain, an entry holds the property itself, which nothing reads.
 	private let propertyLazilyInstantiatedInstance: ChunkedTable<PropertyID>
 	private let propertyIsLazilyInstantiated: ChunkedTable<Bool>
+	private let propertyLabel: ChunkedTable<LabelID>
+	private let propertyType: ChunkedTable<TypeID>
+	private let index: ExactIndex
+
+	fileprivate struct PropertyExactKey: Hashable, Sendable {
+		let label: LabelID
+		let type: TypeID
+	}
+
+	/// A type’s structure, its names by their bytes and its children by their exact IDs.
+	fileprivate enum ExactKey: Hashable, Sendable {
+		case void(spelling: String)
+		case simple(name: [UInt8], generics: [TypeID])
+		case nested(name: [UInt8], parent: TypeID, generics: [TypeID])
+		case composition([TypeID])
+		case optional(TypeID)
+		case implicitlyUnwrappedOptional(TypeID)
+		case some(TypeID)
+		case any(TypeID)
+		case metatype(TypeID, isType: Bool)
+		case attributed(TypeID, specifiers: [[UInt8]], attributes: [[UInt8]])
+		case array(TypeID)
+		case dictionary(key: TypeID, value: TypeID)
+		case tuple([ExactTupleElement])
+		case closure(arguments: [TypeID], isAsync: Bool, doesThrow: Bool, thrownType: TypeID?, returnType: TypeID)
+		case variadic(TypeID)
+		case unknown([UInt8])
+	}
+
+	fileprivate struct ExactTupleElement: Hashable, Sendable {
+		let label: [UInt8]?
+		let type: TypeID
+	}
+
+	/// The exact key of `type`, its children’s IDs from `childID`: the builder interns them, and a snapshot looks them up.
+	fileprivate static func exactKey(of type: TypeDescription, childID: (TypeDescription) -> TypeID) -> ExactKey {
+		switch type {
+		case let .void(spelling):
+			.void(spelling: spelling.rawValue)
+		case let .simple(name, generics):
+			.simple(name: Array(name.utf8), generics: generics.map { childID($0) })
+		case let .nested(name, parentType, generics):
+			.nested(name: Array(name.utf8), parent: childID(parentType), generics: generics.map { childID($0) })
+		case let .composition(types):
+			.composition(types.map { childID($0) })
+		case let .optional(wrapped):
+			.optional(childID(wrapped))
+		case let .implicitlyUnwrappedOptional(wrapped):
+			.implicitlyUnwrappedOptional(childID(wrapped))
+		case let .some(constraint):
+			.some(childID(constraint))
+		case let .any(constraint):
+			.any(childID(constraint))
+		case let .metatype(instanceType, isType):
+			.metatype(childID(instanceType), isType: isType)
+		case let .attributed(attributedType, specifiers, attributes):
+			.attributed(childID(attributedType), specifiers: specifiers.map { Array($0.utf8) }, attributes: attributes.map { Array($0.utf8) })
+		case let .array(element):
+			.array(childID(element))
+		case let .dictionary(key, value):
+			.dictionary(key: childID(key), value: childID(value))
+		case let .tuple(elements):
+			.tuple(elements.map { ExactTupleElement(label: $0.label.map { Array($0.utf8) }, type: childID($0.typeDescription)) })
+		case let .closure(arguments, isAsync, doesThrow, thrownType, returnType):
+			.closure(arguments: arguments.map { childID($0) }, isAsync: isAsync, doesThrow: doesThrow, thrownType: thrownType.map { childID($0) }, returnType: childID(returnType))
+		case let .variadic(variadicType):
+			.variadic(childID(variadicType))
+		case let .unknown(text):
+			.unknown(Array(text.utf8))
+		}
+	}
+
+	/// Every value’s ID by its exact key, in frozen layers that every snapshot and every copy of the builder share, and
+	/// what was interned since the last freeze. A freeze merges the newest layer into the one before it while that one is
+	/// no larger, so the layers’ sizes at least double from the newest to the oldest: a run holds as many layers as the
+	/// logarithm of its values, and copies each value as many times.
+	fileprivate struct ExactIndex: Sendable {
+		/// One frozen layer, never changed.
+		final class Layer: Sendable {
+			init(typeIDByExactKey: [ExactKey: TypeID], labelIDByBytes: [[UInt8]: LabelID], propertyIDByExactKey: [PropertyExactKey: PropertyID]) {
+				self.typeIDByExactKey = typeIDByExactKey
+				self.labelIDByBytes = labelIDByBytes
+				self.propertyIDByExactKey = propertyIDByExactKey
+			}
+
+			/// A layer of `older`’s values and `newer`’s, which share none.
+			convenience init(merging older: Layer, _ newer: Layer) {
+				var typeIDByExactKey = older.typeIDByExactKey
+				typeIDByExactKey.reserveCapacity(older.typeIDByExactKey.count + newer.typeIDByExactKey.count)
+				for (key, id) in newer.typeIDByExactKey {
+					typeIDByExactKey[key] = id
+				}
+				var labelIDByBytes = older.labelIDByBytes
+				labelIDByBytes.reserveCapacity(older.labelIDByBytes.count + newer.labelIDByBytes.count)
+				for (bytes, id) in newer.labelIDByBytes {
+					labelIDByBytes[bytes] = id
+				}
+				var propertyIDByExactKey = older.propertyIDByExactKey
+				propertyIDByExactKey.reserveCapacity(older.propertyIDByExactKey.count + newer.propertyIDByExactKey.count)
+				for (key, id) in newer.propertyIDByExactKey {
+					propertyIDByExactKey[key] = id
+				}
+				self.init(typeIDByExactKey: typeIDByExactKey, labelIDByBytes: labelIDByBytes, propertyIDByExactKey: propertyIDByExactKey)
+			}
+
+			let typeIDByExactKey: [ExactKey: TypeID]
+			let labelIDByBytes: [[UInt8]: LabelID]
+			let propertyIDByExactKey: [PropertyExactKey: PropertyID]
+
+			var count: Int {
+				typeIDByExactKey.count + labelIDByBytes.count + propertyIDByExactKey.count
+			}
+		}
+
+		/// The frozen layers, oldest and largest first.
+		private(set) var layers = [Layer]()
+
+		func typeID(for key: ExactKey) -> TypeID? {
+			layers.lazy.compactMap { $0.typeIDByExactKey[key] }.first ?? pendingTypeIDByExactKey[key]
+		}
+
+		func labelID(for bytes: [UInt8]) -> LabelID? {
+			layers.lazy.compactMap { $0.labelIDByBytes[bytes] }.first ?? pendingLabelIDByBytes[bytes]
+		}
+
+		func propertyID(for key: PropertyExactKey) -> PropertyID? {
+			layers.lazy.compactMap { $0.propertyIDByExactKey[key] }.first ?? pendingPropertyIDByExactKey[key]
+		}
+
+		mutating func insert(_ id: TypeID, for key: ExactKey) {
+			pendingTypeIDByExactKey[key] = id
+		}
+
+		mutating func insert(_ id: LabelID, for bytes: [UInt8]) {
+			pendingLabelIDByBytes[bytes] = id
+		}
+
+		mutating func insert(_ id: PropertyID, for key: PropertyExactKey) {
+			pendingPropertyIDByExactKey[key] = id
+		}
+
+		/// Moves what was interned since the last freeze into a layer of its own, merging layers that are no larger.
+		mutating func freeze() {
+			guard !pendingTypeIDByExactKey.isEmpty || !pendingLabelIDByBytes.isEmpty || !pendingPropertyIDByExactKey.isEmpty else { return }
+			var newest = Layer(typeIDByExactKey: pendingTypeIDByExactKey, labelIDByBytes: pendingLabelIDByBytes, propertyIDByExactKey: pendingPropertyIDByExactKey)
+			pendingTypeIDByExactKey = [:]
+			pendingLabelIDByBytes = [:]
+			pendingPropertyIDByExactKey = [:]
+			while let older = layers.last, older.count <= newest.count {
+				layers.removeLast()
+				newest = Layer(merging: older, newest)
+			}
+			layers.append(newest)
+		}
+
+		private var pendingTypeIDByExactKey = [ExactKey: TypeID]()
+		private var pendingLabelIDByBytes = [[UInt8]: LabelID]()
+		private var pendingPropertyIDByExactKey = [PropertyExactKey: PropertyID]()
+	}
 
 	/// The one writer of a generator's ID space. It gives IDs in the order it is asked for values, a type's children
 	/// before the type, and publishes snapshots (`snapshot()`).
 	struct Builder: Sendable {
 		/// The ID of `type`, given now when the builder has none.
 		mutating func intern(_ type: TypeDescription) -> TypeID {
-			let exactKey = exactKey(of: type)
-			if let id = typeIDByExactKey[exactKey] {
+			let exactKey = ConstructionInterner.exactKey(of: type) { intern($0) }
+			if let id = index.typeID(for: exactKey) {
 				return id
 			} else {
 				let classID = classID(of: type)
@@ -218,7 +424,7 @@ final class ConstructionInterner: Sendable {
 				let alikeID = typeAlikeIDByKey[alikeKey] ?? TypeAlikeID(typeAlikeIDByKey.count)
 				typeAlikeIDByKey[alikeKey] = alikeID
 				let id = TypeID(typeClass.count)
-				typeIDByExactKey[exactKey] = id
+				index.insert(id, for: exactKey)
 				typeClass.append(classID)
 				typeAlike.append(alikeID)
 				return id
@@ -228,13 +434,13 @@ final class ConstructionInterner: Sendable {
 		/// The ID of `label`, given now when the builder has none.
 		mutating func intern(label: String) -> LabelID {
 			let bytes = Array(label.utf8)
-			if let id = labelIDByBytes[bytes] {
+			if let id = index.labelID(for: bytes) {
 				return id
 			} else {
 				let classID = labelClassIDByLabel[label] ?? LabelClassID(labelClassIDByLabel.count)
 				labelClassIDByLabel[label] = classID
 				let id = LabelID(labelClass.count)
-				labelIDByBytes[bytes] = id
+				index.insert(id, for: bytes)
 				labelClass.append(classID)
 				return id
 			}
@@ -247,7 +453,7 @@ final class ConstructionInterner: Sendable {
 			let label = intern(label: property.label)
 			let type = intern(property.typeDescription)
 			let exactKey = PropertyExactKey(label: label, type: type)
-			if let id = propertyIDByExactKey[exactKey] {
+			if let id = index.propertyID(for: exactKey) {
 				return id
 			} else {
 				let validatedForDependencyCycles = property.typeDescription.lazilyInstantiatedInstanceType.map { _ in intern(property.asValidatedForDependencyCycles) }
@@ -256,8 +462,10 @@ final class ConstructionInterner: Sendable {
 				let classID = propertyClassIDByKey[classKey] ?? PropertyClassID(propertyClassIDByKey.count)
 				propertyClassIDByKey[classKey] = classID
 				let id = PropertyID(propertyClass.count)
-				propertyIDByExactKey[exactKey] = id
+				index.insert(id, for: exactKey)
 				propertyClass.append(classID)
+				propertyLabel.append(label)
+				propertyType.append(type)
 				propertyValidatedForDependencyCycles.append(validatedForDependencyCycles ?? id)
 				propertyLazilyInstantiatedInstance.append(lazilyInstantiatedInstance ?? id)
 				propertyIsLazilyInstantiated.append(lazilyInstantiatedInstance != nil)
@@ -314,9 +522,12 @@ final class ConstructionInterner: Sendable {
 			typeClass.count + labelClass.count + propertyClass.count
 		}
 
-		/// What the builder holds now, for every reader until the next snapshot.
-		func snapshot() -> ConstructionInterner {
-			ConstructionInterner(
+		/// What the builder holds now, for every reader until the next snapshot, with what it has interned since the last
+		/// one frozen into the layers they share.
+		mutating func snapshot() -> ConstructionInterner {
+			index.freeze()
+			return ConstructionInterner(
+				index: index,
 				typeClass: typeClass,
 				typeAlike: typeAlike,
 				labelClass: labelClass,
@@ -324,42 +535,14 @@ final class ConstructionInterner: Sendable {
 				propertyValidatedForDependencyCycles: propertyValidatedForDependencyCycles,
 				propertyLazilyInstantiatedInstance: propertyLazilyInstantiatedInstance,
 				propertyIsLazilyInstantiated: propertyIsLazilyInstantiated,
+				propertyLabel: propertyLabel,
+				propertyType: propertyType,
 			)
-		}
-
-		private struct PropertyExactKey: Hashable {
-			let label: LabelID
-			let type: TypeID
 		}
 
 		private struct PropertyClassKey: Hashable {
 			let label: LabelClassID
 			let type: TypeClassID
-		}
-
-		/// A type's structure, its names by their bytes and its children by their exact IDs.
-		private enum ExactKey: Hashable {
-			case void(spelling: String)
-			case simple(name: [UInt8], generics: [TypeID])
-			case nested(name: [UInt8], parent: TypeID, generics: [TypeID])
-			case composition([TypeID])
-			case optional(TypeID)
-			case implicitlyUnwrappedOptional(TypeID)
-			case some(TypeID)
-			case any(TypeID)
-			case metatype(TypeID, isType: Bool)
-			case attributed(TypeID, specifiers: [[UInt8]], attributes: [[UInt8]])
-			case array(TypeID)
-			case dictionary(key: TypeID, value: TypeID)
-			case tuple([ExactTupleElement])
-			case closure(arguments: [TypeID], isAsync: Bool, doesThrow: Bool, thrownType: TypeID?, returnType: TypeID)
-			case variadic(TypeID)
-			case unknown([UInt8])
-		}
-
-		private struct ExactTupleElement: Hashable {
-			let label: [UInt8]?
-			let type: TypeID
 		}
 
 		/// A type as `TypeDescription.==` and `hash` read it, case by case: names by `String ==`, which reads canonically
@@ -392,43 +575,6 @@ final class ConstructionInterner: Sendable {
 		private struct AlikeKey: Hashable {
 			let classID: TypeClassID
 			let spelling: [UInt8]
-		}
-
-		private mutating func exactKey(of type: TypeDescription) -> ExactKey {
-			switch type {
-			case let .void(spelling):
-				.void(spelling: spelling.rawValue)
-			case let .simple(name, generics):
-				.simple(name: Array(name.utf8), generics: generics.map { intern($0) })
-			case let .nested(name, parentType, generics):
-				.nested(name: Array(name.utf8), parent: intern(parentType), generics: generics.map { intern($0) })
-			case let .composition(types):
-				.composition(types.map { intern($0) })
-			case let .optional(wrapped):
-				.optional(intern(wrapped))
-			case let .implicitlyUnwrappedOptional(wrapped):
-				.implicitlyUnwrappedOptional(intern(wrapped))
-			case let .some(constraint):
-				.some(intern(constraint))
-			case let .any(constraint):
-				.any(intern(constraint))
-			case let .metatype(instanceType, isType):
-				.metatype(intern(instanceType), isType: isType)
-			case let .attributed(attributedType, specifiers, attributes):
-				.attributed(intern(attributedType), specifiers: specifiers.map { Array($0.utf8) }, attributes: attributes.map { Array($0.utf8) })
-			case let .array(element):
-				.array(intern(element))
-			case let .dictionary(key, value):
-				.dictionary(key: intern(key), value: intern(value))
-			case let .tuple(elements):
-				.tuple(elements.map { ExactTupleElement(label: $0.label.map { Array($0.utf8) }, type: intern($0.typeDescription)) })
-			case let .closure(arguments, isAsync, doesThrow, thrownType, returnType):
-				.closure(arguments: arguments.map { intern($0) }, isAsync: isAsync, doesThrow: doesThrow, thrownType: thrownType.map { intern($0) }, returnType: intern(returnType))
-			case let .variadic(variadicType):
-				.variadic(intern(variadicType))
-			case let .unknown(text):
-				.unknown(Array(text.utf8))
-			}
 		}
 
 		/// The class of `type`, interning the classes of its children first.
@@ -483,20 +629,20 @@ final class ConstructionInterner: Sendable {
 			}
 		}
 
-		private var typeIDByExactKey = [ExactKey: TypeID]()
+		private var index = ExactIndex()
 		private var typeClassIDByKey = [ClassKey: TypeClassID]()
 		private var typeAlikeIDByKey = [AlikeKey: TypeAlikeID]()
-		private var labelIDByBytes = [[UInt8]: LabelID]()
 		private var labelClassIDByLabel = [String: LabelClassID]()
 		private var typeClass = ChunkedTable<TypeClassID>()
 		private var typeAlike = ChunkedTable<TypeAlikeID>()
 		private var labelClass = ChunkedTable<LabelClassID>()
-		private var propertyIDByExactKey = [PropertyExactKey: PropertyID]()
 		private var propertyClassIDByKey = [PropertyClassKey: PropertyClassID]()
 		private var propertyClass = ChunkedTable<PropertyClassID>()
 		private var propertyValidatedForDependencyCycles = ChunkedTable<PropertyID>()
 		private var propertyLazilyInstantiatedInstance = ChunkedTable<PropertyID>()
 		private var propertyIsLazilyInstantiated = ChunkedTable<Bool>()
+		private var propertyLabel = ChunkedTable<LabelID>()
+		private var propertyType = ChunkedTable<TypeID>()
 	}
 }
 
