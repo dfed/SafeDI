@@ -363,16 +363,12 @@ struct SafeDIToolNodeRecordsMockRootTests: ~Copyable {
 		        func __safeDI_childBuilder(name: String, safeDIOverrides: ((String, Shared) -> Child)?) -> Child {
 		            if let safeDIBuilder = safeDIOverrides { safeDIBuilder(name, shared) } else { Child(name: name, shared: shared) }
 		        }
-		        let childBuilder = Instantiator<Child> {
-		            __safeDI_childBuilder(name: $0, safeDIOverrides: safeDIOverrides.childBuilder)
-		        }
+		        let childBuilder = Instantiator<Child> { __safeDI_childBuilder(name: $0, safeDIOverrides: safeDIOverrides.childBuilder) }
 		        func __safeDI_panelBuilder(safeDIOverrides: Panel.SafeDIMockConfiguration) -> Panel {
 		            let leaf = if let safeDIBuilder = safeDIOverrides.leaf { safeDIBuilder() } else { Leaf() }
 		            return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(leaf) } else { Panel(leaf: leaf) }
 		        }
-		        let panelBuilder = Instantiator<Panel> {
-		            __safeDI_panelBuilder(safeDIOverrides: safeDIOverrides.panelBuilder)
-		        }
+		        let panelBuilder = Instantiator<Panel> { __safeDI_panelBuilder(safeDIOverrides: safeDIOverrides.panelBuilder) }
 		        return Root(shared: shared, childBuilder: childBuilder, panelBuilder: panelBuilder)
 		    }
 		}

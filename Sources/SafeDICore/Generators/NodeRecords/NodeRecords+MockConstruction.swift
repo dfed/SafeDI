@@ -74,6 +74,7 @@ extension NodeRecords {
 		}
 		let slot = mockOverrideSlot(ofNodeLabeled: record.property.label, typed: slotType, hasFunction: record.hasFunction)
 		record.passedArguments = slot.passedArguments
+		record.wrapsCallOnOneLine = true
 		record.alternatives = [ConstructionAlternative(
 			closure: isConfigured ? .member(ReservedName.configurationBuilderPropertyName, of: slot.value) : slot.value,
 			bindingName: ReservedName.configurationBuilderPropertyName,

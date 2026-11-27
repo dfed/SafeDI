@@ -98,6 +98,9 @@ struct BuiltPlaceRecord: Sendable {
 	/// What a place that calls another module's code records beyond a built place (`CallFields`), in a box of its own
 	/// that every other place leaves `nil`.
 	var callFields: CallFields?
+	/// Whether a wrapper built around a call of the place's function that is handed arguments spells its closure on one
+	/// line, `Instantiator<T> { f(…) }`, rather than the call on a line of its own between the braces.
+	var wrapsCallOnOneLine = false
 
 	/// The statement the place's builder function begins with, before its children.
 	var leadingStatement: LeadingStatement? {

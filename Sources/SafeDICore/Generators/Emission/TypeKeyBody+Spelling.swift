@@ -260,10 +260,11 @@ extension TypeKeyLayout {
 				isErased: isErased,
 				handing: functionName,
 				forwardedArguments: (forwardedArguments + arguments).joined(separator: ", "),
+				onOneLine: representative.wrapsCallOnOneLine,
 			)
 		case .lazilyInstantiated,
 		     .sendableLazilyInstantiated:
-			return "\(BindingDeclaration(property: property, rule: .lazilyInstantiated).spelled) = \(ScopeGenerator.lazilyInstantiatedInstantiation(of: property, callingFunctionNamed: functionName, cycleArguments: arguments.joined(separator: ", "), erasedToConcreteExistential: isErased))"
+			return "\(BindingDeclaration(property: property, rule: .lazilyInstantiated).spelled) = \(ScopeGenerator.lazilyInstantiatedInstantiation(of: property, callingFunctionNamed: functionName, cycleArguments: arguments.joined(separator: ", "), erasedToConcreteExistential: isErased, onOneLine: representative.wrapsCallOnOneLine))"
 		case .constant:
 			// A binding to a builder function's call is annotated unless its value is erased, whatever type the function
 			// returns (`BindingDeclaration.AnnotationRule.constant`), so no type is compared here.

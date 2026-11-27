@@ -8138,7 +8138,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// with `forwardedArguments`, of a type declared through an extension where `isExtension` is set, erased where
 	/// `isErased` is set, and read through `inlinePlaceBuilder` where it is set
 	/// (`instantiatorDeclaration(handing:forwardedArguments:inlinePlaceBuilder:)`).
-	static func instantiatorDeclaration(of property: Property, isExtension: Bool, isErased: Bool, handing functionName: String, forwardedArguments: String, inlinePlaceBuilder: FillPlaceBindings.HoleBuilder? = nil) -> String {
+	static func instantiatorDeclaration(of property: Property, isExtension: Bool, isErased: Bool, handing functionName: String, forwardedArguments: String, onOneLine: Bool = false, inlinePlaceBuilder: FillPlaceBindings.HoleBuilder? = nil) -> String {
 		// A type constructed by annotation spells its generic arguments only in the declaration.
 		let unwrappedTypeDescription = property
 			.typeDescription
@@ -8148,29 +8148,34 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			property: property,
 			rule: .instantiator(isExtension: isExtension, constructionSpellsPropertyType: property.typeDescription.asSource == unwrappedTypeDescription),
 		)
-		let expression = instantiatorExpression(of: property, isErased: isErased, handing: functionName, forwardedArguments: forwardedArguments)
+		let expression = instantiatorExpression(of: property, isErased: isErased, handing: functionName, forwardedArguments: forwardedArguments, onOneLine: onOneLine)
 		guard let inlinePlaceBuilder else { return "\(propertyDeclaration.spelled) = \(expression)" }
 		return "\(propertyDeclaration.spelled) = \(inlinePlaceBuilder.inlinePlaceValue(construction: expression, overrideExpression: nil, wrappingBuilderIn: unwrappedTypeDescription))"
 	}
 
-	/// The wrapper `instantiatorDeclaration(of:isExtension:isErased:handing:forwardedArguments:)` declares.
-	private static func instantiatorExpression(of property: Property, isErased erasedToConcreteExistential: Bool, handing functionName: String, forwardedArguments: String) -> String {
+	/// The wrapper `instantiatorDeclaration(of:isExtension:isErased:handing:forwardedArguments:onOneLine:inlinePlaceBuilder:)`
+	/// declares: around the function itself where it is handed nothing and erases nothing, and otherwise around a closure
+	/// that calls it, on one line where `onOneLine` holds.
+	private static func instantiatorExpression(of property: Property, isErased erasedToConcreteExistential: Bool, handing functionName: String, forwardedArguments: String, onOneLine: Bool) -> String {
 		let unwrappedTypeDescription = property
 			.typeDescription
 			.unwrapped
 			.spelledForConstruction
-		return if forwardedArguments.isEmpty, !erasedToConcreteExistential {
-			"\(unwrappedTypeDescription)(\(functionName))"
-		} else if erasedToConcreteExistential {
-			"""
-			\(unwrappedTypeDescription) {
-			\(Self.standardIndent)\(Expression.erasure(.call(function: functionName, arguments: forwardedArguments), as: property.typeDescription.unwrapped.asInstantiatedType).spelled)
-			}
-			"""
+		guard !forwardedArguments.isEmpty || erasedToConcreteExistential else { return "\(unwrappedTypeDescription)(\(functionName))" }
+		let call: Expression = .call(function: functionName, arguments: forwardedArguments)
+		let closureBody = erasedToConcreteExistential ? Expression.erasure(call, as: property.typeDescription.unwrapped.asInstantiatedType).spelled : call.spelled
+		return wrapperClosure(of: unwrappedTypeDescription, calling: closureBody, onOneLine: onOneLine)
+	}
+
+	/// `wrapperType` built around a closure whose one statement is `body`: on one line where `onOneLine` holds, else with
+	/// `body` on a line of its own.
+	static func wrapperClosure(of wrapperType: String, calling body: String, onOneLine: Bool) -> String {
+		if onOneLine {
+			"\(wrapperType) { \(body) }"
 		} else {
 			"""
-			\(unwrappedTypeDescription) {
-			\(Self.standardIndent)\(functionName)(\(forwardedArguments))
+			\(wrapperType) {
+			\(standardIndent)\(body)
 			}
 			"""
 		}
@@ -8246,6 +8251,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				isErased: fulfillingIsErased,
 				handing: fulfillingDeclaration.functionName,
 				forwardedArguments: Self.forwardedArguments(of: forwardedProperties.sorted(), spreading: "$0").joined(separator: ", "),
+				onOneLine: false,
 			),
 			ofType: fulfillingDeclaration.property.typeDescription,
 			erasedToConcreteExistential: false,
@@ -8911,26 +8917,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		callingFunctionNamed functionName: String,
 		cycleArguments: String,
 		erasedToConcreteExistential: Bool,
+		onOneLine: Bool = false,
 	) -> String {
 		let unwrappedTypeDescription = property
 			.typeDescription
 			.unwrapped
 			.asSource
-		return if erasedToConcreteExistential {
-			"""
-			\(unwrappedTypeDescription) {
-			\(Self.standardIndent)\(Expression.erasure(.call(function: functionName, arguments: cycleArguments), as: property.typeDescription.asInstantiatedType).spelled)
-			}
-			"""
-		} else if cycleArguments.isEmpty {
-			"\(unwrappedTypeDescription)(\(functionName))"
-		} else {
-			"""
-			\(unwrappedTypeDescription) {
-			\(Self.standardIndent)\(functionName)(\(cycleArguments))
-			}
-			"""
-		}
+		guard !cycleArguments.isEmpty || erasedToConcreteExistential else { return "\(unwrappedTypeDescription)(\(functionName))" }
+		let call: Expression = .call(function: functionName, arguments: cycleArguments)
+		let closureBody = erasedToConcreteExistential ? Expression.erasure(call, as: property.typeDescription.asInstantiatedType).spelled : call.spelled
+		return wrapperClosure(of: unwrappedTypeDescription, calling: closureBody, onOneLine: onOneLine)
 	}
 
 	/// The code of this scope, which builds `property` from `instantiable`, written around `childCode`, its children's
