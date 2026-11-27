@@ -760,7 +760,7 @@ extension MockLowering {
 				read(value, type: dependencyProperty.typeDescription, source: .binding(label: value))
 			}
 		}
-		if let overrideRead, let root = overrideRead.split(separator: ".").first.map(String.init) {
+		if let overrideRead, let root = overrideRead.utf8.split(separator: UInt8(ascii: ".")).first.map({ String(Substring($0)) }) {
 			read(root, type: .simple(name: ReservedName.mockOverridesTypeName, generics: []), source: .binding(label: root))
 		}
 		return reads

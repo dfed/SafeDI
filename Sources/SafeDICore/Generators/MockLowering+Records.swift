@@ -32,7 +32,7 @@ extension MockLowering {
 	/// The value path of an override read spelled `safeDIOverrides.<member>.<member>…`, or `nil` for any other read, such
 	/// as a local a `@Sendable` function's extractor bound it to.
 	static func overrideReadPath(_ read: String) -> ValuePath? {
-		let parts = read.split(separator: ".", omittingEmptySubsequences: false).map(String.init)
+		let parts = read.utf8.split(separator: UInt8(ascii: "."), omittingEmptySubsequences: false).map { String(Substring($0)) }
 		guard parts.count > 1, parts[0] == ReservedName.mockOverridesParameterName, !parts.contains(where: \.isEmpty) else { return nil }
 		var path = ValuePath.rootDeclaration(parts[0])
 		for member in parts.dropFirst() {

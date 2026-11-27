@@ -574,6 +574,7 @@ extension MockLowering.RootSignature {
 		var declarations = [Property]()
 		// A parameter `mock()` takes as another type than its property's, a builder or an autoclosure, is no declaration
 		// the records read.
+		// safedi-source-rule: allow stringScan — once per parameter of one `mock()`, over that parameter’s type as spelled.
 		for parameter in forwardedParameters + flatReceivedParameters + uncoveredParameters where parameter.typeSource.map({ $0.replacingOccurrences(of: "@escaping ", with: "") == parameter.property.typeDescription.asSource }) ?? true {
 			declarations.append(Property(label: parameter.name, typeDescription: parameter.property.typeDescription))
 		}

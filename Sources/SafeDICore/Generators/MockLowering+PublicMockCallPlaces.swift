@@ -201,10 +201,10 @@ extension MockLowering {
 	/// declares is a read, as is every name `outerTypes` holds, even one it declares too: a read too many is only a
 	/// declaration the type key must resolve as the walk does.
 	static func textPlace(_ text: String, outerTypes: [String: TypeDescription]) -> (reads: [PlaceRead], declaredFunctionNames: [String])? {
-		let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
+		let lines = text.utf8.split(separator: UInt8(ascii: "\n"), omittingEmptySubsequences: false).map(Substring.init)
 		var declaredFunctionNames = [String]()
 		for line in lines where !(line.first?.isWhitespace ?? true) {
-			let words = line.split(separator: " ")
+			let words = line.utf8.split(separator: UInt8(ascii: " ")).map(Substring.init)
 			guard !words.contains(where: { $0 == "let" || $0 == "var" }) else { return nil }
 			if let funcIndex = words.firstIndex(of: "func"), funcIndex + 1 < words.count {
 				declaredFunctionNames.append(String(words[funcIndex + 1].prefix { $0 != "(" }))
