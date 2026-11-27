@@ -23,8 +23,7 @@ extension NodeRecords {
 	/// discharging every refusal of stage 1. A rename is a leaf whose scope is the scope that declares it, so each refusal
 	/// stage 1 finds of it is of that scope, which its own node holds; `nil` for any other node.
 	static func renameClaim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
-		// A mock root's world reads each node's override, which these records do not yet.
-		guard !world.isMockWorld, world.kind(of: declaration) == .alias else { return nil }
+		guard world.kind(of: declaration) == .alias else { return nil }
 		// A rename of a builder that does not erase it can be a member of a loop of builders, which the tree rebinds where
 		// the loop holds only builders (`ScopeGenerator.isLoopBuilder(amongSiblings:)`): a loop of builders, refused.
 		let isLoopBuilder = rename(of: declaration, in: world).map { !$0.erasedToConcreteExistential && ScopeGenerator.isBuilder($0.property) } ?? false
