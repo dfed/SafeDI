@@ -566,6 +566,51 @@ struct SafeDIToolNodeRecordsMockRenameTests: ~Copyable {
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == Self.mockFile(of: "Root", in: walkOutput, withFixturePathsOf: output, fixtureNames: ["Profile.swift"]))
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_keepsTheWalksStatements_whenRenameIsFulfilledByWrapperOfValueMockTakes() async throws {
+		// `mock()` takes `session` by value and builds the `Garage` the root receives, binding a `LazilyInstantiated` around
+		// `session` that the walk passes to each receiver by name. `Garage`'s rename reads that wrapper, which a rename's record cannot name, so the root keeps the
+		// walk's statements.
+		let fixture = [
+			"""
+			@Instantiable(generateMock: true)
+			public final class Root: Instantiable {
+			    public init(session: Session, garage: Garage) {
+			        self.session = session
+			        self.garage = garage
+			    }
+
+			    @Instantiated let session: Session
+			    @Received let garage: Garage
+			}
+			""",
+			"""
+			public final class Session {}
+			""",
+			"""
+			@Instantiable
+			public final class Garage: Instantiable {
+			    public init(session: LazilyInstantiated<Session>, lazySession: LazilyInstantiated<Session>) {
+			        self.session = session
+			        self.lazySession = lazySession
+			    }
+
+			    @Received let session: LazilyInstantiated<Session>
+			    @Received(fulfilledByDependencyNamed: "session", ofType: LazilyInstantiated<Session>.self) let lazySession: LazilyInstantiated<Session>
+			}
+			""",
+		]
+		let walkOutput = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+
+		#expect(reports.filter(\.isMockRoot).map(\.refusal) == ["mockRootBindsOtherThanNodes"])
+		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [false])
+		#expect(output.mockFiles["Root+SafeDIMock.swift"] == Self.mockFile(of: "Root", in: walkOutput, withFixturePathsOf: output, fixtureNames: ["Garage.swift"]))
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]

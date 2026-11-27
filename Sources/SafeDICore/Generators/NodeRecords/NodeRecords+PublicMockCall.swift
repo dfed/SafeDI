@@ -135,7 +135,7 @@ extension NodeRecords {
 		let calledType = instantiable.concreteInstantiable
 		var arguments = [PlaceRead]()
 		// Each builder the call passes up is bound again under the label the leaf receives it as, first in the call's function,
-		// from the name `mock()` binds it apart by (`mockReceivesBoundAgain(in:)`).
+		// from the name `mock()` binds it apart by (`mockNamesReadApart(in:)`).
 		var builderStructValues = [Int: ValuePath]()
 		for calledArgument in initializer.arguments {
 			// The leaf receives a builder the call passes up as its label alone, which no argument's type matches: the called

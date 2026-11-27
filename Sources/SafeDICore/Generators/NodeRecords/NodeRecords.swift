@@ -246,7 +246,7 @@ struct NodeRecords: Sendable {
 			try Self.checkMockCycles(in: world, slots: enteredSlots)
 		}
 		let onlyIfAvailableAnswers = try OnlyIfAvailableAnswers(world: world, rootParameters: seamTree?.parameters ?? outerDeclarations)
-		let mockReceivesBoundAgain = Self.mockReceivesBoundAgain(in: world)
+		let mockNamesReadApart = Self.mockNamesReadApart(in: world)
 		let answeringDeclarations = DeclarationsAnsweringReads(
 			world: world,
 			rootLazilyInstantiatedInstanceProperties: seamTree?.rootLazilyInstantiatedInstanceProperties ?? [],
@@ -293,6 +293,9 @@ struct NodeRecords: Sendable {
 			let children = Self.mockPlaceBuilderBindings(of: declaration, in: world).map(\.place) + Self.loopRebindings(of: declaration, in: world, mockLoopLevels: mockLoopLevels, enteredSlots: enteredSlots) + children
 			// What a receive by value reads as a wrapper's instance, which every record of a construction passes its arguments.
 			let instanceProperties = answeringDeclarations.lazilyInstantiatedInstanceProperties(readBy: variant)
+			// A wrapper `mock()` binds around a value it takes is passed to each receiver by a name apart from its label, which
+			// neither a rename's record nor a public mock's call reads (`mockNamesReadApart(in:)`).
+			guard !world.isMockWorld || kinds[Int(declaration)] != .rename || !mockNamesReadApart.renamesOfWrappersPassedByName.contains(variant), kinds[Int(declaration)] != .publicMockCall || mockNamesReadApart.wrapperArgumentNames[Int(variant)].isEmpty else { throw NodeRecordRefusal.mockRootBindsOtherThanNodes }
 			let madeRecord: PlaceRecord = switch kinds[Int(declaration)] {
 			// A hole's place is made above, from no record.
 			case .builtByInitializer, .erased, .lazy, .sendable, .seamHole:
@@ -319,11 +322,11 @@ struct NodeRecords: Sendable {
 			case .cycle:
 				try .built(Self.cycleRecord(of: declaration, variant: variant, in: world, lazilyInstantiatedInstanceProperties: instanceProperties, typesDeclaredEscaping: escaping, children: children))
 			case .mockConstruction:
-				try .built(Self.mockDecoratedRecord(of: declaration, variant: variant, in: world, unavailableProperties: onlyIfAvailableAnswers.unavailableProperties(of: variant), lazilyInstantiatedInstanceProperties: instanceProperties, receivesBoundAgain: mockReceivesBoundAgain[Int(variant)], enteredSlots: enteredSlots, typesDeclaredEscaping: escaping, children: children))
+				try .built(Self.mockDecoratedRecord(of: declaration, variant: variant, in: world, unavailableProperties: onlyIfAvailableAnswers.unavailableProperties(of: variant), lazilyInstantiatedInstanceProperties: instanceProperties, receivesBoundAgain: mockNamesReadApart.receivesBoundAgain[Int(variant)], enteredSlots: enteredSlots, wrapperArgumentNames: mockNamesReadApart.wrapperArgumentNames[Int(variant)], typesDeclaredEscaping: escaping, children: children))
 			case .mockUnavailableDependency:
 				try .alias(Self.mockUnavailableDependencyRecord(of: declaration, in: world))
 			case .publicMockCall:
-				try .built(Self.publicMockCallRecord(of: declaration, variant: variant, in: world, receivesBoundAgain: mockReceivesBoundAgain[Int(variant)], enteredSlots: enteredSlots, typesDeclaredEscaping: escaping, children: children))
+				try .built(Self.publicMockCallRecord(of: declaration, variant: variant, in: world, receivesBoundAgain: mockNamesReadApart.receivesBoundAgain[Int(variant)], enteredSlots: enteredSlots, typesDeclaredEscaping: escaping, children: children))
 			}
 			var record = Self.record(madeRecord, functionName: functionName, isMadeSendable: isMadeSendable, cycleParameters: cycleParameters, callCycleArguments: callCycleArguments)
 			// A mock's member of a loop of builders is handed its level's overrides after its own (`NodeRecords+Loops.swift`).
