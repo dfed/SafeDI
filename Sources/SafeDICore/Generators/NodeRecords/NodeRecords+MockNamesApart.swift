@@ -122,6 +122,64 @@ extension NodeRecords {
 		return receivesBoundAgain
 	}
 
+	/// The names of the wrappers `mock()` binds around instances it takes (`MockRootNames.wrapperNames`) that each variant's
+	/// place sees, by variant: those its parent's builder function sees, as the walk narrows them
+	/// (`MockLowering.removingRenames(hiddenBy:from:)`), hidden by the same declarations as a name apart is
+	/// (`mockReceivesBoundAgain(in:)`). A receive of exactly a wrapper's label and type reads the wrapper by name, at a place
+	/// and inside a builder function alike, and is never bound again (`MockLowering.passingWrappersByName`).
+	static func mockWrapperNamesVisible(in world: some NodeRecordSources) -> [[String: [TypeDescription: String]]] {
+		let wrapperNames = world.mockRootNames.wrapperNames
+		var visibleNames = [[String: [TypeDescription: String]]?](repeating: nil, count: world.variantCount)
+		guard !wrapperNames.isEmpty else { return visibleNames.map { $0 ?? [:] } }
+		visibleNames[0] = wrapperNames
+		var variantsToVisit: [VariantID] = [0]
+		while let variant = variantsToVisit.popLast() {
+			let declaration = world.declaration(of: variant)
+			let calls = world.calls(of: variant)
+			let functionNames: [String: [TypeDescription: String]]
+			if variant == 0 {
+				functionNames = wrapperNames
+			} else {
+				let instantiable = world.scope(of: declaration).instantiable
+				let isWrapper = switch world.kind(of: declaration) {
+				case .instantiator, .erasedInstantiator, .lazy, .sendableInstantiator, .sendableErasedInstantiator, .sendableLazy:
+					true
+				case .constant, .alias, .hole:
+					false
+				}
+				var declarations = calls.compactMap { world.property(of: world.declaration(of: $0)) }
+				if isWrapper {
+					declarations += instantiable.dependencies.filter { $0.source == .forwarded }.map(\.property)
+				}
+				declarations += world.scope(of: declaration).instantiatedDependenciesNotGenerated.map(\.property)
+				functionNames = MockLowering.removingRenames(hiddenBy: declarations, from: visibleNames[Int(variant)] ?? [:])
+			}
+			for callee in calls where visibleNames[Int(callee)] == nil {
+				visibleNames[Int(callee)] = functionNames
+				variantsToVisit.append(callee)
+			}
+		}
+		return visibleNames.map { $0 ?? [:] }
+	}
+
+	/// The wrappers a mock root binds around instances it takes, each under the label of the receives that read it, which a
+	/// receive only if available of that label finds available from the root, as the walk finds it.
+	static func mockWrapperDeclarations(in world: some NodeRecordSources) -> [Property] {
+		world.mockRootNames.wrapperNames.flatMap { label, names in names.keys.map { Property(label: label, typeDescription: $0) } }.sorted()
+	}
+
+	/// The name of the wrapper each receive of `declaration`'s type reads, by the receive's label, among `visibleNames`, the
+	/// wrapper names its place sees (`mockWrapperNamesVisible(in:)`): a receive of exactly a wrapper's label and type.
+	static func mockWrapperArgumentNames(of declaration: DeclarationID, among visibleNames: [String: [TypeDescription: String]], in world: some NodeRecordSources) -> [String: String] {
+		guard !visibleNames.isEmpty else { return [:] }
+		var names = [String: String]()
+		for dependency in world.scope(of: declaration).instantiable.dependencies where dependency.source.isReceived {
+			guard let name = visibleNames[dependency.property.label]?[dependency.property.typeDescription] else { continue }
+			names[dependency.property.label] = name
+		}
+		return names
+	}
+
 	/// The lazy wrapper among `names`, the names apart of one label by type, whose instance a receive of `property` by value
 	/// reads, a `LazilyInstantiated` before a `SendableLazilyInstantiated`, as the walk looks it up, and `nil` where none is
 	/// named apart.

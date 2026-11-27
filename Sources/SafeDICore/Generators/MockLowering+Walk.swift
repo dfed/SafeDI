@@ -232,8 +232,16 @@ extension ScopeGenerator {
 			// again before the nodes, as the walk binds it.
 			// A dependency the mock cannot build is a parameter of `mock()`, which the type that instantiates it reads by its
 			// name; one taken as a `@Sendable` autoclosure is read into a local before the nodes and bound again by that type.
+			// A wrapper `mock()` binds around an instance it takes is a declaration under its name, which the receives of its
+			// label and type read by name (`NodeRecords.mockWrapperNamesVisible(in:)`).
+			let wrapperBindingNames = Set(signature.lazilyInstantiatedBindings.map(\.name))
+			var wrapperNames = [String: [TypeDescription: String]]()
+			for (label, names) in signature.lazilyInstantiatedBindingNamesByLabelAndType {
+				for (type, name) in names where wrapperBindingNames.contains(name) {
+					wrapperNames[label, default: [:]][type] = name
+				}
+			}
 			let bindsOnlyNodes = rootReceiverBindingIndex == bindingsBeforeNodes
-				&& signature.lazilyInstantiatedBindings.isEmpty
 				&& !signature.uncoveredRootParameters.contains(where: \.isSendableAutoclosure)
 				&& bindsOnlyPassedUpBuilders
 				// A node the root's level names apart is bound under that name by its record, and a parameter or override
@@ -243,6 +251,7 @@ extension ScopeGenerator {
 						walk.rootPropertyNodeBindingNames.contains(name)
 							|| signature.renamesByLabelAndType[label]?[type] == name
 							|| signature.uncoveredParameterNamesByLabelAndType[label]?[type] == name
+							|| wrapperNames[label]?[type] == name
 					}
 				}
 				&& rootInstancesReadByValue.isEmpty
@@ -258,6 +267,7 @@ extension ScopeGenerator {
 			}
 			outerDeclarations += overridesBoundBeforeNodes.map { Property(label: $0.name, typeDescription: $0.typeDescription) }
 			outerDeclarations += rootReceivesBoundAgain
+			outerDeclarations += signature.lazilyInstantiatedBindings.map { Property(label: $0.name, typeDescription: $0.type) }
 			if let statements = Self.nodeRecordsMockStatements(
 				of: instantiable,
 				worldRoot: worldRoot,
@@ -271,12 +281,13 @@ extension ScopeGenerator {
 						signature.uncoveredRootParameters.filter { !$0.isSendableAutoclosure }.map { ($0.property, $0.label) },
 						uniquingKeysWith: { first, _ in first },
 					),
+					wrapperNames: wrapperNames,
 				),
 				outerDeclarations: outerDeclarations,
 			) {
-				// The builders' and the overrides' bindings, and the mocked type's own receives bound again, stay before the nodes
-				// that read them.
-				bindingLines = Array(bindingLines.prefix(bindingsBeforeNodes + rootReceiverBindingLines.count)) + (statements.isEmpty ? [] : [statements])
+				// The builders' and the overrides' bindings, the wrappers around the instances `mock()` takes, and the mocked type's
+				// own receives bound again, stay before the nodes that read them.
+				bindingLines = Array(bindingLines.prefix(bindingsBeforeNodes + linesBoundBesideNodes.count)) + (statements.isEmpty ? [] : [statements])
 			}
 		}
 		// A public mock's tiers, overrides and guard (`MockLowering+PublicMocks.swift`).

@@ -234,8 +234,9 @@ struct NodeRecords: Sendable {
 		// them (`TypeFactsEdge.buildPosition`), which `NodeBuildOrder` stands in for only off every cycle.
 		let order: NodeBuildOrder? = holdsCycle ? nil : try NodeBuildOrder(world: world)
 		let labelsReceived = holdsCycle ? try Self.labelsReceived(inWorldWithCycle: world) : []
-		let onlyIfAvailableAnswers = try OnlyIfAvailableAnswers(world: world, rootParameters: seamTree?.parameters ?? outerDeclarations)
+		let onlyIfAvailableAnswers = try OnlyIfAvailableAnswers(world: world, rootParameters: seamTree?.parameters ?? outerDeclarations + Self.mockWrapperDeclarations(in: world))
 		let mockReceivesBoundAgain = Self.mockReceivesBoundAgain(in: world)
+		let mockWrapperNamesVisible = Self.mockWrapperNamesVisible(in: world)
 		let answeringDeclarations = DeclarationsAnsweringReads(
 			world: world,
 			rootLazilyInstantiatedInstanceProperties: seamTree?.rootLazilyInstantiatedInstanceProperties ?? [],
@@ -301,11 +302,11 @@ struct NodeRecords: Sendable {
 			case .unavailableDependency:
 				try .alias(Self.unavailableDependencyRecord(of: declaration, in: world))
 			case .rename:
-				try .alias(Self.renameRecord(of: declaration, variant: variant, in: world, answers: onlyIfAvailableAnswers, readsWrappersInstance: answeringDeclarations.renamesReadingWrappersInstance.contains(variant)))
+				try .alias(Self.renameRecord(of: declaration, variant: variant, in: world, answers: onlyIfAvailableAnswers, readsWrappersInstance: answeringDeclarations.renamesReadingWrappersInstance.contains(variant), wrapperNamesVisible: mockWrapperNamesVisible[Int(variant)]))
 			case .cycle:
 				try .built(Self.cycleRecord(of: declaration, variant: variant, in: world, lazilyInstantiatedInstanceProperties: instanceProperties, typesDeclaredEscaping: escaping, children: children))
 			case .mockConstruction:
-				try .built(Self.mockDecoratedRecord(of: declaration, variant: variant, in: world, unavailableProperties: onlyIfAvailableAnswers.unavailableProperties(of: variant), lazilyInstantiatedInstanceProperties: instanceProperties, receivesBoundAgain: mockReceivesBoundAgain[Int(variant)], typesDeclaredEscaping: escaping, children: children))
+				try .built(Self.mockDecoratedRecord(of: declaration, variant: variant, in: world, unavailableProperties: onlyIfAvailableAnswers.unavailableProperties(of: variant), lazilyInstantiatedInstanceProperties: instanceProperties, receivesBoundAgain: mockReceivesBoundAgain[Int(variant)], wrapperArgumentNames: Self.mockWrapperArgumentNames(of: declaration, among: mockWrapperNamesVisible[Int(variant)], in: world), typesDeclaredEscaping: escaping, children: children))
 			case .mockUnavailableDependency:
 				try .alias(Self.mockUnavailableDependencyRecord(of: declaration, in: world))
 			case .publicMockCall:
@@ -538,7 +539,7 @@ struct NodeRecords: Sendable {
 			}
 		}
 		do {
-			_ = try OnlyIfAvailableAnswers(world: world, rootParameters: seamTree?.parameters ?? outerDeclarations)
+			_ = try OnlyIfAvailableAnswers(world: world, rootParameters: seamTree?.parameters ?? outerDeclarations + Self.mockWrapperDeclarations(in: world))
 		} catch {
 			refusals.insert(error)
 		}

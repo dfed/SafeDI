@@ -72,6 +72,7 @@ extension NodeRecords {
 		unavailableProperties: Set<Property>,
 		lazilyInstantiatedInstanceProperties: Set<Property>,
 		receivesBoundAgain: [MockReceiveBoundAgain],
+		wrapperArgumentNames: [String: String] = [:],
 		typesDeclaredEscaping: Set<TypeDescription>,
 		children: [GeneratedCode],
 	) throws -> BuiltPlaceRecord {
@@ -105,6 +106,7 @@ extension NodeRecords {
 			boundProperty: boundProperty,
 			argumentsOfOtherValues: fieldArguments,
 			uncoveredArgumentNames: uncoveredArgumentNames(of: declaration, in: world),
+			wrapperArgumentNames: wrapperArgumentNames,
 			alwaysDeclaresFunction: !fieldArguments.isEmpty,
 			typesDeclaredEscaping: typesDeclaredEscaping,
 			children: receivesBoundAgain.map(\.place) + children,

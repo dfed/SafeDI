@@ -32,8 +32,11 @@ struct MockRootNames: Sendable {
 	///   - uncoveredParameterNames: The name of the parameter `mock()` takes as a plain value for each dependency a type of the
 	///     tree instantiates that the mock cannot build, by the dependency's property, its label where it is not named apart
 	///     (`MockLowering.RootSignature.uncoveredParameters`); a `@Sendable` autoclosure parameter is none.
-	init(namesApart: [String: [TypeDescription: String]] = [:], unavailableDependencyOverrides: [(property: Property, name: String)] = [], passedUpBuilderNames: [Property: String] = [:], uncoveredParameterNames: [Property: String] = [:]) {
+	///   - wrapperNames: The name of each wrapper `mock()` binds around an instance it takes, by the label and then the type
+	///     of the receives that read it (`MockLowering.RootSignature.lazilyInstantiatedBindingNamesByLabelAndType`).
+	init(namesApart: [String: [TypeDescription: String]] = [:], unavailableDependencyOverrides: [(property: Property, name: String)] = [], passedUpBuilderNames: [Property: String] = [:], uncoveredParameterNames: [Property: String] = [:], wrapperNames: [String: [TypeDescription: String]] = [:]) {
 		self.namesApart = namesApart
+		self.wrapperNames = wrapperNames
 		self.passedUpBuilderNames = passedUpBuilderNames
 		self.uncoveredParameterNames = uncoveredParameterNames
 		unavailableDependencyOverrideNamesInOrder = unavailableDependencyOverrides.map(\.name)
@@ -79,6 +82,10 @@ struct MockRootNames: Sendable {
 
 	/// The name the root gives each value of its level it names apart, by label and then type.
 	let namesApart: [String: [TypeDescription: String]]
+
+	/// The name of each wrapper `mock()` binds around an instance it takes, by the label and then the type of the receives
+	/// that read it by that name (`NodeRecords.mockWrapperNamesVisible(in:)`).
+	let wrapperNames: [String: [TypeDescription: String]]
 
 	/// The name of the parameter `mock()` takes as a plain value for `property`, a dependency a type of the tree instantiates
 	/// that the mock cannot build, and `nil` where it takes none so.
