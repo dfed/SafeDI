@@ -24,12 +24,13 @@ import Testing
 /// Soundness rule 1 of node records: at every place of every production root they accept, node records' record of the
 /// place's node equals the record the tree's place made (`NodeRecordsObservation`). Where `SAFEDI_NODE_RECORDS_REPORT`
 /// names a file, each root's outcome is appended to it as a line: the test, the root, `laid out`, `accepted`, or the
-/// refusal's kind, the count of differences, every refusal the world holds, and `mock` for a mock's root. Where `SAFEDI_NODE_RECORDS_LAY_OUT` is `1`, every root node records accept is laid out from them.
+/// refusal's kind, the count of differences, every refusal the world holds, and `mock` for a mock's root. Where `SAFEDI_NODE_RECORDS_LAY_OUT` is `1`, every root node records accept is laid out from them. Where `SAFEDI_NODE_RECORDS_NO_TREE` is `1`, the switch to node records is on (`NodeRecordsObservation.buildsNoTreeForAcceptedRoots`): a root they accept builds its tree only to be compared.
 enum NodeRecordsChecks {
 	static func checking<Result>(_ body: () async throws -> Result) async rethrows -> Result {
 		let reportPath = ProcessInfo.processInfo.environment["SAFEDI_NODE_RECORDS_REPORT"]
 		let testName = Test.current?.name ?? "unknown test"
 		let laysOutRoots = NodeRecordsObservation.laysOutRoots || ProcessInfo.processInfo.environment["SAFEDI_NODE_RECORDS_LAY_OUT"] == "1"
+		let buildsNoTreeForAcceptedRoots = NodeRecordsObservation.buildsNoTreeForAcceptedRoots || ProcessInfo.processInfo.environment["SAFEDI_NODE_RECORDS_NO_TREE"] == "1"
 		let enclosingObserver = NodeRecordsObservation.observer
 		let enclosingSeamCallObserver = SeamCallRecordObservation.observer
 		// A seam call's record, as the engine is to spell it, must list what its text reads, binds and declares, and spell
@@ -67,7 +68,9 @@ enum NodeRecordsChecks {
 		return try await SeamCallRecordObservation.$observer.withValue(seamCallObserver) {
 			try await DispatcherRecordObservation.$observer.withValue(dispatcherObserver) {
 				try await FillSignatureObservation.$observer.withValue(fillObserver) {
-					try await checkingNodeRecords(laysOutRoots: laysOutRoots, reportPath: reportPath, testName: testName, enclosingObserver: enclosingObserver, body)
+					try await NodeRecordsObservation.$buildsNoTreeForAcceptedRoots.withValue(buildsNoTreeForAcceptedRoots) {
+						try await checkingNodeRecords(laysOutRoots: laysOutRoots, reportPath: reportPath, testName: testName, enclosingObserver: enclosingObserver, body)
+					}
 				}
 			}
 		}

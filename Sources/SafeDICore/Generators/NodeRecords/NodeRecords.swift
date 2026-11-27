@@ -267,6 +267,7 @@ struct NodeRecords: Sendable {
 			rootEscaping.formUnion(typesDeclaredEscaping[Int(callee)] ?? [])
 		}
 		rootTypesDeclaredEscaping = rootEscaping
+		holdsSeamCallOrHole = kinds.contains(.seamCall) || kinds.contains(.seamHole)
 		self.records = records
 		declarationByVariant = (0..<Int32(world.variantCount)).map(world.declaration(of:))
 	}
@@ -283,6 +284,11 @@ struct NodeRecords: Sendable {
 	/// The names the root's tree declares `@escaping`, as the tree's root collects them (`ScopeGenerator.typesDeclaredEscaping`),
 	/// which a seam's own root spells its parameters with.
 	let rootTypesDeclaredEscaping: Set<TypeDescription>
+
+	/// Whether the world holds a call of a seam or a hole, whose checks only a tree answers today
+	/// (`validateNoSeamTierOmitsProvidedValue`, the leaf's `@Sendable` deferred parameter), so a seam's own root that holds
+	/// one keeps its tree (`DependencyTreeGenerator.ownSeamRootLayout`).
+	let holdsSeamCallOrHole: Bool
 
 	/// How many variants have a record, which is every variant but the root's.
 	var recordCount: Int {

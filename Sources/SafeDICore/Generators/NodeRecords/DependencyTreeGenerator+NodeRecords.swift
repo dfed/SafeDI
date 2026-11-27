@@ -41,6 +41,32 @@ extension DependencyTreeGenerator {
 		}
 	}
 
+	/// The layout of `seam`'s code, a seam this module generates whose own root is `seamRoot`, from the node records of its
+	/// world, the root `constructionScope` builds, where its tree need not be built: the switch to node records is on
+	/// (`NodeRecordsObservation.buildsNoTreeForAcceptedRoots`), nothing reads every tree (`readersOfEveryTree`), node
+	/// records accept the world, it holds no call of a seam and no hole, whose checks read the tree
+	/// (`NodeRecords.holdsSeamCallOrHole`), and the engine lays every statement of its body out. `nil` otherwise, where the
+	/// seam's tree is built.
+	/// - Throws: What an initializer's arguments throw, as the tree's construction of the same place throws it.
+	static func ownSeamRootLayout(
+		of seam: Instantiable,
+		seamRoot: ScopeGenerator.SeamRoot,
+		constructionScope: ConstructionScope,
+		declaredTypeNames: DeclaredTypeNames,
+		readersOfEveryTree: [TreeForcer],
+	) throws -> NodeRecordsLayout? {
+		guard NodeRecordsObservation.buildsNoTreeForAcceptedRoots, readersOfEveryTree.isEmpty else { return nil }
+		let world = TypeFactsGraph(root: constructionScope, forMockGeneration: false)
+		do {
+			let nodeRecords = try NodeRecords(world: world, seamTree: RootScopeInfo.SeamTree(seam: seam, seamRoot: seamRoot), declaredTypeNames: declaredTypeNames)
+			guard !nodeRecords.holdsSeamCallOrHole else { return nil }
+			guard let code = try laidOutSeamRootCode(of: seam, seamRoot: seamRoot, nodeRecords: nodeRecords) else { return nil }
+			return NodeRecordsLayout(code: code, nodeRecords: nodeRecords)
+		} catch is NodeRecordRefusal {
+			return nil
+		}
+	}
+
 	/// The kind node records refuse the world of `rootInfo`, a root of a module with seams, with; empty where they make its
 	/// records, or the root is of a module without seams, whose forcers name the kind already.
 	static func nodeRecordRefusal(ofSeamWorldRoot rootInfo: RootScopeInfo, declaredTypeNames: DeclaredTypeNames) -> [TreeForcer] {

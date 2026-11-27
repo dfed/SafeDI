@@ -869,7 +869,7 @@ public actor DependencyTreeGenerator {
 				}
 				rootScopeGenerators = roots
 			} else {
-				let seamWorldRoots = try await seamWorldRootScopeGenerators(validatedWorld: validatedWorld, foreignSeamRoots: foreignSeamRoots, unreadTypeComment: unreadTypeComment, ownAccessProof: ownAccessProof)
+				let seamWorldRoots = try await seamWorldRootScopeGenerators(validatedWorld: validatedWorld, foreignSeamRoots: foreignSeamRoots, unreadTypeComment: unreadTypeComment, ownAccessProof: ownAccessProof, readersOfEveryTree: readersOfEveryTree)
 				rootsOfOtherModules = seamWorldRoots.rootsOfOtherModules
 				storedSeamSignatures = seamWorldRoots.storedSeamSignatures
 				rootScopeGenerators = seamWorldRoots.roots
