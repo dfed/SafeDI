@@ -65,6 +65,46 @@ struct BitRows: Sendable {
 		return columns
 	}
 
+	/// Hands each column set in a row to `body`, in increasing order, with its rank: how many columns of the row precede it.
+	func forEachColumn(inRow row: Int, _ body: (_ column: Int32, _ rank: Int) -> Void) {
+		var rank = 0
+		for index in Int(rowStarts[row])..<Int(rowEnds[row]) {
+			var word = wordBits[index]
+			while word != 0 {
+				body(wordIndices[index] * 64 + Int32(word.trailingZeroBitCount), rank)
+				rank += 1
+				word &= word - 1
+			}
+		}
+	}
+
+	/// How many columns of a row precede `column`, where the row holds it; `nil` where it does not.
+	func rank(of column: Int32, inRow row: Int) -> Int? {
+		let (word, bit) = Int(column).quotientAndRemainder(dividingBy: 64)
+		var rank = 0
+		for index in Int(rowStarts[row])..<Int(rowEnds[row]) {
+			let bits = wordBits[index]
+			if wordIndices[index] == Int32(word) {
+				guard bits & 1 << UInt64(bit) != 0 else {
+					return nil
+				}
+				return rank + (bits & (1 << UInt64(bit) - 1)).nonzeroBitCount
+			} else {
+				rank += bits.nonzeroBitCount
+			}
+		}
+		return nil
+	}
+
+	/// The columns a row holds.
+	func columnCount(inRow row: Int) -> Int {
+		var count = 0
+		for index in Int(rowStarts[row])..<Int(rowEnds[row]) {
+			count += wordBits[index].nonzeroBitCount
+		}
+		return count
+	}
+
 	/// The words held, for a test to count what a fold keeps.
 	var wordCount: Int {
 		wordIndices.count
@@ -190,7 +230,9 @@ struct ReadsFromAbove: Sendable {
 	/// - Parameters:
 	///   - own: The reads each node makes itself, a row per node in position order.
 	///   - hidden: The reads each node hides from the nodes above it, of the same shape.
-	init(graph: OrderedGraph<some Hashable & Sendable>, own: BitRows, hidden: BitRows) {
+	///   - followsEdge: Whether a node takes what the target of an edge, by its position among the graph's edges, reads:
+	///     every edge, unless a fold says otherwise.
+	init(graph: OrderedGraph<some Hashable & Sendable>, own: BitRows, hidden: BitRows, followsEdge: (_ edgeIndex: Int) -> Bool = { _ in true }) {
 		var rows = BitRows(columnCount: own.columnCount)
 		rows.reserveRows(graph.nodes.count)
 		var accumulator = RowAccumulator(columnCount: own.columnCount)
@@ -221,7 +263,8 @@ struct ReadsFromAbove: Sendable {
 			if members.count == 1, let index = members.first.map(Int.init), !graph.isOnCycle(index) {
 				mask.load(row: index, of: hidden)
 				own.add(row: index, to: &accumulator)
-				for target in graph.edges(from: index) {
+				for edgeIndex in graph.edgeIndices(from: index) where followsEdge(edgeIndex) {
+					let target = graph.edgeTargets[edgeIndex]
 					work += rows.wordCount(ofRow: Int(target))
 					_ = rows.add(row: Int(target), to: &accumulator, excluding: mask)
 				}
@@ -243,7 +286,8 @@ struct ReadsFromAbove: Sendable {
 					for (slot, index) in members.enumerated() {
 						mask.load(row: Int(index), of: hidden)
 						previousPass.add(row: slot, to: &accumulator)
-						for target in graph.edges(from: Int(index)) {
+						for edgeIndex in graph.edgeIndices(from: Int(index)) where followsEdge(edgeIndex) {
+							let target = graph.edgeTargets[edgeIndex]
 							let targetSlot = memberSlotByNode[Int(target)]
 							if targetSlot >= 0 {
 								work += previousPass.wordCount(ofRow: Int(targetSlot))
