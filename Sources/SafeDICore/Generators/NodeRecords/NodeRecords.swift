@@ -126,7 +126,6 @@ struct NodeRecords: Sendable {
 		var places = [GeneratedCode?](repeating: nil, count: world.variantCount)
 		var records = [PlaceRecord?](repeating: nil, count: world.variantCount)
 		var typesDeclaredEscaping = [Set<TypeDescription>?](repeating: nil, count: world.variantCount)
-		var holdsCallFields = false
 		let seamCallRoutes = seamTree.map { SeamCallRoutes(world: world, signature: $0.signature) } ?? SeamCallRoutes()
 		var stack: [(variant: VariantID, childrenPushed: Bool)] = [(0, false)]
 		while let (variant, childrenPushed) = stack.popLast() {
@@ -170,9 +169,6 @@ struct NodeRecords: Sendable {
 			}
 			typesDeclaredEscaping[Int(variant)] = escaping
 			records[Int(variant)] = record
-			if case let .alias(aliasRecord) = record, aliasRecord.call != nil {
-				holdsCallFields = true
-			}
 			places[Int(variant)] = switch record {
 			case let .alias(aliasRecord):
 				// A place written as text: the engine copies it as written.
@@ -186,7 +182,6 @@ struct NodeRecords: Sendable {
 			.indented(places[Int(rootCalls[rootCalls.startIndex + edgeIndex])] ?? .empty, by: TypeKeyBody.rootStatementIndentation)
 		}
 		self.records = records
-		self.holdsCallFields = holdsCallFields
 		declarationByVariant = (0..<Int32(world.variantCount)).map(world.declaration(of:))
 	}
 
@@ -198,10 +193,6 @@ struct NodeRecords: Sendable {
 	/// The root's body: a place for each of the root's children, in the order the root builds them, indented as a root's
 	/// statements are.
 	let rootBody: [GeneratedCode]
-
-	/// Whether a record is a call the engine spells in place (`InPlaceCall`), whose `text` node records leave empty, which
-	/// the engine still keys by: such a root's records are compared with its tree's, and its code is not laid out from them.
-	let holdsCallFields: Bool
 
 	/// How many variants have a record, which is every variant but the root's.
 	var recordCount: Int {

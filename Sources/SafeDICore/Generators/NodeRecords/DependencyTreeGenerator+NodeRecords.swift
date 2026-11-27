@@ -43,14 +43,8 @@ extension DependencyTreeGenerator {
 		guard rootInfo.treeForcers.contains(.seamWorld), let constructionScope = rootInfo.constructionScope else { return [] }
 		let world = TypeFactsGraph(root: constructionScope, forMockGeneration: false)
 		let records = Result { () throws -> NodeRecords in try NodeRecords(world: world, seamTree: rootInfo.seamTree) }
-		switch records {
-		case let .success(nodeRecords):
-			// A call of a seam, whose guard line the engine does not spell yet, keeps the root from being laid out.
-			return nodeRecords.holdsCallFields ? [.nodeRecordKind(NodeRecordRefusal.notLaidOut.rawValue)] : []
-		case let .failure(error):
-			guard let refusal = error as? NodeRecordRefusal else { return [] }
-			return [.nodeRecordKind(refusal.rawValue)]
-		}
+		guard case let .failure(error) = records, let refusal = error as? NodeRecordRefusal else { return [] }
+		return [.nodeRecordKind(refusal.rawValue)]
 	}
 
 	/// The plan of `rootInfo`'s code: its node records' layout where nothing forces its tree, and its tree's places
@@ -85,9 +79,8 @@ extension DependencyTreeGenerator {
 				observer(NodeRecordsReport(root: root, refusal: refusal.rawValue, everyRefusal: everyRefusal.map(\.rawValue), isLaidOutFromNodeRecords: false, differences: [], recordCount: 0, treePlaceCount: 0, treeForcers: rootInfo.treeForcers))
 				return try await scopeGenerator.generatePlan()
 			}
-			// A seam's own tree is compared and never laid out here: its initializers are written around its body. Nor is a tree
-			// that calls a seam, whose call's guard line the engine does not spell yet.
-			let laidOutCode: GeneratedCode? = if NodeRecordsObservation.laysOutRoots, rootInfo.seamTree == nil, !nodeRecords.holdsCallFields {
+			// A seam's own tree is compared and never laid out here: its initializers are written around its body.
+			let laidOutCode: GeneratedCode? = if NodeRecordsObservation.laysOutRoots, rootInfo.seamTree == nil {
 				try laidOutRootCode(of: rootInfo.instantiable, body: nodeRecords.rootBody)
 			} else {
 				nil

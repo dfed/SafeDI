@@ -296,10 +296,10 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_makesTheRecordOfASeamCallAsTheTreeDoes_whenTheCallPassesNoBuilder() async throws {
+	mutating func generate_laysOutASeamCallAsTheTreeDoes_whenTheCallPassesNoBuilder() async throws {
 		// `App`'s `Root` reaches `Feature`'s seam `Screen`, which it calls through the initializer SafeDI generates for it,
-		// after the guard line: node records make the call's record, guard line included, as the tree records it beside its
-		// text, and lay nothing out, since the engine spells no guard line yet.
+		// after the guard line: node records make the call's record, guard line included, and the root is laid out from them
+		// as the tree writes it.
 		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -371,7 +371,8 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 		"""])
 		// `Screen`'s own tree reads its deferred parameter through its memo, which node records refuse as lazy.
 		#expect(reports.map(\.root) == ["Screen", "Root"])
-		#expect(reports.map(\.refusal) == ["lazy", "notLaidOut"])
+		#expect(reports.map(\.refusal) == ["lazy", nil])
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [false, true])
 		#expect(reports.map(\.recordCount) == [0, 2])
 		#expect(reports.flatMap(\.differences) == [])
 	}
