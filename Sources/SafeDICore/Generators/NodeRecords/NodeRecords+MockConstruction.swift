@@ -28,7 +28,8 @@ extension NodeRecords {
 		guard world.isMockWorld else { return nil }
 		// A hand-written mock builds its type with or without an initializer: a fake has none.
 		let buildsWithHandWrittenMock = world.construction(of: declaration) == .handWrittenMock
-		let discharges: Set<NodeRecordRefusal> = buildsWithHandWrittenMock ? [.construction, .noInitializer] : []
+		var discharges: Set<NodeRecordRefusal> = buildsWithHandWrittenMock ? [.construction, .noInitializer] : []
+		discharges.formUnion(mockOnlyIfAvailableDischarges(of: declaration))
 		guard refusalsOfBuiltByInitializer(declaration, in: world).allSatisfy(discharges.contains) else { return nil }
 		var refusals = [NodeRecordRefusal]()
 		let instantiable = world.scope(of: declaration).instantiable
@@ -78,6 +79,7 @@ extension NodeRecords {
 		of declaration: DeclarationID,
 		variant: VariantID,
 		in world: some NodeRecordSources,
+		unavailableProperties: Set<Property>,
 		typesDeclaredEscaping: Set<TypeDescription>,
 		children: [GeneratedCode],
 	) throws -> BuiltPlaceRecord {
@@ -89,13 +91,20 @@ extension NodeRecords {
 		}
 		// A mock world that holds a lazily instantiated property is refused (`refusalsOfBuiltByInitializer(_:in:)`), so no
 		// receive of this node reads a wrapper's instance.
+		// A constant the mock builds for an optional property it promotes is bound as the unwrapped type its function returns,
+		// as every node the mock builds is bound non-optional; the optional receiver takes it through optional promotion.
+		let boundProperty = world.property(of: declaration).map { property in
+			property.propertyType == .constant && property.typeDescription.isOptional ? Property(label: property.label, typeDescription: property.typeDescription.unwrapped) : property
+		}
 		var record = try builtByInitializerRecord(
 			of: declaration,
 			variant: variant,
 			in: world,
+			unavailableProperties: unavailableProperties,
 			lazilyInstantiatedInstanceProperties: [],
 			construction: handWrittenMock,
-			typeFunctionReturns: world.property(of: declaration)?.typeDescription.asInstantiatedTypeSpelledAsDeclared,
+			typeFunctionReturns: boundProperty?.typeDescription.asInstantiatedTypeSpelledAsDeclared,
+			boundProperty: boundProperty,
 			typesDeclaredEscaping: typesDeclaredEscaping,
 			children: children,
 		)
