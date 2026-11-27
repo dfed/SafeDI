@@ -695,7 +695,6 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		SeamSignature.Hole.PathType.self,
 		SeamSignature.Hole.EnumPlace.self,
 		SeamSignature.Hole.RouteStep.self,
-		SeamSignature.Hole.RouteStep.Member.self,
 		SeamSignature.Hole.RouteStep.Values.self,
 		SeamSignature.Hole.RouteStep.InnerScope.self,
 		SeamSignature.Hole.DeclaredProperty.self,
@@ -2976,7 +2975,6 @@ extension SeamSignature.Hole.DeclarationHiddenByField: BinarySample {}
 extension SeamSignature.Hole.PathType: BinarySample {}
 extension SeamSignature.Hole.EnumPlace: BinarySample {}
 extension SeamSignature.Hole.RouteStep: BinarySample {}
-extension SeamSignature.Hole.RouteStep.Member: BinarySample {}
 extension SeamSignature.Hole.RouteStep.Values: BinarySample {}
 extension SeamSignature.Hole.RouteStep.InnerScope: BinarySample {}
 extension SeamSignature.Hole.DeclaredProperty: BinarySample {}

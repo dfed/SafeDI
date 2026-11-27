@@ -355,6 +355,7 @@ extension MockLowering.Walk {
 			of: ScopeGenerator.buildSiteCode(
 				of: property,
 				at: site,
+				routeMembers: generator.siteRouteMembers,
 				functionName: holeFunctionName,
 				readingInstancesOf: generator.mockLoweringCallSiteLazilyInstantiatedInstanceProperties,
 			),

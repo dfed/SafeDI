@@ -950,7 +950,6 @@ extension SeamSignature.Hole.RouteStep: BinarySchemaMember {
 				BinaryLayoutField("values", \.values),
 				BinaryLayoutField("innerScope", \.innerScope),
 				BinaryLayoutField("leadsIntoFill", \.leadsIntoFill),
-				BinaryLayoutField("member", \.member),
 			],
 			unwrittenProperties: [],
 		)
@@ -962,7 +961,6 @@ extension SeamSignature.Hole.RouteStep: BinarySchemaMember {
 			values: reader.read() as SeamSignature.Hole.RouteStep.Values?,
 			innerScope: reader.read() as SeamSignature.Hole.RouteStep.InnerScope?,
 			leadsIntoFill: reader.read(),
-			member: reader.read() as SeamSignature.Hole.RouteStep.Member?,
 		)
 	}
 
@@ -971,46 +969,6 @@ extension SeamSignature.Hole.RouteStep: BinarySchemaMember {
 		writer.write(values)
 		writer.write(innerScope)
 		writer.write(leadsIntoFill)
-		writer.write(member)
-	}
-}
-
-extension SeamSignature.Hole.RouteStep.Member: BinarySchemaMember {
-	static var binaryLayout: BinaryLayout<Self> {
-		.structure(
-			fields: [
-				BinaryLayoutField("bindingName", \.bindingName),
-				BinaryLayoutField("valuesType", \.valuesType),
-				BinaryLayoutField("fields", \.fields),
-				BinaryLayoutField("levelType", \.levelType),
-				BinaryLayoutField("bindingPathLength", \.bindingPathLength),
-				BinaryLayoutField("isCalledInsideFunction", \.isCalledInsideFunction),
-				BinaryLayoutField("isLetChild", \.isLetChild),
-			],
-			unwrittenProperties: [],
-		)
-	}
-
-	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
-		try self.init(
-			bindingName: reader.read(),
-			valuesType: reader.read(),
-			fields: reader.read(),
-			levelType: reader.read(),
-			bindingPathLength: reader.read(),
-			isCalledInsideFunction: reader.read(),
-			isLetChild: reader.read(),
-		)
-	}
-
-	func write(to writer: inout BinaryWriter) {
-		writer.write(bindingName)
-		writer.write(valuesType)
-		writer.write(fields)
-		writer.write(levelType)
-		writer.write(bindingPathLength)
-		writer.write(isCalledInsideFunction)
-		writer.write(isLetChild)
 	}
 }
 
