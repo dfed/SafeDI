@@ -632,7 +632,7 @@ public actor DependencyTreeGenerator {
 		/// table is freed with the build. A production root, of a module with seams or without, or a seam's own root,
 		/// whose records a test only compares.
 		let rootScope: ConstructionScope?
-		/// For a seam's own tree, its root; `nil` for every other root.
+		/// For a seam's own tree, its root, held only where `rootScope` is; `nil` for every other root.
 		let ownSeamRoot: ScopeGenerator.SeamRoot?
 
 		/// Whether a root's scope is kept after its tree is built (`rootScope`): set where the run names what node records
