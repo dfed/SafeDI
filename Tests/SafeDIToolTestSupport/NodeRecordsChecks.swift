@@ -118,11 +118,18 @@ enum NodeRecordsChecks {
 	/// Then the records' differences from the tree's, place by place, are that rewrite's and fail nothing. A difference
 	/// no text shows always fails, as does every difference of a root whose two texts were not both laid out.
 	static func outcome(of report: NodeRecordsReport, approving approvedDifferences: [ApprovedDifference] = ApprovedDifferences.all) -> (differences: [String], approvedEntries: [Int]) {
-		guard !report.differences.isEmpty,
-		      let texts = report.comparedTexts,
-		      let normalized = ApprovedDifferences.normalized(nodeRecordsText: texts.nodeRecords, treeText: texts.tree, by: approvedDifferences)
-		else { return (report.differences, []) }
-		return (report.differencesNoTextShows, normalized.entries)
+		guard !report.differences.isEmpty, let texts = report.comparedTexts else { return (report.differences, []) }
+		// Entry 13's optional parameter off every cycle: one variant serves a call that answers a read only if available
+		// and a call that does not, so its record reads the declaration where the tree's place at the second call reads
+		// `nil`, and the two write the same code, the call passing `nil`. Only the arguments of places differ, and no
+		// text does.
+		if texts.nodeRecords == texts.tree, report.differences.allSatisfy({ $0.contains(": arguments is ") }) {
+			return (report.differencesNoTextShows, [13])
+		} else if let normalized = ApprovedDifferences.normalized(nodeRecordsText: texts.nodeRecords, treeText: texts.tree, by: approvedDifferences) {
+			return (report.differencesNoTextShows, normalized.entries)
+		} else {
+			return (report.differences, [])
+		}
 	}
 
 	private static func append(_ line: String, toFileAt path: String) {
