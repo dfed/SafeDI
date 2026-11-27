@@ -241,8 +241,8 @@ struct NodeRecords: Sendable {
 		publicMockCallClaim(of: declaration, in: world)
 			// A test claims a node by its type's name (`NodeRecordsObservation.claimsForTesting`).
 			?? NodeRecordsObservation.claimsForTesting[world.scope(of: declaration).instantiable.concreteInstantiable.asSource].map { discharged in
-			NodeRecordClaim(kind: .builtByInitializer, discharges: Set(discharged.compactMap(NodeRecordRefusal.init(rawValue:))))
-		}
+				NodeRecordClaim(kind: .builtByInitializer, discharges: Set(discharged.compactMap(NodeRecordRefusal.init(rawValue:))))
+			}
 			// Asked last: it claims every node of a mock root's world that no kind before it claimed.
 			?? mockConstructionClaim(of: declaration, in: world)
 	}

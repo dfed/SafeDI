@@ -60,57 +60,57 @@ struct SafeDIToolNodeRecordsPublicMockCallTests: ~Copyable {
 			""",
 		)
 		#expect(output == generatedFileHeader + """
-			#if canImport(Feed)
-			import Feed
-			#endif
-			#if canImport(SafeDI)
-			import SafeDI
-			#endif
+		#if canImport(Feed)
+		import Feed
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
 
-			#if DEBUG
-			extension Root {
-			    /// Overrides for the mock dependency tree.
-			    struct SafeDIOverrides {
-			        init(
-			            session: (() -> Session)? = nil,
-			            screen: Screen.SafeDIOverrides = .init()
-			        ) {
-			            __safeDI_storage = __safeDI_Storage(
-			                session: session,
-			                screen: screen
-			            )
-			        }
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            session: (() -> Session)? = nil,
+		            screen: Screen.SafeDIOverrides = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                session: session,
+		                screen: screen
+		            )
+		        }
 
-			        var session: (() -> Session)? { __safeDI_storage.session }
-			        var screen: Screen.SafeDIOverrides { __safeDI_storage.screen }
+		        var session: (() -> Session)? { __safeDI_storage.session }
+		        var screen: Screen.SafeDIOverrides { __safeDI_storage.screen }
 
-			        private let __safeDI_storage: __safeDI_Storage
+		        private let __safeDI_storage: __safeDI_Storage
 
-			        private final class __safeDI_Storage {
-			            init(
-			                session: (() -> Session)?,
-			                screen: Screen.SafeDIOverrides
-			            ) {
-			                self.session = session
-			                self.screen = screen
-			            }
+		        private final class __safeDI_Storage {
+		            init(
+		                session: (() -> Session)?,
+		                screen: Screen.SafeDIOverrides
+		            ) {
+		                self.session = session
+		                self.screen = screen
+		            }
 
-			            let session: (() -> Session)?
-			            let screen: Screen.SafeDIOverrides
-			        }
-			    }
+		            let session: (() -> Session)?
+		            let screen: Screen.SafeDIOverrides
+		        }
+		    }
 
-			    static func mock(
-			        safeDIOverrides: SafeDIOverrides = .init()
-			    ) -> Root {
-			        let session = if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session() }
-			        _ = Screen.__safeDI_Screen_mock_53B5F60DA3BBE2A1.self // If this line does not compile, compile the code SafeDI generates for module Feed into Feed: under Bazel, add Feed’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			        let screen = Screen.__safeDI_mock(session: session, safeDIOverrides: safeDIOverrides.screen)
-			        return Root(session: session, screen: screen)
-			    }
-			}
-			#endif
-			""")
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        let session = if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session() }
+		        _ = Screen.__safeDI_Screen_mock_53B5F60DA3BBE2A1.self // If this line does not compile, compile the code SafeDI generates for module Feed into Feed: under Bazel, add Feed’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        let screen = Screen.__safeDI_mock(session: session, safeDIOverrides: safeDIOverrides.screen)
+		        return Root(session: session, screen: screen)
+		    }
+		}
+		#endif
+		""")
 		#expect(reports.map(\.refusal) == [nil])
 		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
 	}
@@ -134,62 +134,62 @@ struct SafeDIToolNodeRecordsPublicMockCallTests: ~Copyable {
 			""",
 		)
 		#expect(output == generatedFileHeader + """
-			#if canImport(Feed)
-			import Feed
-			#endif
-			#if canImport(SafeDI)
-			import SafeDI
-			#endif
+		#if canImport(Feed)
+		import Feed
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
 
-			#if DEBUG
-			extension Root {
-			    /// Overrides for the mock dependency tree.
-			    struct SafeDIOverrides {
-			        init(
-			            session: (() -> Session)? = nil,
-			            screenBuilder: Screen.SafeDIOverrides = .init()
-			        ) {
-			            __safeDI_storage = __safeDI_Storage(
-			                session: session,
-			                screenBuilder: screenBuilder
-			            )
-			        }
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            session: (() -> Session)? = nil,
+		            screenBuilder: Screen.SafeDIOverrides = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                session: session,
+		                screenBuilder: screenBuilder
+		            )
+		        }
 
-			        var session: (() -> Session)? { __safeDI_storage.session }
-			        var screenBuilder: Screen.SafeDIOverrides { __safeDI_storage.screenBuilder }
+		        var session: (() -> Session)? { __safeDI_storage.session }
+		        var screenBuilder: Screen.SafeDIOverrides { __safeDI_storage.screenBuilder }
 
-			        private let __safeDI_storage: __safeDI_Storage
+		        private let __safeDI_storage: __safeDI_Storage
 
-			        private final class __safeDI_Storage {
-			            init(
-			                session: (() -> Session)?,
-			                screenBuilder: Screen.SafeDIOverrides
-			            ) {
-			                self.session = session
-			                self.screenBuilder = screenBuilder
-			            }
+		        private final class __safeDI_Storage {
+		            init(
+		                session: (() -> Session)?,
+		                screenBuilder: Screen.SafeDIOverrides
+		            ) {
+		                self.session = session
+		                self.screenBuilder = screenBuilder
+		            }
 
-			            let session: (() -> Session)?
-			            let screenBuilder: Screen.SafeDIOverrides
-			        }
-			    }
+		            let session: (() -> Session)?
+		            let screenBuilder: Screen.SafeDIOverrides
+		        }
+		    }
 
-			    static func mock(
-			        safeDIOverrides: SafeDIOverrides = .init()
-			    ) -> Root {
-			        let session = if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session() }
-			        _ = Screen.__safeDI_Screen_mock_B3DFA5A0540208AE.self // If this line does not compile, compile the code SafeDI generates for module Feed into Feed: under Bazel, add Feed’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			        func __safeDI_screenBuilder(id: Int) -> Screen {
-			            Screen.__safeDI_mock(id: id, session: session, safeDIOverrides: safeDIOverrides.screenBuilder)
-			        }
-			        let screenBuilder = Instantiator<Screen> {
-			            __safeDI_screenBuilder(id: $0)
-			        }
-			        return Root(session: session, screenBuilder: screenBuilder)
-			    }
-			}
-			#endif
-			""")
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        let session = if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session() }
+		        _ = Screen.__safeDI_Screen_mock_B3DFA5A0540208AE.self // If this line does not compile, compile the code SafeDI generates for module Feed into Feed: under Bazel, add Feed’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        func __safeDI_screenBuilder(id: Int) -> Screen {
+		            Screen.__safeDI_mock(id: id, session: session, safeDIOverrides: safeDIOverrides.screenBuilder)
+		        }
+		        let screenBuilder = Instantiator<Screen> {
+		            __safeDI_screenBuilder(id: $0)
+		        }
+		        return Root(session: session, screenBuilder: screenBuilder)
+		    }
+		}
+		#endif
+		""")
 		#expect(reports.map(\.refusal) == [nil])
 		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
 	}
@@ -224,105 +224,105 @@ struct SafeDIToolNodeRecordsPublicMockCallTests: ~Copyable {
 			""",
 		)
 		#expect(output == generatedFileHeader + """
-			#if canImport(Feed)
-			import Feed
-			#endif
-			#if canImport(SafeDI)
-			import SafeDI
-			#endif
+		#if canImport(Feed)
+		import Feed
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
 
-			#if DEBUG
-			extension Root {
-			    /// Overrides for the mock dependency tree.
-			    struct SafeDIOverrides {
-			        init(
-			            session: (() -> Session)? = nil,
-			            middleBuilder: Middle.SafeDIMockConfiguration = .init()
-			        ) {
-			            __safeDI_storage = __safeDI_Storage(
-			                session: session,
-			                middleBuilder: middleBuilder
-			            )
-			        }
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            session: (() -> Session)? = nil,
+		            middleBuilder: Middle.SafeDIMockConfiguration = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                session: session,
+		                middleBuilder: middleBuilder
+		            )
+		        }
 
-			        var session: (() -> Session)? { __safeDI_storage.session }
-			        var middleBuilder: Middle.SafeDIMockConfiguration { __safeDI_storage.middleBuilder }
+		        var session: (() -> Session)? { __safeDI_storage.session }
+		        var middleBuilder: Middle.SafeDIMockConfiguration { __safeDI_storage.middleBuilder }
 
-			        private let __safeDI_storage: __safeDI_Storage
+		        private let __safeDI_storage: __safeDI_Storage
 
-			        private final class __safeDI_Storage {
-			            init(
-			                session: (() -> Session)?,
-			                middleBuilder: Middle.SafeDIMockConfiguration
-			            ) {
-			                self.session = session
-			                self.middleBuilder = middleBuilder
-			            }
+		        private final class __safeDI_Storage {
+		            init(
+		                session: (() -> Session)?,
+		                middleBuilder: Middle.SafeDIMockConfiguration
+		            ) {
+		                self.session = session
+		                self.middleBuilder = middleBuilder
+		            }
 
-			            let session: (() -> Session)?
-			            let middleBuilder: Middle.SafeDIMockConfiguration
-			        }
-			    }
+		            let session: (() -> Session)?
+		            let middleBuilder: Middle.SafeDIMockConfiguration
+		        }
+		    }
 
-			    static func mock(
-			        safeDIOverrides: SafeDIOverrides = .init()
-			    ) -> Root {
-			        let session = if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session() }
-			        _ = Screen.__safeDI_Screen_mock_B3DFA5A0540208AE.self // If this line does not compile, compile the code SafeDI generates for module Feed into Feed: under Bazel, add Feed’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			        func __safeDI_screenBuilder(id: Int, safeDIOverrides: Screen.SafeDIOverrides) -> Screen {
-			            Screen.__safeDI_mock(id: id, session: session, safeDIOverrides: safeDIOverrides)
-			        }
-			        func __safeDI_middleBuilder(safeDIOverrides: Middle.SafeDIMockConfiguration) -> Middle {
-			            let screenBuilder = Instantiator<Screen> {
-			                __safeDI_screenBuilder(id: $0, safeDIOverrides: safeDIOverrides.screenBuilder)
-			            }
-			            return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(session, screenBuilder) } else { Middle(session: session, screenBuilder: screenBuilder) }
-			        }
-			        let middleBuilder = Instantiator<Middle> {
-			            __safeDI_middleBuilder(safeDIOverrides: safeDIOverrides.middleBuilder)
-			        }
-			        return Root(session: session, middleBuilder: middleBuilder)
-			    }
-			}
-			#endif
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        let session = if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session() }
+		        _ = Screen.__safeDI_Screen_mock_B3DFA5A0540208AE.self // If this line does not compile, compile the code SafeDI generates for module Feed into Feed: under Bazel, add Feed’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        func __safeDI_screenBuilder(id: Int, safeDIOverrides: Screen.SafeDIOverrides) -> Screen {
+		            Screen.__safeDI_mock(id: id, session: session, safeDIOverrides: safeDIOverrides)
+		        }
+		        func __safeDI_middleBuilder(safeDIOverrides: Middle.SafeDIMockConfiguration) -> Middle {
+		            let screenBuilder = Instantiator<Screen> {
+		                __safeDI_screenBuilder(id: $0, safeDIOverrides: safeDIOverrides.screenBuilder)
+		            }
+		            return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(session, screenBuilder) } else { Middle(session: session, screenBuilder: screenBuilder) }
+		        }
+		        let middleBuilder = Instantiator<Middle> {
+		            __safeDI_middleBuilder(safeDIOverrides: safeDIOverrides.middleBuilder)
+		        }
+		        return Root(session: session, middleBuilder: middleBuilder)
+		    }
+		}
+		#endif
 
-			#if DEBUG
-			extension Middle {
-			    /// Configuration for how this type is constructed within a mock tree.
-			    struct SafeDIMockConfiguration {
-			        init(
-			            screenBuilder: Screen.SafeDIOverrides = .init(),
-			            _ safeDIBuilder: ((Session, Instantiator<Screen>) -> Middle)? = nil
-			        ) {
-			            __safeDI_storage = __safeDI_Storage(
-			                screenBuilder: screenBuilder,
-			                safeDIBuilder: safeDIBuilder
-			            )
-			        }
+		#if DEBUG
+		extension Middle {
+		    /// Configuration for how this type is constructed within a mock tree.
+		    struct SafeDIMockConfiguration {
+		        init(
+		            screenBuilder: Screen.SafeDIOverrides = .init(),
+		            _ safeDIBuilder: ((Session, Instantiator<Screen>) -> Middle)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                screenBuilder: screenBuilder,
+		                safeDIBuilder: safeDIBuilder
+		            )
+		        }
 
-			        var screenBuilder: Screen.SafeDIOverrides { __safeDI_storage.screenBuilder }
-			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        var safeDIBuilder: ((Session, Instantiator<Screen>) -> Middle)? { __safeDI_storage.safeDIBuilder }
+		        var screenBuilder: Screen.SafeDIOverrides { __safeDI_storage.screenBuilder }
+		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+		        var safeDIBuilder: ((Session, Instantiator<Screen>) -> Middle)? { __safeDI_storage.safeDIBuilder }
 
-			        private let __safeDI_storage: __safeDI_Storage
+		        private let __safeDI_storage: __safeDI_Storage
 
-			        private final class __safeDI_Storage {
-			            init(
-			                screenBuilder: Screen.SafeDIOverrides,
-			                safeDIBuilder: ((Session, Instantiator<Screen>) -> Middle)?
-			            ) {
-			                self.screenBuilder = screenBuilder
-			                self.safeDIBuilder = safeDIBuilder
-			            }
+		        private final class __safeDI_Storage {
+		            init(
+		                screenBuilder: Screen.SafeDIOverrides,
+		                safeDIBuilder: ((Session, Instantiator<Screen>) -> Middle)?
+		            ) {
+		                self.screenBuilder = screenBuilder
+		                self.safeDIBuilder = safeDIBuilder
+		            }
 
-			            let screenBuilder: Screen.SafeDIOverrides
-			            let safeDIBuilder: ((Session, Instantiator<Screen>) -> Middle)?
-			        }
-			    }
-			}
-			#endif
+		            let screenBuilder: Screen.SafeDIOverrides
+		            let safeDIBuilder: ((Session, Instantiator<Screen>) -> Middle)?
+		        }
+		    }
+		}
+		#endif
 
-			""")
+		""")
 		#expect(reports.map(\.refusal) == [nil])
 		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
 	}
@@ -348,65 +348,65 @@ struct SafeDIToolNodeRecordsPublicMockCallTests: ~Copyable {
 			""",
 		)
 		#expect(output == generatedFileHeader + """
-			#if canImport(Feed)
-			import Feed
-			#endif
-			#if canImport(SafeDI)
-			import SafeDI
-			#endif
+		#if canImport(Feed)
+		import Feed
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
 
-			#if DEBUG
-			extension Root {
-			    /// Overrides for the mock dependency tree.
-			    struct SafeDIOverrides {
-			        init(
-			            session: (() -> Session)? = nil,
-			            first: Screen.SafeDIOverrides = .init(),
-			            second: Screen.SafeDIOverrides = .init()
-			        ) {
-			            __safeDI_storage = __safeDI_Storage(
-			                session: session,
-			                first: first,
-			                second: second
-			            )
-			        }
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            session: (() -> Session)? = nil,
+		            first: Screen.SafeDIOverrides = .init(),
+		            second: Screen.SafeDIOverrides = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                session: session,
+		                first: first,
+		                second: second
+		            )
+		        }
 
-			        var session: (() -> Session)? { __safeDI_storage.session }
-			        var first: Screen.SafeDIOverrides { __safeDI_storage.first }
-			        var second: Screen.SafeDIOverrides { __safeDI_storage.second }
+		        var session: (() -> Session)? { __safeDI_storage.session }
+		        var first: Screen.SafeDIOverrides { __safeDI_storage.first }
+		        var second: Screen.SafeDIOverrides { __safeDI_storage.second }
 
-			        private let __safeDI_storage: __safeDI_Storage
+		        private let __safeDI_storage: __safeDI_Storage
 
-			        private final class __safeDI_Storage {
-			            init(
-			                session: (() -> Session)?,
-			                first: Screen.SafeDIOverrides,
-			                second: Screen.SafeDIOverrides
-			            ) {
-			                self.session = session
-			                self.first = first
-			                self.second = second
-			            }
+		        private final class __safeDI_Storage {
+		            init(
+		                session: (() -> Session)?,
+		                first: Screen.SafeDIOverrides,
+		                second: Screen.SafeDIOverrides
+		            ) {
+		                self.session = session
+		                self.first = first
+		                self.second = second
+		            }
 
-			            let session: (() -> Session)?
-			            let first: Screen.SafeDIOverrides
-			            let second: Screen.SafeDIOverrides
-			        }
-			    }
+		            let session: (() -> Session)?
+		            let first: Screen.SafeDIOverrides
+		            let second: Screen.SafeDIOverrides
+		        }
+		    }
 
-			    static func mock(
-			        safeDIOverrides: SafeDIOverrides = .init()
-			    ) -> Root {
-			        let session = if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session() }
-			        _ = Screen.__safeDI_Screen_mock_53B5F60DA3BBE2A1.self // If this line does not compile, compile the code SafeDI generates for module Feed into Feed: under Bazel, add Feed’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			        let first = Screen.__safeDI_mock(session: session, safeDIOverrides: safeDIOverrides.first)
-			        _ = Screen.__safeDI_Screen_mock_53B5F60DA3BBE2A1.self // If this line does not compile, compile the code SafeDI generates for module Feed into Feed: under Bazel, add Feed’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			        let second = Screen.__safeDI_mock(session: session, safeDIOverrides: safeDIOverrides.second)
-			        return Root(session: session, first: first, second: second)
-			    }
-			}
-			#endif
-			""")
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        let session = if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session() }
+		        _ = Screen.__safeDI_Screen_mock_53B5F60DA3BBE2A1.self // If this line does not compile, compile the code SafeDI generates for module Feed into Feed: under Bazel, add Feed’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        let first = Screen.__safeDI_mock(session: session, safeDIOverrides: safeDIOverrides.first)
+		        _ = Screen.__safeDI_Screen_mock_53B5F60DA3BBE2A1.self // If this line does not compile, compile the code SafeDI generates for module Feed into Feed: under Bazel, add Feed’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        let second = Screen.__safeDI_mock(session: session, safeDIOverrides: safeDIOverrides.second)
+		        return Root(session: session, first: first, second: second)
+		    }
+		}
+		#endif
+		""")
 		#expect(reports.map(\.refusal) == [nil])
 		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
 	}
