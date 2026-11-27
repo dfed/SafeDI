@@ -6506,19 +6506,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 	}
 
-	/// How this scope spells a `@Sendable` local function it declares.
-	nonisolated private var sendableFunctionDecorator: String {
-		Self.localFunctionPrefix(isSendable: true)
-	}
-
-	/// How generated code spells the attributes of a local function it declares: `@Sendable nonisolated` where the function
-	/// is `@Sendable`, and nothing otherwise. A `Sendable` wrapper calls its function synchronously from any isolation, so the
-	/// function must be nonisolated, which is what Swift infers for a `@Sendable` local function in a module whose
-	/// declarations default to no isolation. A module whose declarations default to the main actor
+	/// How generated code spells the attributes of a local function it declares: `@inline(never)` in a seam’s tree
+	/// (`LocalFunctionInlining`), then `@Sendable nonisolated` where the function is `@Sendable`. A `Sendable` wrapper calls
+	/// its function synchronously from any isolation, so the function must be nonisolated, which is what Swift infers for a
+	/// `@Sendable` local function in a module whose declarations default to no isolation. A module whose declarations default to the main actor
 	/// (`-default-isolation MainActor`) infers the function to be on the main actor instead, and rejects it as `@Sendable`,
 	/// so the spelling says `nonisolated` (`SafeDIToolDefaultMainActorIsolationTests`).
 	static func localFunctionPrefix(isSendable: Bool) -> String {
-		isSendable ? "@Sendable nonisolated " : ""
+		LocalFunctionInlining.attribute + (isSendable ? "@Sendable nonisolated " : "")
 	}
 
 	/// The lines that bind the payloads of the cases on the routes to the places beneath this scope, which its parent emits
@@ -7824,6 +7819,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					indentation: leadingMemberWhitespace,
 				),
 				name: dispatcher.functionName,
+				// The declaration after its indentation and the attributes it is spelled with (`RootFunctionRecord.spelled`).
 				textWithoutAttributes: String(dispatcher.declaration(
 					isSendable: false,
 					indent: leadingMemberWhitespace,
@@ -7832,7 +7828,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					typesDeclaredEscaping: typesDeclaredEscaping,
 					fillsTakingPayloadFields: body.fillsTakingPayloadFields,
 					labelsHiddenByReenteringCalls: labelsHiddenByReenteringCalls,
-				).dropFirst(leadingMemberWhitespace.count)),
+				).dropFirst(leadingMemberWhitespace.count + Self.localFunctionPrefix(isSendable: false).count)),
 				isSendable: isSendable,
 				calls: dispatcher.cases.compactMap { dispatcherCase in
 					dispatcherCase.target.flatMap { body.inlinedFills[$0.key] == nil ? $0.name : nil }
@@ -8392,16 +8388,20 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			switch codeGeneration {
 			case .dependencyTree:
 				if let seamRoot {
-					return try await .text(generateSeamRootCode(
-						instantiable: instantiable,
-						seamRoot: seamRoot,
-						unavailableProperties: unavailableProperties,
-						propertiesGeneratedLater: propertiesGeneratedLater,
-						builderFunctionNames: builderFunctionNames,
-						fillPlaceBindings: fillPlaceBindings,
-					))
+					// Only a seam’s tree declares its local functions `@inline(never)` (`LocalFunctionInlining`).
+					return try await LocalFunctionInlining.$isNeverInlined.withValue(true) {
+						try await .text(generateSeamRootCode(
+							instantiable: instantiable,
+							seamRoot: seamRoot,
+							unavailableProperties: unavailableProperties,
+							propertiesGeneratedLater: propertiesGeneratedLater,
+							builderFunctionNames: builderFunctionNames,
+							fillPlaceBindings: fillPlaceBindings,
+						))
+					}
 				}
 				guard let rootInitializer = try Self.rootInitializer(of: instantiable) else { return .empty }
+				// A root’s tree keeps its local functions inlinable, where a seam’s does not (`LocalFunctionInlining`).
 				// A root of the dependency tree plans its children at once (`ConcurrentChildCode`).
 				let childCode = try await ConcurrentChildCode.$plansChildrenAtOnce.withValue(true) {
 					try await generateProperties(
@@ -9059,7 +9059,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					? ""
 					: forwardedProperties.initializerFunctionParametersSource(amongTypesDeclaredEscaping: typesDeclaredEscaping)
 				let callArguments = (forwardedProperties.map { CallArgument(label: $0.label, source: .binding(label: $0.label)).spelled } + cycleArguments).joined(separator: ", ")
-				let receivedFunctionDecorator = buildsInSendableFunction || property.propertyType.isSendable ? sendableFunctionDecorator : ""
+				let receivedFunctionDecorator = Self.localFunctionPrefix(isSendable: buildsInSendableFunction || property.propertyType.isSendable)
 				let receivedFunctionDeclaration = """
 				\(receivedFunctionDecorator)func \(receivedFunctionName)(\(receivedFunctionParameters)) -> \(concreteTypeName) {
 				\((memberLines + ["\(Self.standardIndent)\(BuilderBody(statements: memberLines.map(GeneratedCode.text)).returnKeyword)\(functionName)(\(callArguments))"]).joined(separator: "\n"))

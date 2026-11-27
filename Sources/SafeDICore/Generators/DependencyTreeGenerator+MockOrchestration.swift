@@ -19,7 +19,8 @@
 // SOFTWARE.
 
 extension DependencyTreeGenerator {
-	/// Generates mock code for all `@Instantiable` types.
+	/// Generates mock code for all `@Instantiable` types. A mock keeps its local functions inlinable, where a seam’s tree
+	/// does not (`LocalFunctionInlining`).
 	/// - Parameter publicMockContext: The context the module's public mocks share (`makePublicMockContext()`), or `nil`
 	///   when the module declares no public mock.
 	func generateMockCode(
