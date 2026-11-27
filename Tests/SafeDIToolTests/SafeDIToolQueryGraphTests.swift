@@ -789,6 +789,241 @@ struct SafeDIToolQueryGraphTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func graph_handsReaderEachTwinsTheme_whenLazyTwinClosesOnConstantBeneathTypeThatDeclaresSecondLabel() async throws {
+		// `Root` builds `home: Home`, and `Panel`, beneath it, builds `home: LazilyInstantiated<Home>`, which closes the
+		// cycle on the constant twin. Each twin's `Reader` takes the `theme` declared above that twin, and `home` is being
+		// built around it at both.
+		let report = try await graph(of: [
+			"Root.swift": """
+			@Instantiable(isRoot: true)
+			public final class Root: Instantiable {
+			    public init(theme: Theme, home: Home) {
+			        self.theme = theme
+			        self.home = home
+			    }
+
+			    @Instantiated let theme: Theme
+			    @Instantiated let home: Home
+			}
+			""",
+			"Theme.swift": """
+			@Instantiable
+			public final class Theme: Instantiable {
+			    public init() {}
+			}
+			""",
+			"Home.swift": """
+			@Instantiable
+			public final class Home: Instantiable {
+			    public init(reader: Reader, detailBuilder: Instantiator<Detail>) {
+			        self.reader = reader
+			        self.detailBuilder = detailBuilder
+			    }
+
+			    @Instantiated let reader: Reader
+			    @Instantiated let detailBuilder: Instantiator<Detail>
+			}
+			""",
+			"Detail.swift": """
+			@Instantiable
+			public final class Detail: Instantiable {
+			    public init(panelBuilder: Instantiator<Panel>) {
+			        self.panelBuilder = panelBuilder
+			    }
+
+			    @Instantiated let panelBuilder: Instantiator<Panel>
+			}
+			""",
+			"Reader.swift": """
+			@Instantiable
+			public final class Reader: Instantiable {
+			    public init(theme: Theme, home: Home?) {
+			        self.theme = theme
+			        self.home = home
+			    }
+
+			    @Received let theme: Theme
+			    @Received(onlyIfAvailable: true) let home: Home?
+			}
+			""",
+			"Panel.swift": """
+			@Instantiable
+			public final class Panel: Instantiable {
+			    public init(theme: Theme, home: LazilyInstantiated<Home>) {
+			        self.theme = theme
+			        self.home = home
+			    }
+
+			    @Instantiated let theme: Theme
+			    @Instantiated let home: LazilyInstantiated<Home>
+			}
+			""",
+		])
+
+		#expect(Self.supplies(in: report) == [
+			"App.Reader.home": "nil(providerNotYetBuilt)",
+			"App.Reader.theme": "App.Panel.theme, App.Root.theme",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func graph_handsReaderEachTwinsTheme_whenTypeDeclaresSecondLabelAfterLazyTwinReaderTakesOnlyIfAvailable() async throws {
+		// As above, but `Reader` takes `theme` only if available, and `Panel` declares its `theme` after its lazy `home`.
+		// `Home`'s tree receives `theme`, so `Panel` still builds it first, and the call made there hands it.
+		let report = try await graph(of: [
+			"Root.swift": """
+			@Instantiable(isRoot: true)
+			public final class Root: Instantiable {
+			    public init(theme: Theme, home: Home) {
+			        self.theme = theme
+			        self.home = home
+			    }
+
+			    @Instantiated let theme: Theme
+			    @Instantiated let home: Home
+			}
+			""",
+			"Theme.swift": """
+			@Instantiable
+			public final class Theme: Instantiable {
+			    public init() {}
+			}
+			""",
+			"Home.swift": """
+			@Instantiable
+			public final class Home: Instantiable {
+			    public init(reader: Reader, detailBuilder: Instantiator<Detail>) {
+			        self.reader = reader
+			        self.detailBuilder = detailBuilder
+			    }
+
+			    @Instantiated let reader: Reader
+			    @Instantiated let detailBuilder: Instantiator<Detail>
+			}
+			""",
+			"Detail.swift": """
+			@Instantiable
+			public final class Detail: Instantiable {
+			    public init(panelBuilder: Instantiator<Panel>) {
+			        self.panelBuilder = panelBuilder
+			    }
+
+			    @Instantiated let panelBuilder: Instantiator<Panel>
+			}
+			""",
+			"Reader.swift": """
+			@Instantiable
+			public final class Reader: Instantiable {
+			    public init(theme: Theme?, home: Home?) {
+			        self.theme = theme
+			        self.home = home
+			    }
+
+			    @Received(onlyIfAvailable: true) let theme: Theme?
+			    @Received(onlyIfAvailable: true) let home: Home?
+			}
+			""",
+			"Panel.swift": """
+			@Instantiable
+			public final class Panel: Instantiable {
+			    public init(theme: Theme, home: LazilyInstantiated<Home>) {
+			        self.theme = theme
+			        self.home = home
+			    }
+
+			    @Instantiated let home: LazilyInstantiated<Home>
+			    @Instantiated let theme: Theme
+			}
+			""",
+		])
+
+		#expect(Self.supplies(in: report) == [
+			"App.Reader.home": "nil(providerNotYetBuilt)",
+			"App.Reader.theme": "App.Panel.theme, App.Root.theme",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func graph_handsReaderEachTwinsTheme_whenConstantTwinClosesOnLazyTwinBeneathTypeThatDeclaresSecondLabel() async throws {
+		// The twins of the first test the other way round: `Root` builds `home: LazilyInstantiated<Home>`, and the constant
+		// `home: Home` that `Panel` builds closes the cycle on it.
+		let report = try await graph(of: [
+			"Root.swift": """
+			@Instantiable(isRoot: true)
+			public final class Root: Instantiable {
+			    public init(theme: Theme, home: LazilyInstantiated<Home>) {
+			        self.theme = theme
+			        self.home = home
+			    }
+
+			    @Instantiated let theme: Theme
+			    @Instantiated let home: LazilyInstantiated<Home>
+			}
+			""",
+			"Theme.swift": """
+			@Instantiable
+			public final class Theme: Instantiable {
+			    public init() {}
+			}
+			""",
+			"Home.swift": """
+			@Instantiable
+			public final class Home: Instantiable {
+			    public init(reader: Reader, detailBuilder: Instantiator<Detail>) {
+			        self.reader = reader
+			        self.detailBuilder = detailBuilder
+			    }
+
+			    @Instantiated let reader: Reader
+			    @Instantiated let detailBuilder: Instantiator<Detail>
+			}
+			""",
+			"Detail.swift": """
+			@Instantiable
+			public final class Detail: Instantiable {
+			    public init(panelBuilder: Instantiator<Panel>) {
+			        self.panelBuilder = panelBuilder
+			    }
+
+			    @Instantiated let panelBuilder: Instantiator<Panel>
+			}
+			""",
+			"Reader.swift": """
+			@Instantiable
+			public final class Reader: Instantiable {
+			    public init(theme: Theme, home: Home?) {
+			        self.theme = theme
+			        self.home = home
+			    }
+
+			    @Received let theme: Theme
+			    @Received(onlyIfAvailable: true) let home: Home?
+			}
+			""",
+			"Panel.swift": """
+			@Instantiable
+			public final class Panel: Instantiable {
+			    public init(theme: Theme, home: Home) {
+			        self.theme = theme
+			        self.home = home
+			    }
+
+			    @Instantiated let theme: Theme
+			    @Instantiated let home: Home
+			}
+			""",
+		])
+
+		#expect(Self.supplies(in: report) == [
+			"App.Reader.home": "nil(providerNotYetBuilt)",
+			"App.Reader.theme": "App.Panel.theme, App.Root.theme",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func graph_recordsNilProvenance_whenSiblingThatDeclaresReceiveIsBuiltAfterReceiver() async throws {
 		// `c` receives `b`, so `b` is built first, and its receive of `c` only if available is handed `nil`.
 		let report = try await graph(of: [
