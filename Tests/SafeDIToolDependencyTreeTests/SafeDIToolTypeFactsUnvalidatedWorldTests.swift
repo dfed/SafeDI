@@ -30,10 +30,11 @@ import Testing
 /// not `generate` then throws, and a test of a rejected graph also pins the error, so that the fixture stays one the
 /// walk rejects for that reason.
 ///
-/// A receive's line (`TypeFactsRootsReport.receives`) ends `provided` where the answer its variant is given holds a
-/// property the receive accepts, and names the answer: `none` where nothing above declares the label, the forms the
-/// nearest declaration binds otherwise, and `being built` where that declaration is the property a type on the way down
-/// is being built as.
+/// A receive's line (`TypeFactsRootsReport.receives`) names each answer some route hands the node for the receive's
+/// read: `none` where nothing above declares the label, the forms the nearest declaration binds otherwise, and
+/// `being built` where that declaration is the property a type on the way down is being built as. After each answer
+/// come `provided` where it holds a property the receive accepts, and the route the world keeps as its witness, which
+/// in each rejected graph here is the chain the walk's error names.
 struct SafeDIToolTypeFactsUnvalidatedWorldTests {
 	// MARK: Rejections
 
@@ -47,7 +48,7 @@ struct SafeDIToolTypeFactsUnvalidatedWorldTests {
 		])
 
 		#expect(try observation.firstWorld.receives == [
-			"v3 Child as child: Child: required value(x) accepts [x: X] = none, not provided",
+			"Child as child: Child: required value(x) accepts [x: X] = none (not provided) along world > frame 0 of Root > Root > Child as child: Child",
 		])
 		let error = try #require(observation.error as? SafeDIToolTestError)
 		#expect("\(error.underlyingError)" == """
@@ -67,7 +68,7 @@ struct SafeDIToolTypeFactsUnvalidatedWorldTests {
 		])
 
 		#expect(try observation.firstWorld.receives == [
-			"v6 Child as child: Child: required value(x) accepts [x: X] = value x: Y, x: Y?, not provided",
+			"Child as child: Child: required value(x) accepts [x: X] = value x: Y, x: Y? (not provided) along world > frame 0 of Root > Root > Parent as parent: Parent > Child as child: Child",
 		])
 		let error = try #require(observation.error as? SafeDIToolTestError)
 		#expect("\(error.underlyingError)" == """
@@ -86,7 +87,7 @@ struct SafeDIToolTypeFactsUnvalidatedWorldTests {
 		])
 
 		#expect(try observation.firstWorld.receives == [
-			"v4 B as b: B: required value(a) accepts [a: A] = value a: A, a: A? being built, provided",
+			"B as b: B: required value(a) accepts [a: A] = value a: A, a: A? being built (provided) along world > frame 0 of Root > Root > A as a: A > B as b: B",
 		])
 		let error = try #require(observation.error as? SafeDIToolTestError)
 		#expect("\(error.underlyingError)" == """
@@ -121,8 +122,8 @@ struct SafeDIToolTypeFactsUnvalidatedWorldTests {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func unvalidatedWorld_keepsEachRootsAnswer_whenTwoRootsBindOneLabelInTwoTypesAboveOneRequiredReceive() async throws {
-		// One root's answers never reach another root's nodes: `Child` is one node with a variant per root, answered by
-		// `RootA`'s `x: X` in one and by `RootB`'s `x: Y` in the other, which the walk rejects.
+		// `Child` is one node both roots reach, so its read has two answers: `RootA`'s `x: X`, and `RootB`'s `x: Y`, which
+		// the walk rejects along the same route the world keeps as that answer's witness.
 		let observation = await observe([
 			seamFixtureType(named: "RootA", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let x: X", "@Instantiated let child: Child"]),
 			seamFixtureType(named: "RootB", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let x: Y", "@Instantiated let child: Child"]),
@@ -143,8 +144,7 @@ struct SafeDIToolTypeFactsUnvalidatedWorldTests {
 			"Y as x: Y",
 		])
 		#expect(world.receives == [
-			"v6 Child as child: Child: required value(x) accepts [x: X] = value x: X, x: X?, provided",
-			"v8 Child as child: Child: required value(x) accepts [x: X] = value x: Y, x: Y?, not provided",
+			"Child as child: Child: required value(x) accepts [x: X] = value x: X, x: X? (provided) along world > frame 0 of RootA > RootA > Child as child: Child; value x: Y, x: Y? (not provided) along world > frame 1 of RootB > RootB > Child as child: Child",
 		])
 		let error = try #require(observation.error as? SafeDIToolTestError)
 		#expect("\(error.underlyingError)" == """
@@ -170,8 +170,29 @@ struct SafeDIToolTypeFactsUnvalidatedWorldTests {
 		#expect(observation.error == nil)
 		#expect(world.rootVariants.map { world.nodes[world.variantNodes[$0]].description } == ["RootA", "RootB"])
 		#expect(world.receives == [
-			"v6 Child as child: Child: only if available optionalValue(x) accepts [x: X?, x: X] = optionalValue x: X, x: X?, provided",
-			"v8 Child as child: Child: only if available optionalValue(x) accepts [x: X?, x: X] = optionalValue x: Y, x: Y?, not provided",
+			"Child as child: Child: only if available optionalValue(x) accepts [x: X?, x: X] = optionalValue x: X, x: X? (provided) along world > frame 0 of RootA > RootA > Child as child: Child; optionalValue x: Y, x: Y? (not provided) along world > frame 1 of RootB > RootB > Child as child: Child",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func unvalidatedWorld_holdsOnlyItsRootsAnswer_whenOneOfTwoRootsThatBindOneLabelReachesNode() async throws {
+		// One root's answers never reach another root's nodes: only `RootA` builds `OnlyA`, so `RootB`'s `x: Y` is no
+		// answer of its read, though it is one of `Child`'s, which both roots build.
+		let observation = await observe([
+			seamFixtureType(named: "RootA", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let x: X", "@Instantiated let onlyA: OnlyA", "@Instantiated let child: Child"]),
+			seamFixtureType(named: "RootB", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let x: Y", "@Instantiated let child: Child"]),
+			seamFixtureType(named: "OnlyA", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let x: X?"]),
+			seamFixtureType(named: "Child", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let x: X?"]),
+			seamFixtureType(named: "X", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "Y", isFinalClass: true, declarations: []),
+		])
+
+		let world = try observation.firstWorld
+		#expect(observation.error == nil)
+		#expect(world.receives == [
+			"OnlyA as onlyA: OnlyA: only if available optionalValue(x) accepts [x: X?, x: X] = optionalValue x: X, x: X? (provided) along world > frame 0 of RootA > RootA > OnlyA as onlyA: OnlyA",
+			"Child as child: Child: only if available optionalValue(x) accepts [x: X?, x: X] = optionalValue x: X, x: X? (provided) along world > frame 0 of RootA > RootA > Child as child: Child; optionalValue x: Y, x: Y? (not provided) along world > frame 1 of RootB > RootB > Child as child: Child",
 		])
 	}
 
@@ -197,10 +218,9 @@ struct SafeDIToolTypeFactsUnvalidatedWorldTests {
 			"B",
 		])
 		#expect(world.receives == [
-			"v3 A: required value(x) accepts [x: X] = value x: X, x: X?, provided",
-			"v4 B: required value(x) accepts [x: Y] = value x: X?, x: Y, provided",
-			"v5 Shared as shared: Shared: only if available optionalValue(x) accepts [x: X?, x: X] = optionalValue x: X, x: X?, provided",
-			"v6 Shared as shared: Shared: only if available optionalValue(x) accepts [x: X?, x: X] = optionalValue x: X?, x: Y, provided",
+			"A: required value(x) accepts [x: X] = value x: X, x: X? (provided) along world > frame 0 of A > A",
+			"Shared as shared: Shared: only if available optionalValue(x) accepts [x: X?, x: X] = optionalValue x: X, x: X? (provided) along world > frame 0 of A > A > Shared as shared: Shared; optionalValue x: X?, x: Y (provided) along world > frame 1 of B > B > Shared as shared: Shared",
+			"B: required value(x) accepts [x: Y] = value x: X?, x: Y (provided) along world > frame 1 of B > B",
 		])
 	}
 
@@ -222,7 +242,7 @@ struct SafeDIToolTypeFactsUnvalidatedWorldTests {
 			"One as one: One",
 		])
 		#expect(world.receives == [
-			"v3 One as one: One: required value(x) accepts [x: X] = value x: X, provided",
+			"One as one: One: required value(x) accepts [x: X] = value x: X (provided) along world > frame 0 of First > First > One as one: One",
 		])
 	}
 
@@ -239,8 +259,8 @@ struct SafeDIToolTypeFactsUnvalidatedWorldTests {
 		let receives = try observation.firstWorld.receives
 		#expect(observation.error == nil)
 		#expect(receives == [
-			"v3 One as one: One: required value(x) accepts [x: X] = value x: X, provided",
-			"v3 One as one: One: required value(y) accepts [y: Y] = value y: Y, provided",
+			"One as one: One: required value(x) accepts [x: X] = value x: X (provided) along world > frame 0 of First > First > One as one: One",
+			"One as one: One: required value(y) accepts [y: Y] = value y: Y (provided) along world > frame 0 of First > First > One as one: One",
 		])
 	}
 
@@ -256,13 +276,13 @@ struct SafeDIToolTypeFactsUnvalidatedWorldTests {
 		let receives = try observation.firstWorld.receives
 		#expect(observation.error == nil)
 		#expect(receives == [
-			"v4 B as b: B: required value(aBuilder) accepts [aBuilder: Instantiator<A>] = value aBuilder: Instantiator<A>, aBuilder: Instantiator<A>? being built, provided",
+			"B as b: B: required value(aBuilder) accepts [aBuilder: Instantiator<A>] = value aBuilder: Instantiator<A>, aBuilder: Instantiator<A>? being built (provided) along world > frame 0 of Root > Root > A as aBuilder: Instantiator<A> > B as b: B",
 		])
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func unvalidatedWorld_keysVariantPerAnswer_whenLapIsBuiltAgainBeneathAnotherFormOfItsReceive() async throws {
+	func unvalidatedWorld_keepsBothFormsWithTheLapsRoute_whenLapIsBuiltAgainBeneathAnotherFormOfItsReceive() async throws {
 		let observation = await observe([
 			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let x: X", "@Instantiated let aBuilder: Instantiator<A>"]),
 			seamFixtureType(named: "A", isFinalClass: true, declarations: ["@Instantiated let b: B", "@Received let x: X"]),
@@ -272,12 +292,8 @@ struct SafeDIToolTypeFactsUnvalidatedWorldTests {
 
 		let world = try observation.firstWorld
 		#expect(observation.error == nil)
-		#expect(variantCounts(in: world) == [
-			"A as aBuilder: Instantiator<A>: 2",
-		])
 		#expect(world.receives == [
-			"v4 A as aBuilder: Instantiator<A>: required value(x) accepts [x: X] = value x: X, x: X?, provided",
-			"v7 A as aBuilder: Instantiator<A>: required value(x) accepts [x: X] = value x: LazilyInstantiated<X>, x: LazilyInstantiated<X>?, x: X, x: X?, provided",
+			"A as aBuilder: Instantiator<A>: required value(x) accepts [x: X] = value x: X, x: X? (provided) along world > frame 0 of Root > Root > A as aBuilder: Instantiator<A>; value x: LazilyInstantiated<X>, x: LazilyInstantiated<X>?, x: X, x: X? (provided) along world > frame 0 of Root > Root > A as aBuilder: Instantiator<A> > B as b: B > A as aBuilder: Instantiator<A>",
 		])
 	}
 
@@ -293,7 +309,7 @@ struct SafeDIToolTypeFactsUnvalidatedWorldTests {
 		let receives = try observation.firstWorld.receives
 		#expect(observation.error == nil)
 		#expect(receives == [
-			"v3 Child as child: Child: only if available optionalValue(x) accepts [x: X?, x: X] = none, not provided",
+			"Child as child: Child: only if available optionalValue(x) accepts [x: X?, x: X] = none (not provided) along world > frame 0 of Root > Root > Child as child: Child",
 		])
 	}
 
@@ -313,8 +329,8 @@ struct SafeDIToolTypeFactsUnvalidatedWorldTests {
 		let receives = try observation.firstWorld.receives
 		#expect(observation.error == nil)
 		#expect(receives == [
-			"v4 Child as child: Child: required value(x) through renamed: X accepts [x: X] = value x: X, x: X?, provided",
-			"v4 Child as child: Child: only if available optionalValue(y) through other: Y? accepts [y: Y, y: Y?] = none, not provided",
+			"Child as child: Child: required value(x) through renamed: X accepts [x: X] = value x: X, x: X? (provided) along world > frame 0 of Root > Root > Child as child: Child",
+			"Child as child: Child: only if available optionalValue(y) through other: Y? accepts [y: Y, y: Y?] = none (not provided) along world > frame 0 of Root > Root > Child as child: Child",
 		])
 	}
 
@@ -347,104 +363,41 @@ struct SafeDIToolTypeFactsUnvalidatedWorldTests {
 		}
 	}
 
-	// MARK: Variants with answers kept distinct
+	// MARK: Growth
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func unvalidatedWorld_keysVariantPerDistinctAnswerVector_whenAlternatingParentsDeclareTokenOnOneSide() async throws {
-		// rows.py's alternating row with the identity key: a reader's answers differ in every layer whose left parent is
-		// on its path, so its variants are the paths.
-		let small = try await variantCounts(in: observe(Self.alternatingRow(layerCount: 4)).firstWorld)
-		let large = try await variantCounts(in: observe(Self.alternatingRow(layerCount: 8)).firstWorld)
+	func unvalidatedWorld_holdsAnswersInProportionToItsReads_whenAlternatingParentsDeclareTokenOnOneSide() async throws {
+		// rows.py's alternating row: every route gives the reader another vector of answers, 2 to the layers of them, and
+		// each of its reads has two answers, the token and `none`. Sizes 4 and 8 only: at 16 layers the generator, which
+		// builds the reader once per vector after validation, does not finish in a quarter of an hour.
+		let small = try await growth(of: observe(Self.alternatingRow(layerCount: 4)).firstWorld)
+		let medium = try await growth(of: observe(Self.alternatingRow(layerCount: 8)).firstWorld)
 
-		#expect(small == [
-			"Left1 as left1Builder: Instantiator<Left1>: 2",
-			"Left2 as left2Builder: Instantiator<Left2>: 4",
-			"Left3 as left3Builder: Instantiator<Left3>: 8",
-			"Reader as reader: Reader: 16",
-			"Right3 as right3Builder: Instantiator<Right3>: 8",
-			"Right2 as right2Builder: Instantiator<Right2>: 4",
-			"Right1 as right1Builder: Instantiator<Right1>: 2",
-		])
-		#expect(large == [
-			"Left1 as left1Builder: Instantiator<Left1>: 2",
-			"Left2 as left2Builder: Instantiator<Left2>: 4",
-			"Left3 as left3Builder: Instantiator<Left3>: 8",
-			"Left4 as left4Builder: Instantiator<Left4>: 16",
-			"Left5 as left5Builder: Instantiator<Left5>: 32",
-			"Left6 as left6Builder: Instantiator<Left6>: 64",
-			"Left7 as left7Builder: Instantiator<Left7>: 128",
-			"Reader as reader: Reader: 256",
-			"Right7 as right7Builder: Instantiator<Right7>: 128",
-			"Right6 as right6Builder: Instantiator<Right6>: 64",
-			"Right5 as right5Builder: Instantiator<Right5>: 32",
-			"Right4 as right4Builder: Instantiator<Right4>: 16",
-			"Right3 as right3Builder: Instantiator<Right3>: 8",
-			"Right2 as right2Builder: Instantiator<Right2>: 4",
-			"Right1 as right1Builder: Instantiator<Right1>: 2",
-		])
+		#expect(small == "variants beyond one per node [] nodes 16 edges 22 reads 85 answers 117 largest set 2 steps 246")
+		#expect(medium == "variants beyond one per node [] nodes 28 edges 42 reads 297 answers 425 largest set 2 steps 970")
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func unvalidatedWorld_keysVariantPerDistinctAnswerVector_whenReaderReceivesEveryLayersBuilderStillBeingBuiltOnHalfThePaths() async throws {
-		let small = try await variantCounts(in: observe(Self.beingBuiltRow(layerCount: 4)).firstWorld)
-		let large = try await variantCounts(in: observe(Self.beingBuiltRow(layerCount: 8)).firstWorld)
+	func unvalidatedWorld_holdsAnswersInProportionToItsReads_whenReaderReceivesEveryLayersBuilderStillBeingBuiltOnHalfTheRoutes() async throws {
+		let small = try await growth(of: observe(Self.beingBuiltRow(layerCount: 4)).firstWorld)
+		let medium = try await growth(of: observe(Self.beingBuiltRow(layerCount: 8)).firstWorld)
 
-		#expect(small == [
-			"Left1 as left1Builder: Instantiator<Left1>: 2",
-			"Left2 as left2Builder: Instantiator<Left2>: 4",
-			"Left3 as left3Builder: Instantiator<Left3>: 8",
-			"Reader as reader: Reader: 16",
-			"Right3 as right3Builder: Instantiator<Right3>: 8",
-			"Right2 as right2Builder: Instantiator<Right2>: 4",
-			"Right1 as right1Builder: Instantiator<Right1>: 2",
-		])
-		#expect(large == [
-			"Left1 as left1Builder: Instantiator<Left1>: 2",
-			"Left2 as left2Builder: Instantiator<Left2>: 4",
-			"Left3 as left3Builder: Instantiator<Left3>: 8",
-			"Left4 as left4Builder: Instantiator<Left4>: 16",
-			"Left5 as left5Builder: Instantiator<Left5>: 32",
-			"Left6 as left6Builder: Instantiator<Left6>: 64",
-			"Left7 as left7Builder: Instantiator<Left7>: 128",
-			"Reader as reader: Reader: 256",
-			"Right7 as right7Builder: Instantiator<Right7>: 128",
-			"Right6 as right6Builder: Instantiator<Right6>: 64",
-			"Right5 as right5Builder: Instantiator<Right5>: 32",
-			"Right4 as right4Builder: Instantiator<Right4>: 16",
-			"Right3 as right3Builder: Instantiator<Right3>: 8",
-			"Right2 as right2Builder: Instantiator<Right2>: 4",
-			"Right1 as right1Builder: Instantiator<Right1>: 2",
-		])
+		#expect(small == "variants beyond one per node [] nodes 12 edges 18 reads 29 answers 45 largest set 2 steps 80")
+		#expect(medium == "variants beyond one per node [] nodes 20 edges 34 reads 89 answers 153 largest set 2 steps 288")
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func unvalidatedWorld_keysVariantPerDistinctAnswerVector_whenHubsLeafReceivesEveryMembersLabelOnlyIfAvailable() async throws {
-		let small = try await variantCounts(in: observe(Self.hubMembersRow(memberCount: 4)).firstWorld)
-		let large = try await variantCounts(in: observe(Self.hubMembersRow(memberCount: 8)).firstWorld)
+	func unvalidatedWorld_holdsAnswersInProportionToItsReads_whenHubsLeafReceivesEveryMembersLabelOnlyIfAvailable() async throws {
+		let small = try await growth(of: observe(Self.hubMembersRow(memberCount: 4)).firstWorld)
+		let medium = try await growth(of: observe(Self.hubMembersRow(memberCount: 8)).firstWorld)
+		let large = try await growth(of: observe(Self.hubMembersRow(memberCount: 16)).firstWorld)
 
-		#expect(small == [
-			"Hub as hubBuilder: Instantiator<Hub>: 16",
-			"Leaf as leaf: Leaf: 16",
-			"Member0 as member0Builder: Instantiator<Member0>: 8",
-			"Member1 as member1Builder: Instantiator<Member1>: 8",
-			"Member2 as member2Builder: Instantiator<Member2>: 8",
-			"Member3 as member3Builder: Instantiator<Member3>: 8",
-		])
-		#expect(large == [
-			"Hub as hubBuilder: Instantiator<Hub>: 256",
-			"Leaf as leaf: Leaf: 256",
-			"Member0 as member0Builder: Instantiator<Member0>: 128",
-			"Member1 as member1Builder: Instantiator<Member1>: 128",
-			"Member2 as member2Builder: Instantiator<Member2>: 128",
-			"Member3 as member3Builder: Instantiator<Member3>: 128",
-			"Member4 as member4Builder: Instantiator<Member4>: 128",
-			"Member5 as member5Builder: Instantiator<Member5>: 128",
-			"Member6 as member6Builder: Instantiator<Member6>: 128",
-			"Member7 as member7Builder: Instantiator<Member7>: 128",
-		])
+		#expect(small == "variants beyond one per node [] nodes 13 edges 16 reads 58 answers 98 largest set 2 steps 227")
+		#expect(medium == "variants beyond one per node [] nodes 21 edges 28 reads 178 answers 322 largest set 2 steps 835")
+		#expect(large == "variants beyond one per node [] nodes 37 edges 52 reads 610 answers 1154 largest set 2 steps 3203")
 	}
 
 	// MARK: Agreement with the validated world
@@ -514,9 +467,9 @@ struct SafeDIToolTypeFactsUnvalidatedWorldTests {
 		let large = try await observe(Self.hubMembersRow(memberCount: 8)).firstWorld
 
 		#expect(small.internedForWorldCount == 12)
-		#expect(small.columnElementCount == 4_278)
+		#expect(small.columnElementCount == 1_166)
 		#expect(large.internedForWorldCount == 20)
-		#expect(large.columnElementCount == 200_382)
+		#expect(large.columnElementCount == 3_190)
 	}
 
 	// MARK: Private
@@ -580,6 +533,13 @@ struct SafeDIToolTypeFactsUnvalidatedWorldTests {
 		seamFixtureType(named: name, isFinalClass: true, declarations: declarations).replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(generateMock: true)\n")
 	}
 
+	/// What a row's world holds and what its answer sets cost, as one line: the nodes with more than one variant, then
+	/// the reads from above, the answers of their sets, the answers of the largest set, and the times the fold took an
+	/// answer to an edge.
+	private func growth(of world: TypeFactsRootsReport) -> String {
+		"variants beyond one per node \(variantCounts(in: world)) nodes \(world.nodes.count) edges \(world.edgeCount) reads \(world.readCount) answers \(world.answerCount) largest set \(world.largestAnswerSetCount) steps \(world.answerStepCount)"
+	}
+
 	/// A line per node with more than one variant, `<node>: <count>`, in node order.
 	private func variantCounts(in world: TypeFactsRootsReport) -> [String] {
 		zip(world.nodes, world.variantCountsByNode).filter { $0.1 != 1 }.map { "\($0.0.description): \($0.1)" }
@@ -603,7 +563,11 @@ struct SafeDIToolTypeFactsUnvalidatedWorldTests {
 		var thrownError: (any Error)?
 		do {
 			_ = try await ConstructionInternerOrder.applying(order) {
-				try await ValidationWalkObservation.$unvalidatedWorld.withValue({ worldContinuation.yield($0) }) {
+				try await ValidationWalkObservation.$observer.withValue({ observation in
+					if case let .unvalidatedWorld(world) = observation {
+						worldContinuation.yield(world)
+					}
+				}) {
 					try await ConstructionMemoOracle.$observer.withValue({ _, _, report in reportContinuation.yield(report) }) {
 						var filesToDelete = [URL]()
 						defer {

@@ -318,7 +318,8 @@ extension TypeFactsGraph: TypeFactsWorld {
 	}
 
 	/// Filled in a world of several roots (`init(roots:intern:)`); empty in a world of one root until the table-side
-	/// columns fill it there.
+	/// columns fill it there. The two fills must agree for a root both worlds hold: when the one-root fill lands, the
+	/// receives and their accepted properties join what `TypeFactsChecks.disagreements(ofRootAt:in:with:)` compares.
 	func receives(of declaration: DeclarationID) -> ArraySlice<TypeFactsReceive> {
 		guard !receiveStarts.isEmpty else {
 			return []

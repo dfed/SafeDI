@@ -35,7 +35,9 @@ struct TypeFactsDeclaration: Hashable, Sendable {
 		let isFill: Bool
 		/// Which node of a world of several roots stands for no declaration (`TypeFactsGraph.init(roots:intern:)`): the
 		/// position of the root a frame gives its values to, `worldRootFrame` for the node above every frame, and
-		/// `noFrame` for a declaration.
+		/// `noFrame` for a declaration. It is on every declaration's key, in a world of one root too, where it is always
+		/// `noFrame`: four bytes a node of every world, which is the cost to weigh before a build that is no test's
+		/// makes worlds.
 		let frame: Int32
 	}
 
@@ -156,6 +158,7 @@ struct TypeFactsGraph: Sendable {
 		answerForms = []
 		formOffsets = []
 		formColumn = []
+		answerSets = nil
 		receiveStarts = []
 		receiveEnds = []
 		receiveColumn = []
@@ -253,6 +256,17 @@ struct TypeFactsGraph: Sendable {
 	let formOffsets: [Int32]
 	/// The properties each run of forms holds, in `Property` order, which no ID's order decides.
 	let formColumn: [PropertyID]
+
+	/// What answers each read of each node on some route to it, in a world of several roots; `nil` in a world of one
+	/// root, whose variants key by their answers.
+	let answerSets: TypeFactsAnswerSets?
+
+	/// The answers some route hands the node for the read at `position` among its reads from above, in a world of
+	/// several roots: `TypeFactsAnswerSets.none` where nothing above answers it on some route, and each declaration's
+	/// answer otherwise. Empty in a world of one root.
+	func answers(ofReadAt position: Int, of declaration: DeclarationID) -> ArraySlice<AnswerID> {
+		answerSets?.answers(ofReadAt: Int(readOffsets[Int(declaration)]) + position) ?? []
+	}
 
 	/// The receives each node's own type makes, in declaration order, as a run of `receiveColumn` from `receiveStarts` to
 	/// `receiveEnds` (every node of one record shares its run), and the properties that fulfill each, as runs of
@@ -457,9 +471,10 @@ struct TypeFactsGraph: Sendable {
 	/// What the graph's folds hold, beside the nodes it keeps for text: the 32-bit elements of its columns (each 64-bit
 	/// word of a bit set counts two), which a test counts per node and per edge.
 	var columnElementCount: Int {
-		graph.columnElementCount + instantiatedEdgeCounts.count + constructions.count + readTable.count + 2 * reads.rows.wordCount
+		let answerSetElementCount = answerSets?.columnElementCount ?? 0
+		return graph.columnElementCount + instantiatedEdgeCounts.count + constructions.count + readTable.count + 2 * reads.rows.wordCount
 			+ cycleIDs.count + readColumn.count + readOffsets.count + labelColumn.count + labelOffsets.count + answerKeys.count + variants.columnElementCount
-			+ rootVariants.count + answerForms.count + formOffsets.count + formColumn.count + receiveStarts.count + receiveEnds.count + 5 * receiveColumn.count + acceptedColumn.count
+			+ rootVariants.count + answerForms.count + formOffsets.count + formColumn.count + receiveStarts.count + receiveEnds.count + 5 * receiveColumn.count + acceptedColumn.count + answerSetElementCount
 	}
 
 	/// The graph as text, a line per node: its position, its declaration, `cycle` where it is on one, what its subtree reads

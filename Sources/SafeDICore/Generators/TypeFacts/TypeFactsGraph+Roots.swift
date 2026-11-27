@@ -35,14 +35,16 @@ extension TypeFactsGraph {
 	///
 	/// The graph keeps one root. Node 0 stands for no declaration and has an edge to one frame per root, in the roots'
 	/// order; a frame binds exactly what its root is given and has one edge, to its root's declaration. A frame hides
-	/// every label, so no answer passes from one root's frame to another root's nodes: a declaration two roots reach has a
-	/// variant per vector of answers, one per root where their answers differ.
+	/// every label, so no answer passes from one root's frame to another root's nodes: a declaration only one root
+	/// reaches has that root's answers alone, and one two roots reach has both roots'.
 	///
 	/// An answer is interned by value: the channel that asks, the forms the nearest declaration provides, and whether
-	/// that declaration is still being built at the edge. A variant keys by the answers themselves, with neither
-	/// parameter rule applied: validation judges an answer, where generation only passes it on. The forms and the
-	/// properties that fulfill a receive are named by `intern`'s IDs, in `Property` order, so no ID's value orders
-	/// anything.
+	/// that declaration is still being built at the edge. Validation asks whether any route fails, which is a join over
+	/// the routes, so the world holds each read's answers as a set per node (`TypeFactsAnswerSets`,
+	/// `answers(ofReadAt:of:)`), never a variant per vector of answers, whose count follows the routes. Every read
+	/// therefore keys its variant as a parameter does (`optionalParameterKey`), alike whatever it is answered, and each
+	/// node has one variant per family. The forms and the properties that fulfill a receive are named by `intern`'s IDs,
+	/// in `Property` order, so no ID's value orders anything.
 	///
 	/// - Parameter intern: The run's ID of a property, given now where the run has none.
 	/// - Returns: `nil` when there is no root, and so no world.
@@ -98,7 +100,7 @@ extension TypeFactsGraph {
 		}
 		let reads = ReadsFromAbove(graph: graph, own: own, hidden: hidden)
 		let readColumns = ReadColumns(of: reads, nodeCount: graph.nodes.count, readTable: readTable, labelCount: labels.labels.count)
-		let answers = Self.answersByValue(of: graph, roots: roots, reads: reads, readTable: readTable, labels: labels, intern: intern)
+		let answers = Self.answersByValue(of: graph, roots: roots, reads: reads, readTable: readTable, readColumns: readColumns, labels: labels, intern: intern)
 		let receives = Self.receiveColumns(of: graph, readInterner: &readInterner, labels: &labels, intern: intern)
 		self.graph = graph
 		self.instantiatedEdgeCounts = instantiatedEdgeCounts
@@ -121,6 +123,7 @@ extension TypeFactsGraph {
 		answerForms = answers.forms
 		formOffsets = answers.formOffsets
 		formColumn = answers.formColumn
+		answerSets = answers.sets
 		receiveStarts = receives.starts
 		receiveEnds = receives.ends
 		receiveColumn = receives.receives
@@ -142,6 +145,7 @@ extension TypeFactsGraph {
 
 	private struct AnswersByValue {
 		let variants: TypeFactsVariants
+		let sets: TypeFactsAnswerSets
 		let isBeingBuilt: [Bool]
 		let texts: [String]
 		let forms: [Int32]
@@ -151,12 +155,14 @@ extension TypeFactsGraph {
 
 	/// What answers each read at each edge, by value and by ID: a node answers a read of a label it declares with the
 	/// forms its declaration provides, being built where the edge builds that declaration, and a frame answers a read of
-	/// a label its root is given with the given properties of that label. Every variant keys by its answers as they are.
+	/// a label its root is given with the given properties of that label. Each read's answers over every route are a set
+	/// per node; no variant keys by an answer.
 	private static func answersByValue(
 		of graph: OrderedGraph<TypeFactsDeclaration>,
 		roots: [TypeFactsRoot],
 		reads: ReadsFromAbove,
 		readTable: [Read],
+		readColumns: ReadColumns,
 		labels: LabelInterner,
 		intern: (Property) -> PropertyID,
 	) -> AnswersByValue {
@@ -220,32 +226,38 @@ extension TypeFactsGraph {
 		}
 		var answerIDByValue = [AnswerValue: Int32]()
 		var answerValues = [AnswerValue]()
+		/// The answer the source of `edge` gives the read, or `nil` where it declares nothing of the read's label.
+		func answer(atEdge edge: Int, to readID: Int32) -> Int32? {
+			let read = readTable[Int(readID)]
+			guard let forms = formsByLabelByNode[Int(sourceByEdge[edge])][read.label] else {
+				return nil
+			}
+			let isBeingBuilt = graph.nodes[Int(edgeTargets[edge])].property.map { labels.existingID(of: $0.label) == read.label } ?? false
+			let value = AnswerValue(channel: read.channel, forms: forms, isBeingBuilt: isBeingBuilt)
+			if let id = answerIDByValue[value] {
+				return id
+			} else {
+				let id = Int32(answerValues.count)
+				answerIDByValue[value] = id
+				answerValues.append(value)
+				return id
+			}
+		}
 		let variants = TypeFactsVariants(
 			graph: graph,
 			reads: reads,
 			rootAnswer: { _ in nil },
 			binding: { edge, readID in
-				let read = readTable[Int(readID)]
-				let node = sourceByEdge[edge]
-				guard let forms = formsByLabelByNode[Int(node)][read.label] else {
-					return nil
-				}
-				let isBeingBuilt = graph.nodes[Int(edgeTargets[edge])].property.map { labels.existingID(of: $0.label) == read.label } ?? false
-				let value = AnswerValue(channel: read.channel, forms: forms, isBeingBuilt: isBeingBuilt)
-				if let id = answerIDByValue[value] {
-					return VariantBinding(answer: id, declaration: node)
-				} else {
-					let id = Int32(answerValues.count)
-					answerIDByValue[value] = id
-					answerValues.append(value)
-					return VariantBinding(answer: id, declaration: node)
-				}
+				answer(atEdge: edge, to: readID).map { VariantBinding(answer: $0, declaration: sourceByEdge[edge]) }
 			},
 			family: { _, family in family },
-			key: { _, answer in answer },
+			// Validation judges every answer of a read's set, so no answer picks a body: each read keys as a parameter.
+			key: { _, _ in optionalParameterKey },
 		)
+		let sets = TypeFactsAnswerSets(graph: graph, readOffsets: readColumns.readOffsets, readColumn: readColumns.readColumn, binding: answer)
 		return AnswersByValue(
 			variants: variants,
+			sets: sets,
 			isBeingBuilt: answerValues.map(\.isBeingBuilt),
 			texts: answerValues.map { "\($0.channel.name) \(formTexts[Int($0.forms)])\($0.isBeingBuilt ? " being built" : "")" },
 			forms: answerValues.map(\.forms),

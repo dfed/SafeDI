@@ -32,14 +32,13 @@ public enum ValidationWalkObservation: Sendable {
 	/// The walk built the key of a scope's subtree, to skip it or to remember its walk. A scope that reaches a cycle of
 	/// instantiators stops being keyed after a run of keys no remembered walk equals.
 	case keyedSubtree
+	/// A walk is about to validate its roots, whose world of per-type facts, built before any of them is validated
+	/// (`TypeFactsGraph.init(roots:intern:)`), this is; `nil` where the walk has no root. Built only while an observer
+	/// is set, so only on a test's path: the tool builds no such world yet.
+	case unvalidatedWorld(TypeFactsRootsReport?)
 
 	/// Called with what the walk did, when set: by the tests, never by the tool.
 	@TaskLocal public static var observer: (@Sendable (ValidationWalkObservation) -> Void)?
-
-	/// Called, when set, before each walk with the world of per-type facts of the roots the walk is about to validate
-	/// (`TypeFactsGraph.init(roots:intern:)`), or `nil` where it has no root: by the tests, never by the tool, which builds
-	/// no such world yet.
-	@TaskLocal public static var unvalidatedWorld: (@Sendable (TypeFactsRootsReport?) -> Void)?
 
 	/// Whether the walk skips a subtree whose walk along an equal context completed and found nothing. `false` only where a
 	/// test, or the graph fuzzer's oracle, compares what the walk reports with and without the skip.

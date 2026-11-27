@@ -46,26 +46,33 @@ public struct TypeFactsRootsReport: Sendable {
 		variantNodes = (0..<graph.variantCount).map { Int(graph.declaration(of: VariantID($0))) }
 		variantCalls = (0..<graph.variantCount).map { graph.calls(of: VariantID($0)).map(Int.init) }
 		var receives = [String]()
-		for variant in 0..<graph.variantCount {
-			let declaration = graph.declaration(of: VariantID(variant))
+		for index in graph.graph.nodes.indices where !graph.isFrame(index) {
+			let declaration = DeclarationID(index)
 			let reads = graph.reads(of: declaration)
-			let keys = graph.keys(of: VariantID(variant))
-			let ownReceives = graph.isFrame(Int(declaration)) ? [] : TypeFactsGraph.ownReceives(of: graph.graph.nodes[Int(declaration)].scope.identity)
+			let ownReceives = TypeFactsGraph.ownReceives(of: graph.graph.nodes[index].scope.identity)
 			for (receive, ownReceive) in zip(graph.receives(of: declaration), ownReceives) {
-				// A node's own reads are among its subtree's reads from above, which its keys are parallel to.
-				let answer = reads.firstIndex(of: receive.read).map { keys[keys.startIndex + ($0 - reads.startIndex)] } ?? -1
-				var line = "v\(variant) \(graph.description(ofNode: Int(declaration))): \(receive.isRequired ? "required" : "only if available") \(graph.readDescription(receive.read))"
+				var line = "\(graph.description(ofNode: index)): \(receive.isRequired ? "required" : "only if available") \(graph.readDescription(receive.read))"
 				if let alias = ownReceive.alias {
 					line += " through \(alias.asSource)"
 				}
-				line += " accepts [\(TypeFactsGraph.acceptedProperties(of: ownReceive).map(\.asSource).joined(separator: ", "))]"
-				line += " = \(answer >= 0 ? graph.answerTexts[Int(answer)] : "none")"
-				line += graph.acceptedProperties(of: receive).contains { graph.provides(answer, $0) } ? ", provided" : ", not provided"
+				line += " accepts [\(TypeFactsGraph.acceptedProperties(of: ownReceive).map(\.asSource).joined(separator: ", "))] ="
+				// A node's own reads are among its subtree's reads from above, which its answer sets are parallel to.
+				let answers = reads.firstIndex(of: receive.read).map { graph.answers(ofReadAt: $0 - reads.startIndex, of: declaration) } ?? []
+				for (position, answer) in zip(answers.indices, answers) {
+					let isProvided = graph.acceptedProperties(of: receive).contains { graph.provides(answer, $0) }
+					let route = graph.answerSets?.firstRoute(toAnswerAt: position, in: graph.graph).map(graph.description(ofNode:)) ?? []
+					line += "\(position == answers.startIndex ? "" : ";") \(answer >= 0 ? graph.answerTexts[Int(answer)] : "none") (\(isProvided ? "provided" : "not provided")) along \(route.joined(separator: " > "))"
+				}
 				receives.append(line)
 			}
 		}
 		self.receives = receives
 		columnElementCount = graph.columnElementCount
+		readCount = graph.readColumn.count
+		edgeCount = graph.graph.edgeCount
+		answerCount = graph.answerSets?.answers.count ?? 0
+		largestAnswerSetCount = graph.answerSets.map { sets in sets.offsets.indices.dropLast().map { sets.answers(ofReadAt: $0).count }.max() ?? 0 } ?? 0
+		answerStepCount = graph.answerSets?.stepCount ?? 0
 		internedForWorldCount = internedCountAfter - internedCountBefore
 	}
 
@@ -78,7 +85,7 @@ public struct TypeFactsRootsReport: Sendable {
 	/// Each node as `TypeFactsReport` describes one, by position: node 0, the frames and the declarations. A frame's
 	/// one edge leads to its root's declaration, and nothing above a frame is read.
 	public let nodes: [TypeFactsReport.Node]
-	/// How many variants each node has, by node position: one per vector of answers its subtree's reads are given.
+	/// How many variants each node has, by node position: one per family it is built in, whatever its reads are answered.
 	public let variantCountsByNode: [Int]
 	/// The variant each root's body is, in the roots' order.
 	public let rootVariants: [Int]
@@ -86,10 +93,22 @@ public struct TypeFactsRootsReport: Sendable {
 	public let variantNodes: [Int]
 	/// The variant each edge of a variant's node calls, in edge order.
 	public let variantCalls: [[Int]]
-	/// A line per receive of each variant's own type, in variant then declaration order: the variant, its declaration,
-	/// the receive's read, the alias it is read through, the properties that fulfill it, its answer, and whether the
-	/// answer provides one of them. Every name is spelled, so the lines are the same whatever order the run interns in.
+	/// A line per receive of each node's own type, in node then declaration order: the declaration, the receive's read,
+	/// the alias it is read through, the properties that fulfill it, and each answer some route hands the node for it,
+	/// with whether that answer provides one of them and the route the world keeps as the answer's witness
+	/// (`TypeFactsAnswerSets.firstRoute(toAnswerAt:in:)`). Every name is spelled, so the lines are the same whatever
+	/// order the run interns in.
 	public let receives: [String]
+	/// How many reads from above the world's nodes hold together: a read of each node whose subtree makes it.
+	public let readCount: Int
+	public let edgeCount: Int
+	/// How many answers the world's answer sets hold together: for each read of each node, each answer some route hands
+	/// it.
+	public let answerCount: Int
+	/// How many answers the largest set holds: the most answers the routes to one node hand one of its reads.
+	public let largestAnswerSetCount: Int
+	/// How many times the answer sets' fold took an answer to an edge.
+	public let answerStepCount: Int
 	/// The 32-bit elements of the world's columns.
 	public let columnElementCount: Int
 	/// How many values the world's build interned that the run did not hold: the forms and accepted properties no

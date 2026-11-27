@@ -26,21 +26,24 @@ extension DependencyTreeGenerator {
 	/// map. A frame is given what the walk makes receivable at its root from outside the tree: what a mock root binds
 	/// and what a generated seam's initializer takes.
 	///
-	/// Only a test asks for it (`ValidationWalkObservation.unvalidatedWorld`): the freeze here is one more than the run
-	/// makes, so the tables' observer is not told of it, and what the world interns beyond the records is counted as
-	/// `ConstructionInternerMiss.internedForTypeFacts`.
+	/// Only a test's path asks for it (`ValidationWalkObservation.unvalidatedWorld`, while a walk observer is set): the
+	/// freeze here is one more than the run makes, so the tables' observer, a task-local that exists already and is
+	/// bound here on that path alone, is not told of it. The freeze and the world intern in a copy of the run's ID
+	/// space, so observing a walk gives the run no ID it would not have had, and what the world interns beyond the
+	/// records is counted there as `ConstructionInternerMiss.internedForTypeFacts`.
 	func unvalidatedWorldReport(ofRootScopes rootScopes: [ValidatedRootScope], typeDescriptionToScopeMap: [TypeDescription: Scope]) -> TypeFactsRootsReport? {
+		let worldSpace = ConstructionInternerSpace(copying: internerSpace.copyOfBuilder())
 		let frozenScopeMap = ScopeTableObservation.$observer.withValue(nil) {
-			FrozenScopeMap(freezing: typeDescriptionToScopeMap.lazy.map { (key: $0.key, scope: $0.value) }, interningIn: internerSpace)
+			FrozenScopeMap(freezing: typeDescriptionToScopeMap.lazy.map { (key: $0.key, scope: $0.value) }, interningIn: worldSpace)
 		}
 		let roots = rootScopes.map { rootScope in
 			let (table, record) = frozenScopeMap.freezing(rootScope: rootScope.scope)
 			return TypeFactsRoot(scope: ConstructionScope(table: table, record: record), givenProperties: rootScope.boundProperties.union(rootScope.receivedFromOutside).sorted())
 		}
-		let internedCountBefore = internerSpace.internedCount
-		let graph = internerSpace.interning(countingMissesIn: .internedForTypeFacts) {
-			TypeFactsGraph(roots: roots, intern: internerSpace.intern)
+		let internedCountBefore = worldSpace.internedCount
+		let graph = worldSpace.interning(countingMissesIn: .internedForTypeFacts) {
+			TypeFactsGraph(roots: roots, intern: worldSpace.intern)
 		}
-		return graph.map { TypeFactsRootsReport($0, internedCountBefore: internedCountBefore, internedCountAfter: internerSpace.internedCount) }
+		return graph.map { TypeFactsRootsReport($0, internedCountBefore: internedCountBefore, internedCountAfter: worldSpace.internedCount) }
 	}
 }

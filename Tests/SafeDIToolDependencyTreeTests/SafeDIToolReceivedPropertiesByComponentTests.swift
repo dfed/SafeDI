@@ -355,7 +355,8 @@ struct SafeDIToolReceivedPropertiesByComponentTests: ~Copyable {
 				collectedScopeCount += 1
 			case .validatedScope,
 			     .skippedCleanSubtree,
-			     .keyedSubtree:
+			     .keyedSubtree,
+			     .unvalidatedWorld:
 				break
 			}
 		}
@@ -504,7 +505,8 @@ struct SafeDIToolReceivedPropertiesByComponentTests: ~Copyable {
 				collectedScopeCount += 1
 			case .validatedScope,
 			     .skippedCleanSubtree,
-			     .keyedSubtree:
+			     .keyedSubtree,
+			     .unvalidatedWorld:
 				break
 			}
 		}
