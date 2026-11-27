@@ -22,24 +22,31 @@ extension NodeRecords {
 	/// The claim of `declaration` in a mock root's world, and `nil` in a production root's: of kind `mockConstruction`, for a
 	/// node stage 1 makes in a production root's world (`refusalsOfBuiltByInitializer(_:in:)`) and for one its type's
 	/// hand-written mock builds, whose override is the field of its parent's configuration under the node's own label,
-	/// holding each refusal of a node whose override a later stage reads. A node stage 1 refuses for anything this kind
-	/// does not make is left unclaimed, so its first refusal is stage 1's.
+	/// holding each refusal of a node whose override a later stage reads. A node stage 1 refuses for anything a mock kind
+	/// does not make is left unclaimed, so its first refusal is stage 1's. Each mock kind adds its term to `discharges`, the
+	/// stage-1 refusals of the node its record makes, and the node is of the kind whose term discharged one.
 	static func mockConstructionClaim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
 		guard world.isMockWorld else { return nil }
 		// A hand-written mock builds its type with or without an initializer: a fake has none.
 		let buildsWithHandWrittenMock = world.construction(of: declaration) == .handWrittenMock
+		let erasedDischarges = mockErasedDischarges(of: declaration, in: world)
 		var discharges: Set<NodeRecordRefusal> = buildsWithHandWrittenMock ? [.construction, .noInitializer] : []
 		discharges.formUnion(mockOnlyIfAvailableDischarges(of: declaration))
+		discharges.formUnion(erasedDischarges)
 		// A node built in a `@Sendable` function of its own reads its override from a local bound before the function
 		// (`NodeRecords+MockSendable.swift`).
 		discharges.formUnion(mockSendableDischarges(of: declaration, in: world))
 		guard refusalsOfBuiltByInitializer(declaration, in: world).allSatisfy(discharges.contains) else { return nil }
+		// A `Sendable` wrapper erased to its property's type is made as `mockErased` makes an erased node: stage 1 refuses it
+		// as `sendable` alone.
+		let kind: NodeRecordKind = erasedDischarges.isEmpty && !isErasedSendableWrapper(declaration, in: world) ? .mockConstruction : .mockErased
 		var refusals = mockSendableRefusals(of: declaration, in: world)
 		let instantiable = world.scope(of: declaration).instantiable
-		// An actor's arguments are sent to it, and each node built for one reads its override before its function.
-		if instantiable.declarationType == .actorType {
-			refusals.append(.mockActor)
-		}
+		// An actor is claimed as any node is. The closure that overrides it takes each argument `sending`
+		// (`MockLowering.BuilderParameters`), and what it is sent is built by functions that are each handed their
+		// configuration, the `Sendable` form beneath an actor (`ScopeGenerator.sendableConfigurationTypeNames(ofMockRootOf:)`),
+		// so none captures `mock()`'s overrides, as the walk's read of them into a local before each function keeps its own
+		// from doing.
 		// The root's own such parameters are parameters of `mock()`, which the root's lowering judges
 		// (`ScopeGenerator.nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:)`). A type's configuration takes the
 		// defaults of its initializer and of its hand-written mock, whichever of the two builds a node.
@@ -58,7 +65,7 @@ extension NodeRecords {
 			refusals.append(.mockOverrideNotParentField)
 			break
 		}
-		return NodeRecordClaim(kind: .mockConstruction, discharges: discharges, refusals: refusals)
+		return NodeRecordClaim(kind: kind, discharges: discharges, refusals: refusals)
 	}
 
 	/// Whether a call of `construction` a mock writes passes a value none of `dependencies` fulfills, which the node's

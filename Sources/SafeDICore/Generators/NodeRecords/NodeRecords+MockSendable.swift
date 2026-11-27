@@ -35,17 +35,13 @@ extension NodeRecords {
 		isBuiltInSendableFunction(declaration, in: world) ? [.sendable] : []
 	}
 
-	/// The shapes of a node built in a `@Sendable` function this kind does not make yet. A value erased to its property's
-	/// type is refused as `erased`, the erased kind's; the rest as `sendable`: a node
+	/// The shapes of a node built in a `@Sendable` function this kind does not make yet, refused as `sendable`: a node
 	/// with more than one parent, or a child with more than one, whose override is read from more than one place; a child
 	/// built in a function of its own, which would be handed the local's field across the `@Sendable` function; a local
 	/// whose name a node's label or function takes, which the walk names apart; and a type declared in an extension,
 	/// whose wrapper the engine annotates as production's binding does, where the walk does not.
 	static func mockSendableRefusals(of declaration: DeclarationID, in world: some NodeRecordSources) -> [NodeRecordRefusal] {
 		guard isBuiltInSendableFunction(declaration, in: world), let label = world.property(of: declaration)?.label else { return [] }
-		// As a constant's or an `Instantiator`'s is (`refusalsOfBuiltByInitializer(_:in:)`): its function returns the
-		// property's type.
-		guard !world.isErased(declaration) else { return [.erased] }
 		guard world.parents(of: declaration).count == 1, !world.scope(of: declaration).instantiable.declarationType.isExtension else { return [.sendable] }
 		for child in world.edges(from: declaration) {
 			guard world.parents(of: child).count == 1, !isBuiltInFunctionOfItsOwn(child, in: world) else { return [.sendable] }
@@ -149,6 +145,12 @@ extension NodeRecords {
 
 	private static func mockOverridesLocalName(ofNodeLabeled label: String, isConfigured: Bool) -> String {
 		"\(ScopeGenerator.functionName(toBuildPropertyNamed: label))__\(isConfigured ? "overrides" : ReservedName.configurationBuilderPropertyName)".spelledAsJoinedIdentifier
+	}
+
+	/// Whether a node of a mock root's world is built in a `@Sendable` function of its own and erased to its property's
+	/// type, whose function returns that type (`mockErasedRecord(of:variant:in:unavailableProperties:typesDeclaredEscaping:children:)`).
+	static func isErasedSendableWrapper(_ declaration: DeclarationID, in world: some NodeRecordSources) -> Bool {
+		isBuiltInSendableFunction(declaration, in: world) && world.isErased(declaration)
 	}
 
 	/// Whether a node of a mock root's world is built in a `@Sendable` function of its own.

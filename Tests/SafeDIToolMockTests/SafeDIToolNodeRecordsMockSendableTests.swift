@@ -65,13 +65,15 @@ struct SafeDIToolNodeRecordsMockSendableTests: ~Copyable {
 		            shared: (() -> Shared)? = nil,
 		            childBuilder: Child.SafeDIMockConfiguration = .init(),
 		            namedBuilder: (@Sendable (String) -> Named)? = nil,
-		            anyBuilder: (@Sendable () -> LeafProtocol)? = nil
+		            anyBuilder: (@Sendable () -> LeafProtocol)? = nil,
+		            wrappedBuilder: (@Sendable () -> AnyLeaf)? = nil
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
 		                shared: shared,
 		                childBuilder: childBuilder,
 		                namedBuilder: namedBuilder,
-		                anyBuilder: anyBuilder
+		                anyBuilder: anyBuilder,
+		                wrappedBuilder: wrappedBuilder
 		            )
 		        }
 
@@ -79,6 +81,7 @@ struct SafeDIToolNodeRecordsMockSendableTests: ~Copyable {
 		        var childBuilder: Child.SafeDIMockConfiguration { __safeDI_storage.childBuilder }
 		        var namedBuilder: (@Sendable (String) -> Named)? { __safeDI_storage.namedBuilder }
 		        var anyBuilder: (@Sendable () -> LeafProtocol)? { __safeDI_storage.anyBuilder }
+		        var wrappedBuilder: (@Sendable () -> AnyLeaf)? { __safeDI_storage.wrappedBuilder }
 
 		        private let __safeDI_storage: __safeDI_Storage
 
@@ -87,18 +90,21 @@ struct SafeDIToolNodeRecordsMockSendableTests: ~Copyable {
 		                shared: (() -> Shared)?,
 		                childBuilder: Child.SafeDIMockConfiguration,
 		                namedBuilder: (@Sendable (String) -> Named)?,
-		                anyBuilder: (@Sendable () -> LeafProtocol)?
+		                anyBuilder: (@Sendable () -> LeafProtocol)?,
+		                wrappedBuilder: (@Sendable () -> AnyLeaf)?
 		            ) {
 		                self.shared = shared
 		                self.childBuilder = childBuilder
 		                self.namedBuilder = namedBuilder
 		                self.anyBuilder = anyBuilder
+		                self.wrappedBuilder = wrappedBuilder
 		            }
 
 		            let shared: (() -> Shared)?
 		            let childBuilder: Child.SafeDIMockConfiguration
 		            let namedBuilder: (@Sendable (String) -> Named)?
 		            let anyBuilder: (@Sendable () -> LeafProtocol)?
+		            let wrappedBuilder: (@Sendable () -> AnyLeaf)?
 		        }
 		    }
 
@@ -124,7 +130,12 @@ struct SafeDIToolNodeRecordsMockSendableTests: ~Copyable {
 		            if let safeDIBuilder = __safeDI_anyBuilder__safeDIBuilder { safeDIBuilder() } else { Leaf() }
 		        }
 		        let anyBuilder = SendableErasedInstantiator<(), LeafProtocol>(__safeDI_anyBuilder)
-		        return Root(shared: shared, childBuilder: childBuilder, namedBuilder: namedBuilder, anyBuilder: anyBuilder)
+		        let __safeDI_wrappedBuilder__safeDIBuilder = safeDIOverrides.wrappedBuilder
+		        @Sendable nonisolated func __safeDI_wrappedBuilder() -> AnyLeaf {
+		            if let safeDIBuilder = __safeDI_wrappedBuilder__safeDIBuilder { safeDIBuilder() } else { AnyLeaf(Leaf()) }
+		        }
+		        let wrappedBuilder = SendableErasedInstantiator<(), AnyLeaf>(__safeDI_wrappedBuilder)
+		        return Root(shared: shared, childBuilder: childBuilder, namedBuilder: namedBuilder, anyBuilder: anyBuilder, wrappedBuilder: wrappedBuilder)
 		    }
 		}
 		#endif
@@ -372,33 +383,6 @@ struct SafeDIToolNodeRecordsMockSendableTests: ~Copyable {
 			""",
 			"sendable",
 		),
-		// A value erased to its property's type is the erased kind's.
-		(
-			"""
-			@Instantiable(generateMock: true)
-			public struct Root: Instantiable {
-			    public init(anyBuilder: SendableErasedInstantiator<(), AnyLeaf>) {
-			        self.anyBuilder = anyBuilder
-			    }
-
-			    @Instantiated(fulfilledByType: "Leaf", erasedToConcreteExistential: true) let anyBuilder: SendableErasedInstantiator<(), AnyLeaf>
-			}
-
-			@Instantiable
-			public struct Leaf: Instantiable, Sendable {
-			    public init() {}
-			}
-
-			public struct AnyLeaf: Sendable {
-			    public init(_ leaf: Leaf) {
-			        self.leaf = leaf
-			    }
-
-			    let leaf: Leaf
-			}
-			""",
-			"erased",
-		),
 	])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_keepsTheWalksStatements_whenSendableNodeIsOfShapeNoRecordMakesYet(fixture: String, refusal: String) async throws {
@@ -416,22 +400,25 @@ struct SafeDIToolNodeRecordsMockSendableTests: ~Copyable {
 	private var filesToDelete: [URL]
 
 	/// The root builds a configured `@Sendable` builder whose type receives a value the root builds, one that forwards a
-	/// value and has no configuration, and an erased one whose function returns the concrete type.
+	/// value and has no configuration, an erased one whose function returns the concrete type, and one erased to its
+	/// property's type.
 	private static let rootFixture = [
 		"Root.swift": """
 		@Instantiable(generateMock: true)
 		public struct Root: Instantiable {
-		    public init(shared: Shared, childBuilder: SendableInstantiator<Child>, namedBuilder: SendableInstantiator<Named>, anyBuilder: SendableErasedInstantiator<(), LeafProtocol>) {
+		    public init(shared: Shared, childBuilder: SendableInstantiator<Child>, namedBuilder: SendableInstantiator<Named>, anyBuilder: SendableErasedInstantiator<(), LeafProtocol>, wrappedBuilder: SendableErasedInstantiator<(), AnyLeaf>) {
 		        self.shared = shared
 		        self.childBuilder = childBuilder
 		        self.namedBuilder = namedBuilder
 		        self.anyBuilder = anyBuilder
+		        self.wrappedBuilder = wrappedBuilder
 		    }
 
 		    @Instantiated let shared: Shared
 		    @Instantiated let childBuilder: SendableInstantiator<Child>
 		    @Instantiated let namedBuilder: SendableInstantiator<Named>
 		    @Instantiated(fulfilledByType: "Leaf") let anyBuilder: SendableErasedInstantiator<(), LeafProtocol>
+		    @Instantiated(fulfilledByType: "Leaf", erasedToConcreteExistential: true) let wrappedBuilder: SendableErasedInstantiator<(), AnyLeaf>
 		}
 		""",
 		"Types.swift": """
@@ -480,6 +467,15 @@ struct SafeDIToolNodeRecordsMockSendableTests: ~Copyable {
 		public struct Leaf: Instantiable, LeafProtocol, Marked {
 		    public init() {}
 
+		    public var marker = "built"
+		}
+
+		public struct AnyLeaf: Sendable, Marked {
+		    public init(_ leaf: Leaf) {
+		        self.leaf = leaf
+		    }
+
+		    let leaf: Leaf
 		    public var marker = "built"
 		}
 		""",
@@ -544,7 +540,8 @@ struct SafeDIToolNodeRecordsMockSendableTests: ~Copyable {
 		shared: { marked(Shared(), "shared") }, \
 		childBuilder: .init(leaf: { marked(Leaf(), "childBuilder.leaf") }, { marked(Child(shared: $0, leaf: $1), "childBuilder") }), \
 		namedBuilder: { marked(Named(name: $0), "namedBuilder") }, \
-		anyBuilder: { marked(Leaf(), "anyBuilder") }\
+		anyBuilder: { marked(Leaf(), "anyBuilder") }, \
+		wrappedBuilder: { marked(AnyLeaf(Leaf()), "wrappedBuilder") }\
 		))
 		"""
 		let overriddenNested = """
@@ -565,8 +562,10 @@ struct SafeDIToolNodeRecordsMockSendableTests: ~Copyable {
 					DifferentialValueProbe(name: "overridden child", expression: "\(overriddenRoot).childBuilder.instantiate()"),
 					DifferentialValueProbe(name: "overridden named", expression: "\(overriddenRoot).namedBuilder.instantiate(\"first\")"),
 					DifferentialValueProbe(name: "overridden any", expression: "\(overriddenRoot).anyBuilder.instantiate()"),
+					DifferentialValueProbe("Root.mock().wrappedBuilder.instantiate()"),
+					DifferentialValueProbe(name: "overridden wrapped", expression: "\(overriddenRoot).wrappedBuilder.instantiate()"),
 				],
-				["shared", "childBuilder.leaf", "childBuilder", "namedBuilder", "anyBuilder"],
+				["shared", "childBuilder.leaf", "childBuilder", "namedBuilder", "anyBuilder", "wrappedBuilder"],
 			),
 			"nested": (
 				[
