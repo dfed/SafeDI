@@ -961,6 +961,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 		}
 	}
 
+	// OWED (C1, by 2026-11-30): the place graph derives no cycle re-entry for a label a lazy cycle nested between declares again (#1115), so its oracle, and the judge that reads it, answer otherwise than the per-site walk. Never a known issue: this mark goes when the test passes.
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_namesInstantiatedDeclarationOfSecondCycle_whenItPrecedesForwardedDeclarationOfTypeBetweenInSourceOrder() async {
@@ -987,6 +988,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 		}
 	}
 
+	// OWED (C1, by 2026-11-30): the place graph derives no cycle re-entry for a label a lazy cycle nested between declares again (#1115), so its oracle, and the judge that reads it, answer otherwise than the per-site walk. Never a known issue: this mark goes when the test passes.
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_namesForwardedDeclarationOfTypeBetween_whenItPrecedesInstantiatedDeclarationOfSecondCycleInSourceOrder() async {

@@ -28,6 +28,7 @@ struct SafeDIToolSeamTreeReuseSmokeTests {
 	/// Every run through the test executors compares each reused seam tree with one built anew (`ReusedSeamTreeChecks`);
 	/// this test makes that check non-vacuous over the seam smoke seeds: the tool reuses trees there, of seams with holes
 	/// among them.
+	// OWED (C1, by 2026-11-30): the place graph derives no cycle re-entry for a label a lazy cycle nested between declares again (#1115), so its oracle, and the judge that reads it, answer otherwise than the per-site walk. Never a known issue: this mark goes when the test passes.
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func generate_reusesTreesOfSeamsWithHoles_whenSeamSmokeSeedsRun() async throws {

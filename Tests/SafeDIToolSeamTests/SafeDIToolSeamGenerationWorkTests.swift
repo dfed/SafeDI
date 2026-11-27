@@ -279,6 +279,7 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 		])
 	}
 
+	// OWED (C2, by 2026-11-30): the place graph’s drafting walk, which runs only while a test observes it, reads each closed-on scope again, doubling the count. Never a known issue: this mark goes when the test passes.
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_readsEachScopeOfACycleOnce_whenLayersOfScreensBetweenPlaceAndItsCycleClosingScopesShareSubtrees() async throws {
