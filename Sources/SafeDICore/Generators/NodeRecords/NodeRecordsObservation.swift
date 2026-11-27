@@ -152,7 +152,7 @@ public struct NodeRecordsReport: Sendable {
 	public let root: String
 	/// Why node records refused the root's world (`NodeRecordRefusal`), or `nil` where they made its records.
 	public let refusal: String?
-	/// Every refusal the root's world holds, at any node, each once (`NodeRecords.refusals(in:)`): empty where node records
+	/// Every refusal the root's world holds, at any node, each once (`NodeRecords.refusals(in:seamTree:declaredTypeNames:)`): empty where node records
 	/// made its records.
 	public let everyRefusal: [String]
 	/// Whether the root's code was laid out from node records.

@@ -49,9 +49,11 @@ extension ScopeGenerator {
 		}
 		let nodeRecords: NodeRecords
 		do {
-			nodeRecords = try NodeRecords(world: world)
+			// No kind claims an erased instantiator in a mock root's world, so its first generic argument is the mock's tree's
+			// to check.
+			nodeRecords = try NodeRecords(world: world, declaredTypeNames: nil)
 		} catch let refusal as NodeRecordRefusal {
-			report(refusal: refusal, everyRefusal: NodeRecords.refusals(in: world), isLaidOut: false, recordCount: 0)
+			report(refusal: refusal, everyRefusal: NodeRecords.refusals(in: world, declaredTypeNames: nil), isLaidOut: false, recordCount: 0)
 			return nil
 		}
 		// A read of a value the mock binds beside its nodes would resolve to no declaration of the records' body.

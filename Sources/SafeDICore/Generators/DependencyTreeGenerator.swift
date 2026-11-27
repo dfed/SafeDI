@@ -361,7 +361,7 @@ public actor DependencyTreeGenerator {
 		// The mocks are made only once the trees are released, so a module's root trees and its mock trees are never held
 		// at once: making them beside the plans raised a mock-heavy module's peak memory by a fifth.
 		let treeForcers = TreeForcerReport(forcersByRoot: trees?.roots.map { root in
-			(root: root.instantiable.concreteInstantiable.asSource, forcers: root.treeForcers + (request.namesNodeRecordRefusals ? Self.nodeRecordRefusal(ofSeamWorldRoot: root) : []))
+			(root: root.instantiable.concreteInstantiable.asSource, forcers: root.treeForcers + (request.namesNodeRecordRefusals ? Self.nodeRecordRefusal(ofSeamWorldRoot: root, declaredTypeNames: declaredTypeNames) : []))
 		} ?? [])
 		let storedSeamSignatures = if request.generatesDependencyTrees, let trees {
 			trees.storedSeamSignatures
@@ -430,6 +430,7 @@ public actor DependencyTreeGenerator {
 	/// `rootsOfOtherModules`, the roots another module declares.
 	private func plannedCode(of roots: [RootScopeInfo], rootsOfOtherModules: [Instantiable]) async throws -> [PlannedRoot] {
 		let rootScopeGenerators = roots
+		let declaredTypeNames = declaredTypeNames
 		// A seam's root plans its children at once only where the module plans few trees: each tree is planned on a task
 		// of its own, so many trees keep every processor busy, and planning their children at once too only holds more
 		// frames (1,200 seams of two children each held 13% more peak memory, at the same wall time).
@@ -441,7 +442,7 @@ public actor DependencyTreeGenerator {
 			) { taskGroup in
 				for rootInfo in rootScopeGenerators {
 					taskGroup.addTask {
-						let code = try await Self.plannedRootCode(of: rootInfo)
+						let code = try await Self.plannedRootCode(of: rootInfo, declaredTypeNames: declaredTypeNames)
 						return await PlannedRoot(
 							typeDescription: rootInfo.typeDescription,
 							sourceFilePath: rootInfo.sourceFilePath,
@@ -581,7 +582,7 @@ public actor DependencyTreeGenerator {
 			/// From its place tree.
 			case tree(ScopeGenerator)
 			/// From its node records, where no `TreeForcer` holds. `comparisonTree` is the tree built beside them only
-			/// where a test observes node records, which compares the two (`plannedRootCode(of:)`); a plain run builds
+			/// where a test observes node records, which compares the two (`plannedRootCode(of:declaredTypeNames:)`); a plain run builds
 			/// none.
 			case nodeRecords(NodeRecordsLayout, comparisonTree: ScopeGenerator?)
 		}
@@ -802,7 +803,7 @@ public actor DependencyTreeGenerator {
 							constructionMemo: &memo,
 						)
 					}
-					let (layout, treeForcers) = try Self.nodeRecordsLayout(of: scope.instantiable, constructionScope: constructionScope, readersOfEveryTree: readersOfEveryTree)
+					let (layout, treeForcers) = try Self.nodeRecordsLayout(of: scope.instantiable, constructionScope: constructionScope, declaredTypeNames: declaredTypeNames, readersOfEveryTree: readersOfEveryTree)
 					let built: RootScopeInfo.Built = if let layout {
 						// The work of building it is no run's, so the tests that count a run's work count none of it.
 						try .nodeRecords(layout, comparisonTree: NodeRecordsObservation.observer == nil ? nil : GenerationWork.$observer.withValue(nil) { try tree(memo: &comparisonMemo) })
