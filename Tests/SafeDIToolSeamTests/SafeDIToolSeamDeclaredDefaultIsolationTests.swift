@@ -55,7 +55,7 @@ struct SafeDIToolSeamDeclaredDefaultIsolationTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    @MainActor public convenience init(__safeDI_user: @autoclosure @escaping () -> User) {
 			        let user = LazilyInstantiated<User>(__safeDI_user)
-			        func __safeDI_detailBuilder() -> Detail {
+			        @inline(never) func __safeDI_detailBuilder() -> Detail {
 			            Detail(user: user.instance)
 			        }
 			        let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)

@@ -172,6 +172,7 @@ extension InstantiableVisitor {
 	/// Whether `attributes`, the text of an attribute argument, may make the generated declaration `@MainActor`: it
 	/// spells an attribute without arguments, which may be the main actor under any name.
 	private static func mayStateMainActor(_ attributes: String) -> Bool {
+		// safedi-source-rule: allow stringScan — reads one attribute argument’s short text, at most twice per `@Instantiable` type whose generated declarations call a `@MainActor` declaration, once when its file is read.
 		attributes.split(separator: " ").contains { $0.hasPrefix("@") && !$0.contains("(") }
 	}
 
@@ -186,7 +187,9 @@ extension InstantiableVisitor {
 		// safedi-source-rule: allow forceUnwrap — a declaration SafeDI generates is asked for by an argument (`isRoot`, `generateDependencyTree` or `generateMock`) that `isRootValue`, `InstantiableVisitor.generatesDependencyTree` and `mockGenerationValue` read from labeled arguments.
 		var arguments = Array(LabeledExprListSyntax(instantiableMacro.arguments!)!)
 		// A `nonisolated` the argument spells would contradict the attribute added.
+		// safedi-source-rule: allow stringScan — splits one attribute argument’s short text, once per finding, only while a fix-it is built.
 		let words = text.split(separator: " ")
+		// safedi-source-rule: allow stringScan — membership among the few words of one attribute argument, once per finding.
 		let keptText = words.contains("nonisolated") ? words.filter { $0 != "nonisolated" }.joined(separator: " ") : text
 		let attributesText = keptText.isEmpty ? mainActorAttribute : "\(mainActorAttribute) \(keptText)"
 		if let index = arguments.firstIndex(where: { $0.label?.text == label }) {
