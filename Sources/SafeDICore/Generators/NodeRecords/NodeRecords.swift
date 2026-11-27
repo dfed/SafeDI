@@ -86,6 +86,8 @@ protocol NodeRecordSources: TypeFactsWorld {
 	func text(ofLabel label: WorldLabelID) -> String
 	/// Whether the world is a mock root's, each of whose nodes reads its override.
 	var isMockWorld: Bool { get }
+	/// What a mock root's lowering names that the records of its world read; empty for a production root's world.
+	var mockRootNames: MockRootNames { get }
 }
 
 extension TypeFactsGraph: NodeRecordSources {
@@ -130,12 +132,15 @@ struct NodeRecords: Sendable {
 	///   - seamTree: What a seam's own root is handed: its parameters, the nearest declarations of their labels, and the
 	///     instances of `LazilyInstantiated` properties among them, a deferred parameter's memo included, which its tree
 	///     reads through their wrappers. `nil` for any other root.
+	///   - outerDeclarations: What a mock root's body is declared inside, the nearest declarations of their labels: the
+	///     parameters of `mock()` and the overrides it binds before its nodes, which a node's receive only if available
+	///     reads as a seam's tree reads the seam's parameters. Empty for any other root.
 	///   - declaredTypeNames: The names the modules SafeDI read declare types by at file scope, which the check of an erased
 	///     instantiator's first generic argument reads (`checkForwardsBuiltTypesProperties(_:in:declaredTypeNames:)`).
 	///     `nil` for a mock root's world, where no kind claims an erased instantiator and the mock's own tree reports it.
 	/// - Throws: A `NodeRecordRefusal` where the world holds a kind stage 1 does not make, or what an initializer's
 	///   arguments throw.
-	init(world: some NodeRecordSources, seamTree: DependencyTreeGenerator.RootScopeInfo.SeamTree? = nil, declaredTypeNames: DeclaredTypeNames?) throws {
+	init(world: some NodeRecordSources, seamTree: DependencyTreeGenerator.RootScopeInfo.SeamTree? = nil, outerDeclarations: [Property] = [], declaredTypeNames: DeclaredTypeNames?) throws {
 		let declarationCount = world.declarationCount
 		var kinds = [NodeRecordKind]()
 		kinds.reserveCapacity(declarationCount)
@@ -151,7 +156,7 @@ struct NodeRecords: Sendable {
 			variantByDeclaration[declaration] = variant
 		}
 		let order = try NodeBuildOrder(world: world)
-		let onlyIfAvailableAnswers = try OnlyIfAvailableAnswers(world: world, rootParameters: seamTree?.parameters ?? [])
+		let onlyIfAvailableAnswers = try OnlyIfAvailableAnswers(world: world, rootParameters: seamTree?.parameters ?? outerDeclarations)
 		let answeringDeclarations = DeclarationsAnsweringReads(world: world)
 		// The tree reports the capture as an error, which the records cannot.
 		guard !answeringDeclarations.sendableFunctionCapturesWrapper else { throw NodeRecordRefusal.sendableFunctionCapturesWrapper }
@@ -205,8 +210,12 @@ struct NodeRecords: Sendable {
 				try .alias(Self.unavailableDependencyRecord(of: declaration, in: world))
 			case .rename:
 				try .alias(Self.renameRecord(of: declaration, variant: variant, in: world, answers: onlyIfAvailableAnswers))
+			case .mockRename:
+				try .alias(Self.mockRenameRecord(of: declaration, variant: variant, in: world, answers: onlyIfAvailableAnswers))
 			case .mockConstruction:
 				try .built(Self.mockConstructionRecord(of: declaration, variant: variant, in: world, unavailableProperties: onlyIfAvailableAnswers.unavailableProperties(of: variant), typesDeclaredEscaping: escaping, children: children))
+			case .mockUnavailableDependency:
+				try .alias(Self.mockUnavailableDependencyRecord(of: declaration, in: world))
 			case .mockErased:
 				try .built(Self.mockErasedRecord(of: declaration, variant: variant, in: world, unavailableProperties: onlyIfAvailableAnswers.unavailableProperties(of: variant), typesDeclaredEscaping: escaping, children: children))
 			case .publicMockCall:
@@ -252,7 +261,7 @@ struct NodeRecords: Sendable {
 
 	/// Every refusal `world` holds, each once, in the order of `NodeRecordRefusal`'s cases: what a test reports of a world, so
 	/// that each stage counts the worlds it frees.
-	static func refusals(in world: some NodeRecordSources, seamTree: DependencyTreeGenerator.RootScopeInfo.SeamTree? = nil, declaredTypeNames: DeclaredTypeNames?) -> [NodeRecordRefusal] {
+	static func refusals(in world: some NodeRecordSources, seamTree: DependencyTreeGenerator.RootScopeInfo.SeamTree? = nil, outerDeclarations: [Property] = [], declaredTypeNames: DeclaredTypeNames?) -> [NodeRecordRefusal] {
 		var refusals = Set<NodeRecordRefusal>()
 		for declaration in 0..<Int32(world.declarationCount) {
 			refusals.formUnion(kindAndRefusals(of: declaration, in: world).refusals)
@@ -277,7 +286,7 @@ struct NodeRecords: Sendable {
 			refusals.insert(error)
 		}
 		do {
-			_ = try OnlyIfAvailableAnswers(world: world, rootParameters: seamTree?.parameters ?? [])
+			_ = try OnlyIfAvailableAnswers(world: world, rootParameters: seamTree?.parameters ?? outerDeclarations)
 		} catch {
 			refusals.insert(error)
 		}
@@ -427,4 +436,10 @@ enum NodeRecordKind: Sendable {
 	/// A constant or an `Instantiator` built by a call of another module's public mock, which passes the called mock its own
 	/// `SafeDIOverrides` and fills no builder (`NodeRecords+PublicMockCall.swift`).
 	case publicMockCall
+	/// A property instantiated only if available that no declaration fulfills, in a mock root's world: bound to the
+	/// override `mock()` takes of it, or to `nil` where it takes none (`NodeRecords+MockUnavailableDependency.swift`).
+	case mockUnavailableDependency
+	/// A rename of a mock root's world, which reads no override: `rename`'s record, mapped as the mock's walk maps an erased
+	/// rename only if available (`NodeRecords+MockRename.swift`).
+	case mockRename
 }

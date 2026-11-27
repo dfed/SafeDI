@@ -22,7 +22,9 @@ extension NodeRecords {
 	/// The refusals of stage 1 the mock kind `onlyIfAvailable` discharges of `declaration`, a node of a mock root's world
 	/// (`mockConstructionClaim(of:in:)`): a receive only if available of its type, which its construction is passed as
 	/// `OnlyIfAvailableAnswers` finds it on the node's path, the value of the nearest declaration of its label that
-	/// provides a form it reads and is built before it, or `nil`, as a production root's world. The mocked type's own
+	/// provides a form it reads and is built before it, or `nil`, as a production root's world; the parameters of `mock()`
+	/// and the overrides it binds before its nodes are the declarations farthest from every node, as a seam's parameters
+	/// are in its tree (`NodeRecords.init(world:seamTree:outerDeclarations:declaredTypeNames:)`). The mocked type's own
 	/// receive is not discharged: the mock offers it an override, which the root binds (`mockRootBindsOtherThanNodes`),
 	/// or hands it a dependency the mock promotes beside it, which the root's own construction reads.
 	static func mockOnlyIfAvailableDischarges(of declaration: DeclarationID) -> Set<NodeRecordRefusal> {

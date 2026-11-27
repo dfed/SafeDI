@@ -340,6 +340,34 @@ struct SafeDIToolNodeRecordsMockOnlyIfAvailableTests: ~Copyable {
 		""", "Unexpected output \(output.mockFiles["Screen+SafeDIMock.swift"] ?? "")")
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_bindsPromotedOptionalInstantiatorAsUnwrappedType_whenMockedTypeRequiresOptionalForm() async throws {
+		// `Screen` requires `tokenBuilder: Instantiator<Token>?`, so the mock promotes it and builds the instantiator. The root
+		// binds it as the `Instantiator<Token>` it makes, as the walk does, not as the optional property.
+		let fixture = [
+			"""
+			@Instantiable(generateMock: true)
+			public final class Screen: Instantiable {
+			    public init(tokenBuilder: Instantiator<Token>?) { self.tokenBuilder = tokenBuilder }
+			    @Received let tokenBuilder: Instantiator<Token>?
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Token: Instantiable {
+			    public init() {}
+			}
+			""",
+		]
+		let walkOutput = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [true])
+		#expect(output.mockFiles == walkOutput.mockFiles, "Unexpected output \(output.mockFiles["Screen+SafeDIMock.swift"] ?? "")\nThe walk writes \(walkOutput.mockFiles["Screen+SafeDIMock.swift"] ?? "")")
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]

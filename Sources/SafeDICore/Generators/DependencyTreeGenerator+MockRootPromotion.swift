@@ -42,7 +42,7 @@ extension DependencyTreeGenerator {
 	///   of another module's public mock passes `false` with that module: the declaring module's own run checked its
 	///   constructions, and the plan must promote what that run promoted.
 	/// - Parameter recordingWorldRoot: Handed the root of the mock root's world, which node records are made of
-	///   (`ScopeGenerator.nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:sendableConfigurationTypeNames:)`), where a caller keeps it.
+	///   (`ScopeGenerator.nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:sendableConfigurationTypeNames:rootNames:outerDeclarations:)`), where a caller keeps it.
 	func createMockRootScopeGenerator(
 		for instantiable: Instantiable,
 		scope: Scope,

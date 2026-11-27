@@ -710,6 +710,54 @@ struct SafeDIToolNodeRecordsPublicMockCallTests: ~Copyable {
 		#expect(reports.map(\.refusal) == ["onlyIfAvailable"])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_refusesCall_whenRootNamesApartLabelCalledMockReceives() async throws {
+		// `Root`’s mock promotes `session` as a `Session` and as a `Token` and names the two apart, so the walk binds the
+		// `Session` under its label in the call’s function before the call passes it, which no record of a call makes.
+		let (_, reports) = try await mockOfRoot(
+			feed: Self.screen(),
+			app: """
+			@Instantiable(generateMock: true)
+			public final class Root: Instantiable {
+			    public init(plain: Plain, badge: Badge, screen: Screen) {
+			        self.plain = plain
+			        self.badge = badge
+			        self.screen = screen
+			    }
+
+			    @Instantiated let plain: Plain
+			    @Instantiated let badge: Badge
+			    @Instantiated let screen: Screen
+			}
+
+			@Instantiable
+			public final class Plain: Instantiable {
+			    public init(session: Session) {
+			        self.session = session
+			    }
+
+			    @Received let session: Session
+			}
+
+			@Instantiable
+			public final class Badge: Instantiable {
+			    public init(session: Token) {
+			        self.session = session
+			    }
+
+			    @Received let session: Token
+			}
+
+			@Instantiable
+			public final class Token: Instantiable {
+			    public init() {}
+			}
+			""",
+		)
+		#expect(reports.map(\.refusal) == ["mockOverrideNotParentField"])
+	}
+
 	// MARK: Values
 
 	@Test

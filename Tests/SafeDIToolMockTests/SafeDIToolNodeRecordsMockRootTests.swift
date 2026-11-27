@@ -997,6 +997,188 @@ struct SafeDIToolNodeRecordsMockRootTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildsTheWalksValues_whenNodesReadMocksParametersAndEveryPlaceIsOverridden() async throws {
+		let walkOutput = try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: Self.parameterValueFixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: Self.parameterValueFixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [true])
+		let overridden = """
+		Root.mock(name: "named", level: 7, timer: marked(Ticker(), "timer"), safeDIOverrides: .init(\
+		leaf: { marked(Leaf(name: $0, timer: $1), "leaf") }, \
+		clock: marked(Ticker(), "clock")\
+		))
+		"""
+		let comparison = try await DifferentialValueOracle.compare(
+			feature: DifferentialValuePath(fixtureFiles: Self.parameterValueFixture, generatedFiles: #require(output.generatedFiles)),
+			knownRight: DifferentialValuePath(fixtureFiles: Self.parameterValueFixture, generatedFiles: #require(walkOutput.generatedFiles)),
+			probes: [
+				DifferentialValueProbe("Root.mock(name: \"plain\", timer: Ticker())"),
+				DifferentialValueProbe(name: "overridden root", expression: overridden),
+			],
+			filesToDelete: &filesToDelete,
+		)
+		// Nothing is compared where compile verification is off.
+		guard let comparison else { return }
+		#expect(comparison.differences.isEmpty, "\(comparison.report)")
+		// Every parameter and override was read: each marks the value it set.
+		for marker in ["named", "timer", "clock", "leaf"] {
+			#expect(comparison.featureDescription.contains("\"\(marker)\""), "No value is marked \(marker):\n\(comparison.featureDescription)")
+		}
+	}
+
+	@Test(arguments: [
+		// A type nothing fulfills is a flat parameter of `mock()`, which a node reads.
+		"""
+		public protocol Clock {}
+
+		@Instantiable(generateMock: true)
+		public struct Root: Instantiable {
+		    public init(leaf: Leaf) {
+		        self.leaf = leaf
+		    }
+
+		    @Instantiated let leaf: Leaf
+		}
+
+		@Instantiable
+		public struct Leaf: Instantiable {
+		    public init(clock: Clock) {
+		        self.clock = clock
+		    }
+
+		    @Received let clock: Clock
+		}
+		""",
+		// The root's forwarded value is a parameter of `mock()`, which a node reads.
+		"""
+		@Instantiable(generateMock: true)
+		public struct Root: Instantiable {
+		    public init(name: String, leaf: Leaf) {
+		        self.name = name
+		        self.leaf = leaf
+		    }
+
+		    @Forwarded let name: String
+		    @Instantiated let leaf: Leaf
+		}
+
+		@Instantiable
+		public struct Leaf: Instantiable {
+		    public init(name: String) {
+		        self.name = name
+		    }
+
+		    @Received let name: String
+		}
+		""",
+		// The root's default-valued argument is a parameter of `mock()` with its default.
+		"""
+		@Instantiable(generateMock: true)
+		public struct Root: Instantiable {
+		    public init(leaf: Leaf, level: Int = 1) {
+		        self.leaf = leaf
+		        self.level = level
+		    }
+
+		    @Instantiated let leaf: Leaf
+		    let level: Int
+		}
+
+		@Instantiable
+		public struct Leaf: Instantiable {
+		    public init() {}
+		}
+		""",
+		// The root's own receive only if available is an override `mock()` binds before the nodes.
+		"""
+		public protocol Clock {}
+
+		@Instantiable(generateMock: true)
+		public struct Root: Instantiable {
+		    public init(clock: Clock?, leaf: Leaf) {
+		        self.clock = clock
+		        self.leaf = leaf
+		    }
+
+		    @Received(onlyIfAvailable: true) let clock: Clock?
+		    @Instantiated let leaf: Leaf
+		}
+
+		@Instantiable
+		public struct Leaf: Instantiable {
+		    public init() {}
+		}
+		""",
+		// A node's receive only if available that no node provides reads the override `mock()` binds before the nodes, as
+		// a seam's tree reads its parameter.
+		"""
+		public protocol Clock {}
+
+		@Instantiable(generateMock: true)
+		public struct Root: Instantiable {
+		    public init(leaf: Leaf) {
+		        self.leaf = leaf
+		    }
+
+		    @Instantiated let leaf: Leaf
+		}
+
+		@Instantiable
+		public struct Leaf: Instantiable {
+		    public init(clock: Clock?) {
+		        self.clock = clock
+		    }
+
+		    @Received(onlyIfAvailable: true) let clock: Clock?
+		}
+		""",
+		// A node's receive only if available of a value another node requires reads the parameter `mock()` takes for it.
+		"""
+		public protocol Clock {}
+
+		@Instantiable(generateMock: true)
+		public struct Root: Instantiable {
+		    public init(leaf: Leaf, reader: Reader) {
+		        self.leaf = leaf
+		        self.reader = reader
+		    }
+
+		    @Instantiated let leaf: Leaf
+		    @Instantiated let reader: Reader
+		}
+
+		@Instantiable
+		public struct Leaf: Instantiable {
+		    public init(clock: Clock) {
+		        self.clock = clock
+		    }
+
+		    @Received let clock: Clock
+		}
+
+		@Instantiable
+		public struct Reader: Instantiable {
+		    public init(clock: Clock?) {
+		        self.clock = clock
+		    }
+
+		    @Received(onlyIfAvailable: true) let clock: Clock?
+		}
+		""",
+	])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_laysOutNodesAsTheWalkWritesThem_whenRootBindsParameterOrOverride(declarations: String) async throws {
+		let walkOutput = try await executeSafeDIToolTest(swiftFileContent: [declarations], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: [declarations], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [true])
+		#expect(output.generatedFiles == walkOutput.generatedFiles)
+	}
+
 	@Test(arguments: [
 		// A configuration some root of the module builds inside a `@Sendable` function stores each field that is no function
 		// as a `@Sendable` closure, which every root's construction calls.
@@ -1062,61 +1244,6 @@ struct SafeDIToolNodeRecordsMockRootTests: ~Copyable {
 			}
 			""",
 			"mockDefaultValuedParameter",
-		),
-		// A type nothing fulfills is a parameter of `mock()`.
-		(
-			"""
-			public protocol Clock {}
-
-			@Instantiable
-			public struct Leaf: Instantiable {
-			    public init(clock: Clock) {
-			        self.clock = clock
-			    }
-
-			    @Received let clock: Clock
-			}
-			""",
-			"mockRootBindsOtherThanNodes",
-		),
-		// The mock promotes each form of a label its tree receives, and names the two apart.
-		(
-			"""
-			@Instantiable
-			public struct Leaf: Instantiable {
-			    public init(first: First, second: Second) {
-			        self.first = first
-			        self.second = second
-			    }
-
-			    @Instantiated let first: First
-			    @Instantiated let second: Second
-			}
-
-			@Instantiable
-			public struct First: Instantiable {
-			    public init(thing: Thing) {
-			        self.thing = thing
-			    }
-
-			    @Received let thing: Thing
-			}
-
-			@Instantiable
-			public struct Second: Instantiable {
-			    public init(thing: Instantiator<Thing>) {
-			        self.thing = thing
-			    }
-
-			    @Received let thing: Instantiator<Thing>
-			}
-
-			@Instantiable
-			public struct Thing: Instantiable {
-			    public init() {}
-			}
-			""",
-			"mockOverrideNotParentField",
 		),
 	])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
@@ -1650,6 +1777,60 @@ struct SafeDIToolNodeRecordsMockRootTests: ~Copyable {
 
 	/// The marker of each place `erasedValueProbes` overrides.
 	private static let erasedValueMarkers = ["shared", "service", "holder.leaf", "holder.innerService", "holder", "serviceBuilder", "holderBuilder.leaf", "holderBuilder.innerService", "holderBuilder", "plainBuilder"]
+
+	/// A root that forwards a name, takes a default-valued level, and receives a clock only if available, whose leaf
+	/// reads the name and a timer nothing fulfills, a flat parameter of `mock()`.
+	private static let parameterValueFixture: [String: String] = [
+		"Marked.swift": """
+		public protocol Marked: AnyObject {
+		    var marker: String { get set }
+		}
+
+		func marked<Value: Marked>(_ value: Value, _ marker: String) -> Value {
+		    value.marker = marker
+		    return value
+		}
+
+		public protocol Clock: AnyObject {}
+
+		public protocol Timer: AnyObject {}
+
+		public final class Ticker: Clock, Timer, Marked {
+		    public init() {}
+
+		    public var marker = "built"
+		}
+		""",
+		"Root.swift": """
+		@Instantiable(generateMock: true)
+		public final class Root: Instantiable {
+		    public init(name: String, clock: Clock?, leaf: Leaf, level: Int = 1) {
+		        self.name = name
+		        self.clock = clock
+		        self.leaf = leaf
+		        self.level = level
+		    }
+
+		    @Forwarded let name: String
+		    @Received(onlyIfAvailable: true) let clock: Clock?
+		    @Instantiated let leaf: Leaf
+		    let level: Int
+		}
+		""",
+		"Leaf.swift": """
+		@Instantiable
+		public final class Leaf: Instantiable, Marked {
+		    public init(name: String, timer: Timer) {
+		        self.name = name
+		        self.timer = timer
+		    }
+
+		    @Received let name: String
+		    @Received let timer: Timer
+		    public var marker = "built"
+		}
+		""",
+	]
 
 	/// What `body` returns with every internal mock root node records accept laid out from them, and the report of each
 	/// root of the run.
