@@ -44,6 +44,14 @@ public enum PlanCallsObservation {
 	@TaskLocal public static var observer: (@Sendable (_ root: String, _ calls: [String]) -> Void)?
 }
 
+/// Lets a test compare, for each root whose plan keys its bodies by the per-type facts' variants
+/// (`DependencyTreeGenerator.VariantBodies.keysBodiesByFacts`), what the facts decide with what the plan's own rules
+/// decide of the same call: which body a call takes, and the order its function takes its parameters in.
+public enum PlanFactsKeyObservation {
+	/// Called for each call whose two answers differ, with a line that names the call and both answers.
+	@TaskLocal public static var observer: (@Sendable (_ difference: String) -> Void)?
+}
+
 extension DependencyTreeGenerator {
 	/// What the bodies of a root are kept by: the scope built and the property it is built as, `nil` for the root's own.
 	struct VariantBodyKey: Hashable {
@@ -237,6 +245,11 @@ extension DependencyTreeGenerator {
 				beneath: NearestDeclarations(),
 				lazilyInstantiatedInstanceProperties: [],
 			)
+			if shadow.twinValues.isEmpty, Self.keysBodiesByFacts(inTreeOf: scope) {
+				let (table, record) = frozenScopeMap.freezing(rootScope: scope)
+				facts = TypeFactsGraph(root: ConstructionScope(table: table, record: record), forMockGeneration: false)
+				variantsByBody[rootBody] = 0
+			}
 			return try plan(fromRootBody: rootBody, shadow: shadow, isMockRoot: false, cache: &cache).map { (rootBody, $0) }
 		}
 
@@ -307,6 +320,7 @@ extension DependencyTreeGenerator {
 							calledNearestDeclarations.build(functionProperty)
 						}
 						let key = VariantBodyKey(scope: ObjectIdentifier(calledScope), property: functionProperty, twinsBeingBuilt: context.twinsBeingBuilt)
+						let calledVariant = variantsByBody[bodyToWalk].flatMap { variant(calledAt: context.path, of: body.copy, builtAs: $0) }
 						let (calledBody, arguments) = try self.calledBody(
 							of: calledCopy,
 							calledScope: calledScope,
@@ -318,6 +332,7 @@ extension DependencyTreeGenerator {
 							makingAgain: context.labelsMadeAgainAtCall,
 							takingOptionallyAmong: shadow.parameterLabels(ofFunctionOf: calledScope),
 							builtBy: (context.builder, context.erasedToConcreteExistential),
+							variant: calledVariant,
 							cache: &cache,
 						)
 						// Bodies a key holds apart differ in a label no one optional parameter takes, such as one declared
@@ -329,7 +344,7 @@ extension DependencyTreeGenerator {
 							return nil
 						}
 						// The tree can receive the label the body is built as too, as a loop mate does: it keeps its first place.
-						let labelsInOrderReceived = [context.property.label] + calledTree.labelsInOrderFirstReceived.filter { $0 != context.property.label }
+						let labelsInOrderReceived = [context.property.label] + parameterLabels(ofFunctionBuiltAs: context.property, calledTree: calledTree, variant: calledVariant)
 						var positionsByLabel = [String: Int]()
 						for (position, label) in bodies[calledBody].labels.enumerated() {
 							positionsByLabel[label] = position
@@ -380,6 +395,7 @@ extension DependencyTreeGenerator {
 			lazilyInstantiatedInstanceProperties: Set<Property>,
 			takingOptionally optionalParameters: [String: OptionalParameter] = [:],
 			builtBy builder: (scope: Scope, erasedToConcreteExistential: Bool)? = nil,
+			variant: Int? = nil,
 		) throws -> Int {
 			// A label the body takes optionally is bound to its parameter, which hides every declaration of it above.
 			let answeredLabelSet = Set(answeredLabels)
@@ -392,7 +408,21 @@ extension DependencyTreeGenerator {
 			let answers = labels.map { optionalParameters[$0] != nil ? keptNearestDeclarations[$0] : answeredLabelSet.contains($0) ? nearestDeclarations[$0] : nil }
 			let labelsTakenOptionally = Set(optionalParameters.keys)
 			let lazilyInstantiatedInstanceProperties = lazilyInstantiatedInstanceProperties.filter { answeredLabelSet.contains($0.label) && !labelsTakenOptionally.contains($0.label) }
-			if let position = positionsByKey[key]?.first(where: { bodies[$0].answers == answers && bodies[$0].lazilyInstantiatedInstanceProperties == lazilyInstantiatedInstanceProperties && bodies[$0].labelsTakenOptionally == labelsTakenOptionally }) {
+			// The facts' variant is the body where the facts owe its declaration nothing (`TypeFactsOwedFacts`): until a
+			// producer lands, two places of one variant of such a declaration can answer a read apart.
+			let keyingVariant = variant.flatMap { variant in facts.flatMap { $0.owedFacts(of: $0.variants.node(of: variant)).isEmpty ? variant : nil } }
+			let positionByPlansKey = positionsByKey[key]?.first(where: { bodies[$0].answers == answers && bodies[$0].lazilyInstantiatedInstanceProperties == lazilyInstantiatedInstanceProperties && bodies[$0].labelsTakenOptionally == labelsTakenOptionally })
+			// A body a comparison with today's tree built before the plan has no variant yet: the first call of the plan
+			// the plan's key answers with it gives it one.
+			let position = keyingVariant.map { bodiesByVariant[$0] ?? positionByPlansKey.flatMap { variantsByBody[$0] == nil ? $0 : nil } } ?? positionByPlansKey
+			if keyingVariant != nil, position != positionByPlansKey, let observer = PlanFactsKeyObservation.observer {
+				observer("The facts give `\(copy.instantiable.concreteInstantiable.asSource)` built as `\(key.property?.asSource ?? "the root")` \(position.map { "the body \(bodies[$0].description)" } ?? "a body of its own") where the plan’s key gives it \(positionByPlansKey.map { "the body \(bodies[$0].description)" } ?? "a body of its own")")
+			}
+			if let position {
+				if let keyingVariant, bodiesByVariant[keyingVariant] == nil {
+					variantsByBody[position] = keyingVariant
+					bodiesByVariant[keyingVariant] = position
+				}
 				return position
 			} else {
 				let generator: ScopeGenerator
@@ -443,6 +473,10 @@ extension DependencyTreeGenerator {
 					generator: generator,
 				))
 				positionsByKey[key, default: []].append(bodies.count - 1)
+				variantsByBody[bodies.count - 1] = variant
+				if let keyingVariant {
+					bodiesByVariant[keyingVariant] = bodies.count - 1
+				}
 				return bodies.count - 1
 			}
 		}
@@ -486,6 +520,7 @@ extension DependencyTreeGenerator {
 			makingAgain labelsMadeAgainAtCall: Set<String>,
 			takingOptionallyAmong parameterLabels: Set<String>,
 			builtBy builder: (scope: Scope, erasedToConcreteExistential: Bool),
+			variant: Int? = nil,
 			cache: inout ReceivedPropertiesCache,
 		) throws -> (body: Int, arguments: [Answer]) {
 			var optionalParameters = [String: OptionalParameter]()
@@ -512,9 +547,74 @@ extension DependencyTreeGenerator {
 				lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
 				takingOptionally: optionalParameters,
 				builtBy: builder,
+				variant: variant,
 			)
 			let arguments = zip(labels, bodies[body].planAnswers).map { label, answer in optionalArguments[label] ?? answer }
 			return (body, VariantAnswers.arguments(arguments, of: labels, makingAgain: labelsMadeAgainAtCall))
+		}
+
+		/// Whether the per-type facts' variants key the bodies of `root`'s plan: where every scope of its tree reads only
+		/// required values, by value or through an instantiator. A value read only if available, an optional one, and a
+		/// lazily instantiated one keep the plan's own key until the facts' keys of those reads are wired too.
+		static func keysBodiesByFacts(inTreeOf root: Scope) -> Bool {
+			var visitedScopes: Set = [ObjectIdentifier(root)]
+			var scopesToVisit = [root]
+			while let scope = scopesToVisit.popLast() {
+				for dependency in scope.instantiable.dependencies {
+					let isReadOnlyIfAvailable = switch dependency.source {
+					case let .aliased(_, _, onlyIfAvailable), let .received(onlyIfAvailable):
+						onlyIfAvailable
+					case .forwarded, .instantiated:
+						false
+					}
+					let isLazilyInstantiated = switch dependency.property.propertyType {
+					case .lazilyInstantiated, .sendableLazilyInstantiated:
+						true
+					case .constant, .erasedInstantiator, .instantiator, .sendableErasedInstantiator, .sendableInstantiator:
+						false
+					}
+					guard !isReadOnlyIfAvailable, !isLazilyInstantiated, !dependency.property.typeDescription.isOptional else { return false }
+				}
+				for case let .instantiated(_, childScope, _) in scope.propertiesToGenerate where visitedScopes.insert(ObjectIdentifier(childScope)).inserted {
+					scopesToVisit.append(childScope)
+				}
+			}
+			return true
+		}
+
+		/// The facts' variant of the call place at `path` in the body of `copy`, which is the variant `callingVariant`:
+		/// at each scope from the body's own down, the variant its variant calls at the edge of the child that leads to
+		/// the call. The facts' graph has an edge for each of a scope's properties to generate, in their order, before
+		/// the edges of its fills, so a child's edge is its index. `nil` where the facts do not key the plan.
+		private func variant(calledAt path: [Int], of copy: Scope, builtAs callingVariant: Int) -> Int? {
+			var variant: Int? = callingVariant
+			var scope: Scope? = copy
+			for index in path {
+				let propertiesToGenerate = scope?.propertiesToGenerate ?? []
+				variant = variant.flatMap { variant in facts.flatMap { facts in
+					let callees = facts.variants.callees(of: variant)
+					return index < callees.count ? Int(callees[callees.startIndex + index]) : nil
+				} }
+				if propertiesToGenerate.indices.contains(index), case let .instantiated(_, childScope, _) = propertiesToGenerate[index] {
+					scope = childScope
+				} else {
+					scope = nil
+				}
+			}
+			return variant
+		}
+
+		/// The labels a function built as `property` takes as parameters after its own, in the order it takes them: the
+		/// facts' order of its declaration (`TypeFactsWorld.parameterOrder(of:)`) where the facts key the plan, else the
+		/// order a walk of the called scope's tree first receives each.
+		private func parameterLabels(ofFunctionBuiltAs property: Property, calledTree: CalledTree, variant: Int?) -> [String] {
+			let plansOrder = calledTree.labelsInOrderFirstReceived.filter { $0 != property.label }
+			guard let facts, let variant else { return plansOrder }
+			let factsOrder = facts.parameterOrder(of: facts.variants.node(of: variant)).map { facts.labelTexts[Int($0)] }
+			if factsOrder != plansOrder.filter(factsOrder.contains), let observer = PlanFactsKeyObservation.observer {
+				observer("The facts order the parameters of the function built as `\(property.asSource)` \(factsOrder) where the plan’s walk orders them \(plansOrder)")
+			}
+			return factsOrder
 		}
 
 		/// The labels `scope`'s tree reads from above it, sorted: hiding is by label, so a read is answered by the nearest
@@ -608,6 +708,12 @@ extension DependencyTreeGenerator {
 		/// parameter merges, of which a path around a cycle can give a key one per subset of its labels.
 		static let bodiesPerKeyLimit = 8
 		private var positionsByKey = [VariantBodyKey: [Int]]()
+		/// The per-type facts of the root the plan is of, where their variants key its bodies (`keysBodiesByFacts`); held
+		/// as long as the bodies are.
+		private var facts: TypeFactsGraph?
+		/// The facts' variant each body is, by its position, and the body of each variant that keys one.
+		private var variantsByBody = [Int: Int]()
+		private var bodiesByVariant = [Int: Int]()
 		private var calledTreesByScope = [ObjectIdentifier: CalledTree]()
 		/// The memo the root's bodies are built with: shared across them where the plan lays the root's code out, so a
 		/// body's places that read their context alike reuse what another body built.

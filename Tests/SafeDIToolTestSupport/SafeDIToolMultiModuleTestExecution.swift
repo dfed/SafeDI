@@ -627,7 +627,10 @@ func executeSafeDIToolMultiModuleTest(
 																							try await UnpassableCycleLabelChecks.checking(handingOn: UnpassableCycleLabelObservation.observer) {
 																								// The fold that decides whether any route is walked must send every graph the walk rejects to the walk (`FulfillmentFoldChecks`).
 																								try await ValidationWalkObservation.$foldComparison.withValue(FulfillmentFoldChecks.comparison(handingOn: ValidationWalkObservation.foldComparison)) {
-																									try await tool.generate()
+																									// Every call of a plan the per-type facts key must take the body, and its function the parameter order, the plan’s own rules give (`PlanFactsKeyChecks`).
+																									try await PlanFactsKeyChecks.comparing(handingOn: PlanFactsKeyObservation.observer) {
+																										try await tool.generate()
+																									}
 																								}
 																							}
 																						}
