@@ -44,7 +44,7 @@ enum TwinShape: String, CaseIterable, Comparable {
 	case themeInSameForm
 	/// `TwinFirst` declares `twinTheme` by value and `TwinSecond` as the lazy wrapper, which `TwinModel` receives.
 	case themeInMixedForms
-	/// `themeInMixedForms` where `TwinSecond` holds the model in a `SendableLazilyInstantiated`, so the body of `TwinModel`
+	/// `themeInMixedForms` where a parent holds the model in a `SendableLazilyInstantiated`, so the body of `TwinModel`
 	/// that reads the theme in its two forms is inside that wrapper's `@Sendable` builder.
 	case themeInMixedFormsInsideSendableBuilder
 
@@ -58,7 +58,6 @@ enum TwinShape: String, CaseIterable, Comparable {
 		var currentTypeName = ""
 		var firstDeclaresTheme = false
 		var secondThemeType: String?
-		var secondHoldsSendableLazyModel = false
 		for line in fixture.swiftFileContent.flatMap(GraphFuzzerSourceLine.lines(of:)) {
 			switch line {
 			case let .typeDeclaration(name):
@@ -78,7 +77,6 @@ enum TwinShape: String, CaseIterable, Comparable {
 				case "\(prefix)TwinSecond" where label == "twinModel":
 					if type.hasPrefix("SendableLazilyInstantiated<") {
 						shapes.insert(.sendableWrapper)
-						secondHoldsSendableLazyModel = true
 					}
 				case "\(prefix)TwinFirst" where label == "twinTheme":
 					firstDeclaresTheme = true
@@ -106,7 +104,7 @@ enum TwinShape: String, CaseIterable, Comparable {
 		if firstDeclaresTheme, let secondThemeType {
 			if secondThemeType.contains("LazilyInstantiated<") {
 				shapes.insert(.themeInMixedForms)
-				if secondHoldsSendableLazyModel {
+				if shapes.contains(.sendableWrapper) {
 					shapes.insert(.themeInMixedFormsInsideSendableBuilder)
 				}
 			} else {

@@ -7083,7 +7083,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// It is small because compiling generated code is what the fuzzer costs; ci.yml fuzzes the whole corpus on
 	/// every pull request. Compiling the batch is one `swiftc` invocation when nothing fails, and comparing its values
 	/// one compile and one link.
-	static let smokeSeeds: [UInt64] = [4, 5, 12, 18, 25, 30, 40, 53, 59, 62, 70, 86, 94, 97, 98, 99, 133, 161, 212, 267, 304, 327, 378, 466, 520, 582, 691, 705, 731, 930, 2_314, 2_420, 2_611, 3_360, 4_002, 4_224, 4_516, 5_889, 6_388]
+	static let smokeSeeds: [UInt64] = [4, 5, 12, 18, 25, 30, 40, 53, 59, 62, 70, 86, 94, 97, 98, 99, 133, 161, 212, 267, 304, 327, 378, 466, 520, 582, 691, 705, 731, 930, 2_186, 2_314, 2_420, 2_449, 2_611, 3_360, 4_002, 4_224, 4_516, 5_889, 6_388]
 
 	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x5DACD5ABC47F0132
 
@@ -7192,6 +7192,17 @@ struct SafeDIToolGraphFuzzerTests {
 		.instantiableStruct: 544,
 		.additionalMockToGenerate: 653,
 		.generateDependencyTree: 0,
+		.twinsOverSharedScreen: 98,
+		.twinsOverSharedScreenValueFirst: 52,
+		.twinsOverSharedScreenWrapperFirst: 46,
+		.twinsOverSharedScreenSendableWrapper: 20,
+		.twinsOverSharedScreenScreenReceivesOnlyIfAvailable: 36,
+		.twinsOverSharedScreenScreenBuildsPanel: 32,
+		.twinsOverSharedScreenFirstThroughInstantiator: 46,
+		.twinsOverSharedScreenTopOpensSecond: 44,
+		.twinsOverSharedScreenThemeInSameForm: 37,
+		.twinsOverSharedScreenThemeInMixedForms: 29,
+		.twinsOverSharedScreenThemeInMixedFormsInsideSendableBuilder: 16,
 	]
 
 	/// The graphs of seeds `0..<seedCount` drawn with `features`, and what is pinned about them. Each generator
@@ -8133,9 +8144,9 @@ struct SafeDIToolGraphFuzzerTests {
 		.twinsOverSharedScreenFirstThroughInstantiator: 101,
 		.twinsOverSharedScreenTopOpensSecond: 71,
 		.twinsOverSharedScreenInSeam: 195,
-		.twinsOverSharedScreenThemeInSameForm: 82,
-		.twinsOverSharedScreenThemeInMixedForms: 33,
-		.twinsOverSharedScreenThemeInMixedFormsInsideSendableBuilder: 4,
+		.twinsOverSharedScreenThemeInSameForm: 67,
+		.twinsOverSharedScreenThemeInMixedForms: 70,
+		.twinsOverSharedScreenThemeInMixedFormsInsideSendableBuilder: 49,
 	]
 
 	/// Seeds in `0..<seamCorpusSeedCount` whose graphs fail today. The 1 000-seed run of this corpus found that each

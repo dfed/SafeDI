@@ -25,8 +25,8 @@ import Testing
 
 /// The corpora's draw of twins over a shared screen: `addingTwinsOverSharedScreen` in the base and seam corpora, and its
 /// public mock form in the public mock corpus. The seam and public mock corpora count each shape as a draw feature, drawn
-/// and accepted (`seamCorpusDrawFeatureCounts`, `seamCorpusAcceptedDrawFeatureCounts` and their public mock twins); the
-/// base corpus's drawn counts are pinned here.
+/// and accepted (`seamCorpusDrawFeatureCounts`, `seamCorpusAcceptedDrawFeatureCounts` and their public mock twins), and
+/// the base corpus as features of accepted graphs (`corpusAcceptedFeatureCounts`); its drawn counts are pinned here.
 struct SafeDIToolGraphFuzzerTwinDrawTests {
 	@Test
 	func baseCorpus_drawsEachShapeOfTwinsOverSharedScreen_inPinnedNumberOfGraphs() {
@@ -90,9 +90,9 @@ struct SafeDIToolGraphFuzzerTwinDrawTests {
 		.screenBuildsPanel: 76,
 		.firstThroughInstantiator: 91,
 		.topOpensSecond: 78,
-		.themeInSameForm: 81,
-		.themeInMixedForms: 36,
-		.themeInMixedFormsInsideSendableBuilder: 3,
+		.themeInSameForm: 69,
+		.themeInMixedForms: 65,
+		.themeInMixedFormsInsideSendableBuilder: 37,
 	]
 }
 
@@ -132,10 +132,10 @@ struct TwinSeed: CustomTestStringConvertible, Sendable {
 
 	static let all: [TwinSeed] = [
 		TwinSeed(corpus: .base, seed: 2_449, shapes: [.drawn, .firstThroughInstantiator, .screenBuildsPanel, .screenReceivesOnlyIfAvailable, .themeInSameForm, .topOpensSecond, .wrapperFirst]),
-		TwinSeed(corpus: .base, seed: 3_698, shapes: [.drawn, .screenBuildsPanel, .sendableWrapper, .themeInMixedForms, .themeInMixedFormsInsideSendableBuilder, .valueFirst]),
+		TwinSeed(corpus: .base, seed: 2_186, shapes: [.drawn, .firstThroughInstantiator, .screenBuildsPanel, .sendableWrapper, .themeInMixedForms, .themeInMixedFormsInsideSendableBuilder, .topOpensSecond, .valueFirst]),
 		TwinSeed(corpus: .seam, seed: 62, shapes: [.drawn, .inSeam, .themeInSameForm, .wrapperFirst]),
 		TwinSeed(corpus: .seam, seed: 98, shapes: [.drawn, .firstThroughInstantiator, .inSeam, .screenBuildsPanel, .screenReceivesOnlyIfAvailable, .wrapperFirst]),
-		TwinSeed(corpus: .seam, seed: 897, shapes: [.drawn, .firstThroughInstantiator, .inSeam, .sendableWrapper, .themeInMixedForms, .themeInMixedFormsInsideSendableBuilder, .topOpensSecond, .valueFirst]),
+		TwinSeed(corpus: .seam, seed: 89, shapes: [.drawn, .firstThroughInstantiator, .inSeam, .sendableWrapper, .themeInMixedForms, .themeInMixedFormsInsideSendableBuilder, .topOpensSecond, .valueFirst]),
 		TwinSeed(corpus: .publicMock, seed: 60, shapes: [.drawn, .screenReceivesOnlyIfAvailable, .wrapperFirst]),
 		TwinSeed(corpus: .publicMock, seed: 330, shapes: [.drawn, .firstThroughInstantiator, .screenBuildsPanel, .sendableWrapper, .topOpensSecond, .valueFirst]),
 	]

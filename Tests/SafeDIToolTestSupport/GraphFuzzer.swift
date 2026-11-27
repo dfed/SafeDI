@@ -8649,9 +8649,10 @@ enum GraphFuzzerGenerator {
 			// Two rolls of their own: four graphs in ten give both parents a declaration of `twinTheme` in one form, by value,
 			// which `TwinModel`, the twins' type, receives, so each twin reads its own parent's theme; of the rest, four in
 			// ten declare it by value on `TwinFirst` and as the lazy wrapper on `TwinSecond`, so the twins read it in two
-			// forms.
-			let themeInSameForm = twinRandom.percentChance(40)
-			let themeInMixedForms = twinRandom.percentChance(40) && !themeInSameForm
+			// forms. Where the lazy twin is a `SendableLazilyInstantiated`, one graph in five draws the one form and the rest
+			// the two forms, so that enough graphs read a label in two forms inside a `@Sendable` builder.
+			let themeInSameForm = twinRandom.percentChance(isSendable ? 20 : 40)
+			let themeInMixedForms = twinRandom.percentChance(isSendable ? 100 : 40) && !themeInSameForm
 			let readsTheme = themeInSameForm || themeInMixedForms
 			let themeName = "\(prefix)TwinTheme"
 			let valueTheme = PropertyDeclaration(attribute: "@Instantiated", label: "twinTheme", type: themeName)
@@ -11437,6 +11438,19 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 	/// A type declared with `generateDependencyTree: true`, whose tree SafeDI generates in an initializer of its own
 	/// that every tree reaching it calls. Drawn only with the `generateDependencyTree` generator feature on; what its
 	/// initializer takes is a `GraphFuzzerSeamOutputFeature`, read from the generated code.
+	/// Twins over a shared screen in a root's own tree (`addingTwinsOverSharedScreen`), one case per `TwinShape` the base
+	/// corpus draws.
+	case twinsOverSharedScreen
+	case twinsOverSharedScreenValueFirst
+	case twinsOverSharedScreenWrapperFirst
+	case twinsOverSharedScreenSendableWrapper
+	case twinsOverSharedScreenScreenReceivesOnlyIfAvailable
+	case twinsOverSharedScreenScreenBuildsPanel
+	case twinsOverSharedScreenFirstThroughInstantiator
+	case twinsOverSharedScreenTopOpensSecond
+	case twinsOverSharedScreenThemeInSameForm
+	case twinsOverSharedScreenThemeInMixedForms
+	case twinsOverSharedScreenThemeInMixedFormsInsideSendableBuilder
 	case generateDependencyTree
 
 	/// The features only a graph drawn with the `generateDependencyTree` generator feature has.
@@ -11445,6 +11459,24 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 	/// The features a graph drawn without any generator feature can have, which the smoke batch must exercise.
 	static var baseCases: [GraphFuzzerFeature] {
 		allCases.filter { !seamCases.contains($0) }
+	}
+
+	/// The feature of the base corpus that `shape` is, where a root's own tree holds the twins.
+	static func twinsOverSharedScreen(_ shape: TwinShape) -> GraphFuzzerFeature? {
+		switch shape {
+		case .drawn: .twinsOverSharedScreen
+		case .valueFirst: .twinsOverSharedScreenValueFirst
+		case .wrapperFirst: .twinsOverSharedScreenWrapperFirst
+		case .sendableWrapper: .twinsOverSharedScreenSendableWrapper
+		case .screenReceivesOnlyIfAvailable: .twinsOverSharedScreenScreenReceivesOnlyIfAvailable
+		case .screenBuildsPanel: .twinsOverSharedScreenScreenBuildsPanel
+		case .firstThroughInstantiator: .twinsOverSharedScreenFirstThroughInstantiator
+		case .topOpensSecond: .twinsOverSharedScreenTopOpensSecond
+		case .themeInSameForm: .twinsOverSharedScreenThemeInSameForm
+		case .themeInMixedForms: .twinsOverSharedScreenThemeInMixedForms
+		case .themeInMixedFormsInsideSendableBuilder: .twinsOverSharedScreenThemeInMixedFormsInsideSendableBuilder
+		case .inSeam: nil
+		}
 	}
 
 	static func < (lhs: GraphFuzzerFeature, rhs: GraphFuzzerFeature) -> Bool {
@@ -12093,6 +12125,10 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		}
 		if !mockOnlyExtendedTypeNames.intersection(productionTypeNames).isDisjoint(with: receivedTypes) {
 			features.insert(.mockOnlyExtensionOfReceivedType)
+		}
+		let twinShapes = TwinShape.shapes(of: fixture)
+		if !twinShapes.contains(.inSeam) {
+			features.formUnion(twinShapes.compactMap(GraphFuzzerFeature.twinsOverSharedScreen))
 		}
 		return features
 	}

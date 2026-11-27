@@ -326,6 +326,10 @@ private final class GeneratedCodeSupplyReader: SyntaxVisitor {
 		} else if let call = expression.as(FunctionCallExprSyntax.self), call.arguments.count == 1, let argument = call.arguments.first, argument.label == nil {
 			// An erasing type wraps the value it erases.
 			resolve(argument.expression, into: &values, visitedFunctions: &visitedFunctions)
+		} else if let call = expression.as(FunctionCallExprSyntax.self), call.arguments.isEmpty, let closure = call.trailingClosure, closure.signature == nil, closure.statements.count == 1, let wrapped = closure.statements.first?.item.as(ExprSyntax.self), let wrapper = call.calledExpression.as(GenericSpecializationExprSyntax.self)?.expression.as(DeclReferenceExprSyntax.self), ["LazilyInstantiated", "SendableLazilyInstantiated"].contains(wrapper.baseName.text) {
+			// A lazy wrapper made of a value, `LazilyInstantiated<T> { x }`, which a twin's call of the function the other
+			// twin closes on passes where that function takes the wrapper, holds `x`.
+			resolve(wrapped, into: &values, visitedFunctions: &visitedFunctions)
 		} else if let call = expression.as(FunctionCallExprSyntax.self), call.arguments.isEmpty, call.trailingClosure != nil, let map = call.calledExpression.as(MemberAccessExprSyntax.self), map.declName.baseName.text == "map", let tuple = map.base?.as(TupleExprSyntax.self), tuple.elements.count == 1, let element = tuple.elements.first, let erased = Self.valueCast(element.expression) {
 			// An erased rename of an optional value erases it inside `(x as T?).map { AnyT($0) }`.
 			resolve(erased, into: &values, visitedFunctions: &visitedFunctions)
