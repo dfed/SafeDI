@@ -92,10 +92,11 @@ extension NodeRecords {
 		let fieldArguments = mockConfigurationFieldArguments(of: declaration, in: world)
 		// A mock world that holds a lazily instantiated property is refused (`refusalsOfBuiltByInitializer(_:in:)`), so no
 		// receive of this node reads a wrapper's instance.
-		// A constant the mock builds for an optional property it promotes is bound as the unwrapped type its function returns,
-		// as every node the mock builds is bound non-optional; the optional receiver takes it through optional promotion.
+		// A node the mock builds for an optional property it promotes, a constant or an instantiator, is bound as the unwrapped
+		// type it makes, as every node the mock builds is bound non-optional; the optional receiver takes it through optional
+		// promotion.
 		let boundProperty = world.property(of: declaration).map { property in
-			property.propertyType == .constant && property.typeDescription.isOptional ? Property(label: property.label, typeDescription: property.typeDescription.unwrapped) : property
+			property.typeDescription.isOptional ? Property(label: property.label, typeDescription: property.typeDescription.unwrapped) : property
 		}
 		.map { property in
 			nameApart.map { Property(label: $0, typeDescription: property.typeDescription) } ?? property
