@@ -419,6 +419,9 @@ enum TypeFactsChecks {
 		// Check 35 (34 is the production Sendable mark’s): a variant’s parameters, read from the facts alone, are the
 		// cycle parameters of the function the tree builds at each of its places. A place that closes a cycle builds no
 		// function.
+		// A function a place closes on whose own variant in the facts is another (a member built two ways, which is two
+		// declarations, or a call whose answers key it apart from the function’s first call) is two variants in the facts,
+		// which hold its parameters apart: counted, and no finding.
 		var placesClosedOnByAnotherVariant = Set<Int>()
 		var variantsWithParametersTheTreeCaptures = Set<Int>()
 		for (index, place) in places.enumerated() where place.closesCycle {
