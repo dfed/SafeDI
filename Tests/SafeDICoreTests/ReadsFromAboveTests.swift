@@ -92,7 +92,7 @@ struct ReadsFromAboveTests {
 		let rebound = BitRows(rowCount: 3, columnCount: 2) { row, insert in
 			[[], [0], []][row].forEach(insert)
 		}
-		let madeAgain = MadeAgainEdges(graph: graph, targetsByNode: [[], [2], []], rebound: rebound)
+		let madeAgain = MadeAgainEdges(graph: graph, targetsByNode: [[], [2], []], parentEdgesByNode: [[], [1], []], rebound: rebound)
 		let reads = ReadsFromAbove(graph: graph, own: own, hidden: hidden, madeAgain: madeAgain)
 
 		#expect(graph.nodes.indices.map { reads.reads(of: $0) } == [[0, 1], [1], [0, 1]])
@@ -113,7 +113,7 @@ struct ReadsFromAboveTests {
 		let rebound = BitRows(rowCount: 4, columnCount: 3) { row, insert in
 			[[], [1], [2], [0]][row].forEach(insert)
 		}
-		let madeAgain = MadeAgainEdges(graph: graph, targetsByNode: [[], [2], [3], [1]], rebound: rebound)
+		let madeAgain = MadeAgainEdges(graph: graph, targetsByNode: [[], [2], [3], [1]], parentEdgesByNode: [[], [1], [2], [0]], rebound: rebound)
 		let reads = ReadsFromAbove(graph: graph, own: own, hidden: rebound, madeAgain: madeAgain)
 
 		#expect(graph.nodes.indices.map(graph.isOnCycle) == [false, false, false, false])

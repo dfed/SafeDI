@@ -89,9 +89,9 @@ struct TypeFactsVariants: Sendable {
 	///     difference a parameter can carry projects to one key. It is applied once, to an answer a call binds or to -1 for
 	///     none, never to a key a call passes through, so it need not be idempotent: a key collapsed at one call reaches
 	///     every callee below unchanged.
-	///   - madeAgain: The world's made-again calls, or `nil` for a world with no loop of builders.
-	///   - madeAgainBinding: What a node binds at its top for a read of a member it makes again: an answer for each read of
-	///     a label it rebinds, `nil` for the others, which pass through from the caller's own answers.
+	///   - madeAgain: The world's made-again calls, and what a node binds at its top for a read of a member it makes again
+	///     (an answer for each read of a label it rebinds, `nil` for the others, which pass through from the caller's own
+	///     answers); `nil` for a world with no loop of builders.
 	init(
 		graph: OrderedGraph<some Hashable & Sendable>,
 		reads: ReadsFromAbove,
@@ -99,8 +99,7 @@ struct TypeFactsVariants: Sendable {
 		binding: (_ edge: Int, _ read: Int32) -> VariantBinding?,
 		family: (_ edge: Int, _ callerFamily: VariantFamily) -> VariantFamily,
 		key: (_ read: Int32, _ answer: Int32) -> Int32,
-		madeAgain: MadeAgainEdges? = nil,
-		madeAgainBinding: (_ node: Int, _ read: Int32) -> VariantBinding? = { _, _ in nil },
+		madeAgain: (edges: MadeAgainEdges, binding: (_ node: Int, _ read: Int32) -> VariantBinding?)? = nil,
 	) {
 		var columns = Columns()
 		var bucketByHash = [Int: Int32]()
@@ -176,9 +175,12 @@ struct TypeFactsVariants: Sendable {
 			}
 			if let madeAgain {
 				columns.madeAgainOffsets.append(Int32(columns.callees.count))
-				// A member made again is built in the family of its caller's top, where the call is.
-				for target in madeAgain.targets(of: node) {
-					appendCall(of: target, from: caller, of: node, family: { callerFamily }, binding: { madeAgainBinding(node, $0) })
+				// A member made again is the parent's member, built in the family its parent's edge builds it in. The caller
+				// stands for the parent there: a caller in another family than the parent's is a `@Sendable` member, which
+				// rebinds only `@Sendable` members (a plain one is `nonSendableWrapperCaptures`' error), each of whose edges
+				// fixes its family whatever it is given.
+				for (target, parentEdge) in zip(madeAgain.edges.targets(of: node), madeAgain.edges.parentEdges(of: node)) {
+					appendCall(of: target, from: caller, of: node, family: { family(Int(parentEdge), callerFamily) }, binding: { madeAgain.binding(node, $0) })
 				}
 			}
 		}

@@ -67,6 +67,7 @@ public struct TypeFactsReport: Sendable {
 		variantNodes = (0..<graph.variantCount).map { Int(graph.declaration(of: VariantID($0))) }
 		variantCalls = (0..<graph.variantCount).map { graph.calls(of: VariantID($0)).map(Int.init) }
 		variantMadeAgainCalls = (0..<graph.variantCount).map { graph.madeAgainCalls(of: VariantID($0)).map(Int.init) }
+		variantIsCalledOnce = (0..<graph.variantCount).map { graph.isCalledOnce(VariantID($0)) }
 		func sourceDescriptions(_ sources: ArraySlice<AnswerSource>) -> [String] {
 			sources.map { source in
 				switch source.kind {
@@ -189,6 +190,8 @@ public struct TypeFactsReport: Sendable {
 	public let variantCalls: [[Int]]
 	/// The variant each made-again call of a variant calls, in the order its node rebinds the members.
 	public let variantMadeAgainCalls: [[Int]]
+	/// Whether each variant is called by exactly one call, a made-again call counted, and off every cycle.
+	public let variantIsCalledOnce: [Bool]
 	/// For each call of each variant, in edge order, where each answer it hands comes from: `none`, `passedThrough`, or
 	/// `bound` with the answer's form.
 	public let variantCallSources: [[[String]]]

@@ -58,10 +58,13 @@ struct SafeDIToolTypeFactsLoopTests: ~Copyable {
 		#expect(!report.nodes[a].isOnCycle && !report.nodes[b].isOnCycle, "\(report.world)")
 		#expect(report.variantCountsByNode[a] == 1 && report.variantCountsByNode[b] == 1, "\(report.world)")
 		expectMadeAgainCallsNameTheParentsCalls(in: report)
-		// The member made again reads its own label, answered made again at its caller's top, and the other label, the
-		// caller's own, passed through.
+		// Each member's receive of the other reads the rebinding at its top, so each reads only the label it is built as,
+		// and the member made again is handed its label made again.
+		#expect(report.nodes[a].readsFromAbove == ["value(aBuilder)"] && report.nodes[b].readsFromAbove == ["value(bBuilder)"], "\(report.world)")
 		let callOfB = try #require(report.variantMadeAgainCallSources[variant(of: a, in: report)].first)
-		#expect(callOfB == ["passedThrough", "bound madeAgain"], "\(report.world)")
+		#expect(callOfB == ["bound madeAgain"], "\(report.world)")
+		// A made-again call is a call: each member is called by its parent and made again by the other.
+		#expect(try !report.variantIsCalledOnce[variant(of: a, in: report)] && !report.variantIsCalledOnce[variant(of: b, in: report)], "\(report.world)")
 	}
 
 	@Test
@@ -77,8 +80,9 @@ struct SafeDIToolTypeFactsLoopTests: ~Copyable {
 
 		#expect(members.map { report.nodes[$0].madeAgain } == [[members[1]], [members[2]], [members[0]]], "\(report.world)")
 		#expect(members.allSatisfy { !report.nodes[$0].isOnCycle }, "\(report.world)")
-		// Each member makes the next again, which makes the one after again: what the ring reads reaches each member.
-		#expect(members.allSatisfy { Set(report.nodes[$0].readsFromAbove).isSuperset(of: ["value(aBuilder)", "value(bBuilder)", "value(cBuilder)"]) }, "\(report.world)")
+		// Each member's receive reads its rebinding, and what the member it makes again reads but for that rebinding is
+		// the label it is built as, which the next member rebinds: each member reads only its own label.
+		#expect(members.map { report.nodes[$0].readsFromAbove } == [["value(aBuilder)"], ["value(bBuilder)"], ["value(cBuilder)"]], "\(report.world)")
 		#expect(members.allSatisfy { report.variantCountsByNode[$0] == 1 }, "\(report.world)")
 		expectMadeAgainCallsNameTheParentsCalls(in: report)
 	}
@@ -130,6 +134,66 @@ struct SafeDIToolTypeFactsLoopTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_makesAgainWhatEachMemberRebinds_whenARingRunsThroughAMembersTree() async throws {
+		// `A` receives `bBuilder`, `B`'s child `E` receives `dBuilder`, and `D` receives `aBuilder`: the ring runs through a
+		// member's tree, and each member makes again what its function rebinds.
+		let (report, output) = try await rootReportAndOutput(of: [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let aBuilder: Instantiator<A>", "@Instantiated let bBuilder: Instantiator<B>", "@Instantiated let dBuilder: Instantiator<D>"]),
+			seamFixtureType(named: "A", isFinalClass: true, declarations: ["@Received let bBuilder: Instantiator<B>"]),
+			seamFixtureType(named: "B", isFinalClass: true, declarations: ["@Instantiated let e: E"]),
+			seamFixtureType(named: "E", isFinalClass: true, declarations: ["@Received let dBuilder: Instantiator<D>"]),
+			seamFixtureType(named: "D", isFinalClass: true, declarations: ["@Received let aBuilder: Instantiator<A>"]),
+		])
+		let members = try ["A as aBuilder: Instantiator<A>", "B as bBuilder: Instantiator<B>", "D as dBuilder: Instantiator<D>"].map { try node(declaring: $0, in: report) }
+
+		#expect(members.map { report.nodes[$0].madeAgain } == [[members[1]], [members[2]], [members[0]]], "\(report.world)")
+		expectMadeAgainCallsNameTheParentsCalls(in: report)
+		// Today's code: each member's function rebinds what the report says it makes again.
+		#expect(output.generatedFiles?["Root+SafeDI.swift"] == generatedFileHeader + """
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_aBuilder() -> A {
+		            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+		            return A(bBuilder: bBuilder)
+		        }
+		        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+		        func __safeDI_bBuilder() -> B {
+		            let dBuilder = Instantiator<D>(__safeDI_dBuilder)
+		            let e = E(dBuilder: dBuilder)
+		            return B(e: e)
+		        }
+		        let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+		        func __safeDI_dBuilder() -> D {
+		            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+		            return D(aBuilder: aBuilder)
+		        }
+		        let dBuilder = Instantiator<D>(__safeDI_dBuilder)
+		        self.init(aBuilder: aBuilder, bBuilder: bBuilder, dBuilder: dBuilder)
+		    }
+		}
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_makesNothingAgainOfALabel_whenTheMemberDeclaresIt() async throws {
+		// `A` declares its own `bBuilder`, which hides the root's from `A`'s tree, so `A` makes no `B` again. Its `B`
+		// receives `aBuilder`, the `A` being built, which `A` makes again itself.
+		let report = try await rootReport(of: [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let aBuilder: Instantiator<A>", "@Instantiated let bBuilder: Instantiator<B>"]),
+			seamFixtureType(named: "A", isFinalClass: true, declarations: ["@Instantiated let bBuilder: Instantiator<B>"]),
+			seamFixtureType(named: "B", isFinalClass: true, declarations: ["@Received let aBuilder: Instantiator<A>"]),
+		])
+		let a = try node(declaring: "A as aBuilder: Instantiator<A>", in: report)
+		let b = try node(declaring: "B as bBuilder: Instantiator<B>", in: report)
+
+		#expect(report.nodes[a].madeAgain == [a], "\(report.world)")
+		#expect(report.nodes[b].madeAgain.isEmpty, "\(report.world)")
+		expectMadeAgainCallsNameTheParentsCalls(in: report)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_listsMemberSharedApart_whenAnotherParentBuildsItOffTheLoop() async throws {
 		// The root's `A` and `B` are a loop. `Other` builds `A` as the same property without `B`, so `A` receives the
 		// root's `bBuilder` there and makes nothing again: one node, two made-again sets.
@@ -148,9 +212,8 @@ struct SafeDIToolTypeFactsLoopTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_keepsVariantsPerNodeFixed_whenRingGrows() async throws {
-		// A ring of n members, each receiving the next. Each member makes the next again from its top, which makes the one
-		// after again, so each member reads every label of the ring: n reads per member, n² keys in all, and one variant
-		// per node however long the ring.
+		// A ring of n members, each receiving the next. Each member reads only the label it is built as, so the ring's keys
+		// total n, with one variant per node, however long the ring.
 		for memberCount in [4, 8, 16] {
 			var rootDeclarations = [String]()
 			var types = [String]()
@@ -161,7 +224,7 @@ struct SafeDIToolTypeFactsLoopTests: ~Copyable {
 			types.append(seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: rootDeclarations))
 			let report = try await rootReport(of: types, skipCompileVerification: true)
 
-			#expect(report.nodes.dropFirst().allSatisfy { $0.madeAgain.count == 1 && !$0.isOnCycle && $0.readsFromAbove.count == memberCount }, "\(memberCount): \(report.world)")
+			#expect(report.nodes.dropFirst().allSatisfy { $0.madeAgain.count == 1 && !$0.isOnCycle && $0.readsFromAbove.count == 1 }, "\(memberCount): \(report.world)")
 			#expect(report.variantCountsByNode.allSatisfy { $0 == 1 }, "\(memberCount): \(report.world)")
 		}
 	}
@@ -172,8 +235,13 @@ struct SafeDIToolTypeFactsLoopTests: ~Copyable {
 
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private func rootReport(of types: [String], skipCompileVerification: Bool = false) async throws -> TypeFactsReport {
+		try await rootReportAndOutput(of: types, skipCompileVerification: skipCompileVerification).report
+	}
+
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private func rootReportAndOutput(of types: [String], skipCompileVerification: Bool = false) async throws -> (report: TypeFactsReport, output: TestOutput) {
 		let (stream, continuation) = AsyncStream.makeStream(of: TypeFactsReport.self)
-		_ = try await ConstructionMemoOracle.$observer.withValue({ _, _, report in continuation.yield(report) }) {
+		let output = try await ConstructionMemoOracle.$observer.withValue({ _, _, report in continuation.yield(report) }) {
 			var filesToDelete = [URL]()
 			defer {
 				for file in filesToDelete {
@@ -187,7 +255,7 @@ struct SafeDIToolTypeFactsLoopTests: ~Copyable {
 		for await report in stream where report.root == "Root" && !report.forMockGeneration {
 			reports.append(report)
 		}
-		return try #require(reports.last)
+		return try (#require(reports.last), output)
 	}
 
 	private func node(declaring declaration: String, in report: TypeFactsReport) throws -> Int {

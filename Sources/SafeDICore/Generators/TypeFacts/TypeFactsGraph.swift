@@ -138,12 +138,11 @@ struct TypeFactsGraph: Sendable {
 		let reads: ReadsFromAbove
 		let madeAgain: MadeAgainEdges?
 		if let loops {
-			// A member binds each label it rebinds at the top of its body, before every edge, so it hides them from the nodes
-			// above it, and its made-again calls are edges of the closure.
+			// A member binds each label it rebinds at the top of its body, before every other statement, so it hides them
+			// from the nodes above it, and its made-again calls are edges of the closure.
 			func reboundReads(of index: Int, _ insert: (Int32) -> Void) {
 				for target in loops.targetsByNode[index] {
-					guard let label = graph.nodes[Int(target)].property.flatMap({ labels.existingID(of: $0.label) }) else { continue }
-					readsByLabel[Int(label)].forEach(insert)
+					readsByLabel[Int(target.label)].forEach(insert)
 				}
 			}
 			let rebound = BitRows(rowCount: graph.nodes.count, columnCount: readInterner.reads.count, columnsOfRow: reboundReads)
@@ -151,9 +150,23 @@ struct TypeFactsGraph: Sendable {
 				hidden.columns(inRow: index).forEach(insert)
 				reboundReads(of: index, insert)
 			}
-			let edges = MadeAgainEdges(graph: graph, targetsByNode: loops.targetsByNode, rebound: rebound)
+			// The rebinding shadows the label for the member's own type too: its receive of a member it makes again reads the
+			// rebinding, never what is above. Only the read of the label it is built as, `value` of its own label, still
+			// reaches above, where its parent's declaration is being built.
+			let ownAboveRebinding = BitRows(rowCount: graph.nodes.count, columnCount: readInterner.reads.count) { index, insert in
+				let shadowed = Set(loops.targetsByNode[index].lazy.filter { $0.node != Int32(index) }.flatMap { readsByLabel[Int($0.label)] })
+				for read in own.columns(inRow: index) where !shadowed.contains(read) {
+					insert(read)
+				}
+			}
+			let edges = MadeAgainEdges(
+				graph: graph,
+				targetsByNode: loops.targetsByNode.map { $0.map(\.node) },
+				parentEdgesByNode: loops.targetsByNode.map { $0.map(\.parentEdge) },
+				rebound: rebound,
+			)
 			madeAgain = edges
-			reads = ReadsFromAbove(graph: graph, own: own, hidden: hiddenOrRebound, madeAgain: edges)
+			reads = ReadsFromAbove(graph: graph, own: ownAboveRebinding, hidden: hiddenOrRebound, madeAgain: edges)
 		} else {
 			madeAgain = nil
 			reads = readsOfEdges
@@ -186,7 +199,7 @@ struct TypeFactsGraph: Sendable {
 		self.readOffsets = readOffsets
 		self.labelColumn = labelColumn
 		self.labelOffsets = labelOffsets
-		let answers = Self.answers(of: graph, reads: reads, readTable: readInterner.reads, labels: labels, madeAgain: madeAgain, loopParents: loops?.parentByMember ?? [])
+		let answers = Self.answers(of: graph, reads: reads, readTable: readInterner.reads, labels: labels, madeAgain: madeAgain, loops: loops)
 		answerIsBeingBuilt = answers.isBeingBuilt
 		answerIsMadeAgain = answers.isMadeAgain
 		answerTexts = answers.texts
@@ -294,7 +307,7 @@ struct TypeFactsGraph: Sendable {
 		readTable: [Read],
 		labels: LabelInterner,
 		madeAgain: MadeAgainEdges?,
-		loopParents: [Int32],
+		loops: LoopsOfBuilders?,
 	) -> (variants: TypeFactsVariants, isBeingBuilt: [Bool], isMadeAgain: [Bool], texts: [String], keys: [Int32]) {
 		var answerIDByText = [String: Int32]()
 		var texts = [String]()
@@ -347,26 +360,24 @@ struct TypeFactsGraph: Sendable {
 		for index in graph.nodes.indices {
 			edgeTargets.append(contentsOf: graph.edges(from: index))
 		}
-		// Each member's rebound labels, with the forms its parent declares them with.
-		var reboundByLabelByNode = [[Int32: (forms: String, kind: Property.PropertyType)]](repeating: [:], count: madeAgain == nil ? 0 : graph.nodes.count)
-		if let madeAgain {
-			for index in graph.nodes.indices {
-				for target in madeAgain.targets(of: index) {
-					guard let label = graph.nodes[Int(target)].property.flatMap({ labels.existingID(of: $0.label) }),
-					      let declaration = declarationByLabelByNode[Int(loopParents[index])][label]
-					else { continue }
-					reboundByLabelByNode[index][label] = declaration
+		// Each member's rebound labels, with the forms its parent declares them with: the parent declares each member it
+		// builds.
+		var reboundByLabelByNode = [[Int32: (forms: String, kind: Property.PropertyType)]](repeating: [:], count: loops == nil ? 0 : graph.nodes.count)
+		if let loops {
+			for (index, targets) in loops.targetsByNode.enumerated() {
+				for target in targets {
+					reboundByLabelByNode[index][target.label] = declarationByLabelByNode[Int(loops.parentByMember[index])][target.label]
 				}
 			}
 		}
-		/// The answer `node` binds at its top for a read of a label it rebinds, or `nil` for any other read.
+		/// The answer `node` binds at its top for a read of a label it rebinds, or `nil` for any other read. A member is a
+		/// builder, so the answer keys as the wrapper alone (rule 2).
 		func madeAgainAnswer(at node: Int, for read: Read) -> VariantBinding? {
 			guard read.channel.asksAboutLabel, !reboundByLabelByNode.isEmpty, let declaration = reboundByLabelByNode[node][read.label] else {
 				return nil
 			}
-			let text = "\(read.channel.name) \(declaration.forms) made again"
-			let keyText = declaration.kind.isConstant ? text : "\(read.channel.name) \(declaration.forms)"
-			return VariantBinding(answer: answer(text: text, beingBuilt: false, madeAgain: true, keyText: keyText, kind: declaration.kind), declaration: Int32(node))
+			let keyText = "\(read.channel.name) \(declaration.forms)"
+			return VariantBinding(answer: answer(text: "\(keyText) made again", beingBuilt: false, madeAgain: true, keyText: keyText, kind: declaration.kind), declaration: Int32(node))
 		}
 		let variants = TypeFactsVariants(
 			graph: graph,
@@ -397,9 +408,8 @@ struct TypeFactsGraph: Sendable {
 					answer < 0 ? answer : keys[Int(answer)]
 				}
 			},
-			madeAgain: madeAgain,
-			madeAgainBinding: { node, readID in
-				madeAgainAnswer(at: node, for: readTable[Int(readID)])
+			madeAgain: madeAgain.map { edges in
+				(edges, { node, readID in madeAgainAnswer(at: node, for: readTable[Int(readID)]) })
 			},
 		)
 		return (variants, isBeingBuilt, isMadeAgain, texts, keys)
@@ -547,8 +557,15 @@ struct TypeFactsGraph: Sendable {
 
 	/// The loops of builders of a world, and what each member makes again.
 	private struct LoopsOfBuilders {
+		/// A member a node makes again: its node, its label, and the parent's edge that builds it.
+		struct Target: Equatable {
+			let node: Int32
+			let label: Int32
+			let parentEdge: Int32
+		}
+
 		/// The members each node makes again, sorted by property as its body rebinds them (`ScopeGenerator.reboundProperties`).
-		var targetsByNode: [[Int32]]
+		var targetsByNode: [[Target]]
 		/// The parent that declares each member's loop, -1 for a node on none.
 		var parentByMember: [Int32]
 		var membersSharedApart: [Int32]
@@ -562,6 +579,9 @@ struct TypeFactsGraph: Sendable {
 	/// of them with an arrow inside it. A receive only if available, a rename and a fill join no loop here; a stage that
 	/// writes from nodes refuses each of them beside a loop. A node whose parents' loops make different members again (or
 	/// a loop under one parent and none under another) is shared apart: it makes nothing again here, and is listed.
+	///
+	/// A member never declares a label it makes again: a declaration hides the label from the member's tree, which then
+	/// receives nothing of it, so no arrow is drawn.
 	private static func loopsOfBuilders(
 		graph: OrderedGraph<TypeFactsDeclaration>,
 		instantiatedEdgeCounts: [Int32],
@@ -570,36 +590,40 @@ struct TypeFactsGraph: Sendable {
 		readInterner: ReadInterner,
 		labels: LabelInterner,
 	) -> LoopsOfBuilders? {
-		func valueRead(ofLabelOf node: Int) -> Int32? {
-			graph.nodes[node].property.flatMap { labels.existingID(of: $0.label) }.flatMap { readInterner.existingID(of: Read(.value, label: $0)) }
-		}
-		func isBuilder(_ node: Int) -> Bool {
-			graph.nodes[node].property.map(ScopeGenerator.isBuilder) ?? false
-		}
-		var targetsUnderParent = [[Int32]?](repeating: nil, count: graph.nodes.count)
+		var targetsUnderParent = [[LoopsOfBuilders.Target]?](repeating: nil, count: graph.nodes.count)
 		var parentByMember = [Int32](repeating: -1, count: graph.nodes.count)
 		var isSharedApart = [Bool](repeating: false, count: graph.nodes.count)
 		var hasLoop = false
 		for parent in graph.nodes.indices {
-			var children = [Int32]()
+			// Each child once, with the parent's first edge to it.
+			var children = [(node: Int32, edge: Int32)]()
 			var isChild = Set<Int32>()
-			for child in graph.edges(from: parent).prefix(Int(instantiatedEdgeCounts[parent])) where isChild.insert(child).inserted {
-				children.append(child)
+			for (edgeIndex, child) in graph.edges(from: parent).prefix(Int(instantiatedEdgeCounts[parent])).enumerated() where isChild.insert(child).inserted {
+				children.append((child, Int32(graph.edgeOffset(of: parent) + edgeIndex)))
 			}
-			var targetsByChild = [[Int32]](repeating: [], count: children.count)
+			var targetsByChild = [[LoopsOfBuilders.Target]](repeating: [], count: children.count)
 			// A fill's one child is the property it fills, whose builder function the seam's initializer declares.
 			if !graph.nodes[parent].key.isFill {
+				// The `value` read of each builder child's label, and the label.
+				var valueReadBySlot = [Int32?](repeating: nil, count: children.count)
+				var labelBySlot = [Int32](repeating: -1, count: children.count)
 				var slotByValueRead = [Int32: Int]()
-				for (slot, child) in children.enumerated() where isBuilder(Int(child)) {
-					if let read = valueRead(ofLabelOf: Int(child)) {
-						slotByValueRead[read] = slot
-					}
+				for (slot, child) in children.enumerated() {
+					guard let property = graph.nodes[Int(child.node)].property,
+					      ScopeGenerator.isBuilder(property),
+					      let label = labels.existingID(of: property.label),
+					      let read = readInterner.existingID(of: Read(.value, label: label))
+					else { continue }
+					valueReadBySlot[slot] = read
+					labelBySlot[slot] = label
+					slotByValueRead[read] = slot
 				}
 				var arrows = [Set<Int>](repeating: [], count: children.count)
 				var hasArrow = false
-				for (slot, child) in children.enumerated() where isBuilder(Int(child)) {
-					let ownRead = valueRead(ofLabelOf: Int(child))
-					reads.rows.forEachColumn(inRow: Int(child)) { read, _ in
+				for (slot, child) in children.enumerated() {
+					guard let ownRead = valueReadBySlot[slot] else { continue }
+					let node = Int(child.node)
+					reads.rows.forEachColumn(inRow: node) { read, _ in
 						if read != ownRead, let sibling = slotByValueRead[read] {
 							arrows[slot].insert(sibling)
 							hasArrow = true
@@ -607,11 +631,11 @@ struct TypeFactsGraph: Sendable {
 					}
 					// The child's tree receives its own label where its type receives it, or a node beneath it does that the
 					// child does not hide it from.
-					guard let ownRead, let label = graph.nodes[Int(child)].property?.label else { continue }
-					let receivesItself = graph.nodes[Int(child)].scope.instantiable.dependencies.contains {
+					let label = labels.labels[Int(labelBySlot[slot])]
+					let receivesItself = graph.nodes[node].scope.instantiable.dependencies.contains {
 						$0.source == .received(onlyIfAvailable: false) && $0.property.label == label
 					}
-					let treeReceivesItself = !hidden.contains(ownRead, inRow: Int(child)) && graph.edges(from: Int(child)).prefix(Int(instantiatedEdgeCounts[Int(child)])).contains {
+					let treeReceivesItself = !hidden.contains(ownRead, inRow: node) && graph.edges(from: node).prefix(Int(instantiatedEdgeCounts[node])).contains {
 						reads.rows.contains(ownRead, inRow: Int($0))
 					}
 					if receivesItself || treeReceivesItself {
@@ -625,29 +649,33 @@ struct TypeFactsGraph: Sendable {
 						let members = arrows[slot].filter { componentBySlot[$0] == componentBySlot[slot] }
 						guard !members.isEmpty else { continue }
 						// Each member is a builder, built as a property.
-						targetsByChild[slot] = members.compactMap { member in graph.nodes[Int(children[member])].property.map { ($0, children[member]) } }
-							.sorted { $0.0 < $1.0 }
-							.map(\.1)
+						targetsByChild[slot] = members.compactMap { member in
+							graph.nodes[Int(children[member].node)].property.map { property in
+								(property, LoopsOfBuilders.Target(node: children[member].node, label: labelBySlot[member], parentEdge: children[member].edge))
+							}
+						}
+						.sorted { $0.0 < $1.0 }
+						.map(\.1)
 						hasLoop = true
 					}
 				}
 			}
 			for (slot, child) in children.enumerated() {
-				if let targets = targetsUnderParent[Int(child)] {
-					if targets != targetsByChild[slot] {
-						isSharedApart[Int(child)] = true
+				if let targets = targetsUnderParent[Int(child.node)] {
+					if targets.map(\.node) != targetsByChild[slot].map(\.node) {
+						isSharedApart[Int(child.node)] = true
 					}
 				} else {
-					targetsUnderParent[Int(child)] = targetsByChild[slot]
+					targetsUnderParent[Int(child.node)] = targetsByChild[slot]
 					if !targetsByChild[slot].isEmpty {
-						parentByMember[Int(child)] = Int32(parent)
+						parentByMember[Int(child.node)] = Int32(parent)
 					}
 				}
 			}
 		}
 		guard hasLoop else { return nil }
 		var membersSharedApart = [Int32]()
-		var targetsByNode = [[Int32]]()
+		var targetsByNode = [[LoopsOfBuilders.Target]]()
 		for node in graph.nodes.indices {
 			if isSharedApart[node] {
 				membersSharedApart.append(Int32(node))
