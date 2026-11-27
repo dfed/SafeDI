@@ -37,6 +37,9 @@ struct FillPrototypeReport: Sendable {
 	let nanoseconds: Int64
 	/// Per fill key, the labels of the case values the fill binds, then `|`, then the labels of what it takes after them.
 	let fillSignaturesByKey: [String: String]
+	/// The fills piece A made facts of, and the caller reads it found sources for.
+	let factsMade: Int
+	let callerSourcesMade: Int
 	var treeFillSignaturesByKey: [String: String] = [:]
 	var treeFillKeys: [String] = []
 	var treeCarrierFillKeys: [String] = []
@@ -54,6 +57,7 @@ struct FillPrototypeReport: Sendable {
 			comparison("carrier fills", carrierFillKeys, treeCarrierFillKeys),
 			comparison("dispatchers", dispatcherKeys, treeDispatcherKeys),
 			"  fill bound values and parameters: \(fillSignaturesByKey.filter { treeFillSignaturesByKey[$0.key] == $0.value }.count) of \(fillSignaturesByKey.count) agree\(fillSignaturesByKey.sorted { $0.key < $1.key }.filter { treeFillSignaturesByKey[$0.key] != $0.value }.prefix(5).map { "; \($0.key): records \($0.value), tree \(treeFillSignaturesByKey[$0.key] ?? "none")" }.joined())",
+			"  fill facts made \(factsMade), caller sources \(callerSourcesMade)",
 			"  refused filled calls: \(refusedCallsByReason.isEmpty ? "none" : refusedCallsByReason.map { "\($0.reason) \($0.count)" }.joined(separator: ", "))",
 			"  world refusals: \(worldRefusals.isEmpty ? "none" : worldRefusals.joined(separator: ", "))",
 		] + [""]).joined(separator: "\n")
@@ -76,6 +80,8 @@ enum FillPrototype {
 		var carrierFillKeys = Set<String>()
 		var dispatcherKeys = Set<String>()
 		var filledCalls = 0
+		var factsMade = 0
+		var callerSourcesMade = 0
 		var fillSignaturesByKey = [String: String]()
 		for declaration in 0..<Int32(world.declarationCount) where world.construction(of: declaration) == .seamCall {
 			let scope = world.scope(of: declaration)
@@ -105,6 +111,17 @@ enum FillPrototype {
 				continue
 			}
 			filledCalls += 1
+			// Row 2 (piece A): the fills' facts and their caller sources, from the world.
+			switch FillFacts.of(call: declaration, in: world) {
+			case let .facts(allFacts):
+				let variant = (0..<Int32(world.variantCount)).first { world.declaration(of: $0) == declaration } ?? 0
+				for facts in allFacts {
+					factsMade += 1
+					callerSourcesMade += FillCallerSources.of(facts: facts, call: declaration, variant: variant, in: world).count
+				}
+			case let .refused(refusal):
+				refused[refusal.rawValue, default: 0] += 1
+			}
 			var log = ConstructionLog(recording: false)
 			let callFills = ScopeGeneratorUnderConstruction.callFills(
 				of: scope,
@@ -160,6 +177,8 @@ enum FillPrototype {
 			worldRefusals: NodeRecords.refusals(in: world, declaredTypeNames: nil).map(\.rawValue),
 			nanoseconds: nanoseconds,
 			fillSignaturesByKey: fillSignaturesByKey,
+			factsMade: factsMade,
+			callerSourcesMade: callerSourcesMade,
 		)
 	}
 
