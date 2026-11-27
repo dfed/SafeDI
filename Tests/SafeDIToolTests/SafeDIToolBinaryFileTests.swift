@@ -129,6 +129,23 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	}
 
 	@Test
+	func binaryWriter_writesValueOnceMoreToCompareIt_onlyAtTheFirstWriteOfEachStorage() {
+		// Two equal values in storages of their own, each written three times. The first write of the first storage
+		// writes its element twice, once to look the value up and once in place; the first write of the second storage
+		// writes it once, to find it equal to the first. A later write of either storage is known by its storage, so it
+		// writes the element no more. A writer that compared every write would write the element seven times.
+		let writes = WriteCount()
+		let first = [CountedElement(name: "a", writes: writes)]
+		let second = [CountedElement(name: "a", writes: writes)]
+		var writer = BinaryWriter()
+		writer.write([BinaryShared(first), BinaryShared(second), BinaryShared(second), BinaryShared(first), BinaryShared(first), BinaryShared(second)])
+
+		#expect(writes.count == 3)
+		// The string table (one string), then six elements: the first written in full, every other a reference to it.
+		#expect(writer.encoded == [1, 1, 97] + [6, 0, 1, 0, 1, 1, 1, 1, 1])
+	}
+
+	@Test
 	func binaryWriter_writesEachEmptyValueInFull_whenEmptyValuesOfTwoTypesShareStorage() throws {
 		// Every empty array can share one storage, so a value of another type found there is no repeat.
 		var writer = BinaryWriter()
@@ -3045,5 +3062,44 @@ private struct ListWrittenAsDifference: BinaryCodable, Equatable {
 
 	func write(to writer: inout BinaryWriter) {
 		writer.writeDifference(of: list, in: .labelsBoundLater)
+	}
+}
+
+/// How many times the elements that share it were written.
+private final class WriteCount {
+	private(set) var count = 0
+
+	func increment() {
+		count += 1
+	}
+}
+
+/// An element that counts each time it is written, so that a test can tell a value the writer wrote to compare it from
+/// one the writer knew by its storage. Two elements are equal when their names are.
+private struct CountedElement: BinaryCodable, Hashable {
+	init(name: String, writes: WriteCount) {
+		self.name = name
+		self.writes = writes
+	}
+
+	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		name = try reader.readString()
+		writes = WriteCount()
+	}
+
+	let name: String
+	let writes: WriteCount
+
+	func write(to writer: inout BinaryWriter) {
+		writes.increment()
+		writer.writeString(name)
+	}
+
+	static func == (lhs: Self, rhs: Self) -> Bool {
+		lhs.name == rhs.name
+	}
+
+	func hash(into hasher: inout Hasher) {
+		hasher.combine(name)
 	}
 }

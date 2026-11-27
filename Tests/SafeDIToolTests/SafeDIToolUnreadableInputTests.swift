@@ -118,6 +118,26 @@ struct SafeDIToolUnreadableInputTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorOfFirstPath_whenItsFileIsStillBeingReadAsTwentyThreeOthersAreFoundMissing() async throws {
+		// `Large.safedi` is listed last and sorts first, which is what “first path” means. It is a quarter of a gigabyte that
+		// is no module info, written as a hole so it takes no disk, and the others do not exist, so every other failure
+		// arrives while it is being read: a run that reported the failure that arrived first would name a missing file.
+		let directory = try temporaryDirectory()
+		let rootPath = try writeRoot(in: directory)
+		let largeURL = directory.appendingPathComponent("Large.safedi")
+		try #require(FileManager.default.createFile(atPath: largeURL.path, contents: nil))
+		let largeFile = try FileHandle(forWritingTo: largeURL)
+		try largeFile.truncate(atOffset: 256 << 20)
+		try largeFile.close()
+		let paths = (0..<23).reversed().map { directory.appendingPathComponent("Missing\($0).safedi").path } + [largeURL.path]
+
+		let message = await generateErrorMessage(listing: [rootPath], dependentModuleInfoPaths: paths, in: directory)
+
+		#expect(message == "Could not read the SafeDI module info file at \(directory.path)/Large.safedi: The file is not a module info file: it does not begin with `SDMI`. \(BinaryFile.unreadableFileExplanation)")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsErrorNamingDirectory_whenDependentModuleInfoPathIsDirectory() async throws {
 		let directory = try temporaryDirectory()
 		let rootPath = try writeRoot(in: directory)
