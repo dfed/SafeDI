@@ -709,6 +709,47 @@ struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
 		""")
 	}
 
+	@Test(arguments: [false, true])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_drawsEveryPlaceInDOTTree_whenFillStandsForPlaceOfAnotherCase(callHoldsEveryPlace: Bool) async throws {
+		// `Office` builds `Panel`, which holds the place `api`, as a constant, behind an instantiator and behind a lazy
+		// wrapper: three cases of one place each, whose fills are built alike, so the constant's fill stands for the lazy
+		// wrapper's. Where `Office` also builds `Panel` beneath `Other`, the constant's case has a second place, which the
+		// call is not handed. The tree draws each place beneath the call, each with `LiveApi`'s tree.
+		let otherDeclarations = callHoldsEveryPlace ? [] : ["@Instantiated let other: Other"]
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: SafeDIToolSeamBuilderParameterTests.modules(
+				feature: [
+					"public protocol Api {}",
+					seamFixtureType(named: "Row", declarations: []),
+					seamFixtureType(named: "Panel", declarations: ["@Instantiated let api: any Api"]),
+					seamFixtureType(named: "Other", declarations: ["@Instantiated let panel: Panel"]),
+					seamFixtureType(named: "Office", isSeam: true, declarations: [
+						"@Instantiated let panel: Panel",
+						"@Instantiated let panelBuilder: Instantiator<Panel>",
+						"@Instantiated let lazyPanel: LazilyInstantiated<Panel>",
+					] + otherDeclarations),
+				],
+				app: [
+					SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "LiveApi", fulfilling: "Api", declarations: ["@Instantiated let row: Row"]),
+					seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let office: Office"]),
+				],
+			),
+			integration: .moduleInfo,
+			writesDOTTrees: true,
+			filesToDelete: &filesToDelete,
+		)
+		let placeCount = callHoldsEveryPlace ? 3 : 4
+		#expect(output.modules["App"]?.dotTree == """
+		graph SafeDI {
+		    ranksep=2
+		    Root -- "office: Office"
+		\(Array(repeating: "    \"office: Office\" -- \"api: any Api\"", count: placeCount).joined(separator: "\n"))
+		\(Array(repeating: "    \"api: any Api\" -- \"row: Row\"", count: placeCount).joined(separator: "\n"))
+		}
+		""")
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]

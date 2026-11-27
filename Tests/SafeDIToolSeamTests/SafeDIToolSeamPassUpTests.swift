@@ -3223,6 +3223,42 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func casesPresentingSamePlaces_linkCasesOfBothCalls_whenEachPresentsBothPlacesOfOneCaseOfPublicMock() async throws {
+		// `Holder`’s public mock holds the place `api` of `Detail` beneath `First` and beneath `Second`: one case with two
+		// places, and a public mock hands a caller every place. `Left`’s and `Right`’s public mocks each call it and pass both
+		// places up, and `Home`’s calls both: the case of its call of `Right` presents each place the case of its call of
+		// `Left` presented before, so it is linked to that case once, by whichever place is added second.
+		let publicMockType = { (name: String, declarations: [String]) in
+			seamFixtureType(named: name, isFinalClass: true, declarations: declarations)
+				.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(generateMock: .public)\n")
+				.replacingOccurrences(of: "    public init(", with: "    init(")
+		}
+		let modules = [
+			ModuleFixture(name: "Base", packageName: "Shop", swiftFileContent: [
+				"public protocol Api {}",
+				seamFixtureType(named: "Detail", isFinalClass: true, declarations: ["@Instantiated public let api: any Api"]),
+				seamFixtureType(named: "First", isFinalClass: true, declarations: ["@Instantiated public let detail: Detail"]),
+				seamFixtureType(named: "Second", isFinalClass: true, declarations: ["@Instantiated public let detail: Detail"]),
+				publicMockType("Holder", ["@Instantiated public let first: First", "@Instantiated public let second: Second"]),
+			]),
+			ModuleFixture(name: "Mid", packageName: "Shop", swiftFileContent: [
+				"import Base\n\n" + publicMockType("Left", ["@Instantiated public let holder: Holder"]),
+				"import Base\n\n" + publicMockType("Right", ["@Instantiated public let holder: Holder"]),
+			], dependencies: ["Base"]),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
+				"import Mid\n\n" + publicMockType("Home", ["@Instantiated public let left: Left", "@Instantiated public let right: Right"]),
+			], dependencies: ["Mid"]),
+		]
+		let home = try await observation(ofSeamNamed: "Home", over: modules)
+		let query = SeamSignature.Places.Query(of: home.places, calledPlaces: home.calledPlaces(of:), ofPublicMock: true)
+		#expect(home.places.cases.map { $0.passedUp?.seamType.asSource } == ["Left", "Right"])
+		#expect(home.siteHoles.map { $0.site.path.map(\.label).joined(separator: ".") }.sorted() == ["first.detail.api", "second.detail.api"])
+		#expect(home.places.cases.map(\.firstCasePresentingSamePlaces) == [nil, 0])
+		#expect(home.places.cases.indices.map { query.casesPresentingSamePlaces(as: $0) } == [[0, 1], [0, 1]])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func called_handsPlaceOfCaseEachCallPresents_whenTwoSeamsPassUpThePlaceOfTheSeamTheyCall() async throws {
 		let outer = try await observationOfOuterOverPlacePassedUpThroughTwoModules()
 		let query = SeamSignature.Places.Query(of: outer.places, calledPlaces: outer.calledPlaces(of:))

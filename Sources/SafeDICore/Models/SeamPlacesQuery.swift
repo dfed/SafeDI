@@ -1232,7 +1232,7 @@ extension SeamSignature.Places {
 			let holdingCaseIndex: Int
 			/// The holding seam's index in `seams`, where it is among them.
 			var holdingSeam: Int?
-			var callsOfHoldingSeam = [Call]()
+			var callsOfHoldingSeam: [Call]
 
 			/// Whether calls lead from the seam at `seam` down to the holding seam through no seam of `seamsPassed`, the
 			/// seam itself included.
@@ -1275,7 +1275,7 @@ extension SeamSignature.Places {
 		private func presentation(of caseIndex: Int) -> Presentation? {
 			let firstCase = places.cases[caseIndex].firstCasePresentingSamePlaces ?? caseIndex
 			// The seam's own places, which no call presents.
-			guard places.cases[firstCase].passedUp != nil || casesPresentingSamePlaces(as: firstCase).count > 1 else { return Presentation(seams: [], holdingQuery: nil, holdingCaseIndex: firstCase) }
+			guard places.cases[firstCase].passedUp != nil || casesPresentingSamePlaces(as: firstCase).count > 1 else { return Presentation(seams: [], holdingQuery: nil, holdingCaseIndex: firstCase, callsOfHoldingSeam: []) }
 			if let known = presentationByFirstCase[firstCase] {
 				return known
 			} else {
