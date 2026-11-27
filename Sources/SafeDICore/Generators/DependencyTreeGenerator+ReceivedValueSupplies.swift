@@ -31,7 +31,7 @@ extension DependencyTreeGenerator {
 	///   that a call made beneath it passes, which the walk does not judge.
 	/// - Throws: The error `generate` reports when the trees are not valid.
 	public func receivedValueSupplies() async throws -> ReceivedValueSupplies? {
-		let roots = try await dependencyTrees(unreadTypeComment: nil, ownAccessProof: ownAccessProof(), plansCyclesPerType: false).roots
+		let roots = try await dependencyTrees(unreadTypeComment: nil, ownAccessProof: ownAccessProof(), plansCyclesPerType: false, readersOfEveryTree: [.reader(.receivedValueSupplies)]).roots
 		var supplies = [ReceivedValueSupply]()
 		var constructedTypes = [TypeDescription]()
 		var unfulfilledReceiveLabels = Set<String>()
@@ -43,16 +43,16 @@ extension DependencyTreeGenerator {
 			}
 		}
 		let unfulfilledReceives = ScopeGenerator.UnfulfilledReceives(locations: unfulfilledReceiveLocations, labels: unfulfilledReceiveLabels)
-		for root in roots {
-			if unfulfilledReceiveLocations.isEmpty {
+		if unfulfilledReceiveLocations.isEmpty {
+			for root in roots {
 				// Read from the root's per-type graph, where a node stands for every place of its declaration.
 				let tree = TypeFactsReceivedValueSupplies(root: root.rootScope)
 				supplies.append(contentsOf: tree.supplies)
 				constructedTypes.append(contentsOf: tree.constructedTypes)
-			} else {
-				// Every root's tree is built per path here (`plansCyclesPerType`).
-				guard let scopeGenerator = root.scopeGenerator else { continue }
-				guard let tree = await scopeGenerator.receivedValueSupplies(ofTreeRootedAt: root.instantiable, unfulfilledReceives: unfulfilledReceives) else { return nil }
+			}
+		} else {
+			for root in roots.compactMap(\.tree) {
+				guard let tree = await root.scopeGenerator.receivedValueSupplies(ofTreeRootedAt: root.instantiable, unfulfilledReceives: unfulfilledReceives) else { return nil }
 				supplies.append(contentsOf: tree.supplies)
 				constructedTypes.append(contentsOf: tree.constructedTypes)
 			}

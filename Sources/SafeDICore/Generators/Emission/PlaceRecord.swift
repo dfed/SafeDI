@@ -95,6 +95,24 @@ struct BuiltPlaceRecord: Sendable {
 	/// What a place records beyond a call of its target, held in one box that most places leave `nil`, so a record stays
 	/// as small to copy as one that holds none of it.
 	var sharingFields: PlaceSharingFields?
+	/// What a place that calls another module's code records beyond a built place (`CallFields`), in a box of its own
+	/// that every other place leaves `nil`.
+	var callFields: CallFields?
+
+	/// The statement the place's builder function begins with, before its children.
+	var leadingStatement: CallGuard? {
+		callFields?.leadingStatement
+	}
+
+	/// What the construction hands each closure parameter after `arguments`.
+	var closureArguments: [ClosureArgumentEntry] {
+		callFields?.closureArguments ?? []
+	}
+
+	/// The closures the place builds for the builders its call hands on (`CallFields.builtClosures`).
+	var builtClosures: [BuiltClosure] {
+		callFields?.builtClosures ?? []
+	}
 
 	/// The values the place's function is handed on every call (`PassedArgument`), after `cycleParameters`.
 	var passedArguments: [PassedArgument] {
@@ -235,6 +253,20 @@ struct AliasPlaceRecord: Sendable {
 	/// The names of the root functions the text calls (`RootFunctionRecord`), which the text does not declare: the root
 	/// declares them, from the place's plan, and nothing renames them, so none is among `calledFunctionNames`.
 	var calledRootFunctionNames = [String]()
+	/// The call the engine spells where the place is written, in place of `text`, which it equals; `nil` where the engine
+	/// writes `text`.
+	var call: InPlaceCall?
+}
+
+/// A call written where its place is, in the body that holds it: its builder function, which declares the statements of
+/// its body and returns its construction, then the binding of the function's result. The function stays in that body,
+/// so it reads what it captures there by its label.
+struct InPlaceCall: Sendable {
+	/// The construction and the function: its name, `@Sendable` mark, escaping types, leading statement and line end.
+	let record: BuiltPlaceRecord
+	/// The statements of the function's body before its leading statement, and after it, as the tree writes them.
+	let statementsBeforeLeadingStatement: [GeneratedCode]
+	let statementsAfterLeadingStatement: [GeneratedCode]
 }
 
 /// A value reached from a declaration by members and calls: what a passed argument, an alternative or a construction

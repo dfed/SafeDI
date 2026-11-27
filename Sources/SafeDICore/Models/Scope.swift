@@ -502,7 +502,7 @@ extension ScopeRecord {
 					scopeGeneratorLimit: nil,
 				)
 			} }
-			observer(treeBuiltWithMemo, treeBuiltWithoutMemo, TypeFactsReport(root: ConstructionScope(table: table, record: self), places: places ?? TypeFactsPlaces(), forMockGeneration: forMockGeneration))
+			observer(treeBuiltWithMemo, treeBuiltWithoutMemo, TypeFactsReport(root: ConstructionScope(table: table, record: self), places: places ?? TypeFactsPlaces(), forMockGeneration: forMockGeneration, tree: treeBuiltWithoutMemo))
 		}
 		return scopeGenerator
 	}
@@ -2235,12 +2235,12 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 					reads.unavailableProperties.insert(form)
 				}
 			}
-			reads.argumentByLabel[label] = callerArgument(reading: parameter.property, of: fill.callerNearestDeclarations, lazilyInstantiatedInstanceProperties: fill.callerLazilyInstantiatedInstanceProperties, log: &log).spelled
+			reads.argumentByLabel[label] = callerArgument(reading: parameter.property, of: fill.callerNearestDeclarations, lazilyInstantiatedInstanceProperties: fill.callerLazilyInstantiatedInstanceProperties, log: &log)
 		}
 		reads.mockRootBindingByLabel = fill.mockRootBindingByLabel
 		for field in fill.fields where fill.labelsHandedAsMemo.contains(field.property.label) && field.bindsMemo && field.deferral == .deferred(isSendable: true) {
 			let memo = field.memoProperty
-			reads.memoArgumentByMemo[memo] = callerArgument(reading: memo, of: fill.callerNearestDeclarations, lazilyInstantiatedInstanceProperties: fill.callerLazilyInstantiatedInstanceProperties, log: &log).spelled
+			reads.memoArgumentByMemo[memo] = callerArgument(reading: memo, of: fill.callerNearestDeclarations, lazilyInstantiatedInstanceProperties: fill.callerLazilyInstantiatedInstanceProperties, log: &log)
 		}
 		return reads
 	}
@@ -2509,16 +2509,19 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			// is handed the struct the case of this seam's enum for the call returns. A call that re-enters an enclosing call's
 			// level function hands it, for each struct it takes, what the member of the call's own case of that struct's level
 			// returns.
-			let upArgument = if let carriedInnerScopes = enclosingFill == nil ? nil : enclosingCarriedInnerScopes[dispatcherKey] {
-				carriedInnerScopes.compactMap { carriedInnerScope in
+			if let carriedInnerScopes = enclosingFill == nil ? nil : enclosingCarriedInnerScopes[dispatcherKey] {
+				let upArgument = carriedInnerScopes.compactMap { carriedInnerScope in
 					seamHoles.carriedStruct(at: sitePath, innerKey: enumKey, carrying: carriedInnerScope.type).map { "\(carriedInnerScope.upName.spelledAsArgumentLabel): \($0)" }
 				}.joined(separator: ", ")
-			} else {
-				(dispatchersOfThisCall.first { $0.key == dispatcherKey }?.carriedInnerScopes ?? []).compactMap { carriedInnerScope in
-					seamHoles.carriedStruct(at: sitePath, innerKey: enumKey, innerScopeName: carriedInnerScope.name).map { "\(carriedInnerScope.upName.spelledAsArgumentLabel): \($0)" }
-				}.joined(separator: ", ")
+				return .init(label: label, value: "\(dispatcher)(\(upArgument))", enclosingFill: enclosingFill, isSendable: enumKey.isSendable)
 			}
-			return .init(label: label, value: "\(dispatcher)(\(upArgument))", enclosingFill: enclosingFill, isSendable: enumKey.isSendable)
+			let carriedStructs = (dispatchersOfThisCall.first { $0.key == dispatcherKey }?.carriedInnerScopes ?? []).compactMap { carriedInnerScope in
+				seamHoles.carriedStruct(at: sitePath, innerKey: enumKey, innerScopeName: carriedInnerScope.name).map {
+					ScopeGenerator.BuilderCallArgument.BuiltCall.CarriedStruct(upName: carriedInnerScope.upName, type: carriedInnerScope.type, name: $0)
+				}
+			}
+			let builtCall = ScopeGenerator.BuilderCallArgument.BuiltCall(dispatcherKey: dispatcherKey, dispatcherName: dispatcher, carriedStructs: carriedStructs)
+			return .init(label: label, value: builtCall.spelled, enclosingFill: enclosingFill, isSendable: enumKey.isSendable, builtCall: enclosingFill == nil ? builtCall : nil)
 		}
 	}
 
@@ -3056,29 +3059,29 @@ struct SeamHoles: Sendable {
 			// The struct the call's own member is called on, typed where the seam's tree binds it: the builder, or the level the
 			// route's last member returns. The struct of a fill's own level, which the fill is handed, is typed by no binding.
 			let parentStep = callRoute.route.last
-			let memberParent: ScopeGenerator.BuilderCallArgument.PassedUpStruct? = if parentStep?.innerScope != nil {
+			let memberParent: (name: String, type: TypeDescription)? = if parentStep?.innerScope != nil {
 				nil
 			} else if let member = parentStep?.member {
-				.init(name: member.bindingName, type: member.levelType)
+				(member.bindingName, member.levelType)
 			} else {
-				.init(name: builderName, type: builder.parameterType)
+				(builderName, builder.parameterType)
+			}
+			// A carrier's member for a call's own case takes no values: a `let` child is read, any other member called.
+			let member: PassedOnMember? = callRoute.handsFillLevelStruct ? nil : callRoute.memberValuesType.map { memberValuesType in
+				if case let .nested(_, enumType, _) = memberValuesType, ReservedName.seamCarrier(ofEnum: enumType) != nil {
+					isLetChild(ofCaseNamed: callRoute.caseName, handed: memberValuesType) ? .carrierChild : .carrierMember
+				} else {
+					.member(valuesType: memberValuesType)
+				}
 			}
 			let memberCall = if callRoute.handsFillLevelStruct {
 				callRoute.route.last.flatMap { $0.innerScope?.name ?? $0.member?.bindingName }
 			} else {
-				callRoute.memberValuesType.map { memberValuesType in
-					let parentName = callRoute.route.last.flatMap { $0.innerScope?.name ?? $0.member?.bindingName } ?? builderName
-					if case let .nested(_, enumType, _) = memberValuesType, ReservedName.seamCarrier(ofEnum: enumType) != nil {
-						// A carrier's member for a call's own case takes no values: a `let` child is read, any other member called.
-						return isLetChild(ofCaseNamed: callRoute.caseName, handed: memberValuesType) ? "\(parentName).\(callRoute.caseName)" : "\(parentName).\(callRoute.caseName)()"
-					} else {
-						return "\(parentName).\(callRoute.caseName)(\(memberValuesType.asSource)())"
-					}
-				}
+				member.map { $0.spelled(on: callRoute.route.last.flatMap { $0.innerScope?.name ?? $0.member?.bindingName } ?? builderName, caseName: callRoute.caseName) }
 			}
 			routeCasesByCall[RouteCall(sitePath: callRoute.sitePath, innerKey: callRoute.innerKey)] = RouteCase(
 				memberCall: memberCall,
-				passedUpStruct: callRoute.handsFillLevelStruct || memberCall == nil ? nil : memberParent,
+				passedUpStruct: member.flatMap { member in memberParent.map { .init(name: $0.name, type: $0.type, caseName: callRoute.caseName, member: member) } },
 			)
 		}
 		self.routeCasesByCall = routeCasesByCall

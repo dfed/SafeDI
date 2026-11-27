@@ -158,8 +158,32 @@ extension TypeKeyLayout {
 			let reads = record.listedReads.map { "\($0.label):\($0.property.asSource)" }.joined(separator: ",")
 			// Two renames of one text read their value apart where one reads it only if available: the type they read
 			// differs, so the places are no class of one.
-			return .text("alias|\(record.text)|\(reads)|\(record.readsOnlyIfAvailable)")
+			guard let call = record.call else { return .text("alias|\(record.text)|\(reads)|\(record.readsOnlyIfAvailable)") }
+			return .text("alias|\(inPlaceCallShape(call))|\(reads)|\(record.readsOnlyIfAvailable)")
 		}
+	}
+
+	/// What tells two calls written where their places are apart: everything the engine spells them from, never their text.
+	func inPlaceCallShape(_ call: InPlaceCall) -> String {
+		let record = call.record
+		var shape = [
+			record.property.asSource,
+			record.concreteType.asSource,
+			record.target.callee,
+			"\(record.isErased)",
+			"\(record.isExtension)",
+			"\(record.isSendable)",
+			record.functionName,
+			record.lineEnd,
+			record.typesDeclaredEscaping.map(\.asSource).sorted().joined(separator: ","),
+			record.leadingStatement?.spelled ?? "",
+		]
+		for (position, argument) in record.arguments.enumerated() {
+			shape.append("argument|\(argument.argumentLabel)|\(argument.label)|\(argument.property.asSource)|\(record.argumentValues[position].map { "\($0)" } ?? "")")
+		}
+		shape.append("before|\(call.statementsBeforeLeadingStatement.map { $0.spelled() }.joined())")
+		shape.append("after|\(call.statementsAfterLeadingStatement.map { $0.spelled() }.joined())")
+		return shape.joined(separator: ";")
 	}
 
 	/// `classes` refined until alike places' bodies call alike places: a place's class joins the classes its body's calls
