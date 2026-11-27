@@ -365,6 +365,7 @@ extension SeamSignature.Places.Level: BinarySchemaMember {
 				BinaryLayoutField("pathTypes", absentWhenEmpty: \.pathTypes),
 				BinaryLayoutField("parents", absentWhenEmpty: \.parents),
 				BinaryLayoutField("declaredSegmentByParent", absentWhenEmpty: \.declaredSegmentByParent),
+				BinaryLayoutField("closesOn", \.closesOn),
 			],
 			unwrittenProperties: [],
 		)
@@ -385,6 +386,7 @@ extension SeamSignature.Places.Level: BinarySchemaMember {
 			pathTypes: reader.readAbsentWhenEmpty(flaggedIn: &fieldFlags),
 			parents: reader.readAbsentWhenEmpty(flaggedIn: &fieldFlags),
 			declaredSegmentByParent: reader.readAbsentWhenEmpty(flaggedIn: &fieldFlags),
+			closesOn: reader.readOptional(flaggedIn: &fieldFlags) as SeamSignature.Places.StackEntry?,
 		)
 		try fieldFlags.finish()
 	}
@@ -404,6 +406,7 @@ extension SeamSignature.Places.Level: BinarySchemaMember {
 		writer.writeAbsentWhenEmpty(pathTypes, flaggedIn: &fieldFlags)
 		writer.writeAbsentWhenEmpty(parents, flaggedIn: &fieldFlags)
 		writer.writeAbsentWhenEmpty(declaredSegmentByParent, flaggedIn: &fieldFlags)
+		writer.writeOptional(closesOn, flaggedIn: &fieldFlags)
 		writer.finishFields(fieldFlags, startingAt: fieldsStart)
 	}
 }

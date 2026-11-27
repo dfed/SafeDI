@@ -317,6 +317,7 @@ extension SeamSignature {
 				pathTypes: [Hole.PathType],
 				parents: [Int],
 				declaredSegmentByParent: [[Hole.DeclaredProperty]],
+				closesOn: StackEntry? = nil,
 			) {
 				self.key = key
 				self.declarationList = declarationList
@@ -330,6 +331,7 @@ extension SeamSignature {
 				self.pathTypes = pathTypes
 				self.parents = parents
 				self.declaredSegmentByParent = declaredSegmentByParent
+				self.closesOn = closesOn
 			}
 
 			public let key: LevelKey
@@ -360,6 +362,11 @@ extension SeamSignature {
 			public let parents: [Int]
 			/// For each of `parents`, the properties the code declares on the way from it, which a diagnostic prints.
 			public let declaredSegmentByParent: [[Hole.DeclaredProperty]]
+			/// For the level of a scope whose next property is a call that closes a cycle (a builder function the call refers to,
+			/// never a child built anew), the entry the call closes on: the nearest build above with that entry on the route. `nil`
+			/// on every other level. These levels lead to no place: they are added after every place's and call's, so that the
+			/// route a question about a place walks never meets them, and say where a cycle re-enters a scope.
+			public let closesOn: StackEntry?
 		}
 
 		/// A place another seam's tree holds, which a call in this seam's tree presents: a reference to that seam's case,

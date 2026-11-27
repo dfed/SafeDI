@@ -48,6 +48,8 @@ struct SeamPlacesBuilder {
 		/// The position of the next property among the scope's children, and its loop of received builders.
 		let nextPosition: Int?
 		let nextLoop: Int?
+		/// For a level whose next property is a call that closes a cycle, the entry it closes on (`Level.closesOn`).
+		var closesOn: SeamSignature.Places.StackEntry?
 	}
 
 	private struct LevelVariant {
@@ -101,6 +103,8 @@ struct SeamPlacesBuilder {
 	private var lists = [DeclarationList]()
 	private var listIndexByProjection = [ListProjection: Int]()
 	private var edges = Set<EdgeKey>()
+	/// The number of levels when the closing calls' phase began (`beginClosingCalls()`), or `nil` before it.
+	private var closingCallsStart: Int?
 	private var cases = [CaseDraft]()
 	private var caseIndexByKey = [CaseKey: Int]()
 	private var caseIndexBySite = [SeamSignature.Hole.Site: Int]()
@@ -164,9 +168,8 @@ struct SeamPlacesBuilder {
 		var route = [Int]()
 		for draft in levels {
 			let index = variantIndex(of: draft)
-			if let parent = route.last, edges.insert(EdgeKey(level: index, parent: parent)).inserted {
-				variants[index].parents.append(parent)
-				variants[index].declaredSegmentByParent.append(draft.declaredSegment)
+			if let parent = route.last {
+				addEdge(to: index, from: parent, declaredSegment: draft.declaredSegment)
 			}
 			route.append(index)
 		}
@@ -232,12 +235,37 @@ struct SeamPlacesBuilder {
 	/// `addPlacesInTree`.
 	mutating func addLevel(_ draft: LevelDraft, listProjection: ListProjection, parent: Int?) -> Int {
 		let listIndex = listIndexByProjection[listProjection] ?? addList(draft, projection: listProjection)
-		let index = variantIndex(of: draft, inList: listIndex)
-		if let parent, edges.insert(EdgeKey(level: index, parent: parent)).inserted {
-			variants[index].parents.append(parent)
-			variants[index].declaredSegmentByParent.append(draft.declaredSegment)
+		let index = variantIndex(of: draft, inList: listIndex, beneath: parent)
+		if let parent {
+			addEdge(to: index, from: parent, declaredSegment: draft.declaredSegment)
 		}
 		return index
+	}
+
+	/// Adds the edge from `parent` to the level at `index` where it is new.
+	private mutating func addEdge(to index: Int, from parent: Int, declaredSegment: [SeamSignature.Hole.DeclaredProperty]) {
+		guard edges.insert(EdgeKey(level: index, parent: parent)).inserted else { return }
+		variants[index].parents.append(parent)
+		variants[index].declaredSegmentByParent.append(declaredSegment)
+	}
+
+	/// Starts the phase that adds the levels of the paths to the calls that close cycles, after every place's and call's,
+	/// so that every level before keeps its index and its parents.
+	mutating func beginClosingCalls() {
+		closingCallsStart = closingCallsStart ?? variants.count
+	}
+
+	/// Adds the levels of the path to a call that closes a cycle, root first, the last the level that makes the call, whose
+	/// `closesOn` says what it closes on. Called in the closing calls' phase (`beginClosingCalls()`).
+	mutating func addClosingCall(levels: [LevelDraft]) {
+		var parent: Int?
+		for draft in levels {
+			let index = variantIndex(of: draft, inList: declarationListIndex(of: draft), beneath: parent)
+			if let parent {
+				addEdge(to: index, from: parent, declaredSegment: draft.declaredSegment)
+			}
+			parent = index
+		}
 	}
 
 	/// Adds the sites of the places the tree of the declaration at `declarationIndex` of the level at `level` holds on one
@@ -308,6 +336,7 @@ struct SeamPlacesBuilder {
 				pathTypes: variant.draft.pathTypes,
 				parents: variant.parents,
 				declaredSegmentByParent: variant.declaredSegmentByParent,
+				closesOn: variant.draft.closesOn,
 			)
 		}
 		// A case leads to an earlier one or to itself, so the first case of each is known once those before it are.
@@ -343,9 +372,17 @@ struct SeamPlacesBuilder {
 		variantIndex(of: draft, inList: declarationListIndex(of: draft))
 	}
 
-	/// The index of the variant of `draft`, whose declaration list is at `listIndex`.
-	private mutating func variantIndex(of draft: LevelDraft, inList listIndex: Int) -> Int {
-		let projection = VariantProjection(declarationList: listIndex, key: draft.key, nextPosition: draft.nextPosition, nextLoop: draft.nextLoop)
+	/// The index of the variant of `draft`, whose declaration list is at `listIndex`, reached beneath `parent`. In the closing
+	/// calls' phase, a level there before it that `parent` does not enclose yet is not reused but copied: a level that leads
+	/// to a place gains no parent from a path to a closing call, so a route up from a place never climbs one, while the way
+	/// down from a closed-on level to its closing calls stays whole.
+	private mutating func variantIndex(of draft: LevelDraft, inList listIndex: Int, beneath parent: Int? = nil) -> Int {
+		let index = variantIndex(of: VariantProjection(declarationList: listIndex, key: draft.key, nextPosition: draft.nextPosition, nextLoop: draft.nextLoop, closesOn: draft.closesOn, isCopyOnWayToClosingCall: false), draft: draft, inList: listIndex)
+		guard let closingCallsStart, index < closingCallsStart, let parent, !edges.contains(EdgeKey(level: index, parent: parent)) else { return index }
+		return variantIndex(of: VariantProjection(declarationList: listIndex, key: draft.key, nextPosition: draft.nextPosition, nextLoop: draft.nextLoop, closesOn: draft.closesOn, isCopyOnWayToClosingCall: true), draft: draft, inList: listIndex)
+	}
+
+	private mutating func variantIndex(of projection: VariantProjection, draft: LevelDraft, inList listIndex: Int) -> Int {
 		if let known = variantIndexByProjection[projection] {
 			return known
 		}
@@ -387,6 +424,9 @@ struct SeamPlacesBuilder {
 		let key: SeamSignature.Places.LevelKey
 		let nextPosition: Int?
 		let nextLoop: Int?
+		let closesOn: SeamSignature.Places.StackEntry?
+		/// Whether it is the copy of a level that leads to a place, on a path to a closing call (`variantIndex(of:inList:beneath:)`).
+		let isCopyOnWayToClosingCall: Bool
 	}
 
 	/// Every fact of a level but its next property and its declarations' places in their trees, source locations included.

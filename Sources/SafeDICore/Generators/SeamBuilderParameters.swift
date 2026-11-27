@@ -490,6 +490,31 @@ extension DependencyTreeGenerator {
 		let order = holes.indices.sorted { holes[$0].builderLabel < holes[$1].builderLabel }
 		let sortedHoles = order.map { holes[$0] }
 		guard draftsPlaceLevels else { return HolesAndPlaces(holes: sortedHoles) }
+		// The paths to the calls that close cycles, after every place's and call's: where a cycle re-enters a scope is a fact
+		// of the route, which the graph's query reads from these levels.
+		placesBuilder.beginClosingCalls()
+		for (closingSite, closesOn) in closingCallSites(in: generator) {
+			var childDeclarationsOnPathToCall = [ObjectIdentifier: ChildDeclarations]()
+			var levels = fields(
+				of: closingSite,
+				seam: seam,
+				bindsReceivesAgain: bindsReceivesAgain,
+				namesApartAtRoot: namesApartAtRoot,
+				parameters: parameters,
+				receiversByParameter: receiversByParameter,
+				seamTypeAccess: seamTypeAccess,
+				proof: proof,
+				instantiables: instantiables,
+				declarationsBetweenByClosedOnScope: &declarationsBetweenByClosedOnScope,
+				placesByTreePath: &placesByTreePath,
+				seamDependencies: seamDependencies,
+				dependenciesByGenerator: &dependenciesByGenerator,
+				childDeclarationsByGenerator: &childDeclarationsOnPathToCall,
+				draftsPlaceLevels: true,
+			).placeLevels
+			levels[levels.count - 1].closesOn = closesOn
+			placesBuilder.addClosingCall(levels: levels)
+		}
 		// Each case is named by its first place in builder-label order, as each place was named when a seam held a hole per site.
 		var namingRouteByCase = [Int: [Int]]()
 		for index in order where caseIndexByHole[index] >= 0 && namingRouteByCase[caseIndexByHole[index]] == nil {
@@ -682,6 +707,40 @@ extension DependencyTreeGenerator {
 				sites.append(BuildSite(frames: frames, property: holeSite.property, erasedToConcreteExistential: holeSite.erasedToConcreteExistential, fillPropertyStack: child.generator.ownerPropertyStack, fillConcreteTypeStack: child.generator.ownerConcreteTypeStack))
 			} else if child.generator.containsBuildSite, child.generator.fillEmitsCode {
 				// A fill whose code another fill of its case generates builds no site of its own.
+				frames.append(PathFrame(
+					generator: child.generator,
+					orderedChildren: child.generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: child.propertiesGeneratedLater),
+					nextPosition: 0,
+					fillIsSendable: frame.generator.buildsInSendableFunction(ofFill: child.generator),
+				))
+			}
+		}
+		return sites
+	}
+
+	/// The calls in the tree `generator` roots that close a cycle on a scope on their path, in the order the generated code
+	/// makes them, each as a site at the scope that makes it with the entry it closes on, found by walking only the subtrees
+	/// that hold a cycle-closing scope.
+	private static func closingCallSites(in generator: ScopeGenerator) -> [(site: BuildSite, closesOn: SeamSignature.Places.StackEntry)] {
+		var sites = [(site: BuildSite, closesOn: SeamSignature.Places.StackEntry)]()
+		var frames = [PathFrame(generator: generator, orderedChildren: generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: []), nextPosition: 0)]
+		while let frame = frames.last {
+			guard frame.nextPosition < frame.orderedChildren.count else {
+				frames.removeLast()
+				continue
+			}
+			frames[frames.count - 1].nextPosition += 1
+			let child = frame.orderedChildren[frame.nextPosition]
+			guard child.generator.holdsCycleClosingScope, child.generator.fillEmitsCode else { continue }
+			if child.generator.closesPropertyCycle, let declaration = child.generator.closedOnDeclaration, let property = child.generator.property {
+				// A call that closes on a scope above the seam's tree, or above a fill's, re-enters no level of this graph.
+				if frames.contains(where: { $0.generator.declaration == declaration }) {
+					sites.append((
+						BuildSite(frames: frames, property: property, erasedToConcreteExistential: false, fillPropertyStack: [], fillConcreteTypeStack: []),
+						SeamSignature.Places.StackEntry(property: declaration.property, concreteType: declaration.concreteType),
+					))
+				}
+			} else {
 				frames.append(PathFrame(
 					generator: child.generator,
 					orderedChildren: child.generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: child.propertiesGeneratedLater),

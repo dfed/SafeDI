@@ -67,13 +67,6 @@ extension SeamSignature.Places {
 				return indexByLabel
 			}
 			lastDeclarationIndexByLabel = places.levels.map { lastIndexByLabelByList[$0.declarationList] }
-			firstReentryIndexByLabel = places.levels.map { level in
-				var indexByLabel = [String: Int]()
-				for (index, reentry) in level.cycleReentries.enumerated() where indexByLabel[reentry.property.label] == nil {
-					indexByLabel[reentry.property.label] = index
-				}
-				return indexByLabel
-			}
 			(plainReach, openReach) = Self.reaches(of: places.levels)
 			validity = excludedEntries.isEmpty ? [] : Self.validity(of: places.levels, excluding: excludedEntries, plainReach: plainReach, openReach: openReach)
 		}
@@ -211,9 +204,9 @@ extension SeamSignature.Places {
 					return nil
 				},
 				children: { [unowned self] key in
-					let own = firstReentryIndexByLabel[key.level][key.label]
-					return transitions(from: key.level, state: key.state).map { parent, state in
-						(StateKey(level: parent, label: key.label, state: state), { element in
+					transitions(from: key.level, state: key.state).map { parent, state in
+						let own = reentries(ofLevel: key.level, beneath: parent).firstIndexByLabel[key.label]
+						return (StateKey(level: parent, label: key.label, state: state), { element in
 							guard case .none = element, let own else { return element }
 							return .reentry(level: key.level, index: own, declaringParent: parent)
 						})
@@ -226,7 +219,7 @@ extension SeamSignature.Places {
 		/// The declaration a re-entry hands the type built again, or `nil` for a route on which none does.
 		private func cycleReentryDeclaration(of element: ReentryElement) -> SeamSignature.Hole.CycleReentryDeclaration? {
 			guard case let .reentry(level, index, declaringParent) = element else { return nil }
-			let reentry = places.levels[level].cycleReentries[index]
+			let reentry = reentries(ofLevel: level, beneath: declaringParent).list[index]
 			return SeamSignature.Hole.CycleReentryDeclaration(
 				property: reentry.property,
 				declaringType: reentry.declaringType,
@@ -245,8 +238,10 @@ extension SeamSignature.Places {
 			var labels = [String]()
 			var seen = Set<String>()
 			for level in levelsReaching(caseIndex) {
-				for reentry in places.levels[level].cycleReentries where seen.insert(reentry.property.label).inserted {
-					labels.append(reentry.property.label)
+				for parent in places.levels[level].parents {
+					for reentry in reentries(ofLevel: level, beneath: parent).list where seen.insert(reentry.property.label).inserted {
+						labels.append(reentry.property.label)
+					}
 				}
 			}
 			return labels.flatMap { cycleReentryDeclarations(ofLabel: $0, at: caseIndex).compactMap(\.self) }
@@ -494,10 +489,10 @@ extension SeamSignature.Places {
 				children: { [unowned self] key in
 					let opens = places.levels[key.level].opensSendableFunction.isPresent
 					let crossesHere = opens && !key.crossed
-					let own = tracksReentry ? firstReentryIndexByLabel[key.level][key.label] : nil
 					let level = key.level
 					return transitions(from: key.level, state: key.state).map { parent, state in
-						(AnswerKey(level: parent, label: key.label, state: state, crossed: key.crossed || opens), { element in
+						let own = tracksReentry ? reentries(ofLevel: level, beneath: parent).firstIndexByLabel[key.label] : nil
+						return (AnswerKey(level: parent, label: key.label, state: state, crossed: key.crossed || opens), { element in
 							var element = element
 							if crossesHere {
 								element.answer = element.answer.crossingFunction(at: level)
@@ -591,8 +586,8 @@ extension SeamSignature.Places {
 							}
 						}
 						let opens = places.levels[node.level].opensSendableFunction.isPresent
-						let own = tracksReentry ? firstReentryIndexByLabel[node.level][label] : nil
 						return transitions(from: node.level, state: node.state).map { parent, state in
+							let own = tracksReentry ? reentries(ofLevel: node.level, beneath: parent).firstIndexByLabel[label] : nil
 							let nextReentry: ReentryElement = own.map { .reentry(level: node.level, index: $0, declaringParent: parent) } ?? reentry
 							return (Node(level: parent, state: state, phase: .beforeDeclaration(function: function ?? (opens ? node.level : nil), reentry: nextReentry)), true)
 						}
@@ -719,7 +714,18 @@ extension SeamSignature.Places {
 		/// were reached decides it. `next` gives each node the nodes it leads up to, each with whether the step goes up an edge
 		/// of the graph or stays at its level. Found from the ends down, one location at a time, over the nodes that lead to an
 		/// end, so no route is listed; a node a route has already passed is not entered again. `nil` when no route reaches one.
+		/// The least route a walk up from `startNode` reaches an end by, as `leastRoute(from:level:next:isEnd:simple:)` finds
+		/// it: the least that stacks no entry twice, a route the seam's tree can build, where the graph holds one; else the least.
 		private func leastRoute<Node: Hashable>(from startNode: Node, level: (Node) -> Int, next: (Node) -> [(Node, Bool)], isEnd: (Node) -> Bool) -> Route? {
+			leastRoute(from: startNode, level: level, next: next, isEnd: isEnd, simple: true) ?? leastRoute(from: startNode, level: level, next: next, isEnd: isEnd, simple: false)
+		}
+
+		/// The least route, in source order, by which a walk up from `startNode` reaches an end. Where `simple`, a route stacks
+		/// no entry twice: two levels alike are one level of the graph, so a route up can join builds of a tangle of cycles
+		/// that no tree holds together, climbing through a member already on it. Read from the ends down, each step takes the
+		/// least edge from which the start is still reachable without stacking an entry the route holds, so every choice is
+		/// final; a level outside every cycle of the graph needs no such check.
+		private func leastRoute<Node: Hashable>(from startNode: Node, level: (Node) -> Int, next: (Node) -> [(Node, Bool)], isEnd: (Node) -> Bool, simple: Bool) -> Route? {
 			// The walk up, each node with the nodes it leads up to.
 			var parentsByNode = [Node: [(node: Node, isEdge: Bool)]]()
 			var nodesInOrderReached = [startNode]
@@ -755,10 +761,34 @@ extension SeamSignature.Places {
 			// walk holds the properties of the edge it is on that it has not read yet. Properties are read by their locations,
 			// then, where those are equal (a module's view of another reads none), by their labels, as a message spelling the
 			// route from its root would sort.
-			typealias Walk = (levels: [Int], node: Node, pending: ArraySlice<SeamSignature.Hole.DeclaredProperty>)
+			typealias Walk = (levels: [Int], node: Node, pending: ArraySlice<SeamSignature.Hole.DeclaredProperty>, entries: Set<SeamSignature.Places.StackEntry>)
+			/// The entry the edge from `upper` down to `lower` stacks; `nil` into a fill, whose tree starts a stack of its own.
+			func entry(from upper: Node, to lower: Node) -> SeamSignature.Places.StackEntry? {
+				guard let property = places.levels[level(upper)].key.nextProperty, let builtType = places.levels[level(lower)].key.builtType else { return nil }
+				return SeamSignature.Places.StackEntry(property: property, concreteType: builtType)
+			}
+			/// Whether a walk down from `node` reaches the start without stacking any of `entries`, or past a fill.
+			func reachesStart(from node: Node, avoiding entries: Set<SeamSignature.Places.StackEntry>) -> Bool {
+				var seen: Set<Node> = [node]
+				var toVisit = [node]
+				while let node = toVisit.popLast() {
+					if node == startNode {
+						return true
+					}
+					for (child, isEdge) in childrenByNode[node] ?? [] where onRoute.contains(child) && !seen.contains(child) {
+						if isEdge {
+							guard let entry = entry(from: node, to: child) else { return true }
+							guard !entries.contains(entry) else { continue }
+						}
+						seen.insert(child)
+						toVisit.append(child)
+					}
+				}
+				return false
+			}
 			// A node is entered by the first walk to read every location on the way to it, which is the least walk there.
 			var entered = Set<Node>()
-			var frontier = ends.map { (levels: [level($0)], node: $0, pending: ArraySlice<SeamSignature.Hole.DeclaredProperty>()) }
+			var frontier = ends.map { (levels: [level($0)], node: $0, pending: ArraySlice<SeamSignature.Hole.DeclaredProperty>(), entries: Set<SeamSignature.Places.StackEntry>()) }
 			while !frontier.isEmpty {
 				// Each walk with nothing pending goes on down each of its steps; a step that stays at its level reads nothing.
 				var expanded = [Walk]()
@@ -777,10 +807,18 @@ extension SeamSignature.Places {
 					for (child, isEdge) in childrenByNode[walk.node] ?? [] where onRoute.contains(child) && !entered.contains(child) {
 						if isEdge {
 							let childLevel = level(child)
+							var entries = walk.entries
+							if simple {
+								if let entry = entry(from: walk.node, to: child) {
+									guard entries.insert(entry).inserted, !isInCycle[childLevel] || reachesStart(from: child, avoiding: entries) else { continue }
+								} else {
+									entries = []
+								}
+							}
 							let parentPosition = places.levels[childLevel].parents.firstIndex(of: level(walk.node)) ?? 0
-							frontier.append((levels: walk.levels + [childLevel], node: child, pending: places.levels[childLevel].declaredSegmentByParent[parentPosition][...]))
+							frontier.append((levels: walk.levels + [childLevel], node: child, pending: places.levels[childLevel].declaredSegmentByParent[parentPosition][...], entries: entries))
 						} else {
-							frontier.append((levels: walk.levels, node: child, pending: []))
+							frontier.append((levels: walk.levels, node: child, pending: [], entries: walk.entries))
 						}
 					}
 				}
@@ -1380,7 +1418,39 @@ extension SeamSignature.Places {
 		// MARK: Private
 
 		private let lastDeclarationIndexByLabel: [[String: Int]]
-		private let firstReentryIndexByLabel: [[String: Int]]
+		/// The levels each level encloses (`Places.childLevels()`), for the way down to the calls that close a cycle.
+		private lazy var childLevels = places.childLevels()
+		/// Per level, whether it is on a cycle of the graph's edges (`Places.levelsOnCycles(children:)`).
+		private lazy var isInCycle = places.levelsOnCycles(children: childLevels)
+		private var reentriesByEdge = [ReentryEdge: Reentries]()
+
+		private struct ReentryEdge: Hashable {
+			let level: Int
+			let parent: Int
+		}
+
+		private struct Reentries {
+			let list: [SeamSignature.Places.CycleReentry]
+			let firstIndexByLabel: [String: Int]
+		}
+
+		/// What a cycle that closes on the scope of `level` built beneath `parent` hands the type built again
+		/// (`Places.cycleReentries(ofLevel:beneath:children:)`), each label's first at its index.
+		private func reentries(ofLevel level: Int, beneath parent: Int) -> Reentries {
+			let edge = ReentryEdge(level: level, parent: parent)
+			if let reentries = reentriesByEdge[edge] {
+				return reentries
+			}
+			let list = places.cycleReentries(ofLevel: level, beneath: parent, children: childLevels)
+			var firstIndexByLabel = [String: Int]()
+			for (index, reentry) in list.enumerated() where firstIndexByLabel[reentry.property.label] == nil {
+				firstIndexByLabel[reentry.property.label] = index
+			}
+			let reentries = Reentries(list: list, firstIndexByLabel: firstIndexByLabel)
+			reentriesByEdge[edge] = reentries
+			return reentries
+		}
+
 		/// Per level, whether some route from the seam's root reaches it with no level on it, the level included, opening a
 		/// `@Sendable` function.
 		private let plainReach: [Bool]
