@@ -53,8 +53,8 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	case cycle
 	/// The node is built as a `LazilyInstantiated`, which `lazyClaim(of:in:)` discharges: its record is
 	/// `NodeRecordKind.lazy`'s. Also a world whose records read a wrapper's instance where no record does yet: a rename
-	/// fulfilled by one (`DeclarationsAnsweringReads.renameReadsWrappersInstance`), a seam's own root handed one, and a
-	/// mock root's scope that declares or forwards a lazily instantiated property.
+	/// fulfilled by one (`DeclarationsAnsweringReads.renameReadsWrappersInstance`), a rename in a seam's own tree of one
+	/// its root is handed, and a mock root's scope that declares or forwards a lazily instantiated property.
 	case lazy
 	/// The node's type receives a property only if available.
 	case onlyIfAvailable
@@ -123,9 +123,10 @@ extension TypeFactsGraph: NodeRecordSources {
 struct NodeRecords: Sendable {
 	/// - Parameters:
 	///   - world: A production root's world.
-	///   - seamTree: What a seam's own root is handed: its parameters, the nearest declarations of their labels, and the
+	///   - seamTree: What a seam's own root is handed: its parameters, the nearest declarations of their labels, the
 	///     instances of `LazilyInstantiated` properties among them, a deferred parameter's memo included, which its tree
-	///     reads through their wrappers. `nil` for any other root.
+	///     reads through their wrappers, and the labels of those held in a wrapper a `@Sendable` function cannot capture.
+	///     `nil` for any other root.
 	///   - declaredTypeNames: The names the modules SafeDI read declare types by at file scope, which the check of an erased
 	///     instantiator's first generic argument reads (`checkForwardsBuiltTypesProperties(_:in:declaredTypeNames:)`).
 	///     `nil` for a mock root's world, where no kind claims an erased instantiator and the mock's own tree reports it.
@@ -148,7 +149,11 @@ struct NodeRecords: Sendable {
 		}
 		let order = try NodeBuildOrder(world: world)
 		let onlyIfAvailableAnswers = try OnlyIfAvailableAnswers(world: world, rootParameters: seamTree?.parameters ?? [])
-		let answeringDeclarations = DeclarationsAnsweringReads(world: world)
+		let answeringDeclarations = DeclarationsAnsweringReads(
+			world: world,
+			rootLazilyInstantiatedInstanceProperties: seamTree?.rootLazilyInstantiatedInstanceProperties ?? [],
+			rootNonSendableWrapperLabels: seamTree?.rootNonSendableWrapperLabels ?? [],
+		)
 		// The tree reports the capture as an error, which the records cannot.
 		guard !answeringDeclarations.sendableFunctionCapturesWrapper else { throw NodeRecordRefusal.sendableFunctionCapturesWrapper }
 		// A rename's record binds it from its fulfilling property's label, never from a wrapper's instance.
@@ -279,7 +284,11 @@ struct NodeRecords: Sendable {
 		} catch {
 			refusals.insert(error)
 		}
-		let answeringDeclarations = DeclarationsAnsweringReads(world: world)
+		let answeringDeclarations = DeclarationsAnsweringReads(
+			world: world,
+			rootLazilyInstantiatedInstanceProperties: seamTree?.rootLazilyInstantiatedInstanceProperties ?? [],
+			rootNonSendableWrapperLabels: seamTree?.rootNonSendableWrapperLabels ?? [],
+		)
 		if answeringDeclarations.sendableFunctionCapturesWrapper {
 			refusals.insert(.sendableFunctionCapturesWrapper)
 		}
@@ -289,24 +298,22 @@ struct NodeRecords: Sendable {
 		return NodeRecordRefusal.allCases.filter(refusals.contains)
 	}
 
-	/// Refuses `declaration`'s world where its type reads what a seam's root is handed as stage 1 does not write it: as
-	/// the lazy stage's, a receive or a rename of one of the instances of `LazilyInstantiated` properties the root is
-	/// handed, which its tree reads through the wrapper and stage 1 would read as a binding of the label; as a rename's,
-	/// the seam's own rename that keeps a deferred parameter's label, which the tree binds from the parameter's
-	/// autoclosure and writes no record of.
+	/// Refuses `declaration`'s world where its type reads what a seam's root is handed as node records do not write it: as
+	/// the lazy stage's, a rename of one of the instances of `LazilyInstantiated` properties the root is handed, which its
+	/// tree binds from the wrapper's instance and a rename's record would bind from the label; as a rename's, the seam's own
+	/// rename that keeps a deferred parameter's label, which the tree binds from the parameter's autoclosure and writes no
+	/// record of. A receive of such an instance is answered (`DeclarationsAnsweringReads`).
 	private static func checkReadsNoSeamRootValue(of seamTree: DependencyTreeGenerator.RootScopeInfo.SeamTree?, _ declaration: DeclarationID, in world: some NodeRecordSources) throws(NodeRecordRefusal) {
 		guard let seamTree else { return }
-		let readsAnInstance = world.scope(of: declaration).instantiable.dependencies.contains { dependency in
+		let renamesAnInstance = world.scope(of: declaration).instantiable.dependencies.contains { dependency in
 			switch dependency.source {
-			case .received:
-				seamTree.rootLazilyInstantiatedInstanceProperties.contains(dependency.property.asUnwrappedProperty)
 			case let .aliased(fulfillingProperty, _, _):
 				seamTree.rootLazilyInstantiatedInstanceProperties.contains(fulfillingProperty.asUnwrappedProperty)
-			case .instantiated, .forwarded:
+			case .received, .instantiated, .forwarded:
 				false
 			}
 		}
-		guard !readsAnInstance else { throw .lazy }
+		guard !renamesAnInstance else { throw .lazy }
 		// The root declares no rename through a variant of its own, so it is the scope of each rename among its edges.
 		guard declaration == 0 else { return }
 		let readsAnAutoclosure = world.edges(from: declaration).contains { edge in

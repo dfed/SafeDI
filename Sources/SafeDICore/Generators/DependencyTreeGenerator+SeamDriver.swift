@@ -550,6 +550,7 @@ extension DependencyTreeGenerator {
 			// A test compares the records of a seam's own tree with its tree's places, and no run lays the seam's
 			// initializers out from them: they are written around its tree's body (`ScopeGenerator.generateSeamRootCode`).
 			let (table, record) = seamWorld.frozenScopeMap.freezing(rootScope: seamRootScope)
+			let seamRootDeclarations = Self.seamRootDeclarations(of: seamRootScope, seamRoot: finalSeamRoot)
 			rootScopeGenerators.append(RootScopeInfo(
 				typeDescription: seam.concreteInstantiable,
 				instantiable: seam,
@@ -557,7 +558,8 @@ extension DependencyTreeGenerator {
 				built: .tree(scopeGenerator),
 				constructionScope: ConstructionScope(table: table, record: record),
 				seamTree: RootScopeInfo.SeamTree(
-					rootLazilyInstantiatedInstanceProperties: Self.seamRootDeclarations(of: seamRootScope, seamRoot: finalSeamRoot).lazilyInstantiatedInstanceProperties,
+					rootLazilyInstantiatedInstanceProperties: seamRootDeclarations.lazilyInstantiatedInstanceProperties,
+					rootNonSendableWrapperLabels: seamRootDeclarations.nonSendableWrapperLabels,
 					parameters: finalSeamRoot.signature.parameters.map(\.property),
 					autoclosureLabels: Set(finalSeamRoot.autoclosureCallByLabel(of: seamRootScope.instantiable).keys),
 					signature: finalSeamRoot.signature,
@@ -1643,7 +1645,7 @@ extension DependencyTreeGenerator {
 		seamRoot: ScopeGenerator.SeamRoot,
 		declaredTypeNames: DeclaredTypeNames,
 	) throws -> ScopeGenerator {
-		let (nearestDeclarations, lazilyInstantiatedInstanceProperties) = seamRootDeclarations(of: rootScope, seamRoot: seamRoot)
+		let (nearestDeclarations, lazilyInstantiatedInstanceProperties, _) = seamRootDeclarations(of: rootScope, seamRoot: seamRoot)
 		// A seam's tree reads its own `SeamHoles`, constant within the tree but not across trees, so it keeps a memo of its
 		// own, for one pass: a seam without holes reuses its places within a pass, and one with holes stores none.
 		var constructionMemo = ConstructionMemo()
@@ -1660,10 +1662,15 @@ extension DependencyTreeGenerator {
 	}
 
 	/// What a seam's root is handed (`seamRootGenerator`): its parameters, as the nearest declarations of their labels, and
-	/// the instances of `LazilyInstantiated` properties among them, a deferred parameter's memo included.
-	private static func seamRootDeclarations(of rootScope: Scope, seamRoot: ScopeGenerator.SeamRoot) -> (nearestDeclarations: NearestDeclarations, lazilyInstantiatedInstanceProperties: Set<Property>) {
+	/// the instances of `LazilyInstantiated` properties among them, a deferred parameter's memo included; and, for the
+	/// seam's node records, the labels of those held in a wrapper that is not `Sendable`.
+	private static func seamRootDeclarations(
+		of rootScope: Scope,
+		seamRoot: ScopeGenerator.SeamRoot,
+	) -> (nearestDeclarations: NearestDeclarations, lazilyInstantiatedInstanceProperties: Set<Property>, nonSendableWrapperLabels: Set<String>) {
 		var nearestDeclarations = NearestDeclarations()
 		var lazilyInstantiatedInstanceProperties = Set<Property>()
+		var nonSendableWrapperLabels = Set<String>()
 		let autoclosureCallByLabel = seamRoot.autoclosureCallByLabel(of: rootScope.instantiable)
 		for parameter in seamRoot.signature.parameters {
 			let property = parameter.property
@@ -1682,8 +1689,19 @@ extension DependencyTreeGenerator {
 			if parameter.isDeferred, autoclosureCallByLabel[property.label] == nil {
 				lazilyInstantiatedInstanceProperties.insert(property.asUnwrappedProperty)
 			}
+			// A `@Sendable` function of the tree that reads a parameter held in a wrapper that is not `Sendable` captures
+			// it, as `ScopeGenerator.nonSendableWrapperCaptures(ofTreeRootedAt:)` declares them: a wrapper parameter, or
+			// the memo of a deferred one that no `@Sendable` function was found to read.
+			let isHeldInNonSendableWrapper = if case let .deferred(isSendable) = parameter.deferral, autoclosureCallByLabel[property.label] == nil {
+				!isSendable
+			} else {
+				!property.propertyType.isConstant && !property.propertyType.isSendable
+			}
+			if isHeldInNonSendableWrapper {
+				nonSendableWrapperLabels.insert(property.label)
+			}
 		}
-		return (nearestDeclarations, lazilyInstantiatedInstanceProperties)
+		return (nearestDeclarations, lazilyInstantiatedInstanceProperties, nonSendableWrapperLabels)
 	}
 
 	/// Every receive in the tree `generator` roots, `seam`'s, that leaves the seam – each `@Received` dependency and

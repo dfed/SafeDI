@@ -602,6 +602,9 @@ public actor DependencyTreeGenerator {
 			/// What the seam's root is handed as instances of `LazilyInstantiated` properties, which its tree reads through
 			/// their wrappers (`DependencyTreeGenerator.seamRootDeclarations(of:seamRoot:)`).
 			let rootLazilyInstantiatedInstanceProperties: Set<Property>
+			/// The labels of what the seam's root is handed in a wrapper that is not `Sendable`, which a `@Sendable` function
+			/// of its tree would capture (`DependencyTreeGenerator.seamRootDeclarations(of:seamRoot:)`).
+			let rootNonSendableWrapperLabels: Set<String>
 			/// The seam's parameters, the nearest declarations of their labels in its tree, in signature order.
 			let parameters: [Property]
 			/// The labels of the deferred parameters the seam's own rename of the label reads from the autoclosure
