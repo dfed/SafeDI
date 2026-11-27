@@ -501,8 +501,7 @@ extension MockLowering.Walk {
 			guard !declaredFillBodyNames.isEmpty else { return code.spelled() }
 			// Written inside a level, which leaves out the empty line an omitted body begins, then unindented again.
 			let marker = "\t"
-			return GeneratedCode.indented(.omittingRootFunctions(code, named: declaredFillBodyNames), by: marker).spelled()
-				.split(separator: "\n", omittingEmptySubsequences: false)
+			return GeneratedCodeText.lines(of: GeneratedCode.indented(.omittingRootFunctions(code, named: declaredFillBodyNames), by: marker).spelled())
 				.map { $0.dropFirst(marker.count) }
 				.joined(separator: "\n")
 		}.joined(separator: "\n")
