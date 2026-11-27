@@ -19,62 +19,16 @@
 // SOFTWARE.
 
 extension NodeRecords {
-	/// The claim of `declaration` in a mock root's world, and `nil` in a production root's: of kind `mockConstruction`, for a
-	/// node `builtByInitializer` makes in a production root's world (`refusalsOfBuiltByInitializer(_:in:)`) and for one its
-	/// type's hand-written mock builds, whose override is the field of its parent's configuration under the node's own
-	/// label, holding each refusal of a node whose override it does not read yet. A node `builtByInitializer` refuses for
-	/// anything a mock kind does not make is left unclaimed, so its first refusal is its own. Each mock kind adds its term
-	/// to `discharges`, the refusals of `builtByInitializer` that the node its record makes no longer has, and the node is
-	/// of the kind whose term discharged one.
+	/// The claim of `declaration` in a mock root's world, and `nil` in a production root's: of kind `mockConstruction`, the
+	/// record production makes of the node decorated with its override (`mockDecoratedRecord`), for every node no term
+	/// before it claims (`NodeRecords.claim(of:in:)`), discharging what the override makes and what production's marks of
+	/// the node discharge (`joiningProductionMarks(_:to:of:in:)`). A refusal neither discharges is the node's.
 	static func mockConstructionClaim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
 		guard world.isMockWorld else { return nil }
 		// A property nothing fulfills builds nothing, so it is no construction (`NodeRecords+MockUnavailableDependency.swift`).
 		guard !world.scope(of: declaration).isUnavailableDependency else { return mockUnavailableDependencyClaim(of: declaration, in: world) }
-		// A rename is a node of its own kind, which reads no override.
-		let renameClaim = mockRenameClaim(of: declaration, in: world)
-		guard renameClaim == nil else { return renameClaim }
-		// A hand-written mock builds its type with or without an initializer: a fake has none.
-		let buildsWithHandWrittenMock = world.construction(of: declaration) == .handWrittenMock
-		let erasedDischarges = mockErasedDischarges(of: declaration, in: world)
-		let lazyDischarges = mockLazyDischarges(of: declaration, in: world)
-		let rename = mockRenameDischargesAndRefusals(of: declaration, in: world)
-		var discharges: Set<NodeRecordRefusal> = buildsWithHandWrittenMock ? [.construction, .noInitializer] : []
-		discharges.formUnion(mockOnlyIfAvailableDischarges(of: declaration))
-		discharges.formUnion(erasedDischarges)
-		discharges.formUnion(lazyDischarges)
-		discharges.formUnion(rename.discharges)
-		// A node built in a `@Sendable` function of its own reads its override from a local bound before the function
-		// (`NodeRecords+MockSendable.swift`).
-		discharges.formUnion(mockSendableDischarges(of: declaration, in: world))
-		// A dependency the mock cannot build is a parameter of `mock()`, which the node's construction reads
-		// (`NodeRecords+MockUncoveredDependency.swift`).
-		discharges.formUnion(mockUncoveredDependencyDischarges(of: declaration, in: world))
-		guard refusalsOfBuiltByInitializer(declaration, in: world).allSatisfy(discharges.contains) else { return nil }
-		// A `Sendable` wrapper erased to its property's type is made as `mockErased` makes an erased node:
-		// `builtByInitializer` refuses it as `sendable` alone. An erased `LazilyInstantiated`'s override returns the erased
-		// type, as an erased node's does, so its record is the erased kind's too
-		// (`mockErasedRecord(of:variant:in:unavailableProperties:lazilyInstantiatedInstanceProperties:receivesBoundAgain:typesDeclaredEscaping:children:)`).
-		let kind: NodeRecordKind = erasedDischarges.isEmpty && !isErasedSendableWrapper(declaration, in: world) && (lazyDischarges.isEmpty || !world.isErased(declaration)) ? .mockConstruction : .mockErased
-		var refusals = rename.refusals + mockSendableRefusals(of: declaration, in: world) + mockActorWrapperRefusals(of: declaration, in: world)
-		let instantiable = world.scope(of: declaration).instantiable
-		// An actor is claimed as any node is. The closure that overrides it takes each argument `sending`
-		// (`MockLowering.BuilderParameters`), and what it is sent is built by functions that are each handed their
-		// configuration, the `Sendable` form beneath an actor (`ScopeGenerator.sendableConfigurationTypeNames(ofMockRootOf:)`),
-		// so none captures `mock()`'s overrides, as the walk's read of them into a local before each function keeps its own
-		// from doing.
-		// A wrapper the actor builds calls its function in a closure, which would capture the configuration the actor's
-		// function is handed, so its override is read into a local before it (`isWrapperSentToActor(_:in:)`).
-		// The root's own default-valued parameters are parameters of `mock()`, which the root's lowering judges
-		// (`ScopeGenerator.nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:sendableConfigurationTypeNames:rootNames:outerDeclarations:)`).
-		if declaration != 0, mockConstructionFunction(of: declaration, in: world).map({ passesValueNoRecordMakes($0, given: instantiable.dependencies) }) ?? false {
-			refusals.append(.mockDefaultValuedParameter)
-		}
-		// A child the mock root names apart reads the root's field under that name, where every read of its label is one
-		// the records make (`NodeRecords+MockOverrideNotParentField.swift`).
-		if let refusal = refusalOfNamingApart(declaration, in: world) {
-			refusals.append(refusal)
-		}
-		return NodeRecordClaim(kind: kind, discharges: discharges, refusals: refusals)
+		let override = mockOverrideDischargesAndRefusals(of: declaration, in: world)
+		return joiningProductionMarks([.erased, .lazy], to: NodeRecordClaim(kind: .mockConstruction, discharges: override.discharges, refusals: override.refusals), of: declaration, in: world)
 	}
 
 	/// The function that builds `declaration`'s node in a mock: its type's hand-written mock where the world says so
@@ -99,8 +53,9 @@ extension NodeRecords {
 		world.edges(from: declaration).contains { world.kind(of: $0) != .alias && !world.scope(of: $0).isUnavailableDependency }
 	}
 
-	/// The record of `declaration`'s place, a node of kind `mockConstruction`: the record `builtByInitializer` makes of it, built with
-	/// its type's hand-written mock where the world says so (`TypeFactsConstruction.handWrittenMock`), which first tries
+	/// The record of `declaration`'s place in a mock root's world, before an erased node's decoration
+	/// (`mockDecoratedRecord`): the record `builtByInitializer` makes of it, built with its type's hand-written mock where
+	/// the world says so (`TypeFactsConstruction.handWrittenMock`), which first tries
 	/// the closure that overrides it (`mockOverrideSlot(of:labeled:typed:in:hasFunction:handsOverridesToChildren:isSendable:)`),
 	/// called with its construction's arguments. A node that builds a child with an override of its own (neither a rename
 	/// nor a property nothing fulfills), or whose construction takes a field of its configuration

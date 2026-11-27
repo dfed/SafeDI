@@ -117,6 +117,158 @@ struct SafeDIToolNodeRecordsPublicMockCallTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_laysOutCallFromNodeRecords_whenConstantCallIsErasedToPropertysType() async throws {
+		// Two terms claim `service`: the call, and production's erasure, which wraps the call in `AnyServicing`.
+		let (output, reports) = try await mockOfRoot(
+			feed: Self.erasedService,
+			app: """
+			@Instantiable(generateMock: true)
+			public final class Root: Instantiable {
+			    public init(analytics: Analytics, service: AnyServicing) {
+			        self.analytics = analytics
+			        self.service = service
+			    }
+
+			    @Instantiated let analytics: Analytics
+			    @Instantiated(fulfilledByType: "Service", erasedToConcreteExistential: true) let service: AnyServicing
+			}
+			""",
+		)
+		#expect(output == generatedFileHeader + """
+		#if canImport(Feed)
+		import Feed
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            analytics: (() -> Analytics)? = nil,
+		            service: Service.SafeDIOverrides = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                analytics: analytics,
+		                service: service
+		            )
+		        }
+
+		        var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
+		        var service: Service.SafeDIOverrides { __safeDI_storage.service }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                analytics: (() -> Analytics)?,
+		                service: Service.SafeDIOverrides
+		            ) {
+		                self.analytics = analytics
+		                self.service = service
+		            }
+
+		            let analytics: (() -> Analytics)?
+		            let service: Service.SafeDIOverrides
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
+		        _ = Service.__safeDI_Service_mock_81027395670D1D21.self // If this line does not compile, compile the code SafeDI generates for module Feed into Feed: under Bazel, add Feed’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        let service = AnyServicing(Service.__safeDI_mock(analytics: analytics, safeDIOverrides: safeDIOverrides.service))
+		        return Root(analytics: analytics, service: service)
+		    }
+		}
+		#endif
+		""")
+		#expect(reports.map(\.refusal) == [nil])
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_laysOutCallFromNodeRecords_whenErasedInstantiatorCallsMock() async throws {
+		let (output, reports) = try await mockOfRoot(
+			feed: Self.erasedService,
+			app: """
+			@Instantiable(generateMock: true)
+			public final class Root: Instantiable {
+			    public init(analytics: Analytics, serviceBuilder: ErasedInstantiator<(), AnyServicing>) {
+			        self.analytics = analytics
+			        self.serviceBuilder = serviceBuilder
+			    }
+
+			    @Instantiated let analytics: Analytics
+			    @Instantiated(fulfilledByType: "Service", erasedToConcreteExistential: true) let serviceBuilder: ErasedInstantiator<(), AnyServicing>
+			}
+			""",
+		)
+		#expect(output == generatedFileHeader + """
+		#if canImport(Feed)
+		import Feed
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            analytics: (() -> Analytics)? = nil,
+		            serviceBuilder: Service.SafeDIOverrides = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                analytics: analytics,
+		                serviceBuilder: serviceBuilder
+		            )
+		        }
+
+		        var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
+		        var serviceBuilder: Service.SafeDIOverrides { __safeDI_storage.serviceBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                analytics: (() -> Analytics)?,
+		                serviceBuilder: Service.SafeDIOverrides
+		            ) {
+		                self.analytics = analytics
+		                self.serviceBuilder = serviceBuilder
+		            }
+
+		            let analytics: (() -> Analytics)?
+		            let serviceBuilder: Service.SafeDIOverrides
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
+		        _ = Service.__safeDI_Service_mock_81027395670D1D21.self // If this line does not compile, compile the code SafeDI generates for module Feed into Feed: under Bazel, add Feed’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        func __safeDI_serviceBuilder() -> AnyServicing {
+		            AnyServicing(Service.__safeDI_mock(analytics: analytics, safeDIOverrides: safeDIOverrides.serviceBuilder))
+		        }
+		        let serviceBuilder = ErasedInstantiator<(), AnyServicing>(__safeDI_serviceBuilder)
+		        return Root(analytics: analytics, serviceBuilder: serviceBuilder)
+		    }
+		}
+		#endif
+		""")
+		#expect(reports.map(\.refusal) == [nil])
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_laysOutCallFromNodeRecords_whenInstantiatorCallForwardsValue() async throws {
 		let (output, reports) = try await mockOfRoot(
 			feed: Self.screen(forwardsID: true),
@@ -1219,6 +1371,41 @@ struct SafeDIToolNodeRecordsPublicMockCallTests: ~Copyable {
 		}
 		"""
 	}
+
+	/// `Feed`'s `Service`, whose public mock `App` calls since `Session`, which it instantiates, is `package`, and which
+	/// `App` reaches erased to `AnyServicing`.
+	private static let erasedService = """
+	import SafeDI
+
+	@Instantiable
+	public final class Analytics: Instantiable {
+	    public init() {}
+	}
+
+	@Instantiable
+	package final class Session: Instantiable {
+	    package init() {}
+	}
+
+	@Instantiable(generateMock: .public)
+	public final class Service: Instantiable {
+	    package init(analytics: Analytics, session: Session) {
+	        self.analytics = analytics
+	        self.session = session
+	    }
+
+	    @Received let analytics: Analytics
+	    @Instantiated let session: Session
+	}
+
+	public protocol Servicing {}
+
+	extension Service: Servicing {}
+
+	public struct AnyServicing: Servicing {
+	    public init(_ servicing: any Servicing) {}
+	}
+	"""
 
 	/// `App`'s generated mock file, and the report of each mock root of `App`.
 	private mutating func mockOfRoot(feed: String, app: String) async throws -> (String?, [NodeRecordsReport]) {
