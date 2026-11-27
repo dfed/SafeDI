@@ -17,12 +17,17 @@ written again before each nested copy of the function it stands before).
 3 (an actor's override local, placed where the walk's text declares it) and 11 (a function named apart with a
 trailing underscore) read one fact from the walk's text. 5 as ruled 17:35Z (a dependency nothing fulfills, bound once by mock() in the records and first in each
 function that declares it in the walk) and 17 (a local only the records read) read one too. Not rewritten, so
-such a pair fails: 12, 16 and the cycle kind's entered places.
+such a pair fails: 12 and 16. 20 (cycle kind, form c) removes the places list's declaration and the calls that
+hand it on; a call of a function the caller is nested in closes on that function, and a fresh configuration
+holds no override.
 """
 import collections
 import re
 import sys
 import threading
+FOLD=re.compile(r'if let safeDIBuilder = (?:\w+\.)*\w+\.SafeDIMockConfiguration\(\)(?:\.\w+)* \{ .*? \} else \{ (.*) \}$')
+def fold_empty(line):
+    return FOLD.sub(lambda m:m.group(1),line)
 GUARD=re.compile(r'^\s*_ = (?:\w+\.)*\w+\.__safeDI_\w+_mock_\w+\.self //')
 ALSO_USED=[]
 FUNC=re.compile(r'^(\s*)((?:@Sendable nonisolated )?func )(__safeDI_\w+|`__safeDI_[^`]+`)\((.*)\)((?: async| throws)* -> .+) \{$')
@@ -65,7 +70,7 @@ def split_top(t):
         else: cur+=c
     if cur.strip(): parts.append(cur.strip())
     return parts
-def expand(lines,hoisted,base_indent):
+def expand(lines,hoisted,base_indent,entered={}):
     """lines: body of one function (or root) at base_indent. returns new lines."""
     out=[]
     i=0
@@ -81,6 +86,16 @@ def expand(lines,hoisted,base_indent):
             out.append(line); i+=1; continue
         name,s,e,expr=hit
         newline=line[:s]+line[e:]
+        # entry 20: a fresh configuration, or a member of one, holds no override
+        if name in entered:
+            # entry 20: a call of a function this one is nested in closes the cycle on that function
+            newline=re.sub(r'(?<![\w.])'+re.escape(name)+r'(?=\()',entered[name],newline)
+            lines[i]=newline
+            mm=re.match(r'^\s*(__safeDI_\w+)\(\)$',newline)
+            if mm and out and out[-1].rstrip().endswith('> {') and i+1<len(lines) and lines[i+1].strip()=='}':
+                out[-1]=out[-1][:-2].rstrip()+'('+mm.group(1)+')'
+                i+=2
+            continue
         # instantiate
         sig,body,guard=hoisted[name]
         m=FUNC.match(sig)
@@ -112,8 +127,8 @@ def expand(lines,hoisted,base_indent):
             newline=re.sub(r'(?<![\w.])'+re.escape(name)+r'(?=\()',newname,newline)
         if guard and base_indent>8: ALSO_USED.append('10')
         inst=([ind+guard.strip()] if guard else [])+[ind+m.group(2)+newname+'('+params+')'+m.group(5)+' {']
-        sub=[ (ind+'    '+b if b else b) for b in (TOKEN.sub(lambda _:expr,x) for x in body)]
-        sub=expand(sub,hoisted,base_indent+4)
+        sub=[ (ind+'    '+b if b else b) for b in (fold_empty(TOKEN.sub(lambda _:expr,x)) for x in body)]
+        sub=expand(sub,hoisted,base_indent+4,dict(entered,**{name:newname}))
         inst+=sub+[ind+'}']
         # find statement start in out
         k=len(out)
@@ -193,6 +208,22 @@ def e6(text,walk=None):
 E6_CALL=re.compile(r'(?<![\w.`])(?:(?:[A-Z]\w*\.)*[A-Z]\w*(?:\.\w+)?|safeDIBuilder)\(')
 def e4(text,walk=None):
     return re.sub(r'^(\s*let \w+): ((?:Sendable)?(?:Erased)?Instantiator<.*>|(?:Sendable)?LazilyInstantiated<.*>) = \2',r'\1 = \2',text,flags=re.M)
+def e20(text,walk=None):
+    # entry 20, cycle kind form c: the places list's declaration and the calls that hand it on are removed.
+    # What a function then reads of its configuration, and every other line, stays in the byte comparison.
+    if 'struct __safeDI_EnteredPlaces {' not in text: return text
+    lines=text.split('\n');out=[];i=0
+    while i<len(lines):
+        line=lines[i]
+        if line.strip()=='struct __safeDI_EnteredPlaces {':
+            i=block_end(lines,i)+1; continue
+        if line.strip()=='let __safeDI_entered = __safeDI_EnteredPlaces()' or PLACE_LINE.match(line):
+            i+=1; continue
+        line=re.sub(r'(, )?__safeDI_entered: __safeDI_EnteredPlaces(, )?',lambda m:', ' if m.group(1) and m.group(2) else '',line)
+        line=re.sub(r'(, )?__safeDI_entered: __safeDI_entered(, )?',lambda m:', ' if m.group(1) and m.group(2) else '',line)
+        out.append(line);i+=1
+    return '\n'.join(out)
+PLACE_LINE=re.compile(r'^ +let (?:__safeDI_entered = __safeDI_entered\.entering\(\w+: \.init\(safeDIOverrides(?:\.\w+)*, above: __safeDI_entered\)\)|__safeDI_place = __safeDI_entered\.\w+ \?\? \.init\(safeDIOverrides, above: __safeDI_entered\)|safeDIOverrides = __safeDI_place\.configuration|__safeDI_entered = __safeDI_place\.enteredAbove\.entering\(\w+: __safeDI_place\))$')
 def mock_bodies(text):
     """the text cut before each mock function, so that a fact is read from the walk's text of the same mock"""
     parts=[[]]
@@ -254,6 +285,18 @@ def e11(text,walk):
         if not re.search(r'(?<!\w)'+re.escape(name)+r'\(',walk):
             text=re.sub(r'(?<![\w.])'+re.escape(name)+r'(?=[(),\n])',name[:-1],text)
     return text
+def takes_overrides(lines,i):
+    """whether the function at line i, or a function it is nested in, has a parameter named safeDIOverrides:
+    there the walk's line would read that function's configuration, not mock()'s, so the pair stays different"""
+    indent=len(lines[i])-len(lines[i].lstrip())
+    for k in range(i,-1,-1):
+        f=FUNC.match(lines[k])
+        if f and len(f.group(1))<=indent:
+            if len(f.group(1))<indent or k==i:
+                if re.search(r'(^|, )safeDIOverrides: ',f.group(4)): return True
+                indent=len(f.group(1))
+        if MOCK.match(lines[k]): break
+    return False
 def e5(text,walk):
     # entry 5 as ruled 17:35Z: a dependency nothing fulfills is an ordinary read, which the records bind once in
     # mock() before its nodes and the walk binds first in each function of a type that declares it. Which
@@ -268,10 +311,10 @@ def e5(text,walk):
         bound.add(lines[i].strip())
         if lines[i] in walk_at_root: continue
         del lines[i]
-        if binding.group(1)!=binding.group(2): continue
+        if binding.group(1)!=binding.group(3): continue
         # a binding named apart: the function that declares the label reads it under the label
         for k in range(len(lines)):
-            renamed=re.match(r'^( +let \w+: .+\? = )'+re.escape(binding.group(1))+'$',lines[k])
+            renamed=re.match(r'^( +let \w+: '+re.escape(binding.group(2))+' = )'+re.escape(binding.group(1))+'$',lines[k])
             if renamed:
                 lines[k]=renamed.group(1)+'safeDIOverrides.'+binding.group(1)
                 bound.add(lines[k].strip())
@@ -280,7 +323,7 @@ def e5(text,walk):
         if not (UNAVAILABLE.match(walk_lines[k]) and walk_lines[k].strip() in bound and FUNC.match(walk_lines[k-1])): continue
         i=0
         while i<len(lines):
-            if lines[i]==walk_lines[k-1] and lines[i+1]!=walk_lines[k]:
+            if lines[i]==walk_lines[k-1] and i+1<len(lines) and lines[i+1]!=walk_lines[k] and not takes_overrides(lines,i):
                 if block_end(lines,i)==i+2:
                     # the function's one expression becomes its last statement
                     only=lines[i+1]
@@ -288,11 +331,11 @@ def e5(text,walk):
                 lines.insert(i+1,walk_lines[k])
             i+=1
     return '\n'.join(lines)
-UNAVAILABLE=re.compile(r'^ +let (\w+): .+\? = safeDIOverrides\.(\w+)$')
+UNAVAILABLE=re.compile(r'^ +let (\w+): (.+\?) = safeDIOverrides\.(\w+)$')
 e3=per_mock(e3)
 e5=per_mock(e5)
 e11=per_mock(e11)
-REWRITES=[('1+2',unhoist),('11',e11),('5',e5),('3',e3),('8',e8),('9',e9),('6',e6),('4',e4)]
+REWRITES=[('20',e20),('1+2',unhoist),('11',e11),('5',e5),('3',e3),('8',e8),('9',e9),('6',e6),('4',e4)]
 
 
 def rewritten(text, walk):
