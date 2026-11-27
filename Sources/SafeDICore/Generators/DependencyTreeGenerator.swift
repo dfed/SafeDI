@@ -607,6 +607,9 @@ public actor DependencyTreeGenerator {
 			/// The labels of the deferred parameters the seam's own rename of the label reads from the autoclosure
 			/// (`ScopeGenerator.SeamRoot.autoclosureCallByLabel(of:)`).
 			let autoclosureLabels: Set<String>
+			/// The names the seam's generated initializer binds for its builders, sorted, which every call in its tree reserves
+			/// (`SeamHoles.namesBoundForBuilders`).
+			let namesBoundForBuilders: [String]
 		}
 
 		/// What made this run build the root's tree (`TreeForcer`); empty where it built none.
