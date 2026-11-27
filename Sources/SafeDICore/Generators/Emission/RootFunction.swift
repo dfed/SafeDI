@@ -117,6 +117,10 @@ public struct RootFunctionKey: Hashable, Sendable {
 	let typesDeclaredEscaping: Set<TypeDescription>
 	/// The labels a call inside a fill binds again beneath the call.
 	let labelsHiddenByReenteringCalls: Set<String>
+	/// For a dispatcher, the names of the functions its cases call, in case order: a case's target is named where its call
+	/// declares it, so two calls of one level can hand a case to fills of two names. Empty for a fill, whose `text` names
+	/// them.
+	var calledFunctionNames: [String] = []
 	/// The indentation the call writes the declaration after, which the body of every scope shares, and the root's
 	/// statements too (`ScopeGenerator.rootStatementIndentation`). Empty for a fill, whose plan is indented where it is
 	/// written.
@@ -135,6 +139,7 @@ public struct RootFunctionKey: Hashable, Sendable {
 			fillsTakingPayloadFields: fillsTakingPayloadFields,
 			typesDeclaredEscaping: typesDeclaredEscaping,
 			labelsHiddenByReenteringCalls: labelsHiddenByReenteringCalls,
+			calledFunctionNames: calledFunctionNames,
 			indentation: indentation,
 			text: text,
 		)
@@ -325,6 +330,7 @@ public enum RootFunctionHoisting {
 					fillsTakingPayloadFields: record.key.fillsTakingPayloadFields,
 					typesDeclaredEscaping: record.key.typesDeclaredEscaping,
 					labelsHiddenByReenteringCalls: record.key.labelsHiddenByReenteringCalls,
+					calledFunctionNames: record.key.calledFunctionNames,
 					indentation: record.key.indentation,
 					text: record.key.text,
 				)

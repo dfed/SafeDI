@@ -1586,15 +1586,13 @@ extension DependencyTreeGenerator {
 		// `LazilyInstantiated`: a fill takes such a wrapper optionally where the caller hands it
 		// (`Scope.Fill.optionalLazilyInstantiatedLabels`). No other fill's parameters depend on it, so no other fill is walked.
 		// A call handed one place per case holds the case's other routes only in its place graph, where a route the handed place
-		// is not on can hold the wrapper the case's fill takes: such a call's every fill is walked where any level of the graph
-		// declares a wrapper. The walk enters the fills of the seam calls inside the fulfilling type's tree, which receive from
+		// is not on can hold the wrapper the case's fill takes: such a call's every fill is walked where any level of the graph,
+		// or of the graph of a seam beneath that the case passes through, declares a wrapper. The walk enters the fills of the seam calls inside the fulfilling type's tree, which receive from
 		// the fill's scope as the fill's tree does.
 		var receivedPropertiesCache = ReceivedPropertiesCache(walksSeamCallFills: true)
 		for scope in scopes {
-			guard let places = scope.seamCall?.calledBuilders.places else { continue }
-			let placesDeclareWrapper = places.levels.indices.contains { level in
-				places.declarations(ofLevel: level).contains { $0.field.property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding != nil }
-			}
+			guard let calledBuilders = scope.seamCall?.calledBuilders else { continue }
+			let placesDeclareWrapper = Self.declaresLazilyInstantiatedValue(calledBuilders.places, placesOfSeamsBeneath: calledBuilders.placesOfSeamsBeneath)
 			for case let .fill(hole, fulfillingScope) in scope.holeArguments where placesDeclareWrapper || hole.fields.contains(where: { $0.property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding != nil }) {
 				let received = Self.collectReceivedProperties(from: fulfillingScope, cache: &receivedPropertiesCache)
 				let requiredLabels = Set(received.received.subtracting(received.onlyIfAvailable).map(\.label))
@@ -1602,6 +1600,26 @@ extension DependencyTreeGenerator {
 			}
 		}
 		return typeDescriptionToScopeMap
+	}
+
+	/// Whether a level of `places`, or of the graph of a seam beneath whose case it presents or fills
+	/// (`placesOfSeamsBeneath`), declares a `LazilyInstantiated` value: a route through a call of a seam beneath reaches the
+	/// case's place through that seam's levels, which only its own graph holds.
+	private static func declaresLazilyInstantiatedValue(_ places: SeamSignature.Places, placesOfSeamsBeneath: (SeamSignature.Places.CalledCase) -> SeamSignature.Places.Called?) -> Bool {
+		var graphs = [places]
+		var calledCasesSeen = Set<SeamSignature.Places.CalledCase>()
+		while let graph = graphs.popLast() {
+			let declaresWrapper = graph.levels.indices.contains { level in
+				graph.declarations(ofLevel: level).contains { $0.field.property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding != nil }
+			}
+			guard !declaresWrapper else { return true }
+			for calledCase in graph.cases.compactMap(\.passedUp) + graph.levels.compactMap(\.key.filledCase) where calledCasesSeen.insert(calledCase).inserted {
+				if let called = placesOfSeamsBeneath(calledCase) {
+					graphs.append(called.places)
+				}
+			}
+		}
+		return false
 	}
 
 	/// Fills `scope.propertiesToGenerate` from `typeDescriptionToScopeMap`, as `createTypeDescriptionToScopeMapping`

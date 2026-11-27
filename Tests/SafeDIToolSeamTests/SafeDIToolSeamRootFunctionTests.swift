@@ -812,6 +812,164 @@ struct SafeDIToolSeamRootFunctionTests: ~Copyable {
 		)
 	}
 
+	/// `Top` calls `Home` through `Both`, and the root calls `Home` itself. Each call's `Stager` and `Deep` dispatchers
+	/// call the fills of their own call, which `Top`'s call names apart from the root's, so each call keeps its
+	/// dispatchers: declared once at the root's top, the root's call's dispatchers would call `Top`'s fills in `Top`'s
+	/// call, and `Top`'s fills would be declared and never called.
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsEachCallsDispatchersInItsCall_whenTwoCallsOfOneLevelCallFillsOfTwoNames() async throws {
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				ModuleFixture(name: "Session", packageName: "pkg", swiftFileContentByFilePath: ["Deep.swift": """
+				import SafeDI
+				public protocol DeepService: Sendable {}
+				@Instantiable(generateDependencyTree: true)
+				public final class Deep: Instantiable, Sendable {
+				    public init(deepService: any DeepService) { self.deepService = deepService }
+				    @Instantiated public let deepService: any DeepService
+				}
+				"""]),
+				ModuleFixture(name: "Feature", packageName: "pkg", swiftFileContentByFilePath: ["Types.swift": """
+				import SafeDI
+				import Session
+				public protocol Service: Sendable {}
+				@Instantiable public final class Analytics: Instantiable, Sendable { public init() {} }
+				@Instantiable public final class StageOwner: Instantiable, Sendable {
+				    public init(analytics: Analytics, service: any Service) { self.analytics = analytics; self.service = service }
+				    @Instantiated public let analytics: Analytics
+				    @Instantiated public let service: any Service
+				}
+				@Instantiable(generateDependencyTree: true) public final class Stager: Instantiable, Sendable {
+				    public init(ownerBuilder: SendableInstantiator<StageOwner>) { self.ownerBuilder = ownerBuilder }
+				    @Instantiated public let ownerBuilder: SendableInstantiator<StageOwner>
+				}
+				@Instantiable(fulfillingAdditionalTypes: [DeepService.self]) public final class DeepImpl: Instantiable, Sendable, DeepService {
+				    public init(analytics: Analytics, service: any Service) { self.analytics = analytics; self.service = service }
+				    @Instantiated public let analytics: Analytics
+				    @Instantiated public let service: any Service
+				}
+				@Instantiable(generateDependencyTree: true) public final class Home: Instantiable, Sendable {
+				    public init(stagerBuilder: SendableInstantiator<Stager>, deepBuilder: SendableInstantiator<Deep>) { self.stagerBuilder = stagerBuilder; self.deepBuilder = deepBuilder }
+				    @Instantiated public let stagerBuilder: SendableInstantiator<Stager>
+				    @Instantiated public let deepBuilder: SendableInstantiator<Deep>
+				}
+				@Instantiable(generateDependencyTree: true) public final class Both: Instantiable, Sendable {
+				    public init(homeBuilder: SendableInstantiator<Home>) { self.homeBuilder = homeBuilder }
+				    @Instantiated public let homeBuilder: SendableInstantiator<Home>
+				}
+				@Instantiable(generateDependencyTree: true) public final class Top: Instantiable, Sendable {
+				    public init(both: Both) { self.both = both }
+				    @Instantiated public let both: Both
+				}
+				"""], dependencies: ["Session"]),
+				ModuleFixture(name: "App", packageName: "pkg", swiftFileContentByFilePath: ["Root.swift": """
+				import Feature
+				import SafeDI
+				import Session
+				@Instantiable(fulfillingAdditionalTypes: [Service.self]) public final class LiveService: Instantiable, Sendable, Service {
+				    public init(stats: Analytics) { self.stats = stats }
+				    @Received(fulfilledByDependencyNamed: "analytics", ofType: Analytics.self) public let stats: Analytics
+				}
+				@Instantiable(isRoot: true) public final class Root: Instantiable, Sendable {
+				    public init(home: Home, top: Top) { self.home = home; self.top = top }
+				    @Instantiated public let home: Home
+				    @Instantiated public let top: Top
+				}
+				"""], dependencies: ["Feature", "Session"]),
+			],
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+
+		let rootPath = try #require(output.modules["App"]).fixtures["Root.swift"]
+		#expect(output.modules["App"]?.generatedFiles["App.swift"] == generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+		#if canImport(Session)
+		import Session
+		#endif
+
+		extension Root {
+		    public convenience init() {
+		        @Sendable nonisolated func __safeDI_serviceSendableBuilder_Stager_StageOwner_Scope_service(_ scope_analytics: Analytics) -> any Service {
+		            return __safeDI_fillBody_3DA0D783809250A2(analytics: scope_analytics)
+		        }
+		        @Sendable nonisolated func __safeDI_fillBody_3DA0D783809250A2(analytics: Analytics) -> any Service {
+		            func __safeDI_service() -> LiveService {
+		                #sourceLocation(file: "\(rootPath)", line: 6)
+		                let stats: Analytics = analytics
+		                #sourceLocation()
+		                return LiveService(stats: stats)
+		            }
+		            let service: any Service = __safeDI_service()
+		            return service
+		        }
+		        @Sendable nonisolated func __safeDI_serviceSendableBuilder_Home_DeepImpl_Scope_service(_ scope: Home.SafeDIScope_Service.DeepImpl_Scope.service_Values) -> any Service {
+		            return __safeDI_fillBody_3DA0D783809250A2(analytics: scope.analytics)
+		        }
+		        @Sendable nonisolated func __safeDI_serviceSendableBuilder_StageOwner_Stager_StageOwner_Scope_service(_ scope_analytics: Analytics) -> any Service {
+		            return __safeDI_fillBody_3DA0D783809250A2(analytics: scope_analytics)
+		        }
+		        @Sendable nonisolated func __safeDI_serviceSendableBuilder_DeepImpl_Home_DeepImpl_Scope_service(_ scope: Home.SafeDIScope_Service.DeepImpl_Scope.service_Values) -> any Service {
+		            return __safeDI_fillBody_3DA0D783809250A2(analytics: scope.analytics)
+		        }
+		        func __safeDI_home() -> Home {
+		            _ = Home.__safeDI_Home_BA1C0D484BB01770.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            @Sendable nonisolated func __safeDI_serviceSendableBuilder_Home() -> Home.SafeDISendableScope_Service.__safeDI_Builder<any Service> {
+		                .init(stagerBuilder_Sendable: { _ in __safeDI_serviceSendableBuilder_Stager() }, deepBuilder_deepServiceBuilder: { _ in __safeDI_serviceBuilder_Home_Deep() })
+		            }
+		            @Sendable nonisolated func __safeDI_serviceSendableBuilder_Stager() -> Stager.__safeDI_ServiceSendableCarrier<any Service> {
+		                .init(ownerBuilder: { __safeDI_serviceBuilder_Stager_StageOwner_Scope() })
+		            }
+		            @Sendable nonisolated func __safeDI_serviceBuilder_Stager_StageOwner_Scope() -> Stager.__safeDI_ServiceCarrier_StageOwner<any Service> {
+		                .init(service: { scope_analytics in __safeDI_serviceSendableBuilder_Stager_StageOwner_Scope_service(scope_analytics) })
+		            }
+		            @Sendable nonisolated func __safeDI_serviceBuilder_Home_DeepImpl_Scope() -> Home.SafeDIScope_Service.DeepImpl_Scope.__safeDI_Builder<any Service> {
+		                .init(service: { scope in __safeDI_serviceSendableBuilder_Home_DeepImpl_Scope_service(scope) })
+		            }
+		            @Sendable nonisolated func __safeDI_serviceBuilder_Home_Deep() -> Deep.__safeDI_DeepServiceCarrier<Home.SafeDIScope_Service.DeepImpl_Scope.__safeDI_Builder<any Service>> {
+		                .init(deepService: { __safeDI_serviceBuilder_Home_DeepImpl_Scope() })
+		            }
+		            return Home(__safeDI_serviceSendableBuilder: __safeDI_serviceSendableBuilder_Home())
+		        }
+		        let home: Home = __safeDI_home()
+		        func __safeDI_top() -> Top {
+		            _ = Top.__safeDI_Top_7975D2135DE32E42.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            @Sendable nonisolated func __safeDI_serviceSendableBuilder_Top() -> Top.__safeDI_ServiceSendableCarrier<any Service> {
+		                .init(both_Sendable: __safeDI_serviceSendableBuilder_Both())
+		            }
+		            @Sendable nonisolated func __safeDI_serviceSendableBuilder_Both() -> Both.__safeDI_ServiceSendableCarrier<any Service> {
+		                .init(homeBuilder_Sendable: __safeDI_serviceSendableBuilder_Home())
+		            }
+		            @Sendable nonisolated func __safeDI_serviceSendableBuilder_Home() -> Home.SafeDISendableScope_Service.__safeDI_Builder<any Service> {
+		                .init(stagerBuilder_Sendable: { _ in __safeDI_serviceSendableBuilder_Stager() }, deepBuilder_deepServiceBuilder: { _ in __safeDI_serviceBuilder_Home_Deep() })
+		            }
+		            @Sendable nonisolated func __safeDI_serviceSendableBuilder_Stager() -> Stager.__safeDI_ServiceSendableCarrier<any Service> {
+		                .init(ownerBuilder: { __safeDI_serviceBuilder_Stager_StageOwner_Scope() })
+		            }
+		            @Sendable nonisolated func __safeDI_serviceBuilder_Stager_StageOwner_Scope() -> Stager.__safeDI_ServiceCarrier_StageOwner<any Service> {
+		                .init(service: { scope_analytics in __safeDI_serviceSendableBuilder_StageOwner_Stager_StageOwner_Scope_service(scope_analytics) })
+		            }
+		            @Sendable nonisolated func __safeDI_serviceBuilder_Home_DeepImpl_Scope() -> Home.SafeDIScope_Service.DeepImpl_Scope.__safeDI_Builder<any Service> {
+		                .init(service: { scope in __safeDI_serviceSendableBuilder_DeepImpl_Home_DeepImpl_Scope_service(scope) })
+		            }
+		            @Sendable nonisolated func __safeDI_serviceBuilder_Home_Deep() -> Deep.__safeDI_DeepServiceCarrier<Home.SafeDIScope_Service.DeepImpl_Scope.__safeDI_Builder<any Service>> {
+		                .init(deepService: { __safeDI_serviceBuilder_Home_DeepImpl_Scope() })
+		            }
+		            return Top(__safeDI_serviceSendableBuilder: __safeDI_serviceSendableBuilder_Top())
+		        }
+		        let top: Top = __safeDI_top()
+		        self.init(home: home, top: top)
+		    }
+		}
+		""")
+	}
+
 	/// The code generated for module `App`, whose root is `root`, built on `Seam`.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private mutating func generate(root: String, seamAddition: String = "") async throws -> String? {
