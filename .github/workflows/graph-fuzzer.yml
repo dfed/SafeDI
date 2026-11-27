@@ -103,6 +103,10 @@ on:
         description: With `targeted`, the number of jobs the seeds are split across.
         required: false
         default: '30'
+      targeted_mocks:
+        description: With `targeted`, compare mocks instead of production roots. `on_commit` is built with .github/scripts/switch-attack/lay-out-mocks.patch applied, gen2.py draws its mock-heavy graphs, approved differences are normalized by number and counted (normalize-mocks.py), and the base and public mock corpora's long runs run on the patched commit for the value oracles.
+        type: boolean
+        default: false
   # From verify.yml, in whose run the jobs below then run: they read the
   # bundle that run's build uploaded and build nothing.
   workflow_call:
@@ -637,6 +641,20 @@ jobs:
         run: |
           git config --global --add safe.directory "$PWD"
           git rev-parse HEAD | tee commit.txt
+      # The patch comes from the commit the run is dispatched on, as the scripts do.
+      - name: Checkout the Mock Layout Patch
+        if: ${{ inputs.targeted_mocks && matrix.side == 'on' }}
+        uses: actions/checkout@v7
+        with:
+          path: dispatch
+          sparse-checkout: .github/scripts/switch-attack
+      - name: Lay Mocks Out From Node Records
+        if: ${{ inputs.targeted_mocks && matrix.side == 'on' }}
+        run: |
+          git apply dispatch/.github/scripts/switch-attack/lay-out-mocks.patch
+          git diff --stat
+          rm -rf dispatch
+          echo "with lay-out-mocks.patch" >> commit.txt
       - name: Build SafeDITool
         run: swift build -c release --product SafeDITool --static-swift-stdlib
       - name: Package the Tool
@@ -670,6 +688,7 @@ jobs:
     env:
       FIRST: ${{ matrix.shard.first }}
       LAST: ${{ matrix.shard.last }}
+      GATE_MODE: ${{ inputs.targeted_mocks && 'mocks' || 'production' }}
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v7
@@ -703,6 +722,82 @@ jobs:
           path: ${{ runner.temp }}/targeted-report/
           if-no-files-found: error
 
+  # With `targeted_mocks`, the value oracles: the base and public mock
+  # corpora's long runs over the patched on commit, so that every mock the
+  # tests generate is laid out from node records and executed against
+  # production's values (the base corpus's mock value oracle and mirror model,
+  # the public mock corpus's value differential). A shard builds the commit's
+  # tests itself, in its own container, restoring and saving no cache, as the
+  # tool's build does; it reports the failures' headlines in its summary.
+  targeted-values:
+    name: Value Oracles With Mocks Laid Out on Linux (${{ matrix.corpus }} ${{ matrix.starting-seed }})
+    needs: targeted-plan
+    if: ${{ inputs.targeted && inputs.targeted_mocks }}
+    runs-on: ubuntu-latest
+    container: swift:6.2
+    # Not yet measured: a debug test build (about 25 minutes on a hosted
+    # runner) and a quarter of the base corpus (5 to 8 minutes in ci.yml's
+    # shards) or half the public mock corpus (about 10).
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { corpus: base, features: "", starting-seed: 0, iterations: 1250 }
+          - { corpus: base, features: "", starting-seed: 1250, iterations: 1250 }
+          - { corpus: base, features: "", starting-seed: 2500, iterations: 1250 }
+          - { corpus: base, features: "", starting-seed: 3750, iterations: 1250 }
+          - { corpus: generateMockPublic, features: generateMockPublic, starting-seed: 0, iterations: 500 }
+          - { corpus: generateMockPublic, features: generateMockPublic, starting-seed: 500, iterations: 500 }
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout the Commit Under Test
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.on_commit }}
+      - name: Checkout the Mock Layout Patch
+        uses: actions/checkout@v7
+        with:
+          path: dispatch
+          sparse-checkout: .github/scripts/switch-attack
+      - name: Lay Mocks Out From Node Records
+        run: |
+          git config --global --add safe.directory "$PWD"
+          git apply dispatch/.github/scripts/switch-attack/lay-out-mocks.patch
+          rm -rf dispatch
+          git rev-parse HEAD
+      - name: Build the Tests
+        run: swift build --traits sourceBuild --build-tests
+      - name: Run the Corpus
+        env:
+          SAFEDI_GRAPH_FUZZER_FEATURES: ${{ matrix.features }}
+          SAFEDI_GRAPH_FUZZER_STARTING_SEED: ${{ matrix.starting-seed }}
+          SAFEDI_GRAPH_FUZZER_ITERATIONS: ${{ matrix.iterations }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/swifttmp"
+          status=0
+          TMPDIR="$RUNNER_TEMP/swifttmp" swift test --skip-build --traits sourceBuild --filter 'SafeDIToolGraphFuzzerTests/longRun' > "$RUNNER_TEMP/long-run.txt" 2>&1 || status=$?
+          {
+            echo "### ${{ matrix.corpus }} seeds ${{ matrix.starting-seed }} + ${{ matrix.iterations }}, mocks laid out from node records"
+            echo '```'
+            grep '↳ Graph fuzzer seed' "$RUNNER_TEMP/long-run.txt" | sed 's/^↳ Graph fuzzer seed \([0-9]*\): /\1 /' | awk '{ seed = $1; $1 = ""; seeds[$0] = seeds[$0] " " seed; count[$0]++ } END { for (k in count) printf "%4d%s:%s\n", count[k], k, seeds[k] }' | sort -rn
+            grep -c 'no longer fails' "$RUNNER_TEMP/long-run.txt" | sed 's/^/stale known issues: /'
+            tail -3 "$RUNNER_TEMP/long-run.txt"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
+      - name: Upload the Long Run's Output
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: targeted-values-${{ matrix.corpus }}-${{ matrix.starting-seed }}
+          path: ${{ runner.temp }}/long-run.txt
+          retention-days: 7
+
   # Adds the shards up: the run passes only when every shard ran every one
   # of its graphs and no graph differed.
   targeted-report:
@@ -717,6 +812,7 @@ jobs:
       FIRST_SEED: ${{ inputs.first_seed }}
       LAST_SEED: ${{ inputs.last_seed }}
       FUZZ_RESULT: ${{ needs.targeted-fuzz.result }}
+      TARGETED_MOCKS: ${{ inputs.targeted_mocks }}
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v7
@@ -745,8 +841,14 @@ jobs:
             echo
             echo "| Result | Graphs |"
             echo "|---|---|"
-            for result in SAME ERRSAME DIFF EXITDIFF ERRDIFF; do echo "| $result | $(count "$result") |"; done
+            for result in SAME APPROVED ERRSAME DIFF EXITDIFF ERRDIFF; do echo "| $result | $(count "$result") |"; done
             echo
+            if [ "$(count APPROVED)" -gt 0 ]; then
+              echo "Approved mock differences by number (approved-byte-differences.md): sites, and graphs that show it:"
+              echo '```'
+              grep -o ' [1-6]=[0-9]*' "$RUNNER_TEMP/all.log" | awk -F= '{ sum[$1] += $2; graphs[$1]++ } END { for (k in sum) printf "%s: %d sites in %d graphs\n", k, sum[k], graphs[k] }' | sort
+              echo '```'
+            fi
             echo "Accepted graphs by what kept a root off the switch's path (\`[none;]\` is every root on it):"
             echo '```'
             grep " SAME " "$RUNNER_TEMP/all.log" | sed 's/^[^[]*//' | sort | uniq -c | sort -rn
@@ -756,10 +858,16 @@ jobs:
               echo '```'
               grep -E " (DIFF|EXITDIFF|ERRDIFF) " "$RUNNER_TEMP/all.log" | head -100
               echo '```'
+              echo "By reason:"
+              echo '```'
+              grep -E " (DIFF|EXITDIFF|ERRDIFF) " "$RUNNER_TEMP/all.log" | awk '{ print $2 }' | sort | uniq -c
+              grep ' DIFF ' "$RUNNER_TEMP/all.log" | sed 's/.*\] //' | cut -d' ' -f1-2 | sort | uniq -c | sort -rn | head -30
+              echo '```'
             fi
           } >> "$GITHUB_STEP_SUMMARY"
           if [ "$graphs" != "$expected" ]; then echo "::error::$graphs of $expected graphs ran."; exit 1; fi
           if [ "$different" -gt 0 ]; then echo "::error::$different graphs differ between the two tools."; exit 1; fi
+          if [ "$TARGETED_MOCKS" = "true" ] && [ "$(count APPROVED)" = 0 ]; then echo "::error::No graph's mocks were laid out from node records: the patch did not take."; exit 1; fi
           if [ "$FUZZ_RESULT" != "success" ]; then echo "::error::A shard did not pass ($FUZZ_RESULT)."; exit 1; fi
           echo "Clean: $graphs graphs, none differing."
 
