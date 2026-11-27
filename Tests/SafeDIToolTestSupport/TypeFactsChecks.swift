@@ -53,6 +53,9 @@ enum TypeFactsChecks {
 					Issue.record(Comment(rawValue: "Type facts check \(check), root \(report.root): \(finding)"))
 				}
 			}
+			for finding in result.check10OwedUncovered.prefix(3) {
+				Issue.record(Comment(rawValue: "Type facts check 10, root \(report.root): \(finding)"))
+			}
 		}
 		if let path = environment["SAFEDI_TYPE_FACTS_LOG"], !path.isEmpty {
 			append(result.line, toFileAt: path)
@@ -69,6 +72,11 @@ enum TypeFactsChecks {
 		var factsVariantCount = 0
 		/// Pairs of places of one variant that check 10 compared after setting aside a read one of them asks, answered none.
 		var check10ExemptedPairs = 0
+		/// Check 10's findings by the fact a producer still owes that tells the two places apart (`owedFacts(answering:)`),
+		/// a finding once per fact. Each fact's count goes to 0 when its producer lands; `unowed` stays 0.
+		var check10OwedByFact = [String: Int]()
+		/// Check 10's findings whose owed fact the node's `owedFacts` lacks, which `TypeFactsOwedFacts` must cover.
+		var check10OwedUncovered = [String]()
 		/// A proxy for rule 3's `@Sendable` gap: nodes two or more of whose reads by label are answered by a value at one
 		/// place and by a `SendableLazilyInstantiated` at another. Wider than the gap: it does not ask whether the node is
 		/// reached inside a `@Sendable` function, which the report does not say.
@@ -245,7 +253,16 @@ enum TypeFactsChecks {
 				result.check10ExemptedPairs += 1
 			}
 			if answers != firstAnswers {
-				add(10, "places \(first) and \(index) of \(nodeDescription(places[index].node)) share variant \(variant) but answer \(answers.symmetricDifference(firstAnswers).sorted()) otherwise")
+				let differing = answers.symmetricDifference(firstAnswers)
+				let finding = "places \(first) and \(index) of \(nodeDescription(places[index].node)) share variant \(variant) but answer \(differing.sorted()) otherwise"
+				add(10, finding)
+				let owed = places[index].node.map { report.nodes[$0].owedFacts } ?? []
+				for owedFact in owedFacts(answering: differing) {
+					result.check10OwedByFact[owedFact, default: 0] += 1
+					if !owed.contains(owedFact) {
+						result.check10OwedUncovered.append("\(owedFact) owed but not in the node’s owed facts \(owed.sorted()): \(finding)")
+					}
+				}
 			}
 		}
 		var answerFormsByNodeAndLabel = [Int: [String: Set<Character>]]()
@@ -316,6 +333,7 @@ enum TypeFactsChecks {
 			line.append(" check\(check)=\(result.findingsByCheck[check]?.count ?? 0)")
 		}
 		line.append(" check10Exempted=\(result.check10ExemptedPairs) sendableGapProxy=\(result.sendableGapProxyNodes)")
+		line.append(" check10Owed=\(result.check10OwedByFact.sorted { $0.key < $1.key }.map { "\($0.key):\($0.value)" }.joined(separator: ",")) check10OwedUncovered=\(result.check10OwedUncovered.count) test=\(Test.current?.name ?? "")")
 		for check in 11...lastCheck {
 			line.append(" compared\(check)=\(result.comparedByCheck[check] ?? 0)")
 		}
@@ -341,6 +359,50 @@ enum TypeFactsChecks {
 		} else {
 			return "v"
 		}
+	}
+
+	/// The facts a producer still owes that tell apart the answers two places of one variant give, the symmetric
+	/// difference of their keyed answers: per read, `mockRootPin` for a mock read; for two answers of one read, the first
+	/// field that differs names it (`fillBeingBuilt` for being built at one only, `mockRootRecord` for what is pinned or
+	/// read above, `mockRootBinding` for what the mock root binds, `madeAgain` for a builder's bindings); `unowed`
+	/// otherwise, a read one place asks among them.
+	static func owedFacts(answering differing: Set<String>) -> Set<String> {
+		var answersByRead = [String: [String]]()
+		for answer in differing {
+			answersByRead[readOfAnswer(answer), default: []].append(answer)
+		}
+		var owed = Set<String>()
+		for (read, answers) in answersByRead {
+			if read.hasPrefix("mock(") {
+				owed.insert("mockRootPin")
+			} else if answers.count == 2 {
+				let (first, second) = (answers[0], answers[1])
+				let differs = { (field: String) in self.field(field, of: first) != self.field(field, of: second) }
+				if (self.field("being built", of: first) == "[]") != (self.field("being built", of: second) == "[]") {
+					owed.insert("fillBeingBuilt")
+				} else if differs("pinned above") || differs("read above") {
+					owed.insert("mockRootRecord")
+				} else if differs("bound by mock root") {
+					owed.insert("mockRootBinding")
+				} else if differs("bindings"), first.contains("Instantiator<") {
+					owed.insert("madeAgain")
+				} else {
+					owed.insert("unowed")
+				}
+			} else {
+				owed.insert("unowed")
+			}
+		}
+		return owed
+	}
+
+	/// The text an answer gives after one of its fields' names, up to the next field: `[]` of `being built []`.
+	private static func field(_ name: String, of answer: String) -> Substring {
+		let names = [" = bindings ", " being built ", " passed ", " pinned above ", " read above ", " bound by mock root "]
+		guard let start = answer.range(of: name == "bindings" ? " = bindings " : " \(name) ") else { return "" }
+		let rest = answer[start.upperBound...]
+		let end = names.compactMap { rest.range(of: $0)?.lowerBound }.min() ?? rest.endIndex
+		return rest[..<end]
 	}
 
 	/// The read an answered read names, `value(x)` of `value(x) = none`.

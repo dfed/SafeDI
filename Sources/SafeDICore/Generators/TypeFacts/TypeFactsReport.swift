@@ -187,6 +187,7 @@ public struct TypeFactsReport: Sendable {
 				isOnCycle: graph.graph.isOnCycle(index),
 				readsFromAbove: graph.reads.reads(of: index).map(graph.readDescription),
 				firstRoute: graph.graph.firstRoute(to: index),
+				owedFacts: Self.names(of: graph.owedFacts(of: Int32(index))),
 			)
 		}
 		self.places = places.places.map { place in
@@ -310,6 +311,19 @@ public struct TypeFactsReport: Sendable {
 		public let readsFromAbove: [String]
 		/// The nodes from the root to this one on the first route a walk of the edges in order finds.
 		public let firstRoute: [Int]
+		/// The facts producers still owe the node's answers (`TypeFactsOwedFacts`), by the names of their bits.
+		public let owedFacts: Set<String>
+	}
+
+	private static func names(of owed: TypeFactsOwedFacts) -> Set<String> {
+		let named: [(TypeFactsOwedFacts, String)] = [
+			(.fillBeingBuilt, "fillBeingBuilt"),
+			(.mockRootPin, "mockRootPin"),
+			(.mockRootRecord, "mockRootRecord"),
+			(.mockRootBinding, "mockRootBinding"),
+			(.madeAgain, "madeAgain"),
+		]
+		return Set(named.filter { owed.contains($0.0) }.map(\.1))
 	}
 
 	public struct Place: Sendable {
