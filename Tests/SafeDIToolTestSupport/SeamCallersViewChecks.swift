@@ -28,14 +28,20 @@ import Testing
 /// compute, encoded to the same bytes, and the error reported at the seam, with the declaration it names and its text.
 enum SeamCallersViewChecks {
 	/// Runs `operation` while observing every callers' view a run computes, handing each to `enclosingObserver` too, then
-	/// records an issue for each whose computation again decides otherwise.
+	/// records an issue for each whose computation again decides otherwise, also where `operation` throws, as a run does
+	/// that reports the callers' view's error at a seam: the view was computed before the error was thrown.
 	static func comparing<Result>(handingOn enclosingObserver: (@Sendable (SeamCallersView) -> Void)?, _ operation: () async throws -> Result) async throws -> Result {
 		let (views, continuation) = AsyncStream.makeStream(of: SeamCallersView.self)
-		let result = try await SeamCallersViewObservation.$comparesProducers.withValue({ view in
-			continuation.yield(view)
-			enclosingObserver?(view)
-		}) {
-			try await operation()
+		let result: Swift.Result<Result, any Error>
+		do {
+			result = try await .success(SeamCallersViewObservation.$comparesProducers.withValue({ view in
+				continuation.yield(view)
+				enclosingObserver?(view)
+			}) {
+				try await operation()
+			})
+		} catch {
+			result = .failure(error)
 		}
 		continuation.finish()
 		for await view in views {
@@ -50,8 +56,12 @@ enum SeamCallersViewChecks {
 				Issue.record(Comment(rawValue: "The callers’ view of module \(view.moduleName ?? "(unnamed)") decided otherwise when computed again:\n\(difference)"))
 			}
 		}
-		return result
+		return try result.get()
 	}
+
+	/// Set only by the test that shows this oracle fires after a run that throws: the verdicts computed again lose their
+	/// diagnostics, so a seam whose error the run reports is decided otherwise.
+	@TaskLocal static var dropsRecomputedDiagnostics = false
 
 	/// What `recomputed` decides otherwise than `verdicts`, one line per seam, or `nil` when the two decide alike.
 	static func difference(between verdicts: [SeamCallersVerdict], and recomputed: [SeamCallersVerdict]) -> String? {
@@ -71,8 +81,9 @@ enum SeamCallersViewChecks {
 			if signature != otherSignature {
 				lines.append("\(seam): callers’ signature\n  \(signature)\nagainst\n  \(otherSignature)")
 			}
-			if verdict.diagnostics != other.diagnostics {
-				lines.append("\(seam): reported\n  \(verdict.diagnostics.map(\.formatted))\nagainst\n  \(other.diagnostics.map(\.formatted))")
+			let otherDiagnostics = dropsRecomputedDiagnostics ? [] : other.diagnostics
+			if verdict.diagnostics != otherDiagnostics {
+				lines.append("\(seam): reported\n  \(verdict.diagnostics.map(\.formatted))\nagainst\n  \(otherDiagnostics.map(\.formatted))")
 			}
 		}
 		return lines.isEmpty ? nil : lines.joined(separator: "\n")
