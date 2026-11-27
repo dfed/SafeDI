@@ -157,6 +157,113 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 		}
 	}
 
+	@Test(arguments: [false, true])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFillReadsValueACycleDeclaresAgain_whenSeamPassesUpPlaceOfCallInsideCycleOfItsOwnTree(throughSecondCycle: Bool) async {
+		// `Shell` builds `W`, which calls `Hub` and whose cycle declares `l` again: `P` directly, or `P` in a second cycle
+		// through `U`. `Shell` cannot fill `Hub`'s `api` and passes it up. Inline, the `W` built again beneath `P` hands its
+		// `Hub`'s `api` `P`'s `l`; no function of `Shell`'s tree takes `l`, so the fill would read `Root`'s at every level.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `l: L`, \(throughSecondCycle
+				? "which `U`’s builder function takes as a parameter between where `Shell` instantiates `wBuilder: Instantiator<W>` and where `U` instantiates it again, because a cycle inside `U`’s tree passes it (`P` declares `l: L`). Inline, the `W` built again receives the `l` that parameter is passed,"
+				: "which `P` declares between where `Shell` instantiates `wBuilder: Instantiator<W>` and where `P` instantiates it again. Inline, the `W` built again receives `P`’s `l`,") but SafeDI hands the builder for `Hub`’s `api: any Api` (`api` of `apiBuilder`) the same values at every level of that cycle. Declare `@Received let l: L` on `Hub`, so each `W` passes its `Hub` the `l` of its own level, which the builder is then handed, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Feature"]!["P.swift"]):8:5: note: `P` declares `l: L` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modules(
+					feature: [
+						"public protocol Api {}",
+						seamFixtureType(named: "L", isFinalClass: true, declarations: []),
+						seamFixtureType(named: "Hub", isSeam: true, declarations: ["@Instantiated public let api: any Api"]),
+						seamFixtureType(named: "Shell", isSeam: true, declarations: ["@Instantiated public let wBuilder: Instantiator<W>"]),
+					] + (throughSecondCycle ? [
+						seamFixtureType(named: "W", declarations: ["@Instantiated public let hub: Hub", "@Instantiated public let uBuilder: Instantiator<U>"]),
+						seamFixtureType(named: "U", declarations: ["@Instantiated public let pBuilder: Instantiator<P>", "@Instantiated public let wBuilder: Instantiator<W>"]),
+						seamFixtureType(named: "P", declarations: ["@Instantiated public let l: L", "@Instantiated public let uBuilder: Instantiator<U>"]),
+					] : [
+						seamFixtureType(named: "W", declarations: ["@Instantiated public let hub: Hub", "@Instantiated public let pBuilder: Instantiator<P>"]),
+						seamFixtureType(named: "P", declarations: ["@Instantiated public let l: L", "@Instantiated public let wBuilder: Instantiator<W>"]),
+					]),
+					app: [
+						Self.liveApi(["@Received public let l: L"]),
+						seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated public let l: L", "@Instantiated public let shell: Shell"]),
+					],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFillReadsValueACycleDeclaresAgain_whenSecondSeamPassesOnPlacePassedUpFromInsideCycle() async {
+		// `Outer`, a seam too, calls `Shell` and passes the place on: the copy keeps what `Shell`'s cycle declares again.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `l: L`, which `P` declares between where `Shell` instantiates `wBuilder: Instantiator<W>` and where `P` instantiates it again. Inline, the `W` built again receives `P`’s `l`, but SafeDI hands the builder for `Hub`’s `api: any Api` (`api` of `apiBuilder`) the same values at every level of that cycle. Declare `@Received let l: L` on `Hub`, so each `W` passes its `Hub` the `l` of its own level, which the builder is then handed, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Feature"]!["P.swift"]):8:5: note: `P` declares `l: L` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modules(
+					feature: [
+						"public protocol Api {}",
+						seamFixtureType(named: "L", isFinalClass: true, declarations: []),
+						seamFixtureType(named: "Hub", isSeam: true, declarations: ["@Instantiated public let api: any Api"]),
+						seamFixtureType(named: "Shell", isSeam: true, declarations: ["@Instantiated public let wBuilder: Instantiator<W>"]),
+						seamFixtureType(named: "Outer", isSeam: true, declarations: ["@Instantiated public let shell: Shell"]),
+						seamFixtureType(named: "W", declarations: ["@Instantiated public let hub: Hub", "@Instantiated public let pBuilder: Instantiator<P>"]),
+						seamFixtureType(named: "P", declarations: ["@Instantiated public let l: L", "@Instantiated public let wBuilder: Instantiator<W>"]),
+					],
+					app: [
+						Self.liveApi(["@Received public let l: L"]),
+						seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated public let l: L", "@Instantiated public let outer: Outer"]),
+					],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test(arguments: [false, true])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_fillBuildsInlineValues_whenSeamCalledInsideCycleReceivesLabelItsPassedUpPlacesFillReads(callsInsideSendableFunction: Bool) async throws {
+		// The remedy of the error above: `Hub` receives `l`, so `W`'s function takes it, each call of `Hub` is passed the
+		// `l` of its level, and `Hub`'s scope carries it to the fill. With every type `Sendable` and every builder a
+		// `SendableInstantiator`, each call of `Hub` is made inside a `@Sendable` function, which the remedy holds for too.
+		let instantiator = callsInsideSendableFunction ? "SendableInstantiator" : "Instantiator"
+		let conformances = callsInsideSendableFunction ? ", Sendable" : ""
+		try await expectValuesEqualInlineBuild(
+			feature: [
+				"public protocol Api\(callsInsideSendableFunction ? ": Sendable" : "") {}",
+				seamFixtureType(named: "L", isFinalClass: true, declarations: [], conformances: conformances),
+				seamFixtureType(named: "Hub", isSeam: true, declarations: ["@Received public let l: L", "@Instantiated public let api: any Api"], conformances: conformances),
+				seamFixtureType(named: "Shell", isSeam: true, declarations: ["@Instantiated public let wBuilder: \(instantiator)<W>"], conformances: conformances),
+				seamFixtureType(named: "W", declarations: ["@Instantiated public let hub: Hub", "@Instantiated public let pBuilder: \(instantiator)<P>"], conformances: conformances),
+				seamFixtureType(named: "P", declarations: ["@Instantiated public let l: L", "@Instantiated public let wBuilder: \(instantiator)<W>"], conformances: conformances),
+			],
+			fulfiller: Self.liveApi(["@Received public let l: L"], conformances: conformances),
+			root: seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated public let l: L", "@Instantiated public let shell: Shell"]),
+			probe: DifferentialValueProbe(
+				name: "whose l the api of each W's Hub holds",
+				expression: """
+				{ () -> [String] in
+				    let root = Root()
+				    let w = root.shell.wBuilder.instantiate()
+				    let p = w.pBuilder.instantiate()
+				    let wAgain = p.wBuilder.instantiate()
+				    func l(of w: W) -> L { (w.hub.api as! LiveApi).l }
+				    return ["\\(l(of: w) === root.l)", "\\(l(of: wAgain) === p.l)", "\\(l(of: wAgain) === root.l)"]
+				}()
+				""",
+			),
+		)
+	}
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsFillReadsValueACycleDeclaresAgain_whenLabelIsParameterOfNestedCycleBetween() async {
@@ -244,7 +351,142 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFillReadsValueACycleDeclaresAgain_whenCycleNestedBetweenDeclaresLabelNoFunctionTakes() async {
+		// `U` builds `W` again, and `P` builds `U` again and declares `l`. Nothing in `Feature` receives `l`, so no builder
+		// function takes it, and no declaration on the path from `W` to the `W` built again declares it. Inline, `LiveApi`
+		// makes the functions of `W` and `U` take `l`, and the `W` that the `U` beneath `P` builds again hands it `P`'s; the
+		// fill would read `Hub`'s at every level.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `l: L`, which `U`’s builder function takes as a parameter between where `Hub` instantiates `wBuilder: Instantiator<W>` and where `U` instantiates it again, because a cycle inside `U`’s tree passes it (`P` declares `l: L`). Inline, the `W` built again receives the `l` that parameter is passed, but SafeDI hands the builder for `V`’s `api: any Api` (`api` of `apiBuilder`) the same values at every level of that cycle. Declare `@Received let l: L` on `W`, so each `W` receives the `l` of its own level and hands it on, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Feature"]!["P.swift"]):8:5: note: `P` declares `l: L` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modules(
+					feature: Self.typeBuiltAgainThroughSecondCycle(w: []),
+					app: [Self.liveApi(["@Received public let l: L"]), Self.root([])],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test(arguments: [false, true])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFillReadsValueACycleDeclaresAgain_whenLabelIsDeclaredInCycleNestedInsideCycleNestedBetween(declaresAfterCloser: Bool) async {
+		// Three cycles, one inside another: `U` builds `W` again, `T` builds `U` again, and `P` builds `T` again and declares
+		// `l`. The path from `U` to the `U` built again declares no `l`: it reaches `U` only as what the cycle on `T`, a scope
+		// on that path, declares. `T` builds `U` again before or after `P`, the order the paths are read in.
+		let tDeclares = ["@Instantiated public let uBuilder: Instantiator<U>", "@Instantiated public let pBuilder: Instantiator<P>"]
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `l: L`, which `U`’s builder function takes as a parameter between where `Hub` instantiates `wBuilder: Instantiator<W>` and where `U` instantiates it again, because a cycle inside `U`’s tree passes it (`P` declares `l: L`). Inline, the `W` built again receives the `l` that parameter is passed, but SafeDI hands the builder for `V`’s `api: any Api` (`api` of `apiBuilder`) the same values at every level of that cycle. Declare `@Received let l: L` on `W`, so each `W` receives the `l` of its own level and hands it on, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Feature"]!["P.swift"]):8:5: note: `P` declares `l: L` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modules(
+					feature: [
+						"public protocol Api {}",
+						seamFixtureType(named: "L", isFinalClass: true, declarations: []),
+						seamFixtureType(named: "W", declarations: ["@Instantiated public let uBuilder: Instantiator<U>", "@Instantiated public let vBuilder: Instantiator<V>"]),
+						seamFixtureType(named: "U", declarations: ["@Instantiated public let tBuilder: Instantiator<T>", "@Instantiated public let wBuilder: Instantiator<W>"]),
+						seamFixtureType(named: "T", declarations: declaresAfterCloser ? tDeclares : tDeclares.reversed()),
+						seamFixtureType(named: "P", declarations: ["@Instantiated public let l: L", "@Instantiated public let tBuilder: Instantiator<T>"]),
+						seamFixtureType(named: "V", declarations: ["@Instantiated public let api: any Api"]),
+						seamFixtureType(named: "Hub", isSeam: true, declarations: ["@Instantiated public let l: L", "@Instantiated public let wBuilder: Instantiator<W>"]),
+					],
+					app: [Self.liveApi(["@Received public let l: L"]), Self.root([])],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFillReadsValueACycleDeclaresAgain_whenOnlyLaterPathThroughSharedScopeDeclaresLabel() async {
+		// `B` builds `W` again itself, a first path that declares nothing, and through `C`, which declares `l`. `A`, above
+		// `B`, reads `B`'s paths once and reports the later one's `l`.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `l: L`, which `C` declares between where `Hub` instantiates `wBuilder: Instantiator<W>` and where `C` instantiates it again. Inline, the `W` built again receives `C`’s `l`, but SafeDI hands the builder for `W`’s `api: any Api` (`api` of `apiBuilder`) the same values at every level of that cycle. Declare `@Received let l: L` on `W`, so each `W` receives the `l` of its own level and hands it on, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Feature"]!["C.swift"]):8:5: note: `C` declares `l: L` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modules(
+					feature: [
+						"public protocol Api {}",
+						seamFixtureType(named: "L", isFinalClass: true, declarations: []),
+						seamFixtureType(named: "W", declarations: ["@Instantiated public let api: any Api", "@Instantiated public let aBuilder: Instantiator<A>"]),
+						seamFixtureType(named: "A", declarations: ["@Instantiated public let bBuilder: Instantiator<B>"]),
+						seamFixtureType(named: "B", declarations: ["@Instantiated public let wBuilder: Instantiator<W>", "@Instantiated public let cBuilder: Instantiator<C>"]),
+						seamFixtureType(named: "C", declarations: ["@Instantiated public let l: L", "@Instantiated public let wBuilder: Instantiator<W>"]),
+						seamFixtureType(named: "Hub", isSeam: true, declarations: ["@Instantiated public let l: L", "@Instantiated public let wBuilder: Instantiator<W>"]),
+					],
+					app: [Self.liveApi(["@Received public let l: L"]), Self.root([])],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFillReadsValueACycleDeclaresAgain_whenCycleNestedBetweenIsClosedThroughSendableInstantiators() async {
+		// The graph of the test above with every type `Sendable` and every builder a `SendableInstantiator`, so the place
+		// is in the `@Sendable` family: the read is rejected, and no receive on `W` is offered, since `V`'s `@Sendable` function hands
+		// the place nothing `W`'s function binds.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `l: L`, which `U`’s builder function takes as a parameter between where `Hub` instantiates `wBuilder: SendableInstantiator<W>` and where `U` instantiates it again, because a cycle inside `U`’s tree passes it (`P` declares `l: L`). Inline, the `W` built again receives the `l` that parameter is passed, but SafeDI hands the builder for `V`’s `api: any Api` (`api` of `apiSendableBuilder`) the same values at every level of that cycle. Declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Feature"]!["P.swift"]):8:5: note: `P` declares `l: L` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modules(
+					feature: Self.typeBuiltAgainThroughSecondCycle(w: [], instantiator: "SendableInstantiator", conformances: ", Sendable"),
+					app: [Self.liveApi(["@Received public let l: L"], conformances: ", Sendable"), Self.root([])],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
 	// MARK: Accepted
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_fillBuildsInlineValues_whenTypeBuiltAgainThroughSecondCycleReceivesLabelTheFillReads() async throws {
+		// The remedy of the error above: `W` receives `l`, so the functions of `W` and `U` take it, `W`'s level carries it,
+		// and the `W` that the `U` beneath `P` builds again hands `LiveApi` `P`'s `l`.
+		try await expectValuesEqualInlineBuild(
+			feature: Self.typeBuiltAgainThroughSecondCycle(w: ["@Received public let l: L"]),
+			fulfiller: Self.liveApi(["@Received public let l: L"]),
+			root: Self.root([]),
+			probe: DifferentialValueProbe(
+				name: "whose l the api of each W holds",
+				expression: """
+				{ () -> [String] in
+				    let hub = Root().hub
+				    let w = hub.wBuilder.instantiate()
+				    let p = w.uBuilder.instantiate().pBuilder.instantiate()
+				    let wAgain = p.uBuilder.instantiate().wBuilder.instantiate()
+				    func l(of w: W) -> L { (w.vBuilder.instantiate().api as! LiveApi).l }
+				    return ["\\(l(of: w) === hub.l)", "\\(l(of: wAgain) === p.l)", "\\(l(of: wAgain) === hub.l)"]
+				}()
+				""",
+			),
+		)
+	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
@@ -320,9 +562,9 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			    public init(__safeDI_mark __safeDI_mark_: @autoclosure @escaping () -> Mark?, __safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 			        let mark = LazilyInstantiated<Mark?>(__safeDI_mark_)
 			        let __safeDI_apiBuilder_tBuilder = __safeDI_apiBuilder.tBuilder(mark)
-			        func __safeDI_tBuilder(mark: Mark?) -> T {
+			        @inline(never) func __safeDI_tBuilder(mark: Mark?) -> T {
 			            let reader = MarkReader(mark: mark)
-			            func __safeDI_cBuilder() -> C {
+			            @inline(never) func __safeDI_cBuilder() -> C {
 			                let mark = Mark()
 			                let tBuilder = Instantiator<T> {
 			                    __safeDI_tBuilder(mark: mark)
@@ -337,10 +579,10 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			            __safeDI_tBuilder(mark: mark.instance)
 			        }
 			        let __safeDI_apiBuilder_cBuilder = __safeDI_apiBuilder.cBuilder(mark, tBuilder)
-			        func __safeDI_cBuilder() -> C {
+			        @inline(never) func __safeDI_cBuilder() -> C {
 			            let mark = Mark()
 			            let __safeDI_apiBuilder_tBuilder = __safeDI_apiBuilder_cBuilder.tBuilder(mark)
-			            func __safeDI_tBuilder() -> T {
+			            @inline(never) func __safeDI_tBuilder() -> T {
 			                let reader = MarkReader(mark: mark)
 			                let cBuilder = Instantiator<C>(__safeDI_cBuilder)
 			                let api: any Api = __safeDI_apiBuilder_tBuilder.api(mark, reader, cBuilder)
@@ -469,9 +711,9 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			    public init(__safeDI_mark __safeDI_mark_: @autoclosure @escaping () -> Mark, __safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 			        let mark = LazilyInstantiated<Mark>(__safeDI_mark_)
 			        let __safeDI_apiBuilder_tBuilder = __safeDI_apiBuilder.tBuilder(mark)
-			        func __safeDI_tBuilder(mark: Mark) -> T {
+			        @inline(never) func __safeDI_tBuilder(mark: Mark) -> T {
 			            let reader = MarkReader(mark: mark)
-			            func __safeDI_cBuilder() -> C {
+			            @inline(never) func __safeDI_cBuilder() -> C {
 			                let mark = Mark()
 			                let tBuilder = Instantiator<T> {
 			                    __safeDI_tBuilder(mark: mark)
@@ -486,10 +728,10 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			            __safeDI_tBuilder(mark: mark.instance)
 			        }
 			        let __safeDI_apiBuilder_cBuilder = __safeDI_apiBuilder.cBuilder(mark, tBuilder)
-			        func __safeDI_cBuilder() -> C {
+			        @inline(never) func __safeDI_cBuilder() -> C {
 			            let mark = Mark()
 			            let __safeDI_apiBuilder_tBuilder = __safeDI_apiBuilder_cBuilder.tBuilder(mark)
-			            func __safeDI_tBuilder() -> T {
+			            @inline(never) func __safeDI_tBuilder() -> T {
 			                let reader = MarkReader(mark: mark)
 			                let cBuilder = Instantiator<C>(__safeDI_cBuilder)
 			                let api: any Api = __safeDI_apiBuilder_tBuilder.api(mark, reader, cBuilder)
@@ -500,13 +742,13 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			        }
 			        let cBuilder = Instantiator<C>(__safeDI_cBuilder)
 			        let __safeDI_apiBuilder_t = __safeDI_apiBuilder.t(mark, tBuilder, cBuilder)
-			        func __safeDI_t() -> T {
+			        @inline(never) func __safeDI_t() -> T {
 			            let reader = MarkReader(mark: mark.instance)
 			            let __safeDI_apiBuilder_cBuilder = __safeDI_apiBuilder_t.cBuilder(mark.instance, reader)
-			            func __safeDI_cBuilder() -> C {
+			            @inline(never) func __safeDI_cBuilder() -> C {
 			                let mark = Mark()
 			                let __safeDI_apiBuilder_tBuilder = __safeDI_apiBuilder_cBuilder.tBuilder(mark)
-			                func __safeDI_tBuilder() -> T {
+			                @inline(never) func __safeDI_tBuilder() -> T {
 			                    let reader = MarkReader(mark: mark)
 			                    let cBuilder = Instantiator<C>(__safeDI_cBuilder)
 			                    let api: any Api = __safeDI_apiBuilder_tBuilder.api(mark, reader, cBuilder)
@@ -637,14 +879,14 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
-			        func __safeDI_mark() -> Mark {
+			        @inline(never) func __safeDI_mark() -> Mark {
 			            Mark()
 			        }
 			        let mark = LazilyInstantiated<Mark>(__safeDI_mark)
 			        let __safeDI_apiBuilder_tBuilder = __safeDI_apiBuilder.tBuilder(mark)
-			        func __safeDI_tBuilder(mark: Mark) -> T {
+			        @inline(never) func __safeDI_tBuilder(mark: Mark) -> T {
 			            let reader = MarkReader(mark: mark)
-			            func __safeDI_cBuilder() -> C {
+			            @inline(never) func __safeDI_cBuilder() -> C {
 			                let mark = Mark()
 			                let tBuilder = Instantiator<T> {
 			                    __safeDI_tBuilder(mark: mark)
@@ -659,10 +901,10 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			            __safeDI_tBuilder(mark: mark.instance)
 			        }
 			        let __safeDI_apiBuilder_cBuilder = __safeDI_apiBuilder.cBuilder(mark, tBuilder)
-			        func __safeDI_cBuilder() -> C {
+			        @inline(never) func __safeDI_cBuilder() -> C {
 			            let mark = Mark()
 			            let __safeDI_apiBuilder_tBuilder = __safeDI_apiBuilder_cBuilder.tBuilder(mark)
-			            func __safeDI_tBuilder() -> T {
+			            @inline(never) func __safeDI_tBuilder() -> T {
 			                let reader = MarkReader(mark: mark)
 			                let cBuilder = Instantiator<C>(__safeDI_cBuilder)
 			                let api: any Api = __safeDI_apiBuilder_tBuilder.api(mark, reader, cBuilder)
@@ -673,13 +915,13 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			        }
 			        let cBuilder = Instantiator<C>(__safeDI_cBuilder)
 			        let __safeDI_apiBuilder_t = __safeDI_apiBuilder.t(mark, tBuilder, cBuilder)
-			        func __safeDI_t() -> T {
+			        @inline(never) func __safeDI_t() -> T {
 			            let reader = MarkReader(mark: mark.instance)
 			            let __safeDI_apiBuilder_cBuilder = __safeDI_apiBuilder_t.cBuilder(mark.instance, reader)
-			            func __safeDI_cBuilder() -> C {
+			            @inline(never) func __safeDI_cBuilder() -> C {
 			                let mark = Mark()
 			                let __safeDI_apiBuilder_tBuilder = __safeDI_apiBuilder_cBuilder.tBuilder(mark)
-			                func __safeDI_tBuilder() -> T {
+			                @inline(never) func __safeDI_tBuilder() -> T {
 			                    let reader = MarkReader(mark: mark)
 			                    let cBuilder = Instantiator<C>(__safeDI_cBuilder)
 			                    let api: any Api = __safeDI_apiBuilder_tBuilder.api(mark, reader, cBuilder)
@@ -936,14 +1178,14 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_apiSendableBuilder: __safeDI_ApiSendableCarrier<any Api>) {
-			        @Sendable nonisolated func __safeDI_a() -> A {
+			        @inline(never) @Sendable nonisolated func __safeDI_a() -> A {
 			            let __safeDI_apiSendableBuilder_a_Sendable = __safeDI_apiSendableBuilder.a_Sendable
 			            let bBuilder = SendableInstantiator<B> {
 			                __safeDI_bBuilder(__safeDI_apiSendableBuilder_a_Sendable: __safeDI_apiSendableBuilder_a_Sendable)
 			            }
 			            return A(bBuilder: bBuilder)
 			        }
-			        @Sendable nonisolated func __safeDI_bBuilder(__safeDI_apiSendableBuilder_a_Sendable: __safeDI_ApiSendableCarrier_A<any Api>) -> B {
+			        @inline(never) @Sendable nonisolated func __safeDI_bBuilder(__safeDI_apiSendableBuilder_a_Sendable: __safeDI_ApiSendableCarrier_A<any Api>) -> B {
 			            let __safeDI_apiSendableBuilder_bBuilder = __safeDI_apiSendableBuilder_a_Sendable.bBuilder()
 			            let a: A = __safeDI_a()
 			            let api: any Api = __safeDI_apiSendableBuilder_bBuilder.api(a)
@@ -1016,6 +1258,21 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 		]
 	}
 
+	/// `Api`, `L`, `W`, `U`, `P`, `V` and `Hub`, two lazy cycles that share `U`: `Hub` instantiates `l` and `W`, `W` declares
+	/// `w`'s declarations and builds `U` and `V`, which holds the hole `api`, `U` builds `P` and `W` again, and `P`
+	/// instantiates its own `l` and builds `U` again.
+	private static func typeBuiltAgainThroughSecondCycle(w: [String], instantiator: String = "Instantiator", conformances: String = "") -> [String] {
+		[
+			"public protocol Api\(conformances.isEmpty ? "" : ": Sendable") {}",
+			seamFixtureType(named: "L", isFinalClass: true, declarations: [], conformances: conformances),
+			seamFixtureType(named: "W", declarations: w + ["@Instantiated public let uBuilder: \(instantiator)<U>", "@Instantiated public let vBuilder: \(instantiator)<V>"], conformances: conformances),
+			seamFixtureType(named: "U", declarations: ["@Instantiated public let pBuilder: \(instantiator)<P>", "@Instantiated public let wBuilder: \(instantiator)<W>"], conformances: conformances),
+			seamFixtureType(named: "P", declarations: ["@Instantiated public let l: L", "@Instantiated public let uBuilder: \(instantiator)<U>"], conformances: conformances),
+			seamFixtureType(named: "V", declarations: ["@Instantiated public let api: any Api"], conformances: conformances),
+			seamFixtureType(named: "Hub", isSeam: true, declarations: ["@Instantiated public let l: L", "@Instantiated public let wBuilder: \(instantiator)<W>"], conformances: conformances),
+		]
+	}
+
 	private static let tag = """
 	@Instantiable
 	public struct Tag: Instantiable, CustomStringConvertible {
@@ -1026,8 +1283,8 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 	}
 	"""
 
-	private static func liveApi(_ declarations: [String]) -> String {
-		seamFixtureType(named: "LiveApi", declarations: declarations, conformances: ", Api")
+	private static func liveApi(_ declarations: [String], conformances: String = "") -> String {
+		seamFixtureType(named: "LiveApi", declarations: declarations, conformances: ", Api" + conformances)
 			.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(fulfillingAdditionalTypes: [Api.self])\n")
 	}
 

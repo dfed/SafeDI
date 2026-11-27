@@ -63,7 +63,7 @@ on:
         required: false
         default: 'corpus'
       shards:
-        description: The number of jobs to split the graphs across, or `auto` for two with the seam feature (`generateDependencyTree`), whose graphs cost the most, and one otherwise.
+        description: The number of jobs to split the graphs across, or `auto` for four with the seam feature (`generateDependencyTree`), whose graphs cost the most, and one otherwise.
         type: choice
         options: ['auto', '1', '2', '3', '4']
         default: 'auto'
@@ -118,8 +118,13 @@ jobs:
     strategy:
       fail-fast: false
       # One matrix entry per shard; each job reads its index and the count from `strategy`.
+      # `auto` gives the seam corpus four. With two, shard 0 fuzzed for 61 to
+      # 63 minutes after a 26-minute build, against the job's 90: run 340 of
+      # this workflow was cancelled at the limit, and run 345 finished with
+      # under a minute to spare. Four halve each shard's graphs, which should
+      # leave a shard near 57 minutes; that is not measured yet.
       matrix:
-        shard: ${{ fromJSON('{"1":[0],"2":[0,1],"3":[0,1,2],"4":[0,1,2,3]}')[(inputs.shards || 'auto') == 'auto' && (inputs.features == 'generateDependencyTree' && '2' || '1') || inputs.shards] }}
+        shard: ${{ fromJSON('{"1":[0],"2":[0,1],"3":[0,1,2],"4":[0,1,2,3]}')[(inputs.shards || 'auto') == 'auto' && (inputs.features == 'generateDependencyTree' && '4' || '1') || inputs.shards] }}
     defaults:
       run:
         shell: bash
