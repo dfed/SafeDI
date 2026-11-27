@@ -188,13 +188,20 @@ struct FillFacts: Sendable {
 		// What the fill's tree reads from above it, by label: required where a read asks for the label's value.
 		var readLabels = Set<String>()
 		var requiredLabels = Set<String>()
-		// The fill's node is the declaration of the property it fills, built as the fill builds it, whose subtree's reads hold
-		// the read of the node's own label.
+		// The fill's node is the declaration of the property it fills, built as the fill builds it.
 		let filledProperty = world.property(of: node)
 		for readID in world.reads(of: node) {
 			let read = world.read(readID)
-			// A required read of the node's own label is the node's declaration of it, never a read of the caller's.
-			guard read.channel != .value || world.text(ofLabel: read.label) != filledProperty?.label else { continue }
+			// The node's own label is the fill's to build: a child closing a cycle on it reads the node, and only a receive of
+			// it only if available beneath reads the caller's, never required.
+			if read.channel == .value, world.text(ofLabel: read.label) == filledProperty?.label {
+				if world.edges(from: node).contains(where: { child in
+					world.reads(of: child).contains { world.read($0) == Read(.optional, label: read.label) }
+				}) {
+					readLabels.insert(world.text(ofLabel: read.label))
+				}
+				continue
+			}
 			switch read.channel {
 			case .value:
 				readLabels.insert(world.text(ofLabel: read.label))
@@ -272,6 +279,11 @@ enum FillCallerSources {
 
 	/// The declaration that answers a read `source` hands `callee`, built before the read, or `nil` where none does.
 	private static func declaration(of label: String, answering source: AnswerSource, callee: VariantID, in world: TypeFactsGraph) -> Property? {
+		// The call's own edge to the fill answers a read of a field the fill binds with that field (the fill channel): a caller
+		// read is a field no place of the case carries, so the caller's nearest declaration of the label answers it.
+		guard source.kind != .bound || source.payload != world.declaration(of: callee) else {
+			return nearestDeclaration(of: label, above: callee, in: world)
+		}
 		var source = source
 		var callee = callee
 		while true {
@@ -292,6 +304,22 @@ enum FillCallerSources {
 				callee = caller
 			}
 		}
+	}
+
+	/// The nearest declaration of `label` in the scopes that enclose `variant`'s declaration: a property one of them builds, else
+	/// one its type receives or forwards.
+	private static func nearestDeclaration(of label: String, above variant: VariantID, in world: TypeFactsGraph) -> Property? {
+		var variant = variant
+		while let (caller, _) = caller(of: variant, in: world) {
+			let binder = world.declaration(of: caller)
+			if let declared = world.edges(from: binder).lazy.filter({ world.construction(of: $0) != .fill }).compactMap({ world.property(of: $0) }).first(where: { $0.label == label })
+				?? world.scope(of: binder).instantiable.dependencies.lazy.map(\.property).first(where: { $0.label == label })
+			{
+				return declared
+			}
+			variant = caller
+		}
+		return nil
 	}
 
 	/// The variant that calls `variant`, and the index of the edge it calls it on.
