@@ -467,7 +467,8 @@ struct StructuralKeyParts {
 	mutating func id(of value: ValuePath) -> Int {
 		var members = [(name: String, throughOptional: Bool)]()
 		var current = value
-		while true {
+		var node: Node
+		reading: while true {
 			switch current {
 			case let .memberRead(name, base):
 				members.append((name, false))
@@ -476,21 +477,25 @@ struct StructuralKeyParts {
 				members.append((name, true))
 				current = base.value
 			case let .rootDeclaration(name):
-				return id(of: .rootDeclaration(name), beneath: members)
+				node = .rootDeclaration(name)
+				break reading
 			case let .read(read):
-				return id(of: .read(read.shape), beneath: members)
+				node = .read(read.shape)
+				break reading
 			case let .passedArgument(name):
-				return id(of: .passedArgument(name), beneath: members)
+				node = .passedArgument(name)
+				break reading
 			case let .call(name, value, arguments, argumentsWrapper):
-				let node = Node.call(
+				node = Node.call(
 					name: name,
 					value: id(of: value),
 					arguments: arguments.map(\.shape),
 					argumentsWrapper: argumentsWrapper?.asSource,
 				)
-				return id(of: node, beneath: members)
+				break reading
 			case let .emptyInitialization(type):
-				return id(of: .emptyInitialization(type.asSource), beneath: members)
+				node = .emptyInitialization(type.asSource)
+				break reading
 			case let .spliced(segments):
 				var spliced = [Segment]()
 				for segment in segments {
@@ -503,9 +508,11 @@ struct StructuralKeyParts {
 						spliced.append(.declaredFunction(name))
 					}
 				}
-				return id(of: .spliced(spliced), beneath: members)
+				node = .spliced(spliced)
+				break reading
 			}
 		}
+		return id(of: node, beneath: members)
 	}
 
 	/// The id of `node` read through `members`, the read nearest the node last.
