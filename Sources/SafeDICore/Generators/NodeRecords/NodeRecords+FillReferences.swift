@@ -96,7 +96,7 @@ struct FillReferences: Sendable {
 		var referenced = Set<String>()
 		var referencedFromSendableFunctions = Set<String>()
 		var named = Set<String>()
-		var ownFills = [(key: String, isSendable: Bool)]()
+		var ownFills = [String]()
 		var ownFillNodes = [DeclarationID]()
 		var filledSites = Set<SeamSignature.Hole.Site>()
 		// The fill nodes the call passes, one per fill argument, in their order.
@@ -117,33 +117,33 @@ struct FillReferences: Sendable {
 					referencedFromSendableFunctions.insert(key)
 				}
 			} else {
-				ownFills.append((key, hole.isSendable))
+				ownFills.append(key)
 				ownFillNodes.append(fillNode)
 			}
 		}
 		// What a call inside one of the call's own fills refers to of them is a later step's.
 		guard !FillFacts.treesHoldCall(ownFillNodes, in: world) else { throw .fillHoldsCall }
-		let dispatchers: [ScopeGenerator.FillDispatcher]
-		if let calledBuilders = scope.calledBuilders {
+		let calledBuilders = scope.calledBuilders
+		// The call passes the enclosing call's dispatcher of a builder's enum by name. A seam's builder that takes a builder
+		// struct is handed the struct its root level returns, unless the enclosing call declares a dispatcher of the hole
+		// type over its enum, as `Scope` decides it where the tree that makes the call holds no hole.
+		let holeTypesOfEnclosingDispatchers = Set((calledBuilders?.builders ?? []).filter { enclosingKeys.contains(ScopeGenerator.FillDispatcher.key(of: $0.enumKey)) }.map(\.enumKey.holeType))
+		let buildersReachingFilledSites: [SeamSignature.Builder] = calledBuilders.map { calledBuilders in
 			let filledSiteNumbers = calledBuilders.siteNumbers(of: filledSites)
-			// The call passes the enclosing call's dispatcher of a builder's enum by name. A seam's builder that takes a builder
-			// struct is handed the struct its root level returns, unless the enclosing call declares a dispatcher of the hole
-			// type over its enum, as `Scope` decides it where the tree that makes the call holds no hole.
-			for builder in calledBuilders.builders where calledBuilders.reaches(anyOf: filledSiteNumbers, from: builder.enumKey, onRoutesOf: isPublicMockCall ? builder.enumKey : nil) {
-				let returnsBuilderStruct = !isPublicMockCall && builder.takesBuilderStruct && !calledBuilders.builders.contains { calledBuilder in
-					calledBuilder.enumKey.holeType == builder.enumKey.holeType && enclosingKeys.contains(ScopeGenerator.FillDispatcher.key(of: calledBuilder.enumKey))
-				}
-				let key = ScopeGenerator.FillDispatcher.key(of: builder.enumKey, returnsBuilderStruct: returnsBuilderStruct)
-				if enclosingKeys.contains(key) {
-					referenced.insert(key)
-					named.insert(key)
-					if builder.enumKey.isSendable {
-						referencedFromSendableFunctions.insert(key)
-					}
-				}
+			return calledBuilders.builders.filter { calledBuilders.reaches(anyOf: filledSiteNumbers, from: $0.enumKey, onRoutesOf: isPublicMockCall ? $0.enumKey : nil) }
+		} ?? []
+		for builder in buildersReachingFilledSites {
+			let returnsBuilderStruct = !isPublicMockCall && builder.takesBuilderStruct && !holeTypesOfEnclosingDispatchers.contains(builder.enumKey.holeType)
+			let key = ScopeGenerator.FillDispatcher.key(of: builder.enumKey, returnsBuilderStruct: returnsBuilderStruct)
+			if enclosingKeys.contains(key) {
+				referenced.insert(key)
+				named.insert(key)
+				referencedFromSendableFunctions.formUnion(builder.enumKey.isSendable ? [key] : [])
 			}
-			var names = GeneratedNameAllocator(reserving: [])
-			dispatchers = ScopeGenerator.FillDispatcher.dispatchers(
+		}
+		var names = GeneratedNameAllocator(reserving: [])
+		let dispatchers = calledBuilders.map { calledBuilders in
+			ScopeGenerator.FillDispatcher.dispatchers(
 				of: calledBuilders,
 				filledSites: filledSites,
 				enclosingDispatchers: Dictionary(enclosingKeys.map { ($0, "enclosing \($0)") }, uniquingKeysWith: { first, _ in first }),
@@ -151,30 +151,17 @@ struct FillReferences: Sendable {
 				names: &names,
 				decidesPerRoute: isPublicMockCall,
 			)
-		} else {
-			dispatchers = []
-		}
-		let ownKeys = Set(ownFills.map(\.key) + dispatchers.map(\.key))
-		var referencesByKey = [String: [String]]()
+		} ?? []
+		let ownKeys = Set(ownFills + dispatchers.map(\.key))
+		let sendableDispatcherKeys = Set(dispatchers.filter(\.isSendableFamily).map(\.key))
 		for dispatcher in dispatchers {
 			let targetKeys = dispatcher.cases.compactMap(\.target?.key)
-			referencesByKey[dispatcher.key] = targetKeys
 			named.formUnion(targetKeys)
 			referenced.formUnion(targetKeys.filter { !ownKeys.contains($0) })
-		}
-		// The call's fills and dispatchers that are `@Sendable` refer to what they refer to from a `@Sendable` function.
-		var keysToVisit = ownFills.filter(\.isSendable).map(\.key) + dispatchers.filter(\.isSendableFamily).map(\.key)
-		var sendableKeys = Set(keysToVisit)
-		while let key = keysToVisit.popLast() {
-			for target in referencesByKey[key] ?? [] {
-				if ownKeys.contains(target) {
-					if sendableKeys.insert(target).inserted {
-						keysToVisit.append(target)
-					}
-				} else {
-					referencedFromSendableFunctions.insert(target)
-				}
-			}
+			// A `@Sendable` dispatcher refers to what its cases lead to from a `@Sendable` function. One whose case leads to a
+			// dispatcher of its own call that serves both families would make that one `@Sendable` too: a later step's.
+			guard !sendableDispatcherKeys.contains(dispatcher.key) || targetKeys.allSatisfy({ !ownKeys.contains($0) || sendableDispatcherKeys.contains($0) || ownFills.contains($0) }) else { throw .fillHoldsCall }
+			referencedFromSendableFunctions.formUnion(sendableDispatcherKeys.contains(dispatcher.key) ? targetKeys.filter { !ownKeys.contains($0) } : [])
 		}
 		return (referenced, referencedFromSendableFunctions, named.subtracting(ownKeys))
 	}
