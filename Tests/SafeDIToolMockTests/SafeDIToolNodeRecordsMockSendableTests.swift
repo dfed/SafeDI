@@ -469,6 +469,97 @@ struct SafeDIToolNodeRecordsMockSendableTests: ~Copyable {
 		#expect(output.generatedFiles == walkOutput.generatedFiles)
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_takesSendableNodesOverrideAsClosure_whenItsOnlyChildIsRename() async throws {
+		let fixture = [
+			"""
+			@Instantiable(generateMock: true)
+			public final class Root: Instantiable {
+			    public init(user: User, profileBuilder: SendableInstantiator<Profile>) {
+			        self.user = user
+			        self.profileBuilder = profileBuilder
+			    }
+			    @Instantiated let user: User
+			    @Instantiated let profileBuilder: SendableInstantiator<Profile>
+			}
+			""",
+			"""
+			@Instantiable
+			public final class User: Instantiable, Sendable {
+			    public init() {}
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Profile: Instantiable, Sendable {
+			    public init(account: User) {
+			        self.account = account
+			    }
+			    @Received(fulfilledByDependencyNamed: "user", ofType: User.self) let account: User
+			}
+			""",
+		]
+		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		let mock = try #require(output.mockFiles["Root+SafeDIMock.swift"])
+		// A rename reads no override, so `Profile` has no configuration: its override is a closure, bound before the
+		// `@Sendable` function under the name the walk gives a closure’s local, which is the text the walk writes.
+		#expect(mock == generatedFileHeader + """
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            user: (() -> User)? = nil,
+		            profileBuilder: (@Sendable (User) -> Profile)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                user: user,
+		                profileBuilder: profileBuilder
+		            )
+		        }
+
+		        var user: (() -> User)? { __safeDI_storage.user }
+		        var profileBuilder: (@Sendable (User) -> Profile)? { __safeDI_storage.profileBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                user: (() -> User)?,
+		                profileBuilder: (@Sendable (User) -> Profile)?
+		            ) {
+		                self.user = user
+		                self.profileBuilder = profileBuilder
+		            }
+
+		            let user: (() -> User)?
+		            let profileBuilder: (@Sendable (User) -> Profile)?
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        let user = if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { User() }
+		        let __safeDI_profileBuilder__safeDIBuilder = safeDIOverrides.profileBuilder
+		        @Sendable nonisolated func __safeDI_profileBuilder() -> Profile {
+		            #sourceLocation(file: "\(output.fixtures["Profile.swift"])", line: 6)
+		            let account: User = user
+		            #sourceLocation()
+		            return if let safeDIBuilder = __safeDI_profileBuilder__safeDIBuilder { safeDIBuilder(account) } else { Profile(account: account) }
+		        }
+		        let profileBuilder = SendableInstantiator<Profile>(__safeDI_profileBuilder)
+		        return Root(user: user, profileBuilder: profileBuilder)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(mock)")
+		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [true])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]

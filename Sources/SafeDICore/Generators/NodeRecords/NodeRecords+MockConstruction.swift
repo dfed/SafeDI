@@ -86,6 +86,14 @@ extension NodeRecords {
 		world.edges(from: declaration).contains { world.kind(of: $0) != .alias }
 	}
 
+	/// Whether `declaration`, a node of a mock root's world, builds a child with an override of its own, which neither a
+	/// rename nor a property nothing fulfills has. Such a child makes the node's override a configuration, as a field its
+	/// construction takes does (`mockConfigurationFieldArguments(of:in:)`); a node with neither is overridden by a
+	/// closure. Each record, and each local that names a node's override, asks here, so that they agree.
+	static func buildsMockChildWithOverride(_ declaration: DeclarationID, in world: some NodeRecordSources) -> Bool {
+		world.edges(from: declaration).contains { world.kind(of: $0) != .alias && !world.scope(of: $0).isUnavailableDependency }
+	}
+
 	/// The record of `declaration`'s place, a node of kind `mockConstruction`: the record `builtByInitializer` makes of it, built with
 	/// its type's hand-written mock where the world says so (`TypeFactsConstruction.handWrittenMock`), which first tries
 	/// the closure that overrides it (`mockOverrideSlot(of:labeled:typed:in:hasFunction:handsOverridesToChildren:isSendable:)`),
@@ -145,8 +153,7 @@ extension NodeRecords {
 		let isConfiguredForChildren = isConfiguredMockNode(declaration, in: world)
 		// A property nothing fulfills is a child with no override of its own, as a rename is, so neither makes its type a
 		// configuration; its function is still handed the overrides, beside which it takes that property’s.
-		let buildsChildWithOverride = world.edges(from: declaration).contains { world.kind(of: $0) != .alias && !world.scope(of: $0).isUnavailableDependency }
-		let isConfigured = buildsChildWithOverride || !fieldArguments.isEmpty
+		let isConfigured = buildsMockChildWithOverride(declaration, in: world) || !fieldArguments.isEmpty
 		let slotType = mockOverrideType(of: record, usesHandWrittenMock: handWrittenMock != nil, isConfigured: isConfigured, instantiable: instantiable)
 		let slot = mockOverrideSlot(
 			of: declaration,
@@ -214,7 +221,7 @@ extension NodeRecords {
 		// A `@Sendable` function can neither capture the overrides nor be handed them: its value is read into a local before
 		// it (`mockOverridesBindingPlace(of:record:in:)`), which the function captures where the root's body declares both,
 		// and is handed elsewhere.
-		guard !isSendable else { return mockSendableOverrideSlot(of: declaration, labeled: label, typed: type, in: world, handsOverridesToChildren: handsOverridesToChildren) }
+		guard !isSendable else { return mockSendableOverrideSlot(of: declaration, labeled: label, typed: type, in: world) }
 		if !handsOverridesToChildren, world.parents(of: declaration).allSatisfy({ $0.parent == 0 }) {
 			return (.member(label.spelledAsMemberDeclarationName, of: .rootDeclaration(ReservedName.mockOverridesParameterName)), [])
 		} else {

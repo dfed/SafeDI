@@ -63,9 +63,8 @@ extension NodeRecords {
 		labeled label: String,
 		typed type: TypeDescription,
 		in world: some NodeRecordSources,
-		handsOverridesToChildren: Bool,
 	) -> (value: ValuePath, passedArguments: [PassedArgument]) {
-		let local = ValuePath.read(mockOverridesLocal(ofNodeLabeled: label, typed: type, isConfigured: isConfigured(declaration, buildsChildren: handsOverridesToChildren, in: world)))
+		let local = ValuePath.read(mockOverridesLocal(ofNodeLabeled: label, typed: type, isConfigured: isConfigured(declaration, in: world)))
 		if capturesOverridesLocal(declaration, in: world) {
 			return (local, [])
 		} else {
@@ -111,7 +110,7 @@ extension NodeRecords {
 	static func mockOverridesBindingPlace(of declaration: DeclarationID, record: PlaceRecord, in world: some NodeRecordSources) -> BuiltPlaceRecord? {
 		guard world.isMockWorld, case let .built(built) = record, built.isSendable else { return nil }
 		let instantiable = world.scope(of: declaration).instantiable
-		let isConfigured = isConfigured(declaration, buildsChildren: !built.children.isEmpty, in: world)
+		let isConfigured = isConfigured(declaration, in: world)
 		let usesHandWrittenMock = world.construction(of: declaration) == .handWrittenMock && instantiable.mockInitializer != nil
 		let type = mockOverrideType(of: built, usesHandWrittenMock: usesHandWrittenMock, isConfigured: isConfigured, instantiable: instantiable)
 		let local = mockOverridesLocal(ofNodeLabeled: built.property.label, typed: type, isConfigured: isConfigured)
@@ -138,10 +137,12 @@ extension NodeRecords {
 	}
 
 	/// Whether a node of a mock root's world has a configuration, as its record's override type says
-	/// (`mockConstructionRecord(of:variant:in:unavailableProperties:lazilyInstantiatedInstanceProperties:receivesBoundAgain:typesDeclaredEscaping:children:)`): whether it
-	/// `buildsChildren`, or passes its construction a field of its configuration (`mockConfigurationFieldArguments(of:in:)`).
-	private static func isConfigured(_ declaration: DeclarationID, buildsChildren: Bool, in world: some NodeRecordSources) -> Bool {
-		buildsChildren || !mockConfigurationFieldArguments(of: declaration, in: world).isEmpty
+	/// (`mockConstructionRecord(of:variant:in:unavailableProperties:lazilyInstantiatedInstanceProperties:receivesBoundAgain:typesDeclaredEscaping:children:)`):
+	/// whether it builds a child with an override of its own (`buildsMockChildWithOverride(_:in:)`), or passes its
+	/// construction a field of its configuration (`mockConfigurationFieldArguments(of:in:)`). A node whose children are
+	/// all renames has none, so the local its override is bound to is named as a closure's.
+	private static func isConfigured(_ declaration: DeclarationID, in world: some NodeRecordSources) -> Bool {
+		buildsMockChildWithOverride(declaration, in: world) || !mockConfigurationFieldArguments(of: declaration, in: world).isEmpty
 	}
 
 	/// The type of the configuration of a node of `instantiable`'s type.
