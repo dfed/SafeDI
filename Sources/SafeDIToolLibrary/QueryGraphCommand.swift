@@ -192,7 +192,7 @@ public struct QueryGraphReport: Encodable, Equatable, Sendable {
 		}
 
 		errors = resolutionDiagnostics.map { diagnostic in
-			GraphError(message: diagnostic.message, filePath: attribution(of: diagnostic.location?.filePath), line: diagnostic.location?.line)
+			GraphError(message: diagnostic.message, filePath: attribution(of: diagnostic.location?.filePath), line: diagnostic.location?.lineAndColumn?.line)
 		}
 		declarations = productionInstantiables.map { instantiable in
 			let declarationID = id(of: instantiable)
@@ -201,7 +201,7 @@ public struct QueryGraphReport: Encodable, Equatable, Sendable {
 				typeName: instantiable.concreteInstantiable.asSource,
 				module: instantiable.moduleName,
 				filePath: attribution(of: instantiable.declarationLocation?.filePath ?? instantiable.sourceFilePath),
-				line: instantiable.declarationLocation?.line,
+				line: instantiable.declarationLocation?.lineAndColumn?.line,
 				declarationKind: GraphDeclaration.DeclarationKind(instantiable.declarationType),
 				fulfills: instantiable.instantiableTypes.map(\.asSource),
 				isRoot: instantiable.isRoot,
@@ -367,7 +367,7 @@ public struct GraphDependency: Encodable, Equatable, Sendable {
 		type = dependency.property.typeDescription.asSource
 		wrapper = dependency.property.typeDescription.propertyType.wrapperTypeName
 		self.filePath = filePath
-		line = dependency.declarationLocation?.line
+		line = dependency.declarationLocation?.lineAndColumn?.line
 		switch dependency.source {
 		case let .instantiated(fulfillingTypeDescription, erasedToConcreteExistential):
 			source = .instantiated
