@@ -118,25 +118,24 @@ struct DeclarationsAnsweringReads: Sendable {
 				// instance where the scope declares the wrapper itself, or reads the label as one from above. Matched by
 				// label, and refined below by the tree's rule. Every call of a rename is read, so that what is reported does
 				// not depend on which call resolves it.
-				if let rename = Self.rename(world.declaration(of: callee), in: world) {
-					if callerScope.declaredLazilyInstantiatedInstanceProperties.contains(where: { $0.label == rename.fulfillingProperty.label })
-						|| lazilyInstantiatedInstancePropertiesByVariant[Int(caller)].contains(where: { $0.label == rename.fulfillingProperty.label })
-					{
-						// The tree's rule (`Scope.createScopeGenerator`'s rename): a rename that keeps its fulfilling property's
-						// label reads what is in scope above its scope, and any other reads its scope's declarations first.
-						let inheritedProperties = lazilyInstantiatedInstancePropertiesByVariant[Int(caller)]
-						let instanceProperties = rename.fulfillingProperty.label == rename.property.label
-							? inheritedProperties
-							: inheritedProperties.filter { !callerScope.declaredLabels.contains($0.label) }.union(callerScope.declaredLazilyInstantiatedInstanceProperties)
-						if instanceProperties.contains(rename.fulfillingProperty.asUnwrappedProperty) {
-							renamesReadingWrappersInstance.insert(callee)
-						} else {
-							// Any other form, the wrapper itself or its optional among them, is bound from its label, as the tree
-							// binds it, but for an instance read through an optional wrapper (beneath a fill that takes the
-							// wrapper optionally), which the tree reads with `?.instance`.
-							renameReadsWrappersInstance = renameReadsWrappersInstance
-								|| instanceProperties.contains(rename.fulfillingProperty.asUnwrappedProperty.asOptionalProperty)
-						}
+				if let rename = Self.rename(world.declaration(of: callee), in: world),
+				   callerScope.declaredLazilyInstantiatedInstanceProperties.contains(where: { $0.label == rename.fulfillingProperty.label })
+				   || lazilyInstantiatedInstancePropertiesByVariant[Int(caller)].contains(where: { $0.label == rename.fulfillingProperty.label })
+				{
+					// The tree's rule (`Scope.createScopeGenerator`'s rename): a rename that keeps its fulfilling property's
+					// label reads what is in scope above its scope, and any other reads its scope's declarations first.
+					let inheritedProperties = lazilyInstantiatedInstancePropertiesByVariant[Int(caller)]
+					let instanceProperties = rename.fulfillingProperty.label == rename.property.label
+						? inheritedProperties
+						: inheritedProperties.filter { !callerScope.declaredLabels.contains($0.label) }.union(callerScope.declaredLazilyInstantiatedInstanceProperties)
+					if instanceProperties.contains(rename.fulfillingProperty.asUnwrappedProperty) {
+						renamesReadingWrappersInstance.insert(callee)
+					} else {
+						// Any other form, the wrapper itself or its optional among them, is bound from its label, as the tree
+						// binds it, but for an instance read through an optional wrapper (beneath a fill that takes the
+						// wrapper optionally), which the tree reads with `?.instance`.
+						renameReadsWrappersInstance = renameReadsWrappersInstance
+							|| instanceProperties.contains(rename.fulfillingProperty.asUnwrappedProperty.asOptionalProperty)
 					}
 				}
 				// A variant's record is written from the call that resolved it. Every other call into it answers its reads in
