@@ -875,6 +875,55 @@ struct SafeDIToolTypeFactsVariantKeyTests: ~Copyable {
 		#expect(Set(report.variantFamilies) == ["plain"], "\(report.world)")
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_marksSharedVariantBuiltInsideSendableFunction_whenProductionBuildsTypeInPlainFunctionAndInSendableFunction() async throws {
+		// `leaf`'s one body is called from `Plain`'s plain body and from `Shared`'s, inside `sharedBuilder`'s `@Sendable`
+		// function: the mark folded over its calls makes its function `@Sendable`.
+		let report = try await rootReport(of: [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let plainBuilder: Instantiator<Plain>", "@Instantiated let sharedBuilder: SendableInstantiator<Shared>"]),
+			seamFixtureType(named: "Plain", isFinalClass: true, declarations: ["@Instantiated let leaf: Leaf"]),
+			seamFixtureType(named: "Shared", isFinalClass: true, declarations: ["@Instantiated let leaf: Leaf"], conformances: ", Sendable"),
+			seamFixtureType(named: "Leaf", isFinalClass: true, declarations: [], conformances: ", Sendable"),
+		])
+
+		#expect(marksByDeclaration(in: report) == [
+			"Root": [false],
+			"Plain as plainBuilder: Instantiator<Plain>": [false],
+			"Shared as sharedBuilder: SendableInstantiator<Shared>": [true],
+			"Leaf as leaf: Leaf": [true],
+		], "\(report.world)")
+		// Each place the old tree builds says the same.
+		#expect(TypeFactsChecks.findings(of: report).findingsByCheck[34] == nil, "\(report.world)")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_marksVariantMadeBeforeItsCallerBuiltInsideSendableFunction_whenCycleClosesFromInsideSendableFunction() async throws {
+		// `C`'s body is made first, called from `bBuilder`'s plain body, and called again by `otherBBuilder`'s, inside its
+		// `@Sendable` function, where the cycle closes on `C`: the fold marks `C` when that call is met, after `C` was
+		// visited, as 2.4.x makes `C`'s function `@Sendable` for the call that closes on it from inside one, and hands the
+		// mark on to `d`, built in `C`'s body.
+		let report = try await rootReport(of: [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let aBuilder: Instantiator<A>"]),
+			seamFixtureType(named: "A", isFinalClass: true, declarations: ["@Instantiated let bBuilder: Instantiator<B>"]),
+			seamFixtureType(named: "B", isFinalClass: true, declarations: ["@Instantiated let cBuilder: Instantiator<C>"]),
+			seamFixtureType(named: "C", isFinalClass: true, declarations: ["@Instantiated let otherBBuilder: SendableInstantiator<B>", "@Instantiated let d: D"]),
+			seamFixtureType(named: "D", isFinalClass: true, declarations: []),
+		])
+
+		#expect(marksByDeclaration(in: report) == [
+			"Root": [false],
+			"A as aBuilder: Instantiator<A>": [false],
+			"B as bBuilder: Instantiator<B>": [false],
+			"C as cBuilder: Instantiator<C>": [true],
+			"B as otherBBuilder: SendableInstantiator<B>": [true],
+			"D as d: D": [true],
+		], "\(report.world)")
+		// Each place the old tree builds says the same.
+		#expect(TypeFactsChecks.findings(of: report).findingsByCheck[34] == nil, "\(report.world)")
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -933,6 +982,15 @@ struct SafeDIToolTypeFactsVariantKeyTests: ~Copyable {
 			reports.append(report)
 		}
 		return (output.dependencyTreeFiles, try #require(reports.last))
+	}
+
+	/// Each node's description, with the mark of each of its variants in variant order.
+	private func marksByDeclaration(in report: TypeFactsReport) -> [String: [Bool]] {
+		var marks = [String: [Bool]]()
+		for (variant, node) in report.variantNodes.enumerated() {
+			marks[report.nodes[node].description, default: []].append(report.variantBuildsInSendableFunction[variant])
+		}
+		return marks
 	}
 
 	private func variantCount(ofNodeDeclaring declaration: String, in report: TypeFactsReport) -> Int? {

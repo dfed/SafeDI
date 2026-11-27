@@ -463,6 +463,24 @@ enum TypeFactsChecks {
 		}
 		var compared = [Int: Int]()
 		columnChecks(of: report, subtreeClosesCycle: subtreeClosesCycle, closedOnPlace: closedOnPlace, childrenByPlace: childrenByPlace, add: add, compared: &compared)
+		// Check 34.
+		var placesMarkByVariant = [Bool?](repeating: nil, count: report.variantNodes.count)
+		for case let (index, variant?) in factsVariantByPlace.enumerated() {
+			let isInsideSendableFunction = path(of: index).contains { places[$0].generator?.buildsInSendableFunction == true }
+			placesMarkByVariant[variant] = (placesMarkByVariant[variant] ?? false) || isInsideSendableFunction
+		}
+		for (variant, mark) in report.variantBuildsInSendableFunction.enumerated() {
+			let node = report.nodes[report.variantNodes[variant]]
+			if let placesMark = placesMarkByVariant[variant] {
+				compared[34, default: 0] += 1
+				if placesMark != mark {
+					add(34, "v\(variant) of \(node.description) is marked \(mark ? "inside" : "outside") a `@Sendable` function where its places say \(placesMark ? "inside" : "outside")")
+				}
+			}
+			if report.forMockGeneration || (report.holesArePlaces && node.holdsHoleBeneath), mark != (report.variantFamilies[variant] == "sendable") {
+				add(34, "v\(variant) of \(node.description), keyed \(report.variantFamilies[variant]), is marked \(mark ? "inside" : "outside") a `@Sendable` function")
+			}
+		}
 		result.comparedByCheck = compared
 		let unwalkedNodes = report.nodes.count - nodesSeen.count - report.nodes.count(where: \.isLeaf)
 		let twinNodes = report.nodes.count { $0.twin >= 0 }
@@ -615,7 +633,7 @@ enum TypeFactsChecks {
 		return reads
 	}
 
-	static let lastCheck = 33
+	static let lastCheck = 34
 
 	/// Checks 11 to 31: each column of the graph against what the generator decided at each place.
 	///
@@ -646,6 +664,9 @@ enum TypeFactsChecks {
 	/// of a seam's tree that hold a hole, which read their cases from the `@Sendable` carrier inside a `@Sendable` function.
 	/// Every other body serves its places inside and outside a `@Sendable` function, the mark folded over its calls, as
 	/// 2.4.x writes it.
+	///
+	/// 34, outside the columns: a variant is marked built inside a `@Sendable` function exactly when one of its places is,
+	/// itself or a place above it building in one; where the world keys the variant by family, the mark is its family.
 	private static func columnChecks(
 		of report: TypeFactsReport,
 		subtreeClosesCycle: [Bool],

@@ -743,6 +743,7 @@ struct TypeFactsGraph: Sendable {
 		answerKeys = answers.keys
 		answerProperties = answers.properties
 		variants = answers.variants
+		variantBuildsInSendableFunction = Self.sendableMarks(of: answers.variants, graph: graph, edgeOpens: edgeOpens)
 		let isBeingBuilt = answers.isBeingBuilt
 		let variantsOfAnswers = answers.variants
 		let readsByID = readInterner.values
@@ -788,6 +789,9 @@ struct TypeFactsGraph: Sendable {
 
 	/// The variants of the world's bodies, answered by what each node binds at its edges (`answers(of:reads:…)`).
 	let variants: TypeFactsVariants
+
+	/// Per variant, whether a call builds its body inside a `@Sendable` function (`sendableMarks(of:graph:edgeOpens:)`).
+	let variantBuildsInSendableFunction: [Bool]
 
 	/// What each read of each variant comes to in its body.
 	let outcomes: TypeFactsOutcomes
@@ -1361,6 +1365,27 @@ struct TypeFactsGraph: Sendable {
 		} else {
 			{ _, callerFamily in callerFamily }
 		}
+	}
+
+	/// Per variant, whether a call builds its body inside a `@Sendable` function: the mark a body shared by calls inside
+	/// and outside one carries, folded over every call into it, so that its function is `@Sendable` once any call needs
+	/// it. A call opens such a function by `familyOfCall(opening:callerFamily:)`'s rule, and a call from a marked body
+	/// hands the mark on. Where a world keys a body by family (a mock's, and a seam's that holds a hole), the mark is its
+	/// family; elsewhere it is the one fact that tells a production body's places inside and outside the function apart.
+	static func sendableMarks(of variants: TypeFactsVariants, graph: OrderedGraph<TypeFactsDeclaration>, edgeOpens: [TypeFactsFunctionOpened]) -> [Bool] {
+		var marks = [Bool](repeating: false, count: variants.count)
+		// Each variant is visited once in order and again only when a call newly marks it: a call that closes a cycle
+		// reaches a variant made before its caller.
+		var worklist = Array((0..<variants.count).reversed())
+		while let variant = worklist.popLast() {
+			let callerFamily: VariantFamily = marks[variant] ? .sendable : .plain
+			let edgeOffset = graph.edgeOffset(of: Int(variants.node(of: variant)))
+			for (edgeIndex, callee) in variants.callees(of: variant).enumerated() where !marks[Int(callee)] && familyOfCall(opening: edgeOpens[edgeOffset + edgeIndex], callerFamily: callerFamily) == .sendable {
+				marks[Int(callee)] = true
+				worklist.append(Int(callee))
+			}
+		}
+		return marks
 	}
 
 	static func familyOfCall(opening opens: TypeFactsFunctionOpened, callerFamily: VariantFamily) -> VariantFamily {
