@@ -103,10 +103,6 @@ extension TypeKeyLayout {
 			record.forwardedProperties.map(\.asSource).joined(separator: ","),
 			reads[body].joined(separator: ","),
 		]
-		// A function that begins with a statement of its kind's writes other text than one that does not.
-		if let leadingStatement = record.leadingStatement {
-			key.append("leading|\(leadingStatement)")
-		}
 		// A function that returns the property's type spells it, and erases in its body.
 		if record.returnsPropertyType {
 			key.append("returns|\(record.property.typeDescription.asSource)|\(record.isErased)")
@@ -167,7 +163,7 @@ extension TypeKeyLayout {
 			record.functionName,
 			record.lineEnd,
 			record.typesDeclaredEscaping.map(\.asSource).sorted().joined(separator: ","),
-			record.leadingStatement.map { "\($0)" } ?? "",
+			record.leadingStatement?.spelled ?? "",
 		]
 		for (position, argument) in record.arguments.enumerated() {
 			shape.append("argument|\(argument.argumentLabel)|\(argument.label)|\(argument.property.asSource)|\(record.argumentValues[position].map { "\($0)" } ?? "")")

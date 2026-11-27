@@ -319,7 +319,7 @@ struct NodeRecords: Sendable {
 			case .mockUnavailableDependency:
 				try .alias(Self.mockUnavailableDependencyRecord(of: declaration, in: world))
 			case .publicMockCall:
-				try .built(Self.publicMockCallRecord(of: declaration, variant: variant, in: world, receivesBoundAgain: mockReceivesBoundAgain[Int(variant)], typesDeclaredEscaping: escaping, children: children))
+				try .built(Self.publicMockCallRecord(of: declaration, variant: variant, in: world, receivesBoundAgain: mockReceivesBoundAgain[Int(variant)], enteredSlots: enteredSlots, typesDeclaredEscaping: escaping, children: children))
 			}
 			let record = Self.record(madeRecord, functionName: functionName, isMadeSendable: isMadeSendable)
 			let place: GeneratedCode = switch record {
@@ -331,7 +331,7 @@ struct NodeRecords: Sendable {
 				.place(PlacePlan(code: .empty, record: record))
 			}
 			// A mock's `@Sendable` function captures its override from a local its parent's body binds just before it.
-			let boundPlace: GeneratedCode = if let binding = Self.mockOverridesBindingPlace(of: declaration, record: record, in: world) {
+			let boundPlace: GeneratedCode = if let binding = Self.mockOverridesBindingPlace(of: declaration, record: record, in: world, slots: enteredSlots) {
 				.sequence([.place(PlacePlan(code: .empty, record: .built(binding))), place])
 			} else {
 				place
@@ -471,7 +471,7 @@ struct NodeRecords: Sendable {
 		}
 		self.rootBody = rootBody
 		self.records = records
-		mockEnteredSlots = enteredSlots?.slots ?? []
+		mockEnteredPlacesUse = enteredSlots.flatMap { $0.slots.isEmpty ? nil : $0.use }
 		declarationByVariant = (0..<Int32(world.variantCount)).map(world.declaration(of:))
 	}
 
@@ -484,10 +484,10 @@ struct NodeRecords: Sendable {
 	/// statements are.
 	let rootBody: [GeneratedCode]
 
-	/// The slots of the places a mock root's cycles enter, in the order its struct declares them
-	/// (`MockEnteredSlot.mockEnteredPlacesDeclaration(slots:isSendable:)`); empty for a world with no cycle and for a
-	/// production root's.
-	let mockEnteredSlots: [MockEnteredSlot]
+	/// Which functions a mock root's calls enter the places of its cycles with, which decides what `mock()` declares for
+	/// them (`MockEnteredSlot.mockEnteredPlacesDeclaration(isSendable:entersNearest:passes:)`); `nil` for a world with no
+	/// cycle and for a production root's.
+	let mockEnteredPlacesUse: MockEnteredPlacesUse?
 
 	/// How many variants have a record, which is every variant but the root's.
 	var recordCount: Int {

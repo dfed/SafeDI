@@ -25,9 +25,10 @@ import Testing
 @testable import SafeDIToolTestSupport
 
 /// An internal mock root whose tree holds a cycle of builders, laid out from the node records of its world
-/// (`NodeRecords+MockCycle.swift`): each function on the cycle is handed the places entered above it, finds the place
-/// it builds among them or enters a new one, and hands the places on, so that a builder called again around the cycle
-/// reads the configuration its place was entered with, as the mock’s walk reads it of the nearest place on the path.
+/// (`NodeRecords+MockCycle.swift`): each function on the cycle is handed, in one argument, its configuration with the
+/// places entered above it, and each call of one looks its place up among them or enters a new one, so that a builder
+/// called again around the cycle reads the configuration its place was entered with, as the mock’s walk reads it of the
+/// nearest place on the path.
 struct SafeDIToolNodeRecordsMockCycleTests: ~Copyable {
 	// MARK: Initialization
 
@@ -85,49 +86,42 @@ struct SafeDIToolNodeRecordsMockCycleTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        struct __safeDI_EnteredPlaces {
-		            final class Place<Configuration> {
-		                let configuration: Configuration
-		                let enteredAbove: __safeDI_EnteredPlaces
-		                init(_ configuration: Configuration, above enteredAbove: __safeDI_EnteredPlaces) {
-		                    self.configuration = configuration
-		                    self.enteredAbove = enteredAbove
+		        indirect enum __safeDI_Places {
+		            case none
+		            case entered(slot: String?, entered: Any, above: __safeDI_Places)
+		        }
+		        struct __safeDI_Entered<Configuration> {
+		            let configuration: Configuration
+		            var places = __safeDI_Places.none
+		            func entering<Handed>(_ slot: String, _ handed: Handed, nearestOfType: Bool = false) -> __safeDI_Entered<Handed> {
+		                var nearest: __safeDI_Entered<Handed>?
+		                var above = places
+		                while case let .entered(enteredSlot, entered, next) = above {
+		                    if enteredSlot == slot || nearestOfType && nearest == nil, let entered = entered as? __safeDI_Entered<Handed> {
+		                        if enteredSlot == slot { return .init(configuration: entered.configuration, places: above) }
+		                        nearest = entered
+		                    }
+		                    above = next
 		                }
-		            }
-		            var parentBuilder: Place<Parent.SafeDIMockConfiguration>?
-		            var childBuilder: Place<Child.SafeDIMockConfiguration>?
-		            func entering(parentBuilder place: Place<Parent.SafeDIMockConfiguration>) -> Self {
-		                var entered = self
-		                entered.parentBuilder = place
-		                return entered
-		            }
-		            func entering(childBuilder place: Place<Child.SafeDIMockConfiguration>) -> Self {
-		                var entered = self
-		                entered.childBuilder = place
-		                return entered
+		                let entered = __safeDI_Entered<Handed>(configuration: nearest?.configuration ?? handed)
+		                return .init(configuration: entered.configuration, places: .entered(slot: slot, entered: entered, above: places))
 		            }
 		        }
-		        let __safeDI_entered = __safeDI_EnteredPlaces()
-		        func __safeDI_parentBuilder(safeDIOverrides: Parent.SafeDIMockConfiguration, __safeDI_entered: __safeDI_EnteredPlaces) -> Parent {
-		            let __safeDI_place = __safeDI_entered.parentBuilder ?? .init(safeDIOverrides, above: __safeDI_entered)
-		            let safeDIOverrides = __safeDI_place.configuration
-		            let __safeDI_entered = __safeDI_place.enteredAbove.entering(parentBuilder: __safeDI_place)
+		        let __safeDI_entered = __safeDI_Entered(configuration: ())
+		        func __safeDI_parentBuilder(__safeDI_entered: __safeDI_Entered<Parent.SafeDIMockConfiguration>) -> Parent {
 		            let childBuilder = Instantiator<Child> {
-		                __safeDI_childBuilder(safeDIOverrides: Child.SafeDIMockConfiguration(), __safeDI_entered: __safeDI_entered)
+		                __safeDI_childBuilder(__safeDI_entered: __safeDI_entered.entering("childBuilder", Child.SafeDIMockConfiguration()))
 		            }
-		            return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(childBuilder) } else { Parent(childBuilder: childBuilder) }
+		            return if let safeDIBuilder = __safeDI_entered.configuration.safeDIBuilder { safeDIBuilder(childBuilder) } else { Parent(childBuilder: childBuilder) }
 		        }
-		        func __safeDI_childBuilder(safeDIOverrides: Child.SafeDIMockConfiguration, __safeDI_entered: __safeDI_EnteredPlaces) -> Child {
-		            let __safeDI_place = __safeDI_entered.childBuilder ?? .init(safeDIOverrides, above: __safeDI_entered)
-		            let safeDIOverrides = __safeDI_place.configuration
-		            let __safeDI_entered = __safeDI_place.enteredAbove.entering(childBuilder: __safeDI_place)
+		        func __safeDI_childBuilder(__safeDI_entered: __safeDI_Entered<Child.SafeDIMockConfiguration>) -> Child {
 		            let parentBuilder = Instantiator<Parent> {
-		                __safeDI_parentBuilder(safeDIOverrides: safeDIOverrides.parentBuilder, __safeDI_entered: __safeDI_entered)
+		                __safeDI_parentBuilder(__safeDI_entered: __safeDI_entered.entering("parentBuilder", __safeDI_entered.configuration.parentBuilder))
 		            }
-		            return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(parentBuilder) } else { Child(parentBuilder: parentBuilder) }
+		            return if let safeDIBuilder = __safeDI_entered.configuration.safeDIBuilder { safeDIBuilder(parentBuilder) } else { Child(parentBuilder: parentBuilder) }
 		        }
 		        let parentBuilder = Instantiator<Parent> {
-		            __safeDI_parentBuilder(safeDIOverrides: safeDIOverrides.parentBuilder, __safeDI_entered: __safeDI_entered)
+		            __safeDI_parentBuilder(__safeDI_entered: __safeDI_entered.entering("parentBuilder", safeDIOverrides.parentBuilder))
 		        }
 		        return Root(parentBuilder: parentBuilder)
 		    }

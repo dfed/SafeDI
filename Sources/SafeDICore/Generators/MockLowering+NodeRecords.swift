@@ -76,14 +76,11 @@ extension ScopeGenerator {
 			report(refusal: .mockDefaultValuedParameter, everyRefusal: [.mockDefaultValuedParameter], isLaidOut: false, recordCount: 0)
 			return nil
 		}
-		// Where the world's cycles enter places, `mock()` declares their struct and binds a value of it with none entered
+		// Where the world's cycles enter places, `mock()` declares what holds them and binds a value with none entered
 		// before its nodes, which its body and every function that takes no places hand a function that takes them
 		// (`NodeRecords+MockCycle.swift`).
-		let enteredSlots = nodeRecords.mockEnteredSlots
-		let enteredPlaces: [GeneratedCode] = enteredSlots.isEmpty ? [] : (
-			MockEnteredSlot.mockEnteredPlacesDeclaration(slots: enteredSlots, isSendable: false)
-				+ ["let \(ReservedName.mockEnteredPlacesParameterName) = \(ReservedName.mockEnteredPlacesTypeName)()"]
-		).map { .text("\(TypeKeyBody.rootStatementIndentation)\($0)") }
+		let enteredPlaces: [GeneratedCode] = (nodeRecords.mockEnteredPlacesUse.map { MockEnteredSlot.mockEnteredPlacesDeclaration(isSendable: false, entersNearest: $0.entersNearest, passes: $0.passes) } ?? [])
+			.map { .text("\(TypeKeyBody.rootStatementIndentation)\($0)") }
 		let statements = TypeKeyBody.statements(ofRootBody: nodeRecords.rootBody, outerDeclarations: outerDeclarations, namesInScope: Set(outerDeclarations.map(\.label)), rootPassedArgumentNames: [ReservedName.mockOverridesParameterName])
 		report(refusal: statements == nil ? .notLaidOut : nil, everyRefusal: [], isLaidOut: statements != nil, recordCount: nodeRecords.recordCount)
 		return statements.map { GeneratedCode.lines(enteredPlaces + $0).spelled() }

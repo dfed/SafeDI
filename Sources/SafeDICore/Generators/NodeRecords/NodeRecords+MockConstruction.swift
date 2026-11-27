@@ -119,18 +119,15 @@ extension NodeRecords {
 		// configuration; its function is still handed the overrides.
 		let isConfigured = buildsMockChildWithOverride(declaration, in: world) || !fieldArguments.isEmpty
 		let slotType = mockOverrideType(of: record, usesHandWrittenMock: handWrittenMock != nil, isConfigured: isConfigured, instantiable: instantiable)
-		// A function that takes the places its world's cycles enter is handed its overrides beside them by every call, a
-		// call that closes a cycle on it included, and begins by entering its place where it has one
-		// (`NodeRecords+MockCycle.swift`).
-		let slot: (value: ValuePath, passedArguments: [PassedArgument])
-		if let enteredSlots, takesMockEnteredPlaces(declaration, in: enteredSlots) {
-			slot = (
-				.passedArgument(ReservedName.mockOverridesParameterName),
+		// A function that takes the places its world's cycles enter is handed its configuration with them, in one argument,
+		// by every call, a call that closes a cycle on it included (`NodeRecords+MockCycle.swift`).
+		let slot: (value: ValuePath, passedArguments: [PassedArgument]) = if let enteredSlots, takesMockEnteredPlaces(declaration, in: enteredSlots) {
+			(
+				mockEnteredConfiguration,
 				mockArgumentsHanded(to: declaration, labeled: record.property.label, by: world.parents(of: declaration).first?.parent ?? 0, in: world, slots: enteredSlots),
 			)
-			record.callFields = mockEnteredPlace(of: declaration, in: enteredSlots).map { CallFields(leadingStatement: .enteredPlace($0), closureArguments: []) }
 		} else {
-			slot = mockOverrideSlot(
+			mockOverrideSlot(
 				of: declaration,
 				labeled: record.property.label,
 				typed: slotType,
@@ -138,6 +135,7 @@ extension NodeRecords {
 				hasFunction: record.hasFunction,
 				handsOverridesToChildren: isConfiguredForChildren,
 				isSendable: record.isSendable,
+				slots: enteredSlots,
 			)
 		}
 		record.passedArguments = slot.passedArguments
@@ -180,6 +178,8 @@ extension NodeRecords {
 	///   - hasFunction: Whether the node is built in a function of its own.
 	///   - handsOverridesToChildren: Whether the value is a configuration whose fields the node's children read.
 	///   - isSendable: Whether the node's function is `@Sendable`.
+	///   - slots: The slots of the places the world's cycles enter, and which nodes take them; `nil` for a world with no
+	///     cycle.
 	/// - Returns: The value the node's own construction reads, and what each call of its function hands it.
 	static func mockOverrideSlot(
 		of declaration: DeclarationID,
@@ -189,8 +189,9 @@ extension NodeRecords {
 		hasFunction: Bool,
 		handsOverridesToChildren: Bool,
 		isSendable: Bool,
+		slots: MockEnteredSlots?,
 	) -> (value: ValuePath, passedArguments: [PassedArgument]) {
-		let field = mockConfigurationField(of: declaration, named: label, in: world)
+		let field = mockConfigurationField(of: declaration, named: label, in: world, slots: slots)
 		guard hasFunction else { return (field, []) }
 		// A `@Sendable` function can neither capture the overrides nor be handed them: its value is read into a local before
 		// it (`mockOverridesBindingPlace(of:record:in:)`), which the function captures where the root's body declares both,
@@ -212,7 +213,7 @@ extension NodeRecords {
 	/// of `mock()`'s own, and a `@Sendable` function's of the local it captures (`mockOverridesOfChildren(of:in:)`). A
 	/// node with more than one parent has no parent built in a `@Sendable` function (`mockSendableRefusals(of:in:)`), so
 	/// its first parent's is every parent's.
-	static func mockConfigurationField(of declaration: DeclarationID, named label: String, in world: some NodeRecordSources) -> ValuePath {
-		.member(label.spelledAsMemberDeclarationName, of: mockOverridesOfChildren(of: world.parents(of: declaration).first?.parent ?? 0, in: world))
+	static func mockConfigurationField(of declaration: DeclarationID, named label: String, in world: some NodeRecordSources, slots: MockEnteredSlots?) -> ValuePath {
+		.member(label.spelledAsMemberDeclarationName, of: mockOverridesOfChildren(of: world.parents(of: declaration).first?.parent ?? 0, in: world, slots: slots))
 	}
 }

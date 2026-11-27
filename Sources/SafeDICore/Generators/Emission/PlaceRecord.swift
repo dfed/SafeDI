@@ -108,7 +108,7 @@ struct BuiltPlaceRecord: Sendable {
 	var functionAlwaysWritesReturn = false
 
 	/// The statement the place's builder function begins with, before its children.
-	var leadingStatement: LeadingStatement? {
+	var leadingStatement: CallGuard? {
 		callFields?.leadingStatement
 	}
 
