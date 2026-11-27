@@ -29,13 +29,13 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	case sendable
 	/// The node is built as an `ErasedInstantiator`, or as a constant erased to its property's type.
 	case erased
-	/// The node is built as a `LazilyInstantiated`, or its scope declares or forwards one.
 	/// The node's type declares a rename, a hole, or an instantiated dependency its scope does not build.
 	case renameOrHole
 	/// The node's call passes fills.
 	case fill
 	/// The node is on a cycle.
 	case cycle
+	/// The node is built as a `LazilyInstantiated`, or its scope declares or forwards one.
 	case lazy
 	/// The node's type receives a property only if available.
 	case onlyIfAvailable
@@ -167,14 +167,7 @@ struct NodeRecords: Sendable {
 	static func refusals(in world: some NodeRecordSources) -> [NodeRecordRefusal] {
 		var refusals = Set<NodeRecordRefusal>()
 		for declaration in 0..<Int32(world.declarationCount) {
-			do {
-				// A node a lane's kind claims holds no refusal of the kinds no lane makes yet.
-				if try claimedKind(of: declaration, in: world) == nil {
-					refusals.formUnion(refusalsOfBuiltByInitializer(declaration, in: world))
-				}
-			} catch {
-				refusals.insert(error)
-			}
+			refusals.formUnion(kindAndRefusals(of: declaration, in: world).refusals)
 		}
 		var declarationsWithAVariant = Set<DeclarationID>()
 		for variant in 0..<Int32(world.variantCount) where !declarationsWithAVariant.insert(world.declaration(of: variant)).inserted {
@@ -188,24 +181,43 @@ struct NodeRecords: Sendable {
 		return NodeRecordRefusal.allCases.filter(refusals.contains)
 	}
 
-	/// The kind of record `declaration` is made as, or the refusal of its world: the kind a lane's classifier claims it as,
-	/// and otherwise a node built by its initializer, where it holds none of the kinds no lane makes yet
-	/// (`checkBuiltByInitializer(_:in:)`).
+	/// The kind of record `declaration` is made as, or the first refusal it holds (`kindAndRefusals(of:in:)`).
 	private static func kind(of declaration: DeclarationID, in world: some NodeRecordSources) throws(NodeRecordRefusal) -> NodeRecordKind {
-		guard let kind = try claimedKind(of: declaration, in: world) else {
-			try checkBuiltByInitializer(declaration, in: world)
-			return .builtByInitializer
+		let (kind, refusals) = kindAndRefusals(of: declaration, in: world)
+		if let refusal = refusals.first {
+			throw refusal
 		}
 		return kind
 	}
 
-	/// The kind a lane's classifier claims `declaration` as, or `nil` where none does. Each lane adds one line here, in
-	/// the order of `NodeRecordKind`'s cases, calling its file's classifier, `<kind>Kind(of:in:)`, which returns `nil` for
-	/// a node not of its kind and throws a refusal for a node of its kind it cannot make:
-	/// `if let kind = try <kind>Kind(of: declaration, in: world) { return kind }`.
-	private static func claimedKind(of _: DeclarationID, in _: some NodeRecordSources) throws(NodeRecordRefusal) -> NodeRecordKind? {
-		nil
+	/// The kind `declaration` is made as, and every refusal it holds: those of the claim a lane's kind makes of it, and
+	/// every check of stage 1 the claim does not discharge (`refusalsOfBuiltByInitializer(_:in:)`). A node of two kinds,
+	/// one claimed, is still refused for the other.
+	private static func kindAndRefusals(of declaration: DeclarationID, in world: some NodeRecordSources) -> (kind: NodeRecordKind, refusals: [NodeRecordRefusal]) {
+		let claim = claim(of: declaration, in: world)
+		let discharged = claim?.discharges ?? []
+		let refusals = (claim?.refusals ?? []) + refusalsOfBuiltByInitializer(declaration, in: world).filter { !discharged.contains($0) }
+		return (claim?.kind ?? .builtByInitializer, refusals)
 	}
+
+	/// What a lane's kind claims of `declaration`, or `nil` where none does. Each lane adds one line here, above the test's,
+	/// in the order of `NodeRecordKind`'s cases, calling its file's classifier, which returns `nil` for a node not of its
+	/// kind: `if let claim = <kind>Claim(of: declaration, in: world) { return claim }`.
+	private static func claim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
+		// A test claims a node by its type's name (`NodeRecordsObservation.claimsForTesting`).
+		NodeRecordsObservation.claimsForTesting[world.scope(of: declaration).instantiable.concreteInstantiable.asSource].map { discharged in
+			NodeRecordClaim(kind: .builtByInitializer, discharges: Set(discharged.compactMap(NodeRecordRefusal.init(rawValue:))))
+		}
+	}
+}
+
+/// What a lane's kind claims of a node (`NodeRecords.claim(of:in:)`): the kind its record is made as, the refusals of
+/// stage 1's checks the kind discharges, which are the kinds it makes, and any refusal of its own the node holds, of its
+/// kind but a shape it does not make yet.
+struct NodeRecordClaim: Sendable {
+	let kind: NodeRecordKind
+	let discharges: Set<NodeRecordRefusal>
+	var refusals = [NodeRecordRefusal]()
 }
 
 /// The kinds of node `NodeRecords` makes a record of. Each is made by one file of this folder, `NodeRecords+<Kind>.swift`,

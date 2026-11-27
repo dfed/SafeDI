@@ -29,6 +29,10 @@ public enum NodeRecordsObservation {
 	/// plan before it is turned on for every run, or generate time doubles.
 	@TaskLocal public static var laysOutRoots = false
 
+	/// The nodes a test claims as a lane's kind would (`NodeRecords.claim(of:in:)`), by their concrete type's name, each
+	/// with the raw values of the refusals the claim discharges. Only a test sets it.
+	@TaskLocal public static var claimsForTesting = [String: [String]]()
+
 	/// Handed each root's report, where set. Only a test sets it.
 	@TaskLocal public static var observer: (@Sendable (NodeRecordsReport) -> Void)?
 
