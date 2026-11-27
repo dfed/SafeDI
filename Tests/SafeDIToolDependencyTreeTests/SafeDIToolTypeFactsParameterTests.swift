@@ -173,6 +173,24 @@ struct SafeDIToolTypeFactsParameterTests: ~Copyable {
 		#expect(try parameters(ofVariantsOf: "Leaf ", in: report) == [["theme: LazilyInstantiated<Theme>?"]], "\(report.world)")
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_typesParameterAsValue_whenLazilyInstantiatedWrappersAnswerRequiredReceiveOfTheValue() async throws {
+		// `Toolbar`, inside `A`, receives the theme by value, which `Root` and `B` each declare lazily: each call passes its
+		// wrapper's instance, so the function is `__safeDI_aBuilder(theme: Theme)`, as the tree writes it.
+		let report = try await rootReport(of: [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let theme: LazilyInstantiated<Theme>", "@Instantiated let aBuilder: Instantiator<A>"]),
+			seamFixtureType(named: "A", isFinalClass: true, declarations: ["@Instantiated let toolbar: Toolbar", "@Instantiated let bBuilder: Instantiator<B>"]),
+			seamFixtureType(named: "B", isFinalClass: true, declarations: ["@Instantiated let theme: LazilyInstantiated<Theme>", "@Instantiated let aBuilder: Instantiator<A>"]),
+			seamFixtureType(named: "Toolbar", isFinalClass: true, declarations: ["@Received let theme: Theme"]),
+			seamFixtureType(named: "Theme", isFinalClass: true, declarations: []),
+		])
+
+		#expect(try parameters(ofVariantsOf: "A ", in: report) == [["theme: Theme"]], "\(report.world)")
+		#expect(TypeFactsChecks.findings(of: report).findingsByCheck[35, default: []].isEmpty)
+		#expect(report.places.contains { $0.generator?.cycleParameters == ["theme: Theme"] })
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
