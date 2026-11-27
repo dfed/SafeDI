@@ -106,7 +106,7 @@ struct NodeRecords: Sendable {
 		// A node's place holds its children's places, so each is made after its children: a post-order walk from the root,
 		// with a stack, since a tree can be as deep as the module has types.
 		var places = [GeneratedCode?](repeating: nil, count: world.variantCount)
-		var records = [BuiltPlaceRecord?](repeating: nil, count: world.variantCount)
+		var records = [PlaceRecord?](repeating: nil, count: world.variantCount)
 		var typesDeclaredEscaping = [Set<TypeDescription>?](repeating: nil, count: world.variantCount)
 		var stack: [(variant: VariantID, childrenPushed: Bool)] = [(0, false)]
 		while let (variant, childrenPushed) = stack.popLast() {
@@ -129,15 +129,23 @@ struct NodeRecords: Sendable {
 				escaping.formUnion(typesDeclaredEscaping[callee] ?? [])
 				children.append(.indented(places[callee] ?? .empty, by: ScopeGenerator.standardIndent))
 			}
-			let record = switch kinds[Int(declaration)] {
+			let record: PlaceRecord = switch kinds[Int(declaration)] {
 			case .builtByInitializer:
-				try Self.builtByInitializerRecord(of: declaration, variant: variant, in: world, typesDeclaredEscaping: escaping, children: children)
+				try .built(Self.builtByInitializerRecord(of: declaration, variant: variant, in: world, typesDeclaredEscaping: escaping, children: children))
 			case .receivesOnlyIfAvailable:
-				try Self.receivesOnlyIfAvailableRecord(of: declaration, variant: variant, in: world, answers: onlyIfAvailableAnswers, typesDeclaredEscaping: escaping, children: children)
+				try .built(Self.receivesOnlyIfAvailableRecord(of: declaration, variant: variant, in: world, answers: onlyIfAvailableAnswers, typesDeclaredEscaping: escaping, children: children))
+			case .rename:
+				try .alias(Self.renameRecord(of: declaration, variant: variant, in: world, answers: onlyIfAvailableAnswers))
 			}
 			typesDeclaredEscaping[Int(variant)] = escaping
 			records[Int(variant)] = record
-			places[Int(variant)] = .place(PlacePlan(code: .empty, record: .built(record)))
+			places[Int(variant)] = switch record {
+			case let .alias(aliasRecord):
+				// A place written as text: the engine copies it as written.
+				.place(PlacePlan(code: .text(aliasRecord.text), record: record))
+			case .built, .closer:
+				.place(PlacePlan(code: .empty, record: record))
+			}
 		}
 		let rootCalls = world.calls(of: 0)
 		rootBody = order.edgeIndices(of: 0).map { edgeIndex in
@@ -148,7 +156,7 @@ struct NodeRecords: Sendable {
 	}
 
 	/// The record of `declaration`'s place in `variant`'s body. The root, variant 0, has none.
-	func record(of _: DeclarationID, variant: VariantID) -> BuiltPlaceRecord? {
+	func record(of _: DeclarationID, variant: VariantID) -> PlaceRecord? {
 		records[Int(variant)]
 	}
 
@@ -165,7 +173,7 @@ struct NodeRecords: Sendable {
 	private let declarationByVariant: [DeclarationID]
 
 	/// By variant.
-	private let records: [BuiltPlaceRecord?]
+	private let records: [PlaceRecord?]
 
 	/// Every refusal `world` holds, each once, in the order of `NodeRecordRefusal`'s cases: what a test reports of a world, so
 	/// that each stage counts the worlds it frees.
@@ -217,6 +225,9 @@ struct NodeRecords: Sendable {
 		if let claim = receivesOnlyIfAvailableClaim(of: declaration, in: world) {
 			return claim
 		}
+		if let claim = renameClaim(of: declaration, in: world) {
+			return claim
+		}
 		// A test claims a node by its type's name (`NodeRecordsObservation.claimsForTesting`).
 		return NodeRecordsObservation.claimsForTesting[world.scope(of: declaration).instantiable.concreteInstantiable.asSource].map { discharged in
 			NodeRecordClaim(kind: .builtByInitializer, discharges: Set(discharged.compactMap(NodeRecordRefusal.init(rawValue:))))
@@ -244,4 +255,7 @@ enum NodeRecordKind: Sendable {
 	/// A node that would be of kind `builtByInitializer` but that its type receives a property only if available, which its
 	/// construction is passed where the variant's calls find it available, and `nil` where not (`OnlyIfAvailableAnswers`).
 	case receivesOnlyIfAvailable
+	/// A rename a scope declares (`@Received(fulfilledByDependencyNamed:ofType:)`), written as text: bound from its fulfilling
+	/// property, or, only if available, to `nil` where no declaration it reads is available (`NodeRecords+Rename.swift`).
+	case rename
 }

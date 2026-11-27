@@ -55,21 +55,33 @@ public enum NodeRecordsObservation {
 			for (treeCode, nodeRecordsCode) in zip(tree, nodeRecords) {
 				let (treeIndentation, treeInner) = unindented(treeCode)
 				let (nodeRecordsIndentation, nodeRecordsInner) = unindented(nodeRecordsCode)
-				guard case let .place(nodeRecordsPlan) = nodeRecordsInner.node, case let .built(nodeRecordsRecord)? = nodeRecordsPlan.record else {
-					differences.append("\(path): node records made a statement that is no built place")
+				guard case let .place(nodeRecordsPlan) = nodeRecordsInner.node, let nodeRecordsRecord = nodeRecordsPlan.record else {
+					differences.append("\(path): node records made a statement that is no place")
 					continue
 				}
-				let placePath = "\(path).\(nodeRecordsRecord.property.label)"
-				guard case let .place(treePlan) = treeInner.node, case let .built(treeRecord)? = treePlan.record else {
-					differences.append("\(placePath): the tree writes no built place’s record")
+				let label = switch nodeRecordsRecord {
+				case let .built(record): record.property.label
+				case let .closer(record): record.property.label
+				case let .alias(record): record.property.label
+				}
+				let placePath = "\(path).\(label)"
+				guard case let .place(treePlan) = treeInner.node, let treeRecord = treePlan.record else {
+					differences.append("\(placePath): the tree writes no place’s record")
 					continue
 				}
 				treePlaceCount += 1
 				if treeIndentation != nodeRecordsIndentation {
 					differences.append("\(placePath): indented \(treeIndentation.count) in the tree, \(nodeRecordsIndentation.count) by node records")
 				}
-				differences += fieldDifferences(between: treeRecord, and: nodeRecordsRecord).map { "\(placePath): \($0)" }
-				pending.append((tree: treeRecord.children, nodeRecords: nodeRecordsRecord.children, path: placePath))
+				switch (treeRecord, nodeRecordsRecord) {
+				case let (.built(treeBuilt), .built(nodeRecordsBuilt)):
+					differences += fieldDifferences(between: treeBuilt, and: nodeRecordsBuilt).map { "\(placePath): \($0)" }
+					pending.append((tree: treeBuilt.children, nodeRecords: nodeRecordsBuilt.children, path: placePath))
+				case let (.alias(treeAlias), .alias(nodeRecordsAlias)):
+					differences += fieldDifferences(between: treeAlias, and: nodeRecordsAlias).map { "\(placePath): \($0)" }
+				case (.built, _), (.alias, _), (.closer, _):
+					differences.append("\(placePath): the tree writes another kind of place than node records")
+				}
 			}
 		}
 		return (differences, treePlaceCount)
@@ -83,6 +95,22 @@ public enum NodeRecordsObservation {
 			inner = wrapped
 		}
 		return (indentation, inner)
+	}
+
+	/// The fields of `nodeRecords`, a rename, that differ from `tree`'s.
+	private static func fieldDifferences(between tree: AliasPlaceRecord, and nodeRecords: AliasPlaceRecord) -> [String] {
+		var differences = [String]()
+		func compare<Value: Equatable>(_ name: String, _ treeValue: Value, _ nodeRecordsValue: Value) {
+			guard treeValue != nodeRecordsValue else { return }
+			differences.append("\(name) is \(treeValue) in the tree, \(nodeRecordsValue) by node records")
+		}
+		compare("property", tree.property, nodeRecords.property)
+		compare("fulfillingProperty", tree.fulfillingProperty, nodeRecords.fulfillingProperty)
+		compare("text", tree.text, nodeRecords.text)
+		compare("reads", tree.reads, nodeRecords.reads)
+		compare("otherBindings", tree.otherBindings, nodeRecords.otherBindings)
+		compare("calledFunctionNames", tree.calledFunctionNames, nodeRecords.calledFunctionNames)
+		return differences
 	}
 
 	/// The fields of `nodeRecords` that differ from `tree`'s, children aside.
