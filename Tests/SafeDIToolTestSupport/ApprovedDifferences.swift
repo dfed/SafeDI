@@ -29,54 +29,68 @@ struct ApprovedDifference: Sendable {
 	let entry: Int
 	/// What the entry is, in a few words.
 	let name: String
-	/// The records' text with the entry's difference written as the tree writes it, or `nil` where the text holds none.
-	/// The tree's text is read only to choose among the candidates the records' text itself holds.
-	let rewrite: @Sendable (_ nodeRecordsText: String, _ treeText: String) -> String?
+	/// The records' text with the entry's difference written as the tree writes it, and each choice the rewrite took from
+	/// the tree's text, or `nil` where the text holds none. The tree's text is read only to choose among the candidates
+	/// the records' text itself holds, and each such choice is named, so that a run counts how often each was taken.
+	let rewrite: @Sendable (_ nodeRecordsText: String, _ treeText: String) -> (text: String, choices: [String])?
 }
 
 enum ApprovedDifferences {
-	/// Every approved difference the check of node records knows, in the order it applies them.
-	static let all: [ApprovedDifference] = [
-		ApprovedDifference(entry: 13, name: "optional channel, rule A", rewrite: OptionalChannelRewrite.rewritten),
-	]
+	/// Every approved difference the check of node records applies, in the order it applies them. An entry is listed
+	/// with the first root that differs by it, never before: `Scripts/node-records-approved-differences.py` fails a run
+	/// in which a listed entry was used on no root. `optionalChannel` waits for the first root laid out under rule A.
+	static let all: [ApprovedDifference] = []
+
+	/// Entry 13 (`OptionalChannelRewrite`).
+	static let optionalChannel = ApprovedDifference(entry: 13, name: "optional channel, rule A", rewrite: OptionalChannelRewrite.rewritten)
 
 	/// The records' text after each approved difference that it holds is rewritten as the tree writes it, and the entries
-	/// rewritten, where the result is the tree's text; `nil` where the texts still differ, or were equal to begin with.
-	static func normalized(nodeRecordsText: String, treeText: String, by differences: [ApprovedDifference] = all) -> (text: String, entries: [Int])? {
+	/// rewritten, each as its number and the choices it took (`13[LazilyInstantiated]`), where the result is the tree's
+	/// text; `nil` where the texts still differ, or were equal to begin with.
+	static func normalized(nodeRecordsText: String, treeText: String, by differences: [ApprovedDifference] = all) -> (text: String, entries: [String])? {
 		guard nodeRecordsText != treeText else { return nil }
 		var text = nodeRecordsText
-		var entries = [Int]()
+		var entries = [String]()
 		for difference in differences {
 			guard let rewritten = difference.rewrite(text, treeText) else { continue }
-			text = rewritten
-			entries.append(difference.entry)
+			text = rewritten.text
+			entries.append("\(difference.entry)[\(rewritten.choices.joined(separator: "+"))]")
 		}
 		guard text == treeText else { return nil }
 		return (text, entries)
 	}
 }
 
-/// Entry 13, the optional channel under rule A. Laid out from the facts, a call that passes `nil` for a read received
-/// only if available goes to the function that takes the read in its declared form, `theme: Theme?`, and a function a
-/// wrapper answers takes the wrapper itself, `theme: LazilyInstantiated<Theme>`, and reads its instance. The tree gives
-/// the `nil` to the function of a place a wrapper answers instead, whose parameter it makes optional,
-/// `theme: LazilyInstantiated<Theme>?`, read as `theme?.instance`. The rewrite moves each such call to that function,
-/// makes the parameter optional in it and in every function it hands the wrapper to, removes each function nothing
-/// calls any more, and names the functions that remain of a removed one's name as the tree numbers them.
+/// Entry 13, the optional channel under rule A: one read of the unwrapped form, received only if available, that one
+/// world answers with a declared-form value, a wrapper and nothing, or with a lazy and a Sendable lazy wrapper and
+/// nothing. Laid out from the facts, the call that passes `nil` goes to the function the value answers, `theme: Theme?`,
+/// and each wrapper's function takes the wrapper itself, `theme: LazilyInstantiated<Theme>`; with two wrappers and no
+/// value it goes to the lazy wrapper's, `theme: LazilyInstantiated<Theme>?`. The tree gives the `nil` to the function of
+/// the first place in declaration order, which may be another wrapper's, typed optional and read as `theme?.instance`.
+/// The rewrite moves each such call to the wrapper's function the tree declares optional, makes the parameter optional
+/// in it and in every function it hands the wrapper to, makes a wrapper's function that no longer takes `nil`
+/// non-optional, removes each function nothing references any more, declares a function that lost its first call where
+/// its first remaining caller is, and names the functions that remain of a removed one's name as the tree numbers them.
+/// A value and `nil`, or one wrapper and `nil`, are one function in both texts and no difference.
 enum OptionalChannelRewrite {
-	static func rewritten(_ nodeRecordsText: String, treeText: String) -> String? {
+	static func rewritten(_ nodeRecordsText: String, treeText: String) -> (text: String, choices: [String])? {
 		var code = FunctionText(nodeRecordsText)
-		var removedCalls = [String]()
+		var sources = [String]()
+		var choices = [String]()
 		while let move = code.nextMove(treeText: treeText) {
 			code.makeOptional(move.label, wrapperType: move.wrapperType, inFunctionNamed: move.target)
 			code.retargetCalls(of: move.source, passingNilFor: move.label, to: move.target)
-			removedCalls.append(move.source)
+			if let sourceWrapperType = move.sourceWrapperType {
+				code.makeNonOptional(move.label, wrapperType: sourceWrapperType, inFunctionNamed: move.source)
+			}
+			sources.append(move.source)
+			choices.append(String(move.wrapperType.prefix { $0 != "<" }))
 		}
-		guard !removedCalls.isEmpty else { return nil }
-		let removedNames = code.removeFunctionsNothingReferences(startingFrom: removedCalls)
-		code.moveFunctionsBeforeFirstReference(removedCalls.filter { !removedNames.contains($0) })
+		guard !sources.isEmpty else { return nil }
+		let removedNames = code.removeFunctionsNothingReferences(startingFrom: sources)
+		code.moveFunctionsBeforeFirstReference(sources.filter { !removedNames.contains($0) })
 		code.renumberFunctions(sharingNameWith: removedNames)
-		return code.text
+		return (code.text, choices)
 	}
 
 	/// A call of `source` that passes `nil` for `label`, to move to `target`, which takes `label` as `wrapperType`.
@@ -85,6 +99,8 @@ enum OptionalChannelRewrite {
 		let target: String
 		let label: String
 		let wrapperType: String
+		/// The wrapper `source` takes `label` as, optional, where it takes a wrapper and not the declared form.
+		let sourceWrapperType: String?
 	}
 
 	/// The wrappers whose instance answers a read of the unwrapped form.
@@ -148,8 +164,11 @@ struct FunctionText {
 		for source in functions {
 			for (position, parameter) in source.parameters.enumerated() where parameter.type.hasSuffix("?") {
 				guard callsPassNil(for: parameter.label, to: source) else { continue }
-				let declaredType = String(parameter.type.dropLast())
-				let wrapperTypes = OptionalChannelRewrite.wrapperNames.map { "\($0)<\(declaredType)>" }
+				// The source takes the declared form, or a wrapper of it.
+				let sourceType = String(parameter.type.dropLast())
+				let sourceWrapperName = OptionalChannelRewrite.wrapperNames.first { sourceType.hasPrefix("\($0)<") && sourceType.hasSuffix(">") }
+				let declaredType = sourceWrapperName.map { String(sourceType.dropFirst($0.count + 1).dropLast()) } ?? sourceType
+				let wrapperTypes = OptionalChannelRewrite.wrapperNames.filter { $0 != sourceWrapperName }.map { "\($0)<\(declaredType)>" }
 				let target = functions.first { candidate in
 					candidate.name != source.name
 						&& Self.stem(of: candidate.name) == Self.stem(of: source.name)
@@ -159,7 +178,7 @@ struct FunctionText {
 						&& treeText.contains("\(parameter.label): \(candidate.parameters[position].type)?")
 				}
 				guard let target else { continue }
-				return OptionalChannelRewrite.Move(source: source.name, target: target.name, label: parameter.label, wrapperType: target.parameters[position].type)
+				return OptionalChannelRewrite.Move(source: source.name, target: target.name, label: parameter.label, wrapperType: target.parameters[position].type, sourceWrapperType: sourceWrapperName == nil ? nil : sourceType)
 			}
 		}
 		return nil
@@ -179,6 +198,24 @@ struct FunctionText {
 			}
 			let body = lines[function.range.dropFirst()].joined(separator: "\n")
 			for callee in functions where callee.parameters.contains(where: { $0.label == label && $0.type == wrapperType }) && body.contains("\(callee.name)(") && Self.arguments(ofCallsTo: callee.name, in: body).contains(where: { $0.contains("\(label): \(label)") }) {
+				pending.append(callee.name)
+			}
+		}
+	}
+
+	/// Makes `label`, an optional parameter of type `wrapperType`, non-optional in the function named `name` and in every
+	/// function its body hands the parameter to under the same label, and reads the wrapper's instance directly.
+	mutating func makeNonOptional(_ label: String, wrapperType: String, inFunctionNamed name: String) {
+		var pending = [name]
+		var visited = Set<String>()
+		while let name = pending.popLast() {
+			guard visited.insert(name).inserted, let function = functions.first(where: { $0.name == name }) else { continue }
+			lines[function.range.lowerBound] = lines[function.range.lowerBound].replacingOccurrences(of: "\(label): \(wrapperType)?", with: "\(label): \(wrapperType)")
+			for index in function.range.dropFirst() {
+				lines[index] = lines[index].replacingOccurrences(of: "\(label)?.instance", with: "\(label).instance")
+			}
+			let body = lines[function.range.dropFirst()].joined(separator: "\n")
+			for callee in functions where callee.parameters.contains(where: { $0.label == label && $0.type == wrapperType + "?" }) && Self.arguments(ofCallsTo: callee.name, in: body).contains(where: { $0.contains("\(label): \(label)") }) {
 				pending.append(callee.name)
 			}
 		}

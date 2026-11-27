@@ -43,14 +43,14 @@ struct ApprovedDifferencesTests: ~Copyable {
 	// MARK: Tests – entry 13, the optional channel
 
 	@Test
-	mutating func rewrite_writesTheTreesText_whenNilIsPassedBesideOneWrapper() async throws {
-		let treeText = try await treeText(of: Self.wrapperAndNilFixture)
-		let nodeRecordsText = Self.generatedFilePreamble + Self.wrapperAndNilUnderRuleA
+	mutating func rewrite_writesTheTreesText_whenNilIsPassedBesideSendableLazyAndLazyWrappers() async throws {
+		let treeText = try await treeText(of: Self.twoWrappersAndNilFixture)
+		let nodeRecordsText = Self.generatedFilePreamble + Self.twoWrappersAndNilUnderRuleA
 		#expect(nodeRecordsText != treeText)
-		// The call that passes `nil` moves to the wrapper's function, whose parameter becomes optional, and the function of
-		// the declared form, which nothing calls any more, is removed.
-		#expect(OptionalChannelRewrite.rewritten(nodeRecordsText, treeText: treeText) == treeText)
-		#expect(ApprovedDifferences.normalized(nodeRecordsText: nodeRecordsText, treeText: treeText)?.entries == [13])
+		// The `nil` moves from the lazy wrapper's function, which the facts give it to, to the Sendable lazy wrapper's, the
+		// first place's: that one's parameter becomes optional and the lazy one's is optional no more.
+		#expect(OptionalChannelRewrite.rewritten(nodeRecordsText, treeText: treeText)?.text == treeText)
+		#expect(ApprovedDifferences.normalized(nodeRecordsText: nodeRecordsText, treeText: treeText, by: [ApprovedDifferences.optionalChannel])?.entries == ["13[SendableLazilyInstantiated]"])
 	}
 
 	@Test
@@ -60,23 +60,49 @@ struct ApprovedDifferencesTests: ~Copyable {
 		#expect(nodeRecordsText != treeText)
 		// The `nil` moves to the function of the wrapper the tree declares optional, the first place's; the function of the
 		// declared form stays for the place that passes a value, declared where that place calls it.
-		#expect(OptionalChannelRewrite.rewritten(nodeRecordsText, treeText: treeText) == treeText)
-		#expect(ApprovedDifferences.normalized(nodeRecordsText: nodeRecordsText, treeText: treeText)?.entries == [13])
+		#expect(OptionalChannelRewrite.rewritten(nodeRecordsText, treeText: treeText)?.text == treeText)
+		#expect(ApprovedDifferences.normalized(nodeRecordsText: nodeRecordsText, treeText: treeText, by: [ApprovedDifferences.optionalChannel])?.entries == ["13[LazilyInstantiated]"])
 	}
 
 	@Test
-	mutating func rewrite_returnsNil_whenNoCallPassesNilBesideWrapper() async throws {
-		let treeText = try await treeText(of: Self.wrapperAndNilFixture)
+	mutating func rewrite_returnsNil_whenTextAlreadyHandsNilToWrapperTreeDeclaresOptional() async throws {
+		// One wrapper and `nil` are one function in both texts: there is no call to move.
+		let treeText = try await treeText(of: Self.twoWrappersValueAndNilFixture)
 		#expect(OptionalChannelRewrite.rewritten(treeText, treeText: treeText) == nil)
 	}
 
 	@Test
-	mutating func normalized_returnsNil_whenRewrittenTextStillDiffersFromTrees() async throws {
-		let treeText = try await treeText(of: Self.wrapperAndNilFixture)
-		// A second difference, which no entry approves: the root's argument is another value.
-		let nodeRecordsText = (Self.generatedFilePreamble + Self.wrapperAndNilUnderRuleA).replacingOccurrences(of: "self.init(first: first, third: third)", with: "self.init(first: first, third: __safeDI_third())")
+	mutating func normalized_returnsNil_whenWrappersFunctionReadsWrapperWhereTreeReadsItsInstance() async throws {
+		let treeText = try await treeText(of: Self.twoWrappersValueAndNilFixture)
+		// The function the rewrite makes optional hands `Twig` the wrapper itself, which no entry approves. The rewrite
+		// changes only the reads of the wrapper's instance, so the text still differs. The mutation this test names: a
+		// rewrite that also turned a bare `theme` argument of that function into `theme?.instance` would approve this text,
+		// and this test would fail.
+		let nodeRecordsText = (Self.generatedFilePreamble + Self.twoWrappersValueAndNilUnderRuleA).replacingOccurrences(of: """
+		        func __safeDI_leafBuilder(theme: LazilyInstantiated<Theme>) -> Leaf {
+		            let twig = Twig(theme: theme.instance)
+		""", with: """
+		        func __safeDI_leafBuilder(theme: LazilyInstantiated<Theme>) -> Leaf {
+		            let twig = Twig(theme: theme)
+		""")
+		#expect(nodeRecordsText != Self.generatedFilePreamble + Self.twoWrappersValueAndNilUnderRuleA)
 		#expect(OptionalChannelRewrite.rewritten(nodeRecordsText, treeText: treeText) != nil)
-		#expect(ApprovedDifferences.normalized(nodeRecordsText: nodeRecordsText, treeText: treeText) == nil)
+		#expect(ApprovedDifferences.normalized(nodeRecordsText: nodeRecordsText, treeText: treeText, by: [ApprovedDifferences.optionalChannel]) == nil)
+	}
+
+	@Test
+	func all_listsNoEntry_untilRootDiffersByIt() {
+		// Entry 13 is listed with the first root laid out under rule A, so that the tally fails no run for it before.
+		#expect(ApprovedDifferences.all.map(\.entry) == [])
+	}
+
+	@Test
+	mutating func normalized_returnsNil_whenRewrittenTextStillDiffersFromTrees() async throws {
+		let treeText = try await treeText(of: Self.twoWrappersAndNilFixture)
+		// A second difference, which no entry approves: the root's argument is another value.
+		let nodeRecordsText = (Self.generatedFilePreamble + Self.twoWrappersAndNilUnderRuleA).replacingOccurrences(of: "self.init(second: second, first: first, third: third)", with: "self.init(second: second, first: first, third: __safeDI_third())")
+		#expect(OptionalChannelRewrite.rewritten(nodeRecordsText, treeText: treeText) != nil)
+		#expect(ApprovedDifferences.normalized(nodeRecordsText: nodeRecordsText, treeText: treeText, by: [ApprovedDifferences.optionalChannel]) == nil)
 	}
 
 	@Test
@@ -111,11 +137,13 @@ struct ApprovedDifferencesTests: ~Copyable {
 
 	"""
 
-	/// `First` answers `Leaf`'s read of `theme` with a lazy wrapper, and `Third` with nothing.
-	private static let wrapperAndNilFixture = """
+	/// `Second`, the root's first place, answers `Leaf`'s read of `theme` with a Sendable lazy wrapper, `First` with a
+	/// lazy wrapper, and `Third` with nothing.
+	private static let twoWrappersAndNilFixture = """
 	import SafeDI
 	@Instantiable(isRoot: true) public final class Root: Instantiable {
-	    public init(first: First, third: Third) { self.first = first; self.third = third }
+	    public init(second: Second, first: First, third: Third) { self.second = second; self.first = first; self.third = third }
+	    @Instantiated let second: Second
 	    @Instantiated let first: First
 	    @Instantiated let third: Third
 	}
@@ -133,39 +161,55 @@ struct ApprovedDifferencesTests: ~Copyable {
 	    public init(theme: Theme?) { self.theme = theme }
 	    @Received(onlyIfAvailable: true) let theme: Theme?
 	}
-	@Instantiable public final class Theme: Instantiable {
+	@Instantiable public final class Theme: Instantiable, Sendable {
 	    public init() {}
 	}
 	@Instantiable public final class Third: Instantiable {
 	    public init(leafBuilder: Instantiator<Leaf>) { self.leafBuilder = leafBuilder }
 	    @Instantiated let leafBuilder: Instantiator<Leaf>
 	}
+	@Instantiable public final class Second: Instantiable {
+	    public init(theme: SendableLazilyInstantiated<Theme>, leafBuilder: Instantiator<Leaf>) { self.theme = theme; self.leafBuilder = leafBuilder }
+	    @Instantiated let theme: SendableLazilyInstantiated<Theme>
+	    @Instantiated let leafBuilder: Instantiator<Leaf>
+	}
 	"""
 
-	/// `wrapperAndNilFixture`'s root as rule A lays it out: the wrapper's function takes the wrapper, and the call that
-	/// passes `nil` has the function of the declared form.
-	private static let wrapperAndNilUnderRuleA = """
+	/// `twoWrappersAndNilFixture`'s root as rule A lays it out: the `nil` goes to the lazy wrapper's function, whose
+	/// parameter is optional, and the Sendable lazy wrapper's function takes the wrapper.
+	private static let twoWrappersAndNilUnderRuleA = """
 	extension Root {
 	    public convenience init() {
-	        func __safeDI_theme() -> Theme {
+	        @Sendable nonisolated func __safeDI_theme() -> Theme {
 	            Theme()
 	        }
-	        func __safeDI_leafBuilder(theme: LazilyInstantiated<Theme>) -> Leaf {
+	        func __safeDI_leafBuilder(theme: SendableLazilyInstantiated<Theme>) -> Leaf {
 	            let twig = Twig(theme: theme.instance)
 	            return Leaf(theme: theme.instance, twig: twig)
 	        }
-	        func __safeDI_first() -> First {
-	            let theme = LazilyInstantiated<Theme>(__safeDI_theme)
+	        func __safeDI_second() -> Second {
+	            let theme = SendableLazilyInstantiated<Theme>(__safeDI_theme)
 	            let leafBuilder = Instantiator<Leaf> {
 	                __safeDI_leafBuilder(theme: theme)
+	            }
+	            return Second(theme: theme, leafBuilder: leafBuilder)
+	        }
+	        let second: Second = __safeDI_second()
+	        func __safeDI_theme_() -> Theme {
+	            Theme()
+	        }
+	        func __safeDI_leafBuilder_(theme: LazilyInstantiated<Theme>?) -> Leaf {
+	            let twig = Twig(theme: theme?.instance)
+	            return Leaf(theme: theme?.instance, twig: twig)
+	        }
+	        func __safeDI_first() -> First {
+	            let theme = LazilyInstantiated<Theme>(__safeDI_theme_)
+	            let leafBuilder = Instantiator<Leaf> {
+	                __safeDI_leafBuilder_(theme: theme)
 	            }
 	            return First(theme: theme, leafBuilder: leafBuilder)
 	        }
 	        let first: First = __safeDI_first()
-	        func __safeDI_leafBuilder_(theme: Theme?) -> Leaf {
-	            let twig = Twig(theme: theme)
-	            return Leaf(theme: theme, twig: twig)
-	        }
 	        func __safeDI_third() -> Third {
 	            let leafBuilder = Instantiator<Leaf> {
 	                __safeDI_leafBuilder_(theme: nil)
@@ -173,7 +217,7 @@ struct ApprovedDifferencesTests: ~Copyable {
 	            return Third(leafBuilder: leafBuilder)
 	        }
 	        let third: Third = __safeDI_third()
-	        self.init(first: first, third: third)
+	        self.init(second: second, first: first, third: third)
 	    }
 	}
 	"""

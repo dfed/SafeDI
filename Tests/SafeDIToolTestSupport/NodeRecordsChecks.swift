@@ -61,7 +61,7 @@ enum NodeRecordsChecks {
 				}
 				if let reportPath {
 					let state = report.isLaidOutFromNodeRecords ? "laid out" : report.refusal ?? "accepted"
-					append("\(testName)\t\(report.root)\t\(state)\t\(outcome.differences.count)\t\(report.everyRefusal.joined(separator: ","))\t\(report.isMockRoot ? "mock" : "")\t\(outcome.approvedEntries.map(String.init).joined(separator: ","))\n", toFileAt: reportPath)
+					append("\(testName)\t\(report.root)\t\(state)\t\(outcome.differences.count)\t\(report.everyRefusal.joined(separator: ","))\t\(report.isMockRoot ? "mock" : "")\t\(outcome.approvedEntries.joined(separator: ","))\n", toFileAt: reportPath)
 				}
 				enclosingObserver?(report)
 			}) {
@@ -75,7 +75,7 @@ enum NodeRecordsChecks {
 	/// difference it holds rewritten as the tree writes it (`ApprovedDifferences`), is the tree's code byte for byte.
 	/// Then the records' differences from the tree's, place by place, are that rewrite's and fail nothing. A difference
 	/// no text shows always fails, as does every difference of a root whose two texts were not both laid out.
-	static func outcome(of report: NodeRecordsReport, approving approvedDifferences: [ApprovedDifference] = ApprovedDifferences.all) -> (differences: [String], approvedEntries: [Int]) {
+	static func outcome(of report: NodeRecordsReport, approving approvedDifferences: [ApprovedDifference] = ApprovedDifferences.all) -> (differences: [String], approvedEntries: [String]) {
 		guard !report.differences.isEmpty,
 		      let texts = report.comparedTexts,
 		      let normalized = ApprovedDifferences.normalized(nodeRecordsText: texts.nodeRecords, treeText: texts.tree, by: approvedDifferences)
