@@ -47,8 +47,21 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	case erased
 	/// The node's type declares a rename, a hole, or an instantiated dependency its scope does not build.
 	case renameOrHole
-	/// The node's call passes fills.
+	/// The node's call passes fills, which no record makes yet.
 	case fill
+	/// The node's call fills a place of another module's public mock.
+	case fillPublicMockCall
+	/// The node's call fills a place, and a fill encloses it.
+	case fillInsideFill
+	/// The node's call fills a place, and is on a cycle.
+	case fillCycleMember
+	/// The node's call fills a place, and is reached on more than one route, whose caller's declarations may differ.
+	case fillCallSeveralVariants
+	/// A fill of the node's call makes a call of a seam or a public mock, which may re-enter the call's levels.
+	case fillHoldsCall
+	/// A dispatcher of the node's call carries a seam's deferred fields, so a fill may take a memo in a form only the forms
+	/// its tree reads decide, which the world's reads, by label, do not hold.
+	case fillHandedMemo
 	/// The node is a hole of a seam's tree, or on the route to one, that the tree reaches along more than one path: the names
 	/// a route binds follow its path, so one variant per node cannot hold the place.
 	case holeOnSeveralPaths
@@ -422,6 +435,7 @@ struct NodeRecords: Sendable {
 		// A hole is claimed apart from the chains below, which the compiler cannot type-check as one.
 		guard let claim = testClaim(of: declaration, in: world) ?? seamHoleClaim(of: declaration, in: world) else {
 			let seamClaim = inlineSeamClaim(of: declaration, in: world)
+				?? filledSeamCallClaim(of: declaration, in: world)
 				?? seamCallClaim(of: declaration, in: world)
 			return seamClaim
 				?? unavailableDependencyClaim(of: declaration, in: world)

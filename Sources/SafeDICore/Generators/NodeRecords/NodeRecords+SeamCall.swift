@@ -23,27 +23,20 @@ extension NodeRecords {
 	/// discharges stage 1's refusal of a construction other than an initializer, and its refusal of a call that passes
 	/// builders where the call passes each builder up from the seam whose tree makes it (`ConstructionScope.HoleArgument.passUp`);
 	/// `nil` for any other node, and for every node of a mock root's world, which builds every seam inline. Every other
-	/// check of stage 1 still runs on it, so a call that fills a place is still refused as `fill`. The engine binds a call in
+	/// check of stage 1 still runs on it. A call that fills a place is claimed above it (`filledSeamCallClaim(of:in:)`). The engine binds a call in
 	/// place as a built place of its form, a wrapper of its function where the property is one (`InPlaceCall`); a call that
 	/// forwards values, which a wrapper binds inside its function, is refused as `construction`.
 	static func seamCallClaim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
 		guard !world.isMockWorld, world.construction(of: declaration) == .seamCall else { return nil }
 		let scope = world.scope(of: declaration)
 		let forwardsValues = scope.instantiable.dependencies.contains { $0.source == .forwarded }
-		let passesEveryBuilderUp = scope.holeArguments.allSatisfy { holeArgument in
-			switch holeArgument {
-			case .passUp:
-				true
-			case .fill:
-				false
-			}
-		}
 		// A call held in a wrapper, erased or not, or in a `@Sendable` function is bound as a built place of its form is, which
 		// discharges what that form's claim does.
 		let wrapperDischarges = (erasedClaim(of: declaration, in: world) ?? lazyClaim(of: declaration, in: world) ?? sendableClaim(of: declaration, in: world))?.discharges ?? []
 		return NodeRecordClaim(
 			kind: .seamCall,
-			discharges: (passesEveryBuilderUp ? Set<NodeRecordRefusal>([.construction, .fill]) : [.construction]).union(wrapperDischarges),
+			// Every builder the call passes is passed up: a call that fills a place is claimed above (`filledSeamCallClaim(of:in:)`).
+			discharges: Set<NodeRecordRefusal>([.construction, .fill]).union(wrapperDischarges),
 			refusals: forwardsValues ? [.construction] : [],
 		)
 	}

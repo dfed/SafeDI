@@ -18,26 +18,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-/// Why node records leave a root's filled seam call to the tree in step 3 (`lanes/node-records-fills/step3-interface.md`),
-/// each its own reason, so a count of refused calls says what is left.
-enum FillRefusal: String, Sendable, CaseIterable {
-	/// The world is a mock root's.
-	case fillMockWorld
-	/// The call is of another module's public mock.
-	case fillPublicMockCall
-	/// A fill encloses the call.
-	case fillInsideFill
-	/// The call is on a cycle.
-	case fillCycleMember
-	/// The call is reached on more than one route, whose caller's declarations may differ.
-	case fillCallSeveralVariants
-	/// A fill of the call makes a call of a seam or a public mock, which may re-enter this call's levels.
-	case fillHoldsCall
-	/// A dispatcher of the call carries a seam's deferred fields, so a fill may take a memo in a form only the forms its tree
-	/// reads decide, which the world's reads, by label, do not hold.
-	case fillHandedMemo
-}
-
 /// What one fill of a root's seam call binds, takes and reads, made from the world's facts alone (step 3, row 2): its
 /// identity, the case values it binds, what it takes after them, what it reads of the caller's scope, and whether its body
 /// declares a function. Keyed by the fill's key, never by a name.
@@ -83,14 +63,14 @@ struct FillFacts: Sendable {
 	/// Whether the property the fill builds is a constant.
 	let returnsBoundValue: Bool
 	/// Whether the fill's tree reads the inner-scope levels it is offered (`FillInnerScopes`): never, for a fill of a
-	/// root's call that holds no call of its own (`FillRefusal.fillHoldsCall`), since only a seam's own tree holds its
+	/// root's call that holds no call of its own (`NodeRecordRefusal.fillHoldsCall`), since only a seam's own tree holds its
 	/// hole sites.
 	let readsInnerScopes: Bool
 
 	/// The facts of a call's fills, or why node records leave them to the tree.
 	enum OfCall {
 		case facts([FillFacts])
-		case refused(FillRefusal)
+		case refused(NodeRecordRefusal)
 	}
 
 	/// The facts as text, which two makings of them compare by. The stem is left out: the tree's fill keeps the hole of its
@@ -109,17 +89,16 @@ struct FillFacts: Sendable {
 		].joined(separator: "; ")
 	}
 
-	/// Why node records leave `call`, a seam call that fills a place, to the tree, or `nil`.
-	static func refusal(ofCall call: DeclarationID, in world: TypeFactsGraph, routeCounts: [Int]) -> FillRefusal? {
-		if world.isMockWorld {
-			.fillMockWorld
-		} else if world.scope(of: call).publicMockCall != nil {
+	/// Why node records leave `call`, a seam call of a production world that fills a place, to the tree, or `nil`.
+	/// - Parameter routeCount: The number of variants of `call`.
+	static func refusal(ofCall call: DeclarationID, in world: some NodeRecordSources, routeCount: Int) -> NodeRecordRefusal? {
+		if world.scope(of: call).publicMockCall != nil {
 			.fillPublicMockCall
 		} else if world.firstRoute(to: call).dropLast().contains(where: { world.construction(of: $0) == .fill }) {
 			.fillInsideFill
 		} else if world.isOnCycle(call) {
 			.fillCycleMember
-		} else if routeCounts[Int(call)] > 1 {
+		} else if routeCount > 1 {
 			.fillCallSeveralVariants
 		} else if fillsHoldCall(call, in: world) {
 			.fillHoldsCall
@@ -129,7 +108,7 @@ struct FillFacts: Sendable {
 	}
 
 	/// Whether a fill `call` passes builds, somewhere in its tree, a call of a seam or a public mock.
-	static func fillsHoldCall(_ call: DeclarationID, in world: TypeFactsGraph) -> Bool {
+	static func fillsHoldCall(_ call: DeclarationID, in world: some NodeRecordSources) -> Bool {
 		// A fill's node is built as its call builds it, a call of a seam or a public mock too, which its scope says.
 		var pending = world.edges(from: call).filter { world.construction(of: $0) == .fill }
 		var visited = Set(pending)
@@ -359,7 +338,7 @@ public struct FillFactsObservation: Sendable {
 	public let fromRecords: [String: String]
 	/// The projections of the tree's fills of the root's seam calls no fill encloses, by key.
 	public let tree: [String: String]
-	/// The reason node records leave each filled call they leave to the tree (`FillRefusal`), sorted.
+	/// The reason node records leave each filled call they leave to the tree (`NodeRecordRefusal`), sorted.
 	public let refusals: [String]
 
 	/// Called with each production root's filled calls, when set: by the tests, never by the tool.
@@ -371,7 +350,7 @@ public struct FillFactsObservation: Sendable {
 		guard let observer else { return }
 		let routeCounts = FillFacts.routeCounts(in: world)
 		var fromRecords = [String: String]()
-		var refusals = [FillRefusal]()
+		var refusals = [NodeRecordRefusal]()
 		for declaration in 0..<Int32(world.declarationCount) where world.construction(of: declaration) == .seamCall {
 			let scope = world.scope(of: declaration)
 			guard scope.holeArguments.contains(where: {
@@ -381,7 +360,7 @@ public struct FillFactsObservation: Sendable {
 					false
 				}
 			}) else { continue }
-			if let refusal = FillFacts.refusal(ofCall: declaration, in: world, routeCounts: routeCounts) {
+			if let refusal = FillFacts.refusal(ofCall: declaration, in: world, routeCount: routeCounts[Int(declaration)]) {
 				refusals.append(refusal)
 			} else {
 				switch FillFacts.of(call: declaration, in: world) {
@@ -397,5 +376,35 @@ public struct FillFactsObservation: Sendable {
 			}
 		}
 		observer(FillFactsObservation(root: root, fromRecords: fromRecords, tree: treeProjections, refusals: refusals.map(\.rawValue).sorted()))
+	}
+}
+
+extension NodeRecords {
+	/// The claim of `declaration` as `seamCall` where it calls another module's seam and fills a place of it, in a production
+	/// world, above `seamCallClaim(of:in:)`, which claims a call that passes every builder up. It discharges what that claim
+	/// does but `fill`, and refuses the call with why node records leave it to the tree (`FillFacts.refusal(ofCall:in:routeCount:)`),
+	/// or `fill` where no reason holds, until the call's record is assembled.
+	static func filledSeamCallClaim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
+		guard !world.isMockWorld, world.construction(of: declaration) == .seamCall else { return nil }
+		let scope = world.scope(of: declaration)
+		let fillsAPlace = scope.holeArguments.contains { holeArgument in
+			switch holeArgument {
+			case .fill:
+				true
+			case .passUp:
+				false
+			}
+		}
+		guard fillsAPlace else { return nil }
+		let forwardsValues = scope.instantiable.dependencies.contains { $0.source == .forwarded }
+		let routeCount = (0..<Int32(world.variantCount)).count(where: { world.declaration(of: $0) == declaration })
+		// A call held in a wrapper, erased or not, or in a `@Sendable` function is bound as a built place of its form is, which
+		// discharges what that form's claim does.
+		let wrapperDischarges = (erasedClaim(of: declaration, in: world) ?? lazyClaim(of: declaration, in: world) ?? sendableClaim(of: declaration, in: world))?.discharges ?? []
+		return NodeRecordClaim(
+			kind: .seamCall,
+			discharges: Set<NodeRecordRefusal>([.construction]).union(wrapperDischarges),
+			refusals: (forwardsValues ? [.construction] : []) + [FillFacts.refusal(ofCall: declaration, in: world, routeCount: routeCount) ?? .fill],
+		)
 	}
 }
