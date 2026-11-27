@@ -55,10 +55,6 @@ extension NodeRecords {
 		if passesUp {
 			refusals.append(.publicMockCallPassesUp)
 		}
-		// A mock that takes no overrides is configured by an override closure, whose arguments read the call's fills.
-		if !call.takesOverrides {
-			refusals.append(.publicMockCallOverrideClosure)
-		}
 		// The leaf receives only if available each parameter its tier omits, which the call never passes, and each `T? = nil`
 		// parameter of the tier, which the call passes what the caller's tree holds, or `nil`: the variant's answer, which the
 		// record reads (`passedOnlyIfAvailable(_:by:variant:in:)`).
@@ -136,15 +132,42 @@ extension NodeRecords {
 				: argument.source
 			arguments.append(PlaceRead(argumentLabel: argument.label, label: dependency.property.label, property: dependency.property, source: source))
 		}
-		// The called mock's own overrides: the enclosing configuration's field under the node's label, which the record never
-		// spells (`mockConfigurationField(named:)`).
 		let isInstantiator = world.kind(of: declaration) == .instantiator
-		let overridesType = TypeDescription.nested(name: ReservedName.mockOverridesTypeName, parentType: calledType, generics: [])
-		let overridesProperty = Property(label: ReservedName.mockOverridesParameterName, typeDescription: overridesType)
-		// The called mock's overrides are its own: the node hands no configuration to children, since it has none.
-		let slot = mockOverrideSlot(of: declaration, labeled: property.label, typed: overridesType, in: world, hasFunction: isInstantiator, handsOverridesToChildren: false, isSendable: false)
-		let argumentValues = [arguments.count: slot.value]
-		arguments.append(PlaceRead(argumentLabel: overridesProperty.label, label: overridesProperty.label, property: overridesProperty, source: .binding(label: overridesProperty.label)))
+		let argumentValues: [Int: ValuePath]
+		let alternatives: [ConstructionAlternative]
+		let passedArguments: [PassedArgument]
+		if call.takesOverrides {
+			// The called mock's own overrides: the enclosing configuration's field under the node's label, which the record
+			// never spells (`mockConfigurationField(named:)`).
+			let overridesType = TypeDescription.nested(name: ReservedName.mockOverridesTypeName, parentType: calledType, generics: [])
+			let overridesProperty = Property(label: ReservedName.mockOverridesParameterName, typeDescription: overridesType)
+			// The called mock's overrides are its own: the node hands no configuration to children, since it has none.
+			let slot = mockOverrideSlot(of: declaration, labeled: property.label, typed: overridesType, in: world, hasFunction: isInstantiator, handsOverridesToChildren: false, isSendable: false)
+			argumentValues = [arguments.count: slot.value]
+			arguments.append(PlaceRead(argumentLabel: overridesProperty.label, label: overridesProperty.label, property: overridesProperty, source: .binding(label: overridesProperty.label)))
+			alternatives = []
+			passedArguments = slot.passedArguments
+		} else {
+			// A mock that takes no overrides is configured by an override closure, which the enclosing configuration holds
+			// under the node's label, called with what the call passes the called mock (`MockLowering.PublicMockCallNode`'s
+			// `overrideClosureType`). A call that fills or passes up a builder, whose closure is handed builders, is refused.
+			let parameterTypes = initializer.arguments.map { argument in
+				(argument.typeDescription.strippingEscaping.autoclosureValueType ?? argument.typeDescription)
+					.asFunctionParameter(amongTypesDeclaredEscaping: call.typesDeclaredEscaping)
+					.asSource
+			}
+			let closureType = TypeDescription.unknown(text: "((\(parameterTypes.joined(separator: ", "))) -> \(property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource))?")
+			let slot = mockOverrideSlot(of: declaration, labeled: property.label, typed: closureType, in: world, hasFunction: isInstantiator, handsOverridesToChildren: false, isSendable: false)
+			argumentValues = [:]
+			alternatives = [ConstructionAlternative(
+				closure: slot.value,
+				bindingName: ReservedName.configurationBuilderPropertyName,
+				requiresAbsent: [],
+				use: .calledWithConstructionArguments,
+				resultWrapper: nil,
+			)]
+			passedArguments = slot.passedArguments
+		}
 		var record = BuiltPlaceRecord(
 			property: property,
 			isErased: false,
@@ -164,7 +187,7 @@ extension NodeRecords {
 			children: [],
 			node: PlanNode(),
 		)
-		record.sharingFields = PlaceSharingFields(passedArguments: slot.passedArguments, constructionValue: nil, alternatives: [], argumentValues: argumentValues)
+		record.sharingFields = PlaceSharingFields(passedArguments: passedArguments, constructionValue: nil, alternatives: alternatives, argumentValues: argumentValues)
 		return record
 	}
 }
