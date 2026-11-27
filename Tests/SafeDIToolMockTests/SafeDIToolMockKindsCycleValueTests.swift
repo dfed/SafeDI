@@ -5634,6 +5634,7 @@ struct SafeDIToolMockKindsCycleValueTests: ~Copyable {
 			DifferentialValueProbe("{ let p0 = Profile.mock(); let p1 = p0.followers.instance.profileBuilder.instantiate(); let p2 = p1.followers.instance.profileBuilder.instantiate(); let p3 = p2.followers.instance.profileBuilder.instantiate(); return [p0.state === p1.state, p1.state === p2.state, p2.state === p3.state] }()"),
 		], filesToDelete: &filesToDelete)
 	}
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_buildsWalksValues_whenReenteredCycleThroughLazyWrapperBuildsFreshDefaultBeneathSibling() async throws {
@@ -5757,6 +5758,7 @@ struct SafeDIToolMockKindsCycleValueTests: ~Copyable {
 			DifferentialValueProbe("{ let p0 = Profile.mock(); let p1 = p0.followers.instantiate().profileBuilder.instantiate(); let p2 = p1.followers.instantiate().profileBuilder.instantiate(); return [p0.settingsBuilder.instantiate().state === p1.settingsBuilder.instantiate().state, p1.settingsBuilder.instantiate().state === p2.settingsBuilder.instantiate().state, p2.settingsBuilder.instantiate().state === p2.settingsBuilder.instantiate().state] }()"),
 		], filesToDelete: &filesToDelete)
 	}
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_buildsWalksValues_whenLazyWrapperIsReachedThroughDeeperPathOnLapTwo() async throws {
@@ -5880,6 +5882,7 @@ struct SafeDIToolMockKindsCycleValueTests: ~Copyable {
 			DifferentialValueProbe("walkDigest(seeds: 0 ..< 400, depth: 12)"),
 		], filesToDelete: &filesToDelete)
 	}
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_buildsWalksValues_whenSiblingOfCycleThroughLazyWrapperReadsItsOwnOverrideOnLapTwo() async throws {
@@ -6002,6 +6005,7 @@ struct SafeDIToolMockKindsCycleValueTests: ~Copyable {
 			DifferentialValueProbe("walkDigest(seeds: 0 ..< 400, depth: 12)"),
 		], filesToDelete: &filesToDelete)
 	}
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_buildsWalksValues_whenLazyWrapperAndItsValueTwinShareOneSlotWithKindsSwapped() async throws {
