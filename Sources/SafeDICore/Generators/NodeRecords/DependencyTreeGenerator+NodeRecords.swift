@@ -56,7 +56,7 @@ extension DependencyTreeGenerator {
 	/// tree's at every place, and a root laid out from them is compared with the tree built beside them: its code, its
 	/// imports, and the checks its records stand in for (`TreeForcer`). A forced root whose world node records accept is
 	/// laid out from them where the test turns `NodeRecordsObservation.laysOutRoots` on. A run no test observes builds
-	/// no tree beside the records, and lays out the root of a seam without holes from its records where they accept its world.
+	/// no tree beside the records, and lays out a seam's own root from its records where they accept its world.
 	static func plannedRootCode(of rootInfo: RootScopeInfo, declaredTypeNames: DeclaredTypeNames) async throws -> GeneratedCode {
 		let root = rootInfo.instantiable.concreteInstantiable.asSource
 		switch rootInfo.built {
@@ -67,8 +67,9 @@ extension DependencyTreeGenerator {
 			return layout.code
 		case let .tree(scopeGenerator):
 			guard let observer = NodeRecordsObservation.observer else {
-				// A seam's own root without holes is laid out from its node records where they accept its world; its tree is
-				// still built, for its signature and the checks that read it, but its places are not planned.
+				// A seam's own root is laid out from its node records where they accept its world, holes included: each hole
+				// they accept is reached on one route (`NodeRecords.holesReachedOnSeveralRoutes(in:)`). Its tree is still
+				// built, for its signature and the checks that read it, but its places are not planned.
 				guard let ownSeamRoot = rootInfo.ownSeamRoot,
 				      let code = try laidOutOwnSeamRootCode(of: rootInfo, ownSeamRoot: ownSeamRoot, declaredTypeNames: declaredTypeNames)
 				else { return try await scopeGenerator.generatePlan() }
@@ -205,11 +206,8 @@ extension DependencyTreeGenerator {
 	}
 
 	/// The code of `rootInfo`, a seam's own root whose tree's root is `ownSeamRoot`, laid out from its world's node records,
-	/// or `nil` where the seam has holes, they refuse its world, or the engine cannot lay every statement out.
+	/// or `nil` where they refuse its world or the engine cannot lay every statement out.
 	private static func laidOutOwnSeamRootCode(of rootInfo: RootScopeInfo, ownSeamRoot: ScopeGenerator.SeamRoot, declaredTypeNames: DeclaredTypeNames) throws -> GeneratedCode? {
-		// A hole's leaf reads nothing, so nothing in the records yet keys a hole by the forms its places hand its fill: a seam
-		// with holes keeps its tree until the records show its leaves need no reads.
-		guard ownSeamRoot.signature.holes.isEmpty else { return nil }
 		let world = TypeFactsGraph(root: rootInfo.rootScope, forMockGeneration: false)
 		let seamTree = rootInfo.seamTree
 		let nodeRecords: NodeRecords
