@@ -7962,13 +7962,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			generatedProperties.append(.rootFunction(record))
 		}
 		if let publicMockLevelFunctions {
-			generatedProperties += publicMockLevelFunctions.records(
+			let records = publicMockLevelFunctions.records(
 				sendableKeys: sendableFillKeys,
-				inlinedFills: body.inlinedFills,
+				inlinedFillsBindingScope: body.inlinedFills.mapValues { $0.carriesPayload && $0.readsScope },
 				fillsTakingPayloadFields: body.fillsTakingPayloadFields,
 				fillMemberParameterFieldsByKey: body.fillParametersByKey,
 				typesDeclaredEscaping: typesDeclaredEscaping,
-			).declarations(indent: leadingMemberWhitespace, inlinedFillBodies: body.inlinedFills.mapValues(\.body)).map(GeneratedCode.text)
+			)
+			LevelFunctionRecordsObservation.observer?(LevelFunctionRecordsObservation(root: nil, records: records))
+			generatedProperties += records.declarations(indent: leadingMemberWhitespace, inlinedFillBodies: body.inlinedFills.mapValues(\.body)).map(GeneratedCode.text)
 		}
 		return generatedProperties
 	}

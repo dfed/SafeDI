@@ -134,10 +134,24 @@ enum NodeRecordsChecks {
 			filledCalls.addRecords(records)
 			enclosingFilledCallObserver?(records)
 		}
-		let result = try await FilledCallRecordsObservation.$observer.withValue(filledCallObserver) {
+		let enclosingLevelFunctionObserver = LevelFunctionRecordsObservation.observer
+		// The level functions node records make of a mock world's call of another module's public mock, each among those the
+		// tree records.
+		let levelFunctions = LevelFunctionTexts()
+		let levelFunctionObserver: @Sendable (LevelFunctionRecordsObservation) -> Void = { records in
+			levelFunctions.add(records)
+			enclosingLevelFunctionObserver?(records)
+		}
+		let result = try await LevelFunctionRecordsObservation.$observer.withValue(levelFunctionObserver) { try await FilledCallRecordsObservation.$observer.withValue(filledCallObserver) {
 			try await checkingFills(seamCallObserver: seamCallObserver, dispatcherObserver: dispatcherObserver, fillObserver: fillObserver, decisionsObserver: decisionsObserver, fillFactsObserver: fillFactsObserver, namesObserver: namesObserver) {
 				try await checkingNodeRecords(laysOutRoots: laysOutRoots, laysOutMockRoots: laysOutMockRoots, reportPath: reportPath, testName: testName, enclosingObserver: enclosingObserver, body)
 			}
+		} }
+		for mismatch in levelFunctions.mismatches() {
+			Issue.record(Comment(rawValue: mismatch))
+		}
+		if let levelFunctionsReportPath = ProcessInfo.processInfo.environment["SAFEDI_LEVEL_FUNCTIONS_REPORT"] {
+			append("\(testName)\t\(levelFunctions.summary)\n", toFileAt: levelFunctionsReportPath)
 		}
 		// Each function and closure argument node records spell of a root's filled call is one the tree writes.
 		for mismatch in filledCalls.mismatches() {
@@ -241,6 +255,39 @@ private final class FilledCallTexts: Sendable {
 	var summary: String {
 		state.withLock { state in
 			"\(state.records.filter { state.tree.contains($0.text) }.count)/\(state.records.count)"
+		}
+	}
+}
+
+/// The level functions the tree records of a test's calls of other modules' public mocks, and those node records make of
+/// them (`LevelFunctionRecordsObservation`), each as its records print.
+private final class LevelFunctionTexts: Sendable {
+	private struct State {
+		var tree = Set<String>()
+		var records = [(root: String, projection: String)]()
+	}
+
+	private let state = Mutex(State())
+
+	func add(_ observation: LevelFunctionRecordsObservation) {
+		state.withLock { state in
+			if let root = observation.root {
+				state.records.append((root, observation.projection))
+			} else {
+				state.tree.insert(observation.projection)
+			}
+		}
+	}
+
+	func mismatches() -> [String] {
+		state.withLock { state in
+			state.records.filter { !state.tree.contains($0.projection) }.map { "Root \($0.root)’s call of a public mock has, from node records, the level functions\n\($0.projection)\nwhich the tree records nowhere" }
+		}
+	}
+
+	var summary: String {
+		state.withLock { state in
+			"\(state.records.filter { state.tree.contains($0.projection) }.count)/\(state.records.count)"
 		}
 	}
 }

@@ -344,7 +344,7 @@ struct PublicMockLevelFunctions: Sendable {
 	/// `fillMemberParameterFieldsByKey` lists.
 	func records(
 		sendableKeys: Set<String>,
-		inlinedFills: [String: ScopeGenerator.FillDispatcher.InlinedFill],
+		inlinedFillsBindingScope: [String: Bool],
 		fillsTakingPayloadFields: Set<String>,
 		fillMemberParameterFieldsByKey: [String: [SeamSignature.Hole.Field]],
 		typesDeclaredEscaping: Set<TypeDescription>,
@@ -367,8 +367,8 @@ struct PublicMockLevelFunctions: Sendable {
 				case let .fill(caseName, target, arguments, _):
 					fillNames[target.key] = target.name
 					let form: LevelMember.FillForm
-					if let inlinedFill = inlinedFills[target.key] {
-						form = .inlined(bindsScope: inlinedFill.carriesPayload && inlinedFill.readsScope)
+					if let bindsScope = inlinedFillsBindingScope[target.key] {
+						form = .inlined(bindsScope: bindsScope)
 					} else if fillsTakingPayloadFields.contains(target.key) {
 						let extraLabels = Set(arguments.map(\.label))
 						form = .takesPayloadFields(payloadLabels: (fillMemberParameterFieldsByKey[target.key] ?? []).map(\.property.label).filter { !extraLabels.contains($0) })

@@ -153,3 +153,19 @@ struct LevelArgument: Hashable, Sendable {
 		return "\(label.spelledAsArgumentLabel): \(readsInstance ? "\(source).\(Dependency.lazilyInstantiatedInstancePropertyName)" : source)"
 	}
 }
+
+/// The level functions of a call of another module's public mock, as records: the tree's (`root` `nil`) beside those node
+/// records make of a mock world's call (`root` the mock root's), which a test holds to be among the tree's.
+public struct LevelFunctionRecordsObservation: Sendable {
+	public let root: String?
+	/// The records, spelled as their values print, compared for equality alone.
+	public let projection: String
+
+	init(root: String?, records: LevelFunctionRecords) {
+		self.root = root
+		projection = "\(records)"
+	}
+
+	/// Called with each call's records, when set: by the tests, never by the tool.
+	@TaskLocal public static var observer: (@Sendable (LevelFunctionRecordsObservation) -> Void)?
+}

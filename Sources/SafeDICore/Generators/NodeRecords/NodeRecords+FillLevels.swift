@@ -55,6 +55,19 @@ struct FillInnerScopes: Sendable {
 		let type: TypeDescription
 	}
 
+	/// The inner scope levels of `call`, a call of another module's public mock in a mock root's world: a mock root is no
+	/// seam, so the call's fills take no struct of its levels, as for a root's seam call (`of(call:in:seamTree:)`).
+	/// - Throws: `NodeRecordRefusal.fill` where the call is inside a fill, which may re-enter an enclosing call's levels.
+	static func ofPublicMockCall(_ call: DeclarationID, in world: some NodeRecordSources) throws(NodeRecordRefusal) -> FillInnerScopes {
+		guard !isInsideFill(call, callers: callers(in: world), in: world) else { throw .fill }
+		var fills = [Fill]()
+		var seenCaseKeys = Set<String>()
+		for case let .fill(hole, _, _) in world.scope(of: call).holeArguments where seenCaseKeys.insert(ScopeGenerator.fillCaseKey(of: hole)).inserted {
+			fills.append(Fill(caseKey: ScopeGenerator.fillCaseKey(of: hole), fillKey: ScopeGenerator.fillKey(of: hole), innerScopeParameters: []))
+		}
+		return FillInnerScopes(fills: fills, enums: [], callingSeam: nil)
+	}
+
 	/// The inner scope levels of `call`, a node of `world` whose construction fills a builder of the seam it calls.
 	/// - Parameter seamTree: What `world`'s root, where it is a seam, is handed: its signature, whose holes the fills' places
 	///   are; `nil` for a root that is no seam.
@@ -176,7 +189,7 @@ struct FillDispatchers: Sendable {
 	///     where `nil`, which no record's identity reads.
 	static func of(call: DeclarationID, in world: some NodeRecordSources, fillParameters: [(fillKey: String, parameters: [SeamSignature.Hole.Field])], innerScopes: FillInnerScopes, names callNames: FillNames? = nil) -> FillDispatchers {
 		let scope = world.scope(of: call)
-		guard let calledBuilders = scope.seamCall?.calledBuilders else { return FillDispatchers(dispatchers: [], builtClosures: []) }
+		guard let calledBuilders = scope.calledBuilders else { return FillDispatchers(dispatchers: [], builtClosures: []) }
 		var filledSites = Set<SeamSignature.Hole.Site>()
 		var fillNames = [String: String]()
 		for case let .fill(hole, _, _) in scope.holeArguments {
@@ -202,6 +215,8 @@ struct FillDispatchers: Sendable {
 			names: &names,
 			innerScopeNameByKey: innerScopeNameByKey,
 			carriedInnerScopesByKey: carriedInnerScopesByKey,
+			// A call of another module's public mock decides per route, as `Scope` makes its dispatchers.
+			decidesPerRoute: scope.publicMockCall != nil,
 		)
 		var fillReads = [String: [SeamSignature.Hole.Field]]()
 		for (fillKey, parameters) in fillParameters {

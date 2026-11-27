@@ -36,6 +36,7 @@ extension ScopeGenerator {
 	@inline(never)
 	static func nodeRecordsMockStatements(of instantiable: Instantiable, worldRoot: ConstructionScope, bindsOnlyNodes: Bool, sendableConfigurationTypeNames: Set<String>, rootNames: MockRootNames, outerDeclarations: [Property]) -> String? {
 		let world = TypeFactsGraph(root: worldRoot, forMockGeneration: true, mockRootNames: rootNames)
+		LevelFunctionRecordsObservation.observe(root: instantiable.concreteInstantiable.asSource, world: world)
 		func report(refusal: NodeRecordRefusal?, everyRefusal: [NodeRecordRefusal], isLaidOut: Bool, recordCount: Int) {
 			var report = NodeRecordsReport(
 				root: instantiable.concreteInstantiable.asSource,
