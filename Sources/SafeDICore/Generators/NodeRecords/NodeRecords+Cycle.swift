@@ -43,22 +43,16 @@ extension NodeRecords {
 	}
 
 	/// The labels the types of `world`, which holds a cycle, receive: read from above wherever they are, a superset of what
-	/// the function a call closes a cycle on reads from above it.
+	/// the function a call closes a cycle on reads from above it. Every alias is a node of kind `alias`, and every value
+	/// received only if available is the `onlyIfAvailable` of the node receiving it, which the kinds `init(world:)` reads
+	/// first refuse (`refusalsOfBuiltByInitializer(_:in:)`), so the world reads from above only what it receives plainly.
 	/// - Throws: `cycleReceivesBuilder` where a type receives a builder.
 	static func labelsReceived(inWorldWithCycle world: some NodeRecordSources) throws(NodeRecordRefusal) -> Set<String> {
 		var labels = Set<String>()
 		for declaration in 0..<Int32(world.declarationCount) {
-			for dependency in world.scope(of: declaration).instantiable.dependencies {
-				switch dependency.source {
-				case .received:
-					guard dependency.property.propertyType.isConstant else { throw .cycleReceivesBuilder }
-					labels.insert(dependency.property.label)
-				case let .aliased(fulfillingProperty, _, _):
-					guard fulfillingProperty.propertyType.isConstant else { throw .cycleReceivesBuilder }
-					labels.insert(fulfillingProperty.label)
-				case .instantiated, .forwarded:
-					break
-				}
+			for dependency in world.scope(of: declaration).instantiable.dependencies where dependency.source == .received(onlyIfAvailable: false) {
+				guard dependency.property.propertyType.isConstant else { throw .cycleReceivesBuilder }
+				labels.insert(dependency.property.label)
 			}
 		}
 		return labels

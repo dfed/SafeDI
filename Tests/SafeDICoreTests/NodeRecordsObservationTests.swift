@@ -75,6 +75,13 @@ struct NodeRecordsObservationTests {
 		#expect(comparison.treePlaceCount == 1)
 	}
 
+	@Test
+	func differences_nameThePlace_whenTheTreeWritesAnAliasWhereNodeRecordsBuildThePlace() {
+		let alias = AliasPlaceRecord(property: Property(label: "a", typeDescription: .simple(name: "A")), fulfillingProperty: Property(label: "b", typeDescription: .simple(name: "A")), text: "let a = b")
+		let comparison = NodeRecordsObservation.differences(between: [.indented(.place(PlacePlan(code: .empty, record: .alias(alias))), by: "    ")], and: [Self.place(Self.record("a"))])
+		#expect(comparison.differences == ["root.a: the tree writes no built place’s record"])
+	}
+
 	/// `record` as a place that closes a cycle, indented as a child of a builder function is.
 	private static func closingPlace(_ record: ClosingPlaceRecord) -> GeneratedCode {
 		.indented(.place(PlacePlan(code: .empty, record: .closer(record))), by: "    ")
