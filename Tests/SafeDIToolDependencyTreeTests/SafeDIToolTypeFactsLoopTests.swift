@@ -284,14 +284,15 @@ struct SafeDIToolTypeFactsLoopTests: ~Copyable {
 		}
 	}
 
-	@Test
+	@Test(arguments: [false, true])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_answersOptionalReadMadeAgain_whenLoopMemberReceivesLaterSiblingsBuilderOnlyIfAvailable() async throws {
-		// `A` receives `bBuilder` only if available and `B` receives `aBuilder`. The root binds `bBuilder` after `aBuilder`,
-		// but `A`'s function begins by making `bBuilder` again, so `A`'s construction reads that: the read stays inside
-		// `A`, where nothing the root binds later can answer it nil.
+	mutating func generate_answersOptionalReadMadeAgain_whenLoopMemberReceivesSiblingsBuilderOnlyIfAvailable(siblingIsDeclaredFirst: Bool) async throws {
+		// `A` receives `bBuilder` only if available and `B` receives `aBuilder`. Whichever the root binds first, `A`'s
+		// function begins by making `bBuilder` again, so `A`'s construction reads that: the read stays inside `A`, where
+		// nothing the root binds before or after can answer it.
+		let builders = ["@Instantiated let aBuilder: Instantiator<A>", "@Instantiated let bBuilder: Instantiator<B>"]
 		let report = try await rootReport(of: [
-			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let aBuilder: Instantiator<A>", "@Instantiated let bBuilder: Instantiator<B>"]),
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: siblingIsDeclaredFirst ? builders.reversed() : builders),
 			seamFixtureType(named: "A", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let bBuilder: Instantiator<B>?"]),
 			seamFixtureType(named: "B", isFinalClass: true, declarations: ["@Received let aBuilder: Instantiator<A>"]),
 		])
@@ -344,6 +345,28 @@ struct SafeDIToolTypeFactsLoopTests: ~Copyable {
 		#expect(report.places.count(where: { $0.node == innerA }) == 3 && report.places.count(where: { $0.node == innerB }) == 3, "\(report.world)")
 		#expect(report.variantCountsByNode[innerA] == 1 && report.variantCountsByNode[innerB] == 1, "\(report.world)")
 		expectMadeAgainCallsNameTheParentsCalls(in: report)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_listsMemberSharedApart_whenAnotherParentBuildsTheMembersTypeOffTheLoop() async throws {
+		// `Other` builds `A` as `aBuilder` too, beside no `bBuilder`: one node, which the root's loop makes `bBuilder` again
+		// in and `Other` does not, so the root's call reads the rebinding where `Other`'s reads the root's `bBuilder`. The
+		// facts make nothing again in `A` and list it shared apart, which node records refuse; its optional reads key
+		// alike either way (rule 1), so it has one variant.
+		let report = try await rootReport(of: [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let aBuilder: Instantiator<A>", "@Instantiated let bBuilder: Instantiator<B>", "@Instantiated let other: Other"]),
+			seamFixtureType(named: "Other", isFinalClass: true, declarations: ["@Instantiated let aBuilder: Instantiator<A>"]),
+			seamFixtureType(named: "A", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let bBuilder: Instantiator<B>?"]),
+			seamFixtureType(named: "B", isFinalClass: true, declarations: ["@Received let aBuilder: Instantiator<A>"]),
+		])
+		let a = try node(declaring: "A as aBuilder: Instantiator<A>", in: report)
+
+		#expect(report.places.count(where: { $0.node == a }) == 2, "\(report.world)")
+		#expect(report.loopMembersSharedApart.contains(a) && report.nodes[a].madeAgain.isEmpty, "\(report.world)")
+		#expect(report.nodes[a].readsFromAbove == ["value(aBuilder)", "optionalValue(bBuilder)", "optional(bBuilder)"], "\(report.world)")
+		#expect(report.variantCallSources[0].first == ["bound beingBuilt", "none", "none"], "\(report.world)")
+		#expect(report.variantCountsByNode[a] == 1, "\(report.world)")
 	}
 
 	// MARK: Private
