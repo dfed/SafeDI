@@ -349,17 +349,24 @@ func executeSafeDIToolTest(
 							try await ConstructionInternerObservation.$missObserver.withValue(ConstructionInternerClosure.recordingMissesNotExcluded(handingOn: ConstructionInternerObservation.missObserver)) {
 								try await ConstructionInternerOrder.applying(.fromEnvironment) {
 									try await ReusedSeamTreeChecks.comparing(handingOn: SeamTreeReuseObservation.comparesBuiltTrees) {
-										try await LabelsReadFromAboveChecks.comparing(handingOn: LabelsReadFromAboveObservation.observer) {
-											try await CallPlaceOrderChecks.comparing(handingOn: CallPlaceOrderObservation.observer) {
-												try await PlaceReadsChecks.comparing(handingOn: PlaceReadsObservation.observer) {
-													try await VariantBodyChecks.comparing(handingOn: VariantBodyObservation.observer) {
-														try await PlanBodiesChecks.comparing(handingOn: PlanBodiesObservation.observer) {
-															try await MockVariantBodyChecks.comparing {
-																try await TwinIdentityChecks.comparing(handingOn: TwinIdentityObservation.observer) {
-																	try await PlanSendableChecks.comparing(handingOn: PlanSendableObservation.observer) {
-																		try await PlanCaptureChecks.comparing(handingOn: PlanCaptureObservation.observer) {
-																			try await UnpassableCycleLabelChecks.checking(handingOn: UnpassableCycleLabelObservation.observer) {
-																				try await tool.generate()
+										// Every root’s imports from its union fact must equal the walk of its generator tree’s (`TypeFactsImportsChecks`).
+										try await TypeFactsImportsChecks.comparing(handingOn: TypeFactsImportsObservation.comparesWalk) {
+											// Every root’s received values from its per-type graph must equal the walk of its generator tree’s
+											// (`TypeFactsReceivedValueSuppliesChecks`).
+											try await TypeFactsReceivedValueSuppliesChecks.comparing(handingOn: TypeFactsReceivedValueSuppliesObservation.comparesWalk) {
+												try await LabelsReadFromAboveChecks.comparing(handingOn: LabelsReadFromAboveObservation.observer) {
+													try await CallPlaceOrderChecks.comparing(handingOn: CallPlaceOrderObservation.observer) {
+														try await PlaceReadsChecks.comparing(handingOn: PlaceReadsObservation.observer) {
+															try await VariantBodyChecks.comparing(handingOn: VariantBodyObservation.observer) {
+																try await PlanBodiesChecks.comparing(handingOn: PlanBodiesObservation.observer) {
+																	try await MockVariantBodyChecks.comparing {
+																		try await TwinIdentityChecks.comparing(handingOn: TwinIdentityObservation.observer) {
+																			try await PlanSendableChecks.comparing(handingOn: PlanSendableObservation.observer) {
+																				try await PlanCaptureChecks.comparing(handingOn: PlanCaptureObservation.observer) {
+																					try await UnpassableCycleLabelChecks.checking(handingOn: UnpassableCycleLabelObservation.observer) {
+																						try await tool.generate()
+																					}
+																				}
 																			}
 																		}
 																	}

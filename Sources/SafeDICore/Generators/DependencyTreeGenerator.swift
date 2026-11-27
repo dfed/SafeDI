@@ -430,21 +430,49 @@ public actor DependencyTreeGenerator {
 			) { taskGroup in
 				for rootInfo in rootScopeGenerators {
 					taskGroup.addTask {
+						let fulfillers = TypeFactsImports(root: rootInfo.rootScope).fulfillers
 						switch rootInfo.tree {
 						case let .perPath(scopeGenerator):
 							let code = try await scopeGenerator.generatePlan()
-							return await PlannedRoot(
+							if let observer = TypeFactsImportsObservation.comparesWalk {
+								let walkedFulfillers = await GenerationWork.$observer.withValue(nil) {
+									await scopeGenerator.fulfillersOfTree(buildingMock: false)
+								}
+								observer(TypeFactsImportsComparison(root: rootInfo.typeDescription.asSource, foldedFulfillers: fulfillers, walkedFulfillers: walkedFulfillers))
+							}
+							if let observer = TypeFactsReceivedValueSuppliesObservation.comparesWalk {
+								await GenerationWork.$observer.withValue(nil) {
+									let folded = TypeFactsReceivedValueSupplies(root: rootInfo.rootScope)
+									// A tree `generate` plans is built around no receive nothing provides, which the walk always judges.
+									let walked = await scopeGenerator.receivedValueSupplies(
+										ofTreeRootedAt: rootInfo.instantiable,
+										unfulfilledReceives: ScopeGenerator.UnfulfilledReceives(locations: [], labels: []),
+									)
+									observer(TypeFactsReceivedValueSuppliesComparison(
+										root: rootInfo.typeDescription.asSource,
+										folded: ReceivedValueSupplies(supplies: folded.supplies, constructedTypes: folded.constructedTypes),
+										walked: walked.map { ReceivedValueSupplies(supplies: $0.supplies.uniqued(), constructedTypes: $0.constructedTypes.uniqued()) },
+									))
+								}
+							}
+							return PlannedRoot(
 								typeDescription: rootInfo.typeDescription,
 								sourceFilePath: rootInfo.sourceFilePath,
 								code: code,
-								fulfillers: scopeGenerator.fulfillersOfTree(buildingMock: false),
+								fulfillers: fulfillers,
 							)
 						case let .perType(code, bodies):
-							// Each body's generator is the tree of one function, so the bodies together build what the root's
-							// tree builds.
-							var fulfillers = Set<FulfillerImports.Fulfiller>()
-							for body in bodies {
-								await fulfillers.formUnion(body.fulfillersOfTree(buildingMock: false))
+							if let observer = TypeFactsImportsObservation.comparesWalk {
+								// Each body's generator is the tree of one function, so the bodies together build what the root's tree
+								// builds. No tree per path is built here, so the received values are not compared with a walk's.
+								let walkedFulfillers = await GenerationWork.$observer.withValue(nil) {
+									var walkedFulfillers = Set<FulfillerImports.Fulfiller>()
+									for body in bodies {
+										await walkedFulfillers.formUnion(body.fulfillersOfTree(buildingMock: false))
+									}
+									return walkedFulfillers
+								}
+								observer(TypeFactsImportsComparison(root: rootInfo.typeDescription.asSource, foldedFulfillers: fulfillers, walkedFulfillers: walkedFulfillers))
 							}
 							return PlannedRoot(
 								typeDescription: rootInfo.typeDescription,
@@ -590,6 +618,8 @@ public actor DependencyTreeGenerator {
 		let typeDescription: TypeDescription
 		let instantiable: Instantiable
 		let sourceFilePath: String?
+		/// The root's scope, from which its tree is built, whose declarations the imports read (`TypeFactsImports`).
+		let rootScope: ConstructionScope
 		let tree: Tree
 		/// The root's tree per path where its code is laid out from its plan by type and the caller draws the trees.
 		var drawnTree: ScopeGenerator?
@@ -934,6 +964,7 @@ public actor DependencyTreeGenerator {
 				typeDescription: typeDescription,
 				instantiable: scope.instantiable,
 				sourceFilePath: typeDescriptionToFulfillingInstantiableMap[typeDescription]?.sourceFilePath,
+				rootScope: ConstructionScope(table: table, record: record),
 				tree: tree,
 				drawnTree: drawnTree,
 			))
