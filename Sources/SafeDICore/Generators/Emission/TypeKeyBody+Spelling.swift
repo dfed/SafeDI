@@ -114,6 +114,10 @@ extension TypeKeyLayout {
 			if let function = attachedFunction[site] {
 				code.append(.indented(functionCode[function], by: indentation))
 			}
+			// A place that declares only its function binds nothing.
+			if case let .built(child) = statement, bodies[child].record?.declaresOnlyItsFunction == true {
+				continue
+			}
 			guard let text = spelledStatement(statement, inClass: owner, at: index) else { return nil }
 			code.append(.indented(.text(text), by: indentation))
 		}
@@ -143,14 +147,20 @@ extension TypeKeyLayout {
 			return "\(leadingLine)\(declaration.spelled) = \(value)\(record.lineEnd)"
 		case let .built(child):
 			guard let record = bodies[child].record else { return nil }
-			// A function that returns the property's type has erased what it returns.
-			return spelledCall(of: classByBody[child], binding: record.property, isErased: record.isErased && !record.returnsPropertyType, isExtension: record.isExtension, inClass: owner, at: index)
+			return spelledCall(of: classByBody[child], binding: record.property, isErased: callErases(record.isErased, theFunctionOf: child), isExtension: record.isExtension, inClass: owner, at: index)
 		case let .closer(record, target):
-			return spelledCall(of: classByBody[target], binding: record.property, isErased: record.isErased, isExtension: record.isExtension, inClass: owner, at: index)
+			return spelledCall(of: classByBody[target], binding: record.property, isErased: callErases(record.isErased, theFunctionOf: target), isExtension: record.isExtension, inClass: owner, at: index)
 		case let .alias(record):
 			guard let call = record.call else { return record.text }
 			return spelledInPlace(call, inClass: owner, at: index)
 		}
+	}
+
+	/// Whether a call of `body`'s function erases what it returns into a binding that `isErased`: a function that returns
+	/// the property's type has erased it already, whichever place calls it, the place it builds or one that closes a
+	/// cycle on it.
+	func callErases(_ isErased: Bool, theFunctionOf body: Int) -> Bool {
+		isErased && !(bodies[body].record?.returnsPropertyType ?? false)
 	}
 
 	/// The text of a call written where its place is, at `index` of `owner`'s body: its builder function, then the binding

@@ -679,6 +679,55 @@ struct SafeDIToolNodeRecordsMockLoopTests: ~Copyable {
 		""")
 	}
 
+	/// A member that takes its level’s overrides and is built at two levels stays refused: its one function would take
+	/// one level’s type, and the other level would hand it its own configuration.
+	@Test
+	mutating func mock_refusesLoop_whenMemberTakingItsLevelsOverridesIsBuiltAtTwoLevels() async throws {
+		let fixture = [
+			"""
+			@Instantiable(generateMock: true)
+			public final class Root: Instantiable {
+			    public init(holder: Holder, loopBuilder: Instantiator<Loop>) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+			    @Instantiated let holder: Holder
+			    @Instantiated let loopBuilder: Instantiator<Loop>
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Holder: Instantiable {
+			    public init(loopBuilder: Instantiator<Loop>) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+			    @Instantiated let loopBuilder: Instantiator<Loop>
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Loop: Instantiable {
+			    public init(loopBuilder: Instantiator<Loop>, leaf: Leaf) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+			    @Received let loopBuilder: Instantiator<Loop>
+			    @Instantiated let leaf: Leaf
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Leaf: Instantiable {
+			    public init() {}
+			}
+			""",
+		]
+		let walkOutput = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(reports.filter(\.isMockRoot).map(\.everyRefusal) == [["builderLoop"]])
+		#expect(output.generatedFiles == walkOutput.generatedFiles)
+	}
+
 	/// A loop of `@Sendable` builders below the root stays refused: its members' functions could capture no configuration that is not `Sendable`.
 	@Test
 	mutating func mock_refusesLoop_whenSendableMembersWouldTakeTheirLevelsConfiguration() async throws {
@@ -803,9 +852,9 @@ struct SafeDIToolNodeRecordsMockLoopTests: ~Copyable {
 		}
 	}
 
-	/// A member the mock root promotes only because another member's tree receives it stays refused: the walk binds no wrapper of it, which the root's body would bind unread.
+	/// A member the mock root promotes only because another member's tree receives it has its function declared and its wrapper bound nowhere, as the walk writes it.
 	@Test
-	mutating func mock_refusesLoop_whenMockRootPromotesMemberOnlyForItsLoop() async throws {
+	mutating func mock_laysOutLoopAsTheWalkWritesIt_whenMockRootPromotesMemberOnlyForItsLoop() async throws {
 		let fixture = [
 			"""
 			@Instantiable(generateMock: true)
@@ -826,10 +875,12 @@ struct SafeDIToolNodeRecordsMockLoopTests: ~Copyable {
 			}
 			""",
 		]
-		let (_, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
+		let walkOutput = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
 			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		}
-		#expect(reports.filter(\.isMockRoot).map(\.everyRefusal) == [["builderLoop"]])
+		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [true])
+		#expect(output.mockFiles["A+SafeDIMock.swift"] == walkOutput.mockFiles["A+SafeDIMock.swift"])
 	}
 
 	/// A member promoted for an optional receive stays refused: the walk binds it non-optional, which its rebinding would annotate optional.

@@ -106,6 +106,9 @@ struct BuiltPlaceRecord: Sendable {
 	/// builds in a function of its own whatever its body holds (`NodeRecords+MockConstruction.swift`). Every other
 	/// function writes it only after statements (`BuilderBody.returnKeyword`).
 	var functionAlwaysWritesReturn = false
+	/// Whether the place declares its builder function and binds its value nowhere: other places call the function, and
+	/// nothing reads the value.
+	var declaresOnlyItsFunction = false
 
 	/// The statement the place's builder function begins with, before its children.
 	var leadingStatement: LeadingStatement? {
