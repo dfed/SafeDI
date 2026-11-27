@@ -135,7 +135,6 @@ extension DependencyTreeGenerator {
 		/// generator and the tree beneath it, whatever path reaches it. What it declares for its children is the frame's, since
 		/// a declaration holds facts of the path (its depth, the path to a tree a type above the seam could build).
 		private var dependenciesByGenerator = [ObjectIdentifier: DependenciesByProperty]()
-		private var cycleReentriesByGenerator = [ObjectIdentifier: [SeamSignature.Places.CycleReentry]]()
 		/// The places each buildable tree holds, by the path to them: a tree's places are read at its own path.
 		private var placesByTreePath = [[Property]: [SeamSignature.Hole.Site]]()
 		/// A scope on the path from the seam's root to the scope being walked.
@@ -159,7 +158,6 @@ extension DependencyTreeGenerator {
 			/// What the level declares before its children (for a fill, all it declares).
 			let headDeclarations: [PathDeclaration]
 			let opensSendableFunction: SeamSignature.Places.SendableFunctionOpened?
-			let cycleReentries: [SeamSignature.Places.CycleReentry]
 			/// The level's path segment: the frames' since the last level ended, this one's last.
 			let pathSegment: [Property]
 			let pathTypes: [SeamSignature.Hole.PathType]
@@ -188,8 +186,6 @@ extension DependencyTreeGenerator {
 			let nearestDeclarations: [String: Property]
 			/// The path segment the children's level starts with, where the scope ends no level.
 			let pendingSegment: (properties: [Property], types: [SeamSignature.Hole.PathType], declared: [SeamSignature.Hole.DeclaredProperty])
-			/// The cycle re-entries the next level ending holds, where the scope ends no level.
-			let pendingCycleReentries: [SeamSignature.Places.CycleReentry]?
 
 			/// The position whose level is in the graph, and its index there.
 			var addedLevel: (position: Int, index: Int)?
@@ -405,23 +401,6 @@ extension DependencyTreeGenerator {
 				pathTypes += SeamSignature.Hole.PathType.pathTypes(through: generator)
 				declaredSegment += DependencyTreeGenerator.declaredProperties(reaching: generator, from: parent.generator)
 			}
-			// Where a cycle-closing scope calls the scope's builder function, the declarations between, which the level the scope
-			// ends holds, or the next level that ends where it ends none.
-			var cycleReentries = parent?.pendingCycleReentries
-			if depth > 0, let declaration = generator.declarationACycleClosesOn {
-				cycleReentries = cycleReentriesByGenerator[ObjectIdentifier(generator)] ?? DependencyTreeGenerator.declarationsBetween(closedOnScope: generator, closedOnDeclaration: declaration).map { between in
-					SeamSignature.Places.CycleReentry(
-						property: between.property,
-						declaringType: between.declaringType,
-						declarationLocation: between.declarationLocation,
-						parameterTakingType: between.parameterTakingType,
-						closedOnProperty: between.closedOnProperty,
-						closedOnBuiltType: declaration.concreteType,
-						reenteringType: between.reenteringType,
-					)
-				}
-				cycleReentriesByGenerator[ObjectIdentifier(generator)] = cycleReentries
-			}
 			let isSeamRoot = parent.map { !$0.endsLevel && $0.isSeamRoot } ?? true
 			var isInFill = parent?.isInFill ?? false
 			var isInSendableFunction = parent?.childrenAreInSendableFunction ?? false
@@ -605,7 +584,6 @@ extension DependencyTreeGenerator {
 				instantiable: instantiable,
 				headDeclarations: declarations,
 				opensSendableFunction: opensSendableFunction,
-				cycleReentries: endsLevel ? cycleReentries ?? [] : [],
 				pathSegment: pathSegment,
 				pathTypes: pathTypes,
 				declaredSegment: declaredSegment,
@@ -619,7 +597,6 @@ extension DependencyTreeGenerator {
 				loopDeclaring: loopDeclaring,
 				nearestDeclarations: nearest,
 				pendingSegment: endsLevel ? ([], [], []) : (pathSegment, pathTypes, declaredSegment),
-				pendingCycleReentries: endsLevel ? nil : cycleReentries,
 				childDeclarations: frameChildDeclarations,
 				subtreeKey: endsLevel && depth > 0 && parent?.endsLevel == true ? SubtreeKey(
 					builtType: instantiable?.concreteInstantiable,
@@ -841,7 +818,6 @@ extension DependencyTreeGenerator {
 					key: SeamSignature.Places.LevelKey(builtType: met.calledSeamType, nextProperty: nil, isSeamRoot: false, isInFill: frames.last(where: \.endsLevel)?.isInFill ?? false, filledType: nil),
 					declarations: [],
 					opensSendableFunction: opensSendableFunction,
-					cycleReentries: [],
 					fillBaseStack: [],
 					fillOwnerType: nil,
 					pathSegment: [met.property],
@@ -902,7 +878,6 @@ extension DependencyTreeGenerator {
 				),
 				declarations: drafted.draft.declarations,
 				opensSendableFunction: drafted.draft.opensSendableFunction,
-				cycleReentries: drafted.draft.cycleReentries,
 				fillBaseStack: drafted.draft.fillBaseStack,
 				fillOwnerType: drafted.draft.fillOwnerType,
 				pathSegment: drafted.draft.pathSegment,
@@ -975,7 +950,6 @@ extension DependencyTreeGenerator {
 					return SeamPlacesBuilder.DeclarationDraft(declaration: placesDeclaration(of: declaration, buildability: buildability), placesInTree: [])
 				},
 				opensSendableFunction: frame.opensSendableFunction,
-				cycleReentries: frame.cycleReentries,
 				fillBaseStack: frame.fill.map { zip($0.hole.fillPropertyStack, $0.hole.fillConcreteTypeStack).map { SeamSignature.Places.StackEntry(property: $0, concreteType: $1) } } ?? [],
 				fillOwnerType: frame.fill?.hole.ownerType,
 				pathSegment: frame.pathSegment,

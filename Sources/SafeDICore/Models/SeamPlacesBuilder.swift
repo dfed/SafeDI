@@ -38,7 +38,6 @@ struct SeamPlacesBuilder {
 		let key: SeamSignature.Places.LevelKey
 		var declarations: [DeclarationDraft]
 		let opensSendableFunction: SeamSignature.Places.SendableFunctionOpened?
-		var cycleReentries: [SeamSignature.Places.CycleReentry]
 		let fillBaseStack: [SeamSignature.Places.StackEntry]
 		let fillOwnerType: TypeDescription?
 		let pathSegment: [Property]
@@ -222,7 +221,6 @@ struct SeamPlacesBuilder {
 			key: SeamSignature.Places.LevelKey(builtType: draft.key.builtType, nextProperty: nil, isSeamRoot: draft.key.isSeamRoot, isInFill: draft.key.isInFill, filledType: draft.key.filledType, filledCase: draft.key.filledCase),
 			declarations: draft.declarations.map(\.declaration),
 			opensSendableFunction: draft.opensSendableFunction,
-			cycleReentries: draft.cycleReentries,
 			fillBaseStack: draft.fillBaseStack,
 			fillOwnerType: draft.fillOwnerType,
 			pathSegment: draft.pathSegment,
@@ -329,7 +327,6 @@ struct SeamPlacesBuilder {
 				nextPosition: variant.draft.nextPosition,
 				nextLoop: variant.draft.nextLoop,
 				opensSendableFunction: variant.draft.opensSendableFunction,
-				cycleReentries: variant.draft.cycleReentries,
 				fillBaseStack: variant.draft.fillBaseStack,
 				fillOwnerType: variant.draft.fillOwnerType,
 				pathSegment: variant.draft.pathSegment,
@@ -437,7 +434,6 @@ struct SeamPlacesBuilder {
 		let key: SeamSignature.Places.LevelKey
 		let declarations: [SeamSignature.Places.Declaration]
 		let opensSendableFunction: SeamSignature.Places.SendableFunctionOpened?
-		let cycleReentries: [SeamSignature.Places.CycleReentry]
 		let fillBaseStack: [SeamSignature.Places.StackEntry]
 		let fillOwnerType: TypeDescription?
 		let pathSegment: [Property]

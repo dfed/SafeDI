@@ -475,7 +475,7 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		var keyWriter = BinaryWriter()
 		keyWriter.write(level.key)
 
-		#expect(level.cycleReentries.isEmpty && level.fillBaseStack.isEmpty && level.pathSegment.isEmpty && level.pathTypes.isEmpty && level.parents.isEmpty && level.declaredSegmentByParent.isEmpty)
+		#expect(level.fillBaseStack.isEmpty && level.pathSegment.isEmpty && level.pathTypes.isEmpty && level.parents.isEmpty && level.declaredSegmentByParent.isEmpty)
 		#expect(levelWriter.bytes.count == keyWriter.bytes.count + 2)
 	}
 
@@ -752,7 +752,6 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		SeamSignature.Places.Buildability.self,
 		SeamSignature.Places.FillFieldHiding.self,
 		SeamSignature.Places.SendableFunctionOpened.self,
-		SeamSignature.Places.CycleReentry.self,
 		SeamSignature.Places.StackEntry.self,
 		SeamSignature.Places.Case.self,
 		SeamSignature.Places.Case.Access.self,
@@ -3097,7 +3096,6 @@ extension SeamSignature.Places.ChildFacts: BinarySample {}
 extension SeamSignature.Places.Buildability: BinarySample {}
 extension SeamSignature.Places.FillFieldHiding: BinarySample {}
 extension SeamSignature.Places.SendableFunctionOpened: BinarySample {}
-extension SeamSignature.Places.CycleReentry: BinarySample {}
 extension SeamSignature.Places.StackEntry: BinarySample {}
 extension SeamSignature.Places.Case: BinarySample {}
 extension SeamSignature.Places.Case.Access: BinarySample {}

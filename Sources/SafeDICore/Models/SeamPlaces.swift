@@ -282,7 +282,7 @@ extension SeamSignature {
 		/// What a scope between a closed-on level and one of its cycle-closing scopes declares, which the cycle hands the
 		/// type built again (`Hole.CycleReentryDeclaration`, whose `closedOnDeclaringType` is the type that declares the
 		/// level's own property, read from the route).
-		public struct CycleReentry: Codable, Hashable, Sendable {
+		public struct CycleReentry: Hashable, Sendable {
 			public init(property: Property, declaringType: TypeDescription, declarationLocation: Dependency.DeclarationLocation?, parameterTakingType: TypeDescription?, closedOnProperty: Property, closedOnBuiltType: TypeDescription, reenteringType: TypeDescription) {
 				self.property = property
 				self.declaringType = declaringType
@@ -310,7 +310,6 @@ extension SeamSignature {
 				nextPosition: Int?,
 				nextLoop: Int?,
 				opensSendableFunction: SendableFunctionOpened?,
-				cycleReentries: [CycleReentry],
 				fillBaseStack: [StackEntry],
 				fillOwnerType: TypeDescription?,
 				pathSegment: [Property],
@@ -324,7 +323,6 @@ extension SeamSignature {
 				self.nextPosition = nextPosition
 				self.nextLoop = nextLoop
 				self.opensSendableFunction = opensSendableFunction
-				self.cycleReentries = cycleReentries
 				self.fillBaseStack = fillBaseStack
 				self.fillOwnerType = fillOwnerType
 				self.pathSegment = pathSegment
@@ -346,9 +344,6 @@ extension SeamSignature {
 			public let nextLoop: Int?
 			/// The `@Sendable` function the scope opens, or `nil` where it opens none.
 			public let opensSendableFunction: SendableFunctionOpened?
-			/// Where a cycle-closing scope in the scope's tree calls its builder function, what a scope between binds, first per
-			/// label.
-			public let cycleReentries: [CycleReentry]
 			/// For a fill, the stack of the filled seam's path its tree is built beneath, innermost first; empty otherwise.
 			public let fillBaseStack: [StackEntry]
 			/// For a fill, the owner of the hole it fills, which declares the next level's property.
