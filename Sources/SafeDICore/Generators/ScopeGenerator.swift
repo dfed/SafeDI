@@ -1805,36 +1805,42 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		return caseFields
 	}
 
-	/// What one fill binds for every place of the cases at `caseIndices` of `query`'s place graph, the graph's cases of one
-	/// case nested by type (a case of the graph per owner level and family), whose emitting place is `hole`, by the rule
-	/// `caseFields(of:)` states, read over every route to those cases instead of over their places: a label's fields are
-	/// the distinct field answers of its routes (`SeamSignature.Places.Query.answers(ofLabel:at:)`), each case's
-	/// representative route's first, and a label some route answers with no level's field is read from the caller's scope
-	/// there. The labels are in the order `hole` carries them, then in the order the graph first reaches the others, as
-	/// `caseFields(of:)` takes the first place's first. No case is a place the call passes up, which is no case of the
-	/// graph yet: its fields are its own.
-	static func caseFields(ofCasesAt caseIndices: [Int], hole: SeamSignature.Hole, in query: SeamSignature.Places.Query) -> CaseFields {
-		guard !caseIndices.isEmpty else { return caseFields(of: [hole]) }
+	/// What one fill binds for every place of `cases`, the cases of one case nested by type (a case of a graph per owner
+	/// level and family, each answered by its own graph's query: a case of the called seam's own places in the called seam's
+	/// graph, and a place the call passes up in the graph of the seam whose tree holds it, `Query.holdingCase(of:)`), whose
+	/// emitting place is `hole`, by the rule `caseFields(of:)` states, read over every route to those cases instead of over
+	/// their places: a label's fields are the distinct field answers of its routes (`SeamSignature.Places.Query.answers(ofLabel:at:)`),
+	/// each case's representative route's first, and a label some route answers with no level's field is read from the
+	/// caller's scope there. A seam that passes a place up binds nothing the place's fill can read (what it binds on its
+	/// paths to the call is `boundByPassingUpSeam`, which `validateFills` reports), so the holding seam's answers are all a
+	/// passed-up place's fill reads. The labels are in the order `hole` carries them, then in the order the graphs first
+	/// reach the others, as `caseFields(of:)` takes the first place's first.
+	static func caseFields(ofResolvedCases cases: [SeamSignature.Places.Query.ResolvedCase], hole: SeamSignature.Hole) -> CaseFields {
 		var caseFields = CaseFields()
 		let payloadLabels = Set((hole.enumPlace?.values ?? []).map(\.property.label))
 		var labels = hole.fields.map(\.property.label)
 		var seenLabels = Set(labels)
-		for caseIndex in caseIndices {
-			for label in query.labels(reaching: caseIndex) where seenLabels.insert(label).inserted {
+		for resolved in cases {
+			for label in resolved.query.labels(reaching: resolved.caseIndex) where seenLabels.insert(label).inserted {
 				labels.append(label)
 			}
 		}
+		// An answer's indices are its own graph's, so two graphs' answers are told apart by the graph that answers them; the
+		// graph's identity orders nothing.
+		struct GraphAnswer: Hashable {
+			let graph: ObjectIdentifier
+			let answer: SeamSignature.Places.Answer
+		}
 		for label in labels {
-			var answers = [SeamSignature.Places.Answer]()
-			var seenAnswers = Set<SeamSignature.Places.Answer>()
-			for caseIndex in caseIndices {
-				for answer in query.answers(ofLabel: label, at: caseIndex) where seenAnswers.insert(answer).inserted {
-					answers.append(answer)
+			var held = [SeamSignature.Hole.Field]()
+			var answerCount = 0
+			var seenAnswers = Set<GraphAnswer>()
+			for resolved in cases {
+				for answer in resolved.query.answers(ofLabel: label, at: resolved.caseIndex) where seenAnswers.insert(GraphAnswer(graph: ObjectIdentifier(resolved.query), answer: answer)).inserted {
+					answerCount += 1
+					guard case let .field(level, declaration) = answer else { continue }
+					held.append(resolved.query.places.declaration(level: level, declaration: declaration).field)
 				}
-			}
-			let held = answers.compactMap { answer -> SeamSignature.Hole.Field? in
-				guard case let .field(level, declaration) = answer else { return nil }
-				return query.places.declaration(level: level, declaration: declaration).field
 			}
 			guard let firstField = held.first else { continue }
 			guard !payloadLabels.contains(label) else {
@@ -1847,7 +1853,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				continue
 			}
 			caseFields.fields.append(heldByLevels.first { $0.property.typeDescription.isOptional && $0.property.asUnwrappedProperty == firstHeld.property.asUnwrappedProperty } ?? firstHeld)
-			if heldByLevels.count < answers.count || innerRoutesLack(label, atCasesAt: caseIndices, in: query) {
+			if heldByLevels.count < answerCount || cases.contains(where: { innerRoutesLack(label, atCasesAt: [$0.caseIndex], in: $0.query) }) {
 				caseFields.callerReadLabels.insert(label)
 			}
 		}
