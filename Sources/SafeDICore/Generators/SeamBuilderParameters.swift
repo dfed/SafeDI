@@ -2794,6 +2794,14 @@ extension DependencyTreeGenerator {
 			let isPassedUp = query !== callQuery
 			guard let emitting = group.first(where: { $0.fill.fillEmitsCode }) ?? group.first, let child = (emitting.fill.fillJudgementTree ?? emitting.fill).children.first else { continue }
 			let reads = FillTreeReads(walking: child, recordsOpenScopes: !isPassedUp)
+			// The case of the call's own graph each holding case's first place has, which a passed-up place's reads past the calls
+			// that present it are asked at.
+			var callCaseIndexByHoldingCase = [Int: Int]()
+			for entry in group {
+				if let holdingCaseIndex = calledBuilders.holdingCase(ofSite: entry.hole.site, in: callQuery)?.caseIndex, callCaseIndexByHoldingCase[holdingCaseIndex] == nil {
+					callCaseIndexByHoldingCase[holdingCaseIndex] = calledBuilders.caseIndexBySite[entry.hole.site]
+				}
+			}
 			// The case's own place names its builder, of its own family.
 			func casePlace(at caseIndex: Int) -> SeamSignature.Hole {
 				group.first { calledBuilders.holdingCase(ofSite: $0.hole.site, in: callQuery)?.caseIndex == caseIndex }?.hole ?? emitting.hole
@@ -2940,8 +2948,17 @@ extension DependencyTreeGenerator {
 					let labelQuery = excludingQuery(excluded)
 					for caseIndex in caseIndices {
 						for variant in labelQuery.labelVariants(ofLabel: label, at: caseIndex) ?? [] {
-							let hole = judgedHole(casePlace(at: caseIndex), ofLabel: label, as: variant, at: caseIndex, in: labelQuery, callerBindsArgument: callerBindsArgument, resolvingBuildability: resolvingBuildability)
-							findings += findingsOfFill(of: hole, fill: emitting.fill, reads: labelReads, call: call, hidden: hidden, requirement: AccessLevel.required(toConstructFrom: callerModule, declaredIn: hole.scopeSeamModule, isOwnFile: false), callerModule: callerModule, compilesGeneratedMocks: compilesGeneratedMocks, seamTreeReceives: &seamTreeReceives)
+							// A read that leaves the holding seam's tree on a route with no re-entry of its own is read past each call that
+							// presents the place, where a cycle around the call re-enters it as the per-site walk finds (`holesPassedUp`):
+							// each such re-entry stands in the variant's place, as a place's own re-entry precedes its other facts.
+							var reentries: [SeamSignature.Hole.CycleReentryDeclaration?] = [variant.cycleReentry]
+							if isPassedUp, variant.cycleReentry == nil, let presentedReentries = callCaseIndexByHoldingCase[caseIndex].flatMap({ callQuery.presentedCycleReentryDeclarations(ofLabel: label, reading: variant.answer, at: $0) }), !presentedReentries.isEmpty {
+								reentries = presentedReentries
+							}
+							for reentry in reentries {
+								let hole = judgedHole(casePlace(at: caseIndex), ofLabel: label, as: variant, reentry: reentry, at: caseIndex, in: labelQuery, callerBindsArgument: callerBindsArgument, resolvingBuildability: resolvingBuildability)
+								findings += findingsOfFill(of: hole, fill: emitting.fill, reads: labelReads, call: call, hidden: hidden, requirement: AccessLevel.required(toConstructFrom: callerModule, declaredIn: hole.scopeSeamModule, isOwnFile: false), callerModule: callerModule, compilesGeneratedMocks: compilesGeneratedMocks, seamTreeReceives: &seamTreeReceives)
+							}
 						}
 					}
 				}
@@ -2951,9 +2968,9 @@ extension DependencyTreeGenerator {
 	}
 
 	/// EXPERIMENT: `hole`, a case's emitting place, as the place on `variant`'s least route reads `label`: that label's field,
-	/// uncarried declaration, cycle re-entry and declaration hidden by a field are the variant's, and the place is named by
-	/// the route.
-	private static func judgedHole(_ hole: SeamSignature.Hole, ofLabel label: String, as variant: SeamSignature.Places.Query.LabelVariant, at caseIndex: Int, in query: SeamSignature.Places.Query, callerBindsArgument: [Property: Bool], resolvingBuildability: (SeamSignature.Hole.UncarriedDeclaration, SeamSignature.Places.Answer) -> SeamSignature.Hole.UncarriedDeclaration) -> SeamSignature.Hole {
+	/// uncarried declaration and declaration hidden by a field are the variant's, its cycle re-entry is `reentry` (the
+	/// variant's, or one a cycle around a call that presents the place hands it), and the place is named by the route.
+	private static func judgedHole(_ hole: SeamSignature.Hole, ofLabel label: String, as variant: SeamSignature.Places.Query.LabelVariant, reentry: SeamSignature.Hole.CycleReentryDeclaration?, at caseIndex: Int, in query: SeamSignature.Places.Query, callerBindsArgument: [Property: Bool], resolvingBuildability: (SeamSignature.Hole.UncarriedDeclaration, SeamSignature.Places.Answer) -> SeamSignature.Hole.UncarriedDeclaration) -> SeamSignature.Hole {
 		var fields = hole.fields.filter { $0.property.label != label }
 		if case let .field(level, declaration) = variant.answer {
 			fields.append(query.places.declaration(level: level, declaration: declaration).field)
@@ -2990,7 +3007,7 @@ extension DependencyTreeGenerator {
 		if !placedVariant, let variantDeclaration {
 			uncarriedDeclarations.append(variantDeclaration)
 		}
-		let cycleReentryDeclarations = hole.cycleReentryDeclarations.filter { $0.property.label != label } + [variant.cycleReentry].compactMap(\.self)
+		let cycleReentryDeclarations = hole.cycleReentryDeclarations.filter { $0.property.label != label } + [reentry].compactMap(\.self)
 		let declarationsHiddenByFields = hole.declarationsHiddenByFields.filter { $0.property.label != label } + [variant.hiddenByField].compactMap(\.self)
 		return routedHole(hole, along: variant.leastRoute, in: query, fields: fields, uncarriedDeclarations: uncarriedDeclarations, cycleReentryDeclarations: cycleReentryDeclarations, declarationsHiddenByFields: declarationsHiddenByFields)
 	}
