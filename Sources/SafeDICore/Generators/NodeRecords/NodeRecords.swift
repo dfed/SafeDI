@@ -24,11 +24,15 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	/// The node is built by anything but its type's initializer or `instantiate()`: a seam's or a public mock's call, a
 	/// hand-written mock, a construction function or a fill.
 	case construction
-	/// A mock root's node takes a parameter with a default value, which a mock holds in the type's configuration, or its
-	/// type has a hand-written mock, whose defaults that configuration takes too.
+	/// The node calls another module's public mock and fills a builder of it: its fills, dispatchers and level functions
+	/// are declared in a builder function of the call's own.
+	case publicMockCallFills
+	/// The node calls another module's public mock and passes a builder up to it, which is bound again under the label the
+	/// leaf receives it as.
+	case publicMockCallPassesUp
+	/// A mock root's node's type takes, in its initializer or its hand-written mock, a value no dependency fulfills, as a
+	/// parameter with a default value is, which a mock holds in the type's configuration.
 	case mockDefaultValuedParameter
-	/// A mock root's node is an actor, whose arguments a mock sends it.
-	case mockActor
 	/// A mock root's node whose override is not its parent's field under the node's own label: two children of one node
 	/// share a label, which a mock root names apart.
 	case mockOverrideNotParentField
@@ -75,9 +79,10 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	/// different names (`CycleFunctionNames`), where its one place cannot stand for both.
 	case cycleBuilderNameShared
 	/// The node is built as a `LazilyInstantiated`, which `lazyClaim(of:in:)` discharges: its record is
-	/// `NodeRecordKind.lazy`'s. Also a world whose records read a wrapper's instance where no record does yet: a rename
-	/// fulfilled by one (`DeclarationsAnsweringReads.renameReadsWrappersInstance`), a rename in a seam's own tree of one
-	/// its root is handed, and a mock root's scope that declares or forwards a lazily instantiated property.
+	/// `NodeRecordKind.lazy`'s, and in a mock root's world `mockLazyDischarges(of:in:)` discharges it. Also a world whose
+	/// records read a wrapper's instance where no record does yet: a rename fulfilled by one
+	/// (`DeclarationsAnsweringReads.renameReadsWrappersInstance`) and a rename in a seam's own tree of one its root is
+	/// handed.
 	case lazy
 	/// The node's type receives a property only if available.
 	case onlyIfAvailable
@@ -114,6 +119,8 @@ protocol NodeRecordSources: TypeFactsWorld {
 	func text(ofLabel label: WorldLabelID) -> String
 	/// Whether the world is a mock root's, each of whose nodes reads its override.
 	var isMockWorld: Bool { get }
+	/// What a mock root's lowering names that the records of its world read; empty for a production root's world.
+	var mockRootNames: MockRootNames { get }
 }
 
 extension TypeFactsGraph: NodeRecordSources {
@@ -161,12 +168,15 @@ struct NodeRecords: Sendable {
 	///     `nil` for any other root.
 	///   - seamHoles: A seam's holes, by path, which its holes' places read (`seamHolePlace(of:in:seamHoles:rootLazilyInstantiatedInstanceProperties:)`);
 	///     `nil` for any other root, whose holes are passed `nil`.
+	///   - outerDeclarations: What a mock root's body is declared inside, the nearest declarations of their labels: the
+	///     parameters of `mock()` and the overrides it binds before its nodes, which a node's receive only if available
+	///     reads as a seam's tree reads the seam's parameters. Empty for any other root.
 	///   - declaredTypeNames: The names the modules SafeDI read declare types by at file scope, which the check of an erased
 	///     instantiator's first generic argument reads (`checkForwardsBuiltTypesProperties(_:in:declaredTypeNames:)`).
 	///     `nil` for a mock root's world, where no kind claims an erased instantiator and the mock's own tree reports it.
 	/// - Throws: A `NodeRecordRefusal` where the world holds a kind node records do not make, or what an initializer's
 	///   arguments throw.
-	init(world: some NodeRecordSources, seamTree: DependencyTreeGenerator.RootScopeInfo.SeamTree? = nil, seamHoles: SeamHoles? = nil, declaredTypeNames: DeclaredTypeNames?) throws {
+	init(world: some NodeRecordSources, seamTree: DependencyTreeGenerator.RootScopeInfo.SeamTree? = nil, seamHoles: SeamHoles? = nil, outerDeclarations: [Property] = [], declaredTypeNames: DeclaredTypeNames?) throws {
 		let declarationCount = world.declarationCount
 		var kinds = [NodeRecordKind]()
 		kinds.reserveCapacity(declarationCount)
@@ -195,7 +205,8 @@ struct NodeRecords: Sendable {
 		// them (`TypeFactsEdge.buildPosition`), which `NodeBuildOrder` stands in for only off every cycle.
 		let order: NodeBuildOrder? = holdsCycle ? nil : try NodeBuildOrder(world: world)
 		let labelsReceived = holdsCycle ? try Self.labelsReceived(inWorldWithCycle: world) : []
-		let onlyIfAvailableAnswers = try OnlyIfAvailableAnswers(world: world, rootParameters: seamTree?.parameters ?? [])
+		let onlyIfAvailableAnswers = try OnlyIfAvailableAnswers(world: world, rootParameters: seamTree?.parameters ?? outerDeclarations)
+		let mockReceivesBoundAgain = Self.mockReceivesBoundAgain(in: world)
 		let answeringDeclarations = DeclarationsAnsweringReads(
 			world: world,
 			rootLazilyInstantiatedInstanceProperties: seamTree?.rootLazilyInstantiatedInstanceProperties ?? [],
@@ -260,8 +271,16 @@ struct NodeRecords: Sendable {
 				try .alias(Self.renameRecord(of: declaration, variant: variant, in: world, answers: onlyIfAvailableAnswers, readsWrappersInstance: answeringDeclarations.renamesReadingWrappersInstance.contains(variant)))
 			case .cycle:
 				try .built(Self.cycleRecord(of: declaration, variant: variant, in: world, lazilyInstantiatedInstanceProperties: instanceProperties, typesDeclaredEscaping: escaping, children: children))
+			case .mockRename:
+				try .alias(Self.mockRenameRecord(of: declaration, variant: variant, in: world, answers: onlyIfAvailableAnswers, readsWrappersInstance: answeringDeclarations.renamesReadingWrappersInstance.contains(variant)))
 			case .mockConstruction:
-				try .built(Self.mockConstructionRecord(of: declaration, variant: variant, in: world, typesDeclaredEscaping: escaping, children: children))
+				try .built(Self.mockConstructionRecord(of: declaration, variant: variant, in: world, unavailableProperties: onlyIfAvailableAnswers.unavailableProperties(of: variant), lazilyInstantiatedInstanceProperties: instanceProperties, receivesBoundAgain: mockReceivesBoundAgain[Int(variant)], typesDeclaredEscaping: escaping, children: children))
+			case .mockUnavailableDependency:
+				try .alias(Self.mockUnavailableDependencyRecord(of: declaration, in: world))
+			case .mockErased:
+				try .built(Self.mockErasedRecord(of: declaration, variant: variant, in: world, unavailableProperties: onlyIfAvailableAnswers.unavailableProperties(of: variant), lazilyInstantiatedInstanceProperties: instanceProperties, receivesBoundAgain: mockReceivesBoundAgain[Int(variant)], typesDeclaredEscaping: escaping, children: children))
+			case .publicMockCall:
+				try .built(Self.publicMockCallRecord(of: declaration, variant: variant, in: world, receivesBoundAgain: mockReceivesBoundAgain[Int(variant)], typesDeclaredEscaping: escaping, children: children))
 			}
 			let record = Self.record(madeRecord, functionName: functionName, isMadeSendable: isMadeSendable)
 			let place: GeneratedCode = switch record {
@@ -271,10 +290,16 @@ struct NodeRecords: Sendable {
 			case .built, .closer:
 				.place(PlacePlan(code: .empty, record: record))
 			}
-			if bindsHolesPayloads, let seamHoles {
-				return (Self.placeOnRouteToHole(place, of: declaration, in: world, seamHoles: seamHoles, rootLazilyInstantiatedInstanceProperties: rootLazilyInstantiatedInstanceProperties), record, escaping)
+			// A mock's `@Sendable` function captures its override from a local its parent's body binds just before it.
+			let boundPlace: GeneratedCode = if let binding = Self.mockOverridesBindingPlace(of: declaration, record: record, in: world) {
+				.sequence([.place(PlacePlan(code: .empty, record: .built(binding))), place])
 			} else {
-				return (place, record, escaping)
+				place
+			}
+			if bindsHolesPayloads, let seamHoles {
+				return (Self.placeOnRouteToHole(boundPlace, of: declaration, in: world, seamHoles: seamHoles, rootLazilyInstantiatedInstanceProperties: rootLazilyInstantiatedInstanceProperties), record, escaping)
+			} else {
+				return (boundPlace, record, escaping)
 			}
 		}
 		let seamCallRoutes = seamTree.map { SeamCallRoutes(world: world, seamTree: $0) } ?? SeamCallRoutes()
@@ -443,7 +468,7 @@ struct NodeRecords: Sendable {
 
 	/// Every refusal `world` holds, each once, in the order of `NodeRecordRefusal`'s cases: what a test reports of a world, so
 	/// that each stage counts the worlds it frees.
-	static func refusals(in world: some NodeRecordSources, seamTree: DependencyTreeGenerator.RootScopeInfo.SeamTree? = nil, declaredTypeNames: DeclaredTypeNames?) -> [NodeRecordRefusal] {
+	static func refusals(in world: some NodeRecordSources, seamTree: DependencyTreeGenerator.RootScopeInfo.SeamTree? = nil, outerDeclarations: [Property] = [], declaredTypeNames: DeclaredTypeNames?) -> [NodeRecordRefusal] {
 		var refusals = Set<NodeRecordRefusal>()
 		for declaration in 0..<Int32(world.declarationCount) {
 			refusals.formUnion(kindAndRefusals(of: declaration, in: world).refusals)
@@ -484,7 +509,7 @@ struct NodeRecords: Sendable {
 			}
 		}
 		do {
-			_ = try OnlyIfAvailableAnswers(world: world, rootParameters: seamTree?.parameters ?? [])
+			_ = try OnlyIfAvailableAnswers(world: world, rootParameters: seamTree?.parameters ?? outerDeclarations)
 		} catch {
 			refusals.insert(error)
 		}
@@ -588,7 +613,10 @@ struct NodeRecords: Sendable {
 	private static func claim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
 		// A test's claim comes first, so that it can claim a node another kind would.
 		guard !world.isMockWorld else {
-			return testClaim(of: declaration, in: world) ?? mockConstructionClaim(of: declaration, in: world)
+			return publicMockCallClaim(of: declaration, in: world)
+				?? testClaim(of: declaration, in: world)
+				// Asked last: it claims every node of a mock root's world that no kind before it claimed.
+				?? mockConstructionClaim(of: declaration, in: world)
 		}
 		// A hole is claimed apart from the chains below, which the compiler cannot type-check as one.
 		guard let claim = testClaim(of: declaration, in: world) ?? seamHoleClaim(of: declaration, in: world) else {
@@ -661,4 +689,17 @@ enum NodeRecordKind: Sendable {
 	/// A node of a mock root's world that `builtByInitializer` would make in a production root's, which reads its override before it
 	/// calls its type's initializer (`NodeRecords+MockConstruction.swift`).
 	case mockConstruction
+	/// A node of a mock root's world that would be of kind `mockConstruction` but that it is erased: an `ErasedInstantiator`,
+	/// or a constant, an `Instantiator` or a `LazilyInstantiated` erased to its property's type, whose override returns the property's type
+	/// (`NodeRecords+MockErased.swift`).
+	case mockErased
+	/// A constant or an `Instantiator` built by a call of another module's public mock, which passes the called mock its own
+	/// `SafeDIOverrides` and fills no builder (`NodeRecords+PublicMockCall.swift`).
+	case publicMockCall
+	/// A property instantiated only if available that no declaration fulfills, in a mock root's world: bound to the
+	/// override `mock()` takes of it, or to `nil` where it takes none (`NodeRecords+MockUnavailableDependency.swift`).
+	case mockUnavailableDependency
+	/// A rename of a mock root's world, which reads no override: `rename`'s record, mapped as the mock's walk maps an erased
+	/// rename only if available (`NodeRecords+MockRename.swift`).
+	case mockRename
 }

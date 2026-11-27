@@ -91,7 +91,8 @@ struct OnlyIfAvailableAnswers: Sendable {
 	/// - Parameters:
 	///   - world: A world each of whose nodes is of a kind `NodeRecords` makes, off every cycle.
 	///   - rootParameters: A seam's parameters, which its root is handed as the nearest declarations of their labels
-	///     (`DependencyTreeGenerator.seamRootDeclarations(of:seamRoot:)`); empty for any other root.
+	///     (`DependencyTreeGenerator.seamRootDeclarations(of:seamRoot:)`), or what a mock root's body is declared inside,
+	///     the parameters of `mock()` and the overrides it binds before its nodes; empty for any other root.
 	init(world: some NodeRecordSources, rootParameters: [Property] = []) throws(NodeRecordRefusal) {
 		var labels = Set<String>()
 		for declaration in 0..<Int32(world.declarationCount) where world.kind(of: declaration) != .alias && world.kind(of: declaration) != .hole {
@@ -116,7 +117,8 @@ struct OnlyIfAvailableAnswers: Sendable {
 		// What each variant's construction sees of each followed label: what the call that reaches it sees, with the
 		// declarations of the node that calls it, in the order that node builds its children.
 		var contextByVariant = [[String: [Binding]]?](repeating: nil, count: world.variantCount)
-		// A seam's parameters are available throughout its tree, each the nearest declaration of its label.
+		// A seam's parameters, and what a mock root binds before its nodes, are available throughout the tree, each the
+		// nearest declaration of its label.
 		var rootContext = [String: [Binding]]()
 		for parameter in rootParameters where labels.contains(parameter.label) {
 			rootContext[parameter.label] = [Binding(property: parameter, state: .available)]
@@ -176,14 +178,26 @@ struct OnlyIfAvailableAnswers: Sendable {
 				}
 			}
 			// A rename only if available is bound from a property its scope creates, whatever order it is built in, else from
-			// the nearest declaration above the scope, or to `nil` (`Scope`'s `aliasBindings`).
-			for (callee, renameDeclaration) in zip(calls, edges) where world.kind(of: renameDeclaration) == .alias {
+			// a child its node builds that its scope does not create, a dependency a mock root promotes, where that child is
+			// built before the rename, else from the nearest declaration above the scope, or to `nil` (`Scope`'s
+			// `aliasBindings`).
+			for (edgeIndex, (callee, renameDeclaration)) in zip(calls, edges).enumerated() where world.kind(of: renameDeclaration) == .alias {
 				for dependency in scope.instantiable.dependencies where dependency.property == world.property(of: renameDeclaration) {
 					guard case let .aliased(fulfillingProperty, _, onlyIfAvailable: true) = dependency.source else { continue }
-					let binding: Property? = if let createdBinding = scope.createdBinding(of: fulfillingProperty) {
-						createdBinding
+					let binding: Property?
+					if let createdBinding = scope.createdBinding(of: fulfillingProperty) {
+						binding = createdBinding
 					} else {
-						try Self.binding(reading: fulfillingProperty, in: context)
+						// A rename that keeps its label is no declaration of it where its own value is read.
+						let childBindings = edges.indices.compactMap { siblingEdgeIndex -> Binding? in
+							guard world.kind(of: edges[siblingEdgeIndex]) != .alias, let property = world.property(of: edges[siblingEdgeIndex]), property.label == fulfillingProperty.label else { return nil }
+							return Binding(property: property, state: positionByEdgeIndex[siblingEdgeIndex] < positionByEdgeIndex[edgeIndex] ? .available : .builtLater)
+						}
+						var renameContext = context
+						if !childBindings.isEmpty {
+							renameContext[fulfillingProperty.label] = childBindings
+						}
+						binding = try Self.binding(reading: fulfillingProperty, in: renameContext)
 					}
 					if let binding {
 						renameBindingByVariant[Int(callee)] = .bound(fulfillingBindingIsOptional: binding.typeDescription.isOptional)

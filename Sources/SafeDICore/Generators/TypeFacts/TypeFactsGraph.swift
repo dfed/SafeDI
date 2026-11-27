@@ -129,7 +129,9 @@ struct TypeFactsGraph: Sendable {
 	/// - Parameters:
 	///   - forMockGeneration: Whether the world is a mock root's, whose receives only if available read what the mock root
 	///     binds or pins (`ReadChannel.mock`), and whose types are built with their hand-written mocks.
-	init(root: ConstructionScope, forMockGeneration: Bool) {
+	///   - mockRootNames: What a mock root's lowering names that the node records of its world read; empty for a
+	///     production root's world, and read by no fact of the graph.
+	init(root: ConstructionScope, forMockGeneration: Bool, mockRootNames: MockRootNames = MockRootNames()) {
 		// Building the graph is an edge: it reads each record's properties and labels once per node, and interns them. The
 		// walk asks for a node's edges once, when it first reaches the node, so in node order, and each edge's entry among
 		// its scope's properties to generate, or among its fills, is appended in edge order.
@@ -732,6 +734,7 @@ struct TypeFactsGraph: Sendable {
 
 		self.graph = graph
 		self.forMockGeneration = forMockGeneration
+		self.mockRootNames = mockRootNames
 		self.constructions = constructions
 		self.kinds = kinds
 		self.nodeProperties = nodeProperties
@@ -1088,6 +1091,9 @@ struct TypeFactsGraph: Sendable {
 
 	/// Whether the world is a mock root's.
 	let forMockGeneration: Bool
+
+	/// What a mock root's lowering names that the node records of its world read (`NodeRecordSources`).
+	let mockRootNames: MockRootNames
 
 	/// What each node's subtree reads from above it, by read ID.
 	let reads: ReadsFromAbove

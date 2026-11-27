@@ -103,6 +103,14 @@ extension TypeKeyLayout {
 			record.forwardedProperties.map(\.asSource).joined(separator: ","),
 			reads[body].joined(separator: ","),
 		]
+		// A function that returns the property's type spells it, and erases in its body.
+		if record.returnsPropertyType {
+			key.append("returns|\(record.property.typeDescription.asSource)|\(record.isErased)")
+		}
+		// A function that writes `return` before a lone value is another function's text.
+		if record.functionAlwaysWritesReturn {
+			key.append("writesReturn")
+		}
 		for argument in record.arguments {
 			key.append("argument|\(argument.argumentLabel)|\(argument.label)|\(argument.property.asSource)")
 		}
@@ -129,7 +137,7 @@ extension TypeKeyLayout {
 		switch statement {
 		case let .built(child):
 			guard let record = bodies[child].record else { return "" }
-			return "call|\(record.property.asSource)|\(record.isErased)|\(record.isExtension)"
+			return "call|\(record.property.asSource)|\(record.isErased && !record.returnsPropertyType)|\(record.isExtension)"
 		case let .closer(record, _):
 			return "call|\(record.property.asSource)|\(record.isErased)|\(record.isExtension)"
 		case let .inline(record):
