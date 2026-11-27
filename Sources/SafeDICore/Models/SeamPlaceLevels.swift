@@ -44,9 +44,35 @@ public struct SeamPlaceLevels: Sendable, Equatable {
 	/// (`ScopeGenerator.caseFields(ofCaseAt:hole:in:)`) than from its places, each difference. Rides alone on a value with
 	/// no seam and no places, as `fillJudgement` does. Left out of `==`.
 	public var caseFieldsMismatches = [String]()
+	/// Test only, deleted before merge: whether the seam's own signature and the callers' differ when their call shapes hold
+	/// a hole per site, and when they hold one per case (`SeamSignature.callShapeHoles(of:places:caseIndexByHole:)`), for
+	/// an observation of the comparison alone, which holds no place (`carriesComparisonOnly`). Left out of `==`.
+	public var callShapeComparison: CallShapeComparison?
+
+	/// Test only, deleted before merge: a signature's call shape, with a hole per case, beside its holes per site, for an
+	/// observation of the signature alone, which holds no place (`carriesComparisonOnly`). Left out of `==`.
+	public var callShapeFold: CallShapeFold?
+
 	/// Test only, deleted before merge: whether the value carries one of the comparisons above alone, no seam's levels.
 	public var carriesComparisonOnly: Bool {
-		fillJudgement != nil || !caseFieldsMismatches.isEmpty
+		fillJudgement != nil || !caseFieldsMismatches.isEmpty || callShapeComparison != nil || callShapeFold != nil
+	}
+
+	/// Test only, deleted before merge: a signature's call shape holes (`SeamSignature.callShapeHoles(of:places:caseIndexByHole:)`)
+	/// and its holes per site, each site with its case in the signature's place graph (`caseIndexByHole`, -1 for none),
+	/// and whether each case has an access.
+	public struct CallShapeFold: Sendable {
+		public let caseHoles: [SeamSignature.CallShape.Hole]
+		public let siteHoles: [SeamSignature.CallShape.Hole]
+		public let caseIndexBySite: [Int]
+		public let caseHasAccess: [Bool]
+	}
+
+	/// Test only, deleted before merge: what the comparison of a seam's own signature with the callers' finds, per site and
+	/// per case.
+	public struct CallShapeComparison: Sendable {
+		public let differsPerSite: Bool
+		public let differsPerCase: Bool
 	}
 
 	public static func == (lhs: SeamPlaceLevels, rhs: SeamPlaceLevels) -> Bool {

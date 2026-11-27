@@ -779,6 +779,13 @@ extension ScopeRecord {
 
 /// A scope whose generator `ScopeRecord.createScopeGenerator` is creating, with what the generator is created from once
 /// the generators of the scopes it creates exist.
+/// A case of a place graph, told apart from another graph's case of the same index by the graph's query, whose identity
+/// orders nothing.
+private struct HoldingCaseKey: Hashable {
+	let graph: ObjectIdentifier
+	let caseIndex: Int
+}
+
 private struct ScopeGeneratorUnderConstruction: Sendable {
 	/// - Parameters:
 	///   - property: The property the scope builds, with its ID in `scope`'s interner, or `nil` for a root.
@@ -1074,13 +1081,28 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			// caller's declaration, as for a label one place of the case carries and another does not.
 			let innerScopeReaders = scope.calledBuilders.map { InnerScopeReaders(enumsByKey: $0.enumsByKey) }
 			// The call holds one place per case of the called seam's place graph, and reads what every route to the case
-			// hands from the graph (`SeamSignature.placesHandedToCallers`). A place the call passes up is no case of the
-			// graph yet, and a call whose graph was not built holds every place: both read their places.
+			// hands from the graph (`SeamSignature.placesHandedToCallers`), a place the call passes up from the graph of the
+			// seam whose tree holds it (`CalledBuilders.holdingCase(ofSite:in:)`), never from the place, whose lists are its
+			// first route's only. A call whose graph was not built, or whose run does not hold the graph of a seam on the way
+			// to a place it passes up, reads its places.
 			let placesQuery = scope.calledBuilders.flatMap { $0.places.cases.isEmpty ? nil : SeamSignature.Places.Query(of: $0.places, calledPlaces: { [placesOfSeamsBeneath = $0.placesOfSeamsBeneath] in placesOfSeamsBeneath($0)?.places }) }
 			var caseFieldsByCaseKey = placesByCaseKey.mapValues { places in
-				let caseIndices = places.compactMap { scope.calledBuilders?.ownCaseIndex(ofSite: $0.site) }
-				var caseFields = if let placesQuery, let firstPlace = places.first, caseIndices.count == places.count {
-					ScopeGenerator.caseFields(ofCasesAt: caseIndices, hole: firstPlace, in: placesQuery)
+				var holdingCases = [SeamSignature.Places.Query.ResolvedCase]()
+				var holdingCasesSeen = Set<HoldingCaseKey>()
+				var readsEveryPlaceFromGraph = placesQuery != nil
+				if let placesQuery, let calledBuilders = scope.calledBuilders {
+					for place in places {
+						guard let holding = calledBuilders.holdingCase(ofSite: place.site, in: placesQuery) else {
+							readsEveryPlaceFromGraph = false
+							break
+						}
+						if holdingCasesSeen.insert(HoldingCaseKey(graph: ObjectIdentifier(holding.query), caseIndex: holding.caseIndex)).inserted {
+							holdingCases.append(holding)
+						}
+					}
+				}
+				var caseFields = if readsEveryPlaceFromGraph, let firstPlace = places.first {
+					ScopeGenerator.caseFields(ofResolvedCases: holdingCases, hole: firstPlace)
 				} else {
 					ScopeGenerator.caseFields(of: places)
 				}
@@ -1102,19 +1124,21 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 				}
 				for (caseKey, places) in placesByCaseKey.sorted(by: { $0.key < $1.key }) {
 					guard let firstPlace = places.first, let perPlace = caseFieldsByCaseKey[caseKey] else { continue }
-					var caseIndices = [Int]()
+					var holdingCases = [SeamSignature.Places.Query.ResolvedCase]()
+					var holdingCasesSeen = Set<HoldingCaseKey>()
 					for place in places {
-						if let caseIndex = calledBuilders.ownCaseIndex(ofSite: place.site), !caseIndices.contains(caseIndex) {
-							caseIndices.append(caseIndex)
+						if let holding = calledBuilders.holdingCase(ofSite: place.site, in: query), holdingCasesSeen.insert(HoldingCaseKey(graph: ObjectIdentifier(holding.query), caseIndex: holding.caseIndex)).inserted {
+							holdingCases.append(holding)
 						}
 					}
-					guard !caseIndices.isEmpty else { continue }
-					let passedUpCount = places.count(where: { calledBuilders.ownCaseIndex(ofSite: $0.site) == nil })
-					guard passedUpCount == 0 else {
-						mismatches.append("case \(caseKey): \(passedUpCount) of its places passed up beside graph cases \(caseIndices)")
+					let caseIndices = holdingCases.map(\.caseIndex)
+					guard !holdingCases.isEmpty else { continue }
+					let unresolvedCount = places.count(where: { calledBuilders.holdingCase(ofSite: $0.site, in: query) == nil })
+					guard unresolvedCount == 0 else {
+						mismatches.append("case \(caseKey): \(unresolvedCount) of its places resolve to no graph case beside graph cases \(caseIndices)")
 						continue
 					}
-					let byGraph = ScopeGenerator.caseFields(ofCasesAt: caseIndices, hole: firstPlace, in: query)
+					let byGraph = ScopeGenerator.caseFields(ofResolvedCases: holdingCases, hole: firstPlace)
 					if spelled(perPlace.fields).sorted() != spelled(byGraph.fields).sorted() {
 						mismatches.append("case \(caseKey): fields per place \(spelled(perPlace.fields)), by graph \(spelled(byGraph.fields))")
 					} else if spelled(perPlace.fields) != spelled(byGraph.fields) {

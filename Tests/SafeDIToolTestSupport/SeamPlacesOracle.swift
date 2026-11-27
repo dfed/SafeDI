@@ -301,8 +301,10 @@ public enum SeamPlacesOracle {
 			// Counted from a run's output, for the release note's line on the passed-up path.
 			print("[SeamPlacesOracle] `\(report.seamType)`: \(report.passedUpDeclarationsBehindNearerSeams) declarations behind a nearer seam's, \(report.passedUpDeclarationsBehindHoldingSeams) behind the holding seam's own")
 		}
-		guard report.mismatchCount > 0 else { return [] }
-		return ["The place graph of `\(report.seamType)` answers \(report.mismatchCount) questions otherwise than the per-site walk (\(report.sites) sites, \(report.cases) cases): " + report.mismatches.joined(separator: "; ")]
+		// The graph one walk of the tree builds must equal the one the per-site walk builds (`SeamPlacesWalkedOnceChecks`).
+		let walkedOnceMismatches = SeamPlacesWalkedOnceChecks.mismatches(of: observation)
+		guard report.mismatchCount > 0 else { return walkedOnceMismatches }
+		return walkedOnceMismatches + ["The place graph of `\(report.seamType)` answers \(report.mismatchCount) questions otherwise than the per-site walk (\(report.sites) sites, \(report.cases) cases): " + report.mismatches.joined(separator: "; ")]
 	}
 
 	/// What the per-site comparison found of a site's uncarried declarations, for the per-case one.
