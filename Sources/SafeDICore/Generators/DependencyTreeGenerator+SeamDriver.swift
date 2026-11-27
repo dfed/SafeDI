@@ -563,6 +563,7 @@ extension DependencyTreeGenerator {
 					rootLazilyInstantiatedInstanceProperties: Self.seamRootDeclarations(of: seamRootScope, seamRoot: finalSeamRoot).lazilyInstantiatedInstanceProperties,
 					parameters: finalSeamRoot.signature.parameters.map(\.property),
 					autoclosureLabels: Set(finalSeamRoot.autoclosureCallByLabel(of: seamRootScope.instantiable).keys),
+					signature: finalSeamRoot.signature,
 				),
 			))
 		}
