@@ -114,12 +114,10 @@ extension NodeRecords {
 					let sources = world.sources(ofCall: edgeIndex, of: caller)
 					let source = sources[sources.startIndex + calleePosition]
 					switch source.kind {
-					case .bound where world.answer(source.answer).form == .declared:
-						break
 					case .passedThrough:
 						pending.append((variant: caller, position: Int(source.payload)))
 					case .bound, .none:
-						throw .onlyIfAvailable
+						guard source.kind == .bound, world.answer(source.answer).form == .declared else { throw .onlyIfAvailable }
 					}
 					isCalled = true
 				}

@@ -500,11 +500,32 @@ struct SafeDIToolNodeRecordsPublicMockCallTests: ~Copyable {
 		#expect(reports.map(\.refusal) == ["onlyIfAvailable"])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_refusesCall_whenCalledMockTakesNoOverrides() async throws {
+		let (_, reports) = try await mockOfRoot(
+			feed: Self.screen(holdsAnalytics: false, receivesSession: false),
+			app: """
+			@Instantiable(generateMock: true)
+			public final class Root: Instantiable {
+			    public init(session: Session, screen: Screen) {
+			        self.session = session
+			        self.screen = screen
+			    }
+
+			    @Instantiated let session: Session
+			    @Instantiated let screen: Screen
+			}
+			""",
+		)
+		#expect(reports.map(\.refusal) == ["publicMockCallOverrideClosure"])
+	}
+
 	// MARK: Fixtures
 
 	/// `Feed`'s `Screen`, whose public mock `App` calls since its initializer is `internal`: it receives `session`, and
-	/// instantiates `analytics`, so its mock takes `SafeDIOverrides`.
-	private static func screen(forwardsID: Bool = false, holdsService: Bool = false, receivesSessionOnlyIfAvailable: Bool = false) -> String {
+	/// instantiates `analytics`, so its mock takes `SafeDIOverrides`; with neither, its mock takes none.
+	private static func screen(forwardsID: Bool = false, holdsService: Bool = false, receivesSessionOnlyIfAvailable: Bool = false, holdsAnalytics: Bool = true, receivesSession: Bool = true) -> String {
 		var parameters = [String]()
 		var assignments = [String]()
 		var properties = [String]()
@@ -513,12 +534,16 @@ struct SafeDIToolNodeRecordsPublicMockCallTests: ~Copyable {
 			assignments.append("self.id = id")
 			properties.append("@Forwarded let id: Int")
 		}
-		parameters.append(receivesSessionOnlyIfAvailable ? "session: Session?" : "session: Session")
-		assignments.append("self.session = session")
-		properties.append(receivesSessionOnlyIfAvailable ? "@Received(onlyIfAvailable: true) let session: Session?" : "@Received let session: Session")
-		parameters.append("analytics: Analytics")
-		assignments.append("self.analytics = analytics")
-		properties.append("@Instantiated let analytics: Analytics")
+		if receivesSession {
+			parameters.append(receivesSessionOnlyIfAvailable ? "session: Session?" : "session: Session")
+			assignments.append("self.session = session")
+			properties.append(receivesSessionOnlyIfAvailable ? "@Received(onlyIfAvailable: true) let session: Session?" : "@Received let session: Session")
+		}
+		if holdsAnalytics {
+			parameters.append("analytics: Analytics")
+			assignments.append("self.analytics = analytics")
+			properties.append("@Instantiated let analytics: Analytics")
+		}
 		if holdsService {
 			parameters.append("service: Service")
 			assignments.append("self.service = service")
