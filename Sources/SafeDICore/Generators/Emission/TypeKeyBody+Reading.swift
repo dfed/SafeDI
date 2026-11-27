@@ -520,7 +520,7 @@ extension TypeKeyLayout {
 		var body = body
 		var index = index
 		while body != 0,
-		      bodies[body].positionsByLabel[label]?.contains(where: { $0 < index }) != true,
+		      Self.lastPosition(in: bodies[body].positionsByLabel[label], before: index) == nil,
 		      !bodies[body].forwardedLabels.contains(label),
 		      !bodies[body].cycleParameterLabels.contains(label)
 		{
@@ -531,7 +531,7 @@ extension TypeKeyLayout {
 			index = bodies[body].position
 			body = bodies[body].parent
 		}
-		if let position = bodies[body].positionsByLabel[label]?.last(where: { $0 < index }) {
+		if let position = Self.lastPosition(in: bodies[body].positionsByLabel[label], before: index) {
 			return .statement(body: body, index: position)
 		} else if body == 0 {
 			return .none

@@ -65,12 +65,12 @@ struct SafeDIToolSeamReceiversWalkTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_user: @autoclosure @escaping @Sendable () -> User) {
 		        let user = SendableLazilyInstantiated<User>(__safeDI_user)
-		        func __safeDI_plain() -> Plain {
+		        @inline(never) func __safeDI_plain() -> Plain {
 		            let detail = Detail(user: user.instance)
 		            return Plain(detail: detail)
 		        }
 		        let plain: Plain = __safeDI_plain()
-		        @Sendable nonisolated func __safeDI_holderBuilder() -> Holder {
+		        @inline(never) @Sendable nonisolated func __safeDI_holderBuilder() -> Holder {
 		            let detail = Detail(user: user.instance)
 		            return Holder(detail: detail)
 		        }
@@ -97,12 +97,12 @@ struct SafeDIToolSeamReceiversWalkTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_user: @autoclosure @escaping @Sendable () -> User) {
 		        let user = SendableLazilyInstantiated<User>(__safeDI_user)
-		        @Sendable nonisolated func __safeDI_holderBuilder() -> Holder {
+		        @inline(never) @Sendable nonisolated func __safeDI_holderBuilder() -> Holder {
 		            let detail = Detail(user: user.instance)
 		            return Holder(detail: detail)
 		        }
 		        let holderBuilder = SendableInstantiator<Holder>(__safeDI_holderBuilder)
-		        func __safeDI_plain() -> Plain {
+		        @inline(never) func __safeDI_plain() -> Plain {
 		            let detail = Detail(user: user.instance)
 		            return Plain(detail: detail)
 		        }

@@ -191,6 +191,22 @@ struct SafeDIToolTypeFactsVariantKeyTests: ~Copyable {
 		#expect(variantCount(ofNodeDeclaring: "Child as child: Child", in: report) == 1, "\(report.world)")
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_answersBeingBuilt_whenConstantChildsOwnLabelIsReadBeneathIt() async throws {
+		// `First` builds `home` by value, and `Leaf` beneath it receives `home` only if available, so the answer `First`
+		// binds at its edge to `home` is the declaration being built, whose key text is the answer's own.
+		let report = try await rootReport(of: [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let first: First"]),
+			seamFixtureType(named: "First", isFinalClass: true, declarations: ["@Instantiated let home: Home"]),
+			seamFixtureType(named: "Home", isFinalClass: true, declarations: ["@Instantiated let leaf: Leaf"]),
+			seamFixtureType(named: "Leaf", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let home: Home?"]),
+		])
+
+		#expect(report.world.contains("bound beingBuilt"), "\(report.world)")
+		#expect(!report.world.contains("bound declared"), "\(report.world)")
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]

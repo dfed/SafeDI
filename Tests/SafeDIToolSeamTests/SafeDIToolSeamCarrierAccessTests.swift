@@ -111,11 +111,11 @@ struct SafeDIToolSeamCarrierAccessTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 		        let __safeDI_apiBuilder_screenBuilder = __safeDI_apiBuilder.screenBuilder
-		        func __safeDI_detailBuilder(__safeDI_apiBuilder_detailBuilder: __safeDI_ApiCarrier_Detail<any Api>) -> Detail {
+		        @inline(never) func __safeDI_detailBuilder(__safeDI_apiBuilder_detailBuilder: __safeDI_ApiCarrier_Detail<any Api>) -> Detail {
 		            let api: any Api = __safeDI_apiBuilder_detailBuilder.api()
 		            return Detail(api: api)
 		        }
-		        func __safeDI_screenBuilder(id: Int) -> Screen {
+		        @inline(never) func __safeDI_screenBuilder(id: Int) -> Screen {
 		            let secret = Secret()
 		            let __safeDI_Screen_values2 = __safeDI_ScreenValues2(id: id, secret: secret)
 		            let __safeDI_apiBuilder_detailBuilder = __safeDI_apiBuilder_screenBuilder.detailBuilder(__safeDI_Screen_values2)

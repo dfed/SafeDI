@@ -148,7 +148,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_serviceBuilder: __safeDI_ServiceCarrier<any Service>) {
 			        let __safeDI_serviceBuilder_panel = __safeDI_serviceBuilder.panel
-			        func __safeDI_panel() -> Panel {
+			        @inline(never) func __safeDI_panel() -> Panel {
 			            let service: any Service = __safeDI_serviceBuilder_panel.service()
 			            return Panel(service: service)
 			        }
@@ -248,13 +248,13 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_serviceBuilder: __safeDI_ServiceCarrier<any Service>) {
 			        let __safeDI_serviceBuilder_panel = __safeDI_serviceBuilder.panel
-			        func __safeDI_panel() -> Panel {
+			        @inline(never) func __safeDI_panel() -> Panel {
 			            let service: any Service = __safeDI_serviceBuilder_panel.service()
 			            return Panel(service: service)
 			        }
 			        let panel: Panel = __safeDI_panel()
 			        let __safeDI_serviceBuilder_row = __safeDI_serviceBuilder.row(panel)
-			        func __safeDI_row() -> Row {
+			        @inline(never) func __safeDI_row() -> Row {
 			            let service: any Service = __safeDI_serviceBuilder_row.service()
 			            return Row(service: service)
 			        }
@@ -346,13 +346,13 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_serviceBuilder: __safeDI_ServiceCarrier<any Service>) {
 			        let __safeDI_serviceBuilder_first = __safeDI_serviceBuilder.first
-			        func __safeDI_first() -> Panel {
+			        @inline(never) func __safeDI_first() -> Panel {
 			            let service: any Service = __safeDI_serviceBuilder_first.service()
 			            return Panel(service: service)
 			        }
 			        let first: Panel = __safeDI_first()
 			        let __safeDI_serviceBuilder_second = __safeDI_serviceBuilder.second(first)
-			        func __safeDI_second() -> Panel {
+			        @inline(never) func __safeDI_second() -> Panel {
 			            let service: any Service = __safeDI_serviceBuilder_second.service()
 			            return Panel(service: service)
 			        }
@@ -974,7 +974,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_serviceBuilder: __safeDI_ServiceCarrier<any Service>) {
-			        func __safeDI_inner() -> Inner {
+			        @inline(never) func __safeDI_inner() -> Inner {
 			            _ = Inner.__safeDI_Inner_99BD917DA5EDFC3D.self
 			            return Inner(__safeDI_serviceBuilder: __safeDI_serviceBuilder.inner)
 			        }
@@ -1098,7 +1098,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// From code you write, call the initializer above instead.
 		    public init(__safeDI_serviceBuilder: __safeDI_ServiceCarrier<any Service>) {
-		        func __safeDI_inner() -> Inner {
+		        @inline(never) func __safeDI_inner() -> Inner {
 		            _ = Inner.__safeDI_Inner_99BD917DA5EDFC3D.self
 		            return Inner(__safeDI_serviceBuilder: __safeDI_serviceBuilder.inner)
 		        }
@@ -1192,12 +1192,12 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_serviceBuilder: __safeDI_ServiceCarrier<any Service>) {
-			        func __safeDI_first() -> Inner {
+			        @inline(never) func __safeDI_first() -> Inner {
 			            _ = Inner.__safeDI_Inner_99BD917DA5EDFC3D.self
 			            return Inner(__safeDI_serviceBuilder: __safeDI_serviceBuilder.first)
 			        }
 			        let first: Inner = __safeDI_first()
-			        func __safeDI_second() -> Inner {
+			        @inline(never) func __safeDI_second() -> Inner {
 			            _ = Inner.__safeDI_Inner_99BD917DA5EDFC3D.self
 			            return Inner(__safeDI_serviceBuilder: __safeDI_serviceBuilder.second)
 			        }
@@ -1320,7 +1320,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_serviceBuilder: __safeDI_ServiceCarrier<any Service>) {
-			        func __safeDI_mid() -> Mid {
+			        @inline(never) func __safeDI_mid() -> Mid {
 			            _ = Mid.__safeDI_Mid_14E719AD28B2294D.self
 			            return Mid(__safeDI_serviceBuilder: __safeDI_serviceBuilder.mid)
 			        }
@@ -1350,7 +1350,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_serviceBuilder: __safeDI_ServiceCarrier<any Service>) {
-			        func __safeDI_deep() -> Deep {
+			        @inline(never) func __safeDI_deep() -> Deep {
 			            _ = Deep.__safeDI_Deep_24C4D6B7262EE267.self
 			            return Deep(__safeDI_serviceBuilder: __safeDI_serviceBuilder.deep)
 			        }
@@ -1424,7 +1424,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_serviceBuilder: __safeDI_ServiceCarrier<any Service>) {
-		        func __safeDI_deep() -> Deep {
+		        @inline(never) func __safeDI_deep() -> Deep {
 		            _ = Deep.__safeDI_Deep_24C4D6B7262EE267.self // If this line does not compile, compile the code SafeDI generates for module Lower into Lower: under Bazel, add Lower’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Deep(__safeDI_serviceBuilder: __safeDI_serviceBuilder.deep)
 		        }
@@ -1483,12 +1483,12 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_serviceBuilder: __safeDI_ServiceCarrier<any Service>, __safeDI_serviceSendableBuilder: __safeDI_ServiceSendableCarrier<any Service>) {
-			        func __safeDI_plain() -> Inner {
+			        @inline(never) func __safeDI_plain() -> Inner {
 			            _ = Inner.__safeDI_Inner_99BD917DA5EDFC3D.self
 			            return Inner(__safeDI_serviceBuilder: __safeDI_serviceBuilder.plain)
 			        }
 			        let plain: Inner = __safeDI_plain()
-			        @Sendable nonisolated func __safeDI_held() -> Inner {
+			        @inline(never) @Sendable nonisolated func __safeDI_held() -> Inner {
 			            _ = Inner.__safeDI_Inner_99BD917DA5EDFC3D.self
 			            return Inner(__safeDI_serviceBuilder: __safeDI_serviceSendableBuilder.held())
 			        }
@@ -1627,7 +1627,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_serviceBuilder: __safeDI_ServiceCarrier<any Service>, __safeDI_serviceSendableBuilder: __safeDI_ServiceSendableCarrier<any Service>) {
-			        func __safeDI_inner() -> Inner {
+			        @inline(never) func __safeDI_inner() -> Inner {
 			            _ = Inner.__safeDI_Inner_68297CC35FF95BC7.self
 			            return Inner(__safeDI_serviceBuilder: __safeDI_serviceBuilder.inner, __safeDI_serviceSendableBuilder: __safeDI_serviceSendableBuilder.inner_Sendable)
 			        }
@@ -1670,12 +1670,12 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_serviceBuilder: __safeDI_ServiceCarrier<any Service>, __safeDI_serviceSendableBuilder: __safeDI_ServiceSendableCarrier<any Service>) {
-			        func __safeDI_plain() -> Deep {
+			        @inline(never) func __safeDI_plain() -> Deep {
 			            _ = Deep.__safeDI_Deep_24C4D6B7262EE267.self
 			            return Deep(__safeDI_serviceBuilder: __safeDI_serviceBuilder.plain)
 			        }
 			        let plain: Deep = __safeDI_plain()
-			        @Sendable nonisolated func __safeDI_held() -> Deep {
+			        @inline(never) @Sendable nonisolated func __safeDI_held() -> Deep {
 			            _ = Deep.__safeDI_Deep_24C4D6B7262EE267.self
 			            return Deep(__safeDI_serviceBuilder: __safeDI_serviceSendableBuilder.held())
 			        }
@@ -1769,7 +1769,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_serviceSendableBuilder: __safeDI_ServiceSendableCarrier<any Service>) {
-			        @Sendable nonisolated func __safeDI_job() -> Job {
+			        @inline(never) @Sendable nonisolated func __safeDI_job() -> Job {
 			            let __safeDI_serviceSendableBuilder_job = __safeDI_serviceSendableBuilder.job()
 			            let service: any Service = __safeDI_serviceSendableBuilder_job.service()
 			            return Job(service: service)
@@ -1851,7 +1851,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_serviceSendableBuilder: __safeDI_ServiceSendableCarrier<any Service>) {
-			        func __safeDI_inner() -> Inner {
+			        @inline(never) func __safeDI_inner() -> Inner {
 			            _ = Inner.__safeDI_Inner_307337C475868692.self
 			            return Inner(__safeDI_serviceSendableBuilder: __safeDI_serviceSendableBuilder.inner_Sendable)
 			        }
@@ -1878,7 +1878,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_serviceSendableBuilder: __safeDI_ServiceSendableCarrier<any Service>) {
-			        @Sendable nonisolated func __safeDI_held() -> Inner {
+			        @inline(never) @Sendable nonisolated func __safeDI_held() -> Inner {
 			            _ = Inner.__safeDI_Inner_307337C475868692.self
 			            return Inner(__safeDI_serviceSendableBuilder: __safeDI_serviceSendableBuilder.held_Sendable)
 			        }
@@ -1907,12 +1907,12 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_serviceSendableBuilder: __safeDI_ServiceSendableCarrier<any Service>) {
-			        func __safeDI_inner() -> Inner {
+			        @inline(never) func __safeDI_inner() -> Inner {
 			            _ = Inner.__safeDI_Inner_307337C475868692.self
 			            return Inner(__safeDI_serviceSendableBuilder: __safeDI_serviceSendableBuilder.inner_Sendable)
 			        }
 			        let inner: Inner = __safeDI_inner()
-			        @Sendable nonisolated func __safeDI_held() -> Inner {
+			        @inline(never) @Sendable nonisolated func __safeDI_held() -> Inner {
 			            _ = Inner.__safeDI_Inner_307337C475868692.self
 			            return Inner(__safeDI_serviceSendableBuilder: __safeDI_serviceSendableBuilder.held_Sendable)
 			        }
@@ -1974,7 +1974,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_serviceBuilder: __safeDI_ServiceCarrier<any Service>) {
-			        func __safeDI_bBuilder() -> B {
+			        @inline(never) func __safeDI_bBuilder() -> B {
 			            _ = B.__safeDI_B_4310AAFCAAE5697A.self
 			            return B(__safeDI_serviceBuilder: __safeDI_serviceBuilder.bBuilder())
 			        }
@@ -2005,7 +2005,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_serviceBuilder: __safeDI_ServiceCarrier<any Service>) {
-			        func __safeDI_aBuilder() -> A {
+			        @inline(never) func __safeDI_aBuilder() -> A {
 			            _ = A.__safeDI_A_4310AAFCAAE5697A.self
 			            return A(__safeDI_serviceBuilder: __safeDI_serviceBuilder.aBuilder())
 			        }
@@ -2091,7 +2091,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_serviceBuilder: __safeDI_ServiceCarrier<any Service>, __safeDI_serviceSendableBuilder: __safeDI_ServiceSendableCarrier<any Service>) {
-			        func __safeDI_bBuilder() -> B {
+			        @inline(never) func __safeDI_bBuilder() -> B {
 			            _ = B.__safeDI_B_1FF857DACA85E0C8.self
 			            return B(__safeDI_serviceSendableBuilder: __safeDI_serviceSendableBuilder.bBuilder_Sendable())
 			        }
@@ -2124,7 +2124,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_serviceSendableBuilder: __safeDI_ServiceSendableCarrier<any Service>) {
-			        @Sendable nonisolated func __safeDI_aBuilder() -> A {
+			        @inline(never) @Sendable nonisolated func __safeDI_aBuilder() -> A {
 			            _ = A.__safeDI_A_0CBC6A899F21E707.self
 			            return A(__safeDI_serviceBuilder: __safeDI_serviceSendableBuilder.aBuilder(), __safeDI_serviceSendableBuilder: __safeDI_serviceSendableBuilder.aBuilder_Sendable())
 			        }
@@ -2198,7 +2198,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_serviceBuilder: __safeDI_ServiceCarrier<any Service>) {
-			        func __safeDI_nextBuilder() -> S {
+			        @inline(never) func __safeDI_nextBuilder() -> S {
 			            _ = S.__safeDI_S_004BE8E9F6F4AA37.self
 			            return S(__safeDI_serviceBuilder: __safeDI_serviceBuilder.nextBuilder())
 			        }
@@ -2285,8 +2285,8 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_serviceBuilder: __safeDI_ServiceCarrier<any Service>) {
 			        let __safeDI_serviceBuilder_step = __safeDI_serviceBuilder.step()
-			        func __safeDI_step() -> Step {
-			            func __safeDI_sBuilder() -> S {
+			        @inline(never) func __safeDI_step() -> Step {
+			            @inline(never) func __safeDI_sBuilder() -> S {
 			                _ = S.__safeDI_S_2503D99080B73F48.self
 			                return S(__safeDI_serviceBuilder: __safeDI_serviceBuilder_step.sBuilder())
 			            }
@@ -2364,12 +2364,12 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_serviceBuilder: __safeDI_ServiceCarrier<any Service>) {
-		        func __safeDI_bBuilder() -> B {
+		        @inline(never) func __safeDI_bBuilder() -> B {
 		            _ = B.__safeDI_B_60CD4BBEB4782A0F.self
 		            return B(__safeDI_serviceBuilder: __safeDI_serviceBuilder.bBuilder())
 		        }
 		        let bBuilder = Instantiator<B>(__safeDI_bBuilder)
-		        func __safeDI_c() -> C {
+		        @inline(never) func __safeDI_c() -> C {
 		            _ = C.__safeDI_C_04E4814C5A0B918A.self
 		            return C(__safeDI_serviceBuilder: __safeDI_serviceBuilder.c)
 		        }
@@ -2399,7 +2399,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_serviceBuilder: __safeDI_ServiceCarrier<any Service>) {
-		        func __safeDI_aBuilder() -> A {
+		        @inline(never) func __safeDI_aBuilder() -> A {
 		            _ = A.__safeDI_A_60CD4BBEB4782A0F.self
 		            return A(__safeDI_serviceBuilder: __safeDI_serviceBuilder.aBuilder())
 		        }
@@ -2452,7 +2452,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		extension A {
 		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public init() {
-		        func __safeDI_bBuilder() -> B {
+		        @inline(never) func __safeDI_bBuilder() -> B {
 		            _ = B.__safeDI_B_CBF29CE484222325.self
 		            return B()
 		        }
@@ -2468,7 +2468,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		extension B {
 		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public init() {
-		        func __safeDI_aBuilder() -> A {
+		        @inline(never) func __safeDI_aBuilder() -> A {
 		            _ = A.__safeDI_A_CBF29CE484222325.self
 		            return A()
 		        }
@@ -3078,7 +3078,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    package init(__safeDI_serviceBuilder: __safeDI_ServiceCarrier<any Service>) {
-		        func __safeDI_inner() -> Inner {
+		        @inline(never) func __safeDI_inner() -> Inner {
 		            _ = Inner.__safeDI_Inner_BEC663BFAF038116.self
 		            return Inner(__safeDI_serviceBuilder: __safeDI_serviceBuilder.inner)
 		        }
@@ -3199,7 +3199,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_serviceBuilder: __safeDI_ServiceCarrier<any Service>) {
-		        func __safeDI_deep() -> Deep {
+		        @inline(never) func __safeDI_deep() -> Deep {
 		            _ = Deep.__safeDI_Deep_24C4D6B7262EE267.self // If this line does not compile, compile the code SafeDI generates for module Lower into Lower: under Bazel, add Lower’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Deep(__safeDI_serviceBuilder: __safeDI_serviceBuilder.deep)
 		        }
@@ -4068,7 +4068,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_Type Type: Kind, __safeDI_init `init`: Name, __safeDI_serviceBuilder: __safeDI_ServiceCarrier<any Service>, __safeDI_serviceSendableBuilder: __safeDI_ServiceSendableCarrier<any Service>) {
 			        let zsvc: any Service = __safeDI_serviceBuilder.zsvc(Type, `init`)
-			        @Sendable nonisolated func __safeDI_job() -> Job {
+			        @inline(never) @Sendable nonisolated func __safeDI_job() -> Job {
 			            let __safeDI_serviceSendableBuilder_job = __safeDI_serviceSendableBuilder.job()
 			            let service: any Service = __safeDI_serviceSendableBuilder_job.service()
 			            return Job(service: service)
@@ -4175,7 +4175,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_serviceBuilder: __safeDI_ServiceCarrier<any Service>) {
-			        func __safeDI_inner() -> `My Inner` {
+			        @inline(never) func __safeDI_inner() -> `My Inner` {
 			            _ = `My Inner`.`__safeDI_My Inner_A1B351F30D3C02C7`.self
 			            return `My Inner`(__safeDI_serviceBuilder: __safeDI_serviceBuilder.inner)
 			        }
