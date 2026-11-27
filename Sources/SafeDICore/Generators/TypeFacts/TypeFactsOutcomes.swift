@@ -20,7 +20,7 @@
 
 /// What each variant of a world uses for each of its reads from above: `nil`, a statement of the root's body that its
 /// function captures, that statement read into a local before a `@Sendable` function that could not capture it, or a
-/// parameter (design section 4, point 3). It is the type key's `computeOutcomes` taken over the call edges between
+/// parameter. It is the type key's `computeOutcomes` taken over the call edges between
 /// variants instead of over the places of a tree, so that it costs one join per source of a call edge, however many
 /// paths reach a variant.
 ///

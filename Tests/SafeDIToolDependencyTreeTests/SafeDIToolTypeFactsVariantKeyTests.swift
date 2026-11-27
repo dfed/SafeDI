@@ -77,8 +77,8 @@ struct SafeDIToolTypeFactsVariantKeyTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_keysVariantPerParameterType_whenReceiveOnlyIfAvailableIsAnsweredLazilyUnderOneParentAndNilUnderTheOther() async throws {
-		// `nil` keys apart from a lazy wrapper's answer until rule 3 is ruled, which would let a `nil` wrapper parameter
-		// stand for it: this count is the one that ruling changes.
+		// `nil` keys apart from a lazy wrapper's answer until rule 3's second stage, which lets a `nil` wrapper parameter
+		// stand for it: this count is the one that stage changes.
 		let report = try await rootReport(of: [
 			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let first: First", "@Instantiated let second: Second"]),
 			seamFixtureType(named: "First", isFinalClass: true, declarations: ["@Instantiated let x: LazilyInstantiated<X>", "@Instantiated let child: Child"]),
@@ -205,6 +205,23 @@ struct SafeDIToolTypeFactsVariantKeyTests: ~Copyable {
 
 		#expect(report.world.contains("bound beingBuilt"), "\(report.world)")
 		#expect(!report.world.contains("bound declared"), "\(report.world)")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_answersNone_whenParentBindsReadLabelAfterTheCall() async throws {
+		// `Second` receives `first`, so `Root` builds `first` before `second`, and `Leaf` beneath `first` receives `second`
+		// only if available: at the edge to `first` nothing of `Root` answers `second` yet, and `Leaf` is handed nil, as the
+		// generated code passes it.
+		let report = try await rootReport(of: [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let first: First", "@Instantiated let second: Second"]),
+			seamFixtureType(named: "First", isFinalClass: true, declarations: ["@Instantiated let leaf: Leaf"]),
+			seamFixtureType(named: "Second", isFinalClass: true, declarations: ["@Received let first: First"]),
+			seamFixtureType(named: "Leaf", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let second: Second?"]),
+		])
+
+		// `Second` receives `first`, so `Root` builds `first` first: its call answers `second`'s two reads none.
+		#expect(report.world.contains("v0 d0 plain keys [] calls [1, 2] sources [[\"bound beingBuilt\", \"none\", \"none\"], [\"bound declared\", \"bound beingBuilt\"]]"), "\(report.world)")
 	}
 
 	// MARK: Private
