@@ -80,7 +80,8 @@ extension TypeKeyLayout {
 					typesDeclaredEscaping.insert(argument.type)
 				}
 			}
-			var value = Expression.construction(representative.target, arguments: arguments)
+			let returnType = representative.returnsPropertyType ? representative.property.typeDescription.asInstantiatedTypeSpelledAsDeclared : representative.concreteType
+			var value = Expression.construction(representative.target, arguments: arguments).erased(to: returnType, where: representative.returnsPropertyType && representative.isErased)
 			if !representative.alternatives.isEmpty || representative.constructionValue != nil {
 				guard let construction = spelledConstruction(of: representative, call: value.spelled, argumentValues: argumentValues, inClass: owner, before: statements(ofClass: owner).count) else { return nil }
 				value = .spelledConstruction(construction)
@@ -90,7 +91,7 @@ extension TypeKeyLayout {
 				isSendable: isDecorated[owner],
 				parameters: parameters,
 				typesDeclaredEscaping: typesDeclaredEscaping,
-				returnType: representative.concreteType,
+				returnType: returnType,
 				body: BuilderBody(statements: body),
 				value: value,
 				lineEnd: representative.lineEnd,
@@ -139,7 +140,8 @@ extension TypeKeyLayout {
 			return "\(leadingLine)\(declaration.spelled) = \(value)\(record.lineEnd)"
 		case let .built(child):
 			guard let record = bodies[child].record else { return nil }
-			return spelledCall(of: classByBody[child], binding: record.property, isErased: record.isErased, isExtension: record.isExtension, inClass: owner, at: index)
+			// A function that returns the property's type has erased what it returns.
+			return spelledCall(of: classByBody[child], binding: record.property, isErased: record.isErased && !record.returnsPropertyType, isExtension: record.isExtension, inClass: owner, at: index)
 		case let .closer(record, target):
 			return spelledCall(of: classByBody[target], binding: record.property, isErased: record.isErased, isExtension: record.isExtension, inClass: owner, at: index)
 		case let .alias(record):

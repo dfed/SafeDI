@@ -38,8 +38,6 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	/// A mock root's node's type takes, in its initializer or its hand-written mock, a value no dependency fulfills, as a
 	/// parameter with a default value is, which a mock holds in the type's configuration.
 	case mockDefaultValuedParameter
-	/// A mock root's node is an actor, whose arguments a mock sends it.
-	case mockActor
 	/// A mock root's node whose override is not its parent's field under the node's own label: two children of one node
 	/// share a label, which a mock root names apart.
 	case mockOverrideNotParentField
@@ -209,7 +207,9 @@ struct NodeRecords: Sendable {
 			case .rename:
 				try .alias(Self.renameRecord(of: declaration, variant: variant, in: world, answers: onlyIfAvailableAnswers))
 			case .mockConstruction:
-				try .built(Self.mockConstructionRecord(of: declaration, variant: variant, in: world, typesDeclaredEscaping: escaping, children: children))
+				try .built(Self.mockConstructionRecord(of: declaration, variant: variant, in: world, unavailableProperties: onlyIfAvailableAnswers.unavailableProperties(of: variant), typesDeclaredEscaping: escaping, children: children))
+			case .mockErased:
+				try .built(Self.mockErasedRecord(of: declaration, variant: variant, in: world, unavailableProperties: onlyIfAvailableAnswers.unavailableProperties(of: variant), typesDeclaredEscaping: escaping, children: children))
 			case .publicMockCall:
 				try .built(Self.publicMockCallRecord(of: declaration, variant: variant, in: world, typesDeclaredEscaping: escaping, children: children))
 			}
@@ -400,6 +400,10 @@ enum NodeRecordKind: Sendable {
 	/// A node of a mock root's world that stage 1 would make in a production root's, which reads its override before it
 	/// calls its type's initializer (`NodeRecords+MockConstruction.swift`).
 	case mockConstruction
+	/// A node of a mock root's world that would be of kind `mockConstruction` but that it is erased: an `ErasedInstantiator`,
+	/// or a constant or an `Instantiator` erased to its property's type, whose override returns the property's type
+	/// (`NodeRecords+MockErased.swift`).
+	case mockErased
 	/// A constant or an `Instantiator` built by a call of another module's public mock, which passes the called mock its own
 	/// `SafeDIOverrides` and fills no builder (`NodeRecords+PublicMockCall.swift`).
 	case publicMockCall
