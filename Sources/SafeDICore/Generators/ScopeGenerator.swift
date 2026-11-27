@@ -8095,38 +8095,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// apart, because its place carries a field or its tree reads a value labeled `scope`, which the dispatcher's own
 	/// parameter would hide: it keeps its function.
 	private static func inlinedFill(of fill: ScopeGenerator, code: String, leadingMemberWhitespace: String) -> FillDispatcher.InlinedFill? {
-		// A fill is its function's declaration, its body, and the line closing it.
-		let lines = GeneratedCodeText.lines(of: code)
-		let valuesType = fill.fillHole?.valuesType(qualifiedBy: nil)
-		let carriesPayload = valuesType != nil
-		// A seam's carrier hands the fill the payload's fields as arguments, the first named `scope_<label>`
-		// (`SeamHoles.argumentName(of:inPayloadNamed:)`), where a builder struct hands it the payload named `scope`.
-		let argumentFields: [SeamSignature.Hole.Field]? = if case let .nested(_, enumType, _)? = valuesType, ReservedName.seamCarrier(ofEnum: enumType) != nil {
-			fill.fillHole.map { $0.enumPlace?.values ?? $0.fields } ?? []
-		} else {
-			nil
-		}
-		let scopePrefix = argumentFields.map { fields in (fill.fillCarrierUse?.parameterNames(of: fields, inPayloadNamed: "scope") ?? fields.map { SeamHoles.argumentName(of: $0, inPayloadNamed: "scope") }).first.map { "(_ \($0): " } ?? "(" } ?? "(_ scope: "
-		guard lines.count > 2,
-		      !carriesPayload || lines[0].contains(scopePrefix),
-		      lines[lines.count - 1] == leadingMemberWhitespace + "}"
-		else { return nil }
-		let body = lines[1..<(lines.count - 1)].map { Self.standardIndent + $0 }
-		// The fill binds the fields its tree reads first, each from the scope; nothing after them reads the scope.
-		// safedi-source-rule: allow stringScan — reads the first line of one inlined fill, once per fill.
-		let readsScope = carriesPayload && lines[1].hasPrefix(leadingMemberWhitespace + Self.standardIndent + "let ") && (lines[1].contains(" = scope.") || (argumentFields != nil && lines[1].contains(" = scope_")))
-		let builtProperty = fill.propertiesToGenerate.first?.property
-		let forwardedValueName = fill.fillHole?.forwardedType == nil ? nil : builtProperty.map(Self.forwardedValueParameterName(forBuilding:))
-		let readsForwardedValue = forwardedValueName.map { name in
-			body.contains { line in GeneratedCodeText.containsIdentifier(name, in: line) }
-		} ?? false
-		return FillDispatcher.InlinedFill(
-			carriesPayload: carriesPayload,
-			readsScope: readsScope,
-			forwardedValueName: forwardedValueName,
-			readsForwardedValue: readsForwardedValue,
-			body: body,
-		)
+		FillDispatcher.InlinedFill(hole: fill.fillHole, carrierUse: fill.fillCarrierUse, builtProperty: fill.propertiesToGenerate.first?.property, code: code, leadingMemberWhitespace: leadingMemberWhitespace)
 	}
 
 	/// The facts the tree builds each fill of a seam call no fill encloses with, by the fill's key, as projections
@@ -9836,7 +9805,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	/// The name of the parameter that holds the value an instantiator forwards, in a fill of a hole's `property`: named
 	/// apart from the function that builds the property, which it would hide, or be hidden by.
-	private static func forwardedValueParameterName(forBuilding property: Property) -> String {
+	nonisolated static func forwardedValueParameterName(forBuilding property: Property) -> String {
 		let name = ReservedName.forwardedValueParameterName
 		return functionName(toBuild: property) == name ? "\(name)_" : name
 	}

@@ -39,6 +39,11 @@ public enum NodeRecordsObservation {
 	/// (`DependencyTreeGenerator.nodeRecordsLayout`). Off until the switch to node records lands: only a test turns it on.
 	@TaskLocal public static var buildsNoTreeForAcceptedRoots = false
 
+	/// Whether node records make the record of a root's seam call that fills places of the seam it calls
+	/// (`NodeRecords.filledSeamCallRecord`) where its records assemble, rather than refusing it as `fill`. Off until the
+	/// engine lays every such call out as the tree writes it: only a test turns it on.
+	@TaskLocal public static var recordsFilledCalls = false
+
 	/// The nodes a test claims as a kind would (`NodeRecords.claim(of:in:)`), by their concrete type's name, each
 	/// with the raw values of the refusals the claim discharges. Only a test sets it.
 	@TaskLocal public static var claimsForTesting = [String: [String]]()
@@ -90,6 +95,11 @@ public enum NodeRecordsObservation {
 				}
 				let placePath = "\(path).\(label)"
 				guard case let .place(treePlan) = treeInner.node, let treeRecord = treePlan.record else {
+					// The tree plans no call that fills a place (`ScopeGenerator.seamCallRecord`), whose record node records make
+					// alone: the root's text, which the engine lays out from it, is compared instead.
+					if case let .alias(nodeRecordsAlias) = nodeRecordsRecord, let call = nodeRecordsAlias.call, !(call.record.callFields?.builtClosures.isEmpty ?? true) {
+						continue
+					}
 					differences.append("\(placePath): the tree writes no place’s record")
 					continue
 				}

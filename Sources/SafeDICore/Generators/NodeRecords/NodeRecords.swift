@@ -117,6 +117,9 @@ protocol NodeRecordSources: TypeFactsWorld {
 	func text(ofLabel label: WorldLabelID) -> String
 	/// Whether the world is a mock root's, each of whose nodes reads its override.
 	var isMockWorld: Bool { get }
+	/// The records of `call`, a seam call of a root's tree that fills places of the seam it calls (`FilledCallRecords`), or
+	/// why node records leave the call to the tree.
+	func filledCallRecords(of call: DeclarationID) -> Result<FilledCallRecords, NodeRecordRefusal>
 }
 
 extension TypeFactsGraph: NodeRecordSources {
@@ -134,6 +137,12 @@ extension TypeFactsGraph: NodeRecordSources {
 
 	func text(ofLabel label: WorldLabelID) -> String {
 		labelTexts[Int(label)]
+	}
+
+	func filledCallRecords(of call: DeclarationID) -> Result<FilledCallRecords, NodeRecordRefusal> {
+		// A call of a root's tree is reached on one route (`NodeRecordRefusal.fillCallSeveralVariants`).
+		let variant = (0..<Int32(variantCount)).first { declaration(of: $0) == call } ?? 0
+		return Result { () throws(NodeRecordRefusal) -> FilledCallRecords in try FilledCallRecords.of(call: call, variant: variant, in: self, reservedNames: []) }
 	}
 }
 
@@ -249,10 +258,13 @@ struct NodeRecords: Sendable {
 			// A call of a seam spells the builder types its signature declares `@escaping` so, as its tree does.
 			escaping.formUnion(scope.seamCall?.typesDeclaredEscaping ?? [])
 			var children = [GeneratedCode]()
+			// Each child's declaration and place before it is indented, which a filled call's fills are built from.
+			var childPlaces = [(declaration: DeclarationID, place: GeneratedCode)]()
 			for edgeIndex in order.edgeIndices(of: declaration) {
 				let callee = Int(calls[calls.startIndex + edgeIndex])
 				escaping.formUnion(typesDeclaredEscaping[callee] ?? [])
 				children.append(.indented(places[callee] ?? .empty, by: ScopeGenerator.standardIndent))
+				childPlaces.append((world.declaration(of: VariantID(callee)), places[callee] ?? .empty))
 			}
 			// A member of a loop of builders first makes again the members its tree receives, whatever its kind
 			// (`NodeRecords+Loops.swift`).
@@ -267,7 +279,10 @@ struct NodeRecords: Sendable {
 			case .inlineSeam:
 				try .built(Self.inlineSeamRecord(of: declaration, variant: variant, in: world, lazilyInstantiatedInstanceProperties: instanceProperties, typesDeclaredEscaping: escaping, children: children))
 			case .seamCall:
-				try .alias(Self.seamCallRecord(of: declaration, variant: variant, in: world, routes: seamCallRoutes, lazilyInstantiatedInstanceProperties: instanceProperties, typesDeclaredEscaping: escaping, children: children))
+				// A filled call's record holds its fills and dispatchers (`filledSeamCallRecord`).
+				try .alias(Self.fillsAPlace(declaration, in: world)
+					? Self.filledSeamCallRecord(of: declaration, variant: variant, in: world, isInSeamTree: seamTree != nil, lazilyInstantiatedInstanceProperties: instanceProperties, typesDeclaredEscaping: escaping, childPlaces: childPlaces, typesDeclaredEscapingOf: { typesDeclaredEscaping[Int(variantByDeclaration[Int($0)])] ?? [] })
+					: Self.seamCallRecord(of: declaration, variant: variant, in: world, routes: seamCallRoutes, lazilyInstantiatedInstanceProperties: instanceProperties, typesDeclaredEscaping: escaping, children: children))
 			case .receivesOnlyIfAvailable:
 				try .built(Self.receivesOnlyIfAvailableRecord(
 					of: declaration,
@@ -289,8 +304,17 @@ struct NodeRecords: Sendable {
 			records[Int(variant)] = record
 			let place: GeneratedCode = switch record {
 			case let .alias(aliasRecord):
-				// A place written as text: the engine copies it as written.
-				.place(PlacePlan(code: .text(aliasRecord.text), record: record))
+				if let call = aliasRecord.call, case let statements = call.statementsBeforeLeadingStatement + call.statementsAfterLeadingStatement, statements.contains(where: \.holdsRootFunction) {
+					// A call written in place whose function declares a root function (a filled call's dispatcher): the place
+					// holds its statements, so the root finds the function to declare once (`RootFunctionHoisting`).
+					.place(PlacePlan(code: .sequence(statements), record: record))
+				} else {
+					// A place written as text: the engine copies it as written.
+					.place(PlacePlan(code: .text(aliasRecord.text), record: record))
+				}
+			case let .built(builtRecord) where builtRecord.children.contains(where: \.holdsRootFunction):
+				// A place whose tree holds a root function holds its children, so the root finds the function to declare once.
+				.place(PlacePlan(code: .sequence(builtRecord.children), record: record))
 			case .built, .closer:
 				.place(PlacePlan(code: .empty, record: record))
 			}
@@ -487,6 +511,7 @@ struct NodeRecords: Sendable {
 				?? filledSeamCallClaim(of: declaration, in: world)
 				?? seamCallClaim(of: declaration, in: world)
 			return seamClaim
+				?? fillClaim(of: declaration, in: world)
 				?? unavailableDependencyClaim(of: declaration, in: world)
 				?? receivesOnlyIfAvailableClaim(of: declaration, in: world)
 				?? renameClaim(of: declaration, in: world)
