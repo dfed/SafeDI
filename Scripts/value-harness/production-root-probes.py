@@ -251,6 +251,91 @@ probe("two-modules-cycle", two([
     root("AppRoot", [(I, "viewer", "Viewer"), (I, "feedBuilder", "Instantiator<Feed>"), (I, "local", "LocalReader")]),
     cls("LocalReader", [(R, "viewer", "Viewer")]),
 ]))
+# --- Cycles node records lay out, or will (shapes of SafeDIToolNodeRecordsCycleTests) ----------------------------
+probe("records-two-types-instantiate-each-other", one(
+    root("Root", [(I, "aBuilder", "Instantiator<Alpha>")]),
+    cls("Alpha", [(I, "bBuilder", "Instantiator<Beta>")]),
+    cls("Beta", [(I, "aBuilder", "Instantiator<Alpha>")]),
+))
+probe("records-value-declared-after-builder", one(
+    root("Root", [(I, "aBuilder", "Instantiator<Alpha>")]),
+    cls("Alpha", [(I, "bBuilder", "Instantiator<Beta>"), (I, "model", "Model")]),
+    cls("Beta", [(R, "model", "Model"), (I, "aBuilder", "Instantiator<Alpha>")]),
+    cls("Model"),
+))
+probe("records-cycle-closes-through-constant", one(
+    root("Root", [(I, "aBuilder", "Instantiator<Alpha>")]),
+    cls("Alpha", [(I, "b", "Beta")]),
+    cls("Beta", [(I, "aBuilder", "Instantiator<Alpha>")]),
+))
+probe("records-two-branches-close-on-one-place", one(
+    root("Root", [(I, "aBuilder", "Instantiator<Alpha>")]),
+    cls("Alpha", [(I, "bBuilder", "Instantiator<Beta>"), (I, "cBuilder", "Instantiator<Gamma>")]),
+    cls("Beta", [(I, "cBuilder", "Instantiator<Gamma>")]),
+    cls("Gamma", [(I, "aBuilder", "Instantiator<Alpha>")]),
+))
+probe("records-member-closes-on-another-place", one(
+    root("Root", [(I, "aBuilder", "Instantiator<Alpha>")]),
+    cls("Alpha", [(I, "bBuilder", "Instantiator<Beta>"), (I, "cBuilder", "Instantiator<Gamma>")]),
+    cls("Beta", [(I, "cBuilder", "Instantiator<Gamma>")]),
+    cls("Gamma", [(I, "bBuilder", "Instantiator<Beta>"), (I, "aBuilder", "Instantiator<Alpha>")]),
+))
+probe("records-type-receives-builder-of-cycle", one(
+    root("Root", [(I, "screenBuilder", "Instantiator<Screen>")]),
+    cls("Screen", [(I, "stepBuilder", "Instantiator<Step>"), (I, "detail", "Detail")]),
+    cls("Detail", [(R, "screenBuilder", "Instantiator<Screen>")]),
+    cls("Step", [(I, "screenBuilder", "Instantiator<Screen>")]),
+))
+probe("records-member-receives-only-if-available", one(
+    root("Root", [(I, "session", "Session"), (I, "aBuilder", "Instantiator<Alpha>")]),
+    cls("Session"),
+    cls("Alpha", [(I, "bBuilder", "Instantiator<Beta>")]),
+    cls("Beta", [(RO, "session", "Session?"), (I, "aBuilder", "Instantiator<Alpha>")]),
+))
+probe("records-builder-name-shared-by-another-type", one(
+    root("Root", [(I, "aBuilder", "Instantiator<Alpha>"), (I, "other", "Other")]),
+    cls("Alpha", [(I, "bBuilder", "Instantiator<Beta>")]),
+    cls("Beta", [(I, "aBuilder", "Instantiator<Alpha>")]),
+    cls("Other", [(I, "aBuilder", "Instantiator<Leaf>")]),
+    cls("Leaf"),
+))
+probe("records-builder-name-shared-by-two-cycles", one(
+    root("Root", [(I, "left", "LeftHub"), (I, "right", "RightHub")]),
+    cls("LeftHub", [(I, "aBuilder", "Instantiator<LeftA>")]),
+    cls("LeftA", [(I, "bBuilder", "Instantiator<LeftB>")]),
+    cls("LeftB", [(I, "aBuilder", "Instantiator<LeftA>")]),
+    cls("RightHub", [(I, "aBuilder", "Instantiator<RightA>")]),
+    cls("RightA", [(I, "bBuilder", "Instantiator<RightB>"), (I, "mark", "Mark")]),
+    cls("RightB", [(I, "aBuilder", "Instantiator<RightA>"), (R, "mark", "Mark")]),
+    cls("Mark"),
+))
+probe("records-sendable-closing", one(
+    root("Root", [(I, "session", "Session"), (I, "aBuilder", "SendableInstantiator<Alpha>")], sendable=True),
+    cls("Session", sendable=True),
+    cls("Alpha", [(I, "bBuilder", "SendableInstantiator<Beta>")], sendable=True),
+    cls("Beta", [(R, "session", "Session"), (I, "aBuilder", "SendableInstantiator<Alpha>")], sendable=True),
+))
+probe("records-sendable-closing-beneath-plain-builder", one(
+    root("Root", [(I, "session", "Session"), (I, "aBuilder", "Instantiator<Alpha>")]),
+    cls("Session", sendable=True),
+    cls("Alpha", [(I, "bBuilder", "SendableInstantiator<Beta>"), (I, "tag", "Tag")], sendable=True),
+    cls("Tag", sendable=True),
+    cls("Beta", [(R, "tag", "Tag"), (RO, "session", "Session?"), (I, "aBuilder", "SendableInstantiator<Alpha>")], sendable=True),
+))
+probe("records-sendable-closing-beside-shared-name", one(
+    root("Root", [(I, "aBuilder", "SendableInstantiator<Alpha>"), (I, "other", "Other")]),
+    cls("Alpha", [(I, "bBuilder", "SendableInstantiator<Beta>")], sendable=True),
+    cls("Beta", [(I, "aBuilder", "SendableInstantiator<Alpha>")], sendable=True),
+    cls("Other", [(I, "aBuilder", "Instantiator<Leaf>")]),
+    cls("Leaf"),
+))
+probe("records-sendable-and-plain-closings", one(
+    root("Root", [(I, "aBuilder", "Instantiator<Alpha>")]),
+    cls("Alpha", [(I, "bBuilder", "SendableInstantiator<Beta>"), (I, "cBuilder", "Instantiator<Gamma>")]),
+    cls("Beta", [(I, "token", "Token")], sendable=True),
+    cls("Token", sendable=True),
+    cls("Gamma", [(I, "aBuilder", "Instantiator<Alpha>"), (I, "bBuilder", "SendableInstantiator<Beta>")]),
+))
 
 if os.path.exists(OUT):
     shutil.rmtree(OUT)
