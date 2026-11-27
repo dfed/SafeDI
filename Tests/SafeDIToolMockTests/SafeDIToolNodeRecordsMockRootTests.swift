@@ -135,6 +135,74 @@ struct SafeDIToolNodeRecordsMockRootTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_worksOutEachSharedNodesDomainOnce_whenThreeMockRootsShareSubtree() async throws {
+		let fixture = [
+			"""
+			@Instantiable(generateMock: true)
+			public struct AlphaScreen: Instantiable {
+			    public init(storeBuilder: Instantiator<SessionStore>) {
+			        self.storeBuilder = storeBuilder
+			    }
+
+			    @Instantiated let storeBuilder: Instantiator<SessionStore>
+			}
+			""",
+			"""
+			@Instantiable(generateMock: true)
+			public struct BetaScreen: Instantiable {
+			    public init(storeBuilder: Instantiator<SessionStore>) {
+			        self.storeBuilder = storeBuilder
+			    }
+
+			    @Instantiated let storeBuilder: Instantiator<SessionStore>
+			}
+			""",
+			"""
+			@Instantiable(generateMock: true)
+			public struct GammaScreen: Instantiable {
+			    public init(storeBuilder: Instantiator<SessionStore>) {
+			        self.storeBuilder = storeBuilder
+			    }
+
+			    @Instantiated let storeBuilder: Instantiator<SessionStore>
+			}
+			""",
+			"""
+			@Instantiable
+			public struct SessionStore: Instantiable {
+			    public init(clockBuilder: Instantiator<Clock>) {
+			        self.clockBuilder = clockBuilder
+			    }
+
+			    @Instantiated let clockBuilder: Instantiator<Clock>
+			}
+			""",
+			"""
+			@Instantiable
+			public struct Clock: Instantiable {
+			    public init() {}
+			}
+			""",
+		]
+		let (stream, continuation) = AsyncStream.makeStream(of: GenerationWork.self)
+		let (_, reports) = try await GenerationWork.$observer.withValue({ continuation.yield($0) }) {
+			try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
+				try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+			}
+		}
+		continuation.finish()
+		var domainCount = 0
+		for await work in stream where work.step == .computingPlanNodeDomains {
+			domainCount += work.elementCount
+		}
+		// `storeBuilder` and `clockBuilder` are the same two nodes in every world: their domains are worked out once for the
+		// three roots, where each root's layout worked out both.
+		#expect(domainCount == 2)
+		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [true, true, true])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_handsOneFunctionEachParentsOverrides_whenConfiguredTypeIsBuiltUnderTwoParents() async throws {
 		let fixture = [
 			"""

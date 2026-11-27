@@ -61,7 +61,7 @@ extension ScopeGenerator {
 			report(refusal: .mockRootBindsOtherThanNodes, everyRefusal: [.mockRootBindsOtherThanNodes], isLaidOut: false, recordCount: 0)
 			return nil
 		}
-		let statements = TypeKeyBody.statements(ofRootBody: nodeRecords.rootBody, rootPassedArgumentNames: [ReservedName.mockOverridesParameterName])
+		let statements = TypeKeyBody.statements(ofRootBody: nodeRecords.rootBody, rootPassedArgumentNames: [ReservedName.mockOverridesParameterName], nodeFacts: world.nodeFacts)
 		report(refusal: statements == nil ? .notLaidOut : nil, everyRefusal: [], isLaidOut: statements != nil, recordCount: nodeRecords.recordCount)
 		return statements.map { GeneratedCode.lines($0).spelled() }
 	}

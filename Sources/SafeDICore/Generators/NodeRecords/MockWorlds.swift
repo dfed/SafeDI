@@ -32,6 +32,8 @@ struct MockWorld: Sendable {
 	let everyRefusal: [NodeRecordRefusal]
 	/// The table the world took its shared records from.
 	let table: MockWorldsTable
+	/// What the type key reads of the plan nodes of the table's shared records, worked out once for every world.
+	let nodeFacts: NodeLayoutFacts
 	/// The key of each of the world's variants' declarations, by variant, one entry for every variant, a row or not: the
 	/// table's ID of the declaration times two, plus one where every parent of the declaration is the world's root. A row's
 	/// key is its row's (`MockWorlds`).
@@ -119,6 +121,8 @@ struct MockWorlds: Sendable {
 			rows.append(MockWorldsTable.Row(declaration: key / 2, everyParentIsRoot: key % 2 == 1, record: record))
 		}
 		let sharedTable = table.holding(sharedRecordsOf: rows)
+		// Only a root laid out from its records reads the facts of their nodes.
+		let nodeFacts = NodeRecordsObservation.laysOutMockRoots ? NodeLayoutFacts(records: sharedRecords) : .none
 
 		let builtWorlds = try await BoundedConcurrency.map(worldRows, width: width) { rows, _ in
 			let sharedRecordByVariant = rows.rowKeyByVariant.map { key in key < 0 ? nil : sharedRecords[Int(frozenRowByKey[Int(key)])] }
@@ -129,7 +133,7 @@ struct MockWorlds: Sendable {
 				try NodeRecords(world: rows.graph, declaredTypeNames: nil, refusesOwedFacts: false)
 			}
 			return BuiltWorld(
-				world: world(of: rows.graph, records: records, table: sharedTable, declarationKeyByVariant: rows.declarationKeyByVariant),
+				world: world(of: rows.graph, records: records, table: sharedTable, nodeFacts: nodeFacts, declarationKeyByVariant: rows.declarationKeyByVariant),
 				builtRecords: builtRecords(of: records),
 				recordCountWithoutTable: builtRecords(of: recordsWithoutTable)?.count ?? 0,
 				differences: Self.differences(between: records, and: recordsWithoutTable),
@@ -247,7 +251,7 @@ struct MockWorlds: Sendable {
 
 	/// The world whose node records, made with the table and without refusing owed facts, are `records`: refused as
 	/// `readAnsweredTwoWays` where a producer owes its facts, as `NodeRecords` refuses it.
-	private static func world(of graph: TypeFactsGraph, records: Result<NodeRecords, NodeRecordRefusal>, table: MockWorldsTable, declarationKeyByVariant: [Int32]) -> MockWorld {
+	private static func world(of graph: TypeFactsGraph, records: Result<NodeRecords, NodeRecordRefusal>, table: MockWorldsTable, nodeFacts: NodeLayoutFacts, declarationKeyByVariant: [Int32]) -> MockWorld {
 		let records = records.flatMap { made in NodeRecords.owesFacts(in: graph) ? .failure(.readAnsweredTwoWays) : .success(made) }
 		let everyRefusal: [NodeRecordRefusal] = switch records {
 		case .success:
@@ -255,7 +259,7 @@ struct MockWorlds: Sendable {
 		case let .failure(refusal):
 			refusal == .recordsThrew ? [.recordsThrew] : NodeRecords.refusals(in: graph, declaredTypeNames: nil)
 		}
-		return MockWorld(records: records, everyRefusal: everyRefusal, table: table, declarationKeyByVariant: declarationKeyByVariant)
+		return MockWorld(records: records, everyRefusal: everyRefusal, table: table, nodeFacts: nodeFacts, declarationKeyByVariant: declarationKeyByVariant)
 	}
 
 	/// The built records `records` holds, or `nil` where they were refused.

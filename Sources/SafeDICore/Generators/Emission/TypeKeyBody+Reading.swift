@@ -357,6 +357,12 @@ extension TypeKeyLayout {
 				stack.removeLast()
 				continue
 			}
+			// A node several roots share has its domain worked out once for all of them.
+			if let shared = nodeFacts.domainsByNode[current.node] {
+				domainsByNode[current.node] = shared
+				stack.removeLast()
+				continue
+			}
 			var children = [PlaceRecord]()
 			for code in Self.statementCodes(of: current.children) {
 				guard let record = Self.record(of: code) else { return nil }
@@ -371,6 +377,7 @@ extension TypeKeyLayout {
 				continue
 			}
 			stack.removeLast()
+			GenerationWork.record(1, by: .computingPlanNodeDomains)
 			let bound = Set(current.parameterProperties.map(\.label)).union(current.cycleParameters.map(\.label))
 			var boundBefore = Set<String>()
 			var domain = Domain()
