@@ -295,6 +295,52 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysOutAnUnavailableDependencyAsTheTreeDoes_whenNoDeclarationFulfillsItsType() async throws {
+		// Nothing fulfills `any Analytics`, so `Screen`'s property instantiated only if available is bound to `nil`, which node
+		// records write as the tree does.
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true) public final class Root: Instantiable {
+					    @Instantiated let screen: Screen
+					    public init(screen: Screen) { self.screen = screen }
+					}
+					""",
+					"""
+					@Instantiable public final class Screen: Instantiable {
+					    @Instantiated(onlyIfAvailable: true) let analytics: (any Analytics)?
+					    public init(analytics: (any Analytics)?) { self.analytics = analytics }
+					}
+					""",
+					"""
+					public protocol Analytics {}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		#expect(output.dependencyTreeFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_screen() -> Screen {
+			            let analytics: (any Analytics)? = nil
+			            return Screen(analytics: analytics)
+			        }
+			        let screen: Screen = __safeDI_screen()
+			        self.init(screen: screen)
+			    }
+			}
+			""",
+		])
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
+		#expect(reports.flatMap(\.differences) == [])
+	}
+
+	@Test
 	func nodeRecordsFiles_callNoScopeGeneratorAndReadNoText_whenReadAsSource() throws {
 		// Soundness rule 2: a record is made from per-type facts, never from a tree's generator or text it spelled. Only
 		// the static helpers of `ScopeGenerator` listed here are called, until they move: a new one is a decision. The

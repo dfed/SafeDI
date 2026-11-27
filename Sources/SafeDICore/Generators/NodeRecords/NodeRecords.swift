@@ -153,6 +153,8 @@ struct NodeRecords: Sendable {
 				try .built(Self.inlineSeamRecord(of: declaration, variant: variant, in: world, typesDeclaredEscaping: escaping, children: children))
 			case .receivesOnlyIfAvailable:
 				try .built(Self.receivesOnlyIfAvailableRecord(of: declaration, variant: variant, in: world, answers: onlyIfAvailableAnswers, typesDeclaredEscaping: escaping, children: children))
+			case .unavailableDependency:
+				try .alias(Self.unavailableDependencyRecord(of: declaration, in: world))
 			case .rename:
 				try .alias(Self.renameRecord(of: declaration, variant: variant, in: world, answers: onlyIfAvailableAnswers))
 			case .mockConstruction:
@@ -264,6 +266,9 @@ struct NodeRecords: Sendable {
 		if let claim = inlineSeamClaim(of: declaration, in: world) {
 			return claim
 		}
+		if let claim = unavailableDependencyClaim(of: declaration, in: world) {
+			return claim
+		}
 		if let claim = receivesOnlyIfAvailableClaim(of: declaration, in: world) {
 			return claim
 		}
@@ -301,6 +306,9 @@ enum NodeRecordKind: Sendable {
 	/// A seam of another module built inline, because no module SafeDI knows generates its initializer, and otherwise a
 	/// node `builtByInitializer` makes: its line ends with the comment that says why (`NodeRecords+InlineSeam.swift`).
 	case inlineSeam
+	/// A property instantiated only if available that no declaration fulfills, bound to `nil` and written as text
+	/// (`NodeRecords+UnavailableDependency.swift`).
+	case unavailableDependency
 	/// A node that would be of kind `builtByInitializer` but that its type receives a property only if available, which its
 	/// construction is passed where the variant's calls find it available, and `nil` where not (`OnlyIfAvailableAnswers`).
 	case receivesOnlyIfAvailable
