@@ -434,7 +434,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				fillParametersByKey[key] = child.fillParameterFields
 				for (label, argument) in child.fillCallerReads.argumentByLabel {
 					guard let field = child.fillCallerReads.parameterByLabel[label] else { continue }
-					callerReadFormsByLabel[label, default: [:]].merge([field.property: (field, argument)]) { form, _ in form }
+					callerReadFormsByLabel[label, default: [:]].merge([field.property: (field, argument.spelled)]) { form, _ in form }
 				}
 			}
 			if case let .fill(_, functionName) = child.scopeData {
@@ -1737,12 +1737,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// The parameter the fill takes for each such label.
 		var parameterByLabel = [String: SeamSignature.Hole.Field]()
 		/// What the root dispatcher passes the parameter of each such label, where the caller does not build it later.
-		var argumentByLabel = [String: String]()
+		var argumentByLabel = [String: ArgumentSource]()
 		/// What the root dispatcher hands of each label the fill takes as a `SendableLazilyInstantiated` memo some route hands
 		/// it (`Scope.Fill.labelsHandedAsMemo`), by the memo the fill takes (`SeamSignature.Hole.Field.memoProperty`): the
 		/// caller's declaration of that wrapper, or one made of the caller's value, so the fill's tree reads the caller's own
 		/// wrapper where it reads the wrapper, as inline.
-		var memoArgumentByMemo = [Property: String]()
+		var memoArgumentByMemo = [Property: ArgumentSource]()
 		/// The scope value the inner seam handed the fill, which a place inside its tree, or a call there that passes one up,
 		/// carries (`SeamHoles.innerScope(at:innerKey:)`): the fill takes it as a parameter, and each dispatcher that leads to
 		/// it passes it on from the root dispatcher's own parameter.
@@ -7278,8 +7278,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let parametersByKey: [String: [SeamSignature.Hole.Field]]
 		/// What the root dispatcher passes of each value it reads from this scope, by the parameter a target takes for it,
 		/// and of each memo.
-		let callerArgumentByParameter: [Property: String]
-		let callerMemoArgumentByMemo: [Property: String]
+		let callerArgumentByParameter: [Property: ArgumentSource]
+		let callerMemoArgumentByMemo: [Property: ArgumentSource]
 		/// The dispatchers of a seam's caller; empty for a public mock's caller, which declares level functions instead.
 		let callDispatchers: [FillDispatcher]
 		/// Which fills a dispatcher may hold in its case.
@@ -7405,8 +7405,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// The caller's declaration in one form is the same for every fill of the call, which reads the one scope enclosing it
 		// (`Scope.Fill.callerNearestDeclarations`), so nothing is chosen among spellings: a form is passed as the declaration
 		// where any fill that takes it finds it available, and as `nil` where none does.
-		var callerArgumentByParameter = [Property: String]()
-		var callerMemoArgumentByMemo = [Property: String]()
+		var callerArgumentByParameter = [Property: ArgumentSource]()
+		var callerMemoArgumentByMemo = [Property: ArgumentSource]()
 		// The fills a level function's member hands each field of its payload they read, rather than the payload: those that
 		// return a wrapper's builder, and those an override closure of the call is handed a function over, which the closure
 		// calls with the caller's values.
@@ -7432,7 +7432,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						if !forms.allSatisfy(child.unavailableProperties.contains) {
 							callerArgumentByParameter[parameter] = argument
 						} else if callerArgumentByParameter[parameter] == nil {
-							callerArgumentByParameter[parameter] = "nil"
+							callerArgumentByParameter[parameter] = .nil
 						}
 					}
 					callerMemoArgumentByMemo.merge(callerReads.memoArgumentByMemo) { argument, _ in argument }
@@ -7555,13 +7555,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// A call's dispatchers follow its fills, each a function that returns its level's struct. One that captures nothing
 		// of the call is a root function, which the root may declare once for every call (`RootFunctionHoisting`).
 		let labelsHiddenByReenteringCalls = Set(fillDeferredLabelsHiddenByReenteringCalls.values.joined())
+		let callerArgumentByParameter = body.callerArgumentByParameter.mapValues(\.spelled)
+		let callerMemoArgumentByMemo = body.callerMemoArgumentByMemo.mapValues(\.spelled)
 		// A dispatcher captures the caller's declarations where it hands a target one (the root dispatcher, which takes no
 		// parameter): its text then differs from the text written without them, which a root function's record holds. Every
 		// other dispatcher of the call takes what its targets read as parameters, so the root may still declare it once.
 		var capturingKeys = Set<String>()
 		if !body.callerArgumentByParameter.isEmpty || !body.callerMemoArgumentByMemo.isEmpty {
 			for dispatcher in body.callDispatchers {
-				let withCallerDeclarations = dispatcher.declaration(isSendable: false, indent: "", inlinedFills: body.inlinedFills, parametersByKey: body.parametersByKey, callerArgumentByParameter: body.callerArgumentByParameter, callerMemoArgumentByMemo: body.callerMemoArgumentByMemo, typesDeclaredEscaping: typesDeclaredEscaping, fillsTakingPayloadFields: body.fillsTakingPayloadFields, labelsHiddenByReenteringCalls: labelsHiddenByReenteringCalls)
+				let withCallerDeclarations = dispatcher.declaration(isSendable: false, indent: "", inlinedFills: body.inlinedFills, parametersByKey: body.parametersByKey, callerArgumentByParameter: callerArgumentByParameter, callerMemoArgumentByMemo: callerMemoArgumentByMemo, typesDeclaredEscaping: typesDeclaredEscaping, fillsTakingPayloadFields: body.fillsTakingPayloadFields, labelsHiddenByReenteringCalls: labelsHiddenByReenteringCalls)
 				let withoutCallerDeclarations = dispatcher.declaration(isSendable: false, indent: "", inlinedFills: body.inlinedFills, parametersByKey: body.parametersByKey, typesDeclaredEscaping: typesDeclaredEscaping, fillsTakingPayloadFields: body.fillsTakingPayloadFields, labelsHiddenByReenteringCalls: labelsHiddenByReenteringCalls)
 				if withCallerDeclarations != withoutCallerDeclarations {
 					capturingKeys.insert(dispatcher.key)
@@ -7569,22 +7571,57 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 		}
 		let rootFunctionKeys = Self.rootFunctionDispatcherKeys(of: body.callDispatchers, inlinedFills: body.inlinedFills.filter { !body.inlinedFillKeysReadingCallersDeclarations.contains($0.key) }, capturingCallerDeclarations: capturingKeys)
-		for dispatcher in body.callDispatchers {
+		// Where a test observes them, each dispatcher's declaration is spelled again from the call's records alone, beside
+		// the text written here.
+		let dispatcherObserver = DispatcherRecordObservation.observer
+		let filledCallFields = FilledCallFields(callerArguments: body.callerArgumentByParameter, callerMemoArguments: body.callerMemoArgumentByMemo, labelsHiddenByReenteringCalls: labelsHiddenByReenteringCalls)
+		let dispatcherRecords = dispatcherObserver == nil ? [] : body.callDispatchers.map { dispatcher in
+			DispatcherRecord(dispatcher: dispatcher, parameters: body.parametersByKey[dispatcher.key, default: []], isSendable: sendableFillKeys.contains(dispatcher.key))
+		}
+		func observe(_ text: String, ofDispatcherAt index: Int, asRootFunction: Bool) {
+			guard let dispatcherObserver else { return }
+			dispatcherObserver(DispatcherRecordObservation(
+				text: text,
+				spelledFromRecord: filledCallFields.declaration(
+					of: dispatcherRecords[index],
+					among: dispatcherRecords,
+					asRootFunction: asRootFunction,
+					indent: leadingMemberWhitespace,
+					inlinedFills: body.inlinedFills,
+					fillParametersByKey: body.fillParametersByKey,
+					typesDeclaredEscaping: typesDeclaredEscaping,
+					fillsTakingPayloadFields: body.fillsTakingPayloadFields,
+				),
+			))
+		}
+		for (index, dispatcher) in body.callDispatchers.enumerated() {
 			let isSendable = sendableFillKeys.contains(dispatcher.key)
 			guard rootFunctionKeys.contains(dispatcher.key) else {
-				generatedProperties.append(.text(dispatcher.declaration(
+				let text = dispatcher.declaration(
 					isSendable: isSendable,
 					indent: leadingMemberWhitespace,
 					inlinedFills: body.inlinedFills,
 					parametersByKey: body.parametersByKey,
-					callerArgumentByParameter: body.callerArgumentByParameter,
-					callerMemoArgumentByMemo: body.callerMemoArgumentByMemo,
+					callerArgumentByParameter: callerArgumentByParameter,
+					callerMemoArgumentByMemo: callerMemoArgumentByMemo,
 					typesDeclaredEscaping: typesDeclaredEscaping,
 					fillsTakingPayloadFields: body.fillsTakingPayloadFields,
 					labelsHiddenByReenteringCalls: labelsHiddenByReenteringCalls,
-				)))
+				)
+				observe(text, ofDispatcherAt: index, asRootFunction: false)
+				generatedProperties.append(.text(text))
 				continue
 			}
+			let rootFunctionText = dispatcher.declaration(
+				isSendable: false,
+				indent: leadingMemberWhitespace,
+				inlinedFills: body.inlinedFills,
+				parametersByKey: body.parametersByKey,
+				typesDeclaredEscaping: typesDeclaredEscaping,
+				fillsTakingPayloadFields: body.fillsTakingPayloadFields,
+				labelsHiddenByReenteringCalls: labelsHiddenByReenteringCalls,
+			)
+			observe(rootFunctionText, ofDispatcherAt: index, asRootFunction: true)
 			let targetKeys = dispatcher.cases.compactMap(\.target?.key)
 			let inlinedFillKeys = Set(targetKeys.filter { body.inlinedFills[$0] != nil })
 			let record = RootFunctionRecord(
@@ -7599,15 +7636,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					indentation: leadingMemberWhitespace,
 				),
 				name: dispatcher.functionName,
-				textWithoutAttributes: String(dispatcher.declaration(
-					isSendable: false,
-					indent: leadingMemberWhitespace,
-					inlinedFills: body.inlinedFills,
-					parametersByKey: body.parametersByKey,
-					typesDeclaredEscaping: typesDeclaredEscaping,
-					fillsTakingPayloadFields: body.fillsTakingPayloadFields,
-					labelsHiddenByReenteringCalls: labelsHiddenByReenteringCalls,
-				).dropFirst(leadingMemberWhitespace.count)),
+				textWithoutAttributes: String(rootFunctionText.dropFirst(leadingMemberWhitespace.count)),
 				isSendable: isSendable,
 				calls: dispatcher.cases.compactMap { dispatcherCase in
 					dispatcherCase.target.flatMap { body.inlinedFills[$0.key] == nil ? $0.name : nil }

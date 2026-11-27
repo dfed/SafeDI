@@ -2133,12 +2133,12 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 					reads.unavailableProperties.insert(form)
 				}
 			}
-			reads.argumentByLabel[label] = callerArgument(reading: parameter.property, of: fill.callerNearestDeclarations, lazilyInstantiatedInstanceProperties: fill.callerLazilyInstantiatedInstanceProperties, log: &log).spelled
+			reads.argumentByLabel[label] = callerArgument(reading: parameter.property, of: fill.callerNearestDeclarations, lazilyInstantiatedInstanceProperties: fill.callerLazilyInstantiatedInstanceProperties, log: &log)
 		}
 		reads.mockRootBindingByLabel = fill.mockRootBindingByLabel
 		for field in fill.fields where fill.labelsHandedAsMemo.contains(field.property.label) && field.bindsMemo && field.deferral == .deferred(isSendable: true) {
 			let memo = field.memoProperty
-			reads.memoArgumentByMemo[memo] = callerArgument(reading: memo, of: fill.callerNearestDeclarations, lazilyInstantiatedInstanceProperties: fill.callerLazilyInstantiatedInstanceProperties, log: &log).spelled
+			reads.memoArgumentByMemo[memo] = callerArgument(reading: memo, of: fill.callerNearestDeclarations, lazilyInstantiatedInstanceProperties: fill.callerLazilyInstantiatedInstanceProperties, log: &log)
 		}
 		return reads
 	}

@@ -113,3 +113,55 @@ struct FillSignature: Sendable {
 	/// Whether the fill returns the value its body binds (a constant), rather than the wrapper's builder.
 	let returnsBoundValue: Bool
 }
+
+/// What a call that fills a builder hands its dispatchers of the caller's scope, shared by every builder it fills.
+struct FilledCallFields: Sendable {
+	/// What the root dispatcher hands each parameter a target takes of a value of the caller's scope, read of the caller's
+	/// nearest declaration (`ScopeGenerator.FillCallerReads`).
+	let callerArguments: [Property: ArgumentSource]
+	/// What the root dispatcher hands each `SendableLazilyInstantiated` memo a target takes.
+	let callerMemoArguments: [Property: ArgumentSource]
+	/// The deferred labels a fill that re-enters the call cannot read from outside it.
+	let labelsHiddenByReenteringCalls: Set<String>
+
+	/// The declaration of `record`, one of the call's `dispatchers`, indented by `indent`: as a root function, which
+	/// hands on no caller's declaration and takes its attribute where the root declares it, or in the call's body.
+	/// - Parameters:
+	///   - inlinedFills: The fills the dispatchers hold the bodies of, by key.
+	///   - fillParametersByKey: What each fill takes beside its case's values, by key.
+	func declaration(
+		of record: DispatcherRecord,
+		among dispatchers: [DispatcherRecord],
+		asRootFunction: Bool,
+		indent: String,
+		inlinedFills: [String: ScopeGenerator.FillDispatcher.InlinedFill],
+		fillParametersByKey: [String: [SeamSignature.Hole.Field]],
+		typesDeclaredEscaping: Set<TypeDescription>,
+		fillsTakingPayloadFields: Set<String>,
+	) -> String {
+		var parametersByKey = fillParametersByKey
+		for dispatcher in dispatchers where parametersByKey[dispatcher.key] == nil {
+			parametersByKey[dispatcher.key] = dispatcher.parameters
+		}
+		return record.dispatcher.declaration(
+			isSendable: asRootFunction ? false : record.isSendable,
+			indent: indent,
+			inlinedFills: inlinedFills,
+			parametersByKey: parametersByKey,
+			callerArgumentByParameter: asRootFunction ? [:] : callerArguments.mapValues(\.spelled),
+			callerMemoArgumentByMemo: asRootFunction ? [:] : callerMemoArguments.mapValues(\.spelled),
+			typesDeclaredEscaping: typesDeclaredEscaping,
+			fillsTakingPayloadFields: fillsTakingPayloadFields,
+			labelsHiddenByReenteringCalls: labelsHiddenByReenteringCalls,
+		)
+	}
+}
+
+/// A dispatcher's declaration as the tree writes it, beside the declaration spelled from the call's records alone.
+public struct DispatcherRecordObservation: Sendable {
+	public let text: String
+	public let spelledFromRecord: String
+
+	/// Called with each dispatcher as its declaration is written, when set: by the tests, never by the tool.
+	@TaskLocal public static var observer: (@Sendable (DispatcherRecordObservation) -> Void)?
+}

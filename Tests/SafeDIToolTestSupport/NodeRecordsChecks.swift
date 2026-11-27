@@ -48,8 +48,18 @@ enum NodeRecordsChecks {
 			}
 			enclosingSeamCallObserver?(call)
 		}
+		let enclosingDispatcherObserver = DispatcherRecordObservation.observer
+		// A dispatcher's declaration, spelled from the call's records alone, must be the text the tree writes.
+		let dispatcherObserver: @Sendable (DispatcherRecordObservation) -> Void = { dispatcher in
+			if dispatcher.spelledFromRecord != dispatcher.text {
+				Issue.record(Comment(rawValue: "The records of a dispatcher spell\n\(dispatcher.spelledFromRecord)\nwhere the tree writes\n\(dispatcher.text)"))
+			}
+			enclosingDispatcherObserver?(dispatcher)
+		}
 		return try await SeamCallRecordObservation.$observer.withValue(seamCallObserver) {
-			try await checkingNodeRecords(laysOutRoots: laysOutRoots, reportPath: reportPath, testName: testName, enclosingObserver: enclosingObserver, body)
+			try await DispatcherRecordObservation.$observer.withValue(dispatcherObserver) {
+				try await checkingNodeRecords(laysOutRoots: laysOutRoots, reportPath: reportPath, testName: testName, enclosingObserver: enclosingObserver, body)
+			}
 		}
 	}
 
