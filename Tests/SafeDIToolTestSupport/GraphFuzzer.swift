@@ -2974,6 +2974,7 @@ enum GraphFuzzerGenerator {
 			optionalPlaceRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.optionalPlaceRandomSeedMask)
 			nestedCycleRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.nestedCycleRandomSeedMask)
 			renamedLazyReaderRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.renamedLazyReaderRandomSeedMask)
+			mockKindRandoms = GraphFuzzerMockKind.allCases.map { GraphFuzzerRandomNumberGenerator(seed: seed ^ $0.randomSeedMask) }
 			seamDependencyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ GraphFuzzerSeamDependencyDraw.seamRandomSeedMask)
 			prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
 			// One draw decides, so graphs that are not mixed draw exactly what they drew before mixed graphs existed.
@@ -3061,6 +3062,8 @@ enum GraphFuzzerGenerator {
 			finalDeclarations = addingTypeBuiltAgainThroughSecondLazyCycle(to: finalDeclarations)
 			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
 			finalDeclarations = addingReadersOfRenamedLazyInstance(to: finalDeclarations)
+			// Drawn after it, each kind from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
+			finalDeclarations = addingMockKindShapes(to: finalDeclarations)
 			// In a graph split across modules, every file names its module and imports the seam's, so that a type of the
 			// caller can name what the seam's module declares, such as the creation stamps' counter.
 			let isSplit = finalDeclarations.contains { $0.module == .seamModule }
@@ -3556,6 +3559,8 @@ enum GraphFuzzerGenerator {
 		/// Draws only `addingReadersOfRenamedLazyInstance`'s choices: whether a graph gains `RenamedLazyTop`'s tree, and
 		/// every shape of that tree.
 		private var renamedLazyReaderRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only `addingMockKindShapes`' choices, one stream per `GraphFuzzerMockKind`, in `allCases` order.
+		private var mockKindRandoms: [GraphFuzzerRandomNumberGenerator]
 		/// The files `markerFreeFileRandom` moved a declaration into: each named, holding the declaration alone, and in the
 		/// module of the type, `ownerName`, whose file it was drawn in.
 		private var markerFreeFiles = [(ownerName: String, fileName: String, declaration: String)]()
@@ -8484,6 +8489,163 @@ enum GraphFuzzerGenerator {
 
 		private static let renamedLazyReaderRandomSeedMask: UInt64 = 0x52656E4C617A79
 
+		// MARK: Mock kinds
+
+		/// The base corpus's draw, for each `GraphFuzzerMockKind` on a stream of its own, in one graph of twenty-five, of a
+		/// tree no root reaches whose mock holds a node of that kind in two places. `Host`, with `generateMock: true`, builds
+		/// `Node` in the kind's form. Inside a cycle: `Node` instantiates an instantiator of `Loop`, which builds `Node` again
+		/// in the same form, so the node's override is read where the cycle closes too; now and then `Node`'s own mock is
+		/// generated, a mocked type on the cycle. Under a second label: `Host` receives `Peer`, which the mock promotes, and
+		/// `Peer` receives the node's label as `Other`, which the mock promotes beside the node, so the mock root names both
+		/// apart and the node's override is a field under a name other than its label. A graph draws one place or both.
+		/// The compile, the value oracles and the base comparison judge the mock. Each kind's stream draws only for this
+		/// pass, after every other, and only in the base corpus.
+		private mutating func addingMockKindShapes(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			guard features.isEmpty else { return declarations }
+			var declarations = declarations
+			for (index, kind) in GraphFuzzerMockKind.allCases.enumerated() {
+				var random = mockKindRandoms[index]
+				declarations += mockKindShape(of: kind, random: &random)
+				mockKindRandoms[index] = random
+			}
+			return declarations
+		}
+
+		/// The declarations of `kind`'s draw, or none where its stream does not draw it.
+		private func mockKindShape(of kind: GraphFuzzerMockKind, random: inout GraphFuzzerRandomNumberGenerator) -> [TypeDeclaration] {
+			guard random.percentChance(4) else { return [] }
+			// Release acceptance leaves actors out, which 2.3.0 rejects, and, as the actor draw, `Sendable` graphs.
+			guard kind != .mockActor || (!omitsDrawsOlderReleasesReject && sendability != .sendable) else { return [] }
+			// Release acceptance leaves out `@Instantiated(onlyIfAvailable: true)` too, which 2.3.0 rejects.
+			guard kind != .unavailableOrInlineSeam || !omitsDrawsOlderReleasesReject else { return [] }
+			let instantiator = sendability == .sendable ? "SendableInstantiator" : "Instantiator"
+			let lazyWrapper = sendability == .sendable ? "SendableLazilyInstantiated" : "LazilyInstantiated"
+			func name(_ suffix: String) -> String {
+				"\(prefix)\(kind.typeStem)\(suffix)"
+			}
+			func label(_ suffix: String) -> String {
+				"\(kind.labelStem)\(suffix)"
+			}
+			// 0: inside a cycle; 1: under a second label; 2: both.
+			let position = random.integer(in: kind == .mockOverrideNotParentField ? 1...2 : 0...2)
+			let isInsideCycle = position != 1
+			let isUnderSecondLabel = position != 0
+			let mocksNodeOnCycle = isInsideCycle && random.percentChance(30)
+			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
+			let nodeName = name("Node")
+			let nodeLabel = label("Node")
+			var node = TypeDeclaration(name: nodeName, instantiableArguments: mocksNodeOnCycle ? ["generateMock: true"] : [], properties: [], declaresHelperTypes: false, additionalConformances: conformances)
+			var hostPropertiesBeforeNode = [PropertyDeclaration]()
+			var hostPropertiesAfterNode = [PropertyDeclaration]()
+			var additionalTypes = [TypeDeclaration]()
+			/// The label `Peer` receives as `Other`: the node's, or that of the value the kind binds at the mock root.
+			var secondLabel = nodeLabel
+			let nodeProperty: PropertyDeclaration
+			switch kind {
+			case .lazy:
+				nodeProperty = PropertyDeclaration(attribute: "@Instantiated", label: nodeLabel, type: "\(lazyWrapper)<\(nodeName)>")
+			case .renameOrHole:
+				// `Node` renames a value `Host` instantiates before it.
+				let sourceName = name("Source")
+				let sourceLabel = label("Source")
+				additionalTypes.append(TypeDeclaration(name: sourceName, instantiableArguments: [], properties: [], declaresHelperTypes: false, additionalConformances: conformances))
+				hostPropertiesBeforeNode.append(PropertyDeclaration(attribute: "@Instantiated", label: sourceLabel, type: sourceName))
+				node.properties.append(PropertyDeclaration(attribute: "@Received(fulfilledByDependencyNamed: \"\(sourceLabel)\", ofType: \(sourceName).self)", label: label("Renamed"), type: sourceName))
+				nodeProperty = PropertyDeclaration(attribute: "@Instantiated", label: nodeLabel, type: nodeName)
+			case .onlyIfAvailable:
+				// `Node` receives a value only if available, which `Host` mostly instantiates after it or before it.
+				let sourceName = name("Source")
+				let sourceLabel = label("Source")
+				additionalTypes.append(TypeDeclaration(name: sourceName, instantiableArguments: [], properties: [], declaresHelperTypes: false, additionalConformances: conformances))
+				if random.percentChance(75) {
+					let source = PropertyDeclaration(attribute: "@Instantiated", label: sourceLabel, type: sourceName)
+					if random.percentChance(50) {
+						hostPropertiesBeforeNode.append(source)
+					} else {
+						hostPropertiesAfterNode.append(source)
+					}
+				}
+				node.properties.append(PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: sourceLabel, type: sourceName + "?"))
+				nodeProperty = PropertyDeclaration(attribute: "@Instantiated", label: nodeLabel, type: nodeName)
+			case .erased:
+				// `Host` builds `Node` erased to `AnyNode`, which `Node`'s file declares.
+				let erasedName = name("AnyNode")
+				node.additionalDeclarations.append("public struct \(erasedName)\(helperTypesAreSendable ? ": Sendable" : "") {\n\tpublic init(_ value: \(nodeName)) {\n\t\tself.value = value\n\t}\n\n\tpublic let value: \(nodeName)\n}")
+				nodeProperty = PropertyDeclaration(attribute: "@Instantiated(fulfilledByType: \"\(nodeName)\", erasedToConcreteExistential: true)", label: nodeLabel, type: erasedName)
+			case .sendable:
+				// `Host` builds `Node` in a `@Sendable` function of its own, so every type of the draw is `Sendable`.
+				node.additionalConformances = sendability == .sendable ? [] : ["@unchecked Sendable"]
+				nodeProperty = PropertyDeclaration(attribute: "@Instantiated", label: nodeLabel, type: random.percentChance(70) ? "SendableInstantiator<\(nodeName)>" : "SendableLazilyInstantiated<\(nodeName)>")
+			case .mockRootBindsOtherThanNodes:
+				// `Node` reads a value the mock root binds beside its nodes: a parameter of `mock()` for a type it cannot
+				// build, an override of a value received only if available that nothing provides, or a wrapper the mock makes
+				// around the instance it takes.
+				let plainName = name("Plain")
+				switch random.integer(in: 0...2) {
+				case 0:
+					node.additionalDeclarations.append("public final class \(plainName)\(helperTypesAreSendable ? ": Sendable" : "") {}")
+					secondLabel = label("Plain")
+					node.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: secondLabel, type: plainName))
+				case 1:
+					let sourceName = name("Source")
+					additionalTypes.append(TypeDeclaration(name: sourceName, instantiableArguments: [], properties: [], declaresHelperTypes: false, additionalConformances: conformances))
+					secondLabel = label("Optional")
+					node.properties.append(PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: secondLabel, type: sourceName + "?"))
+				default:
+					node.additionalDeclarations.append("public final class \(plainName)\(helperTypesAreSendable ? ": Sendable" : "") {}")
+					secondLabel = label("PlainLazy")
+					node.properties.append(PropertyDeclaration(attribute: "@Received", label: secondLabel, type: "\(lazyWrapper)<\(plainName)>"))
+				}
+				nodeProperty = PropertyDeclaration(attribute: "@Instantiated", label: nodeLabel, type: nodeName)
+			case .mockDefaultValuedParameter:
+				// `Node`'s initializer takes a value no dependency fulfills, which the mock holds in `Node`'s configuration.
+				node.defaultValuedParameters = [ParameterDeclaration(name: label("Name"), type: "String", defaultValue: "\"kind\"")]
+				nodeProperty = PropertyDeclaration(attribute: "@Instantiated", label: nodeLabel, type: nodeName)
+			case .unavailableOrInlineSeam:
+				// `Node` instantiates only if available a type no declaration fulfills, which production binds to `nil` and
+				// the mock overrides. A seam built inline is the seam corpus's: only its mocks build seams.
+				let tokenName = name("Token")
+				node.additionalDeclarations.append("public final class \(tokenName)\(helperTypesAreSendable ? ": Sendable" : "") {}")
+				node.properties.append(PropertyDeclaration(attribute: "@Instantiated(onlyIfAvailable: true)", label: label("Token"), type: tokenName + "?"))
+				nodeProperty = PropertyDeclaration(attribute: "@Instantiated", label: nodeLabel, type: nodeName)
+			case .mockOverrideNotParentField:
+				nodeProperty = PropertyDeclaration(attribute: "@Instantiated", label: nodeLabel, type: nodeName)
+			case .mockActor:
+				// An actor, whose arguments the mock sends it.
+				node.isActor = true
+				node.additionalConformances = []
+				nodeProperty = PropertyDeclaration(attribute: "@Instantiated", label: nodeLabel, type: nodeName)
+			case .builderLoop:
+				// `Node` instantiates two instantiators whose trees receive each other.
+				let firstName = name("First")
+				let secondName = name("Second")
+				let first = PropertyDeclaration(attribute: "@Instantiated", label: label("FirstBuilder"), type: "\(instantiator)<\(firstName)>")
+				let second = PropertyDeclaration(attribute: "@Instantiated", label: label("SecondBuilder"), type: "\(instantiator)<\(secondName)>")
+				let secondReceivesFirstOnlyIfAvailable = random.percentChance(30)
+				additionalTypes.append(TypeDeclaration(name: firstName, instantiableArguments: [], properties: [PropertyDeclaration(attribute: "@Received", label: second.label, type: second.type)], declaresHelperTypes: false, additionalConformances: conformances))
+				additionalTypes.append(TypeDeclaration(name: secondName, instantiableArguments: [], properties: [secondReceivesFirstOnlyIfAvailable
+						? PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: first.label, type: first.type + "?")
+						: PropertyDeclaration(attribute: "@Received", label: first.label, type: first.type)], declaresHelperTypes: false, additionalConformances: conformances))
+				node.properties += random.percentChance(50) ? [first, second] : [second, first]
+				nodeProperty = PropertyDeclaration(attribute: "@Instantiated", label: nodeLabel, type: nodeName)
+			}
+			if isInsideCycle {
+				let loopName = name("Loop")
+				node.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: label("LoopBuilder"), type: "\(instantiator)<\(loopName)>"))
+				additionalTypes.append(TypeDeclaration(name: loopName, instantiableArguments: [], properties: [nodeProperty], declaresHelperTypes: false, additionalConformances: conformances))
+			}
+			var hostProperties = hostPropertiesBeforeNode + [nodeProperty] + hostPropertiesAfterNode
+			if isUnderSecondLabel {
+				let peerName = name("Peer")
+				let otherName = name("Other")
+				additionalTypes.append(TypeDeclaration(name: otherName, instantiableArguments: [], properties: [], declaresHelperTypes: false, additionalConformances: conformances))
+				additionalTypes.append(TypeDeclaration(name: peerName, instantiableArguments: [], properties: [PropertyDeclaration(attribute: "@Received", label: secondLabel, type: otherName)], declaresHelperTypes: false, additionalConformances: conformances))
+				let peer = PropertyDeclaration(attribute: "@Received", label: label("Peer"), type: peerName)
+				hostProperties.insert(peer, at: random.integer(in: 0...hostProperties.count))
+			}
+			return [node] + additionalTypes + [TypeDeclaration(name: name("Host"), instantiableArguments: ["generateMock: true"], properties: hostProperties, declaresHelperTypes: false, additionalConformances: conformances)]
+		}
+
 		// MARK: Cycle parameters
 
 		/// How a property of `addingCycleParameterShapes`' cycle builds its type.
@@ -11358,6 +11520,72 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 	case instantiableStruct
 	/// A type a `#SafeDIConfiguration` lists in `additionalMocksToGenerate`.
 	case additionalMockToGenerate
+	/// A node of the `lazy` mock kind on a lazy cycle in a mocked type's tree, which the cycle builds again
+	/// (`GraphFuzzerMockKind.lazy`).
+	case mockKindLazyInsideCycle
+	/// A node of the `lazy` mock kind, or the value it binds at the mock root, named apart there beside a promoted
+	/// dependency of its label (`GraphFuzzerMockKind.lazy`).
+	case mockKindLazyUnderSecondLabel
+	/// A node of the `renameOrHole` mock kind on a lazy cycle in a mocked type's tree, which the cycle builds again
+	/// (`GraphFuzzerMockKind.renameOrHole`).
+	case mockKindRenameOrHoleInsideCycle
+	/// A node of the `renameOrHole` mock kind, or the value it binds at the mock root, named apart there beside a promoted
+	/// dependency of its label (`GraphFuzzerMockKind.renameOrHole`).
+	case mockKindRenameOrHoleUnderSecondLabel
+	/// A node of the `onlyIfAvailable` mock kind on a lazy cycle in a mocked type's tree, which the cycle builds again
+	/// (`GraphFuzzerMockKind.onlyIfAvailable`).
+	case mockKindOnlyIfAvailableInsideCycle
+	/// A node of the `onlyIfAvailable` mock kind, or the value it binds at the mock root, named apart there beside a promoted
+	/// dependency of its label (`GraphFuzzerMockKind.onlyIfAvailable`).
+	case mockKindOnlyIfAvailableUnderSecondLabel
+	/// A node of the `erased` mock kind on a lazy cycle in a mocked type's tree, which the cycle builds again
+	/// (`GraphFuzzerMockKind.erased`).
+	case mockKindErasedInsideCycle
+	/// A node of the `erased` mock kind, or the value it binds at the mock root, named apart there beside a promoted
+	/// dependency of its label (`GraphFuzzerMockKind.erased`).
+	case mockKindErasedUnderSecondLabel
+	/// A node of the `sendable` mock kind on a lazy cycle in a mocked type's tree, which the cycle builds again
+	/// (`GraphFuzzerMockKind.sendable`).
+	case mockKindSendableInsideCycle
+	/// A node of the `sendable` mock kind, or the value it binds at the mock root, named apart there beside a promoted
+	/// dependency of its label (`GraphFuzzerMockKind.sendable`).
+	case mockKindSendableUnderSecondLabel
+	/// A node of the `mockRootBindsOtherThanNodes` mock kind on a lazy cycle in a mocked type's tree, which the cycle builds again
+	/// (`GraphFuzzerMockKind.mockRootBindsOtherThanNodes`).
+	case mockKindMockRootBindsOtherThanNodesInsideCycle
+	/// A node of the `mockRootBindsOtherThanNodes` mock kind, or the value it binds at the mock root, named apart there beside a promoted
+	/// dependency of its label (`GraphFuzzerMockKind.mockRootBindsOtherThanNodes`).
+	case mockKindMockRootBindsOtherThanNodesUnderSecondLabel
+	/// A node of the `mockDefaultValuedParameter` mock kind on a lazy cycle in a mocked type's tree, which the cycle builds again
+	/// (`GraphFuzzerMockKind.mockDefaultValuedParameter`).
+	case mockKindMockDefaultValuedParameterInsideCycle
+	/// A node of the `mockDefaultValuedParameter` mock kind, or the value it binds at the mock root, named apart there beside a promoted
+	/// dependency of its label (`GraphFuzzerMockKind.mockDefaultValuedParameter`).
+	case mockKindMockDefaultValuedParameterUnderSecondLabel
+	/// A node of the `unavailableOrInlineSeam` mock kind on a lazy cycle in a mocked type's tree, which the cycle builds again
+	/// (`GraphFuzzerMockKind.unavailableOrInlineSeam`).
+	case mockKindUnavailableOrInlineSeamInsideCycle
+	/// A node of the `unavailableOrInlineSeam` mock kind, or the value it binds at the mock root, named apart there beside a promoted
+	/// dependency of its label (`GraphFuzzerMockKind.unavailableOrInlineSeam`).
+	case mockKindUnavailableOrInlineSeamUnderSecondLabel
+	/// A node of the `mockOverrideNotParentField` mock kind on a lazy cycle in a mocked type's tree, which the cycle builds again
+	/// (`GraphFuzzerMockKind.mockOverrideNotParentField`).
+	case mockKindMockOverrideNotParentFieldInsideCycle
+	/// A node of the `mockOverrideNotParentField` mock kind, or the value it binds at the mock root, named apart there beside a promoted
+	/// dependency of its label (`GraphFuzzerMockKind.mockOverrideNotParentField`).
+	case mockKindMockOverrideNotParentFieldUnderSecondLabel
+	/// A node of the `mockActor` mock kind on a lazy cycle in a mocked type's tree, which the cycle builds again
+	/// (`GraphFuzzerMockKind.mockActor`).
+	case mockKindMockActorInsideCycle
+	/// A node of the `mockActor` mock kind, or the value it binds at the mock root, named apart there beside a promoted
+	/// dependency of its label (`GraphFuzzerMockKind.mockActor`).
+	case mockKindMockActorUnderSecondLabel
+	/// A node of the `builderLoop` mock kind on a lazy cycle in a mocked type's tree, which the cycle builds again
+	/// (`GraphFuzzerMockKind.builderLoop`).
+	case mockKindBuilderLoopInsideCycle
+	/// A node of the `builderLoop` mock kind, or the value it binds at the mock root, named apart there beside a promoted
+	/// dependency of its label (`GraphFuzzerMockKind.builderLoop`).
+	case mockKindBuilderLoopUnderSecondLabel
 	/// A type declared with `generateDependencyTree: true`, whose tree SafeDI generates in an initializer of its own
 	/// that every tree reaching it calls. Drawn only with the `generateDependencyTree` generator feature on; what its
 	/// initializer takes is a `GraphFuzzerSeamOutputFeature`, read from the generated code.
@@ -11942,6 +12170,10 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 			}
 		}) {
 			features.insert(.onlyIfAvailableAliasBeneathLabelAMockIsPassed)
+		}
+		// Each mock kind's draw names nothing else of the graph, so the names of its types name its places.
+		for kind in GraphFuzzerMockKind.allCases {
+			features.formUnion(kind.features(drawnIn: fixture))
 		}
 		// The draw's screens name nothing else of the graph, so its mocked screen names the shape.
 		if mockedTypeNames.contains(where: { $0.hasSuffix("CycleWalkScreen0") }) {
