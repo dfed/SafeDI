@@ -37,8 +37,8 @@ extension NodeRecords {
 			refusals.append(.mockActor)
 		}
 		// The root's own such parameters are parameters of `mock()`, which the root's lowering judges
-		// (`ScopeGenerator.nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:)`). A type's configuration takes the
-		// defaults of its initializer and of its hand-written mock, whichever of the two builds a node.
+		// (`ScopeGenerator.nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:outerDeclarations:)`). A type's
+		// configuration takes the defaults of its initializer and of its hand-written mock, whichever of the two builds a node.
 		if declaration != 0 {
 			let (construction, otherConstruction) = buildsWithHandWrittenMock ? (instantiable.mockInitializer, instantiable.initializer) : (instantiable.initializer, instantiable.mockInitializer)
 			let callPassesValueNoDependencyFulfills = construction.map { takesValueNoDependencyFulfills($0, given: instantiable.dependencies) } ?? false

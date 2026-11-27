@@ -208,17 +208,22 @@ extension ScopeGenerator {
 		}
 		let builders = (walk.filledCallBuilders.parameters + signature.placeOnlyBuilderDeclarations).sorted { $0.label < $1.label }
 		// Where a test observes node records, an internal mock that binds nothing but its nodes has the statements that build
-		// them laid out from the records of its world (`nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:)`).
+		// them laid out from the records of its world (`nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:outerDeclarations:)`).
 		if let worldRoot {
+			// `mock()`'s parameters are the declarations the nodes' reads resolve to, as a seam's parameters are for its
+			// root's body, each by its label: one named apart, or an uncovered parameter handed to the type that
+			// instantiates it, is no declaration the records read.
 			let bindsOnlyNodes = rootReceiverBindingIndex == 0
 				&& linesBoundBesideNodes.isEmpty
-				&& signature.parameters.isEmpty
+				&& signature.uncoveredParameters.isEmpty
+				&& signature.parameters.allSatisfy { $0.name == $0.property.label }
 				&& signature.onlyIfAvailableOverrides.isEmpty
 				&& builders.isEmpty
 				&& rootRenames.values.allSatisfy(\.isEmpty)
 				&& rootInstancesReadByValue.isEmpty
-			if let statements = try Self.nodeRecordsMockStatements(of: instantiable, worldRoot: worldRoot, bindsOnlyNodes: bindsOnlyNodes) {
-				bindingLines = [statements]
+			if let statements = try Self.nodeRecordsMockStatements(of: instantiable, worldRoot: worldRoot, bindsOnlyNodes: bindsOnlyNodes, outerDeclarations: signature.parameters.map(\.property)) {
+				// A mock that builds no node binds nothing.
+				bindingLines = statements.isEmpty ? [] : [statements]
 			}
 		}
 		// A public mock's tiers, overrides and guard (`MockLowering+PublicMocks.swift`).
