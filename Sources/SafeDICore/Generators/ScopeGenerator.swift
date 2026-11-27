@@ -9289,11 +9289,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// A seam call's forwarded values are bound inside its text, which lists only the reads outside it.
 				// One the engine spells where its place is binds the wrapper of its function as a built place does
 				// (`InPlaceCall`): its body holds the call's guard among its statements, with nothing a loop or a fill binds first,
-				// and its function takes the values the wrapper is forwarded. A call that is forwarded values has no record yet,
-				// in any run, so the type key keeps the text of every root that holds one: laid out by the type key, such a root
-				// declares a lazily instantiated builder function that reads nothing in the root's body, where its text nests
-				// it in the function that uses it. `seamCallClaim(of:in:)` refuses the call to match.
-				forwardedProperties.isEmpty ? try seamCallRecord(of: property, instantiable: instantiable, seamCall: seamCall, erasedToConcreteExistential: erasedToConcreteExistential, code: code, declaredFunctionName: functionName, forwardedProperties: forwardedProperties, unavailableProperties: unavailableProperties, builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings, inlinePlaceBuilder: inlinePlaceBuilder, separatesValuesBindings: separatesValuesBindings, inPlaceStatements: valuesBindingLines.isEmpty && unboxingLines.isEmpty && forwardedInnerScopeLines.isEmpty && rebindingLines.isEmpty ? (before: memberCallCode, after: fillPlaceBindingLines + childCode) : nil, lineEnd: constructionLineEnd) : nil
+				// and its function takes the values the wrapper is forwarded. Laid out by the type key, a root that holds a call
+				// forwarded values declares a lazily instantiated builder function that reads nothing in the root's body, where
+				// its text nests it in the function that uses it: a stated difference of the type key's form, the same values.
+				try seamCallRecord(of: property, instantiable: instantiable, seamCall: seamCall, erasedToConcreteExistential: erasedToConcreteExistential, code: code, declaredFunctionName: functionName, forwardedProperties: forwardedProperties, unavailableProperties: unavailableProperties, builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings, inlinePlaceBuilder: inlinePlaceBuilder, separatesValuesBindings: separatesValuesBindings, inPlaceStatements: valuesBindingLines.isEmpty && unboxingLines.isEmpty && forwardedInnerScopeLines.isEmpty && rebindingLines.isEmpty ? (before: memberCallCode, after: fillPlaceBindingLines + childCode) : nil, lineEnd: constructionLineEnd)
 			} else {
 				try builtRecord(functionName: functionName, hasFunction: true, rebindings: rebindingLines)
 			}

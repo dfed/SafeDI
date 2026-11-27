@@ -26,12 +26,11 @@ extension NodeRecords {
 	/// check of stage 1 still runs on it. A call that fills a place is claimed above it (`filledSeamCallClaim(of:in:)`). It
 	/// discharges the refusal of a receive only if available too: the leaf receives only if available each parameter the
 	/// seam takes so, which the call is passed `nil` for where `OnlyIfAvailableAnswers` finds it unavailable. The engine binds
-	/// a call in place as a built place of its form, a wrapper of its function where the property is one (`InPlaceCall`); a
-	/// call that forwards values, which a wrapper binds inside its function, is refused as `construction`.
+	/// a call in place as a built place of its form, a wrapper of its function where the property is one (`InPlaceCall`),
+	/// whose function takes the values the seam forwards, which the wrapper hands it.
 	static func seamCallClaim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
 		guard !world.isMockWorld, world.construction(of: declaration) == .seamCall else { return nil }
 		let scope = world.scope(of: declaration)
-		let forwardsValues = scope.instantiable.dependencies.contains { $0.source == .forwarded }
 		// A call held in a wrapper, erased or not, or in a `@Sendable` function is bound as a built place of its form is, which
 		// discharges what that form's claim does.
 		let wrapperDischarges = (erasedClaim(of: declaration, in: world) ?? lazyClaim(of: declaration, in: world) ?? sendableClaim(of: declaration, in: world))?.discharges ?? []
@@ -42,7 +41,7 @@ extension NodeRecords {
 			kind: .seamCall,
 			// Every builder the call passes is passed up: a call that fills a place is claimed above (`filledSeamCallClaim(of:in:)`).
 			discharges: Set<NodeRecordRefusal>([.construction, .fill, .onlyIfAvailable]).union(wrapperDischarges),
-			refusals: (forwardsValues ? [.construction] : []) + (rebindsLoopMember ? [.builderLoop] : []),
+			refusals: rebindsLoopMember ? [.builderLoop] : [],
 		)
 	}
 
