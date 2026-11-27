@@ -8020,12 +8020,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					callerReads: child.fillCallerReads.parameterByLabel.keys.sorted().map { label in
 						FillFacts.CallerRead(label: label, isRequired: treeReads.required.contains { $0.label == label })
 					},
+					parametersTakenOfCallerReads: child.fillCallerReads.parameterByLabel.sorted { $0.key < $1.key }.map(\.value.property),
 					readLabels: readLabels.sorted(),
 					labelsReadOrDeclared: child.fillLabelsReadOrDeclared.sorted(),
 					declaresFunction: child.fillDeclaresFunction(fillPlaceBindings: FillPlaceBindings(bindingsByGenerator: [:])),
 					returnsBoundValue: filled.property?.propertyType.isConstant ?? false,
 					readsInnerScopes: treeReads.readsInnerScopes,
-				).projection
+				).projection + "; sources: " + child.fillCallerReads.parameterByLabel.keys.sorted().map { "\($0) \((child.fillCallerReads.argumentByLabel[$0] ?? .nil).spelled)" }.joined(separator: ", ")
 			}
 		}
 		return projections

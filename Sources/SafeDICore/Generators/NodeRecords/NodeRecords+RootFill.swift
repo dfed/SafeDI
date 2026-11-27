@@ -61,6 +61,8 @@ struct FillFacts: Sendable {
 	let parametersTaken: [SeamSignature.Hole.Field]
 	/// What the fill reads of the caller's scope, by label, in label order.
 	let callerReads: [CallerRead]
+	/// The parameter the fill takes for each of `callerReads`, in their order.
+	let parametersTakenOfCallerReads: [Property]
 	/// The labels the fill's tree reads from above it, sorted.
 	let readLabels: [String]
 	/// The labels the fill's tree reads or declares, which its scope parameter is named apart from, sorted.
@@ -219,12 +221,84 @@ struct FillFacts: Sendable {
 			bound: boundFill.fields.filter { boundFill.boundLabels.contains($0.property.label) && treeReads.reads($0.property) }.map(\.property.label),
 			parametersTaken: parametersTaken,
 			callerReads: callerReads.parameterByLabel.keys.sorted().map { CallerRead(label: $0, isRequired: requiredLabels.contains($0)) },
+			parametersTakenOfCallerReads: callerReads.parameterByLabel.sorted { $0.key < $1.key }.map(\.value.property),
 			readLabels: readLabels.sorted(),
 			labelsReadOrDeclared: Set(boundFill.fields.map(\.property.label)).union(readLabels).sorted(),
 			declaresFunction: declaresFunction,
 			returnsBoundValue: filledProperty?.propertyType.isConstant ?? false,
 			readsInnerScopes: treeReads.readsInnerScopes,
 		)
+	}
+}
+
+/// What a call hands each read a fill makes of the caller's scope, on one of the call's variants (step 3, row 2): the
+/// caller's nearest declaration of the read's label, or `nil` where none answers it. Per variant, since the declarations
+/// above a call are the one thing two routes to it can differ in.
+enum FillCallerSources {
+	/// The source of each of `facts`' caller reads, in their order, where `call` is reached as `variant`.
+	static func of(facts: FillFacts, call: DeclarationID, variant: VariantID, in world: TypeFactsGraph) -> [ArgumentSource] {
+		let edges = world.edges(from: call)
+		let reads = Array(world.reads(of: facts.declaration))
+		guard let edge = edges.firstIndex(of: facts.declaration) else { return facts.callerReads.map { _ in .nil } }
+		let sources = Array(world.sources(ofCall: edge - edges.startIndex, of: variant))
+		return zip(facts.callerReads, facts.parametersTakenOfCallerReads).map { callerRead, parameter in
+			// The read of the label's value, else its read only if available.
+			let readIndex = reads.indices.first { world.read(reads[$0]).channel == .value && world.text(ofLabel: world.read(reads[$0]).label) == callerRead.label }
+				?? reads.indices.first { world.read(reads[$0]).channel == .optionalValue && world.text(ofLabel: world.read(reads[$0]).label) == callerRead.label }
+			guard let readIndex, readIndex < sources.count, let declared = declaration(of: callerRead.label, answering: sources[readIndex], callee: variant, in: world) else { return .nil }
+			return argument(reading: parameter, declaredAs: declared)
+		}
+	}
+
+	/// The declaration that answers a read `source` hands `callee`, built before the read, or `nil` where none does.
+	private static func declaration(of label: String, answering source: AnswerSource, callee: VariantID, in world: TypeFactsGraph) -> Property? {
+		var source = source
+		var callee = callee
+		while true {
+			switch source.kind {
+			case .none:
+				return nil
+			case .bound:
+				// The declaration that binds the read: a property its scope builds, else one its type receives or forwards.
+				guard world.answer(source.answer).form != .beingBuilt else { return nil }
+				let binder = source.payload
+				return world.edges(from: binder).lazy.filter { world.construction(of: $0) != .fill }.compactMap { world.property(of: $0) }.first { $0.label == label }
+					?? world.scope(of: binder).instantiable.dependencies.lazy.map(\.property).first { $0.label == label }
+			case .passedThrough:
+				// The callee's caller answers its read at the position the source names.
+				guard let (caller, edge) = self.caller(of: callee, in: world) else { return nil }
+				source = world.sources(ofCall: edge, of: caller)[world.sources(ofCall: edge, of: caller).startIndex + Int(source.payload)]
+				callee = caller
+			}
+		}
+	}
+
+	/// The variant that calls `variant`, and the index of the edge it calls it on.
+	private static func caller(of variant: VariantID, in world: TypeFactsGraph) -> (VariantID, Int)? {
+		for caller in 0..<Int32(world.variantCount) {
+			let calls = world.calls(of: caller)
+			if let index = calls.firstIndex(of: variant) {
+				return (caller, index - calls.startIndex)
+			}
+		}
+		return nil
+	}
+
+	/// What a call hands `parameter` where `declared` is the nearest declaration of its label, as
+	/// `ScopeGeneratorUnderConstruction` hands a fill's caller read.
+	private static func argument(reading parameter: Property, declaredAs declared: Property) -> ArgumentSource {
+		let forms = CycleParameter.forms(providedBy: declared)
+		guard parameter.formsReadByOnlyIfAvailableReceive.contains(where: forms.contains) else {
+			guard let instanceProperty = parameter.asLazilyInstantiatedInstanceProperty, instanceProperty.formsReadByOnlyIfAvailableReceive.contains(where: forms.contains) else { return .nil }
+			let instance = argument(reading: instanceProperty, declaredAs: declared)
+			let wrapperType = parameter.typeDescription.unwrapped
+			return declared.typeDescription.isOptional
+				? .optionalWrapper(of: instance, wrapperType: wrapperType)
+				: .wrapper(of: instance, wrapperType: wrapperType)
+		}
+		return !parameter.propertyType.isLazilyInstantiated && declared.propertyType.isLazilyInstantiated
+			? .lazyInstance(label: parameter.label, throughOptional: false)
+			: .binding(label: parameter.label)
 	}
 }
 
@@ -263,8 +337,10 @@ public struct FillFactsObservation: Sendable {
 			} else {
 				switch FillFacts.of(call: declaration, in: world) {
 				case let .facts(allFacts):
+					let variant = (0..<Int32(world.variantCount)).first { world.declaration(of: $0) == declaration } ?? 0
 					for facts in allFacts {
-						fromRecords[facts.key] = facts.projection
+						let sources = FillCallerSources.of(facts: facts, call: declaration, variant: variant, in: world)
+						fromRecords[facts.key] = facts.projection + "; sources: " + zip(facts.callerReads, sources).map { "\($0.label) \($1.spelled)" }.joined(separator: ", ")
 					}
 				case let .refused(refusal):
 					refusals.append(refusal)
