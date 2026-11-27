@@ -29,6 +29,10 @@ public enum NodeRecordsObservation {
 	/// plan before it is turned on for every run, or generate time doubles.
 	@TaskLocal public static var laysOutRoots = false
 
+	/// The nodes a test claims as a lane's kind would (`NodeRecords.claim(of:in:)`), by their concrete type's name, each
+	/// with the raw values of the refusals the claim discharges. Only a test sets it.
+	@TaskLocal public static var claimsForTesting = [String: [String]]()
+
 	/// Handed each root's report, where set. Only a test sets it.
 	@TaskLocal public static var observer: (@Sendable (NodeRecordsReport) -> Void)?
 
@@ -179,6 +183,9 @@ public struct NodeRecordsReport: Sendable {
 	public let root: String
 	/// Why node records refused the root's world (`NodeRecordRefusal`), or `nil` where they made its records.
 	public let refusal: String?
+	/// Every refusal the root's world holds, at any node, each once (`NodeRecords.refusals(in:)`): empty where node records
+	/// made its records.
+	public let everyRefusal: [String]
 	/// Whether the root's code was laid out from node records.
 	public let isLaidOutFromNodeRecords: Bool
 	/// Each way the records differ from the records the tree's places made, where both were made.
@@ -187,4 +194,7 @@ public struct NodeRecordsReport: Sendable {
 	public let recordCount: Int
 	/// How many places the tree's body holds, counted per path, where node records made the root's records.
 	public let treePlaceCount: Int
+	/// What made the run build the root's tree (`TreeForcer`); empty where its code was laid out from node records alone,
+	/// and the tree was built only for the test to compare.
+	public let treeForcers: [TreeForcer]
 }

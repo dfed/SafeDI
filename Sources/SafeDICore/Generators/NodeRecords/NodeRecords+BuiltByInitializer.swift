@@ -19,57 +19,79 @@
 // SOFTWARE.
 
 extension NodeRecords {
-	/// Refuses `declaration`'s world with the first kind stage 1 does not make that the node is of.
-	static func checkBuiltByInitializer(_ declaration: DeclarationID, in world: some NodeRecordSources) throws(NodeRecordRefusal) {
+	/// Every kind stage 1 does not make that `declaration` is of, in the order they are checked.
+	static func refusalsOfBuiltByInitializer(_ declaration: DeclarationID, in world: some NodeRecordSources) -> [NodeRecordRefusal] {
+		var refusals = [NodeRecordRefusal]()
 		// Every other construction is a call of another module's code, a hand-written mock or a fill, which a later stage or
 		// another lane's kind makes.
-		guard world.construction(of: declaration) == .initializer else { throw .construction }
+		if world.construction(of: declaration) != .initializer {
+			refusals.append(.construction)
+		}
 		switch world.kind(of: declaration) {
 		case .constant, .instantiator:
 			break
-		case .sendableInstantiator, .erasedInstantiator, .sendableErasedInstantiator, .lazy, .sendableLazy, .alias, .hole:
-			throw .kind
+		case .sendableInstantiator, .sendableErasedInstantiator, .sendableLazy:
+			refusals.append(.sendable)
+		case .erasedInstantiator:
+			refusals.append(.erased)
+		case .lazy:
+			refusals.append(.lazy)
+		case .hole:
+			// A hole's scope is the one that declares it, whose own node is checked for what it holds.
+			return [.renameOrHole]
+		case .alias:
+			refusals.append(.renameOrHole)
 		}
-		guard !world.isOnCycle(declaration) else { throw .cycle }
+		if world.isOnCycle(declaration) {
+			refusals.append(.cycle)
+		}
 		let scope = world.scope(of: declaration)
-		guard !scope.isUnavailableDependency, scope.builtInlineSeamComment == nil else { throw .unavailableOrInlineSeam }
-		guard scope.holeArguments.isEmpty else { throw .fill }
-		guard scope.instantiatedDependenciesNotGenerated.isEmpty else { throw .renameOrHole }
+		if scope.isUnavailableDependency || scope.builtInlineSeamComment != nil {
+			refusals.append(.unavailableOrInlineSeam)
+		}
+		if !scope.holeArguments.isEmpty {
+			refusals.append(.fill)
+		}
+		if !scope.instantiatedDependenciesNotGenerated.isEmpty {
+			refusals.append(.renameOrHole)
+		}
 		for propertyToGenerate in scope.propertiesToGenerate {
 			switch propertyToGenerate {
 			case let .instantiated(_, _, erasedToConcreteExistential, _):
-				guard !erasedToConcreteExistential else { throw .kind }
+				if erasedToConcreteExistential {
+					refusals.append(.erased)
+				}
 			case .hole:
-				// A node of its own, which `holeKind(of:in:)` makes.
+				// A hole is a node of its own, whose kind is checked there.
 				break
 			case .aliased:
-				throw .renameOrHole
+				refusals.append(.renameOrHole)
 			}
 		}
-		guard scope.declaredLazilyInstantiatedInstanceProperties.isEmpty, scope.forwardedLazilyInstantiatedInstanceProperties.isEmpty else { throw .onlyIfAvailable }
-		for dependency in scope.instantiable.dependencies {
-			switch dependency.source {
-			case .instantiated, .forwarded, .received(onlyIfAvailable: false),
-			     // A rename is among the scope's properties to generate, refused above.
-			     .aliased:
-				break
-			case .received(onlyIfAvailable: true):
-				throw .onlyIfAvailable
-			}
+		// A scope that declares a lazily instantiated property also declares its instance.
+		if !scope.declaredLazilyInstantiatedInstanceProperties.isEmpty || !scope.forwardedLazilyInstantiatedInstanceProperties.isEmpty {
+			refusals.append(.lazy)
 		}
-		guard declaration == 0 || scope.instantiable.initializer != nil else { throw .noInitializer }
+		for dependency in scope.instantiable.dependencies where dependency.source == .received(onlyIfAvailable: true) {
+			refusals.append(.onlyIfAvailable)
+		}
+		if declaration != 0, scope.instantiable.initializer == nil {
+			refusals.append(.noInitializer)
+		}
+		return refusals
 	}
 
 	/// The record of `declaration`'s place, a node of kind `builtByInitializer`, whose body builds `children` and whose
 	/// tree declares `typesDeclaredEscaping` `@escaping`.
 	static func builtByInitializerRecord(
 		of declaration: DeclarationID,
+		variant _: VariantID,
 		in world: some NodeRecordSources,
 		typesDeclaredEscaping: Set<TypeDescription>,
 		children: [GeneratedCode],
 	) throws -> BuiltPlaceRecord {
 		let instantiable = world.scope(of: declaration).instantiable
-		// Every node but the root is built as a property, and has an initializer (`checkBuiltByInitializer(_:in:)`).
+		// Every node but the root is built as a property, and has an initializer (`refusalsOfBuiltByInitializer(_:in:)`).
 		guard let property = world.property(of: declaration), let initializer = instantiable.initializer else { throw NodeRecordRefusal.noInitializer }
 		// Never throws: a type's initializer is one that fulfills its dependencies (`InstantiableVisitor`'s
 		// `canonicalConstructionInitializer`, through `Initializer.isValid(forFulfilling:)`, which makes the same binding).

@@ -30,24 +30,29 @@ struct NodeBuildOrder: Sendable {
 	init(world: some NodeRecordSources) throws(NodeRecordRefusal) {
 		let declarationCount = world.declarationCount
 		var receivedByDeclaration = [Set<Property>?](repeating: nil, count: declarationCount)
-		var holdsHole = false
+		// A child met again on the path closes a cycle of edges, which this order cannot hold: the world is refused as a
+		// cycle here, whatever kinds claim its nodes.
+		var state = [VisitState](repeating: .unvisited, count: declarationCount)
 		var stack: [(declaration: DeclarationID, childrenPushed: Bool)] = [(0, false)]
 		while let (declaration, childrenPushed) = stack.popLast() {
 			let edges = world.edges(from: declaration)
 			guard childrenPushed else {
+				guard state[Int(declaration)] == .unvisited else { continue }
+				state[Int(declaration)] = .onPath
 				stack.append((declaration, true))
-				for child in edges.reversed() where receivedByDeclaration[Int(child)] == nil {
-					stack.append((child, false))
+				for child in edges.reversed() {
+					switch state[Int(child)] {
+					case .unvisited:
+						stack.append((child, false))
+					case .onPath:
+						throw .cycle
+					case .ordered:
+						break
+					}
 				}
 				continue
 			}
-			guard receivedByDeclaration[Int(declaration)] == nil else { continue }
-			// A hole builds no scope and receives nothing (`ScopeGenerator(holeProperty:…)`).
-			guard world.kind(of: declaration) != .hole else {
-				receivedByDeclaration[Int(declaration)] = []
-				holdsHole = true
-				continue
-			}
+			state[Int(declaration)] = .ordered
 			let scope = world.scope(of: declaration)
 			let forwardedProperties = Set(scope.instantiable.dependencies.filter { $0.source == .forwarded }.map(\.property))
 			var received = Set<Property>()
@@ -68,15 +73,11 @@ struct NodeBuildOrder: Sendable {
 			let children = world.edges(from: declaration).map { child in
 				(property: world.property(of: child), received: receivedByDeclaration[Int(child)] ?? [])
 			}
-			let order = try Self.order(of: children)
-			// A child that holds a place starts after its siblings that hold none (`ScopeGenerator.startsAsCarrier(_:)`), which
-			// the graph's build positions say, as the declaration graph decides; only a world that holds a hole has a carrier.
-			if holdsHole {
-				let facts = world.edgeFacts(from: declaration)
-				edgeIndicesByDeclaration[Int(declaration)] = facts.indices.sorted { facts[$0].buildPosition < facts[$1].buildPosition }.map { $0 - facts.startIndex }
-			} else {
-				edgeIndicesByDeclaration[Int(declaration)] = order
-			}
+			try Self.checkNoBuilderLoop(among: children)
+			// Step 0's build position, which the sibling-order fixed point gives each edge.
+			edgeIndicesByDeclaration[Int(declaration)] = world.edgeFacts(from: declaration).enumerated()
+				.sorted { $0.element.buildPosition < $1.element.buildPosition }
+				.map(\.offset)
 		}
 		self.edgeIndicesByDeclaration = edgeIndicesByDeclaration
 	}
@@ -94,13 +95,14 @@ struct NodeBuildOrder: Sendable {
 		case ordered
 	}
 
-	private static func order(of children: [(property: Property?, received: Set<Property>)]) throws(NodeRecordRefusal) -> [Int] {
+	/// Refuses `children` where two wait on each other, or a child's tree receives the child's own property.
+	private static func checkNoBuilderLoop(among children: [(property: Property?, received: Set<Property>)]) throws(NodeRecordRefusal) {
 		// A child's tree that receives the child's own property receives the declaration being built, which the child's
 		// builder function rebinds: a loop of builders, however many siblings it has.
 		for case let (property?, received) in children where received.contains(property) || received.contains(property.asOptionalProperty) {
 			throw .builderLoop
 		}
-		guard children.count > 1 else { return Array(children.indices) }
+		guard children.count > 1 else { return }
 		var indexByProperty = [Property: Int]()
 		for (index, child) in children.enumerated() {
 			if let property = child.property {
@@ -120,9 +122,7 @@ struct NodeBuildOrder: Sendable {
 			childDependencies.remove(index)
 			dependencies.append(childDependencies.sorted())
 		}
-		// Each child follows the siblings it depends on, depth first in index order; a sibling met again on the path is a
-		// loop.
-		var orderedIndices = [Int]()
+		// A sibling met again on the path of a depth-first walk of the siblings each child depends on is a loop.
 		var state = [VisitState](repeating: .unvisited, count: children.count)
 		for startIndex in children.indices where state[startIndex] == .unvisited {
 			state[startIndex] = .onPath
@@ -142,11 +142,9 @@ struct NodeBuildOrder: Sendable {
 					}
 				} else {
 					state[index] = .ordered
-					orderedIndices.append(index)
 					path.removeLast()
 				}
 			}
 		}
-		return orderedIndices
 	}
 }

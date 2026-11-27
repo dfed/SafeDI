@@ -547,23 +547,20 @@ extension DependencyTreeGenerator {
 			} else {
 				scopeGenerator = try builtTree()
 			}
-			// Node records read the seam's tree only where a test observes them.
-			let nodeRecordsWorld: (ConstructionScope, SeamHoles, Set<Property>)? = if NodeRecordsObservation.observer != nil {
-				(
-					{ let (table, record) = seamWorld.frozenScopeMap.freezing(rootScope: seamRootScope); return ConstructionScope(table: table, record: record) }(),
-					SeamHoles(of: finalSeamRoot, seamType: seam.concreteInstantiable),
-					Self.seamRootDeclarations(of: seamRootScope, seamRoot: finalSeamRoot).lazilyInstantiatedInstanceProperties,
-				)
-			} else {
-				nil
-			}
+			// A test compares the records of a seam's own tree with its tree's places, and no run lays the seam's
+			// initializers out from them: they are written around its tree's body (`ScopeGenerator.generateSeamRootCode`).
+			let (table, record) = seamWorld.frozenScopeMap.freezing(rootScope: seamRootScope)
 			rootScopeGenerators.append(RootScopeInfo(
 				typeDescription: seam.concreteInstantiable,
 				instantiable: seam,
 				sourceFilePath: seam.sourceFilePath,
-				scopeGenerator: scopeGenerator,
-				constructionScope: nodeRecordsWorld?.0,
-				seamTree: nodeRecordsWorld.map { ($0.1, $0.2) },
+				built: .tree(scopeGenerator),
+				constructionScope: ConstructionScope(table: table, record: record),
+				seamTree: RootScopeInfo.SeamTree(
+					rootLazilyInstantiatedInstanceProperties: Self.seamRootDeclarations(of: seamRootScope, seamRoot: finalSeamRoot).lazilyInstantiatedInstanceProperties,
+					seamRoot: finalSeamRoot,
+					seamType: seam.concreteInstantiable,
+				),
 			))
 		}
 		// The signature of each seam this module generates, sorted by seam, which its module info carries for the modules
@@ -1664,7 +1661,7 @@ extension DependencyTreeGenerator {
 
 	/// What a seam's root is handed: its parameters as the nearest declarations of their labels, and the instances of
 	/// `LazilyInstantiated` properties among them, a deferred parameter's memo included (`seamRootGenerator`).
-	static func seamRootDeclarations(of rootScope: Scope, seamRoot: ScopeGenerator.SeamRoot) -> (nearestDeclarations: NearestDeclarations, lazilyInstantiatedInstanceProperties: Set<Property>) {
+	private static func seamRootDeclarations(of rootScope: Scope, seamRoot: ScopeGenerator.SeamRoot) -> (nearestDeclarations: NearestDeclarations, lazilyInstantiatedInstanceProperties: Set<Property>) {
 		var nearestDeclarations = NearestDeclarations()
 		var lazilyInstantiatedInstanceProperties = Set<Property>()
 		let autoclosureCallByLabel = seamRoot.autoclosureCallByLabel(of: rootScope.instantiable)

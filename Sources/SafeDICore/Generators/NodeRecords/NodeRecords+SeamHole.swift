@@ -19,46 +19,62 @@
 // SOFTWARE.
 
 extension NodeRecords {
-	/// `.hole` of its property for a hole its scope declares, `nil` for any other node. A hole beside a sibling on a cycle is refused: a
+	/// The claim of `declaration` as a hole its scope declares, `nil` for any other node. A hole's place is its own
+	/// node's, so it discharges the refusal of a hole (`renameOrHole`). A hole beside a sibling on a cycle is refused: a
 	/// cycle-closing scope beneath that sibling can rename the hole's builder function apart
-	/// (`ScopeGenerator.builderFunctionNames(for:enclosingFunctionNames:)`), which the cycle stage decides; so is one the
-	/// tree reaches along more than one path. A hole is never a member of a loop of builders: it receives nothing.
-	static func holeKind(of declaration: DeclarationID, in world: some NodeRecordSources) throws(NodeRecordRefusal) -> NodeRecordKind? {
-		guard world.kind(of: declaration) == .hole, let property = world.property(of: declaration) else { return nil }
-		for parent in world.parents(of: declaration) {
-			for edge in world.edgeFacts(from: parent.parent) where world.isOnCycle(edge.child) || edge.isCallEdge {
-				throw .cycle
-			}
+	/// (`ScopeGenerator.builderFunctionNames(for:enclosingFunctionNames:)`), which the cycle stage decides. So is one the
+	/// tree reaches along more than one path (`holeOnSeveralPaths`). A hole is never a member of a loop of builders: it
+	/// receives nothing.
+	static func seamHoleClaim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
+		guard world.kind(of: declaration) == .hole else { return nil }
+		var refusals = [NodeRecordRefusal]()
+		let besideACycle = world.parents(of: declaration).contains { parent in
+			world.edgeFacts(from: parent.parent).contains { world.isOnCycle($0.child) || $0.isCallEdge }
 		}
+		if besideACycle {
+			refusals.append(.cycle)
+		}
+		if !reachesTheRootAlongOnePath(declaration, in: world) {
+			refusals.append(.holeOnSeveralPaths)
+		}
+		return NodeRecordClaim(kind: .seamHole, discharges: [.renameOrHole], refusals: refusals)
+	}
+
+	/// Whether every node from `declaration` up to the world's root has one parent.
+	private static func reachesTheRootAlongOnePath(_ declaration: DeclarationID, in world: some NodeRecordSources) -> Bool {
 		var node = declaration
 		while node != 0 {
 			let parents = world.parents(of: node)
-			guard parents.count == 1, let parent = parents.first else { throw .holeOnSeveralPaths }
+			guard parents.count == 1, let parent = parents.first else { return false }
 			node = parent.parent
 		}
-		return .hole(property)
+		return true
 	}
 
 	/// The place of `declaration`, a hole: its site's code, as a seam's tree writes it (`HoleSitePlaces`), from the site and
 	/// what the tree binds at its path, which `seamHoles` holds by path (`pathFacts(of:in:rootLazilyInstantiatedInstanceProperties:)`).
-	static func holePlace(
+	/// The place is text, one alias record for the site and one for each payload bound before it, so it is held as a place,
+	/// not as one `PlaceRecord`.
+	static func seamHolePlace(
 		of declaration: DeclarationID,
-		property: Property,
 		in world: some NodeRecordSources,
 		seamHoles: SeamHoles,
 		rootLazilyInstantiatedInstanceProperties: Set<Property>,
 	) -> GeneratedCode {
 		let (sitePath, lazilyInstantiatedInstanceProperties) = pathFacts(of: declaration, in: world, rootLazilyInstantiatedInstanceProperties: rootLazilyInstantiatedInstanceProperties)
 		let carrierSite = seamHoles.carrierSite(at: sitePath)
-		return HoleSitePlaces.place(
-			of: property,
-			at: seamHoles.site(at: sitePath),
-			functionName: nil,
-			valuesBindings: carrierSite?.formations ?? [],
-			carrierUse: carrierSite?.use,
-			readingInstancesOf: lazilyInstantiatedInstanceProperties,
-			loopBindsPayloads: false,
-		)
+		// A hole is a leaf its scope declares, built as its property (`TypeFactsDeclaration.init(leafOf:...)`).
+		return world.property(of: declaration).map { property in
+			HoleSitePlaces.place(
+				of: property,
+				at: seamHoles.site(at: sitePath),
+				functionName: nil,
+				valuesBindings: carrierSite?.formations ?? [],
+				carrierUse: carrierSite?.use,
+				readingInstancesOf: lazilyInstantiatedInstanceProperties,
+				loopBindsPayloads: false,
+			)
+		} ?? .empty
 	}
 
 	/// The place of a node built on the route to a hole's place, `builtPlace`, after the payloads the seam's tree binds just
@@ -79,9 +95,9 @@ extension NodeRecords {
 	/// The properties from the world's root to `declaration`'s, by each node's first parent, and what the scope that builds
 	/// it holds only as the instance of a `LazilyInstantiated`: each scope on the path hides what its declarations shadow and
 	/// adds what it declares lazily, as a scope's generator hands its children (`ScopeGeneratorUnderConstruction`'s
-	/// `childLazilyInstantiatedInstanceProperties`). Every path to one node gives its place one code: its case and payload are
-	/// the node's, and the names its route binds are one per node of the seam's graph (`seam-generation.md`), so the first
-	/// path the world reaches it by is read, and no other is walked.
+	/// `childLazilyInstantiatedInstanceProperties`). A hole and each node on its route reach the root along one path, or the
+	/// world is refused (`holeOnSeveralPaths`), since the names a route binds follow its path; any other node binds nothing,
+	/// so the first path the world reaches it by is read, and no other is walked.
 	private static func pathFacts(
 		of declaration: DeclarationID,
 		in world: some NodeRecordSources,
