@@ -85,6 +85,12 @@ public struct GenerationWork: Sendable {
 		/// visits a generator once, so the generators count, not the places that share them; entered at every place, a
 		/// tree of n layers of screens that each build every screen of the next layer was visited once per path.
 		case collectingTypesOfATree
+		/// Collecting what the scopes of a lazy cycle in a seam's tree declare between the builder function the cycle closes
+		/// on and the scopes that call it again (`DependencyTreeGenerator.declarationsBetween(closedOnScope:closedOnDeclaration:)`):
+		/// each generator a walk reads. A walk reads a generator once, so the generators count, not the paths through
+		/// them; walked along every path, layers of screens that each build every screen of the next layer were read
+		/// once per path.
+		case collectingDeclarationsOfACycle
 		/// Finding, for a child a scope on a site's path builds after the property that leads to the site, the first carrier
 		/// among its siblings that it requires (`DependencyTreeGenerator.fields(of:)`): the properties the child
 		/// requires, where they are fewer than the scope's carriers and each is looked up, or else the carriers compared
@@ -92,6 +98,25 @@ public struct GenerationWork: Sendable {
 		/// child of every site, so a seam whose own type builds n children that each hold a place compared n carriers n²
 		/// times.
 		case findingCarrierASiblingRequires
+		/// Finding the fill of a seam call that stands for a place (`ScopeGenerator.FillStoodFor`): each place of a call
+		/// and each set of fills of the place's case with one tree's reads that its lookup asks (`Scope.nextFill()`), and,
+		/// where the capture walk reaches the call, each place stood for that it gathers under its fill and each that a
+		/// fill then takes. Scanned for, the fills of a case were compared for every place of it, and the places stood
+		/// for for every fill.
+		case findingFillThatStandsForPlace
+		/// Collecting the names of the builder functions of a seam's tree (`DependencyTreeGenerator.builderFunctionNamesOfProperties(in:includingHoleSites:)`):
+		/// each generator the walk visits. A walk visits a generator once, so the generators count, not the places that
+		/// share them.
+		case collectingBuilderFunctionNames
+		/// Finding a seam's receivers and the reads of its parameters (`DependencyTreeGenerator.receivers(in:of:instantiables:)`):
+		/// each place of the seam's tree the walk reaches, a place it then skips included. A place whose generator the walk
+		/// already visited with the same context, as far as the generator's subtree reads it, is skipped and its children
+		/// are not reached, so the generators and the contexts their parents are visited in count, not the paths to them.
+		case findingSeamReceivers
+		/// Finding the values a seam tier a tree calls omits (`ScopeGenerator.seamTierOmissions(ofTreeRootedAt:isOwnFile:)`):
+		/// each place the walk visits. The walk enters no tree that holds no call of a seam tier that omits a parameter, and
+		/// in a tree that holds one only a place whose subtree holds such a call or a scope that closes a lazy cycle.
+		case findingSeamTierOmissions
 	}
 
 	/// The step that did the work.

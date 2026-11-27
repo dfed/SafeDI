@@ -258,7 +258,6 @@ struct SafeDIToolPublicMockPromotedHoleTests: ~Copyable {
 				            self.leaf = leaf
 				        }
 
-				        @_alwaysEmitIntoClient
 				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 				            self.init(leaf: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 				        }
@@ -272,7 +271,6 @@ struct SafeDIToolPublicMockPromotedHoleTests: ~Copyable {
 				            self.api = api
 				        }
 
-				        @_alwaysEmitIntoClient
 				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 				            self.init(api: { __safeDI_builder() })
 				        }
@@ -3068,7 +3066,6 @@ struct SafeDIToolPublicMockPromotedHoleTests: ~Copyable {
 				            self.api = api
 				        }
 
-				        @_alwaysEmitIntoClient
 				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 				            self.init(api: { __safeDI_builder() })
 				        }

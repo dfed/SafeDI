@@ -70,7 +70,6 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		            self.profileBuilder = profileBuilder
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(profileBuilder: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -84,7 +83,6 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		            self.userService = userService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(userService: { __safeDI_builder() })
 		        }
@@ -194,7 +192,6 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		            self.settings = settings
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(profile: .init(__safeDI_noScope: __safeDI_builder), settings: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -208,7 +205,6 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		            self.userService = userService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(userService: { __safeDI_builder() })
 		        }
@@ -222,7 +218,6 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(service: { __safeDI_builder() })
 		        }
@@ -373,7 +368,6 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		            self.userService = userService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(userService: { __safeDI_builder() })
 		        }
@@ -408,7 +402,6 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		            self.inner = inner
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(inner: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -526,7 +519,6 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		            self.profile = profile
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(profile: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -540,7 +532,6 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		            self.userService = userService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(userService: { __safeDI_builder() })
 		        }
@@ -627,7 +618,6 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		            self.account = account
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(settings: .init(__safeDI_noScope: __safeDI_builder), account: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -641,7 +631,6 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(service: { __safeDI_builder() })
 		        }
@@ -655,7 +644,6 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(service: { __safeDI_builder() })
 		        }
@@ -792,7 +780,6 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		            self.settings = settings
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(settings: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -806,7 +793,6 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(service: { __safeDI_builder() })
 		        }
@@ -911,7 +897,6 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		            self.profile = profile
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(profile: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -925,7 +910,6 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		            self.userService = userService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(userService: { __safeDI_builder() })
 		        }
@@ -1048,7 +1032,6 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		            self.badge = badge
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(badge: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -1062,7 +1045,6 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		            self.userService = userService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(userService: { _ in __safeDI_builder() })
 		        }
@@ -1221,7 +1203,6 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		            self.analytics = analytics
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(analytics: { __safeDI_builder() })
 		        }
@@ -1274,7 +1255,6 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		            self.userService = userService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(userService: { __safeDI_builder() })
 		        }
@@ -1332,7 +1312,6 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		            self.userService = userService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(userService: { __safeDI_builder() })
 		        }
@@ -1346,7 +1325,6 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		            self.profileBuilder = profileBuilder
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(profileBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -1439,7 +1417,6 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		            self.userServiceBuilder = userServiceBuilder
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(userServiceBuilder: { { _ in __safeDI_builder() } })
 		        }
@@ -1516,7 +1493,6 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		            self.settings = settings
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(settings: { _, _, _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -1530,7 +1506,6 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(service: { __safeDI_builder() })
 		        }
@@ -1632,7 +1607,6 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		            self.userServiceBuilder = userServiceBuilder
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<String, __safeDI_Built>.Builder) {
 		            self.init(userServiceBuilder: { __safeDI_builder })
 		        }
@@ -1721,7 +1695,6 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		            self.userService = userService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(userService: { __safeDI_builder() })
 		        }
@@ -1795,7 +1768,6 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		            self.panel = panel
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(panel: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -1882,7 +1854,6 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		            self.profile = profile
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(profile: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -1896,7 +1867,6 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		            self.userService = userService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(userService: { __safeDI_builder() })
 		        }
@@ -1993,7 +1963,6 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		            self.panel = panel
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(profile: { _ in .init(__safeDI_noScope: __safeDI_builder) }, panel: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -2007,7 +1976,6 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		            self.userService = userService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(userService: { __safeDI_builder() })
 		        }
@@ -2327,7 +2295,6 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		            self.api = api
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { __safeDI_builder() })
 		        }
@@ -2343,7 +2310,6 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		            self.gadgetBuilder = gadgetBuilder
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(dBuilder: { .init(__safeDI_noScope: __safeDI_builder) }, gadgetBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }

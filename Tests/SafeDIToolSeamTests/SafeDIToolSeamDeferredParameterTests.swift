@@ -864,7 +864,6 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			            self.panel = panel
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 			            self.init(panel: { __safeDI_builder() })
 			        }
@@ -993,7 +992,6 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			            self.panel = panel
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(panel: { __safeDI_builder() })
 			        }
@@ -1007,7 +1005,6 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			            self.detailBuilder = detailBuilder
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 			            self.init(detailBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -1181,7 +1178,6 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			            self.profileBuilder = profileBuilder
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(profileBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -1195,7 +1191,6 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			            self.userService = userService
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(userService: { __safeDI_builder() })
 			        }

@@ -17,5 +17,6 @@ Sources/SafeDI/Decorators/Instantiated.swift: macro declarations only, which com
 Sources/SafeDI/Decorators/Received.swift: macro declarations only, which compile to no executable code
 Sources/SafeDI/Decorators/SafeDIConfiguration.swift: macro declarations only, which compile to no executable code
 Sources/SafeDICore/Errors/DiagnosticError.swift: a protocol declaration only, which compiles to no executable code
+Sources/SafeDICore/Generators/SeamFillSharing.swift: an enum of @TaskLocal declarations and a struct of stored properties only, which compile to no executable lines a coverage report records
 Sources/SafeDICore/Generators/ValidationWalkObservation.swift: an enum of cases and @TaskLocal declarations only, which compile to no executable lines a coverage report records
 Sources/SafeDITool/SafeDIToolMain.swift: the executable's entry point; test targets depend on SafeDIToolLibrary, never on an executable target

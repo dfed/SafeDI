@@ -69,7 +69,7 @@ recompiles it on the next `xcodebuild`, no `tuist generate` round-trip.
    target's compilation conditions when the tool is `2.1.0` or newer):
 
    ```swift
-   .package(url: "https://github.com/dfed/SafeDI.git", from: "2.3.5"),
+   .package(url: "https://github.com/dfed/SafeDI.git", from: "2.4.0"),
    ```
 
 3. In `Project.swift`, `import SafeDITuist` and call the helpers from each

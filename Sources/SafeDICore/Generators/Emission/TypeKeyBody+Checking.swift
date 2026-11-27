@@ -68,6 +68,9 @@ extension TypeKeyLayout {
 			for argument in record.callCycleArguments {
 				let first = normalized(pathValue(of: argument, inBody: bodies[body].parent, before: bodies[body].position))
 				var values = [first]
+				for edge in bodies[body].otherEdges {
+					values.append(normalized(pathValue(of: argument, inBody: edge.parent, before: edge.position)))
+				}
 				for closer in closersByTarget[body] ?? [] {
 					values.append(normalized(closerValue(of: argument.label, closing: closer, onPlace: body)))
 				}
@@ -204,15 +207,77 @@ extension TypeKeyLayout {
 	func checkCall(of place: Int, from body: Int, at index: Int, closer: ClosingPlaceRecord?) -> Bool {
 		let callee = classByBody[place]
 		let owner = classByBody[body]
+		var siblingEdges: [(edge: (parent: Int, position: Int), sibling: (parent: Int, position: Int))]?
+		if let closer, closesOnSibling(closer, from: body) {
+			guard let edges = edgesOfSibling(place, closedOnBy: closer, from: body) else { return false }
+			siblingEdges = edges
+		}
 		for label in reads[membersByClass[callee][0]] where outcomes[callee][label] == .passed {
-			let expected: PathValue = if closer != nil {
-				normalized(closerValue(of: label, closing: (body: body, index: index), onPlace: place))
-			} else {
-				normalized(resolution(of: label, atPlace: place))
-			}
 			let declaration = typeLookUp(label, inClass: owner, before: index)
-			guard normalized(evaluate(declaration, inBody: body)) == expected else { return false }
+			let actual = normalized(evaluate(declaration, inBody: body))
+			if let siblingEdges {
+				// A member of a loop of builders calls a sibling's function: at each of its own places, the sibling its body's
+				// own parent declares, which reads there what that parent holds before it. The closer passes what its function
+				// was passed for the label, which each place's call passes from that same parent, or a declaration of its own.
+				guard !bodies[place].cycleParameterLabels.contains(label) else { return false }
+				let readsOwnParameter = declaration == .read(owner: owner, label: label) && !bodies[body].cycleParameterLabels.contains(label)
+				for pair in siblingEdges {
+					let passed = readsOwnParameter ? normalized(resolution(of: label, atPlace: body, edge: pair.edge)) : actual
+					guard passed == normalized(resolution(of: label, atPlace: place, edge: pair.sibling)) else { return false }
+				}
+			} else if closer == nil {
+				// The call is an edge of the place: it passes what the place resolves the label to there.
+				guard actual == normalized(resolution(of: label, atPlace: place, edge: (parent: body, position: index))) else { return false }
+			} else if bodies[place].cycleParameterLabels.contains(label) {
+				guard actual == normalized(closerValue(of: label, closing: (body: body, index: index), onPlace: place)) else { return false }
+			} else if !passesOwnParameter(declaration, inBody: body, of: place) {
+				// A closer that hands on what the place it calls was passed passes, beneath each edge of that place, what that
+				// edge resolves the label to, which the call at the edge is checked for. Any other value is the one every
+				// edge of the place resolves the label to.
+				for edge in bodies[place].edges {
+					guard actual == normalized(resolution(of: label, atPlace: place, edge: edge)) else { return false }
+				}
+			}
 		}
 		return true
+	}
+
+	/// Whether `closer`, a statement of `body`, calls the function of a statement of the body that declares `body`'s own
+	/// place: a member of a loop of builders calling a sibling's. Any other closer calls an enclosing place's function or a
+	/// statement the view's key pins (`KeyedDeclaration.absolute`).
+	func closesOnSibling(_ closer: ClosingPlaceRecord, from body: Int) -> Bool {
+		guard closer.rebindsLoopMember, body != 0, case let .statement(declaringBody, _, _) = resolvedFunction(named: closer.closedOnFunctionName, from: body) else { return false }
+		return declaringBody == bodies[body].parent
+	}
+
+	/// Where `closer`, a statement of `body` that calls a sibling's function (`closesOnSibling(_:from:)`), calls the function
+	/// of `place`: each edge of `body` with the edge of `place` that the edge's parent declares under the name, which the
+	/// closer calls beneath that edge. `nil` where an edge's parent declares no place of `place`'s view under it.
+	func edgesOfSibling(_ place: Int, closedOnBy closer: ClosingPlaceRecord, from body: Int) -> [(edge: (parent: Int, position: Int), sibling: (parent: Int, position: Int))]? {
+		var pairs = [(edge: (parent: Int, position: Int), sibling: (parent: Int, position: Int))]()
+		for edge in bodies[body].edges {
+			guard case let .statement(siblingBody, index, _) = resolvedFunction(named: closer.closedOnFunctionName, from: edge.parent),
+			      siblingBody == edge.parent,
+			      index < bodies[siblingBody].statements.count,
+			      case let .built(sibling) = bodies[siblingBody].statements[index],
+			      sibling == place
+			else { return nil }
+			pairs.append((edge, (siblingBody, index)))
+		}
+		return pairs
+	}
+
+	/// Whether `declaration`, which `typeLookUp` found in the class of `body`, holds there what the function of `place`, a
+	/// view enclosing `body` along its first edges, was passed as its parameter of the label.
+	func passesOwnParameter(_ declaration: TypeDeclaration, inBody body: Int, of place: Int) -> Bool {
+		var declaration = declaration
+		var body = body
+		while case let .read(owner, label) = declaration {
+			guard body != place else { return owner == classByBody[place] }
+			guard !bodies[body].cycleParameterLabels.contains(label) else { return false }
+			declaration = typeLookUp(label, inClass: classByBody[bodies[body].parent], before: bodies[body].position)
+			body = bodies[body].parent
+		}
+		return false
 	}
 }

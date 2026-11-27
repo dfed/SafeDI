@@ -1047,15 +1047,11 @@ extension TypeAccessProof {
 		/// normalization runs before the run knows its own files, and such a declaration is in one of them, or in a
 		/// directory a configuration adds. A declaration of a module the mentioning module cannot name (`reach`) qualifies
 		/// nothing there.
-		///
-		/// A module's own `@Instantiable` type shadows every other module's type of its name there, as its own plain
-		/// declaration does, so the type declarations of `instantiables` are read beside the plain ones
-		/// (`[Instantiable].ownTypeDeclarations`): a type another module nests in a type of that name is no option.
 		public init(instantiables: [Instantiable], plainTypeDeclarations: [PlainTypeDeclaration], reach: ModuleReach) {
 			let instantiableTypes = Set(instantiables.flatMap(\.instantiableTypes))
 			self.instantiableTypes = instantiableTypes
 			let plainTypeDeclarations = PlainTypeDeclarations(
-				plainTypeDeclarations + instantiables.ownTypeDeclarations,
+				plainTypeDeclarations,
 				entryTypes: Set(instantiables.map(\.concreteInstantiable)),
 				moduleNames: Set(instantiables.compactMap(\.moduleName)),
 				isOwnFile: { _ in true },
@@ -1294,27 +1290,6 @@ extension TypeAccessProof {
 	}
 }
 
-// MARK: - Instantiable type declarations
-
-extension [Instantiable] {
-	/// The declaration of the type each of these declares, as a plain declaration records a type: an extension declares no
-	/// type, and a `mockOnly` declaration names one declared elsewhere.
-	fileprivate var ownTypeDeclarations: [PlainTypeDeclaration] {
-		filter { !$0.mockOnly && !$0.declarationType.isExtension }
-			.map {
-				PlainTypeDeclaration(
-					typeDescription: $0.concreteInstantiable,
-					access: $0.access,
-					enclosingTypeAccess: $0.enclosingTypeAccess,
-					enclosingExtensionAccess: $0.enclosingExtensionAccess,
-					moduleName: $0.moduleName,
-					packageName: $0.packageName,
-					sourceFilePath: $0.sourceFilePath,
-				)
-			}
-	}
-}
-
 // MARK: - TypeAccessProof.MentionedDeclarations
 
 extension TypeAccessProof {
@@ -1327,8 +1302,21 @@ extension TypeAccessProof {
 		///   - plainTypeDeclarations: The plain declarations of the run, each with its module.
 		///   - reach: Which declarations a mention in each module can name.
 		public init(instantiables: [Instantiable], plainTypeDeclarations: [PlainTypeDeclaration], reach: ModuleReach) {
+			let instantiableTypeDeclarations = instantiables
+				.filter { !$0.mockOnly && !$0.declarationType.isExtension }
+				.map {
+					PlainTypeDeclaration(
+						typeDescription: $0.concreteInstantiable,
+						access: $0.access,
+						enclosingTypeAccess: $0.enclosingTypeAccess,
+						enclosingExtensionAccess: $0.enclosingExtensionAccess,
+						moduleName: $0.moduleName,
+						packageName: $0.packageName,
+						sourceFilePath: $0.sourceFilePath,
+					)
+				}
 			declarations = PlainTypeDeclarations(
-				plainTypeDeclarations + instantiables.ownTypeDeclarations,
+				plainTypeDeclarations + instantiableTypeDeclarations,
 				entryTypes: Set(instantiables.map(\.concreteInstantiable)),
 				moduleNames: Set(instantiables.compactMap(\.moduleName)),
 				isOwnFile: nil,

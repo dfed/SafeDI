@@ -136,7 +136,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.nestService = nestService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(nestService: { __safeDI_builder() })
 		        }
@@ -171,7 +170,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.seam = seam
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(seam: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -221,7 +219,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.holeService = holeService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(holeService: { _, _ in __safeDI_builder() })
 		        }
@@ -377,7 +374,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.nestService = nestService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(nestService: { __safeDI_builder() })
 		        }
@@ -412,7 +408,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.seam = seam
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(seam: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -462,7 +457,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.holeService = holeService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(holeService: { _, _ in __safeDI_builder() })
 		        }
@@ -813,7 +807,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.serviceBuilder = serviceBuilder
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(serviceBuilder: { _, _ in { _ in __safeDI_builder() } })
 		        }
@@ -842,7 +835,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.inner = inner
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(inner: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -932,7 +924,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.serviceBuilder = serviceBuilder
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(serviceBuilder: { _, _ in { _ in __safeDI_builder() } })
 		        }
@@ -962,7 +953,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.inner = inner
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(inner: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -1058,7 +1048,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.seam = seam
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(seam: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -1091,7 +1080,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.holeService = holeService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(holeService: { _, _ in __safeDI_builder() })
 		        }
@@ -1147,7 +1135,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.workerBuilder = workerBuilder
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(workerBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		                }
@@ -1165,7 +1152,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.thing = thing
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(thing: { _ in __safeDI_builder() })
 		                }
@@ -1180,7 +1166,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                self.outer_holeServiceBuilder = outer_holeServiceBuilder
 		            }
 
-		            @_alwaysEmitIntoClient
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.init(outer_holeServiceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 		            }
@@ -1311,7 +1296,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.seam = seam
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(seam: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -1344,7 +1328,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.holeService = holeService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(holeService: { _, _ in __safeDI_builder() })
 		        }
@@ -1400,7 +1383,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.workerBuilder = workerBuilder
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(workerBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		                }
@@ -1418,7 +1400,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.thing = thing
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(thing: { _ in __safeDI_builder() })
 		                }
@@ -1433,7 +1414,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                self.outer_holeServiceBuilder = outer_holeServiceBuilder
 		            }
 
-		            @_alwaysEmitIntoClient
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.init(outer_holeServiceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 		            }
@@ -1590,7 +1570,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.seam = seam
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(seam: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -1623,7 +1602,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.holeService = holeService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(holeService: { _, _ in __safeDI_builder() })
 		        }
@@ -1672,7 +1650,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.gadgetBuilder = gadgetBuilder
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		                    self.init(gadgetBuilder: { _ in { _ in __safeDI_builder() } })
 		                }
@@ -1687,7 +1664,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                self.outer_holeServiceBuilder_Sendable = outer_holeServiceBuilder_Sendable
 		            }
 
-		            @_alwaysEmitIntoClient
 		            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		                self.init(outer_holeServiceBuilder_Sendable: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
@@ -1717,7 +1693,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.thingBuilder = thingBuilder
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(thingBuilder: { _ in { _ in __safeDI_builder() } })
 		                }
@@ -1732,7 +1707,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                self.outer_holeServiceBuilder = outer_holeServiceBuilder
 		            }
 
-		            @_alwaysEmitIntoClient
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.init(outer_holeServiceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 		            }
@@ -1760,7 +1734,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.workerBuilder = workerBuilder
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(workerBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		                }
@@ -1778,7 +1751,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.thing = thing
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(thing: { _ in __safeDI_builder() })
 		                }
@@ -1793,7 +1765,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                self.outer_holeServiceBuilder = outer_holeServiceBuilder
 		            }
 
-		            @_alwaysEmitIntoClient
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.init(outer_holeServiceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 		            }
@@ -1967,7 +1938,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.seam = seam
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(seam: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -2000,7 +1970,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.holeService = holeService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(holeService: { _, _ in __safeDI_builder() })
 		        }
@@ -2056,7 +2025,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.workerBuilder = workerBuilder
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(workerBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		                }
@@ -2074,7 +2042,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.thing = thing
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(thing: { _ in __safeDI_builder() })
 		                }
@@ -2089,7 +2056,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                self.outer_holeServiceBuilder = outer_holeServiceBuilder
 		            }
 
-		            @_alwaysEmitIntoClient
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.init(outer_holeServiceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 		            }
@@ -2238,7 +2204,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.seam = seam
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(seam: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -2271,7 +2236,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.holeService = holeService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(holeService: { _, _ in __safeDI_builder() })
 		        }
@@ -2338,7 +2302,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.thing = thing
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(thing: { _ in __safeDI_builder() })
 		                }
@@ -2362,7 +2325,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.thing = thing
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(workerBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) }, thing: { _ in __safeDI_builder() })
 		                }
@@ -2379,7 +2341,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                self.outer_holeServiceBuilder = outer_holeServiceBuilder
 		            }
 
-		            @_alwaysEmitIntoClient
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.init(worker: { _ in .init(__safeDI_noScope: __safeDI_builder) }, outer_holeServiceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 		            }
@@ -2520,7 +2481,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.seam = seam
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(seam: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -2553,7 +2513,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.holeService = holeService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(holeService: { _, _ in __safeDI_builder() })
 		        }
@@ -2620,7 +2579,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.workerBuilder = workerBuilder
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(workerBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		                }
@@ -2638,7 +2596,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.thing = thing
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(thing: { _ in __safeDI_builder() })
 		                }
@@ -2655,7 +2612,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                self.midWorkerBuilder = midWorkerBuilder
 		            }
 
-		            @_alwaysEmitIntoClient
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.init(outer_holeServiceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }, midWorkerBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
@@ -2790,7 +2746,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.seam = seam
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(seamB: .init(__safeDI_noScope: __safeDI_builder), seam: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -2828,7 +2783,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.holeService = holeService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(holeService: { _, _ in __safeDI_builder() })
 		        }
@@ -2860,7 +2814,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.holeService = holeService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(holeService: { _, _ in __safeDI_builder() })
 		        }
@@ -2916,7 +2869,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.workerBuilder = workerBuilder
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(workerBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		                }
@@ -2934,7 +2886,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.thing = thing
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(thing: { _ in __safeDI_builder() })
 		                }
@@ -2949,7 +2900,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                self.outer_holeServiceBuilder = outer_holeServiceBuilder
 		            }
 
-		            @_alwaysEmitIntoClient
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.init(outer_holeServiceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 		            }
@@ -3094,7 +3044,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.seam = seam
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(seam: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -3127,7 +3076,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.holeService = holeService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(holeService: { _, _ in __safeDI_builder() })
 		        }
@@ -3194,7 +3142,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.workerBuilder = workerBuilder
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(workerBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		                }
@@ -3212,7 +3159,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.thing = thing
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(thing: { _ in __safeDI_builder() })
 		                }
@@ -3229,7 +3175,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                self.midWorkerBuilder = midWorkerBuilder
 		            }
 
-		            @_alwaysEmitIntoClient
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.init(outer_holeServiceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }, midWorkerBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
@@ -3368,7 +3313,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.seam = seam
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(seam: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -3401,7 +3345,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.holeService = holeService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(holeService: { _, _ in __safeDI_builder() })
 		        }
@@ -3468,7 +3411,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.workerBuilder = workerBuilder
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(workerBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		                }
@@ -3486,7 +3428,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.thing = thing
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(thing: { _ in __safeDI_builder() })
 		                }
@@ -3503,7 +3444,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                self.midWorkerBuilder = midWorkerBuilder
 		            }
 
-		            @_alwaysEmitIntoClient
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.init(outer_holeServiceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }, midWorkerBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
@@ -3649,7 +3589,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.seam = seam
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(seamB: .init(__safeDI_noScope: __safeDI_builder), seam: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -3687,7 +3626,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.holeService = holeService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(holeService: { _, _ in __safeDI_builder() })
 		        }
@@ -3719,7 +3657,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.holeService = holeService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(holeService: { _, _ in __safeDI_builder() })
 		        }
@@ -3775,7 +3712,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.workerBuilder = workerBuilder
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(workerBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		                }
@@ -3793,7 +3729,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.thing = thing
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(thing: { _ in __safeDI_builder() })
 		                }
@@ -3808,7 +3743,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                self.outer_holeServiceBuilder = outer_holeServiceBuilder
 		            }
 
-		            @_alwaysEmitIntoClient
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.init(outer_holeServiceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 		            }
@@ -3954,7 +3888,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.seam = seam
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(seam: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -3987,7 +3920,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.holeService = holeService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(holeService: { _, _ in __safeDI_builder() })
 		        }
@@ -4043,7 +3975,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.workerBuilder = workerBuilder
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(workerBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		                }
@@ -4061,7 +3992,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.thing = thing
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(thing: { _ in __safeDI_builder() })
 		                }
@@ -4078,7 +4008,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                self.midWorkerBuilder = midWorkerBuilder
 		            }
 
-		            @_alwaysEmitIntoClient
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.init(outer_holeServiceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }, midWorkerBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
@@ -4207,7 +4136,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.seam = seam
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(seam: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -4243,7 +4171,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.holeService = holeService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(holeService: { _, _ in __safeDI_builder() })
 		        }
@@ -4292,7 +4219,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.workerBuilder = workerBuilder
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(workerBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		                }
@@ -4310,7 +4236,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.thing = thing
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(thing: { _ in __safeDI_builder() })
 		                }
@@ -4325,7 +4250,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                self.outer_holeServiceBuilder = outer_holeServiceBuilder
 		            }
 
-		            @_alwaysEmitIntoClient
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.init(outer_holeServiceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 		            }
@@ -4446,7 +4370,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.seam = seam
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(seam: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -4479,7 +4402,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.holeService = holeService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(holeService: { _, _ in __safeDI_builder() })
 		        }
@@ -4530,7 +4452,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.workerBuilder = workerBuilder
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(workerBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		                }
@@ -4548,7 +4469,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.thing = thing
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(thing: { _ in __safeDI_builder() })
 		                }
@@ -4563,7 +4483,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                self.outer_holeServiceBuilder = outer_holeServiceBuilder
 		            }
 
-		            @_alwaysEmitIntoClient
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.init(outer_holeServiceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 		            }
@@ -4767,7 +4686,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(service: { _, _ in __safeDI_builder() })
 		        }
@@ -4815,7 +4733,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.gadget = gadget
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(gadget: { _ in __safeDI_builder() })
 		                }
@@ -4830,7 +4747,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                self.inner_serviceBuilder = inner_serviceBuilder
 		            }
 
-		            @_alwaysEmitIntoClient
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.init(inner_serviceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 		            }
@@ -4895,7 +4811,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.workerBuilder = workerBuilder
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(workerBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		                }
@@ -4913,7 +4828,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.gizmo = gizmo
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(gizmo: { _ in __safeDI_builder() })
 		                }
@@ -4928,7 +4842,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                self.outer_gadgetBuilder = outer_gadgetBuilder
 		            }
 
-		            @_alwaysEmitIntoClient
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.init(outer_gadgetBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 		            }
@@ -5068,7 +4981,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.seamB = seamB
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(seamB: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -5101,7 +5013,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.holeService = holeService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(holeService: { _, _ in __safeDI_builder() })
 		        }
@@ -5133,7 +5044,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.holeService = holeService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(holeService: { _, _ in __safeDI_builder() })
 		        }
@@ -5200,7 +5110,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.workerBuilder = workerBuilder
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(workerBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		                }
@@ -5218,7 +5127,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.thing = thing
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(thing: { _ in __safeDI_builder() })
 		                }
@@ -5235,7 +5143,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                self.midWorkerBuilder = midWorkerBuilder
 		            }
 
-		            @_alwaysEmitIntoClient
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.init(outer_holeServiceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }, midWorkerBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
@@ -5371,7 +5278,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.seamB = seamB
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(seamB: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -5404,7 +5310,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.holeService = holeService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(holeService: { _, _ in __safeDI_builder() })
 		        }
@@ -5436,7 +5341,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.holeService = holeService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(holeService: { _, _ in __safeDI_builder() })
 		        }
@@ -5492,7 +5396,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.workerBuilder = workerBuilder
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(workerBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		                }
@@ -5510,7 +5413,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.thing = thing
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(thing: { _ in __safeDI_builder() })
 		                }
@@ -5525,7 +5427,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                self.outer_holeServiceBuilder = outer_holeServiceBuilder
 		            }
 
-		            @_alwaysEmitIntoClient
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.init(outer_holeServiceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 		            }
@@ -5658,7 +5559,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.seam = seam
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(seamB: .init(__safeDI_noScope: __safeDI_builder), seam: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -5696,7 +5596,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.holeService = holeService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(holeService: { _, _ in __safeDI_builder() })
 		        }
@@ -5728,7 +5627,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.holeService = holeService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(holeService: { _, _ in __safeDI_builder() })
 		        }
@@ -5784,7 +5682,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.workerBuilder = workerBuilder
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(workerBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		                }
@@ -5802,7 +5699,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.thing = thing
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(thing: { _ in __safeDI_builder() })
 		                }
@@ -5817,7 +5713,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                self.outer_holeServiceBuilder = outer_holeServiceBuilder
 		            }
 
-		            @_alwaysEmitIntoClient
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.init(outer_holeServiceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 		            }
@@ -6249,7 +6144,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.seam = seam
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(seam: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -6281,7 +6175,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.holeService = holeService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(holeService: { _, _ in __safeDI_builder() })
 		        }
@@ -6331,7 +6224,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.workerBuilder = workerBuilder
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(workerBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		                }
@@ -6349,7 +6241,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.thing = thing
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(thing: { _ in __safeDI_builder() })
 		                }
@@ -6364,7 +6255,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                self.outer_holeServiceBuilder = outer_holeServiceBuilder
 		            }
 
-		            @_alwaysEmitIntoClient
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.init(outer_holeServiceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 		            }
@@ -6494,7 +6384,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.seam = seam
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(seam: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -6527,7 +6416,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.holeService = holeService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(holeService: { _, _ in __safeDI_builder() })
 		        }
@@ -6583,7 +6471,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.workerBuilder = workerBuilder
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(workerBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		                }
@@ -6601,7 +6488,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.thing = thing
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(thing: { _ in __safeDI_builder() })
 		                }
@@ -6616,7 +6502,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                self.outer_holeServiceBuilder = outer_holeServiceBuilder
 		            }
 
-		            @_alwaysEmitIntoClient
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.init(outer_holeServiceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 		            }
@@ -6746,7 +6631,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.seam = seam
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(seam: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -6779,7 +6663,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.holeService = holeService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(holeService: { _, _ in __safeDI_builder() })
 		        }
@@ -6835,7 +6718,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.workerBuilder = workerBuilder
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(workerBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		                }
@@ -6853,7 +6735,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.thing = thing
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(thing: { _ in __safeDI_builder() })
 		                }
@@ -6868,7 +6749,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                self.outer_holeServiceBuilder = outer_holeServiceBuilder
 		            }
 
-		            @_alwaysEmitIntoClient
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.init(outer_holeServiceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 		            }
@@ -6999,7 +6879,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.seam = seam
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(seam: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -7032,7 +6911,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.holeService = holeService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(holeService: { _, _ in __safeDI_builder() })
 		        }
@@ -7088,7 +6966,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.workerBuilder = workerBuilder
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(workerBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		                }
@@ -7106,7 +6983,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.thing = thing
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(thing: { _ in __safeDI_builder() })
 		                }
@@ -7121,7 +6997,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                self.outer_holeServiceBuilder = outer_holeServiceBuilder
 		            }
 
-		            @_alwaysEmitIntoClient
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.init(outer_holeServiceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 		            }
@@ -7252,7 +7127,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.seamB = seamB
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(seamB: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -7285,7 +7159,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.holeService = holeService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(holeService: { _, _ in __safeDI_builder() })
 		        }
@@ -7317,7 +7190,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.holeService = holeService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(holeService: { _, _ in __safeDI_builder() })
 		        }
@@ -7384,7 +7256,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.workerBuilder = workerBuilder
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(workerBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		                }
@@ -7402,7 +7273,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.thing = thing
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(thing: { _ in __safeDI_builder() })
 		                }
@@ -7419,7 +7289,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                self.midWorkerBuilder = midWorkerBuilder
 		            }
 
-		            @_alwaysEmitIntoClient
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.init(outer_holeServiceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }, midWorkerBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
@@ -7558,7 +7427,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.seamB = seamB
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(seamB: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -7591,7 +7459,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.holeService = holeService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(holeService: { _, _ in __safeDI_builder() })
 		        }
@@ -7623,7 +7490,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.holeService = holeService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(holeService: { _, _ in __safeDI_builder() })
 		        }
@@ -7690,7 +7556,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.workerBuilder = workerBuilder
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(workerBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		                }
@@ -7708,7 +7573,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.thing = thing
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(thing: { _ in __safeDI_builder() })
 		                }
@@ -7725,7 +7589,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                self.midWorkerBuilder = midWorkerBuilder
 		            }
 
-		            @_alwaysEmitIntoClient
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.init(outer_holeServiceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }, midWorkerBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
@@ -7864,7 +7727,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.seamB = seamB
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(seamB: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -7897,7 +7759,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.holeService = holeService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(holeService: { _, _ in __safeDI_builder() })
 		        }
@@ -7929,7 +7790,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.holeService = holeService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(holeService: { _, _ in __safeDI_builder() })
 		        }
@@ -7996,7 +7856,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.workerBuilder = workerBuilder
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(workerBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		                }
@@ -8014,7 +7873,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.thing = thing
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(thing: { _ in __safeDI_builder() })
 		                }
@@ -8031,7 +7889,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                self.midWorkerBuilder = midWorkerBuilder
 		            }
 
-		            @_alwaysEmitIntoClient
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.init(outer_holeServiceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }, midWorkerBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
@@ -8235,7 +8092,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.seam = seam
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(seam: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -8268,7 +8124,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.holeService = holeService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(holeService: { _, _ in __safeDI_builder() })
 		        }
@@ -8324,7 +8179,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.workerBuilder = workerBuilder
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(workerBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		                }
@@ -8342,7 +8196,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.thing = thing
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(thing: { _ in __safeDI_builder() })
 		                }
@@ -8357,7 +8210,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                self.outer_holeServiceBuilder = outer_holeServiceBuilder
 		            }
 
-		            @_alwaysEmitIntoClient
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.init(outer_holeServiceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 		            }
@@ -8491,7 +8343,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.seam = seam
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(seam: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -8523,7 +8374,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.holeService = holeService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(holeService: { _, _ in __safeDI_builder() })
 		        }
@@ -8573,7 +8423,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.workerBuilder = workerBuilder
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(workerBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		                }
@@ -8591,7 +8440,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.thing = thing
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(thing: { _ in __safeDI_builder() })
 		                }
@@ -8606,7 +8454,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                self.outer_holeServiceBuilder = outer_holeServiceBuilder
 		            }
 
-		            @_alwaysEmitIntoClient
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.init(outer_holeServiceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 		            }
@@ -8742,7 +8589,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.seam = seam
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(seam: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -8775,7 +8621,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.holeService = holeService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(holeService: { _, _ in __safeDI_builder() })
 		        }
@@ -8831,7 +8676,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.workerBuilder = workerBuilder
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(workerBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		                }
@@ -8849,7 +8693,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.thing = thing
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(thing: { _ in __safeDI_builder() })
 		                }
@@ -8864,7 +8707,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                self.outer_holeServiceBuilder = outer_holeServiceBuilder
 		            }
 
-		            @_alwaysEmitIntoClient
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.init(outer_holeServiceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 		            }
@@ -8999,7 +8841,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.seam = seam
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(seam: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -9032,7 +8873,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.holeService = holeService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(holeService: { _, _ in __safeDI_builder() })
 		        }
@@ -9088,7 +8928,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.workerBuilder = workerBuilder
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(workerBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		                }
@@ -9106,7 +8945,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.thing = thing
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(thing: { _ in __safeDI_builder() })
 		                }
@@ -9121,7 +8959,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                self.outer_holeServiceBuilder = outer_holeServiceBuilder
 		            }
 
-		            @_alwaysEmitIntoClient
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.init(outer_holeServiceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 		            }
@@ -9356,7 +9193,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.seam = seam
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(seam: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -9392,7 +9228,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.holeService = holeService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(holeService: { _, _ in __safeDI_builder() })
 		        }
@@ -9440,7 +9275,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.workerBuilder = workerBuilder
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(workerBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		                }
@@ -9458,7 +9292,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.thing = thing
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(thing: { _ in __safeDI_builder() })
 		                }
@@ -9473,7 +9306,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                self.outer_holeServiceBuilder = outer_holeServiceBuilder
 		            }
 
-		            @_alwaysEmitIntoClient
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.init(outer_holeServiceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 		            }
@@ -9613,7 +9445,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.seam = seam
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(seam: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -9649,7 +9480,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.holeService = holeService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(holeService: { _, _ in __safeDI_builder() })
 		        }
@@ -9697,7 +9527,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.workerBuilder = workerBuilder
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(workerBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		                }
@@ -9715,7 +9544,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.thing = thing
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(thing: { _ in __safeDI_builder() })
 		                }
@@ -9730,7 +9558,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                self.outer_holeServiceBuilder = outer_holeServiceBuilder
 		            }
 
-		            @_alwaysEmitIntoClient
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.init(outer_holeServiceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 		            }
@@ -9855,7 +9682,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.seam = seam
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(seam: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -9887,7 +9713,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.holeService = holeService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(holeService: { _, _ in __safeDI_builder() })
 		        }
@@ -9937,7 +9762,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.workerBuilder = workerBuilder
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(workerBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		                }
@@ -9955,7 +9779,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.thing = thing
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(thing: { _ in __safeDI_builder() })
 		                }
@@ -9970,7 +9793,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                self.outer_holeServiceBuilder = outer_holeServiceBuilder
 		            }
 
-		            @_alwaysEmitIntoClient
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.init(outer_holeServiceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 		            }
@@ -10100,7 +9922,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.seam = seam
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(seam: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -10136,7 +9957,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.holeService = holeService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(holeService: { _, _ in __safeDI_builder() })
 		        }
@@ -10194,7 +10014,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.workerBuilder = workerBuilder
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(workerBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		                }
@@ -10212,7 +10031,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.thing = thing
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(thing: { _ in __safeDI_builder() })
 		                }
@@ -10227,7 +10045,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                self.outer_holeServiceBuilder = outer_holeServiceBuilder
 		            }
 
-		            @_alwaysEmitIntoClient
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.init(outer_holeServiceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 		            }
@@ -10359,7 +10176,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.seamB = seamB
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(seamB: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -10395,7 +10211,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.holeService = holeService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(holeService: { _, _ in __safeDI_builder() })
 		        }
@@ -10427,7 +10242,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            self.holeService = holeService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(holeService: { _, _ in __safeDI_builder() })
 		        }
@@ -10476,7 +10290,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.workerBuilder = workerBuilder
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(workerBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		                }
@@ -10494,7 +10307,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.thing = thing
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(thing: { _ in __safeDI_builder() })
 		                }
@@ -10509,7 +10321,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                self.outer_holeServiceBuilder = outer_holeServiceBuilder
 		            }
 
-		            @_alwaysEmitIntoClient
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.init(outer_holeServiceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 		            }

@@ -65,7 +65,6 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			            self.uploader = uploader
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(uploader: { _, _ in __safeDI_builder() })
 			        }
@@ -194,7 +193,6 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			            self.uploader = uploader
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(uploader: { __safeDI_builder() })
 			        }
@@ -208,7 +206,6 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			            self.panelBuilder = panelBuilder
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 			            self.init(panelBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -400,7 +397,6 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			            self.uploader = uploader
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(uploader: { _, _, _, _ in __safeDI_builder() })
 			        }
@@ -497,7 +493,6 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			            self.uploader = uploader
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(uploader: { _, _, _ in __safeDI_builder() })
 			        }
@@ -700,7 +695,6 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			            self.uploader = uploader
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(uploader: { _, _, _ in __safeDI_builder() })
 			        }
@@ -792,7 +786,6 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			            self.uploader = uploader
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(uploader: { _, _ in __safeDI_builder() })
 			        }
@@ -879,7 +872,6 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 		            self.uploader = uploader
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(uploader: { _, _ in __safeDI_builder() })
 		        }
@@ -967,7 +959,6 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 		            self.uploader = uploader
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(uploader: { _, _ in __safeDI_builder() })
 		        }
@@ -999,7 +990,6 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 		            self.exportFeature = exportFeature
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(exportFeature: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -1035,7 +1025,6 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 		            self.uploader = uploader
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(uploader: { _, _ in __safeDI_builder() })
 		        }
@@ -1067,7 +1056,6 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 		            self.exportFeature = exportFeature
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(exportFeature: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -1156,7 +1144,6 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			            self.uploader = uploader
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(uploader: { _, _ in __safeDI_builder() })
 			        }
@@ -1272,7 +1259,6 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			            self.uploader = uploader
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(uploader: { _, _ in __safeDI_builder() })
 			        }
