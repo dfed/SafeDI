@@ -52,6 +52,10 @@ public actor DependencyTreeGenerator {
 	///   - viewPlainTypeDeclarations: The plain type declarations of those modules, which attribute types too.
 	///   - viewDeclaringModules: The module each type those declarations fulfill is declared in, with the module this
 	///     module reaches it through, which an error about a type no declaration this module reads fulfills names.
+	///   - unfulfilledReceiveLocations: Where each received dependency and alias is declared that the trees are built
+	///     around although nothing provides it: `validatePropertiesAreFulfillable` reports no such dependency as
+	///     unfulfillable. Only `query graph` passes any, to read what the other receives of a graph mid-edit are handed
+	///     (`receivedValueSupplies()`); `generate` passes none, and reports every one.
 	public init(
 		importStatements: [ImportStatement],
 		mockImportStatements: [ImportStatement],
@@ -67,8 +71,10 @@ public actor DependencyTreeGenerator {
 		viewInstantiablesByModuleName: [String: [Instantiable]] = [:],
 		viewPlainTypeDeclarations: [PlainTypeDeclaration] = [],
 		viewDeclaringModules: [TypeDescription: ViewDeclaringModule] = [:],
+		unfulfilledReceiveLocations: Set<Dependency.DeclarationLocation> = [],
 	) {
 		self.unreadImports = unreadImports
+		self.unfulfilledReceiveLocations = unfulfilledReceiveLocations
 		self.viewInstantiablesByModuleName = viewInstantiablesByModuleName
 		self.viewDeclaringModules = viewDeclaringModules
 		let viewInstantiables = Array(viewInstantiablesByModuleName.values.joined())
@@ -533,6 +539,9 @@ public actor DependencyTreeGenerator {
 	private let importAccessSpellingOwnLevels: @Sendable ([String: Set<AccessLevel>]) -> GeneratedImportAccess
 	private let readOwnFiles: (@Sendable () async -> FulfillerImports.OwnFiles)?
 	let typeDescriptionToFulfillingInstantiableMap: [TypeDescription: Instantiable]
+	/// Where each received dependency and alias is declared that the trees are built around although nothing provides
+	/// it. Empty but for `query graph`'s generator of a graph whose only errors are such dependencies.
+	let unfulfilledReceiveLocations: Set<Dependency.DeclarationLocation>
 	/// The generator's one ID space: every map it freezes interns its records' values here, so that every ID a tree or a
 	/// construction memo compares means one value however many maps and tables the generator makes. Only the generator's
 	/// serial code reaches it.

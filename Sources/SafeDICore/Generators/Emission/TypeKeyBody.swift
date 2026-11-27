@@ -137,9 +137,13 @@ struct TypeKeyLayout {
 		/// call.
 		let domainLabels: Set<String>
 		var statements = [Statement]()
+		/// The positions of the statements that bind each label, ascending.
 		var positionsByLabel = [String: [Int]]()
 		let forwardedLabels: Set<String>
 		let cycleParameterLabels: Set<String>
+		/// The declaration each label of the body's domain resolves to outside it, at its first place: what a look-up from the
+		/// body or beneath it finds once it leaves the body, without walking further up.
+		var outerDeclarations = [String: PathValue]()
 
 		/// The parent body and statement index of each of the view's places.
 		var edges: [(parent: Int, position: Int)] {
@@ -155,6 +159,10 @@ struct TypeKeyLayout {
 		/// Whether a closer beneath the node's own body, rather than one of its own statements, calls a function declared
 		/// outside it.
 		var closesBeneathItsBody = false
+		/// The names among `closedOnFunctionNames` that a member of a loop of builders calls, rebinding a sibling
+		/// (`ClosingPlaceRecord.rebindsLoopMember`): the only names a statement's function can answer. A node whose domain
+		/// holds none resolves each name to an enclosing place's function, with no look-up among statements.
+		var loopMemberFunctionNames = Set<String>()
 	}
 
 	/// What tells two places of one plan node apart (`Body`).

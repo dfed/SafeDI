@@ -89,7 +89,7 @@ struct SafeDIToolSeamGuardTests: ~Copyable {
 		        let logger = Logger()
 		        let navigator = Navigator()
 		        let __safeDI_apiBuilder_detailBuilder = __safeDI_apiBuilder.detailBuilder(logger, navigator)
-		        func __safeDI_detailBuilder() -> Detail {
+		        @inline(never) func __safeDI_detailBuilder() -> Detail {
 		            let api: any Api = __safeDI_apiBuilder_detailBuilder.api()
 		            return Detail(api: api)
 		        }
@@ -185,11 +185,11 @@ struct SafeDIToolSeamGuardTests: ~Copyable {
 		    public convenience init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 		        let logger = Logger()
 		        let __safeDI_apiBuilder_stepBuilder = __safeDI_apiBuilder.stepBuilder(logger)
-		        func __safeDI_detailBuilder(__safeDI_apiBuilder_detailBuilder: __safeDI_ApiCarrier_Detail<any Api>) -> Detail {
+		        @inline(never) func __safeDI_detailBuilder(__safeDI_apiBuilder_detailBuilder: __safeDI_ApiCarrier_Detail<any Api>) -> Detail {
 		            let api: any Api = __safeDI_apiBuilder_detailBuilder.api()
 		            return Detail(api: api)
 		        }
-		        func __safeDI_stepBuilder() -> Step {
+		        @inline(never) func __safeDI_stepBuilder() -> Step {
 		            let __safeDI_apiBuilder_detailBuilder = __safeDI_apiBuilder_stepBuilder.detailBuilder
 		            let detailBuilder = Instantiator<Detail> {
 		                __safeDI_detailBuilder(__safeDI_apiBuilder_detailBuilder: __safeDI_apiBuilder_detailBuilder)
@@ -280,7 +280,7 @@ struct SafeDIToolSeamGuardTests: ~Copyable {
 		    public convenience init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 		        let logger = Logger()
 		        let __safeDI_apiBuilder_detailBuilder = __safeDI_apiBuilder.detailBuilder(logger)
-		        func __safeDI_detailBuilder() -> Detail {
+		        @inline(never) func __safeDI_detailBuilder() -> Detail {
 		            let api: any Api = __safeDI_apiBuilder_detailBuilder.api()
 		            let backupApi: any Api = __safeDI_apiBuilder_detailBuilder.backupApi(api)
 		            return Detail(api: api, backupApi: backupApi)
@@ -371,7 +371,7 @@ struct SafeDIToolSeamGuardTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_apiSendableBuilder: __safeDI_ApiSendableCarrier<any Api>) {
 		        let logger = Logger()
-		        @Sendable nonisolated func __safeDI_detailBuilder() -> Detail {
+		        @inline(never) @Sendable nonisolated func __safeDI_detailBuilder() -> Detail {
 		            let __safeDI_apiSendableBuilder_detailBuilder = __safeDI_apiSendableBuilder.detailBuilder()
 		            let api: any Api = __safeDI_apiSendableBuilder_detailBuilder.api()
 		            return Detail(api: api)
@@ -457,7 +457,7 @@ struct SafeDIToolSeamGuardTests: ~Copyable {
 		        let logger = Logger()
 		        let tracker = Tracker()
 		        let __safeDI_apiBuilder_detailBuilder = __safeDI_apiBuilder.detailBuilder(logger, tracker)
-		        func __safeDI_detailBuilder() -> Detail {
+		        @inline(never) func __safeDI_detailBuilder() -> Detail {
 		            let api: any Api = __safeDI_apiBuilder_detailBuilder.api()
 		            return Detail(api: api)
 		        }
@@ -545,7 +545,7 @@ struct SafeDIToolSeamGuardTests: ~Copyable {
 		    public convenience init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 		        let logger = Logger()
 		        let __safeDI_apiBuilder_detailBuilder = __safeDI_apiBuilder.detailBuilder(logger)
-		        func __safeDI_detailBuilder() -> Detail {
+		        @inline(never) func __safeDI_detailBuilder() -> Detail {
 		            let api: any Api = __safeDI_apiBuilder_detailBuilder.api()
 		            return Detail(api: api)
 		        }
@@ -629,7 +629,7 @@ struct SafeDIToolSeamGuardTests: ~Copyable {
 		    public convenience init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 		        let logger = Logger()
 		        let __safeDI_apiBuilder_detailBuilder = __safeDI_apiBuilder.detailBuilder(logger)
-		        func __safeDI_detailBuilder() -> Detail {
+		        @inline(never) func __safeDI_detailBuilder() -> Detail {
 		            let api: any Api = __safeDI_apiBuilder_detailBuilder.api()
 		            return Detail(api: api)
 		        }
@@ -713,7 +713,7 @@ struct SafeDIToolSeamGuardTests: ~Copyable {
 		    public convenience init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 		        let logger = Logger()
 		        let __safeDI_apiBuilder_detailBuilder = __safeDI_apiBuilder.detailBuilder(logger)
-		        func __safeDI_detailBuilder() -> Detail {
+		        @inline(never) func __safeDI_detailBuilder() -> Detail {
 		            let api: any Api = __safeDI_apiBuilder_detailBuilder.api()
 		            return Detail(api: api)
 		        }
@@ -796,7 +796,7 @@ struct SafeDIToolSeamGuardTests: ~Copyable {
 		    public convenience init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 		        let logger = Logger()
 		        let __safeDI_apiBuilder_detailBuilder = __safeDI_apiBuilder.detailBuilder(logger)
-		        func __safeDI_detailBuilder() -> Detail {
+		        @inline(never) func __safeDI_detailBuilder() -> Detail {
 		            let api: any Api = __safeDI_apiBuilder_detailBuilder.api()
 		            return Detail(api: api)
 		        }
@@ -878,7 +878,7 @@ struct SafeDIToolSeamGuardTests: ~Copyable {
 	    public convenience init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 	        let logger = Logger()
 	        let __safeDI_apiBuilder_detailBuilder = __safeDI_apiBuilder.detailBuilder(logger)
-	        func __safeDI_detailBuilder() -> Detail {
+	        @inline(never) func __safeDI_detailBuilder() -> Detail {
 	            let api: any Api = __safeDI_apiBuilder_detailBuilder.api()
 	            return Detail(api: api)
 	        }

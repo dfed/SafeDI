@@ -211,7 +211,7 @@ enum SeamAccessExplanation {
 				// A modifier is replaced, and one is inserted where the declaration begins when it spells none.
 				let fixIt = accessNeed.access.modifierRange.map { SourceDiagnostic.FixIt(range: $0, replacement: level) }
 					?? SourceDiagnostic.FixIt(
-						range: Dependency.SourceRange(startLine: location.line, startColumn: location.column, endLine: location.line, endColumn: location.column),
+						range: .insertionPoint(at: location),
 						replacement: "\(level) ",
 					)
 				return SourceDiagnostic(

@@ -624,7 +624,7 @@ struct SafeDIToolNestedLazyCycleNearestDeclarationTests: ~Copyable {
 				    /// Code you write and code SafeDI generates can both call this initializer.
 				    public convenience init() {
 				        let l = L()
-				        func __safeDI_wBuilder(l: L) -> W {
+				        @inline(never) func __safeDI_wBuilder(l: L) -> W {
 				            let uBuilder = Instantiator<U> {
 				                __safeDI_uBuilder(l: l)
 				            }
@@ -633,21 +633,21 @@ struct SafeDIToolNestedLazyCycleNearestDeclarationTests: ~Copyable {
 				            }
 				            return W(uBuilder: uBuilder, vBuilder: vBuilder)
 				        }
-				        func __safeDI_uBuilder(l: L) -> U {
+				        @inline(never) func __safeDI_uBuilder(l: L) -> U {
 				            let pBuilder = Instantiator<P>(__safeDI_pBuilder)
 				            let wBuilder = Instantiator<W> {
 				                __safeDI_wBuilder(l: l)
 				            }
 				            return U(pBuilder: pBuilder, wBuilder: wBuilder)
 				        }
-				        func __safeDI_pBuilder() -> P {
+				        @inline(never) func __safeDI_pBuilder() -> P {
 				            let l = L()
 				            let uBuilder = Instantiator<U> {
 				                __safeDI_uBuilder(l: l)
 				            }
 				            return P(l: l, uBuilder: uBuilder)
 				        }
-				        func __safeDI_vBuilder(l: L) -> V {
+				        @inline(never) func __safeDI_vBuilder(l: L) -> V {
 				            V(l: l)
 				        }
 				        let wBuilder = Instantiator<W> {
