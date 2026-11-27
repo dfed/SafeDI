@@ -561,11 +561,7 @@ extension DependencyTreeGenerator {
 				sourceFilePath: seam.sourceFilePath,
 				built: .tree(scopeGenerator),
 				rootScope: rootScope,
-				seamTree: RootScopeInfo.SeamTree(
-					rootLazilyInstantiatedInstanceProperties: Self.seamRootDeclarations(of: seamRootScope, seamRoot: finalSeamRoot).lazilyInstantiatedInstanceProperties,
-					parameters: finalSeamRoot.signature.parameters.map(\.property),
-					autoclosureLabels: Set(finalSeamRoot.autoclosureCallByLabel(of: seamRootScope.instantiable).keys),
-				),
+				ownSeamRoot: finalSeamRoot,
 			))
 		}
 		// The signature of each seam this module generates, sorted by seam, which its module info carries for the modules
@@ -1648,7 +1644,7 @@ extension DependencyTreeGenerator {
 		seamRoot: ScopeGenerator.SeamRoot,
 		declaredTypeNames: DeclaredTypeNames,
 	) throws -> SeamRootTree {
-		let (nearestDeclarations, lazilyInstantiatedInstanceProperties) = seamRootDeclarations(of: rootScope, seamRoot: seamRoot)
+		let (nearestDeclarations, lazilyInstantiatedInstanceProperties) = seamRootDeclarations(of: rootScope.instantiable, seamRoot: seamRoot)
 		// A seam's tree reads its own `SeamHoles`, constant within the tree but not across trees, so it keeps a memo of its
 		// own, for one pass: a seam without holes reuses its places within a pass, and one with holes stores none.
 		var constructionMemo = ConstructionMemo()
@@ -1669,10 +1665,10 @@ extension DependencyTreeGenerator {
 
 	/// What a seam's root is handed (`seamRootGenerator`): its parameters, as the nearest declarations of their labels, and
 	/// the instances of `LazilyInstantiated` properties among them, a deferred parameter's memo included.
-	private static func seamRootDeclarations(of rootScope: Scope, seamRoot: ScopeGenerator.SeamRoot) -> (nearestDeclarations: NearestDeclarations, lazilyInstantiatedInstanceProperties: Set<Property>) {
+	static func seamRootDeclarations(of seam: Instantiable, seamRoot: ScopeGenerator.SeamRoot) -> (nearestDeclarations: NearestDeclarations, lazilyInstantiatedInstanceProperties: Set<Property>) {
 		var nearestDeclarations = NearestDeclarations()
 		var lazilyInstantiatedInstanceProperties = Set<Property>()
-		let autoclosureCallByLabel = seamRoot.autoclosureCallByLabel(of: rootScope.instantiable)
+		let autoclosureCallByLabel = seamRoot.autoclosureCallByLabel(of: seam)
 		for parameter in seamRoot.signature.parameters {
 			let property = parameter.property
 			// Each parameter is the nearest declaration of its label in the seam's tree. An optional one also stands for the

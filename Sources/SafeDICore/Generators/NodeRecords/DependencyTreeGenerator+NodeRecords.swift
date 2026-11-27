@@ -84,7 +84,7 @@ extension DependencyTreeGenerator {
 				return try await scopeGenerator.generatePlan()
 			}
 			// A seam's own tree is compared and never laid out here: its initializers are written around its body.
-			let laidOutCode: GeneratedCode? = if NodeRecordsObservation.laysOutRoots, rootInfo.seamTree == nil {
+			let laidOutCode: GeneratedCode? = if NodeRecordsObservation.laysOutRoots, rootInfo.ownSeamRoot == nil {
 				try laidOutRootCode(of: rootInfo.instantiable, body: nodeRecords.rootBody)
 			} else {
 				nil

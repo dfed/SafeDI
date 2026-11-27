@@ -328,6 +328,112 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_refusesWorldAsReadAnsweredTwoWays_whenAMemberOfALoopOfBuildersIsOwedItsBindings() async throws {
+		// `Editor` receives `editorBuilder`, the `Instantiator` being built around it: a member of a loop of builders, whose
+		// bindings made again the facts still owe (`madeAgain`).
+		let (_, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true)
+				public struct Root: Instantiable {
+				    public init(editorBuilder: Instantiator<Editor>) {
+				        self.editorBuilder = editorBuilder
+				    }
+				    @Instantiated let editorBuilder: Instantiator<Editor>
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Editor: Instantiable {
+				    public init(editorBuilder: Instantiator<Editor>?) {
+				        self.editorBuilder = editorBuilder
+				    }
+				    @Received(onlyIfAvailable: true) let editorBuilder: Instantiator<Editor>?
+				}
+				""",
+			], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(reports.map(\.everyRefusal) == [["builderLoop", "readAnsweredTwoWays"]])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_refusesWorldAsReadAnsweredTwoWays_whenADeclarationIsBuiltInsideAFillOfASeamsHole() async throws {
+		// `App`'s root calls `Feature`'s seam `Screen` and fills its hole `api` with `LiveApi`: whether the hole's property
+		// is still being built inside its fill the facts still owe the fill and what it builds (`fillBeingBuilt`).
+		let (_, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(name: "Feature", packageName: "App", swiftFileContent: [
+						"""
+						public protocol Api {}
+
+						@Instantiable(generateDependencyTree: true)
+						public struct Screen: Instantiable {
+						    public init(api: any Api) {
+						        self.api = api
+						    }
+
+						    @Instantiated let api: any Api
+						}
+						""",
+					], dependencies: []),
+					ModuleFixture(name: "App", packageName: "App", swiftFileContent: [
+						"""
+						import Feature
+
+						@Instantiable(fulfillingAdditionalTypes: [(any Api).self])
+						public struct LiveApi: Api, Instantiable {
+						    public init() {}
+						}
+
+						@Instantiable(isRoot: true)
+						public struct Root: Instantiable {
+						    public init(screen: Screen) {
+						        self.screen = screen
+						    }
+
+						    @Instantiated let screen: Screen
+						}
+						""",
+					], dependencies: ["Feature"]),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		#expect(reports.filter { $0.root == "Root" }.map { $0.everyRefusal.contains("readAnsweredTwoWays") } == [true])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_refusesMockWorldAsReadAnsweredTwoWays_whenTheMockRootsPinsRecordsAndBindingsAreOwed() async throws {
+		// The facts still owe every declaration of a mock root's world its pins, required-receive records and bindings
+		// (`mockRootPin`, `mockRootRecord`, `mockRootBinding`), which are set together.
+		let (_, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true, generateMock: true)
+				public struct Root: Instantiable {
+				    public init(service: Service) {
+				        self.service = service
+				    }
+				    @Instantiated let service: Service
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Service: Instantiable {
+				    public init() {}
+				}
+				""",
+			], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(reports.filter(\.isMockRoot).map(\.everyRefusal) == [["readAnsweredTwoWays"]])
+	}
+
+	@Test
 	func nodeRecordsFiles_callNoScopeGeneratorAndReadNoText_whenReadAsSource() throws {
 		// Soundness rule 2: a record is made from per-type facts, never from a tree's generator or text it spelled. Only
 		// the static helpers of `ScopeGenerator` listed here are called, until they move: a new one is a decision. The
