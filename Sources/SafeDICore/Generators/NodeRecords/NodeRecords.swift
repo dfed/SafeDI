@@ -52,9 +52,10 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	/// The node is on a cycle, and no kind that makes a node on a cycle claims it (`cycleClaim(of:in:)`), or the world's
 	/// edges close a cycle that `NodeBuildOrder` meets.
 	case cycle
-	/// A world with a cycle holds a node of a kind other than `builtByInitializer` or `cycle`, whose records inside a world
-	/// with a cycle no comparison has covered yet.
-	case cycleWorldHoldsLaterKind
+	/// A variant of a node on a cycle holds an optional parameter's key (`TypeFactsGraph.optionalParameterKey`, a value
+	/// or `nil`), or a cycle's identity is twinned (a value and a lazily instantiated wrapper of it), where the facts'
+	/// variants and today's bodies may partition the cycle's places apart.
+	case cycleVariantsPartitionApart
 	/// A node on a cycle is built at two places whose trees close the cycle on different places above them, so that one
 	/// place of its variant cannot stand for both.
 	case cycleMemberBuiltTwoWays
@@ -67,6 +68,9 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	/// Two places of a world with a cycle are bound to one label, and one of them is on a cycle or a builder, so that today's
 	/// tree may name one's function apart.
 	case cycleBuilderNameShared
+	/// A call closes a cycle beneath a place built in a `@Sendable` function, which today's tree makes the functions the
+	/// call refers to `@Sendable` too.
+	case cycleClosesInsideSendableFunction
 	/// The node is built as a `LazilyInstantiated`, which `lazyClaim(of:in:)` discharges: its record is
 	/// `NodeRecordKind.lazy`'s. Also a world whose records read a wrapper's instance where no record does yet: a rename
 	/// fulfilled by one (`DeclarationsAnsweringReads.renameReadsWrappersInstance`), a seam's own root handed one, and a
@@ -156,17 +160,22 @@ struct NodeRecords: Sendable {
 			try Self.checkReadsNoSeamRootValue(of: seamTree, declaration, in: world)
 			try Self.checkForwardsBuiltTypesProperties(declaration, in: world, declaredTypeNames: declaredTypeNames)
 		}
-		var variantByDeclaration = [VariantID](repeating: -1, count: declarationCount)
-		for variant in 0..<Int32(world.variantCount) {
-			let declaration = Int(world.declaration(of: variant))
-			guard variantByDeclaration[declaration] < 0 else { throw NodeRecordRefusal.nodeHasSeveralVariants }
-			variantByDeclaration[declaration] = variant
+		let holdsCycle = (0..<Int32(declarationCount)).contains(where: world.isOnCycle)
+		// A world with a cycle makes a record per variant, each read of its own calls; any other world, one per node.
+		if holdsCycle {
+			try Self.checkVariantsPartitionAlike(inWorldWithCycle: world)
+		} else {
+			var variantByDeclaration = [VariantID](repeating: -1, count: declarationCount)
+			for variant in 0..<Int32(world.variantCount) {
+				let declaration = Int(world.declaration(of: variant))
+				guard variantByDeclaration[declaration] < 0 else { throw NodeRecordRefusal.nodeHasSeveralVariants }
+				variantByDeclaration[declaration] = variant
+			}
 		}
 		// A world whose edges close a cycle builds each node's children in the order step 0's sibling-order fixed point gives
 		// them (`TypeFactsEdge.buildPosition`), which `NodeBuildOrder` stands in for only off every cycle.
-		let holdsCycle = (0..<Int32(declarationCount)).contains(where: world.isOnCycle)
 		let order: NodeBuildOrder? = holdsCycle ? nil : try NodeBuildOrder(world: world)
-		let labelsReceived = holdsCycle ? try Self.labelsReceived(inWorldWithCycle: world, kinds: kinds) : []
+		let labelsReceived = holdsCycle ? try Self.labelsReceived(inWorldWithCycle: world) : []
 		let onlyIfAvailableAnswers = try OnlyIfAvailableAnswers(world: world, rootParameters: seamTree?.parameters ?? [])
 		let answeringDeclarations = DeclarationsAnsweringReads(world: world)
 		// The tree reports the capture as an error, which the records cannot.
@@ -210,6 +219,9 @@ struct NodeRecords: Sendable {
 					   stack[(closedOn + 1)...].contains(where: { !labelsReceived.isDisjoint(with: Self.labelsDeclared(by: world.declaration(of: $0.variant), in: world)) })
 					{
 						throw NodeRecordRefusal.cycleTakesParameters
+					}
+					guard !stack.contains(where: { Self.buildsInSendableFunction(world.declaration(of: $0.variant), in: world) }) else {
+						throw NodeRecordRefusal.cycleClosesInsideSendableFunction
 					}
 					let closer = try Self.closingRecord(closingOn: world.declaration(of: callee), in: world)
 					stack[stack.count - 1].children.append(.indented(.place(PlacePlan(code: .empty, record: closer)), by: indentation))
@@ -355,10 +367,11 @@ struct NodeRecords: Sendable {
 			}
 		}
 		var declarationsWithAVariant = Set<DeclarationID>()
-		for variant in 0..<Int32(world.variantCount) where !declarationsWithAVariant.insert(world.declaration(of: variant)).inserted {
+		let holdsCycle = (0..<Int32(world.declarationCount)).contains(where: world.isOnCycle)
+		for variant in 0..<Int32(world.variantCount) where !holdsCycle && !declarationsWithAVariant.insert(world.declaration(of: variant)).inserted {
 			refusals.insert(.nodeHasSeveralVariants)
 		}
-		if (0..<Int32(world.declarationCount)).contains(where: world.isOnCycle) {
+		if holdsCycle {
 			// A world with a cycle is built in step 0's order, and its walk refuses what its places' closing needs.
 			if refusals.isEmpty, case let .failure(refusal as NodeRecordRefusal) = Result(catching: { try NodeRecords(world: world, seamTree: seamTree, declaredTypeNames: declaredTypeNames) }) {
 				refusals.insert(refusal)
@@ -441,7 +454,12 @@ struct NodeRecords: Sendable {
 	/// one claimed, is still refused for the other.
 	private static func kindAndRefusals(of declaration: DeclarationID, in world: some NodeRecordSources) -> (kind: NodeRecordKind, refusals: [NodeRecordRefusal]) {
 		let claim = claim(of: declaration, in: world)
-		let discharged = claim?.discharges ?? []
+		var discharged = claim?.discharges ?? []
+		// A production node on a cycle that a lane's kind claims is that kind's record, and the walk closes the cycle on it
+		// as on a node of kind `cycle` (`NodeRecords+Cycle.swift`).
+		if claim != nil, !world.isMockWorld, world.isOnCycle(declaration) {
+			discharged.insert(.cycle)
+		}
 		let refusals = (claim?.refusals ?? []) + refusalsOfBuiltByInitializer(declaration, in: world).filter { !discharged.contains($0) }
 		return (claim?.kind ?? .builtByInitializer, refusals)
 	}

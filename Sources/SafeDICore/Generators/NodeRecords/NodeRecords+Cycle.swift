@@ -20,7 +20,8 @@
 
 extension NodeRecords {
 	/// The claim of `declaration` as a node on a cycle, which discharges the refusal of the cycle, or `nil` where it is on
-	/// none. A node on a cycle another kind claims first keeps the refusal.
+	/// none. A node on a cycle another kind claims is that kind's, closed on as this kind's is
+	/// (`NodeRecords.kindAndRefusals(of:in:)`).
 	static func cycleClaim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
 		guard world.isOnCycle(declaration) else { return nil }
 		return NodeRecordClaim(kind: .cycle, discharges: [.cycle])
@@ -47,29 +48,58 @@ extension NodeRecords {
 		)
 	}
 
-	/// The labels the types of `world`, which holds a cycle, receive: read from above wherever they are, a superset of what
-	/// the function a call closes a cycle on reads from above it. Every node of `world` is of kind `builtByInitializer` or
-	/// `cycle`, so no type renames a value or receives one only if available: it reads from above only what it receives
-	/// plainly.
-	/// - Throws: `cycleWorldHoldsLaterKind` where a node of `kinds` is of another kind, and `cycleReceivesBuilder` where a
-	///   type receives a builder.
-	static func labelsReceived(inWorldWithCycle world: some NodeRecordSources, kinds: [NodeRecordKind]) throws(NodeRecordRefusal) -> Set<String> {
-		for kind in kinds {
-			switch kind {
-			case .builtByInitializer, .cycle:
-				break
-			case .inlineSeam, .unavailableDependency, .receivesOnlyIfAvailable, .rename, .erased, .lazy, .sendable, .mockConstruction:
-				throw .cycleWorldHoldsLaterKind
-			}
+	/// Refuses `world`, which holds a cycle, where a variant of a node on a cycle holds an optional parameter's key: one
+	/// body takes the label as an optional parameter there (rule 1), where today's tree may write a body per value or `nil`;
+	/// or where one cycle identity (`cycle(of:)`) is built both as a lazily instantiated wrapper and otherwise: a twin.
+	static func checkVariantsPartitionAlike(inWorldWithCycle world: some NodeRecordSources) throws(NodeRecordRefusal) {
+		for variant in 0..<Int32(world.variantCount) where world.isOnCycle(world.declaration(of: variant)) {
+			guard !world.keys(of: variant).contains(TypeFactsGraph.optionalParameterKey) else { throw .cycleVariantsPartitionApart }
 		}
+		var isLazyByIdentity = [CycleID: Bool]()
+		for declaration in 0..<Int32(world.declarationCount) where world.isOnCycle(declaration) {
+			let isLazy = switch world.kind(of: declaration) {
+			case .lazy, .sendableLazy:
+				true
+			case .constant, .instantiator, .sendableInstantiator, .erasedInstantiator, .sendableErasedInstantiator, .alias, .hole:
+				false
+			}
+			guard isLazyByIdentity[world.cycle(of: declaration), default: isLazy] == isLazy else { throw .cycleVariantsPartitionApart }
+			isLazyByIdentity[world.cycle(of: declaration)] = isLazy
+		}
+	}
+
+	/// The labels the types of `world`, which holds a cycle, receive, plainly, only if available or through a rename: read
+	/// from above wherever they are, a superset of what the function a call closes a cycle on reads from above it.
+	/// - Throws: `cycleReceivesBuilder` where a type receives a builder.
+	static func labelsReceived(inWorldWithCycle world: some NodeRecordSources) throws(NodeRecordRefusal) -> Set<String> {
 		var labels = Set<String>()
 		for declaration in 0..<Int32(world.declarationCount) {
-			for dependency in world.scope(of: declaration).instantiable.dependencies where dependency.source == .received(onlyIfAvailable: false) {
-				guard dependency.property.propertyType.isConstant else { throw .cycleReceivesBuilder }
-				labels.insert(dependency.property.label)
+			let reads = world.scope(of: declaration).instantiable.dependencies.compactMap { dependency -> Property? in
+				switch dependency.source {
+				case .received:
+					dependency.property
+				case let .aliased(fulfillingProperty, _, _):
+					fulfillingProperty
+				case .instantiated, .forwarded:
+					nil
+				}
+			}
+			for read in reads {
+				guard read.asUnwrappedProperty.propertyType.isConstant else { throw .cycleReceivesBuilder }
+				labels.insert(read.label)
 			}
 		}
 		return labels
+	}
+
+	/// Whether `declaration` is built in a `@Sendable` function of its own.
+	static func buildsInSendableFunction(_ declaration: DeclarationID, in world: some NodeRecordSources) -> Bool {
+		switch world.kind(of: declaration) {
+		case .sendableInstantiator, .sendableErasedInstantiator, .sendableLazy:
+			true
+		case .constant, .instantiator, .erasedInstantiator, .lazy, .alias, .hole:
+			false
+		}
 	}
 
 	/// The labels `declaration`'s body declares: what it instantiates, what it is forwarded and the names it gives aliases.
@@ -94,7 +124,7 @@ extension NodeRecords {
 		let instantiable = world.scope(of: declaration).instantiable
 		return .closer(ClosingPlaceRecord(
 			property: property,
-			isErased: false,
+			isErased: world.isErased(declaration),
 			isExtension: instantiable.declarationType.isExtension,
 			closedOnFunctionName: ScopeGenerator.functionName(toBuildPropertyNamed: property.label),
 			forwardedProperties: instantiable.dependencies.filter { $0.source == .forwarded }.map(\.property).sorted(),
