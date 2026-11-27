@@ -285,7 +285,8 @@ struct NodeRecords: Sendable {
 			escaping.formUnion(childrensEscaping)
 			// A member of a loop of builders first makes again the members its tree receives, whatever its kind
 			// (`NodeRecords+Loops.swift`).
-			let children = Self.loopRebindings(of: declaration, in: world) + children
+			// A place of a seam's own mock is bound from its builder before the node's children, which read it.
+			let children = Self.mockPlaceBuilderBindings(of: declaration, in: world).map(\.place) + Self.loopRebindings(of: declaration, in: world) + children
 			// What a receive by value reads as a wrapper's instance, which every record of a construction passes its arguments.
 			let instanceProperties = answeringDeclarations.lazilyInstantiatedInstanceProperties(readBy: variant)
 			let madeRecord: PlaceRecord = switch kinds[Int(declaration)] {
