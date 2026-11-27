@@ -65,7 +65,8 @@ struct SafeDIToolSeamPlaceTangleGrowthTests: ~Copyable {
 			.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(fulfillingAdditionalTypes: [Api.self])\n")
 		let root = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated public let hub: Hub"])
 		let (stream, continuation) = AsyncStream.makeStream(of: SeamSignature.Places.self)
-		_ = try await SeamPlaceLevels.$observer.withValue({ placeLevels in
+		// No member always encloses another here, so the graph answers routes no tree builds (`SeamPlaceTreeRoutes`).
+		_ = try await SeamPlaceTreeRoutes.$areCompared.withValue(false) { try await SeamPlaceLevels.$observer.withValue({ placeLevels in
 			if let observation = placeLevels.placesObservation, observation.seamType.asSource == "Hub" {
 				continuation.yield(observation.places)
 			}
@@ -79,7 +80,7 @@ struct SafeDIToolSeamPlaceTangleGrowthTests: ~Copyable {
 				compileVerification: .skipped,
 				filesToDelete: &filesToDelete,
 			)
-		}
+		} }
 		continuation.finish()
 		var observed = [SeamSignature.Places]()
 		for await places in stream {

@@ -1388,20 +1388,16 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 		}
 	}
 
-	private var filesToDelete: [URL]
-}
+	// MARK: Laps around a ring
 
-// MARK: - Laps around a ring
-
-/// Each test builds a ring a seam's place is on, walks several laps through every call that closes it, and pins which
-/// declaration each read gets, beside the inline build's. Every lap reads the declaration nearest on its run-time route,
-/// which the fold over (function, binding) that answers a place's re-entries assumes: a label a ring declares again is a
-/// parameter of each member's function that reads it (`ScopeGenerator.cycleParameterSearch`, over the labels
-/// `CycleClosingRedeclaredLabels` collects between a closed-on scope and its closing call), never a capture, and each
-/// closing call passes the labels its own scope binds.
-@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-extension SafeDIToolSeamHoleOnCycleTests {
+	// Each test builds a ring a seam's place is on, walks several laps through every call that closes it, and pins which
+	// declaration each read gets, beside the inline build's. Every lap reads the declaration nearest on its run-time route,
+	// which the fold over (function, binding) that answers a place's re-entries assumes: a label a ring declares again is a
+	// parameter of each member's function that reads it (`ScopeGenerator.cycleParameterSearch`, over the labels
+	// `CycleClosingRedeclaredLabels` collects between a closed-on scope and its closing call), never a capture, and each
+	// closing call passes the labels its own scope binds.
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_fillReadsNearestMarkOnEveryLap_whenThreeRingMembersEachDeclareOneMarkAndReceiveTheOthers() async throws {
 		let members = ["M0", "M1", "M2"]
 		var feature = ["public protocol Api {}"]
@@ -1476,6 +1472,7 @@ extension SafeDIToolSeamHoleOnCycleTests {
 	}
 
 	@Test(arguments: [3, 4])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_fillFirstReadsRingsDeclarationOnLapAfterChainOfRenames_whenEachRingMemberRenamesTheLabelBeforeIt(renameCount: Int) async throws {
 		// The ring is R<n> > … > R1 > D > R<n>, where R<i> receives l<i+1> renamed from l<i> and D declares l1; the fill
 		// reads l<n+1>. Each lap moves the declaration one label along the chain, so the lap after `renameCount` laps is the
@@ -1535,6 +1532,7 @@ extension SafeDIToolSeamHoleOnCycleTests {
 	}
 
 	@Test(arguments: [false, true])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_passesLabelRingDeclaresAgainAsParameterOfReadersFunction_whenReaderIsBuiltInsideRingMembersBody(readerIsOnRing: Bool) async throws {
 		// X reads `l`, which B, on the ring, declares again. Off the ring X is A's child; on it, X builds B. Either way X's
 		// function takes `l` as a parameter, never a capture of the scope it is declared in, so each lap reads the `l` of
@@ -1731,6 +1729,7 @@ extension SafeDIToolSeamHoleOnCycleTests {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_closingCallPassesItsOwnSidesDeclaration_whenRingMemberIsBuiltBeneathValueAndBeneathLazilyInstantiatedWrapper() async throws {
 		// Leaf receives `theme` only if available; First declares it as a value, Second as a `LazilyInstantiated`, and Mid,
 		// between each Leaf and its closing call, declares it again as a wrapper. Each side's Leaf has a function of its own,
@@ -1780,6 +1779,7 @@ extension SafeDIToolSeamHoleOnCycleTests {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_fillReadsBothLabelsFromOneDeclarer_whenTwoWaysRoundRingEachDeclareBothLabels() async throws {
 		// R receives l1 and l2, and A and B, the two ways round the ring, each declare both: on every route the fill reads
 		// both of the nearest declarer, never one label of one way and the other of the other.
@@ -1833,4 +1833,6 @@ extension SafeDIToolSeamHoleOnCycleTests {
 			""",
 		)
 	}
+
+	private var filesToDelete: [URL]
 }
