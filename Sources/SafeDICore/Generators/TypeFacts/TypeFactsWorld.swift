@@ -23,8 +23,29 @@
 // (lanes/per-type-facts/step0-columns-brief.md) or the mock track (lanes/per-type-facts/track-d-columns.md) is declared
 // here with its final type and answers empty until that lane fills it; its doc comment says which. One part is not
 // frozen: `Read` in a mock world, which gains the override read about a concrete type (a `TypeClassID`), not a label
-// (track D, "Settled by the design thread"). Its answer is an optional argument handed down like any answer, and `key`
-// projects every answer of it to one key, as rule 1 does: one body per declaration, never one per set of cycle types.
+// (track D, "Settled by the design thread"). Its answer is still an argument, with one key and one body per declaration
+// (ruling of 2026-11-26, 3:28 PM PT): the places entered above, an optional slot for each of the body's own properties a
+// path can close on, none for a body outside every cycle. A step to a property already on the path returns to that place
+// and forgets the places beneath it, as 2.4.0 does. The slot is keyed as `cycle(of:)` keys a cycle, and the form
+// `nearest ?? parent.field` is withdrawn.
+//
+// Twins (ruling of 2026-11-26, 3:47 PM PT; designs/per-type-facts.md section 17): `cycle(of:)` is the identity in both
+// worlds, so a value and a `LazilyInstantiated` of one label share it, and plain and `@Sendable` builders do not. Which
+// twin a path builds is an argument, never a key: when the `madeAgain` producer lands, its key projects that choice to
+// one key, as rule 1 does. Owed with the cycles producer: per identity, its declarations in first-reach order; per node,
+// the twinned identities its subtree can close on, a union fact like the reads.
+//
+// Rule 3 (ruling of 2026-11-26, 3:56 PM PT; section 17, "Rule 3") is staged, and both keys are planned states. Stage 1,
+// today: an only-if-available read keys a lazy wrapper by its kind (-3, -4) and `nil` apart from it, so a lazy answer
+// beside none is two bodies. Stage 2, required, after track A's replay: where a value and a lazy wrapper both reach one
+// declaration for one read, the parameter is the wrapper and their keys project to one. "Both reach" is a fact per
+// (root, declaration, read): a union over the answers not being built that are bound for that read at every call into
+// the node within one root's tree, since a root's functions are local to its code, so two roots that disagree on it share
+// no variant. It is computed before the variants fold so that `key` can ask it, never decided per call or by arrival
+// order. It projects a value beside a plain wrapper, or wrappers alone; a value beside a `SendableLazilyInstantiated`
+// answering one read of a body in the `@Sendable` family keeps its form in the key, a stated gap (lead, 4:00 PM PT), since
+// no wrapper can carry a value that need not be `Sendable`. Where one form alone reaches, stage 1's key stands. Read
+// neither stage's count of bodies as permanent.
 
 /// A node of a world's graph: a declaration, its position in `OrderedGraph`.
 typealias DeclarationID = Int32
@@ -192,15 +213,15 @@ protocol TypeFactsWorld {
 	func madeAgain(from declaration: DeclarationID) -> ArraySlice<Int32>
 	/// The loop members whose parents' loops make different members again, which a stage that writes from nodes refuses.
 	var loopMembersSharedApart: [Int32] { get }
-	/// Owed by the table-side columns.
 	func edgeFacts(from declaration: DeclarationID) -> ArraySlice<TypeFactsEdge>
-	/// Owed by the table-side columns.
+	/// Owed: the graph's bindings carry the world's IDs (`TypeFactsGraph.worldBindings(of:)`) until the snapshot looks a
+	/// value up to its run ID.
 	func bindings(of declaration: DeclarationID) -> ArraySlice<TypeFactsBinding>
-	/// Owed by the table-side columns.
 	func parents(of declaration: DeclarationID) -> ArraySlice<TypeFactsParent>
 	/// Owed by the table-side columns.
 	func hole(_ declaration: DeclarationID) -> TypeFactsHole?
-	/// The union fact of what the subtree receives from above. Owed by the table-side columns.
+	/// The union fact of what the subtree receives from above. Owed: the graph's union rows carry the world's IDs
+	/// (`TypeFactsGraph.receives`) until the snapshot looks a value up to its run ID.
 	func received(by declaration: DeclarationID) -> ArraySlice<TypeFactsReceived>
 	/// The receives the declaration's own type makes, in declaration order; `reads(of:)` is its subtree's. Owed by the
 	/// table-side columns.
@@ -256,28 +277,9 @@ extension TypeFactsGraph: TypeFactsWorld {
 		graph.nodes.count
 	}
 
-	/// Never `alias` or `hole` yet, and `constant` for the root: aliases and holes become nodes with the table-side
-	/// columns (step0-columns-brief.md), so a switch over kinds has those cases with nothing behind them until then.
+	/// The form of the property the declaration is built as: a leaf's as its leaf, the root's `constant`.
 	func kind(of declaration: DeclarationID) -> TypeFactsKind {
-		guard let property = graph.nodes[Int(declaration)].property else {
-			return .constant
-		}
-		switch property.propertyType {
-		case .constant:
-			return .constant
-		case .instantiator:
-			return .instantiator
-		case .sendableInstantiator:
-			return .sendableInstantiator
-		case .erasedInstantiator:
-			return .erasedInstantiator
-		case .sendableErasedInstantiator:
-			return .sendableErasedInstantiator
-		case .lazilyInstantiated:
-			return .lazy
-		case .sendableLazilyInstantiated:
-			return .sendableLazy
-		}
+		kinds[Int(declaration)]
 	}
 
 	func construction(of declaration: DeclarationID) -> TypeFactsConstruction {
@@ -316,16 +318,16 @@ extension TypeFactsGraph: TypeFactsWorld {
 		madeAgain?.targets(of: Int(declaration)) ?? []
 	}
 
-	func edgeFacts(from _: DeclarationID) -> ArraySlice<TypeFactsEdge> {
-		[]
+	func edgeFacts(from declaration: DeclarationID) -> ArraySlice<TypeFactsEdge> {
+		edgeFacts(from: Int(declaration))
 	}
 
 	func bindings(of _: DeclarationID) -> ArraySlice<TypeFactsBinding> {
 		[]
 	}
 
-	func parents(of _: DeclarationID) -> ArraySlice<TypeFactsParent> {
-		[]
+	func parents(of declaration: DeclarationID) -> ArraySlice<TypeFactsParent> {
+		parents(of: Int(declaration))
 	}
 
 	func hole(_: DeclarationID) -> TypeFactsHole? {

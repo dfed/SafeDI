@@ -232,8 +232,10 @@ struct ReadsFromAbove: Sendable {
 	/// - Parameters:
 	///   - own: The reads each node makes itself, a row per node in position order.
 	///   - hidden: The reads each node hides from the nodes above it, of the same shape.
+	///   - followsEdge: Whether a node takes what the target of an edge, by its position among the graph's edges, reads:
+	///     every edge, unless a fold says otherwise.
 	///   - madeAgain: The world's made-again calls, or `nil` for a world with no loop of builders.
-	init(graph: OrderedGraph<some Hashable & Sendable>, own: BitRows, hidden: BitRows, madeAgain: MadeAgainEdges? = nil) {
+	init(graph: OrderedGraph<some Hashable & Sendable>, own: BitRows, hidden: BitRows, followsEdge: (_ edgeIndex: Int) -> Bool = { _ in true }, madeAgain: MadeAgainEdges? = nil) {
 		var rows = BitRows(columnCount: own.columnCount)
 		rows.reserveRows(graph.nodes.count)
 		var accumulator = RowAccumulator(columnCount: own.columnCount)
@@ -266,7 +268,8 @@ struct ReadsFromAbove: Sendable {
 			if members.count == 1, let index = members.first.map(Int.init), !(madeAgain?.isOnReadCycle[index] ?? graph.isOnCycle(index)) {
 				mask.load(row: index, of: hidden)
 				own.add(row: index, to: &accumulator)
-				for target in graph.edges(from: index) {
+				for edgeIndex in graph.edgeIndices(from: index) where followsEdge(edgeIndex) {
+					let target = graph.edgeTargets[edgeIndex]
 					work += rows.wordCount(ofRow: Int(target))
 					_ = rows.add(row: Int(target), to: &accumulator, excluding: mask)
 				}
@@ -313,8 +316,8 @@ struct ReadsFromAbove: Sendable {
 					for (slot, index) in members.enumerated() {
 						mask.load(row: Int(index), of: hidden)
 						previousPass.add(row: slot, to: &accumulator)
-						for target in graph.edges(from: Int(index)) {
-							add(rowOf: target)
+						for edgeIndex in graph.edgeIndices(from: Int(index)) where followsEdge(edgeIndex) {
+							add(rowOf: graph.edgeTargets[edgeIndex])
 						}
 						mask.drain { _, _ in }
 						if let madeAgain {
