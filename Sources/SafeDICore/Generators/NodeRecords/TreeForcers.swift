@@ -29,7 +29,7 @@
 /// - `fulfillersOfTree`, the imports, is folded over the root's world (`NodeRecordsLayout.fulfillers`).
 ///
 /// Where a test observes node records, the tree is built beside the records all the same, and each of these is checked
-/// against it (`DependencyTreeGenerator.plannedRootCode(of:)`).
+/// against it (`DependencyTreeGenerator.plannedRootCode(of:declaredTypeNames:)`).
 public enum TreeForcer: Hashable, Sendable, CustomStringConvertible {
 	/// The module holds a seam, whose roots node records do not lay out yet. Where the run names refusals
 	/// (`GenerationRequest.namesNodeRecordRefusals`), the kind node records refuse the root's world with follows it.

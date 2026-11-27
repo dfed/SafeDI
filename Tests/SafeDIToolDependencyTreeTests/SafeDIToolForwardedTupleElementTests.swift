@@ -2123,6 +2123,83 @@ struct SafeDIToolForwardedTupleElementTests: ~Copyable {
 		}
 	}
 
+	/// The `Sendable` twin, one type beneath the root: a run no test observes builds no tree beside a root's node records,
+	/// so the records themselves must leave the root to its tree, which reports the error.
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func multiModuleTest_throwsErrorSpellingForwardedTupleExactly_whenTypeBeneathRootBuildsSendableErasedInstantiatorOfTypeNamedAsItsModule(integration: MultiModuleIntegration) async {
+		await assertThrowsError(
+			containing: "error: The first generic argument of `childBuilder: SendableErasedInstantiator<(config: Config, title: String), Screen>` on `Host` must be the @Forwarded properties of `Child`, which it builds. Declare it as `SendableErasedInstantiator<(config: Feature.Config, title: String), Screen>`.",
+		) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(
+						name: "Feature",
+						packageName: "Pipeline",
+						swiftFileContent: [
+							"""
+							public class Screen {
+							    public init() {}
+							}
+
+							public struct Config {}
+
+							public enum Feature {
+							    public struct Config {}
+							}
+
+							@Instantiable
+							public final class Child: Screen, Instantiable {
+							    public init(config: Feature.Config, title: String) {
+							        self.config = config
+							        self.title = title
+							        super.init()
+							    }
+
+							    @Forwarded let config: Feature.Config
+							    @Forwarded let title: String
+							}
+							""",
+						],
+					),
+					ModuleFixture(
+						name: "App",
+						packageName: "Pipeline",
+						swiftFileContent: [
+							"""
+							import Feature
+
+							@Instantiable(isRoot: true)
+							public final class Root: Instantiable {
+							    public init(host: Host) {
+							        self.host = host
+							    }
+
+							    @Instantiated let host: Host
+							}
+							""",
+							"""
+							import Feature
+
+							@Instantiable
+							public final class Host: Instantiable {
+							    public init(childBuilder: SendableErasedInstantiator<(config: Config, title: String), Screen>) {
+							        self.childBuilder = childBuilder
+							    }
+
+							    @Instantiated(fulfilledByType: "Child") let childBuilder: SendableErasedInstantiator<(config: Config, title: String), Screen>
+							}
+							""",
+						],
+						dependencies: ["Feature"],
+					),
+				],
+				integration: integration,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
