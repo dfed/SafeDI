@@ -341,6 +341,34 @@ struct SafeDIToolTypeFactsVariantKeyTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_ordersParametersAsBodyFirstReceives_whenACallThatClosesACycleFollowsASiblingThatReceivesTheLabels() async throws {
+		// `Screen2` calls `screen3Builder` before `screen1Builder`, which closes the cycle on `Screen1`: the walk meets
+		// `Screen3`'s receives, `model` then `service`, before the closing call, so `Screen4`'s `service` then `model` and the
+		// closed-on declaration's labels decide nothing. 2.4.x orders the function's reads `model`, `service`.
+		let report = try await rootReport(of: [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let service: Service", "@Instantiated let screen0Builder: Instantiator<Screen0>"]),
+			seamFixtureType(named: "Screen0", isFinalClass: true, declarations: ["@Instantiated let screen1Builder: Instantiator<Screen1>", "@Instantiated let model: Model"]),
+			seamFixtureType(named: "Screen1", isFinalClass: true, declarations: ["@Instantiated let screen2Builder: Instantiator<Screen2>"]),
+			seamFixtureType(named: "Pane2", isFinalClass: true, declarations: ["@Instantiated let screen1Builder: Instantiator<Screen1>"]),
+			seamFixtureType(named: "Screen2", isFinalClass: true, declarations: ["@Instantiated let screen3Builder: Instantiator<Screen3>", "@Instantiated let screen1Builder: Instantiator<Screen1>", "@Instantiated let pane2: Pane2"]),
+			seamFixtureType(named: "Screen3", isFinalClass: true, declarations: ["@Received let model: Model", "@Received let service: Service", "@Instantiated let screen4Builder: Instantiator<Screen4>"]),
+			seamFixtureType(named: "Screen4", isFinalClass: true, declarations: ["@Received let service: Service", "@Received let model: Model", "@Instantiated let screen0Builder: Instantiator<Screen0>"]),
+			seamFixtureType(named: "Service", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "Model", isFinalClass: true, declarations: []),
+		])
+		let graph = report.graph
+		func labelTexts(_ labels: some Sequence<WorldLabelID>) -> [String] {
+			labels.map { graph.labelTexts[Int($0)] }
+		}
+		let screen1 = try #require(report.nodes.firstIndex { $0.description.hasPrefix("Screen1 ") })
+		let pane2 = try #require(report.nodes.firstIndex { $0.description.hasPrefix("Pane2 ") })
+
+		#expect(labelTexts(graph.parameterOrder(of: Int32(screen1))) == ["model", "service"])
+		#expect(labelTexts(graph.parameterOrder(of: Int32(pane2))) == ["model", "service"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_ordersParametersAsBodyFirstReceives_whenTheBodyReceivesALabelThroughARename() async throws {
 		// As above, with `Ring0` receiving `zeta` through a rename: the rename receives `zeta` itself, before its `leaf`
 		// receives `alpha`, so `zeta` still comes first.
