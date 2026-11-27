@@ -55,7 +55,11 @@ public enum NodeRecordsObservation {
 					differences.append("\(path): node records made a statement that is no place")
 					continue
 				}
-				let treePlaceRecord: PlaceRecord? = if case let .place(treePlan) = treeInner.node { treePlan.record } else { nil }
+				let treePlaceRecord: PlaceRecord? = if case let .place(treePlan) = treeInner.node {
+					treePlan.record
+				} else {
+					nil
+				}
 				switch nodeRecordsPlaceRecord {
 				case let .built(nodeRecordsRecord):
 					let placePath = "\(path).\(nodeRecordsRecord.property.label)"
