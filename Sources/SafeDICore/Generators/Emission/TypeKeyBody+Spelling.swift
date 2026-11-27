@@ -118,7 +118,8 @@ extension TypeKeyLayout {
 				parameters: parameters,
 				typesDeclaredEscaping: typesDeclaredEscaping,
 				returnType: representative.functionReturnType ?? representative.concreteType,
-				body: BuilderBody(statements: body),
+				// A statement a kind supplies comes first in the function's body, before the functions declared in it.
+				body: BuilderBody(statements: (representative.leadingStatement?.spelledLines ?? []).map { .text("\(ScopeGenerator.standardIndent)\($0)") } + body),
 				value: value,
 				lineEnd: representative.lineEnd,
 			).spelled()
@@ -183,8 +184,8 @@ extension TypeKeyLayout {
 			return memberCall.record.arguments[position].source
 		}) else { return nil }
 		var statements = call.statementsBeforeLeadingStatement
-		if let leadingStatement = record.leadingStatement {
-			statements.append(.text("\(ScopeGenerator.standardIndent)\(leadingStatement.spelled)"))
+		for line in record.leadingStatement?.spelledLines ?? [] {
+			statements.append(.text("\(ScopeGenerator.standardIndent)\(line)"))
 		}
 		statements += call.statementsAfterLeadingStatement
 		let function = SafeDICore.Statement.function(BuilderNode(

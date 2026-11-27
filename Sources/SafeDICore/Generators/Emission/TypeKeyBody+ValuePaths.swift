@@ -413,6 +413,8 @@ struct StructuralKeyParts {
 			reads: [String],
 		)
 		case argument(argumentLabel: String, label: String, property: String)
+		/// The statement a place's function begins with (`BuiltPlaceRecord.leadingStatement`).
+		case leadingStatement(LeadingStatement)
 		/// A part spelled as text: what a construction does besides calling its target, or an inline or alias statement.
 		case text(String)
 		case parameter(name: String, type: String)

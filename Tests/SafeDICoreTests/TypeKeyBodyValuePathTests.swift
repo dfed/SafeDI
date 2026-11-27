@@ -25,6 +25,40 @@ import Testing
 /// handed a read of the body. No walk records one yet, so each test builds the root's places as a walk would.
 struct TypeKeyBodyValuePathTests {
 	@Test
+	func statements_beginsThePlacesFunctionWithItsEnteredPlaceLines_whenItsRecordCarriesAnEnteredPlace() throws {
+		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.rootBody { built in
+			built.callFields = CallFields(leadingStatement: .enteredPlace(EnteredPlace(slot: "b", nearestOfTypeSlot: nil)), closureArguments: [])
+		}))
+		#expect(GeneratedCode.lines(statements).spelled() == """
+		        let id = 1
+		        func __safeDI_b() -> B {
+		            let __safeDI_place = __safeDI_entered.b ?? .init(safeDIOverrides, above: __safeDI_entered)
+		            let safeDIOverrides = __safeDI_place.configuration
+		            let __safeDI_entered = __safeDI_place.enteredAbove.entering(b: __safeDI_place)
+		            return B()
+		        }
+		        let b: B = __safeDI_b()
+		""")
+	}
+
+	@Test
+	func statements_entersANewPlaceWithTheNearestConfigurationOfItsType_whenItsEnteredPlaceNamesANearestOfTypeSlot() throws {
+		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.rootBody { built in
+			built.callFields = CallFields(leadingStatement: .enteredPlace(EnteredPlace(slot: "b", nearestOfTypeSlot: "nearestB")), closureArguments: [])
+		}))
+		#expect(GeneratedCode.lines(statements).spelled() == """
+		        let id = 1
+		        func __safeDI_b() -> B {
+		            let __safeDI_place = __safeDI_entered.b ?? .init(__safeDI_entered.nearestB?.configuration ?? safeDIOverrides, above: __safeDI_entered)
+		            let safeDIOverrides = __safeDI_place.configuration
+		            let __safeDI_entered = __safeDI_place.enteredAbove.entering(b: __safeDI_place)
+		            return B()
+		        }
+		        let b: B = __safeDI_b()
+		""")
+	}
+
+	@Test
 	func statements_spellsMemberCallWithWrappedReads_whenConstructionIsACallOfAValue() throws {
 		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.rootBody { built in
 			built.constructionValue = ConstructionValue(value: .call("member", of: .rootDeclaration("builder"), arguments: [Self.idRead], argumentsWrapper: .simple(name: "Values")), resultWrapper: nil)
@@ -545,6 +579,9 @@ struct TypeKeyBodyValuePathTests {
 		// A passed argument's key (`PassedArgument.shape`).
 		case passedArgumentType
 		case passedArgumentParameterName
+		// The statement a place's function begins with (`BuiltPlaceRecord.leadingStatement`).
+		case enteredPlaceSlot
+		case enteredPlaceNearestOfTypeSlot
 
 		func configure(_ c: inout BuiltPlaceRecord, isSecond: Bool) {
 			let cfg = ValuePath.passedArgument("cfg")
@@ -598,6 +635,10 @@ struct TypeKeyBodyValuePathTests {
 				c.passedArguments = [passed("cfg"), passed("alt", type: isSecond ? "OtherCfg" : "Cfg")]
 			case .passedArgumentParameterName:
 				c.passedArguments = [passed("cfg"), passed(isSecond ? "other" : "alt")]
+			case .enteredPlaceSlot:
+				c.callFields = CallFields(leadingStatement: .enteredPlace(EnteredPlace(slot: isSecond ? "other" : "c", nearestOfTypeSlot: nil)), closureArguments: [])
+			case .enteredPlaceNearestOfTypeSlot:
+				c.callFields = CallFields(leadingStatement: .enteredPlace(EnteredPlace(slot: "c", nearestOfTypeSlot: isSecond ? "nearestC" : nil)), closureArguments: [])
 			}
 		}
 	}

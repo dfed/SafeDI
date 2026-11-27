@@ -108,6 +108,10 @@ extension TypeKeyLayout {
 			forwardedProperties: record.forwardedProperties.map(\.asSource),
 			reads: reads[body],
 		))]
+		// A function that begins with a statement of its kind's writes other text than one that does not.
+		if let leadingStatement = record.leadingStatement {
+			key.append(parts.id(of: .leadingStatement(leadingStatement)))
+		}
 		for argument in record.arguments {
 			key.append(parts.id(of: .argument(argumentLabel: argument.argumentLabel, label: argument.label, property: argument.property.asSource)))
 		}
@@ -176,7 +180,7 @@ extension TypeKeyLayout {
 			record.functionName,
 			record.lineEnd,
 			record.typesDeclaredEscaping.map(\.asSource).sorted().joined(separator: ","),
-			record.leadingStatement?.spelled ?? "",
+			record.leadingStatement.map { "\($0)" } ?? "",
 		]
 		for (position, argument) in record.arguments.enumerated() {
 			shape.append("argument|\(argument.argumentLabel)|\(argument.label)|\(argument.property.asSource)|\(record.argumentValues[position].map { "\($0)" } ?? "")")
