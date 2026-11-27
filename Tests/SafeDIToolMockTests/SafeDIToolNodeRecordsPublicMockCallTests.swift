@@ -550,14 +550,14 @@ struct SafeDIToolNodeRecordsPublicMockCallTests: ~Copyable {
 		let overridden = """
 		Root.mock(safeDIOverrides: .init(\
 		session: { marked(Session(), "session") }, \
-		screen: .init(analytics: { marked(Analytics(), "screen.analytics") }), \
+		panel: .init(analytics: { marked(Analytics(), "panel.analytics") }), \
 		screenBuilder: .init(analytics: { marked(Analytics(), "screenBuilder.analytics") }), \
 		middleBuilder: .init(screenBuilder: .init(analytics: { marked(Analytics(), "middleBuilder.screenBuilder.analytics") }))\
 		))
 		"""
 		let overriddenMiddle = """
 		Root.mock(safeDIOverrides: .init(\
-		middleBuilder: .init(screenBuilder: .init(analytics: { marked(Analytics(), "unread") }), { marked(Middle(session: $0, screenBuilder: $1), "middleBuilder") })\
+		middleBuilder: .init({ marked(Middle(session: $0, screenBuilder: $1), "middleBuilder") })\
 		))
 		"""
 		let comparison = try await DifferentialValueOracle.compare(
@@ -571,7 +571,8 @@ struct SafeDIToolNodeRecordsPublicMockCallTests: ~Copyable {
 				DifferentialValueProbe(name: "overridden screenBuilder", expression: "\(overridden).screenBuilder.instantiate(1)"),
 				DifferentialValueProbe(name: "overridden middleBuilder", expression: "\(overridden).middleBuilder.instantiate()"),
 				DifferentialValueProbe(name: "overridden middleBuilder's screenBuilder", expression: "\(overridden).middleBuilder.instantiate().screenBuilder.instantiate(2)"),
-				DifferentialValueProbe(name: "overridden middle", expression: "\(overriddenMiddle).middleBuilder.instantiate().screenBuilder.instantiate(3)"),
+				DifferentialValueProbe(name: "overridden middle", expression: "\(overriddenMiddle).middleBuilder.instantiate()"),
+				DifferentialValueProbe(name: "overridden middle's screenBuilder", expression: "\(overriddenMiddle).middleBuilder.instantiate().screenBuilder.instantiate(3)"),
 			],
 			filesToDelete: &filesToDelete,
 		)
@@ -579,7 +580,7 @@ struct SafeDIToolNodeRecordsPublicMockCallTests: ~Copyable {
 		guard let comparison else { return }
 		#expect(comparison.differences.isEmpty, "\(comparison.report)")
 		// Every override was read: each marks the value its closure built.
-		for marker in ["session", "screen.analytics", "screenBuilder.analytics", "middleBuilder.screenBuilder.analytics", "middleBuilder"] {
+		for marker in ["session", "panel.analytics", "screenBuilder.analytics", "middleBuilder.screenBuilder.analytics", "middleBuilder"] {
 			#expect(comparison.featureDescription.contains("\"\(marker)\""), "No value is marked \(marker):\n\(comparison.featureDescription)")
 		}
 	}
@@ -660,8 +661,8 @@ struct SafeDIToolNodeRecordsPublicMockCallTests: ~Copyable {
 		return (output.modules["App"]?.generatedFiles.values.first, reports)
 	}
 
-	/// `Feed` of the value test: `Screen`, whose public mock `App` calls, forwards `id`, receives `session` and
-	/// instantiates `analytics`. Each type carries a marker an override's closure sets.
+	/// `Feed` of the value test: `Panel` and `Screen`, whose public mocks `App` calls, each receive `session` and instantiate
+	/// `analytics`, and `Screen` forwards `id`. Each type carries a marker an override's closure sets.
 	private static let valueFeed: [String: String] = [
 		"Marked.swift": """
 		public protocol Marked: AnyObject {
@@ -691,6 +692,18 @@ struct SafeDIToolNodeRecordsPublicMockCallTests: ~Copyable {
 		}
 
 		@Instantiable(generateMock: .public)
+		public final class Panel: Instantiable, Marked {
+		    init(session: Session, analytics: Analytics) {
+		        self.session = session
+		        self.analytics = analytics
+		    }
+
+		    @Received let session: Session
+		    @Instantiated let analytics: Analytics
+		    public var marker = "built"
+		}
+
+		@Instantiable(generateMock: .public)
 		public final class Screen: Instantiable, Marked {
 		    init(id: Int, session: Session, analytics: Analytics) {
 		        self.id = id
@@ -706,8 +719,8 @@ struct SafeDIToolNodeRecordsPublicMockCallTests: ~Copyable {
 		""",
 	]
 
-	/// `App` of the value test: `Root` calls `Screen`'s public mock as a constant, from an `Instantiator`, and from an
-	/// `Instantiator` inside `Middle`'s.
+	/// `App` of the value test: `Root` calls `Panel`'s public mock as a constant, and `Screen`'s from an `Instantiator` and
+	/// from an `Instantiator` inside `Middle`'s.
 	private static let valueApp: [String: String] = [
 		"Root.swift": """
 		import Feed
@@ -715,15 +728,15 @@ struct SafeDIToolNodeRecordsPublicMockCallTests: ~Copyable {
 
 		@Instantiable(generateMock: true)
 		public final class Root: Instantiable {
-		    public init(session: Session, screen: Screen, screenBuilder: Instantiator<Screen>, middleBuilder: Instantiator<Middle>) {
+		    public init(session: Session, panel: Panel, screenBuilder: Instantiator<Screen>, middleBuilder: Instantiator<Middle>) {
 		        self.session = session
-		        self.screen = screen
+		        self.panel = panel
 		        self.screenBuilder = screenBuilder
 		        self.middleBuilder = middleBuilder
 		    }
 
 		    @Instantiated let session: Session
-		    @Instantiated let screen: Screen
+		    @Instantiated let panel: Panel
 		    @Instantiated let screenBuilder: Instantiator<Screen>
 		    @Instantiated let middleBuilder: Instantiator<Middle>
 		}
