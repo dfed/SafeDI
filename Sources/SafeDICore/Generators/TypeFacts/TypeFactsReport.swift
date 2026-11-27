@@ -125,6 +125,7 @@ public struct TypeFactsReport: Sendable {
 		self.graph = graph
 		self.root = root.instantiable.concreteInstantiable.asSource
 		self.forMockGeneration = forMockGeneration
+		holesArePlaces = graph.holesArePlaces
 		projection = graph.projection
 		world = Self.projection(of: graph)
 		var variantCounts = [Int](repeating: 0, count: graph.declarationCount)
@@ -133,6 +134,7 @@ public struct TypeFactsReport: Sendable {
 		}
 		variantCountsByNode = variantCounts
 		variantNodes = (0..<graph.variantCount).map { Int(graph.declaration(of: VariantID($0))) }
+		variantFamilies = (0..<graph.variantCount).map { "\(graph.family(of: VariantID($0)))" }
 		variantCalls = (0..<graph.variantCount).map { graph.calls(of: VariantID($0)).map(Int.init) }
 		columnElementCount = graph.columnElementCount
 		edgeCount = graph.graph.edgeCount
@@ -372,6 +374,8 @@ public struct TypeFactsReport: Sendable {
 	public let columnElementCount: Int
 	public let edgeCount: Int
 	public let forMockGeneration: Bool
+	/// Whether the world's holes are places: a seam's own tree, or a public mock's.
+	public let holesArePlaces: Bool
 	/// The graph as text, a line per node (`TypeFactsGraph.projection`).
 	public let projection: String
 	public let nodes: [Node]
@@ -383,6 +387,8 @@ public struct TypeFactsReport: Sendable {
 	public let variantCountsByNode: [Int]
 	/// Each variant's node.
 	public let variantNodes: [Int]
+	/// Each variant's family (`VariantFamily`), spelled as its case.
+	public let variantFamilies: [String]
 	/// The variant each edge of a variant's node calls, in edge order.
 	public let variantCalls: [[Int]]
 
