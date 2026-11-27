@@ -2973,6 +2973,7 @@ enum GraphFuzzerGenerator {
 			instantiatedOnlyIfAvailableRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.instantiatedOnlyIfAvailableRandomSeedMask)
 			optionalPlaceRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.optionalPlaceRandomSeedMask)
 			nestedCycleRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.nestedCycleRandomSeedMask)
+			renamedLazyReaderRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.renamedLazyReaderRandomSeedMask)
 			perTypePlanRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.perTypePlanRandomSeedMask)
 			perTypePlanJobRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.perTypePlanJobRandomSeedMask)
 			seamDependencyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ GraphFuzzerSeamDependencyDraw.seamRandomSeedMask)
@@ -3061,6 +3062,7 @@ enum GraphFuzzerGenerator {
 			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
 			finalDeclarations = addingTypeBuiltAgainThroughSecondLazyCycle(to: finalDeclarations)
 			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
+			finalDeclarations = addingReadersOfRenamedLazyInstance(to: finalDeclarations)
 			finalDeclarations = addingScreensLaidOutFromPerTypePlan(to: finalDeclarations)
 			// In a graph split across modules, every file names its module and imports the seam's, so that a type of the
 			// caller can name what the seam's module declares, such as the creation stamps' counter.
@@ -3554,6 +3556,9 @@ enum GraphFuzzerGenerator {
 		/// Draws only `addingTypeBuiltAgainThroughSecondLazyCycle`'s choices: whether a graph gains `NestRoot`'s tree, and
 		/// every shape of that tree.
 		private var nestedCycleRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only `addingReadersOfRenamedLazyInstance`'s choices: whether a graph gains `RenamedLazyTop`'s tree, and
+		/// every shape of that tree.
+		private var renamedLazyReaderRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only `addingScreensLaidOutFromPerTypePlan`'s choices: whether a graph gains `PlanRoot`'s tree, and every
 		/// shape of that tree.
 		private var perTypePlanRandom: GraphFuzzerRandomNumberGenerator
@@ -7982,7 +7987,7 @@ enum GraphFuzzerGenerator {
 			let badgeValue = "\(badgeName)(repeatBadgeDetail: \(badgeDetailValue))"
 			let screenProtocolName = "\(screenName)Protocol"
 			let badgeProtocolName = "\(badgeName)Protocol"
-			var root = TypeDeclaration(
+			let root = TypeDeclaration(
 				name: rootName,
 				instantiableArguments: ["generateMock: true"],
 				properties: [PropertyDeclaration(attribute: "@Instantiated", label: "repeatScreen", type: screenProtocolName)],
@@ -8435,6 +8440,57 @@ enum GraphFuzzerGenerator {
 		}
 
 		private static let nestedCycleRandomSeedMask: UInt64 = 0x6E657374437963
+
+		// MARK: Readers of a renamed lazy instance
+
+		/// The base corpus's draw, in one graph of eight, of a choice between declarations of one type, decided by where
+		/// each is declared. `RenamedLazyTop`, a root, instantiates a lazily instantiated `RenamedLazyValue` and
+		/// `RenamedLazyOwner`, which renames it under six labels and instantiates `RenamedLazyReader`, which receives
+		/// the instance under every one of them, in an order drawn apart from the labels'. So creating `RenamedLazyTop`
+		/// creates the value, and the warning that says so names the reader's receive declared first
+		/// (`InstantiationAnalysis`' `recordReads(whileCreating:)`), never the first label. The multi-module partition
+		/// puts the reader in a module beneath the root's when it splits the tree, where a run over module info files that
+		/// store positions apart reads the receives' places by their order in the reader's file alone, and must name the
+		/// same one (`SplitPositionsRun`). `renamedLazyReaderRandom` draws only for this pass, after every other, and only
+		/// in the base corpus.
+		private mutating func addingReadersOfRenamedLazyInstance(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			guard features.isEmpty, renamedLazyReaderRandom.percentChance(12) else { return declarations }
+			var declarations = declarations
+			// Six, so that a choice made in any other order than the reader's declarations' differs on nearly every run.
+			let labels = ["renamedLazyFirst", "renamedLazySecond", "renamedLazyThird", "renamedLazyFourth", "renamedLazyFifth", "renamedLazySixth"]
+			var readOrder = Array(labels)
+			for index in readOrder.indices.dropLast() {
+				readOrder.swapAt(index, renamedLazyReaderRandom.integer(in: index...(readOrder.count - 1)))
+			}
+			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
+			func append(_ name: String, isRoot: Bool = false, _ properties: [PropertyDeclaration]) {
+				declarations.append(TypeDeclaration(
+					name: name,
+					instantiableArguments: isRoot ? ["isRoot: true"] : [],
+					properties: properties,
+					declaresHelperTypes: false,
+					additionalConformances: conformances,
+				))
+			}
+			let valueName = "\(prefix)RenamedLazyValue"
+			let wrapped = "\(lazilyInstantiatedWrapper(isSendable: sendability == .sendable))<\(valueName)>"
+			append(valueName, [])
+			append("\(prefix)RenamedLazyReader", readOrder.map { PropertyDeclaration(attribute: "@Received", label: $0, type: valueName) })
+			append("\(prefix)RenamedLazyOwner", labels.map {
+				PropertyDeclaration(attribute: "@Received(fulfilledByDependencyNamed: \"renamedLazyValue\", ofType: \(wrapped).self)", label: $0, type: wrapped)
+			} + [PropertyDeclaration(attribute: "@Instantiated", label: "renamedLazyReader", type: "\(prefix)RenamedLazyReader")])
+			// The value, the reader and the owner come first, and the root last, so that the multi-module partition, which
+			// deals the files out to modules in that order, puts the reader in a module beneath the root's wherever it
+			// makes more than one.
+			declarations = declarations.suffix(3) + declarations.dropLast(3)
+			append("\(prefix)RenamedLazyTop", isRoot: true, [
+				PropertyDeclaration(attribute: "@Instantiated", label: "renamedLazyValue", type: wrapped),
+				PropertyDeclaration(attribute: "@Instantiated", label: "renamedLazyOwner", type: "\(prefix)RenamedLazyOwner"),
+			])
+			return declarations
+		}
+
+		private static let renamedLazyReaderRandomSeedMask: UInt64 = 0x52656E4C617A79
 
 		// MARK: Screens laid out from the per-type plan
 
@@ -11564,9 +11620,14 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		let content: Substring
 		var block = [GeneratedCodeLine]()
 
+		/// The line without the `@inline(never)` a seam's tree declares its local functions with.
+		var contentAfterInlining: Substring {
+			content.hasPrefix("@inline(never) ") ? content.dropFirst("@inline(never) ".count) : content
+		}
+
 		/// The name of the builder function the line declares, when it declares one.
 		var declaredBuilderFunctionName: Substring? {
-			let declaration = content.hasPrefix("@Sendable nonisolated ") ? content.dropFirst("@Sendable nonisolated ".count) : content
+			let declaration = contentAfterInlining.hasPrefix("@Sendable nonisolated ") ? contentAfterInlining.dropFirst("@Sendable nonisolated ".count) : contentAfterInlining
 			guard declaration.hasPrefix("func __safeDI_") else { return nil }
 			return declaration.dropFirst("func ".count).prefix { $0.isLetter || $0.isNumber || $0 == "_" }
 		}
@@ -11637,7 +11698,7 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 				guard let name = line.declaredBuilderFunctionName else { continue }
 				// A function wrapping a sibling's, which it calls last, with the cycle arguments its scope passes.
 				if siblingNames.contains(where: { name != $0 && name.hasPrefix($0 + "_received") && line.block.last?.content.contains($0 + "(") == true }) {
-					features.insert(line.content.hasPrefix("@Sendable ") ? .sendableReceivedLoopMemberWithCycleParameters : .receivedLoopMemberWithCycleParameters)
+					features.insert(line.contentAfterInlining.hasPrefix("@Sendable ") ? .sendableReceivedLoopMemberWithCycleParameters : .receivedLoopMemberWithCycleParameters)
 				}
 				let ownFunctionNames = Set(line.block.compactMap(\.declaredBuilderFunctionName))
 				let instantiatedLabels = line.returnedTypeName.map { instantiatedLabelsByTypeName[String($0), default: []] } ?? []
@@ -14790,6 +14851,14 @@ struct GraphFuzzerFailure: Equatable {
 		/// `query graph` names other suppliers for a receive than the generated code hands it, or the oracle cannot follow
 		/// a read of the generated code (`GraphFuzzerToolRuns.querySuppliersFailure`).
 		case querySuppliersDifferFromGeneratedCode = "query graph names other suppliers for a receive than the generated code hands it"
+		/// `query graph` marks a dependency unfulfilled that neither `generate` reports nor it reports once each type no
+		/// declaration fulfills is declared, or marks none where its trees are partial or one where they are not, or leaves
+		/// a dependency `generate` reports unmarked (`GraphFuzzerToolRuns.queryUnfulfilledFailure`).
+		case queryMarksOtherDependenciesUnfulfilled = "query graph marks other dependencies unfulfilled than the errors generate reports name"
+		/// `query graph`'s export of a graph the tool accepts, with a type's declaration or a property that provides a value
+		/// deleted, is not the graph's own export but for what read the deleted declaration
+		/// (`GraphFuzzerToolRuns.queryDeletionFailure`).
+		case queryProvenanceMovesWhenDeclarationIsDeleted = "query graph moves what a receive is handed when another declaration is deleted"
 		/// The graph names a type no declaration SafeDI reads declares, and its read twin (`GraphFuzzerFixture.readTwin`),
 		/// which declares that type `public` where SafeDI reads it, gets another verdict, other diagnostics, or other
 		/// generated code: SafeDI counts the type otherwise than as `public` (decision 54).
@@ -15676,6 +15745,14 @@ struct GraphFuzzerToolRuns {
 	///     (`GraphFuzzerGenerator.drawnHolePlaces(forSeed:features:)`), which the builder surface's floors count.
 	///   - queryExport: The JSON `query graph` exports for a graph in one module the tool accepts, which
 	///     `querySuppliersFailure` compares with the generated code.
+	///   - rejectedQueryExport: The JSON `query graph` exports for a graph in one module the tool rejects, which
+	///     `queryUnfulfilledFailure` judges.
+	///   - missingTypesDeclaredOutcome: The outcome of that graph with an empty declaration of each type the export marks
+	///     missing, with no seam, where the export has partial trees built around such a type.
+	///   - queryDeletion: The declaration the deletion oracle deletes from a graph in one module the tool accepts, with
+	///     the JSON `query graph` exports for the graph without it, which `queryDeletionFailure` judges.
+	///   - queryProviderDeletion: The property that provides a value the deletion oracle deletes from that graph, with
+	///     the JSON `query graph` exports for the graph without it, which `queryDeletionFailure` judges too.
 	init(
 		fixture: GraphFuzzerFixture,
 		firstOutcome: GraphFuzzerToolOutcome,
@@ -15701,8 +15778,16 @@ struct GraphFuzzerToolRuns {
 		builderSurfaceRuns: [GraphFuzzerBuilderSurfaceRun] = [],
 		drawnHolePlaces: [GraphFuzzerDrawnHolePlace] = [],
 		queryExport: String? = nil,
+		rejectedQueryExport: String? = nil,
+		missingTypesDeclaredOutcome: GraphFuzzerUnfulfilledDependencies.OutcomeWithMissingTypesDeclared? = nil,
+		queryDeletion: (deletion: GraphFuzzerQueryDeletion, export: String)? = nil,
+		queryProviderDeletion: (deletion: GraphFuzzerQueryProviderDeletion, export: String)? = nil,
 	) {
 		self.queryExport = queryExport
+		self.rejectedQueryExport = rejectedQueryExport
+		self.missingTypesDeclaredOutcome = missingTypesDeclaredOutcome
+		self.queryDeletion = queryDeletion
+		self.queryProviderDeletion = queryProviderDeletion
 		self.builderSurfaceRuns = builderSurfaceRuns
 		self.drawnHolePlaces = drawnHolePlaces
 		self.withoutSecondHolePlaceOutcome = withoutSecondHolePlaceOutcome
@@ -15757,6 +15842,10 @@ struct GraphFuzzerToolRuns {
 	let builderSurfaceRuns: [GraphFuzzerBuilderSurfaceRun]
 	let drawnHolePlaces: [GraphFuzzerDrawnHolePlace]
 	let queryExport: String?
+	let rejectedQueryExport: String?
+	let missingTypesDeclaredOutcome: GraphFuzzerUnfulfilledDependencies.OutcomeWithMissingTypesDeclared?
+	let queryDeletion: (deletion: GraphFuzzerQueryDeletion, export: String)?
+	let queryProviderDeletion: (deletion: GraphFuzzerQueryProviderDeletion, export: String)?
 
 	/// The failure of a graph some place of whose seam's tree has a path that repeats a declaration, or `nil`: the tree
 	/// closes a cycle where a declaration is already being built above, and a build that closes a cycle is the first build,
@@ -16590,7 +16679,7 @@ enum GraphFuzzerOracle {
 			let renamedGraphFailures = runs.renamedGraphFailures(refutingOrderOf: valueComparisons.listOrderRefutations[runs.fixture.seed] ?? [:])
 			var failures = [runs.runsDifferFailure, runs.cleanSubtreeSkipFailure, runs.differentialFailure, runs.acceptanceDifferentialFailure, runs.integrationsDisagreeFailure, runs.storedSeamSignaturesDisagreeFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.seamRejectedWhereInlineAcceptsFailure, runs.nilArgumentFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.publicMockRootLevelFailure, runs.publicMockOverrideClosureFailure, runs.publicMockOverridesOrderFailure, runs.omittedValueFailure, codeCompilationFailures[runs.fixture.seed], runs.valueOracleFixtureFailure].compactMap(\.self)
 			failures.append(contentsOf: valueComparisons.failures[runs.fixture.seed] ?? [])
-			failures.append(contentsOf: [runs.wrapperParameterFailure, runs.generatedCodeCallsEntryMeantForPeopleFailure, runs.generatedOnlyInitializerTakesDefaultFailure, runs.carrierMemberReadApartFailure, runs.configurationStorageFailure, runs.handWrittenMockBypassFailure, runs.readTwinFailure, runs.holeNameStabilityFailure, runs.builderSurfaceFailure, builderCallFailures[runs.fixture.seed], runs.builderLabelFailure, runs.sameSupplyFailure, runs.sameSupplyEditRejectedFailure, runs.addedSupplyFailure, runs.forwardedValuesFailure, runs.forwardingRemedyFailure, runs.remedyBuildersFailure, runs.callingMockFailure, runs.placeLevelsFailure, runs.rootFunctionKeyFailure, runs.placesJudgedByAnotherPlacesFillFailure, runs.placeChainFailure, runs.secondPathFailure, runs.multiModuleFailures.first, runs.remedyFailure, runs.querySuppliersFailure].compactMap(\.self))
+			failures.append(contentsOf: [runs.wrapperParameterFailure, runs.generatedCodeCallsEntryMeantForPeopleFailure, runs.generatedOnlyInitializerTakesDefaultFailure, runs.carrierMemberReadApartFailure, runs.configurationStorageFailure, runs.handWrittenMockBypassFailure, runs.readTwinFailure, runs.holeNameStabilityFailure, runs.builderSurfaceFailure, builderCallFailures[runs.fixture.seed], runs.builderLabelFailure, runs.sameSupplyFailure, runs.sameSupplyEditRejectedFailure, runs.addedSupplyFailure, runs.forwardedValuesFailure, runs.forwardingRemedyFailure, runs.remedyBuildersFailure, runs.callingMockFailure, runs.placeLevelsFailure, runs.rootFunctionKeyFailure, runs.placesJudgedByAnotherPlacesFillFailure, runs.placeChainFailure, runs.secondPathFailure, runs.multiModuleFailures.first, runs.remedyFailure, runs.querySuppliersFailure, runs.queryUnfulfilledFailure, runs.queryDeletionFailure].compactMap(\.self))
 			failures.append(contentsOf: runs.scopeCaseFailures)
 			// Whether a closure a level function returns keeps a level's values, read from the generated text, so it judges
 			// with compiles and without.
@@ -17539,8 +17628,32 @@ enum GraphFuzzerOracle {
 		// A graph in one module the tool accepts is exported by `query graph`, whose suppliers must be what the generated code
 		// hands each receive (`querySuppliersFailure`).
 		var queryExport: String?
-		if fixture.modules == nil, !drawnFeatures.contains(.generateMockPublic), case .accepted = firstOutcome {
-			queryExport = try await GraphFuzzerQuerySupplies.export(of: fixture)
+		// A graph in one module the tool rejects is exported too, whose dependencies marked unfulfilled must be where the
+		// errors it reports are (`queryUnfulfilledFailure`).
+		var rejectedQueryExport: String?
+		var missingTypesDeclaredOutcome: GraphFuzzerUnfulfilledDependencies.OutcomeWithMissingTypesDeclared?
+		var queryDeletion: (deletion: GraphFuzzerQueryDeletion, export: String)?
+		var queryProviderDeletion: (deletion: GraphFuzzerQueryProviderDeletion, export: String)?
+		if fixture.modules == nil, !drawnFeatures.contains(.generateMockPublic) {
+			switch firstOutcome {
+			case .accepted:
+				let export = try await GraphFuzzerQuerySupplies.export(of: fixture)
+				queryExport = export
+				// The graph is exported again without one of its declarations, which must move no other receive's suppliers
+				// (`queryDeletionFailure`).
+				if let deletion = try? GraphFuzzerQueryDeletion(exportedJSON: export, fixture: fixture) {
+					queryDeletion = try await (deletion, GraphFuzzerQuerySupplies.export(of: deletion.fixtureWithoutDeclaration))
+				}
+				if let deletion = try? GraphFuzzerQueryProviderDeletion(exportedJSON: export, fixture: fixture) {
+					queryProviderDeletion = try await (deletion, GraphFuzzerQuerySupplies.export(of: deletion.fixtureWithoutProperty))
+				}
+			case .rejected:
+				let export = try await GraphFuzzerQuerySupplies.export(of: fixture)
+				rejectedQueryExport = export
+				// Where the export has partial trees built around a missing type, the graph is run again with each missing
+				// type declared: its errors are the further marks, and the export marks every one of them.
+				missingTypesDeclaredOutcome = try await (try? GraphFuzzerUnfulfilledDependencies(exportedJSON: export))?.outcomeWithMissingTypesDeclared(of: fixture)
+			}
 		}
 		return try await GraphFuzzerToolRuns(
 			fixture: fixture,
@@ -17584,6 +17697,10 @@ enum GraphFuzzerOracle {
 			builderSurfaceRuns: builderSurfaceRuns,
 			drawnHolePlaces: drawnHolePlaces,
 			queryExport: queryExport,
+			rejectedQueryExport: rejectedQueryExport,
+			missingTypesDeclaredOutcome: missingTypesDeclaredOutcome,
+			queryDeletion: queryDeletion,
+			queryProviderDeletion: queryProviderDeletion,
 		)
 	}
 

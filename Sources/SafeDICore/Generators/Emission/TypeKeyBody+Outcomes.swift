@@ -65,8 +65,13 @@ extension TypeKeyLayout {
 	func lastPosition(of label: String, inClass owner: Int, before index: Int) -> Int? {
 		// The body `statements(ofClass:)` reads, whose positions of each label are indexed in order: a lookup in the root's
 		// long body stays logarithmic.
-		let body = owner == 0 ? 0 : membersByClass[owner][0]
-		guard let positions = bodies[body].positionsByLabel[label] else { return nil }
+		Self.lastPosition(in: bodies[owner == 0 ? 0 : membersByClass[owner][0]].positionsByLabel[label], before: index)
+	}
+
+	/// The last of `positions`, which ascend, before `index`: a binary search, since a look-up reads it for every label at
+	/// every place, so a body of many statements costs a look-up no more than a few.
+	static func lastPosition(in positions: [Int]?, before index: Int) -> Int? {
+		guard let positions else { return nil }
 		var low = 0
 		var high = positions.count
 		while low < high {

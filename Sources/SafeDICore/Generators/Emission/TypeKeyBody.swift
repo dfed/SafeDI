@@ -197,6 +197,7 @@ struct TypeKeyLayout {
 		/// above it. The view's key holds each one as `keyed(_:label:byKind:)` gives it.
 		let outerView: [String: PathValue]
 		var statements = [Statement]()
+		/// The positions of the statements that bind each label, ascending.
 		var positionsByLabel = [String: [Int]]()
 		/// The positions of the statements that declare each function, by its name (`AliasPlaceRecord.declaredFunctionNames`),
 		/// apart from the labels the statements bind, so no read of a label resolves to a function.
