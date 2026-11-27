@@ -185,7 +185,9 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 			.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
 			.appendingPathComponent("Sources/SafeDICore/Generators/NodeRecords")
 		let staticHelpers: Set = ["functionName", "standardIndent", "provides"]
-		for file in ["NodeRecords.swift", "NodeBuildOrder.swift", "NodeRecordsObservation.swift"] {
+		let files = try FileManager.default.contentsOfDirectory(atPath: directory.path).filter { $0.hasSuffix(".swift") && $0 != "DependencyTreeGenerator+NodeRecords.swift" }.sorted()
+		#expect(files.count >= 4)
+		for file in files {
 			let source = try String(contentsOf: directory.appendingPathComponent(file), encoding: .utf8)
 			let code = source.split(separator: "\n").filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }.joined(separator: "\n")
 			for match in code.matches(of: /ScopeGenerator\.(\w+)/) {

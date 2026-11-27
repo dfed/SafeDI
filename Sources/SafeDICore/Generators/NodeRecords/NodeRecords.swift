@@ -83,8 +83,10 @@ struct NodeRecords: Sendable {
 	///   arguments throw.
 	init(world: some NodeRecordSources) throws {
 		let declarationCount = world.declarationCount
+		var kinds = [NodeRecordKind]()
+		kinds.reserveCapacity(declarationCount)
 		for declaration in 0..<Int32(declarationCount) {
-			try Self.checkStageOneKind(of: declaration, in: world)
+			try kinds.append(Self.kind(of: declaration, in: world))
 		}
 		var variantByDeclaration = [VariantID](repeating: -1, count: declarationCount)
 		for variant in 0..<Int32(world.variantCount) {
@@ -119,7 +121,10 @@ struct NodeRecords: Sendable {
 				escaping.formUnion(typesDeclaredEscaping[callee] ?? [])
 				children.append(.indented(places[callee] ?? .empty, by: ScopeGenerator.standardIndent))
 			}
-			let record = try Self.record(of: declaration, in: world, typesDeclaredEscaping: escaping, children: children)
+			let record = switch kinds[Int(declaration)] {
+			case .builtByInitializer:
+				try Self.builtByInitializerRecord(of: declaration, in: world, typesDeclaredEscaping: escaping, children: children)
+			}
 			typesDeclaredEscaping[Int(variant)] = escaping
 			records[Int(variant)] = record
 			places[Int(variant)] = .place(PlacePlan(code: .empty, record: .built(record)))
@@ -148,84 +153,21 @@ struct NodeRecords: Sendable {
 	/// By variant.
 	private let records: [BuiltPlaceRecord?]
 
-	private static func checkStageOneKind(of declaration: DeclarationID, in world: some NodeRecordSources) throws(NodeRecordRefusal) {
-		switch world.construction(of: declaration) {
-		case .initializer:
-			break
-		case .handWrittenMock, .seamCall, .publicMockCall, .constructionFunction, .fill:
-			throw .construction
-		}
-		switch world.kind(of: declaration) {
-		case .constant, .instantiator:
-			break
-		case .sendableInstantiator, .erasedInstantiator, .sendableErasedInstantiator, .lazy, .sendableLazy, .alias, .hole:
-			throw .kind
-		}
-		guard !world.isOnCycle(declaration) else { throw .cycle }
-		let scope = world.scope(of: declaration)
-		guard !scope.isUnavailableDependency, scope.builtInlineSeamComment == nil else { throw .unavailableOrInlineSeam }
-		guard scope.holeArguments.isEmpty else { throw .fill }
-		guard scope.instantiatedDependenciesNotGenerated.isEmpty else { throw .renameOrHole }
-		for propertyToGenerate in scope.propertiesToGenerate {
-			switch propertyToGenerate {
-			case let .instantiated(_, _, erasedToConcreteExistential, _):
-				guard !erasedToConcreteExistential else { throw .kind }
-			case .hole, .aliased:
-				throw .renameOrHole
-			}
-		}
-		guard scope.declaredLazilyInstantiatedInstanceProperties.isEmpty, scope.forwardedLazilyInstantiatedInstanceProperties.isEmpty else { throw .onlyIfAvailable }
-		for dependency in scope.instantiable.dependencies {
-			switch dependency.source {
-			case .instantiated, .forwarded, .received(onlyIfAvailable: false):
-				break
-			case .received(onlyIfAvailable: true):
-				throw .onlyIfAvailable
-			case .aliased:
-				throw .renameOrHole
-			}
-		}
-		guard declaration == 0 || scope.instantiable.initializer != nil else { throw .noInitializer }
+	/// The kind of record `declaration` is made as, or the refusal of its world. A lane that adds a kind asks its own
+	/// file's classifier first, which returns `nil` for a node not of its kind, and leaves the refusals of the kinds no
+	/// lane makes yet to `checkBuiltByInitializer(_:in:)`, last.
+	private static func kind(of declaration: DeclarationID, in world: some NodeRecordSources) throws(NodeRecordRefusal) -> NodeRecordKind {
+		try checkBuiltByInitializer(declaration, in: world)
+		return .builtByInitializer
 	}
+}
 
-	private static func record(
-		of declaration: DeclarationID,
-		in world: some NodeRecordSources,
-		typesDeclaredEscaping: Set<TypeDescription>,
-		children: [GeneratedCode],
-	) throws -> BuiltPlaceRecord {
-		let instantiable = world.scope(of: declaration).instantiable
-		// Every node but the root is built as a property, and has an initializer (`checkStageOneKind(of:in:)`).
-		guard let property = world.property(of: declaration), let initializer = instantiable.initializer else { throw NodeRecordRefusal.noInitializer }
-		// Throws what the tree's construction of the same place throws, which the `@Instantiable` macro rejects first.
-		let arguments = try initializer.createInitializerArguments(given: instantiable.dependencies)
-		let isExtension = instantiable.declarationType.isExtension
-		let isInstantiator = switch world.kind(of: declaration) {
-		case .instantiator, .sendableInstantiator, .erasedInstantiator, .sendableErasedInstantiator:
-			true
-		case .constant, .lazy, .sendableLazy, .alias, .hole:
-			false
-		}
-		return BuiltPlaceRecord(
-			property: property,
-			isErased: false,
-			concreteType: instantiable.concreteInstantiable,
-			isExtension: isExtension,
-			target: isExtension ? .instantiate(instantiable.concreteInstantiable) : .initializer(instantiable.concreteInstantiable),
-			arguments: arguments.map {
-				PlaceRead(argumentLabel: $0.argument.label, label: $0.dependency.property.label, property: $0.dependency.property, source: $0.argument.source)
-			},
-			forwardedProperties: instantiable.dependencies.filter { $0.source == .forwarded }.map(\.property).sorted(),
-			cycleParameters: [],
-			callCycleArguments: [],
-			functionName: ScopeGenerator.functionName(toBuildPropertyNamed: property.label),
-			isSendable: false,
-			typesDeclaredEscaping: typesDeclaredEscaping,
-			lineEnd: "",
-			// An `Instantiator` always declares its builder function; a constant only where its body has a statement.
-			hasFunction: isInstantiator || !children.isEmpty,
-			children: children,
-			node: PlanNode(),
-		)
-	}
+/// The kinds of node `NodeRecords` makes a record of. Each is made by one file of this folder, `NodeRecords+<Kind>.swift`,
+/// which the lane that adds the kind owns: its classifier (whether a node is of the kind) and its record. A world holding
+/// a node of no kind is refused whole. The stages of `lanes/per-type-facts/node-records-interface.md` add the kinds in
+/// order; loops of received builders and mock construction kinds are other lanes', handed to this folder.
+enum NodeRecordKind: Sendable {
+	/// A constant or an `Instantiator` built by its type's initializer or `instantiate()`, off every cycle, with nothing
+	/// erased, lazy, `@Sendable`, received only if available, renamed or filled in its scope (stage 1).
+	case builtByInitializer
 }
