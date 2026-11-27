@@ -137,12 +137,15 @@ struct NodeRecords: Sendable {
 	///   - seamTree: What a seam's own root is handed: its parameters, the nearest declarations of their labels, and the
 	///     instances of `LazilyInstantiated` properties among them, a deferred parameter's memo included, which its tree
 	///     reads through their wrappers. `nil` for any other root.
+	///   - outerDeclarations: What a mock root's body is declared inside, the nearest declarations of their labels: the
+	///     parameters of `mock()` and the overrides it binds before its nodes, which a node's receive only if available
+	///     reads as a seam's tree reads the seam's parameters. Empty for any other root.
 	///   - declaredTypeNames: The names the modules SafeDI read declare types by at file scope, which the check of an erased
 	///     instantiator's first generic argument reads (`checkForwardsBuiltTypesProperties(_:in:declaredTypeNames:)`).
 	///     `nil` for a mock root's world, where no kind claims an erased instantiator and the mock's own tree reports it.
 	/// - Throws: A `NodeRecordRefusal` where the world holds a kind stage 1 does not make, or what an initializer's
 	///   arguments throw.
-	init(world: some NodeRecordSources, seamTree: DependencyTreeGenerator.RootScopeInfo.SeamTree? = nil, declaredTypeNames: DeclaredTypeNames?) throws {
+	init(world: some NodeRecordSources, seamTree: DependencyTreeGenerator.RootScopeInfo.SeamTree? = nil, outerDeclarations: [Property] = [], declaredTypeNames: DeclaredTypeNames?) throws {
 		let declarationCount = world.declarationCount
 		var kinds = [NodeRecordKind]()
 		kinds.reserveCapacity(declarationCount)
@@ -158,7 +161,7 @@ struct NodeRecords: Sendable {
 			variantByDeclaration[declaration] = variant
 		}
 		let order = try NodeBuildOrder(world: world)
-		let onlyIfAvailableAnswers = try OnlyIfAvailableAnswers(world: world, rootParameters: seamTree?.parameters ?? [])
+		let onlyIfAvailableAnswers = try OnlyIfAvailableAnswers(world: world, rootParameters: seamTree?.parameters ?? outerDeclarations)
 		let answeringDeclarations = DeclarationsAnsweringReads(world: world)
 		// The tree reports the capture as an error, which the records cannot.
 		guard !answeringDeclarations.sendableFunctionCapturesWrapper else { throw NodeRecordRefusal.sendableFunctionCapturesWrapper }
@@ -259,7 +262,7 @@ struct NodeRecords: Sendable {
 
 	/// Every refusal `world` holds, each once, in the order of `NodeRecordRefusal`'s cases: what a test reports of a world, so
 	/// that each stage counts the worlds it frees.
-	static func refusals(in world: some NodeRecordSources, seamTree: DependencyTreeGenerator.RootScopeInfo.SeamTree? = nil, declaredTypeNames: DeclaredTypeNames?) -> [NodeRecordRefusal] {
+	static func refusals(in world: some NodeRecordSources, seamTree: DependencyTreeGenerator.RootScopeInfo.SeamTree? = nil, outerDeclarations: [Property] = [], declaredTypeNames: DeclaredTypeNames?) -> [NodeRecordRefusal] {
 		var refusals = Set<NodeRecordRefusal>()
 		for declaration in 0..<Int32(world.declarationCount) {
 			refusals.formUnion(kindAndRefusals(of: declaration, in: world).refusals)
@@ -284,7 +287,7 @@ struct NodeRecords: Sendable {
 			refusals.insert(error)
 		}
 		do {
-			_ = try OnlyIfAvailableAnswers(world: world, rootParameters: seamTree?.parameters ?? [])
+			_ = try OnlyIfAvailableAnswers(world: world, rootParameters: seamTree?.parameters ?? outerDeclarations)
 		} catch {
 			refusals.insert(error)
 		}

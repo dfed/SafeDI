@@ -1112,6 +1112,62 @@ struct SafeDIToolNodeRecordsMockRootTests: ~Copyable {
 		    public init() {}
 		}
 		""",
+		// A node's receive only if available that no node provides reads the override `mock()` binds before the nodes, as
+		// a seam's tree reads its parameter.
+		"""
+		public protocol Clock {}
+
+		@Instantiable(generateMock: true)
+		public struct Root: Instantiable {
+		    public init(leaf: Leaf) {
+		        self.leaf = leaf
+		    }
+
+		    @Instantiated let leaf: Leaf
+		}
+
+		@Instantiable
+		public struct Leaf: Instantiable {
+		    public init(clock: Clock?) {
+		        self.clock = clock
+		    }
+
+		    @Received(onlyIfAvailable: true) let clock: Clock?
+		}
+		""",
+		// A node's receive only if available of a value another node requires reads the parameter `mock()` takes for it.
+		"""
+		public protocol Clock {}
+
+		@Instantiable(generateMock: true)
+		public struct Root: Instantiable {
+		    public init(leaf: Leaf, reader: Reader) {
+		        self.leaf = leaf
+		        self.reader = reader
+		    }
+
+		    @Instantiated let leaf: Leaf
+		    @Instantiated let reader: Reader
+		}
+
+		@Instantiable
+		public struct Leaf: Instantiable {
+		    public init(clock: Clock) {
+		        self.clock = clock
+		    }
+
+		    @Received let clock: Clock
+		}
+
+		@Instantiable
+		public struct Reader: Instantiable {
+		    public init(clock: Clock?) {
+		        self.clock = clock
+		    }
+
+		    @Received(onlyIfAvailable: true) let clock: Clock?
+		}
+		""",
 	])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_laysOutNodesAsTheWalkWritesThem_whenRootBindsParameterOrOverride(declarations: String) async throws {
@@ -1188,22 +1244,6 @@ struct SafeDIToolNodeRecordsMockRootTests: ~Copyable {
 			}
 			""",
 			"mockDefaultValuedParameter",
-		),
-		// A receive only if available beneath the root is the node half's (`NodeRecords+BuiltByInitializer.swift`).
-		(
-			"""
-			public protocol Clock {}
-
-			@Instantiable
-			public struct Leaf: Instantiable {
-			    public init(clock: Clock?) {
-			        self.clock = clock
-			    }
-
-			    @Received(onlyIfAvailable: true) let clock: Clock?
-			}
-			""",
-			"onlyIfAvailable",
 		),
 	])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)

@@ -27,6 +27,8 @@ extension ScopeGenerator {
 	/// handed (`NodeRecords.mockConfigurationField(named:)`), which the root's body reads of `mock()`'s own parameter. The
 	/// root is reported to the test that observes node records (`NodeRecordsObservation.observer`), which alone hands a
 	/// mock root its world. The world answers its records `rootNames`, the names the root's level binds its nodes apart under.
+	/// A node's receive only if available reads `outerDeclarations`, the parameters of `mock()` and the overrides it binds
+	/// before its nodes, where no node nearer it declares the label, as the walk passes them.
 	///
 	/// The function awaits nothing and is kept out of the frame of the mock's walk, which every root's lowering holds.
 	/// - Throws: What an initializer's arguments throw, as the mock's walk throws it of the same node.
@@ -51,9 +53,9 @@ extension ScopeGenerator {
 		do {
 			// No kind claims an erased instantiator in a mock root's world, so its first generic argument is the mock's tree's
 			// to check.
-			nodeRecords = try NodeRecords(world: world, declaredTypeNames: nil)
+			nodeRecords = try NodeRecords(world: world, outerDeclarations: outerDeclarations, declaredTypeNames: nil)
 		} catch let refusal as NodeRecordRefusal {
-			report(refusal: refusal, everyRefusal: NodeRecords.refusals(in: world, declaredTypeNames: nil), isLaidOut: false, recordCount: 0)
+			report(refusal: refusal, everyRefusal: NodeRecords.refusals(in: world, outerDeclarations: outerDeclarations, declaredTypeNames: nil), isLaidOut: false, recordCount: 0)
 			return nil
 		}
 		// A read of a value the mock binds beside its nodes would resolve to no declaration of the records' body.
