@@ -376,68 +376,6 @@ struct SafeDIToolNodeRecordsCycleTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_keepsTheTreesLayout_whenTypeBetweenCycleMemberAndCloserDeclaresLabelTheCycleReceives() async throws {
-		// `Step`, between `Screen`'s place and the call that closes the cycle on it, declares `session`, which `Screen` receives.
-		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					@Instantiable(isRoot: true) public final class Root: Instantiable {
-					    @Instantiated let session: Session
-					    @Instantiated let screenBuilder: Instantiator<Screen>
-					    public init(session: Session, screenBuilder: Instantiator<Screen>) { self.session = session; self.screenBuilder = screenBuilder }
-					}
-
-					@Instantiable public final class Session: Instantiable {
-					    public init() {}
-					}
-
-					@Instantiable public final class Screen: Instantiable {
-					    @Received let session: Session
-					    @Instantiated let stepBuilder: Instantiator<Step>
-					    public init(session: Session, stepBuilder: Instantiator<Step>) { self.session = session; self.stepBuilder = stepBuilder }
-					}
-
-					@Instantiable public final class Step: Instantiable {
-					    @Instantiated let session: Session
-					    @Instantiated let screenBuilder: Instantiator<Screen>
-					    public init(session: Session, screenBuilder: Instantiator<Screen>) { self.session = session; self.screenBuilder = screenBuilder }
-					}
-					""",
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
-		#expect(output.generatedFiles == [
-			"Root+SafeDI.swift": generatedFileHeader + """
-			extension Root {
-			    public convenience init() {
-			        let session = Session()
-			        func __safeDI_screenBuilder(session: Session) -> Screen {
-			            let stepBuilder = Instantiator<Step>(__safeDI_stepBuilder)
-			            return Screen(session: session, stepBuilder: stepBuilder)
-			        }
-			        func __safeDI_stepBuilder() -> Step {
-			            let session = Session()
-			            let screenBuilder = Instantiator<Screen> {
-			                __safeDI_screenBuilder(session: session)
-			            }
-			            return Step(session: session, screenBuilder: screenBuilder)
-			        }
-			        let screenBuilder = Instantiator<Screen> {
-			            __safeDI_screenBuilder(session: session)
-			        }
-			        self.init(session: session, screenBuilder: screenBuilder)
-			    }
-			}
-			""",
-		])
-		#expect(reports.map(\.refusal) == ["cycleTakesParameters"])
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_laysOutRootAsTheTreeDoes_whenTheFactsAnswerTheParametersOfTheFunctionACycleClosesOn() async throws {
 		// `Step`, between `Screen`'s place and the call that closes the cycle on it, declares `session`, which `Screen` receives,
 		// so `Screen`'s function takes it, as the facts answer.
