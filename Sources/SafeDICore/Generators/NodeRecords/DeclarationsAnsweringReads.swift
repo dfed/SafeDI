@@ -76,6 +76,7 @@ struct DeclarationsAnsweringReads: Sendable {
 			self.lazilyInstantiatedInstancePropertiesByVariant = []
 			self.sendableFunctionCapturesWrapper = false
 			self.renamesReadingWrappersInstance = []
+			self.renamesReadDifferentInstances = false
 			return
 		}
 		var lazilyInstantiatedInstancePropertiesByVariant = [Set<Property>](repeating: [], count: world.variantCount)
@@ -84,6 +85,9 @@ struct DeclarationsAnsweringReads: Sendable {
 		lazilyInstantiatedInstancePropertiesByVariant[0] = rootInstanceProperties
 		var sendableFunctionCapturesWrapper = false
 		var renamesReadingWrappersInstance = Set<VariantID>()
+		var renamesReadDifferentInstances = false
+		// The labels the world's renames are fulfilled by.
+		let renamedLabels = Set(declarations.compactMap { Self.rename($0, in: world)?.fulfillingProperty.label })
 		// For each variant reached, the declaration that answers each of its reads, -1 where none does. Nothing is above
 		// the root, so nothing answers what its tree reads.
 		var answeringDeclarations = [[DeclarationID]?](repeating: nil, count: world.variantCount)
@@ -99,7 +103,24 @@ struct DeclarationsAnsweringReads: Sendable {
 			let callerAnsweringDeclarations = answeringDeclarations[Int(caller)] ?? []
 			let callerScope = world.scope(of: world.declaration(of: caller))
 			let edgeFacts = world.edgeFacts(from: world.declaration(of: caller))
-			for (edgeIndex, callee) in world.calls(of: caller).enumerated() where answeringDeclarations[Int(callee)] == nil {
+			for (edgeIndex, callee) in world.calls(of: caller).enumerated() {
+				// Calls into one variant can answer a read that keys no variant (a rename's, or one only if available)
+				// differently: where one call hands a label a rename is fulfilled by as a wrapper's instance and another does
+				// not, the tree binds the rename two ways, and one record cannot.
+				if let calleeAnsweringDeclarations = answeringDeclarations[Int(callee)] {
+					if !renamesReadDifferentInstances, Self.handsRenamesDifferentInstances(
+						calleeAnsweringDeclarations,
+						and: world.sources(ofCall: edgeIndex, of: caller).map { source in
+							Self.answeringDeclaration(of: source, among: callerAnsweringDeclarations)
+						},
+						readBy: callee,
+						renamedLabels: renamedLabels,
+						in: world,
+					) {
+						renamesReadDifferentInstances = true
+					}
+					continue
+				}
 				// A rename is a leaf of the scope that declares it, which reads its fulfilling property for it.
 				if let rename = Self.rename(world.declaration(of: callee), in: world),
 				   Self.readsWrappersInstance(
@@ -115,14 +136,7 @@ struct DeclarationsAnsweringReads: Sendable {
 				let opensSendableFunction = Self.opensSendableFunction(edgeFacts[edgeFacts.startIndex + edgeIndex])
 				var calleeAnsweringDeclarations = [DeclarationID]()
 				for (source, readID) in zip(world.sources(ofCall: edgeIndex, of: caller), world.reads(of: world.declaration(of: callee))) {
-					let answeringDeclaration: DeclarationID = switch source.kind {
-					case .none:
-						-1
-					case .bound:
-						source.payload
-					case .passedThrough:
-						callerAnsweringDeclarations[Int(source.payload)]
-					}
+					let answeringDeclaration = Self.answeringDeclaration(of: source, among: callerAnsweringDeclarations)
 					calleeAnsweringDeclarations.append(answeringDeclaration)
 					let read = world.read(readID)
 					// The caller passes the read through to the root's own, which asks about this label (`rootMemoLabels`).
@@ -158,6 +172,7 @@ struct DeclarationsAnsweringReads: Sendable {
 		self.lazilyInstantiatedInstancePropertiesByVariant = lazilyInstantiatedInstancePropertiesByVariant
 		self.sendableFunctionCapturesWrapper = sendableFunctionCapturesWrapper
 		self.renamesReadingWrappersInstance = renamesReadingWrappersInstance
+		self.renamesReadDifferentInstances = renamesReadDifferentInstances
 	}
 
 	/// The by-value properties `variant`'s body reads as a wrapper's instance, of the labels its tree reads from above.
@@ -173,6 +188,10 @@ struct DeclarationsAnsweringReads: Sendable {
 	func renameReadsWrappersInstance(_ variant: VariantID) -> Bool {
 		renamesReadingWrappersInstance.contains(variant)
 	}
+
+	/// Whether two calls into one variant hand a rename beneath it its label differently: one as a wrapper's instance, the
+	/// other not.
+	let renamesReadDifferentInstances: Bool
 
 	/// The renames fulfilled by a wrapper's instance; empty in a world that declares no lazily instantiated property and
 	/// opens no `@Sendable` function.
@@ -208,6 +227,35 @@ struct DeclarationsAnsweringReads: Sendable {
 		}.first
 	}
 
+	/// The declaration that answers a read the call hands from `source`, of the caller's answers `answers`.
+	private static func answeringDeclaration(of source: AnswerSource, among answers: [DeclarationID]) -> DeclarationID {
+		switch source.kind {
+		case .none:
+			-1
+		case .bound:
+			source.payload
+		case .passedThrough:
+			answers[Int(source.payload)]
+		}
+	}
+
+	/// Whether `answers` and `otherAnswers`, two calls' answers to `variant`'s reads, differ in whether a read of one of
+	/// `renamedLabels` is answered by a declaration of a wrapper's instance of its label.
+	private static func handsRenamesDifferentInstances(_ answers: [DeclarationID], and otherAnswers: [DeclarationID], readBy variant: VariantID, renamedLabels: Set<String>, in world: some NodeRecordSources) -> Bool {
+		func declaresInstance(_ declaration: DeclarationID, of label: String) -> Bool {
+			declaration == rootMemo || declaration >= 0 && world.scope(of: declaration).declaredLazilyInstantiatedInstanceProperties.contains { $0.label == label }
+		}
+		for (index, readID) in world.reads(of: world.declaration(of: variant)).enumerated() where index < answers.count && index < otherAnswers.count && answers[index] != otherAnswers[index] {
+			let read = world.read(readID)
+			let label = world.text(ofLabel: read.label)
+			guard read.channel.asksAboutLabel, renamedLabels.contains(label) else { continue }
+			if declaresInstance(answers[index], of: label) != declaresInstance(otherAnswers[index], of: label) {
+				return true
+			}
+		}
+		return false
+	}
+
 	/// The declaration that answers `variant`'s read of `label` from above: a declaration of the world, `rootMemo`, or -1
 	/// where none does or the variant reads no such label.
 	private static func declaration(answering label: String, readBy variant: VariantID, among answers: [DeclarationID], in world: some NodeRecordSources) -> DeclarationID {
@@ -231,14 +279,12 @@ struct DeclarationsAnsweringReads: Sendable {
 		in world: some NodeRecordSources,
 	) -> Bool {
 		let instance = rename.fulfillingProperty.asUnwrappedProperty
-		if rename.fulfillingProperty.label != rename.property.label, scope.declaredLabels.contains(rename.fulfillingProperty.label) {
-			return scope.declaredLazilyInstantiatedInstanceProperties.contains(instance)
+		return if rename.fulfillingProperty.label != rename.property.label, scope.declaredLabels.contains(rename.fulfillingProperty.label) {
+			scope.declaredLazilyInstantiatedInstanceProperties.contains(instance)
 		} else if answeringDeclaration == rootMemo {
-			return rootInstanceProperties.contains(instance)
-		} else if answeringDeclaration >= 0 {
-			return world.scope(of: answeringDeclaration).declaredLazilyInstantiatedInstanceProperties.contains(instance)
+			rootInstanceProperties.contains(instance)
 		} else {
-			return false
+			answeringDeclaration >= 0 && world.scope(of: answeringDeclaration).declaredLazilyInstantiatedInstanceProperties.contains(instance)
 		}
 	}
 

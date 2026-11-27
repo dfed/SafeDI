@@ -53,7 +53,8 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	case cycle
 	/// The node is built as a `LazilyInstantiated`, which `lazyClaim(of:in:)` discharges: its record is
 	/// `NodeRecordKind.lazy`'s. Also a mock root's scope that declares or forwards a lazily instantiated property, whose
-	/// instance no record reads yet.
+	/// instance no record reads yet, and a rename the tree binds from a wrapper's instance on one path to its node only
+	/// (`DeclarationsAnsweringReads.renamesReadDifferentInstances`).
 	case lazy
 	/// The node's type receives a property only if available.
 	case onlyIfAvailable
@@ -150,6 +151,8 @@ struct NodeRecords: Sendable {
 		let answeringDeclarations = DeclarationsAnsweringReads(world: world, rootInstanceProperties: seamTree?.rootLazilyInstantiatedInstanceProperties ?? [])
 		// The tree reports the capture as an error, which the records cannot.
 		guard !answeringDeclarations.sendableFunctionCapturesWrapper else { throw NodeRecordRefusal.sendableFunctionCapturesWrapper }
+		// One rename record binds its rename one way, where the tree binds it from a wrapper's instance on one path only.
+		guard !answeringDeclarations.renamesReadDifferentInstances else { throw NodeRecordRefusal.lazy }
 		// A node's place holds its children's places, so each is made after its children: a post-order walk from the root,
 		// with a stack, since a tree can be as deep as the module has types.
 		var places = [GeneratedCode?](repeating: nil, count: world.variantCount)
@@ -170,8 +173,9 @@ struct NodeRecords: Sendable {
 			let declaration = world.declaration(of: variant)
 			let scope = world.scope(of: declaration)
 			let instantiable = scope.instantiable
-			var escaping = Set(instantiable.initializer?.typesDeclaredEscaping ?? [])
-			escaping.formUnion(instantiable.mockInitializer?.typesDeclaredEscaping ?? [])
+			// The declaration spells its own, a name a non-erased rename hands a receiver that declares it `@escaping` included,
+			// as the tree's scope does (`ScopeGenerator.typesDeclaredEscaping`).
+			var escaping = instantiable.typesDeclaredEscapingByItsDeclaration
 			// A call of a seam spells the builder types its signature declares `@escaping` so, as its tree does.
 			escaping.formUnion(scope.seamCall?.typesDeclaredEscaping ?? [])
 			var children = [GeneratedCode]()
@@ -289,6 +293,9 @@ struct NodeRecords: Sendable {
 		let answeringDeclarations = DeclarationsAnsweringReads(world: world, rootInstanceProperties: seamTree?.rootLazilyInstantiatedInstanceProperties ?? [])
 		if answeringDeclarations.sendableFunctionCapturesWrapper {
 			refusals.insert(.sendableFunctionCapturesWrapper)
+		}
+		if answeringDeclarations.renamesReadDifferentInstances {
+			refusals.insert(.lazy)
 		}
 		return NodeRecordRefusal.allCases.filter(refusals.contains)
 	}
