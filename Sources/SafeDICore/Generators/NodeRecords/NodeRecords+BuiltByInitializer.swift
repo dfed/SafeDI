@@ -29,7 +29,9 @@ extension NodeRecords {
 		}
 		switch world.kind(of: declaration) {
 		case .constant, .instantiator:
-			break
+			if world.isErased(declaration) {
+				refusals.append(.erased)
+			}
 		case .sendableInstantiator, .sendableErasedInstantiator, .sendableLazy:
 			refusals.append(.sendable)
 		case .erasedInstantiator:
@@ -54,17 +56,11 @@ extension NodeRecords {
 		}
 		for propertyToGenerate in scope.propertiesToGenerate {
 			switch propertyToGenerate {
-			case let .instantiated(_, _, erasedToConcreteExistential, _):
-				if erasedToConcreteExistential {
-					refusals.append(.erased)
-				}
+			case .instantiated:
+				break
 			case .hole, .aliased:
 				refusals.append(.renameOrHole)
 			}
-		}
-		// A scope that declares a lazily instantiated property also declares its instance.
-		if !scope.declaredLazilyInstantiatedInstanceProperties.isEmpty || !scope.forwardedLazilyInstantiatedInstanceProperties.isEmpty {
-			refusals.append(.lazy)
 		}
 		for dependency in scope.instantiable.dependencies where dependency.source == .received(onlyIfAvailable: true) {
 			refusals.append(.onlyIfAvailable)
@@ -75,12 +71,16 @@ extension NodeRecords {
 		return refusals
 	}
 
-	/// The record of `declaration`'s place, a node of kind `builtByInitializer`, whose body builds `children` and whose
-	/// tree declares `typesDeclaredEscaping` `@escaping`.
+	/// The record of `declaration`'s place, a node its type's initializer builds (`builtByInitializer`, `erased`, `lazy`
+	/// or `sendable`), whose body builds `children` and whose tree declares `typesDeclaredEscaping` `@escaping`. Whether
+	/// the place is erased, is `@Sendable` and always declares its builder function, it reads of the node.
+	/// - Parameter lazilyInstantiatedInstanceProperties: The by-value properties the node's type receives as the instance
+	///   of a lazily instantiated property declared above it (`DeclarationsAnsweringReads`).
 	static func builtByInitializerRecord(
 		of declaration: DeclarationID,
 		variant _: VariantID,
 		in world: some NodeRecordSources,
+		lazilyInstantiatedInstanceProperties: Set<Property>,
 		typesDeclaredEscaping: Set<TypeDescription>,
 		children: [GeneratedCode],
 	) throws -> BuiltPlaceRecord {
@@ -89,17 +89,20 @@ extension NodeRecords {
 		guard let property = world.property(of: declaration), let initializer = instantiable.initializer else { throw NodeRecordRefusal.noInitializer }
 		// Never throws: a type's initializer is one that fulfills its dependencies (`InstantiableVisitor`'s
 		// `canonicalConstructionInitializer`, through `Initializer.isValid(forFulfilling:)`, which makes the same binding).
-		let arguments = try initializer.createInitializerArguments(given: instantiable.dependencies)
+		let arguments = try initializer.createInitializerArguments(given: instantiable.dependencies, lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties)
 		let isExtension = instantiable.declarationType.isExtension
-		let isInstantiator = switch world.kind(of: declaration) {
-		case .instantiator, .sendableInstantiator, .erasedInstantiator, .sendableErasedInstantiator:
-			true
-		case .constant, .lazy, .sendableLazy, .alias, .hole:
-			false
+		// An instantiator or a lazy wrapper is made of its builder function, which is `@Sendable` for a `Sendable` wrapper.
+		let (isWrapper, isSendable) = switch world.kind(of: declaration) {
+		case .instantiator, .erasedInstantiator, .lazy:
+			(true, false)
+		case .sendableInstantiator, .sendableErasedInstantiator, .sendableLazy:
+			(true, true)
+		case .constant, .alias, .hole:
+			(false, false)
 		}
 		return BuiltPlaceRecord(
 			property: property,
-			isErased: false,
+			isErased: world.isErased(declaration),
 			concreteType: instantiable.concreteInstantiable,
 			isExtension: isExtension,
 			target: isExtension ? .instantiate(instantiable.concreteInstantiable) : .initializer(instantiable.concreteInstantiable),
@@ -110,11 +113,11 @@ extension NodeRecords {
 			cycleParameters: [],
 			callCycleArguments: [],
 			functionName: ScopeGenerator.functionName(toBuildPropertyNamed: property.label),
-			isSendable: false,
+			isSendable: isSendable,
 			typesDeclaredEscaping: typesDeclaredEscaping,
 			lineEnd: "",
-			// An `Instantiator` always declares its builder function; a constant only where its body has a statement.
-			hasFunction: isInstantiator || !children.isEmpty,
+			// A wrapper always declares its builder function; a constant only where its body has a statement.
+			hasFunction: isWrapper || !children.isEmpty,
 			children: children,
 			node: PlanNode(),
 		)

@@ -44,24 +44,24 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_buildsTreeOnlyForRootNodeRecordsRefuse_whenNothingElseReadsTrees() async throws {
-		let (forcers, heldTaskCounts) = try await treeForcers(of: Self.plainAndLazyRoots)
+		let (forcers, heldTaskCounts) = try await treeForcers(of: Self.plainAndTolerantRoots)
 		#expect(forcers == """
-		Lazy\tkind lazy
 		Plain\tnone
+		Tolerant\tkind onlyIfAvailable
 		roots that built a tree: 1 of 2
 
 		""")
-		// A tree's code tasks are counted once its code is planned: only `Lazy` built one.
+		// A tree's code tasks are counted once its code is planned: only `Tolerant` built one.
 		#expect(heldTaskCounts == [0])
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_buildsEveryRootsTree_whenRunDrawsDOTGraph() async throws {
-		let (forcers, heldTaskCounts) = try await treeForcers(of: Self.plainAndLazyRoots, buildDOTFileOutput: true)
+		let (forcers, heldTaskCounts) = try await treeForcers(of: Self.plainAndTolerantRoots, buildDOTFileOutput: true)
 		#expect(forcers == """
-		Lazy\tkind lazy, DOT graph
 		Plain\tDOT graph
+		Tolerant\tkind onlyIfAvailable, DOT graph
 		roots that built a tree: 2 of 2
 
 		""")
@@ -91,11 +91,12 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 
 	private var filesToDelete: [URL]
 
-	/// `Plain`, a root node records lay out, and `Lazy`, a root whose `LazilyInstantiated` property they refuse, since its
-	/// instance can be read by value.
-	private static let plainAndLazyRoots = [
+	/// `Plain`, a root node records lay out, and `Tolerant`, a root they refuse, since a type of its tree receives a
+	/// property only if available.
+	private static let plainAndTolerantRoots = [
 		seamFixtureType(named: "Plain", isRoot: true, declarations: ["@Instantiated let service: Service"]),
-		seamFixtureType(named: "Lazy", isRoot: true, declarations: ["@Instantiated let service: LazilyInstantiated<Service>"]),
+		seamFixtureType(named: "Tolerant", isRoot: true, declarations: ["@Instantiated let service: Service", "@Instantiated let reader: Reader"]),
+		seamFixtureType(named: "Reader", declarations: ["@Received(onlyIfAvailable: true) let service: Service?"]),
 		seamFixtureType(named: "Service", declarations: []),
 	]
 
