@@ -6964,6 +6964,11 @@ struct SafeDIToolGraphFuzzerTests {
 		// The graphs the oracle ran again with no skip of a clean subtree in the validation walk, against no pin: a run of the
 		// whole corpus checks the floor below.
 		report.append("clean-subtree-skips \(cleanSubtreeSkipOffGraphCount) \(corpus.name)")
+		// What the per-type facts' parameters differ by from the functions the tree writes, against no pin: the functions
+		// (and their roots) a parameter that every call passes `nil` is dropped from, and the parameters the facts name
+		// that the tree captures, by the calls into their variant (none, one, two or more).
+		let parameterCounts = TypeFactsChecks.ParameterTally.shared.counts
+		report.append("parameter-facts \(parameterCounts.droppedParameterFunctions) \(parameterCounts.droppedParameterRoots) \(parameterCounts.capturedParametersByCalls.map(String.init).joined(separator: " ")) \(corpus.name)")
 		// The accepted graphs whose seam's own internal mock takes a builder as a closure that takes nothing, which ci.yml's
 		// combine job adds up and checks against a floor of ten: the only count of that shape the corpus draws.
 		if corpus.features.contains(.generateDependencyTree) {

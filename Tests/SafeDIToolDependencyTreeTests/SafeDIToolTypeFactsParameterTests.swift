@@ -103,13 +103,14 @@ struct SafeDIToolTypeFactsParameterTests: ~Copyable {
 	mutating func generate_typesNoParameter_whenReadIsNotOneOfTheVariantsDeclaration() async throws {
 		let report = try await rootReport(of: Self.loggerFixture(t4Declares: []))
 		let graph = report.graph
+		let arrivals = TypeFactsReadArrivals(world: graph)
 		let t3 = try #require(report.variantNodes.firstIndex { report.nodes[$0].description.hasPrefix("T3 ") })
 		let logger = try #require(report.variantNodes.firstIndex { report.nodes[$0].description.hasPrefix("Logger ") })
 		let loggerReads = graph.reads(of: graph.declaration(of: VariantID(logger)))
 		let t3Reads = graph.reads(of: graph.declaration(of: VariantID(t3)))
 
 		// A read of another declaration is no read of the variant.
-		#expect(loggerReads.filter { !t3Reads.contains($0) }.allSatisfy { graph.parameterType(of: VariantID(t3), $0) == nil })
+		#expect(loggerReads.filter { !t3Reads.contains($0) }.allSatisfy { graph.parameterType(of: VariantID(t3), $0, arrivals: arrivals) == nil })
 	}
 
 	@Test
@@ -118,11 +119,12 @@ struct SafeDIToolTypeFactsParameterTests: ~Copyable {
 		// A mock root's world reads what the root pins for a label, which is no value a function is handed.
 		let fixture = Self.loggerFixture(t4Declares: []).map { $0.replacingOccurrences(of: "@Instantiable(isRoot: true)", with: "@Instantiable(isRoot: true, generateMock: true)") }
 		let graph = try await rootReport(of: fixture, forMockGeneration: true).graph
+		let arrivals = TypeFactsReadArrivals(world: graph)
 		var pinnedReadCount = 0
 		for variant in 0..<graph.variantCount {
 			for read in graph.reads(of: graph.declaration(of: VariantID(variant))) where graph.readTable[Int(read)].channel == .mock {
 				pinnedReadCount += 1
-				#expect(graph.parameterType(of: VariantID(variant), read) == nil)
+				#expect(graph.parameterType(of: VariantID(variant), read, arrivals: arrivals) == nil)
 			}
 		}
 		#expect(pinnedReadCount > 0)

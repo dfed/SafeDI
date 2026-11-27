@@ -83,7 +83,7 @@ KNOWN_WORDS = {
     "read-twins", "omitted-values", "spellings", "draws", "errors", "outputs", "value-oracle", "remedies", "partitions",
     "cpu", "builder-surface", "seam-mock-builders", "level-captures", "failure", "stale", "misfiled", "known", "renamed", "multimodule", "problem", "seed", "finished", "completed",
     # Counted against no pin, so nothing is derived from it.
-    "clean-subtree-skips",
+    "clean-subtree-skips", "parameter-facts",
 }
 
 NOT_DERIVED = [

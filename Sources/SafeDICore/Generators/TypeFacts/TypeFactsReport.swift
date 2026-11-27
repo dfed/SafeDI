@@ -131,7 +131,8 @@ public struct TypeFactsReport: Sendable {
 		variantCountsByNode = variantCounts
 		variantNodes = (0..<graph.variantCount).map { Int(graph.declaration(of: VariantID($0))) }
 		variantCalls = (0..<graph.variantCount).map { graph.calls(of: VariantID($0)).map(Int.init) }
-		variantParameters = (0..<graph.variantCount).map { graph.parameters(of: VariantID($0)).map(\.property.spelledWithoutAny) }
+		let arrivals = TypeFactsReadArrivals(world: graph)
+		variantParameters = (0..<graph.variantCount).map { graph.parameters(of: VariantID($0), arrivals: arrivals).map(\.property.spelledWithoutAny) }
 		columnElementCount = graph.columnElementCount
 		edgeCount = graph.graph.edgeCount
 		func spelled(_ row: BitRows, of index: Int, _ spelling: (Int32) -> String) -> [String] {
