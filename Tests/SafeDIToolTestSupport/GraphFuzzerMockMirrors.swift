@@ -1741,12 +1741,10 @@ struct GraphFuzzerValueOraclePlan {
 		var rootOverrideCandidates = [String: [GraphFuzzerOverrideCandidate]]()
 		for rootTypeName in rootTypeNames {
 			rootOverrideCandidates[rootTypeName] = model.propertiesToGenerate(ofTypeNamed: rootTypeName).compactMap { propertyToGenerate in
-				guard case let .instantiated(property, scopeTypeName, isErased) = propertyToGenerate,
-				      !isErased,
-				      !property.isOptional,
-				      let kind = GraphFuzzerOverrideCandidateKind(propertyType: property.type)
+				guard case let .instantiated(property, scopeTypeName, _) = propertyToGenerate,
+				      let dependency = model.types[rootTypeName]?.dependencies.first(where: { $0.property == property })
 				else { return nil }
-				return GraphFuzzerOverrideCandidate(label: property.label, builtTypeName: scopeTypeName, propertyTypeName: GraphFuzzerMockMirrorModel.unqualifiedName(of: GraphFuzzerMirrorTypes.instantiatedType(of: property.type)), kind: kind)
+				return GraphFuzzerOverrideCandidate(property: property, attribute: dependency.attribute, builtTypeName: scopeTypeName)
 			}
 		}
 		self.rootOverrideCandidates = rootOverrideCandidates

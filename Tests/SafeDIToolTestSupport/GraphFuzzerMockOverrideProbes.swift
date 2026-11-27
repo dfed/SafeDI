@@ -32,6 +32,28 @@ struct GraphFuzzerOverrideCandidate: Equatable {
 	/// The type of the dependency's property, without `any` or the types it is nested in.
 	let propertyTypeName: String
 	let kind: GraphFuzzerOverrideCandidateKind
+	/// For an erased dependency, the type of its property as declared, which the mock's builder field returns.
+	var erasedPropertyType: String?
+	/// Whether an erased dependency is `erasedToConcreteExistential: true`, so that production holds an erasing type
+	/// that stores the instance (`value`), rather than the instance as the protocol it fulfills.
+	var isErasedToConcreteExistential = false
+
+	/// A candidate for `property`, which the scope of `builtTypeName` builds and `attribute` declares, or `nil` for one
+	/// the oracle does not judge.
+	init?(property: GraphFuzzerMirrorProperty, attribute: String, builtTypeName: String) {
+		guard !property.isOptional, var kind = GraphFuzzerOverrideCandidateKind(propertyType: property.type) else { return nil }
+		if attribute.contains("fulfilledByType: ") {
+			// An erased lazily instantiated dependency's field is not judged.
+			guard kind == .constant else { return nil }
+			kind = .erased
+			erasedPropertyType = property.type
+			isErasedToConcreteExistential = attribute.contains("erasedToConcreteExistential: true")
+		}
+		label = property.label
+		self.builtTypeName = builtTypeName
+		propertyTypeName = GraphFuzzerMockMirrorModel.unqualifiedName(of: GraphFuzzerMirrorTypes.instantiatedType(of: property.type))
+		self.kind = kind
+	}
 }
 
 /// The kind of dependency whose `SafeDIOverrides` field the override oracle passes its sentinel through, which decides
@@ -42,6 +64,10 @@ enum GraphFuzzerOverrideCandidateKind: String, CaseIterable, Comparable {
 	/// A `LazilyInstantiated` or `SendableLazilyInstantiated`, whose instance production creates on its first read: the
 	/// sentinel is built when the mock's wrapper is first read, so each side reads its record after the rest of the probe.
 	case lazilyInstantiated
+	/// A constant whose property is of another type than the one built (`fulfilledByType:`): an erasing type
+	/// (`erasedToConcreteExistential: true`) or a protocol the built type fulfills. Its builder field returns the
+	/// property's type, and its configuration's builder the built type, which the mock then erases.
+	case erased
 
 	/// The kind of a non-optional dependency of `type`, or `nil` for a kind the oracle does not judge.
 	init?(propertyType type: String) {
@@ -100,7 +126,8 @@ enum GraphFuzzerOverrideSentinel {
 
 	/// The enum's file, which names itself (`GraphFuzzerFixture.fileNameMarker`), as it declares no `@Instantiable`
 	/// type. `recording(_:)` wraps a builder in a `@Sendable` closure, which a builder field of either kind of
-	/// graph takes, and which converts to one that is not `@Sendable`; `recorded(_:)` records a value a closure the
+	/// graph takes, and which converts to one that is not `@Sendable`, and `recording(_:erasedBy:)` one whose value an
+	/// erased dependency's field erases; `recorded(_:)` records a value a closure the
 	/// oracle writes builds; `nonisolated(unsafe)` lets either write the record, which only the probe executable's one
 	/// thread reads.
 	static func source(typeNamePrefix: String) -> String {
@@ -112,6 +139,12 @@ enum GraphFuzzerOverrideSentinel {
 			static func recording<each Argument, Value>(_ build: @escaping @Sendable (repeat each Argument) -> Value) -> @Sendable (repeat each Argument) -> Value {
 				{ (argument: repeat each Argument) -> Value in
 					recorded(build(repeat each argument))
+				}
+			}
+
+			static func recording<each Argument, Value, Erased>(_ build: @escaping @Sendable (repeat each Argument) -> Value, erasedBy erase: @escaping @Sendable (Value) -> Erased) -> @Sendable (repeat each Argument) -> Erased {
+				{ (argument: repeat each Argument) -> Erased in
+					recorded(erase(build(repeat each argument)))
 				}
 			}
 
@@ -150,13 +183,8 @@ extension GraphFuzzerValueOraclePlan {
 		}
 		for mirror in mirrors {
 			let candidates = mirror.declarations.compactMap { declaration -> GraphFuzzerOverrideCandidate? in
-				guard declaration.alias == nil,
-				      let builtTypeName = declaration.builtTypeName,
-				      !declaration.attribute.contains("erasedToConcreteExistential: true"),
-				      !declaration.property.isOptional,
-				      let kind = GraphFuzzerOverrideCandidateKind(propertyType: declaration.property.type)
-				else { return nil }
-				return GraphFuzzerOverrideCandidate(label: declaration.property.label, builtTypeName: builtTypeName, propertyTypeName: GraphFuzzerMockMirrorModel.unqualifiedName(of: GraphFuzzerMirrorTypes.instantiatedType(of: declaration.property.type)), kind: kind)
+				guard declaration.alias == nil, let builtTypeName = declaration.builtTypeName else { return nil }
+				return GraphFuzzerOverrideCandidate(property: declaration.property, attribute: declaration.attribute, builtTypeName: builtTypeName)
 			}
 			if let probe = overrideProbe(
 				mockedTypeName: mirror.mockedTypeName,
@@ -202,11 +230,11 @@ extension GraphFuzzerValueOraclePlan {
 			// A lazily instantiated dependency's instance is created where the mocked type's value reads it, so only one the
 			// mocked type holds, as the wrapper or its instance, is created on both sides (base corpus seed 691).
 			guard candidate.kind != .lazilyInstantiated || dependenciesByTypeName[mockedTypeName]?.contains(where: { $0.property.label == candidate.label }) == true else { return nil }
-			// A field of another type than the one built – an erased or fulfilled-by-type protocol – takes a builder that
-			// the built type's initializer is not.
+			// The builder field of a dependency of another type than the one built – an erased or fulfilled-by-type
+			// protocol – returns the property's type.
 			if field.type == "\(candidate.builtTypeName).SafeDIMockConfiguration" {
 				return (candidate, .configuration)
-			} else if field.type.hasPrefix("("), field.type.hasSuffix(" -> \(candidate.builtTypeName))?") {
+			} else if field.type.hasPrefix("("), field.type.hasSuffix(" -> \(candidate.erasedPropertyType ?? candidate.builtTypeName))?") {
 				return (candidate, .builder)
 			} else {
 				return nil
@@ -215,8 +243,15 @@ extension GraphFuzzerValueOraclePlan {
 		guard !matched.isEmpty else { return nil }
 		let (candidate, kind) = matched[Int((fixture.seed &+ ordinal) % UInt64(matched.count))]
 		let sentinel = GraphFuzzerOverrideSentinel.typeName(typeNamePrefix: fixture.typeNamePrefix)
+		// A builder field of an erased dependency returns the property's type: the erasing type around the built
+		// instance, or the instance as the protocol it fulfills.
+		let erasure: ((String) -> String)? = if kind == .builder, let erasedPropertyType = candidate.erasedPropertyType {
+			candidate.isErasedToConcreteExistential ? { "\(erasedPropertyType)(\($0))" } : { "\($0) as \(erasedPropertyType)" }
+		} else {
+			nil
+		}
 		let builder = if let instantiateParameters = instantiateParametersByExtensionTypeName[candidate.builtTypeName] {
-			"{ \(sentinel).recorded(\(candidate.builtTypeName).instantiate(\(Self.builderArguments(ofInstantiateParameters: instantiateParameters).joined(separator: ", ")))) }"
+			"{ \(sentinel).recorded(\((erasure ?? { $0 })("\(candidate.builtTypeName).instantiate(\(Self.builderArguments(ofInstantiateParameters: instantiateParameters).joined(separator: ", ")))"))) }"
 		} else if kind == .configuration,
 		          let handWrittenMock = handWrittenMocksReturningAdditionalTypes[candidate.builtTypeName],
 		          handWrittenMock.returnTypeName == candidate.propertyTypeName
@@ -225,6 +260,8 @@ extension GraphFuzzerValueOraclePlan {
 			// configuration's builder takes the mock's parameters, which the initializer need not take. The builder returns
 			// the configured type, which the mock built and returns as the property's type.
 			"{ \(sentinel).recorded(\(candidate.builtTypeName).\(handWrittenMock.name)(\(Self.builderArguments(ofInstantiateParameters: handWrittenMock.parameters).joined(separator: ", "))) as! \(candidate.builtTypeName)) }"
+		} else if let erasure {
+			"\(sentinel).recording(\(candidate.builtTypeName).init, erasedBy: { \(erasure("$0")) })"
 		} else {
 			"\(sentinel).recording(\(candidate.builtTypeName).init)"
 		}
@@ -242,6 +279,9 @@ extension GraphFuzzerValueOraclePlan {
 			// The instance is created on the wrapper's first read, which the describer makes after the rest of the
 			// probe's value, so each record is read after it too, through a wrapper of its own.
 			("LazilyInstantiated<Any?> { \(sentinel).value }", "LazilyInstantiated<Any?> { known.\(candidate.label).instance as Any? }")
+		case .erased:
+			// A configuration's builder builds the instance the erasing type production holds stores.
+			("\(sentinel).value", "known.\(candidate.label)\(kind == .configuration && candidate.isErasedToConcreteExistential ? ".value" : "") as Any?")
 		}
 		return GraphFuzzerOverrideProbe(
 			mockedTypeName: mockedTypeName,

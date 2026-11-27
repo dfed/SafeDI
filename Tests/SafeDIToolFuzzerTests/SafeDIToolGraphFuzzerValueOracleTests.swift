@@ -1060,6 +1060,73 @@ struct SafeDIToolGraphFuzzerValueOracleTests {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func overrideProbes_eraseSentinelAsProductionErasesIt_whenOverriddenDependencyIsFulfilledByAnotherType() async throws {
+		// Seed 1 takes `S1_Root0`'s second field, the protocol `clock`, whose builder returns the protocol;
+		// `S1_Root1`'s only one, `anyCache`, whose builder returns the erasing type; and the mirror's only one, the
+		// promoted `anyStore`, whose configuration's builder returns the built type, which the erasing type production
+		// holds stores.
+		let runs = try await Self.valueOracleToolRuns(of: Self.fixture([
+			Self.type("S1_Root0", arguments: "isRoot: true", properties: [
+				"@Instantiated(fulfilledByType: \"S1_Store\", erasedToConcreteExistential: true) let anyStore: S1_AnyStore",
+				"@Instantiated(fulfilledByType: \"S1_Clock\") let clock: S1_ClockProtocol",
+				"@Instantiated let screen: S1_Screen",
+			]),
+			Self.type("S1_Root1", arguments: "isRoot: true", properties: ["@Instantiated(fulfilledByType: \"S1_Cache\", erasedToConcreteExistential: true) let anyCache: S1_AnyCache"]),
+			Self.type("S1_Screen", arguments: "generateMock: true", properties: ["@Received let anyStore: S1_AnyStore"]),
+			Self.type("S1_Store", properties: ["@Instantiated let detail: S1_Detail"]),
+			Self.type("S1_Detail", properties: []),
+			Self.type("S1_Cache", properties: []),
+			"""
+			@Instantiable(fulfillingAdditionalTypes: [S1_ClockProtocol.self])
+			public final class S1_Clock: Instantiable, S1_ClockProtocol {
+				public init() {}
+			}
+
+			public protocol S1_ClockProtocol: AnyObject {}
+
+			public final class S1_AnyStore {
+				public init(_ value: S1_Store) {
+					self.value = value
+				}
+
+				public let value: S1_Store
+			}
+
+			public final class S1_AnyCache {
+				public init(_ value: S1_Cache) {
+					self.value = value
+				}
+
+				public let value: S1_Cache
+			}
+
+			""",
+		]))
+
+		let probes = try #require(runs.valueOracle).overrideProbes
+		#expect(probes.map(\.candidateKind) == [.erased, .erased, .erased])
+		#expect(probes.map(\.fieldKind) == [.builder, .builder, .configuration])
+		#expect(probes.map(\.pair) == [
+			DifferentialValueProbePair(
+				name: "S1_Root0.mock(safeDIOverrides: .init(clock: sentinel))",
+				featureExpression: "{ S1_ZOverrideSentinel.value = nil; let value = S1_Root0.mock(safeDIOverrides: .init(clock: S1_ZOverrideSentinel.recording(S1_Clock.init, erasedBy: { $0 as S1_ClockProtocol }))); return (value, S1_ZOverrideSentinel.value) }()",
+				knownRightExpression: "{ let known = S1_Root0(); return (known, known.clock as Any?) }()",
+			),
+			DifferentialValueProbePair(
+				name: "S1_Root1.mock(safeDIOverrides: .init(anyCache: sentinel))",
+				featureExpression: "{ S1_ZOverrideSentinel.value = nil; let value = S1_Root1.mock(safeDIOverrides: .init(anyCache: S1_ZOverrideSentinel.recording(S1_Cache.init, erasedBy: { S1_AnyCache($0) }))); return (value, S1_ZOverrideSentinel.value) }()",
+				knownRightExpression: "{ let known = S1_Root1(); return (known, known.anyCache as Any?) }()",
+			),
+			DifferentialValueProbePair(
+				name: "S1_Screen.mock(safeDIOverrides: .init(anyStore: sentinel))",
+				featureExpression: "{ S1_ZOverrideSentinel.value = nil; let value = S1_Screen.mock(safeDIOverrides: .init(anyStore: .init(S1_ZOverrideSentinel.recording(S1_Store.init)))); return (value, S1_ZOverrideSentinel.value) }()",
+				knownRightExpression: "{ let known = S1_ZMirror0(); return (known.differentialMirrorValue, known.anyStore.value as Any?) }()",
+			),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func overrideProbes_omitLazilyInstantiatedDependency_whenMockedTypeHoldsNoFormOfIt() async throws {
 		// The mock promotes `lazyStore` for `S1_Editor`, which `S1_Screen` does not hold, so its instance is created only
 		// where something reads the editor's wrapper, which production's `known.lazyStore.instance` would read regardless
@@ -1170,21 +1237,27 @@ struct SafeDIToolGraphFuzzerValueOracleTests {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func overrideProbes_omitField_whenItBuildsAProtocolOrAWrapper() async throws {
-		// A fulfilled-by-type protocol's field returns the protocol, which the built type's initializer does not, and an
-		// instantiator's builds an instance per call.
+	func overrideProbes_omitField_whenItBuildsAnInstantiatorOrAnErasedLazilyInstantiatedDependency() async throws {
+		// An instantiator's field builds an instance per call, and the oracle does not judge an erased lazily instantiated
+		// dependency's.
 		let runs = try await Self.valueOracleToolRuns(of: Self.fixture([
 			Self.type("S1_Root", arguments: "isRoot: true", properties: [
-				"@Instantiated(fulfilledByType: \"S1_Service\") let service: S1_ServiceProtocol",
+				"@Instantiated(fulfilledByType: \"S1_Service\", erasedToConcreteExistential: true) let lazyAnyService: LazilyInstantiated<S1_AnyService>",
 				"@Instantiated let storeBuilder: Instantiator<S1_Store>",
 			]),
 			"""
-			@Instantiable(fulfillingAdditionalTypes: [S1_ServiceProtocol.self])
-			public final class S1_Service: Instantiable, S1_ServiceProtocol {
+			@Instantiable
+			public final class S1_Service: Instantiable {
 				public init() {}
 			}
 
-			public protocol S1_ServiceProtocol: AnyObject {}
+			public final class S1_AnyService {
+				public init(_ value: S1_Service) {
+					self.value = value
+				}
+
+				public let value: S1_Service
+			}
 
 			""",
 			Self.type("S1_Store", properties: []),
