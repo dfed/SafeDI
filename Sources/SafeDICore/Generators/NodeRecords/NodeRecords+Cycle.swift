@@ -68,29 +68,6 @@ extension NodeRecords {
 		}
 	}
 
-	/// The labels the types of `world`, which holds a cycle, receive, plainly, only if available or through a rename: read
-	/// from above wherever they are, a superset of what the function a call closes a cycle on reads from above it.
-	/// A builder or a `LazilyInstantiated` wrapper a type receives is a label like any other.
-	static func labelsReceived(inWorldWithCycle world: some NodeRecordSources) -> Set<String> {
-		var labels = Set<String>()
-		for declaration in 0..<Int32(world.declarationCount) {
-			let reads = world.scope(of: declaration).instantiable.dependencies.compactMap { dependency -> Property? in
-				switch dependency.source {
-				case .received:
-					dependency.property
-				case let .aliased(fulfillingProperty, _, _):
-					fulfillingProperty
-				case .instantiated, .forwarded:
-					nil
-				}
-			}
-			for read in reads {
-				labels.insert(read.label)
-			}
-		}
-		return labels
-	}
-
 	/// Whether `declaration` is built in a `@Sendable` function of its own.
 	static func buildsInSendableFunction(_ declaration: DeclarationID, in world: some NodeRecordSources) -> Bool {
 		switch world.kind(of: declaration) {

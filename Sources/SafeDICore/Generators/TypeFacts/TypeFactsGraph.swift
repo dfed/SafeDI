@@ -738,6 +738,7 @@ struct TypeFactsGraph: Sendable {
 
 		self.graph = graph
 		self.forMockGeneration = forMockGeneration
+		self.holesArePlaces = holesArePlaces
 		self.constructions = constructions
 		self.kinds = kinds
 		self.nodeProperties = nodeProperties
@@ -803,7 +804,31 @@ struct TypeFactsGraph: Sendable {
 		self.readOffsets = readOffsets
 		self.labelColumn = labelColumn
 		self.labelOffsets = labelOffsets
-		let answers = Self.answers(of: graph, reads: reads, readTable: readInterner.values, labels: labels, bindings: bindings, bindingOffsets: bindingOffsets, bindingsBefore: bindingsBefore, properties: properties, forms: (table: formInterner.values, readFromAbove: formsReadFromAbove), madeAgain: madeAgain.map { ($0, madeAgainByNode, loopParentByMember) })
+		let edgeOpens = edgeFacts.map(\.opens)
+		let answers = Self.answers(
+			of: graph,
+			reads: reads,
+			readTable: readInterner.values,
+			labels: labels,
+			bindings: bindings,
+			bindingOffsets: bindingOffsets,
+			bindingsBefore: bindingsBefore,
+			properties: properties,
+			forms: (table: formInterner.values, readFromAbove: formsReadFromAbove),
+			// Production bodies have one variant, `@Sendable` a mark folded over call edges (`TypeFactsOutcomes`), so the
+			// root's `.plain` reaches every node. A mock's body reads its overrides from a local bound before the `@Sendable`
+			// function that encloses it, and its parent's configuration where none does, so a mock keys by its family. In a
+			// seam's own tree, a body holding a hole reads its cases from the `@Sendable` carrier inside a `@Sendable`
+			// function and from the plain one outside, so it keys by its family too; a body holding none stays one variant.
+			family: Self.familyOfCall(
+				forMockGeneration: forMockGeneration,
+				holesArePlaces: holesArePlaces,
+				holesBeneath: holesBeneath,
+				edgeTargets: graph.edgeTargets,
+				edgeOpens: edgeOpens,
+			),
+			madeAgain: madeAgain.map { ($0, madeAgainByNode, loopParentByMember) },
+		)
 		answerIsBeingBuilt = answers.isBeingBuilt
 		answerIsMadeAgain = answers.isMadeAgain
 		answerTexts = answers.texts
@@ -972,6 +997,7 @@ struct TypeFactsGraph: Sendable {
 		bindingsBefore: [Int32],
 		properties: TypeFactsInterner<Property>,
 		forms: (table: [OnlyIfAvailableForm], readFromAbove: ReadsFromAbove),
+		family: (_ edge: Int, _ callerFamily: VariantFamily) -> VariantFamily,
 		madeAgain: (edges: MadeAgainEdges, targetsByNode: [[LoopTarget]], parentByMember: [Int32])?,
 	) -> (variants: TypeFactsVariants, isBeingBuilt: [Bool], isMadeAgain: [Bool], texts: [String], keys: [Int32], properties: [Int32]) {
 		var answerIDByText = [String: Int32]()
@@ -1219,9 +1245,7 @@ struct TypeFactsGraph: Sendable {
 			reads: reads,
 			rootAnswer: { _ in nil },
 			binding: { edge, readID in binding(at: edge, of: readID) },
-			// Production bodies have one variant, `@Sendable` a mark folded over call edges; the family a seam's cases,
-			// builders and mock bodies key by is the edge facts' `opens`, which no producer feeds here yet.
-			family: { _, family in family },
+			family: family,
 			key: { readID, answer, target in
 				switch readTable[Int(readID)].channel {
 				case .optional, .optionalValue:
@@ -1260,6 +1284,8 @@ struct TypeFactsGraph: Sendable {
 
 	/// Whether the world is a mock root's.
 	let forMockGeneration: Bool
+	/// Whether the world's holes are places: a seam's own tree, or a public mock's.
+	let holesArePlaces: Bool
 
 	/// What each node's subtree reads from above it, by read ID.
 	let reads: ReadsFromAbove
@@ -1608,6 +1634,35 @@ struct TypeFactsGraph: Sendable {
 			}
 		}
 		return dominators
+	}
+
+	/// The family a call builds its callee in, given the function its edge `opens` and its caller's family: a body inside a
+	/// `@Sendable` function is in the `@Sendable` family, and so is every body beneath it.
+	/// The family a call at an edge builds its callee in, given the caller's: its own family in a mock, and in a seam's
+	/// tree where the callee holds a hole; the root's `.plain` everywhere else.
+	static func familyOfCall(
+		forMockGeneration: Bool,
+		holesArePlaces: Bool,
+		holesBeneath: BitRows,
+		edgeTargets: [Int32],
+		edgeOpens: [TypeFactsFunctionOpened],
+	) -> (_ edge: Int, _ callerFamily: VariantFamily) -> VariantFamily {
+		if forMockGeneration {
+			{ edge, callerFamily in familyOfCall(opening: edgeOpens[edge], callerFamily: callerFamily) }
+		} else if holesArePlaces {
+			{ edge, callerFamily in holesBeneath.contains(0, inRow: Int(edgeTargets[edge])) ? familyOfCall(opening: edgeOpens[edge], callerFamily: callerFamily) : .plain }
+		} else {
+			{ _, callerFamily in callerFamily }
+		}
+	}
+
+	static func familyOfCall(opening opens: TypeFactsFunctionOpened, callerFamily: VariantFamily) -> VariantFamily {
+		switch opens {
+		case .sendableInstantiatorBuilder, .sendableLazyWrapper, .otherSendableFunction:
+			.sendable
+		case .none, .instantiatorBuilder:
+			callerFamily
+		}
 	}
 
 	private static func opens(_ node: TypeFactsDeclaration) -> TypeFactsFunctionOpened {
