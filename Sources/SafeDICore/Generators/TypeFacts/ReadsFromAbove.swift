@@ -65,6 +65,46 @@ struct BitRows: Sendable {
 		return columns
 	}
 
+	/// Hands each column set in a row to `body`, in increasing order, with its rank: how many columns of the row precede it.
+	func forEachColumn(inRow row: Int, _ body: (_ column: Int32, _ rank: Int) -> Void) {
+		var rank = 0
+		for index in Int(rowStarts[row])..<Int(rowEnds[row]) {
+			var word = wordBits[index]
+			while word != 0 {
+				body(wordIndices[index] * 64 + Int32(word.trailingZeroBitCount), rank)
+				rank += 1
+				word &= word - 1
+			}
+		}
+	}
+
+	/// How many columns of a row precede `column`, where the row holds it; `nil` where it does not.
+	func rank(of column: Int32, inRow row: Int) -> Int? {
+		let (word, bit) = Int(column).quotientAndRemainder(dividingBy: 64)
+		var rank = 0
+		for index in Int(rowStarts[row])..<Int(rowEnds[row]) {
+			let bits = wordBits[index]
+			if wordIndices[index] == Int32(word) {
+				guard bits & 1 << UInt64(bit) != 0 else {
+					return nil
+				}
+				return rank + (bits & (1 << UInt64(bit) - 1)).nonzeroBitCount
+			} else {
+				rank += bits.nonzeroBitCount
+			}
+		}
+		return nil
+	}
+
+	/// The columns a row holds.
+	func columnCount(inRow row: Int) -> Int {
+		var count = 0
+		for index in Int(rowStarts[row])..<Int(rowEnds[row]) {
+			count += wordBits[index].nonzeroBitCount
+		}
+		return count
+	}
+
 	/// The words held, for a test to count what a fold keeps.
 	var wordCount: Int {
 		wordIndices.count

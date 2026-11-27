@@ -77,8 +77,9 @@ struct SafeDIToolTypeFactsStorageTests: ~Copyable {
 			elementsPerNodeAndEdge.append(Double(report.columnElementCount) / Double(report.nodes.count + report.edgeCount))
 		}
 
-		// 87 elements over 9 nodes and 12 edges, then 167 over 17 and 28.
-		#expect(elementsPerNodeAndEdge.allSatisfy { $0 <= 5 }, "\(elementsPerNodeAndEdge)")
+		// Every column counted, the variants' and the read and label runs included: 302 elements over 9 nodes and 12 edges,
+		// then 622 over 17 and 28.
+		#expect(elementsPerNodeAndEdge.allSatisfy { $0 <= 15 }, "\(elementsPerNodeAndEdge)")
 		#expect(elementsPerNodeAndEdge[1] <= elementsPerNodeAndEdge[0], "\(elementsPerNodeAndEdge)")
 	}
 

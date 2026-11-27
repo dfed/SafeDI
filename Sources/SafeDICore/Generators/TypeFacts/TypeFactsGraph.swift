@@ -68,13 +68,18 @@ struct TypeFactsDeclaration: Hashable, Sendable {
 	}
 }
 
-/// How a declaration's type is built, read from its record: a call of another module's seam or public mock, a fill, or
-/// the type's own initializer. Whether a mock builds it with its hand-written mock is the world's choice per declaration,
-/// which the mock track adds.
+/// How a declaration's type comes to exist, beside its kind (the property's form), which varies apart from it: an
+/// `Instantiator<T>` whose `T` a hand-written mock builds is kind `instantiator`, construction `handWrittenMock`. Read
+/// from the record: a call of another module's seam or public mock, a fill, or the type's own initializer. In a mock
+/// world it is part of the declaration, and the mock track's column decides `handWrittenMock` and
+/// `constructionFunction` per declaration (lanes/per-type-facts/track-d-columns.md, section 1); until then no node holds
+/// either.
 enum TypeFactsConstruction: UInt8, Sendable {
 	case initializer
+	case handWrittenMock
 	case seamCall
 	case publicMockCall
+	case constructionFunction
 	case fill
 }
 
@@ -128,9 +133,182 @@ struct TypeFactsGraph: Sendable {
 		self.graph = graph
 		self.instantiatedEdgeCounts = instantiatedEdgeCounts
 		self.constructions = constructions
-		reads = ReadsFromAbove(graph: graph, own: own, hidden: hidden)
+		let reads = ReadsFromAbove(graph: graph, own: own, hidden: hidden)
+		self.reads = reads
 		readTable = readInterner.reads
 		labelTexts = labels.labels
+		var readColumn = [Int32]()
+		var readOffsets = [Int32]()
+		var labelColumn = [Int32]()
+		var labelOffsets = [Int32]()
+		var labelSeen = [Int32](repeating: -1, count: labels.labels.count)
+		for index in graph.nodes.indices {
+			readOffsets.append(Int32(readColumn.count))
+			labelOffsets.append(Int32(labelColumn.count))
+			reads.rows.forEachColumn(inRow: index) { read, _ in
+				readColumn.append(read)
+				let label = readInterner.reads[Int(read)].label
+				if label >= 0, labelSeen[Int(label)] != Int32(index) {
+					labelSeen[Int(label)] = Int32(index)
+					labelColumn.append(label)
+				}
+			}
+		}
+		readOffsets.append(Int32(readColumn.count))
+		labelOffsets.append(Int32(labelColumn.count))
+		self.readColumn = readColumn
+		self.readOffsets = readOffsets
+		self.labelColumn = labelColumn
+		self.labelOffsets = labelOffsets
+		let answers = Self.answers(of: graph, reads: reads, readTable: readInterner.reads, labels: labels)
+		answerIsBeingBuilt = answers.isBeingBuilt
+		answerTexts = answers.texts
+		answerKeys = answers.keys
+		variants = answers.variants
+		var cycleIDByKey = [String: Int32]()
+		cycleIDs = graph.nodes.map { node in
+			let key = Self.cycleKey(of: node)
+			if let id = cycleIDByKey[key] {
+				return id
+			}
+			let id = Int32(cycleIDByKey.count)
+			cycleIDByKey[key] = id
+			return id
+		}
+	}
+
+	/// Each node's cycle identity (A4), interned from its cycle key in first-reach order.
+	let cycleIDs: [Int32]
+
+	/// Each node's reads from above, in increasing read ID, one run per node at `readOffsets`: what `reads(of:)` slices.
+	let readColumn: [Int32]
+	let readOffsets: [Int32]
+
+	/// Each node's labels read from above, each once, in read order, one run per node at `labelOffsets`.
+	let labelColumn: [Int32]
+	let labelOffsets: [Int32]
+
+	/// Each answer ID's key: the answer without what a parameter carries.
+	let answerKeys: [Int32]
+
+	/// The variants of the world's bodies, answered by what each node binds at its edges (`answers(of:reads:…)`).
+	let variants: TypeFactsVariants
+
+	/// Whether each answer ID's declaration is still being built where it answers.
+	let answerIsBeingBuilt: [Bool]
+
+	/// Each answer ID's text, which only a report reads.
+	let answerTexts: [String]
+
+	/// The key that keeps a parameter's difference out of the variant: rule 1, a read only if available, whose `nil` or
+	/// value is an optional parameter, keys alike whatever it is answered; rule 2, whether a wrapper is still being built,
+	/// which is passed and made again at the call, keys as the wrapper alone.
+	static let optionalParameterKey: Int32 = -2
+
+	/// Rule 1's keys where the answer is a lazy wrapper, one per kind: a receive of the value only if available that a
+	/// wrapper answers reads its instance where the value is read, so the parameter is the wrapper, never the value
+	/// (which, made at the call, would move when the value is built). A declaration and one being built key alike within
+	/// each; `nil` keys as `optionalParameterKey`, apart from both lazy keys, until rule 3 says whether a `nil` wrapper
+	/// parameter may stand for it.
+	static let optionalLazilyInstantiatedParameterKey: Int32 = -3
+	static let optionalSendableLazilyInstantiatedParameterKey: Int32 = -4
+
+	/// The key rule 1 gives an answer declared with `kind`.
+	static func optionalParameterKey(of kind: Property.PropertyType?) -> Int32 {
+		switch kind {
+		case .lazilyInstantiated:
+			optionalLazilyInstantiatedParameterKey
+		case .sendableLazilyInstantiated:
+			optionalSendableLazilyInstantiatedParameterKey
+		case nil, .constant, .instantiator, .sendableInstantiator, .erasedInstantiator, .sendableErasedInstantiator:
+			optionalParameterKey
+		}
+	}
+
+	/// What answers each read at each edge, by value: a node answers a read of a label it declares with the forms its
+	/// declaration provides, being built where the edge builds that declaration. Interned at the edge, where the graph
+	/// is built from the table; the worklist sees IDs only. Every declaration a node holds answers at every edge: which
+	/// edges a declaration is bound before is the ordered bindings' column, owed by the table-side columns.
+	private static func answers(of graph: OrderedGraph<TypeFactsDeclaration>, reads: ReadsFromAbove, readTable: [Read], labels: LabelInterner) -> (variants: TypeFactsVariants, isBeingBuilt: [Bool], texts: [String], keys: [Int32]) {
+		var answerIDByText = [String: Int32]()
+		var texts = [String]()
+		var isBeingBuilt = [Bool]()
+		var keys = [Int32]()
+		var kinds = [Property.PropertyType]()
+		func answer(text: String, beingBuilt: Bool, keyText: String, kind: Property.PropertyType) -> Int32 {
+			let keyID: Int32
+			if let existing = answerIDByText[keyText] {
+				keyID = existing
+			} else {
+				keyID = Int32(texts.count)
+				answerIDByText[keyText] = keyID
+				texts.append(keyText)
+				isBeingBuilt.append(false)
+				kinds.append(kind)
+				keys.append(keyID)
+			}
+			guard text != keyText else {
+				return keyID
+			}
+			if let existing = answerIDByText[text] {
+				return existing
+			}
+			let id = Int32(texts.count)
+			answerIDByText[text] = id
+			texts.append(text)
+			isBeingBuilt.append(beingBuilt)
+			kinds.append(kind)
+			keys.append(keyID)
+			return id
+		}
+		var sourceByEdge = [Int32]()
+		var declarationByLabelByNode = [[Int32: (forms: String, kind: Property.PropertyType)]]()
+		for index in graph.nodes.indices {
+			for _ in graph.edges(from: index) {
+				sourceByEdge.append(Int32(index))
+			}
+			var declarations = [Int32: (forms: String, kind: Property.PropertyType)]()
+			for (property, forms) in graph.nodes[index].scope.sortedDeclaredPropertyForms {
+				guard let label = labels.existingID(of: property.label) else { continue }
+				declarations[label] = (forms.sorted().map(\.asSource).joined(separator: ", "), property.propertyType)
+			}
+			declarationByLabelByNode.append(declarations)
+		}
+		var edgeTargets = [Int32]()
+		for index in graph.nodes.indices {
+			edgeTargets.append(contentsOf: graph.edges(from: index))
+		}
+		let variants = TypeFactsVariants(
+			graph: graph,
+			reads: reads,
+			rootAnswer: { _ in nil },
+			binding: { edge, readID in
+				let read = readTable[Int(readID)]
+				let node = Int(sourceByEdge[edge])
+				guard read.channel.asksAboutLabel, let declaration = declarationByLabelByNode[node][read.label] else {
+					return nil
+				}
+				let child = Int(edgeTargets[edge])
+				let beingBuilt = graph.nodes[child].property.map { labels.existingID(of: $0.label) == read.label } ?? false
+				let text = "\(read.channel.name) \(declaration.forms)\(beingBuilt ? " being built" : "")"
+				// Rule 2: a wrapper still being built is passed and made again at the call, so it keys as the wrapper.
+				let keyText = declaration.kind.isConstant ? text : "\(read.channel.name) \(declaration.forms)"
+				return VariantBinding(answer: answer(text: text, beingBuilt: beingBuilt, keyText: keyText, kind: declaration.kind), declaration: Int32(node))
+			},
+			// Production bodies have one variant, `@Sendable` a mark folded over call edges (lead, 11-26 20:26Z); the family
+			// a seam's cases, builders and mock bodies key by is the edge facts' `opens`, owed by the table-side columns.
+			family: { _, family in family },
+			key: { readID, answer in
+				switch readTable[Int(readID)].channel {
+				case .optional:
+					// Rule 1.
+					optionalParameterKey(of: answer < 0 ? nil : kinds[Int(answer)])
+				case .value, .alias, .madeAgain, .mock, .carrier, .fill, .family, .override:
+					answer < 0 ? answer : keys[Int(answer)]
+				}
+			},
+		)
+		return (variants, isBeingBuilt, texts, keys)
 	}
 
 	/// The declarations in the order a walk of the root's edges, depth first, first reaches each. A node keeps its scope
@@ -176,13 +354,18 @@ struct TypeFactsGraph: Sendable {
 	/// The property as cycle validation sees it, with the concrete type built: a place closes a cycle on a place above it
 	/// of the same key (`Property.asValidatedForDependencyCycles`).
 	func cycleKey(ofNode index: Int) -> String {
-		"\(graph.nodes[index].property?.asValidatedForDependencyCycles.asSource ?? "root") for \(graph.nodes[index].scope.instantiable.concreteInstantiable.asSource)"
+		Self.cycleKey(of: graph.nodes[index])
+	}
+
+	private static func cycleKey(of node: TypeFactsDeclaration) -> String {
+		"\(node.property?.asValidatedForDependencyCycles.asSource ?? "root") for \(node.scope.instantiable.concreteInstantiable.asSource)"
 	}
 
 	/// What the graph's folds hold, beside the nodes it keeps for text: the 32-bit elements of its columns (each 64-bit
 	/// word of a bit set counts two), which a test counts per node and per edge.
 	var columnElementCount: Int {
 		graph.columnElementCount + instantiatedEdgeCounts.count + constructions.count + readTable.count + 2 * reads.rows.wordCount
+			+ cycleIDs.count + readColumn.count + readOffsets.count + labelColumn.count + labelOffsets.count + answerKeys.count + variants.columnElementCount
 	}
 
 	/// The graph as text, a line per node: its position, its declaration, `cycle` where it is on one, what its subtree reads
@@ -248,13 +431,16 @@ struct TypeFactsGraph: Sendable {
 		return reads
 	}
 
+	/// A required receive reads the nearest declaration of its label; one only if available reads only whether it is
+	/// handed a value or `nil` (rule 1: its whole answer, form included, is an optional parameter the caller passes).
 	private static func appendReceiveReads(of label: Int32, onlyIfAvailable: Bool, forMockGeneration: Bool, to reads: inout [Read]) {
-		reads.append(Read(.value, label: label))
-		if onlyIfAvailable {
-			reads.append(Read(.optional, label: label))
-			if forMockGeneration {
-				reads.append(Read(.mock, label: label))
-			}
+		guard onlyIfAvailable else {
+			reads.append(Read(.value, label: label))
+			return
+		}
+		reads.append(Read(.optional, label: label))
+		if forMockGeneration {
+			reads.append(Read(.mock, label: label))
 		}
 	}
 

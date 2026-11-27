@@ -59,6 +59,18 @@ enum ReadChannel: UInt8, Sendable {
 		}
 	}
 
+	/// Whether an answer to a read of the channel is a value a body is handed, which the outcomes fold decides is `nil`,
+	/// captured or a parameter. The others key the variant instead: the family, a carrier bound above, what a mock root
+	/// pins.
+	var carriesValue: Bool {
+		switch self {
+		case .value, .optional, .alias, .madeAgain, .override, .fill:
+			true
+		case .family, .carrier, .mock:
+			false
+		}
+	}
+
 	/// The channel's name, as a read's text spells it.
 	var name: String {
 		switch self {

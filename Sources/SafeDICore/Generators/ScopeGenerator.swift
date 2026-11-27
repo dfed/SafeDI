@@ -8306,6 +8306,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						fillPlaceBindings: fillPlaceBindings,
 					)
 				}
+				// A test that observes node records compares this body with theirs.
+				NodeRecordsObservation.rootBodyObserver?(childCode)
 				return Self.rootCode(of: rootInitializer, writing: consume childCode)
 			}
 		case let .property(
@@ -8534,7 +8536,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// The initializer generated for `instantiable`, a root of the dependency tree, or `nil` for a root without
 	/// dependencies, for which nothing is generated (`RootInitializer.init(of:argumentList:)`).
 	@inline(never)
-	private static func rootInitializer(of instantiable: Instantiable) throws -> RootInitializer? {
+	static func rootInitializer(of instantiable: Instantiable) throws -> RootInitializer? {
 		try RootInitializer(of: instantiable, argumentList: instantiable.generateArgumentList())
 	}
 

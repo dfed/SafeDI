@@ -36,6 +36,9 @@ import Testing
 /// 7. As 5, against a walk that stops where a place closes a cycle, as the tree does.
 /// 8. As 2's second half, for a closing place inside a fill, which can close on the path of the filled seam.
 /// 9. As 3, for a place whose subtree closes a cycle, which reads the cycle parameters it passes.
+/// 10. Places the world's variants map to one variant (the root place to the root's, each other to the variant its parent's
+///     variant calls at the edge the place is built for) answer their declared reads alike, but for what a parameter
+///     carries: a read only if available (rule 1), and whether a wrapper is still being built (rule 2).
 ///
 /// Findings are recorded as issues only where `SAFEDI_TYPE_FACTS_STRICT` is set, until every graph passes; a run that
 /// sets `SAFEDI_TYPE_FACTS_LOG` to a file appends a line per tree to it, with each check's count of findings and its
@@ -61,6 +64,7 @@ enum TypeFactsChecks {
 		var variantCount = 0
 		var worstNode = ""
 		var worstNodeVariantCount = 0
+		var factsVariantCount = 0
 		var line = ""
 	}
 
@@ -196,6 +200,35 @@ enum TypeFactsChecks {
 			result.worstNode = report.nodes[worst.key].description
 			result.worstNodeVariantCount = worst.value
 		}
+		// Check 10.
+		var factsVariantByPlace = [Int?](repeating: nil, count: places.count)
+		if let root = places.first, root.node == 0, !report.variantNodes.isEmpty {
+			factsVariantByPlace[0] = 0
+		}
+		for (index, children) in childrenByPlace.enumerated() {
+			guard let variant = factsVariantByPlace[index], let node = places[index].node else { continue }
+			let edges = report.nodes[node].edges
+			var cursor = 0
+			for child in children {
+				guard let childNode = places[child].node, let edge = edges[cursor...].firstIndex(of: childNode) else { continue }
+				factsVariantByPlace[child] = report.variantCalls[variant][edge]
+				cursor = edge + 1
+			}
+		}
+		var firstPlaceByFactsVariant = [Int: Int]()
+		for (index, variant) in factsVariantByPlace.enumerated() {
+			guard let variant else { continue }
+			guard let first = firstPlaceByFactsVariant[variant] else {
+				firstPlaceByFactsVariant[variant] = index
+				continue
+			}
+			let answers = keyedAnswers(of: places[index])
+			let firstAnswers = keyedAnswers(of: places[first])
+			if answers != firstAnswers {
+				add(10, "places \(first) and \(index) of \(nodeDescription(places[index].node)) share variant \(variant) but answer \(answers.symmetricDifference(firstAnswers).sorted()) otherwise")
+			}
+		}
+		result.factsVariantCount = report.variantNodes.count
 		// Check 5.
 		var nodesSeen = Set<Int>()
 		for (index, place) in places.enumerated() {
@@ -241,17 +274,28 @@ enum TypeFactsChecks {
 			}
 		}
 		let unwalkedNodes = report.nodes.count - nodesSeen.count
-		var line = "root=\(report.root) mock=\(report.forMockGeneration) nodes=\(report.nodes.count) unwalkedNodes=\(unwalkedNodes) places=\(places.count) variants=\(result.variantCount) worst=\(result.worstNodeVariantCount)"
-		for check in 1...9 {
+		var line = "root=\(report.root) mock=\(report.forMockGeneration) nodes=\(report.nodes.count) unwalkedNodes=\(unwalkedNodes) places=\(places.count) variants=\(result.variantCount) factsVariants=\(result.factsVariantCount) worst=\(result.worstNodeVariantCount)"
+		for check in 1...10 {
 			line.append(" check\(check)=\(result.findingsByCheck[check]?.count ?? 0)")
 		}
-		for check in 1...9 {
+		for check in 1...10 {
 			if let first = result.findingsByCheck[check]?.first {
 				line.append(" first\(check)=«\(first.replacingOccurrences(of: "\n", with: " "))»")
 			}
 		}
 		result.line = line + "\n"
 		return result
+	}
+
+	/// A place's answered reads as a variant's key compares them: a read only if available left out (rule 1), and what is
+	/// still being built left out of a read whose declaration is a wrapper (rule 2), which the text shows by its type.
+	private static func keyedAnswers(of place: TypeFactsReport.Place) -> Set<String> {
+		var answers = Set<String>()
+		for answer in place.answeredReads where !answer.hasPrefix("optional(") {
+			let isWrapper = answer.contains("Instantiator<") || answer.contains("LazilyInstantiated<")
+			answers.insert(isWrapper ? answer.replacingOccurrences(of: #" being built \[[^\]]*\]"#, with: "", options: .regularExpression) : answer)
+		}
+		return answers
 	}
 
 	private static func append(_ line: String, toFileAt path: String) {
