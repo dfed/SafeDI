@@ -5119,6 +5119,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	/// For a fill, the fields of its hole's struct it binds from the struct (see `fillStructBoundLabels`), in
 	/// field order. Empty for every other generator.
+	/// Each label this fill's tree reads and each name it declares, which the parameter that takes its case's values is
+	/// named apart from (`FillSignature.labelsReadOrDeclared`).
+	nonisolated var fillLabelsReadOrDeclared: Set<String> {
+		guard let child = propertiesToGenerate.first else { return [] }
+		return Set(fillFields.map(\.property.label)
+			+ child.receivedProperties.map(\.label)
+			+ child.fieldsCarriedBySites.map(\.label))
+	}
+
 	nonisolated var fillBoundFields: [SeamSignature.Hole.Field] {
 		fillFields.filter { fillStructBoundLabels.contains($0.property.label) }
 	}
@@ -7196,7 +7205,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				append(code, ofChildAt: index, to: &body, leadingMemberWhitespace: leadingMemberWhitespace, fillPlaceBindings: fillPlaceBindings)
 			}
 		}
-		return statements(of: consume body, leadingMemberWhitespace: leadingMemberWhitespace)
+		return statements(of: consume body, leadingMemberWhitespace: leadingMemberWhitespace, fillPlaceBindings: fillPlaceBindings)
 	}
 
 	/// What a body asks of one child's code: the child's generator, which is an actor of its own, and the context the body
@@ -7604,10 +7613,62 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		return keys
 	}
 
+	/// Hands `observer` this call's decisions of its fills and dispatchers beside the decisions made from their records alone
+	/// (`FillEmissionDecisions`), for a seam's call no fill encloses: one whose fills refer to no fill by name, and none of
+	/// whose cases leads to a level function an enclosing call declares.
+	nonisolated private func observeFillEmissionDecisions(
+		of body: borrowing BodyChildren,
+		rootFunctionKeys: Set<String>,
+		capturingKeys: Set<String>,
+		fillPlaceBindings: FillPlaceBindings,
+		labelsHiddenByReenteringCalls: Set<String>,
+		observer: @Sendable (FillEmissionDecisionsObservation) -> Void,
+	) {
+		let fillGenerators = body.orderedChildren.map(\.generator).filter { $0.fillKey != nil && $0.fillEmitsCode }
+		guard publicMockLevelFunctions == nil,
+		      !body.callDispatchers.isEmpty,
+		      // A call inside a fill of its seam's call refers to the enclosing call's fills by name.
+		      !holdsCallReenteringEnclosingFill,
+		      builderCallArguments.allSatisfy({ $0.enclosingFill == nil }),
+		      labelsHiddenByReenteringCalls.isEmpty,
+		      fillGenerators.allSatisfy(\.referencedFillNamesByKey.isEmpty),
+		      body.callDispatchers.allSatisfy({ $0.cases.allSatisfy { $0.target?.reusedCarriedInnerScopes.isEmpty ?? true } })
+		else { return }
+		let fills = fillGenerators.compactMap { fill -> FillEmissionDecisions.Fill? in
+			guard let key = fill.fillKey, let hole = fill.fillHole else { return nil }
+			return FillEmissionDecisions.Fill(
+				key: key,
+				hole: hole,
+				carrierUse: fill.fillCarrierUse,
+				takesPayloadFields: body.fillsTakingPayloadFields.contains(key),
+				labelsReadOrDeclared: fill.fillLabelsReadOrDeclared,
+				boundLabels: Set(fill.fillBoundFields.map(\.property.label)),
+				parameters: body.parametersByKey[key] ?? [],
+				innerScopeParameters: fill.fillCallerReads.innerScopeParameters,
+				declaresFunction: fill.fillDeclaresFunction(fillPlaceBindings: fillPlaceBindings),
+				readLabels: Set(fill.receivedProperties.map(\.label)),
+			)
+		}
+		let ownKeys = Set(fills.map(\.key) + body.callDispatchers.map(\.key))
+		let tree = FillEmissionDecisions(
+			sendableKeys: sendableFillKeys.intersection(ownKeys),
+			inlinedFillKeys: Set(body.inlinedFills.keys),
+			rootFunctionDispatcherKeys: rootFunctionKeys,
+			capturingDispatcherKeys: capturingKeys,
+		)
+		let fromRecords = FillEmissionDecisions.of(
+			fills: fills,
+			dispatchers: body.callDispatchers.map { DispatcherRecord(dispatcher: $0, parameters: body.parametersByKey[$0.key, default: []], isSendable: false) },
+			callerArguments: body.callerArgumentByParameter,
+			callerMemoArguments: body.callerMemoArgumentByMemo,
+		)
+		observer(FillEmissionDecisionsObservation(tree: tree.description, fromRecords: fromRecords.description))
+	}
+
 	/// The statements of `body`, its children's code followed by the declarations of its call's dispatchers or a public
 	/// mock's level functions.
 	@inline(never)
-	private func statements(of body: consuming BodyChildren, leadingMemberWhitespace: String) -> [GeneratedCode] {
+	private func statements(of body: consuming BodyChildren, leadingMemberWhitespace: String, fillPlaceBindings: FillPlaceBindings) -> [GeneratedCode] {
 		// Moved out of `body`, so that appending to it does not copy it.
 		var generatedProperties = [GeneratedCode]()
 		swap(&generatedProperties, &body.generatedProperties)
@@ -7630,6 +7691,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 		}
 		let rootFunctionKeys = Self.rootFunctionDispatcherKeys(of: body.callDispatchers, inlinedFills: body.inlinedFills.filter { !body.inlinedFillKeysReadingCallersDeclarations.contains($0.key) }, capturingCallerDeclarations: capturingKeys)
+		if let observer = FillEmissionDecisionsObservation.observer {
+			observeFillEmissionDecisions(of: body, rootFunctionKeys: rootFunctionKeys, capturingKeys: capturingKeys, fillPlaceBindings: fillPlaceBindings, labelsHiddenByReenteringCalls: labelsHiddenByReenteringCalls, observer: observer)
+		}
 		// Where a test observes them, each dispatcher's declaration is spelled again from the call's records alone, beside
 		// the text written here.
 		let dispatcherObserver = DispatcherRecordObservation.observer
@@ -9561,9 +9625,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				&& (child.reads(field.property) || child.fieldsCarriedBySites.contains(field.property))
 		}
 		// The parameter is named apart from what the tree reads by name, which it would hide.
-		let labelsReadInFill = Set(fillFields.map(\.property.label)
-			+ child.receivedProperties.map(\.label)
-			+ child.fieldsCarriedBySites.map(\.label))
+		let labelsReadInFill = fillLabelsReadOrDeclared
 		var scopeParameterName = "scope"
 		while labelsReadInFill.contains(scopeParameterName) {
 			scopeParameterName += "_"

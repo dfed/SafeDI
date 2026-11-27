@@ -64,10 +64,24 @@ enum NodeRecordsChecks {
 			}
 			enclosingFillObserver?(fill)
 		}
+		let enclosingDecisionsObserver = FillEmissionDecisionsObservation.observer
+		// A root's seam call decides which of its fills and dispatchers are `@Sendable`, held in place, or root functions from
+		// their records alone as the tree decides them.
+		let decisionsObserver: @Sendable (FillEmissionDecisionsObservation) -> Void = { decisions in
+			if let decisionsReportPath = ProcessInfo.processInfo.environment["SAFEDI_FILL_DECISIONS_REPORT"] {
+				append("\(testName)\t\(decisions.fromRecords == decisions.tree ? "agree" : "differ")\t\(decisions.tree.replacingOccurrences(of: "\n", with: " | "))\n", toFileAt: decisionsReportPath)
+			}
+			if decisions.fromRecords != decisions.tree {
+				Issue.record(Comment(rawValue: "The records of a seam call's fills and dispatchers decide\n\(decisions.fromRecords)\nwhere the tree decides\n\(decisions.tree)"))
+			}
+			enclosingDecisionsObserver?(decisions)
+		}
 		return try await SeamCallRecordObservation.$observer.withValue(seamCallObserver) {
 			try await DispatcherRecordObservation.$observer.withValue(dispatcherObserver) {
 				try await FillSignatureObservation.$observer.withValue(fillObserver) {
-					try await checkingNodeRecords(laysOutRoots: laysOutRoots, reportPath: reportPath, testName: testName, enclosingObserver: enclosingObserver, body)
+					try await FillEmissionDecisionsObservation.$observer.withValue(decisionsObserver) {
+						try await checkingNodeRecords(laysOutRoots: laysOutRoots, reportPath: reportPath, testName: testName, enclosingObserver: enclosingObserver, body)
+					}
 				}
 			}
 		}
