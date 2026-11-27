@@ -206,6 +206,26 @@ alternating runs after one untimed run of each graph. A run still going after 30
                                number, and those of the screen before it, so every component is on two screens; each
                                component receives one of the root's values and instantiates a model of its own. Its
                                larger graph is twice its smaller one, so its limits are that doubling's.
+  BL-back-links-to-feature-entries
+                               one module: a root that holds an `Instantiator` of each of six features' entries. Each
+                               entry instantiates a state of its feature's own type under one label, which its
+                               feature's nine screens in three layers receive, and holds `Instantiator`s of the entry
+                               of the feature before it and of the feature three before it. In as many features as
+                               the row's number, the last screen holds an `Instantiator` of its feature's entry: a
+                               link back.
+  BL4-back-links-to-most-feature-entries
+                               the same at four and six links, where the time left is tree building's, whose limit
+                               the row records.
+  BLO-back-links-with-state-only-if-available
+                               the same at one and three links, with each screen receiving its feature's state only
+                               if available, which validation still walks once for each path through the links: the
+                               row records that growth.
+  BLS-back-links-with-feature-labels-over-shared-tree
+                               one module: a root over sixty features, each an entry and three screens, the last of
+                               which holds an `Instantiator` of its entry, a link back, and one of a tree of 1,000
+                               types every feature opens. Each entry instantiates 5 values, and at the larger size
+                               25, under labels every feature declares with types of its own, which its screens
+                               receive.
 A row whose growth is known and not yet removed carries limits of its own (`GROWTH_ROWS`), each what it measured with
 room for noise, which the change that removes the growth deletes. Add a row with each change that removes growth of
 this kind, for the shape it fixed.
@@ -738,6 +758,72 @@ def shape_components_on_two_wide_screens(components, screens=40, values=400):
     return [("App", [], source)]
 
 
+def shape_back_links(links, features=6, layers=2, width=2, state_only_if_available=False):
+    """One module: a root that holds an `Instantiator` of each of `features` features' entries. Each entry instantiates
+    a state of its feature's own type under one label, `Instantiator`s of its first layer of `width` screens, and one
+    of the entry of the feature before it and of the feature three before it. Each screen receives its feature's state
+    and holds `Instantiator`s of two screens of the next layer, and in the first `links` features the last screen of
+    the last layer holds one of its own feature's entry: a link back, as a tab that opens its flow's start again. A
+    feature is reached beneath every set of features that open it, each of which declares the label with another
+    type, and a link is inside the tree of every feature that reaches its own, so the paths through the links multiply
+    with them, while each type's own tree is the same on every path. With `state_only_if_available`, each screen
+    receives the state only if available."""
+    source = "import SafeDI\n\n"
+    for feature in range(features):
+        source += declaration("@Instantiable", f"State{feature}", [])
+        entry = [("@Instantiated", "state", f"State{feature}")]
+        entry += [("@Instantiated", f"screen0x{position}Builder", f"Instantiator<Screen{feature}x0x{position}>") for position in range(width)]
+        entry += [("@Instantiated", f"feature{opened}Builder", f"Instantiator<Entry{opened}>") for opened in (feature - 1, feature - 3) if opened >= 0]
+        source += declaration("@Instantiable", f"Entry{feature}", entry)
+        for layer in range(layers):
+            for position in range(width):
+                properties = [("@Received(onlyIfAvailable: true)", "state", f"State{feature}?") if state_only_if_available else ("@Received", "state", f"State{feature}")]
+                if layer < layers - 1:
+                    properties += [
+                        ("@Instantiated", f"screen{layer + 1}x{child}Builder", f"Instantiator<Screen{feature}x{layer + 1}x{child}>")
+                        for child in dict.fromkeys(((position + offset) % width for offset in range(2)))
+                    ]
+                elif position == width - 1 and feature < links:
+                    properties.append(("@Instantiated", "entryBackBuilder", f"Instantiator<Entry{feature}>"))
+                source += declaration("@Instantiable", f"Screen{feature}x{layer}x{position}", properties)
+    source += declaration("@Instantiable(isRoot: true)", "Root", [("@Instantiated", f"feature{feature}Builder", f"Instantiator<Entry{feature}>") for feature in range(features)])
+    return [("App", [], source)]
+
+
+def shape_feature_labels_over_shared_tree(labels, features=60, shared=1000):
+    """One module: a root that instantiates six services and holds an `Instantiator` of each of `features` features'
+    entries. Each entry instantiates `labels` values, each under a label every feature declares with a type of its own,
+    and holds an `Instantiator` of the first of its feature's three screens. Each screen receives its feature's values
+    and holds an `Instantiator` of the next screen; the last holds one of its feature's entry, a link back, and one of
+    the first of `shared` types, a tree every feature opens, each type of which receives the six services and
+    instantiates two more. No feature's value can reach another feature's screens, and the shared tree reads none of
+    them, so what validation asks of each label is settled by its own feature's four types."""
+    source = "import SafeDI\n\n"
+    services = [("service%d" % service, "Service%d" % service) for service in range(6)]
+    for _, service in services:
+        source += declaration("@Instantiable", service, [])
+    for index in range(shared):
+        properties = [("@Received", label, type_) for label, type_ in services]
+        properties += [("@Instantiated", f"shared{child}", f"Shared{child}") for child in (2 * index + 1, 2 * index + 2) if child < shared]
+        source += declaration("@Instantiable", f"Shared{index}", properties)
+    for feature in range(features):
+        for label in range(labels):
+            source += declaration("@Instantiable", f"Value{feature}x{label}", [])
+        entry = [("@Instantiated", f"value{label}", f"Value{feature}x{label}") for label in range(labels)]
+        source += declaration("@Instantiable", f"Entry{feature}", entry + [("@Instantiated", "screen0Builder", f"Instantiator<Screen{feature}x0>")])
+        for screen in range(3):
+            properties = [("@Received", f"value{label}", f"Value{feature}x{label}") for label in range(labels)]
+            if screen < 2:
+                properties.append(("@Instantiated", f"screen{screen + 1}Builder", f"Instantiator<Screen{feature}x{screen + 1}>"))
+            else:
+                properties += [("@Instantiated", "entryBackBuilder", f"Instantiator<Entry{feature}>"), ("@Instantiated", "sharedBuilder", "Instantiator<Shared0>")]
+            source += declaration("@Instantiable", f"Screen{feature}x{screen}", properties)
+    root = [("@Instantiated", label, type_) for label, type_ in services]
+    root += [("@Instantiated", f"feature{feature}Builder", f"Instantiator<Entry{feature}>") for feature in range(features)]
+    source += declaration("@Instantiable(isRoot: true)", "Root", root)
+    return [("App", [], source)]
+
+
 def shape_w(width):
     """One module: a root over two layers of `width` screens, each first-layer screen holding `Instantiator`s of three
     second-layer screens, from its own position on, and each second-layer screen one of the first-layer screen after
@@ -860,6 +946,23 @@ GROWTH_ROWS = {
     # context only near the root, which T and TC pass, took 209 MB and 537 MB here (2.57), since what a walk hands a
     # scope grows with the labels above it and with its parent's width, not with its depth.
     "TW-components-on-two-wide-screens": (lambda layers: shape_components_on_two_wide_screens(25 * layers), 2, {"time": 2.5, "memory": 2.3, "size": 2.3, "code": 2.3}),
+    # BL, BL4 and BLO are one shape, six features that open one another. BL, at one and three links back to a feature's
+    # entry: 0.077 s and 0.127 s (1.65), where a tool that walked a screen beneath each set of features above it, and its
+    # tree again at each link, took 0.106 s and 0.586 s (5.54). BL4, at four and six: 0.187 s and 0.833 s (4.46), 47.4 MB
+    # and 83.5 MB (1.76), where that tool took 1.463 s and 14.544 s (9.94). Validation walks the same scopes whatever the
+    # links (105 to 109 from two links to six), so BL4's limits are tree building's, which still builds a first-pass
+    # tree with a node for each path through the links. BLO, with the state received only if available: 0.101 s and
+    # 0.329 s (3.25). Validation still walks it once for each path: such a receive makes the optional form receivable
+    # beneath it, so a screen built again beneath its own feature's last screen has another key than its first build.
+    "BL-back-links-to-feature-entries": (lambda layers: shape_back_links(layers, features=6, layers=3, width=3), 1, {}),
+    "BL4-back-links-to-most-feature-entries": (lambda layers: shape_back_links(layers, features=6, layers=3, width=3), 4, {"time": 6.0, "memory": 2.4}),
+    "BLO-back-links-with-state-only-if-available": (lambda layers: shape_back_links(layers, features=6, layers=3, width=3, state_only_if_available=True), 1, {"time": 8.0}),
+    # BLS: sixty features with a link back each, over a shared tree of 1,000 types, at 5 and 25 labels that every
+    # feature declares with types of its own. Whether a declaration of such a label can hide a read is asked of each
+    # scope once, for every label together: 1.45 s and 2.11 s (1.46), each within a hundredth of a tool that never asks.
+    # Asked once for each label and each scope that declares it, over every scope beneath that scope, the shared tree
+    # included, it took 2.26 s and 5.94 s (2.63).
+    "BLS-back-links-with-feature-labels-over-shared-tree": (lambda layers: shape_feature_labels_over_shared_tree(10 * layers - 5), 1, {}),
 }
 GROWTH_STEP = 2
 GROWTH_RUNS = 3
