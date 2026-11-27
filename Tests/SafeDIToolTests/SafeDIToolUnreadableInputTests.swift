@@ -118,6 +118,23 @@ struct SafeDIToolUnreadableInputTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorOfFirstPath_whenItsFileIsStillBeingReadAsTwentyThreeOthersAreFoundMissing() async throws {
+		// The first path’s file is sixteen megabytes that are no module info, and the others do not exist, so every other
+		// failure arrives while the first file is being read: a run that reported the failure that arrived first would
+		// name a missing file.
+		let directory = try temporaryDirectory()
+		let rootPath = try writeRoot(in: directory)
+		let largeURL = directory.appendingPathComponent("Large.safedi")
+		try Data(count: 16 << 20).write(to: largeURL)
+		let paths = (0..<23).reversed().map { directory.appendingPathComponent("Missing\($0).safedi").path } + [largeURL.path]
+
+		let message = await generateErrorMessage(listing: [rootPath], dependentModuleInfoPaths: paths, in: directory)
+
+		#expect(message == "Could not read the SafeDI module info file at \(directory.path)/Large.safedi: The file is not a module info file: it does not begin with `SDMI`. \(BinaryFile.unreadableFileExplanation)")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsErrorNamingDirectory_whenDependentModuleInfoPathIsDirectory() async throws {
 		let directory = try temporaryDirectory()
 		let rootPath = try writeRoot(in: directory)
