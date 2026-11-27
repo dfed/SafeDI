@@ -562,6 +562,9 @@ public actor DependencyTreeGenerator {
 		/// The root's scope, frozen, where node records may lay its code out (`NodeRecords`): a production root of a module
 		/// without seams.
 		var constructionScope: ConstructionScope?
+		/// For a seam's own tree, what node records read beside its world: the seam's holes, by path, and what its root is
+		/// handed as instances of `LazilyInstantiated` properties.
+		var seamTree: (seamHoles: SeamHoles, rootLazilyInstantiatedInstanceProperties: Set<Property>)?
 	}
 
 	/// The validated scopes, frozen. Made only in this file, once `dependencyTrees(unreadTypeComment:)` has validated them,

@@ -39,7 +39,10 @@ extension NodeRecords {
 			switch propertyToGenerate {
 			case let .instantiated(_, _, erasedToConcreteExistential, _):
 				guard !erasedToConcreteExistential else { throw .kind }
-			case .hole, .aliased:
+			case .hole:
+				// A node of its own, which `holeKind(of:in:)` makes.
+				break
+			case .aliased:
 				throw .renameOrHole
 			}
 		}

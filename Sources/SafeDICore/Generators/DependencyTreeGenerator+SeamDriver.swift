@@ -547,11 +547,23 @@ extension DependencyTreeGenerator {
 			} else {
 				scopeGenerator = try builtTree()
 			}
+			// Node records read the seam's tree only where a test observes them.
+			let nodeRecordsWorld: (ConstructionScope, SeamHoles, Set<Property>)? = if NodeRecordsObservation.observer != nil {
+				(
+					{ let (table, record) = seamWorld.frozenScopeMap.freezing(rootScope: seamRootScope); return ConstructionScope(table: table, record: record) }(),
+					SeamHoles(of: finalSeamRoot, seamType: seam.concreteInstantiable),
+					Self.seamRootDeclarations(of: seamRootScope, seamRoot: finalSeamRoot).lazilyInstantiatedInstanceProperties,
+				)
+			} else {
+				nil
+			}
 			rootScopeGenerators.append(RootScopeInfo(
 				typeDescription: seam.concreteInstantiable,
 				instantiable: seam,
 				sourceFilePath: seam.sourceFilePath,
 				scopeGenerator: scopeGenerator,
+				constructionScope: nodeRecordsWorld?.0,
+				seamTree: nodeRecordsWorld.map { ($0.1, $0.2) },
 			))
 		}
 		// The signature of each seam this module generates, sorted by seam, which its module info carries for the modules
@@ -1634,6 +1646,25 @@ extension DependencyTreeGenerator {
 		seamRoot: ScopeGenerator.SeamRoot,
 		declaredTypeNames: DeclaredTypeNames,
 	) throws -> ScopeGenerator {
+		let (nearestDeclarations, lazilyInstantiatedInstanceProperties) = seamRootDeclarations(of: rootScope, seamRoot: seamRoot)
+		// A seam's tree reads its own `SeamHoles`, constant within the tree but not across trees, so it keeps a memo of its
+		// own, for one pass: a seam without holes reuses its places within a pass, and one with holes stores none.
+		var constructionMemo = ConstructionMemo()
+		let (table, rootRecord) = world.frozenScopeMap.freezing(rootScope: rootScope)
+		return try rootRecord.createScopeGenerator(
+			in: table,
+			nearestDeclarations: nearestDeclarations,
+			lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
+			seamRoot: seamRoot,
+			erasedToConcreteExistential: false,
+			declaredTypeNames: declaredTypeNames,
+			constructionMemo: &constructionMemo,
+		)
+	}
+
+	/// What a seam's root is handed: its parameters as the nearest declarations of their labels, and the instances of
+	/// `LazilyInstantiated` properties among them, a deferred parameter's memo included (`seamRootGenerator`).
+	static func seamRootDeclarations(of rootScope: Scope, seamRoot: ScopeGenerator.SeamRoot) -> (nearestDeclarations: NearestDeclarations, lazilyInstantiatedInstanceProperties: Set<Property>) {
 		var nearestDeclarations = NearestDeclarations()
 		var lazilyInstantiatedInstanceProperties = Set<Property>()
 		let autoclosureCallByLabel = seamRoot.autoclosureCallByLabel(of: rootScope.instantiable)
@@ -1655,19 +1686,7 @@ extension DependencyTreeGenerator {
 				lazilyInstantiatedInstanceProperties.insert(property.asUnwrappedProperty)
 			}
 		}
-		// A seam's tree reads its own `SeamHoles`, constant within the tree but not across trees, so it keeps a memo of its
-		// own, for one pass: a seam without holes reuses its places within a pass, and one with holes stores none.
-		var constructionMemo = ConstructionMemo()
-		let (table, rootRecord) = world.frozenScopeMap.freezing(rootScope: rootScope)
-		return try rootRecord.createScopeGenerator(
-			in: table,
-			nearestDeclarations: nearestDeclarations,
-			lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
-			seamRoot: seamRoot,
-			erasedToConcreteExistential: false,
-			declaredTypeNames: declaredTypeNames,
-			constructionMemo: &constructionMemo,
-		)
+		return (nearestDeclarations, lazilyInstantiatedInstanceProperties)
 	}
 
 	/// Every receive in the tree `generator` roots, `seam`'s, that leaves the seam – each `@Received` dependency and

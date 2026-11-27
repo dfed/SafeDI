@@ -30,6 +30,7 @@ struct NodeBuildOrder: Sendable {
 	init(world: some NodeRecordSources) throws(NodeRecordRefusal) {
 		let declarationCount = world.declarationCount
 		var receivedByDeclaration = [Set<Property>?](repeating: nil, count: declarationCount)
+		var holdsHole = false
 		var stack: [(declaration: DeclarationID, childrenPushed: Bool)] = [(0, false)]
 		while let (declaration, childrenPushed) = stack.popLast() {
 			let edges = world.edges(from: declaration)
@@ -41,6 +42,12 @@ struct NodeBuildOrder: Sendable {
 				continue
 			}
 			guard receivedByDeclaration[Int(declaration)] == nil else { continue }
+			// A hole builds no scope and receives nothing (`ScopeGenerator(holeProperty:…)`).
+			guard world.kind(of: declaration) != .hole else {
+				receivedByDeclaration[Int(declaration)] = []
+				holdsHole = true
+				continue
+			}
 			let scope = world.scope(of: declaration)
 			let forwardedProperties = Set(scope.instantiable.dependencies.filter { $0.source == .forwarded }.map(\.property))
 			var received = Set<Property>()
@@ -61,7 +68,15 @@ struct NodeBuildOrder: Sendable {
 			let children = world.edges(from: declaration).map { child in
 				(property: world.property(of: child), received: receivedByDeclaration[Int(child)] ?? [])
 			}
-			edgeIndicesByDeclaration[Int(declaration)] = try Self.order(of: children)
+			let order = try Self.order(of: children)
+			// A child that holds a place starts after its siblings that hold none (`ScopeGenerator.startsAsCarrier(_:)`), which
+			// the graph's build positions say, as the declaration graph decides; only a world that holds a hole has a carrier.
+			if holdsHole {
+				let facts = world.edgeFacts(from: declaration)
+				edgeIndicesByDeclaration[Int(declaration)] = facts.indices.sorted { facts[$0].buildPosition < facts[$1].buildPosition }.map { $0 - facts.startIndex }
+			} else {
+				edgeIndicesByDeclaration[Int(declaration)] = order
+			}
 		}
 		self.edgeIndicesByDeclaration = edgeIndicesByDeclaration
 	}

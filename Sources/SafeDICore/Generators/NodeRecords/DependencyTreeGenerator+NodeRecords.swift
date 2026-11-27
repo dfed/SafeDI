@@ -30,12 +30,17 @@ extension DependencyTreeGenerator {
 		let root = rootInfo.instantiable.concreteInstantiable.asSource
 		let nodeRecords: NodeRecords
 		do {
-			nodeRecords = try NodeRecords(world: TypeFactsGraph(root: constructionScope, forMockGeneration: false))
+			nodeRecords = try NodeRecords(
+				world: TypeFactsGraph(root: constructionScope, forMockGeneration: false),
+				seamHoles: rootInfo.seamTree?.seamHoles ?? SeamHoles(),
+				rootLazilyInstantiatedInstanceProperties: rootInfo.seamTree?.rootLazilyInstantiatedInstanceProperties ?? [],
+			)
 		} catch let refusal as NodeRecordRefusal {
 			observer(NodeRecordsReport(root: root, refusal: refusal.rawValue, isLaidOutFromNodeRecords: false, differences: [], recordCount: 0, treePlaceCount: 0))
 			return try await rootInfo.scopeGenerator.generatePlan()
 		}
-		let laidOutCode: GeneratedCode? = if NodeRecordsObservation.laysOutRoots {
+		// A seam's tree is compared and never laid out here: its initializers are written around its body.
+		let laidOutCode: GeneratedCode? = if NodeRecordsObservation.laysOutRoots, rootInfo.seamTree == nil {
 			try laidOutRootCode(of: rootInfo.instantiable, body: nodeRecords.rootBody)
 		} else {
 			nil

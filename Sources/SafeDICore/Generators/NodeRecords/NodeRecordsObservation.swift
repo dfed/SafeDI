@@ -49,8 +49,24 @@ public enum NodeRecordsObservation {
 				continue
 			}
 			for (treeCode, nodeRecordsCode) in zip(tree, nodeRecords) {
-				let (treeIndentation, treeInner) = unindented(treeCode)
-				let (nodeRecordsIndentation, nodeRecordsInner) = unindented(nodeRecordsCode)
+				let (treeIndentation, treeStatement) = unindented(treeCode)
+				let (nodeRecordsIndentation, nodeRecordsStatement) = unindented(nodeRecordsCode)
+				// A hole's place is the site's code, written as text, and the payloads bound before it.
+				if let nodeRecordsPlaces = textPlaces(of: nodeRecordsStatement) {
+					let placePath = "\(path).\(nodeRecordsPlaces.first?.record.property.label ?? "hole")"
+					treePlaceCount += 1
+					if treeIndentation != nodeRecordsIndentation {
+						differences.append("\(placePath): indented \(treeIndentation.count) in the tree, \(nodeRecordsIndentation.count) by node records")
+					}
+					differences += textPlaceDifferences(between: textPlaces(of: treeStatement), and: nodeRecordsPlaces).map { "\(placePath): \($0)" }
+					continue
+				}
+				// A place on the route to a hole's place follows the payloads bound before it, places written as text.
+				let (treeBindings, treeInner) = splittingBindings(off: treeStatement)
+				let (nodeRecordsBindings, nodeRecordsInner) = splittingBindings(off: nodeRecordsStatement)
+				if !treeBindings.isEmpty || !nodeRecordsBindings.isEmpty {
+					differences += textPlaceDifferences(between: treeBindings, and: nodeRecordsBindings).map { "\(path): before a place, \($0)" }
+				}
 				guard case let .place(nodeRecordsPlan) = nodeRecordsInner.node, case let .built(nodeRecordsRecord)? = nodeRecordsPlan.record else {
 					differences.append("\(path): node records made a statement that is no built place")
 					continue
@@ -79,6 +95,56 @@ public enum NodeRecordsObservation {
 			inner = wrapped
 		}
 		return (indentation, inner)
+	}
+
+	/// `code`'s leading places written as text and the place after them, where `code` is a sequence that ends in a built
+	/// place; none and `code` otherwise.
+	private static func splittingBindings(off code: GeneratedCode) -> (bindings: [(text: String, record: AliasPlaceRecord)], place: GeneratedCode) {
+		guard case let .sequence(pieces) = code.node, let last = pieces.last, case let .place(plan) = last.node, case .built? = plan.record,
+		      let bindings = textPlaces(of: .sequence(Array(pieces.dropLast())))
+		else { return ([], code) }
+		return (bindings, last)
+	}
+
+	/// The places `code` is made of where each is written as text with a rename's record (`AliasPlaceRecord`): one, or a
+	/// sequence of them; `nil` for any other code.
+	private static func textPlaces(of code: GeneratedCode) -> [(text: String, record: AliasPlaceRecord)]? {
+		switch code.node {
+		case let .place(plan):
+			guard case let .text(text) = plan.code.node, case let .alias(record)? = plan.record else { return nil }
+			return [(text, record)]
+		case let .sequence(pieces):
+			var places = [(text: String, record: AliasPlaceRecord)]()
+			for piece in pieces {
+				guard let piecePlaces = textPlaces(of: piece) else { return nil }
+				places += piecePlaces
+			}
+			return places
+		case .text, .lines, .indented, .rootFunction, .sendableFunction, .omittingRootFunctions:
+			return nil
+		}
+	}
+
+	/// How `nodeRecords`, places written as text, differ from `tree`'s.
+	private static func textPlaceDifferences(between tree: [(text: String, record: AliasPlaceRecord)]?, and nodeRecords: [(text: String, record: AliasPlaceRecord)]) -> [String] {
+		guard let tree, tree.count == nodeRecords.count else { return ["the tree writes \(tree?.count ?? 0) places as text, node records \(nodeRecords.count)"] }
+		var differences = [String]()
+		for (treePlace, nodeRecordsPlace) in zip(tree, nodeRecords) {
+			func compare<Value: Equatable>(_ name: String, _ treeValue: Value, _ nodeRecordsValue: Value) {
+				guard treeValue != nodeRecordsValue else { return }
+				differences.append("\(name) is \(treeValue) in the tree, \(nodeRecordsValue) by node records")
+			}
+			compare("text", treePlace.text, nodeRecordsPlace.text)
+			compare("property", treePlace.record.property, nodeRecordsPlace.record.property)
+			compare("fulfillingProperty", treePlace.record.fulfillingProperty, nodeRecordsPlace.record.fulfillingProperty)
+			compare("recordText", treePlace.record.text, nodeRecordsPlace.record.text)
+			compare("reads", treePlace.record.reads, nodeRecordsPlace.record.reads)
+			compare("otherBindings", treePlace.record.otherBindings, nodeRecordsPlace.record.otherBindings)
+			compare("calledFunctionNames", treePlace.record.calledFunctionNames, nodeRecordsPlace.record.calledFunctionNames)
+			compare("declaredFunctionNames", treePlace.record.declaredFunctionNames, nodeRecordsPlace.record.declaredFunctionNames)
+			compare("calledRootFunctionNames", treePlace.record.calledRootFunctionNames, nodeRecordsPlace.record.calledRootFunctionNames)
+		}
+		return differences
 	}
 
 	/// The fields of `nodeRecords` that differ from `tree`'s, children aside.
