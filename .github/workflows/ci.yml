@@ -3831,6 +3831,13 @@ jobs:
       - name: Check the Edit Script Against Its Fixtures
         if: ${{ !cancelled() }}
         run: python3 -I .claude/skills/apply-edit/apply-edit.py --self-test "$RUNNER_TEMP/apply-edit-self-test"
+      # .claude/skills/review-expectation-diffs/review-expectation-diffs.py
+      # accepts the generated outputs an approved-differences file explains,
+      # so its fixtures prove a moved function is accepted and a changed type
+      # or body is reported.
+      - name: Check the Expectation Diff Classifier Against Its Fixtures
+        if: ${{ !cancelled() }}
+        run: python3 -I .claude/skills/review-expectation-diffs/review-expectation-diffs.py --self-test "$RUNNER_TEMP/review-expectation-diffs-self-test"
       # .claude/skills/regenerate-expectations/regenerate-expectations.py rewrites test expectations from
       # what the test helpers record, so its fixtures prove it rewrites only
       # literals that equalled a recorded output and refuses records made over

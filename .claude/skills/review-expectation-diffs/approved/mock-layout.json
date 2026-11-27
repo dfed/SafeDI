@@ -1,0 +1,249 @@
+{
+ "source": "lanes/per-type-facts/approved-byte-differences.md, entries 1 to 15 as of 11-27 18:05Z (entry 15 judges mock worlds by compiling and executed trace; entry 14 is covered by entry 2's comparison). Matching an entry classifies a difference; each entry's conditions (compile, executed values) still gate it.",
+ "entries": [
+  {
+   "id": "9-keyword-member-in-backticks",
+   "ruling": "lead 11-27 9:31 AM PT",
+   "summary": "An override member named like a keyword goes in backticks.",
+   "steps": [
+    {
+     "line": "(safeDIOverrides(?:\\.(?:\\w+|`[^`]+`))*)\\.`(\\w+)`",
+     "replacement": "\\1.\\2",
+     "side": "head",
+     "repeat": true
+    }
+   ],
+   "scope": "mock"
+  },
+  {
+   "id": "3-configuration-local-goes",
+   "ruling": "11-27, for mockActor",
+   "summary": "The local that held a function's configuration goes where the function is handed it.",
+   "steps": [
+    {
+     "dropLine": "^let __safeDI_\\w+__overrides = ",
+     "side": "base"
+    },
+    {
+     "line": "\\b__safeDI_\\w+__overrides\\b",
+     "replacement": "safeDIOverrides",
+     "side": "base"
+    }
+   ],
+   "scope": "mock"
+  },
+  {
+   "id": "5-unavailable-override-argument",
+   "status": "withdrawn",
+   "ruling": "withdrawn by the lead 11-27 17:35Z: the override is an ordinary read from above bound by mock()",
+   "summary": "The old form: an override of an unavailable dependency handed down as further arguments after safeDIOverrides:.",
+   "steps": [
+    {
+     "line": "^((?:@\\w+ )*(?:nonisolated )?func (?:__safeDI_\\w+|`__safeDI_[^`]+`)\\(.*?safeDIOverrides: (?:[^(),<>]|<[^<>]*>|\\((?:(?:[^()]|\\((?:(?:[^()]|\\((?:(?:[^()]|\\((?:(?:[^()]|\\((?:(?:[^()]|\\((?:[^()])*\\)))*\\)))*\\)))*\\)))*\\)))*\\))+?)(?:, \\w+: (?:[^(),<>]|<[^<>]*>|\\((?:(?:[^()]|\\((?:(?:[^()]|\\((?:(?:[^()]|\\((?:(?:[^()]|\\((?:(?:[^()]|\\((?:[^()])*\\)))*\\)))*\\)))*\\)))*\\)))*\\))+?)+(?=\\) (?:async |throws )*-> )",
+     "replacement": "\\1",
+     "side": "head"
+    },
+    {
+     "line": "((?:__safeDI_\\w+|`__safeDI_[^`]+`)\\((?:[^()]*?, )?)(\\w+): safeDIOverrides\\.\\2(?:, |(?=\\)))",
+     "replacement": "\\1",
+     "side": "head",
+     "repeat": true
+    }
+   ],
+   "shapes": [
+    "changed: ? = {- safeDIOverrides . -} X1"
+   ],
+   "scope": "mock"
+  },
+  {
+   "id": "1-overrides-handed-as-argument",
+   "ruling": "lead's mock world ruling; entry 15 (11-27 17:52Z) judges it by compiling and executed trace",
+   "summary": "A function is handed its node's overrides as an argument and reads them where the walk spelled the whole path.",
+   "steps": [
+    {
+     "line": "^((?:@\\w+ )*(?:nonisolated )?func (?:__safeDI_\\w+|`__safeDI_[^`]+`)\\(.*?)(?:, )?safeDIOverrides: (?:[^(),<>]|<[^<>]*>|\\((?:(?:[^()]|\\((?:(?:[^()]|\\((?:(?:[^()]|\\((?:(?:[^()]|\\((?:(?:[^()]|\\((?:[^()])*\\)))*\\)))*\\)))*\\)))*\\)))*\\))+?(?=\\) (?:async |throws )*-> )",
+     "replacement": "\\1"
+    },
+    {
+     "line": "(?:, )?safeDIOverrides: safeDIOverrides(?:\\.(?:\\w+|`[^`]+`))*",
+     "replacement": ""
+    },
+    {
+     "line": "(?:, )?safeDIOverrides: __safeDI_\\w+__safeDIBuilder\\b",
+     "replacement": ""
+    },
+    {
+     "line": "if let safeDIBuilder = __safeDI_\\w+__safeDIBuilder \\{",
+     "replacement": "if let safeDIBuilder = safeDIOverrides {"
+    },
+    {
+     "line": "\\(, ",
+     "replacement": "("
+    },
+    {
+     "line": "safeDIOverrides(?:\\.(?:\\w+|`[^`]+`))*(\\.(?:\\w+|`[^`]+`))",
+     "replacement": "safeDIOverrides\\1"
+    },
+    {
+     "line": "if let safeDIBuilder = safeDIOverrides\\.(?!safeDIBuilder\\b)(?:\\w+|`[^`]+`) \\{",
+     "replacement": "if let safeDIBuilder = safeDIOverrides {"
+    }
+   ],
+   "scope": "mock"
+  },
+  {
+   "id": "2-one-function-per-node",
+   "ruling": "lead's mock world ruling; entry 15",
+   "summary": "One function per node, declared once in the root's body and called by each parent; a function moved there takes the values it captured as parameters, and a wrapper that calls it with arguments is a closure. A head function equal to one of the base's bodies of its name is accepted, which also covers entry 14 (one @Sendable function for a Sendable lazy twin and a constant twin).",
+   "steps": [
+    {
+     "hoistFunctions": "^(?:@Sendable )?(?:nonisolated )?func (?P<name>(?:__safeDI_\\w+|`__safeDI_[^`]+`))\\("
+    },
+    {
+     "line": "^((?:@\\w+ )*(?:nonisolated )?func (?:__safeDI_\\w+|`__safeDI_[^`]+`)\\()(?:(?:[^()]|\\((?:(?:[^()]|\\((?:(?:[^()]|\\((?:(?:[^()]|\\((?:(?:[^()]|\\((?:[^()])*\\)))*\\)))*\\)))*\\)))*\\)))*?(?=\\) (?:async |throws )*-> )",
+     "replacement": "\\1"
+    },
+    {
+     "line": "((?:__safeDI_\\w+|`__safeDI_[^`]+`)\\((?:[^()]*?, )?)(\\w+|`[^`]+`): \\2(?:, |(?=\\)))",
+     "replacement": "\\1",
+     "repeat": true
+    },
+    {
+     "line": ", \\)",
+     "replacement": ")",
+     "repeat": true
+    },
+    {
+     "text": "((?:Sendable)?(?:Erased)?(?:Instantiator|LazilyInstantiated)<[^\\n]*>) \\{\\n\\s*((?:try |await )*)((?:__safeDI_\\w+|`__safeDI_[^`]+`))\\(\\)\\n\\s*\\}",
+     "replacement": "\\1(\\3)"
+    }
+   ],
+   "shapes": [
+    "changed: > ( {- __safeDI_X1 -}{+ __safeDI_X2 +} )",
+    "function removed: func __safeDI_X1 ( ) -> X2 {"
+   ],
+   "scope": "mock"
+  },
+  {
+   "id": "4-wrapper-binding-spells-type",
+   "ruling": "11-27, erased, sendable and default-valued parameter kinds",
+   "summary": "A wrapper binding of a type declared in an extension spells its type, as production's does.",
+   "steps": [
+    {
+     "line": "^let (\\w+): ((?:Sendable)?(?:Erased)?Instantiator<.*>) = \\2(?=[({ ]|$)",
+     "replacement": "let \\1 = \\2",
+     "side": "head"
+    }
+   ],
+   "scope": "mock"
+  },
+  {
+   "id": "7-alias-chain-roots-flat",
+   "scope": "production",
+   "ruling": "lead 11-27 12:54Z and 15:38Z, for exactly these nine roots",
+   "summary": "A root with a label-keeping rename of a rename is laid out by the type key: builder functions declared once in the root's body, a function that reads the outer rename takes it as a parameter.",
+   "conditions": "Executed values equal 2.4.1's in each case; no root without a rename of a rename moves.",
+   "tests": [
+    "generate_bindsChainToNil_whenReaderBeneathLabelKeepingAliasOfAliasOfPropertyBeingBuiltReceivesIt",
+    "generate_bindsErasedLabelKeepingAliasFromAlias_whenItRetypesAliasAboveIt",
+    "generate_bindsLabelKeepingAliasFromAliasAbove_whenItSpellsUnwrappedFormBeneathAlias",
+    "generate_bindsLabelKeepingAliasFromAliasInSeamsModule_whenItAndItsDeclaringTypeAreInModuleSeamDependsOn",
+    "generate_bindsLabelKeepingAliasFromAlias_whenItRetypesAliasAboveIt",
+    "generate_bindsLabelKeepingAliasFromAlias_whenReaderBeneathLabelKeepingAliasOfAliasReceivesIt",
+    "generate_bindsLabelKeepingAliasFromNearestDeclaration_whenItIsReachedBeneathAliasAndBesideIt",
+    "run_passesNilToOnlyIfAvailableReceiverOfSiblingRequiringTheReceiversAncestor_whenAncestorsTreeAlsoAliasesSiblingsOptionalFormBeneathForwardedSibling",
+    "run_passesNilToOnlyIfAvailableReceiverOfEarlierSiblingRequiringTheReceiversAncestor_whenAncestorsTreeAlsoAliasesSiblingsOptionalFormBeneathForwardedSibling"
+   ],
+   "steps": [
+    {
+     "hoistFunctions": "^(?:@Sendable )?(?:nonisolated )?func (?P<name>(?:__safeDI_\\w+|`__safeDI_[^`]+`))\\("
+    },
+    {
+     "line": "^((?:@\\w+ )*(?:nonisolated )?func (?:__safeDI_\\w+|`__safeDI_[^`]+`)\\()(?:(?:[^()]|\\((?:(?:[^()]|\\((?:(?:[^()]|\\((?:(?:[^()]|\\((?:(?:[^()]|\\((?:[^()])*\\)))*\\)))*\\)))*\\)))*\\)))*?(?=\\) (?:async |throws )*-> )",
+     "replacement": "\\1"
+    },
+    {
+     "line": "((?:__safeDI_\\w+|`__safeDI_[^`]+`)\\((?:[^()]*?, )?)(\\w+|`[^`]+`): \\2(?:, |(?=\\)))",
+     "replacement": "\\1",
+     "repeat": true
+    },
+    {
+     "line": ", \\)",
+     "replacement": ")",
+     "repeat": true
+    }
+   ]
+  },
+  {
+   "id": "6-unlabeled-argument-spelled",
+   "ruling": "lead's test, 11-27",
+   "summary": "An argument of a parameter with no label is spelled `_: value`, as production spells it.",
+   "steps": [
+    {
+     "line": "([(,] ?)_: ",
+     "replacement": "\\1",
+     "side": "head"
+    }
+   ],
+   "scope": "mock"
+  },
+  {
+   "id": "8-constant-binding-states-type",
+   "ruling": "lead 11-27 9:31 AM PT",
+   "summary": "A constant's binding states its type, including one a hand-written mock builds.",
+   "shapes": [
+    "changed: let X1 {+ : X2 +} = if",
+    "changed: let X1 {+ : X2 . X3 +} = if"
+   ],
+   "scope": "mock"
+  },
+  {
+   "id": "10-public-mock-guard-once-in-root",
+   "ruling": "lead 11-27 9:31 AM PT",
+   "summary": "A public mock's guard line sits once, in the root's body.",
+   "shapes": [
+    "moved: _ = X1 . __safeDI_X2 . self //…",
+    "removed: _ = X1 . __safeDI_X2 . self //…"
+   ],
+   "scope": "mock"
+  },
+  {
+   "id": "11-function-named-apart",
+   "ruling": "lead 11-27 9:31 AM PT",
+   "summary": "A function is named apart with a trailing underscore.",
+   "shapes": [
+    "changed: {- __safeDI_X1 -}{+ __safeDI_X1_ +} ( X2",
+    "function added: func __safeDI_X1_ ( ) -> X2 {"
+   ],
+   "scope": "mock"
+  },
+  {
+   "id": "12-leaf-built-inline",
+   "ruling": "lead 11-27 9:31 AM PT",
+   "summary": "A leaf is built inline where its function existed only to rebind.",
+   "shapes": [
+    "changed: let X1 {+ = if let safeDIBuilder = safeDIOverrides { safeDIBuilder ( X2 . instance ) } else { X3 ( X2 +} : X3 … X1 : {- X3 = __safeDI_X1 ( -}{+ X2 . instance +} ) … ( ) {+ } +}",
+    "function removed: func __safeDI_X1 ( ) -> X2 {"
+   ],
+   "scope": "mock"
+  },
+  {
+   "id": "not-approved-binding-type-changes",
+   "ruling": "Not approved, whatever the kind",
+   "summary": "A binding's declared type changes: optional for non-optional, some for any.",
+   "shapes": [
+    "changed: let X1 {+ : X2 ? +} = if",
+    "changed: X1 : {- any -}{+ some +} X2 ."
+   ],
+   "status": "notApproved"
+  },
+  {
+   "id": "13-optional-channel-rule-a",
+   "ruling": "lead 11-27 15:06Z, approved per listed root",
+   "summary": "One optional parameter where 2.4.x wrote nil in one body and built a second function; the caller passes the value or nil.",
+   "conditions": "Each differing root is listed here by the commit that frees it, with executed values equal; the count goes in the release notes.",
+   "tests": [],
+   "shapes": []
+  }
+ ]
+}
