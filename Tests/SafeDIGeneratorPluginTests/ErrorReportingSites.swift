@@ -45,6 +45,11 @@ extension ErrorReportingSite {
 		// The macros attach them to the declaration as diagnostics; neither is thrown.
 		"FixableInjectableError": .macroDiagnostic,
 		"FixableInstantiableError": .macroDiagnostic,
+		// Never reported: a world node records refuse keeps the tree's plan, and only a test observes the refusal.
+		"NodeRecordRefusal": ErrorReportingSite(
+			path: "Sources/SafeDICore/Generators/NodeRecords/DependencyTreeGenerator+NodeRecords.swift",
+			code: "refusal: refusal.rawValue",
+		),
 		// The `@Instantiable` macro reports it as diagnostics. Generation builds a type only with an initializer that
 		// fulfills its dependencies, so generation never throws it.
 		"Initializer.GenerationError": ErrorReportingSite(
