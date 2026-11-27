@@ -696,6 +696,9 @@ extension ScopeRecord {
 		// The generators of the calls that pass fills this tree holds, none of which it may hold twice
 		// (`ConstructionMemo.Entry.callGenerators`).
 		var callGeneratorsInTree = Set<ObjectIdentifier>()
+		// How many of the scopes under construction are judgement trees of fills (`ScopeGenerator.fillJudgementTree`), in
+		// which nothing is the tree's own: no call there is one the tree holds.
+		var fillJudgementTreesUnderConstruction = 0
 		while true {
 			let index = scopeGeneratorsUnderConstruction.count - 1
 			if let propertyToGenerate = scopeGeneratorsUnderConstruction[index].nextPropertyToGenerate() {
@@ -728,7 +731,7 @@ extension ScopeRecord {
 						)
 						child.memoKey = key
 						scopeGeneratorsUnderConstruction.append(child)
-						placeIndices.append(typeFactsPlaces?.start(TypeFactsDeclaration(scope: scope, property: property, propertyID: propertyID, erasedToConcreteExistential: erasedToConcreteExistential, isFill: false), parent: placeIndices[index]))
+						placeIndices.append(fillJudgementTreesUnderConstruction == 0 ? typeFactsPlaces?.start(TypeFactsDeclaration(scope: scope, property: property, propertyID: propertyID, erasedToConcreteExistential: erasedToConcreteExistential, isFill: false), parent: placeIndices[index]) : nil)
 					}
 				case let .aliased(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable, declarationReference):
 					scopeGeneratorsUnderConstruction[index].addAliasGenerator(
@@ -749,8 +752,21 @@ extension ScopeRecord {
 					fill: fill.fill,
 					scope: fill.scope,
 					context: fill.context,
+					isJudgementTree: false,
 				))
-				placeIndices.append(typeFactsPlaces?.start(TypeFactsDeclaration(scope: fill.scope, property: fill.fill.hole.property, propertyID: fill.context.propertyID, erasedToConcreteExistential: false, isFill: true), parent: placeIndices[index]))
+				// A judgement tree's places are no places of the world's: the fill they judge is recorded once, where its call
+				// passes it.
+				placeIndices.append(fillJudgementTreesUnderConstruction == 0 ? typeFactsPlaces?.start(TypeFactsDeclaration(scope: fill.scope, property: fill.fill.hole.property, propertyID: fill.context.propertyID, erasedToConcreteExistential: false, isFill: true), parent: placeIndices[index]) : nil)
+			} else if let fill = scopeGeneratorsUnderConstruction[index].fillJudgementTreeToBuild() {
+				// The scope is a fill, which the call beneath it on the stack passes: that call builds the fill's tree again.
+				try scopeGeneratorsUnderConstruction.append(scopeGeneratorsUnderConstruction[index - 1].fillUnderConstruction(
+					fill: fill.fill,
+					scope: scopeGeneratorsUnderConstruction[index].builtScope,
+					context: fill.context,
+					isJudgementTree: true,
+				))
+				placeIndices.append(nil)
+				fillJudgementTreesUnderConstruction += 1
 			} else {
 				var createdScope = scopeGeneratorsUnderConstruction.removeLast()
 				let placeIndex = placeIndices.removeLast()
@@ -762,9 +778,15 @@ extension ScopeRecord {
 					typeFactsPlaces?.record(placeIndex, generator: scopeGenerator)
 				}
 				let callGenerators = createdScope.callGenerators(including: scopeGenerator)
-				callGeneratorsInTree.formUnion(callGenerators)
+				if fillJudgementTreesUnderConstruction == 0 {
+					callGeneratorsInTree.formUnion(callGenerators)
+				}
 				if scopeGeneratorsUnderConstruction.isEmpty {
 					return scopeGenerator
+				} else if createdScope.isFillJudgementTree {
+					// No child of the fill it judges, which generates the case's code alone.
+					fillJudgementTreesUnderConstruction -= 1
+					scopeGeneratorsUnderConstruction[scopeGeneratorsUnderConstruction.count - 1].add(fillJudgementTree: scopeGenerator, readsAnsweredAbove: createdScope.readsAnsweredAbove)
 				} else {
 					// Filtered once, for the memo and the parent alike.
 					let readsAnsweredAbove = createdScope.readsAnsweredAbove
@@ -787,6 +809,24 @@ extension ScopeRecord {
 
 /// A scope whose generator `ScopeRecord.createScopeGenerator` is creating, with what the generator is created from once
 /// the generators of the scopes it creates exist.
+/// A case of a place graph, told apart from another graph's case of the same index by the graph's query, whose identity
+/// orders nothing.
+/// A case of a place graph as a set tells it apart: its indices are its own graph's, so two graphs' cases are told apart by
+/// the graph's identity, which orders nothing.
+struct HoldingCaseKey: Hashable {
+	init(graph: ObjectIdentifier, caseIndex: Int) {
+		self.graph = graph
+		self.caseIndex = caseIndex
+	}
+
+	init(_ resolved: SeamSignature.Places.Query.ResolvedCase) {
+		self.init(graph: ObjectIdentifier(resolved.query), caseIndex: resolved.caseIndex)
+	}
+
+	let graph: ObjectIdentifier
+	let caseIndex: Int
+}
+
 private struct ScopeGeneratorUnderConstruction: Sendable {
 	/// - Parameters:
 	///   - property: The property the scope builds, with its ID in `scope`'s interner, or `nil` for a root.
@@ -867,6 +907,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		// Whether the declaration this scope closes on, when it closes on one, is of the fill's path: generation's own finding,
 		// which the check of a fill reads instead of working the membership out again.
 		closesCycleOnFillPath = closedOn.map { $0.index < fillPathStackCount } ?? false
+		treeClosesCycleOnFillPath = closesCycleOnFillPath
 		// The parameters of this scope's builder function that the pass before found, when a lazy cycle closes on it,
 		// or those of the function a cycle-closing scope refers to. Nearly every scope has neither.
 		let ownCycleParameters = if !isPropertyCycle, property != nil {
@@ -1080,8 +1121,32 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			// label that some route of the inner seam's enum holds and another does not: on that other route inline reads the
 			// caller's declaration, as for a label one place of the case carries and another does not.
 			let innerScopeReaders = scope.calledBuilders.map { InnerScopeReaders(enumsByKey: $0.enumsByKey) }
+			// The call holds one place per case of the called seam's place graph, and reads what every route to the case
+			// hands from the graph (`SeamSignature.placesHandedToCallers`), a place the call passes up from the graph of the
+			// seam whose tree holds it (`CalledBuilders.holdingCase(ofSite:in:)`), never from the place, whose lists are its
+			// first route's only. A call whose graph was not built, or whose run does not hold the graph of a seam on the way
+			// to a place it passes up, reads its places.
+			let placesQuery = scope.calledBuilders.flatMap { $0.places.cases.isEmpty ? nil : SeamSignature.Places.Query(of: $0.places, calledPlaces: { [placesOfSeamsBeneath = $0.placesOfSeamsBeneath] in placesOfSeamsBeneath($0)?.places }) }
 			var caseFieldsByCaseKey = placesByCaseKey.mapValues { places in
-				var caseFields = ScopeGenerator.caseFields(of: places)
+				var holdingCases = [SeamSignature.Places.Query.ResolvedCase]()
+				var holdingCasesSeen = Set<HoldingCaseKey>()
+				var readsEveryPlaceFromGraph = placesQuery != nil
+				if let placesQuery, let calledBuilders = scope.calledBuilders {
+					for place in places {
+						guard let holding = calledBuilders.holdingCase(ofSite: place.site, in: placesQuery) else {
+							readsEveryPlaceFromGraph = false
+							break
+						}
+						if holdingCasesSeen.insert(HoldingCaseKey(graph: ObjectIdentifier(holding.query), caseIndex: holding.caseIndex)).inserted {
+							holdingCases.append(holding)
+						}
+					}
+				}
+				var caseFields = if readsEveryPlaceFromGraph, let firstPlace = places.first {
+					ScopeGenerator.caseFields(ofResolvedCases: holdingCases, hole: firstPlace)
+				} else {
+					ScopeGenerator.caseFields(of: places)
+				}
 				if let innerScopeReaders {
 					let fieldLabels = Set(caseFields.fields.map(\.property.label))
 					for place in places {
@@ -1089,6 +1154,47 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 					}
 				}
 				return caseFields
+			}
+			// Test only, deleted before merge: the same fields read from the call's place graph, for the tests' oracle, which
+			// rides on the levels' observer (`SeamPlaceLevels.caseFieldsMismatches`).
+			if let observer = SeamPlaceLevels.observer, let calledBuilders = scope.calledBuilders, !calledBuilders.places.cases.isEmpty {
+				let query = SeamSignature.Places.Query(of: calledBuilders.places, calledPlaces: { calledBuilders.placesOfSeamsBeneath($0)?.places })
+				var mismatches = [String]()
+				func spelled(_ fields: [SeamSignature.Hole.Field]) -> [String] {
+					fields.map { "\($0.property.label): \($0.property.typeDescription.asSource)\($0.isDeferredParameter ? " (deferred)" : "")" }
+				}
+				for (caseKey, places) in placesByCaseKey.sorted(by: { $0.key < $1.key }) {
+					guard let firstPlace = places.first, let perPlace = caseFieldsByCaseKey[caseKey] else { continue }
+					var holdingCases = [SeamSignature.Places.Query.ResolvedCase]()
+					var holdingCasesSeen = Set<HoldingCaseKey>()
+					for place in places {
+						if let holding = calledBuilders.holdingCase(ofSite: place.site, in: query), holdingCasesSeen.insert(HoldingCaseKey(graph: ObjectIdentifier(holding.query), caseIndex: holding.caseIndex)).inserted {
+							holdingCases.append(holding)
+						}
+					}
+					let caseIndices = holdingCases.map(\.caseIndex)
+					guard !holdingCases.isEmpty else { continue }
+					let unresolvedCount = places.count(where: { calledBuilders.holdingCase(ofSite: $0.site, in: query) == nil })
+					guard unresolvedCount == 0 else {
+						mismatches.append("case \(caseKey): \(unresolvedCount) of its places resolve to no graph case beside graph cases \(caseIndices)")
+						continue
+					}
+					let byGraph = ScopeGenerator.caseFields(ofResolvedCases: holdingCases, hole: firstPlace)
+					if spelled(perPlace.fields).sorted() != spelled(byGraph.fields).sorted() {
+						mismatches.append("case \(caseKey): fields per place \(spelled(perPlace.fields)), by graph \(spelled(byGraph.fields))")
+					} else if spelled(perPlace.fields) != spelled(byGraph.fields) {
+						mismatches.append("case \(caseKey): field order per place \(spelled(perPlace.fields)), by graph \(spelled(byGraph.fields))")
+					}
+					if perPlace.callerReadLabels != byGraph.callerReadLabels {
+						let withoutInnerRoutes = ScopeGenerator.caseFields(of: places).callerReadLabels
+						mismatches.append("case \(caseKey) (graph cases \(caseIndices)): caller-read labels per place \(perPlace.callerReadLabels.sorted()) (\(withoutInnerRoutes.sorted()) without inner routes), by graph \(byGraph.callerReadLabels.sorted())")
+					}
+				}
+				if !mismatches.isEmpty {
+					var observation = SeamPlaceLevels(seamType: .simple(name: "", generics: []), places: [])
+					observation.caseFieldsMismatches = [(["case fields read from the place graph differ from those read per place"] + mismatches).joined(separator: "\n")]
+					observer(observation)
+				}
 			}
 			// A public mock's caller decides per route, and a route whose nearest type binds another form of a value its fill
 			// reads converts it, so the fill takes each value its case's payload does not carry in the form it reads
@@ -1493,6 +1599,39 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			subtreeIsShareable = false
 		}
 		callGeneratorsBeneath.formUnion(child.callGenerators(including: childGenerator))
+		// A fill nested in this tree is built beneath a path of its own.
+		if child.fill == nil, child.treeClosesCycleOnFillPath {
+			treeClosesCycleOnFillPath = true
+		}
+	}
+
+	/// Whether this scope, or a scope beneath it outside every fill nested in its tree, closes a cycle on an entry of the
+	/// path of the seam whose hole the enclosing fill fills (`ScopeGenerator.closesCycleOnFillPath`). No scope inside a fill
+	/// reuses another place's generator (`memoKey(ofChildBuilding:as:id:erasedToConcreteExistential:)`), so every such
+	/// scope is created beneath this one.
+	private var treeClosesCycleOnFillPath: Bool
+	/// For a fill, what `fillUnderConstruction` built it from, until its judgement tree is asked for.
+	private var fillBuiltFrom: (fill: Fill, context: ScopeRecord.FillContext)?
+	/// Whether this scope is a fill's judgement tree (`ScopeGenerator.fillJudgementTree`).
+	private(set) var isFillJudgementTree = false
+	/// For a fill, its judgement tree, once built.
+	private var fillJudgementTree: ScopeGenerator?
+
+	/// For a fill that generates its case's code whose tree, now built, closed a cycle on an entry of its seam's path,
+	/// what its judgement tree is built from, once (`ScopeGenerator.fillJudgementTree`): the fill as the call built it,
+	/// beneath the same stack with none of the path's entries closing a cycle. Such a tree closes on none of them, so it
+	/// has no judgement tree of its own. Only a graph validation rejects has such a fill.
+	mutating func fillJudgementTreeToBuild() -> (fill: Fill, context: ScopeRecord.FillContext)? {
+		guard treeClosesCycleOnFillPath, let builtFrom = fillBuiltFrom, builtFrom.fill.emitsCode else { return nil }
+		fillBuiltFrom = nil
+		return (builtFrom.fill, ScopeRecord.FillContext(propertyID: builtFrom.context.propertyID, contextStack: builtFrom.context.contextStack.closingNoCycleOnItsEntries))
+	}
+
+	/// Keeps `judgementTree`, the judgement tree of this fill, for its generator. What the tree read of the context above
+	/// the call is read by the call's place, as the reads of the fill's own tree are.
+	mutating func add(fillJudgementTree judgementTree: ScopeGenerator, readsAnsweredAbove: ConstructionLog) {
+		fillJudgementTree = judgementTree
+		log.formUnion(readsAnsweredAbove)
 	}
 
 	/// Merges a child's `CycleClosingRedeclaredLabels` into `cycleClosingRedeclaredLabels`.
@@ -1733,6 +1872,8 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	private var fillsStoodFor = [ScopeGenerator.FillStoodFor]()
 	/// How many fills `nextFill()` has handed out to build.
 	private var builtFillCount = 0
+	/// How many of this call's fills it built a judgement tree for (`fillJudgementTreeToBuild()`).
+	private var fillJudgementTreeCount = 0
 
 	/// The generator the pass before created for the fill keyed `key`, or the one that stood for it there, or `nil` in the
 	/// first pass. A pass can build a fill for a place another pass built none for, so a fill that is not where this
@@ -1767,8 +1908,10 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	/// The scope under construction for the property a fill of this scope's seam call builds: the scope of the type
 	/// that fulfills the hole in the caller's declarations, built with the stack the seam whose tree holds the site
 	/// reaches it with, and with the fields of the site's scope struct in scope beside what encloses the call.
-	mutating func fillUnderConstruction(fill: Fill, scope: ConstructionScope, context fillContext: ScopeRecord.FillContext) throws -> ScopeGeneratorUnderConstruction {
-		var fill = fill
+	/// - Parameter isJudgementTree: Whether the scope is the fill's judgement tree (`ScopeGenerator.fillJudgementTree`),
+	///   which `fillJudgementTreeToBuild()` asks for with the stack it is built beneath.
+	mutating func fillUnderConstruction(fill givenFill: Fill, scope: ConstructionScope, context fillContext: ScopeRecord.FillContext, isJudgementTree: Bool) throws -> ScopeGeneratorUnderConstruction {
+		var fill = givenFill
 		let hole = fill.hole
 		try validateForwardedProperties(of: hole.property, declaredAt: hole.declarationLocation, on: hole.ownerType, seeingThroughModulesNamed: hole.declaringModuleNames, building: scope.instantiable)
 		// A field bound from a parameter the seam defers holds the seam's memo of what the call passed, which is the
@@ -1850,7 +1993,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 				fieldInstanceProperties.insert(instanceProperty)
 			}
 		}
-		return ScopeGeneratorUnderConstruction(
+		var underConstruction = ScopeGeneratorUnderConstruction(
 			scope: scope,
 			property: (hole.property, fillContext.propertyID),
 			// The fill's stack is the path of the seam whose tree holds the site, put on it above this tree.
@@ -1878,7 +2021,9 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			// function of its own, declared where the seam is called, so no function enclosing the call that a lazy cycle
 			// closes on encloses a cycle-closing scope in the fill. The fill's own built scope takes the parameters the
 			// pass before found for it as any scope does, when a lazy cycle inside the fill closes on its property.
-			previousPassGenerator: previousPassFillGenerator(keyed: fill.key)?.children.first,
+			// A judgement tree is built as a first pass builds it: what a pass finds for the next decides generated code
+			// alone, of which the judgement tree has none.
+			previousPassGenerator: isJudgementTree ? nil : previousPassFillGenerator(keyed: fill.key)?.children.first,
 			cycleParameterContexts: [:],
 			// A place inside the fill is a place of the type the fill builds, whose builds start their children in its order.
 			placeHoldingPropertiesByType: placeHoldingPropertiesByType,
@@ -1886,6 +2031,12 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			// enclosing scope's are.
 			recordsReads: recordsReads,
 		)
+		underConstruction.fillBuiltFrom = (givenFill, fillContext)
+		underConstruction.isFillJudgementTree = isJudgementTree
+		if isJudgementTree {
+			fillJudgementTreeCount += 1
+		}
+		return underConstruction
 	}
 
 	/// Creates the generator of a hole this scope's type instantiates, a site of the seam whose tree is generated.
@@ -2456,9 +2607,6 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		// Both read the caller's declarations, which they log.
 		let builderCallArguments = builderCallArguments(fillNames: fillNames)
 		let enclosingLevelCalls = scope.publicMockCall == nil ? [:] : enclosingLevelCalls()
-		if builtFillCount > 0, let observer = SeamFillSharing.observer {
-			observer(SeamFillSharing.FillsOfCall(calledType: scope.instantiable.concreteInstantiable.asSource, builtFillCount: builtFillCount, placeStoodForCount: fillsStoodFor.count))
-		}
 		let builtGenerator = ScopeGenerator(
 			instantiable: scope.instantiable,
 			property: property,
@@ -2539,6 +2687,12 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			previousPassBuildsFillOfEveryPlace: previousPassGenerator?.buildsFillOfEveryPlace ?? false,
 			cycleClosingRedeclaredLabels: &cycleClosingRedeclaredLabels,
 		)
+		if builtFillCount > 0, let observer = SeamFillSharing.observer {
+			let bindings = builtGenerator.children.compactMap { fill in
+				fill.fillHole.flatMap { hole in builtGenerator.fillBinding(of: fill).map { (sitePath: hole.sitePath, binding: $0) } }
+			}
+			observer(SeamFillSharing.FillsOfCall(calledType: scope.instantiable.concreteInstantiable.asSource, builtFillCount: builtFillCount, placeStoodForCount: fillsStoodFor.count, fillJudgementTreeCount: fillJudgementTreeCount, bindings: bindings))
+		}
 		return if let fill {
 			ScopeGenerator(
 				fill: fill.hole,
@@ -2554,6 +2708,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 				plainMemoRoutesOfSendableWrapperReads: fill.plainMemoRoutesOfSendableWrapperReads,
 				memoOriginsByLabel: fill.memoOriginsByLabel,
 				carrierUse: fill.carrierUse,
+				judgementTree: fillJudgementTree,
 				child: builtGenerator,
 				cycleClosingRedeclaredLabels: &cycleClosingRedeclaredLabels,
 			)

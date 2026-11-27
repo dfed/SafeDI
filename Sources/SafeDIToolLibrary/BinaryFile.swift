@@ -177,6 +177,18 @@ enum BinaryFile {
 			SeamSignature.ScopeEnum.Case.self,
 			SeamSignature.ScopeEnum.Case.Kind.self,
 			SeamSignature.Builder.self,
+			SeamSignature.Places.self,
+			SeamSignature.Places.Level.self,
+			SeamSignature.Places.LevelKey.self,
+			SeamSignature.Places.Declaration.self,
+			SeamSignature.Places.ChildFacts.self,
+			SeamSignature.Places.Buildability.self,
+			SeamSignature.Places.FillFieldHiding.self,
+			SeamSignature.Places.SendableFunctionOpened.self,
+			SeamSignature.Places.StackEntry.self,
+			SeamSignature.Places.Case.self,
+			SeamSignature.Places.Case.Access.self,
+			SeamSignature.Places.CalledCase.self,
 			TypeAccessProof.Cause.self,
 			TypeAccessProof.Prover.self,
 			TypeAccessProof.MemberKind.self,
@@ -192,7 +204,7 @@ enum BinaryFile {
 	/// because describing the schema reflects on every member's type, and reflection scans the runtime's
 	/// protocol conformance tables: computing it took most of a small module's `generate`. A test computes it
 	/// and fails, giving the new value, when a stored type's layout changes.
-	static let schemaFingerprint: UInt64 = 0xF17DF3245A0CEAA4
+	static let schemaFingerprint: UInt64 = 0xC0E00E04189B9B15
 
 	/// The format version and every schema member's layout, one member per line: the name and type of each
 	/// field a struct writes, and the name and payload types of each case an enum writes, in the order written.

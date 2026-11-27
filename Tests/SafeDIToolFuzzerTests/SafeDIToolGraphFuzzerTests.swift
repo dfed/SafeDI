@@ -1347,6 +1347,46 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
+	func acceptedDrawFeatureCounts_holdAtLeastTenGraphs_forSeamCallReachedOnTwoPaths() {
+		// A type of the roots' module that calls the seam on two paths of a root, which the type key lays out in one function
+		// both paths call, stands in for unit tests of that layout's values only while it lands in at least ten graphs the
+		// tool accepts, which the value comparator judges against the inline and visible builds.
+		for feature in GraphFuzzerSeamDrawFeature.allCases where feature.isSeamCallReachedOnTwoPathsShape {
+			#expect(Self.seamCorpusAcceptedDrawFeatureCounts[feature, default: 0] >= Self.gatingDrawJudgedGraphFloor, "\(feature.rawValue) is pinned in fewer than ten accepted graphs")
+		}
+	}
+
+	@Test
+	func acceptedDrawFeatureCounts_holdAtLeastTenGraphs_forSendableFillKeptInItsCall() {
+		// A `@Sendable` fill that stays in its call and calls a seam it fills itself, whose dispatcher the root declares at its
+		// top, stands in for unit tests of that dispatcher's `@Sendable` marking only while it lands in at least ten graphs the
+		// tool accepts, whose generated code the compile judges.
+		for feature in GraphFuzzerSeamDrawFeature.allCases where feature.isSendableFillKeptInItsCallShape {
+			#expect(Self.seamCorpusAcceptedDrawFeatureCounts[feature, default: 0] >= Self.gatingDrawJudgedGraphFloor, "\(feature.rawValue) is pinned in fewer than ten accepted graphs")
+		}
+	}
+
+	@Test
+	func acceptedDrawFeatureCounts_holdAtLeastTenGraphs_forRootDispatcherHandingCallersValue() {
+		// Two calls of a seam, each beneath a type that declares the value the call's root dispatcher hands a fill, stand in for
+		// unit tests of keeping that dispatcher in its call only while they land in at least ten graphs the tool accepts, whose
+		// values the value comparator judges against the inline build.
+		for feature in GraphFuzzerSeamDrawFeature.allCases where feature.isRootDispatcherHandingCallersValueShape {
+			#expect(Self.seamCorpusAcceptedDrawFeatureCounts[feature, default: 0] >= Self.gatingDrawJudgedGraphFloor, "\(feature.rawValue) is pinned in fewer than ten accepted graphs")
+		}
+	}
+
+	@Test
+	func acceptedDrawFeatureCounts_holdAtLeastTenGraphs_forEachSharedFillBodyShape() {
+		// Calls of a seam at two depths, and places at two levels of it, whose fills share one body that each adapter calls
+		// with its own level's values, stand in for unit tests of those adapters only while each lands in at least ten graphs
+		// the tool accepts, whose values the value comparator judges against the inline and visible builds.
+		for feature in GraphFuzzerSeamDrawFeature.allCases where feature.isSharedFillBodyShape {
+			#expect(Self.seamCorpusAcceptedDrawFeatureCounts[feature, default: 0] >= Self.gatingDrawJudgedGraphFloor, "\(feature.rawValue) is pinned in fewer than ten accepted graphs")
+		}
+	}
+
+	@Test
 	func acceptedDrawFeatureCounts_holdAtLeastTenGraphs_forEachLazyRouteShape() {
 		// Two routes to one case whose fill reads a value one route binds lazily and the caller holds by value – with a
 		// `SendableLazilyInstantiated`, read only if available, and beneath an instantiator – stand in for unit tests of the
@@ -7145,7 +7185,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// one compile and one link.
 	static let smokeSeeds: [UInt64] = [4, 5, 12, 18, 25, 30, 40, 53, 59, 62, 70, 86, 94, 97, 98, 99, 133, 161, 212, 267, 304, 327, 378, 466, 520, 582, 691, 705, 731, 930, 2_314, 2_420, 2_611, 3_360, 4_002, 4_224, 4_516, 5_889, 6_388]
 
-	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x33ADA44BB7966C3B
+	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x7036001E6A7C6CCE
 
 	/// The remedies the remedy oracle applies in the smoke batch's rejected graphs. `SafeDIToolGraphFuzzerRemedyTests`
 	/// holds a representative of every kind.
@@ -7155,15 +7195,15 @@ struct SafeDIToolGraphFuzzerTests {
 	/// them; `corpusPartitionHash` pins the whole corpus's. The partition draws nothing from the seed, so changing it
 	/// changes neither the graphs nor the pins on them: these pins make a change to the partition deliberate. They
 	/// move with the generator and, this one, with the smoke and known-issue seeds too, as the fixture hashes do.
-	static let smokeAndKnownIssuePartitionHash: UInt64 = 0x7DD0C0FE5EACE756
+	static let smokeAndKnownIssuePartitionHash: UInt64 = 0x621CFB8CC4F3014
 
 	/// The corpus, seeds `0..<corpusSeedCount`, which ci.yml fuzzes on every pull request and push to main and
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=corpus` selects. `knownIssues` lists every one that fails.
 	static let corpusSeedCount = 5_000
 
-	static let corpusFixtureHash: UInt64 = 0xAA725E722421C987
+	static let corpusFixtureHash: UInt64 = 0x498249530FB88E0F
 
-	static let corpusPartitionHash: UInt64 = 0x856D3A8836B9FF17
+	static let corpusPartitionHash: UInt64 = 0x6E9B72CF03F27B48
 
 	/// How many of the corpus's graphs the tool accepts, and which ones, as a `GraphFuzzerSeedSetSum`, which
 	/// shards of the corpus can add up.
@@ -7471,7 +7511,7 @@ struct SafeDIToolGraphFuzzerTests {
 		omittedValueGraphCount: seamCorpusOmittedValueGraphCount,
 		errorMarkers: seamCorpusErrorMarkers,
 		errorGraphCounts: seamCorpusErrorGraphCounts,
-		drawFeaturesCountedWhenAccepted: Set(GraphFuzzerSeamDrawFeature.allCases.filter { $0.isAliasSpellingRollShape || $0.isCycleParameterShape || $0.isForwardedLabelAcrossSeamCallShape || $0.isRetentionShape || $0.isErasurePlaceShape || $0.isForwardingPlaceShape || $0.isPassedUpPlaceReadingPassingSeamsValueShape || $0.isFixedSeamCallDefectShape || $0.isOptionalPlaceShape || $0.isReadThroughViewShape || $0.isScreenPlaceShape || $0.isLazyRouteShape || $0.isCallersViewShape }),
+		drawFeaturesCountedWhenAccepted: Set(GraphFuzzerSeamDrawFeature.allCases.filter { $0.isAliasSpellingRollShape || $0.isCycleParameterShape || $0.isForwardedLabelAcrossSeamCallShape || $0.isRetentionShape || $0.isErasurePlaceShape || $0.isForwardingPlaceShape || $0.isPassedUpPlaceReadingPassingSeamsValueShape || $0.isFixedSeamCallDefectShape || $0.isOptionalPlaceShape || $0.isReadThroughViewShape || $0.isSeamCallReachedOnTwoPathsShape || $0.isSendableFillKeptInItsCallShape || $0.isRootDispatcherHandingCallersValueShape || $0.isSharedFillBodyShape || $0.isScreenPlaceShape || $0.isLazyRouteShape || $0.isCallersViewShape }),
 		acceptedDrawFeatureCounts: seamCorpusAcceptedDrawFeatureCounts,
 		readTwinGraphCount: seamCorpusReadTwinGraphCount,
 		retentionCounts: seamCorpusRetentionCounts,

@@ -669,6 +669,15 @@ func executeSafeDIToolMultiModuleTest(
 		var moduleInfoFile = try moduleInfoOutput.map { try ModuleInfoFile(moduleInfoData: Data(contentsOf: $0)) }
 		if let writtenFile = moduleInfoFile {
 			StoredBlockDecodeChecks.expectStoredBlocksReadBackAsWritten(in: writtenFile, writtenByRunOfModuleNamed: moduleName, sourceLocation: sourceLocation)
+			if let computedSignatures = generateOutput?.seamSignaturesWrittenToModuleInfo {
+				// Each seam's place graph reads back from the file as the graph the run computed (`StoredPlaceGraphChecks`), so
+				// what the oracles check of a computed graph holds of the graph a module above decodes.
+				StoredPlaceGraphChecks.expectGraphsReadBackAsComputed(ofSeamSignatures: computedSignatures, in: writtenFile, writtenByRunOfModuleNamed: moduleName, sourceLocation: sourceLocation)
+			}
+			if let computedPlans = generateOutput?.publicMockPlansWrittenToModuleInfo {
+				// And each public mock's, which a module whose mocks call it decodes.
+				StoredPlaceGraphChecks.expectGraphsReadBackAsComputed(ofPublicMockPlans: computedPlans, in: writtenFile, writtenByRunOfModuleNamed: moduleName, sourceLocation: sourceLocation)
+			}
 		}
 		if discardsStoredSeamSignatures, let moduleInfoOutput, let writtenFile = moduleInfoFile {
 			// The modules above compute every seam's signature again, as the SwiftPM plugin's flow does.
@@ -928,12 +937,17 @@ enum SplitPositionsRun {
 			splitArguments.append("--module-info-positions-in-own-file")
 		}
 		// Detached, so the run inherits none of the observers a test sets around its own run, which count each layer and
-		// step of one run.
+		// step of one run. But the tool drafts a seam's place graph, stores it and reads a stored one only while the levels
+		// are observed (`SeamPlaceLevels.observer`), as every whole run here is: the run is handed an observer of its own
+		// that keeps nothing, so both runs read their files' graphs and differ in where the positions are stored alone,
+		// and the whole run's observer sees no place twice.
 		let splitRun: Result<Generate.Output, any Error> = await Task.detached {
-			do {
-				return try await .success(Generate.parse(splitArguments).generate())
-			} catch {
-				return .failure(error)
+			await SeamPlaceLevels.$observer.withValue({ _ in }) {
+				do {
+					return try await .success(Generate.parse(splitArguments).generate())
+				} catch {
+					return .failure(error)
+				}
 			}
 		}.value
 		switch (wholeRun, splitRun) {

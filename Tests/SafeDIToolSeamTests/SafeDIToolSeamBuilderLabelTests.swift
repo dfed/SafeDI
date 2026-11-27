@@ -101,17 +101,20 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_livePanel_PanelBuilder_Toolbar_panelBuilder(theme: Theme) -> ErasedInstantiator<String, any Panel>.Builder {
+		            return __safeDI_fillBody_9DB559CA6CA23750(theme: theme)
+		        }
+		        func __safeDI_fillBody_9DB559CA6CA23750(theme: Theme) -> ErasedInstantiator<String, any Panel>.Builder {
+		            func __safeDI_panelBuilder(title: String) -> LivePanel {
+		                LivePanel(title: title, theme: theme)
+		            }
+		            return { forwarded in __safeDI_panelBuilder(title: forwarded) }
+		        }
+		        func __safeDI_livePanel_PanelBuilder_Toolbar() -> Toolbar.__safeDI_LivePanel_PanelCarrier<any Panel> {
+		            .init(panelBuilder: { values_theme in __safeDI_livePanel_PanelBuilder_Toolbar_panelBuilder(theme: values_theme) })
+		        }
 		        func __safeDI_toolbar() -> Toolbar {
 		            _ = Toolbar.__safeDI_Toolbar_7E934FE75F52C44F.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_livePanel_PanelBuilder_Toolbar_panelBuilder(theme: Theme) -> ErasedInstantiator<String, any Panel>.Builder {
-		                func __safeDI_panelBuilder(title: String) -> LivePanel {
-		                    LivePanel(title: title, theme: theme)
-		                }
-		                return { forwarded in __safeDI_panelBuilder(title: forwarded) }
-		            }
-		            func __safeDI_livePanel_PanelBuilder_Toolbar() -> Toolbar.__safeDI_LivePanel_PanelCarrier<any Panel> {
-		                .init(panelBuilder: { values_theme in __safeDI_livePanel_PanelBuilder_Toolbar_panelBuilder(theme: values_theme) })
-		            }
 		            return Toolbar(__safeDI_livePanel_PanelBuilder: __safeDI_livePanel_PanelBuilder_Toolbar())
 		        }
 		        let toolbar: Toolbar = __safeDI_toolbar()
@@ -179,17 +182,20 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        @Sendable nonisolated func __safeDI_livePanel_PanelSendableBuilder_Toolbar_panelBuilder() -> SendableErasedInstantiator<String, any Panel>.Builder {
+		            return __safeDI_fillBody_55B6CFB6A08455F2()
+		        }
+		        @Sendable nonisolated func __safeDI_fillBody_55B6CFB6A08455F2() -> SendableErasedInstantiator<String, any Panel>.Builder {
+		            @Sendable nonisolated func __safeDI_panelBuilder(title: String) -> LivePanel {
+		                LivePanel(title: title)
+		            }
+		            return { forwarded in __safeDI_panelBuilder(title: forwarded) }
+		        }
+		        @Sendable nonisolated func __safeDI_livePanel_PanelSendableBuilder_Toolbar() -> Toolbar.__safeDI_LivePanel_PanelSendableCarrier<any Panel> {
+		            .init(panelBuilder: { __safeDI_livePanel_PanelSendableBuilder_Toolbar_panelBuilder() })
+		        }
 		        func __safeDI_toolbar() -> Toolbar {
 		            _ = Toolbar.__safeDI_Toolbar_F39B6A30B2E5FD88.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            @Sendable nonisolated func __safeDI_livePanel_PanelSendableBuilder_Toolbar_panelBuilder() -> SendableErasedInstantiator<String, any Panel>.Builder {
-		                @Sendable nonisolated func __safeDI_panelBuilder(title: String) -> LivePanel {
-		                    LivePanel(title: title)
-		                }
-		                return { forwarded in __safeDI_panelBuilder(title: forwarded) }
-		            }
-		            @Sendable nonisolated func __safeDI_livePanel_PanelSendableBuilder_Toolbar() -> Toolbar.__safeDI_LivePanel_PanelSendableCarrier<any Panel> {
-		                .init(panelBuilder: { __safeDI_livePanel_PanelSendableBuilder_Toolbar_panelBuilder() })
-		            }
 		            return Toolbar(__safeDI_livePanel_PanelSendableBuilder: __safeDI_livePanel_PanelSendableBuilder_Toolbar())
 		        }
 		        let toolbar: Toolbar = __safeDI_toolbar()

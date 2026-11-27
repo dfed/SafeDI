@@ -2551,17 +2551,20 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        func __safeDI_namedGadget_AnyGadgetBuilder_Host_maker() -> ErasedInstantiator<(count: Int, name: Name), AnyGadget>.Builder {
+			            return __safeDI_fillBody_60F13CDE44B58A54()
+			        }
+			        func __safeDI_fillBody_60F13CDE44B58A54() -> ErasedInstantiator<(count: Int, name: Name), AnyGadget>.Builder {
+			            func __safeDI_maker(count: Int, name: Name) -> NamedGadget {
+			                NamedGadget(name: name, count: count)
+			            }
+			            return { forwarded in AnyGadget(__safeDI_maker(count: forwarded.count, name: forwarded.name)) }
+			        }
+			        func __safeDI_namedGadget_AnyGadgetBuilder_Host() -> Host.__safeDI_NamedGadget_AnyGadgetCarrier<AnyGadget> {
+			            .init(maker: { __safeDI_namedGadget_AnyGadgetBuilder_Host_maker() })
+			        }
 			        func __safeDI_host() -> Host {
 			            _ = Host.__safeDI_Host_CA1A5978999B46CD.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            func __safeDI_namedGadget_AnyGadgetBuilder_Host_maker() -> ErasedInstantiator<(count: Int, name: Name), AnyGadget>.Builder {
-			                func __safeDI_maker(count: Int, name: Name) -> NamedGadget {
-			                    NamedGadget(name: name, count: count)
-			                }
-			                return { forwarded in AnyGadget(__safeDI_maker(count: forwarded.count, name: forwarded.name)) }
-			            }
-			            func __safeDI_namedGadget_AnyGadgetBuilder_Host() -> Host.__safeDI_NamedGadget_AnyGadgetCarrier<AnyGadget> {
-			                .init(maker: { __safeDI_namedGadget_AnyGadgetBuilder_Host_maker() })
-			            }
 			            return Host(__safeDI_namedGadget_AnyGadgetBuilder: __safeDI_namedGadget_AnyGadgetBuilder_Host())
 			        }
 			        let host: Host = __safeDI_host()
@@ -2945,6 +2948,16 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        func __safeDI_serviceBuilder_Inner_Inner_job(_ scope__scope: Token) -> any Service {
+			            let job: any Service = DefaultService()
+			            return job
+			        }
+			        func __safeDI_serviceBuilder_Host() -> Host.__safeDI_ServiceCarrier<any Service> {
+			            .init(inner: __safeDI_serviceBuilder_Inner(), innerJob: __safeDI_serviceBuilder_Inner_Inner_job_())
+			        }
+			        func __safeDI_serviceBuilder_Inner() -> Inner.__safeDI_ServiceCarrier<any Service> {
+			            .init(job: { scope_scope in __safeDI_serviceBuilder_Inner_Inner_job(scope_scope) })
+			        }
 			        func __safeDI_serviceBuilder_Inner_Inner_job_() -> Inner_Inner_job.__safeDI_ServiceCarrier<any Service> {
 			            .init(service: {
 			                let service: any Service = DefaultService()
@@ -2965,16 +2978,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			        }
 			        func __safeDI_host() -> Host {
 			            _ = Host.__safeDI_Host_21F652AED089ABCB.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            func __safeDI_serviceBuilder_Inner_Inner_job(_ scope__scope: Token) -> any Service {
-			                let job: any Service = DefaultService()
-			                return job
-			            }
-			            func __safeDI_serviceBuilder_Host() -> Host.__safeDI_ServiceCarrier<any Service> {
-			                .init(inner: __safeDI_serviceBuilder_Inner(), innerJob: __safeDI_serviceBuilder_Inner_Inner_job_())
-			            }
-			            func __safeDI_serviceBuilder_Inner() -> Inner.__safeDI_ServiceCarrier<any Service> {
-			                .init(job: { scope_scope in __safeDI_serviceBuilder_Inner_Inner_job(scope_scope) })
-			            }
 			            return Host(__safeDI_serviceBuilder: __safeDI_serviceBuilder_Host(), __safeDI_serviceSendableBuilder: __safeDI_serviceSendableBuilder_Host())
 			        }
 			        let host: Host = __safeDI_host()
@@ -3355,6 +3358,17 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        func __safeDI_serviceBuilder_Inner_service(_ scope_deep: Deep) -> any Service {
+			            return __safeDI_fillBody_220E4FCEBC0CCEE2()
+			        }
+			        func __safeDI_fillBody_220E4FCEBC0CCEE2() -> any Service {
+			            func __safeDI_service() -> DefaultService {
+			                let gadget: any Gadget = DefaultGadget()
+			                return DefaultService(gadget: gadget)
+			            }
+			            let service: any Service = __safeDI_service()
+			            return service
+			        }
 			        func __safeDI_gadgetBuilder_Host() -> Host.__safeDI_GadgetCarrier<any Gadget> {
 			            .init(inner: __safeDI_gadgetBuilder_Inner())
 			        }
@@ -3367,22 +3381,14 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			                return gadget
 			            })
 			        }
+			        func __safeDI_serviceBuilder_Host() -> Host.__safeDI_ServiceCarrier<any Service> {
+			            .init(inner: __safeDI_serviceBuilder_Inner())
+			        }
+			        func __safeDI_serviceBuilder_Inner() -> Inner.__safeDI_ServiceCarrier<any Service> {
+			            .init(service: { scope_deep in __safeDI_serviceBuilder_Inner_service(scope_deep) })
+			        }
 			        func __safeDI_host() -> Host {
 			            _ = Host.__safeDI_Host_6C150D4BF5C855DE.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            func __safeDI_serviceBuilder_Inner_service(_ scope_deep: Deep) -> any Service {
-			                func __safeDI_service() -> DefaultService {
-			                    let gadget: any Gadget = DefaultGadget()
-			                    return DefaultService(gadget: gadget)
-			                }
-			                let service: any Service = __safeDI_service()
-			                return service
-			            }
-			            func __safeDI_serviceBuilder_Host() -> Host.__safeDI_ServiceCarrier<any Service> {
-			                .init(inner: __safeDI_serviceBuilder_Inner())
-			            }
-			            func __safeDI_serviceBuilder_Inner() -> Inner.__safeDI_ServiceCarrier<any Service> {
-			                .init(service: { scope_deep in __safeDI_serviceBuilder_Inner_service(scope_deep) })
-			            }
 			            return Host(__safeDI_gadgetBuilder: __safeDI_gadgetBuilder_Host(), __safeDI_serviceBuilder: __safeDI_serviceBuilder_Host())
 			        }
 			        let host: Host = __safeDI_host()
@@ -3523,19 +3529,146 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		], visible: Self.modules(feature: feature + [fulfiller], app: [root]), probes: [DifferentialValueProbe("Root().home.listBuilder.instantiate().detailBuilder.instantiate().settingsBuilder.instantiate().service")])
 	}
 
+	/// Four seams that build each other through instantiators, three of which hold a place `service` of their own: every
+	/// seam passes up the places of the others, most through more than one call.
+	private static var fourSeamsInCyclesFeature: [String] {
+		[
+			service,
+			type("S0", seam: true, ["@Instantiated public let to1: Instantiator<S1>", "@Instantiated public let to3: Instantiator<S3>", "@Instantiated public let service: any Service"]),
+			type("S1", seam: true, ["@Instantiated public let to0: Instantiator<S0>", "@Instantiated public let to2: Instantiator<S2>", "@Instantiated public let service: any Service"]),
+			type("S2", seam: true, ["@Instantiated public let to0: Instantiator<S0>", "@Instantiated public let to3: Instantiator<S3>"]),
+			type("S3", seam: true, ["@Instantiated public let to0: Instantiator<S0>", "@Instantiated public let to1: Instantiator<S1>", "@Instantiated public let to2: Instantiator<S2>", "@Instantiated public let service: any Service"]),
+		]
+	}
+
+	private static let fourSeamsInCyclesFulfiller = fulfilling("DefaultService", "Service")
+	private static let fourSeamsInCyclesRoot = root(["@Instantiated public let s0: S0"])
+	private static var fourSeamsInCyclesModules: [ModuleFixture] {
+		modules(feature: fourSeamsInCyclesFeature, app: [fourSeamsInCyclesFulfiller, fourSeamsInCyclesRoot])
+	}
+
+	/// Each seam's place graph over `fourSeamsInCyclesModules` as its last pass computed it, once the signatures have
+	/// settled, with the graphs its references resolve to.
+	private mutating func lastObservationsOfFourSeamsInCycles() async throws -> [String: SeamSignature.Places.Observation] {
+		let (stream, continuation) = AsyncStream.makeStream(of: SeamSignature.Places.Observation.self)
+		let enclosingObserver = SeamPlaceLevels.observer
+		var writtenFiles = [URL]()
+		_ = try await SeamPlaceLevels.$observer.withValue({ placeLevels in
+			if let observation = placeLevels.placesObservation {
+				continuation.yield(observation)
+			}
+			enclosingObserver?(placeLevels)
+		}) {
+			try await executeSafeDIToolMultiModuleTest(modules: Self.fourSeamsInCyclesModules, integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &writtenFiles)
+		}
+		filesToDelete += writtenFiles
+		continuation.finish()
+		var lastObservationBySeam = [String: SeamSignature.Places.Observation]()
+		for await observation in stream {
+			lastObservationBySeam[observation.seamType.asSource] = observation
+		}
+		return lastObservationBySeam
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func called_handsPlaceEachReasonNames_whenSeamsThatPresentThePlaceCallEachOther() async throws {
+		let lastObservationBySeam = try await lastObservationsOfFourSeamsInCycles()
+		// Each declaration a place holds as bound by a seam that passes it up names, in its reason, the called seam's place
+		// the call presents. Where no case stores the declaration with that reason, the run hands the same place, under the
+		// same builder label and case name, for the case the call's case refers to.
+		var reasonsCompared = 0
+		var reasonsNotHanded = [String]()
+		for (seam, observation) in lastObservationBySeam {
+			let query = SeamSignature.Places.Query(of: observation.places, calledPlaces: observation.calledPlaces(of:))
+			for (hole, caseIndex) in zip(observation.siteHoles, observation.caseIndexBySite) where observation.places.cases[caseIndex].passedUp != nil {
+				let additions = try #require(query.presentationAdditions(of: caseIndex))
+				let holding = try #require(query.holdingCase(of: caseIndex))
+				let stored = Set(additions.calledCopyDeclarations + holding.query.places.cases[holding.caseIndex].calledCopyDeclarations)
+				for declaration in hole.uncarriedDeclarations where !stored.contains(declaration) {
+					guard case let .boundByPassingUpSeam(passingSeam, _, place) = declaration.reason else { continue }
+					reasonsCompared += 1
+					let isHanded = additions.boundOnPathsToCalls.contains { bound in
+						let presentingPlaces = bound.presentingCase.query.places
+						guard bound.declaration.property == declaration.property, bound.declaration.declaringType == declaration.declaringType,
+						      presentingPlaces.levels.first(where: \.key.isSeamRoot)?.key.builtType == passingSeam,
+						      let reference = presentingPlaces.cases[bound.presentingCase.caseIndex].passedUp,
+						      let calledHole = observation.called(of: reference)?.hole(ofCaseAt: reference.caseIndex)
+						else { return false }
+						return calledHole.scopeSeamType == place.seamType && calledHole.ownerType == place.ownerType && calledHole.property == place.property
+							&& calledHole.instantiatedType == place.instantiatedType && calledHole.builderLabel == place.builderLabel && calledHole.enumPlace?.caseName == place.caseName
+					}
+					if !isHanded {
+						reasonsNotHanded.append("\(seam): \(declaration.property.asSource) of \(declaration.declaringType.asSource), bound by \(passingSeam.asSource), presenting \(place.builderLabel)")
+					}
+				}
+			}
+		}
+		#expect(reasonsCompared > 0)
+		#expect(reasonsNotHanded.sorted() == [])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func holdingCase_isCaseOfSeamThatHoldsPlace_whenReferencesOfTwoSeamsCasesLeadToEachOther() async throws {
+		let lastObservationBySeam = try await lastObservationsOfFourSeamsInCycles()
+		func seamAndProperty(_ resolved: SeamSignature.Places.Query.ResolvedCase) -> String {
+			let places = resolved.query.places
+			let seam = places.levels.first(where: \.key.isSeamRoot)?.key.builtType?.asSource ?? "no seam"
+			return "\(seam).\(places.levels[places.cases[resolved.caseIndex].ownerLevel].key.nextProperty?.label ?? "a call")"
+		}
+		// `S0` presents `S3`'s `service` first through its call of `S1`, and `S1` presents it first through its call of
+		// `S0`: the references of those two cases lead to each other. `S0` also presents the place through its call of `S3`.
+		var holdersOfCasesWhoseReferencesLoop = [String: Set<String>]()
+		var holdersBySeam = [String: Set<String>]()
+		for (seam, observation) in lastObservationBySeam {
+			let query = SeamSignature.Places.Query(of: observation.places, calledPlaces: observation.calledPlaces(of:))
+			for caseIndex in observation.places.cases.indices where observation.places.cases[caseIndex].passedUp != nil {
+				let holder = query.holdingCase(of: caseIndex).map(seamAndProperty) ?? "none"
+				holdersBySeam[seam, default: []].insert(holder)
+				if let end = query.casesPresented(from: caseIndex).last, end.query.places.cases[end.caseIndex].passedUp != nil {
+					holdersOfCasesWhoseReferencesLoop[seam, default: []].insert(holder)
+				}
+			}
+		}
+		#expect(holdersBySeam == [
+			"S0": ["S1.service", "S3.service", "S0.service"],
+			"S1": ["S0.service", "S3.service", "S1.service"],
+			"S2": ["S0.service", "S1.service", "S3.service"],
+			"S3": ["S0.service", "S1.service", "S3.service"],
+		])
+		#expect(holdersOfCasesWhoseReferencesLoop["S0"]?.contains("S3.service") == true)
+		#expect(holdersOfCasesWhoseReferencesLoop["S1"]?.contains("S3.service") == true)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func pathToHoldingSeam_passesNoSeamTwice_whenSeamsThatPresentThePlaceCallEachOther() async throws {
+		let lastObservationBySeam = try await lastObservationsOfFourSeamsInCycles()
+		/// The path through the calls from `seam` down to `S3`, which holds the place `service` asked of.
+		func pathToServiceOfS3(from seam: String) throws -> [String] {
+			let observation = try #require(lastObservationBySeam[seam])
+			let query = SeamSignature.Places.Query(of: observation.places, calledPlaces: observation.calledPlaces(of:))
+			let caseOfPlace = try #require(observation.places.cases.indices.first { caseIndex in
+				guard observation.places.cases[caseIndex].passedUp != nil, let holding = query.holdingCase(of: caseIndex) else { return false }
+				return holding.query.places.levels.first(where: \.key.isSeamRoot)?.key.builtType?.asSource == "S3"
+			})
+			return try #require(query.pathToHoldingSeam(of: caseOfPlace)).sitePath.map(\.asSource)
+		}
+		// `S0` declares its call of `S1` before its call of `S3`, so the path starts through `S1`. `S1` declares its call of
+		// `S0` first, which the path has passed, so it goes on through `S2`, whose call of `S0` it leaves out the same way.
+		let pathFromS0 = try pathToServiceOfS3(from: "S0")
+		#expect(pathFromS0 == ["to1: Instantiator<S1>", "to2: Instantiator<S2>", "to3: Instantiator<S3>"])
+		// `S2` declares its call of `S0` first. From `S0`, the call of `S1` declared first leads on only through `S0` and
+		// `S2`, both passed, so the path takes `S0`'s call of `S3`.
+		let pathFromS2 = try pathToServiceOfS3(from: "S2")
+		#expect(pathFromS2 == ["to0: Instantiator<S0>", "to3: Instantiator<S3>"])
+	}
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_settlesSignatures_whenFourSeamsFormSeveralCyclesOfInstantiators() async throws {
-		let feature = [
-			Self.service,
-			Self.type("S0", seam: true, ["@Instantiated public let to1: Instantiator<S1>", "@Instantiated public let to3: Instantiator<S3>", "@Instantiated public let service: any Service"]),
-			Self.type("S1", seam: true, ["@Instantiated public let to0: Instantiator<S0>", "@Instantiated public let to2: Instantiator<S2>", "@Instantiated public let service: any Service"]),
-			Self.type("S2", seam: true, ["@Instantiated public let to0: Instantiator<S0>", "@Instantiated public let to3: Instantiator<S3>"]),
-			Self.type("S3", seam: true, ["@Instantiated public let to0: Instantiator<S0>", "@Instantiated public let to1: Instantiator<S1>", "@Instantiated public let to2: Instantiator<S2>", "@Instantiated public let service: any Service"]),
-		]
-		let fulfiller = Self.fulfilling("DefaultService", "Service")
-		let root = Self.root(["@Instantiated public let s0: S0"])
-		try await expectOutput(of: Self.modules(feature: feature, app: [fulfiller, root]), [
+		try await expectOutput(of: Self.fourSeamsInCyclesModules, [
 			"App": ["App.swift": """
 			#if canImport(Feature)
 			import Feature
@@ -3586,7 +3719,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			    }
 			}
 			"""],
-		], visible: Self.modules(feature: feature + [fulfiller], app: [root]), probes: [DifferentialValueProbe("Root().s0.to3.instantiate().to2.instantiate().to3.instantiate().service")])
+		], visible: Self.modules(feature: Self.fourSeamsInCyclesFeature + [Self.fourSeamsInCyclesFulfiller], app: [Self.fourSeamsInCyclesRoot]), probes: [DifferentialValueProbe("Root().s0.to3.instantiate().to2.instantiate().to3.instantiate().service")])
 	}
 
 	@Test

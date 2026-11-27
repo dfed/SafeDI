@@ -312,6 +312,373 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		"""])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_bindsALevelUnderOneNameOnEveryRoute_whenOneRouteReachesItBeneathAnotherCaseOfItsName() async throws {
+		// `Panel`'s `leafBuilder` is reached straight from `Page` and beneath `Detail`'s own `leafBuilder`, whose member's
+		// struct is bound first under `__safeDI_apiBuilder_leafBuilder`. `Panel`'s is bound apart from it on both routes, as
+		// `__safeDI_apiBuilder_leafBuilder_`, though only the second route binds both.
+		let modules = [
+			ModuleFixture(name: "Core", packageName: "Core", swiftFileContent: [Self.core]),
+			ModuleFixture(name: "Feed", packageName: "Feed", swiftFileContent: [
+				"""
+				import Core
+				import SafeDI
+
+				@Instantiable
+				public final class Leaf: Instantiable {
+				    init(api: any Api) {
+				        self.api = api
+				    }
+
+				    @Instantiated public let api: any Api
+				}
+
+				@Instantiable
+				public final class Panel: Instantiable {
+				    init(leafBuilder: Instantiator<Leaf>) {
+				        self.leafBuilder = leafBuilder
+				    }
+
+				    @Instantiated public let leafBuilder: Instantiator<Leaf>
+				}
+
+				@Instantiable
+				public final class Detail: Instantiable {
+				    init(leafBuilder: Instantiator<Panel>) {
+				        self.leafBuilder = leafBuilder
+				    }
+
+				    @Instantiated public let leafBuilder: Instantiator<Panel>
+				}
+
+				@Instantiable(generateMock: .public)
+				public final class Page: Instantiable {
+				    init(panelBuilder: Instantiator<Panel>, detailBuilder: Instantiator<Detail>) {
+				        self.panelBuilder = panelBuilder
+				        self.detailBuilder = detailBuilder
+				    }
+
+				    @Instantiated public let panelBuilder: Instantiator<Panel>
+				    @Instantiated public let detailBuilder: Instantiator<Detail>
+				}
+				""",
+			], dependencies: ["Core"]),
+			ModuleFixture(name: "App", packageName: "App", swiftFileContent: [Self.live, Self.root(holding: "page: Page")].map { "import Core\nimport Feed\nimport SafeDI\n\n" + $0 }, dependencies: ["Core", "Feed"]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["Feed"]?.generatedFiles == ["Feed.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Page {
+		    nonisolated public enum SafeDIMockScope_Api {
+		        nonisolated public struct panelBuilder_Values {}
+
+		        nonisolated public struct detailBuilder_Values {
+		            public let panelBuilder: Instantiator<Panel>
+		        }
+
+		        nonisolated public enum Panel_Scope {
+		            nonisolated public struct leafBuilder_Values {}
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let leafBuilder: (leafBuilder_Values) -> SafeDIMockScope_Api.Leaf_Scope.__safeDI_Builder<__safeDI_Built>
+
+		                public init(leafBuilder: @escaping (leafBuilder_Values) -> SafeDIMockScope_Api.Leaf_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                    self.leafBuilder = leafBuilder
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                    self.init(leafBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
+		                }
+		            }
+		        }
+
+		        nonisolated public enum Detail_Scope {
+		            nonisolated public struct leafBuilder_Values {}
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let leafBuilder: (leafBuilder_Values) -> SafeDIMockScope_Api.Panel_Scope.__safeDI_Builder<__safeDI_Built>
+
+		                public init(leafBuilder: @escaping (leafBuilder_Values) -> SafeDIMockScope_Api.Panel_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                    self.leafBuilder = leafBuilder
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                    self.init(leafBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
+		                }
+		            }
+		        }
+
+		        nonisolated public enum Leaf_Scope {
+		            nonisolated public struct api_Values {}
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let api: (api_Values) -> __safeDI_Built
+
+		                public init(api: @escaping (api_Values) -> __safeDI_Built) {
+		                    self.api = api
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                    self.init(api: { _ in __safeDI_builder() })
+		                }
+		            }
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let panelBuilder: (panelBuilder_Values) -> SafeDIMockScope_Api.Panel_Scope.__safeDI_Builder<__safeDI_Built>
+		            public let detailBuilder: (detailBuilder_Values) -> SafeDIMockScope_Api.Detail_Scope.__safeDI_Builder<__safeDI_Built>
+
+		            public init(panelBuilder: @escaping (panelBuilder_Values) -> SafeDIMockScope_Api.Panel_Scope.__safeDI_Builder<__safeDI_Built>, detailBuilder: @escaping (detailBuilder_Values) -> SafeDIMockScope_Api.Detail_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                self.panelBuilder = panelBuilder
+		                self.detailBuilder = detailBuilder
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.init(panelBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) }, detailBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
+		            }
+		        }
+		    }
+
+		    /// Overrides for the mock dependency tree.
+		    nonisolated public struct SafeDIOverrides {
+		        public init(
+		            panelBuilder: __safeDI_Feed_Panel_MockConfiguration = .init(),
+		            detailBuilder: __safeDI_Feed_Detail_MockConfiguration = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                panelBuilder: panelBuilder,
+		                detailBuilder: detailBuilder
+		            )
+		        }
+
+		        public var panelBuilder: __safeDI_Feed_Panel_MockConfiguration { __safeDI_storage.panelBuilder }
+		        public var detailBuilder: __safeDI_Feed_Detail_MockConfiguration { __safeDI_storage.detailBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                panelBuilder: __safeDI_Feed_Panel_MockConfiguration,
+		                detailBuilder: __safeDI_Feed_Detail_MockConfiguration
+		            ) {
+		                self.panelBuilder = panelBuilder
+		                self.detailBuilder = detailBuilder
+		            }
+
+		            let panelBuilder: __safeDI_Feed_Panel_MockConfiguration
+		            let detailBuilder: __safeDI_Feed_Detail_MockConfiguration
+		        }
+		    }
+
+		    // SafeDI counts `Api` as `public`: no module it reads declares it narrower. If `Api` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
+		    public static func mock(
+		        apiBuilder: @escaping () -> any Api,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Page {
+		        Page.__safeDI_mock(apiBuilder: .init(__safeDI_noScope: apiBuilder), safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        apiBuilder __safeDI_apiBuilder: Page.SafeDIMockScope_Api.__safeDI_Builder<any Api>,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Page {
+		        let __safeDI_apiBuilder_panelBuilder = __safeDI_apiBuilder.panelBuilder(SafeDIMockScope_Api.panelBuilder_Values())
+		        func __safeDI_panelBuilder() -> Panel {
+		            let __safeDI_apiBuilder_leafBuilder_ = __safeDI_apiBuilder_panelBuilder.leafBuilder(SafeDIMockScope_Api.Panel_Scope.leafBuilder_Values())
+		            func __safeDI_leafBuilder() -> Leaf {
+		                let api: any Api = __safeDI_apiBuilder_leafBuilder_.api(SafeDIMockScope_Api.Leaf_Scope.api_Values())
+		                return if let safeDIBuilder = safeDIOverrides.panelBuilder.leafBuilder { safeDIBuilder(api) } else { Leaf(api: api) }
+		            }
+		            let leafBuilder = Instantiator<Leaf>(__safeDI_leafBuilder)
+		            return Panel.__safeDI_init(leafBuilder: leafBuilder, safeDIBuilder: safeDIOverrides.panelBuilder.safeDIBuilder)
+		        }
+		        let panelBuilder = Instantiator<Panel>(__safeDI_panelBuilder)
+		        let __safeDI_apiBuilder_detailBuilder = __safeDI_apiBuilder.detailBuilder(SafeDIMockScope_Api.detailBuilder_Values(panelBuilder: panelBuilder))
+		        func __safeDI_detailBuilder() -> Detail {
+		            let __safeDI_apiBuilder_leafBuilder = __safeDI_apiBuilder_detailBuilder.leafBuilder(SafeDIMockScope_Api.Detail_Scope.leafBuilder_Values())
+		            func __safeDI_leafBuilder() -> Panel {
+		                let __safeDI_apiBuilder_leafBuilder_ = __safeDI_apiBuilder_leafBuilder.leafBuilder(SafeDIMockScope_Api.Panel_Scope.leafBuilder_Values())
+		                func __safeDI_leafBuilder() -> Leaf {
+		                    let api: any Api = __safeDI_apiBuilder_leafBuilder_.api(SafeDIMockScope_Api.Leaf_Scope.api_Values())
+		                    return if let safeDIBuilder = safeDIOverrides.detailBuilder.leafBuilder.leafBuilder { safeDIBuilder(api) } else { Leaf(api: api) }
+		                }
+		                let leafBuilder = Instantiator<Leaf>(__safeDI_leafBuilder)
+		                return Panel.__safeDI_init(leafBuilder: leafBuilder, safeDIBuilder: safeDIOverrides.detailBuilder.leafBuilder.safeDIBuilder)
+		            }
+		            let leafBuilder = Instantiator<Panel>(__safeDI_leafBuilder)
+		            return Detail.__safeDI_init(leafBuilder: leafBuilder, safeDIBuilder: safeDIOverrides.detailBuilder.safeDIBuilder)
+		        }
+		        let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
+		        return Page(panelBuilder: panelBuilder, detailBuilder: detailBuilder)
+		    }
+		}
+
+		extension Page {
+		    public enum __safeDI_Page_mock_624764CC06F81DEA {}
+		}
+		#endif
+
+		#if DEBUG
+		/// Configuration for how `Panel` is constructed within the public mock trees of module `Feed`.
+		nonisolated public struct __safeDI_Feed_Panel_MockConfiguration {
+		    public init(
+		        leafBuilder: ((any Api) -> Leaf)? = nil,
+		        _ safeDIBuilder: ((Instantiator<Leaf>) -> Panel)? = nil
+		    ) {
+		        __safeDI_storage = __safeDI_Storage(
+		            leafBuilder: leafBuilder,
+		            safeDIBuilder: safeDIBuilder
+		        )
+		    }
+
+		    public var leafBuilder: ((any Api) -> Leaf)? { __safeDI_storage.leafBuilder }
+		    /// Overrides how `Panel` is constructed. Parameters match the type’s initializer or custom mock method.
+		    public var safeDIBuilder: ((Instantiator<Leaf>) -> Panel)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            leafBuilder: ((any Api) -> Leaf)?,
+		            safeDIBuilder: ((Instantiator<Leaf>) -> Panel)?
+		        ) {
+		            self.leafBuilder = leafBuilder
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let leafBuilder: ((any Api) -> Leaf)?
+		        let safeDIBuilder: ((Instantiator<Leaf>) -> Panel)?
+		    }
+		}
+
+		extension Panel {
+		    static func __safeDI_init(leafBuilder: Instantiator<Leaf>, safeDIBuilder: ((Instantiator<Leaf>) -> Panel)?) -> Panel {
+		        if let safeDIBuilder { safeDIBuilder(leafBuilder) } else { Panel(leafBuilder: leafBuilder) }
+		    }
+		}
+
+		/// Configuration for how `Detail` is constructed within the public mock trees of module `Feed`.
+		nonisolated public struct __safeDI_Feed_Detail_MockConfiguration {
+		    public init(
+		        leafBuilder: __safeDI_Feed_Panel_MockConfiguration = .init(),
+		        _ safeDIBuilder: ((Instantiator<Panel>) -> Detail)? = nil
+		    ) {
+		        __safeDI_storage = __safeDI_Storage(
+		            leafBuilder: leafBuilder,
+		            safeDIBuilder: safeDIBuilder
+		        )
+		    }
+
+		    public var leafBuilder: __safeDI_Feed_Panel_MockConfiguration { __safeDI_storage.leafBuilder }
+		    /// Overrides how `Detail` is constructed. Parameters match the type’s initializer or custom mock method.
+		    public var safeDIBuilder: ((Instantiator<Panel>) -> Detail)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            leafBuilder: __safeDI_Feed_Panel_MockConfiguration,
+		            safeDIBuilder: ((Instantiator<Panel>) -> Detail)?
+		        ) {
+		            self.leafBuilder = leafBuilder
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let leafBuilder: __safeDI_Feed_Panel_MockConfiguration
+		        let safeDIBuilder: ((Instantiator<Panel>) -> Detail)?
+		    }
+		}
+
+		extension Detail {
+		    static func __safeDI_init(leafBuilder: Instantiator<Panel>, safeDIBuilder: ((Instantiator<Panel>) -> Detail)?) -> Detail {
+		        if let safeDIBuilder { safeDIBuilder(leafBuilder) } else { Detail(leafBuilder: leafBuilder) }
+		    }
+		}
+		#endif
+
+		"""])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(Feed)
+		import Feed
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            page: Page.SafeDIOverrides = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                page: page
+		            )
+		        }
+
+		        var page: Page.SafeDIOverrides { __safeDI_storage.page }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                page: Page.SafeDIOverrides
+		            ) {
+		                self.page = page
+		            }
+
+		            let page: Page.SafeDIOverrides
+		        }
+		    }
+
+		    static func mock(
+		        apiBuilder: (() -> any Api)? = nil,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        func __safeDI_page() -> Page {
+		            func __safeDI_apiBuilder_Page() -> Page.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
+		                .init(panelBuilder: { _ in __safeDI_apiBuilder_Page_Panel_Scope() }, detailBuilder: { _ in __safeDI_apiBuilder_Page_Detail_Scope() })
+		            }
+		            func __safeDI_apiBuilder_Page_Panel_Scope() -> Page.SafeDIMockScope_Api.Panel_Scope.__safeDI_Builder<any Api> {
+		                .init(leafBuilder: { _ in __safeDI_apiBuilder_Page_Leaf_Scope() })
+		            }
+		            func __safeDI_apiBuilder_Page_Leaf_Scope() -> Page.SafeDIMockScope_Api.Leaf_Scope.__safeDI_Builder<any Api> {
+		                .init(api: { _ in
+		                    let api: any Api = Live()
+		                    return api
+		                })
+		            }
+		            func __safeDI_apiBuilder_Page_Detail_Scope() -> Page.SafeDIMockScope_Api.Detail_Scope.__safeDI_Builder<any Api> {
+		                .init(leafBuilder: { _ in __safeDI_apiBuilder_Page_Panel_Scope() })
+		            }
+		            _ = Page.__safeDI_Page_mock_624764CC06F81DEA.self // If this line does not compile, compile the code SafeDI generates for module Feed into Feed: under Bazel, add Feed’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return Page.__safeDI_mock(apiBuilder: apiBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_apiBuilder_Page(), safeDIOverrides: safeDIOverrides.page)
+		        }
+		        let page: Page = __safeDI_page()
+		        return Root(page: page)
+		    }
+		}
+		#endif
+		"""])
+	}
+
 	// MARK: Tests – a call that fills every place
 
 	@Test
@@ -2140,14 +2507,17 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        apiBuilder: (() -> any Api)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
+		        func __safeDI_fillBody_6E0C0CA2ACF9D10F() -> any Api {
+		            func __safeDI_api() -> Live {
+		                let tracker = Tracker()
+		                return Live(tracker: tracker)
+		            }
+		            let api: any Api = __safeDI_api()
+		            return api
+		        }
 		        func __safeDI_page() -> Page {
 		            func __safeDI_apiBuilder_Page_Leaf_Scope_api(_ scope: Page.SafeDIMockScope_Api.Leaf_Scope.api_Values) -> any Api {
-		                func __safeDI_api() -> Live {
-		                    let tracker = Tracker()
-		                    return Live(tracker: tracker)
-		                }
-		                let api: any Api = __safeDI_api()
-		                return api
+		                return __safeDI_fillBody_6E0C0CA2ACF9D10F()
 		            }
 		            func __safeDI_apiBuilder_Page() -> Page.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
 		                .init(detailBuilder: { _ in __safeDI_apiBuilder_Page_Detail_Scope() })
@@ -2584,10 +2954,13 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        apiBuilder: (() -> any Api)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
+		        func __safeDI_fillBody_D559B1DD4A7F3625() -> any Api {
+		            let api: any Api = Live()
+		            return api
+		        }
 		        func __safeDI_detail() -> Detail {
 		            func __safeDI_apiBuilder_Detail_api() -> any Api {
-		                let api: any Api = Live()
-		                return api
+		                return __safeDI_fillBody_D559B1DD4A7F3625()
 		            }
 		            func __safeDI_apiBuilder_Detail() -> Detail.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
 		                .init(api: { _ in __safeDI_apiBuilder_Detail_api() })
@@ -3860,12 +4233,15 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        liveGadget_AnyGadgetBuilder: (() -> AnyGadget)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
+		        func __safeDI_fillBody_03F6D374C8322DA3() -> ErasedInstantiator<(), AnyGadget>.Builder {
+		            func __safeDI_gadgetBuilder() -> LiveGadget {
+		                LiveGadget()
+		            }
+		            return { _ in AnyGadget(__safeDI_gadgetBuilder()) }
+		        }
 		        func __safeDI_panel() -> Panel {
 		            func __safeDI_liveGadget_AnyGadgetBuilder_Panel_gadgetBuilder() -> ErasedInstantiator<(), AnyGadget>.Builder {
-		                func __safeDI_gadgetBuilder() -> LiveGadget {
-		                    LiveGadget()
-		                }
-		                return { _ in AnyGadget(__safeDI_gadgetBuilder()) }
+		                return __safeDI_fillBody_03F6D374C8322DA3()
 		            }
 		            func __safeDI_apiBuilder_Panel() -> Panel.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
 		                .init(api: { _ in
@@ -4992,12 +5368,15 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        let __safeDI_heldBuilder__safeDIBuilder = safeDIOverrides.heldBuilder
 		        @Sendable nonisolated func __safeDI_heldBuilder() -> Panel {
 		            func __safeDI_serviceBuilder_Panel_service() -> any Service {
-		                func __safeDI_service() -> DefaultService {
-		                    let tracker = Tracker()
-		                    return DefaultService(tracker: tracker)
+		                func __safeDI_fillBody_C3BC80AAD1E754D7() -> any Service {
+		                    func __safeDI_service() -> DefaultService {
+		                        let tracker = Tracker()
+		                        return DefaultService(tracker: tracker)
+		                    }
+		                    let service: any Service = __safeDI_service()
+		                    return service
 		                }
-		                let service: any Service = __safeDI_service()
-		                return service
+		                return __safeDI_fillBody_C3BC80AAD1E754D7()
 		            }
 		            func __safeDI_serviceBuilder_Panel() -> Panel.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 		                .init(service: { _ in __safeDI_serviceBuilder_Panel_service() })
@@ -5105,12 +5484,15 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        let __safeDI_heldBuilder__safeDIBuilder = safeDIOverrides.heldBuilder
 		        @Sendable nonisolated func __safeDI_heldBuilder() -> Panel {
 		            func __safeDI_serviceBuilder_Panel_service() -> any Service {
-		                func __safeDI_service() -> DefaultService {
-		                    let tracker = Tracker()
-		                    return DefaultService(tracker: tracker)
+		                func __safeDI_fillBody_C3BC80AAD1E754D7() -> any Service {
+		                    func __safeDI_service() -> DefaultService {
+		                        let tracker = Tracker()
+		                        return DefaultService(tracker: tracker)
+		                    }
+		                    let service: any Service = __safeDI_service()
+		                    return service
 		                }
-		                let service: any Service = __safeDI_service()
-		                return service
+		                return __safeDI_fillBody_C3BC80AAD1E754D7()
 		            }
 		            func __safeDI_serviceBuilder_Panel() -> Panel.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 		                .init(service: { _ in __safeDI_serviceBuilder_Panel_service() })

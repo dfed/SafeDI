@@ -27,7 +27,7 @@ extension TypeKeyLayout {
 			.statement(owner: owner, index: position)
 		} else if owner == 0 {
 			.none
-		} else if representative(of: owner)?.parameterProperties.contains(where: { $0.label == label }) == true {
+		} else if parameterLabelsByClass[owner].contains(label) {
 			.forwarded(owner: owner, label: label)
 		} else if outcomes[owner][label] == .passed {
 			.read(owner: owner, label: label)

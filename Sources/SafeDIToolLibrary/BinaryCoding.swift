@@ -102,7 +102,7 @@ enum BinaryLayout<Member>: CustomStringConvertible {
 	var description: String {
 		switch self {
 		case let .structure(fields, _):
-			fields.map { "\($0.name): \(String(reflecting: $0.type))" }.joined(separator: ", ")
+			fields.map { "\($0.name): \(String(reflecting: $0.type))\($0.isAbsentWhenEmpty ? " absent when empty" : "")" }.joined(separator: ", ")
 		case let .enumeration(cases):
 			cases.map(\.description).joined(separator: ", ")
 		}
@@ -119,6 +119,19 @@ struct BinaryLayoutField<Member> {
 		self.name = name
 		self.keyPath = keyPath
 		type = Value.self
+		isAbsentWhenEmpty = false
+	}
+
+	/// A list a struct that writes field flags writes as a flag alone when it is empty
+	/// (``BinaryWriter/writeAbsentWhenEmpty(_:flaggedIn:)``).
+	/// - Parameters:
+	///   - name: The stored property the field writes.
+	///   - keyPath: The list the field writes.
+	init<Element: BinaryCodable>(_ name: String, absentWhenEmpty keyPath: KeyPath<Member, [Element]>) {
+		self.name = name
+		self.keyPath = keyPath
+		type = [Element].self
+		isAbsentWhenEmpty = true
 	}
 
 	let name: String
@@ -126,6 +139,9 @@ struct BinaryLayoutField<Member> {
 	let keyPath: PartialKeyPath<Member>
 	/// The type the field is written and read as.
 	let type: any BinaryCodable.Type
+	/// Whether the field is a list written as a flag alone when it is empty, which the schema states: a file that
+	/// writes the list with its count is another layout.
+	let isAbsentWhenEmpty: Bool
 }
 
 /// A case an enum writes.
@@ -328,6 +344,15 @@ struct BinaryWriter {
 			write(value)
 		} else {
 			flags.append(false)
+		}
+	}
+
+	/// Writes a list field of a struct that writes its fields' flags: whether it holds an element as a flag, and then
+	/// the list only when it does. A list most records hold empty then costs a bit where its count cost a byte.
+	mutating func writeAbsentWhenEmpty(_ list: [some BinaryCodable], flaggedIn flags: inout BinaryFieldFlags) {
+		flags.append(!list.isEmpty)
+		if !list.isEmpty {
+			write(list)
 		}
 	}
 
@@ -980,6 +1005,15 @@ struct BinaryReader {
 			try read() as Wrapped
 		} else {
 			nil
+		}
+	}
+
+	/// Reads a list field that ``BinaryWriter/writeAbsentWhenEmpty(_:flaggedIn:)`` wrote.
+	mutating func readAbsentWhenEmpty<Element: BinaryCodable>(flaggedIn flags: inout BinaryFieldFlagsReader) throws(BinaryDecodingError) -> [Element] {
+		if flags.next() {
+			try read() as [Element]
+		} else {
+			[]
 		}
 	}
 

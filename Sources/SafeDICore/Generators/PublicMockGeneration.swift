@@ -388,6 +388,9 @@ struct PublicMockPlan: Sendable {
 	var builders = [SeamSignature.Builder]()
 	/// Every enum the builders reach: the mock's own, then those their cases hold.
 	var scopeEnums = [SeamSignature.ScopeEnum]()
+	/// The mock's place graph, while the tests observe it, and each of `holes`' case in it: -1 for a place a call passes up.
+	var places = SeamSignature.Places(levels: [], cases: [])
+	var caseIndexByHole = [Int]()
 
 	/// The parameters the tier at `tier` takes, under that tier's names.
 	func parameters(ofTier tier: AccessLevel) -> [PublicMockParameter] {
@@ -725,6 +728,10 @@ extension ScopeGenerator {
 		plan.holes = holes
 		plan.builders = builders
 		plan.scopeEnums = shapedBuilders?.scopeEnums ?? []
+		if let shapedBuilders, !shapedBuilders.places.cases.isEmpty {
+			plan.places = shapedBuilders.places
+			plan.caseIndexByHole = holes.map { shapedBuilders.caseIndexBySite[$0.site] ?? -1 }
+		}
 		return plan
 	}
 
@@ -1397,6 +1404,8 @@ extension StoredPublicMockPlan {
 			holes: ownPlan.plan.holes,
 			builders: ownPlan.plan.builders,
 			scopeEnums: ownPlan.plan.scopeEnums,
+			places: ownPlan.plan.places,
+			caseIndexByHole: ownPlan.plan.caseIndexByHole,
 			receivers: receivers,
 			typesDeclaredEscaping: ownPlan.typesDeclaredEscaping.filter(parameterTypes.contains).sorted(),
 		)

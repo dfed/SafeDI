@@ -38,7 +38,7 @@
 public struct SeamSignature: Sendable {
 	/// A receive inside a seam's tree that a pass-through parameter fulfills: what a seam that passes the parameter
 	/// on reports when a tier of its own cannot take it.
-	public struct Receiver: Codable, Sendable {
+	public struct Receiver: Codable, Hashable, Sendable {
 		public init(property: Property, declaringType: TypeDescription, declarationLocation: Dependency.DeclarationLocation?, access: AccessLevel, aliasProperty: Property? = nil, isInstantiateMethodParameter: Bool = false) {
 			self.property = property
 			self.declaringType = declaringType
@@ -238,7 +238,7 @@ public struct SeamSignature: Sendable {
 		}
 
 		/// A value in scope at the site, which the scope struct the builder is handed carries.
-		public struct Field: Codable, Sendable {
+		public struct Field: Codable, Hashable, Sendable {
 			public init(property: Property, access: AccessLevel, accessCause: TypeAccessProof.Cause? = nil, declaringType: TypeDescription, declarationLocation: Dependency.DeclarationLocation?, isReceivedOnlyIfAvailable: Bool = false, parameterTakingType: TypeDescription? = nil, deferral: Parameter.Deferral = .none, bindsMemo: Bool = false, isSeamParameter: Bool = false, isBoundByPublicMockRoot: Bool = false, seamParameterOrigin: SeamParameterOrigin? = nil) {
 				self.property = property
 				self.isBoundByPublicMockRoot = isBoundByPublicMockRoot
@@ -261,7 +261,7 @@ public struct SeamSignature: Sendable {
 			/// that seam, whose parameter the field still is. A fill whose tree receives the label in a form no one parameter
 			/// takes together with the parameter's gives that seam's tree the label in two forms, which the seam reports
 			/// where it sees both.
-			public struct SeamParameterOrigin: Codable, Sendable {
+			public struct SeamParameterOrigin: Codable, Hashable, Sendable {
 				public init(seamType: TypeDescription, seamDeclarationLocation: Dependency.DeclarationLocation?, isPassThrough: Bool, receivers: [Receiver]) {
 					self.seamType = seamType
 					self.seamDeclarationLocation = seamDeclarationLocation
@@ -354,7 +354,7 @@ public struct SeamSignature: Sendable {
 		/// A declaration on the site's path whose label a fill cannot read from the scope struct: the nearest declaration
 		/// of its label is bound after the site. A fill whose tree receives such a label is an error, since inline the
 		/// receive reads that declaration.
-		public struct UncarriedDeclaration: Codable, Sendable {
+		public struct UncarriedDeclaration: Codable, Hashable, Sendable {
 			/// A value holding each stored property as given, which a module info file reads back.
 			public init(storing property: Property, declaringType: TypeDescription, declarationLocation: Dependency.DeclarationLocation?, parameterTakingType: TypeDescription?, builtAfter: Property?, reason: Reason, isBoundFromCallersArgument: Bool, isBuildableAboveSeam: Bool, labelsHeldAboveSeam: Set<String>, placesInTree: [Site], holdsPlaceFilledElsewhere: Bool) {
 				self.property = property
@@ -381,7 +381,7 @@ public struct SeamSignature: Sendable {
 			}
 
 			/// Why the declaration is bound after the site.
-			public enum Reason: Codable, Sendable {
+			public enum Reason: Codable, Hashable, Sendable {
 				/// Its type receives `builtAfter`, the scope on the site's path, only if available.
 				case receivesPathScopeOnlyIfAvailable(type: TypeDescription)
 				/// Its type requires `carrier`, a sibling that holds another site.
@@ -405,7 +405,7 @@ public struct SeamSignature: Sendable {
 			}
 
 			/// The `@Sendable` function a place is built inside, which decides whether a value can be forwarded into it.
-			public enum SendableFunction: Codable, Sendable {
+			public enum SendableFunction: Codable, Hashable, Sendable {
 				/// The builder function of an instantiator, which builds `builtType` and takes its forwarded properties.
 				case instantiator(builtType: TypeDescription)
 				/// The builder function of a `SendableLazilyInstantiated`, which builds `builtType`, and would take its forwarded
@@ -420,7 +420,7 @@ public struct SeamSignature: Sendable {
 
 			/// An alias that binds a label to another property than the one of its own label: `fulfillingProperty`, the
 			/// caller's where `isSeams`, the seam's own alias, and otherwise a property of the seam's tree.
-			public struct AliasOrigin: Codable, Sendable {
+			public struct AliasOrigin: Codable, Hashable, Sendable {
 				public init(fulfillingProperty: Property, isSeams: Bool) {
 					self.fulfillingProperty = fulfillingProperty
 					self.isSeams = isSeams
@@ -433,7 +433,7 @@ public struct SeamSignature: Sendable {
 			/// A parameter of the builder function of `takingType` that a lazy cycle closes on: a cycle inside `takingType`'s
 			/// tree passes it the `property` that `declaringType` declares, or forwards where `isForwarded`, at
 			/// `declarationLocation`.
-			public struct CycleParameterOrigin: Codable, Sendable {
+			public struct CycleParameterOrigin: Codable, Hashable, Sendable {
 				public init(takingType: TypeDescription, property: Property, declaringType: TypeDescription, declarationLocation: Dependency.DeclarationLocation?, isForwarded: Bool) {
 					self.takingType = takingType
 					self.property = property
@@ -451,7 +451,7 @@ public struct SeamSignature: Sendable {
 
 			/// The place a call presents whose builder a seam passes up, which a message about a declaration bound on the path
 			/// to that call names: a place inside a fill inherits what the place the fill fills does not carry.
-			public struct PresentedPlace: Codable, Sendable {
+			public struct PresentedPlace: Codable, Hashable, Sendable {
 				/// A value holding each stored property as given, which a module info file reads back.
 				public init(storing seamType: TypeDescription, ownerType: TypeDescription, property: Property, instantiatedType: TypeDescription, builderLabel: String, caseName: String?, isBuiltBySendableBuilder: Bool) {
 					self.seamType = seamType
@@ -578,7 +578,7 @@ public struct SeamSignature: Sendable {
 		/// no field of, nor any scope between that fill's root and the place declares. A field of the label bound above the
 		/// seam call does not lift it, a deliberate loss of a shape inline builds correctly, until each route is handed its own
 		/// value.
-		public struct ReenteringCallDeclaration: Codable, Sendable {
+		public struct ReenteringCallDeclaration: Codable, Hashable, Sendable {
 			public init(property: Property, declaringType: TypeDescription, declarationLocation: Dependency.DeclarationLocation?, pathPlace: UncarriedDeclaration.PresentedPlace, callingType: TypeDescription, callProperty: Property, calledSeam: TypeDescription, reenteredPlace: UncarriedDeclaration.PresentedPlace, reenteredSeamModule: ModuleIdentity, fillingModule: ModuleIdentity) {
 				self.property = property
 				self.declaringType = declaringType
@@ -613,7 +613,7 @@ public struct SeamSignature: Sendable {
 		/// A field, not bound from a seam parameter, of the place whose fill makes a call that builds the filled seam again and
 		/// passes a fill of the same seam call on, with that call: inline, the seam built again sits beneath that place, so a
 		/// read of the label the passed fill makes from the caller's scope finds the field.
-		public struct FieldOfReenteringPlace: Codable, Sendable {
+		public struct FieldOfReenteringPlace: Codable, Hashable, Sendable {
 			public init(field: Field, reenteringPlace: UncarriedDeclaration.PresentedPlace, callProperty: Property, calledSeam: TypeDescription) {
 				self.field = field
 				self.reenteringPlace = reenteringPlace
@@ -636,7 +636,7 @@ public struct SeamSignature: Sendable {
 		/// field, cycle re-entry or uncarried declaration of, that no scope between that fill's root and the place declares, and
 		/// that no declaration on the path to the call hides (`ReenteringCallDeclaration`, which the visible build reports
 		/// first). A field of the label bound above the seam call does not lift it, as for `ReenteringCallDeclaration`.
-		public struct ReenteringPlaceField: Codable, Sendable {
+		public struct ReenteringPlaceField: Codable, Hashable, Sendable {
 			public init(carried: FieldOfReenteringPlace, reenteredPlace: UncarriedDeclaration.PresentedPlace, reenteredSeamModule: ModuleIdentity, fillingModule: ModuleIdentity) {
 				self.carried = carried
 				self.reenteredPlace = reenteredPlace
@@ -677,7 +677,7 @@ public struct SeamSignature: Sendable {
 		}
 
 		/// A type on the way from the seam that takes a hole's builder to the hole's owner, with the module that declares it.
-		public struct PathType: Codable, Sendable {
+		public struct PathType: Codable, Hashable, Sendable {
 			public init(type: TypeDescription, moduleName: String?) {
 				self.type = type
 				self.moduleName = moduleName
@@ -1319,6 +1319,23 @@ public struct SeamSignature: Sendable {
 				func named(_ bindingName: String) -> Member {
 					Member(bindingName: bindingName, valuesType: valuesType, fields: fields, levelType: levelType, bindingPathLength: bindingPathLength, isCalledInsideFunction: isCalledInsideFunction)
 				}
+
+				/// The member call made for the property `length` properties from the seam's root lead to: the only part of a
+				/// member call the path it is on decides.
+				func atBindingPathLength(_ length: Int) -> Member {
+					Member(bindingName: bindingName, valuesType: valuesType, fields: fields, levelType: levelType, bindingPathLength: length, isCalledInsideFunction: isCalledInsideFunction)
+				}
+			}
+
+			/// This step with its inner scope bound at the property `length` properties from the seam's root lead to: the only
+			/// part of a step the path it is on decides.
+			public func atBindingPathLength(_ length: Int) -> Self {
+				Self(
+					caseName: caseName,
+					values: values,
+					innerScope: innerScope.map { InnerScope(callPathLength: length, innerKey: $0.innerKey, enumType: $0.enumType, builderLabel: $0.builderLabel, name: $0.name) },
+					leadsIntoFill: leadsIntoFill,
+				)
 			}
 
 			/// A case's payload on a route: the name the seam's tree binds it under, before the case's property is built, the
@@ -1395,7 +1412,7 @@ public struct SeamSignature: Sendable {
 
 		/// A property on the way to a site, the type that declares it, and where, when that is known. For a property of a
 		/// protocol's fulfiller, the type is the fulfiller, which the property's type does not name.
-		public struct DeclaredProperty: Codable, Sendable {
+		public struct DeclaredProperty: Codable, Hashable, Sendable {
 			public init(property: Property, declaringType: TypeDescription?, declarationLocation: Dependency.DeclarationLocation?) {
 				self.property = property
 				self.declaringType = declaringType
@@ -1457,8 +1474,10 @@ public struct SeamSignature: Sendable {
 		}
 	}
 
-	public init(seamType: TypeDescription, parameters: [Parameter], tiers: [AccessLevel], noTierParameters: [Parameter] = [], holes: [Hole] = [], builders: [Builder] = [], scopeEnums: [ScopeEnum] = [], typesDeclaredEscaping: Set<TypeDescription> = []) {
+	public init(seamType: TypeDescription, parameters: [Parameter], tiers: [AccessLevel], noTierParameters: [Parameter] = [], holes: [Hole] = [], builders: [Builder] = [], scopeEnums: [ScopeEnum] = [], typesDeclaredEscaping: Set<TypeDescription> = [], places: Places = Places(levels: [], cases: []), caseIndexByHole: [Int] = []) {
 		self.seamType = seamType
+		self.places = places
+		self.caseIndexByHole = caseIndexByHole
 		self.parameters = parameters
 		self.tiers = tiers
 		self.noTierParameters = noTierParameters
@@ -1466,8 +1485,9 @@ public struct SeamSignature: Sendable {
 		self.builders = builders
 		self.scopeEnums = scopeEnums
 		self.typesDeclaredEscaping = typesDeclaredEscaping
-		callShape = Self.callShape(parameters: parameters, holes: holes, builders: builders, scopeEnums: scopeEnums, tiers: tiers)
+		callShape = Self.callShape(parameters: parameters, holes: holes, builders: builders, scopeEnums: scopeEnums, tiers: tiers, places: places, caseIndexByHole: caseIndexByHole)
 		guardTypeName = Self.guardTypeName(of: seamType, callShape: callShape)
+		observeCallShapeFold()
 	}
 
 	/// How the seam's tree hands an inner seam's enum up from a call whose case is in an enum nested by type: the call's path,
@@ -1521,14 +1541,62 @@ public struct SeamSignature: Sendable {
 	/// per site. In the order the builders reach them. Kept apart from `parameters`, so a builder is never receivable in the
 	/// seam's own tree.
 	public let holes: [Hole]
+	/// The seam's places by case: the levels of its tree and one case per property of an owner level and family
+	/// (`SeamPlaces.swift`). Held beside the per-site `holes` while their readers move to cases; nothing generated reads it yet.
+	public let places: Places
+	/// The case in `places` of each of `holes`, in its order, or `-1` for a place a call passes up, which is no case yet.
+	public let caseIndexByHole: [Int]
+	/// The seam's places by case, in builder order (`CasePlace.casePlaces(of:caseIndexByHole:)`): what a reader of the
+	/// signature that needs one record per case reads, never `holes` with `caseIndexByHole`. Derived on each read.
+	public var casePlaces: [CasePlace] {
+		CasePlace.casePlaces(of: holes, caseIndexByHole: caseIndexByHole)
+	}
+
+	/// What a module that calls the seam builds its call from: one place per case, the case's first in builder order
+	/// (`casePlaces`), each with its case, and the scope enums with every other place of this signature taken out of the
+	/// place cases that list it. A caller generates one function per case and reads what differs between a case's routes
+	/// from `places`, so it never holds a place per path. A place case of an enum another seam declares lists that
+	/// seam's sites, which are none of this signature's holes and stay. A signature with one place per case already, as
+	/// one whose graph was not built is, hands what it holds. `everyPlace` is this signature's own lists, for the one
+	/// reader that lists a place per path, the drawing of the caller's tree, or `nil` where the caller holds every place.
+	var placesHandedToCallers: (holes: [Hole], scopeEnums: [ScopeEnum], caseIndexByHole: [Int], everyPlace: SeamCall.EveryPlace?) {
+		// A place the seam passes up is handed as it is held, beside its case, until a passed-up case's answers follow its
+		// reference.
+		var handedHoles = [Hole]()
+		var handedCaseIndexByHole = [Int]()
+		// Each place's case, or -1 for a place handed whatever its case, for the drawing.
+		var ownCaseIndexByHole = [Int]()
+		var casesFound = Set<Int>()
+		for (index, hole) in holes.enumerated() {
+			let caseIndex = caseIndexByHole.indices.contains(index) ? caseIndexByHole[index] : -1
+			let isOwnCase = places.cases.indices.contains(caseIndex) && places.cases[caseIndex].passedUp == nil
+			ownCaseIndexByHole.append(isOwnCase ? caseIndex : -1)
+			guard !isOwnCase || casesFound.insert(caseIndex).inserted else { continue }
+			handedHoles.append(hole)
+			handedCaseIndexByHole.append(caseIndex)
+		}
+		guard handedHoles.count < holes.count else { return (holes, scopeEnums, caseIndexByHole, nil) }
+		let droppedSites = Set(holes.map(\.site)).subtracting(handedHoles.map(\.site))
+		var handedEnums = scopeEnums
+		for enumIndex in handedEnums.indices {
+			for caseIndex in handedEnums[enumIndex].cases.indices {
+				if case let .place(sites) = handedEnums[enumIndex].cases[caseIndex].kind {
+					handedEnums[enumIndex].cases[caseIndex].kind = .place(sites: sites.filter { !droppedSites.contains($0) })
+				}
+			}
+		}
+		return (handedHoles, handedEnums, handedCaseIndexByHole, SeamCall.EveryPlace(holes: holes, caseIndexByHole: ownCaseIndexByHole))
+	}
+
 	/// The builders the generated initializer takes, after every parameter and on every tier: per hole type in label order,
 	/// a plain builder over its enum, then a `@Sendable` builder over its enum.
 	public let builders: [Builder]
 	/// This seam's scope enums, then every enum their cases reach, each once.
 	public internal(set) var scopeEnums: [ScopeEnum] {
 		didSet {
-			callShape = Self.callShape(parameters: parameters, holes: holes, builders: builders, scopeEnums: scopeEnums, tiers: tiers)
+			callShape = Self.callShape(parameters: parameters, holes: holes, builders: builders, scopeEnums: scopeEnums, tiers: tiers, places: places, caseIndexByHole: caseIndexByHole)
 			guardTypeName = Self.guardTypeName(of: seamType, callShape: callShape)
+			observeCallShapeFold()
 		}
 	}
 
@@ -1866,13 +1934,27 @@ public struct SeamSignature: Sendable {
 				builderLabel = hole.builderLabel
 				narrowerTierBuilderLabels = TierLabel.sorted(hole.narrowerTierBuilderLabels)
 				tierAccess = hole.tierAccess
-				fields = hole.fields.map { Field(label: $0.property.label, type: $0.property.typeDescription.withoutAny.asSource, access: $0.access) }
+				fields = hole.fields.map(Field.init)
+			}
+
+			/// A case's hole: `hole`, its first place, for the builder, with the case's access and fields.
+			init(_ hole: SeamSignature.Hole, tierAccess: AccessLevel, fields: [Field]) {
+				builderLabel = hole.builderLabel
+				narrowerTierBuilderLabels = TierLabel.sorted(hole.narrowerTierBuilderLabels)
+				self.tierAccess = tierAccess
+				self.fields = fields
 			}
 
 			public struct Field: Hashable, Sendable {
 				public let label: String
 				public let type: String
 				public let access: AccessLevel
+
+				init(_ field: SeamSignature.Hole.Field) {
+					label = field.property.label
+					type = field.property.typeDescription.withoutAny.asSource
+					access = field.access
+				}
 			}
 
 			public let builderLabel: String
@@ -1932,12 +2014,82 @@ public struct SeamSignature: Sendable {
 	/// Computed once per signature, since every tree that reaches the seam reads it, and its guard, from each pass's signature.
 	public private(set) var callShape: CallShape
 
-	private static func callShape(parameters: [Parameter], holes: [Hole], builders: [Builder], scopeEnums: [ScopeEnum], tiers: [AccessLevel]) -> CallShape {
+	private static func callShape(parameters: [Parameter], holes: [Hole], builders: [Builder], scopeEnums: [ScopeEnum], tiers: [AccessLevel], places: Places, caseIndexByHole: [Int]) -> CallShape {
+		CallShape(
+			parameters: parameters.map(CallShape.Parameter.init),
+			holes: callShapeHoles(of: holes, places: places, caseIndexByHole: caseIndexByHole),
+			builders: builders.map(CallShape.Builder.init),
+			scopeEnums: scopeEnumShapes(of: scopeEnums, holes: holes),
+			tiers: tiers,
+		)
+	}
+
+	/// What a call depends on of `holes`: one hole per case of the seam's places (`Places.Case`), in the order of each
+	/// case's first place, with the case's narrowest access. Every place of a case has one owner level and one property,
+	/// so one builder and one access; only the fields can differ between them. An own case's fields are every distinct one
+	/// its places carry (`callShapeFields(ofCaseAt:in:)`). A case a call passes up
+	/// takes its first place's fields, which the signature holds itself: a call shape never reads another seam's graph,
+	/// which a calling module that decodes the signature may not hold. Every place of a signature whose graph was not built
+	/// is a hole of its own.
+	static func callShapeHoles(of holes: [Hole], places: Places, caseIndexByHole: [Int]) -> [CallShape.Hole] {
+		let query = places.cases.isEmpty ? nil : Places.Query(of: places)
+		var casesFound = Set<Int>()
+		var shapeHoles = [CallShape.Hole]()
+		for (index, hole) in holes.enumerated() {
+			guard let query, caseIndexByHole.indices.contains(index), caseIndexByHole[index] >= 0, let access = places.cases[caseIndexByHole[index]].narrowestAccess else {
+				shapeHoles.append(CallShape.Hole(hole))
+				continue
+			}
+			let caseIndex = caseIndexByHole[index]
+			if casesFound.insert(caseIndex).inserted {
+				shapeHoles.append(CallShape.Hole(hole, tierAccess: access.level, fields: places.cases[caseIndex].passedUp == nil ? callShapeFields(ofCaseAt: caseIndex, in: query) : hole.fields.map(CallShape.Hole.Field.init)))
+			}
+		}
+		return shapeHoles
+	}
+
+	/// What a call depends on of the fields the places of the case at `caseIndex` carry: per label in label order
+	/// (`Places.Query.labels(reaching:)`), every distinct field the case's routes carry, in the order of the label's answers
+	/// (`Places.Query.answers(ofLabel:at:)`, the naming route's first), which follows no name.
+	/// Where two routes carry one label as two types (`token: Token` and `token: Token?`), both stay, so the call shape
+	/// tells apart every signature a hole per place would, though the case's scope struct declares one
+	/// (`Places.Query.fields(of:)`).
+	private static func callShapeFields(ofCaseAt caseIndex: Int, in query: Places.Query) -> [CallShape.Hole.Field] {
+		query.labels(reaching: caseIndex).flatMap { label in
+			var fieldsOfLabel = [CallShape.Hole.Field]()
+			for case let .field(level, declaration) in query.answers(ofLabel: label, at: caseIndex) {
+				let field = CallShape.Hole.Field(query.places.declaration(level: level, declaration: declaration).field)
+				if !fieldsOfLabel.contains(field) {
+					fieldsOfLabel.append(field)
+				}
+			}
+			return fieldsOfLabel
+		}
+	}
+
+	/// Test only, deleted before merge: hands the tests this signature's call shape holes beside its holes per site
+	/// (`SeamPlaceLevels.CallShapeFold`), so they check that a hole per case keeps what the holes per site of its case hold.
+	private func observeCallShapeFold() {
+		if let observer = SeamPlaceLevels.observer {
+			var observation = SeamPlaceLevels(seamType: seamType, places: [])
+			observation.callShapeFold = .init(
+				caseHoles: callShape.holes,
+				siteHoles: holes.map(CallShape.Hole.init),
+				caseIndexBySite: caseIndexByHole,
+				caseHasAccess: places.cases.map { $0.narrowestAccess != nil },
+			)
+			observer(observation)
+		}
+	}
+
+	/// Test only, deleted before merge: the call shape with a hole per site, as it was before holes were compared per case,
+	/// which the tests compare the per-case comparison with (`SeamPlaceLevels.CallShapeComparison`).
+	public var callShapeHeldPerSite: CallShape {
 		CallShape(
 			parameters: parameters.map(CallShape.Parameter.init),
 			holes: holes.map(CallShape.Hole.init),
 			builders: builders.map(CallShape.Builder.init),
-			scopeEnums: scopeEnumShapes(of: scopeEnums, holes: holes),
+			scopeEnums: Self.scopeEnumShapes(of: scopeEnums, holes: holes),
 			tiers: tiers,
 		)
 	}
@@ -2132,6 +2284,8 @@ extension SeamSignature: Codable {
 			builders: container.decode([Builder].self, forKey: .builders),
 			scopeEnums: container.decode([ScopeEnum].self, forKey: .scopeEnums),
 			typesDeclaredEscaping: container.decode(Set<TypeDescription>.self, forKey: .typesDeclaredEscaping),
+			places: container.decode(Places.self, forKey: .places),
+			caseIndexByHole: container.decode([Int].self, forKey: .caseIndexByHole),
 		)
 	}
 
@@ -2145,6 +2299,8 @@ extension SeamSignature: Codable {
 		try container.encode(builders, forKey: .builders)
 		try container.encode(scopeEnums, forKey: .scopeEnums)
 		try container.encode(typesDeclaredEscaping.sorted(), forKey: .typesDeclaredEscaping)
+		try container.encode(places, forKey: .places)
+		try container.encode(caseIndexByHole, forKey: .caseIndexByHole)
 	}
 
 	/// The fields a signature is written as: `callShape` and `guardTypeName` are computed from them.
@@ -2157,6 +2313,8 @@ extension SeamSignature: Codable {
 		case builders
 		case scopeEnums
 		case typesDeclaredEscaping
+		case places
+		case caseIndexByHole
 	}
 }
 
@@ -2227,6 +2385,38 @@ struct SeamSignatureHash {
 	}
 }
 
+extension SeamSignature {
+	/// One case of a seam's places as a reader of its signature sees it: the places of one property of one owner level in
+	/// one family (`Places.Case`), which generated code is keyed by, however many paths of the seam's tree reach them.
+	public struct CasePlace: Sendable {
+		/// The case's index in `Places.cases`, or `nil` for a place that is a case of its own: one a call passes up, which
+		/// is no case yet, and every place of a signature whose graph was not built.
+		public let caseIndex: Int?
+		/// The case's first place in builder order, the one `Places.Case.namingRoute` leads to: what is equal at every
+		/// place of the case is read from it, and a name made from a path is made from its path.
+		public let hole: Hole
+
+		/// The cases of `holes`, each at the position of its first place, where `caseIndexByHole` holds the case of each
+		/// hole in the order of `holes` (`SeamSignature.caseIndexByHole`). While a signature holds a hole per site this
+		/// keeps the first hole of each case; once it holds a hole per case, it is `holes`, and only this changes.
+		static func casePlaces(of holes: [Hole], caseIndexByHole: [Int]) -> [CasePlace] {
+			var casesFound = Set<Int>()
+			var casePlaces = [CasePlace]()
+			for (index, hole) in holes.enumerated() {
+				// A signature whose graph was not built names no case, as a place a call passes up has none.
+				guard caseIndexByHole.indices.contains(index), caseIndexByHole[index] >= 0 else {
+					casePlaces.append(CasePlace(caseIndex: nil, hole: hole))
+					continue
+				}
+				if casesFound.insert(caseIndexByHole[index]).inserted {
+					casePlaces.append(CasePlace(caseIndex: caseIndexByHole[index], hole: hole))
+				}
+			}
+			return casePlaces
+		}
+	}
+}
+
 /// How a tree that reaches a seam calls it: the parameters of the tier it calls, the enum the call refers to, and
 /// the comment the call carries saying what to do when it does not compile. A seam whose module SafeDI does not know
 /// is built inline and gets no call.
@@ -2255,9 +2445,13 @@ public struct SeamCall: Sendable {
 		callerModuleName: String? = nil,
 		seamPackageName: String? = nil,
 		callerPackageName: String? = nil,
+		places: SeamSignature.Places = SeamSignature.Places(levels: [], cases: []),
+		caseIndexByHole: [Int] = [],
+		placesOfSeamsBeneath: @escaping @Sendable (SeamSignature.Places.CalledCase) -> SeamSignature.Places.Called?,
+		everyPlace: SeamCall.EveryPlace? = nil,
 	) {
 		self.parameters = parameters
-		calledBuilders = CalledBuilders(holes: holes, builders: builders, scopeEnums: scopeEnums)
+		calledBuilders = CalledBuilders(holes: holes, builders: builders, scopeEnums: scopeEnums, places: places, caseIndexByHole: caseIndexByHole, placesOfSeamsBeneath: placesOfSeamsBeneath, everyPlace: everyPlace)
 		self.guardTypeName = guardTypeName
 		self.comment = comment
 		self.unreachableTierIsReported = unreachableTierIsReported
@@ -2313,20 +2507,48 @@ public struct SeamCall: Sendable {
 
 	/// The builders the call passes, built once with the call.
 	let calledBuilders: CalledBuilders
+
+	/// The places of a called seam, one per path, in the order of the seam's holes, each with its case: what the drawing
+	/// of the calling tree lists (`ScopeGenerator.generateDOT()`), which draws a place per path by Dan's ruling, and
+	/// nothing else reads. Memory: the signature's own two lists, shared with it, never a copy per call. Once a signature
+	/// stores one hole per case, the drawing lists a case's routes from the place graph in their place, and only a run
+	/// that draws the tree walks them.
+	public struct EveryPlace: Sendable {
+		let holes: [SeamSignature.Hole]
+		/// `SeamSignature.caseIndexByHole` of `holes`.
+		let caseIndexByHole: [Int]
+	}
 }
 
 /// The builders a call passes another module's seam or public mock: the builders, every enum they reach, and every place
 /// they reach, in the order they reach them, which the calling module fills or passes up.
 struct CalledBuilders: Sendable {
-	init(holes: [SeamSignature.Hole], builders: [SeamSignature.Builder], scopeEnums: [SeamSignature.ScopeEnum]) {
+	init(
+		holes: [SeamSignature.Hole],
+		builders: [SeamSignature.Builder],
+		scopeEnums: [SeamSignature.ScopeEnum],
+		places: SeamSignature.Places = SeamSignature.Places(levels: [], cases: []),
+		caseIndexByHole: [Int] = [],
+		placesOfSeamsBeneath: @escaping @Sendable (SeamSignature.Places.CalledCase) -> SeamSignature.Places.Called?,
+		everyPlace: SeamCall.EveryPlace? = nil,
+	) {
 		self.holes = holes
 		self.builders = builders
 		self.scopeEnums = scopeEnums
+		self.places = places
+		self.caseIndexByHole = caseIndexByHole
+		self.placesOfSeamsBeneath = placesOfSeamsBeneath
+		self.everyPlace = everyPlace
 		var holeBySite = [SeamSignature.Hole.Site: SeamSignature.Hole]()
-		for hole in holes where holeBySite[hole.site] == nil {
+		var caseIndexBySite = [SeamSignature.Hole.Site: Int]()
+		for (index, hole) in holes.enumerated() where holeBySite[hole.site] == nil {
 			holeBySite[hole.site] = hole
+			if caseIndexByHole.indices.contains(index), caseIndexByHole[index] >= 0 {
+				caseIndexBySite[hole.site] = caseIndexByHole[index]
+			}
 		}
 		self.holeBySite = holeBySite
+		self.caseIndexBySite = caseIndexBySite
 		let enumsByKey = Dictionary(scopeEnums.map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first })
 		self.enumsByKey = enumsByKey
 		carrierValuesBySeam = SeamCarrierValues.bySeam(of: scopeEnums)
@@ -2350,6 +2572,10 @@ struct CalledBuilders: Sendable {
 	let holes: [SeamSignature.Hole]
 	let builders: [SeamSignature.Builder]
 	let scopeEnums: [SeamSignature.ScopeEnum]
+	/// Every place of the called seam, where the call holds one place per case (`SeamSignature.placesHandedToCallers`),
+	/// or `nil` where `holes` is every place.
+	let everyPlace: SeamCall.EveryPlace?
+
 	/// Each enum by its key.
 	let enumsByKey: [SeamSignature.ScopeEnum.Key: SeamSignature.ScopeEnum]
 	/// How each seam's carriers among the enums hand a level's values (`SeamCarrierValues`), by seam; a seam none of whose
@@ -2600,6 +2826,53 @@ struct CalledBuilders: Sendable {
 	/// Each hole by its site, the first of `holes` at a site: found once for the call, never once for each builder whose
 	/// routes are asked for, which grew a call's construction with the square of its hole types.
 	let holeBySite: [SeamSignature.Hole.Site: SeamSignature.Hole]
+	/// The place graph of the called seam (`SeamSignature.places`) or public mock (`StoredPublicMockPlan.places`), which
+	/// answers what the routes to a case hand its places.
+	let places: SeamSignature.Places
+	/// The case in `places` of the place at each site (`SeamSignature.caseIndexByHole`). A place a call passes up, which
+	/// is no case of the graph yet, and every place of a call whose graph was not built, has no entry.
+	let caseIndexBySite: [SeamSignature.Hole.Site: Int]
+	/// The case in `places` of each of `holes` (`SeamSignature.caseIndexByHole`), as given.
+	let caseIndexByHole: [Int]
+	/// The called seam or public mock as a passed-up case of the calling seam refers to it (`Places.CalledCase`): its
+	/// graph, with its places as this call takes them.
+	var called: SeamSignature.Places.Called {
+		SeamSignature.Places.Called(places: places, holes: holes, caseIndexByHole: caseIndexByHole)
+	}
+
+	/// What a case of `places` that the called seam itself passes up refers into (`Places.CalledCase`): the graph and the
+	/// places of a seam the called seam calls, wherever the run holds its signature, or `nil` where it holds none. It
+	/// captures the run's signatures, which live as long as the run.
+	let placesOfSeamsBeneath: @Sendable (SeamSignature.Places.CalledCase) -> SeamSignature.Places.Called?
+
+	/// The case of the place at `site` in the graph of the seam whose tree holds it: for a case of the called seam's own,
+	/// that case of `query`, which is `places`' query; for a place the called seam passes up, the case `query` resolves it to
+	/// (`Query.holdingCase(of:)`). `nil` where `places` holds no case of the place, or the run does not hold the graph of a
+	/// seam on the way.
+	func holdingCase(ofSite site: SeamSignature.Hole.Site, in query: SeamSignature.Places.Query) -> SeamSignature.Places.Query.ResolvedCase? {
+		guard let caseIndex = caseIndexBySite[site] else { return nil }
+		guard places.cases[caseIndex].passedUp != nil else { return SeamSignature.Places.Query.ResolvedCase(query: query, caseIndex: caseIndex) }
+		return query.holdingCase(of: caseIndex)
+	}
+
+	/// The holding case (`holdingCase(ofSite:in:)`) of each of `sites`, each case once, in the order its first site comes,
+	/// or `nil` where one of them has none.
+	func holdingCases(ofSites sites: some Sequence<SeamSignature.Hole.Site>, in query: SeamSignature.Places.Query) -> [SeamSignature.Places.Query.ResolvedCase]? {
+		var holdingCases = [SeamSignature.Places.Query.ResolvedCase]()
+		var seen = Set<HoldingCaseKey>()
+		for site in sites {
+			guard let holding = holdingCase(ofSite: site, in: query) else { return nil }
+			if seen.insert(HoldingCaseKey(holding)).inserted {
+				holdingCases.append(holding)
+			}
+		}
+		return holdingCases
+	}
+
+	/// The query of `places` that resolves the cases the called seam passes up into the graphs of the seams beneath it.
+	var placesQuery: SeamSignature.Places.Query {
+		SeamSignature.Places.Query(of: places, calledPlaces: { [placesOfSeamsBeneath] in placesOfSeamsBeneath($0)?.places })
+	}
 
 	/// The sites of `sites` that a route from the root enum of `rootKey` reaches (see `routesReachOnly(_:by:)`).
 	static func sites(_ sites: Set<SeamSignature.Hole.Site>, onRoutesOf rootKey: SeamSignature.ScopeEnum.Key, holeBySite: [SeamSignature.Hole.Site: SeamSignature.Hole]) -> Set<SeamSignature.Hole.Site> {

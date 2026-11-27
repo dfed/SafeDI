@@ -63,8 +63,10 @@ public struct GenerationWork: Sendable {
 		/// plan node's places that agree on what they read outside it, is laid out once, so the views count, not the places.
 		case layingOutTypeKeyViews
 		/// Finding the root functions a root's body holds (`RootFunctionHoisting`): each level of the plan the walk reads.
-		/// A place records whether a root function is beneath it, so the walk reads no tree of a place that holds none,
-		/// and its levels do not grow with the paths through the tree.
+		/// A place records whether a root function is beneath it, so the walk reads no tree of a place that holds none.
+		/// A root's body is walked once, and the type key's layout reads that walk's result. Where a root reaches a filled
+		/// seam call along many inline paths, each path's places are code of their own, so the levels grow with the paths
+		/// as the generated code does, and no faster.
 		case findingRootFunctions
 		/// Looking a place up in the construction memo (`ConstructionMemo.reuse(of:in:besideCallGenerators:drawing:)`): each
 		/// candidate of the place's key whose log the lookup asks. The candidates are found by what their reads of the
@@ -124,6 +126,18 @@ public struct GenerationWork: Sendable {
 		/// each place the walk visits. The walk enters no tree that holds no call of a seam tier that omits a parameter, and
 		/// in a tree that holds one only a place whose subtree holds such a call or a scope that closes a lazy cycle.
 		case findingSeamTierOmissions
+		/// Walking a tree for the fills `DependencyTreeGenerator.validateFills` judges: each generator the walk visits, each
+		/// child it queues, and each label it carries or clears of what the calls of enclosing public mock calls hide. The
+		/// walk enters only a generator whose subtree holds a call or a fill.
+		case walkingTreeForFills
+		/// Reading what a fill's tree reads outside the fill (`DependencyTreeGenerator.FillTreeReads`), and judging those
+		/// reads against a place (`DependencyTreeGenerator.findingsOfFill`): each scope the walk visits, with the properties
+		/// provided above it and the fill's scopes above it that it hands its children, and each read a judgement takes.
+		case readingFillTrees
+		/// Finding what the calls inside a seam call's fills hide from each fill
+		/// (`DependencyTreeGenerator.hiddenByReenteringCalls(ofFills:)`): each generator of a fill's tree the walk visits, with
+		/// the declarations on its path it hands its children.
+		case findingDeclarationsHiddenByReenteringCalls
 	}
 
 	/// The step that did the work.
