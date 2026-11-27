@@ -657,6 +657,48 @@ struct SafeDIToolReceivedBuilderCycleTests: ~Copyable {
 		])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_rebindsLoopInsideFunctionItsMemberBuildsAgain_whenTypeBeneathMemberClosesCycleOnLoopsEnclosingFunction() async throws {
+		// `F`'s builders `aBuilder` and `bBuilder` receive each other, and `H`, beneath `B`, builds `F` again: `A`'s view
+		// rebinds a sibling whose function closes a cycle beneath its own body, so the type key keys it by its declarations.
+		let output = try await executeSafeDIToolTest(swiftFileContent: [
+			Self.type("Root", attributes: "(isRoot: true)", "@Instantiated let fBuilder: Instantiator<F>"),
+			Self.type("F", "@Instantiated let aBuilder: Instantiator<A>", "@Instantiated let bBuilder: Instantiator<B>"),
+			Self.type("A", "@Received let bBuilder: Instantiator<B>"),
+			Self.type("B", "@Received let aBuilder: Instantiator<A>", "@Instantiated let h: H"),
+			Self.type("H", "@Instantiated let fBuilder: Instantiator<F>"),
+		], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_fBuilder() -> F {
+			            func __safeDI_aBuilder() -> A {
+			                let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			                return A(bBuilder: bBuilder)
+			            }
+			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			            func __safeDI_bBuilder() -> B {
+			                let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			                func __safeDI_h() -> H {
+			                    let fBuilder = Instantiator<F>(__safeDI_fBuilder)
+			                    return H(fBuilder: fBuilder)
+			                }
+			                let h: H = __safeDI_h()
+			                return B(aBuilder: aBuilder, h: h)
+			            }
+			            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			            return F(aBuilder: aBuilder, bBuilder: bBuilder)
+			        }
+			        let fBuilder = Instantiator<F>(__safeDI_fBuilder)
+			        self.init(fBuilder: fBuilder)
+			    }
+			}
+			""",
+		])
+	}
+
 	// MARK: Tests – Sendable builders
 
 	@Test
