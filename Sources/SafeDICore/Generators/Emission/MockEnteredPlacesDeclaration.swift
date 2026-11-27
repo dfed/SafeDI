@@ -18,18 +18,9 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-/// A property of a mock root's tree a path can close on: the property owns one member of the places the root's
-/// functions enter (`ReservedName.mockEnteredPlacesTypeName`), which holds the place of the property the nearest
-/// above on the path, with the configuration that place was entered with.
-struct MockEnteredSlot: Hashable, Sendable {
-	/// The member of the entered places: the property’s label, in `spelledAsIdentifier` spelling.
-	let name: String
-	/// The type the property builds, whose `SafeDIMockConfiguration` a place of the slot holds.
-	let configurationType: TypeDescription
-	/// The member that holds the nearest place of `configurationType` on the path, where several properties build the
-	/// type, one name for the type; `nil` where this property is the only one that builds it.
-	let nearestOfTypeSlotName: String?
-
+/// The declaration of the places a mock root's functions enter (`ReservedName.mockEnteredPlacesTypeName`), from its
+/// slots (`NodeRecords+MockEnteredSlots.swift`).
+extension MockEnteredSlot {
 	/// The lines, unindented, of the struct a mock root declares once for the functions on its tree's cycles. A value
 	/// of it is the places entered along one path: a member per slot of `slots`, in their order, then one per
 	/// nearest-of-type member, in the order `slots` first names each. `Place` holds the configuration a place was

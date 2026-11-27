@@ -99,7 +99,8 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	/// different names (`CycleFunctionNames`), where its one place cannot stand for both.
 	case cycleBuilderNameShared
 	/// The node is built as a `LazilyInstantiated`, which `lazyClaim(of:in:)` discharges: its record is
-	/// `NodeRecordKind.lazy`'s, and in a mock root's world `mockLazyDischarges(of:in:)` discharges it. Also a world whose
+	/// `NodeRecordKind.lazy`'s, and in a mock root's world production's term joins the record the node's override decorates
+	/// (`joiningProductionMarks(_:to:of:in:)`). Also a world whose
 	/// records read a wrapper's instance where no record does yet: a rename fulfilled by one
 	/// (`DeclarationsAnsweringReads.renameReadsWrappersInstance`) and a rename in a seam's own tree of one its root is
 	/// handed.
@@ -114,6 +115,10 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	case builderLoop
 	/// A node has more than one variant, so its record would not be a function of the node alone.
 	case nodeHasSeveralVariants
+	/// Two calls of one variant answer one of its reads apart, in its source, its form, whether it is optional or erased,
+	/// or whether it is passed or captured (`DeclarationsAnsweringReads.callsAnswerAVariantApart`): the variant's key is
+	/// too coarse to tell the two apart, so its one record would be wrong at one of them, and the world keeps its tree.
+	case callsAnswerAVariantApart
 	/// A declaration whose answers a producer of the facts still owes (`TypeFactsWorld.owedFacts(of:)`): two places of one
 	/// of its variants can answer a read apart, which one record per variant cannot write. The whole world is refused,
 	/// whatever its kinds, until each producer lands and clears its bit.
@@ -125,6 +130,9 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	/// A loop of builders in a seam's own tree, whose levels the tree holds in a box and whose members bind its holes'
 	/// payloads, which node records do not write.
 	case builderLoopBoxed
+	/// Making the records, or laying the root out from them, threw something other than a refusal
+	/// (`NodeRecords.refusingWhatRecordsThrow(_:)`). The world keeps its tree, which reports whatever it reports.
+	case recordsThrew
 }
 
 /// What a world's records read of a node beside the frozen interface (`TypeFactsWorld`): the scope it builds and the
@@ -180,6 +188,20 @@ extension TypeFactsGraph: NodeRecordSources {
 /// world whose calls of one variant find different answers is refused. Records still carry today's `functionName`, which
 /// the engine's allocator names apart.
 struct NodeRecords: Sendable {
+	/// What `body`, which makes records or lays a root out from them, returns, or the refusal it throws; anything else it
+	/// throws is `NodeRecordRefusal.recordsThrew`. While the tree exists, the records' path never rejects a world: a world
+	/// the records cannot make keeps its tree, which reports the world's errors as it always has. Each call that throws
+	/// is fixed, and this rule goes, once no accepted graph reports `recordsThrew` and the tree goes.
+	static func refusingWhatRecordsThrow<Value>(_ body: () throws -> Value) -> Result<Value, NodeRecordRefusal> {
+		do {
+			return try .success(body())
+		} catch let refusal as NodeRecordRefusal {
+			return .failure(refusal)
+		} catch {
+			return .failure(.recordsThrew)
+		}
+	}
+
 	/// - Parameters:
 	///   - world: A production root's world.
 	///   - seamTree: What a seam's own root is handed: its parameters, the nearest declarations of their labels, the
@@ -234,6 +256,10 @@ struct NodeRecords: Sendable {
 		)
 		// The tree reports the capture as an error, which the records cannot.
 		guard !answeringDeclarations.sendableFunctionCapturesWrapper else { throw NodeRecordRefusal.sendableFunctionCapturesWrapper }
+		// A variant's one record is right only where every call into it answers its reads as the call it was written from.
+		// Checked before what the records read of the call that resolved each variant, so that which call that is does not
+		// change the refusal.
+		guard !answeringDeclarations.callsAnswerAVariantApart else { throw NodeRecordRefusal.callsAnswerAVariantApart }
 		// A rename's record binds it from its fulfilling property's label, or from a wrapper's instance as the tree's rule
 		// reads it, never from an instance read otherwise.
 		guard !answeringDeclarations.renameReadsWrappersInstance else { throw NodeRecordRefusal.lazy }
@@ -291,14 +317,10 @@ struct NodeRecords: Sendable {
 				try .alias(Self.renameRecord(of: declaration, variant: variant, in: world, answers: onlyIfAvailableAnswers, readsWrappersInstance: answeringDeclarations.renamesReadingWrappersInstance.contains(variant)))
 			case .cycle:
 				try .built(Self.cycleRecord(of: declaration, variant: variant, in: world, lazilyInstantiatedInstanceProperties: instanceProperties, typesDeclaredEscaping: escaping, children: children))
-			case .mockRename:
-				try .alias(Self.mockRenameRecord(of: declaration, variant: variant, in: world, answers: onlyIfAvailableAnswers, readsWrappersInstance: answeringDeclarations.renamesReadingWrappersInstance.contains(variant)))
 			case .mockConstruction:
-				try .built(Self.mockConstructionRecord(of: declaration, variant: variant, in: world, unavailableProperties: onlyIfAvailableAnswers.unavailableProperties(of: variant), lazilyInstantiatedInstanceProperties: instanceProperties, receivesBoundAgain: mockReceivesBoundAgain[Int(variant)], typesDeclaredEscaping: escaping, children: children))
+				try .built(Self.mockDecoratedRecord(of: declaration, variant: variant, in: world, unavailableProperties: onlyIfAvailableAnswers.unavailableProperties(of: variant), lazilyInstantiatedInstanceProperties: instanceProperties, receivesBoundAgain: mockReceivesBoundAgain[Int(variant)], typesDeclaredEscaping: escaping, children: children))
 			case .mockUnavailableDependency:
 				try .alias(Self.mockUnavailableDependencyRecord(of: declaration, in: world))
-			case .mockErased:
-				try .built(Self.mockErasedRecord(of: declaration, variant: variant, in: world, unavailableProperties: onlyIfAvailableAnswers.unavailableProperties(of: variant), lazilyInstantiatedInstanceProperties: instanceProperties, receivesBoundAgain: mockReceivesBoundAgain[Int(variant)], typesDeclaredEscaping: escaping, children: children))
 			case .publicMockCall:
 				try .built(Self.publicMockCallRecord(of: declaration, variant: variant, in: world, receivesBoundAgain: mockReceivesBoundAgain[Int(variant)], typesDeclaredEscaping: escaping, children: children))
 			}
@@ -550,6 +572,9 @@ struct NodeRecords: Sendable {
 		if answeringDeclarations.renameReadsWrappersInstance {
 			refusals.insert(.lazy)
 		}
+		if answeringDeclarations.callsAnswerAVariantApart {
+			refusals.insert(.callsAnswerAVariantApart)
+		}
 		return NodeRecordRefusal.allCases.filter(refusals.contains)
 	}
 
@@ -634,13 +659,18 @@ struct NodeRecords: Sendable {
 
 	/// What a kind claims of `declaration`, or `nil` where none does. Each production kind is one term of the production
 	/// chain, after the test's, in the order of `NodeRecordKind`'s cases, calling its file's classifier, which returns
-	/// `nil` for a node not of its kind: `?? <kind>Claim(of: declaration, in: world)`. A mock world's nodes are the
-	/// mock writer's alone, so no production kind's record, which reads no override, is made of one.
+	/// `nil` for a node not of its kind: `?? <kind>Claim(of: declaration, in: world)`. A mock root's world asks the terms
+	/// that make a record of their own first, at most one of which applies to a node: a public mock call, a test's claim, a
+	/// rename, which reads no override, and last the production record decorated with the node's override
+	/// (`mockConstructionClaim(of:in:)`); production's terms that only mark the node join the term that makes its record,
+	/// in a union whose order cannot matter (`joiningProductionMarks(_:to:of:in:)`).
 	private static func claim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
 		// A test's claim comes first, so that it can claim a node another kind would.
 		guard !world.isMockWorld else {
-			return publicMockCallClaim(of: declaration, in: world)
+			// One term makes the record, and production's marks join it (`joiningProductionMarks(_:to:of:in:)`).
+			return publicMockCallClaim(of: declaration, in: world).map { joiningProductionMarks([.erased], to: $0, of: declaration, in: world) }
 				?? testClaim(of: declaration, in: world)
+				?? renameClaim(of: declaration, in: world)
 				// Asked last: it claims every node of a mock root's world that no kind before it claimed.
 				?? mockConstructionClaim(of: declaration, in: world)
 		}
@@ -713,20 +743,14 @@ enum NodeRecordKind: Sendable {
 	/// A node on a cycle, otherwise of stage 1's kinds, whose children's places include the closing place of each call back
 	/// to a place being built above it (`NodeRecords+Cycle.swift`).
 	case cycle
-	/// A node of a mock root's world that `builtByInitializer` would make in a production root's, which reads its override before it
-	/// calls its type's initializer (`NodeRecords+MockConstruction.swift`).
+	/// A node of a mock root's world whose record is the one production makes of it (`builtByInitializer`'s, erased or
+	/// lazy as the node is), decorated with its override, which it reads before it calls its type's initializer
+	/// (`NodeRecords+MockDecoration.swift`).
 	case mockConstruction
-	/// A node of a mock root's world that would be of kind `mockConstruction` but that it is erased: an `ErasedInstantiator`,
-	/// or a constant, an `Instantiator` or a `LazilyInstantiated` erased to its property's type, whose override returns the property's type
-	/// (`NodeRecords+MockErased.swift`).
-	case mockErased
 	/// A constant or an `Instantiator` built by a call of another module's public mock, which passes the called mock its own
 	/// `SafeDIOverrides` and fills no builder (`NodeRecords+PublicMockCall.swift`).
 	case publicMockCall
 	/// A property instantiated only if available that no declaration fulfills, in a mock root's world: bound to the
 	/// override `mock()` takes of it, or to `nil` where it takes none (`NodeRecords+MockUnavailableDependency.swift`).
 	case mockUnavailableDependency
-	/// A rename of a mock root's world, which reads no override: `rename`'s record, mapped as the mock's walk maps an erased
-	/// rename only if available (`NodeRecords+MockRename.swift`).
-	case mockRename
 }

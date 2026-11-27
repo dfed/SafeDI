@@ -175,12 +175,6 @@ extension NodeRecords {
 		"\(ScopeGenerator.functionName(toBuildPropertyNamed: label))__\(isConfigured ? "overrides" : ReservedName.configurationBuilderPropertyName)".spelledAsJoinedIdentifier
 	}
 
-	/// Whether a node of a mock root's world is built in a `@Sendable` function of its own and erased to its property's
-	/// type, whose function returns that type (`mockErasedRecord(of:variant:in:unavailableProperties:lazilyInstantiatedInstanceProperties:receivesBoundAgain:typesDeclaredEscaping:children:)`).
-	static func isErasedSendableWrapper(_ declaration: DeclarationID, in world: some NodeRecordSources) -> Bool {
-		isBuiltInSendableFunction(declaration, in: world) && world.isErased(declaration)
-	}
-
 	/// Whether a node of a mock root's world is built in a `@Sendable` function of its own.
 	private static func isBuiltInSendableFunction(_ declaration: DeclarationID, in world: some NodeRecordSources) -> Bool {
 		switch world.kind(of: declaration) {

@@ -44,6 +44,10 @@ public enum NodeRecordsObservation {
 	/// text for a node beneath a function, which is handed its override where the walk's captures the root's.
 	@TaskLocal public static var laysOutMockRoots = false
 
+	/// Whether a mock root's world joins the terms that claim a node in the reverse of their order
+	/// (`NodeRecords.joiningProductionMarks(_:to:of:in:)`), so that a test shows the order cannot matter. Only a test sets it.
+	@TaskLocal public static var joinsMockWorldTermsInReverse = false
+
 	/// Handed each mocked type and the root of its mock root's world as the mock root is built, where a test observes node records
 	/// (`DependencyTreeGenerator.createMockRootScopeGenerator`). A task local rather than a parameter: an optional closure
 	/// threaded through the mock roots' construction raised the peak memory of a run that sets none by a fifth on Linux.

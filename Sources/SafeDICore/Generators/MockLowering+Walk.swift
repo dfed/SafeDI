@@ -258,7 +258,7 @@ extension ScopeGenerator {
 			}
 			outerDeclarations += overridesBoundBeforeNodes.map { Property(label: $0.name, typeDescription: $0.typeDescription) }
 			outerDeclarations += rootReceivesBoundAgain
-			if let statements = try Self.nodeRecordsMockStatements(
+			if let statements = Self.nodeRecordsMockStatements(
 				of: instantiable,
 				worldRoot: worldRoot,
 				bindsOnlyNodes: bindsOnlyNodes,
