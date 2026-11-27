@@ -1856,10 +1856,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// deferred parameter, so its fill binds every field, but one that a level of an inner seam's enum holds on some route
 	/// to the place and not on another, which the fill reads of the caller's scope on that other route
 	/// (`InnerScopeReaders.labelsSomeInnerRouteLacks(of:)`). A seam's fill reads a field bound from a deferred parameter of
-	/// the caller's scope too (`fillUnderConstruction`).
+	/// the caller's scope too, but for a place a seam passes up from a seam it calls, whose deferred fields hold the memo of
+	/// what that call passed, which the fill binds from the struct (`fillUnderConstruction`).
 	static func propertiesDeclared(byFillOf hole: SeamSignature.Hole, passedByPublicMockCall: Bool, innerScopeReaders: InnerScopeReaders?) -> Set<Property> {
 		let labelsSomeInnerRouteLacks = innerScopeReaders?.labelsSomeInnerRouteLacks(of: hole) ?? []
-		let boundLabels = Set(hole.fields.filter { passedByPublicMockCall || !$0.isDeferredParameter }.map(\.property.label))
+		let readsDeferredFieldsFromStruct = passedByPublicMockCall || hole.innerSeamType != nil
+		let boundLabels = Set(hole.fields.filter { readsDeferredFieldsFromStruct || !$0.isDeferredParameter }.map(\.property.label))
 		return fieldForms(of: hole, boundLabels: boundLabels.subtracting(labelsSomeInnerRouteLacks)).union(propertiesBeingBuilt(byFillOf: hole))
 	}
 
