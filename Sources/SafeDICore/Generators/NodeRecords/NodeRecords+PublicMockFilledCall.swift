@@ -128,7 +128,7 @@ extension LevelFunctionRecordsObservation {
 		// A call inside a fill refers to the call's fills and level functions by name, which makes them `@Sendable` or keeps
 		// them out of their cases.
 		let references = try FillReferences.of(
-			fills: allFacts.map { (key: $0.key, node: $0.declaration) },
+			fills: allFacts.map { (key: $0.key, node: $0.declaration, payloadLabels: Set($0.hole.enumPlace?.values.map(\.property.label) ?? [])) },
 			dispatchers: levels.dispatchers.map(\.dispatcher),
 			in: world,
 			callingTreeHoldsHoles: mockRootHoles != nil,

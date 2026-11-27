@@ -117,8 +117,13 @@ struct FillFacts: Sendable {
 
 	/// Whether a fill `call` passes builds, somewhere in its tree, a call of a seam or a public mock.
 	static func fillsHoldCall(_ call: DeclarationID, in world: some NodeRecordSources) -> Bool {
+		treesHoldCall(Array(world.edges(from: call).filter { world.construction(of: $0) == .fill }), in: world)
+	}
+
+	/// Whether the tree of a fill whose node is one of `fillNodes` builds a call of a seam or a public mock.
+	static func treesHoldCall(_ fillNodes: [DeclarationID], in world: some NodeRecordSources) -> Bool {
 		// A fill's node is built as its call builds it, a call of a seam or a public mock too, which its scope says.
-		var pending = world.edges(from: call).filter { world.construction(of: $0) == .fill }
+		var pending = fillNodes
 		var visited = Set(pending)
 		while let declaration = pending.popLast() {
 			let scope = world.scope(of: declaration)

@@ -35,14 +35,14 @@ struct FillReferences: Sendable {
 
 	/// What the calls inside the fills of `call` refer to of its fills and dispatchers.
 	/// - Parameters:
-	///   - fills: The call's fills that emit code, each with its node.
+	///   - fills: The call's fills that emit code, each with its node and the labels of its case's payload.
 	///   - dispatchers: The call's dispatchers.
 	///   - callingTreeHoldsHoles: Whether the tree that makes the call holds holes, whose levels a seam's call inside a fill
 	///     would read to decide which of the enclosing call's dispatchers it reuses.
 	/// - Throws: `NodeRecordRefusal.fillHoldsCall` where a call inside a fill holds a call inside one of its own fills, or
 	///   decides what it reuses from levels node records do not hand it.
 	static func of(
-		fills: [(key: String, node: DeclarationID)],
+		fills: [(key: String, node: DeclarationID, payloadLabels: Set<String>)],
 		dispatchers: [ScopeGenerator.FillDispatcher],
 		in world: some NodeRecordSources,
 		callingTreeHoldsHoles: Bool,
@@ -60,7 +60,7 @@ struct FillReferences: Sendable {
 				guard isFirstVisit else { continue }
 				let scope = world.scope(of: node)
 				if node != fill.node, scope.seamCall != nil || scope.publicMockCall != nil {
-					let call = try referencesOfCall(node, enclosingKeys: enclosingKeys, in: world, callingTreeHoldsHoles: callingTreeHoldsHoles)
+					let call = try referencesOfCall(node, insideFillWithPayloadLabels: fill.payloadLabels, enclosingKeys: enclosingKeys, in: world, callingTreeHoldsHoles: callingTreeHoldsHoles)
 					referenced.formUnion(call.referenced)
 					// A `@Sendable` function between the fill and the call, or the call's own, refers to all the call refers to.
 					references.referencedFromSendableFunctions.formUnion(insideSendableFunction ? call.referenced : call.referencedFromSendableFunctions)
@@ -78,23 +78,36 @@ struct FillReferences: Sendable {
 		return references
 	}
 
-	/// What `call`, a call inside a fill of the call whose fills and dispatchers are `enclosingKeys`, refers to of them.
+	/// What `call`, a call inside a fill whose case's payload holds `payloadLabels` of the call whose fills and dispatchers
+	/// are `enclosingKeys`, refers to of them.
 	private static func referencesOfCall(
 		_ call: DeclarationID,
+		insideFillWithPayloadLabels payloadLabels: Set<String>,
 		enclosingKeys: Set<String>,
 		in world: some NodeRecordSources,
 		callingTreeHoldsHoles: Bool,
 	) throws(NodeRecordRefusal) -> (referenced: Set<String>, referencedFromSendableFunctions: Set<String>, named: Set<String>) {
 		let scope = world.scope(of: call)
 		let isPublicMockCall = scope.publicMockCall != nil
-		// A seam's call decides whether a dispatcher returns its builder struct from the levels of the tree that makes it.
-		guard !FillFacts.fillsHoldCall(call, in: world), isPublicMockCall || !callingTreeHoldsHoles else { throw .fillHoldsCall }
+		// A seam's call decides whether a dispatcher returns its builder struct from the levels of the tree that makes it. A
+		// value of the fill's case a call reads, which the fill then takes by itself, its facts do not hold yet.
+		let readsPayloadValue = world.reads(of: call).contains { payloadLabels.contains(world.text(ofLabel: world.read($0).label)) }
+		guard isPublicMockCall || !callingTreeHoldsHoles, !readsPayloadValue else { throw .fillHoldsCall }
 		var referenced = Set<String>()
 		var referencedFromSendableFunctions = Set<String>()
 		var named = Set<String>()
 		var ownFills = [(key: String, isSendable: Bool)]()
+		var ownFillNodes = [DeclarationID]()
 		var filledSites = Set<SeamSignature.Hole.Site>()
-		for case let .fill(hole, _, _) in scope.holeArguments {
+		// The fill nodes the call passes, one per fill argument, in their order.
+		let fillNodes = world.edges(from: call).filter { world.construction(of: $0) == .fill }
+		let filledHoles = scope.holeArguments.compactMap { argument -> SeamSignature.Hole? in
+			switch argument {
+			case let .fill(hole, _, _): hole
+			case .passUp: nil
+			}
+		}
+		for (hole, fillNode) in zip(filledHoles, fillNodes) {
 			filledSites.insert(hole.site)
 			let key = ScopeGenerator.fillKey(of: hole)
 			// The call passes the enclosing call's fill of a place of the same site by name.
@@ -105,8 +118,11 @@ struct FillReferences: Sendable {
 				}
 			} else {
 				ownFills.append((key, hole.isSendable))
+				ownFillNodes.append(fillNode)
 			}
 		}
+		// What a call inside one of the call's own fills refers to of them is a later step's.
+		guard !FillFacts.treesHoldCall(ownFillNodes, in: world) else { throw .fillHoldsCall }
 		let dispatchers: [ScopeGenerator.FillDispatcher]
 		if let calledBuilders = scope.calledBuilders {
 			let filledSiteNumbers = calledBuilders.siteNumbers(of: filledSites)
