@@ -44,20 +44,18 @@ enum ToolComparisonChecks {
 
 	/// `SAFEDI_TOOL_COMPARISON_CHECKS` set to `0` or `1` decides; unset, the comparisons are made everywhere but on
 	/// macOS. A Linux run with `0` is the macOS suite’s run, less Xcode’s compiler.
-	static let areMadeByDefault: Bool = {
-		switch ProcessInfo.processInfo.environment["SAFEDI_TOOL_COMPARISON_CHECKS"] {
-		case "0":
-			return false
-		case "1":
-			return true
-		default:
-			#if os(macOS)
-				return false
-			#else
-				return true
-			#endif
-		}
-	}()
+	static let areMadeByDefault: Bool = switch ProcessInfo.processInfo.environment["SAFEDI_TOOL_COMPARISON_CHECKS"] {
+	case "0":
+		false
+	case "1":
+		true
+	default:
+		#if os(macOS)
+			false
+		#else
+			true
+		#endif
+	}
 
 	/// Runs `generate` with every comparison set around it, or, where none is made, with only the mode a run generates
 	/// in (`ConstructionInternerOrder`). An observer a test set around its own run stays set either way: each comparison
