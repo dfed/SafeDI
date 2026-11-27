@@ -170,21 +170,7 @@ struct SafeDIToolTypeFactsFamilyTests: ~Copyable {
 		// `Home`'s tree builds `leaf`, which holds the hole `api`, under `plainBuilder`'s plain function and under
 		// `sharedBuilder`'s `@Sendable` one, where it reads `api` from the `@Sendable` carrier: `leaf` and the case key by
 		// family. `clock` holds no hole, so its one body serves both functions, as in any other production world.
-		let modules = [
-			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
-				"public protocol Api: Sendable {}",
-				seamFixtureType(named: "Clock", isFinalClass: true, declarations: [], conformances: ", Sendable"),
-				seamFixtureType(named: "Leaf", isFinalClass: true, declarations: ["@Instantiated public let clock: Clock", "@Instantiated public let api: any Api"], conformances: ", Sendable"),
-				seamFixtureType(named: "Plain", isFinalClass: true, declarations: ["@Instantiated public let leaf: Leaf"]),
-				seamFixtureType(named: "Shared", isFinalClass: true, declarations: ["@Instantiated public let leaf: Leaf"], conformances: ", Sendable"),
-				seamFixtureType(named: "Home", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let plainBuilder: Instantiator<Plain>", "@Instantiated public let sharedBuilder: SendableInstantiator<Shared>"]),
-			]),
-			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
-				seamFixtureType(named: "LiveApi", isFinalClass: true, declarations: [], conformances: ", Api")
-					.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(fulfillingAdditionalTypes: [Api.self])\n"),
-				seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated public let home: Home"]),
-			].map { "import Feature\n\n" + $0 }, dependencies: ["Feature"]),
-		]
+		let modules = Self.seamTwoFamiliesModules(sendableBuilderFirst: false)
 		var output: MultiModuleTestOutput?
 		let report = try await typeFactsReport(ofRoot: "Home", forMockGeneration: false) { filesToDelete in
 			output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
@@ -304,6 +290,23 @@ struct SafeDIToolTypeFactsFamilyTests: ~Copyable {
 		"""])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keysSameFamiliesPerSeamNode_whenSeamDeclaresItsSendableBuilderBeforeOrAfterItsPlainBuilder() async throws {
+		// The families a node of `Home`'s tree keys follow the function that encloses each of its bodies, never the order
+		// `Home` declares its builders in.
+		var familiesByOrder = [[String: [String]]]()
+		for sendableBuilderFirst in [false, true] {
+			let report = try await typeFactsReport(ofRoot: "Home", forMockGeneration: false) { filesToDelete in
+				_ = try await executeSafeDIToolMultiModuleTest(modules: Self.seamTwoFamiliesModules(sendableBuilderFirst: sendableBuilderFirst), integration: .moduleInfo, filesToDelete: &filesToDelete)
+			}
+			familiesByOrder.append(Dictionary(report.nodes.indices.map { (report.nodes[$0].description, variantFamilies(ofNode: $0, in: report).sorted()) }, uniquingKeysWith: +))
+		}
+
+		#expect(familiesByOrder[0] == familiesByOrder[1])
+		#expect(familiesByOrder[0]["Leaf as leaf: Leaf"] == ["plain", "sendable"], "\(familiesByOrder[0])")
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -326,6 +329,30 @@ struct SafeDIToolTypeFactsFamilyTests: ~Copyable {
 			output = try await executeSafeDIToolTest(swiftFileContent: types, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		}
 		return try (#require(output), report)
+	}
+
+	/// `Home`, a seam whose tree builds `Leaf`, which holds the hole `api` and builds the hole-free `Clock`, under
+	/// `plainBuilder: Instantiator<Plain>` and under `sharedBuilder: SendableInstantiator<Shared>`, declared in that order
+	/// or, where `sendableBuilderFirst`, the other.
+	private static func seamTwoFamiliesModules(sendableBuilderFirst: Bool) -> [ModuleFixture] {
+		let plainBuilder = "@Instantiated public let plainBuilder: Instantiator<Plain>"
+		let sharedBuilder = "@Instantiated public let sharedBuilder: SendableInstantiator<Shared>"
+		let builders = sendableBuilderFirst ? [sharedBuilder, plainBuilder] : [plainBuilder, sharedBuilder]
+		return [
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+				"public protocol Api: Sendable {}",
+				seamFixtureType(named: "Clock", isFinalClass: true, declarations: [], conformances: ", Sendable"),
+				seamFixtureType(named: "Leaf", isFinalClass: true, declarations: ["@Instantiated public let clock: Clock", "@Instantiated public let api: any Api"], conformances: ", Sendable"),
+				seamFixtureType(named: "Plain", isFinalClass: true, declarations: ["@Instantiated public let leaf: Leaf"]),
+				seamFixtureType(named: "Shared", isFinalClass: true, declarations: ["@Instantiated public let leaf: Leaf"], conformances: ", Sendable"),
+				seamFixtureType(named: "Home", isSeam: true, isFinalClass: true, declarations: builders),
+			]),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
+				seamFixtureType(named: "LiveApi", isFinalClass: true, declarations: [], conformances: ", Api")
+					.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(fulfillingAdditionalTypes: [Api.self])\n"),
+				seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated public let home: Home"]),
+			].map { "import Feature\n\n" + $0 }, dependencies: ["Feature"]),
+		]
 	}
 
 	/// The type facts report of `Root`'s mock world, which `run` generates.
