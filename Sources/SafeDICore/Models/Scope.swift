@@ -1493,6 +1493,7 @@ struct ScopeGeneratorUnderConstruction: Sendable {
 		var functionNameStem: String {
 			ScopeGenerator.fillFunctionName(of: hole)
 		}
+
 		/// Whether the fill is a member of a level function, a dispatcher that returns its enum's builder struct, and fills an
 		/// instantiator's place: it then returns the builder the wrapper keeps, which takes the forwarded value itself, rather
 		/// than the value it builds (`ScopeGenerator.fillReturnsWrapperBuilder`).
