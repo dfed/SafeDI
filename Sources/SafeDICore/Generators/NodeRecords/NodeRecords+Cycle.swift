@@ -29,7 +29,7 @@ extension NodeRecords {
 
 	/// The record of `declaration`'s place, a node of kind `cycle`: built by its initializer as a stage-1 node is, its
 	/// children's places among which a call back to a place being built above it is that call's closing place
-	/// (`closingRecord(closingOn:from:functionName:in:)`).
+	/// (`closingRecord(closingOn:from:functionName:cycleArguments:in:)`).
 	static func cycleRecord(
 		of declaration: DeclarationID,
 		variant: VariantID,
@@ -102,7 +102,6 @@ extension NodeRecords {
 		}
 	}
 
-	/// The labels `declaration`'s body declares: what it instantiates, what it is forwarded and the names it gives aliases.
 	/// Whether two variants of the world, of two declarations, build one concrete type.
 	static func variantsShareConcreteType(in world: some NodeRecordSources) -> Bool {
 		var declarationByConcreteType = [TypeDescription: DeclarationID]()
@@ -118,6 +117,7 @@ extension NodeRecords {
 		return false
 	}
 
+	/// The labels `declaration`'s body declares: what it instantiates, what it is forwarded and the names it gives aliases.
 	static func labelsDeclared(by declaration: DeclarationID, in world: some NodeRecordSources) -> [String] {
 		world.scope(of: declaration).instantiable.dependencies.compactMap { dependency in
 			switch dependency.source {
@@ -129,50 +129,13 @@ extension NodeRecords {
 		}
 	}
 
-	/// What each variant's function takes, in a mock's world, for the labels `labelsByVariant` names: a cycle that closes
-	/// on the variant's place beneath a declaration of the label that a type of the world receives. Each is read of its
-	/// label's nearest declaration, where the variant's place calls the function and where each call closes the cycle, so
-	/// the type the cycle builds again holds the value declared nearest the call, as the walk's function a lazy cycle closes
-	/// on passes it (`CycleParameter`).
-	/// - Throws: `cycleTakesParameters` where the world declares the label in another form than one value, or in two, which
-	///   no one parameter takes.
-	static func mockCycleParameters(labelsByVariant: [[String]], in world: some NodeRecordSources, outerDeclarations: [Property]) throws(NodeRecordRefusal) -> [[PlaceRead]] {
-		var propertyByLabel = [String: Property]()
-		return try labelsByVariant.map { labels throws(NodeRecordRefusal) in
-			try labels.map { label throws(NodeRecordRefusal) in
-				let property: Property
-				if let known = propertyByLabel[label] {
-					property = known
-				} else {
-					var declared = Set(outerDeclarations.filter { $0.label == label })
-					for declaration in 0..<Int32(world.declarationCount) {
-						for dependency in world.scope(of: declaration).instantiable.dependencies where dependency.property.label == label {
-							switch dependency.source {
-							case .instantiated, .forwarded:
-								declared.insert(dependency.property)
-							case .aliased:
-								throw .cycleTakesParameters
-							case .received:
-								break
-							}
-						}
-					}
-					guard declared.count == 1, let only = declared.first, only.propertyType.isConstant else { throw .cycleTakesParameters }
-					property = only
-					propertyByLabel[label] = only
-				}
-				return PlaceRead(argumentLabel: label, label: label, property: property, source: .binding(label: label))
-			}
-		}
-	}
-
 	/// The record of the place at which a call closes a cycle on `declaration`, whose place is being built above the call:
 	/// a call of the function that place declares, named `functionName` where the bodies between rename it
-	/// (`CycleFunctionNames`), which forwards what that place's wrapper forwards. The walk refuses a cycle whose function
-	/// could take a parameter for the cycle (`cycleTakesParameters`), so the function takes none
-	/// (`BuiltPlaceRecord.cycleParameters`), and the call passes none. `caller` is the variant whose body holds the call,
+	/// (`CycleFunctionNames`), which forwards what that place's wrapper forwards, and passes the function's parameters
+	/// `cycleArguments` (`cycleArguments(of:unavailableProperties:lazilyInstantiatedInstanceProperties:)`). `caller` is the
+	/// variant whose body holds the call,
 	/// which a production closer reads nothing of; a mock's closer, which passes what its caller binds, takes this site.
-	static func closingRecord(closingOn declaration: DeclarationID, from caller: VariantID, functionName: String? = nil, in world: some NodeRecordSources, enteredSlots: MockEnteredSlots? = nil, cycleArguments: [PlaceRead] = []) throws(NodeRecordRefusal) -> PlaceRecord {
+	static func closingRecord(closingOn declaration: DeclarationID, from caller: VariantID, functionName: String? = nil, cycleArguments: [PlaceRead] = [], in world: some NodeRecordSources, enteredSlots: MockEnteredSlots? = nil) throws(NodeRecordRefusal) -> PlaceRecord {
 		// Every node a call reaches is built as a property: the root is called by none.
 		guard let property = world.property(of: declaration) else { throw .noInitializer }
 		let instantiable = world.scope(of: declaration).instantiable
@@ -193,10 +156,17 @@ extension NodeRecords {
 	}
 
 	/// `record`, a place's record as its kind makes it, with its function named `functionName` where its body renames it
-	/// (`CycleFunctionNames`), and `@Sendable` where a call beneath it that closes a cycle on it refers to it from a
-	/// `@Sendable` function (`isMadeSendable`), as today's tree makes it (`ScopeGenerator.cycleClosings`). A place written
-	/// as text keeps its text.
-	static func record(_ record: PlaceRecord, functionName: String?, isMadeSendable: Bool, cycleParameters: [PlaceRead] = []) -> PlaceRecord {
+	/// (`CycleFunctionNames`), `@Sendable` where a call beneath it that closes a cycle on it refers to it from a
+	/// `@Sendable` function (`isMadeSendable`), as today's tree makes it (`ScopeGenerator.cycleClosings`), and taking
+	/// `cycleParameters`, which its binding passes `callCycleArguments`, where a cycle closes on it. A place written as text
+	/// keeps its text.
+	static func record(
+		_ record: PlaceRecord,
+		functionName: String?,
+		isMadeSendable: Bool,
+		cycleParameters: [Property],
+		callCycleArguments: [PlaceRead],
+	) -> PlaceRecord {
 		switch record {
 		case let .built(built):
 			guard functionName != nil || (isMadeSendable && !built.isSendable) || !cycleParameters.isEmpty else { return record }
@@ -208,8 +178,8 @@ extension NodeRecords {
 				target: built.target,
 				arguments: built.arguments,
 				forwardedProperties: built.forwardedProperties,
-				cycleParameters: cycleParameters.isEmpty ? built.cycleParameters : cycleParameters.map(\.property),
-				callCycleArguments: cycleParameters.isEmpty ? built.callCycleArguments : cycleParameters,
+				cycleParameters: cycleParameters.isEmpty ? built.cycleParameters : cycleParameters,
+				callCycleArguments: cycleParameters.isEmpty ? built.callCycleArguments : callCycleArguments,
 				functionName: functionName ?? built.functionName,
 				isSendable: built.isSendable || isMadeSendable,
 				typesDeclaredEscaping: built.typesDeclaredEscaping,
@@ -238,18 +208,32 @@ extension NodeRecords {
 		}
 
 		/// Notes that the walk enters a place of `declaration`.
-		/// - Throws: `cycleVariantsPartitionApart` where a place of its twin is on the path.
+		/// - Throws: `cycleVariantsPartitionApart` where a place of its twin, or of another variant of `declaration`, is on
+		///   the path: today's tree closes the cycle on that place, which repeats the declaration's property and type, where
+		///   the facts' variant builds it again.
 		mutating func enter(_ declaration: DeclarationID) throws(NodeRecordRefusal) {
-			guard holdsCycle, let twin = twinKey(of: declaration) else { return }
+			guard holdsCycle else { return }
+			guard placesOnPath[Int(declaration), default: 0] == 0 else { throw .cycleVariantsPartitionApart }
+			placesOnPath[Int(declaration), default: 0] += 1
+			guard let twin = twinKey(of: declaration) else { return }
 			var counts = countsOnPath[twin.key, default: [0, 0, 0]]
 			guard counts.indices.allSatisfy({ $0 == twin.form || counts[$0] == 0 }) else { throw .cycleVariantsPartitionApart }
 			counts[twin.form] += 1
 			countsOnPath[twin.key] = counts
 		}
 
+		/// Whether a place of `declaration`, or of its twin (another form of its label and type), is on the path.
+		func holdsPlaceOfItOrItsTwin(_ declaration: DeclarationID) -> Bool {
+			guard placesOnPath[Int(declaration), default: 0] == 0 else { return true }
+			guard let twin = twinKey(of: declaration), let counts = countsOnPath[twin.key] else { return false }
+			return counts.indices.contains { $0 != twin.form && counts[$0] > 0 }
+		}
+
 		/// Notes that the walk leaves the place of `declaration` it entered.
 		mutating func leave(_ declaration: DeclarationID) {
-			guard holdsCycle, let twin = twinKey(of: declaration) else { return }
+			guard holdsCycle else { return }
+			placesOnPath[Int(declaration), default: 0] -= 1
+			guard let twin = twinKey(of: declaration) else { return }
 			countsOnPath[twin.key, default: [0, 0, 0]][twin.form] -= 1
 		}
 
@@ -263,6 +247,8 @@ extension NodeRecords {
 		/// By label and type, how many places of each form are on the path: a constant, a `LazilyInstantiated` and a
 		/// `SendableLazilyInstantiated`.
 		private var countsOnPath = [LabelAndType: [Int]]()
+		/// By declaration, how many of its places are on the path.
+		private var placesOnPath = [Int: Int]()
 
 		/// The label and type `declaration` builds, and its form's index in `countsOnPath`, or `nil` where it is neither a
 		/// constant nor lazily instantiated.

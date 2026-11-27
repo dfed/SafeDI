@@ -170,42 +170,13 @@ extension PassedArgument {
 			shape
 		case .member,
 		     .optionalMember:
-			// A member of a value the function was handed reads no declaration, so it is the same text at every member.
-			value.isMemberOfPassedArgument ? shape : nil
+			// A member of a value that reads no declaration, such as a member of a value the function was handed or a loop
+			// member's field of its level's configuration, is the same text at every member.
+			value.reads.isEmpty ? shape : nil
 		case .rootDeclaration,
 		     .call,
 		     .implicitMemberCall:
 			nil
-		}
-	}
-}
-
-extension ValuePath {
-	/// Whether the path is a member read, at any depth, of a value its function was handed: text that reads no
-	/// declaration, which a mock's call that closes a cycle hands as its overrides (`NodeRecords+MockCycle.swift`).
-	var isMemberOfPassedArgument: Bool {
-		switch self {
-		case let .member(_, value),
-		     let .optionalMember(_, value):
-			switch value {
-			case .passedArgument:
-				true
-			case .member,
-			     .optionalMember,
-			     .rootDeclaration,
-			     .read,
-			     .call,
-			     .implicitMemberCall,
-			     .emptyInitialization:
-				value.isMemberOfPassedArgument
-			}
-		case .rootDeclaration,
-		     .read,
-		     .passedArgument,
-		     .call,
-		     .implicitMemberCall,
-		     .emptyInitialization:
-			false
 		}
 	}
 }
