@@ -33,4 +33,12 @@ extension NodeRecords {
 			nil
 		}
 	}
+
+	/// The refusals of the wrapper `declaration` is built in that its wrapper's kind discharges (`sendableClaim(of:in:)`,
+	/// `erasedClaim(of:in:)`, `lazyClaim(of:in:)`): what another kind discharges where it claims the node first and makes a
+	/// record of its type's initializer, which reads the wrapper, its erasure and its `@Sendable` mark of the node
+	/// (`builtByInitializerRecord`).
+	static func wrapperRefusalsDischarged(of declaration: DeclarationID, in world: some NodeRecordSources) -> Set<NodeRecordRefusal> {
+		(sendableClaim(of: declaration, in: world) ?? erasedClaim(of: declaration, in: world) ?? lazyClaim(of: declaration, in: world))?.discharges ?? []
+	}
 }

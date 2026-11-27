@@ -221,21 +221,29 @@ extension ScopeGenerator {
 			// A builder a call passes up is a parameter of `mock()`, bound again under the name the calls read it by, which the
 			// call's node binds again under its label (`NodeRecords.mockReceivesBoundAgain(in:)`); an adapter of one, a builder
 			// of a seam's own places and a builder of a call's fills are not.
+			// A place of another module's public mock the tree builds inline reads such a builder too, which no record reads.
 			let bindsOnlyPassedUpBuilders = signature.placeOnlyBuilderDeclarations.isEmpty
 				&& walk.filledCallBuilders.builderBindingLines.isEmpty
 				&& signature.passedUpBuilders.allSatisfy(\.adapters.isEmpty)
+				&& walk.filledCallBuilders.holeBuildersByInlinePlace.isEmpty
 			let bindingsBeforeNodes = builderBindingCount + overridesBoundBeforeNodes.count
 			// A parameter or override named apart is a declaration under its name, which the nodes that receive it bind again
 			// under its label (`NodeRecords.mockReceivesBoundAgain(in:)`), and the mocked type's own receive of it is bound
 			// again before the nodes, as the walk binds it.
+			// A dependency the mock cannot build is a parameter of `mock()`, which the type that instantiates it reads by its
+			// name; one taken as a `@Sendable` autoclosure is read into a local before the nodes and bound again by that type.
 			let bindsOnlyNodes = rootReceiverBindingIndex == bindingsBeforeNodes
 				&& signature.lazilyInstantiatedBindings.isEmpty
-				&& signature.uncoveredParameters.isEmpty
+				&& !signature.uncoveredRootParameters.contains(where: \.isSendableAutoclosure)
 				&& bindsOnlyPassedUpBuilders
 				// A node the root's level names apart is bound under that name by its record, and a parameter or override
-				// under the name `mock()` gives it; any other name is neither's.
+				// under the name `mock()` gives it, an uncovered dependency's included; any other name is neither's.
 				&& rootRenames.allSatisfy { label, names in
-					names.allSatisfy { type, name in walk.rootPropertyNodeBindingNames.contains(name) || signature.renamesByLabelAndType[label]?[type] == name }
+					names.allSatisfy { type, name in
+						walk.rootPropertyNodeBindingNames.contains(name)
+							|| signature.renamesByLabelAndType[label]?[type] == name
+							|| signature.uncoveredParameterNamesByLabelAndType[label]?[type] == name
+					}
 				}
 				&& rootInstancesReadByValue.isEmpty
 			var outerDeclarations = signature.parameters.map { Property(label: $0.name, typeDescription: $0.property.typeDescription) }
@@ -259,6 +267,10 @@ extension ScopeGenerator {
 					namesApart: walk.rootRenames,
 					unavailableDependencyOverrides: signature.onlyIfAvailableOverrides.compactMap { override in signature.unavailableDependencyOverrideNames[override.receivedProperty].map { (override.receivedProperty, $0) } },
 					passedUpBuilderNames: signature.passedUpBuilderNames,
+					uncoveredParameterNames: Dictionary(
+						signature.uncoveredRootParameters.filter { !$0.isSendableAutoclosure }.map { ($0.property, $0.label) },
+						uniquingKeysWith: { first, _ in first },
+					),
 				),
 				outerDeclarations: outerDeclarations,
 			) {
