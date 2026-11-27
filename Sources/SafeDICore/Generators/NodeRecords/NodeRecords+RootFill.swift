@@ -73,7 +73,7 @@ struct FillFacts: Sendable {
 	let readsInnerScopes: Bool
 	/// The structs of levels the fill takes on a carried route (`FillCallerReads.innerScopeParameters`), the last of
 	/// `parametersTaken`; empty where it reads none.
-	var innerScopeParameters: [SeamSignature.Hole.Field] = []
+	let innerScopeParameters: [SeamSignature.Hole.Field]
 
 	/// The facts of a call's fills, or why node records leave them to the tree.
 	enum OfCall {
@@ -253,7 +253,7 @@ struct FillFacts: Sendable {
 			|| !filledScope.propertiesToGenerate.isEmpty
 			|| filledScope.seamCall != nil
 			|| filledScope.publicMockCall != nil
-		var facts = FillFacts(
+		return FillFacts(
 			key: fill.key,
 			declaration: node,
 			functionNameStem: fill.functionNameStem,
@@ -273,9 +273,8 @@ struct FillFacts: Sendable {
 			declaresFunction: declaresFunction,
 			returnsBoundValue: filledProperty?.propertyType.isConstant ?? false,
 			readsInnerScopes: treeReads.readsInnerScopes,
+			innerScopeParameters: callerReads.innerScopeParameters,
 		)
-		facts.innerScopeParameters = callerReads.innerScopeParameters
-		return facts
 	}
 }
 
