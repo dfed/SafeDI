@@ -138,7 +138,7 @@ extension NodeRecords {
 	}
 
 	/// Whether a node of a mock root's world has a configuration, as its record's override type says
-	/// (`mockConstructionRecord(of:variant:in:unavailableProperties:typesDeclaredEscaping:children:)`): whether it
+	/// (`mockConstructionRecord(of:variant:in:unavailableProperties:lazilyInstantiatedInstanceProperties:typesDeclaredEscaping:children:)`): whether it
 	/// `buildsChildren`, or passes its construction a field of its configuration (`mockConfigurationFieldArguments(of:in:)`).
 	private static func isConfigured(_ declaration: DeclarationID, buildsChildren: Bool, in world: some NodeRecordSources) -> Bool {
 		buildsChildren || !mockConfigurationFieldArguments(of: declaration, in: world).isEmpty
@@ -154,7 +154,7 @@ extension NodeRecords {
 	}
 
 	/// Whether a node of a mock root's world is built in a `@Sendable` function of its own and erased to its property's
-	/// type, whose function returns that type (`mockErasedRecord(of:variant:in:unavailableProperties:typesDeclaredEscaping:children:)`).
+	/// type, whose function returns that type (`mockErasedRecord(of:variant:in:unavailableProperties:lazilyInstantiatedInstanceProperties:typesDeclaredEscaping:children:)`).
 	static func isErasedSendableWrapper(_ declaration: DeclarationID, in world: some NodeRecordSources) -> Bool {
 		isBuiltInSendableFunction(declaration, in: world) && world.isErased(declaration)
 	}
