@@ -37,12 +37,22 @@ enum TypeKeyBody {
 	/// is resolved to it in the type key's layout too, never to `nil`. No function the layout declares takes a name of
 	/// `namesInScope`, the names bound around the body, such as a seam's parameters' internal names. A value path of the
 	/// root's body may name each of `rootPassedArgumentNames`, the parameters of the function the body is written in that
-	/// its places read as a function's place reads a passed argument; the layout takes each as a name in scope too.
+	/// its places read as a function's place reads a passed argument; the layout takes each as a name in scope too. A mock,
+	/// whose body the type key's layout replaces whatever it holds, lays out every loop of builders (`laysOutEveryLoop`);
+	/// production keeps the path key's body where it writes each member's function once. Where
+	/// `declaresLoopMembersAsThePathKeyDoes` is set, the function of each member of a loop of builders that one statement of
+	/// the root's body builds is declared right before that statement, as the path key declares a loop it writes once,
+	/// rather than with the loop's other functions, and every other function is declared in the body that calls it, as the
+	/// path key nests it. It applies only where the path key writes each loop once, and exists
+	/// so that a root laid out from node records writes the path key's bytes where the path key keeps 2.4.0's form for a
+	/// loop; once the records place functions themselves, placement comes from them and this goes.
 	static func statements(
 		ofRootBody rootBody: [GeneratedCode],
 		outerDeclarations: [Property] = [],
 		namesInScope: Set<String> = [],
 		rootPassedArgumentNames: Set<String> = [],
+		laysOutEveryLoop: Bool = false,
+		declaresLoopMembersAsThePathKeyDoes: Bool = false,
 	) -> [GeneratedCode]? {
 		var layout = TypeKeyLayout()
 		layout.declareOuter(outerDeclarations)
@@ -66,9 +76,12 @@ enum TypeKeyBody {
 		layout.computeClasses()
 		// A root whose loops of builders the path key writes once each keeps the path key's body, the members' functions
 		// nested as before the type key laid loops out.
-		guard layout.laysOutLoops(), layout.computePlacement() else { return nil }
+		let laysOutLoops = layout.laysOutLoops()
+		layout.declaresLoopMembersAsThePathKeyDoes = declaresLoopMembersAsThePathKeyDoes && !laysOutLoops
+		guard laysOutEveryLoop || laysOutLoops, layout.computePlacement() else { return nil }
 		layout.computeOutcomes()
-		guard layout.computeParameterTypes(),
+		guard layout.keepsCapturesOfLoopMembersDeclaredAsThePathKeyDoes(),
+		      layout.computeParameterTypes(),
 		      layout.checkEveryRead(),
 		      layout.checkValuePaths()
 		else { return nil }
@@ -267,6 +280,10 @@ struct TypeKeyLayout {
 	/// ordered by the first reach of their cycle and then their own, and last the one whose only call is the statement.
 	var hoistedFunctions = [CallSite: [Int]]()
 	var attachedFunction = [CallSite: Int]()
+	/// Whether each member of a loop of builders whose function one statement of the root's body alone reaches is declared
+	/// right before that statement (`TypeKeyBody.statements(ofRootBody:…)`), and the members so declared.
+	var declaresLoopMembersAsThePathKeyDoes = false
+	var loopMembersDeclaredAsThePathKeyDoes = [Int]()
 	var outcomes = [[String: ReadOutcome]]()
 	var parameterTypes = [[String: TypeDescription]]()
 	/// The value each cycle parameter of a place holds at every call of its function, where every call passes one.
