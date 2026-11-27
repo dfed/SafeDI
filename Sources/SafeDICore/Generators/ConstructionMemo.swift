@@ -430,7 +430,7 @@ struct ConstructionContext {
 		case let .nearestDeclaration(label):
 			let (declaration, depth) = nearestDeclarations.resolving(label)
 			return (.nearestDeclaration(declaration), depth)
-		case let .binding(property):
+		case let .binding(property), let .cycleArgumentBinding(property):
 			let (binding, depth) = nearestDeclarations.resolvingBinding(of: property)
 			return (.binding(binding), depth)
 		case let .declarationClosedOn(property, concreteType):
@@ -454,6 +454,10 @@ struct ConstructionLog {
 		case nearestDeclaration(String)
 		/// The binding a receive of a property only if available reads (`NearestDeclarations.resolvingBinding(of:)`).
 		case binding(Property)
+		/// The binding a scope passes a parameter of the builder function a lazy cycle closes on that nothing requires,
+		/// read as `binding` is and answered alike. It is a read of its own because it asks for what a cycle passes: the
+		/// function's body may read none of it, where a declaration of the label inside the function hides the parameter.
+		case cycleArgumentBinding(Property)
 		/// The declaration a scope building a property for a concrete type closes a cycle on, if any, by their IDs.
 		case declarationClosedOn(PropertyID, TypeID)
 		/// The parameters of the builder function built for a declaration that a lazy cycle closes on, if any.
@@ -465,7 +469,7 @@ struct ConstructionLog {
 		/// Whether this read asks what a cycle closes on or passes: what most places of one key differ in.
 		var isCycleRead: Bool {
 			switch self {
-			case .nearestDeclaration, .binding, .passesNil:
+			case .nearestDeclaration, .binding, .cycleArgumentBinding, .passesNil:
 				false
 			case .declarationClosedOn, .cycleParameterContext:
 				true
@@ -624,6 +628,24 @@ struct ConstructionLog {
 			body(recorded.read.read, recorded.answer, recorded.read.depth)
 			return true
 		}
+	}
+
+	/// The labels of the reads of this log that are no cycle reads: what a place's subtree asked of the declarations above
+	/// it (`PlaceReadsObservation`).
+	var labelsOfReadsOfDeclarations: Set<String> {
+		var labels = Set<String>()
+		_ = forEachRead(where: { _ in true }) { recorded in
+			switch recorded.read.read {
+			case let .nearestDeclaration(label):
+				labels.insert(label)
+			case let .binding(property), let .passesNil(property, _, _):
+				labels.insert(property.label)
+			case .declarationClosedOn, .cycleParameterContext, .cycleArgumentBinding:
+				break
+			}
+			return true
+		}
+		return labels
 	}
 
 	/// Calls `body` with each read of this log whose kind `isIncluded` admits, in the order the reads were added, each read

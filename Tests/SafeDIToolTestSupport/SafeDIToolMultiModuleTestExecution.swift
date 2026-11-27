@@ -605,7 +605,27 @@ func executeSafeDIToolMultiModuleTest(
 								try await ConstructionInternerObservation.$missObserver.withValue(ConstructionInternerClosure.recordingMissesNotExcluded(handingOn: ConstructionInternerObservation.missObserver)) {
 									try await ConstructionInternerOrder.applying(.fromEnvironment) {
 										try await ReusedSeamTreeChecks.comparing(handingOn: SeamTreeReuseObservation.comparesBuiltTrees) {
-											try await tool.generate()
+											try await LabelsReadFromAboveChecks.comparing(handingOn: LabelsReadFromAboveObservation.observer) {
+												try await CallPlaceOrderChecks.comparing(handingOn: CallPlaceOrderObservation.observer) {
+													try await PlaceReadsChecks.comparing(handingOn: PlaceReadsObservation.observer) {
+														try await VariantBodyChecks.comparing(handingOn: VariantBodyObservation.observer) {
+															try await PlanBodiesChecks.comparing(handingOn: PlanBodiesObservation.observer) {
+																try await MockVariantBodyChecks.comparing {
+																	try await TwinIdentityChecks.comparing(handingOn: TwinIdentityObservation.observer) {
+																		try await PlanSendableChecks.comparing(handingOn: PlanSendableObservation.observer) {
+																			try await PlanCaptureChecks.comparing(handingOn: PlanCaptureObservation.observer) {
+																				try await UnpassableCycleLabelChecks.checking(handingOn: UnpassableCycleLabelObservation.observer) {
+																					try await tool.generate()
+																				}
+																			}
+																		}
+																	}
+																}
+															}
+														}
+													}
+												}
+											}
 										}
 									}
 								}

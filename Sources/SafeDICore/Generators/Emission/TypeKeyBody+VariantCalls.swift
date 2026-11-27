@@ -209,7 +209,8 @@ extension TypeKeyBody {
 			throw .callAtRename(body: body, path: call.path)
 		}
 		let labels = plan.labels(of: call.calledBody)
-		guard labels.count == call.arguments.count else { throw .answersDifferFromLabels(body: body, path: call.path) }
+		let answers = plan.answers(of: call.calledBody)
+		guard labels.count == call.arguments.count, answers.count == call.arguments.count else { throw .answersDifferFromLabels(body: body, path: call.path) }
 		let parameters = plan.record(ofBody: call.calledBody)?.passedArguments ?? []
 		guard call.passedArguments.map(\.parameterName) == parameters.map(\.parameterName),
 		      call.passedArguments.map(\.type) == parameters.map(\.type)
@@ -221,6 +222,7 @@ extension TypeKeyBody {
 			isExtension: isExtension,
 			forwardedProperties: forwardedProperties,
 			labels: labels,
+			answers: answers,
 			arguments: call.arguments,
 		)
 		closer.passedArguments = call.passedArguments

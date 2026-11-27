@@ -1299,6 +1299,12 @@ extension DependencyTreeGenerator {
 		var labelsReadThroughReceivesByScope = [Scope: Set<String>]()
 		/// See `labelsReadFromAbove(by:)`.
 		var labelsReadFromAboveByScope = [Scope: Set<String>]()
+		/// Set only by a test, which compares each answer of `labelsReadFromAbove(by:)` with the least sets its rule has.
+		let labelsReadFromAboveObserver = LabelsReadFromAboveObservation.observer
+		/// The scopes whose answer the observer was handed.
+		var labelsReadFromAboveObserved = Set<Scope>()
+		/// The least sets found for each scope the observer's walks reached, each way: held only while a test observes.
+		var leastLabelsReadFromAboveByScope = [Scope: (byComponent: Set<String>, byPasses: Set<String>)]()
 		/// See `reachesInstantiationCycle(from:)`.
 		var reachesInstantiationCycleByScope = [Scope: Bool]()
 		/// See `cleanSubtreeLabelFacts(of:)`.
@@ -1544,6 +1550,64 @@ extension DependencyTreeGenerator {
 		/// each taking what the others read until nothing is added, so no scope is remembered with part of a cycle unread:
 		/// a subtree that reaches a cycle of instantiators is remembered too, and its key is built from this.
 		func labelsReadFromAbove(by scope: Scope) -> Set<String> {
+			let labels = rememberedLabelsReadFromAbove(by: scope)
+			if let labelsReadFromAboveObserver, labelsReadFromAboveObserved.insert(scope).inserted {
+				observeLabelsReadFromAbove(by: scope, remembered: labels, observer: labelsReadFromAboveObserver)
+			}
+			return labels
+		}
+		/// The labels a scope's own dependencies and created properties declare, which hide those labels from the scopes
+		/// above it.
+		func labelsDeclared(by scope: Scope) -> Set<String> {
+			var declaredLabels = Set<String>()
+			for dependency in scope.instantiable.dependencies where scope.createdProperties.contains(dependency.property) {
+				declaredLabels.insert(dependency.property.label)
+			}
+			return declaredLabels
+		}
+		/// Hands a test what `labelsReadFromAbove(by:)` answered for `scope` beside the least sets its rule has, found two
+		/// ways that share no code: a component at a time (`LabelsReadFromAbove`), and by passes over every scope `scope`
+		/// reaches until a pass adds no label. A scope whose least sets an earlier call found is a leaf that reads them, since
+		/// what a scope reads from above does not depend on what is above it, so a tree's scopes are each walked once.
+		func observeLabelsReadFromAbove(by scope: Scope, remembered: Set<String>, observer: (_ type: String, _ remembered: [String], _ byComponent: [String], _ byPasses: [String]) -> Void) {
+			var scopeByIdentifier = [ObjectIdentifier(scope): scope]
+			let graph = OrderedGraph(root: ObjectIdentifier(scope)) { identifier in
+				var targets = [ObjectIdentifier]()
+				if let reached = scopeByIdentifier[identifier], leastLabelsReadFromAboveByScope[reached] == nil {
+					for child in instantiatedScopes(of: reached) {
+						scopeByIdentifier[ObjectIdentifier(child)] = child
+						targets.append(ObjectIdentifier(child))
+					}
+				}
+				return targets
+			}
+			let scopes = graph.nodes.compactMap { scopeByIdentifier[$0] }
+			let declaredLabels = scopes.map { labelsDeclared(by: $0) }
+			let byComponent = LabelsReadFromAbove(
+				graph: graph,
+				own: { (leastLabelsReadFromAboveByScope[scopes[$0]]?.byComponent ?? labelsReadThroughReceives(by: scopes[$0])).sorted() },
+				bound: { declaredLabels[$0] },
+			)
+			var byPasses = scopes.map { leastLabelsReadFromAboveByScope[$0]?.byPasses ?? labelsReadThroughReceives(by: $0) }
+			var changed = true
+			while changed {
+				changed = false
+				// Deepest first, so that a tree with no cycle takes one pass.
+				for index in scopes.indices.reversed() {
+					for target in graph.targets(from: index) {
+						let count = byPasses[index].count
+						byPasses[index].formUnion(byPasses[target].subtracting(declaredLabels[index]))
+						changed = changed || byPasses[index].count != count
+					}
+				}
+			}
+			for (index, reached) in scopes.enumerated() {
+				leastLabelsReadFromAboveByScope[reached] = (byComponent: Set(byComponent.labels(of: index)), byPasses: byPasses[index])
+			}
+			observer(scope.instantiable.concreteInstantiable.asSource, remembered.sorted(), byComponent.labels(of: 0).sorted(), byPasses[0].sorted())
+		}
+		/// `labelsReadFromAbove(by:)`, remembered for each scope its walk finishes.
+		func rememberedLabelsReadFromAbove(by scope: Scope) -> Set<String> {
 			valuesReached(
 				from: scope,
 				successors: instantiatedScopes(of:),

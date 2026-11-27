@@ -121,6 +121,16 @@ struct OrderedGraph<Node: Hashable & Sendable>: Sendable {
 		edgeTargets[Int(edgeOffsets[index])..<Int(edgeOffsets[index + 1])]
 	}
 
+	/// The targets of the node's edges as indices of `nodes`, in the order its edges were given.
+	func targets(from index: Int) -> [Int] {
+		edges(from: index).map(Int.init)
+	}
+
+	/// The strongly connected component of the node, numbered as `componentByNode` numbers it.
+	func component(of index: Int) -> Int {
+		Int(componentByNode[index])
+	}
+
 	/// How many edges the graph has, duplicates included.
 	var edgeCount: Int {
 		edgeTargets.count

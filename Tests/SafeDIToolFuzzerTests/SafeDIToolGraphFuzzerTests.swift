@@ -6576,6 +6576,27 @@ struct SafeDIToolGraphFuzzerTests {
 	@Test(.enabled(if: GraphFuzzerLongRunConfiguration.current != nil, "Set SAFEDI_GRAPH_FUZZER_ITERATIONS or SAFEDI_GRAPH_FUZZER_SEEDS to run"))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func longRun_findsNoUnknownFailures_whenEnabledByEnvironment() async throws {
+		// The runs of the tool in this process report each production root that reaches a cycle with its plan's bodies
+		// (`PlanBodiesObservation`): the report's last line counts those roots, those that hold a twin, which stay built
+		// per path, and the bodies their plans build. A graph is run several times, so the counts are of roots of runs.
+		let (planStream, planContinuation) = AsyncStream.makeStream(of: (bodyCount: Int, holdsTwin: Bool).self)
+		try await PlanBodiesObservation.$observer.withValue({ _, bodiesOfPlan, _, twinValues in
+			planContinuation.yield((bodiesOfPlan.count, !twinValues.isEmpty))
+		}) {
+			try await longRun()
+		}
+		planContinuation.finish()
+		var (cyclicRootCount, twinRootCount, bodyCount) = (0, 0, 0)
+		for await plan in planStream {
+			cyclicRootCount += 1
+			twinRootCount += plan.holdsTwin ? 1 : 0
+			bodyCount += plan.bodyCount
+		}
+		GraphFuzzerReport(path: GraphFuzzerLongRunConfiguration.current?.reportPath).append("per-type-plan cyclic-roots=\(cyclicRootCount) twin-roots=\(twinRootCount) bodies=\(bodyCount)")
+	}
+
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private func longRun() async throws {
 		let configuration = try #require(GraphFuzzerLongRunConfiguration.current)
 		let report = GraphFuzzerReport(path: configuration.reportPath)
 		func reportProblem(_ problem: String) {
@@ -7064,7 +7085,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// one compile and one link.
 	static let smokeSeeds: [UInt64] = [4, 5, 12, 18, 25, 30, 40, 53, 59, 62, 70, 86, 94, 97, 98, 99, 133, 161, 212, 267, 304, 327, 378, 466, 520, 582, 691, 705, 731, 930, 2_314, 2_420, 2_611, 3_360, 4_002, 4_224, 4_516, 5_889, 6_388]
 
-	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x4A19E441CED3943D
+	static let smokeAndKnownIssueFixtureHash: UInt64 = 0xD3C2896C551E1C1C
 
 	/// The remedies the remedy oracle applies in the smoke batch's rejected graphs. `SafeDIToolGraphFuzzerRemedyTests`
 	/// holds a representative of every kind.
@@ -7074,7 +7095,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// them; `corpusPartitionHash` pins the whole corpus's. The partition draws nothing from the seed, so changing it
 	/// changes neither the graphs nor the pins on them: these pins make a change to the partition deliberate. They
 	/// move with the generator and, this one, with the smoke and known-issue seeds too, as the fixture hashes do.
-	static let smokeAndKnownIssuePartitionHash: UInt64 = 0x5765175878DB985A
+	static let smokeAndKnownIssuePartitionHash: UInt64 = 0xC9818992D9D0DC88
 
 	/// The corpus, seeds `0..<corpusSeedCount`, which ci.yml fuzzes on every pull request and push to main and
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=corpus` selects. `knownIssues` lists every one that fails.

@@ -42,6 +42,12 @@ extension ErrorReportingSite {
 			path: "Sources/SafeDIToolLibrary/GenerateCommand.swift",
 			code: "catch let error as any SourceLocatedError",
 		),
+		// Never reported: the loop over production roots gives the limit, catches it, and builds the root from its plan
+		// by type or again without a limit.
+		"ScopeGeneratorLimitExceeded": ErrorReportingSite(
+			path: "Sources/SafeDICore/Generators/DependencyTreeGenerator.swift",
+			code: "catch is ScopeGeneratorLimitExceeded",
+		),
 		// The macros attach them to the declaration as diagnostics; neither is thrown.
 		"FixableInjectableError": .macroDiagnostic,
 		"FixableInstantiableError": .macroDiagnostic,

@@ -62,6 +62,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		isUnavailableDependency: Bool = false,
 		seamCall: SeamCall? = nil,
 		publicMockCall: PublicMockCall? = nil,
+		callPlaceRequiredAliasFulfillingProperties: Set<Property> = [],
 		seamRoot: SeamRoot? = nil,
 		mockBuilders: DependencyTreeGenerator.ShapedBuilders? = nil,
 		holeCallArguments: [HoleCallArgument] = [],
@@ -296,7 +297,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			propertiesToDeclare: propertiesToDeclare,
 			forwardedProperties: forwardedProperties,
 			cycleParameters: isPropertyCycle ? cycleParameters : [],
-			seamCallRequiredThroughAliasProperties: seamCall?.requiredThroughAliasProperties ?? [],
+			// A call place of the per-type plan requires what the tree it stands for requires, as a seam's call does.
+			seamCallRequiredThroughAliasProperties: (seamCall?.requiredThroughAliasProperties ?? []).union(callPlaceRequiredAliasFulfillingProperties),
 		)
 		requiredOnlyIfAvailableAliasProperties = aliasRequirements.requiredOnlyIfAvailableAliasProperties
 		requiredAliasFulfillingProperties = aliasRequirements.requiredAliasFulfillingProperties
@@ -501,6 +503,21 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		seamCall: SeamCall?,
 		children: [ScopeGenerator],
 	) -> Set<TypeDescription> {
+		var typesDeclaredEscaping = typesDeclaredEscaping(ownedBy: instantiable, publicMockCall: publicMockCall, seamCall: seamCall)
+		for child in children where !child.typesDeclaredEscaping.isEmpty {
+			typesDeclaredEscaping.formUnion(child.typesDeclaredEscaping)
+		}
+		return typesDeclaredEscaping
+	}
+
+	/// The names a scope of `instantiable` declares `@escaping` itself, without its children's: those its initializers'
+	/// parameters declare so, those its aliases name in place of one, and those of the seam or public mock it calls. A call
+	/// place of the per-type plan declares the union of these over every scope its tree reaches (`CallPlaceShadow`).
+	nonisolated static func typesDeclaredEscaping(
+		ownedBy instantiable: Instantiable,
+		publicMockCall: PublicMockCall?,
+		seamCall: SeamCall?,
+	) -> Set<TypeDescription> {
 		var typesDeclaredEscaping = Set(instantiable.initializer?.typesDeclaredEscaping ?? [])
 		typesDeclaredEscaping.formUnion(instantiable.mockInitializer?.typesDeclaredEscaping ?? [])
 		// An alias hands its receiver the value of the property it names, so a name that fulfills a property of a name
@@ -517,9 +534,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		typesDeclaredEscaping.formUnion(publicMockCall?.typesDeclaredEscaping ?? [])
 		typesDeclaredEscaping.formUnion(seamCall?.typesDeclaredEscaping ?? [])
-		for child in children where !child.typesDeclaredEscaping.isEmpty {
-			typesDeclaredEscaping.formUnion(child.typesDeclaredEscaping)
-		}
 		return typesDeclaredEscaping
 	}
 
@@ -3237,6 +3251,23 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		)
 	}
 
+	/// The places of this scope's body, its children's code in the order it builds them, as a root's body holds them: what
+	/// the type key lays out of a body of the per-type plan (`TypeKeyBody.statements(ofPlan:)`).
+	func generateChildPlans() async throws -> [GeneratedCode] {
+		try await generateProperties(
+			propertiesGeneratedLater: [],
+			enclosingFunctionNames: BuilderFunctionNames().enclosingFunctionNames,
+			leadingMemberWhitespace: "        ",
+			fillPlaceBindings: .none,
+		)
+	}
+
+	/// The extension a root of the dependency tree declares around `statements`, the body the type key laid out; nothing
+	/// for a root without dependencies.
+	static func rootCode(of instantiable: Instantiable, writing statements: [GeneratedCode]) throws -> GeneratedCode {
+		try rootInitializer(of: instantiable)?.spelled(writing: BuilderFunctionGraph(body: statements.map(Statement.verbatim))) ?? .empty
+	}
+
 	/// This scope's unavailable properties as the root of what is generated, with nothing generated before it.
 	private var rootUnavailableProperties: Set<Property> {
 		unavailableProperties(
@@ -3499,6 +3530,42 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			enclosingSendableBuilders: [],
 			chain: [],
 		)
+	}
+
+	/// Whether a `@Sendable` builder function in this body of a root's per-type plan may capture an `Instantiator`,
+	/// `ErasedInstantiator`, or `LazilyInstantiated` declared outside it: the walk of
+	/// `nonSendableWrapperCaptures(ofTreeRootedAt:)` over the body's tree, each label the body reads from above declared,
+	/// outside every `@Sendable` function of the body, as each of `answers` binds it. It may find a capture the plan's
+	/// code does not make, where a `@Sendable` function reads a parameter of its own: the root then keeps its tree per
+	/// path, whose walk judges it.
+	///
+	/// - Parameters:
+	///   - instantiable: The type the body builds.
+	///   - answers: The declarations that answer the labels the body reads from above.
+	func mayCaptureNonSendableWrapper(asBodyOf instantiable: Instantiable, answeredBy answers: [NearestDeclaration]) async -> Bool {
+		var declarationsByLabel = [String: [VisibleDeclaration]]()
+		for answer in answers {
+			for (form, declaredProperty) in answer.bindings.sorted(by: { $0.key < $1.key }) {
+				declarationsByLabel[form.label, default: []].append(VisibleDeclaration(
+					property: declaredProperty,
+					instanceProperty: form == declaredProperty ? nil : form,
+					declaringType: nil,
+					declarationLocation: nil,
+					sendableBuilderDepth: 0,
+				))
+			}
+		}
+		return await !nonSendableWrapperCaptures(
+			of: instantiable,
+			unavailableProperties: unavailableProperties(
+				isGeneratedBefore: { _ in false },
+				propertiesGeneratedLater: [],
+			),
+			propertiesGeneratedLater: [],
+			declarationsByLabel: declarationsByLabel,
+			enclosingSendableBuilders: [],
+			chain: [],
+		).isEmpty
 	}
 
 	/// A value the tree holds for a parameter of a seam's generated initializer that the tier it calls omits, which
@@ -5052,6 +5119,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// Those of `cycleParameters` that are unavailable where this scope passes them, given what the scopes enclosing it
 	/// create, before any sibling's ordering is known (see `unavailableProperties(isGeneratedBefore:propertiesGeneratedLater:)`).
 	private let cycleParameterUnavailableProperties: Set<Property>
+	/// The labels of those of `cycleParameters` this scope passes `nil`, before any sibling's ordering is known.
+	nonisolated var labelsOfCycleParametersPassedNil: Set<String> {
+		Set(cycleParameters.lazy.filter { self.cycleParameterUnavailableProperties.contains($0.property) }.map(\.property.label))
+	}
+
 	/// The received properties in scope only as the instance of a `LazilyInstantiated` property where this scope passes
 	/// `cycleParameters`: for a scope that declares the function, those its parameters do not hide; for any other scope,
 	/// `lazilyInstantiatedInstanceProperties`.
@@ -6902,7 +6974,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// `bodyChildren(propertiesGeneratedLater:enclosingFunctionNames:)` declares them: a member that takes such parameters
 	/// is a loop's non-alias child with cycle parameters, and the members are the loop's non-alias children and the renames
 	/// the body declares of them. Empty for nearly every body.
-	nonisolated private func loopMembersPassedByReceivedFunctions(of orderedChildren: [OrderedChild]) -> [Int: Set<Property>] {
+	///
+	/// - Parameter includingChildrenWithoutCycleParameters: Whether to give the members of every non-alias child on a loop, also one whose
+	///   function takes no such parameter: a call place of a plan by declaration (`VariantAnswers`) stands for a function
+	///   that takes them, and has none of its own.
+	nonisolated func loopMembersPassedByReceivedFunctions(of orderedChildren: [OrderedChild], includingChildrenWithoutCycleParameters: Bool = false) -> [Int: Set<Property>] {
 		let loopByChildIndex = receivedBuilderLoops.loopByChildIndex
 		guard !loopByChildIndex.isEmpty else { return [:] }
 		var membersByLoop = [Int: Set<Property>]()
@@ -6919,7 +6995,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 		}
 		var membersByChildIndex = [Int: Set<Property>]()
-		for child in orderedChildren where !child.generator.isAlias && !child.generator.cycleParameters.isEmpty {
+		for child in orderedChildren where !child.generator.isAlias && (includingChildrenWithoutCycleParameters || !child.generator.cycleParameters.isEmpty) {
 			guard let loop = loopByChildIndex[child.index] else { continue }
 			membersByChildIndex[child.index] = membersByLoop[loop, default: []]
 		}
@@ -8496,7 +8572,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			if Self.aliasIsBoundToNil(onlyIfAvailable: onlyIfAvailable, fulfillingProperty: fulfillingProperty, unavailableProperties: unavailableProperties) {
 				.alias(AliasPlaceRecord(property: property, fulfillingProperty: nil, text: aliasCode, reads: []))
 			} else {
-				.alias(AliasPlaceRecord(property: property, fulfillingProperty: fulfillingProperty, text: aliasCode))
+				.alias(AliasPlaceRecord(property: property, fulfillingProperty: fulfillingProperty, text: aliasCode, readsOnlyIfAvailable: fulfillingBindingIsOptional))
 			}
 		} else {
 			nil

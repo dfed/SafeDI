@@ -185,20 +185,21 @@ struct ClosingPlaceRecord: Sendable {
 
 extension ClosingPlaceRecord {
 	/// The record of a call place of the per-type plan (`PlanStatement.call`): a call of the function of the variant at
-	/// index `variant`, which builds `property`, handing each of `parameters` (the variant's cycle parameters, one per
-	/// label its declaration reads from above, in that order) what `arguments` answers where the call is made: the nearest
-	/// declaration, the instance of a lazily instantiated one, or `nil` where nothing provides the label or what provides
-	/// it is still being built.
-	init(callingVariant variant: Int, property: Property, isErased: Bool, isExtension: Bool, forwardedProperties: [Property], labels: [String], arguments: [Answer]) {
+	/// index `variant`, which builds `property`, handing each parameter the variant's `answers` give it (its cycle
+	/// parameters, one per label its declaration reads from above, in the order of `labels`) what `arguments` answers
+	/// where the call is made: the nearest declaration, the instance of a lazily instantiated one, or `nil` where nothing
+	/// provides a label the variant takes optionally. A call answers a label as the variant does, but for one the variant
+	/// takes optionally, which each call answers by its own declaration or `nil`.
+	init(callingVariant variant: Int, property: Property, isErased: Bool, isExtension: Bool, forwardedProperties: [Property], labels: [String], answers: [Answer], arguments: [Answer]) {
 		self.init(
 			property: property,
 			isErased: isErased,
 			isExtension: isExtension,
 			closedOnFunctionName: ScopeGenerator.functionName(toBuildPropertyNamed: property.label),
 			forwardedProperties: forwardedProperties,
-			cycleArguments: zip(labels, arguments).compactMap { label, answer in
-				answer.parameter(labeled: label).map { parameter in
-					PlaceRead(argumentLabel: label, label: label, property: parameter, source: answer.argumentSource(labeled: label))
+			cycleArguments: zip(labels, zip(answers, arguments)).compactMap { label, answerAndArgument in
+				answerAndArgument.0.parameter(labeled: label).map { parameter in
+					PlaceRead(argumentLabel: label, label: label, property: parameter, source: answerAndArgument.1.argumentSource(labeled: label))
 				}
 			},
 		)
@@ -394,17 +395,18 @@ extension Answer {
 		}
 	}
 
-	/// What a call passes for `label` under this answer, which takes a parameter: the nearest declaration of the label
-	/// where the call is made, a wrapper whose instance the body reads included. The one place a call's argument form is
-	/// decided.
+	/// What a call passes for `label` under this answer, to a parameter: the nearest declaration of the label where the
+	/// call is made, a wrapper whose instance the body reads included, or `nil` where nothing provides a label the
+	/// function takes optionally. The one place a call's argument form is decided.
 	///
 	/// A deliberate gap while nothing emits from the plan: a member of a loop of builders made again at the call
 	/// (`declaredMadeAgainAtCall`) is spelled as its binding here, which the call would read before its declaration.
 	/// The layout of a loop member's call owes that wrapper before the plan's code is generated for such a loop.
 	func argumentSource(labeled label: String) -> ArgumentSource {
 		switch self {
-		case .none,
-		     .declared,
+		case .none:
+			.nil
+		case .declared,
 		     .declaredMadeAgainAtCall,
 		     .instance:
 			.binding(label: label)
