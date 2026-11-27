@@ -34,9 +34,11 @@ extension DependencyTreeGenerator {
 		/// The properties the tree requires through `onlyIfAvailable` aliases
 		/// (`ScopeGenerator.requiredAliasFulfillingProperties`).
 		var requiredAliasFulfillingProperties: Set<Property>
-		/// Every receive that leaves the seam, and the reads of its parameters (`receivers(in:of:instantiables:)`).
+		/// Every receive that leaves the seam (`receivers(in:of:instantiables:)`).
 		let receivers: [SeamReceiver]
-		let parameterReads: ParameterReads
+		/// The reads of the seam's parameters its tree makes, which decide a by-value pass-through's deferral and whether
+		/// it is `@Sendable` (`receivers(in:of:instantiables:)`, or `ParameterReads(facts:)`).
+		var parameterReads: ParameterReads
 		/// The names the tree's declarations declare `@escaping` (`ScopeGenerator.typesDeclaredEscaping`).
 		var typesDeclaredEscaping: Set<TypeDescription>
 		/// The tree the builder function names are read from, when `seamRoot` asks for them: a seam that throws, or equals
@@ -63,7 +65,7 @@ extension DependencyTreeGenerator {
 			requiredAliasFulfillingProperties = properties(in: graph.receives.requiredAliasFulfilling)
 			typesDeclaredEscaping = Set(graph.typesDeclaredEscaping.columns(inRow: 0).map { graph.typeTable[Int($0)] })
 			receivers = treeReads.receivers
-			parameterReads = treeReads.parameterReads
+			parameterReads = ParameterReads(facts: graph)
 			builderFunctionNameTree = treeReads.builderFunctionNameTree
 		}
 
@@ -75,13 +77,19 @@ extension DependencyTreeGenerator {
 
 		/// The field as the comparison reads it, sorted. The required sets are spelled as `==` reads them, `any P` as `P`:
 		/// `seamRoot` asks them only whether they hold a property, and spells each parameter from its receivers. The escaping
-		/// types are spelled as declared, since the signature keeps the ones it holds.
+		/// types are spelled as declared, since the signature keeps the ones it holds. The parameter reads are spelled as
+		/// `seamRoot` asks them, by the two questions, for each label a receive that leaves the seam has, in label order: the
+		/// receives are the parameters' candidates, and both values hold the same ones.
 		func spelling(of field: SeamTreeReadsObservation.FactsField) -> [String] {
 			switch field {
 			case .requiredAliasFulfillingProperties:
 				requiredAliasFulfillingProperties.map(\.spelledAsEqualityReadsIt).sorted()
 			case .typesDeclaredEscaping:
 				typesDeclaredEscaping.map(\.asSource).sorted()
+			case .parameterReads:
+				Set(receivers.map(\.property.label)).sorted().map { label in
+					"\(label): read \(parameterReads.reads(label)), inside a @Sendable function \(parameterReads.readsInsideSendableFunction(label))"
+				}
 			}
 		}
 
@@ -93,6 +101,8 @@ extension DependencyTreeGenerator {
 				reads.requiredAliasFulfillingProperties = []
 			case .typesDeclaredEscaping:
 				reads.typesDeclaredEscaping = []
+			case .parameterReads:
+				reads.parameterReads = ParameterReads()
 			}
 			return reads
 		}
@@ -148,6 +158,9 @@ public enum SeamTreeReadsObservation {
 	public enum FactsField: String, CaseIterable, Sendable {
 		case requiredAliasFulfillingProperties
 		case typesDeclaredEscaping
+		/// For each label, whether the tree reads it where a parameter is its nearest declaration, and whether inside a
+		/// `@Sendable` function.
+		case parameterReads
 	}
 
 	/// The fields still read from the tree in both values, which the comparison cannot tell apart yet. What the facts lack
@@ -158,8 +171,6 @@ public enum SeamTreeReadsObservation {
 		case requiredReceivedProperties
 		/// Each receive's declaring type, alias, module, and the tier facts of the nested seam call that omits it.
 		case receivers
-		/// The labels the tree reads, those read inside a `@Sendable` function, and the labels around each hole site.
-		case parameterReads
 		/// The builder function names, with and without the hole sites' wrappers.
 		case builderFunctionNames
 	}
@@ -195,6 +206,100 @@ public struct SeamTreeReadsComparison: Sendable {
 	public let seam: String
 	/// The fields that differ, in `FactsField` order.
 	public let differences: [Difference]
+}
+
+extension DependencyTreeGenerator.ParameterReads {
+	/// The reads of the seam's parameters the facts of its tree, `graph`, hold, as `receivers(in:of:instantiables:)` finds
+	/// them on the tree, for every label the world interns: a label the world does not hold is read by no scope of the tree.
+	/// - A receive, an alias's fulfilling label, a nested seam call's parameters and a cycle-closing scope's call, each
+	///   where no scope enclosing it declares the label, are the labels the root's subtree reads from above it
+	///   (`TypeFactsWorld.labels(of:)` at the root, whose fold hides a read beneath each node that binds its label).
+	/// - A hole's site reads every label none of the scopes enclosing it declares: a hole that a route from the root
+	///   reaches through no node binding the label (`labelsReadAtSites(in:)`).
+	/// - A read inside a `@Sendable` function is a label the subtree beneath an edge that opens one reads from above it,
+	///   which no node on the route to that edge binds (`labelsReadInsideSendableFunction(in:)`).
+	init(facts graph: TypeFactsGraph) {
+		self.init()
+		for label in graph.labels(of: 0) {
+			labelsRead.insert(graph.labelTexts[Int(label)])
+		}
+		labelsRead.formUnion(Self.labelsReadAtSites(in: graph))
+		labelsReadInsideSendableFunction = Self.labelsReadInsideSendableFunction(in: graph)
+	}
+
+	/// Each label some hole's site in `graph` reads: a hole reached from the root along a route on which no node binds the
+	/// label. One walk of the graph per label, each node visited once; it holds a set of the nodes visited, which dies with
+	/// the walk.
+	private static func labelsReadAtSites(in graph: TypeFactsGraph) -> Set<String> {
+		var labels = Set<String>()
+		guard graph.holesBeneath.contains(0, inRow: 0) else { return labels }
+		for label in graph.labelTexts.indices {
+			var visited: Set = [0]
+			var pending = [0]
+			var reachesSite = false
+			while !reachesSite, let node = pending.popLast() {
+				guard !graph.worldBindings(of: node).contains(where: { $0.label == Int32(label) }) else { continue }
+				for target in graph.edges(from: Int32(node)).map(Int.init) {
+					if graph.kind(of: Int32(target)) == .hole {
+						reachesSite = true
+					} else if visited.insert(target).inserted {
+						pending.append(target)
+					}
+				}
+			}
+			if reachesSite {
+				labels.insert(graph.labelTexts[label])
+			}
+		}
+		return labels
+	}
+
+	/// Each label `graph`'s tree reads inside a `@Sendable` function: one its subtree beneath an edge that opens such a
+	/// function (`TypeFactsEdge.opens`) reads from above it, where no node on the route from the root to the edge binds
+	/// it. A route is walked only in plain code: beneath such an edge, what the subtree reads from above it already holds
+	/// every read beneath. A fill that is no `@Sendable` function is not entered: the call hands it what its tree reads
+	/// from the caller's scope where the call is, in plain code (`ScopeGenerator.FillCallerReads`). A visit is a node with
+	/// the labels the nodes above it bind, of those its subtree reads from above, which alone decide a read beneath it;
+	/// the visits made die with the walk.
+	private static func labelsReadInsideSendableFunction(in graph: TypeFactsGraph) -> Set<String> {
+		struct Visit: Hashable {
+			let node: Int32
+			let boundLabels: Set<Int32>
+		}
+		var labels = Set<String>()
+		var visits = Set<Visit>()
+		var pending = [Visit(node: 0, boundLabels: [])]
+		while let visit = pending.popLast() {
+			guard visits.insert(visit).inserted else { continue }
+			var boundLabels = visit.boundLabels
+			for binding in graph.worldBindings(of: Int(visit.node)) {
+				boundLabels.insert(binding.label)
+			}
+			for (target, edge) in zip(graph.edges(from: visit.node), graph.edgeFacts(from: visit.node)) {
+				let labelsOfTarget = graph.labels(of: target)
+				if edge.opens.isSendableFunction {
+					for label in labelsOfTarget where !boundLabels.contains(label) {
+						labels.insert(graph.labelTexts[Int(label)])
+					}
+				} else if !edge.isFill {
+					pending.append(Visit(node: target, boundLabels: boundLabels.intersection(labelsOfTarget)))
+				}
+			}
+		}
+		return labels
+	}
+}
+
+extension TypeFactsFunctionOpened {
+	/// Whether the function the edge opens is `@Sendable`.
+	fileprivate var isSendableFunction: Bool {
+		switch self {
+		case .none, .instantiatorBuilder:
+			false
+		case .sendableInstantiatorBuilder, .sendableLazyWrapper, .otherSendableFunction:
+			true
+		}
+	}
 }
 
 extension Property {

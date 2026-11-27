@@ -28,7 +28,10 @@ import Testing
 /// its root (`SeamTreeReadsObservation`, `SeamTreeReadsChecks`), which every test and fuzzer graph runs under. `Screen`'s
 /// tree requires `config` and `onTap` of its caller, receives `theme` only if available, requires `token` only through
 /// `Detail`'s `onlyIfAvailable` alias of it, and declares `OnTap` `@escaping`, so each field the facts produce is
-/// non-empty: the oracle reports nothing, and reports each field emptied.
+/// non-empty: the oracle reports nothing, and reports each field emptied. Of its by-value pass-throughs, `config` is read
+/// in plain code, `session` inside a `SendableInstantiator`'s builder, and `clock` by `Panel`, a nested seam that takes it
+/// `@Sendable`; a pass-through no read reaches, whose label a fill binds from its struct, is
+/// `generate_reportsNoDifference_whenFillOfSeamCallBindsLabelOfReceiveThatLeavesSeam`'s.
 struct SafeDIToolSeamTreeReadsTests: ~Copyable {
 	// MARK: Initialization
 
@@ -49,7 +52,7 @@ struct SafeDIToolSeamTreeReadsTests: ~Copyable {
 	mutating func generate_reportsNoDifference_whenFactsOfSeamsTreeHoldWhatTreeHolds(integration: MultiModuleIntegration) async throws {
 		let comparisons = try await observedComparisons(under: integration)
 		#expect(!comparisons.isEmpty)
-		#expect(Set(comparisons.map(\.seam)) == ["Screen"])
+		#expect(Set(comparisons.map(\.seam)) == ["Panel", "Screen"])
 		let differences = comparisons.flatMap(\.differences)
 		#expect(differences.isEmpty)
 	}
@@ -69,14 +72,50 @@ struct SafeDIToolSeamTreeReadsTests: ~Copyable {
 			["token: Token"]
 		case .typesDeclaredEscaping:
 			["OnTap"]
+		case .parameterReads:
+			[
+				"clock: read true, inside a @Sendable function true",
+				"config: read true, inside a @Sendable function false",
+				"onTap: read true, inside a @Sendable function false",
+				"session: read true, inside a @Sendable function true",
+				"theme: read true, inside a @Sendable function false",
+				"token: read true, inside a @Sendable function false",
+			]
 		}
-		#expect(!comparisons.isEmpty)
-		for comparison in comparisons {
-			#expect(comparison.seam == "Screen")
+		// `Panel`'s tree holds no alias and no escaping type, and its `clock` is read where `Screen`'s is.
+		let screenComparisons = comparisons.filter { $0.seam == "Screen" }
+		#expect(!screenComparisons.isEmpty)
+		for comparison in screenComparisons {
 			#expect(comparison.differences.map(\.field) == [field.rawValue])
 			#expect(comparison.differences.map(\.tree) == [tree])
-			#expect(comparison.differences.map(\.facts) == [[]])
+			// An emptied `ParameterReads` reads no label.
+			#expect(comparison.differences.map(\.facts) == [field == .parameterReads ? tree.map { $0.replacingOccurrences(of: "true", with: "false") } : []])
 		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsNoDifference_whenFillOfSeamCallBindsLabelOfReceiveThatLeavesSeam() async throws {
+		// `Top`'s fill of `Inner`'s place, which `Outer` passes up, binds `token` from its struct, so `WrapperReader`'s
+		// receive of `token` reaches no parameter of `Top`: the graph is rejected (`declarationHiddenByField`), and the
+		// signature pass before the error compares `Top`.
+		let (stream, continuation) = AsyncStream.makeStream(of: SeamTreeReadsComparison.self)
+		await #expect(throws: (any Error).self) {
+			try await SeamTreeReadsObservation.$comparesFacts.withValue({ continuation.yield($0) }) {
+				_ = try await executeSafeDIToolMultiModuleTest(
+					modules: Self.fillBindingLabelModules,
+					integration: .moduleInfo,
+					filesToDelete: &filesToDelete,
+				)
+			}
+		}
+		continuation.finish()
+		var comparisons = [SeamTreeReadsComparison]()
+		for await comparison in stream where comparison.seam == "Top" {
+			comparisons.append(comparison)
+		}
+		#expect(!comparisons.isEmpty)
+		#expect(comparisons.flatMap(\.differences).isEmpty)
 	}
 
 	@Test
@@ -194,12 +233,47 @@ struct SafeDIToolSeamTreeReadsTests: ~Copyable {
 			}
 			""",
 			"""
+			@Instantiable
+			public final class Session: Instantiable, Sendable {
+			    public init() {}
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Poller: Instantiable, Sendable {
+			    public init(session: Session) { self.session = session }
+			    @Received let session: Session
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Clock: Instantiable, Sendable {
+			    public init() {}
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Ticker: Instantiable, Sendable {
+			    public init(clock: Clock) { self.clock = clock }
+			    @Received let clock: Clock
+			}
+			""",
+			"""
+			@Instantiable(generateDependencyTree: true)
+			public final class Panel: Instantiable {
+			    public init(tickerBuilder: SendableInstantiator<Ticker>) { self.tickerBuilder = tickerBuilder }
+			    @Instantiated let tickerBuilder: SendableInstantiator<Ticker>
+			}
+			""",
+			"""
 			@Instantiable(generateDependencyTree: true)
 			public final class Screen: Instantiable {
-			    public init(reader: TapReader, badge: Badge, detail: Detail) { self.reader = reader; self.badge = badge; self.detail = detail }
+			    public init(reader: TapReader, badge: Badge, detail: Detail, pollerBuilder: SendableInstantiator<Poller>, panel: Panel) { self.reader = reader; self.badge = badge; self.detail = detail; self.pollerBuilder = pollerBuilder; self.panel = panel }
 			    @Instantiated let reader: TapReader
 			    @Instantiated let badge: Badge
 			    @Instantiated let detail: Detail
+			    @Instantiated let pollerBuilder: SendableInstantiator<Poller>
+			    @Instantiated let panel: Panel
 			}
 			""",
 		]),
@@ -209,10 +283,12 @@ struct SafeDIToolSeamTreeReadsTests: ~Copyable {
 
 			@Instantiable
 			public final class Home: Instantiable {
-			    public init(onTap: @escaping OnTap, config: Config, token: Token, screen: Screen) { self.onTap = onTap; self.config = config; self.token = token; self.screen = screen }
+			    public init(onTap: @escaping OnTap, config: Config, token: Token, session: Session, clock: Clock, screen: Screen) { self.onTap = onTap; self.config = config; self.token = token; self.session = session; self.clock = clock; self.screen = screen }
 			    @Forwarded let onTap: OnTap
 			    @Instantiated let config: Config
 			    @Instantiated let token: Token
+			    @Instantiated let session: Session
+			    @Instantiated let clock: Clock
 			    @Instantiated let screen: Screen
 			}
 			""",
@@ -226,5 +302,68 @@ struct SafeDIToolSeamTreeReadsTests: ~Copyable {
 			}
 			""",
 		], dependencies: ["Feature"]),
+	]
+
+	/// `Inner`, a seam of `Core`, takes a builder for `service`; `Outer`, a seam of `Session`, declares `token` and calls
+	/// `Inner`, passing the place up; `Top`, a seam of `Feature`, calls `Outer` and fills the place with `ServiceImpl`, whose
+	/// `WrapperReader` receives `token` as a wrapper, a form the place's field does not provide.
+	private static let fillBindingLabelModules = [
+		ModuleFixture(name: "Core", packageName: "Min", swiftFileContent: ["""
+		import SafeDI
+
+		public protocol Service: Sendable {}
+
+		@Instantiable
+		public final class Token: Instantiable, Sendable {
+		    public init() {}
+		}
+
+		@Instantiable
+		public final class Leaf: Instantiable, Sendable {
+		    public init(token: Token) { self.token = token }
+		    @Received public let token: Token
+		}
+
+		@Instantiable(generateDependencyTree: true)
+		public final class Inner: Instantiable, Sendable {
+		    public init(leafBuilder: SendableInstantiator<Leaf>, service: any Service) { self.leafBuilder = leafBuilder; self.service = service }
+		    @Instantiated public let leafBuilder: SendableInstantiator<Leaf>
+		    @Instantiated public let service: any Service
+		}
+		"""]),
+		ModuleFixture(name: "Session", packageName: "Min", swiftFileContent: ["""
+		import Core
+		import SafeDI
+
+		@Instantiable(generateDependencyTree: true)
+		public final class Outer: Instantiable, Sendable {
+		    public init(token: SendableLazilyInstantiated<Token>, inner: Inner) { self.token = token; self.inner = inner }
+		    @Instantiated public let token: SendableLazilyInstantiated<Token>
+		    @Instantiated public let inner: Inner
+		}
+		"""], dependencies: ["Core"]),
+		ModuleFixture(name: "Feature", packageName: "Min", swiftFileContent: ["""
+		import Core
+		import Session
+		import SafeDI
+
+		@Instantiable
+		public final class WrapperReader: Instantiable, Sendable {
+		    public init(token: SendableLazilyInstantiated<Token>) { self.token = token }
+		    @Received public let token: SendableLazilyInstantiated<Token>
+		}
+
+		@Instantiable(fulfillingAdditionalTypes: [Service.self])
+		public final class ServiceImpl: Instantiable, Service, Sendable {
+		    public init(wrapperReader: WrapperReader) { self.wrapperReader = wrapperReader }
+		    @Instantiated public let wrapperReader: WrapperReader
+		}
+
+		@Instantiable(generateDependencyTree: true)
+		public final class Top: Instantiable, Sendable {
+		    public init(outer: Outer) { self.outer = outer }
+		    @Instantiated public let outer: Outer
+		}
+		"""], dependencies: ["Core", "Session"]),
 	]
 }

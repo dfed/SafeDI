@@ -28,14 +28,20 @@ import Testing
 /// `generate_reportsDifference_whenFactsFieldIsPerturbed` cells fail here.
 enum SeamTreeReadsChecks {
 	/// Runs `operation` while comparing the reads of every seam it computes, handing each comparison to
-	/// `enclosingObserver` too, and records an issue for each comparison that holds a difference.
+	/// `enclosingObserver` too, and records an issue for each comparison that holds a difference, also where `operation`
+	/// throws, as a test of an error makes it: the signature passes before the error compared their seams too.
 	static func comparing<Result>(handingOn enclosingObserver: (@Sendable (SeamTreeReadsComparison) -> Void)?, _ operation: () async throws -> Result) async throws -> Result {
 		let (comparisons, continuation) = AsyncStream.makeStream(of: SeamTreeReadsComparison.self)
-		let result = try await SeamTreeReadsObservation.$comparesFacts.withValue({ comparison in
-			continuation.yield(comparison)
-			enclosingObserver?(comparison)
-		}) {
-			try await operation()
+		let result: Swift.Result<Result, any Error>
+		do {
+			result = try await .success(SeamTreeReadsObservation.$comparesFacts.withValue({ comparison in
+				continuation.yield(comparison)
+				enclosingObserver?(comparison)
+			}) {
+				try await operation()
+			})
+		} catch {
+			result = .failure(error)
 		}
 		continuation.finish()
 		for await comparison in comparisons where !comparison.differences.isEmpty {
@@ -44,6 +50,6 @@ enum SeamTreeReadsChecks {
 			\(comparison.differences.map { "\($0.field): tree \($0.tree), facts \($0.facts)" }.joined(separator: "\n"))
 			"""))
 		}
-		return result
+		return try result.get()
 	}
 }
