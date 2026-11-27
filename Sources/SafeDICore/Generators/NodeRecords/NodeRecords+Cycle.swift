@@ -201,9 +201,11 @@ extension NodeRecords {
 			countsOnPath[twin.key] = counts
 		}
 
-		/// Whether a place of `declaration` is on the path.
-		func holdsPlace(of declaration: DeclarationID) -> Bool {
-			placesOnPath[Int(declaration), default: 0] > 0
+		/// Whether a place of `declaration`, or of its twin (another form of its label and type), is on the path.
+		func holdsPlaceOfItOrItsTwin(_ declaration: DeclarationID) -> Bool {
+			guard placesOnPath[Int(declaration), default: 0] == 0 else { return true }
+			guard let twin = twinKey(of: declaration), let counts = countsOnPath[twin.key] else { return false }
+			return counts.indices.contains { $0 != twin.form && counts[$0] > 0 }
 		}
 
 		/// Notes that the walk leaves the place of `declaration` it entered.
