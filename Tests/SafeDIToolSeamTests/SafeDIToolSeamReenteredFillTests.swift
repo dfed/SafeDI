@@ -5626,6 +5626,48 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func presentationAdditions_holdCopyOfReenteredFillsHoleThatSeamCalledInsideFillTakes_whenCallThatPresentsPlaceIsInsideThatFill() async throws {
+		// `Relay` binds `x` and calls `SubB`, whose `second` `DefaultSecond` fills: a fill `Relay`’s call re-enters, whose
+		// copy of the hole leaves `x` uncarried. `DefaultSecond` builds `Pad`, a seam of `Middle` with the place `gadget`,
+		// which `Host` passes up, so the case of `Host`’s call of `Pad` holds that copy’s `x`, and the place’s builder,
+		// whose fulfiller reads no `x`, builds what the visible build does.
+		let fixture = Fixture(
+			xIsFinalClass: true,
+			featureTypes: [seamFixtureType(named: "Relay", isSeam: true, declarations: ["@Instantiated let x: X", "@Instantiated let subB: SubB"])],
+			middleTypes: [seamFixtureType(named: "Pad", isSeam: true, declarations: ["@Instantiated let gadget: any Gadget"])],
+			defaultFirstDeclarations: ["@Instantiated let relay: Relay"],
+			defaultSecondDeclarations: ["@Instantiated let pad: Pad"],
+			gadgetDeclarations: ["@Instantiated let label: Label"],
+		)
+		let (stream, continuation) = AsyncStream.makeStream(of: SeamSignature.Places.Observation.self)
+		let enclosingObserver = SeamPlaceLevels.observer
+		var writtenFiles = [URL]()
+		let output = try await SeamPlaceLevels.$observer.withValue({ placeLevels in
+			if let observation = placeLevels.placesObservation {
+				continuation.yield(observation)
+			}
+			enclosingObserver?(placeLevels)
+		}) {
+			try await executeSafeDIToolMultiModuleTest(modules: fixture.modules, integration: .moduleInfo, filesToDelete: &writtenFiles)
+		}
+		filesToDelete += writtenFiles
+		continuation.finish()
+		var host: SeamSignature.Places.Observation?
+		for await observation in stream where observation.seamType.asSource == "Host" {
+			host = observation
+		}
+		let observation = try #require(host)
+		let query = SeamSignature.Places.Query(of: observation.places, calledPlaces: observation.calledPlaces(of:))
+		let casesOfPad = observation.places.cases.indices.filter { observation.places.cases[$0].passedUp?.seamType.asSource == "Pad" }
+		#expect(casesOfPad.count == 1)
+		let caseOfPad = try #require(casesOfPad.first)
+		let additions = try #require(query.presentationAdditions(of: caseOfPad))
+		#expect(additions.calledCopyDeclarations.map { "\($0.property.asSource) of \($0.declaringType.asSource)" } == ["x: X of Relay"])
+		try await expectValuesEqualVisibleBuild(output, fixture)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_marksReusedLevelFunctionSendable_whenTypeOfAnotherModuleCallsSeamThatPassesReenteredPlaceUpInsideSendableInstantiator() async throws {
 		// `DefaultFirst` builds `Hub`, a type of `Feature`, through a `SendableInstantiator`, and `Hub` calls `Relay` in plain code:
 		// the call is made inside the `@Sendable` function above it, which calls `SubB`'s level function, so `SubB`'s is `@Sendable`.

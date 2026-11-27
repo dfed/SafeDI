@@ -498,7 +498,8 @@ public enum SeamPlacesOracle {
 		var facts = PresentedFacts()
 		var seen = Set<String>()
 		_ = addPresentedFacts(of: holding.caseIndex, query: holding.query, depth: 0, seen: &seen, to: &facts)
-		facts.uncarried.formUnion(additions.calledCopyDeclarations.map { uncarriedJSON($0) })
+		let calledCopies = Set(additions.calledCopyDeclarations.map { uncarriedJSON($0) })
+		facts.uncarried.formUnion(calledCopies)
 		facts.isPassedOnSendable = additions.isPassedOnSendable
 		for bound in additions.boundOnPathsToCalls {
 			facts.boundOnPathsToCalls.insert(boundKey(bound.declaration))
@@ -581,7 +582,9 @@ public enum SeamPlacesOracle {
 			}
 			// A declaration today's place holds as bound by a seam that passes the place up is among those the query says
 			// the place reads of its label above the holding seam.
-			for declaration in hole.uncarriedDeclarations {
+			// A copy of a fill's hole that a seam called inside the fill takes, which a presenting case stores
+			// (`presentationAdditions.calledCopyDeclarations`), is a case fact, as an own case's is, and no answer of a label.
+			for declaration in hole.uncarriedDeclarations where !calledCopies.contains(uncarriedJSON(declaration)) {
 				guard case .boundByPassingUpSeam = declaration.reason else { continue }
 				let answers = query.presentedAnswers(ofLabel: declaration.property.label, at: caseIndex) ?? []
 				let boundAbove = Set(answers.compactMap { answer -> String? in
