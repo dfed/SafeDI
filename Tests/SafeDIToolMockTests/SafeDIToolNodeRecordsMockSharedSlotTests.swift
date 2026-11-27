@@ -327,6 +327,72 @@ struct SafeDIToolNodeRecordsMockSharedSlotTests: ~Copyable {
 		#expect(printed ?? "Alpha released\nBravo released\nCharlie released\n" == "Alpha released\nBravo released\nCharlie released\n")
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildsWalksValuesFromEveryRoot_whenMockedCycleMemberCallsAnotherModulesPublicMock() async throws {
+		// `Bravo`, on the cycle, holds `Feed`'s `Screen`, which `App` cannot build, so each lap's function of `Bravo` calls
+		// `Screen`'s public mock, in whichever mock of `App` the function is written.
+		let modules = [
+			ModuleFixture(name: "Feed", packageName: "feedpkg", swiftFileContentByFilePath: [
+				"Screen.swift": """
+				import SafeDI
+
+				@Instantiable
+				public final class Analytics: Instantiable {
+				    public init() {}
+				}
+
+				@Instantiable(generateMock: .public)
+				public final class Screen: Instantiable {
+				    init(analytics: Analytics) {
+				        self.analytics = analytics
+				    }
+
+				    @Instantiated let analytics: Analytics
+				}
+				""",
+			]),
+			ModuleFixture(name: "App", packageName: "apppkg", swiftFileContentByFilePath: [
+				"Marked.swift": Self.markedFile,
+				"Alpha.swift": "import SafeDI\n\n" + Self.type("Alpha", building: ["Bravo"]),
+				"Bravo.swift": """
+				import Feed
+				import SafeDI
+
+				@Instantiable(generateMock: true)
+				public final class Bravo: Instantiable, Marked {
+				    public init(screen: Screen, charlieBuilder: Instantiator<Charlie>) {
+				        self.screen = screen
+				        self.charlieBuilder = charlieBuilder
+				    }
+
+				    @Instantiated let screen: Screen
+				    @Instantiated let charlieBuilder: Instantiator<Charlie>
+				    public var marker = ""
+				}
+				""",
+				"Charlie.swift": "import SafeDI\n\n" + Self.type("Charlie", building: ["Alpha"]),
+			], dependencies: ["Feed"]),
+		]
+		let walkOutput = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+		let (output, _) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+		}
+		let names = ["Alpha", "Bravo", "Charlie"]
+		let graph = ["Alpha": ["Bravo"], "Charlie": ["Alpha"]]
+		let comparison = try await DifferentialValueOracle.compare(
+			feature: DifferentialValuePath(output: output, modules: modules),
+			knownRight: DifferentialValuePath(output: walkOutput, modules: modules),
+			probes: Self.probes(from: "Alpha", path: Self.path(aroundRing: names, from: 1, steps: 7))
+				+ Self.probes(from: "Bravo", path: Self.path(aroundRing: names, from: 2, steps: 7), graph: graph)
+				+ Self.probes(from: "Charlie", path: Self.path(aroundRing: names, from: 0, steps: 7), graph: graph),
+			filesToDelete: &filesToDelete,
+		)
+		// Nothing is compared where compile verification is off.
+		guard let comparison else { return }
+		#expect(comparison.differences.isEmpty, "\(comparison.report)")
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
