@@ -348,16 +348,30 @@ enum TypeFactsChecks {
 				isInsideFill[index] = true
 			}
 		}
+		// The fills a place's subtree passes, whose reads from the caller's scope its generator receives, and so orders its
+		// children by: the node's union leaves a fill's reads out until the receives of a fill's fields are a column.
+		var fillNodesBeneath = places.map { _ in Set<Int>() }
+		for index in places.indices.reversed() {
+			for child in childrenByPlace[index] {
+				fillNodesBeneath[index].formUnion(fillNodesBeneath[child])
+				if places[child].isFill, let fillNode = places[child].node {
+					fillNodesBeneath[index].insert(fillNode)
+				}
+			}
+		}
 		func count(_ check: Int) {
 			compared[check, default: 0] += 1
 		}
 		for (index, place) in places.enumerated() {
 			guard let node = place.node, let generator = place.generator else { continue }
 			let facts = nodes[node]
-			let explained = subtreeClosesCycle[index] || isInsideFill[index]
-			// Check 31.
-			count(31)
-			if generator.callsSeam != (facts.construction == "seamCall") || generator.callsPublicMock != (facts.construction == "publicMockCall") || generator.constructsWithHandWrittenMock && facts.construction != "handWrittenMock" {
+			let fillNodes = fillNodesBeneath[index].sorted()
+			let explained = subtreeClosesCycle[index] || isInsideFill[index] || !fillNodes.isEmpty
+			// Check 31. A fill's construction is the fill, whatever builds its fulfiller.
+			if facts.construction != "fill" {
+				count(31)
+			}
+			if facts.construction != "fill", generator.callsSeam != (facts.construction == "seamCall") || generator.callsPublicMock != (facts.construction == "publicMockCall") || generator.constructsWithHandWrittenMock && facts.construction != "handWrittenMock" {
 				add(31, "place \(index) \(place.declaration) is \(facts.construction) where its generator calls a seam \(generator.callsSeam), a public mock \(generator.callsPublicMock), a hand-written mock \(generator.constructsWithHandWrittenMock)")
 			}
 			// Check 27.
@@ -454,12 +468,23 @@ enum TypeFactsChecks {
 				("only if available", generator.onlyIfAvailableUnwrapped, facts.onlyIfAvailableUnwrapped),
 				("through an alias", generator.requiredAliasFulfilling, facts.requiredAliasFulfilling),
 			].filter { spellingsOfOneType($0.1) != spellingsOfOneType($0.2) }
-			if let (name, generatorSet, nodeSet) = receiveDifferences.first {
+			if !receiveDifferences.isEmpty {
 				// Explained only where the node's union, a fixed point over every build of the type, holds what the place's
 				// generator receives: a place on a cycle, beneath one that closes a cycle, or built for a mock sees less,
 				// never more.
-				let isSubset = receiveDifferences.allSatisfy { Set(spellingsOfOneType($0.1)).isSubset(of: spellingsOfOneType($0.2)) }
-				add(isExplainedReceive && isSubset ? 17 : 16, "place \(index) \(place.declaration) receives \(name) \(generatorSet) where its node's union is \(nodeSet)")
+				// A label one receiver requires is required (`collectReceivedProperties`), so a place that receives it only if
+				// available where the union requires it sees less too.
+				// A fill beneath adds what its tree reads, in any form its tree reads it: the caller hands it a wrapper of a
+				// value it declares, or a value whose wrapper the fill reads.
+				let fillReads = Set(fillNodes.flatMap { nodes[$0].received + nodes[$0].required + nodes[$0].onlyIfAvailableUnwrapped + nodes[$0].requiredAliasFulfilling })
+				let fillLabels = Set(fillReads.map { String($0.prefix { $0 != ":" }) })
+				let requiredUnwrapped = spellingsOfOneType(facts.required).map { $0.hasSuffix("?") ? String($0.dropLast()) : $0 }
+				let isSubset = receiveDifferences.allSatisfy { name, generatorSet, nodeSet in
+					let nodeHolds = name == "only if available" ? Set(spellingsOfOneType(nodeSet)).union(requiredUnwrapped) : Set(spellingsOfOneType(nodeSet))
+					return Set(spellingsOfOneType(generatorSet)).subtracting(nodeHolds).allSatisfy { fillLabels.contains(String($0.prefix { $0 != ":" })) }
+				}
+				let differences = receiveDifferences.map { "\($0.0) \($0.1) where its node's union is \($0.2)" }.joined(separator: ", ")
+				add(isExplainedReceive && isSubset ? 17 : 16, "place \(index) \(place.declaration) receives \(differences)")
 			}
 			// Check 18 and 19.
 			count(explained ? 19 : 18)
@@ -477,18 +502,19 @@ enum TypeFactsChecks {
 				}
 			}
 		}
-		// Check 22.
-		var identityByKey = [String: Int]()
-		var keyByIdentity = [Int: String]()
+		// Check 22. Keys compare by their bytes: Swift reads two encodings of one label as two names, which `String` equates.
+		var identityByKey = [[UInt8]: Int]()
+		var keyByIdentity = [Int: [UInt8]]()
 		for (index, node) in nodes.enumerated() where !node.isLeaf {
 			count(22)
-			if let identity = identityByKey[node.cycleKey], identity != node.cycleKeyID {
+			let key = Array(node.cycleKey.utf8)
+			if let identity = identityByKey[key], identity != node.cycleKeyID {
 				add(22, "node \(index) \(node.description) has identity \(node.cycleKeyID) where another of key \(node.cycleKey) has \(identity)")
-			} else if let key = keyByIdentity[node.cycleKeyID], key != node.cycleKey {
-				add(22, "node \(index) \(node.description) shares identity \(node.cycleKeyID) with key \(key)")
+			} else if let otherKey = keyByIdentity[node.cycleKeyID], otherKey != key {
+				add(22, "node \(index) \(node.description) shares identity \(node.cycleKeyID) with key \(String(decoding: otherKey, as: UTF8.self))")
 			}
-			identityByKey[node.cycleKey] = node.cycleKeyID
-			keyByIdentity[node.cycleKeyID] = node.cycleKey
+			identityByKey[key] = node.cycleKeyID
+			keyByIdentity[node.cycleKeyID] = key
 		}
 		// Check 30.
 		var holdsHole = nodes.map { $0.kind == "hole" }

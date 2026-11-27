@@ -80,9 +80,10 @@ struct SafeDIToolTypeFactsStorageTests: ~Copyable {
 			elementsPerNodeAndEdge.append(Double(report.columnElementCount) / Double(report.nodes.count + report.edgeCount))
 		}
 
-		// About 29 elements per node and edge at four layers and at eight: each edge's facts are eight, each binding's
-		// eleven, and every node binds its children.
-		#expect(elementsPerNodeAndEdge.allSatisfy { $0 <= 32 }, "\(elementsPerNodeAndEdge)")
+		// About 39 elements per node and edge at four layers and at eight, every column counted, the variants' and the
+		// read and label runs included: each edge's facts are seven, each binding's eleven, and every node binds its
+		// children.
+		#expect(elementsPerNodeAndEdge.allSatisfy { $0 <= 44 }, "\(elementsPerNodeAndEdge)")
 		#expect(elementsPerNodeAndEdge[1] <= elementsPerNodeAndEdge[0], "\(elementsPerNodeAndEdge)")
 	}
 
@@ -110,11 +111,12 @@ struct SafeDIToolTypeFactsStorageTests: ~Copyable {
 			try Self.expectFlatColumns(of: report.graph)
 		}
 		if perElement.count == reports.count {
-			// A debug build measured 66, 41 and 35 allocations and 1,163, 919 and 908 retains per node and edge: the
-			// interning of properties and types hashes their spellings, which retains each part. The bounds stop growth.
+			// A debug build measured 83, 47 and 40 allocations and 1,360, 1,061 and 1,037 retains per node and edge, the
+			// variants included: the interning of properties and types hashes their spellings, which retains each part.
+			// The bounds stop growth.
 			for (allocations, retains) in perElement {
-				#expect(allocations <= 80, "\(perElement)")
-				#expect(retains <= 1_400, "\(perElement)")
+				#expect(allocations <= 100, "\(perElement)")
+				#expect(retains <= 1_600, "\(perElement)")
 			}
 			// The hub of 12 layers holds 64 times the paths of 6 layers, and no more per node and edge.
 			#expect(perElement[2].allocations <= perElement[1].allocations * 1.1, "\(perElement)")

@@ -197,10 +197,10 @@ struct TypeFactsGraph: Sendable {
 				break
 			case .none:
 				let record = node.scope
-				// A world's root is handed its forwarded properties by no scope above it, so they hide nothing its tree receives.
-				var forwarded = Set<Property>()
+				// A world's root is handed its forwarded properties by no scope above it, so they hide nothing its tree receives
+				// but the instances of the wrappers among them, which its tree reads from those wrappers.
+				var forwarded = Set(record.forwardedLazilyInstantiatedInstanceProperties)
 				if node.property != nil {
-					forwarded.formUnion(record.forwardedLazilyInstantiatedInstanceProperties)
 					for dependency in record.instantiable.dependencies where dependency.source == .forwarded {
 						forwarded.insert(dependency.property)
 					}
@@ -397,6 +397,7 @@ struct TypeFactsGraph: Sendable {
 		let rootInstantiable = nodes[0].scope.instantiable
 		let holesArePlaces = rootInstantiable.generatesDependencyTree || (forMockGeneration && rootInstantiable.generateMock == .public)
 		let worldHoldsHoles = holesArePlaces && holesBeneath.contains(0, inRow: 0)
+		let carrierEdges = worldHoldsHoles ? Self.carrierEdges(of: graph, edgeIsFill: edgeIsFill, builtTypes: builtTypes, nodeProperties: nodeProperties) : []
 
 		// The order each scope builds its children in, and the loops of builders among them.
 		var positions = [Int32](repeating: -1, count: graph.edgeCount)
@@ -413,7 +414,7 @@ struct TypeFactsGraph: Sendable {
 					isAlias: nodes[target].key.leaf == .alias,
 					isErasedAlias: nodes[target].key.leaf == .alias && nodes[target].key.erasedToConcreteExistential,
 					onlyIfAvailableAliasFulfilling: childProperties[target].aliasFulfilling,
-					isCarrier: worldHoldsHoles && holesBeneath.contains(0, inRow: target),
+					isCarrier: carrierEdges.contains(edge),
 				)
 			}
 			let order = SiblingOrder.order(of: children, receives: receives, facts: propertyFacts)
@@ -533,15 +534,18 @@ struct TypeFactsGraph: Sendable {
 		for index in nodes.indices {
 			for edge in graph.edgeIndices(from: index) {
 				let target = graph.edgeTargets[edge]
-				let opens = fillHoleByEdge[Int32(edge)].map { $0.isSendable ? TypeFactsFunctionOpened.otherSendableFunction : Self.opens(nodes[Int(target)]) } ?? Self.opens(nodes[Int(target)])
+				// A fill opens what its fulfiller's wrapper opens, or, where the place is built in another `@Sendable` function,
+				// that function.
+				let targetOpens = Self.opens(nodes[Int(target)])
+				let opens = fillHoleByEdge[Int32(edge)].map { $0.isSendable && targetOpens != .sendableInstantiatorBuilder && targetOpens != .sendableLazyWrapper ? TypeFactsFunctionOpened.otherSendableFunction : targetOpens } ?? targetOpens
 				edgeFacts.append(TypeFactsEdge(
 					child: target,
 					buildPosition: positions[edge],
 					loop: loops[edge],
 					opens: opens,
 					isFill: edgeIsFill[edge],
-					isCallEdge: graph.componentByNode[Int(target)] == graph.componentByNode[index] && graph.isOnCycle(index),
 					bindingsBefore: bindingsBefore[edge],
+					isCallEdge: graph.componentByNode[Int(target)] == graph.componentByNode[index] && graph.isOnCycle(index),
 				))
 			}
 		}
@@ -1014,6 +1018,139 @@ struct TypeFactsGraph: Sendable {
 		} else {
 			return .initializer
 		}
+	}
+
+	/// The edges whose children start after their siblings that hold no place (`ScopeGenerator.startsAsCarrier(_:)`), as
+	/// `SeamDeclarationGraph` finds them: an edge whose target dominates its source closes a cycle on every build and is
+	/// removed; a fill is entered where its tree reaches a hole; and a child holds a place where the edge for its property
+	/// out of any declaration of its parent's type is left and reaches a hole along what is left. A fact of the parent's
+	/// type, so every declaration of it starts its children in one order.
+	private static func carrierEdges(of graph: OrderedGraph<TypeFactsDeclaration>, edgeIsFill: [Bool], builtTypes: [Int32], nodeProperties: [Int32]) -> Set<Int> {
+		let nodes = graph.nodes
+		// The nodes that reach a hole along every edge: a fill whose tree reaches none is left out, as the generator's graph
+		// skips a fill whose tree holds no site.
+		var predecessors = [[Int]](repeating: [], count: nodes.count)
+		for source in nodes.indices {
+			for edge in graph.edgeIndices(from: source) {
+				predecessors[Int(graph.edgeTargets[edge])].append(source)
+			}
+		}
+		func reachingHoles(along predecessors: [[Int]]) -> [Bool] {
+			var reaches = nodes.map { $0.key.leaf == .hole }
+			var nodesToVisit = reaches.indices.filter { reaches[$0] }
+			while let node = nodesToVisit.popLast() {
+				for predecessor in predecessors[node] where !reaches[predecessor] {
+					reaches[predecessor] = true
+					nodesToVisit.append(predecessor)
+				}
+			}
+			return reaches
+		}
+		let reachesHole = reachingHoles(along: predecessors)
+		func isInGraph(_ edge: Int) -> Bool {
+			!edgeIsFill[edge] || reachesHole[Int(graph.edgeTargets[edge])]
+		}
+		let dominators = immediateDominators(of: graph, followsEdge: isInGraph)
+		func dominates(_ dominator: Int, _ node: Int) -> Bool {
+			var current = node
+			while true {
+				if current == dominator {
+					return true
+				}
+				let next = dominators[current]
+				guard next >= 0, next != current else { return false }
+				current = next
+			}
+		}
+		var leftPredecessors = [[Int]](repeating: [], count: nodes.count)
+		var isLeft = [Bool](repeating: false, count: graph.edgeCount)
+		for source in nodes.indices where dominators[source] >= 0 {
+			for edge in graph.edgeIndices(from: source) where isInGraph(edge) {
+				let target = Int(graph.edgeTargets[edge])
+				guard !dominates(target, source) else { continue }
+				isLeft[edge] = true
+				leftPredecessors[target].append(source)
+			}
+		}
+		let reachesHoleAlongLeftEdges = reachingHoles(along: leftPredecessors)
+		// By the parent's type and the child's property, whether some declaration's edge holds a place.
+		struct TypeProperty: Hashable {
+			let type: Int32
+			let property: Int32
+		}
+		var holdsPlace = Set<TypeProperty>()
+		for source in nodes.indices {
+			for edge in graph.edgeIndices(from: source) where isLeft[edge] && !edgeIsFill[edge] && reachesHoleAlongLeftEdges[Int(graph.edgeTargets[edge])] {
+				holdsPlace.insert(TypeProperty(type: builtTypes[source], property: nodeProperties[Int(graph.edgeTargets[edge])]))
+			}
+		}
+		var carrierEdges = Set<Int>()
+		for source in nodes.indices {
+			for edge in graph.edgeIndices(from: source) where !edgeIsFill[edge] && holdsPlace.contains(TypeProperty(type: builtTypes[source], property: nodeProperties[Int(graph.edgeTargets[edge])])) {
+				carrierEdges.insert(edge)
+			}
+		}
+		return carrierEdges
+	}
+
+	/// Each node's immediate dominator from the root, node 0, along the edges `followsEdge` keeps (Cooper, Harvey and
+	/// Kennedy's iteration over reverse postorder): the root's is itself, and a node those edges do not reach has -1.
+	private static func immediateDominators(of graph: OrderedGraph<TypeFactsDeclaration>, followsEdge: (Int) -> Bool) -> [Int] {
+		let count = graph.nodes.count
+		// Postorder by an explicit stack, each node's edges in order.
+		var postorderNumber = [Int](repeating: -1, count: count)
+		var postorder = [Int]()
+		var isVisited = [Bool](repeating: false, count: count)
+		var frames = [(node: 0, edges: Array(graph.edgeIndices(from: 0)), next: 0)]
+		isVisited[0] = true
+		var predecessors = [[Int]](repeating: [], count: count)
+		while var frame = frames.popLast() {
+			if frame.next < frame.edges.count {
+				let edge = frame.edges[frame.next]
+				frame.next += 1
+				frames.append(frame)
+				guard followsEdge(edge) else { continue }
+				let target = Int(graph.edgeTargets[edge])
+				predecessors[target].append(frame.node)
+				if !isVisited[target] {
+					isVisited[target] = true
+					frames.append((target, Array(graph.edgeIndices(from: target)), 0))
+				}
+			} else {
+				postorderNumber[frame.node] = postorder.count
+				postorder.append(frame.node)
+			}
+		}
+		var dominators = [Int](repeating: -1, count: count)
+		dominators[0] = 0
+		func intersect(_ first: Int, _ second: Int) -> Int {
+			var first = first
+			var second = second
+			while first != second {
+				while postorderNumber[first] < postorderNumber[second] {
+					first = dominators[first]
+				}
+				while postorderNumber[second] < postorderNumber[first] {
+					second = dominators[second]
+				}
+			}
+			return first
+		}
+		var changed = true
+		while changed {
+			changed = false
+			for node in postorder.reversed() where node != 0 {
+				var newDominator = -1
+				for predecessor in predecessors[node] where dominators[predecessor] >= 0 {
+					newDominator = newDominator < 0 ? predecessor : intersect(predecessor, newDominator)
+				}
+				if newDominator != dominators[node] {
+					dominators[node] = newDominator
+					changed = true
+				}
+			}
+		}
+		return dominators
 	}
 
 	private static func opens(_ node: TypeFactsDeclaration) -> TypeFactsFunctionOpened {
