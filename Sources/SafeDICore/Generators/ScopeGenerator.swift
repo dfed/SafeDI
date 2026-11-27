@@ -7755,6 +7755,23 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// the text written here.
 		let dispatcherObserver = DispatcherRecordObservation.observer
 		let filledCallFields = FilledCallFields(callerArguments: body.callerArgumentByParameter, callerMemoArguments: body.callerMemoArgumentByMemo, labelsHiddenByReenteringCalls: labelsHiddenByReenteringCalls)
+		// Where a test observes them, the inner scope levels and dispatchers of the call, beside node records' (`FillLevelsObservation`).
+		if let fillLevelsObserver = FillLevelsObservation.observer, !body.callDispatchers.isEmpty, let property {
+			fillLevelsObserver(FillLevelsObservation(
+				call: property,
+				fills: body.orderedChildren.compactMap { child in
+					guard let fillKey = child.generator.fillKey, child.generator.fillEmitsCode, let hole = child.generator.fillCaseHoles.first else { return nil }
+					return FillInnerScopes.Fill(caseKey: Self.fillCaseKey(of: hole), fillKey: fillKey, innerScopeParameters: child.generator.fillCallerReads.innerScopeParameters.map { FillInnerScopes.Field(label: $0.property.label, type: $0.property.typeDescription) })
+				},
+				// What a fill builds reads the levels it is offered (`Scope.callerReads(of:child:labelsHandedToReenteredFunctions:log:)`).
+				fillKeysReadingInnerScopes: Set(body.orderedChildren.compactMap { $0.generator.propertiesToGenerate.first?.readsFillInnerScopes == true ? $0.generator.fillKey : nil }),
+				fillParameters: body.fillParametersByKey.sorted { $0.key < $1.key }.map { (fillKey: $0.key, parameters: $0.value) },
+				dispatchers: body.callDispatchers.map { FillLevelsObservation.projection(of: $0, parameters: body.parametersByKey[$0.key, default: []]) },
+				builtClosures: builderCallArguments.compactMap { argument in
+					argument.builtCall.map { FillLevelsObservation.Closure(label: argument.label, rootDispatcherKey: $0.dispatcherKey, carriedStructs: $0.carriedStructs.map { BuiltClosure.CarriedStructRead(upName: $0.upName, structType: $0.type) }) }
+				},
+			))
+		}
 		let dispatcherRecords = dispatcherObserver == nil ? [] : body.callDispatchers.map { dispatcher in
 			DispatcherRecord(dispatcher: dispatcher, parameters: body.parametersByKey[dispatcher.key, default: []], isSendable: sendableFillKeys.contains(dispatcher.key))
 		}

@@ -84,8 +84,9 @@ extension DependencyTreeGenerator {
 				nodeRecords = try records.get()
 			} catch let refusal as NodeRecordRefusal {
 				let everyRefusal = GenerationWork.$observer.withValue(nil) { NodeRecords.refusals(in: world, seamTree: seamTree, declaredTypeNames: declaredTypeNames) }
-				observer(NodeRecordsReport(root: root, refusal: refusal.rawValue, everyRefusal: everyRefusal.map(\.rawValue), isLaidOutFromNodeRecords: false, differences: [], recordCount: 0, treePlaceCount: 0, treeForcers: rootInfo.treeForcers))
-				return try await scopeGenerator.generatePlan()
+				let (code, fillLevelDifferences) = try await planComparingFillLevels(in: world, seamTree: seamTree) { try await scopeGenerator.generatePlan() }
+				observer(NodeRecordsReport(root: root, refusal: refusal.rawValue, everyRefusal: everyRefusal.map(\.rawValue), isLaidOutFromNodeRecords: false, differences: fillLevelDifferences, recordCount: 0, treePlaceCount: 0, treeForcers: rootInfo.treeForcers))
+				return code
 			}
 			// A seam's own tree's initializers are written around its body.
 			let laidOutCode: GeneratedCode? = if !NodeRecordsObservation.laysOutRoots {
@@ -97,9 +98,12 @@ extension DependencyTreeGenerator {
 			}
 			// The tree's places are planned beside node records' so that the two are compared, even where the root is
 			// laid out from node records.
-			let (treeCode, comparisons) = try await treeCode(of: scopeGenerator, besideRecordsBody: nodeRecords.rootBody)
+			let (planned, fillLevelDifferences): (PlannedTree, [String]) = try await planComparingFillLevels(in: world, seamTree: seamTree) { () async throws -> PlannedTree in
+				try await Self.treeCode(of: scopeGenerator, besideRecordsBody: nodeRecords.rootBody)
+			}
+			let (treeCode, comparisons) = planned
 			// A root whose tree's body holds nothing is compared nowhere.
-			let codeDifferences = laidOutCode.map { $0.spelled() == treeCode.spelled() ? [] : ["root: the code laid out from node records differs from the tree’s"] } ?? []
+			let codeDifferences = (laidOutCode.map { $0.spelled() == treeCode.spelled() ? [] : ["root: the code laid out from node records differs from the tree’s"] } ?? []) + fillLevelDifferences
 			for comparison in comparisons {
 				observer(NodeRecordsReport(
 					root: root,
@@ -114,6 +118,25 @@ extension DependencyTreeGenerator {
 			}
 			return laidOutCode ?? treeCode
 		}
+	}
+
+	/// What `plan` returns, planning a tree of `world`, and each way node records' inner scope levels and dispatchers of the
+	/// world's filled calls differ from the tree's (`FillLevelsObservation`).
+	private static func planComparingFillLevels<Planned: Sendable>(in world: TypeFactsGraph, seamTree: RootScopeInfo.SeamTree?, _ plan: () async throws -> Planned) async throws -> (Planned, [String]) {
+		let (stream, continuation) = AsyncStream.makeStream(of: FillLevelsObservation.self)
+		// Typed, as `comparison(of:with:of:)` says why.
+		let planned: Planned = try await FillLevelsObservation.$observer.withValue {
+			continuation.yield($0)
+		} operation: { () async throws -> Planned in
+			try await plan()
+		}
+		continuation.finish()
+		var observations = [FillLevelsObservation]()
+		for await observation in stream {
+			observations.append(observation)
+		}
+		let differences = GenerationWork.$observer.withValue(nil) { FillLevelsObservation.differences(of: observations, in: world, seamTree: seamTree) }
+		return (planned, differences)
 	}
 
 	/// The report of a root laid out from `layout`, its node records, beside `tree`, the tree a test builds for it: every
