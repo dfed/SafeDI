@@ -134,6 +134,33 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 		""")
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysOutRoot_whenRenameKeepingItsLabelReadsInstanceOfLazilyInstantiatedPropertyAbove() async throws {
+		// `Settings` renames `analytics` under its own label, so its scope binds the label the rename reads: the rename's
+		// key names the wrapper above, which its record reads the instance of, as the tree does.
+		let (forcers, _) = try await treeForcers(of: Self.keepLabelRenames(nestedRename: false))
+		#expect(forcers == """
+		Root\tnone
+		roots that built a tree: 0 of 1
+
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsTree_whenRenameKeepingItsLabelReadsRenameKeepingItsLabelAbove() async throws {
+		// `Detail`, beneath `Settings`, renames `analytics` under its own label too: its key names `Settings`' rename, the
+		// nearest declaration, never the wrapper above `Settings`, so its record matches the tree's code
+		// (`NodeRecordsChecks`). The engine does not lay a root out from an erased rename that keeps its label yet.
+		let (forcers, _) = try await treeForcers(of: Self.keepLabelRenames(nestedRename: true))
+		#expect(forcers == """
+		Root\tkind notLaidOut
+		roots that built a tree: 1 of 1
+
+		""")
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -146,6 +173,72 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 		seamFixtureType(named: "Step", declarations: ["@Instantiated let stepBuilder: Instantiator<Step>"]),
 		seamFixtureType(named: "Service", declarations: []),
 	]
+
+	/// A root that instantiates `analytics` as a `LazilyInstantiated<Analytics>` and builds `Settings`, which renames it under
+	/// its own label as an `EventTracker`; with `nestedRename`, `Settings` builds `Detail`, which renames `Settings`' rename
+	/// under the same label as an `AnyTracker`.
+	private static func keepLabelRenames(nestedRename: Bool) -> [String] {
+		var files = [
+			"""
+			@Instantiable(isRoot: true)
+			public final class Root: Instantiable {
+			    public init(analytics: LazilyInstantiated<Analytics>, settingsBuilder: Instantiator<Settings>) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			    @Instantiated let analytics: LazilyInstantiated<Analytics>
+			    @Instantiated let settingsBuilder: Instantiator<Settings>
+			}
+			""",
+			"""
+			public protocol EventTracker {}
+
+			@Instantiable
+			public final class Analytics: EventTracker, Instantiable {
+			    public init() {}
+			}
+			""",
+		]
+		if nestedRename {
+			files.append("""
+			@Instantiable
+			public final class Settings: Instantiable {
+			    public init(analytics: EventTracker, detail: Detail) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			    @Received(fulfilledByDependencyNamed: "analytics", ofType: Analytics.self) let analytics: EventTracker
+			    @Instantiated let detail: Detail
+			}
+			""")
+			files.append("""
+			public struct AnyTracker: EventTracker {
+			    public init(_ tracker: EventTracker) {}
+			}
+
+			@Instantiable
+			public final class Detail: Instantiable {
+			    public init(analytics: AnyTracker) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			    @Received(fulfilledByDependencyNamed: "analytics", ofType: EventTracker.self, erasedToConcreteExistential: true) let analytics: AnyTracker
+			}
+			""")
+		} else {
+			files.append("""
+			@Instantiable
+			public final class Settings: Instantiable {
+			    public init(analytics: EventTracker) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			    @Received(fulfilledByDependencyNamed: "analytics", ofType: Analytics.self) let analytics: EventTracker
+			}
+			""")
+		}
+		return files
+	}
 
 	/// A root whose two parents each build a `Reader` whose rename is fulfilled by `x`: `LazyParent` declares `x` as a
 	/// `LazilyInstantiated<X>` and builds `Reader` through an `Instantiator`, and `ValueParent` declares `x` as an `X`

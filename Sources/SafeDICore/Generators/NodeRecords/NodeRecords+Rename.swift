@@ -68,10 +68,9 @@ extension NodeRecords {
 		answers: OnlyIfAvailableAnswers,
 	) throws(NodeRecordRefusal) -> AliasPlaceRecord {
 		guard let (property, fulfillingProperty, erasedToConcreteExistential, declarationReference) = rename(of: declaration, in: world) else { throw .renameOrHole }
-		// A rename of the wrapper itself is bound from the wrapper; only one of its value reads the instance.
-		// A rename that keeps its label is the declaration being built where it reads the label, so its key names itself,
-		// not what it renames: refused until the facts key that read past the rename's own declaration.
-		guard fulfillingProperty.label != property.label, let fulfillingKeyIsLazyWrapper = fulfillingKeyIsLazyWrapper(declaration, variant: variant, in: world) else { throw .lazy }
+		// A rename of the wrapper itself is bound from the wrapper; only one of its value reads the instance. A rename that
+		// keeps its label reads the label past its own declaration, so its key names what it renames, as any rename's does.
+		guard let fulfillingKeyIsLazyWrapper = fulfillingKeyIsLazyWrapper(declaration, variant: variant, in: world) else { throw .lazy }
 		let readsWrappersInstance = fulfillingProperty.asUnwrappedProperty.propertyType.isConstant && fulfillingKeyIsLazyWrapper
 		switch answers.renameBinding(of: variant) {
 		case .boundToNil:

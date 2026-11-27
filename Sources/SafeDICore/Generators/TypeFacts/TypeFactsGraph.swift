@@ -900,11 +900,13 @@ struct TypeFactsGraph: Sendable {
 				// A child answers its own label's read as the declaration being built, by the property it is built as; any
 				// other label by the last of its parent's bindings bound before the edge, so a declaration bound after the
 				// call does not answer it.
+				// An alias that keeps the label it retypes reads that label but is not the declaration being built: what
+				// answers its scope's read of the label from above answers it, as `ScopeGenerator` binds it.
 				// Every binding, and every child's property, is a declaration of its node's scope, which the lookup finds by its
 				// spelling.
 				let bound: Property?
 				let beingBuilt: Bool
-				if let property = child.property, labels.existingID(of: property.label) == read.label {
+				if child.key.leaf != .alias, let property = child.property, labels.existingID(of: property.label) == read.label {
 					bound = property
 					beingBuilt = true
 				} else {
@@ -1464,6 +1466,11 @@ struct TypeFactsGraph: Sendable {
 				if !createdLabels.contains(fulfillingProperty.label) {
 					let label = labels.id(of: fulfillingProperty.label)
 					appendReceiveReads(of: label, onlyIfAvailable: onlyIfAvailable, forMockGeneration: forMockGeneration, to: &reads)
+					// A required alias that keeps its label reads it on the alias channel from its leaf, which this scope's own
+					// binding of the label hides from above; the scope reads it for the leaf, so its answer reaches it.
+					if !onlyIfAvailable, fulfillingProperty.label == dependency.property.label {
+						reads.append(Read(.alias, label: label))
+					}
 					if onlyIfAvailable {
 						formsReadOnlyIfAvailable.append(OnlyIfAvailableForm(label: label, kind: fulfillingProperty.asUnwrappedProperty.propertyType))
 					}
