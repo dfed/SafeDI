@@ -50,7 +50,7 @@ struct TypeFactsDeclaration: Hashable, Sendable {
 		self.scope = scope
 		self.property = property
 		self.propertyID = propertyID
-		aliasFulfillingProperty = nil
+		alias = nil
 		isOnlyIfAvailableAlias = false
 		key = Key(record: ObjectIdentifier(scope.identity), property: propertyID?.raw ?? -1, erasedToConcreteExistential: erasedToConcreteExistential, isFill: isFill, leaf: .none, leafIndex: -1)
 	}
@@ -60,7 +60,7 @@ struct TypeFactsDeclaration: Hashable, Sendable {
 		self.scope = scope
 		self.property = property
 		propertyID = nil
-		aliasFulfillingProperty = fulfillingProperty
+		alias = fulfillingProperty.map { Alias(property: property, fulfillingProperty: $0) }
 		isOnlyIfAvailableAlias = onlyIfAvailable
 		key = Key(record: ObjectIdentifier(scope.identity), property: -1, erasedToConcreteExistential: erasedToConcreteExistential, isFill: false, leaf: fulfillingProperty == nil ? .hole : .alias, leafIndex: Int32(index))
 	}
@@ -72,9 +72,20 @@ struct TypeFactsDeclaration: Hashable, Sendable {
 	let property: Property?
 	/// The run's ID of the property built, `nil` for a world's root and a leaf.
 	let propertyID: PropertyID?
+	/// For an alias, its own property and the property it is fulfilled by.
+	let alias: Alias?
 	/// For an alias, the property it is fulfilled by.
-	let aliasFulfillingProperty: Property?
+	var aliasFulfillingProperty: Property? {
+		alias?.fulfillingProperty
+	}
+
 	let isOnlyIfAvailableAlias: Bool
+
+	/// An alias leaf's two properties, which every alias has.
+	struct Alias {
+		let property: Property
+		let fulfillingProperty: Property
+	}
 
 	static func == (lhs: Self, rhs: Self) -> Bool {
 		lhs.key == rhs.key
