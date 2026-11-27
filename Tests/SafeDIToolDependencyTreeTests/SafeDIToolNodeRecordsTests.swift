@@ -356,8 +356,8 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 		    }
 		}
 		"""])
-		// `Screen`'s own tree reads its deferred parameter through its memo, which node records read as its tree does, and
-		// each root's code is laid out from its records.
+		// `Screen`'s own tree reads its deferred parameter through its memo, which node records read at its root, and each
+		// root's code is laid out from its records.
 		#expect(reports.map(\.root) == ["Screen", "Root"])
 		#expect(reports.map(\.refusal) == [nil, nil])
 		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true, true])
@@ -797,6 +797,52 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 				#expect(!code.contains(name), "\(file) names \(name)")
 			}
 		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysOutASeamsOwnRootAsTheTreeDoes_whenItsTreeReadsADeferredParameter() async throws {
+		// `Screen`'s tree receives `user`, which `Root` holds lazily, in `Header`, built with `Screen`, and in `Detail`, built
+		// behind an instantiator: the seam binds the deferred parameter's memo, and node records read its instance where the
+		// tree does, so its root is laid out from them.
+		let files = [
+			seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let user: LazilyInstantiated<User>", "@Instantiated let screen: Screen"]),
+			seamFixtureType(named: "Screen", isSeam: true, declarations: ["@Instantiated let detailBuilder: Instantiator<Detail>", "@Instantiated let header: Header"]),
+			seamFixtureType(named: "Detail", declarations: ["@Received let user: User"]),
+			seamFixtureType(named: "Header", declarations: ["@Received let user: User"]),
+			"""
+			@Instantiable
+			public final class User: Instantiable, Sendable {
+			    public init() {}
+			}
+			""",
+		]
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: files, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
+		extension Screen {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public init(__safeDI_user: @autoclosure @escaping () -> User) {
+		        let user = LazilyInstantiated<User>(__safeDI_user)
+		        @inline(never) func __safeDI_detailBuilder() -> Detail {
+		            Detail(user: user.instance)
+		        }
+		        let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
+		        let header = Header(user: user.instance)
+		        self.init(detailBuilder: detailBuilder, header: header)
+		    }
+		}
+
+		extension Screen {
+		    public enum __safeDI_Screen_08AA1A656B91D4BA {}
+		}
+		""")
+		let screenReports = reports.filter { $0.root == "Screen" }
+		#expect(screenReports.map(\.refusal) == [nil])
+		#expect(screenReports.map(\.isLaidOutFromNodeRecords) == [true])
+		#expect(reports.flatMap(\.differences) == [])
 	}
 
 	// MARK: Private
