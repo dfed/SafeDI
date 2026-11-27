@@ -21,8 +21,8 @@
 /// What the folds of a world's graph compare of its properties, by the world's property ID: each property's label, its
 /// unwrapped form, the instance a lazy wrapper creates, whether it is an instantiator of any kind, the forms a receive of
 /// it only if available reads (`Property.formsReadByOnlyIfAvailableReceive`) and the forms a declaration of it provides
-/// (`CycleParameter.forms(providedBy:)`), each a run in one flat column. Built where the graph is built, from the
-/// properties' spellings, so no fold reads one. It holds its columns for as long as its graph does.
+/// (`CycleParameter.forms(providedBy:)`), each a run in one flat column of the world's form IDs, which compare only with
+/// each other. Built where the graph is built, from the properties' spellings, so no fold reads one. It holds its columns for as long as its graph does.
 struct TypeFactsPropertyFacts: Sendable {
 	let labels: [Int32]
 	let unwrapped: [Int32]
