@@ -98,6 +98,8 @@ extension ValuePath {
 			value.reads + arguments
 		case let .implicitMemberCall(_, arguments):
 			arguments
+		case let .callHanding(_, value, _, handed, _):
+			value.reads + handed.reads
 		}
 	}
 
@@ -116,6 +118,8 @@ extension ValuePath {
 			value.passedArgumentNames
 		case let .call(_, value, _, _):
 			value.passedArgumentNames
+		case let .callHanding(_, value, _, handed, _):
+			value.passedArgumentNames + handed.passedArgumentNames
 		}
 	}
 
@@ -138,6 +142,8 @@ extension ValuePath {
 			"new:\(type.asSource)"
 		case let .implicitMemberCall(name, arguments):
 			".\(name)(\(arguments.map(\.shape).joined(separator: ",")))"
+		case let .callHanding(name, value, literal, handed, flags):
+			"\(value.shape).\(name)(\(literal.map(TypeKeyLayout.spelledStringLiteral) ?? "")|\(handed.shape)|\(flags.joined(separator: ",")))"
 		}
 	}
 }
@@ -172,6 +178,10 @@ extension PassedArgument {
 		     .optionalMember:
 			// A member of a value the function was handed reads no declaration, so it is the same text at every member.
 			value.isMemberOfPassedArgument ? shape : nil
+		case .callHanding:
+			// A call of what the function was handed, handing what it was handed or a new value, is the same text at every
+			// member too.
+			value.readsNoDeclaration ? shape : nil
 		case .rootDeclaration,
 		     .call,
 		     .implicitMemberCall:
@@ -196,6 +206,7 @@ extension ValuePath {
 			     .read,
 			     .call,
 			     .implicitMemberCall,
+			     .callHanding,
 			     .emptyInitialization:
 				value.isMemberOfPassedArgument
 			}
@@ -204,7 +215,28 @@ extension ValuePath {
 		     .passedArgument,
 		     .call,
 		     .implicitMemberCall,
+		     .callHanding,
 		     .emptyInitialization:
+			false
+		}
+	}
+
+	/// Whether the path reads no declaration: a value its function was handed, a member of one at any depth, a new value,
+	/// or a call of one such value that hands it another.
+	var readsNoDeclaration: Bool {
+		switch self {
+		case .passedArgument,
+		     .emptyInitialization:
+			true
+		case .member,
+		     .optionalMember:
+			isMemberOfPassedArgument
+		case let .callHanding(_, value, _, handed, _):
+			value.readsNoDeclaration && handed.readsNoDeclaration
+		case .rootDeclaration,
+		     .read,
+		     .call,
+		     .implicitMemberCall:
 			false
 		}
 	}
@@ -335,7 +367,33 @@ extension TypeKeyLayout {
 				spelledArguments.append("\(argument.argumentLabel.spelledAsArgumentLabel): \(value)")
 			}
 			return ".\(name)(\(spelledArguments.joined(separator: ", ")))"
+		case let .callHanding(name, value, literal, handed, flags):
+			guard let receiver = spelledValuePath(value, inClass: owner, before: index),
+			      let handed = spelledValuePath(handed, inClass: owner, before: index)
+			else { return nil }
+			var spelledArguments = literal.map { [Self.spelledStringLiteral($0)] } ?? []
+			spelledArguments.append(handed)
+			for flag in flags {
+				spelledArguments.append("\(flag.spelledAsArgumentLabel): true")
+			}
+			return "\(receiver).\(name)(\(spelledArguments.joined(separator: ", ")))"
 		}
+	}
+
+	/// `contents` as a string literal, each quotation mark and backslash in it escaped: a label spelled as a raw identifier
+	/// can hold a quotation mark.
+	static func spelledStringLiteral(_ contents: String) -> String {
+		let quotationMark = UInt8(ascii: "\"")
+		let backslash = UInt8(ascii: "\\")
+		var bytes = [quotationMark]
+		for byte in contents.utf8 {
+			if byte == quotationMark || byte == backslash {
+				bytes.append(backslash)
+			}
+			bytes.append(byte)
+		}
+		bytes.append(quotationMark)
+		return String(decoding: bytes, as: UTF8.self)
 	}
 
 	/// The value `read` passes where a statement before `index` of `owner`'s body makes it.

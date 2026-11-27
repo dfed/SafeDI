@@ -74,6 +74,97 @@ struct TypeKeyBodyValuePathTests {
 	}
 
 	@Test
+	func statements_handsTheResultOfACallThatTakesALiteralAndAValue_whenACallHandsAPassedArgumentAValueAnotherValueMakesOfOne() throws {
+		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.rootBody { built in
+			built.passedArguments = [PassedArgument(parameterName: "places", type: .simple(name: "Places"), value: .callHanding("entering", of: .rootDeclaration("places"), literal: "b", value: .emptyInitialization(.simple(name: "Cfg")), flags: []), staysOutsideSendableFunctions: false)]
+		}))
+		#expect(GeneratedCode.lines(statements).spelled() == """
+		        let id = 1
+		        func __safeDI_b(places: Places) -> B {
+		            B()
+		        }
+		        let b: B = __safeDI_b(places: places.entering("b", Cfg()))
+		""")
+	}
+
+	@Test
+	func statements_passesTrueUnderEachFlagAfterTheValue_whenACallThatHandsAValueNamesFlags() throws {
+		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.rootBody { built in
+			built.passedArguments = [PassedArgument(parameterName: "places", type: .simple(name: "Places"), value: .callHanding("entering", of: .rootDeclaration("places"), literal: "b", value: .emptyInitialization(.simple(name: "Cfg")), flags: ["nearest", "default"]), staysOutsideSendableFunctions: false)]
+		}))
+		#expect(GeneratedCode.lines(statements).spelled() == """
+		        let id = 1
+		        func __safeDI_b(places: Places) -> B {
+		            B()
+		        }
+		        let b: B = __safeDI_b(places: places.entering("b", Cfg(), nearest: true, default: true))
+		""")
+	}
+
+	@Test
+	func statements_handsTheValueAlone_whenACallThatHandsAValueHasNoLiteral() throws {
+		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.rootBody { built in
+			built.passedArguments = [PassedArgument(parameterName: "places", type: .simple(name: "Places"), value: .callHanding("passing", of: .rootDeclaration("places"), literal: nil, value: .read(Self.idRead), flags: []), staysOutsideSendableFunctions: false)]
+		}))
+		#expect(GeneratedCode.lines(statements).spelled() == """
+		        let id = 1
+		        func __safeDI_b(places: Places) -> B {
+		            B()
+		        }
+		        let b: B = __safeDI_b(places: places.passing(id))
+		""")
+	}
+
+	@Test
+	func statements_escapesTheLiteral_whenACallThatHandsAValueTakesALiteralHoldingAQuotationMarkOrABackslash() throws {
+		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.rootBody { built in
+			built.passedArguments = [PassedArgument(parameterName: "places", type: .simple(name: "Places"), value: .callHanding("entering", of: .rootDeclaration("places"), literal: #"`a "b" \c`"#, value: .emptyInitialization(.simple(name: "Cfg")), flags: []), staysOutsideSendableFunctions: false)]
+		}))
+		#expect(GeneratedCode.lines(statements).spelled() == #"""
+		        let id = 1
+		        func __safeDI_b(places: Places) -> B {
+		            B()
+		        }
+		        let b: B = __safeDI_b(places: places.entering("`a \"b\" \\c`", Cfg()))
+		"""#)
+	}
+
+	@Test(arguments: [
+		ValuePath.callHanding("passing", of: .read(mistypedIdRead), literal: nil, value: .emptyInitialization(.simple(name: "Cfg")), flags: []),
+		.callHanding("passing", of: .rootDeclaration("places"), literal: nil, value: .read(mistypedIdRead), flags: []),
+		.callHanding("passing", of: .passedArgument("missing"), literal: nil, value: .emptyInitialization(.simple(name: "Cfg")), flags: []),
+		.callHanding("passing", of: .rootDeclaration("places"), literal: nil, value: .passedArgument("missing"), flags: []),
+	])
+	func statements_keepsThePathKeysBody_whenACallThatHandsAValueReadsWhatItsBodyCannot(value: ValuePath) {
+		#expect(TypeKeyBody.statements(ofRootBody: Self.rootBody { built in
+			built.passedArguments = [PassedArgument(parameterName: "places", type: .simple(name: "Places"), value: value, staysOutsideSendableFunctions: false)]
+		}) == nil)
+	}
+
+	@Test
+	func statements_handsTheClosedOnFunctionTheResultOfACall_whenACloserHandsACallThatReadsOnlyWhatItsFunctionWasHanded() throws {
+		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.closerBody(handing: PassedArgument(parameterName: "cfg", type: .simple(name: "Cfg"), value: .callHanding("entering", of: .passedArgument("cfg"), literal: "b", value: .member("child", of: .passedArgument("cfg")), flags: []), staysOutsideSendableFunctions: false))))
+		#expect(GeneratedCode.lines(statements).spelled() == """
+		        let id = 1
+		        func __safeDI_b(cfg: Cfg) -> B {
+		            let bBuilder = Instantiator<B> {
+		                __safeDI_b(cfg: cfg.entering("b", cfg.child))
+		            }
+		            return B(bBuilder: bBuilder)
+		        }
+		        let b: B = __safeDI_b(cfg: Cfg())
+		""")
+	}
+
+	@Test(arguments: [
+		ValuePath.callHanding("entering", of: .rootDeclaration("places"), literal: "b", value: .emptyInitialization(.simple(name: "Cfg")), flags: []),
+		.callHanding("entering", of: .passedArgument("cfg"), literal: "b", value: .read(idRead), flags: []),
+	])
+	func statements_keepsThePathKeysBody_whenACloserHandsACallThatReadsADeclaration(value: ValuePath) {
+		#expect(TypeKeyBody.statements(ofRootBody: Self.closerBody(handing: PassedArgument(parameterName: "cfg", type: .simple(name: "Cfg"), value: value, staysOutsideSendableFunctions: false))) == nil)
+	}
+
+	@Test
 	func statements_spellsMemberCallWithWrappedReads_whenConstructionIsACallOfAValue() throws {
 		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.rootBody { built in
 			built.constructionValue = ConstructionValue(value: .call("member", of: .rootDeclaration("builder"), arguments: [Self.idRead], argumentsWrapper: .simple(name: "Values")), resultWrapper: nil)
