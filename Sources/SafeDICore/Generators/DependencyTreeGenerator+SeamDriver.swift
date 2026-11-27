@@ -406,7 +406,9 @@ extension DependencyTreeGenerator {
 		private func error(of seam: Instantiable, ownSignature: SeamSignature?, callersSignature: SeamSignature?, callersFailed: Bool, callersErrors: [DependencyTreeGeneratorError], unseenDeclarations: Set<TypeDescription>) -> DependencyTreeGeneratorError? {
 			guard callersFailed || ownSignature?.callShape != callersSignature?.callShape else { return nil }
 			let labelsCallersFailedOn = callersFailed ? DependencyTreeGenerator.parameterLabels(namedBy: callersErrors, about: seam) : nil
-			if let declaration = DependencyTreeGenerator.unseenDeclarationToName(
+			// A seam the callers compute otherwise names an unseen declaration, else the earliest unseen plain declaration
+			// that proves a differing parameter's access; it is reported with neither where no such declaration exists.
+			let kind: DependencyTreeGeneratorError.SeamError.Kind? = if let declaration = DependencyTreeGenerator.unseenDeclarationToName(
 				for: seam,
 				ownSignature: ownSignature,
 				callersSignature: callersSignature,
@@ -415,16 +417,15 @@ extension DependencyTreeGenerator {
 				in: instantiables,
 				proof: ownProof,
 			) {
-				return .seam(.init(seam: seam, kind: .treeReachesDeclarationCallersCannotSee(declaration: declaration)))
-			} else if let plainDeclaration = DependencyTreeGenerator.unseenPlainDeclarationToName(
-				ownSignature: ownSignature,
-				callersSignature: callersSignature,
-				labelsCallersFailedOn: labelsCallersFailedOn,
-			) {
-				return .seam(.init(seam: seam, kind: .treeReachesPlainDeclarationCallersCannotSee(declaration: plainDeclaration)))
+				.treeReachesDeclarationCallersCannotSee(declaration: declaration)
 			} else {
-				return nil
+				DependencyTreeGenerator.unseenPlainDeclarationToName(
+					ownSignature: ownSignature,
+					callersSignature: callersSignature,
+					labelsCallersFailedOn: labelsCallersFailedOn,
+				).map { .treeReachesPlainDeclarationCallersCannotSee(declaration: $0) }
 			}
+			return kind.map { .seam(.init(seam: seam, kind: $0)) }
 		}
 	}
 
