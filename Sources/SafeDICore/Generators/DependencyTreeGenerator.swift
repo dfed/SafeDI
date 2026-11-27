@@ -611,6 +611,7 @@ public actor DependencyTreeGenerator {
 			/// allocates by about 1%.
 			let makeSeamHoles: (@Sendable () -> SeamHoles)?
 		}
+
 		/// What made this run build the root's tree (`TreeForcer`); empty where it built none.
 		var treeForcers: [TreeForcer] = [.seamWorld]
 
