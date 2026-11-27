@@ -2539,10 +2539,20 @@ struct CalledBuilders: Sendable {
 	let placesOfSeamsBeneath: @Sendable (SeamSignature.Places.CalledCase) -> SeamSignature.Places.Called?
 
 	/// The case in `places` of the place at `site` where it is a case of the called seam's own: a place the called seam
-	/// passes up refers into another seam's graph, whose answers a query does not follow yet, so it is read per place.
+	/// passes up refers into another seam's graph, which a reader resolves through `Query.holdingCase(of:)`.
 	func ownCaseIndex(ofSite site: SeamSignature.Hole.Site) -> Int? {
 		guard let caseIndex = caseIndexBySite[site], places.cases[caseIndex].passedUp == nil else { return nil }
 		return caseIndex
+	}
+
+	/// The case of the place at `site` in the graph of the seam whose tree holds it: for a case of the called seam's own,
+	/// that case of `query`, which is `places`' query; for a place the called seam passes up, the case `query` resolves it to
+	/// (`Query.holdingCase(of:)`). `nil` where `places` holds no case of the place, or the run does not hold the graph of a
+	/// seam on the way.
+	func holdingCase(ofSite site: SeamSignature.Hole.Site, in query: SeamSignature.Places.Query) -> SeamSignature.Places.Query.ResolvedCase? {
+		guard let caseIndex = caseIndexBySite[site] else { return nil }
+		guard places.cases[caseIndex].passedUp != nil else { return SeamSignature.Places.Query.ResolvedCase(query: query, caseIndex: caseIndex) }
+		return query.holdingCase(of: caseIndex)
 	}
 
 	/// The sites of `sites` that a route from the root enum of `rootKey` reaches (see `sitesReachedOnItsRoutes(by:in:)`).
