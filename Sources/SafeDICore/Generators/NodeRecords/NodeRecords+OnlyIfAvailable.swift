@@ -126,8 +126,16 @@ struct OnlyIfAvailableAnswers: Sendable {
 		while let variant = variantsToVisit.popLast() {
 			let declaration = world.declaration(of: variant)
 			// A rename or a hole is a leaf of the scope that declares it, which reads for it (below).
-			guard let context = contextByVariant[Int(variant)], world.kind(of: declaration) != .alias, world.kind(of: declaration) != .hole else { continue }
+			guard let callContext = contextByVariant[Int(variant)], world.kind(of: declaration) != .alias, world.kind(of: declaration) != .hole else { continue }
 			let scope = world.scope(of: declaration)
+			// A member of a loop of builders begins its builder function by binding each member it makes again
+			// (`NodeRecords.loopRebindings(of:in:)`), so its construction and everything inside it read those bindings.
+			var context = callContext
+			for member in world.madeAgain(from: declaration) {
+				if let property = world.property(of: member), labels.contains(property.label) {
+					context[property.label] = [Binding(property: property, state: .available)]
+				}
+			}
 			// Inside the node's builder function, its forwarded properties are the nearest declarations of their labels.
 			var contextInside = context
 			for dependency in scope.instantiable.dependencies where dependency.source == .forwarded && labels.contains(dependency.property.label) {

@@ -80,7 +80,7 @@ public enum NodeRecordsObservation {
 				}
 				let label = switch nodeRecordsRecord {
 				case let .built(record): record.property.label
-				case let .closer(record): record.property.label
+				case let .closer(record): "\(record.property.label) made again"
 				case let .alias(record): record.property.label
 				}
 				let placePath = "\(path).\(label)"
@@ -118,7 +118,7 @@ public enum NodeRecordsObservation {
 		return (indentation, inner)
 	}
 
-	/// The fields of `nodeRecords`, a place that closes a cycle, that differ from `tree`'s.
+	/// The fields of `nodeRecords`, a closing place, that differ from `tree`'s: every field the engine reads of a closer.
 	private static func fieldDifferences(between tree: ClosingPlaceRecord, and nodeRecords: ClosingPlaceRecord) -> [String] {
 		var differences = [String]()
 		func compare<Value: Equatable>(_ name: String, _ treeValue: Value, _ nodeRecordsValue: Value) {

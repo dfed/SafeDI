@@ -94,8 +94,13 @@ extension DependencyTreeGenerator {
 				nil
 			}
 			// The tree's places are planned beside node records' so that the two are compared, even where the root is
-			// laid out from node records.
-			let (treeCode, comparisons) = try await treeCode(of: scopeGenerator, besideRecordsBody: nodeRecords.rootBody)
+			// laid out from node records. There the laid-out code is the run's, so the tests that count a run's work count
+			// none of the tree's planning; the operation is typed for the reason `comparison(of:with:of:)` gives.
+			let observerOfTreeWork = laidOutCode == nil ? GenerationWork.observer : nil
+			let planned: PlannedTree = try await GenerationWork.$observer.withValue(observerOfTreeWork, operation: { () async throws -> PlannedTree in
+				try await Self.treeCode(of: scopeGenerator, besideRecordsBody: nodeRecords.rootBody)
+			})
+			let (treeCode, comparisons) = planned
 			// A root whose tree's body holds nothing is compared nowhere.
 			for comparison in comparisons {
 				observer(NodeRecordsReport(
@@ -167,8 +172,11 @@ extension DependencyTreeGenerator {
 	/// cannot lay out every statement of the body.
 	static func laidOutRootCode(of instantiable: Instantiable, body: [GeneratedCode]) throws -> GeneratedCode? {
 		guard let rootInitializer = try ScopeGenerator.rootInitializer(of: instantiable) else { return .empty }
-		// A statement the engine cannot lay out would be copied as its text, which a node records place does not hold.
-		guard body.allSatisfy(\.statementsAreLaidOutByTypeKey), let statements = TypeKeyBody.statements(ofRootBody: body) else { return nil }
+		// A statement the engine cannot lay out would be copied as its text, which a node records place does not hold, so
+		// every loop of builders is laid out, as a mock's are, where the tree keeps the path key's body for one written once.
+		guard body.allSatisfy(\.statementsAreLaidOutByTypeKey),
+		      let statements = TypeKeyBody.statements(ofRootBody: body, laysOutEveryLoop: true, declaresLoopMembersAsThePathKeyDoes: true)
+		else { return nil }
 		return rootInitializer.spelled(writing: BuilderFunctionGraph(body: statements.map(Statement.verbatim)))
 	}
 }
