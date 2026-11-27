@@ -3564,7 +3564,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	///
 	/// Work and memory: one entry per place of the called seam, so per path to its places, made only where a run draws
 	/// the tree and dropped with the drawing.
-	private nonisolated func placesDrawnWithAnotherFill() -> [PlaceDrawnWithAnotherFill] {
+	nonisolated private func placesDrawnWithAnotherFill() -> [PlaceDrawnWithAnotherFill] {
 		let fillsStoodFor = fillsStoodFor
 		guard let everyPlace = calledBuilders?.everyPlace else {
 			return fillsStoodFor.map { PlaceDrawnWithAnotherFill(property: $0.hole.property, fillKey: $0.standInKey, builtFillCountBefore: $0.builtFillCountBefore) }
