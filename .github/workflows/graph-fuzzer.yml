@@ -79,6 +79,30 @@ on:
         description: Instead of the fuzzing above, check that every graph of the base, seam and public mock corpora that SafeDI 2.3.0 accepts still compiles and builds the same values. The inputs above are ignored.
         type: boolean
         default: false
+      targeted:
+        description: Instead of the fuzzing above, run the targeted fuzzer of a switch (.github/scripts/switch-attack/gate.sh) over the tools of two commits, `on_commit` and `off_commit`. The inputs above are ignored.
+        type: boolean
+        default: false
+      on_commit:
+        description: With `targeted`, the commit or branch of this repository whose SafeDITool has the switch on.
+        required: false
+        default: ''
+      off_commit:
+        description: With `targeted`, the commit or branch of this repository whose SafeDITool has the switch off.
+        required: false
+        default: ''
+      first_seed:
+        description: With `targeted`, the first seed.
+        required: false
+        default: '0'
+      last_seed:
+        description: With `targeted`, the last seed. Each seed is two graphs, one per declaration order, so the default is 100,000 graphs.
+        required: false
+        default: '49999'
+      targeted_shards:
+        description: With `targeted`, the number of jobs the seeds are split across.
+        required: false
+        default: '30'
   # From verify.yml, in whose run the jobs below then run: they read the
   # bundle that run's build uploaded and build nothing.
   workflow_call:
@@ -109,7 +133,7 @@ jobs:
     # Nothing here needs macOS: it runs the tool and compiles its output with
     # `swiftc -emit-object`, so it uses the Linux test job's container.
     name: Fuzz Dependency Graphs on Linux (shard ${{ strategy.job-index }} of ${{ strategy.job-total }})
-    if: ${{ !inputs.coverage && !inputs.release_acceptance }}
+    if: ${{ !inputs.coverage && !inputs.release_acceptance && !inputs.targeted }}
     runs-on: ubuntu-latest
     container: swift:6.2
     timeout-minutes: 90
@@ -527,6 +551,218 @@ jobs:
       contents: read
     uses: ./.github/workflows/release-acceptance.yml
 
+  # The jobs below run only with `targeted`: the targeted fuzzer of a switch,
+  # which every change that moves generation onto a new path runs before it
+  # is turned on. Two tools are compared over generated graphs: `on_commit`, the
+  # commit with the switch on, and `off_commit`, the same code with it off; a graph
+  # passes when both write the same bytes or both fail with the same errors
+  # (.github/scripts/switch-attack/gate.sh, which draws its graphs with
+  # gen2.py beside it). On runners rather than a contributor's machine
+  # because 100,000 graphs are 200,000 pairs of tool runs, which thirty
+  # runners finish while four cores are still at the first tenth.
+  #
+  # This job says which seeds each shard takes: the range split into
+  # `targeted_shards` runs of whole seeds, the earlier ones one seed longer
+  # when the range does not divide evenly.
+  targeted-plan:
+    name: Plan the Targeted Fuzzer's Shards
+    if: ${{ inputs.targeted }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    outputs:
+      shards: ${{ steps.plan.outputs.shards }}
+    steps:
+      - name: Split the Seeds
+        id: plan
+        env:
+          FIRST_SEED: ${{ inputs.first_seed }}
+          LAST_SEED: ${{ inputs.last_seed }}
+          SHARDS: ${{ inputs.targeted_shards }}
+          ON: ${{ inputs.on_commit }}
+          OFF: ${{ inputs.off_commit }}
+        run: |
+          for value in "$FIRST_SEED" "$LAST_SEED" "$SHARDS"; do
+            case "$value" in ''|*[!0-9]*) echo "::error::first_seed, last_seed and targeted_shards are whole numbers; got '$value'."; exit 1 ;; esac
+          done
+          if [ -z "$ON" ] || [ -z "$OFF" ]; then echo "::error::targeted needs both on_commit and off_commit."; exit 1; fi
+          seeds=$(( LAST_SEED - FIRST_SEED + 1 ))
+          if [ "$seeds" -lt 1 ] || [ "$SHARDS" -lt 1 ] || [ "$SHARDS" -gt 40 ]; then
+            echo "::error::last_seed is not before first_seed, and targeted_shards is 1 to 40 (the Linux runners one run may hold)."; exit 1
+          fi
+          if [ "$SHARDS" -gt "$seeds" ]; then SHARDS=$seeds; fi
+          shards="["; first=$FIRST_SEED; index=0
+          while [ "$index" -lt "$SHARDS" ]; do
+            count=$(( seeds / SHARDS )); if [ "$index" -lt $(( seeds % SHARDS )) ]; then count=$(( count + 1 )); fi
+            last=$(( first + count - 1 ))
+            if [ "$index" -gt 0 ]; then shards="$shards,"; fi
+            shards="$shards{\"index\":$index,\"first\":$first,\"last\":$last}"
+            first=$(( last + 1 )); index=$(( index + 1 ))
+          done
+          echo "shards=$shards]" >> "$GITHUB_OUTPUT"
+          echo "$seeds seeds in $SHARDS shards: $shards]"
+
+  # Builds each of the two tools once, in release as the tool ships, linked
+  # with the Swift runtime so the shards run it without a Swift container.
+  # It builds a commit an input names, which the jobs above never do, so it
+  # restores and saves no cache, takes the commit only from this repository,
+  # and has no permission beyond reading it: nothing it runs can write a
+  # branch's caches. The switch-attack scripts come from the commit the run
+  # is dispatched on, never from the commits under test.
+  targeted-build:
+    name: Build the Targeted Fuzzer's SafeDITool on Linux (${{ matrix.side }})
+    needs: targeted-plan
+    runs-on: ubuntu-latest
+    container: swift:6.2
+    # Not yet measured here; ci.yml's "Build Release SafeDITool on Linux"
+    # takes 17 to 18 minutes with one more build of every target.
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: true
+      matrix:
+        side: ['on', 'off']
+    defaults:
+      run:
+        shell: bash
+    env:
+      COMMITISH: ${{ matrix.side == 'on' && inputs.on_commit || inputs.off_commit }}
+    steps:
+      - name: Checkout the Commit Under Test
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ env.COMMITISH }}
+      - name: Record the Commit
+        run: |
+          git config --global --add safe.directory "$PWD"
+          git rev-parse HEAD | tee commit.txt
+      - name: Build SafeDITool
+        run: swift build -c release --product SafeDITool --static-swift-stdlib
+      - name: Package the Tool
+        run: |
+          mkdir tool
+          cp .build/release/SafeDITool commit.txt tool/
+          tool/SafeDITool --version
+      - name: Upload the Tool
+        uses: actions/upload-artifact@v7
+        with:
+          name: targeted-tool-${{ matrix.side }}
+          path: tool/
+          if-no-files-found: error
+          retention-days: 3
+
+  # One shard: its seeds, both declaration orders, through both tools, one
+  # worker per core. No container: the tools carry their runtime and the
+  # scripts need only bash and python3, which the runner image has.
+  targeted-fuzz:
+    name: Fuzz a Switch on Linux (seeds ${{ matrix.shard.first }}...${{ matrix.shard.last }})
+    needs: [targeted-plan, targeted-build]
+    runs-on: ubuntu-latest
+    # Not yet measured; set to twice the slowest shard after the first runs.
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.targeted-plan.outputs.shards) }}
+    env:
+      FIRST: ${{ matrix.shard.first }}
+      LAST: ${{ matrix.shard.last }}
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v7
+      - name: Download the Tools
+        uses: ./.github/actions/download-artifact
+        with:
+          pattern: targeted-tool-*
+          path: ${{ runner.temp }}/tools
+      - name: Run the Targeted Fuzzer
+        run: |
+          chmod +x "$RUNNER_TEMP/tools/targeted-tool-on/SafeDITool" "$RUNNER_TEMP/tools/targeted-tool-off/SafeDITool"
+          status=0
+          .github/scripts/switch-attack/gate.sh "$RUNNER_TEMP/tools/targeted-tool-on/SafeDITool" "$RUNNER_TEMP/tools/targeted-tool-off/SafeDITool" \
+            "$FIRST" "$LAST" "$(nproc)" "$RUNNER_TEMP/targeted" | tee "$RUNNER_TEMP/targeted-result.txt" || status=$?
+          {
+            echo "### Seeds $FIRST...$LAST"
+            echo '```'
+            cat "$RUNNER_TEMP/targeted-result.txt"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          mkdir -p "$RUNNER_TEMP/targeted-report"
+          cp "$RUNNER_TEMP/targeted/all.log" "$RUNNER_TEMP/targeted-report/all.log"
+          cp "$RUNNER_TEMP/targeted-result.txt" "$RUNNER_TEMP/targeted-report/result.txt"
+          if [ -d "$RUNNER_TEMP/targeted/keep" ]; then cp -R "$RUNNER_TEMP/targeted/keep" "$RUNNER_TEMP/targeted-report/keep"; fi
+          exit "$status"
+      - name: Upload the Shard's Log and Differing Graphs
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: targeted-report-${{ matrix.shard.index }}
+          path: ${{ runner.temp }}/targeted-report/
+          if-no-files-found: error
+
+  # Adds the shards up: the run passes only when every shard ran every one
+  # of its graphs and no graph differed.
+  targeted-report:
+    name: Report the Targeted Fuzzer's Result
+    needs: [targeted-plan, targeted-build, targeted-fuzz]
+    if: ${{ always() && inputs.targeted }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      FIRST_SEED: ${{ inputs.first_seed }}
+      LAST_SEED: ${{ inputs.last_seed }}
+      FUZZ_RESULT: ${{ needs.targeted-fuzz.result }}
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v7
+      - name: Download the Shards' Reports
+        uses: ./.github/actions/download-artifact
+        with:
+          pattern: targeted-report-*
+          path: ${{ runner.temp }}/reports
+      - name: Download the Tools' Commits
+        uses: ./.github/actions/download-artifact
+        with:
+          pattern: targeted-tool-*
+          path: ${{ runner.temp }}/tools
+      - name: Add the Shards Up
+        run: |
+          cat "$RUNNER_TEMP"/reports/*/all.log > "$RUNNER_TEMP/all.log"
+          count() { grep -c " $1 " "$RUNNER_TEMP/all.log" || true; }
+          graphs=$(wc -l < "$RUNNER_TEMP/all.log" | tr -d ' ')
+          expected=$(( (LAST_SEED - FIRST_SEED + 1) * 2 ))
+          different=$(( $(count DIFF) + $(count EXITDIFF) + $(count ERRDIFF) ))
+          {
+            echo "## Targeted fuzzer"
+            echo "on: $(cat "$RUNNER_TEMP/tools/targeted-tool-on/commit.txt"), off: $(cat "$RUNNER_TEMP/tools/targeted-tool-off/commit.txt")"
+            echo
+            echo "$graphs of $expected graphs ran (seeds $FIRST_SEED...$LAST_SEED, two declaration orders)."
+            echo
+            echo "| Result | Graphs |"
+            echo "|---|---|"
+            for result in SAME ERRSAME DIFF EXITDIFF ERRDIFF; do echo "| $result | $(count "$result") |"; done
+            echo
+            echo "Accepted graphs by what kept a root off the switch's path (\`[none;]\` is every root on it):"
+            echo '```'
+            grep " SAME " "$RUNNER_TEMP/all.log" | sed 's/^[^[]*//' | sort | uniq -c | sort -rn
+            echo '```'
+            if [ "$different" -gt 0 ]; then
+              echo "Differing graphs, kept in the shards' artifacts under keep/:"
+              echo '```'
+              grep -E " (DIFF|EXITDIFF|ERRDIFF) " "$RUNNER_TEMP/all.log" | head -100
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$graphs" != "$expected" ]; then echo "::error::$graphs of $expected graphs ran."; exit 1; fi
+          if [ "$different" -gt 0 ]; then echo "::error::$different graphs differ between the two tools."; exit 1; fi
+          if [ "$FUZZ_RESULT" != "success" ]; then echo "::error::A shard did not pass ($FUZZ_RESULT)."; exit 1; fi
+          echo "Clean: $graphs graphs, none differing."
+
   # Deletes the branch this run was dispatched on when it is a scratch ref:
   # one a tool pushed only to run this workflow on a commit, named
   # `verify/…`, `probe/…` or `coverage/…`. A tool that is killed never
@@ -586,6 +822,7 @@ jobs:
       - coverage-report
       - coverage-corpus
       - release-acceptance
+      - targeted-report
     if: ${{ always() && github.event_name == 'workflow_dispatch' && !inputs.bundle && github.ref_type == 'branch' && (startsWith(github.ref_name, 'verify/') || startsWith(github.ref_name, 'probe/') || startsWith(github.ref_name, 'coverage/')) }}
     runs-on: ubuntu-latest
     continue-on-error: true
