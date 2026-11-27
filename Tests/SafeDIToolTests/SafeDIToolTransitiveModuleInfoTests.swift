@@ -612,6 +612,26 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func resolvingReferences_throwsErrorOfFirstPath_whenItsFileIsStillBeingReadAsTwentyThreeOthersAreFoundMissing() async throws {
+		// `Large.safedi` is listed last and sorts first, which is what “first path” means. It is a quarter of a gigabyte that
+		// is no module info, written as a hole so it takes no disk, and the others do not exist, so every other failure
+		// arrives while it is being read: a resolver that reported the failure that arrived first would name a missing file.
+		let directory = try temporaryDirectory()
+		let largeURL = directory.appendingPathComponent("Large.safedi")
+		#expect(FileManager.default.createFile(atPath: largeURL.path, contents: nil))
+		let largeFile = try FileHandle(forWritingTo: largeURL)
+		try largeFile.truncate(atOffset: 256 << 20)
+		try largeFile.close()
+		let paths = (0..<23).reversed().map { directory.appendingPathComponent("Missing\($0).safedi").path } + [largeURL.path]
+		let modulesBeneathCSV = try writeList(of: paths, in: directory)
+
+		await assertThrowsError("Could not read the SafeDI module info file at \(directory.path)/Large.safedi: The file is not a module info file: it does not begin with `SDMI`. \(BinaryFile.unreadableFileExplanation)") {
+			try await ModuleReferenceResolver(transitiveModuleInfoListPath: modulesBeneathCSV).resolvingReferences(in: [(Self.fileReferringToDeep, "/App.safedi")])
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func resolvingReferences_throwsErrorNamingDirectory_whenModuleBeneathPathIsDirectory() async throws {
 		let directory = try temporaryDirectory()
 		let directoryNamedLikeModuleInfo = directory.appendingPathComponent("Folder.safedi")
@@ -908,7 +928,7 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		extension FeedScreen {
 		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public init() {
-		        func __safeDI_innerScreen() -> InnerScreen {
+		        @inline(never) func __safeDI_innerScreen() -> InnerScreen {
 		            let clock = Clock()
 		            return InnerScreen(clock: clock)
 		        }

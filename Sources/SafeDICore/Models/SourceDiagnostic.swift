@@ -55,9 +55,11 @@ public struct SourceDiagnostic: Hashable, Sendable {
 		/// The text to put in its place.
 		public let replacement: String
 
-		/// The fix-it formatted as swift-build reads it, for a range in the file at `filePath`.
-		func formatted(inFileAt filePath: String) -> String {
-			"\(filePath):\(range.startLine):\(range.startColumn)-\(range.endLine):\(range.endColumn): fixit: \(escapedReplacement)"
+		/// The fix-it formatted as swift-build reads it, for a range in the file at `filePath`, or `nil` when the run did
+		/// not read the range’s lines and columns, which a module info file stores in a positions file of its own.
+		func formatted(inFileAt filePath: String) -> String? {
+			guard case let .here(startLine, startColumn, endLine, endColumn) = range.placement else { return nil }
+			return "\(filePath):\(startLine):\(startColumn)-\(endLine):\(endColumn): fixit: \(escapedReplacement)"
 		}
 
 		/// `replacement` escaped as the contents of a JSON string literal, which is how swift-build unescapes it.
@@ -100,13 +102,34 @@ public struct SourceDiagnostic: Hashable, Sendable {
 	/// followed by one `fixit:` line per fix-it, or `<severity>: <message>` without a location, which is the shape
 	/// the compiler itself uses for location-less diagnostics. A fix-it edits the file its diagnostic points at,
 	/// so a location-less diagnostic prints none.
+	///
+	/// A location whose line and column the run did not read – another module’s, which its module info file stores in a
+	/// positions file of its own – prints as its file alone, as does a fix-it’s range: a run reports such a diagnostic
+	/// only when it could not read that positions file.
 	public var formatted: String {
 		if let location {
-			(["\(location.filePath):\(location.line):\(location.column): \(severity.rawValue): \(message)"]
-				+ fixIts.map { $0.formatted(inFileAt: location.filePath) })
-				.joined(separator: "\n")
+			switch location.placement {
+			case let .here(line, column):
+				(["\(location.filePath):\(line):\(column): \(severity.rawValue): \(message)"]
+					+ fixIts.compactMap { $0.formatted(inFileAt: location.filePath) })
+					.joined(separator: "\n")
+			case .storedElsewhere:
+				"\(location.filePath): \(severity.rawValue): \(message)"
+			}
 		} else {
 			"\(severity.rawValue): \(message)"
+		}
+	}
+
+	/// Whether the run did not read a line or column the diagnostic prints, which a module info file stores in a
+	/// positions file of its own.
+	public var printsPositionStoredElsewhere: Bool {
+		guard let location else { return false }
+		return switch location.placement {
+		case .here:
+			fixIts.contains { $0.range.placement == .storedElsewhere }
+		case .storedElsewhere:
+			true
 		}
 	}
 
@@ -115,13 +138,7 @@ public struct SourceDiagnostic: Hashable, Sendable {
 	public func respellingFilePath(_ spelling: (String) -> String) -> SourceDiagnostic {
 		SourceDiagnostic(
 			severity: severity,
-			location: location.map { location in
-				Dependency.DeclarationLocation(
-					filePath: spelling(location.filePath),
-					line: location.line,
-					column: location.column,
-				)
-			},
+			location: location.map { $0.respellingFilePath(spelling) },
 			message: message,
 			fixIts: fixIts,
 		)
@@ -143,8 +160,15 @@ extension SourceLocatedError {
 }
 
 extension Dependency.DeclarationLocation: Comparable {
+	/// Orders locations by file, then by line and column where both hold them, and otherwise by order, which ranks the
+	/// locations of one file as their lines and columns do (`Dependency.DeclarationLocation.order`).
 	public static func < (lhs: Dependency.DeclarationLocation, rhs: Dependency.DeclarationLocation) -> Bool {
-		(lhs.filePath, lhs.line, lhs.column) < (rhs.filePath, rhs.line, rhs.column)
+		guard lhs.filePath == rhs.filePath else { return lhs.filePath < rhs.filePath }
+		return if case let .here(lhsLine, lhsColumn) = lhs.placement, case let .here(rhsLine, rhsColumn) = rhs.placement {
+			(lhsLine, lhsColumn) < (rhsLine, rhsColumn)
+		} else {
+			lhs.order < rhs.order
+		}
 	}
 
 	/// Orders locations by file, line, and column, with a missing location after every location.
@@ -157,6 +181,12 @@ extension Dependency.DeclarationLocation: Comparable {
 		case (.none, _):
 			false
 		}
+	}
+
+	/// Orders locations by file, line, and column, with a missing location before every location.
+	public static func precedesInSourceOrderWithMissingFirst(_ lhs: Dependency.DeclarationLocation?, _ rhs: Dependency.DeclarationLocation?) -> Bool {
+		guard let rhs else { return false }
+		return lhs.map { $0 < rhs } ?? true
 	}
 }
 

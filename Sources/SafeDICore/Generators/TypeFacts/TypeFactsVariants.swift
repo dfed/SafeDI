@@ -72,17 +72,30 @@ struct VariantBinding: Equatable, Sendable {
 /// sources of what that call hands. A variant's ID is its position, in the order the worklist first makes it, so it
 /// orders deterministically with no sort. It holds those columns for as long as its owner keeps it.
 struct TypeFactsVariants: Sendable {
+	/// The bucket of a variant's key: its node, family and keys hashed.
+	static func hash(_ node: Int32, _ family: VariantFamily, _ keys: [Int32]) -> Int {
+		var hasher = Hasher()
+		hasher.combine(node)
+		hasher.combine(family)
+		for key in keys {
+			hasher.combine(key)
+		}
+		return hasher.finalize()
+	}
+
 	/// - Parameters:
 	///   - rootAnswer: What answers each read of the root's reads from above: a seam's parameter, or `nil` for none.
 	///   - binding: What a node binds for a read of the edge's target at the edge (the edge's position among every node's
 	///     edges, `OrderedGraph.edgeOffset(of:)` plus its index), or `nil` where it binds nothing for it there and the
 	///     caller's own answer passes through.
 	///   - family: The family a call at the edge builds its callee in, given the caller's. A world whose bodies are one per
-	///     node whatever encloses them (production: `@Sendable` is a mark folded over call edges, lead 11-26 20:26Z)
+	///     node whatever encloses them (production: `@Sendable` is a mark folded over call edges)
 	///     returns the caller's, so the root's `.plain` reaches every node; only seam contracts and mocks whose parameter
 	///     types differ by family key on it.
 	///   - key: The value of an answer to a read that a variant is told apart by. The two parameter rules live here: a
-	///     difference a parameter can carry projects to one key.
+	///     difference a parameter can carry projects to one key. It is applied once, to an answer a call binds or to -1 for
+	///     none, never to a key a call passes through, so it need not be idempotent: a key collapsed at one call reaches
+	///     every callee below unchanged.
 	init(
 		graph: OrderedGraph<some Hashable & Sendable>,
 		reads: ReadsFromAbove,
@@ -90,6 +103,7 @@ struct TypeFactsVariants: Sendable {
 		binding: (_ edge: Int, _ read: Int32) -> VariantBinding?,
 		family: (_ edge: Int, _ callerFamily: VariantFamily) -> VariantFamily,
 		key: (_ read: Int32, _ answer: Int32) -> Int32,
+		bucket: (_ node: Int32, _ family: VariantFamily, _ keys: [Int32]) -> Int = TypeFactsVariants.hash,
 	) {
 		var columns = Columns()
 		var bucketByHash = [Int: Int32]()
@@ -100,13 +114,7 @@ struct TypeFactsVariants: Sendable {
 
 		/// The variant of `node` in `family` with the scratch answers, made if no variant has its key.
 		func variant(of node: Int32, family: VariantFamily) -> Int32 {
-			var hasher = Hasher()
-			hasher.combine(node)
-			hasher.combine(family)
-			for key in scratchKeys {
-				hasher.combine(key)
-			}
-			let hash = hasher.finalize()
+			let hash = bucket(node, family, scratchKeys)
 			var candidate = bucketByHash[hash] ?? -1
 			while candidate >= 0 {
 				if columns.matches(Int(candidate), node: node, family: family, keys: scratchKeys) {
@@ -139,19 +147,18 @@ struct TypeFactsVariants: Sendable {
 				scratchSources.removeAll(keepingCapacity: true)
 				reads.rows.forEachColumn(inRow: Int(target)) { read, _ in
 					work += 1
-					let answer: Int32
 					if let bound = binding(edge, read) {
-						answer = bound.answer
+						scratchKeys.append(key(read, bound.answer))
 						scratchSources.append(.bound(bound.declaration, answer: bound.answer))
 					} else if let position = reads.rows.rank(of: read, inRow: node) {
-						// The caller's key: an answer its callers share, which is all a body shared by them can hand on.
-						answer = columns.key(ofVariant: caller, at: position)
+						// The caller's key, as it is: an answer its callers share, which is all a body shared by them can
+						// hand on. It is a key already, so `key` is never applied to it again.
+						scratchKeys.append(columns.key(ofVariant: caller, at: position))
 						scratchSources.append(.passedThrough(Int32(position)))
 					} else {
-						answer = -1
+						scratchKeys.append(key(read, -1))
 						scratchSources.append(.none)
 					}
-					scratchKeys.append(key(read, answer))
 				}
 				columns.sourceOffsets.append(Int32(columns.sources.count))
 				columns.sources.append(contentsOf: scratchSources)
@@ -243,11 +250,8 @@ struct TypeFactsVariants: Sendable {
 			guard nodes[variant] == node, families[variant] == family else {
 				return false
 			}
+			// One node's variants all hold one key per read of the node's reads from above, so the runs are of one length.
 			let start = Int(keyOffsets[variant])
-			let end = Int(keyOffsets[variant + 1])
-			guard end - start == candidateKeys.count else {
-				return false
-			}
 			for offset in 0..<candidateKeys.count where keys[start + offset] != candidateKeys[offset] {
 				return false
 			}

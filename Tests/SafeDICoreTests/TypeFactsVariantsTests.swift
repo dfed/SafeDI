@@ -71,6 +71,42 @@ struct TypeFactsVariantsTests {
 	}
 
 	@Test
+	func init_makesTheSameVariants_whenEveryKeyFallsInOneBucket() {
+		// Keys of different nodes and answers that share a bucket are told apart by value, so a bucket holding every key
+		// makes the variants the default buckets make.
+		let graph = OrderedGraph(root: 0) { node in
+			[0: [1, 2], 1: [3], 2: [3]][node, default: []]
+		}
+		let bindings: [Edge: [Int32: VariantBinding]] = [
+			Edge(node: 1, index: 0): [0: VariantBinding(answer: 7, declaration: 1)],
+			Edge(node: 2, index: 0): [0: VariantBinding(answer: 8, declaration: 2)],
+		]
+		let hashed = makeVariants(graph: graph, own: [[], [], [], [0]], bindings: bindings)
+		let oneBucket = makeVariants(graph: graph, own: [[], [], [], [0]], bindings: bindings, bucket: { _, _, _ in 0 })
+
+		#expect(oneBucket.count == hashed.count)
+		#expect((0..<oneBucket.count).map { oneBucket.node(of: $0) } == (0..<hashed.count).map { hashed.node(of: $0) })
+		#expect((0..<oneBucket.count).map { Array(oneBucket.keys(of: $0)) } == (0..<hashed.count).map { Array(hashed.keys(of: $0)) })
+		#expect((0..<oneBucket.count).map { Array(oneBucket.callees(of: $0)) } == (0..<hashed.count).map { Array(hashed.callees(of: $0)) })
+	}
+
+	@Test
+	func init_answersNone_whenCallerBindsReadAtAnotherEdgeOnly() throws {
+		// 1 builds 2 and 3, and binds reads 0 and 128 only at its edge to 2, so neither reaches above 1; 3 reads them
+		// beside 1 and 64, which 1 passes through. At the edge to 3 nothing answers 0 or 128: 1's row holds 0's word but
+		// not 0, and not 128's word at all.
+		let graph = OrderedGraph(root: 0) { node in
+			[0: [1], 1: [2, 3]][node, default: []]
+		}
+		let variants = makeVariants(graph: graph, own: [[], [], [], [0, 1, 64, 128]], bindings: [
+			Edge(node: 1, index: 0): [0: VariantBinding(answer: 7, declaration: 1), 128: VariantBinding(answer: 8, declaration: 1)],
+		])
+		let variantOfOne = try #require((0..<variants.count).first { variants.node(of: $0) == 1 })
+
+		#expect(Array(variants.sources(ofCall: variants.callOffset(of: variantOfOne) + 1)) == [.none, .passedThrough(0), .passedThrough(1), .none])
+	}
+
+	@Test
 	func init_sharesVariantAndKeepsEachCallsAnswer_whenKeyProjectsTwoAnswersToOneInEitherEdgeOrder() {
 		// The parameter rules live in the key: answers a parameter can carry project to one key, and the variant keeps
 		// the key alone, so whichever caller the worklist meets first, each call's own answer is its source's.
@@ -104,6 +140,24 @@ struct TypeFactsVariantsTests {
 		#expect(Array(variants.sources(ofCall: variants.callOffset(of: 0))) == [.bound(0, answer: 5)])
 		#expect(Array(variants.sources(ofCall: variants.callOffset(of: 1))) == [.passedThrough(0)])
 		#expect(Array(variants.keys(of: 2)) == [5])
+	}
+
+	@Test
+	func init_handsCollapsedKeyDownUnchanged_whenReadPassesThroughTwoCallsBelowTheCollapse() {
+		// 1 and 2 bind 11 and 12 for 3, which the key collapses to 101; 3 and 4 hand it through to 5. The key is not
+		// idempotent (101 would key as 110), so a fold that applied it again to a passed-through key would split 4 and 5
+		// from 3 or tell their keys apart: one variant per node, and the same key at each depth.
+		let graph = OrderedGraph(root: 0) { node in
+			[0: [1, 2], 1: [3], 2: [3], 3: [4], 4: [5]][node, default: []]
+		}
+		let variants = makeVariants(graph: graph, own: [[], [], [], [], [], [0]], bindings: [
+			Edge(node: 1, index: 0): [0: VariantBinding(answer: 11, declaration: 1)],
+			Edge(node: 2, index: 0): [0: VariantBinding(answer: 12, declaration: 2)],
+		], key: { _, answer in answer < 0 ? answer : 100 + answer / 10 })
+
+		#expect(variants.count == 6)
+		#expect((3..<6).map { Array(variants.keys(of: $0)) } == [[101], [101], [101]])
+		#expect(Array(variants.sources(ofCall: variants.callOffset(of: 4))) == [.passedThrough(0)])
 	}
 
 	@Test
@@ -171,6 +225,7 @@ struct TypeFactsVariantsTests {
 		rootAnswer: (Int32) -> VariantBinding? = { _ in nil },
 		family: (Int, VariantFamily) -> VariantFamily = { _, family in family },
 		key: (Int32, Int32) -> Int32 = { _, answer in answer },
+		bucket: @escaping (Int32, VariantFamily, [Int32]) -> Int = TypeFactsVariants.hash,
 	) -> TypeFactsVariants {
 		let columnCount = Int((own.flatMap(\.self).max() ?? 0) + 1)
 		let ownRows = BitRows(rowCount: graph.nodes.count, columnCount: columnCount) { index, insert in
@@ -194,6 +249,7 @@ struct TypeFactsVariantsTests {
 			binding: { edge, read in bindingByEdge[edge]?[read] },
 			family: family,
 			key: key,
+			bucket: bucket,
 		)
 	}
 }

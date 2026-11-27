@@ -96,7 +96,7 @@ struct SafeDIToolSeamPlainInitializerOptInTests: ~Copyable {
 	    /// From code you write, call the initializer above instead.
 	    public init(__safeDI_user: @autoclosure @escaping () -> User) {
 	        let user = LazilyInstantiated<User>(__safeDI_user)
-	        func __safeDI_detailBuilder() -> Detail {
+	        @inline(never) func __safeDI_detailBuilder() -> Detail {
 	            Detail(user: user.instance)
 	        }
 	        let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
@@ -123,7 +123,7 @@ struct SafeDIToolSeamPlainInitializerOptInTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_user: @autoclosure @escaping () -> User) {
 			        let user = LazilyInstantiated<User>(__safeDI_user)
-			        func __safeDI_detailBuilder() -> Detail {
+			        @inline(never) func __safeDI_detailBuilder() -> Detail {
 			            Detail(user: user.instance)
 			        }
 			        let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
@@ -207,7 +207,7 @@ struct SafeDIToolSeamPlainInitializerOptInTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_user: @autoclosure @escaping () -> User) {
 			        let user = LazilyInstantiated<User>(__safeDI_user)
-			        func __safeDI_detailBuilder() -> Detail {
+			        @inline(never) func __safeDI_detailBuilder() -> Detail {
 			            Detail(user: user.instance)
 			        }
 			        let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
@@ -246,7 +246,7 @@ struct SafeDIToolSeamPlainInitializerOptInTests: ~Copyable {
 			    /// From code you write, call the initializer above instead.
 			    public init(__safeDI_user: @autoclosure @escaping () -> User) {
 			        let user = LazilyInstantiated<User>(__safeDI_user)
-			        func __safeDI_detailBuilder() -> Detail {
+			        @inline(never) func __safeDI_detailBuilder() -> Detail {
 			            Detail(user: user.instance)
 			        }
 			        let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
@@ -318,7 +318,7 @@ struct SafeDIToolSeamPlainInitializerOptInTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_user: @autoclosure @escaping () -> User) {
 			        let user = LazilyInstantiated<User>(__safeDI_user)
-			        func __safeDI_detailBuilder() -> Detail {
+			        @inline(never) func __safeDI_detailBuilder() -> Detail {
 			            Detail(user: user.instance)
 			        }
 			        let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
@@ -440,7 +440,7 @@ struct SafeDIToolSeamPlainInitializerOptInTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_user user: Instantiator<User>) {
-		        func __safeDI_detailBuilder() -> Detail {
+		        @inline(never) func __safeDI_detailBuilder() -> Detail {
 		            Detail(user: user)
 		        }
 		        let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
@@ -474,7 +474,7 @@ struct SafeDIToolSeamPlainInitializerOptInTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// From code you write, call the initializer above instead.
 		    public init(__safeDI_user user: Instantiator<User>) {
-		        func __safeDI_detailBuilder() -> Detail {
+		        @inline(never) func __safeDI_detailBuilder() -> Detail {
 		            Detail(user: user)
 		        }
 		        let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
@@ -768,7 +768,7 @@ struct SafeDIToolSeamPlainInitializerOptInTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_user: @autoclosure @escaping () -> User) {
 			        let user = LazilyInstantiated<User>(__safeDI_user)
-			        func __safeDI_detailBuilder() -> Detail {
+			        @inline(never) func __safeDI_detailBuilder() -> Detail {
 			            Detail(user: user.instance)
 			        }
 			        let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
@@ -820,7 +820,7 @@ struct SafeDIToolSeamPlainInitializerOptInTests: ~Copyable {
 			    /// From code you write, call the initializer above instead.
 			    public init(__safeDI_user: @autoclosure @escaping () -> User) {
 			        let user = LazilyInstantiated<User>(__safeDI_user)
-			        func __safeDI_detailBuilder() -> Detail {
+			        @inline(never) func __safeDI_detailBuilder() -> Detail {
 			            Detail(user: user.instance)
 			        }
 			        let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
@@ -879,7 +879,7 @@ struct SafeDIToolSeamPlainInitializerOptInTests: ~Copyable {
 			    /// From code you write, call the initializer above instead.
 			    public init(__safeDI_user: @autoclosure @escaping () -> User) {
 			        let user = LazilyInstantiated<User>(__safeDI_user)
-			        func __safeDI_detailBuilder() -> Detail {
+			        @inline(never) func __safeDI_detailBuilder() -> Detail {
 			            Detail(user: user.instance)
 			        }
 			        let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)

@@ -76,6 +76,9 @@ extension DependencyTreeGenerator {
 		var holesWithBuilders = [(hole: SeamSignature.Hole, builder: SeamSignature.Builder)]()
 		/// How the seam's tree hands each inner seam's enum up from a call whose case is nested by type.
 		var callRoutes = [SeamSignature.CallRoute]()
+		/// The member call each step of the route of each of the seam's own sites makes, in the route's order
+		/// (`SeamSignature.Hole.RouteStep.Member`).
+		var routeMembersBySite = [SeamSignature.Hole.Site: [SeamSignature.Hole.RouteStep.Member?]]()
 	}
 
 	/// What the scope types a seam or a public mock declares for its builders are named by, and how its builders spell them.
@@ -262,6 +265,7 @@ extension DependencyTreeGenerator {
 		let orderedHoleTypes = holeTypes.sorted { label(of: $0, isSendable: false) < label(of: $1, isSendable: false) }
 		var ownEnums = [SeamSignature.ScopeEnum]()
 		var callRoutes = [SeamSignature.CallRoute]()
+		var routeMembersBySite = [SeamSignature.Hole.Site: [SeamSignature.Hole.RouteStep.Member?]]()
 		var memberBindingKeysByLabel = [String: Set<ValuesBindingKey>]()
 		var builders = [SeamSignature.Builder]()
 		var internalNameByFamily = [SeamSignature.ScopeEnum.Key: String]()
@@ -307,6 +311,10 @@ extension DependencyTreeGenerator {
 					memberBindingKeysByLabel[label(of: holeType, isSendable: isSendable), default: []].formUnion(byType.memberBindingKeysByFamily[isSendable, default: []])
 				}
 				callRoutes += byType.callRoutes
+				// A site is one hole type's, so no two types name it; as its enum place below, a site's members are the last given.
+				for (site, members) in byType.routeMembersBySite {
+					routeMembersBySite[site] = members
+				}
 				for (site, enumPlace) in byType.enumPlaceBySite {
 					holesBySite[site]?.enumPlace = enumPlace
 					holesBySite[site]?.scopeTypeName = enumPlace.enumTypeName
@@ -428,14 +436,21 @@ extension DependencyTreeGenerator {
 		// One per path and case: `__safeDI_<builder>_<case>`, after the label of the builder whose root enum the route starts at.
 		let memberBindingNamesByLabel = memberBindingNames(of: memberBindingKeysByLabel, reservedNames: reservedForBindings)
 		let innerScopeNames = Self.innerScopeNames(of: innerScopes, reservedNames: reservedForBindings)
-		func namedRoute(_ route: [SeamSignature.Hole.RouteStep], to sitePath: [Property], ofHoleType holeType: SeamSignature.HoleType, isSendable: Bool) -> [SeamSignature.Hole.RouteStep] {
-			let memberNameByKey = memberBindingNamesByLabel[label(of: holeType, isSendable: isSendable), default: [:]]
-			return route.map { step in
+		func namedRoute(_ route: [SeamSignature.Hole.RouteStep], to sitePath: [Property]) -> [SeamSignature.Hole.RouteStep] {
+			route.map { step in
 				step.named(
 					nil,
 					innerScopeName: step.innerScope.flatMap { innerScopeNames[InnerScopeKey(callPath: $0.callPath(onRouteTo: sitePath), innerKey: $0.innerKey, enumType: $0.enumType)] },
-					memberBindingName: step.member.flatMap { memberNameByKey[ValuesBindingKey(path: $0.bindingPath(onRouteTo: sitePath), caseName: step.caseName)] },
 				)
+			}
+		}
+		// Each step's member call bound under its name, and no member call for a step whose call has no name.
+		func namedMembers(_ members: [SeamSignature.Hole.RouteStep.Member?], of route: [SeamSignature.Hole.RouteStep], to sitePath: [Property], ofHoleType holeType: SeamSignature.HoleType, isSendable: Bool) -> [SeamSignature.Hole.RouteStep.Member?] {
+			let memberNameByKey = memberBindingNamesByLabel[label(of: holeType, isSendable: isSendable), default: [:]]
+			return zip(members, route).map { member, step in
+				member.flatMap { member in
+					memberNameByKey[ValuesBindingKey(path: member.bindingPath(onRouteTo: sitePath), caseName: step.caseName)].map { member.named($0) }
+				}
 			}
 		}
 		for site in holesBySite.keys {
@@ -447,16 +462,18 @@ extension DependencyTreeGenerator {
 				valuesTypeName: enumPlace.valuesTypeName,
 				memberValuesTypeName: enumPlace.memberValuesTypeName,
 				isBuiltBySendableBuilder: enumPlace.isBuiltBySendableBuilder,
-				route: namedRoute(enumPlace.route, to: hole.sitePath, ofHoleType: hole.holeType, isSendable: enumPlace.isBuiltBySendableBuilder),
+				route: namedRoute(enumPlace.route, to: hole.sitePath),
 				values: enumPlace.values,
 			)
+			routeMembersBySite[site] = namedMembers(routeMembersBySite[site] ?? [], of: enumPlace.route, to: hole.sitePath, ofHoleType: hole.holeType, isSendable: enumPlace.isBuiltBySendableBuilder)
 		}
 		callRoutes = callRoutes.map { callRoute in
 			SeamSignature.CallRoute(
 				sitePath: callRoute.sitePath,
 				innerKey: callRoute.innerKey,
 				rootKey: callRoute.rootKey,
-				route: namedRoute(callRoute.route, to: callRoute.sitePath, ofHoleType: callRoute.rootKey.holeType, isSendable: callRoute.rootKey.isSendable),
+				route: namedRoute(callRoute.route, to: callRoute.sitePath),
+				routeMembers: namedMembers(callRoute.routeMembers, of: callRoute.route, to: callRoute.sitePath, ofHoleType: callRoute.rootKey.holeType, isSendable: callRoute.rootKey.isSendable),
 				caseName: callRoute.caseName,
 				memberValuesType: callRoute.memberValuesType,
 				handsFillLevelStruct: callRoute.handsFillLevelStruct,
@@ -522,7 +539,7 @@ extension DependencyTreeGenerator {
 				keysToVisit.append(contentsOf: innerKeys.reversed())
 			}
 		}
-		return ShapedBuilders(holes: orderedHoles, builders: builders, scopeEnums: scopeEnums, builderBySite: builderBySite, holesWithBuilders: holesWithBuilders, callRoutes: callRoutes)
+		return ShapedBuilders(holes: orderedHoles, builders: builders, scopeEnums: scopeEnums, builderBySite: builderBySite, holesWithBuilders: holesWithBuilders, callRoutes: callRoutes, routeMembersBySite: routeMembersBySite)
 	}
 
 	/// A call whose fill leads to a place, the builder filled, and the type of the scope value it hands: what one inner scope's
@@ -1046,7 +1063,7 @@ extension DependencyTreeGenerator {
 			// The enums are marked in a copy, assigned once, since each assignment computes the signature's call shape again.
 			var signature = seamRoot.signature
 			signature.scopeEnums = markingIndirectCases(of: seamRoot.signature.scopeEnums, componentByKey: componentByKey)
-			return ScopeGenerator.SeamRoot(signature: signature, unreadTypeComment: seamRoot.unreadTypeComment)
+			return ScopeGenerator.SeamRoot(signature: signature, callRoutes: seamRoot.callRoutes, routeMembersBySite: seamRoot.routeMembersBySite, unreadTypeComment: seamRoot.unreadTypeComment)
 		}
 	}
 

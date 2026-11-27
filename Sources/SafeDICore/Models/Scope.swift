@@ -662,7 +662,7 @@ extension ScopeRecord {
 		typeFactsPlaces: inout TypeFactsPlaces?,
 	) throws -> ScopeGenerator {
 		// The position of each scope under construction among the places recorded, where a test records them.
-		var placeIndices = [typeFactsPlaces?.start(TypeFactsDeclaration(scope: root, property: nil, propertyID: -1, erasedToConcreteExistential: false, isFill: false), parent: nil)]
+		var placeIndices = [typeFactsPlaces?.start(TypeFactsDeclaration(scope: root, property: nil, propertyID: nil, erasedToConcreteExistential: false, isFill: false), parent: nil)]
 		var scopeGeneratorsUnderConstruction = [ScopeGeneratorUnderConstruction(
 			scope: root,
 			property: nil,
@@ -673,7 +673,7 @@ extension ScopeRecord {
 			seamRoot: seamRoot,
 			mockBuilders: mockBuilders,
 			seamHoles: seamRoot.map { SeamHoles(of: $0, seamType: instantiable.concreteInstantiable) }
-				?? mockBuilders.map { SeamHoles(seamType: instantiable.concreteInstantiable, holes: $0.holes, builders: $0.builders, callRoutes: $0.callRoutes) }
+				?? mockBuilders.map { SeamHoles(seamType: instantiable.concreteInstantiable, holes: $0.holes, builders: $0.builders, callRoutes: $0.callRoutes, routeMembersBySite: $0.routeMembersBySite) }
 				?? SeamHoles(),
 			sitePath: [],
 			erasedToConcreteExistential: erasedToConcreteExistential,
@@ -728,7 +728,7 @@ extension ScopeRecord {
 						)
 						child.memoKey = key
 						scopeGeneratorsUnderConstruction.append(child)
-						placeIndices.append(typeFactsPlaces?.start(TypeFactsDeclaration(scope: scope, property: property, propertyID: propertyID.raw, erasedToConcreteExistential: erasedToConcreteExistential, isFill: false), parent: placeIndices[index]))
+						placeIndices.append(typeFactsPlaces?.start(TypeFactsDeclaration(scope: scope, property: property, propertyID: propertyID, erasedToConcreteExistential: erasedToConcreteExistential, isFill: false), parent: placeIndices[index]))
 					}
 				case let .aliased(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable, declarationReference):
 					scopeGeneratorsUnderConstruction[index].addAliasGenerator(
@@ -750,13 +750,17 @@ extension ScopeRecord {
 					scope: fill.scope,
 					context: fill.context,
 				))
-				placeIndices.append(typeFactsPlaces?.start(TypeFactsDeclaration(scope: fill.scope, property: fill.fill.hole.property, propertyID: fill.context.propertyID.raw, erasedToConcreteExistential: false, isFill: true), parent: placeIndices[index]))
+				placeIndices.append(typeFactsPlaces?.start(TypeFactsDeclaration(scope: fill.scope, property: fill.fill.hole.property, propertyID: fill.context.propertyID, erasedToConcreteExistential: false, isFill: true), parent: placeIndices[index]))
 			} else {
 				var createdScope = scopeGeneratorsUnderConstruction.removeLast()
-				if let placeIndex = placeIndices.removeLast() {
+				let placeIndex = placeIndices.removeLast()
+				if let placeIndex {
 					typeFactsPlaces?.finish(placeIndex, closesCycle: createdScope.closesCycle, reads: createdScope.readsAnsweredAbove)
 				}
 				let scopeGenerator = createdScope.scopeGenerator()
+				if let placeIndex {
+					typeFactsPlaces?.record(placeIndex, generator: scopeGenerator)
+				}
 				let callGenerators = createdScope.callGenerators(including: scopeGenerator)
 				callGeneratorsInTree.formUnion(callGenerators)
 				if scopeGeneratorsUnderConstruction.isEmpty {
@@ -1902,6 +1906,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			ownerConcreteTypeStack: childContextStack.concreteTypesInnermostFirst,
 			ownerLazilyInstantiatedInstanceProperties: childLazilyInstantiatedInstanceProperties,
 			carrierSite: seamHoles.carrierSite(at: sitePath + [property]),
+			siteRouteMembers: seamHoles.routeMembers(at: sitePath + [property]),
 		))
 	}
 
@@ -2013,14 +2018,14 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	///   spelling names: for a fill, that of the seam that holds the hole (`SeamSignature.Hole.declaringModuleNames`).
 	private func validateForwardedProperties(
 		of property: Property,
-		declaredAt declarationLocation: Dependency.DeclarationLocation?,
+		declaredAt declarationLocation: @autoclosure () -> Dependency.DeclarationLocation?,
 		on parent: TypeDescription,
 		seeingThroughModulesNamed declaringModuleNames: [String],
 		building builtInstantiable: Instantiable,
 	) throws {
 		guard validatesForwardedProperties, let error = ErasedInstantiatorForwardedPropertiesMismatchError(
 			property: property,
-			declarationLocation: declarationLocation,
+			declarationLocation: declarationLocation(),
 			parent: parent,
 			builtInstantiable: builtInstantiable,
 			declaringModuleNames: declaringModuleNames,
@@ -2712,10 +2717,11 @@ extension Instantiable {
 /// `@Forwarded` properties of the type it builds. Reported at the property's declaration.
 struct ErasedInstantiatorForwardedPropertiesMismatchError: SourceLocatedError {
 	/// The error for `property`, declared on `parent` at `declarationLocation` to build `builtInstantiable`, or
-	/// `nil` when `property` is not an erased instantiator or its first generic argument matches.
+	/// `nil` when `property` is not an erased instantiator or its first generic argument matches. The location is found
+	/// only for an error: finding it reads the parent's dependencies, and a check runs for every child.
 	init?(
 		property: Property,
-		declarationLocation: Dependency.DeclarationLocation?,
+		declarationLocation: @autoclosure () -> Dependency.DeclarationLocation?,
 		parent: TypeDescription,
 		builtInstantiable: Instantiable,
 		declaringModuleNames: [String],
@@ -2723,7 +2729,7 @@ struct ErasedInstantiatorForwardedPropertiesMismatchError: SourceLocatedError {
 	) {
 		guard !property.firstGenericMatchesForwardedProperties(of: builtInstantiable, declaringModuleNames: declaringModuleNames, declaredTypeNames: declaredTypeNames) else { return nil }
 		self.property = property
-		self.declarationLocation = declarationLocation
+		self.declarationLocation = declarationLocation()
 		self.parent = parent
 		builtType = builtInstantiable.concreteInstantiable
 		// The forwarded properties are spelled out rather than as `ForwardedProperties` on the built type, which the
@@ -2820,6 +2826,7 @@ struct SeamHoles: Sendable {
 		seamType = nil
 		routeCasesByCall = [:]
 		sitesByPath = [:]
+		routeMembersByPath = [:]
 		passedUpHolesBySite = [:]
 		valuesBindingsByPath = [:]
 		memberCallsInsideFunctionByPath = [:]
@@ -2850,7 +2857,7 @@ struct SeamHoles: Sendable {
 		carrierSitesByPath.isEmpty ? nil : carrierSitesByPath[sitePath]
 	}
 
-	init(seamType: TypeDescription, holes: [SeamSignature.Hole], builders: [SeamSignature.Builder], parameters: [SeamSignature.Parameter] = [], callRoutes: [SeamSignature.CallRoute] = [], scopeEnums: [SeamSignature.ScopeEnum] = [], holdsLoopPayloadsInBoxes: Bool = false) {
+	init(seamType: TypeDescription, holes: [SeamSignature.Hole], builders: [SeamSignature.Builder], parameters: [SeamSignature.Parameter] = [], callRoutes: [SeamSignature.CallRoute] = [], routeMembersBySite: [SeamSignature.Hole.Site: [SeamSignature.Hole.RouteStep.Member?]] = [:], scopeEnums: [SeamSignature.ScopeEnum] = [], holdsLoopPayloadsInBoxes: Bool = false) {
 		self.holdsLoopPayloadsInBoxes = holdsLoopPayloadsInBoxes
 		var routeCasesByCall = [RouteCall: RouteCase]()
 		let builderByEnum = Dictionary(builders.map { ($0.enumKey, $0) }, uniquingKeysWith: { first, _ in first })
@@ -2879,16 +2886,16 @@ struct SeamHoles: Sendable {
 		// Where the enums declare builder structs, each case on a route is a member call on the struct the step before it
 		// returned, the root's builder's for the first, bound before the step's property, or at the top of its builder
 		// function (`RouteStep.Member`). A route's steps lead to one place, so each step's parent is a fact of its path.
-		func bindValues(of route: [SeamSignature.Hole.RouteStep], onRouteTo sitePath: [Property], rootBuilderName: String) {
+		func bindValues(of route: [SeamSignature.Hole.RouteStep], members: [SeamSignature.Hole.RouteStep.Member?], onRouteTo sitePath: [Property], rootBuilderName: String) {
 			var parentName = rootBuilderName
-			for step in route {
+			for (step, member) in zip(route, members) {
 				// Each scope value the call hands, once: a seam's struct of the fill's own level per hole type and family whose places
 				// the fill holds, or a public mock's one inner scope.
 				let routeCall = step.innerScope.map { RouteCall(sitePath: $0.callPath(onRouteTo: sitePath), innerKey: $0.innerKey) }
 				if let innerScope = step.innerScope, let routeCall, !innerScopesByCall[routeCall, default: []].contains(where: { $0.name == innerScope.name }) {
 					innerScopesByCall[routeCall, default: []].append(innerScope)
 				}
-				if let member = step.member {
+				if let member {
 					valuesBindingsByName[member.bindingPath(onRouteTo: sitePath), default: [:]][member.bindingName] = ValuesBinding(member: member, parentName: parentName, caseName: step.caseName, isLetChild: isLetChild(ofCaseNamed: step.caseName, handed: member.valuesType))
 					parentName = member.bindingName
 					// A call's case for a builder it fills returns the called seam's struct, which the call's level functions are
@@ -2903,7 +2910,7 @@ struct SeamHoles: Sendable {
 		for callRoute in callRoutes {
 			guard let builder = builderByEnum[callRoute.rootKey] else { continue }
 			let builderName = builder.internalName
-			bindValues(of: callRoute.route, onRouteTo: callRoute.sitePath, rootBuilderName: builderName)
+			bindValues(of: callRoute.route, members: callRoute.routeMembers, onRouteTo: callRoute.sitePath, rootBuilderName: builderName)
 			// A call that re-enters an enclosing call's fill hands up nothing: it passes the enclosing call's level function the
 			// struct its last case's member returns (`carriedStruct(at:innerKey:carrying:)`).
 			guard !callRoute.reentersEnclosingFill else { continue }
@@ -2917,18 +2924,19 @@ struct SeamHoles: Sendable {
 			// The struct the call's own member is called on, typed where the seam's tree binds it: the builder, or the level the
 			// route's last member returns. The struct of a fill's own level, which the fill is handed, is typed by no binding.
 			let parentStep = callRoute.route.last
+			let parentMember = callRoute.routeMembers.last ?? nil
 			let memberParent: ScopeGenerator.BuilderCallArgument.PassedUpStruct? = if parentStep?.innerScope != nil {
 				nil
-			} else if let member = parentStep?.member {
+			} else if let member = parentMember {
 				.init(name: member.bindingName, type: member.levelType)
 			} else {
 				.init(name: builderName, type: builder.parameterType)
 			}
 			let memberCall = if callRoute.handsFillLevelStruct {
-				callRoute.route.last.flatMap { $0.innerScope?.name ?? $0.member?.bindingName }
+				parentStep?.innerScope?.name ?? parentMember?.bindingName
 			} else {
 				callRoute.memberValuesType.map { memberValuesType in
-					let parentName = callRoute.route.last.flatMap { $0.innerScope?.name ?? $0.member?.bindingName } ?? builderName
+					let parentName = parentStep?.innerScope?.name ?? parentMember?.bindingName ?? builderName
 					if case let .nested(_, enumType, _) = memberValuesType, ReservedName.seamCarrier(ofEnum: enumType) != nil {
 						// A carrier's member for a call's own case takes no values: a `let` child is read, any other member called.
 						return isLetChild(ofCaseNamed: callRoute.caseName, handed: memberValuesType) ? "\(parentName).\(callRoute.caseName)" : "\(parentName).\(callRoute.caseName)()"
@@ -2944,6 +2952,7 @@ struct SeamHoles: Sendable {
 		}
 		self.routeCasesByCall = routeCasesByCall
 		var sitesByPath = [[Property]: SeamSignature.Hole]()
+		var routeMembersByPath = [[Property]: [SeamSignature.Hole.RouteStep.Member?]]()
 		var passedUpHolesBySite = [SeamSignature.Hole.Site: SeamSignature.Hole]()
 		var namesBoundForBuilders = Set(holes.map(\.internalName) + holes.compactMap(\.wrapperFunctionName) + builders.map(\.internalName))
 		for hole in holes {
@@ -2953,7 +2962,9 @@ struct SeamHoles: Sendable {
 			}
 			sitesByPath[hole.sitePath] = hole
 			if let enumPlace = hole.enumPlace {
-				bindValues(of: enumPlace.route, onRouteTo: hole.sitePath, rootBuilderName: hole.internalName)
+				let members = routeMembersBySite[hole.site] ?? []
+				routeMembersByPath[hole.sitePath] = members
+				bindValues(of: enumPlace.route, members: members, onRouteTo: hole.sitePath, rootBuilderName: hole.internalName)
 			}
 		}
 		namesBoundForBuilders.formUnion(innerScopesByCall.values.flatMap { $0.map(\.name) })
@@ -3023,6 +3034,7 @@ struct SeamHoles: Sendable {
 		self.memberCallsInsideFunctionByPath = memberCallsInsideFunctionByPath
 		self.seamType = seamType
 		self.sitesByPath = sitesByPath
+		self.routeMembersByPath = routeMembersByPath
 		self.passedUpHolesBySite = passedUpHolesBySite
 		self.valuesBindingsByPath = valuesBindingsByPath
 		self.namesBoundForBuilders = namesBoundForBuilders
@@ -3242,6 +3254,12 @@ struct SeamHoles: Sendable {
 		sitesByPath[sitePath]
 	}
 
+	/// The member call each step of the route to the site at `sitePath` makes (`SeamSignature.Hole.RouteStep.Member`), in
+	/// the route's order: none where the signature holds no such site.
+	func routeMembers(at sitePath: [Property]) -> [SeamSignature.Hole.RouteStep.Member?] {
+		routeMembersByPath[sitePath] ?? []
+	}
+
 	/// The hole of this seam that takes the builder for `hole`'s site, which a call its tree makes presents: a site of
 	/// its own tree, which a call of the seam itself or of a seam that passes the site back presents, or a site it passes
 	/// up. `nil` when the signature holds none: a tree built to compute the signature, which generates nothing.
@@ -3324,6 +3342,7 @@ struct SeamHoles: Sendable {
 
 	private let routeCasesByCall: [RouteCall: RouteCase]
 	private let sitesByPath: [[Property]: SeamSignature.Hole]
+	private let routeMembersByPath: [[Property]: [SeamSignature.Hole.RouteStep.Member?]]
 	private let passedUpHolesBySite: [SeamSignature.Hole.Site: SeamSignature.Hole]
 	private let valuesBindingsByPath: [[Property]: [ValuesBinding]]
 	private let memberCallsInsideFunctionByPath: [[Property]: [ValuesBinding]]
@@ -3731,7 +3750,7 @@ extension Property {
 extension SeamHoles {
 	/// The holes, builders and routes of `seamRoot`, the seam root of `seamType`, as a tree of the seam reads them.
 	init(of seamRoot: ScopeGenerator.SeamRoot, seamType: TypeDescription) {
-		self.init(seamType: seamType, holes: seamRoot.signature.holes, builders: seamRoot.signature.builders, parameters: seamRoot.signature.parameters, callRoutes: seamRoot.signature.callRoutes, scopeEnums: seamRoot.signature.scopeEnums, holdsLoopPayloadsInBoxes: true)
+		self.init(seamType: seamType, holes: seamRoot.signature.holes, builders: seamRoot.signature.builders, parameters: seamRoot.signature.parameters, callRoutes: seamRoot.callRoutes, routeMembersBySite: seamRoot.routeMembersBySite, scopeEnums: seamRoot.signature.scopeEnums, holdsLoopPayloadsInBoxes: true)
 	}
 }
 
