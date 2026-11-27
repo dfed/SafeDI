@@ -123,6 +123,18 @@ enum PassedOnMember: Hashable, Sendable {
 	/// A member handed its case's values, which hold nothing for the call's own case: `<struct>.<case>(<values>())`.
 	case member(valuesType: TypeDescription)
 
+	/// The read, as a value of the construction whose argument reads `structRead`, the struct the member is called on.
+	func value(reading structRead: PlaceRead, caseName: String) -> ValuePath {
+		switch self {
+		case .carrierChild:
+			.member(caseName, of: .read(structRead))
+		case .carrierMember:
+			.call(caseName, of: .read(structRead), arguments: [], argumentsWrapper: nil)
+		case let .member(valuesType):
+			.call(caseName, of: .read(structRead), arguments: [], argumentsWrapper: valuesType)
+		}
+	}
+
 	/// The read, of the struct bound as `structName`.
 	func spelled(on structName: String, caseName: String) -> String {
 		switch self {

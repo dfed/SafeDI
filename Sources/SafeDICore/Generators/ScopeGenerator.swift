@@ -6967,6 +6967,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		fillPlaceBindings: FillPlaceBindings,
 		inlinePlaceBuilder: FillPlaceBindings.HoleBuilder?,
 		separatesValuesBindings: Bool,
+		inPlaceStatements: (before: [GeneratedCode], after: [GeneratedCode])?,
+		lineEnd: String,
 	) throws(Initializer.GenerationError) -> PlaceRecord? {
 		if SeamCallRecordObservation.observer != nil {
 			try observeFilledCall(of: property, instantiable: instantiable, seamCall: seamCall, erasedToConcreteExistential: erasedToConcreteExistential, code: code, unavailableProperties: unavailableProperties, builderFunctionNames: builderFunctionNames, inlinePlaceBuilder: inlinePlaceBuilder)
@@ -7041,6 +7043,62 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var record = AliasPlaceRecord(property: property, fulfillingProperty: nil, text: text, reads: reads)
 		record.declaredFunctionNames = declaredFunctionName.map { [$0] } ?? []
 		record.calledRootFunctionNames = rootFunctionNames
+		// A call that reaches no root function, outside a loop of builders, is spelled by the engine from its record where
+		// its text is written: the guard line, and a construction that hands each builder the member of the struct it
+		// passes up.
+		if let inPlaceStatements, rootFunctionNames.isEmpty, reboundProperties.isEmpty, let declaredFunctionName {
+			var arguments = argumentReads
+			var argumentValues = [Int: ValuePath]()
+			var closureArguments = [ClosureArgumentEntry]()
+			// Every builder argument passes a struct up (the guard above), in the order the seam's builders are taken.
+			let passedUpStructs = zip(seamCall.calledBuilders.builders, builderCallArguments).compactMap { builder, builderCallArgument in
+				builderCallArgument.passedUpStruct.map { (builder: builder, label: builderCallArgument.label, passedUpStruct: $0) }
+			}
+			for (builder, label, passedUpStruct) in passedUpStructs {
+				let structRead = PlaceRead(
+					argumentLabel: label,
+					label: passedUpStruct.name,
+					property: Property(label: passedUpStruct.name, typeDescription: passedUpStruct.type),
+					source: .binding(label: passedUpStruct.name),
+					// SafeDI cannot tell the struct is `Sendable`, as for a hole site's read of it.
+					staysOutsideSendableFunctions: true,
+				)
+				let passedOnRead = PassedOnRead(calledType: instantiable.concreteInstantiable, builderLabel: builder.label, structType: passedUpStruct.type, caseName: passedUpStruct.caseName, member: passedUpStruct.member)
+				argumentValues[arguments.count] = passedOnRead.member.value(reading: structRead, caseName: passedOnRead.caseName)
+				arguments.append(structRead)
+				closureArguments.append(ClosureArgumentEntry(label: label, value: .passedOn(passedOnRead)))
+			}
+			var callRecord = BuiltPlaceRecord(
+				property: property,
+				isErased: erasedToConcreteExistential,
+				concreteType: instantiable.concreteInstantiable,
+				isExtension: instantiable.declarationType.isExtension,
+				target: .initializer(instantiable.concreteInstantiable),
+				arguments: arguments,
+				forwardedProperties: [],
+				cycleParameters: [],
+				callCycleArguments: [],
+				functionName: declaredFunctionName,
+				isSendable: buildsInSendableFunction,
+				typesDeclaredEscaping: typesDeclaredEscaping,
+				lineEnd: lineEnd,
+				hasFunction: true,
+				children: [],
+				node: PlanNode(),
+			)
+			if !argumentValues.isEmpty {
+				callRecord.argumentValues = argumentValues
+			}
+			callRecord.callFields = CallFields(
+				leadingStatement: seamCall.callGuard(for: instantiable.concreteInstantiable),
+				closureArguments: closureArguments,
+			)
+			record.call = InPlaceCall(
+				record: callRecord,
+				statementsBeforeLeadingStatement: inPlaceStatements.before,
+				statementsAfterLeadingStatement: inPlaceStatements.after,
+			)
+		}
 		return .alias(record)
 	}
 
@@ -8895,7 +8953,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				) : nil
 			} else if let seamCall {
 				// A seam call's forwarded values are bound inside its text, which lists only the reads outside it.
-				forwardedProperties.isEmpty ? try seamCallRecord(of: property, instantiable: instantiable, seamCall: seamCall, erasedToConcreteExistential: erasedToConcreteExistential, code: code, declaredFunctionName: functionName, unavailableProperties: unavailableProperties, builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings, inlinePlaceBuilder: inlinePlaceBuilder, separatesValuesBindings: separatesValuesBindings) : nil
+				forwardedProperties.isEmpty ? try seamCallRecord(of: property, instantiable: instantiable, seamCall: seamCall, erasedToConcreteExistential: erasedToConcreteExistential, code: code, declaredFunctionName: functionName, unavailableProperties: unavailableProperties, builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings, inlinePlaceBuilder: inlinePlaceBuilder, separatesValuesBindings: separatesValuesBindings, inPlaceStatements: nil, lineEnd: constructionLineEnd) : nil
 			} else {
 				try builtRecord(functionName: functionName, hasFunction: true, rebindings: rebindingLines)
 			}
@@ -8928,7 +8986,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 			let code = function.spelled(after: valuesBindingLines, followedBy: lastLine)
 			let record: PlaceRecord? = if let seamCall {
-				try seamCallRecord(of: property, instantiable: instantiable, seamCall: seamCall, erasedToConcreteExistential: erasedToConcreteExistential, code: code, declaredFunctionName: functionName, unavailableProperties: unavailableProperties, builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings, inlinePlaceBuilder: inlinePlaceBuilder, separatesValuesBindings: separatesValuesBindings)
+				try seamCallRecord(of: property, instantiable: instantiable, seamCall: seamCall, erasedToConcreteExistential: erasedToConcreteExistential, code: code, declaredFunctionName: functionName, unavailableProperties: unavailableProperties, builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings, inlinePlaceBuilder: inlinePlaceBuilder, separatesValuesBindings: separatesValuesBindings, inPlaceStatements: nil, lineEnd: constructionLineEnd)
 			} else {
 				try builtRecord(functionName: functionName, hasFunction: true)
 			}
@@ -8982,7 +9040,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// A call of another module's seam is written as its text, which the type key lays out with the reads it lists: its
 			// builder function holds the guard line, which the type key's constructions do not write.
 			let record: PlaceRecord? = if let seamCall {
-				try seamCallRecord(of: property, instantiable: instantiable, seamCall: seamCall, erasedToConcreteExistential: erasedToConcreteExistential, code: code, declaredFunctionName: hasGeneratedContent ? functionName : nil, unavailableProperties: unavailableProperties, builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings, inlinePlaceBuilder: inlinePlaceBuilder, separatesValuesBindings: separatesValuesBindings)
+				try seamCallRecord(of: property, instantiable: instantiable, seamCall: seamCall, erasedToConcreteExistential: erasedToConcreteExistential, code: code, declaredFunctionName: hasGeneratedContent ? functionName : nil, unavailableProperties: unavailableProperties, builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings, inlinePlaceBuilder: inlinePlaceBuilder, separatesValuesBindings: separatesValuesBindings, inPlaceStatements: valuesBindingLines.isEmpty && hasGeneratedContent ? (before: memberCallCode, after: fillPlaceBindingLines + childCode) : nil, lineEnd: constructionLineEnd)
 			} else if isUnavailableDependency {
 				.alias(Self.recordOfPropertyBoundToNil(property))
 			} else {

@@ -142,8 +142,49 @@ extension TypeKeyLayout {
 		case let .closer(record, target):
 			return spelledCall(of: classByBody[target], binding: record.property, isErased: record.isErased, isExtension: record.isExtension, inClass: owner, at: index)
 		case let .alias(record):
-			return record.text
+			guard let call = record.call else { return record.text }
+			return spelledInPlace(call, inClass: owner, at: index)
 		}
+	}
+
+	/// The text of a call written where its place is, at `index` of `owner`'s body: its builder function, then the binding
+	/// of its result. Each argument is read as the declaration visible there, which the function captures.
+	func spelledInPlace(_ call: InPlaceCall, inClass owner: Int, at index: Int) -> String? {
+		let record = call.record
+		guard let argumentValues = spelledArgumentValues(record.arguments, replacedAt: record.argumentValues, inClass: owner, before: index, sourceAtMember: { member, position in
+			guard case let .alias(memberRecord) = bodies[member].statements[index], let memberCall = memberRecord.call else { return nil }
+			return memberCall.record.arguments[position].source
+		}) else { return nil }
+		var statements = call.statementsBeforeLeadingStatement
+		if let leadingStatement = record.leadingStatement {
+			statements.append(.text("\(ScopeGenerator.standardIndent)\(leadingStatement.spelled)"))
+		}
+		statements += call.statementsAfterLeadingStatement
+		let function = SafeDICore.Statement.function(BuilderNode(
+			name: record.functionName,
+			isSendable: record.isSendable,
+			parameters: [],
+			typesDeclaredEscaping: record.typesDeclaredEscaping,
+			returnType: record.concreteType,
+			body: BuilderBody(statements: statements),
+			value: .construction(record.target, arguments: Self.labeled(argumentValues, of: record.arguments)),
+			lineEnd: record.lineEnd,
+		)).spelled
+		let declaration = BindingDeclaration(
+			property: record.property,
+			rule: .constant(
+				isErased: record.isErased,
+				constructedTypeIsPropertyType: record.concreteType.asSource == record.property.typeDescription.asSource,
+				hasBuilderFunction: true,
+				isExtension: record.isExtension,
+			),
+		)
+		let binding = SafeDICore.Statement.binding(
+			declaration,
+			Expression.call(function: record.functionName, arguments: "").erased(to: record.property.typeDescription.unwrapped, where: record.isErased),
+			lineEnd: "",
+		)
+		return GeneratedCode.sequence([function, binding.spelled, .text("\n")]).spelled()
 	}
 
 	/// The binding of `property` to a call of `callee`'s function, made before the statement at `index` of `owner`'s body.
