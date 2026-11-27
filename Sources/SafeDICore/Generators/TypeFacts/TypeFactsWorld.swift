@@ -553,14 +553,29 @@ extension TypeFactsGraph: TypeFactsWorld {
 		for required in receives.required.columns(inRow: Int(declaration)) where propertyFacts.labels[Int(required)] == label {
 			requiredForms.insert(propertyTable[Int(required)])
 		}
-		guard let (property, passedForms) = CycleParameter.property(passing: forms, requiredForms: requiredForms.intersection(forms)) else { return nil }
 		if let wrapperName {
-			let wrapper = Property(label: property.label, typeDescription: .simple(name: wrapperName, generics: [property.typeDescription.unwrapped]))
+			// The wrapper the calls pass: the form of it the body itself receives, where it receives one, else the
+			// wrapper of the value's type. Every form of a label keyed with a wrapper is that wrapper or its value.
+			let unwrappedForms = forms.map(\.asUnwrappedProperty).sorted()
+			guard let wrapper = unwrappedForms.first(where: { $0.asLazilyInstantiatedInstanceProperty != nil })
+				?? unwrappedForms.first.map({ Property(label: $0.label, typeDescription: .simple(name: wrapperName, generics: [$0.typeDescription])) })
+			else { return nil }
 			return TypeFactsParameter(
 				property: arrivals.nilArrives(at: position - reads.startIndex, of: variant) ? wrapper.asOptionalProperty : wrapper,
 				readsInstanceOfWrapper: true,
 			)
 		}
+		// A production function takes the wrapper a lazily instantiated declaration answers a read of its value with, and
+		// its body reads the wrapper’s instance, so the instance is created at first read. A mock’s takes the value, which
+		// each call reads from its wrapper (“Eager instances at a lazy cycle’s calls” in `.claude/rules/cycle-generation.md`).
+		let key = keys[keys.startIndex + (position - reads.startIndex)]
+		if !forMockGeneration, key >= 0 {
+			let declared = propertyTable[Int(answerProperties[Int(key)])]
+			if let instance = declared.asLazilyInstantiatedInstancePropertyOfDeclaredBinding, forms.contains(instance) || forms.contains(instance.asOptionalProperty) {
+				return TypeFactsParameter(property: declared, readsInstanceOfWrapper: true)
+			}
+		}
+		guard let (property, passedForms) = CycleParameter.property(passing: forms, requiredForms: requiredForms.intersection(forms)) else { return nil }
 		let instance = property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding
 		return TypeFactsParameter(
 			property: property,

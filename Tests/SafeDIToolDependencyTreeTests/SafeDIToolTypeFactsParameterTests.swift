@@ -162,6 +162,70 @@ struct SafeDIToolTypeFactsParameterTests: ~Copyable {
 		#expect(try parameters(ofVariantsOf: "Leaf ", in: report) == [["theme: LazilyInstantiated<Theme>?"], ["theme: SendableLazilyInstantiated<Theme>"]], "\(report.world)")
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_typesOneParameterAsOptionalWrapper_whenOneBodyReadsLabelByValueAndThroughItsWrapper() async throws {
+		// `Leaf` receives the theme's value and its `Sub` the wrapper, both only if available; `Second` declares the theme
+		// lazily and `Third` declares none. A function takes one parameter per label, the wrapper, whose instance the
+		// value's receive reads: `__safeDI_leafBuilder(theme: LazilyInstantiated<Theme>?)`.
+		let report = try await rootReport(of: Self.leafFixture(places: [("Second", "LazilyInstantiated<Theme>"), ("Third", nil)], subTheme: "LazilyInstantiated<Theme>?"))
+
+		#expect(try parameters(ofVariantsOf: "Leaf ", in: report) == [["theme: LazilyInstantiated<Theme>?"]], "\(report.world)")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_typesParameterAsWrapper_whenConstantInsideCycleReceivesValueLazilyInstantiatedWrappersAnswer() async throws {
+		// `Toolbar`, inside `A`, receives the theme by value, which `Root` and `B` each declare lazily: each call passes its
+		// wrapper, so the function is `__safeDI_aBuilder(theme: LazilyInstantiated<Theme>)`, as the tree writes it. The
+		// generator’s own cycle parameter is the value, which check 35 compares the wrapper with.
+		let report = try await rootReport(of: [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let theme: LazilyInstantiated<Theme>", "@Instantiated let aBuilder: Instantiator<A>"]),
+			seamFixtureType(named: "A", isFinalClass: true, declarations: ["@Instantiated let toolbar: Toolbar", "@Instantiated let bBuilder: Instantiator<B>"]),
+			seamFixtureType(named: "B", isFinalClass: true, declarations: ["@Instantiated let theme: LazilyInstantiated<Theme>", "@Instantiated let aBuilder: Instantiator<A>"]),
+			seamFixtureType(named: "Toolbar", isFinalClass: true, declarations: ["@Received let theme: Theme"]),
+			seamFixtureType(named: "Theme", isFinalClass: true, declarations: []),
+		])
+
+		#expect(try parameters(ofVariantsOf: "A ", in: report) == [["theme: LazilyInstantiated<Theme>"]], "\(report.world)")
+		#expect(TypeFactsChecks.findings(of: report).findingsByCheck[35, default: []].isEmpty)
+		#expect(report.places.contains { $0.generator?.cycleParameters == ["theme: Theme"] })
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_typesParameterAsWrapper_whenFunctionsOwnTypeReceivesValueLazilyInstantiatedWrappersAnswer() async throws {
+		// `T3` itself receives the session by value, which `Root` and `T0` each declare lazily: the tree writes
+		// `__safeDI_t3Builder(session: LazilyInstantiated<Session>)`, and the body reads the wrapper’s instance.
+		let report = try await rootReport(of: [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let session: LazilyInstantiated<Session>", "@Instantiated let t3Builder: Instantiator<T3>"]),
+			seamFixtureType(named: "T3", isFinalClass: true, declarations: ["@Received let session: Session", "@Instantiated let t0Builder: Instantiator<T0>"]),
+			seamFixtureType(named: "T0", isFinalClass: true, declarations: ["@Instantiated let session: LazilyInstantiated<Session>", "@Instantiated let t3Builder: Instantiator<T3>"]),
+			seamFixtureType(named: "Session", isFinalClass: true, declarations: []),
+		])
+
+		#expect(try parameters(ofVariantsOf: "T3 ", in: report) == [["session: LazilyInstantiated<Session>"]], "\(report.world)")
+		#expect(TypeFactsChecks.findings(of: report).findingsByCheck[35, default: []].isEmpty)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_typesParameterAsWrapper_whenBuilderInsideCycleReceivesValueLazilyInstantiatedWrappersAnswer() async throws {
+		// `D`, built by a builder inside `A`, receives `x` by value, which `Root` and `Mid` each declare lazily: the tree
+		// writes `__safeDI_aBuilder(x: LazilyInstantiated<X>)` and `__safeDI_dBuilder(x: LazilyInstantiated<X>)`.
+		let report = try await rootReport(of: [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let x: LazilyInstantiated<X>", "@Instantiated let aBuilder: Instantiator<A>"]),
+			seamFixtureType(named: "A", isFinalClass: true, declarations: ["@Instantiated let midBuilder: Instantiator<Mid>", "@Instantiated let dBuilder: Instantiator<D>"]),
+			seamFixtureType(named: "Mid", isFinalClass: true, declarations: ["@Instantiated let x: LazilyInstantiated<X>", "@Instantiated let aBuilder: Instantiator<A>"]),
+			seamFixtureType(named: "D", isFinalClass: true, declarations: ["@Received let x: X"]),
+			seamFixtureType(named: "X", isFinalClass: true, declarations: []),
+		])
+
+		#expect(try parameters(ofVariantsOf: "A ", in: report) == [["x: LazilyInstantiated<X>"]], "\(report.world)")
+		#expect(try parameters(ofVariantsOf: "D ", in: report) == [["x: LazilyInstantiated<X>"]], "\(report.world)")
+		#expect(TypeFactsChecks.findings(of: report).findingsByCheck[35, default: []].isEmpty)
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -187,13 +251,17 @@ struct SafeDIToolTypeFactsParameterTests: ~Copyable {
 	}
 
 	/// `Leaf` receives `theme` only if available and builds itself again through `leafBuilder`. Each of `places`, in
-	/// `Root`'s declaration order, declares the `theme` it names, if any, then builds `leafBuilder`.
-	private static func leafFixture(places: [(name: String, theme: String?)], themeIsSendable: Bool = false) -> [String] {
+	/// `Root`'s declaration order, declares the `theme` it names, if any, then builds `leafBuilder`. A `subTheme` gives
+	/// `Leaf` a `Sub` that receives `theme` only if available in that form.
+	private static func leafFixture(places: [(name: String, theme: String?)], subTheme: String? = nil, themeIsSendable: Bool = false) -> [String] {
 		var types = [seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: places.map { "@Instantiated let \($0.name.prefix(1).lowercased() + $0.name.dropFirst()): \($0.name)" })]
 		for place in places {
 			types.append(seamFixtureType(named: place.name, isFinalClass: true, declarations: (place.theme.map { ["@Instantiated let theme: \($0)"] } ?? []) + ["@Instantiated let leafBuilder: Instantiator<Leaf>"]))
 		}
-		types.append(seamFixtureType(named: "Leaf", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let theme: Theme?", "@Instantiated let leafBuilder: Instantiator<Leaf>"]))
+		types.append(seamFixtureType(named: "Leaf", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let theme: Theme?"] + (subTheme == nil ? [] : ["@Instantiated let sub: Sub"]) + ["@Instantiated let leafBuilder: Instantiator<Leaf>"]))
+		if let subTheme {
+			types.append(seamFixtureType(named: "Sub", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let theme: \(subTheme)"]))
+		}
 		types.append(seamFixtureType(named: "Theme", isFinalClass: true, declarations: [], conformances: themeIsSendable ? ", Sendable" : ""))
 		return types
 	}
