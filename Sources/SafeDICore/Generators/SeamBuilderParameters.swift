@@ -2763,10 +2763,9 @@ extension DependencyTreeGenerator {
 		if case let .field(level, declaration) = variant.answer {
 			fields.append(query.places.declaration(level: level, declaration: declaration).field)
 		}
-		// The place's own declarations of the label are the ones the graph answers, never the place's, which for a place a call
-		// passes up are its first route's; the declarations a call on the way presents besides (`boundByPassingUpSeam`, copies a
-		// called place carries) stay. A declaration some place of the case carries keeps that place's buildability, which the
-		// graph's leaves out.
+		// The place's own declaration of the label is the one the graph answers; the declarations a call on the way presents
+		// besides (`boundByPassingUpSeam`, copies a called place carries) stay. A declaration some place of the case carries
+		// keeps that place's buildability, which the graph's leaves out.
 		func sameDeclaration(_ lhs: SeamSignature.Hole.UncarriedDeclaration, _ rhs: SeamSignature.Hole.UncarriedDeclaration) -> Bool {
 			lhs.property == rhs.property && lhs.declaringType == rhs.declaringType && lhs.reason == rhs.reason
 		}
@@ -2784,7 +2783,7 @@ extension DependencyTreeGenerator {
 		var uncarriedDeclarations = [SeamSignature.Hole.UncarriedDeclaration]()
 		var placedVariant = false
 		for declaration in hole.uncarriedDeclarations {
-			guard declaration.property.label == label, graphDeclarations.contains(where: { sameDeclaration($0, declaration) }) || !declaration.isPresentedByCall else {
+			guard declaration.property.label == label, graphDeclarations.contains(where: { sameDeclaration($0, declaration) }) else {
 				uncarriedDeclarations.append(declaration)
 				continue
 			}
@@ -4515,17 +4514,6 @@ extension SeamSignature.Hole.ReenteringPlaceField {
 }
 
 extension SeamSignature.Hole.UncarriedDeclaration {
-	/// Whether a seam that passes the place up binds it on a path to a call that presents the place
-	/// (`Reason.boundByPassingUpSeam`), which a place's own graph does not answer.
-	var isPresentedByCall: Bool {
-		switch reason {
-		case .boundByPassingUpSeam:
-			true
-		case .receivesPathScopeOnlyIfAvailable, .requiresOtherCarrier, .instantiatorBuildingSite, .other, .boundOutsideSendableFunction:
-			false
-		}
-	}
-
 	/// This declaration, bound after the site for `reason`.
 	func with(reason: Reason) -> SeamSignature.Hole.UncarriedDeclaration {
 		var declaration = SeamSignature.Hole.UncarriedDeclaration(property: property, declaringType: declaringType, declarationLocation: declarationLocation, parameterTakingType: parameterTakingType, builtAfter: builtAfter, reason: reason)
