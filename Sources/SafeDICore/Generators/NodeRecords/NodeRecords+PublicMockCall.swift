@@ -104,7 +104,7 @@ extension NodeRecords {
 		let reads = world.reads(of: declaration)
 		guard let position = reads.indices.first(where: {
 			let asked = world.read(reads[$0])
-			return asked.channel == .optional && world.labelText(asked.label) == dependency.property.label
+			return asked.channel == .optional && world.text(ofLabel: asked.label) == dependency.property.label
 		}) else { throw .onlyIfAvailable }
 		// Each variant whose callers' answers are still to read, with the position of the read in its run of keys.
 		var pending = [(variant: variant, position: position - reads.startIndex)]
@@ -155,18 +155,11 @@ extension NodeRecords {
 		// The called mock's own overrides: the enclosing configuration's field under the node's label, which the record never
 		// spells (`mockConfigurationField(named:)`).
 		let isInstantiator = world.kind(of: declaration) == .instantiator
-		// An `Instantiator`'s builder function takes the field as a passed argument of its own (`mockOverrideSlot`), but for
-		// a function built in the root's body, which reads `mock()`'s own overrides where it is declared, as the walk's does.
-		let isBuiltInRootBody = world.parents(of: declaration).allSatisfy { $0.parent == 0 }
 		let overridesType = TypeDescription.nested(name: ReservedName.mockOverridesTypeName, parentType: calledType, generics: [])
 		let overridesProperty = Property(label: ReservedName.mockOverridesParameterName, typeDescription: overridesType)
-		let slot = mockOverrideSlot(ofNodeLabeled: property.label, typed: overridesType, hasFunction: isInstantiator && !isBuiltInRootBody)
-		let overrides: ValuePath = if isInstantiator, isBuiltInRootBody {
-			.member(property.label.spelledAsMemberDeclarationName, of: .rootDeclaration(ReservedName.mockOverridesParameterName))
-		} else {
-			slot.value
-		}
-		let argumentValues = [arguments.count: overrides]
+		// The called mock's overrides are its own: the node hands no configuration to children, since it has none.
+		let slot = mockOverrideSlot(of: declaration, labeled: property.label, typed: overridesType, in: world, hasFunction: isInstantiator, handsOverridesToChildren: false, isSendable: false)
+		let argumentValues = [arguments.count: slot.value]
 		arguments.append(PlaceRead(argumentLabel: overridesProperty.label, label: overridesProperty.label, property: overridesProperty, source: .binding(label: overridesProperty.label)))
 		var record = BuiltPlaceRecord(
 			property: property,

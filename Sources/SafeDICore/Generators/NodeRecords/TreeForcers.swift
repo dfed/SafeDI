@@ -23,14 +23,16 @@
 /// code is laid out from its node records (`NodeRecordsLayout`), and each check that reads a root's tree reads them:
 ///
 /// - `validateFills` and `seamTierOmissions` judge seam calls and fills, which a module without seams has none of.
-/// - `nonSendableWrapperCaptures` judges a `@Sendable` builder function, which only a `Sendable` wrapper or a cycle makes,
-///   and `unpassableCycleLabelsInTree` a lazy cycle: node records refuse both (`NodeRecordRefusal.kind`, `.cycle`).
+/// - `nonSendableWrapperCaptures` judges a `@Sendable` builder function, which only a `Sendable` wrapper or a cycle makes:
+///   node records refuse a world in which one captures a wrapper (`NodeRecordRefusal.sendableFunctionCapturesWrapper`,
+///   from `DeclarationsAnsweringReads`), and every cycle (`.cycle`), which `unpassableCycleLabelsInTree` judges too.
 /// - `fulfillersOfTree`, the imports, is folded over the root's world (`NodeRecordsLayout.fulfillers`).
 ///
 /// Where a test observes node records, the tree is built beside the records all the same, and each of these is checked
 /// against it (`DependencyTreeGenerator.plannedRootCode(of:)`).
 public enum TreeForcer: Hashable, Sendable, CustomStringConvertible {
-	/// The module holds a seam, whose roots' worlds node records do not enter yet.
+	/// The module holds a seam, whose roots node records do not lay out yet. Where the run names refusals
+	/// (`GenerationRequest.namesNodeRecordRefusals`), the kind node records refuse the root's world with follows it.
 	case seamWorld
 	/// Node records refused the root's world, with this kind: a `NodeRecordRefusal`'s raw value, `notLaidOut` where the
 	/// engine could not lay the records out.
@@ -98,8 +100,9 @@ struct NodeRecordsLayout: Sendable {
 		rootBody = nodeRecords.rootBody
 		recordCount = nodeRecords.recordCount
 		var fulfillers = Set<FulfillerImports.Fulfiller>()
-		// The root is built as no property, so it adds none, as the tree's root place adds none.
-		for declaration in 0..<Int32(world.declarationCount) {
+		// The root is built as no property, so it adds none, as the tree's root place adds none; nor does a rename or a hole,
+		// which builds nothing.
+		for declaration in 0..<Int32(world.declarationCount) where world.kind(of: declaration) != .alias && world.kind(of: declaration) != .hole {
 			fulfillers.formUnion(world.property(of: declaration).map { property in
 				FulfillerImports.Fulfiller.fulfillers(
 					building: world.scope(of: declaration).instantiable,
