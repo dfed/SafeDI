@@ -257,10 +257,11 @@ enum FillCallerSources {
 		while true {
 			switch source.kind {
 			case .none:
-				return nil
+				// No declaration before the call answers the read: the scope that makes the call builds a declaration of its own
+				// made after the call first, where it makes one.
+				return world.edges(from: world.declaration(of: callee)).lazy.filter { world.construction(of: $0) != .fill }.compactMap { world.property(of: $0) }.first { $0.label == label }
 			case .bound:
 				// The declaration that binds the read: a property its scope builds, else one its type receives or forwards.
-				guard world.answer(source.answer).form != .beingBuilt else { return nil }
 				let binder = source.payload
 				return world.edges(from: binder).lazy.filter { world.construction(of: $0) != .fill }.compactMap { world.property(of: $0) }.first { $0.label == label }
 					?? world.scope(of: binder).instantiable.dependencies.lazy.map(\.property).first { $0.label == label }
