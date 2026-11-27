@@ -96,6 +96,7 @@ extension NodeRecords {
 			HoleSitePlaces.place(
 				of: property,
 				at: seamHoles.site(at: sitePath),
+				routeMembers: seamHoles.routeMembers(at: sitePath),
 				functionName: nil,
 				valuesBindings: carrierSite?.formations ?? [],
 				carrierUse: carrierSite?.use,
