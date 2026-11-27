@@ -3767,7 +3767,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// type is constructed, in the order the tree's code is generated, or `nil` where generation passes `nil`
 	/// (`unavailableProperties`). Where that declaration is a parameter of a builder function a lazy cycle closes on, the
 	/// value is the one each call of the function passes (see `OmissionFindings`). Also returns the concrete type of each
-	/// scope the tree constructs, in the order the walk meets them.
+	/// scope the tree constructs, in the order the walk meets them. `query graph` runs it only for trees built around
+	/// received dependencies nothing provides, which the fold that replaced it does not read yet, and otherwise only the
+	/// fold's oracle runs it (`TypeFactsReceivedValueSuppliesObservation`), since it enters every path of the tree.
 	///
 	/// A receive `unfulfilledReceives` holds is one the tree was built around although nothing provides it in some place
 	/// (`DependencyTreeGenerator.unfulfilledReceiveLocations`). Where nothing provides it, it is handed nothing, and an
@@ -4255,7 +4257,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// The types the tree rooted at this scope builds that its declarations do not name: through a `fulfilledByType:`
 	/// string or a `fulfillingAdditionalTypes:` entry, or as what a mock promotes for such a property, and, in a mock, by
 	/// calling a hand-written mock another module merges in. The code generated for the tree names each, while no
-	/// declaration of the property does, so no file SafeDI read need import its module.
+	/// declaration of the property does, so no file SafeDI read need import its module. A root's file takes its imports
+	/// from its world's declarations instead (`TypeFactsImports`), which the tests compare with this walk of its tree.
 	/// - Parameter buildingMock: Whether the tree is a mock's, which builds a type with its hand-written mock.
 	func fulfillersOfTree(buildingMock: Bool) async -> Set<FulfillerImports.Fulfiller> {
 		var fulfillers = Set<FulfillerImports.Fulfiller>()
