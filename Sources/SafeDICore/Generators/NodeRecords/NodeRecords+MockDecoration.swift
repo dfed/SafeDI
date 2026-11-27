@@ -69,7 +69,8 @@ extension NodeRecords {
 	/// walk passes it (`mockOnlyIfAvailableDischarges(of:)`); a rename the type declares is a node of its own
 	/// (`mockRenameDischargesAndRefusals(of:in:)`); a node built in a `@Sendable` function of its own reads its override
 	/// from a local bound before the function (`NodeRecords+MockSendable.swift`); a dependency the mock cannot build is a
-	/// parameter of `mock()` (`NodeRecords+MockUncoveredDependency.swift`).
+	/// parameter of `mock()` (`NodeRecords+MockUncoveredDependency.swift`); a node on a cycle finds its place among those
+	/// entered above it (`NodeRecords+MockCycle.swift`).
 	static func mockOverrideDischargesAndRefusals(of declaration: DeclarationID, in world: some NodeRecordSources) -> (discharges: Set<NodeRecordRefusal>, refusals: [NodeRecordRefusal]) {
 		let rename = mockRenameDischargesAndRefusals(of: declaration, in: world)
 		var discharges: Set<NodeRecordRefusal> = world.construction(of: declaration) == .handWrittenMock ? [.construction, .noInitializer] : []
@@ -79,6 +80,9 @@ extension NodeRecords {
 		// A dependency the mock cannot build is a parameter of `mock()`, which the node's construction reads
 		// (`NodeRecords+MockUncoveredDependency.swift`).
 		discharges.formUnion(mockUncoveredDependencyDischarges(of: declaration, in: world))
+		// A node on a cycle is handed the places entered above it, and finds its own among them
+		// (`NodeRecords+MockCycle.swift`).
+		discharges.formUnion(mockCycleDischarges(of: declaration, in: world))
 		var refusals = rename.refusals + mockSendableRefusals(of: declaration, in: world) + mockActorWrapperRefusals(of: declaration, in: world)
 		let instantiable = world.scope(of: declaration).instantiable
 		// An actor is claimed as any node is. The closure that overrides it takes each argument `sending`
@@ -115,6 +119,7 @@ extension NodeRecords {
 		unavailableProperties: Set<Property>,
 		lazilyInstantiatedInstanceProperties: Set<Property>,
 		receivesBoundAgain: [MockReceiveBoundAgain],
+		enteredSlots: MockEnteredSlots?,
 		typesDeclaredEscaping: Set<TypeDescription>,
 		children: [GeneratedCode],
 	) throws -> BuiltPlaceRecord {
@@ -125,6 +130,7 @@ extension NodeRecords {
 			unavailableProperties: unavailableProperties,
 			lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
 			receivesBoundAgain: receivesBoundAgain,
+			enteredSlots: enteredSlots,
 			typesDeclaredEscaping: typesDeclaredEscaping,
 			children: children,
 		)
