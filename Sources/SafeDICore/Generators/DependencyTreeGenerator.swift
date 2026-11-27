@@ -430,11 +430,34 @@ public actor DependencyTreeGenerator {
 				for rootInfo in rootScopeGenerators {
 					taskGroup.addTask {
 						let code = try await rootInfo.scopeGenerator.generatePlan()
-						return await PlannedRoot(
+						// The imports are the root's union fact, read from its declarations, not from its generator tree.
+						let fulfillers = TypeFactsImports(root: rootInfo.rootScope).fulfillers
+						if let observer = TypeFactsImportsObservation.comparesWalk {
+							let walkedFulfillers = await GenerationWork.$observer.withValue(nil) {
+								await rootInfo.scopeGenerator.fulfillersOfTree(buildingMock: false)
+							}
+							observer(TypeFactsImportsComparison(root: rootInfo.typeDescription.asSource, foldedFulfillers: fulfillers, walkedFulfillers: walkedFulfillers))
+						}
+						if let observer = TypeFactsReceivedValueSuppliesObservation.comparesWalk {
+							await GenerationWork.$observer.withValue(nil) {
+								let folded = TypeFactsReceivedValueSupplies(root: rootInfo.rootScope)
+								// A tree `generate` plans is built around no receive nothing provides, which the walk always judges.
+								let walked = await rootInfo.scopeGenerator.receivedValueSupplies(
+									ofTreeRootedAt: rootInfo.instantiable,
+									unfulfilledReceives: ScopeGenerator.UnfulfilledReceives(locations: [], labels: []),
+								)
+								observer(TypeFactsReceivedValueSuppliesComparison(
+									root: rootInfo.typeDescription.asSource,
+									folded: ReceivedValueSupplies(supplies: folded.supplies, constructedTypes: folded.constructedTypes),
+									walked: walked.map { ReceivedValueSupplies(supplies: $0.supplies.uniqued(), constructedTypes: $0.constructedTypes.uniqued()) },
+								))
+							}
+						}
+						return PlannedRoot(
 							typeDescription: rootInfo.typeDescription,
 							sourceFilePath: rootInfo.sourceFilePath,
 							code: code,
-							fulfillers: rootInfo.scopeGenerator.fulfillersOfTree(buildingMock: false),
+							fulfillers: fulfillers,
 						)
 					}
 				}
@@ -567,6 +590,8 @@ public actor DependencyTreeGenerator {
 		let typeDescription: TypeDescription
 		let instantiable: Instantiable
 		let sourceFilePath: String?
+		/// The root's scope, from which its tree is built, whose declarations the imports read (`TypeFactsImports`).
+		let rootScope: ConstructionScope
 		let scopeGenerator: ScopeGenerator
 	}
 
@@ -710,6 +735,7 @@ public actor DependencyTreeGenerator {
 						typeDescription: typeDescription,
 						instantiable: scope.instantiable,
 						sourceFilePath: typeDescriptionToFulfillingInstantiableMap[typeDescription]?.sourceFilePath,
+						rootScope: ConstructionScope(table: table, record: record),
 						scopeGenerator: record.createScopeGenerator(
 							in: table,
 							lazilyInstantiatedInstanceProperties: [],
