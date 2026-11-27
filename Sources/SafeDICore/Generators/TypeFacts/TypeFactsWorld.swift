@@ -29,7 +29,9 @@
 // Twins: `cycle(of:)` is the identity in both worlds, so a value and a `LazilyInstantiated` of one label share it, and
 // plain and `@Sendable` builders do not. Which twin a path builds is an argument, never a key: the `madeAgain` producer's
 // key projects that choice to one key, as rule 1 does. Owed with the cycles producer: per identity, its declarations in
-// first-reach order; per node, the twinned identities its subtree can close on, a union fact like the reads.
+// first-reach order; per node, the twinned identities its subtree can close on, a union fact like the reads. A value or
+// wrapper still being built keys once per identity, by its label, on a required channel; on the optional channels it
+// keys as `nil` does, since 2.4.0 passes `nil` to a receive only if available of a declaration not yet built.
 //
 // Rule 3 is staged, and both keys are planned states. Stage 1, today: an only-if-available read keys a lazy wrapper by
 // its kind (-3, -4) and `nil` apart from it, so a lazy answer beside none is two bodies. Stage 2: where a value and a
