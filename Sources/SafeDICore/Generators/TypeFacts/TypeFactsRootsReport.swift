@@ -22,9 +22,17 @@
 /// (`TypeFactsGraph.init(roots:intern:)`), as text for a test to read. Made only where a test observes it
 /// (`ValidationWalkObservation.unvalidatedWorld`), never by the tool.
 public struct TypeFactsRootsReport: Sendable {
-	init(_ graph: TypeFactsGraph, internedCountBefore: Int, internedCountAfter: Int) {
+	/// - Parameter intern: The run's ID of a property, by which the report spells each ID the world names a property by.
+	init(_ graph: TypeFactsGraph, internedCountBefore: Int, internedCountAfter: Int, intern: (Property) -> PropertyID) {
 		projection = graph.projection
 		world = TypeFactsReport.projection(of: graph) { graph.isFrame(Int($0)) ? " frame" : "" }
+		// The spelling of each validated property some node is built as, by its ID: a node's is looked up by the ID the
+		// world holds for it, so a world that named another property would spell another.
+		var validatedPropertyTexts = [Int32: String]()
+		for node in graph.graph.nodes {
+			guard let validatedProperty = node.property?.asValidatedForDependencyCycles else { continue }
+			validatedPropertyTexts[intern(validatedProperty).raw] = validatedProperty.asSource
+		}
 		nodes = graph.graph.nodes.indices.map { index in
 			Node(
 				description: graph.description(ofNode: index),
@@ -36,6 +44,10 @@ public struct TypeFactsRootsReport: Sendable {
 				isOnCycle: graph.graph.isOnCycle(index),
 				readsFromAbove: graph.reads.reads(of: index).map(graph.readDescription),
 				firstRoute: graph.graph.firstRoute(to: index),
+				validatedProperty: validatedPropertyTexts[graph.validatedProperty(of: DeclarationID(index))],
+				isBuilder: graph.isBuilder(DeclarationID(index)),
+				validatesCycles: graph.checksOfRootsReaching(DeclarationID(index)).contains(.cycles),
+				validatesHiddenProperties: graph.checksOfRootsReaching(DeclarationID(index)).contains(.hiddenProperties),
 			)
 		}
 		var variantCounts = [Int](repeating: 0, count: graph.declarationCount)
@@ -104,6 +116,15 @@ public struct TypeFactsRootsReport: Sendable {
 		public let readsFromAbove: [String]
 		/// The nodes from node 0 to this one on the first route a walk of the edges in order finds.
 		public let firstRoute: [Int]
+		/// The property the node is built as, as cycle validation sees it: `nil` for a node built as no property (node 0,
+		/// a frame, a root's declaration) and for a leaf.
+		public let validatedProperty: String?
+		/// Whether the node is built as an instantiator of any kind.
+		public let isBuilder: Bool
+		/// Whether a root the call validates for cycles reaches the node.
+		public let validatesCycles: Bool
+		/// Whether a root the call validates for hidden receives reaches the node.
+		public let validatesHiddenProperties: Bool
 	}
 
 	/// Each node by position: node 0, the frames and the declarations. A frame's one edge leads to its root's

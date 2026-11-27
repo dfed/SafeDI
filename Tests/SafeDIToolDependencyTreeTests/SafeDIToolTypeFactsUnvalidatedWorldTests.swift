@@ -492,6 +492,79 @@ struct SafeDIToolTypeFactsUnvalidatedWorldTests {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func unvalidatedWorld_namesPropertyEachNodeIsBuiltAsToCycleValidation_whenChildrenAreBuiltAsValuesAndWrappers() async throws {
+		let observation = await observe(Self.wrapperKindsRow())
+
+		let world = try observation.firstWorld
+		#expect(observation.error == nil)
+		#expect(world.nodes.map { "\($0.description): \($0.validatedProperty ?? "none")" } == [
+			"world: none",
+			"frame 0 of Root: none",
+			"Root: none",
+			"Value as value: Value: value: Value",
+			"Value as lazyValue: LazilyInstantiated<Value>: lazyValue: Value",
+			"Value as valueBuilder: Instantiator<Value>: valueBuilder: Instantiator<Value>",
+			"Value as sendableValueBuilder: SendableInstantiator<Value>: sendableValueBuilder: SendableInstantiator<Value>",
+			"alias as renamedValue: Value: none",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func unvalidatedWorld_marksNodesBuiltAsInstantiators_whenChildrenAreBuiltAsValuesAndWrappers() async throws {
+		let observation = await observe(Self.wrapperKindsRow())
+
+		let world = try observation.firstWorld
+		#expect(observation.error == nil)
+		#expect(world.nodes.filter(\.isBuilder).map(\.description) == [
+			"Value as valueBuilder: Instantiator<Value>",
+			"Value as sendableValueBuilder: SendableInstantiator<Value>",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func unvalidatedWorld_saysEachNodeIsJudgedByEveryCheck_whenCallValidatesProductionTrees() async throws {
+		let observation = await observe(Self.rootKindsRow())
+
+		let world = try observation.firstWorld
+		#expect(observation.error == nil)
+		#expect(Self.checks(in: world) == [
+			"world:",
+			"frame 0 of MockedRoot: cycles, hidden properties",
+			"MockedRoot: cycles, hidden properties",
+			"Mocked as mocked: Mocked: cycles, hidden properties",
+			"frame 1 of Root: cycles, hidden properties",
+			"Root: cycles, hidden properties",
+			"Shared as shared: Shared: cycles, hidden properties",
+			"Plain as plain: Plain: cycles, hidden properties",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func unvalidatedWorld_saysWhichChecksJudgeEachNode_whenCallValidatesMocksOfRootsAndOfListedType() async throws {
+		let observation = await observe(Self.rootKindsRow())
+
+		let world = try #require(observation.worlds.compactMap(\.self).dropFirst().first)
+		#expect(observation.error == nil)
+		#expect(Self.checks(in: world) == [
+			"world:",
+			"frame 0 of MockedRoot: cycles, hidden properties",
+			"MockedRoot: cycles, hidden properties",
+			"Mocked as mocked: Mocked: cycles, hidden properties",
+			"frame 1 of Root: cycles",
+			"Root: cycles",
+			"Shared as shared: Shared: cycles, hidden properties",
+			"Plain as plain: Plain: cycles",
+			"frame 2 of Listed: hidden properties",
+			"Listed: hidden properties",
+			"ListedOnly as listedOnly: ListedOnly: hidden properties",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func unvalidatedWorld_internsOnlyFormsNoDeclarationSpells_whenWorldIsBuiltBeforeTheWalk() async throws {
 		// What the world's build adds to the run's interner, and the 32-bit elements of its columns, for the hub row at
 		// two sizes: the memory a validation over the world costs beyond the records it reads.
@@ -499,9 +572,9 @@ struct SafeDIToolTypeFactsUnvalidatedWorldTests {
 		let large = try await observe(Self.hubMembersRow(memberCount: 8)).firstWorld
 
 		#expect(small.internedForWorldCount == 12)
-		#expect(small.columnElementCount == 1_194)
+		#expect(small.columnElementCount == 1_220)
 		#expect(large.internedForWorldCount == 20)
-		#expect(large.columnElementCount == 3_234)
+		#expect(large.columnElementCount == 3_276)
 	}
 
 	// MARK: Private
@@ -568,6 +641,51 @@ struct SafeDIToolTypeFactsUnvalidatedWorldTests {
 		return types
 	}
 
+	/// A root that builds one type as a value, lazily, through an instantiator and through a `Sendable` instantiator, and
+	/// renames the value.
+	private static func wrapperKindsRow() -> [String] {
+		[
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: [
+				"@Instantiated let value: Value",
+				"@Instantiated let lazyValue: LazilyInstantiated<Value>",
+				"@Instantiated let valueBuilder: Instantiator<Value>",
+				"@Instantiated let sendableValueBuilder: SendableInstantiator<Value>",
+				"@Received(fulfilledByDependencyNamed: \"value\", ofType: Value.self) let renamedValue: Value",
+			]),
+			seamFixtureType(named: "Value", isFinalClass: true, declarations: []),
+		]
+	}
+
+	/// A root whose mock is generated, a root whose mock is not, and a type `additionalMocksToGenerate` lists, which
+	/// builds one type the second root builds and one type of its own.
+	private static func rootKindsRow() -> [String] {
+		[
+			"#SafeDIConfiguration(additionalMocksToGenerate: [\"Listed\"])",
+			seamFixtureType(named: "MockedRoot", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let mocked: Mocked"])
+				.replacingOccurrences(of: "@Instantiable(isRoot: true)\n", with: "@Instantiable(isRoot: true, generateMock: true)\n"),
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let shared: Shared", "@Instantiated let plain: Plain"]),
+			seamFixtureType(named: "Listed", isFinalClass: true, declarations: ["@Instantiated let shared: Shared", "@Instantiated let listedOnly: ListedOnly"]),
+			seamFixtureType(named: "Mocked", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "Shared", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "Plain", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "ListedOnly", isFinalClass: true, declarations: []),
+		]
+	}
+
+	/// A line per node: the node, then the checks of the roots that reach it.
+	private static func checks(in world: TypeFactsRootsReport) -> [String] {
+		world.nodes.map { node in
+			var checks = [String]()
+			if node.validatesCycles {
+				checks.append("cycles")
+			}
+			if node.validatesHiddenProperties {
+				checks.append("hidden properties")
+			}
+			return checks.isEmpty ? "\(node.description):" : "\(node.description): \(checks.joined(separator: ", "))"
+		}
+	}
+
 	private func mockFixtureType(named name: String, declarations: [String]) -> String {
 		seamFixtureType(named: name, isFinalClass: true, declarations: declarations).replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(generateMock: true)\n")
 	}
@@ -587,6 +705,7 @@ struct SafeDIToolTypeFactsUnvalidatedWorldTests {
 	/// Everything `world` says by name or by position in the graph, which no interning order changes.
 	private func nameBasedFacts(of world: TypeFactsRootsReport) -> [String] {
 		var facts = world.nodes.map { "\($0.description) \($0.kind) \($0.construction) \($0.cycleKey) \($0.edges) \($0.isOnCycle) \($0.readsFromAbove) \($0.firstRoute)" }
+		facts += world.nodes.map { "\($0.description) built as \($0.validatedProperty ?? "none") \($0.isBuilder) \($0.validatesCycles) \($0.validatesHiddenProperties)" }
 		facts.append("roots \(world.rootVariants) nodes \(world.variantNodes) calls \(world.variantCalls) counts \(world.variantCountsByNode)")
 		facts.append("elements \(world.columnElementCount) interned \(world.internedForWorldCount)")
 		facts += world.receives

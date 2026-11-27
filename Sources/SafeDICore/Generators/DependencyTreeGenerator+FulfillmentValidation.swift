@@ -832,7 +832,12 @@ extension DependencyTreeGenerator {
 		cyclesOnly: Bool,
 	) throws {
 		if let observer = ValidationWalkObservation.observer {
-			observer(.unvalidatedWorld(unvalidatedWorldReport(ofRootScopes: rootScopes + additionalMockRootScopes, typeDescriptionToScopeMap: typeDescriptionToScopeMap)))
+			observer(.unvalidatedWorld(unvalidatedWorldReport(
+				ofRootScopes: rootScopes,
+				additionalMockRootScopes: additionalMockRootScopes,
+				typeDescriptionToScopeMap: typeDescriptionToScopeMap,
+				cyclesOnly: cyclesOnly,
+			)))
 		}
 		var unfulfillableProperties = Set<DependencyTreeGeneratorError.UnfulfillableProperty>()
 		/// Whether an `@Instantiated` declaration of `receivedProperty`'s non-optional form could fulfill it. One the tree

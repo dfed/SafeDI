@@ -25,6 +25,20 @@ struct TypeFactsRoot {
 	/// What the root's tree receives from outside it that the root is handed: a generated seam's parameters, or what a
 	/// mock root binds for its tree. In `Property` order, so no `Set` order reaches the world.
 	let givenProperties: [Property]
+	/// The checks the validation call runs on the root's tree.
+	let checks: TypeFactsRootChecks
+}
+
+/// The checks a validation call runs on a root's tree, by which its walk judges each node the root reaches.
+struct TypeFactsRootChecks: OptionSet {
+	let rawValue: UInt8
+
+	/// The tree is validated for dependency cycles: every root's, but that of a type validated only because
+	/// `additionalMocksToGenerate` lists it.
+	static let cycles = TypeFactsRootChecks(rawValue: 1 << 0)
+	/// The tree is validated for received dependencies a closer declaration of their label hides: every root's where
+	/// production trees are validated, and where mocks are, the tree of each type whose mock is generated.
+	static let hiddenProperties = TypeFactsRootChecks(rawValue: 1 << 1)
 }
 
 extension TypeFactsGraph {
@@ -52,6 +66,12 @@ extension TypeFactsGraph {
 	/// the edges' facts, the parents' segments, the fills, the union facts of what a subtree receives and builds, and the
 	/// world's own tables of properties, types, modules and locations) are empty here, and their accessors return
 	/// nothing: an order of children that require each other, which validation rejects, would be no fact.
+	///
+	/// It also holds what the validation call says of its roots, which no validated tree has: for each node the checks
+	/// of the roots that reach it (`checksOfRootsReaching(_:)`), since a call validates some trees for cycles and others
+	/// only for hidden receives, and a node only the second kind reaches closes no cycle the call reports. An edge's
+	/// facts are its target's: the property the target is built as, as cycle validation sees it
+	/// (`validatedProperty(of:)`), and whether that is an instantiator (`isBuilder(_:)`).
 	///
 	/// - Parameter intern: The run's ID of a property, given now where the run has none.
 	/// - Returns: `nil` when there is no root, and so no world.
@@ -140,6 +160,11 @@ extension TypeFactsGraph {
 		receiveEnds = receives.ends
 		receiveColumn = receives.receives
 		acceptedColumn = receives.accepted
+		validatedProperties = nodes.map { node in
+			guard node.key.leaf == .none, let propertyID = node.propertyID else { return -1 }
+			return node.scope.interner.asValidatedForDependencyCycles(propertyID).raw
+		}
+		rootChecks = Self.rootChecks(of: graph, roots: roots)
 		// What only a validated tree has, or only its generation reads: each offset column still has an entry per node, so
 		// a node's run is empty.
 		let noRows = BitRows(rowCount: 0, columnCount: 0) { _, _ in }
@@ -176,6 +201,52 @@ extension TypeFactsGraph {
 			count += edgeFacts(from: index).count + worldBindings(of: index).count + parents(of: index).count
 		}
 		return count
+	}
+
+	/// The property the node is built as, as cycle validation sees it, by the raw value of the run's ID: what an edge
+	/// to the node declares, with a `LazilyInstantiated` as the value it stands for. -1 for a node built as no property
+	/// (node 0, a frame, a root's declaration), for a leaf, and in a world of one root, which keeps no such column.
+	func validatedProperty(of declaration: DeclarationID) -> Int32 {
+		validatedProperties.isEmpty ? -1 : validatedProperties[Int(declaration)]
+	}
+
+	/// Whether the node is built as an instantiator of any kind, which builds its type each time it is called
+	/// (`ScopeGenerator.isBuilder(_:)`): the hop that defers a cycle. A `LazilyInstantiated` is none, and neither is a
+	/// leaf.
+	func isBuilder(_ declaration: DeclarationID) -> Bool {
+		switch kinds[Int(declaration)] {
+		case .instantiator, .sendableInstantiator, .erasedInstantiator, .sendableErasedInstantiator:
+			true
+		case .constant, .lazy, .sendableLazy, .alias, .hole:
+			false
+		}
+	}
+
+	/// The checks of the roots that reach the node, each of which the validation call runs on it: a node no root
+	/// validated for cycles reaches is judged for none. Node 0 is reached by no root, and a world of one root, which is
+	/// built once its tree has passed every check, keeps no such column and answers none.
+	func checksOfRootsReaching(_ declaration: DeclarationID) -> TypeFactsRootChecks {
+		TypeFactsRootChecks(rawValue: rootChecks.isEmpty ? 0 : rootChecks[Int(declaration)])
+	}
+
+	/// For each node, the checks of the roots that reach it along the graph's edges, a fill's included: a fill no walk
+	/// enters is then counted as checked, which sends a graph to the walk and clears none. Each node is taken up again
+	/// only when a root brings it a check it lacked, so the pass visits an edge at most once per check.
+	private static func rootChecks(of graph: OrderedGraph<TypeFactsDeclaration>, roots: [TypeFactsRoot]) -> [UInt8] {
+		var checks = [UInt8](repeating: 0, count: graph.nodes.count)
+		var pending = [Int32]()
+		// Node 0's edges lead to the frames, in the roots' order.
+		for (frame, root) in zip(graph.edges(from: 0), roots) {
+			checks[Int(frame)] = root.checks.rawValue
+			pending.append(frame)
+		}
+		while let reached = pending.popLast() {
+			for target in graph.edges(from: Int(reached)) where checks[Int(target)] | checks[Int(reached)] != checks[Int(target)] {
+				checks[Int(target)] |= checks[Int(reached)]
+				pending.append(target)
+			}
+		}
+		return checks
 	}
 
 	/// Whether the node stands for no declaration: node 0 of a world of several roots, or a frame.

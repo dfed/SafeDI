@@ -638,6 +638,8 @@ struct TypeFactsGraph: Sendable {
 		receiveEnds = []
 		receiveColumn = []
 		acceptedColumn = []
+		validatedProperties = []
+		rootChecks = []
 	}
 
 	/// The targets of a declaration's edges: the properties its scope instantiates, aliases and holes, then the fills it
@@ -765,6 +767,14 @@ struct TypeFactsGraph: Sendable {
 	let receiveEnds: [Int32]
 	let receiveColumn: [TypeFactsReceive]
 	let acceptedColumn: [PropertyID]
+
+	/// The property each node is built as, as cycle validation sees it (`Property.asValidatedForDependencyCycles`), by
+	/// the raw value of the run's ID: -1 for a node built as no property (node 0, a frame, a root's declaration) and for
+	/// a leaf, which builds nothing (`validatedProperty(of:)`).
+	let validatedProperties: [Int32]
+	/// For each node, the checks of the roots that reach it, as a `TypeFactsRootChecks` raw value
+	/// (`checksOfRootsReaching(_:)`).
+	let rootChecks: [UInt8]
 
 	/// Each node's cycle identity (A4), dense in first-reach order: the property as cycle validation sees it and the
 	/// concrete type built, by the run's IDs, so two nodes of one identity close cycles on each other. A leaf's is its own.
@@ -1036,6 +1046,7 @@ struct TypeFactsGraph: Sendable {
 		count += 2 * (reads.rows.wordCount + receives.wordCount + typesBeneath.wordCount + typesDeclaredEscaping.wordCount + holesBeneath.wordCount)
 		count += rootVariants.count + answerForms.count + formOffsets.count + formColumn.count + receiveStarts.count + receiveEnds.count
 		count += 5 * receiveColumn.count + acceptedColumn.count + (answerSets?.columnElementCount ?? 0)
+		count += validatedProperties.count + rootChecks.count
 		return count
 	}
 

@@ -31,19 +31,41 @@ extension DependencyTreeGenerator {
 	/// bound here on that path alone, is not told of it. The freeze and the world intern in a copy of the run's ID
 	/// space, so observing a walk gives the run no ID it would not have had, and what the world interns beyond the
 	/// records is counted there as `ConstructionInternerMiss.internedForTypeFacts`.
-	func unvalidatedWorldReport(ofRootScopes rootScopes: [ValidatedRootScope], typeDescriptionToScopeMap: [TypeDescription: Scope]) -> TypeFactsRootsReport? {
+	///
+	/// Each root carries the checks the call's walk runs on its tree, as `validatePropertiesAreFulfillable(onRootScopes:…)`
+	/// decides them where it walks the roots: every root is validated for cycles, and for hidden receives where the call
+	/// validates production trees or the root's mock is generated; a type `additionalMocksToGenerate` lists is validated
+	/// for hidden receives alone.
+	func unvalidatedWorldReport(
+		ofRootScopes rootScopes: [ValidatedRootScope],
+		additionalMockRootScopes: [ValidatedRootScope],
+		typeDescriptionToScopeMap: [TypeDescription: Scope],
+		cyclesOnly: Bool,
+	) -> TypeFactsRootsReport? {
 		let worldSpace = ConstructionInternerSpace(copying: internerSpace.copyOfBuilder())
 		let frozenScopeMap = ScopeTableObservation.$observer.withValue(nil) {
 			FrozenScopeMap(freezing: typeDescriptionToScopeMap.lazy.map { (key: $0.key, scope: $0.value) }, interningIn: worldSpace)
 		}
-		let roots = rootScopes.map { rootScope in
+		func root(_ rootScope: ValidatedRootScope, checks: TypeFactsRootChecks) -> TypeFactsRoot {
 			let (table, record) = frozenScopeMap.freezing(rootScope: rootScope.scope)
-			return TypeFactsRoot(scope: ConstructionScope(table: table, record: record), givenProperties: rootScope.boundProperties.union(rootScope.receivedFromOutside).sorted())
+			return TypeFactsRoot(
+				scope: ConstructionScope(table: table, record: record),
+				givenProperties: rootScope.boundProperties.union(rootScope.receivedFromOutside).sorted(),
+				checks: checks,
+			)
 		}
+		var roots = rootScopes.map { rootScope in
+			let validatesHiddenProperties = !cyclesOnly
+				|| rootScope.scope.instantiable.generatesMock
+				|| additionalMockRootScopes.contains { $0.scope == rootScope.scope }
+			return root(rootScope, checks: validatesHiddenProperties ? [.cycles, .hiddenProperties] : .cycles)
+		}
+		roots += additionalMockRootScopes.map { root($0, checks: .hiddenProperties) }
 		let internedCountBefore = worldSpace.internedCount
 		let graph = worldSpace.interning(countingMissesIn: .internedForTypeFacts) {
 			TypeFactsGraph(roots: roots, intern: worldSpace.intern)
 		}
-		return graph.map { TypeFactsRootsReport($0, internedCountBefore: internedCountBefore, internedCountAfter: worldSpace.internedCount) }
+		let internedCountAfter = worldSpace.internedCount
+		return graph.map { TypeFactsRootsReport($0, internedCountBefore: internedCountBefore, internedCountAfter: internedCountAfter, intern: worldSpace.intern) }
 	}
 }
