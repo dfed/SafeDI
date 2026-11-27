@@ -37,12 +37,14 @@ enum TypeKeyBody {
 	/// is resolved to it in the type key's layout too, never to `nil`. No function the layout declares takes a name of
 	/// `namesInScope`, the names bound around the body, such as a seam's parameters' internal names. A mock, whose body the
 	/// type key's layout replaces whatever it holds, lays out every loop of builders (`laysOutEveryLoop`); production keeps
-	/// the path key's body where it writes each member's function once. Where `attachesLoopMembers` is set, the function of
-	/// each member of a loop of builders that one statement of the root's body builds is declared right before that
-	/// statement, as the path key declares it, rather than with the loop's other functions.
-	static func statements(ofRootBody rootBody: [GeneratedCode], outerDeclarations: [Property] = [], namesInScope: Set<String> = [], laysOutEveryLoop: Bool = false, attachesLoopMembers: Bool = false) -> [GeneratedCode]? {
+	/// the path key's body where it writes each member's function once. Where `declaresLoopMembersAsThePathKeyDoes` is set,
+	/// the function of each member of a loop of builders that one statement of the root's body builds is declared right
+	/// before that statement, as the path key declares a loop it writes once, rather than with the loop's other functions.
+	/// It exists so that a root laid out from node records writes the path key's bytes where the path key keeps 2.4.0's
+	/// form for a loop; once the records place functions themselves, placement comes from them and this goes.
+	static func statements(ofRootBody rootBody: [GeneratedCode], outerDeclarations: [Property] = [], namesInScope: Set<String> = [], laysOutEveryLoop: Bool = false, declaresLoopMembersAsThePathKeyDoes: Bool = false) -> [GeneratedCode]? {
 		var layout = TypeKeyLayout()
-		layout.attachesLoopMembers = attachesLoopMembers
+		layout.declaresLoopMembersAsThePathKeyDoes = declaresLoopMembersAsThePathKeyDoes
 		layout.declareOuter(outerDeclarations)
 		layout.namesInScope = namesInScope
 		// The root functions the plan's places call are declared once, before every statement, as the path key declares
@@ -65,7 +67,8 @@ enum TypeKeyBody {
 		// nested as before the type key laid loops out.
 		guard laysOutEveryLoop || layout.laysOutLoops(), layout.computePlacement() else { return nil }
 		layout.computeOutcomes()
-		guard layout.computeParameterTypes(),
+		guard layout.keepsCapturesOfLoopMembersDeclaredAsThePathKeyDoes(),
+		      layout.computeParameterTypes(),
 		      layout.checkEveryRead(),
 		      layout.checkValuePaths()
 		else { return nil }
@@ -254,8 +257,9 @@ struct TypeKeyLayout {
 	var hoistedFunctions = [CallSite: [Int]]()
 	var attachedFunction = [CallSite: Int]()
 	/// Whether each member of a loop of builders whose function one statement of the root's body alone reaches is declared
-	/// right before that statement (`TypeKeyBody.statements(ofRootBody:…)`).
-	var attachesLoopMembers = false
+	/// right before that statement (`TypeKeyBody.statements(ofRootBody:…)`), and the members so declared.
+	var declaresLoopMembersAsThePathKeyDoes = false
+	var loopMembersDeclaredAsThePathKeyDoes = [Int]()
 	var outcomes = [[String: ReadOutcome]]()
 	var parameterTypes = [[String: TypeDescription]]()
 	/// The value each cycle parameter of a place holds at every call of its function, where every call passes one.

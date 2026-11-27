@@ -67,7 +67,7 @@ extension DependencyTreeGenerator {
 		// every loop of builders is laid out, as a mock's are, where the tree keeps the path key's body for one written once.
 		guard body.allSatisfy(\.statementsAreLaidOutByTypeKey),
 		      let rootInitializer = try ScopeGenerator.rootInitializer(of: instantiable),
-		      let statements = TypeKeyBody.statements(ofRootBody: body, laysOutEveryLoop: true, attachesLoopMembers: true)
+		      let statements = TypeKeyBody.statements(ofRootBody: body, laysOutEveryLoop: true, declaresLoopMembersAsThePathKeyDoes: true)
 		else { return nil }
 		return rootInitializer.spelled(writing: BuilderFunctionGraph(body: statements.map(Statement.verbatim)))
 	}

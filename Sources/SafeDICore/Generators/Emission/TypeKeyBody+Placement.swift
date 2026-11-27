@@ -87,15 +87,16 @@ extension TypeKeyLayout {
 			}
 			// A loop of builders whose members the root's statements each build once, and nothing else reaches, declares each
 			// member's function right before the statement that builds it, as the path key does: a member's function may call
-			// a later one's, which Swift resolves as no capture intervenes.
+			// a later one's, which `keepsCapturesOfLoopMembersDeclaredAsThePathKeyDoes()` checks once captures are known.
 			let sitesByMember = members.map { member in callSitesByClass[member].filter { !memberSet.contains($0.owner) } }
-			if attachesLoopMembers, members.count > 1, sitesByMember.allSatisfy({ $0.count == 1 && $0.first?.owner == owner }) {
+			if declaresLoopMembersAsThePathKeyDoes, members.count > 1, sitesByMember.allSatisfy({ $0.count == 1 && $0.first?.owner == owner }) {
 				for (member, sites) in zip(members, sitesByMember) {
 					for site in sites {
 						placementIndex[member] = site.index
 						attachedFunction[site] = member
 					}
 				}
+				loopMembersDeclaredAsThePathKeyDoes.append(contentsOf: members)
 			} else if isAttached {
 				attachedFunction[CallSite(owner: owner, index: index)] = members[0]
 			} else {
@@ -113,5 +114,30 @@ extension TypeKeyLayout {
 			}
 		}
 		return true
+	}
+}
+
+extension TypeKeyLayout {
+	/// Whether each loop member declared right before the statement that builds it (`declaresLoopMembersAsThePathKeyDoes`)
+	/// reaches, through every function it calls, only captures the root binds before that statement. Its statement uses
+	/// its function, and Swift rejects the use of a function before a value any function it calls captures ("closure
+	/// captures 'x' before it is declared"): a member declared before a later member's statement calls that member's
+	/// function, which captures what the root binds before its own statement. Read after `computeOutcomes()`, which
+	/// settles what each function captures from where `computePlacement()` declares it, so placement cannot check it.
+	func keepsCapturesOfLoopMembersDeclaredAsThePathKeyDoes() -> Bool {
+		loopMembersDeclaredAsThePathKeyDoes.allSatisfy { member in
+			let use = placementIndex[member]
+			var reached: Set = [member]
+			var pending = [member]
+			while let owner = pending.popLast() {
+				for case let .captured(.statement(0, index)) in outcomes[owner].values where index >= use {
+					return false
+				}
+				for callee in calleesByClass[owner] where reached.insert(callee).inserted {
+					pending.append(callee)
+				}
+			}
+			return true
+		}
 	}
 }
