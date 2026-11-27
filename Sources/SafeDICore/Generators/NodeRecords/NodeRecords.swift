@@ -70,6 +70,14 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	case fillCallSeveralVariants
 	/// A fill of the node's call makes a call of a seam or a public mock, which may re-enter the call's levels.
 	case fillHoldsCall
+	/// A fill of the node's call of another module's public mock reads a value the call hands the called mock from the
+	/// caller's scope, which the called mock's root binds as its copy: the fill reads the caller's own declaration
+	/// (`Scope`'s `callersOwnLabels`), which the caller's nearest declarations decide and the world does not hold yet.
+	case fillReadsCallersOwnValue
+	/// A fill of the node's call of another module's public mock builds a type nothing the calling module sees fulfills,
+	/// which the calling mock binds from a builder of its own (`ScopeGenerator.FillPlaceBindings`), so the fill's function
+	/// takes a shape the world does not hold.
+	case fillHoldsPlace
 	/// A dispatcher of the node's call carries a seam's deferred fields, so a fill may take a memo in a form only the forms
 	/// its tree reads decide, which the world's reads, by label, do not hold.
 	case fillHandedMemo

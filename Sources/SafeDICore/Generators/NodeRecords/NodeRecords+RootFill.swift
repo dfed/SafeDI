@@ -168,7 +168,10 @@ struct FillFacts: Sendable {
 		let fillNodes = world.edges(from: call).filter { world.construction(of: $0) == .fill }
 		var allFacts = [FillFacts]()
 		for ((fill, _, _), fillNode) in zip(callFills.fills, fillNodes) where fill.emitsCode {
-			allFacts.append(facts(of: fill, node: fillNode, in: world, readsInnerScopes: levelsOfCallingTree != nil && readsInnerScopes(fillNode, in: world), log: &log))
+			// A public mock's root binds a value again in the forms its tree reads, so a level can hold a label in a form the
+			// fill's tree does not read, which the fill then reads from the caller: the forms it reads decide what it binds.
+			let formsRead = scope.publicMockCall == nil ? nil : scope.fillReceivedProperties[fill.hole.site] ?? []
+			allFacts.append(facts(of: fill, node: fillNode, readingForms: formsRead, in: world, readsInnerScopes: levelsOfCallingTree != nil && readsInnerScopes(fillNode, in: world), log: &log))
 		}
 		return .facts(allFacts)
 	}
@@ -200,8 +203,10 @@ struct FillFacts: Sendable {
 		return false
 	}
 
-	/// The facts of `fill`, whose node is `node`, which is handed the structs of its own level where `readsInnerScopes`.
-	private static func facts(of fill: ScopeGeneratorUnderConstruction.Fill, node: DeclarationID, in world: TypeFactsGraph, readsInnerScopes: Bool, log: inout ConstructionLog) -> FillFacts {
+	/// The facts of `fill`, whose node is `node`, which is handed the structs of its own level where `readsInnerScopes`, and
+	/// whose tree reads `formsRead` where they are known: a field of a label the tree reads is received only where the tree
+	/// reads its form. `nil` reads every field of a label the tree reads.
+	private static func facts(of fill: ScopeGeneratorUnderConstruction.Fill, node: DeclarationID, readingForms formsRead: Set<Property>?, in world: TypeFactsGraph, readsInnerScopes: Bool, log: inout ConstructionLog) -> FillFacts {
 		// What the fill's tree reads from above it, by label: required where a read asks for the label's value.
 		var readLabels = Set<String>()
 		var requiredLabels = Set<String>()
@@ -230,7 +235,9 @@ struct FillFacts: Sendable {
 			}
 		}
 		let (boundFill, _) = ScopeGeneratorUnderConstruction.boundFill(fill, readsDeferredFieldsFromStruct: fill.hole.innerSeamType != nil, deferredLabelsBoundFromStruct: [], deferredLabelsBoundByValue: [])
-		let received = Set(boundFill.fields.map(\.property).filter { readLabels.contains($0.label) })
+		let received = Set(boundFill.fields.map(\.property).filter { field in
+			readLabels.contains(field.label) && formsRead.map { FillTreeReadFacts.reads(field, among: $0) } != false
+		})
 		let treeReads = FillTreeReadFacts(
 			received: received,
 			required: received.filter { requiredLabels.contains($0.label) },

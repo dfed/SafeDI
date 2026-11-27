@@ -43,6 +43,46 @@ extension LevelFunctionRecordsObservation {
 		}
 	}
 
+	/// Whether a fill `call` passes builds, somewhere in its tree, a type nothing the module sees fulfills: a hole, or a
+	/// dependency a scope instantiates and does not build (`Scope.instantiatedDependenciesNotGenerated`), which the calling
+	/// mock binds from a builder of its own. A hole counts only where the mock root takes no builders (`mockRootHoles` is
+	/// `nil`): where it does, the hole records model the hole's place.
+	private static func fillsHoldPlace(_ call: DeclarationID, in world: TypeFactsGraph, mockRootHoles: SeamHoles?) -> Bool {
+		var pending = world.edges(from: call).filter { world.construction(of: $0) == .fill }
+		var visited = Set(pending)
+		while let declaration = pending.popLast() {
+			guard mockRootHoles != nil || world.kind(of: declaration) != .hole, world.scope(of: declaration).instantiatedDependenciesNotGenerated.isEmpty else { return true }
+			for target in world.edges(from: declaration) where visited.insert(target).inserted {
+				pending.append(target)
+			}
+		}
+		return false
+	}
+
+	/// Whether a fill among `allFacts`, those of `call`, may read a value of the caller's own: a field of a label the call
+	/// hands the called mock from the caller's scope, bound by the called mock's root, whose form the fill reads, where the
+	/// case's payload does not carry the label or the copy does not provide every form the fill reads, as `Scope`'s
+	/// `callersOwnLabels` judges it before it asks the caller's nearest declaration.
+	private static func readsCallersOwnValue(_ call: DeclarationID, facts allFacts: [FillFacts], in world: TypeFactsGraph) -> Bool {
+		let scope = world.scope(of: call)
+		guard let publicMockCall = scope.publicMockCall else { return false }
+		let labelsHandedFromCaller = Set(publicMockCall.passedParameters.compactMap { parameter in
+			parameter.builder == nil && parameter.dependency.source.isReceived ? parameter.dependency.property.label : nil
+		})
+		return allFacts.contains { facts in
+			let place = facts.hole
+			let reads = scope.fillReceivedProperties[place.site] ?? []
+			let carriedLabels = Set(place.enumPlace?.values.map(\.property.label) ?? [])
+			return place.fields.contains { field in
+				let formsRead = reads.filter { $0.label == field.property.label }
+				return labelsHandedFromCaller.contains(field.property.label)
+					&& !formsRead.isEmpty
+					&& field.isBoundByPublicMockRoot
+					&& (!carriedLabels.contains(field.property.label) || !formsRead.isSubset(of: CycleParameter.forms(providedBy: field.property)))
+			}
+		}
+	}
+
 	/// The level functions of `call`, a call of another module's public mock in `world` that fills a place, reached as
 	/// `variant`, as the tree records them (`PublicMockLevelFunctions.records`), made from the world alone.
 	/// - Throws: The refusal of a call whose fills' facts node records leave to the tree, or that a fill encloses.
@@ -55,6 +95,8 @@ extension LevelFunctionRecordsObservation {
 		case let .refused(refusal):
 			throw refusal
 		}
+		guard !readsCallersOwnValue(call, facts: allFacts, in: world) else { throw .fillReadsCallersOwnValue }
+		guard !fillsHoldPlace(call, in: world, mockRootHoles: mockRootHoles) else { throw .fillHoldsPlace }
 		// What the root level functions read of the caller's scope, by label: the form no fill reads optionally first, then
 		// in `Property` order, as `ScopeGenerator.publicMockLevelFunctions` chooses it.
 		var callerReadFormsByLabel = [String: [Property: (field: SeamSignature.Hole.Field, argument: String)]]()
