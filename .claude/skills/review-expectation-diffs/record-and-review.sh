@@ -49,7 +49,11 @@ if [ -z "$base_ref" ] || [ -z "$approved" ] || [ -z "$out" ]; then
 fi
 if [ -e "$out" ]; then echo "error: $out exists" >&2; exit 2; fi
 mkdir -p "$out"; out="$(cd "$out" && pwd)"
-case "$out/" in "$checkout"/*) echo "error: OUT must be outside the checkout" >&2; exit 2 ;; esac
+system_temporary="$(cd "${TMPDIR:-/tmp}" && pwd -P)"
+case "$(cd "$out" && pwd -P)/" in
+	"$checkout"/*|"$system_temporary"/*|/tmp/*|/private/tmp/*|/private/var/folders/*)
+		echo "error: OUT must be outside the checkout and the system temporary directory, which the recording refuses" >&2; exit 2 ;;
+esac
 base_commit="$(git -C "$checkout" rev-parse --verify "$base_ref^{commit}")"
 
 # SwiftPM's temporary folders go to a folder of this run's own, outside the checkout and the system temporary directory.
