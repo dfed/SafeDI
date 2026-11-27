@@ -326,11 +326,10 @@ extension SeamSignature.Places {
 			callersByScope[scope] = callers
 			outcomesByScope[scope] = outcomesByLabel
 		}
-		let closedOutcomes = (outcomesByScope[root] ?? [:]).compactMapValues { outcomes -> [Outcome]? in
+		return (outcomesByScope[root] ?? [:]).compactMapValues { outcomes -> [Outcome]? in
 			let closed = outcomes.filter { $0.declaration != nil }
 			return closed.isEmpty ? nil : closed
 		}
-		return closedOutcomes
 	}
 
 	/// The nearest declaration of each label `scope` binds for the scopes beneath it: a parameter of its builder function a
