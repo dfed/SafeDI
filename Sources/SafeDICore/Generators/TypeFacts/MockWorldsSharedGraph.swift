@@ -251,19 +251,45 @@ struct MockWorldsDeclarationProjection: Equatable, Sendable {
 	/// The names of the facts in which `other` differs from this, in the order this declares them.
 	func differingFacts(from other: Self) -> [String] {
 		var facts = [String]()
-		if kind != other.kind { facts.append("kind") }
-		if construction != other.construction { facts.append("construction") }
-		if property != other.property { facts.append("property") }
-		if builtType != other.builtType { facts.append("built type") }
-		if edges != other.edges { facts.append("edges") }
-		if bindings != other.bindings { facts.append("bindings") }
-		if reads != other.reads { facts.append("reads") }
-		if received != other.received { facts.append("received") }
-		if required != other.required { facts.append("required") }
-		if onlyIfAvailableUnwrapped != other.onlyIfAvailableUnwrapped { facts.append("only if available unwrapped") }
-		if requiredAliasFulfilling != other.requiredAliasFulfilling { facts.append("required through alias") }
-		if typesBeneath != other.typesBeneath { facts.append("types beneath") }
-		if typesDeclaredEscaping != other.typesDeclaredEscaping { facts.append("types declared escaping") }
+		if kind != other.kind {
+			facts.append("kind")
+		}
+		if construction != other.construction {
+			facts.append("construction")
+		}
+		if property != other.property {
+			facts.append("property")
+		}
+		if builtType != other.builtType {
+			facts.append("built type")
+		}
+		if edges != other.edges {
+			facts.append("edges")
+		}
+		if bindings != other.bindings {
+			facts.append("bindings")
+		}
+		if reads != other.reads {
+			facts.append("reads")
+		}
+		if received != other.received {
+			facts.append("received")
+		}
+		if required != other.required {
+			facts.append("required")
+		}
+		if onlyIfAvailableUnwrapped != other.onlyIfAvailableUnwrapped {
+			facts.append("only if available unwrapped")
+		}
+		if requiredAliasFulfilling != other.requiredAliasFulfilling {
+			facts.append("required through alias")
+		}
+		if typesBeneath != other.typesBeneath {
+			facts.append("types beneath")
+		}
+		if typesDeclaredEscaping != other.typesDeclaredEscaping {
+			facts.append("types declared escaping")
+		}
 		return facts
 	}
 }
