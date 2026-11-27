@@ -125,7 +125,7 @@ struct SafeDIToolUnreadableInputTests: ~Copyable {
 		let directory = try temporaryDirectory()
 		let rootPath = try writeRoot(in: directory)
 		let largeURL = directory.appendingPathComponent("Large.safedi")
-		#expect(FileManager.default.createFile(atPath: largeURL.path, contents: nil))
+		try #require(FileManager.default.createFile(atPath: largeURL.path, contents: nil))
 		let largeFile = try FileHandle(forWritingTo: largeURL)
 		try largeFile.truncate(atOffset: 256 << 20)
 		try largeFile.close()
