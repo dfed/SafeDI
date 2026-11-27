@@ -63,6 +63,10 @@ extension NodeRecords {
 		if isPromotedToMockRoot(declaration, in: world) {
 			refusals.append(.publicMockCallPromoted)
 		}
+		// A parameter under a label the root names apart is handed the name, which no record of a call binds again.
+		if callTakesLabelNamedApart(declaration, in: world) {
+			refusals.append(.mockOverrideNotParentField)
+		}
 		// The leaf receives only if available each parameter its tier omits, which the call never passes, and each `T? = nil`
 		// parameter of the tier, which the call passes what the caller's tree holds, or `nil`: the variant's answer, which the
 		// record reads (`passedOnlyIfAvailable(_:by:variant:in:)`).

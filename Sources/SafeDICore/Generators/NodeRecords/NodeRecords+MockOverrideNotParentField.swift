@@ -79,6 +79,14 @@ extension NodeRecords {
 		return nil
 	}
 
+	/// Whether `declaration`, a call of another module's public mock, takes a parameter under a label the mock root names
+	/// apart. The walk hands such a call the name (`MockLowering.Walk.publicMockCallNode`), while a call's record reads each
+	/// argument under its label and binds no name again, so the call's world keeps the walk.
+	static func callTakesLabelNamedApart(_ declaration: DeclarationID, in world: some NodeRecordSources) -> Bool {
+		let mockRootNames = world.mockRootNames
+		return world.scope(of: declaration).instantiable.dependencies.contains { mockRootNames.namesApart(label: $0.property.label) }
+	}
+
 	/// The child of the mock root named apart that `dependency`, a receive, reads: the form of its own type, or of the
 	/// type it wraps in an optional, as the walk resolves it. `nil` where the root names no such form apart.
 	private static func nameApartRead(by dependency: Dependency, mockRootNames: MockRootNames) -> (property: Property, name: String)? {
