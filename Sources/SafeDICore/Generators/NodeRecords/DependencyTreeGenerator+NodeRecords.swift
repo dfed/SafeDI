@@ -101,6 +101,20 @@ extension DependencyTreeGenerator {
 				try await Self.treeCode(of: scopeGenerator, besideRecordsBody: nodeRecords.rootBody)
 			})
 			let (treeCode, comparisons) = planned
+			// A root that keeps its tree's code is still laid out from its records where they differ from the tree's by an
+			// optional parameter's argument, for the comparison alone: a test approves that difference only where the two
+			// texts are equal. A seam's own tree is never laid out here, so the difference fails there.
+			let holdsDifferenceOfOptionalParameter = comparisons.contains { comparison in
+				// safedi-source-rule: allow stringScan — only where a test observes node records, once for each difference of a root that keeps its tree.
+				comparison.differences.contains { $0.contains(": \(NodeRecordsReport.argumentsOfOptionalParameterDifferenceName) is ") }
+			}
+			let comparedCode: GeneratedCode? = if laidOutCode == nil, holdsDifferenceOfOptionalParameter, rootInfo.ownSeamRoot == nil,
+			                                      case let .success(code) = NodeRecords.refusingWhatRecordsThrow({ try laidOutRootCode(of: rootInfo.instantiable, body: nodeRecords.rootBody) })
+			{
+				code
+			} else {
+				laidOutCode
+			}
 			// A root whose tree's body holds nothing is compared nowhere.
 			for comparison in comparisons {
 				var report = NodeRecordsReport(
@@ -113,7 +127,7 @@ extension DependencyTreeGenerator {
 					treePlaceCount: comparison.treePlaceCount,
 					treeForcers: rootInfo.treeForcers,
 				)
-				report.comparedTexts = laidOutCode.map { NodeRecordsComparedTexts(tree: treeCode.spelled(), nodeRecords: $0.spelled()) }
+				report.comparedTexts = comparedCode.map { NodeRecordsComparedTexts(tree: treeCode.spelled(), nodeRecords: $0.spelled()) }
 				observer(report)
 			}
 			return laidOutCode ?? treeCode
