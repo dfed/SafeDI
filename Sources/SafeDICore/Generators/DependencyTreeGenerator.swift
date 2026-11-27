@@ -418,6 +418,9 @@ public actor DependencyTreeGenerator {
 
 	/// Runs every whole-module check of `roots`, the trees this module generates, which their code needs to pass.
 	private func validateBeforeGeneratingCode(of roots: [RootScopeInfo]) async throws {
+		// A root laid out from its node records has no tree, and needs none of these checks: node records refuse a world
+		// with a fill (`fill`) or a seam call (`construction`), and one whose `@Sendable` function captures a wrapper that is
+		// not `Sendable` (`sendableFunctionCapturesWrapper`), so each such root keeps its tree.
 		try Self.validateFills(
 			inTreesRootedAt: roots.compactMap(\.scopeGenerator),
 			callerModule: seams.currentModule,
@@ -618,8 +621,8 @@ public actor DependencyTreeGenerator {
 		/// and from whose node records its code may be laid out (`NodeRecords`): a production root, of a module with seams
 		/// or without, or a seam's own root, whose records a test only compares.
 		let rootScope: ConstructionScope
-		/// For a seam's own tree, what node records read of it beside its world; `nil` for every other root.
-		var seamTree: SeamTree?
+		/// For a seam's own tree, its root; `nil` for every other root.
+		let ownSeamRoot: ScopeGenerator.SeamRoot?
 
 		/// What node records read of a seam's own tree beside its world.
 		struct SeamTree {
@@ -631,18 +634,30 @@ public actor DependencyTreeGenerator {
 			/// The labels of the deferred parameters the seam's own rename of the label reads from the autoclosure
 			/// (`ScopeGenerator.SeamRoot.autoclosureCallByLabel(of:)`).
 			let autoclosureLabels: Set<String>
+
+			init(seam: Instantiable, seamRoot: ScopeGenerator.SeamRoot) {
+				rootLazilyInstantiatedInstanceProperties = DependencyTreeGenerator.seamRootDeclarations(of: seam, seamRoot: seamRoot).lazilyInstantiatedInstanceProperties
+				parameters = seamRoot.signature.parameters.map(\.property)
+				autoclosureLabels = Set(seamRoot.autoclosureCallByLabel(of: seam).keys)
+			}
+		}
+
+		/// For a seam's own tree, what node records read of it beside its world, worked out only where it is read; `nil` for
+		/// every other root.
+		var seamTree: SeamTree? {
+			ownSeamRoot.map { SeamTree(seam: instantiable, seamRoot: $0) }
 		}
 
 		/// What made this run build the root's tree (`TreeForcer`); empty where it built none.
 		var treeForcers: [TreeForcer] = [.seamWorld]
 
-		init(typeDescription: TypeDescription, instantiable: Instantiable, sourceFilePath: String?, built: Built, rootScope: ConstructionScope, seamTree: SeamTree? = nil, treeForcers: [TreeForcer] = [.seamWorld]) {
+		init(typeDescription: TypeDescription, instantiable: Instantiable, sourceFilePath: String?, built: Built, rootScope: ConstructionScope, ownSeamRoot: ScopeGenerator.SeamRoot? = nil, treeForcers: [TreeForcer] = [.seamWorld]) {
 			self.typeDescription = typeDescription
 			self.instantiable = instantiable
 			self.sourceFilePath = sourceFilePath
 			self.built = built
 			self.rootScope = rootScope
-			self.seamTree = seamTree
+			self.ownSeamRoot = ownSeamRoot
 			self.treeForcers = treeForcers
 		}
 
@@ -847,6 +862,7 @@ public actor DependencyTreeGenerator {
 				rootScopeGenerators = seamWorldRoots.roots
 			}
 		}
+		// A root laid out from its node records has no tree, and no cycle: node records refuse a world with one (`cycle`).
 		try Self.validateCycleLabelsArePassable(inTreesRootedAt: rootScopeGenerators.compactMap(\.scopeGenerator) + inlineForeignSeamTrees)
 		for root in rootScopeGenerators {
 			GenerationLayerObservation.record(.dependencyTree(of: root.typeDescription), inRunOf: seams.currentModule.moduleName)

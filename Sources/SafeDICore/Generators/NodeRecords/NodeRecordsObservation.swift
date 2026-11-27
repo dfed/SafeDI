@@ -20,7 +20,8 @@
 
 /// What a test observes of node records (`NodeRecords`): for each production root, of a module with seams or without,
 /// whether its world was refused and why, whether its code was laid out from the records, and every way the records
-/// differ from the records the tree's places made (soundness rule 1: at every place, the record of the place's node).
+/// differ from the records the tree's places made: at every place, the record of the place's node must equal the
+/// place's own.
 public enum NodeRecordsObservation {
 	/// Whether a root whose world node records accept is laid out from them, rather than from its tree's places, where
 	/// `observer` is set. Off unless a test turns it on; the tree's places are laid out where the engine cannot lay the
@@ -29,7 +30,7 @@ public enum NodeRecordsObservation {
 	/// plan before it is turned on for every run, or generate time doubles.
 	@TaskLocal public static var laysOutRoots = false
 
-	/// The nodes a test claims as a lane's kind would (`NodeRecords.claim(of:in:)`), by their concrete type's name, each
+	/// The nodes a test claims as a kind would (`NodeRecords.claim(of:in:)`), by their concrete type's name, each
 	/// with the raw values of the refusals the claim discharges. Only a test sets it.
 	@TaskLocal public static var claimsForTesting = [String: [String]]()
 
@@ -84,6 +85,8 @@ public enum NodeRecordsObservation {
 					pending.append((tree: treeBuilt.children, nodeRecords: nodeRecordsBuilt.children, path: placePath))
 				case let (.alias(treeAlias), .alias(nodeRecordsAlias)):
 					differences += fieldDifferences(between: treeAlias, and: nodeRecordsAlias).map { "\(placePath): \($0)" }
+				// A closer is compared by no arm yet: node records make none, since they refuse every world with a cycle
+				// (`cycle`), so a tree's closer meets another kind of record here. The kind that makes closers adds its arm.
 				case (.built, _), (.alias, _), (.closer, _):
 					differences.append("\(placePath): the tree writes another kind of place than node records")
 				}
@@ -159,7 +162,7 @@ public struct NodeRecordsReport: Sendable {
 	public let isLaidOutFromNodeRecords: Bool
 	/// Each way the records differ from the records the tree's places made, where both were made.
 	public let differences: [String]
-	/// How many records node records made: one per variant but the root's (soundness rule 5).
+	/// How many records node records made: one per variant but the root's.
 	public let recordCount: Int
 	/// How many places the tree's body holds, counted per path, where node records made the root's records.
 	public let treePlaceCount: Int
