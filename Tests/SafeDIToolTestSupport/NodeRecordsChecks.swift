@@ -24,10 +24,12 @@ import Testing
 /// Soundness rule 1 of node records: at every place of every production root they accept, node records' record of the
 /// place's node equals the record the tree's place made (`NodeRecordsObservation`). Where `SAFEDI_NODE_RECORDS_REPORT`
 /// names a file, each root's outcome is appended to it as a line: the test, the root, `laid out`, `accepted`, or the
-/// refusal's kind, the count of differences, every refusal the world holds, and `mock` for a mock's root. Where
-/// `SAFEDI_NODE_RECORDS_LAY_OUT` is `1`, every production root node records accept is laid out from them, and where
-/// `SAFEDI_NODE_RECORDS_LAY_OUT_MOCKS` is `1`, every internal mock root: a sweep's switches, under which a test that
-/// compares a file with a function fails on the other text, and what is read is what does not compile.
+/// refusal's kind, the count of differences, every refusal the world holds, `mock` for a mock's root, and the entries of the
+/// approved differences that account for the root's differences (`outcome(of:approving:)`), which
+/// `Scripts/node-records-approved-differences.py` tallies. Where `SAFEDI_NODE_RECORDS_LAY_OUT` is `1`, every production
+/// root node records accept is laid out from them, and where `SAFEDI_NODE_RECORDS_LAY_OUT_MOCKS` is `1`, every internal
+/// mock root: a sweep's switches, under which a test that compares a file with a function fails on the other text, and
+/// what is read is what does not compile.
 enum NodeRecordsChecks {
 	/// Whether a run lays out from node records every production root they accept: a test said so, or the sweep's switch
 	/// did. A run started outside `checking(_:)`, as the run over split module info files is, reads it too, so that it
@@ -94,18 +96,39 @@ enum NodeRecordsChecks {
 		try await NodeRecordsObservation.$laysOutRoots.withValue(laysOutRoots) {
 			try await NodeRecordsObservation.$laysOutMockRoots.withValue(laysOutMockRoots) {
 				try await NodeRecordsObservation.$observer.withValue({ report in
-					for difference in report.differences {
+					let outcome = Self.outcome(of: report)
+					for difference in outcome.differences {
 						Issue.record(Comment(rawValue: "Node records differ from the tree’s records of root \(report.root): \(difference)"))
 					}
 					if let reportPath {
-						let outcome = report.isLaidOutFromNodeRecords ? "laid out" : report.refusal ?? "accepted"
-						append("\(testName)\t\(report.root)\t\(outcome)\t\(report.differences.count)\t\(report.everyRefusal.joined(separator: ","))\t\(report.isMockRoot ? "mock" : "")\n", toFileAt: reportPath)
+						let state = report.isLaidOutFromNodeRecords ? "laid out" : report.refusal ?? "accepted"
+						append("\(testName)\t\(report.root)\t\(state)\t\(outcome.differences.count)\t\(report.everyRefusal.joined(separator: ","))\t\(report.isMockRoot ? "mock" : "")\t\(outcome.approvedEntries.map(String.init).joined(separator: ","))\n", toFileAt: reportPath)
 					}
 					enclosingObserver?(report)
 				}) {
 					try await body()
 				}
 			}
+		}
+	}
+
+	/// The differences of `report` that fail its test, and the entries of the approved differences that account for the
+	/// rest. A root's differences are approved only together: the code laid out from its records, each approved
+	/// difference it holds rewritten as the tree writes it (`ApprovedDifferences`), is the tree's code byte for byte.
+	/// Then the records' differences from the tree's, place by place, are that rewrite's and fail nothing. A difference
+	/// no text shows always fails, as does every difference of a root whose two texts were not both laid out.
+	static func outcome(of report: NodeRecordsReport, approving approvedDifferences: [ApprovedDifference] = ApprovedDifferences.all) -> (differences: [String], approvedEntries: [Int]) {
+		guard !report.differences.isEmpty, let texts = report.comparedTexts else { return (report.differences, []) }
+		// Entry 13's optional parameter off every cycle: one variant serves a call that answers a read only if available
+		// and a call that does not, so its record reads the declaration where the tree's place at the second call reads
+		// `nil`, and the two write the same code, the call passing `nil`. Only the arguments of places differ, and no
+		// text does.
+		if texts.nodeRecords == texts.tree, report.differences.allSatisfy({ $0.contains(": arguments is ") }) {
+			return (report.differencesNoTextShows, [13])
+		} else if let normalized = ApprovedDifferences.normalized(nodeRecordsText: texts.nodeRecords, treeText: texts.tree, by: approvedDifferences) {
+			return (report.differencesNoTextShows, normalized.entries)
+		} else {
+			return (report.differences, [])
 		}
 	}
 
