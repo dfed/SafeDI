@@ -1911,21 +1911,27 @@ extension DependencyTreeGenerator {
 			}
 			// The scope's children receive what it creates – its instantiated, aliased, and forwarded properties, with
 			// the instance of each lazily instantiated one – beside what encloses it.
-			let childProvidedProperties = providedProperties.union(visited.providedProperties)
-			let childDeclaredLabels = frame.declaredLabels.union(visited.providedProperties.map(\.label))
+			// But a fill of a case nested by type provides no label its tree reads of the caller's scope on a route that
+			// holds none (`ScopeGenerator.fillLabelsReadOfCallerOnSomeRoute`): on that route the read is one of the scopes
+			// above the fill, so it leaves the seam where none of them provides it, and the seam takes a parameter the
+			// root dispatcher hands the fill.
+			let labelsReadOfCaller = visited.fillLabelsReadOfCallerOnSomeRoute
+			let visitedProvidedProperties = labelsReadOfCaller.isEmpty ? visited.providedProperties : visited.providedProperties.filter { !labelsReadOfCaller.contains($0.label) }
+			let childProvidedProperties = providedProperties.union(visitedProvidedProperties)
+			let childDeclaredLabels = frame.declaredLabels.union(visitedProvidedProperties.map(\.label))
 			// A declaration of a label hides an enclosing fill's binding of it; a fill's own binding is nearer than either.
 			var childFillsBindingLabels = frame.fillsBindingLabels
-			for property in visited.providedProperties where !childFillsBindingLabels.isEmpty {
+			for property in visitedProvidedProperties where !childFillsBindingLabels.isEmpty {
 				childFillsBindingLabels[property.label] = nil
 			}
-			for label in visited.fillStructBoundLabels {
+			for label in visited.fillStructBoundLabels where !labelsReadOfCaller.contains(label) {
 				childFillsBindingLabels[label] = visited
 			}
 			let firstChildIndex = generatorsToVisit.endIndex
 			for child in visited.children {
 				// A fill binds the fields of the hole's struct its tree reads, which hide every declaration of their labels
 				// above it, but for those bound from a deferred parameter, which it reads from the caller's scope.
-				let fillFieldLabels = child.fillStructBoundLabels
+				let fillFieldLabels = child.fillStructBoundLabels.subtracting(child.fillLabelsReadOfCallerOnSomeRoute)
 				generatorsToVisit.append(Frame(
 					generator: child,
 					providedProperties: childProvidedProperties,
@@ -1980,11 +1986,14 @@ extension DependencyTreeGenerator {
 				// A site reads every parameter whose label no scope enclosing it declares, so the subtree that holds one reads
 				// every label.
 				var reads = Reads(labels: [], requests: [], readsEveryLabel: visited.holeSite != nil)
-				let providedLabels = Set(visited.providedProperties.map(\.label))
+				// A fill provides no label its tree reads of the caller's scope on some route, as in the walk.
+				let labelsReadOfCaller = visited.fillLabelsReadOfCallerOnSomeRoute
+				let providedProperties = labelsReadOfCaller.isEmpty ? visited.providedProperties : visited.providedProperties.filter { !labelsReadOfCaller.contains($0.label) }
+				let providedLabels = Set(providedProperties.map(\.label))
 				for child in visited.children {
 					if let childReads = readsByGenerator[ObjectIdentifier(child)] {
 						reads.labels.formUnion(childReads.labels.subtracting(providedLabels))
-						for request in childReads.requests where !Self.isProvided(request, by: visited.providedProperties) {
+						for request in childReads.requests where !Self.isProvided(request, by: providedProperties) {
 							reads.requests.insert(request)
 						}
 						reads.readsEveryLabel = reads.readsEveryLabel || childReads.readsEveryLabel

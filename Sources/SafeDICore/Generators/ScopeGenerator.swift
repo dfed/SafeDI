@@ -5344,6 +5344,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		seamAndFillFieldsStorage?.fields.fillStructBoundLabels ?? []
 	}
 
+	/// For a fill of a case nested by type, the labels of the fields it binds that its tree reads of the caller's scope on a
+	/// route that holds none (`fillCallerReads`). Every route calls the one fill, so a read of such a label beneath it is
+	/// one of the fill's field on a route that holds it and one of the scopes enclosing the call on a route that holds
+	/// none: the fill hides no declaration of the label above it from what leaves a seam whose tree makes the call
+	/// (`DependencyTreeGenerator.receivers(in:of:instantiables:)`). Empty for every other generator.
+	nonisolated var fillLabelsReadOfCallerOnSomeRoute: Set<String> {
+		Set(fillCallerReads.parameterByLabel.keys)
+	}
+
 	/// For a seam call, by the key of each of its fills, the labels of the hole's fields bound from deferred parameters
 	/// that a declaration on the path from a fill of the call to a call inside it that passes the fill on hides: the
 	/// fill, one function, would read the outer call's declaration for every call, so it reads the struct's field for
