@@ -65,8 +65,9 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 		// The walk that finds the values a seam tier omits enters only a subtree that holds a call omitting a parameter or a
 		// scope closing a lazy cycle, which shape E has neither of: the test of layers of screens below counts it.
 		// Finding the value each receive is handed runs for `query graph` alone: `SafeDIToolQueryGraphTests` counts it on
-		// layers of screens that open screens of the next layer.
-		let seamSteps = Set(GenerationWork.Step.allCases).subtracting([.layingOutTypeKeyViews, .findingRootFunctions, .checkingReadsAtEveryMember, .askingMemoCandidates, .filingMemoEntryReads, .collectingTypesOfATree, .collectingDeclarationsOfACycle, .findingCarrierASiblingRequires, .findingSeamTierOmissions, .findingReceivedValueSupplies])
+		// layers of screens that open screens of the next layer. The fold that finds `@Sendable` captures runs only beside the
+		// walk that decides them, under a test's comparison, so no shape here counts it until the fold decides.
+		let seamSteps = Set(GenerationWork.Step.allCases).subtracting([.layingOutTypeKeyViews, .findingRootFunctions, .checkingReadsAtEveryMember, .askingMemoCandidates, .filingMemoEntryReads, .collectingTypesOfATree, .collectingDeclarationsOfACycle, .findingCarrierASiblingRequires, .findingSeamTierOmissions, .findingReceivedValueSupplies, .findingSendableCaptures])
 		var countedSteps = Set<GenerationWork.Step>()
 		for shape in Shape.allCases {
 			var measures = [Measure]()

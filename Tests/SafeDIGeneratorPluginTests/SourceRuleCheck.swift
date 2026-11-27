@@ -76,7 +76,7 @@ enum SourceRule: String, CaseIterable {
 	/// and knows no feature, so a feature that needs something of it records a fact in general terms on the place, and
 	/// the layout reads the fact.
 	case engineFeatureName
-	/// `String`, `Property` or `TypeDescription` named in a fold of the per-type facts (`OrderedGraph.swift`, `ReadsFromAbove.swift`, `SiblingOrder.swift`, `TypeFactsColumns.swift`, `TypeFactsVariants.swift`, `TypeFactsOutcomes.swift`): a fold
+	/// `String`, `Property` or `TypeDescription` named in a fold of the per-type facts (`OrderedGraph.swift`, `TypeFactsBuildsInCallersBody.swift`, `ReadsFromAbove.swift`, `SiblingOrder.swift`, `TypeFactsColumns.swift`, `TypeFactsVariants.swift`, `TypeFactsOutcomes.swift`): a fold
 	/// works on a world's 32-bit IDs and bit sets, and only building the graph, spelling code and wording a message
 	/// touch a model of the source so a fold keeps no reference-counted value in its loops. A reader fold that still reads
 	/// a declaration's `Property` is left out until the graph answers what it reads: `TypeFactsImports.swift`, which hands
@@ -118,6 +118,7 @@ enum SourceRule: String, CaseIterable {
 		case .typeFactsFoldModelName:
 			[
 				"Sources/SafeDICore/Generators/TypeFacts/OrderedGraph.swift",
+				"Sources/SafeDICore/Generators/TypeFacts/TypeFactsBuildsInCallersBody.swift",
 				"Sources/SafeDICore/Generators/TypeFacts/ReadsFromAbove.swift",
 				"Sources/SafeDICore/Generators/TypeFacts/SiblingOrder.swift",
 				"Sources/SafeDICore/Generators/TypeFacts/TypeFactsColumns.swift",

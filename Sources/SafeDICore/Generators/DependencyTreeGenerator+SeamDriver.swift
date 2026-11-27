@@ -245,6 +245,7 @@ extension DependencyTreeGenerator {
 			internerSpace: internerSpace,
 			builtInlineSeamComment: { [seams] in Self.builtInlineSeamComment(for: $0, seams: seams) },
 			keepsFirstPassTrees: true,
+			checksSendableCaptures: checksSendableCaptures,
 		)
 		var errors = ownComputation.errors
 		// Each generated seam is computed again over the declarations its callers see, when those differ from this
@@ -509,6 +510,8 @@ extension DependencyTreeGenerator {
 				fulfillers: TypeFactsImports(root: rootScope).fulfillers,
 				receivedValueSupplies: TypeFactsReceivedValueSupplies.whereRead(root: rootScope),
 				seamTierOmissions: seamTierOmissions(ofTreeRootedAt: rootScope, instantiable: scope.instantiable, seamRoot: nil),
+				sendableCaptures: sendableCaptures(ofTreeRootedAt: rootScope, instantiable: scope.instantiable, seamRoot: nil),
+				buildsInCallersBodyRootScope: Self.buildsInCallersBodyRootScope(rootScope),
 				scopeGenerator: record.createScopeGenerator(
 					in: table,
 					lazilyInstantiatedInstanceProperties: [],
@@ -538,6 +541,8 @@ extension DependencyTreeGenerator {
 			let fulfillers: Set<FulfillerImports.Fulfiller>
 			let receivedValueSupplies: ReceivedValueSupplies?
 			let seamTierOmissions: [ScopeGenerator.SeamTierOmission]?
+			let sendableCaptures: TypeFactsSendableCaptures?
+			let buildsInCallersBodyRootScope: ConstructionScope?
 			if let firstPassTree = firstPassTrees.removeValue(forKey: seam.concreteInstantiable) {
 				scopeGenerator = ScopeGenerator.reseating(treeRootedAt: firstPassTree.generator, of: seam.concreteInstantiable, seamRoot: seamRoot)
 				// The pass's tree holds no seam call or fill (`confirmingPassFindsNothingNew`), so every record it reaches is
@@ -546,6 +551,9 @@ extension DependencyTreeGenerator {
 				receivedValueSupplies = firstPassTree.receivedValueSupplies
 				// Only a call of a seam's tier omits a value, and the pass's tree holds none.
 				seamTierOmissions = []
+				// The pass added no parameter, so the fold its tree took reads the parameters the final seam root holds.
+				sendableCaptures = firstPassTree.sendableCaptures
+				buildsInCallersBodyRootScope = try TypeFactsBuildsInCallersBodyObservation.comparesLayout.map { _ in try builtTree().rootScope }
 				if let observer = SeamTreeReuseObservation.comparesBuiltTrees {
 					let treeBuiltAnew = try builtTree().generator
 					observer(ReusedSeamTree(
@@ -560,6 +568,8 @@ extension DependencyTreeGenerator {
 				fulfillers = TypeFactsImports(root: tree.rootScope).fulfillers
 				receivedValueSupplies = TypeFactsReceivedValueSupplies.whereRead(root: tree.rootScope)
 				seamTierOmissions = self.seamTierOmissions(ofTreeRootedAt: tree.rootScope, instantiable: seam, seamRoot: finalSeamRoot)
+				sendableCaptures = self.sendableCaptures(ofTreeRootedAt: tree.rootScope, instantiable: seam, seamRoot: finalSeamRoot)
+				buildsInCallersBodyRootScope = Self.buildsInCallersBodyRootScope(tree.rootScope)
 			}
 			rootScopeGenerators.append(RootScopeInfo(
 				typeDescription: seam.concreteInstantiable,
@@ -568,6 +578,8 @@ extension DependencyTreeGenerator {
 				fulfillers: fulfillers,
 				receivedValueSupplies: receivedValueSupplies,
 				seamTierOmissions: seamTierOmissions,
+				sendableCaptures: sendableCaptures,
+				buildsInCallersBodyRootScope: buildsInCallersBodyRootScope,
 				scopeGenerator: scopeGenerator,
 			))
 		}
@@ -751,6 +763,7 @@ extension DependencyTreeGenerator {
 		internerSpace: ConstructionInternerSpace,
 		builtInlineSeamComment: @escaping @Sendable (Instantiable) -> String? = { _ in nil },
 		keepsFirstPassTrees: Bool = false,
+		checksSendableCaptures: Bool = false,
 		isolation _: isolated (any Actor)? = #isolation,
 	) async throws -> SeamSignatureComputation {
 		let seamInstantiables = seamTypes.sorted().compactMap { instantiables[$0] }.filter(\.generatesDependencyTree)
@@ -858,6 +871,7 @@ extension DependencyTreeGenerator {
 			proof: proof,
 			declaredTypeNames: declaredTypeNames,
 			keepsFirstPassTrees: keepsFirstPassTrees,
+			checksSendableCaptures: checksSendableCaptures,
 			seamsReachingThemselves: seamComponents.seamsReachingThemselves,
 		)
 		let width = SeamSignatureObservation.width ?? ProcessInfo.processInfo.activeProcessorCount
@@ -966,6 +980,8 @@ extension DependencyTreeGenerator {
 		let proof: TypeAccessProof
 		let declaredTypeNames: DeclaredTypeNames
 		let keepsFirstPassTrees: Bool
+		/// Whether a tree kept for emission takes the fold of its captures (`checksSendableCaptures`).
+		let checksSendableCaptures: Bool
 		let seamsReachingThemselves: Set<TypeDescription>
 
 		func initialSeamRoot(of seam: Instantiable) -> ScopeGenerator.SeamRoot {
@@ -1125,6 +1141,7 @@ extension DependencyTreeGenerator {
 								generator: generator,
 								fulfillers: TypeFactsImports(root: tree.rootScope).fulfillers,
 								receivedValueSupplies: TypeFactsReceivedValueSupplies.whereRead(root: tree.rootScope),
+								sendableCaptures: Self.sendableCaptures(ofTreeRootedAt: tree.rootScope, instantiable: seam, seamRoot: seamRoot, checksSendableCaptures: context.checksSendableCaptures),
 							)
 						}
 					}
@@ -1704,6 +1721,8 @@ extension DependencyTreeGenerator {
 		/// The supplies of the tree, read where it is built, or `nil` where nothing reads them
 		/// (`TypeFactsReceivedValueSupplies.whereRead(root:)`).
 		let receivedValueSupplies: ReceivedValueSupplies?
+		/// The captures of the tree, read where it is built, or `nil` where the module checks none (`checksSendableCaptures`).
+		let sendableCaptures: TypeFactsSendableCaptures?
 	}
 
 	/// Every receive in the tree `generator` roots, `seam`'s, that leaves the seam – each `@Received` dependency and

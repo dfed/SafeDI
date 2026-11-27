@@ -173,7 +173,7 @@ extension DependencyTreeGenerator {
 			callerModule: seams.currentModule,
 			compilesGeneratedMocks: compilesGeneratedMocks,
 		)
-		try await validateSendableBuildersCaptureNoNonSendableWrapper(inTreesRootedAt: mockRoots)
+		try await validateSendableBuildersCaptureNoNonSendableWrapper(inTreesRootedAt: mockRoots.map { ($0.instantiable, $0.scopeGenerator, nil) })
 
 		// Compute the global cycle edges across all mock-reachable types. Per-tree
 		// cycle detection (`isPropertyCycle`) breaks at a different edge depending

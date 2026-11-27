@@ -125,6 +125,12 @@ public struct GenerationWork: Sendable {
 		/// call of a seam tier that omits a parameter, and in a graph that holds one only the nodes on the paths to such a
 		/// call. The walk it replaced, kept as its oracle, counts nothing.
 		case findingSeamTierOmissions
+		/// Finding the `@Sendable` functions a root's tree would make capture a wrapper that is not `Sendable`
+		/// (`TypeFactsSendableCaptures`): each edge a pair crosses for each label a wrapper is declared under, each node
+		/// climbed to find whether a cycle's call makes a function `@Sendable`, each declaration judged and each type of a
+		/// chain. A node stands for every place of its declaration, so a tree of n layers of screens that each open screens
+		/// of the next layer counts its edges, not its paths, which the walk it replaced entered each of.
+		case findingSendableCaptures
 	}
 
 	/// The step that did the work.

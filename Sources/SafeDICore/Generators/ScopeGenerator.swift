@@ -8652,6 +8652,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// The extension `rootInitializer` declares, writing `childCode`, the code of the root's children.
 	@inline(never)
 	private static func rootCode(of rootInitializer: RootInitializer, writing childCode: consuming [GeneratedCode]) -> GeneratedCode {
+		if let observer = TypeFactsBuildsInCallersBodyObservation.observesRootBody {
+			observer(.sequence(copy childCode))
+		}
 		// The type key lays the body out again from the path key's plan, or keeps the path key's body where it cannot.
 		// A root the type key leaves on the path layout still declares its root functions once, at its top.
 		guard let statements = TypeKeyBody.statements(ofRootBody: childCode) else {
@@ -12355,7 +12358,7 @@ extension Instantiable {
 extension Property.PropertyType {
 	/// Whether the property is an `Instantiator`, `ErasedInstantiator`, or `LazilyInstantiated`, which a
 	/// `@Sendable` function cannot capture.
-	fileprivate var isNonSendableWrapper: Bool {
+	var isNonSendableWrapper: Bool {
 		!isConstant && !isSendable
 	}
 }

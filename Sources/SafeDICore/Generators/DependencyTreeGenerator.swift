@@ -93,6 +93,11 @@ public actor DependencyTreeGenerator {
 		importAccess = importAccessSpellingOwnLevels([:])
 		self.readOwnFiles = readOwnFiles
 		self.typeDescriptionToFulfillingInstantiableMap = typeDescriptionToFulfillingInstantiableMap
+		// Walking the trees for captures costs a pass over every scope, so only a module whose types name both a wrapper
+		// that is not `Sendable` and a `Sendable` builder pays for it.
+		let dependencies = typeDescriptionToFulfillingInstantiableMap.values.lazy.flatMap(\.dependencies)
+		checksSendableCaptures = dependencies.contains(where: { !$0.property.propertyType.isConstant && !$0.property.propertyType.isSendable })
+			&& dependencies.contains(where: \.property.propertyType.isSendable)
 		// What the declarations spell is interned first, in the order of their keys, which no arrival order decides. The
 		// order assigns the IDs, which only an `==` reads, never output: the tests intern in other orders to show it.
 		internerSpace = ConstructionInternerSpace(declarationsOf: Self.declarationsInInterningOrder(of: typeDescriptionToFulfillingInstantiableMap))
@@ -410,7 +415,7 @@ public actor DependencyTreeGenerator {
 			inTreesRootedAt: roots.map(\.scopeGenerator),
 			callerModule: seams.currentModule,
 		)
-		try await validateSendableBuildersCaptureNoNonSendableWrapper(inTreesRootedAt: roots.map { ($0.instantiable, $0.scopeGenerator) })
+		try await validateSendableBuildersCaptureNoNonSendableWrapper(inTreesRootedAt: roots.map { ($0.instantiable, $0.scopeGenerator, $0.sendableCaptures) })
 		try await validateNoSeamTierOmitsProvidedValue(inTreesRootedAt: roots)
 	}
 
@@ -429,7 +434,17 @@ public actor DependencyTreeGenerator {
 			) { taskGroup in
 				for rootInfo in rootScopeGenerators {
 					taskGroup.addTask {
-						let code = try await rootInfo.scopeGenerator.generatePlan()
+						// A test that compares the graph's answers with the layout is handed the root's body as planned, before the
+						// type key lays its places out as text.
+						let code = if let observer = TypeFactsBuildsInCallersBodyObservation.comparesLayout, let rootScope = rootInfo.buildsInCallersBodyRootScope {
+							try await TypeFactsBuildsInCallersBodyObservation.$observesRootBody.withValue({ body in
+								observer(TypeFactsBuildsInCallersBodyComparison(root: rootInfo.typeDescription.asSource, rootScope: rootScope, plan: body))
+							}) {
+								try await rootInfo.scopeGenerator.generatePlan()
+							}
+						} else {
+							try await rootInfo.scopeGenerator.generatePlan()
+						}
 						// The fold's imports, found where the tree was built, are compared with the walk of the tree emitted,
 						// which for a seam whose first signature pass settled is that pass's tree made again.
 						if let observer = TypeFactsImportsObservation.comparesWalk {
@@ -549,6 +564,9 @@ public actor DependencyTreeGenerator {
 	private let importAccessSpellingOwnLevels: @Sendable ([String: Set<AccessLevel>]) -> GeneratedImportAccess
 	private let readOwnFiles: (@Sendable () async -> FulfillerImports.OwnFiles)?
 	let typeDescriptionToFulfillingInstantiableMap: [TypeDescription: Instantiable]
+	/// Whether the module's types name both a wrapper that is not `Sendable` and a `Sendable` builder, without which no
+	/// `@Sendable` function captures a wrapper that is not `Sendable`: only then are its trees checked for such captures.
+	let checksSendableCaptures: Bool
 	/// Where each received dependency and alias is declared that the trees are built around although nothing provides
 	/// it. Empty but for `query graph`'s generator of a graph whose only errors are such dependencies.
 	let unfulfilledReceiveLocations: Set<Dependency.DeclarationLocation>
@@ -599,6 +617,14 @@ public actor DependencyTreeGenerator {
 		/// The calls of seams' tiers in the root's tree that omit a value the tree holds, read where the tree is built for
 		/// the same reason (`TypeFactsSeamTierOmissions`), or `nil` where the module checks none: one that knows no seam.
 		let seamTierOmissions: [ScopeGenerator.SeamTierOmission]?
+		/// The captures of a wrapper that is not `Sendable` by a `@Sendable` function in the root's tree, read where the
+		/// tree is built for the same reason (`TypeFactsSendableCaptures`), or `nil` where the module checks none
+		/// (`checksSendableCaptures`).
+		let sendableCaptures: TypeFactsSendableCaptures?
+		/// The root's scope, kept only while a test compares where the graph says each place is built with the layout
+		/// (`TypeFactsBuildsInCallersBodyObservation.comparesLayout`), and otherwise `nil`, so that the table it is frozen
+		/// into is freed with the build.
+		let buildsInCallersBodyRootScope: ConstructionScope?
 		let scopeGenerator: ScopeGenerator
 	}
 
@@ -745,6 +771,8 @@ public actor DependencyTreeGenerator {
 						fulfillers: TypeFactsImports(root: rootScope).fulfillers,
 						receivedValueSupplies: TypeFactsReceivedValueSupplies.whereRead(root: rootScope),
 						seamTierOmissions: seamTierOmissions(ofTreeRootedAt: rootScope, instantiable: scope.instantiable, seamRoot: nil),
+						sendableCaptures: sendableCaptures(ofTreeRootedAt: rootScope, instantiable: scope.instantiable, seamRoot: nil),
+						buildsInCallersBodyRootScope: Self.buildsInCallersBodyRootScope(rootScope),
 						scopeGenerator: record.createScopeGenerator(
 							in: table,
 							lazilyInstantiatedInstanceProperties: [],

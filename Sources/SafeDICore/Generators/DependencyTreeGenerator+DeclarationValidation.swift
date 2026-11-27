@@ -21,29 +21,36 @@
 extension DependencyTreeGenerator {
 	/// Validates that no `@Sendable` builder function in the trees rooted at `roots` would capture an
 	/// `Instantiator`, `ErasedInstantiator`, or `LazilyInstantiated` declared outside it, none of which is
-	/// `Sendable`. See `ScopeGenerator.nonSendableWrapperCaptures(ofTreeRootedAt:)`.
+	/// `Sendable`. Reads the walk of each root's generator tree (`ScopeGenerator.nonSendableWrapperCaptures(ofTreeRootedAt:)`),
+	/// with which a test compares the root's per-type graph (`TypeFactsSendableCaptures`) where the fold answers it: not
+	/// for a mock root, given no fold, a tree with fills, or a tree whose lazy cycle closes on a function that may take
+	/// parameters.
 	///
-	/// A receiver that several roots, or several paths through one tree, reach is reported once for each chain, as
+	/// The walk reports a receiver that several roots, or several paths through one tree, reach once for each chain, as
 	/// an unfulfillable dependency is, rather than once with the chain of whichever root sorts first: which root a
 	/// diagnostic names must not depend on the order of names.
 	func validateSendableBuildersCaptureNoNonSendableWrapper(
-		inTreesRootedAt roots: [(instantiable: Instantiable, scopeGenerator: ScopeGenerator)],
+		inTreesRootedAt roots: [(instantiable: Instantiable, scopeGenerator: ScopeGenerator, sendableCaptures: TypeFactsSendableCaptures?)],
 	) async throws {
-		// Walking the trees costs a pass over every scope, so only a module whose types name both a wrapper
-		// that is not `Sendable` and a `Sendable` builder pays for it.
-		let dependencies = typeDescriptionToFulfillingInstantiableMap.values.lazy.flatMap(\.dependencies)
-		guard dependencies.contains(where: { !$0.property.propertyType.isConstant && !$0.property.propertyType.isSendable }),
-		      dependencies.contains(where: \.property.propertyType.isSendable)
-		else { return }
+		guard checksSendableCaptures else { return }
+		let observer = TypeFactsSendableCapturesObservation.comparesWalk
 		// Two paths can reach one receiver through the same chain of types, so identical captures are reported once.
-		// The trees are walked in parallel: the captures are a set, which the error sorts into source order.
+		// The trees are read in parallel: the captures are a set, which the error sorts into source order.
 		let captures = await withTaskGroup(
 			of: [ScopeGenerator.NonSendableWrapperCapture].self,
 			returning: Set<ScopeGenerator.NonSendableWrapperCapture>.self,
 		) { taskGroup in
 			for root in roots {
 				taskGroup.addTask {
-					await root.scopeGenerator.nonSendableWrapperCaptures(ofTreeRootedAt: root.instantiable)
+					// The walk decides until the fold answers every tree the tool generates: a test compares the fold, read
+					// where the tree is built, with it. A mock root's fold is not read where its tree is built.
+					let walked = await root.scopeGenerator.nonSendableWrapperCaptures(ofTreeRootedAt: root.instantiable)
+					if let observer {
+						let refusals = root.sendableCaptures?.refusals ?? [.mockRoot]
+						let folded = refusals.isEmpty ? root.sendableCaptures?.captures ?? [] : []
+						observer(TypeFactsSendableCapturesComparison(root: root.instantiable.concreteInstantiable.asSource, refusals: refusals.map(\.rawValue), folded: folded.map(\.comparedSpelling), walked: walked.map(\.comparedSpelling)))
+					}
+					return walked
 				}
 			}
 			var captures = Set<ScopeGenerator.NonSendableWrapperCapture>()
@@ -62,6 +69,23 @@ extension DependencyTreeGenerator {
 	func seamTierOmissions(ofTreeRootedAt rootScope: ConstructionScope, instantiable: Instantiable, seamRoot: ScopeGenerator.SeamRoot?) -> [ScopeGenerator.SeamTierOmission]? {
 		guard !seams.isEmpty, let emittingModule else { return nil }
 		return TypeFactsSeamTierOmissions(root: rootScope, instantiable: instantiable, seamRoot: seamRoot, isOwnFile: emittingModule.isOwnFile).omissions
+	}
+
+	/// The captures of a wrapper that is not `Sendable` by a `@Sendable` function in the tree rooted at `rootScope`, read
+	/// where the tree is built, so that no root keeps its frozen table until validation; `nil` where the module checks
+	/// none (`checksSendableCaptures`), or, until the fold decides, where no test compares it with the walk.
+	func sendableCaptures(ofTreeRootedAt rootScope: ConstructionScope, instantiable: Instantiable, seamRoot: ScopeGenerator.SeamRoot?) -> TypeFactsSendableCaptures? {
+		Self.sendableCaptures(ofTreeRootedAt: rootScope, instantiable: instantiable, seamRoot: seamRoot, checksSendableCaptures: checksSendableCaptures)
+	}
+
+	static func sendableCaptures(ofTreeRootedAt rootScope: ConstructionScope, instantiable: Instantiable, seamRoot: ScopeGenerator.SeamRoot?, checksSendableCaptures: Bool) -> TypeFactsSendableCaptures? {
+		guard checksSendableCaptures, TypeFactsSendableCapturesObservation.comparesWalk != nil else { return nil }
+		return TypeFactsSendableCaptures(root: rootScope, instantiable: instantiable, seamRoot: seamRoot)
+	}
+
+	/// `rootScope` while a test compares where the graph says each place is built with the layout, else `nil`.
+	static func buildsInCallersBodyRootScope(_ rootScope: ConstructionScope) -> ConstructionScope? {
+		TypeFactsBuildsInCallersBodyObservation.comparesLayout == nil ? nil : rootScope
 	}
 
 	/// Validates that no call of a seam's generated initializer in the trees rooted at `roots` drops a value the tree

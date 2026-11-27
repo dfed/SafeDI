@@ -676,6 +676,8 @@ struct TypeFactsGraph: Sendable {
 		let isBeingBuilt = answers.isBeingBuilt
 		let variantsOfAnswers = answers.variants
 		let readsByID = readInterner.values
+		let buildsInCallersBody = TypeFactsBuildsInCallersBody(graph: graph, kinds: kinds, constructions: constructions, edgeFacts: edgeFacts, forMockGeneration: forMockGeneration)
+		self.buildsInCallersBody = buildsInCallersBody
 		outcomes = TypeFactsOutcomes(.init(
 			variants: answers.variants,
 			cellRule: { variant, position in
@@ -683,9 +685,11 @@ struct TypeFactsGraph: Sendable {
 				return .init(channel: readsByID[Int(readColumn[Int(readOffsets[node]) + position])].channel)
 			},
 			isBeingBuilt: { isBeingBuilt[Int($0)] },
-			// No call builds its callee in its caller's body until the edge facts say which edges open no function and the
-			// layout gives the callee none: false costs only a parameter, where true could capture a function's local.
-			buildsInCallersBody: { _, _ in false },
+			// Where the rule decides nothing, the call is judged as one into a function of the callee's own: false costs only
+			// a parameter, where true could capture a function's local.
+			buildsInCallersBody: { variant, edgeIndex in
+				buildsInCallersBody.answers[graph.edgeOffset(of: Int(variantsOfAnswers.node(of: variant))) + edgeIndex] == .inCallersBody
+			},
 			edgeOffset: { graph.edgeOffset(of: $0) },
 		))
 		self.cycleIDs = cycleIDs
@@ -714,6 +718,9 @@ struct TypeFactsGraph: Sendable {
 
 	/// What each read of each variant comes to in its body.
 	let outcomes: TypeFactsOutcomes
+
+	/// Whether each edge builds its child in line in its parent's body.
+	let buildsInCallersBody: TypeFactsBuildsInCallersBody
 
 	/// Whether each answer ID's declaration is still being built where it answers.
 	let answerIsBeingBuilt: [Bool]
