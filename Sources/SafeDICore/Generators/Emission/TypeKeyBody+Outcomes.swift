@@ -205,16 +205,13 @@ extension TypeKeyLayout {
 			changed = false
 			for variant in captured.keys.sorted() {
 				for (label, position) in captured[variant, default: [:]].sorted(by: { $0.key < $1.key }) {
+					// The loop above captured the label only where no call passes another statement, a forwarded value or
+					// nothing, and every root statement a call passes is the one at `position`; it set aside a cycle parameter
+					// it could not judge yet. So only a call that passes a cycle parameter can fail here: one of another label,
+					// or of a function that captures the label at no position, or at another.
 					let everyCallPassesStatement = (closersByTarget[variant] ?? []).allSatisfy { closer in
-						switch closerValue(of: label, closing: closer, onPlace: variant) {
-						case let .statement(body, index):
-							body == 0 && index == position
-						case let .cycleParameter(body, passedLabel):
-							passedLabel == label && captured[body]?[label] == position
-						case .forwarded,
-						     .none:
-							false
-						}
+						guard case let .cycleParameter(body, passedLabel) = closerValue(of: label, closing: closer, onPlace: variant) else { return true }
+						return passedLabel == label && captured[body]?[label] == position
 					}
 					if !everyCallPassesStatement {
 						captured[variant]?[label] = nil
