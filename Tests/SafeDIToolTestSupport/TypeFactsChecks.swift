@@ -257,10 +257,13 @@ enum TypeFactsChecks {
 				let finding = "places \(first) and \(index) of \(nodeDescription(places[index].node)) share variant \(variant) but answer \(differing.sorted()) otherwise"
 				add(10, finding)
 				let owed = places[index].node.map { report.nodes[$0].owedFacts } ?? []
+				// A class counts only where the node owes its producer's fact; a shape whose fact the tree lacks is unowed.
 				for owedFact in owedFacts(answering: differing) {
-					result.check10OwedByFact[owedFact, default: 0] += 1
-					if !owed.contains(owedFact) {
-						result.check10OwedUncovered.append("\(owedFact) owed but not in the node’s owed facts \(owed.sorted()): \(finding)")
+					if owed.contains(owedFact) {
+						result.check10OwedByFact[owedFact, default: 0] += 1
+					} else {
+						result.check10OwedByFact["unowed", default: 0] += 1
+						result.check10OwedUncovered.append("\(owedFact) by its shape but not in the node’s owed facts \(owed.sorted()): \(finding)")
 					}
 				}
 			}

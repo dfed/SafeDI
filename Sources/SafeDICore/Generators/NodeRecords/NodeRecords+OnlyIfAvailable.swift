@@ -21,7 +21,8 @@
 extension NodeRecords {
 	/// The claim of `declaration` where it is a node whose type receives a property only if available or declares a rename:
 	/// of kind `receivesOnlyIfAvailable`, discharging `onlyIfAvailable` and `renameOrHole`, which it still holds where its
-	/// scope declares a hole or an instantiated dependency it does not build; `nil` for any other node.
+	/// scope declares a hole or an instantiated dependency it does not build, and the refusal of the wrapper it is built in,
+	/// which its record reads of the node (`wrapperRefusalsDischarged(of:in:)`); `nil` for any other node.
 	static func receivesOnlyIfAvailableClaim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
 		guard world.kind(of: declaration) != .alias, world.kind(of: declaration) != .hole else { return nil }
 		let scope = world.scope(of: declaration)
@@ -41,7 +42,7 @@ extension NodeRecords {
 			}
 		}
 		let refusals: [NodeRecordRefusal] = declaresHole || !scope.instantiatedDependenciesNotGenerated.isEmpty ? [.renameOrHole] : []
-		return NodeRecordClaim(kind: .receivesOnlyIfAvailable, discharges: [.onlyIfAvailable, .renameOrHole], refusals: refusals)
+		return NodeRecordClaim(kind: .receivesOnlyIfAvailable, discharges: wrapperRefusalsDischarged(of: declaration, in: world).union([.onlyIfAvailable, .renameOrHole]), refusals: refusals)
 	}
 
 	/// The record of `declaration`'s place in `variant`, a node of kind `receivesOnlyIfAvailable`: a `builtByInitializer`
@@ -80,6 +81,12 @@ extension NodeRecords {
 /// nothing.
 ///
 /// Holds, per variant, the set of the properties it is passed `nil` for, for as long as the world's records are made.
+///
+/// A bridge: a private copy of the facts' rule of which declaration answers a read (the nearest above, bound before the
+/// edge), which the facts already apply but do not hand on for a read only if available, whose answer rule 1 keys alike
+/// whether it is `nil` or a value. It goes in the change that has the facts hand each call whether a read only if
+/// available finds a value there, beside the call's sources (`TypeFactsWorld.sources(ofCall:of:)`), which records then
+/// read instead.
 struct OnlyIfAvailableAnswers: Sendable {
 	/// - Parameters:
 	///   - world: A world each of whose nodes is of a kind `NodeRecords` makes, off every cycle.

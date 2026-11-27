@@ -79,9 +79,9 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 			],
 			moduleMembershipArguments: ["--module-name", "Feature"],
 		)
-		// The root's world calls the seam, which node records refuse as a construction; the seam's own world they accept.
+		// Node records make the records of the root's world, which calls the seam, and of the seam's own world.
 		#expect(forcers == """
-		Root\tseam world, kind construction
+		Root\tseam world
 		Screen\tseam world
 		roots that built a tree: 2 of 2
 
@@ -109,15 +109,18 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 		let output = TestTemporaryDirectory.uniquePath(prefix: "TreeForcers", pathExtension: "txt")
 		filesToDelete.append(output)
 		let (stream, continuation) = AsyncStream.makeStream(of: Int.self)
-		_ = try await HeldCodeTasks.$observer.withValue({ continuation.yield($0) }) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: files,
-				buildSwiftOutputDirectory: true,
-				buildDOTFileOutput: buildDOTFileOutput,
-				filesToDelete: &filesToDelete,
-				moduleMembershipArguments: moduleMembershipArguments,
-				treeForcersOutput: output,
-			)
+		// The switch to node records is on, as it is once it lands: a root they accept builds no tree.
+		_ = try await NodeRecordsObservation.$buildsNoTreeForAcceptedRoots.withValue(true) {
+			try await HeldCodeTasks.$observer.withValue({ continuation.yield($0) }) {
+				try await executeSafeDIToolTest(
+					swiftFileContent: files,
+					buildSwiftOutputDirectory: true,
+					buildDOTFileOutput: buildDOTFileOutput,
+					filesToDelete: &filesToDelete,
+					moduleMembershipArguments: moduleMembershipArguments,
+					treeForcersOutput: output,
+				)
+			}
 		}
 		continuation.finish()
 		var heldTaskCounts = [Int]()
