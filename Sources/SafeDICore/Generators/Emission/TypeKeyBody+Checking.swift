@@ -246,13 +246,13 @@ extension TypeKeyLayout {
 				guard actual == normalized(resolution(of: label, atPlace: place, edge: (parent: body, position: index))) else { return false }
 			} else if bodies[place].cycleParameterLabels.contains(label) {
 				guard actual == normalized(closerValue(of: label, closing: (body: body, index: index), onPlace: place)) else { return false }
-			} else if !passesOwnParameter(declaration, inBody: body, of: place) {
+			} else {
 				// A closer that hands on what the place it calls was passed passes, beneath each edge of that place, what that
-				// edge resolves the label to, which the call at the edge is checked for. Any other value is the one every
-				// edge of the place resolves the label to.
-				for edge in bodies[place].edges {
-					guard actual == normalized(resolution(of: label, atPlace: place, edge: edge)) else { return false }
-				}
+				// edge resolves the label to, which the call at the edge is checked for. A closer that passes anything else
+				// passes a declaration between it and the place, which makes the label a cycle parameter of the place (the
+				// branch above), so no graph of the suite or the fuzzer’s corpora reaches it: the root keeps the path key's body there rather than lay out a call
+				// no test checks.
+				guard passesOwnParameter(declaration, inBody: body, of: place) else { return false }
 			}
 		}
 		return true
