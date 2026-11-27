@@ -33,6 +33,11 @@ public enum NodeRecordsObservation {
 	/// with the raw values of the refusals the claim discharges. Only a test sets it.
 	@TaskLocal public static var claimsForTesting = [String: [String]]()
 
+	/// Whether a mock root whose world node records accept has the statements that build its nodes laid out from them,
+	/// rather than written by the mock's walk, where `observer` is set. Off unless a test turns it on: the two write other
+	/// text for a node beneath a function, which is handed its override where the walk's captures the root's.
+	@TaskLocal public static var laysOutMockRoots = false
+
 	/// Handed each root's report, where set. Only a test sets it.
 	@TaskLocal public static var observer: (@Sendable (NodeRecordsReport) -> Void)?
 
@@ -159,4 +164,7 @@ public struct NodeRecordsReport: Sendable {
 	/// What made the run build the root's tree (`TreeForcer`); empty where its code was laid out from node records alone,
 	/// and the tree was built only for the test to compare.
 	public let treeForcers: [TreeForcer]
+	/// Whether the root is a mock's: its records are compared with no tree's, so `differences` is empty, and a test
+	/// compares the code laid out from them, or the values that code builds, with the mock's walk's.
+	public var isMockRoot = false
 }

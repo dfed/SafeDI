@@ -23,7 +23,8 @@ extension NodeRecords {
 	/// discharging every refusal of stage 1. A rename is a leaf whose scope is the scope that declares it, so each refusal
 	/// stage 1 finds of it is of that scope, which its own node holds; `nil` for any other node.
 	static func renameClaim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
-		guard world.kind(of: declaration) == .alias else { return nil }
+		// A mock root's world reads each node's override, which these records do not yet.
+		guard !world.isMockWorld, world.kind(of: declaration) == .alias else { return nil }
 		return NodeRecordClaim(kind: .rename, discharges: Set(NodeRecordRefusal.allCases))
 	}
 
