@@ -162,6 +162,17 @@ struct SafeDIToolTypeFactsParameterTests: ~Copyable {
 		#expect(try parameters(ofVariantsOf: "Leaf ", in: report) == [["theme: LazilyInstantiated<Theme>?"], ["theme: SendableLazilyInstantiated<Theme>"]], "\(report.world)")
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_typesOneParameterAsOptionalWrapper_whenOneBodyReadsLabelByValueAndThroughItsWrapper() async throws {
+		// `Leaf` receives the theme's value and its `Sub` the wrapper, both only if available; `Second` declares the theme
+		// lazily and `Third` declares none. A function takes one parameter per label, the wrapper, whose instance the
+		// value's receive reads: `__safeDI_leafBuilder(theme: LazilyInstantiated<Theme>?)`.
+		let report = try await rootReport(of: Self.leafFixture(places: [("Second", "LazilyInstantiated<Theme>"), ("Third", nil)], subTheme: "LazilyInstantiated<Theme>?"))
+
+		#expect(try parameters(ofVariantsOf: "Leaf ", in: report) == [["theme: LazilyInstantiated<Theme>?"]], "\(report.world)")
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -187,13 +198,17 @@ struct SafeDIToolTypeFactsParameterTests: ~Copyable {
 	}
 
 	/// `Leaf` receives `theme` only if available and builds itself again through `leafBuilder`. Each of `places`, in
-	/// `Root`'s declaration order, declares the `theme` it names, if any, then builds `leafBuilder`.
-	private static func leafFixture(places: [(name: String, theme: String?)], themeIsSendable: Bool = false) -> [String] {
+	/// `Root`'s declaration order, declares the `theme` it names, if any, then builds `leafBuilder`. A `subTheme` gives
+	/// `Leaf` a `Sub` that receives `theme` only if available in that form.
+	private static func leafFixture(places: [(name: String, theme: String?)], subTheme: String? = nil, themeIsSendable: Bool = false) -> [String] {
 		var types = [seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: places.map { "@Instantiated let \($0.name.prefix(1).lowercased() + $0.name.dropFirst()): \($0.name)" })]
 		for place in places {
 			types.append(seamFixtureType(named: place.name, isFinalClass: true, declarations: (place.theme.map { ["@Instantiated let theme: \($0)"] } ?? []) + ["@Instantiated let leafBuilder: Instantiator<Leaf>"]))
 		}
-		types.append(seamFixtureType(named: "Leaf", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let theme: Theme?", "@Instantiated let leafBuilder: Instantiator<Leaf>"]))
+		types.append(seamFixtureType(named: "Leaf", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let theme: Theme?"] + (subTheme == nil ? [] : ["@Instantiated let sub: Sub"]) + ["@Instantiated let leafBuilder: Instantiator<Leaf>"]))
+		if let subTheme {
+			types.append(seamFixtureType(named: "Sub", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let theme: \(subTheme)"]))
+		}
 		types.append(seamFixtureType(named: "Theme", isFinalClass: true, declarations: [], conformances: themeIsSendable ? ", Sendable" : ""))
 		return types
 	}
