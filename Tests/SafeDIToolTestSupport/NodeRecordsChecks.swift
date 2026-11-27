@@ -98,12 +98,14 @@ enum NodeRecordsChecks {
 	/// no text shows always fails, as does every difference of a root whose two texts were not both laid out.
 	static func outcome(of report: NodeRecordsReport, approving approvedDifferences: [ApprovedDifference] = ApprovedDifferences.all) -> (differences: [String], approvedEntries: [Int]) {
 		guard !report.differences.isEmpty, let texts = report.comparedTexts else { return (report.differences, []) }
-		// Entry 13's optional parameter off every cycle: one variant serves a call that answers a read only if available
-		// and a call that does not, so its record reads the declaration where the tree's place at the second call reads
-		// `nil`, and the two write the same code, the call passing `nil`. Only the arguments of places differ, and no
-		// text does.
-		if texts.nodeRecords == texts.tree, report.differences.allSatisfy({ $0.contains(": arguments is ") }) {
-			return (report.differencesNoTextShows, [13])
+		// One function with an optional parameter serves a call that answers a read only if available and a call that
+		// does not: its record reads the declaration where the tree's place at the second call reads `nil`, and the two
+		// write the same code, the call passing `nil`. The comparison names exactly that difference
+		// (`NodeRecordsReport.argumentsOfOptionalParameterDifferenceName`), no text shows it, and no rewrite of the
+		// approved differences runs for it, so it is counted under no entry. Any other difference of a root whose texts
+		// are equal fails (`ApprovedDifferencesTests`).
+		if texts.nodeRecords == texts.tree, report.differences.allSatisfy({ $0.contains(": \(NodeRecordsReport.argumentsOfOptionalParameterDifferenceName) is ") }) {
+			return (report.differencesNoTextShows, [])
 		} else if let normalized = ApprovedDifferences.normalized(nodeRecordsText: texts.nodeRecords, treeText: texts.tree, by: approvedDifferences) {
 			return (report.differencesNoTextShows, normalized.entries)
 		} else {
