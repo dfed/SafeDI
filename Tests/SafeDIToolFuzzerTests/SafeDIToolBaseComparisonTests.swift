@@ -43,6 +43,8 @@ struct SafeDIToolBaseComparisonTests {
 		#expect(filePaths.contains { $0.hasPrefix("Output/") && $0.hasSuffix("+SafeDI.swift") })
 		#expect(filePaths.contains { $0.hasPrefix("ModuleInfo/") && $0.hasSuffix(".safedi") })
 		#expect(filePaths.contains { $0.hasPrefix("Output/Fuzz") && $0.hasSuffix(".swift") })
+		#expect(filePaths.contains("Output/graph.dot"))
+		#expect(filePaths.contains { $0.hasPrefix("Output/Fuzz") && $0.hasSuffix(".dot") })
 	}
 
 	// MARK: Comparing two tools
@@ -133,6 +135,37 @@ struct SafeDIToolBaseComparisonTests {
 		}
 		#expect(!changedPaths.isEmpty)
 		#expect(changedPaths.allSatisfy { $0?.hasPrefix("Output/") == true && $0?.hasSuffix(".swift") == true })
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func compare_reportsChangedDOTGraph_whenHeadToolDrawsOtherLines() async throws {
+		var filesToDelete = [URL]()
+		defer {
+			for file in filesToDelete {
+				try? FileManager.default.removeItem(at: file)
+			}
+		}
+		let tool = try GraphFuzzerBaseComparison.builtTool()
+		// Appends a line to the DOT graph a run names after `--dot-file-output`.
+		let head = try Self.script(
+			"""
+			"\(tool.path)" "$@" || exit $?
+			while [ $# -gt 0 ]; do
+				if [ "$1" = "--dot-file-output" ]; then echo "    A -- B" >> "$2"; fi
+				shift
+			done
+			""",
+			filesToDelete: &filesToDelete,
+		)
+		// Seed 0 of the base corpus is in one module and accepted, so `generate` writes its graph on both sides.
+		let result = try await GraphFuzzerBaseComparison.compare(GraphFuzzerGenerator.fixture(forSeed: 0), base: tool, head: head)
+		#expect(result.problem == nil)
+		let changedPaths = result.differences.map { difference -> String? in
+			guard case let .fileBytes(path, _, _) = difference else { return nil }
+			return path
+		}
+		#expect(changedPaths == ["Output/graph.dot"])
 	}
 
 	// MARK: Differences between records
