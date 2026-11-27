@@ -778,6 +778,8 @@ struct GraphFuzzerPublicMockDraw {
 		}
 		var outerFulfillerRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockOuterFulfillerRandomSeedMask)
 		drawFulfillerOnlyCallingModuleCanBuild(random: &outerFulfillerRandom)
+		var twinRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockTwinRandomSeedMask)
+		drawTwinsPublicMock(random: &twinRandom)
 	}
 
 	/// The files of the graph, each beginning with its module's marker: as drawn, or, for the known-right path of the
@@ -924,6 +926,9 @@ struct GraphFuzzerPublicMockDraw {
 	/// construct and the calling module can (`drawFulfillerOnlyCallingModuleCanBuild`): rolls added after the rest of the
 	/// draw was pinned, so that its other shapes are drawn as before.
 	static let publicMockOuterFulfillerRandomSeedMask: UInt64 = 0x7075626D6B6F6666
+	/// Draws only twins beneath a public mock (`drawTwinsPublicMock`): rolls added after the rest of the draw was pinned, so
+	/// that its other shapes are drawn as before.
+	static let publicMockTwinRandomSeedMask: UInt64 = 0x7075626D6B747764
 	/// Draws only whether a `Sendable` graph the main stream draws without a `Sendable` wrapper above a leaf (`T9`) draws one
 	/// anyway, and in which consumer module, so that a consumer's overrides hold a `@Sendable` factory
 	/// (`GraphFuzzerPublicMockOutputFeature.consumerSendableFactory`) in a share of the accepted graphs that clears its floor
@@ -2976,6 +2981,78 @@ struct GraphFuzzerPublicMockDraw {
 		files.append(File(module: .seamDependency, declarations: [Self.renderer(of: step)]))
 		// The declaring module imports only `FuzzSession`, so its file imports the module that declares `OuterClock`.
 		files.append(File(module: .seamModule, declarations: [{ _ in "import \(GraphFuzzerModule.seamDependencyBase.name)" }, Self.renderer(of: screen), fake]))
+	}
+
+	/// Twins beneath a public mock, the public mock corpus's form of the base and seam corpora's twins over a shared screen
+	/// (`GraphFuzzerGenerator`'s `addingTwinsOverSharedScreen`), in three graphs in twenty: `TwinHome`, a `.public` type of
+	/// the declaring module with an `internal` initializer, builds `TwinFirst` by value or through an instantiator, and now
+	/// and then opens `TwinSecond` too. `TwinFirst` declares `twinModel` in one form and `TwinSecond` in the other
+	/// (`LazilyInstantiated`, or, in half the `Sendable` graphs, `SendableLazilyInstantiated`), and each builds `TwinScreen`,
+	/// which receives `twinModel` by value, required or only if available, and now and then builds `TwinPanel`, which
+	/// receives it too. `TwinModel` opens `TwinSecond` through an instantiator, so the cycle closes on `TwinSecond`'s
+	/// declaration of the model, whichever twin a path built first. `TwinApp`, a mocked consumer in one consumer module,
+	/// builds `TwinHome`, so that its mock calls `TwinHome`'s public mock, which the value differential compares with the
+	/// known-right path's inline mock. Every roll is made before any is read.
+	private mutating func drawTwinsPublicMock(random: inout GraphFuzzerRandomNumberGenerator) {
+		let drawsShape = random.percentChance(15)
+		let drawsSendableWrappers = random.percentChance(50)
+		let valueFirst = random.percentChance(50)
+		let screenReceivesRequired = random.percentChance(70)
+		let buildsPanel = random.percentChance(40)
+		let firstBuiltThroughInstantiator = random.percentChance(50)
+		let homeOpensSecond = random.percentChance(40)
+		let consumerModuleRoll = random.integer(in: 0...1)
+		// Whether each type of two properties lists them in the other order: `TwinFirst`, `TwinSecond`, `TwinScreen`, `TwinHome`.
+		let swapsProperties = (0..<4).map { _ in random.percentChance(50) }
+		let consumerModules = consumerModules
+		guard drawsShape, !consumerModules.isEmpty, !hasDifferingMockCondition else { return }
+		let consumerModule = consumerModules[consumerModuleRoll % consumerModules.count]
+		let conformances = isSendableGraph ? ["@unchecked Sendable"] : []
+		let isSendable = isSendableGraph && drawsSendableWrappers
+		let instantiator = isSendable ? "SendableInstantiator" : "Instantiator"
+		let lazyWrapper = isSendable ? "SendableLazilyInstantiated" : "LazilyInstantiated"
+		func ordered(_ properties: [Property], swapping index: Int) -> [Property] {
+			swapsProperties[index] ? properties.reversed() : properties
+		}
+		let modelName = name("TwinModel")
+		let valueModel = Property(attribute: "@Instantiated", label: "twinModel", type: modelName)
+		let lazyModel = Property(attribute: "@Instantiated", label: "twinModel", type: "\(lazyWrapper)<\(modelName)>")
+		let screenProperty = Property(attribute: "@Instantiated", label: "twinScreen", type: name("TwinScreen"))
+		let secondBuilder = Property(attribute: "@Instantiated", label: "twinSecondBuilder", type: "\(instantiator)<\(name("TwinSecond"))>")
+		var first = InstantiableClass(name: name("TwinFirst"), conformances: conformances)
+		first.properties = ordered([valueFirst ? valueModel : lazyModel, screenProperty], swapping: 0)
+		var second = InstantiableClass(name: name("TwinSecond"), conformances: conformances)
+		second.properties = ordered([valueFirst ? lazyModel : valueModel, screenProperty], swapping: 1)
+		var model = InstantiableClass(name: modelName, conformances: conformances)
+		model.properties = [secondBuilder]
+		var screen = InstantiableClass(name: name("TwinScreen"), conformances: conformances)
+		var screenProperties = [screenReceivesRequired
+			? Property(attribute: "@Received", label: "twinModel", type: modelName)
+			: Property(attribute: "@Received(onlyIfAvailable: true)", label: "twinModel", type: modelName + "?")]
+		var declarations = [(Rendering) -> String]()
+		if buildsPanel {
+			screenProperties.append(Property(attribute: "@Instantiated", label: "twinPanel", type: name("TwinPanel")))
+			var panel = InstantiableClass(name: name("TwinPanel"), conformances: conformances)
+			panel.properties = [Property(attribute: "@Received", label: "twinModel", type: modelName)]
+			declarations.append(Self.renderer(of: panel))
+		}
+		screen.properties = ordered(screenProperties, swapping: 2)
+		var home = InstantiableClass(name: name("TwinHome"), conformances: conformances)
+		home.mockGeneration = ".public"
+		// An `internal` initializer, which no consumer module can call, so that the consumer's mock calls the public mock.
+		home.initializerAccess = .internal
+		var homeProperties = [firstBuiltThroughInstantiator
+			? Property(attribute: "@Instantiated", label: "twinFirstBuilder", type: "\(instantiator)<\(first.name)>")
+			: Property(attribute: "@Instantiated", label: "twinFirst", type: first.name)]
+		if homeOpensSecond {
+			homeProperties.append(secondBuilder)
+		}
+		home.properties = ordered(homeProperties, swapping: 3)
+		var app = InstantiableClass(name: name("TwinApp"), conformances: conformances)
+		app.mockGeneration = "true"
+		app.properties = [Property(attribute: "@Instantiated", label: "twinHome", type: home.name)]
+		files.append(File(module: .seamModule, declarations: [Self.renderer(of: home), Self.renderer(of: first), Self.renderer(of: second), Self.renderer(of: model), Self.renderer(of: screen)] + declarations))
+		files.append(File(module: consumerModule, declarations: [Self.renderer(of: app)]))
 	}
 
 	/// The type of the value `drawUnbuildableValuePassedToPublicMock` hands a public mock whose tier omits it: an

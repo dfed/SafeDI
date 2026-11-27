@@ -2952,6 +2952,7 @@ enum GraphFuzzerGenerator {
 			nestedCycleRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.nestedCycleRandomSeedMask)
 			perTypePlanRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.perTypePlanRandomSeedMask)
 			perTypePlanJobRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.perTypePlanJobRandomSeedMask)
+			twinRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.twinRandomSeedMask)
 			seamDependencyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ GraphFuzzerSeamDependencyDraw.seamRandomSeedMask)
 			prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
 			// One draw decides, so graphs that are not mixed draw exactly what they drew before mixed graphs existed.
@@ -3039,6 +3040,8 @@ enum GraphFuzzerGenerator {
 			finalDeclarations = addingTypeBuiltAgainThroughSecondLazyCycle(to: finalDeclarations)
 			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
 			finalDeclarations = addingScreensLaidOutFromPerTypePlan(to: finalDeclarations)
+			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
+			finalDeclarations = addingTwinsOverSharedScreen(to: finalDeclarations)
 			// In a graph split across modules, every file names its module and imports the seam's, so that a type of the
 			// caller can name what the seam's module declares, such as the creation stamps' counter.
 			let isSplit = finalDeclarations.contains { $0.module == .seamModule }
@@ -3532,6 +3535,9 @@ enum GraphFuzzerGenerator {
 		private var perTypePlanRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only whether `addingScreensLaidOutFromPerTypePlan`'s tree gains `PlanJob`, and where.
 		private var perTypePlanJobRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only `addingTwinsOverSharedScreen`'s choices: whether a graph gains `TwinRoot`'s tree, and every shape of
+		/// that tree.
+		private var twinRandom: GraphFuzzerRandomNumberGenerator
 		/// The files `markerFreeFileRandom` moved a declaration into: each named, holding the declaration alone, and in the
 		/// module of the type, `ownerName`, whose file it was drawn in.
 		private var markerFreeFiles = [(ownerName: String, fileName: String, declaration: String)]()
@@ -8548,6 +8554,83 @@ enum GraphFuzzerGenerator {
 
 		private static let perTypePlanRandomSeedMask: UInt64 = 0x506C616E547970
 		private static let perTypePlanJobRandomSeedMask: UInt64 = 0x506C616E4A6F62
+
+		// MARK: Twins over a shared screen
+
+		/// Adds `TwinRoot`'s tree, in which one label is declared as a value by one parent and as a lazy wrapper by another,
+		/// above a screen both parents build, on a cycle: twins (`PerTypePlan.twins`, `CallPlaceShadow.twinValues`), the
+		/// shape `TwinIdentityChecks` judges, which the corpora drew in no root before. `TwinRoot` builds `TwinFirst` by
+		/// value or through an instantiator, and now and then opens `TwinSecond` too. `TwinFirst` declares `twinModel` in
+		/// one form and `TwinSecond` in the other (`LazilyInstantiated`, or `SendableLazilyInstantiated` where the graph's
+		/// wrappers may be `Sendable`), the value first on the path or the wrapper first, and each builds `TwinScreen`,
+		/// which receives `twinModel` by value, required or only if available, and now and then builds `TwinPanel`, which
+		/// receives it too. `TwinModel` opens `TwinSecond` through an instantiator, so the cycle closes on `TwinSecond`'s
+		/// declaration of the model, whichever twin a path built first. Each type's properties are in an order of their
+		/// own. In the seam corpus `TwinRoot` builds `TwinSeam`, a seam whose own tree holds the twins, and in the base
+		/// corpus the root holds them. `twinRandom` draws only for this pass, after every other, so that every graph without
+		/// the tree is drawn as before; the public mock corpus draws the same tree beneath a public mock
+		/// (`GraphFuzzerPublicMockDraw`'s twins).
+		private mutating func addingTwinsOverSharedScreen(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			let drawsSeam = features.contains(.generateDependencyTree)
+			guard twinRandom.percentChance(drawsSeam ? 10 : 4) else { return declarations }
+			var declarations = declarations
+			// A graph of `Sendable` types stores only `Sendable` wrappers; a mixed graph draws the wrapper kind per graph.
+			let isSendable = switch sendability {
+			case .nonSendable: false
+			case .sendable: true
+			case .mixed: twinRandom.percentChance(50)
+			}
+			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
+			func append(_ name: String, isRoot: Bool = false, arguments: [String] = [], _ properties: [PropertyDeclaration]) {
+				var properties = properties
+				for index in properties.indices.reversed() {
+					properties.swapAt(index, twinRandom.integer(in: 0...index))
+				}
+				declarations.append(TypeDeclaration(
+					name: "\(prefix)\(name)",
+					instantiableArguments: (isRoot ? ["isRoot: true"] : []) + arguments,
+					properties: properties,
+					declaresHelperTypes: false,
+					additionalConformances: conformances,
+				))
+			}
+			let instantiator = isSendable ? "SendableInstantiator" : "Instantiator"
+			let lazyWrapper = isSendable ? "SendableLazilyInstantiated" : "LazilyInstantiated"
+			let modelName = "\(prefix)TwinModel"
+			let valueModel = PropertyDeclaration(attribute: "@Instantiated", label: "twinModel", type: modelName)
+			let lazyModel = PropertyDeclaration(attribute: "@Instantiated", label: "twinModel", type: "\(lazyWrapper)<\(modelName)>")
+			let valueFirst = twinRandom.percentChance(50)
+			let screen = PropertyDeclaration(attribute: "@Instantiated", label: "twinScreen", type: "\(prefix)TwinScreen")
+			let secondBuilder = PropertyDeclaration(attribute: "@Instantiated", label: "twinSecondBuilder", type: "\(instantiator)<\(prefix)TwinSecond>")
+			let screenReceive = twinRandom.percentChance(70)
+				? PropertyDeclaration(attribute: "@Received", label: "twinModel", type: modelName)
+				: PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "twinModel", type: modelName + "?")
+			let buildsPanel = twinRandom.percentChance(40)
+			let firstBuiltThroughInstantiator = twinRandom.percentChance(50)
+			let rootOpensSecond = twinRandom.percentChance(40)
+			append("TwinFirst", [valueFirst ? valueModel : lazyModel, screen])
+			append("TwinSecond", [valueFirst ? lazyModel : valueModel, screen])
+			append("TwinModel", [secondBuilder])
+			append("TwinScreen", [screenReceive] + (buildsPanel ? [PropertyDeclaration(attribute: "@Instantiated", label: "twinPanel", type: "\(prefix)TwinPanel")] : []))
+			if buildsPanel {
+				append("TwinPanel", [PropertyDeclaration(attribute: "@Received", label: "twinModel", type: modelName)])
+			}
+			var treeProperties = [firstBuiltThroughInstantiator
+				? PropertyDeclaration(attribute: "@Instantiated", label: "twinFirstBuilder", type: "\(instantiator)<\(prefix)TwinFirst>")
+				: PropertyDeclaration(attribute: "@Instantiated", label: "twinFirst", type: "\(prefix)TwinFirst")]
+			if rootOpensSecond {
+				treeProperties.append(secondBuilder)
+			}
+			if drawsSeam {
+				append("TwinSeam", arguments: ["generateDependencyTree: true"], treeProperties)
+				append("TwinRoot", isRoot: true, [PropertyDeclaration(attribute: "@Instantiated", label: "twinSeam", type: "\(prefix)TwinSeam")])
+			} else {
+				append("TwinRoot", isRoot: true, treeProperties)
+			}
+			return declarations
+		}
+
+		private static let twinRandomSeedMask: UInt64 = 0x5477696E53686172
 
 		// MARK: Cycle parameters
 
