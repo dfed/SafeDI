@@ -285,10 +285,12 @@ private final class SourceRuleVisitor: SyntaxVisitor {
 	}
 
 	override func visit(_ node: FunctionCallExprSyntax) -> SyntaxVisitorContinueKind {
-		if let memberName = node.calledExpression.as(MemberAccessExprSyntax.self)?.declName.baseName,
-		   Self.stringScanFunctionNames.contains(memberName.text)
-		   || (memberName.text == "contains" && node.arguments.contains { $0.expression.is(StringLiteralExprSyntax.self) })
+		if let memberAccess = node.calledExpression.as(MemberAccessExprSyntax.self),
+		   !Self.scansUTF8Bytes(memberAccess),
+		   Self.stringScanFunctionNames.contains(memberAccess.declName.baseName.text)
+		   || (memberAccess.declName.baseName.text == "contains" && node.arguments.contains { $0.expression.is(StringLiteralExprSyntax.self) })
 		{
+			let memberName = memberAccess.declName.baseName
 			record(.stringScan, at: memberName, "`\(memberName.text)` reads every character of its text, and a generator’s code runs per place or per node: go over UTF-8 bytes (`GeneratedCodeText`), or waive a site that runs a bounded number of times with why")
 		}
 		if let calledName = node.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
@@ -299,6 +301,12 @@ private final class SourceRuleVisitor: SyntaxVisitor {
 			record(.taskGroupTupleElement, at: elementType, "a task group whose element is a tuple miscompiles in release builds of Swift 6.3 and 6.4: return a struct")
 		}
 		return .visitChildren
+	}
+
+	/// Whether `memberAccess` is called on a string's UTF-8 view (`code.utf8.split(separator: UInt8(ascii: "\n"))`), which
+	/// is the remedy the rule recommends: it compares bytes, not characters.
+	private static func scansUTF8Bytes(_ memberAccess: MemberAccessExprSyntax) -> Bool {
+		memberAccess.base?.as(MemberAccessExprSyntax.self)?.declName.baseName.text == "utf8"
 	}
 
 	/// The members that scan every character of a string whatever their arguments.
