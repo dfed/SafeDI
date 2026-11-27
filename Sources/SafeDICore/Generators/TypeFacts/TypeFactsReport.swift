@@ -71,14 +71,8 @@ struct TypeFactsGeneratorFacts: Sendable {
 		childCount = children.count
 		orderedIndices = generator.orderedChildGeneratorsWithIndices.map(\.index).filter { $0 < children.count }
 		loopByChildIndex = children.indices.map { generator.receivedBuilderLoops.loopByChildIndex[$0] ?? -1 }
-		childLabels = children.map { child in
-			switch child.scopeData {
-			case let .property(_, property, _, _, _, _), let .alias(property, _, _, _, _), let .hole(property, _, _):
-				property.label
-			case .fill, .root:
-				""
-			}
-		}
+		// Every child is built as a property: a fill is left out above, and no root is a child.
+		childLabels = children.map { $0.property?.label ?? "" }
 		received = generator.receivedProperties
 		required = generator.requiredReceivedProperties
 		onlyIfAvailableUnwrapped = generator.onlyIfAvailableUnwrappedReceivedProperties

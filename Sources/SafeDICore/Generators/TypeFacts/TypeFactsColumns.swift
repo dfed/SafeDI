@@ -22,8 +22,9 @@
 // and types by the world's own IDs, until the run's snapshot can look them up.
 
 /// One binding a declaration makes, by the world's IDs (`TypeFactsBinding` names the run's, which the graph cannot look
-/// up yet), in the order its scope binds them: a seam's own parameters at its world's root, then
-/// the forwarded properties, then each child as it is built. Trivially copyable.
+/// up yet), in the order its scope binds them: the forwarded properties, then each child as it is built. A seam's own
+/// parameters are no binding yet: the graph's reads take them from above its root, as its caller hands them, so
+/// `isSeamParameter` is set by no step 0 binding. Trivially copyable.
 struct TypeFactsWorldBinding: Hashable, Sendable {
 	let label: Int32
 	/// The world's ID of the property bound.

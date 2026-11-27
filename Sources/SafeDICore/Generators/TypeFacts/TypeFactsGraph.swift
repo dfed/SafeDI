@@ -119,8 +119,7 @@ struct TypeFactsGraph: Sendable {
 	/// - Parameters:
 	///   - forMockGeneration: Whether the world is a mock root's, whose receives only if available read what the mock root
 	///     binds or pins (`ReadChannel.mock`), and whose types are built with their hand-written mocks.
-	///   - rootParameters: A seam's own tree's parameters, which its root binds first.
-	init(root: ConstructionScope, forMockGeneration: Bool, rootParameters: [Property] = []) {
+	init(root: ConstructionScope, forMockGeneration: Bool) {
 		// Building the graph is an edge: it reads each record's properties and labels once per node, and interns them. The
 		// walk asks for a node's edges once, when it first reaches the node, so in node order, and each edge's entry among
 		// its scope's properties to generate, or among its fills, is appended in edge order.
@@ -440,8 +439,9 @@ struct TypeFactsGraph: Sendable {
 			}
 		}
 
-		// The bindings of each node, in the order its scope binds them: the seam's parameters at a seam's own root, the
-		// forwarded properties, the dependencies a mock is passed, then each child as it is built.
+		// The bindings of each node, in the order its scope binds them: the forwarded properties, the dependencies a mock is
+		// passed, then each child as it is built. A seam's own parameters are read from above its root, as its caller
+		// hands them, and are no binding yet.
 		var bindings = [TypeFactsWorldBinding]()
 		var bindingOffsets = [Int32]()
 		bindingOffsets.reserveCapacity(nodes.count + 1)
@@ -471,11 +471,6 @@ struct TypeFactsGraph: Sendable {
 					isReboundByBuilderFunction: isRebound,
 					isForwarded: isForwarded,
 				))
-			}
-			if index == 0 {
-				for parameter in rootParameters {
-					append(parameter, isSeamParameter: true)
-				}
 			}
 			for dependency in instantiable.dependencies where dependency.source == .forwarded {
 				append(dependency.property, isForwarded: true)
@@ -868,11 +863,6 @@ struct TypeFactsGraph: Sendable {
 		parents[Int(parentOffsets[index])..<Int(parentOffsets[index + 1])]
 	}
 
-	/// The property of each binding, which a parent's segment (`TypeFactsParent`) is a run of.
-	var declaredSegmentProperties: [Int32] {
-		bindings.map(\.property)
-	}
-
 	/// The read as text.
 	func readDescription(_ read: Int32) -> String {
 		readTable[Int(read)].description(labels: labelTexts)
@@ -957,20 +947,17 @@ struct TypeFactsGraph: Sendable {
 
 	/// The node an edge leaves.
 	static func source(ofEdge edge: Int, in graph: OrderedGraph<TypeFactsDeclaration>) -> Int {
-		// Edges are in node order, so the source is the last node whose first edge is at or before the edge.
+		// Edges are in node order, so the source is the first node whose edges end after the edge: a node with no edges
+		// ends where it starts, at or before it.
 		var low = 0
 		var high = graph.nodes.count - 1
 		while low < high {
-			let middle = (low + high + 1) / 2
-			if graph.edgeIndices(from: middle).lowerBound <= edge {
-				low = middle
+			let middle = (low + high) / 2
+			if graph.edgeIndices(from: middle).upperBound > edge {
+				high = middle
 			} else {
-				high = middle - 1
+				low = middle + 1
 			}
-		}
-		// A node with no edges shares its offset with the next: the source is the last one whose range holds the edge.
-		while !graph.edgeIndices(from: low).contains(edge) {
-			low -= 1
 		}
 		return low
 	}
@@ -1055,14 +1042,12 @@ struct TypeFactsGraph: Sendable {
 		let dominators = immediateDominators(of: graph, followsEdge: isInGraph)
 		func dominates(_ dominator: Int, _ node: Int) -> Bool {
 			var current = node
-			while true {
-				if current == dominator {
-					return true
-				}
+			while current != dominator {
 				let next = dominators[current]
 				guard next >= 0, next != current else { return false }
 				current = next
 			}
+			return true
 		}
 		var leftPredecessors = [[Int]](repeating: [], count: nodes.count)
 		var isLeft = [Bool](repeating: false, count: graph.edgeCount)
