@@ -194,6 +194,10 @@ struct SafeDIToolNodeRecordsPublicMockCallTests: ~Copyable {
 		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
 	}
 
+	/// The bytes pinned here are the engine's, which lifts every function into the root's body, and differ from the walk's;
+	/// the values equal the walk's (`mock_buildsTheWalksValues_whenEveryPlaceOfCallsBeneathRootAndAnotherNodeIsOverridden`).
+	/// Only a test lays a mock root out from records (`NodeRecordsObservation.laysOutMockRoots`, with an observer set), so
+	/// no run without one writes these bytes.
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_laysOutCallFromNodeRecords_whenInstantiatorCallIsBuiltBeneathAnotherNode() async throws {
