@@ -210,6 +210,8 @@ struct NodeRecords: Sendable {
 				try .alias(Self.unavailableDependencyRecord(of: declaration, in: world))
 			case .rename:
 				try .alias(Self.renameRecord(of: declaration, variant: variant, in: world, answers: onlyIfAvailableAnswers))
+			case .mockRename:
+				try .alias(Self.mockRenameRecord(of: declaration, variant: variant, in: world, answers: onlyIfAvailableAnswers))
 			case .mockConstruction:
 				try .built(Self.mockConstructionRecord(of: declaration, variant: variant, in: world, unavailableProperties: onlyIfAvailableAnswers.unavailableProperties(of: variant), typesDeclaredEscaping: escaping, children: children))
 			case .mockErased:
@@ -432,4 +434,7 @@ enum NodeRecordKind: Sendable {
 	/// A constant or an `Instantiator` built by a call of another module's public mock, which passes the called mock its own
 	/// `SafeDIOverrides` and fills no builder (`NodeRecords+PublicMockCall.swift`).
 	case publicMockCall
+	/// A rename of a mock root's world, which reads no override: `rename`'s record, mapped as the mock's walk maps an erased
+	/// rename only if available (`NodeRecords+MockRename.swift`).
+	case mockRename
 }
