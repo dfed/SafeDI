@@ -227,6 +227,25 @@ extension DependencyTreeGenerator {
 		var placesBuilder = SeamPlacesBuilder()
 		var caseIndexByHole = [Int]()
 		var routeByHole = [SeamSignature.Places.Route]()
+		// While a test observes the place graph, the graph one walk of the tree builds, which must equal it; each site’s presentation
+		// is added to both.
+		var walkedOnce = draftsPlaceLevels ? placesWalkingTreeOnce(
+			of: seam,
+			generator: generator,
+			bindsReceivesAgain: bindsReceivesAgain,
+			namesApartAtRoot: namesApartAtRoot,
+			parameters: parameters,
+			receiversByParameter: receiversByParameter,
+			seamTypeAccess: seamTypeAccess,
+			proof: proof,
+			instantiables: instantiables,
+		) : nil
+		var walkedSiteBySite = [SeamSignature.Hole.Site: WalkedSite]()
+		for walkedSite in walkedOnce?.sites ?? [] {
+			walkedSiteBySite[walkedSite.site] = walkedSite
+		}
+		var walkedCaseIndexByHole = [Int]()
+		var walkedRouteByHole = [SeamSignature.Places.Route]()
 		for (index, content) in siteContents.enumerated() {
 			let property = content.site.property
 			var scopeTypeName = "\(ReservedName.seamScopeTypeNamePrefix)\(content.owner.concreteInstantiable.asIdentifier)_\(property.label)".spelledAsJoinedIdentifier
@@ -283,19 +302,36 @@ extension DependencyTreeGenerator {
 				// The uncarried declarations the presentation appends after the place's own, and those it puts in place of one the
 				// place's own list holds: a declaration bound from the caller's argument that a path to a call binds otherwise.
 				let ownCount = content.uncarriedDeclarations.count
+				let calledCopyDeclarations = Array(hole.uncarriedDeclarations.dropFirst(ownCount))
+				let uncarriedReplacedOnPathsToCalls = zip(content.uncarriedDeclarations, hole.uncarriedDeclarations.prefix(ownCount)).compactMap { own, presented in
+					own.isBoundFromCallersArgument && presented != own ? presented : nil
+				}
 				placesBuilder.addPresentation(
 					ofCase: caseIndex,
 					isPassedOnSendable: hole.isSendable,
-					calledCopyDeclarations: Array(hole.uncarriedDeclarations.dropFirst(ownCount)),
-					uncarriedReplacedOnPathsToCalls: zip(content.uncarriedDeclarations, hole.uncarriedDeclarations.prefix(ownCount)).compactMap { own, presented in
-						own.isBoundFromCallersArgument && presented != own ? presented : nil
-					},
+					calledCopyDeclarations: calledCopyDeclarations,
+					uncarriedReplacedOnPathsToCalls: uncarriedReplacedOnPathsToCalls,
 					reenteringCallDeclarations: hole.reenteringCallDeclarations,
 					reenteringPlaceFields: hole.reenteringPlaceFields,
 					access: SeamSignature.Places.Case.Access(level: hole.tierAccess, cause: hole.accessCause),
 				)
 				caseIndexByHole.append(caseIndex)
 				routeByHole.append(route)
+				let walkedSite = walkedSiteBySite[content.site.site(of: seam.concreteInstantiable)]
+				let walkedCaseIndex = walkedSite?.caseIndex ?? -1
+				if walkedCaseIndex >= 0 {
+					walkedOnce?.builder.addPresentation(
+						ofCase: walkedCaseIndex,
+						isPassedOnSendable: hole.isSendable,
+						calledCopyDeclarations: calledCopyDeclarations,
+						uncarriedReplacedOnPathsToCalls: uncarriedReplacedOnPathsToCalls,
+						reenteringCallDeclarations: hole.reenteringCallDeclarations,
+						reenteringPlaceFields: hole.reenteringPlaceFields,
+						access: SeamSignature.Places.Case.Access(level: hole.tierAccess, cause: hole.accessCause),
+					)
+				}
+				walkedCaseIndexByHole.append(walkedCaseIndex)
+				walkedRouteByHole.append(walkedSite?.route ?? SeamSignature.Places.Route(levels: []))
 			}
 			holes.append(hole)
 		}
@@ -314,7 +350,11 @@ extension DependencyTreeGenerator {
 		// While a test observes the place graph: a case for each call that presents places and each case of the called seam's
 		// it presents, owned by the level that declares the call, which the same pass drafts that drafts a site's levels.
 		var passedUpCaseBySite = [SeamSignature.Hole.Site: (caseIndex: Int, route: SeamSignature.Places.Route)]()
-		for presentation in callPresentations {
+		// The one walk adds the same calls' cases, in the same order.
+		var walkedPassedUpCaseBySite = [SeamSignature.Hole.Site: (caseIndex: Int, route: SeamSignature.Places.Route)]()
+		let walkedCalls = walkedOnce?.calls ?? []
+		for (callIndex, presentation) in callPresentations.enumerated() {
+			let walkedCall = callIndex < walkedCalls.count ? walkedCalls[callIndex] : nil
 			// A scope on the path to a call can be shared between paths, so what it declares is found for each call.
 			var childDeclarationsOnPathToCall = [ObjectIdentifier: ChildDeclarations]()
 			var levels = fields(
@@ -379,6 +419,20 @@ extension DependencyTreeGenerator {
 					passedUpCaseBySite[place.hole.site] = (caseIndex, route)
 				}
 			}
+			for (place, walkedCaseIndex) in zip(presentation.places, walkedCall?.caseIndices ?? []) {
+				walkedOnce?.builder.addPresentation(
+					ofCase: walkedCaseIndex,
+					isPassedOnSendable: presentation.isInSendableFunction,
+					calledCopyDeclarations: place.calledCopyDeclarations,
+					uncarriedReplacedOnPathsToCalls: [],
+					reenteringCallDeclarations: place.reenteringCallDeclarations,
+					reenteringPlaceFields: place.reenteringPlaceFields,
+					access: accessOfBuilder(passingUp: place.hole),
+				)
+				if let walkedCall, walkedPassedUpCaseBySite[place.hole.site] == nil {
+					walkedPassedUpCaseBySite[place.hole.site] = (walkedCaseIndex, walkedCall.route)
+				}
+			}
 		}
 		for (offset, passedUp) in passedUpHoles.enumerated() {
 			let builderLabel = builderLabels[siteContents.count + offset]
@@ -422,6 +476,9 @@ extension DependencyTreeGenerator {
 				let passedUpCase = passedUpCaseBySite[inner.site]
 				caseIndexByHole.append(passedUpCase?.caseIndex ?? -1)
 				routeByHole.append(passedUpCase?.route ?? SeamSignature.Places.Route(levels: []))
+				let walkedPassedUpCase = walkedPassedUpCaseBySite[inner.site]
+				walkedCaseIndexByHole.append(walkedPassedUpCase?.caseIndex ?? -1)
+				walkedRouteByHole.append(walkedPassedUpCase?.route ?? SeamSignature.Places.Route(levels: []))
 			}
 		}
 		let order = holes.indices.sorted { holes[$0].builderLabel < holes[$1].builderLabel }
@@ -454,6 +511,19 @@ extension DependencyTreeGenerator {
 			caseIndexBySite: order.map { caseIndexByHole[$0] },
 			routeBySite: order.map { routeByHole[$0] },
 			calledPlaces: calledPlaces,
+			walkedOnce: walkedOnce.map { walkedOnce in
+				// Named as the fed graph names its cases: by the first place of each in builder-label order.
+				var walkedNamingRouteByCase = [Int: [Int]]()
+				for index in order where walkedCaseIndexByHole[index] >= 0 && walkedNamingRouteByCase[walkedCaseIndexByHole[index]] == nil {
+					walkedNamingRouteByCase[walkedCaseIndexByHole[index]] = walkedRouteByHole[index].levels
+				}
+				return SeamSignature.Places.Observation.WalkedOnce(
+					places: walkedOnce.builder.places(namingRouteByCase: walkedNamingRouteByCase),
+					sitePaths: walkedOnce.sites.map(\.site.path),
+					caseIndexBySite: order.map { walkedCaseIndexByHole[$0] },
+					routeBySite: order.map { walkedRouteByHole[$0] },
+				)
+			},
 		)
 		var caseIndexBySite = [SeamSignature.Hole.Site: Int]()
 		for (hole, caseIndex) in zip(holes, caseIndexByHole) where caseIndex >= 0 {
@@ -585,7 +655,7 @@ extension DependencyTreeGenerator {
 
 	/// The properties the code declares on the way from `parent` to its child `generator`: the property the child
 	/// builds, or, for a fill, the way to the hole it fills.
-	private static func declaredProperties(reaching generator: ScopeGenerator, from parent: ScopeGenerator?) -> [SeamSignature.Hole.DeclaredProperty] {
+	static func declaredProperties(reaching generator: ScopeGenerator, from parent: ScopeGenerator?) -> [SeamSignature.Hole.DeclaredProperty] {
 		generator.fillHole?.declaredPathBeforePropertyInItsFill ?? generator.property.map { [declaredProperty($0, declaredBy: parent)] } ?? []
 	}
 
@@ -1179,7 +1249,7 @@ extension DependencyTreeGenerator {
 	}
 
 	/// A declaration on a site's path: the value it binds and whether it is bound before the site.
-	private struct PathDeclaration {
+	struct PathDeclaration {
 		let property: Property
 		var isBoundBeforeSite: Bool
 		/// How many `@Sendable` functions on the path enclose it.
@@ -1905,7 +1975,7 @@ extension DependencyTreeGenerator {
 	/// The sites of the places the tree `generator` roots holds, `generator` building `property` in the scope the properties
 	/// `pathToDeclaringScope` lead to from the root of `seamType`'s tree, and of the places a call in it passes up, walking
 	/// only the subtrees that hold one, each path spelled as `BuildSite.sitePath` spells it.
-	private static func places(inTreeOf generator: ScopeGenerator, building property: Property, declaredAt pathToDeclaringScope: [Property], seamType: TypeDescription) -> [SeamSignature.Hole.Site] {
+	static func places(inTreeOf generator: ScopeGenerator, building property: Property, declaredAt pathToDeclaringScope: [Property], seamType: TypeDescription) -> [SeamSignature.Hole.Site] {
 		var places = [SeamSignature.Hole.Site]()
 		var generatorsToVisit = [(generator: generator, path: pathToDeclaringScope + [property])]
 		while let (visited, path) = generatorsToVisit.popLast() {
@@ -1966,7 +2036,7 @@ extension DependencyTreeGenerator {
 	/// which `fields(of:)` decides per place. A parameter of a scope between, which a cycle nested inside passes, is
 	/// reported as the declaration that cycle's cycle-closing scope passes it, the first a depth-first walk meets. A fill
 	/// in the tree is another seam's, whose cycle-closing scopes close on that seam's path.
-	private static func declarationsBetween(closedOnScope: ScopeGenerator, closedOnDeclaration: ScopeGenerator.BuiltDeclaration) -> [DeclarationBetween] {
+	static func declarationsBetween(closedOnScope: ScopeGenerator, closedOnDeclaration: ScopeGenerator.BuiltDeclaration) -> [DeclarationBetween] {
 		let closedOnProperty = closedOnDeclaration.property
 		var ownLabels: Set<String> = [closedOnProperty.label]
 		for declaration in declarationsBound(by: closedOnScope, includingForwardedProperties: true, reason: .other) {
