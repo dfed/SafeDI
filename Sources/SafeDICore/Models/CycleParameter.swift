@@ -88,13 +88,19 @@ struct CycleParameter: Hashable, Sendable {
 
 	/// The forms a declaration of `property` provides to the scopes beneath it.
 	static func forms(providedBy property: Property) -> Set<Property> {
-		var forms: Set<Property> = [property]
+		Set(orderedForms(providedBy: property))
+	}
+
+	/// `forms(providedBy:)` in a fixed order, without hashing them: the property, its optional form, and the instance and
+	/// its optional form. A form may repeat.
+	static func orderedForms(providedBy property: Property) -> [Property] {
+		var forms = [property]
 		if !property.typeDescription.isOptional {
-			forms.insert(property.asOptionalProperty)
+			forms.append(property.asOptionalProperty)
 		}
 		if let instanceProperty = property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding {
-			forms.insert(instanceProperty)
-			forms.insert(instanceProperty.asOptionalProperty)
+			forms.append(instanceProperty)
+			forms.append(instanceProperty.asOptionalProperty)
 		}
 		return forms
 	}

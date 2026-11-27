@@ -161,6 +161,8 @@ struct TypeFactsGraph: Sendable {
 		}
 		let nodes = graph.nodes
 		var properties = TypeFactsInterner<Property>()
+		// The forms properties read and provide, in IDs of their own, so that no form gets facts of its own.
+		var forms = TypeFactsInterner<Property>()
 		var types = TypeFactsInterner<TypeDescription>()
 		var labels = TypeFactsInterner<String>()
 		var modules = TypeFactsInterner<String>()
@@ -264,12 +266,14 @@ struct TypeFactsGraph: Sendable {
 			let aliasFulfilling = node.isOnlyIfAvailableAlias ? node.aliasFulfillingProperty.map { properties.id(of: $0) } ?? -1 : -1
 			return (instance, aliasFulfilling)
 		}
-		let propertyFactsOfNodes = Self.propertyFacts(of: &properties, labels: &labels, extending: .empty)
+		let propertyFactsOfNodes = Self.propertyFacts(of: &properties, forms: &forms, labels: &labels, extending: .empty)
 
 		// The masks of what each node provides: a property it declares or forwards, the optional form of one, and, for a
 		// receive only if available, each form it reads.
 		var propertiesByUnwrapped = [Int32: [Int32]]()
 		var propertiesByFormRead = [Int32: [Int32]]()
+		// Each property's ID as a form, or -1 where no property reads or provides it.
+		let formOfProperty = properties.values.map { forms.existingID(of: $0) ?? -1 }
 		for property in 0..<Int32(properties.values.count) {
 			propertiesByUnwrapped[propertyFactsOfNodes.unwrapped[Int(property)], default: []].append(property)
 			for form in propertyFactsOfNodes.formsRead(by: property) {
@@ -285,7 +289,7 @@ struct TypeFactsGraph: Sendable {
 		}
 		func providesAFormRead(by node: Int, _ insert: (Int32) -> Void) {
 			for property in declared[node] {
-				propertiesByFormRead[property]?.forEach(insert)
+				propertiesByFormRead[formOfProperty[Int(property)]]?.forEach(insert)
 			}
 		}
 		func followsEdge(_ edge: Int) -> Bool {
@@ -620,7 +624,7 @@ struct TypeFactsGraph: Sendable {
 		}
 
 		// The bindings and fills intern properties no node holds, whose facts an answer's provided forms read.
-		let propertyFacts = Self.propertyFacts(of: &properties, labels: &labels, extending: propertyFactsOfNodes)
+		let propertyFacts = Self.propertyFacts(of: &properties, forms: &forms, labels: &labels, extending: propertyFactsOfNodes)
 
 		// The reads each node makes itself, and those it hides: each read of a label it binds.
 		var readInterner = TypeFactsInterner<Read>()
@@ -1332,9 +1336,9 @@ struct TypeFactsGraph: Sendable {
 		return typesDeclaredEscaping.sorted()
 	}
 
-	/// The facts of every property `properties` holds, interning the forms they name, each of which gets facts too:
-	/// `existing`'s, then those of each property interned since.
-	private static func propertyFacts(of properties: inout TypeFactsInterner<Property>, labels: inout TypeFactsInterner<String>, extending existing: TypeFactsPropertyFacts) -> TypeFactsPropertyFacts {
+	/// The facts of every property `properties` holds: `existing`'s, then those of each property interned since. The
+	/// forms they read and provide are interned in `forms`, and get no facts of their own.
+	private static func propertyFacts(of properties: inout TypeFactsInterner<Property>, forms: inout TypeFactsInterner<Property>, labels: inout TypeFactsInterner<String>, extending existing: TypeFactsPropertyFacts) -> TypeFactsPropertyFacts {
 		var labelIDs = existing.labels
 		var unwrapped = existing.unwrapped
 		var isOptional = existing.isOptional
@@ -1357,11 +1361,11 @@ struct TypeFactsGraph: Sendable {
 			isBuilder.append(ScopeGenerator.isBuilder(property))
 			formsReadOffsets.append(Int32(formsRead.count))
 			for form in property.formsReadByOnlyIfAvailableReceive {
-				formsRead.append(properties.id(of: form))
+				formsRead.append(forms.id(of: form))
 			}
 			formsProvidedOffsets.append(Int32(formsProvided.count))
-			for form in CycleParameter.forms(providedBy: property).sorted() {
-				formsProvided.append(properties.id(of: form))
+			for form in CycleParameter.orderedForms(providedBy: property) {
+				formsProvided.append(forms.id(of: form))
 			}
 			index += 1
 		}
