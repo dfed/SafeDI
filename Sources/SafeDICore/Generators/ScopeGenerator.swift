@@ -2315,7 +2315,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		///
 		/// A public mock's caller passes up a place it does not fill, so a dispatcher that reaches one takes `passUp`. The plain
 		/// and the `@Sendable` root enum of a hole type hold the same enums nested by type, but each one's routes reach only its
-		/// own places (`CalledBuilders.sitesReachedOnItsRoutes(by:in:)`). A caller fills every place of a hole type of a call or
+		/// own places (`CalledBuilders.routesReachOnly(_:by:)`). A caller fills every place of a hole type of a call or
 		/// none (`DependencyTreeGenerator.holesFilled(byCallsOf:in:)`), so an enum both roots reach is filled on both roots'
 		/// routes alike, and one dispatcher serves both.
 		/// - Parameters:
@@ -2336,20 +2336,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let holesBySite = calledBuilders.holeBySite
 			let builtTypeByHoleType = calledBuilders.holes.builtTypeByHoleType
 			let calledSeamTypes = Set(calledBuilders.builders.map(\.enumKey.seamType))
-			var sitesReachedByKey = [SeamSignature.ScopeEnum.Key: Set<SeamSignature.Hole.Site>]()
-			func sitesReached(from key: SeamSignature.ScopeEnum.Key) -> Set<SeamSignature.Hole.Site> {
-				if let sites = sitesReachedByKey[key] {
-					return sites
-				}
-				let sites = SeamSignature.ScopeEnum.sitesReached(from: key, in: enumsByKey)
-				sitesReachedByKey[key] = sites
-				return sites
+			let filledSiteNumbers = calledBuilders.siteNumbers(of: filledSites)
+			/// The root enum whose routes from the enum of `key` a dispatcher for `family` serves: none, so every site the enum
+			/// reaches counts, where the call is not of a public mock or the dispatcher serves both families.
+			func routeRootKey(of key: SeamSignature.ScopeEnum.Key, family: Bool?) -> SeamSignature.ScopeEnum.Key? {
+				guard decidesPerRoute, let family else { return nil }
+				return rootKey(ofFamily: family, holeType: key.holeType)
 			}
-			/// The sites the routes of `family`'s root enum reach from the enum of `key`: every site the enum reaches, where the
-			/// call is not of a public mock or the dispatcher serves both families.
-			func sitesReached(from key: SeamSignature.ScopeEnum.Key, onRoutesOf family: Bool?) -> Set<SeamSignature.Hole.Site> {
-				guard decidesPerRoute, let family, let rootKey = rootKey(ofFamily: family, holeType: key.holeType) else { return sitesReached(from: key) }
-				return CalledBuilders.sites(sitesReached(from: key), onRoutesOf: rootKey, holeBySite: holesBySite)
+			/// Whether the routes of `family`'s root enum reach a filled site from the enum of `key`.
+			func reachesFilledSite(from key: SeamSignature.ScopeEnum.Key, onRoutesOf family: Bool?) -> Bool {
+				calledBuilders.reaches(anyOf: filledSiteNumbers, from: key, onRoutesOf: routeRootKey(of: key, family: family))
 			}
 			/// The key of the called seam's root enum of `holeType` of `family`.
 			func rootKey(ofFamily family: Bool, holeType: SeamSignature.HoleType) -> SeamSignature.ScopeEnum.Key? {
@@ -2383,7 +2379,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				var visited = Set<SeamSignature.ScopeEnum.Key>()
 				var keysToVisit = [builder.enumKey]
 				while let key = keysToVisit.popLast() {
-					guard !sitesReached(from: key, onRoutesOf: family).isDisjoint(with: filledSites),
+					guard reachesFilledSite(from: key, onRoutesOf: family),
 					      visited.insert(key).inserted,
 					      enclosingDispatchers[Self.key(of: key, returnsBuilderStruct: returnsBuilderStruct(key))] == nil,
 					      let scopeEnum = enumsByKey[key]
@@ -2399,7 +2395,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 			/// Whether a dispatcher of the enum of `key` for `family`'s routes takes `passUp`.
 			func takesPassUp(_ key: SeamSignature.ScopeEnum.Key, onRoutesOf family: Bool?) -> Bool {
-				!sitesReached(from: key, onRoutesOf: family).isSubset(of: filledSites)
+				!calledBuilders.reachesOnly(filledSiteNumbers, from: key, onRoutesOf: routeRootKey(of: key, family: family))
 			}
 			/// The instance that dispatches the enum of `key`: one serves every family that reaches the enum, which a caller
 			/// fills on every family's routes alike.
@@ -2438,7 +2434,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					     let .inner(innerKey, _, _),
 					     let .fill(_, _, innerKey, _, _):
 						// The routes this dispatcher serves reach the places of the enum the case holds that are on them.
-						let reachedSites = sitesReached(from: innerKey, onRoutesOf: family)
 						let target = dispatcherInstance(of: innerKey)
 						var dispatcherCase = Case(name: enumCase.name, hasForwardedValue: false, target: nil, values: enumCase.values?.fields, labelsBoundLater: enumCase.values?.labelsBoundLater ?? [])
 						dispatcherCase.isLetChild = enumCase.isLetChildOfCarrier(inSendableEnum: scopeEnum.key.isSendable) && ReservedName.seamCarrier(ofEnum: scopeEnum.type) != nil
@@ -2446,7 +2441,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 							dispatcherCase.isFillCase = true
 							dispatcherCase.carriedInnerKey = SeamSignature.ScopeEnum.carriedInnerKey(of: enumCase)
 						}
-						guard !reachedSites.isDisjoint(with: filledSites) else { return dispatcherCase }
+						guard reachesFilledSite(from: innerKey, onRoutesOf: family) else { return dispatcherCase }
 						let targetKey = target.dispatcherKey
 						return Case(
 							name: dispatcherCase.name,
@@ -3541,6 +3536,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	///   - instantiable: The type this root scope builds.
 	///   - isOwnFile: Whether a file a declaration records is one of the module's own files.
 	func seamTierOmissions(ofTreeRootedAt instantiable: Instantiable, isOwnFile: @escaping @Sendable (String) -> Bool) async -> [SeamTierOmission] {
+		// Only a call of a seam tier that omits a parameter reports, and only a scope that closes a lazy cycle records a
+		// call that judges a read elsewhere, so the walk enters no subtree that holds neither, and no tree that holds no
+		// such call: its visits record nothing.
+		// Several places of the tree can share one generator (see `ConstructionMemo`), so entered at every place a tree of
+		// screens that each open three screens of the next layer was walked once per path.
+		let generatorsLeadingToOmissions = Self.generatorsLeadingToSeamTierOmissions(inTreeRootedAt: self)
+		guard generatorsLeadingToOmissions.contains(ObjectIdentifier(self)) else { return [] }
 		var declarationsByLabel = [String: [VisibleDeclaration]]()
 		if case let .root(_, seamRoot?) = scopeData {
 			for parameter in seamRoot.signature.parameters {
@@ -3562,6 +3564,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			visitNumber: 0,
 			referenceLocation: { instantiable.declarationLocation },
 			isOwnFile: isOwnFile,
+			generatorsLeadingToOmissions: generatorsLeadingToOmissions,
 		).judged()
 		guard case let .root(_, seamRoot?) = scopeData else { return omissions }
 		// A provider that is a pass-through parameter of this seam is declared by no type: the receives in this seam's
@@ -3575,8 +3578,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 	}
 
-	/// - Parameter enclosingCycleFunctions: The builder functions enclosing this scope that lazy cycles close on and that
-	///   take parameters (see `CycleParameter`), by the declaration each builds.
+	/// - Parameters:
+	///   - enclosingCycleFunctions: The builder functions enclosing this scope that lazy cycles close on and that take
+	///     parameters (see `CycleParameter`), by the declaration each builds.
+	///   - generatorsLeadingToOmissions: The generators of the tree whose subtree holds a seam call that omits a
+	///     parameter or a scope that closes a lazy cycle (`generatorsLeadingToSeamTierOmissions(inTreeRootedAt:)`).
 	private func seamTierOmissions(
 		of instantiable: Instantiable,
 		propertiesGeneratedLater: Set<Property>,
@@ -3585,7 +3591,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		visitNumber: Int,
 		referenceLocation: @escaping @Sendable () -> Dependency.DeclarationLocation?,
 		isOwnFile: @escaping @Sendable (String) -> Bool,
+		generatorsLeadingToOmissions: Set<ObjectIdentifier>,
 	) async -> OmissionFindings<SeamTierOmission> {
+		GenerationWork.record(1, by: .findingSeamTierOmissions)
 		let declaringType = instantiable.concreteInstantiable
 		var declarationLocationByProperty = [Property: Dependency.DeclarationLocation?]()
 		for dependency in instantiable.dependencies where !dependency.source.isReceived {
@@ -3663,12 +3671,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						)
 					}
 				}
-			} else {
+			} else if generatorsLeadingToOmissions.contains(ObjectIdentifier(child.generator)) {
 				// This scope calls the child's builder function, which, when a lazy cycle closes on it and it takes parameters,
 				// it passes them as each cycle-closing scope does. The function's body reads its parameters, which hide every
 				// declaration of their labels where it is called, as generation's do.
 				// The function is told apart by the walk's visit of the child, never by its generator, which several places of the
-				// tree can share (see `ConstructionMemo`): each place's calls are of a function of its own.
+				// tree can share (see `ConstructionMemo`): each place's calls are of a function of its own. A child the walk
+				// does not enter takes no number: its function's parameters are read only in its body, which holds no call
+				// that omits one.
 				let function = findings.nextVisitNumber
 				findings.recordCalls(by: child, of: function, among: childDeclarationsByLabel)
 				await findings.append(contentsOf: child.generator.seamTierOmissions(
@@ -3679,10 +3689,44 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					visitNumber: function,
 					referenceLocation: childReferenceLocation(of: child.generator.property),
 					isOwnFile: isOwnFile,
+					generatorsLeadingToOmissions: generatorsLeadingToOmissions,
 				))
 			}
 		}
 		return findings
+	}
+
+	/// The generators of the tree `root` roots whose subtree holds a call of a seam tier that omits a parameter, or one no
+	/// tier takes, or a scope that closes a lazy cycle: the scopes `seamTierOmissions` enters. Empty where the tree holds no
+	/// such call, since a scope that closes a lazy cycle only records calls, which judge the reads of an omitting call
+	/// alone: a tree without one reports nothing, and a lazy cycle in it would have the walk enter every path to it again.
+	/// Each generator is visited once, from the leaves up; the set dies with the walk.
+	private static func generatorsLeadingToSeamTierOmissions(inTreeRootedAt root: ScopeGenerator) -> Set<ObjectIdentifier> {
+		var leadingToOmissions = Set<ObjectIdentifier>()
+		var holdsCallOmittingParameter = false
+		var visitedGenerators = Set<ObjectIdentifier>()
+		var generatorsToVisit = [(generator: root, childrenAreVisited: false)]
+		while let (visited, childrenAreVisited) = generatorsToVisit.popLast() {
+			guard childrenAreVisited else {
+				guard visitedGenerators.insert(ObjectIdentifier(visited)).inserted else { continue }
+				generatorsToVisit.append((visited, true))
+				for child in visited.children where !visitedGenerators.contains(ObjectIdentifier(child)) {
+					generatorsToVisit.append((child, false))
+				}
+				continue
+			}
+			let (closesCycle, callOmitsParameter) = if case let .property(_, _, _, _, isPropertyCycle, seamCall) = visited.scopeData {
+				(isPropertyCycle, seamCall.map { !($0.omittedParameters.isEmpty && $0.noTierParameters.isEmpty) } ?? false)
+			} else {
+				(false, false)
+			}
+			holdsCallOmittingParameter = holdsCallOmittingParameter || callOmitsParameter
+			if closesCycle || callOmitsParameter || visited.children.contains(where: { leadingToOmissions.contains(ObjectIdentifier($0)) }) {
+				leadingToOmissions.insert(ObjectIdentifier(visited))
+			}
+		}
+		guard holdsCallOmittingParameter else { return [] }
+		return leadingToOmissions
 	}
 
 	/// The value each receive in the tree rooted at this scope, a root of the dependency tree, is handed in each place the
@@ -3690,17 +3734,43 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// type is constructed, in the order the tree's code is generated, or `nil` where generation passes `nil`
 	/// (`unavailableProperties`). Where that declaration is a parameter of a builder function a lazy cycle closes on, the
 	/// value is the one each call of the function passes (see `OmissionFindings`). Also returns the concrete type of each
-	/// scope the tree constructs, in the order the walk meets them.
-	func receivedValueSupplies(ofTreeRootedAt instantiable: Instantiable) async -> (supplies: [ReceivedValueSupply], constructedTypes: [TypeDescription]) {
+	/// scope the tree constructs, in the order the walk meets them. `query graph` runs it only for trees built around
+	/// received dependencies nothing provides, which the fold that replaced it does not read yet, and otherwise only the
+	/// fold's oracle runs it (`TypeFactsReceivedValueSuppliesObservation`), since it enters every path of the tree.
+	///
+	/// A receive `unfulfilledReceives` holds is one the tree was built around although nothing provides it in some place
+	/// (`DependencyTreeGenerator.unfulfilledReceiveLocations`). Where nothing provides it, it is handed nothing, and an
+	/// absent declaration of its property is in scope for the scopes its type builds, after every declaration of its
+	/// label: no receive that reads a declaration reads another for it, and a receive that would find none reads the
+	/// absent one, which is reported as the receive that stands for it.
+	func receivedValueSupplies(
+		ofTreeRootedAt instantiable: Instantiable,
+		unfulfilledReceives: UnfulfilledReceives,
+	) async -> (supplies: [ReceivedValueSupply], constructedTypes: [TypeDescription])? {
 		let findings = await receivedValueSupplies(
 			of: instantiable,
 			unavailableProperties: [],
 			propertiesGeneratedLater: [],
 			declarationsByLabel: [:],
+			receivableProperties: [],
+			unfulfilledReceives: unfulfilledReceives,
 			enclosingCycleFunctions: [:],
 			visitNumber: 0,
 		)
+		guard findings.isJudged else { return nil }
 		return (findings.judged(), findings.constructedTypes)
+	}
+
+	/// The received dependencies and aliases a tree was built around although nothing provides them.
+	struct UnfulfilledReceives: Sendable {
+		/// Where each is declared.
+		let locations: Set<Dependency.DeclarationLocation>
+		/// The label each receives: a received dependency's own, an alias's fulfilling property's.
+		let labels: Set<String>
+
+		func contains(_ dependency: Dependency) -> Bool {
+			dependency.declarationLocation.map(locations.contains) == true
+		}
 	}
 
 	/// - Parameters:
@@ -3708,27 +3778,65 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	///   - declarationsByLabel: The declarations each label names where this scope's type is constructed.
 	///   - enclosingCycleFunctions: The builder functions enclosing this scope that lazy cycles close on and that take
 	///     parameters (see `CycleParameter`), by the declaration each builds.
+	///   - receivableProperties: Of the labels `unfulfilledReceives` receive, the properties validation finds receivable
+	///     where this scope's type is constructed (`insertProperties`): what the scopes above declare and receive.
 	///   - visitNumber: The number the walk gives this visit, which names the builder function this scope's body is.
 	private func receivedValueSupplies(
 		of instantiable: Instantiable,
 		unavailableProperties: Set<Property>,
 		propertiesGeneratedLater: Set<Property>,
 		declarationsByLabel: [String: [VisibleDeclaration]],
+		receivableProperties: Set<Property>,
+		unfulfilledReceives: UnfulfilledReceives,
 		enclosingCycleFunctions: [BuiltDeclaration: Int],
 		visitNumber: Int,
 	) async -> ReceivedValueSupplyFindings {
 		let declaringType = instantiable.concreteInstantiable
 		var findings = ReceivedValueSupplyFindings(nextVisitNumber: visitNumber + 1, constructedType: declaringType)
 		/// Records what the receive of `receivedProperty` under `label` reads among `declarationsByLabel`, or `nil`, with
-		/// its reason, when generation passes it `nil`.
-		func recordSupply(of receivedProperty: Property, label: String, among declarationsByLabel: [String: [VisibleDeclaration]], isPassedNil: Bool) {
+		/// its reason, when generation passes it `nil`, or nothing, when `isReportedUnfulfilled` and nothing provides it here.
+		/// - Returns: Whether the receive is handed a value here.
+		func recordSupply(
+			of receivedProperty: Property,
+			label: String,
+			isRequired: Bool,
+			isReportedUnfulfilled: Bool,
+			among declarationsByLabel: [String: [VisibleDeclaration]],
+			isPassedNil: Bool,
+		) -> SupplyOutcome {
 			let unwrappedProperty = receivedProperty.asUnwrappedProperty
-			let passedNil = ReceivedValueSupply(receivingType: declaringType, label: label, value: .passedNil(.noProvidingDeclaration))
-			let provider = declarationsByLabel[receivedProperty.label]?.first(where: { $0.provides(unwrappedProperty) })
+			func supply(_ value: ReceivedValueSupply.Value) -> ReceivedValueSupply {
+				ReceivedValueSupply(receivingType: declaringType, label: label, value: value)
+			}
+			let declarations = declarationsByLabel[receivedProperty.label, default: []]
+			// Beneath a receive nothing provides, a required receive reads the declaration of exactly the property it
+			// requires, the absent one included, as validation judges it. Generation hands a receive the nearest
+			// declaration that provides any form of it, which in a valid tree is that one.
+			let exactProvider = isRequired && declarations.contains(where: \.isAbsent) ? declarations.first(where: { $0.declares(receivedProperty) }) : nil
+			let provider = exactProvider ?? declarations.first(where: { $0.provides(unwrappedProperty) })
+			// A parameter of a builder function a lazy cycle closes on hands a receive what each call of the function
+			// passes. Validation's test of where the function is declared does not judge that for a receive nothing
+			// provides, and an absent declaration beside the parameter is no declaration the calls know of: the walk
+			// reports no supply of such trees.
+			guard provider?.cycleFunction == nil || !(isReportedUnfulfilled || declarations.contains(where: \.isAbsent)) else {
+				findings.leaveUnjudged()
+				return .unfulfilled
+			}
+			// Validation finds a receive unfulfillable exactly where the property it requires is not receivable.
+			guard !isReportedUnfulfilled || receivableProperties.contains(receivedProperty) else {
+				findings.append(supply(.unfulfilled(nil)))
+				return .unfulfilled
+			}
+			if let provider, provider.isAbsent, let absentDeclaringType = provider.declaringType {
+				// Generation, which knows of no absent declaration, passes the receive `nil` or names nothing for it.
+				findings.append(supply(.unfulfilled(ReceivedValueSupply.Supplier(declaringType: absentDeclaringType, label: provider.property.label))))
+				return .handedValue
+			}
+			let passedNil = supply(.passedNil(.noProvidingDeclaration))
 			guard !isPassedNil, let provider else {
 				// Generation also finds a receive unavailable whose nearest declaration provides no form it reads.
 				findings.append(provider == nil ? passedNil : passedNil.passingNil(because: .providerNotYetBuilt))
-				return
+				return .passedNil
 			}
 			findings.append(reading: unwrappedProperty, from: provider, passedNothing: passedNil) { provider in
 				// Every provider a supply is judged at is a declaration of a type of the tree: a parameter of a builder
@@ -3739,23 +3847,49 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					value: provider.declaringType.map { .declaration(ReceivedValueSupply.Supplier(declaringType: $0, label: provider.property.label)) } ?? .passedNil(.noProvidingDeclaration),
 				)
 			}
+			return .handedValue
 		}
-		// The type is constructed in its builder function, which binds its parameters and what it rebinds before anything
-		// in it reads them.
-		let ownUnavailableProperties = bodyUnavailableProperties(unavailableProperties)
-		for dependency in instantiable.dependencies where dependency.source.isReceived {
-			recordSupply(of: dependency.property, label: dependency.property.label, among: declarationsByLabel, isPassedNil: ownUnavailableProperties.contains(dependency.property))
-		}
-
-		func visibleDeclaration(of property: Property, instanceProperty: Property?) -> VisibleDeclaration {
+		func visibleDeclaration(of property: Property, instanceProperty: Property?, isAbsent: Bool = false) -> VisibleDeclaration {
 			VisibleDeclaration(
 				property: property,
 				instanceProperty: instanceProperty,
 				declaringType: declaringType,
 				declarationLocation: nil,
 				sendableBuilderDepth: 0,
+				isAbsent: isAbsent,
 			)
 		}
+		// The type is constructed in its builder function, which binds its parameters and what it rebinds before anything
+		// in it reads them.
+		let ownUnavailableProperties = bodyUnavailableProperties(unavailableProperties)
+		var childReceivableProperties = receivableProperties
+		var absentDeclarations = [VisibleDeclaration]()
+		for dependency in instantiable.dependencies where dependency.source.isReceived {
+			let outcome = recordSupply(
+				of: dependency.property,
+				label: dependency.property.label,
+				isRequired: dependency.source == .received(onlyIfAvailable: false),
+				isReportedUnfulfilled: unfulfilledReceives.contains(dependency),
+				among: declarationsByLabel,
+				isPassedNil: ownUnavailableProperties.contains(dependency.property),
+			)
+			guard unfulfilledReceives.labels.contains(dependency.property.label) else { continue }
+			switch outcome {
+			case .unfulfilled:
+				// As every declaration that provides a lazily instantiated property does, the absent one provides its instance.
+				absentDeclarations.append(visibleDeclaration(
+					of: dependency.property,
+					instanceProperty: dependency.property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding,
+					isAbsent: true,
+				))
+				childReceivableProperties.insert(dependency.property)
+			case .handedValue:
+				childReceivableProperties.insert(dependency.property)
+			case .passedNil:
+				break
+			}
+		}
+
 		var scopeDeclarationsByLabel = [String: [VisibleDeclaration]]()
 		for dependency in instantiable.dependencies where dependency.source == .forwarded {
 			scopeDeclarationsByLabel[dependency.property.label, default: []].append(visibleDeclaration(
@@ -3775,6 +3909,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		var childDeclarationsByLabel = declarationsByLabel
 		childDeclarationsByLabel.merge(scopeDeclarationsByLabel) { _, scopeDeclarations in scopeDeclarations }
+		// An absent declaration follows every declaration of its label, so no receive that reads one reads it instead.
+		for absentDeclaration in absentDeclarations {
+			childDeclarationsByLabel[absentDeclaration.property.label, default: []].append(absentDeclaration)
+		}
+		for (label, declarations) in scopeDeclarationsByLabel where unfulfilledReceives.labels.contains(label) {
+			for declaration in declarations {
+				childReceivableProperties.insert(declaration.property)
+				if let instanceProperty = declaration.instanceProperty {
+					childReceivableProperties.insert(instanceProperty)
+				}
+			}
+		}
 		let loopMembersByChildIndex = loopMembersPassedByReceivedFunctions(of: orderedChildren)
 
 		for child in orderedChildren {
@@ -3785,9 +3931,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				if fulfillingProperty.label == property.label {
 					fulfillingDeclarationsByLabel[property.label] = declarationsByLabel[property.label]
 				}
-				recordSupply(
+				_ = recordSupply(
 					of: fulfillingProperty,
 					label: property.label,
+					isRequired: !onlyIfAvailable,
+					isReportedUnfulfilled: instantiable.dependencies.contains { unfulfilledReceives.contains($0) && $0.property == property },
 					among: fulfillingDeclarationsByLabel,
 					isPassedNil: Self.aliasIsBoundToNil(onlyIfAvailable: onlyIfAvailable, fulfillingProperty: fulfillingProperty, unavailableProperties: child.unavailableProperties),
 				)
@@ -3808,6 +3956,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						unavailableProperties: child.unavailableProperties,
 						propertiesGeneratedLater: child.generator.bodyPropertiesGeneratedLater(child.propertiesGeneratedLater),
 						declarationsByLabel: child.generator.bodyDeclarations(function: function, enclosing: childDeclarationsByLabel),
+						receivableProperties: childReceivableProperties,
+						unfulfilledReceives: unfulfilledReceives,
 						enclosingCycleFunctions: child.generator.bodyEnclosingCycleFunctions(function: function, enclosing: enclosingCycleFunctions),
 						visitNumber: function,
 					))
@@ -3815,6 +3965,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 		}
 		return findings
+	}
+
+	/// What a receive is handed in one place, as `receivedValueSupplies` records it.
+	private enum SupplyOutcome {
+		/// A declaration's value, an absent one's included.
+		case handedValue
+		/// `nil`, which generation passes it.
+		case passedNil
+		/// Nothing: `generate` reports that nothing provides it.
+		case unfulfilled
 	}
 
 	/// A value a mock tree holds for a parameter that the tier of a public mock it calls omits, which the call passes
@@ -4064,7 +4224,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// The types the tree rooted at this scope builds that its declarations do not name: through a `fulfilledByType:`
 	/// string or a `fulfillingAdditionalTypes:` entry, or as what a mock promotes for such a property, and, in a mock, by
 	/// calling a hand-written mock another module merges in. The code generated for the tree names each, while no
-	/// declaration of the property does, so no file SafeDI read need import its module.
+	/// declaration of the property does, so no file SafeDI read need import its module. A root's file takes its imports
+	/// from its world's declarations instead (`TypeFactsImports`), which the tests compare with this walk of its tree.
 	/// - Parameter buildingMock: Whether the tree is a mock's, which builds a type with its hand-written mock.
 	func fulfillersOfTree(buildingMock: Bool) async -> Set<FulfillerImports.Fulfiller> {
 		var fulfillers = Set<FulfillerImports.Fulfiller>()
@@ -4147,10 +4308,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// Whether the declaration is a field of the struct a public mock hands a fill of its place, which the fill binds:
 		/// `declaringType`'s mock hands it the value, which its tree built or its own `mock()` was handed.
 		var isHandedToFill = false
+		/// Whether the declaration is absent: it stands, in a walk of the value each receive is handed, for the declaration
+		/// that will provide a receive of `declaringType` nothing provides yet (see `receivedValueSupplies`).
+		var isAbsent = false
 
 		/// Whether a receive of `unwrappedProperty`, or of its optional form, resolves to this declaration.
 		func provides(_ unwrappedProperty: Property) -> Bool {
 			property.asUnwrappedProperty == unwrappedProperty || instanceProperty?.asUnwrappedProperty == unwrappedProperty
+		}
+
+		/// Whether this declaration makes exactly `property` receivable, as validation judges a required receive of it.
+		func declares(_ property: Property) -> Bool {
+			self.property == property || instanceProperty == property
 		}
 	}
 
@@ -4292,6 +4461,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		private(set) var calls = [Call]()
 		/// The concrete type of each scope the walk constructs, in the order it meets them.
 		private(set) var constructedTypes: [TypeDescription]
+		/// Whether the walk judged every receive it met. It judges none of a tree in which a receive nothing provides, or
+		/// the absent declaration beneath one, meets a parameter of a builder function a lazy cycle closes on: the receive
+		/// or a receive beneath it reads the parameter, or a call of the function is made beneath it.
+		private(set) var isJudged = true
 
 		/// The findings of a visit of a scope that constructs `constructedType`, whose first visit beneath it is numbered
 		/// `nextVisitNumber`.
@@ -4322,6 +4495,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			omissions.append(omission)
 		}
 
+		/// Records that the walk met a receive it does not judge.
+		mutating func leaveUnjudged() {
+			isJudged = false
+		}
+
 		/// Records the call `child` makes of `function`, which it declares or closes a cycle on, with the declarations of
 		/// each parameter's label among `declarationsByLabel`, where the call is made, and none for those it passes `nil`.
 		/// `function` is `nil` for a function that takes no parameters.
@@ -4333,10 +4511,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			for parameter in child.generator.cycleParameters {
 				let unwrappedProperty = parameter.property.asUnwrappedProperty
 				let isPassedLoopMember = loopMembers.contains(unwrappedProperty) || loopMembers.contains(unwrappedProperty.asOptionalProperty)
+				let declarations = declarationsByLabel[parameter.property.label, default: []]
+				// A call made beneath a receive nothing provides would pass what its absent declaration stands for, which
+				// no call generation makes knows of.
+				isJudged = isJudged && !declarations.contains(where: \.isAbsent)
 				calls.append(Call(
 					function: function,
 					label: parameter.property.label,
-					declarations: declarationsByLabel[parameter.property.label, default: []],
+					declarations: declarations,
 					passesNil: !isPassedLoopMember && child.unavailableProperties.contains(parameter.property),
 				))
 			}
@@ -4350,6 +4532,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			parameterReads.append(contentsOf: findings.parameterReads)
 			calls.append(contentsOf: findings.calls)
 			constructedTypes.append(contentsOf: findings.constructedTypes)
+			isJudged = isJudged && findings.isJudged
 		}
 
 		/// The omissions, with each parameter read judged at every call of its function: an omission at each declaration a
@@ -5673,7 +5856,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	/// Whether this scope, in the tree of a fill a mock declares for another module's public mock, builds its type with
 	/// its hand-written mock, as the mock's tree built inline would (`Scope.createScopeGenerator`).
-	private let constructsWithHandWrittenMock: Bool
+	let constructsWithHandWrittenMock: Bool
 	/// How a mock tree calls the public mock another module generated for this scope's type, or `nil` for a scope
 	/// that builds its type (see `Scope.publicMockCall`).
 	nonisolated var publicMockCall: PublicMockCall? {
@@ -6330,19 +6513,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 	}
 
-	/// How this scope spells a `@Sendable` local function it declares.
-	nonisolated private var sendableFunctionDecorator: String {
-		Self.localFunctionPrefix(isSendable: true)
-	}
-
-	/// How generated code spells the attributes of a local function it declares: `@Sendable nonisolated` where the function
-	/// is `@Sendable`, and nothing otherwise. A `Sendable` wrapper calls its function synchronously from any isolation, so the
-	/// function must be nonisolated, which is what Swift infers for a `@Sendable` local function in a module whose
-	/// declarations default to no isolation. A module whose declarations default to the main actor
+	/// How generated code spells the attributes of a local function it declares: `@inline(never)` in a seam’s tree
+	/// (`LocalFunctionInlining`), then `@Sendable nonisolated` where the function is `@Sendable`. A `Sendable` wrapper calls
+	/// its function synchronously from any isolation, so the function must be nonisolated, which is what Swift infers for a
+	/// `@Sendable` local function in a module whose declarations default to no isolation. A module whose declarations default to the main actor
 	/// (`-default-isolation MainActor`) infers the function to be on the main actor instead, and rejects it as `@Sendable`,
 	/// so the spelling says `nonisolated` (`SafeDIToolDefaultMainActorIsolationTests`).
 	static func localFunctionPrefix(isSendable: Bool) -> String {
-		isSendable ? "@Sendable nonisolated " : ""
+		LocalFunctionInlining.attribute + (isSendable ? "@Sendable nonisolated " : "")
 	}
 
 	/// The lines that bind the payloads of the cases on the routes to the places beneath this scope, which its parent emits
@@ -6793,7 +6971,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// The scope visited next is the last one on the stack, so the first child goes last. Each is visited with the index
 		// of the type it is built inside.
 		var generatorsToVisit = children.reversed().map { (generator: $0, parentIndex: 0) }
+		// A generator places share (`construction-memo.md`) is one subtree, which meets the same labels wherever the walk
+		// reaches it: the labels it left unmet the first time stay unmet beneath it. So the walk visits each once, or it
+		// would visit a loop of builders once per path to each member. The set is this walk's and dies with it.
+		var visitedGenerators = Set<ObjectIdentifier>()
 		while !unmetLabels.isEmpty, let (generator, parentIndex) = generatorsToVisit.popLast() {
+			guard visitedGenerators.insert(generator.searchIdentity).inserted else { continue }
 			// An alias is among the dependencies of the type that declares it, which the walk met first.
 			var index = parentIndex
 			if let builtInstantiable = generator.searchBuiltInstantiable {
@@ -6962,7 +7145,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			candidates.append(BuilderFunctionCandidate(
 				property: property,
 				declaration: BuiltDeclaration(property: property, concreteType: property.typeDescription.asInstantiatedType),
-				name: nil,
+				name: generator.holeWrapperFunctionName,
 				declaresFunction: true,
 				cycleClosedOnDeclarations: [],
 				isReferencedByCycleClosingScope: false,
@@ -7116,15 +7299,24 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// (`separatesValuesBindings`, `separatesMemberCalls`).
 	nonisolated private func isPlannedByTypeKey(builderFunctionNames: BuilderFunctionNames, fillPlaceBindings: FillPlaceBindings, separatesValuesBindings: Bool = false, separatesMemberCalls: Bool = false) -> Bool {
 		(valuesBindingLines.isEmpty || separatesValuesBindings)
-			&& builderFunctionNames.loopValuesBindingLines == nil
+			&& builderFunctionNames.loopValuesBindingLines?.isEmpty != false
 			&& builderFunctionNames.loopLevelsName == nil
 			&& builderFunctionNames.receivedFunctionName == nil
-			&& builderFunctionNames.loopMemberDeclarations.isEmpty
-			&& reboundProperties.isEmpty
+			&& rebindingsArePlannedByTypeKey(builderFunctionNames: builderFunctionNames)
 			&& (memberCallLines.isEmpty || separatesMemberCalls)
 			&& !isBuiltByFill
 			&& !fillReturnsWrapperBuilder
 			&& fillPlaceBindings.bindingsByGenerator[ObjectIdentifier(self), default: []].isEmpty
+	}
+
+	/// Whether every rebinding this scope's builder function begins with, as a member of a loop of builders, is a place the
+	/// type key lays out: a wrapper made again of a member's own builder function (`LoopRebinding.closer`), never one of a
+	/// `__safeDI_<label>_received` function, of a rename, or of the function's own property with its cycle parameters.
+	nonisolated private func rebindingsArePlannedByTypeKey(builderFunctionNames: BuilderFunctionNames) -> Bool {
+		reboundProperties.allSatisfy { reboundProperty in
+			!(reboundProperty == property && declaresCycleParameters)
+				&& builderFunctionNames.loopMemberDeclarations[reboundProperty]?.closer != nil
+		}
 	}
 
 	/// The properties of this scope's `onlyIfAvailableDependencies` that are unavailable because an
@@ -7295,7 +7487,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// every child keeps its own.
 		let childBuilderFunctionNames: [BuilderFunctionNames?]?
 		/// Per loop of builders: the rebinding of each member the body declares, wrapping the function this body names.
-		let loopMemberDeclarationsByLoop: [Int: [Property: String]]
+		let loopMemberDeclarationsByLoop: [Int: [Property: LoopRebinding]]
 		/// The `_received` function of each member, by its index among `orderedChildren`, that takes cycle parameters.
 		let receivedFunctionNameByIndex: [Int: String]
 		/// Per loop: the lines binding its members' payloads, the index of the member that binds them, and the name of a
@@ -7354,7 +7546,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// that declares such a function, or a cycle-closing scope that calls one – is wrapped through a function of no
 		// such parameters, `__safeDI_<label>_received`, that this body declares beside it and that passes the parameters
 		// what this body binds, a member of the same loop as a wrapper the function makes. Nearly every body holds no loop.
-		var loopMemberDeclarationsByLoop = [Int: [Property: String]]()
+		var loopMemberDeclarationsByLoop = [Int: [Property: LoopRebinding]]()
 		var receivedFunctionNameByIndex = [Int: String]()
 		var memberFunctionByProperty = [Property: (property: Property, generator: ScopeGenerator, functionName: String)]()
 		// The payloads of each loop's members, in the order the body generates them, and the index of the member that binds
@@ -7414,7 +7606,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					functionName = receivedFunctionName
 					receivedFunctionNameByIndex[index] = functionName
 				}
-				loopMemberDeclarationsByLoop[loop, default: [:]][property] = child.generator.loopRebindingDeclaration(functionName: functionName)
+				// A rebinding that hands the member's own builder function is a cycle-closing place on that function, which
+				// the type key lays out (`LoopRebinding.closedOnFunctionName`); one that hands a `_received` function is not.
+				loopMemberDeclarationsByLoop[loop, default: [:]][property] = child.generator.loopRebinding(
+					functionName: functionName,
+					closesOnFunction: claimedNames.receivedFunctionName == nil,
+				)
 				memberFunctionByProperty[property] = (property, child.generator, functionName)
 			}
 			// A rename this body declares of a member is rebound under its own label, wrapping the member's function.
@@ -7424,7 +7621,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				      let memberFunction = memberFunctionByProperty[fulfillingProperty],
 				      let declaration = child.generator.loopRebindingDeclaration(ofRenameOf: memberFunction)
 				else { continue }
-				loopMemberDeclarationsByLoop[loop, default: [:]][property] = declaration
+				loopMemberDeclarationsByLoop[loop, default: [:]][property] = LoopRebinding(declaration: declaration, closer: nil)
 			}
 		}
 		// What each fill nested by type takes beside its case's payload, then what each dispatcher takes to pass on.
@@ -7629,6 +7826,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					indentation: leadingMemberWhitespace,
 				),
 				name: dispatcher.functionName,
+				// The declaration after its indentation and the attributes it is spelled with (`RootFunctionRecord.spelled`).
 				textWithoutAttributes: String(dispatcher.declaration(
 					isSendable: false,
 					indent: leadingMemberWhitespace,
@@ -7637,7 +7835,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					typesDeclaredEscaping: typesDeclaredEscaping,
 					fillsTakingPayloadFields: body.fillsTakingPayloadFields,
 					labelsHiddenByReenteringCalls: labelsHiddenByReenteringCalls,
-				).dropFirst(leadingMemberWhitespace.count)),
+				).dropFirst(leadingMemberWhitespace.count + Self.localFunctionPrefix(isSendable: false).count)),
 				isSendable: isSendable,
 				calls: dispatcher.cases.compactMap { dispatcherCase in
 					dispatcherCase.target.flatMap { body.inlinedFills[$0.key] == nil ? $0.name : nil }
@@ -7699,7 +7897,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// parameter would hide: it keeps its function.
 	private static func inlinedFill(of fill: ScopeGenerator, code: String, leadingMemberWhitespace: String) -> FillDispatcher.InlinedFill? {
 		// A fill is its function's declaration, its body, and the line closing it.
-		let lines = code.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+		let lines = GeneratedCodeText.lines(of: code)
 		let valuesType = fill.fillHole?.valuesType(qualifiedBy: nil)
 		let carriesPayload = valuesType != nil
 		// A seam's carrier hands the fill the payload's fields as arguments, the first named `scope_<label>`
@@ -7720,9 +7918,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let builtProperty = fill.propertiesToGenerate.first?.property
 		let forwardedValueName = fill.fillHole?.forwardedType == nil ? nil : builtProperty.map(Self.forwardedValueParameterName(forBuilding:))
 		let readsForwardedValue = forwardedValueName.map { name in
-			body.contains { line in
-				line.split(whereSeparator: { !($0.isLetter || $0.isNumber || $0 == "_") }).contains(Substring(name))
-			}
+			body.contains { line in GeneratedCodeText.containsIdentifier(name, in: line) }
 		} ?? false
 		return FillDispatcher.InlinedFill(
 			carriesPayload: carriesPayload,
@@ -7802,7 +7998,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	/// `code` with each line indented once more.
 	private static func indented(_ code: String) -> String {
-		code.split(separator: "\n", omittingEmptySubsequences: false).map { standardIndent + $0 }.joined(separator: "\n")
+		GeneratedCodeText.indentingLines(of: code, by: standardIndent)
 	}
 
 	/// The arguments a builder function of a type whose `@Forwarded` properties are `forwardedProperties`, in their order,
@@ -7877,12 +8073,57 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// The declaration with which a member of a loop of builders rebinds this scope's instantiator, a member of the same
 	/// loop, whose builder function its scope's body names `functionName` (see `ReceivedBuilderLoops`): the declaration the
 	/// scope's body makes of it, which wraps the function again.
-	nonisolated private func loopRebindingDeclaration(functionName: String) -> String {
-		guard case let .property(_, _, forwardedProperties, _, _, _) = scopeData else { return "" }
-		return instantiatorDeclaration(
-			handing: functionName,
-			forwardedArguments: Self.forwardedArguments(of: forwardedProperties.sorted(), spreading: "$0").joined(separator: ", "),
+	nonisolated private func loopRebinding(functionName: String, closesOnFunction: Bool) -> LoopRebinding {
+		guard case let .property(instantiable, property, forwardedProperties, erasedToConcreteExistential, _, _) = scopeData else { return LoopRebinding(declaration: "", closer: nil) }
+		let sortedForwardedProperties = forwardedProperties.sorted()
+		return LoopRebinding(
+			declaration: instantiatorDeclaration(
+				handing: functionName,
+				forwardedArguments: Self.forwardedArguments(of: sortedForwardedProperties, spreading: "$0").joined(separator: ", "),
+			),
+			closer: closesOnFunction ? LoopRebinding.Closer(
+				property: property,
+				isErased: erasedToConcreteExistential,
+				isExtension: instantiable.declarationType.isExtension,
+				functionName: functionName,
+				forwardedProperties: sortedForwardedProperties,
+			) : nil,
 		)
+	}
+
+	/// How a member of a loop of builders is wrapped again inside the functions of the members whose trees receive it: its
+	/// declaration, and, where the declaration hands the member's own builder function, the cycle-closing place the type key
+	/// reads of it. A rebinding is a closer on the function a statement of the loop's body declares, rather than one an
+	/// enclosing scope declares (`TypeKeyLayout.read(_:)` resolves it as Swift does).
+	struct LoopRebinding: Hashable {
+		/// The rebinding, unindented.
+		let declaration: String
+		/// What the type key reads of the rebinding, or `nil` where it hands a `__safeDI_<label>_received` function or wraps a
+		/// rename, which the type key does not lay out.
+		let closer: Closer?
+
+		struct Closer: Hashable {
+			let property: Property
+			let isErased: Bool
+			let isExtension: Bool
+			let functionName: String
+			let forwardedProperties: [Property]
+		}
+
+		/// The place the type key reads, where it lays the rebinding out.
+		var record: PlaceRecord? {
+			closer.map { closer in
+				.closer(ClosingPlaceRecord(
+					property: closer.property,
+					isErased: closer.isErased,
+					isExtension: closer.isExtension,
+					closedOnFunctionName: closer.functionName,
+					forwardedProperties: closer.forwardedProperties,
+					cycleArguments: [],
+					rebindsLoopMember: true,
+				))
+			}
+		}
 	}
 
 	/// The declaration with which a member of a loop of builders rebinds this scope, a rename its scope declares of a member
@@ -7941,7 +8182,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// For a member of a loop of builders, the declarations with which the members of its loop are wrapped again, by
 		/// their property: its builder function rebinds those its tree receives, and its `__safeDI_<label>_received`
 		/// function those it passes as parameters a lazy cycle needs (see `ReceivedBuilderLoops`).
-		var loopMemberDeclarations = [Property: String]()
+		var loopMemberDeclarations = [Property: LoopRebinding]()
 		/// For a member of a loop of builders whose function takes parameters a lazy cycle needs, the name of the function
 		/// of no such parameters its wrappers hand, which passes them; `nil` for every other scope.
 		var receivedFunctionName: String?
@@ -8102,13 +8343,20 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			BuilderFunctionCandidate(
 				property: declaration.property,
 				declaration: declaration,
-				name: nil,
+				name: holeWrapperFunctionName,
 				declaresFunction: declaresBuilderFunction,
 				cycleClosedOnDeclarations: cycleClosedOnDeclarations,
 				isReferencedByCycleClosingScope: isReferencedByCycleClosingScope,
 				referencedFillNames: Set(referencedFillNamesByKey.values),
 			)
 		}
+	}
+
+	/// The name of the function a site of a hole held in a wrapper declares, which its site names apart from the builder
+	/// the function calls (`HoleSiteRecord`), or `nil` for any other scope, whose function is `functionName(toBuild:)`.
+	nonisolated private var holeWrapperFunctionName: String? {
+		guard case let .hole(_, _, site) = scopeData else { return nil }
+		return site?.wrapperFunctionName
 	}
 
 	static let standardIndent = "    "
@@ -8147,16 +8395,20 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			switch codeGeneration {
 			case .dependencyTree:
 				if let seamRoot {
-					return try await .text(generateSeamRootCode(
-						instantiable: instantiable,
-						seamRoot: seamRoot,
-						unavailableProperties: unavailableProperties,
-						propertiesGeneratedLater: propertiesGeneratedLater,
-						builderFunctionNames: builderFunctionNames,
-						fillPlaceBindings: fillPlaceBindings,
-					))
+					// Only a seam’s tree declares its local functions `@inline(never)` (`LocalFunctionInlining`).
+					return try await LocalFunctionInlining.$isNeverInlined.withValue(true) {
+						try await .text(generateSeamRootCode(
+							instantiable: instantiable,
+							seamRoot: seamRoot,
+							unavailableProperties: unavailableProperties,
+							propertiesGeneratedLater: propertiesGeneratedLater,
+							builderFunctionNames: builderFunctionNames,
+							fillPlaceBindings: fillPlaceBindings,
+						))
+					}
 				}
 				guard let rootInitializer = try Self.rootInitializer(of: instantiable) else { return .empty }
+				// A root’s tree keeps its local functions inlinable, where a seam’s does not (`LocalFunctionInlining`).
 				// A root of the dependency tree plans its children at once (`ConcurrentChildCode`).
 				let childCode = try await ConcurrentChildCode.$plansChildrenAtOnce.withValue(true) {
 					try await generateProperties(
@@ -8669,7 +8921,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// its children in its function's body.
 		let isBuiltPlacePlannedByTypeKey = seamCall == nil && isPlannedByTypeKey(builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings, separatesValuesBindings: separatesValuesBindings, separatesMemberCalls: separatesMemberCalls)
 		let isPlannedByTypeKey = seamCall == nil && isPlannedByTypeKey(builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings, separatesValuesBindings: separatesValuesBindings)
-		func builtRecord(functionName: String, hasFunction: Bool) throws(Initializer.GenerationError) -> PlaceRecord? {
+		// A member of a loop of builders writes its rebindings, places of their own, between its member calls and its children.
+		func builtRecord(functionName: String, hasFunction: Bool, rebindings: [GeneratedCode] = []) throws(Initializer.GenerationError) -> PlaceRecord? {
 			guard isBuiltPlacePlannedByTypeKey, let arguments = try constructionReads(of: instantiable, unavailableProperties: unavailableProperties) else { return nil }
 			return .built(BuiltPlaceRecord(
 				property: property,
@@ -8686,7 +8939,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				typesDeclaredEscaping: typesDeclaredEscaping,
 				lineEnd: constructionLineEnd,
 				hasFunction: hasFunction,
-				children: memberCallCode + childCode,
+				children: memberCallCode + rebindings + childCode,
 				node: PlanNode(),
 			))
 		}
@@ -8725,15 +8978,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				if reboundProperty == property, declaresCycleParameters {
 					// The function's own property is wrapped again with the function's own parameters: where a cycle-closing
 					// scope builds the tree again, they are that scope's, which is then the nearest declaration of each.
-					Self.indented(instantiatorDeclaration(
+					GeneratedCode.text(Self.indented(instantiatorDeclaration(
 						handing: functionName,
 						forwardedArguments: (
 							Self.forwardedArguments(of: forwardedProperties, spreading: "$0")
 								+ cycleParameters.map { CallArgument(label: $0.property.label, source: .binding(label: $0.property.label)).spelled },
 						).joined(separator: ", "),
-					))
+					)))
 				} else {
-					builderFunctionNames.loopMemberDeclarations[reboundProperty].map(Self.indented)
+					builderFunctionNames.loopMemberDeclarations[reboundProperty].map { rebinding in
+						GeneratedCode.indented(.place(PlacePlan(code: .text(rebinding.declaration), record: rebinding.record)), by: Self.standardIndent)
+					}
 				}
 			}
 			// A member of a boxed loop first unboxes its own payloads, which the scope bound in the loop's box.
@@ -8755,7 +9010,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			var generatedProperties = unboxingLines.map(GeneratedCode.text)
 			generatedProperties += forwardedInnerScopeLines.map(GeneratedCode.text)
 			generatedProperties += memberCallCode
-			generatedProperties += rebindingLines.map(GeneratedCode.text)
+			generatedProperties += rebindingLines
 			generatedProperties += seamGuardLines
 			generatedProperties += fillPlaceBindingLines
 			generatedProperties += childCode
@@ -8801,7 +9056,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					let unwrappedProperty = parameter.property.asUnwrappedProperty
 					let memberDeclaration = builderFunctionNames.loopMemberDeclarations[unwrappedProperty] ?? builderFunctionNames.loopMemberDeclarations[unwrappedProperty.asOptionalProperty]
 					if let memberDeclaration {
-						memberLines.append(Self.indented(memberDeclaration))
+						memberLines.append(Self.indented(memberDeclaration.declaration))
 						return CallArgument(label: parameter.property.label, source: .binding(label: parameter.property.label)).spelled
 					} else {
 						return argument
@@ -8811,7 +9066,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					? ""
 					: forwardedProperties.initializerFunctionParametersSource(amongTypesDeclaredEscaping: typesDeclaredEscaping)
 				let callArguments = (forwardedProperties.map { CallArgument(label: $0.label, source: .binding(label: $0.label)).spelled } + cycleArguments).joined(separator: ", ")
-				let receivedFunctionDecorator = buildsInSendableFunction || property.propertyType.isSendable ? sendableFunctionDecorator : ""
+				let receivedFunctionDecorator = Self.localFunctionPrefix(isSendable: buildsInSendableFunction || property.propertyType.isSendable)
 				let receivedFunctionDeclaration = """
 				\(receivedFunctionDecorator)func \(receivedFunctionName)(\(receivedFunctionParameters)) -> \(concreteTypeName) {
 				\((memberLines + ["\(Self.standardIndent)\(BuilderBody(statements: memberLines.map(GeneratedCode.text)).returnKeyword)\(functionName)(\(callArguments))"]).joined(separator: "\n"))
@@ -8843,7 +9098,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// A seam call's forwarded values are bound inside its text, which lists only the reads outside it.
 				forwardedProperties.isEmpty ? try seamCallRecord(of: property, instantiable: instantiable, code: code, declaredFunctionName: functionName, unavailableProperties: unavailableProperties, builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings, inlinePlaceBuilder: inlinePlaceBuilder, separatesValuesBindings: separatesValuesBindings) : nil
 			} else {
-				try builtRecord(functionName: functionName, hasFunction: true)
+				try builtRecord(functionName: functionName, hasFunction: true, rebindings: rebindingLines)
 			}
 			return place(code: code).with(record: record)
 		case .lazilyInstantiated,
@@ -9467,7 +9722,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// it under, where that is not the label.
 		var body = fillCallerReads.mockRootRebindings(rootBindingNames: fillPlaceBindings.rootBindingNames).map { "\(indent)let \($0.label) = \($0.rootBindingName)" }
 		// A fill is hosted as its text until fills are planned (`.claude/rules/emission-decisions.md`).
-		body += GeneratedCode.lines(childCode).spelled().split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+		body += GeneratedCodeText.lines(of: GeneratedCode.lines(childCode).spelled())
 		guard !fillReturnsWrapperBuilder else {
 			// A level function's member hands the fill of an instantiator's place each field it reads, and the fill returns the
 			// builder the wrapper keeps, spelled as the wrapper's own `Builder`: a function type a value it forwards could not
@@ -10027,8 +10282,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				/// they pass it up in other forms.
 				var placeProperties: [Property] {
 					calledBuilders.flatMap { called in
-						let sites = called.calledBuilders.sitesReached(by: called.builder, in: called.calledBuilders.enumsByKey)
-						return called.calledBuilders.holes.filter { sites.contains($0.site) && $0.holeType == called.builder.enumKey.holeType }.map(\.property)
+						called.calledBuilders.holesOfItsHoleTypeReached(by: called.builder).map(\.property)
 					}
 				}
 			}
@@ -12262,6 +12516,10 @@ extension ScopeGenerator: CycleParameterSearchNode {
 
 	nonisolated var searchChildren: [ScopeGenerator] {
 		propertiesToGenerate
+	}
+
+	nonisolated var searchIdentity: ObjectIdentifier {
+		ObjectIdentifier(self)
 	}
 
 	/// Whether a child's subtree closes a cycle on a scope enclosing the child, or a child is the scope a cycle beneath it

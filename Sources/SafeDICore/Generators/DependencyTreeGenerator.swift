@@ -52,6 +52,10 @@ public actor DependencyTreeGenerator {
 	///   - viewPlainTypeDeclarations: The plain type declarations of those modules, which attribute types too.
 	///   - viewDeclaringModules: The module each type those declarations fulfill is declared in, with the module this
 	///     module reaches it through, which an error about a type no declaration this module reads fulfills names.
+	///   - unfulfilledReceiveLocations: Where each received dependency and alias is declared that the trees are built
+	///     around although nothing provides it: `validatePropertiesAreFulfillable` reports no such dependency as
+	///     unfulfillable. Only `query graph` passes any, to read what the other receives of a graph mid-edit are handed
+	///     (`receivedValueSupplies()`); `generate` passes none, and reports every one.
 	public init(
 		importStatements: [ImportStatement],
 		mockImportStatements: [ImportStatement],
@@ -67,8 +71,10 @@ public actor DependencyTreeGenerator {
 		viewInstantiablesByModuleName: [String: [Instantiable]] = [:],
 		viewPlainTypeDeclarations: [PlainTypeDeclaration] = [],
 		viewDeclaringModules: [TypeDescription: ViewDeclaringModule] = [:],
+		unfulfilledReceiveLocations: Set<Dependency.DeclarationLocation> = [],
 	) {
 		self.unreadImports = unreadImports
+		self.unfulfilledReceiveLocations = unfulfilledReceiveLocations
 		self.viewInstantiablesByModuleName = viewInstantiablesByModuleName
 		self.viewDeclaringModules = viewDeclaringModules
 		let viewInstantiables = Array(viewInstantiablesByModuleName.values.joined())
@@ -424,11 +430,34 @@ public actor DependencyTreeGenerator {
 				for rootInfo in rootScopeGenerators {
 					taskGroup.addTask {
 						let code = try await rootInfo.scopeGenerator.generatePlan()
-						return await PlannedRoot(
+						// The imports are the root's union fact, read from its declarations, not from its generator tree.
+						let fulfillers = TypeFactsImports(root: rootInfo.rootScope).fulfillers
+						if let observer = TypeFactsImportsObservation.comparesWalk {
+							let walkedFulfillers = await GenerationWork.$observer.withValue(nil) {
+								await rootInfo.scopeGenerator.fulfillersOfTree(buildingMock: false)
+							}
+							observer(TypeFactsImportsComparison(root: rootInfo.typeDescription.asSource, foldedFulfillers: fulfillers, walkedFulfillers: walkedFulfillers))
+						}
+						if let observer = TypeFactsReceivedValueSuppliesObservation.comparesWalk {
+							await GenerationWork.$observer.withValue(nil) {
+								let folded = TypeFactsReceivedValueSupplies(root: rootInfo.rootScope)
+								// A tree `generate` plans is built around no receive nothing provides, which the walk always judges.
+								let walked = await rootInfo.scopeGenerator.receivedValueSupplies(
+									ofTreeRootedAt: rootInfo.instantiable,
+									unfulfilledReceives: ScopeGenerator.UnfulfilledReceives(locations: [], labels: []),
+								)
+								observer(TypeFactsReceivedValueSuppliesComparison(
+									root: rootInfo.typeDescription.asSource,
+									folded: ReceivedValueSupplies(supplies: folded.supplies, constructedTypes: folded.constructedTypes),
+									walked: walked.map { ReceivedValueSupplies(supplies: $0.supplies.uniqued(), constructedTypes: $0.constructedTypes.uniqued()) },
+								))
+							}
+						}
+						return PlannedRoot(
 							typeDescription: rootInfo.typeDescription,
 							sourceFilePath: rootInfo.sourceFilePath,
 							code: code,
-							fulfillers: rootInfo.scopeGenerator.fulfillersOfTree(buildingMock: false),
+							fulfillers: fulfillers,
 						)
 					}
 				}
@@ -521,6 +550,9 @@ public actor DependencyTreeGenerator {
 	private let importAccessSpellingOwnLevels: @Sendable ([String: Set<AccessLevel>]) -> GeneratedImportAccess
 	private let readOwnFiles: (@Sendable () async -> FulfillerImports.OwnFiles)?
 	let typeDescriptionToFulfillingInstantiableMap: [TypeDescription: Instantiable]
+	/// Where each received dependency and alias is declared that the trees are built around although nothing provides
+	/// it. Empty but for `query graph`'s generator of a graph whose only errors are such dependencies.
+	let unfulfilledReceiveLocations: Set<Dependency.DeclarationLocation>
 	/// The generator's one ID space: every map it freezes interns its records' values here, so that every ID a tree or a
 	/// construction memo compares means one value however many maps and tables the generator makes. Only the generator's
 	/// serial code reaches it.
@@ -558,6 +590,8 @@ public actor DependencyTreeGenerator {
 		let typeDescription: TypeDescription
 		let instantiable: Instantiable
 		let sourceFilePath: String?
+		/// The root's scope, from which its tree is built, whose declarations the imports read (`TypeFactsImports`).
+		let rootScope: ConstructionScope
 		let scopeGenerator: ScopeGenerator
 	}
 
@@ -701,6 +735,7 @@ public actor DependencyTreeGenerator {
 						typeDescription: typeDescription,
 						instantiable: scope.instantiable,
 						sourceFilePath: typeDescriptionToFulfillingInstantiableMap[typeDescription]?.sourceFilePath,
+						rootScope: ConstructionScope(table: table, record: record),
 						scopeGenerator: record.createScopeGenerator(
 							in: table,
 							lazilyInstantiatedInstanceProperties: [],

@@ -40,6 +40,110 @@ struct SafeDIToolGraphFuzzerNestedCycleTests {
 		}
 	}
 
+	@Test(arguments: [UInt64(819), 1_501])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func toolRuns_rejectFillWithDeclarationBoundOnCycleReentry_whenNoTypeOfNestedCyclesReceivesLabel(seed: UInt64) async throws {
+		// The seam corpus's `addingNestedCycleHoleShapes`, unremedied: `NestHoleRedeclarer` declares `nestHoleTag` again
+		// inside the second cycle, no type of the cycles receives it, so no builder function takes it, and `NestHoleLive`,
+		// filling a place on `NestHoleOuter`'s level from the roots' module, reads it. Inline, and in the visible build,
+		// which fills the place in the seam's module, the `NestHoleOuter` built beneath `NestHoleRedeclarer` reads that
+		// type's tag; the seam hands the fill the same values at every level of a cycle, so the tool rejects the read and
+		// offers the receive on `NestHoleOuter`. Seed 819's place is on `NestHoleOuter`, in two cycles. Seed 1501's is on
+		// `NestHoleScreen`, and `NestHoleRedeclarer` is built in a third cycle, nested in the second (`NestHoleThird`):
+		// with the declarations of the cycles nested inside a nested cycle left out of
+		// `SeamBuilderParameters.declarationsBetween` (its nested scopes read with `nestedCycles: nil`), the tool accepts
+		// seed 1501 and the fill beneath `NestHoleRedeclarer` reads `NestHoleHome`'s tag, which the comparison with the
+		// visible build reports (`holeBuildsOtherValuesThanVisibleBuild`).
+		let fixture = GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateDependencyTree])
+		let drawFeatures = GraphFuzzerFeature.seamDrawFeatures(of: fixture)
+		#expect(drawFeatures.contains(.nestedCycleHoleLabelNoFunctionTakes))
+		#expect(!drawFeatures.contains(.nestedCycleHolePlacePassedUp))
+		#expect(drawFeatures.contains(.nestedCycleHolePlaceOnScreen) == (seed == 1_501))
+		#expect(drawFeatures.contains(.nestedCycleHoleThirdCycle) == (seed == 1_501))
+		let runs = try await GraphFuzzerOracle.toolRuns(of: fixture, renamings: [])
+		let prefix = fixture.typeNamePrefix
+		guard case let .rejected(diagnostics) = runs.firstOutcome else {
+			Issue.record("Seed \(seed) is not rejected")
+			return
+		}
+		let findings = diagnostics.split(separator: "\n").filter { $0.contains("`\(prefix)NestHoleLive` receives `nestHoleTag: ") }
+		#expect(!findings.isEmpty && findings.allSatisfy {
+			$0.contains("because a cycle inside `\(prefix)NestHoleInner`’s tree passes it (`\(prefix)NestHoleRedeclarer` declares `nestHoleTag: \(prefix)NestHoleTag`)")
+				&& $0.contains("the same values at every level of that cycle")
+				&& $0.contains("Declare `@Received let nestHoleTag: \(prefix)NestHoleTag` on `\(prefix)NestHoleOuter`, so each `\(prefix)NestHoleOuter` receives the `nestHoleTag` of its own level and hands it on")
+		}, "Seed \(seed):\n\(diagnostics)")
+		guard case .accepted? = runs.visibleOutcome else {
+			Issue.record("Seed \(seed)’s visible build is not accepted")
+			return
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func toolRuns_rejectFillWithDeclarationBoundOnCycleReentry_whenSeamCalledInsideNestedCyclesPassesPlaceUp() async throws {
+		// The same draw with the place passed up, unremedied: `NestHoleOuter` builds `NestHoleHub`, a seam of the module
+		// beneath, whose place `NestHoleHome` passes up to its caller. `NestHoleHubRoot` declares the tag, which no type of
+		// `NestHoleHome`'s tree receives, so `NestHoleHome` hands the caller's fill no value of any level. Inline, the
+		// `NestHoleHub` built beneath `NestHoleRedeclarer` reads that type's tag, so the tool rejects the read and offers
+		// the receive on `NestHoleHub`, the seam called. With `SeamBuilderParameters.holesPassedUp` adding none of the
+		// declarations of the cycles around the call, the tool accepts seed 222 and every level's fill reads
+		// `NestHoleHubRoot`'s tag, which the comparison with the visible build reports
+		// (`holeBuildsOtherValuesThanVisibleBuild`).
+		let seed: UInt64 = 222
+		let fixture = GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateDependencyTree])
+		let drawFeatures = GraphFuzzerFeature.seamDrawFeatures(of: fixture)
+		#expect(drawFeatures.contains(.nestedCycleHoleLabelNoFunctionTakes))
+		#expect(drawFeatures.contains(.nestedCycleHolePlacePassedUp))
+		let runs = try await GraphFuzzerOracle.toolRuns(of: fixture, renamings: [])
+		let prefix = fixture.typeNamePrefix
+		guard case let .rejected(diagnostics) = runs.firstOutcome else {
+			Issue.record("Seed \(seed) is not rejected")
+			return
+		}
+		let findings = diagnostics.split(separator: "\n").filter { $0.contains("`\(prefix)NestHoleLive` receives `nestHoleTag: ") }
+		#expect(!findings.isEmpty && findings.allSatisfy {
+			$0.contains("because a cycle inside `\(prefix)NestHoleInner`’s tree passes it (`\(prefix)NestHoleRedeclarer` declares `nestHoleTag: \(prefix)NestHoleTag`)")
+				&& $0.contains("SafeDI hands the builder for `\(prefix)NestHoleHub`’s `nestHoleApi: any \(prefix)NestHoleApi` (`nestHoleApi` of `s\(seed)_NestHoleApiBuilder`) the same values at every level of that cycle")
+				&& $0.contains("Declare `@Received let nestHoleTag: \(prefix)NestHoleTag` on `\(prefix)NestHoleHub`, so each `\(prefix)NestHoleOuter` passes its `\(prefix)NestHoleHub` the `nestHoleTag` of its own level, which the builder is then handed")
+		}, "Seed \(seed):\n\(diagnostics)")
+		guard case .accepted? = runs.visibleOutcome else {
+			Issue.record("Seed \(seed)’s visible build is not accepted")
+			return
+		}
+	}
+
+	@Test(arguments: [UInt64(132), 471, 68, 69])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func toolRuns_acceptBothBuildsWithVisibleBuildsValues_whenTypeBuiltAgainThroughSecondCycleReceivesLabelItsPlacesFillReads(seed: UInt64) async throws {
+		// The remedy, as the draw applies it: `NestHoleOuter` receives `nestHoleTag`, or, where it builds `NestHoleHub`,
+		// whose place `NestHoleHome` passes up, that seam does, so each level's builder function takes it and the fill
+		// reads its own level's. Both builds accept the graph, and every oracle passes, the comparison of the hole
+		// build's values with the visible build's and the inline build's included. Seed 132's place is on
+		// `NestHoleOuter`, seed 471's on `NestHoleScreen` in three cycles; seeds 68 and 69 pass the place up, 69 in
+		// three cycles.
+		let fixture = GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateDependencyTree])
+		let drawFeatures = GraphFuzzerFeature.seamDrawFeatures(of: fixture)
+		let isPassedUp = seed == 68 || seed == 69
+		#expect(drawFeatures.contains(.nestedCycleHoleLabelReceivedByTypeBuiltAgain) == !isPassedUp)
+		#expect(drawFeatures.contains(.nestedCycleHoleLabelReceivedBySeamPassingPlaceUp) == isPassedUp)
+		#expect(drawFeatures.contains(.nestedCycleHolePlacePassedUp) == isPassedUp)
+		#expect(drawFeatures.contains(.nestedCycleHoleThirdCycle) == (seed == 471 || seed == 69))
+		let runs = try await GraphFuzzerOracle.toolRuns(of: fixture, renamings: [])
+		for (build, outcome) in [("hole", Optional(runs.firstOutcome)), ("visible", runs.visibleOutcome)] {
+			switch outcome {
+			case .accepted?:
+				break
+			case let .rejected(diagnostics)?:
+				Issue.record("Seed \(seed)’s \(build) build is rejected:\n\(diagnostics)")
+			case nil:
+				Issue.record("Seed \(seed) has no \(build) build")
+			}
+		}
+		let results = try await GraphFuzzerOracle.results(of: [runs])
+		#expect(results.map { $0.failure.map { "\($0.kind): \($0.details)" } } == [nil])
+		#expect(results.flatMap { $0.laterFailures.map { "\($0.kind): \($0.details)" } } == [])
+	}
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func valueOraclePlan_comparesNestRootsBuildWithTreeBuiltByHand_forSeed576() {
