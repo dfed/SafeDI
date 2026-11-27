@@ -177,4 +177,18 @@ public struct NodeRecordsReport: Sendable {
 	/// Whether the root is a mock's: its records are compared with no tree's, so `differences` is empty, and a test
 	/// compares the code laid out from them, or the values that code builds, with the mock's walk's.
 	public var isMockRoot = false
+	/// The root's code as its tree spells it and as it is laid out from node records, where both were laid out: what a
+	/// test rewrites by the approved differences before it reports the root as differing.
+	public var comparedTexts: NodeRecordsComparedTexts?
+	/// The differences among `differences` that no text shows, a capture or a label only the tree's checks see: no
+	/// approved difference of the texts accounts for one.
+	public var differencesNoTextShows = [String]()
+}
+
+/// One root's code, spelled from its tree and laid out from its node records (`NodeRecordsReport.comparedTexts`).
+public struct NodeRecordsComparedTexts: Sendable {
+	/// The code the tree's places spell.
+	public let tree: String
+	/// The code laid out from node records.
+	public let nodeRecords: String
 }
