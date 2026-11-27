@@ -1993,7 +1993,7 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 			defaultFirstDeclarations: ["@Instantiated let x: X", "@Instantiated let subB: SubB"],
 			gadgetDeclarations: ["@Received(onlyIfAvailable: true) let x: X?"],
 		)
-		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, middleDeclaration, fixtures in
+		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, middleDeclaration, _ in
 			"""
 			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which `DefaultFirst` declares on the path from the builder for `SubA`’s `first: any First` (`first` of `firstBuilder`) to the call by which `DefaultFirst` instantiates `SubB` again (`subB`), but that call passes the builder on as module `Middle` fills it, which cannot hand it `DefaultFirst`’s values. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(middleDeclaration("DefaultFirst.swift", 10, 5)): note: `DefaultFirst` declares `x: X` here.
@@ -2013,7 +2013,7 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 			defaultFirstDeclarations: ["@Instantiated let x: X", "@Instantiated let subB: SubB"],
 			gadgetDeclarations: ["@Received(onlyIfAvailable: true) let x: X?"],
 		)
-		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, middleDeclaration, fixtures in
+		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, middleDeclaration, _ in
 			"""
 			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which `DefaultFirst` declares on the path from the builder for `SubA`’s `first: any First` (`first` of `firstBuilder`) to the call by which `DefaultFirst` instantiates `SubB` again (`subB`), but that call passes the builder on as module `Middle` fills it, which cannot hand it `DefaultFirst`’s values. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(middleDeclaration("DefaultFirst.swift", 10, 5)): note: `DefaultFirst` declares `x: X` here.
@@ -2031,7 +2031,7 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 			hostDeclarations: ["@Instantiated let x: X", "@Instantiated let top: Top"],
 			gadgetDeclarations: ["@Received let x: X"],
 		)
-		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, middleDeclaration, fixtures in
+		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, middleDeclaration, _ in
 			"""
 			\(readerLocation): error: `DefaultGadget` receives `x: X`, which `DefaultFirst` declares on the path from the builder for `SubA`’s `first: any First` (`first` of `firstBuilder`) to the call by which `DefaultFirst` instantiates `SubB` again (`subB`), but that call passes the builder on as module `Middle` fills it, which cannot hand it `DefaultFirst`’s values. Declare `@Received let x: X` on `SubB`, with `x` declared on every route to `SubB`, so SafeDI hands it to the builder; receive it only if available on `SubB` and `DefaultGadget`, with `@Received(onlyIfAvailable: true) let x: X?`; or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(middleDeclaration("DefaultFirst.swift", 10, 5)): note: `DefaultFirst` declares `x: X` here.
@@ -2048,7 +2048,7 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 			hostDeclarations: ["@Instantiated let x: X", "@Instantiated let top: Top"],
 			gadgetDeclarations: ["@Received(onlyIfAvailable: true) let x: X?"],
 		)
-		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, middleDeclaration, fixtures in
+		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, middleDeclaration, _ in
 			"""
 			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which `DefaultFirst` declares on the path from the builder for `SubA`’s `first: any First` (`first` of `firstBuilder`) to the call by which `DefaultFirst` instantiates `SubB` again (`subB`), but that call passes the builder on as module `Middle` fills it, which cannot hand it `DefaultFirst`’s values. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(middleDeclaration("DefaultFirst.swift", 10, 5)): note: `DefaultFirst` declares `x: X` here.
@@ -2064,7 +2064,7 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 			defaultFirstDeclarations: ["@Instantiated let x: X", "@Instantiated let subBBuilder: Instantiator<SubB>"],
 			gadgetDeclarations: ["@Received(onlyIfAvailable: true) let x: X?"],
 		)
-		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, middleDeclaration, fixtures in
+		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, middleDeclaration, _ in
 			"""
 			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which `DefaultFirst` declares on the path from the builder for `SubA`’s `first: any First` (`first` of `firstBuilder`) to the call by which `DefaultFirst` instantiates `SubB` again (`subBBuilder`), but that call passes the builder on as module `Middle` fills it, which cannot hand it `DefaultFirst`’s values. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(middleDeclaration("DefaultFirst.swift", 10, 5)): note: `DefaultFirst` declares `x: X` here.
@@ -2082,7 +2082,7 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 			defaultSecondDeclarations: ["@Instantiated let holder: Holder", "@Instantiated let gadget: any Gadget"],
 			gadgetDeclarations: ["@Received(onlyIfAvailable: true) let x: X?"],
 		)
-		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, middleDeclaration, fixtures in
+		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, middleDeclaration, _ in
 			"""
 			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which `Holder` declares on the path from the builder for `SubB`’s `second: any Second` (`second` of `secondBuilder`) to the call by which `Holder` instantiates `SubB` again (`subBBuilder`), but that call passes the builder on as module `Middle` fills it, which cannot hand it `Holder`’s values. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(middleDeclaration("Holder.swift", 10, 5)): note: `Holder` declares `x: X` here.
@@ -2099,7 +2099,7 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 			defaultFirstDeclarations: ["@Instantiated let x: X", "@Instantiated let subBBuilder: SendableInstantiator<SubB>"],
 			gadgetDeclarations: ["@Received(onlyIfAvailable: true) let x: X?"],
 		)
-		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, middleDeclaration, fixtures in
+		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, middleDeclaration, _ in
 			"""
 			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which `DefaultFirst` declares on the path from the builder for `SubA`’s `first: any First` (`first` of `firstBuilder`) to the call by which `DefaultFirst` instantiates `SubB` again (`subBBuilder`), but that call passes the builder on as module `Middle` fills it, which cannot hand it `DefaultFirst`’s values. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(middleDeclaration("DefaultFirst.swift", 10, 5)): note: `DefaultFirst` declares `x: X` here.
@@ -2117,7 +2117,7 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 			defaultSecondDeclarations: ["@Instantiated let inner: Inner"],
 			appTypes: [SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "DefaultGizmo", fulfilling: "Gizmo", declarations: ["@Received(onlyIfAvailable: true) let x: X?"])],
 		)
-		await expectBothBuildsThrow(fixture, readerFile: "DefaultGizmo.swift", readerLineInMiddle: 9) { readerLocation, middleDeclaration, fixtures in
+		await expectBothBuildsThrow(fixture, readerFile: "DefaultGizmo.swift", readerLineInMiddle: 9) { readerLocation, middleDeclaration, _ in
 			"""
 			\(readerLocation): error: `DefaultGizmo` receives `x: X?`, which `DefaultFirst` declares on the path from the builder for `SubA`’s `first: any First` (`first` of `firstBuilder`) to the call by which `DefaultFirst` instantiates `SubB` again (`subB`), but that call passes the builder on as module `Middle` fills it, which cannot hand it `DefaultFirst`’s values. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(middleDeclaration("DefaultFirst.swift", 10, 5)): note: `DefaultFirst` declares `x: X` here.
@@ -2165,7 +2165,7 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 			defaultSecondDeclarations: ["@Instantiated let holder: Holder", "@Instantiated let gadget: any Gadget"],
 			gadgetDeclarations: ["@Received(onlyIfAvailable: true) let x: X?"],
 		)
-		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, middleDeclaration, fixtures in
+		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, middleDeclaration, _ in
 			"""
 			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which `DefaultFirst` declares on the path from the builder for `SubA`’s `first: any First` (`first` of `firstBuilder`) to the call by which `DefaultFirst` instantiates `SubB` again (`subB`) and `Holder` declares on the path from the builder for `SubB`’s `second: any Second` (`second` of `secondBuilder`) to the call by which `Holder` instantiates `SubB` again (`subBBuilder`), but those calls pass the builder on as module `Middle` fills it, which cannot hand it `DefaultFirst`’s and `Holder`’s values. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(middleDeclaration("DefaultFirst.swift", 10, 5)): note: `DefaultFirst` declares `x: X` here.
@@ -2183,7 +2183,7 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 			defaultFirstDeclarations: ["@Instantiated let x: X", "@Instantiated let subB: SubB", "@Instantiated let subBBuilder: Instantiator<SubB>"],
 			gadgetDeclarations: ["@Received(onlyIfAvailable: true) let x: X?"],
 		)
-		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, middleDeclaration, fixtures in
+		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, middleDeclaration, _ in
 			"""
 			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which `DefaultFirst` declares on the path from the builder for `SubA`’s `first: any First` (`first` of `firstBuilder`) to the call by which `DefaultFirst` instantiates `SubB` again (`subB`) and `DefaultFirst` declares on the path from the builder for `SubA`’s `first: any First` (`first` of `firstBuilder`) to the call by which `DefaultFirst` instantiates `SubB` again (`subBBuilder`), but those calls pass the builder on as module `Middle` fills it, which cannot hand it `DefaultFirst`’s values. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(middleDeclaration("DefaultFirst.swift", 11, 5)): note: `DefaultFirst` declares `x: X` here.
@@ -2831,7 +2831,7 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 			defaultFirstDeclarations: ["@Instantiated let x: X", "@Instantiated let relay: Relay"],
 			gadgetDeclarations: ["@Received(onlyIfAvailable: true) let x: X?"],
 		)
-		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, middleDeclaration, fixtures in
+		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, middleDeclaration, _ in
 			"""
 			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which `DefaultFirst` declares on the path from the builder for `SubA`’s `first: any First` (`first` of `firstBuilder`) to the call by which `DefaultFirst` instantiates `Relay` (`relay`), which instantiates `SubB` again, but that call passes the builder on as module `Middle` fills it, which cannot hand it `DefaultFirst`’s values. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(middleDeclaration("DefaultFirst.swift", 10, 5)): note: `DefaultFirst` declares `x: X` here.

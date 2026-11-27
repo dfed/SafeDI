@@ -2125,9 +2125,9 @@ public struct Generate: AsyncParsableCommand {
 	private func moduleInfoDestination() throws -> (path: String, moduleName: String)? {
 		switch (moduleInfoOutput, moduleName) {
 		case (nil, _):
-			return nil
+			nil
 		case let (path?, moduleName?):
-			return (path: path, moduleName: moduleName)
+			(path: path, moduleName: moduleName)
 		case (_?, nil):
 			throw ValidationError("'--module-info-output' requires '--module-name': a module info file names the module it describes.")
 		}
