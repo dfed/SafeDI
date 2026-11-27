@@ -90,6 +90,25 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsTree_whenRecordsOfRootCannotBeLaidOut() async throws {
+		// A root with no dependencies has no generated initializer, so the engine lays out nothing from its records.
+		let (forcers, _) = try await treeForcers(of: [
+			"""
+			@Instantiable(isRoot: true)
+			public final class Root: Instantiable {
+			    public init() {}
+			}
+			""",
+		])
+		#expect(forcers == """
+		Root\tkind notLaidOut
+		roots that built a tree: 1 of 1
+
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_buildsTree_whenRenameOfSharedTypeIsFulfilledByWrapperOnFirstPathAndValueOnSecond() async throws {
 		let (forcers, _) = try await treeForcers(of: Self.renameFulfilledByWrapperAndValue(lazyParentFirst: true))
 		// One variant of `Reader`'s rename is called beneath both parents, which answer its `x` as a wrapper's instance and as

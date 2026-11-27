@@ -150,10 +150,8 @@ struct NodeRecords: Sendable {
 	static func refusingWhatRecordsThrow<Value>(_ body: () throws -> Value) -> Result<Value, NodeRecordRefusal> {
 		do {
 			return try .success(body())
-		} catch let refusal as NodeRecordRefusal {
-			return .failure(refusal)
 		} catch {
-			return .failure(.recordsThrew)
+			return .failure(error as? NodeRecordRefusal ?? .recordsThrew)
 		}
 	}
 

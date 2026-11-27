@@ -2518,6 +2518,77 @@ struct SafeDIToolGraphFuzzerTests {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func queryGraph_marksDependenciesGenerateReports_inTenBaseCorpusGraphsWithPartialTrees() async throws {
+		// The smoke batch holds too few graphs whose trees `query graph` builds around dependencies that cannot be
+		// fulfilled for a floor, so this judges the first base corpus graphs the tool rejects as the marks oracle does,
+		// with one run of the tool each. Only an export with partial trees counts, so a change that stops `query graph`
+		// building them fails here rather than quietly judging nothing.
+		//
+		// What the marks and deletion oracles add to a long run, measured in a debug build on one core over base corpus
+		// seeds 0..<1250, a shard: 221 seconds (the rejected graphs’ exports 69, the runs with missing types declared 8,
+		// the two deletions with their exports 144), where one `generate` run of each of those graphs takes 277.
+		var partialSeeds = [UInt64]()
+		for seed in UInt64(0)..<120 {
+			guard let marks = try await GraphFuzzerQueryJudgment.marks(of: GraphFuzzerGenerator.fixture(forSeed: seed)) else { continue }
+			#expect(marks.problems == [], "Seed \(seed)")
+			if marks.isPartial {
+				partialSeeds.append(seed)
+			}
+		}
+		#expect(partialSeeds.count >= 10, "Judged partial trees of seeds \(partialSeeds)")
+	}
+
+	@Test(arguments: [70, 79, 293, 335, 485, 896, 1_101, 1_342, 1_345, 1_354, 1_419] as [UInt64])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func queryGraph_marksReceivesGenerateReportsOnceMissingTypesAreDeclared_inBaseCorpusGraphThatHoldsBoth(seed: UInt64) async throws {
+		// A graph that instantiates a type no declaration fulfills and receives a value nothing provides is rare, so the
+		// marks oracle's checks against the graph with its missing types declared have named seeds: each further mark is
+		// an error `generate` reports of that graph, and each error it reports of that graph is at a mark. Each seed must
+		// still run the graph so and agree with it. With the receives the second build reports left unmarked, every one
+		// of these seeds fails.
+		let marks = try #require(await GraphFuzzerQueryJudgment.marks(of: GraphFuzzerGenerator.fixture(forSeed: seed)))
+		#expect(marks.isPartial)
+		#expect(marks.ranWithMissingTypesDeclared)
+		#expect(marks.problems == [])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func queryGraph_handsEveryOtherReceiveItsValue_whenDeclarationIsDeletedFromTenBaseCorpusGraphs() async throws {
+		// The deletion oracle exports a graph again without one type's declaration, and without one property that provides
+		// a value, and requires every receive that read neither to keep its provenance. This judges the first base corpus
+		// graphs so, with no run of the tool, so a change that stops it finding a declaration to delete, or a deletion that
+		// leaves partial trees, fails here rather than quietly judging nothing.
+		var seedsLeftWithUnfulfilledDependency = [UInt64]()
+		var seedsLeftWithUnfulfilledReceive = [UInt64]()
+		for seed in UInt64(0)..<60 {
+			let deletions = try await GraphFuzzerQueryJudgment.deletions(of: GraphFuzzerGenerator.fixture(forSeed: seed))
+			#expect(deletions.problems == [], "Seed \(seed)")
+			if deletions.declarationLeavesDependencyUnfulfilled {
+				seedsLeftWithUnfulfilledDependency.append(seed)
+			}
+			if deletions.propertyLeavesPartialTrees {
+				seedsLeftWithUnfulfilledReceive.append(seed)
+			}
+		}
+		#expect(seedsLeftWithUnfulfilledDependency.count >= 10, "Deleted a declaration a reached dependency requires from seeds \(seedsLeftWithUnfulfilledDependency)")
+		#expect(seedsLeftWithUnfulfilledReceive.count >= 10, "Deleted a property a reached receive requires from seeds \(seedsLeftWithUnfulfilledReceive)")
+	}
+
+	@Test(arguments: [2, 25, 33, 35, 39, 77, 83, 114, 121, 146, 164, 170] as [UInt64])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func queryGraph_namesMarkedReceiveOfDeletedProperty_inBaseCorpusGraphWithReceiveBeneathIt(seed: UInt64) async throws {
+		// A receive beneath a marked receive of the deleted property, whose value names the receive above, is in about one
+		// base corpus graph in twelve, so those graphs have named seeds: each must still hold such a receive, which the
+		// oracle judges.
+		let deletions = try await GraphFuzzerQueryJudgment.deletions(of: GraphFuzzerGenerator.fixture(forSeed: seed))
+		#expect(deletions.propertyLeavesPartialTrees)
+		#expect(deletions.propertyLeavesReceiveBeneathMarkedReceive)
+		#expect(deletions.problems == [])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func seamSmokeSeeds_judgeGeneratedOnlyInitializerDefaults_inGraphsTheToolAccepts() async throws {
 		// The oracle judges each initializer only generated code calls, so a change that stops it finding them fails here
 		// rather than quietly judging nothing.
@@ -6576,27 +6647,6 @@ struct SafeDIToolGraphFuzzerTests {
 	@Test(.enabled(if: GraphFuzzerLongRunConfiguration.current != nil, "Set SAFEDI_GRAPH_FUZZER_ITERATIONS or SAFEDI_GRAPH_FUZZER_SEEDS to run"))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func longRun_findsNoUnknownFailures_whenEnabledByEnvironment() async throws {
-		// The runs of the tool in this process report each production root that reaches a cycle with its plan's bodies
-		// (`PlanBodiesObservation`): the report's last line counts those roots, those that hold a twin, which stay built
-		// per path, and the bodies their plans build. A graph is run several times, so the counts are of roots of runs.
-		let (planStream, planContinuation) = AsyncStream.makeStream(of: (bodyCount: Int, holdsTwin: Bool).self)
-		try await PlanBodiesObservation.$observer.withValue({ _, bodiesOfPlan, _, twinValues in
-			planContinuation.yield((bodiesOfPlan.count, !twinValues.isEmpty))
-		}) {
-			try await longRun()
-		}
-		planContinuation.finish()
-		var (cyclicRootCount, twinRootCount, bodyCount) = (0, 0, 0)
-		for await plan in planStream {
-			cyclicRootCount += 1
-			twinRootCount += plan.holdsTwin ? 1 : 0
-			bodyCount += plan.bodyCount
-		}
-		GraphFuzzerReport(path: GraphFuzzerLongRunConfiguration.current?.reportPath).append("per-type-plan cyclic-roots=\(cyclicRootCount) twin-roots=\(twinRootCount) bodies=\(bodyCount)")
-	}
-
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	private func longRun() async throws {
 		let configuration = try #require(GraphFuzzerLongRunConfiguration.current)
 		let report = GraphFuzzerReport(path: configuration.reportPath)
 		func reportProblem(_ problem: String) {
@@ -7085,7 +7135,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// one compile and one link.
 	static let smokeSeeds: [UInt64] = [4, 5, 12, 18, 25, 30, 40, 53, 59, 62, 70, 86, 94, 97, 98, 99, 133, 161, 212, 267, 304, 327, 378, 466, 520, 582, 691, 705, 731, 930, 2_314, 2_420, 2_611, 3_360, 4_002, 4_224, 4_516, 5_889, 6_388]
 
-	static let smokeAndKnownIssueFixtureHash: UInt64 = 0xD3C2896C551E1C1C
+	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x7036001E6A7C6CCE
 
 	/// The remedies the remedy oracle applies in the smoke batch's rejected graphs. `SafeDIToolGraphFuzzerRemedyTests`
 	/// holds a representative of every kind.
@@ -7095,15 +7145,15 @@ struct SafeDIToolGraphFuzzerTests {
 	/// them; `corpusPartitionHash` pins the whole corpus's. The partition draws nothing from the seed, so changing it
 	/// changes neither the graphs nor the pins on them: these pins make a change to the partition deliberate. They
 	/// move with the generator and, this one, with the smoke and known-issue seeds too, as the fixture hashes do.
-	static let smokeAndKnownIssuePartitionHash: UInt64 = 0xC0B72D84912C654A
+	static let smokeAndKnownIssuePartitionHash: UInt64 = 0x621CFB8CC4F3014
 
 	/// The corpus, seeds `0..<corpusSeedCount`, which ci.yml fuzzes on every pull request and push to main and
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=corpus` selects. `knownIssues` lists every one that fails.
 	static let corpusSeedCount = 5_000
 
-	static let corpusFixtureHash: UInt64 = 0xCCED4D5460D284AC
+	static let corpusFixtureHash: UInt64 = 0x498249530FB88E0F
 
-	static let corpusPartitionHash: UInt64 = 0x5187071079C6A0DC
+	static let corpusPartitionHash: UInt64 = 0x6E9B72CF03F27B48
 
 	/// How many of the corpus's graphs the tool accepts, and which ones, as a `GraphFuzzerSeedSetSum`, which
 	/// shards of the corpus can add up.
@@ -7115,23 +7165,23 @@ struct SafeDIToolGraphFuzzerTests {
 	/// corpus, so a generator change that stops drawing a feature, or a tool change that stops accepting the graphs that
 	/// draw it, changes these and must update them deliberately, with the hashes and the accepted-seed pins.
 	static let corpusAcceptedFeatureCounts: [GraphFuzzerFeature: Int] = [
-		.constantProperty: 2_617,
-		.erasedConstantProperty: 450,
-		.instantiatorProperty: 2_195,
-		.sendableInstantiatorProperty: 919,
+		.constantProperty: 2_624,
+		.erasedConstantProperty: 560,
+		.instantiatorProperty: 2_191,
+		.sendableInstantiatorProperty: 917,
 		.erasedInstantiatorProperty: 1_382,
 		.sendableErasedInstantiatorProperty: 493,
-		.lazilyInstantiatedProperty: 555,
-		.sendableLazilyInstantiatedProperty: 149,
+		.lazilyInstantiatedProperty: 853,
+		.sendableLazilyInstantiatedProperty: 200,
 		.erasedLazilyInstantiatedProperty: 216,
 		.forwardedLazilyInstantiatedProperty: 328,
 		.receivedLazilyInstantiatedInstance: 277,
-		.forwardedProperty: 1_714,
+		.forwardedProperty: 1_686,
 		.optionalForwardedProperty: 889,
-		.requiredReceive: 2_504,
+		.requiredReceive: 2_522,
 		.requiredOptionalReceive: 371,
 		.onlyIfAvailableReceive: 2_287,
-		.requiredAlias: 1_097,
+		.requiredAlias: 1_365,
 		.onlyIfAvailableAlias: 1_033,
 		.aliasOfOnlyIfAvailableAlias: 78,
 		.aliasOfOptionalFormOfProperty: 83,
@@ -7160,10 +7210,10 @@ struct SafeDIToolGraphFuzzerTests {
 		.forwardedTupleKeywordLabel: 173,
 		.forwardedPropertiesTypealiasArgument: 156,
 		.forwardedTupleBuilderReceivedByMockedType: 137,
-		.multipleRoots: 1_971,
+		.multipleRoots: 2_083,
 		.generateMock: 2_490,
-		.lazyCycle: 1_482,
-		.constantCycleCloser: 208,
+		.lazyCycle: 1_420,
+		.constantCycleCloser: 157,
 		.builderReceivedInsideItsTree: 179,
 		.sendableBuilderReceivedInsideItsTree: 68,
 		.builderReceivedInsideItsTreeBesideBuilderLeftNil: 40,
@@ -7177,7 +7227,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.dependencyMockCannotBuildReceivedBeneathItsOwner: 267,
 		.dependencyMockCannotBuildReceivedLazilyBesideItsMockedOwner: 68,
 		.dependencyMockCannotBuildLazilyInstantiatedReceivedAsOtherKindBesideItsMockedOwner: 9,
-		.sendableAndNonSendableWrappers: 576,
+		.sendableAndNonSendableWrappers: 581,
 		.mockedTypeOnLazyCycle: 704,
 		.typesReceivingEachOtherOnlyIfAvailable: 298,
 		.labelReceivedAsInstanceAndAsInstantiator: 244,
@@ -7336,8 +7386,8 @@ struct SafeDIToolGraphFuzzerTests {
 
 	/// What the base corpus's value oracle compares and skips over the whole corpus (`GraphFuzzerValueOracleCounts`).
 	static let corpusValueOracleCounts = GraphFuzzerValueOracleCounts(
-		rootPairCount: 5_879,
-		rootPairsSum: GraphFuzzerSeedSetSum(value: 0x718E3F682577BF99),
+		rootPairCount: 6_240,
+		rootPairsSum: GraphFuzzerSeedSetSum(value: 0x3457D9C40449A8B3),
 		mirroredPairCount: 5_290,
 		mirroredPairsSum: GraphFuzzerSeedSetSum(value: 0x10EC6065CFF8BC10),
 		skipCounts: [
@@ -7347,7 +7397,7 @@ struct SafeDIToolGraphFuzzerTests {
 			.requiredReceiveOfUncreatedAlias: 40,
 		],
 		shapeCounts: [
-			.rootTreePropertyReceivedByTwoOrMoreTypes: 1_885,
+			.rootTreePropertyReceivedByTwoOrMoreTypes: 1_784,
 			.rootTreeLabelDeclaredAtTwoDepthsAboveReceiver: 181,
 			.promotedDependencyReceivedByTwoOrMoreTypes: 565,
 			.onlyIfAvailableAliasOfPromotedDependency: 122,
@@ -7358,12 +7408,12 @@ struct SafeDIToolGraphFuzzerTests {
 		],
 		drawnMocksMatchingOnlyAfterNormalizationCount: 945,
 		mirroredPairsTakingSamplesCount: 972,
-		forwardedPropertiesSampleCount: 2_818,
-		overridePairCount: 6_955,
-		overridePairsSum: GraphFuzzerSeedSetSum(value: 0xC8B12CEE068C76CC),
+		forwardedPropertiesSampleCount: 2_727,
+		overridePairCount: 7_306,
+		overridePairsSum: GraphFuzzerSeedSetSum(value: 0x3C50D1C79CDA5534),
 		overrideFieldKindCounts: [
-			.builder: 4_645,
-			.configuration: 2_310,
+			.builder: 4_523,
+			.configuration: 2_783,
 		],
 		pinnedPlacePairCount: 105,
 		nestedCyclePairCount: 92,
