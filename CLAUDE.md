@@ -120,7 +120,7 @@ Everything SafeDI produces must be identical on every run over the same inputs: 
 ## Pull requests
 
 - The title and description become the squash commit: write them for a newcomer reading `git log` a year later. Say what changes in SafeDI's user-facing terms and why, the tests in a sentence, and the leftovers; no local paths, scratch files, decision identifiers, review rounds or history. Update the description with every push. A fix found in passing gets its own pull request.
-- Each "Found and not fixed" item states its plan: a named pull request, a near-term follow-up release (never a version number), or left and why. A leftover earns a pull request only if it generates code that does not compile, or a wrong value, in a shape a real adopter writes.
+- Each "Found and not fixed" item states its plan: a named pull request, a near-term follow-up release and why (never a version number), or left and why. A leftover earns a pull request only if it generates code that does not compile, or a wrong value, in a shape a real adopter writes.
 - A "Found and not fixed" item whose fix is an open pull request links it, and that pull request links back.
 - Work planned as several pull requests starts only after the whole plan is reviewed for soundness (rework, design coherence, scope, dependencies, risk), never on a plan assembled piece by piece.
 
