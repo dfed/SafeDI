@@ -1,0 +1,126 @@
+// Distributed under the MIT License
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+import Foundation
+import SafeDICore
+import Testing
+@testable import SafeDIToolLibrary
+@testable import SafeDIToolTestSupport
+
+/// What makes `generate` build a root's place tree (`TreeForcer`): a root node records lay out, which nothing else reads
+/// the tree of, builds none, and `--tree-forcers-output` lists, for each root and seam, what made the run build its tree.
+struct SafeDIToolTreeForcerTests: ~Copyable {
+	// MARK: Initialization
+
+	init() {
+		filesToDelete = [URL]()
+	}
+
+	deinit {
+		for fileToDelete in filesToDelete {
+			try! FileManager.default.removeItem(at: fileToDelete)
+		}
+	}
+
+	// MARK: Tests
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsTreeOnlyForRootNodeRecordsRefuse_whenNothingElseReadsTrees() async throws {
+		let (forcers, heldTaskCounts) = try await treeForcers(of: Self.plainAndLazyRoots)
+		#expect(forcers == """
+		Lazy\tkind onlyIfAvailable
+		Plain\tnone
+		roots that built a tree: 1 of 2
+
+		""")
+		// A tree's code tasks are counted once its code is planned: only `Lazy` built one.
+		#expect(heldTaskCounts == [0])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsEveryRootsTree_whenRunDrawsDOTGraph() async throws {
+		let (forcers, heldTaskCounts) = try await treeForcers(of: Self.plainAndLazyRoots, buildDOTFileOutput: true)
+		#expect(forcers == """
+		Lazy\tkind onlyIfAvailable, DOT graph
+		Plain\tDOT graph
+		roots that built a tree: 2 of 2
+
+		""")
+		#expect(heldTaskCounts == [0, 0])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsEveryTree_whenModuleHoldsSeam() async throws {
+		let (forcers, _) = try await treeForcers(
+			of: [
+				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let screen: Screen"]),
+				seamFixtureType(named: "Screen", isSeam: true, declarations: ["@Instantiated let service: Service"]),
+				seamFixtureType(named: "Service", declarations: []),
+			],
+			moduleMembershipArguments: ["--module-name", "Feature"],
+		)
+		#expect(forcers == """
+		Root\tseam world
+		Screen\tseam world
+		roots that built a tree: 2 of 2
+
+		""")
+	}
+
+	// MARK: Private
+
+	private var filesToDelete: [URL]
+
+	/// `Plain`, a root node records lay out, and `Lazy`, a root whose `LazilyInstantiated` property they refuse, since its
+	/// instance can be read by value.
+	private static let plainAndLazyRoots = [
+		seamFixtureType(named: "Plain", isRoot: true, declarations: ["@Instantiated let service: Service"]),
+		seamFixtureType(named: "Lazy", isRoot: true, declarations: ["@Instantiated let service: LazilyInstantiated<Service>"]),
+		seamFixtureType(named: "Service", declarations: []),
+	]
+
+	/// What `--tree-forcers-output` holds once `files` are generated, and the code tasks each tree the run built still
+	/// held once its code was planned, in the order the trees were counted.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private mutating func treeForcers(of files: [String], buildDOTFileOutput: Bool = false, moduleMembershipArguments: [String] = []) async throws -> (forcers: String, heldTaskCounts: [Int]) {
+		let output = TestTemporaryDirectory.uniquePath(prefix: "TreeForcers", pathExtension: "txt")
+		filesToDelete.append(output)
+		let (stream, continuation) = AsyncStream.makeStream(of: Int.self)
+		_ = try await HeldCodeTasks.$observer.withValue({ continuation.yield($0) }) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: files,
+				buildSwiftOutputDirectory: true,
+				buildDOTFileOutput: buildDOTFileOutput,
+				filesToDelete: &filesToDelete,
+				moduleMembershipArguments: moduleMembershipArguments,
+				treeForcersOutput: output,
+			)
+		}
+		continuation.finish()
+		var heldTaskCounts = [Int]()
+		for await count in stream {
+			heldTaskCounts.append(count)
+		}
+		return (try String(contentsOf: output, encoding: .utf8), heldTaskCounts)
+	}
+}
