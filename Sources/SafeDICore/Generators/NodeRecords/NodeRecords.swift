@@ -314,8 +314,9 @@ struct NodeRecords: Sendable {
 			let record = Self.record(madeRecord, functionName: functionName, isMadeSendable: isMadeSendable)
 			let place: GeneratedCode = switch record {
 			case let .alias(aliasRecord):
-				// A place written as text: the engine copies it as written.
-				.place(PlacePlan(code: .text(aliasRecord.text), record: record))
+				// A place written as text: the engine copies it as written. A property nothing fulfills that `mock()` binds
+				// before its nodes is no place.
+				Self.isBoundBeforeMockNodes(declaration, in: world) ? .sequence([]) : .place(PlacePlan(code: .text(aliasRecord.text), record: record))
 			case .built, .closer:
 				.place(PlacePlan(code: .empty, record: record))
 			}
