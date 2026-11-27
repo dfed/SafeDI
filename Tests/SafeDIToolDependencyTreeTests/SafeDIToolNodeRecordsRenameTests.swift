@@ -227,7 +227,9 @@ struct SafeDIToolNodeRecordsRenameTests: ~Copyable {
 			], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		}
 		let screenReports = reports.filter { $0.root == "Screen" }
-		#expect(screenReports.map(\.refusal) == ["callsAnswerAVariantApart"])
+		// A seam's root's keys are not yet seeded from its parameters, so the read of a deferred parameter's instance refuses
+		// the world as `lazy` first.
+		#expect(screenReports.map(\.refusal) == ["lazy"])
 		#expect(screenReports.map(\.isLaidOutFromNodeRecords) == [false])
 	}
 
