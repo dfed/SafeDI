@@ -206,7 +206,8 @@ struct TypeFactsOwedFacts: OptionSet, Sendable {
 	static let mockRootRecord = TypeFactsOwedFacts(rawValue: 1 << 2)
 	/// The mock root's bindings (track D): whether the mock root binds a read. Set on every declaration of a mock world.
 	static let mockRootBinding = TypeFactsOwedFacts(rawValue: 1 << 3)
-	/// The `madeAgain` producer: the bindings a builder made again in a loop of builders rebinds. Set on every builder.
+	/// The `madeAgain` producer: the bindings a builder made again in a loop of builders rebinds. Set on every member of
+	/// a loop of builders.
 	static let madeAgain = TypeFactsOwedFacts(rawValue: 1 << 4)
 }
 
@@ -436,11 +437,9 @@ extension TypeFactsGraph: TypeFactsWorld {
 		if forMockGeneration {
 			owed.formUnion([.mockRootPin, .mockRootRecord, .mockRootBinding])
 		}
-		switch kinds[Int(declaration)] {
-		case .instantiator, .sendableInstantiator, .erasedInstantiator, .sendableErasedInstantiator:
+		// A member of a loop of builders: an edge into it is in a loop.
+		for parent in parents(of: declaration) where edgeFacts(from: parent.parent).contains(where: { $0.child == declaration && $0.loop >= 0 }) {
 			owed.insert(.madeAgain)
-		case .constant, .lazy, .sendableLazy, .alias, .hole:
-			break
 		}
 		// A declaration is beneath a fill where any of its routes enters one: a walk up its parents.
 		var visited: Set = [declaration]
