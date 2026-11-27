@@ -2168,8 +2168,8 @@ extension DependencyTreeGenerator {
 	/// by what generation found (`ScopeGenerator.closesCycleOnFillPath`), so only against the stack it was built
 	/// with: the walk goes on into a fill nested in this one, whose receives fall through to this fill's fields, but a closer
 	/// beneath it is that fill's, which `validateFills` reaches itself. This generator tree holds a seam the fill calls as a
-	/// leaf, so a property re-entered through such a call is never judged here; the cycle walk of
-	/// `validateCyclesFromRootsOfForeignSeamsWithHoles`, which inlines every seam, judges those.
+	/// leaf, so a property re-entered through such a call is never judged here; the validation walk of the module's roots
+	/// (`validatePropertiesAreFulfillable(typeDescriptionToScopeMap:)`), which inlines every seam, judges those.
 	/// - Parameters:
 	///   - fill: The fill's generator, whose fields say which memos it binds.
 	///   - call: The seam call that declares this fill, whose fills decide whether a type above the seam can
