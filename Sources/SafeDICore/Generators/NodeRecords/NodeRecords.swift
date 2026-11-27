@@ -310,6 +310,19 @@ struct NodeRecords: Sendable {
 		// above them. A variant's place is made once and shared, which holds only where every place that reads it closes on
 		// the same places above: each place notes the variants on a cycle its tree closes on above it and those it builds,
 		// and a second place of the variant must have the first on its path and none of the second.
+		// What arrives at each read of each variant, which types a function's parameters (rule 3): folded only in a world
+		// whose walk meets a call that closes a cycle, the only one whose functions take parameters, and kept while the
+		// records are made.
+		var readArrivals: TypeFactsReadArrivals?
+		func arrivals() -> TypeFactsReadArrivals {
+			if let readArrivals {
+				return readArrivals
+			} else {
+				let folded = TypeFactsReadArrivals(world: world)
+				readArrivals = folded
+				return folded
+			}
+		}
 		var entries = [[BodyEntry]](repeating: [], count: world.variantCount)
 		var postOrder = [VariantID]()
 		var isWalked = [Bool](repeating: false, count: world.variantCount)
@@ -332,7 +345,7 @@ struct NodeRecords: Sendable {
 					if let closedOn = stack.lastIndex(where: { $0.variant == callee }) {
 						for frame in stack[(closedOn + 1)...] {
 							let declared = Self.labelsDeclared(by: world.declaration(of: frame.variant), in: world)
-							guard labelsReceived.isDisjoint(with: declared) || !world.parameters(of: callee).isEmpty else {
+							guard labelsReceived.isDisjoint(with: declared) || !world.parameters(of: callee, arrivals: arrivals()).isEmpty else {
 								// The function the call refers to may take a parameter the facts do not answer.
 								throw NodeRecordRefusal.cycleTakesParameters
 							}
@@ -400,7 +413,7 @@ struct NodeRecords: Sendable {
 			// takes a label as a parameter only where a place between it and a call that closes on it declares that label,
 			// or takes it as a parameter of its own function (`CycleParameter`).
 			cycleParametersByVariant[Int(variant)] = []
-			let parameters = world.parameters(of: variant).filter { parameter in
+			let parameters = world.parameters(of: variant, arrivals: arrivals()).filter { parameter in
 				let label = parameter.property.label
 				return labelsDeclaredBetween[Int(variant)].contains(label)
 					|| variantsBetween[Int(variant)].contains { $0 != variant && cycleParameters(of: $0).contains { $0.property.label == label } }

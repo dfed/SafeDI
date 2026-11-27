@@ -581,7 +581,7 @@ extension TypeFactsGraph: TypeFactsWorld {
 			let isAnsweredByWrapper = switch answer(keys[keys.startIndex + offset]).form {
 			case .optionalLazilyInstantiatedParameter, .optionalSendableLazilyInstantiatedParameter:
 				true
-			case .none, .declared, .beingBuilt, .optionalParameter:
+			case .none, .declared, .beingBuilt, .madeAgain, .optionalParameter:
 				false
 			}
 			let label = readTable[Int(read)].label
