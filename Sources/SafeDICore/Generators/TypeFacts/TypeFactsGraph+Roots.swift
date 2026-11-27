@@ -66,13 +66,13 @@ extension TypeFactsGraph {
 		let worldRoot = TypeFactsDeclaration(scope: firstRoot.scope, property: nil, propertyID: nil, erasedToConcreteExistential: false, isFill: false, frame: TypeFactsDeclaration.worldRootFrame)
 		let graph = OrderedGraph(root: worldRoot) { declaration in
 			if declaration.key.frame == TypeFactsDeclaration.worldRootFrame {
-				return roots.enumerated().map { frame, root in
+				roots.enumerated().map { frame, root in
 					TypeFactsDeclaration(scope: root.scope, property: nil, propertyID: nil, erasedToConcreteExistential: false, isFill: false, frame: Int32(frame))
 				}
 			} else if declaration.key.frame != TypeFactsDeclaration.noFrame {
-				return [TypeFactsDeclaration(scope: declaration.scope, property: nil, propertyID: nil, erasedToConcreteExistential: false, isFill: false)]
+				[TypeFactsDeclaration(scope: declaration.scope, property: nil, propertyID: nil, erasedToConcreteExistential: false, isFill: false)]
 			} else {
-				return Self.targets(of: declaration, edgeEntries: &edgeEntries, edgeIsFill: &edgeIsFill, fillHoles: &fillHoles)
+				Self.targets(of: declaration, edgeEntries: &edgeEntries, edgeIsFill: &edgeIsFill, fillHoles: &fillHoles)
 			}
 		}
 		let nodes = graph.nodes
