@@ -92,6 +92,24 @@ struct SafeDIToolTypeFactsVariantKeyTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keysVariantPerSpelling_whenParentsSpellTheReceivedTypeApart() async throws {
+		// One parent spells the router `any Routing` and the other `Routing`, which name one type: today's code has a
+		// function per spelling, each typed as its parent spells it, so the key keeps the declared spelling. Answers by ID
+		// must keep this count, or the merge is a change of generated code (SafeDIToolTypeKeyViewTests' twin of this shape).
+		let report = try await rootReport(of: [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let first: First", "@Instantiated let second: Second"]),
+			"public protocol Routing {}",
+			seamFixtureType(named: "LiveRouter", isFinalClass: true, declarations: [], conformances: ", Routing"),
+			seamFixtureType(named: "First", isFinalClass: true, declarations: ["@Instantiated(fulfilledByType: \"LiveRouter\") let router: any Routing", "@Instantiated let detailBuilder: Instantiator<Detail>"]),
+			seamFixtureType(named: "Second", isFinalClass: true, declarations: ["@Instantiated(fulfilledByType: \"LiveRouter\") let router: Routing", "@Instantiated let detailBuilder: Instantiator<Detail>"]),
+			seamFixtureType(named: "Detail", isFinalClass: true, declarations: ["@Received let router: any Routing"]),
+		])
+
+		#expect(variantCount(ofNodeDeclaring: "Detail as detailBuilder: Instantiator<Detail>", in: report) == 2, "\(report.world)")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_keepsVariantsPerNodeFixed_whenAlternatingParentsDeclareTokenOnOneSideAndEveryLayerDoublesThePaths() async throws {
 		// rows.py's alternating row: layer i's left parent declares `token<i>` and its right one does not, both open both
 		// parents of the next layer, and a reader beneath every parent receives each token only if available. Rule 1
