@@ -124,6 +124,10 @@ extension ScopeGenerator {
 		walk.filledCallBuilders.passedUpBuilderNames = signature.passedUpBuilderNames
 		// With each builder `mock()` takes for its calls' places that it binds apart, in label order.
 		var builderBindingLines = walk.filledCallBuilders.builderBindingLines
+		var rootBindings = [NodeRecordsReport.RootBinding]()
+		if !builderBindingLines.isEmpty {
+			rootBindings.append(.builderBoundApart)
+		}
 		// Then the adapters of a builder passed up, which drop the value a call's form takes.
 		for builder in signature.passedUpBuilders {
 			if builder.internalName != builder.label {
@@ -143,7 +147,11 @@ extension ScopeGenerator {
 		}
 		// Each `@Sendable` autoclosure parameter is read into a local, and the value of one the mocked
 		// type instantiates is bound under the parameter's name.
-		bindingLines.append(contentsOf: signature.sendableAutoclosureLocalBindingLines(indent: bodyIndent))
+		let sendableAutoclosureLines = signature.sendableAutoclosureLocalBindingLines(indent: bodyIndent)
+		if !sendableAutoclosureLines.isEmpty {
+			rootBindings.append(.sendableAutoclosure)
+		}
+		bindingLines.append(contentsOf: sendableAutoclosureLines)
 		bindingLines.append(contentsOf: mockedTypeUncoveredProperties.compactMap { property in
 			signature.sendableAutoclosureBindings[property].map { "\(bodyIndent)\($0.binding)" }
 		})
@@ -193,6 +201,12 @@ extension ScopeGenerator {
 			rootReceiverBindingLines.append("\(bodyIndent)let \(dependency.property.label): \(dependency.property.typeDescription.asSource) = \(name)")
 			rootRenames[dependency.property.label]?[dependency.property.typeDescription] = nil
 		}
+		if !signature.lazilyInstantiatedBindings.isEmpty {
+			rootBindings.append(.wrapperAroundInstance)
+		}
+		if !rootReceiverBindingLines.isEmpty {
+			rootBindings.append(.receiveBoundAgainUnderLabel)
+		}
 		let linesBoundBesideNodes = signature.lazilyInstantiatedBindingLines(indent: bodyIndent) + rootReceiverBindingLines
 		bindingLines.insert(contentsOf: linesBoundBesideNodes, at: rootReceiverBindingIndex)
 		// The mocked type's own receive or instantiation of a lazy wrapper's instance is passed the
@@ -208,16 +222,45 @@ extension ScopeGenerator {
 		}
 		let builders = (walk.filledCallBuilders.parameters + signature.placeOnlyBuilderDeclarations).sorted { $0.label < $1.label }
 		// Where a test observes node records, an internal mock that binds nothing but its nodes has the statements that build
-		// them laid out from the records of its world (`nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:)`).
+		// them laid out from the records of its world (`nodeRecordsMockStatements(of:worldRoot:rootBindings:)`).
 		if let worldRoot {
-			let bindsOnlyNodes = rootReceiverBindingIndex == 0
-				&& linesBoundBesideNodes.isEmpty
-				&& signature.parameters.isEmpty
-				&& signature.onlyIfAvailableOverrides.isEmpty
-				&& builders.isEmpty
-				&& rootRenames.values.allSatisfy(\.isEmpty)
-				&& rootInstancesReadByValue.isEmpty
-			if let statements = try Self.nodeRecordsMockStatements(of: instantiable, worldRoot: worldRoot, bindsOnlyNodes: bindsOnlyNodes) {
+			if !signature.forwardedParameters.isEmpty {
+				rootBindings.append(.forwardedParameter)
+			}
+			if !signature.rootDefaultParameters.isEmpty {
+				rootBindings.append(.defaultValuedParameter)
+			}
+			if !signature.flatReceivedParameters.isEmpty {
+				rootBindings.append(.receivedParameter)
+			}
+			if !signature.uncoveredParameters.isEmpty {
+				rootBindings.append(.uncoveredParameter)
+			}
+			if !signature.onlyIfAvailableOverrides.isEmpty {
+				rootBindings.append(.onlyIfAvailableOverride)
+			}
+			if !builders.isEmpty {
+				rootBindings.append(.builder)
+			}
+			var namedApartKinds = Set<NodeRecordsReport.RootBinding>()
+			for (label, names) in rootRenames {
+				for (type, name) in names {
+					if signature.renamesByLabelAndType[label]?[type] == name {
+						namedApartKinds.insert(.rootReceivesParameterNamedApart)
+					} else if signature.lazilyInstantiatedBindingNamesByLabelAndType[label]?[type] == name {
+						namedApartKinds.insert(.rootReceivesWrapperNamedApart)
+					} else {
+						namedApartKinds.insert(.rootReceivesNodeNamedApart)
+					}
+				}
+			}
+			for kind in [NodeRecordsReport.RootBinding.rootReceivesNodeNamedApart, .rootReceivesParameterNamedApart, .rootReceivesWrapperNamedApart] where namedApartKinds.contains(kind) {
+				rootBindings.append(kind)
+			}
+			if !rootInstancesReadByValue.isEmpty {
+				rootBindings.append(.instanceReadThroughWrapper)
+			}
+			if let statements = try Self.nodeRecordsMockStatements(of: instantiable, worldRoot: worldRoot, rootBindings: rootBindings) {
 				bindingLines = [statements]
 			}
 		}

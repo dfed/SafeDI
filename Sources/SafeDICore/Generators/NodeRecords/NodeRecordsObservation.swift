@@ -169,4 +169,25 @@ public struct NodeRecordsReport: Sendable {
 	/// Whether the root is a mock's: its records are compared with no tree's, so `differences` is empty, and a test
 	/// compares the code laid out from them, or the values that code builds, with the mock's walk's.
 	public var isMockRoot = false
+	/// What a mock's root binds beside its nodes, each kind once, in the order the mock's lowering finds them: empty where
+	/// it binds only nodes. Reported whether or not node records refused the root's world.
+	public var rootBindings = [String]()
+
+	/// A kind of value a mock's root binds beside its nodes (`ScopeGenerator.nodeRecordsMockStatements`).
+	public enum RootBinding: String, Sendable {
+		case builderBoundApart
+		case sendableAutoclosure
+		case wrapperAroundInstance
+		case receiveBoundAgainUnderLabel
+		case forwardedParameter
+		case defaultValuedParameter
+		case receivedParameter
+		case uncoveredParameter
+		case onlyIfAvailableOverride
+		case builder
+		case rootReceivesNodeNamedApart
+		case rootReceivesParameterNamedApart
+		case rootReceivesWrapperNamedApart
+		case instanceReadThroughWrapper
+	}
 }

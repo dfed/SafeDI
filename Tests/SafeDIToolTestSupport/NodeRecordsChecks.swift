@@ -59,7 +59,7 @@ enum NodeRecordsChecks {
 				}
 				if let reportPath {
 					let outcome = report.isLaidOutFromNodeRecords ? "laid out" : report.refusal ?? "accepted"
-					append("\(testName)\t\(report.root)\t\(outcome)\t\(report.differences.count)\t\(report.everyRefusal.joined(separator: ","))\t\(report.isMockRoot ? "mock" : "")\n", toFileAt: reportPath)
+					append("\(testName)\t\(report.root)\t\(outcome)\t\(report.differences.count)\t\(report.everyRefusal.joined(separator: ","))\t\(report.isMockRoot ? "mock" : "")\t\(report.rootBindings.joined(separator: ","))\n", toFileAt: reportPath)
 				}
 				enclosingObserver?(report)
 			}) {
