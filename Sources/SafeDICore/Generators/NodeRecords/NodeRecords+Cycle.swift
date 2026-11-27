@@ -56,7 +56,9 @@ extension NodeRecords {
 			guard !world.keys(of: variant).contains(TypeFactsGraph.optionalParameterKey) else { throw .cycleVariantsPartitionApart }
 		}
 		var isLazyByIdentity = [CycleID: Bool]()
-		for declaration in 0..<Int32(world.declarationCount) where world.isOnCycle(declaration) {
+		// A mock's function on a cycle reads its configuration from the place it is handed, whatever form built that place
+		// (`mockPlace`), so one cycle identity built lazily and by value lays out alike there.
+		for declaration in 0..<Int32(world.declarationCount) where !world.isMockWorld && world.isOnCycle(declaration) {
 			let isLazy = switch world.kind(of: declaration) {
 			case .lazy, .sendableLazy:
 				true
@@ -135,13 +137,17 @@ extension NodeRecords {
 	/// `cycleArguments` (`cycleArguments(of:unavailableProperties:lazilyInstantiatedInstanceProperties:)`). `caller` is the
 	/// variant whose body holds the call,
 	/// which a production closer reads nothing of; a mock's closer, which passes what its caller binds, takes this site.
-	static func closingRecord(closingOn declaration: DeclarationID, from caller: VariantID, functionName: String? = nil, cycleArguments: [PlaceRead] = [], in world: some NodeRecordSources, enteredSlots: MockEnteredSlots? = nil) throws(NodeRecordRefusal) -> PlaceRecord {
+	static func closingRecord(closingOn declaration: DeclarationID, building builtDeclaration: DeclarationID? = nil, from caller: VariantID, functionName: String? = nil, cycleArguments: [PlaceRead] = [], in world: some NodeRecordSources, enteredSlots: MockEnteredSlots? = nil) throws(NodeRecordRefusal) -> PlaceRecord {
 		// Every node a call reaches is built as a property: the root is called by none.
 		guard let property = world.property(of: declaration) else { throw .noInitializer }
+		// The call builds its own declaration, which is the closed-on one's twin of the same label and type where they
+		// differ: its wrapper around the twin's function.
+		let builtDeclaration = builtDeclaration ?? declaration
+		guard let builtProperty = world.property(of: builtDeclaration) else { throw .noInitializer }
 		let instantiable = world.scope(of: declaration).instantiable
 		var closer = ClosingPlaceRecord(
-			property: property,
-			isErased: world.isErased(declaration),
+			property: builtProperty,
+			isErased: world.isErased(builtDeclaration),
 			isExtension: instantiable.declarationType.isExtension,
 			closedOnFunctionName: functionName ?? ScopeGenerator.functionName(toBuildPropertyNamed: property.label),
 			forwardedProperties: instantiable.dependencies.filter { $0.source == .forwarded }.map(\.property).sorted(),
@@ -222,6 +228,12 @@ extension NodeRecords {
 			countsOnPath[twin.key] = counts
 		}
 
+		/// Whether `declaration` is a twin of `other`: another form of its label and type.
+		func isTwin(_ declaration: DeclarationID, of other: DeclarationID) -> Bool {
+			guard let twin = twinKey(of: declaration), let otherTwin = twinKey(of: other) else { return false }
+			return twin.key == otherTwin.key && twin.form != otherTwin.form
+		}
+
 		/// Whether a place of `declaration`, or of its twin (another form of its label and type), is on the path.
 		func holdsPlaceOfItOrItsTwin(_ declaration: DeclarationID) -> Bool {
 			guard placesOnPath[Int(declaration), default: 0] == 0 else { return true }
@@ -272,7 +284,10 @@ extension NodeRecords {
 	/// on a variant whose place is being built above it.
 	enum BodyEntry {
 		case place(VariantID)
-		case closer(closingOn: VariantID)
+		/// A call that closes a cycle on `closingOn`'s place, building `building`: the closed-on variant's declaration, or,
+		/// in a mock's world, its twin (`TwinsOnPath.isTwin(_:of:)`), whose call hands its own wrapper the function of the
+		/// twin's place, as today's tree closes a constant and a lazy declaration of one label and type on each other.
+		case closer(closingOn: VariantID, building: DeclarationID)
 	}
 
 	/// The names the bodies of a world with a cycle give the functions they declare, and the functions a call that closes a
@@ -296,7 +311,7 @@ extension NodeRecords {
 			let isMockWorld = world.isMockWorld
 			func closedOn(_ entry: BodyEntry) -> Set<VariantID> {
 				switch entry {
-				case let .closer(closingOn: callee):
+				case let .closer(closingOn: callee, _):
 					[callee]
 				case let .place(callee):
 					variantsClosedOn[Int(callee)]
@@ -310,7 +325,7 @@ extension NodeRecords {
 			}
 			func callee(of entry: BodyEntry) -> VariantID {
 				switch entry {
-				case let .closer(closingOn: callee), let .place(callee):
+				case let .closer(closingOn: callee, _), let .place(callee):
 					callee
 				}
 			}

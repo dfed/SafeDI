@@ -393,7 +393,13 @@ struct NodeRecords: Sendable {
 				stack[stack.count - 1].next += 1
 				let calls = world.calls(of: top.variant)
 				let callee = calls[calls.startIndex + top.edgeIndices[top.next]]
-				if isOnPath[Int(callee)] {
+				// In a mock's world, a call of a declaration whose twin's place is on the path closes the cycle on that place, as
+				// today's tree closes it (`ScopeGenerator.closedOnDeclaration`): a mock's function on a cycle reads its
+				// configuration from the place it is handed, whatever form built it (`mockPlace`).
+				let calleeDeclaration = world.declaration(of: callee)
+				let closedOnTwin = enteredSlots == nil || isOnPath[Int(callee)] ? nil : stack.last(where: { twins.isTwin(world.declaration(of: $0.variant), of: calleeDeclaration) })?.variant
+				if let closedOnVariant = isOnPath[Int(callee)] ? callee : closedOnTwin {
+					let callee = closedOnVariant
 					// The closed-on property's own label is never a parameter of its function: every call is made inside a tree
 					// that builds a declaration of it (`CycleParameter`).
 					let ownLabel = world.property(of: world.declaration(of: callee))?.label
@@ -404,7 +410,7 @@ struct NodeRecords: Sendable {
 						// The function the call refers to may take a parameter the facts do not answer.
 						throw NodeRecordRefusal.cycleTakesParameters
 					}
-					stack[stack.count - 1].entries.append(.closer(closingOn: callee))
+					stack[stack.count - 1].entries.append(.closer(closingOn: callee, building: calleeDeclaration))
 					stack[stack.count - 1].variantsClosedOn.insert(callee)
 				} else if isWalked[Int(callee)] {
 					// A mock's place serves every place of its variant: whether a call in it returns to a place above or
@@ -486,10 +492,11 @@ struct NodeRecords: Sendable {
 			var loopBindings = [GeneratedCode]()
 			for entry in entries[Int(variant)] {
 				switch entry {
-				case let .closer(closingOn: callee):
+				case let .closer(closingOn: callee, building: builtDeclaration):
 					let closedOnDeclaration = world.declaration(of: callee)
 					let closer = try Self.closingRecord(
 						closingOn: closedOnDeclaration,
+						building: builtDeclaration,
 						from: variant,
 						functionName: functionNames?.closedOnFunctionName(of: callee, inBodyOf: variant),
 						cycleArguments: cycleArguments(of: callee),
@@ -500,7 +507,7 @@ struct NodeRecords: Sendable {
 					closedOn.insert(callee)
 					// A call that hands a `Sendable` wrapper its function refers to the function it closes on from a
 					// `@Sendable` function.
-					if Self.buildsInSendableFunction(closedOnDeclaration, in: world) {
+					if Self.buildsInSendableFunction(builtDeclaration, in: world) {
 						fromSendableFunction.insert(callee)
 					}
 				case let .place(callee):
