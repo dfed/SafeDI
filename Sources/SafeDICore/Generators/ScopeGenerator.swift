@@ -8014,6 +8014,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				projections[key] = FillFacts(
 					key: key,
 					declaration: -1,
+					functionNameStem: "",
 					bound: child.fillFields.filter { child.fillStructBoundLabels.contains($0.property.label) && (treeReads.reads($0.property) || treeReads.fieldsCarriedBySites.contains($0.property)) }.map(\.property.label),
 					parametersTaken: child.fillParameterFields,
 					callerReads: child.fillCallerReads.parameterByLabel.keys.sorted().map { label in
@@ -8023,6 +8024,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					labelsReadOrDeclared: child.fillLabelsReadOrDeclared.sorted(),
 					declaresFunction: child.fillDeclaresFunction(fillPlaceBindings: FillPlaceBindings(bindingsByGenerator: [:])),
 					returnsBoundValue: filled.property?.propertyType.isConstant ?? false,
+					readsInnerScopes: treeReads.readsInnerScopes,
 				).projection
 			}
 		}

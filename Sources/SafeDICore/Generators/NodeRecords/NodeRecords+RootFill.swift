@@ -20,7 +20,7 @@
 
 /// Why node records leave a root's filled seam call to the tree in step 3 (`lanes/node-records-fills/step3-interface.md`),
 /// each its own reason, so a count of refused calls says what is left.
-enum FillRefusal: String, Error, Sendable, CaseIterable {
+enum FillRefusal: String, Sendable, CaseIterable {
 	/// The world is a mock root's.
 	case fillMockWorld
 	/// The call is of another module's public mock.
@@ -53,6 +53,8 @@ struct FillFacts: Sendable {
 	let key: String
 	/// The fill's node.
 	let declaration: DeclarationID
+	/// The stem the fill's function is named from, which `FillNames` claims a name from.
+	let functionNameStem: String
 	/// The labels of the fields the fill binds, in field order.
 	let bound: [String]
 	/// What the fill takes after its case's values, in order (`ScopeGenerator.fillParameterFields`).
@@ -67,8 +69,20 @@ struct FillFacts: Sendable {
 	let declaresFunction: Bool
 	/// Whether the property the fill builds is a constant.
 	let returnsBoundValue: Bool
+	/// Whether the fill's tree reads the inner-scope levels it is offered (`FillInnerScopes`): never, for a fill of a
+	/// root's call that holds no call of its own (`FillRefusal.fillHoldsCall`), since only a seam's own tree holds its
+	/// hole sites.
+	let readsInnerScopes: Bool
 
-	/// The facts as text, which two makings of them compare by.
+	/// The facts of a call's fills, or why node records leave them to the tree.
+	enum OfCall {
+		case facts([FillFacts])
+		case refused(FillRefusal)
+	}
+
+	/// The facts as text, which two makings of them compare by. The stem is left out: the tree's fill keeps the hole of its
+	/// first place, which a nested seam's levels route again after the name is claimed, so `FillNamesObservation` checks
+	/// the names claimed from the stems instead.
 	var projection: String {
 		[
 			"bound: \(bound.joined(separator: ", "))",
@@ -76,7 +90,7 @@ struct FillFacts: Sendable {
 			"caller reads: \(callerReads.map { "\($0.label)\($0.isRequired ? "" : "?")" }.joined(separator: ", "))",
 			"reads: \(readLabels.joined(separator: ", "))",
 			"reads or declares: \(labelsReadOrDeclared.joined(separator: ", "))",
-			"declares function: \(declaresFunction), returns bound value: \(returnsBoundValue)",
+			"declares function: \(declaresFunction), returns bound value: \(returnsBoundValue), reads inner scopes: \(readsInnerScopes)",
 		].joined(separator: "; ")
 	}
 
@@ -125,7 +139,7 @@ struct FillFacts: Sendable {
 
 	/// The facts of each fill of `call` that generates code, in the order of the call's fill arguments, or why node records
 	/// leave the call's fills to the tree.
-	static func of(call: DeclarationID, in world: TypeFactsGraph) -> Result<[FillFacts], FillRefusal> {
+	static func of(call: DeclarationID, in world: TypeFactsGraph) -> OfCall {
 		let scope = world.scope(of: call)
 		var log = ConstructionLog(recording: false)
 		let callFills = ScopeGeneratorUnderConstruction.callFills(
@@ -144,14 +158,14 @@ struct FillFacts: Sendable {
 		let handsMemo = callFills.dispatchers.contains { dispatcher in
 			dispatcher.cases.contains { $0.carriesDeferredFields && $0.values?.contains(where: \.isDeferredParameter) == true }
 		}
-		guard !handsMemo else { return .failure(.fillHandedMemo) }
+		guard !handsMemo else { return .refused(.fillHandedMemo) }
 		// The fill nodes the call passes, one per fill argument, in their order.
 		let fillNodes = world.edges(from: call).filter { world.construction(of: $0) == .fill }
 		var allFacts = [FillFacts]()
 		for ((fill, _, _), fillNode) in zip(callFills.fills, fillNodes) where fill.emitsCode {
 			allFacts.append(facts(of: fill, node: fillNode, in: world, log: &log))
 		}
-		return .success(allFacts)
+		return .facts(allFacts)
 	}
 
 	/// The facts of `fill`, whose node is `node`.
@@ -201,6 +215,7 @@ struct FillFacts: Sendable {
 		return FillFacts(
 			key: fill.key,
 			declaration: node,
+			functionNameStem: fill.functionNameStem,
 			bound: boundFill.fields.filter { boundFill.boundLabels.contains($0.property.label) && treeReads.reads($0.property) }.map(\.property.label),
 			parametersTaken: parametersTaken,
 			callerReads: callerReads.parameterByLabel.keys.sorted().map { CallerRead(label: $0, isRequired: requiredLabels.contains($0)) },
@@ -208,6 +223,7 @@ struct FillFacts: Sendable {
 			labelsReadOrDeclared: Set(boundFill.fields.map(\.property.label)).union(readLabels).sorted(),
 			declaresFunction: declaresFunction,
 			returnsBoundValue: filledProperty?.propertyType.isConstant ?? false,
+			readsInnerScopes: treeReads.readsInnerScopes,
 		)
 	}
 }
@@ -246,11 +262,11 @@ public struct FillFactsObservation: Sendable {
 				refusals.append(refusal)
 			} else {
 				switch FillFacts.of(call: declaration, in: world) {
-				case let .success(allFacts):
+				case let .facts(allFacts):
 					for facts in allFacts {
 						fromRecords[facts.key] = facts.projection
 					}
-				case let .failure(refusal):
+				case let .refused(refusal):
 					refusals.append(refusal)
 				}
 			}

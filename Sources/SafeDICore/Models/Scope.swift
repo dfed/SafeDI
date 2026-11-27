@@ -1488,6 +1488,11 @@ struct ScopeGeneratorUnderConstruction: Sendable {
 		var innerScopeParameters = [SeamSignature.Hole.Field]()
 		/// How the fill takes its case's values where the case is a seam's carrier's (`SeamCarrierValues.Use`).
 		var carrierUse: SeamCarrierValues.Use?
+
+		/// The stem the fill's function is named from (`ScopeGenerator.fillFunctionName(of:)`), before a name is claimed.
+		var functionNameStem: String {
+			ScopeGenerator.fillFunctionName(of: hole)
+		}
 		/// Whether the fill is a member of a level function, a dispatcher that returns its enum's builder struct, and fills an
 		/// instantiator's place: it then returns the builder the wrapper keeps, which takes the forwarded value itself, rather
 		/// than the value it builds (`ScopeGenerator.fillReturnsWrapperBuilder`).
