@@ -42,7 +42,7 @@ extension DependencyTreeGenerator {
 	static func nodeRecordRefusal(ofSeamWorldRoot rootInfo: RootScopeInfo) -> [TreeForcer] {
 		guard rootInfo.treeForcers.contains(.seamWorld), let constructionScope = rootInfo.constructionScope else { return [] }
 		let world = TypeFactsGraph(root: constructionScope, forMockGeneration: false)
-		let records = Result { () throws -> NodeRecords in try NodeRecords(world: world, rootLazilyInstantiatedInstanceProperties: rootInfo.seamTree?.rootLazilyInstantiatedInstanceProperties ?? []) }
+		let records = Result { () throws -> NodeRecords in try NodeRecords(world: world, rootLazilyInstantiatedInstanceProperties: rootInfo.seamTree?.rootLazilyInstantiatedInstanceProperties ?? [], isSeamRoot: rootInfo.seamTree != nil) }
 		guard case let .failure(error) = records, let refusal = error as? NodeRecordRefusal else { return [] }
 		return [.nodeRecordKind(refusal.rawValue)]
 	}
@@ -69,13 +69,13 @@ extension DependencyTreeGenerator {
 			// The work of making the records is no run's, so the tests that count a run's work count none of it.
 			let (world, records) = GenerationWork.$observer.withValue(nil) {
 				let world = TypeFactsGraph(root: constructionScope, forMockGeneration: false)
-				return (world, Result { () throws -> NodeRecords in try NodeRecords(world: world, rootLazilyInstantiatedInstanceProperties: rootLazilyInstantiatedInstanceProperties) })
+				return (world, Result { () throws -> NodeRecords in try NodeRecords(world: world, rootLazilyInstantiatedInstanceProperties: rootLazilyInstantiatedInstanceProperties, isSeamRoot: rootInfo.seamTree != nil) })
 			}
 			let nodeRecords: NodeRecords
 			do {
 				nodeRecords = try records.get()
 			} catch let refusal as NodeRecordRefusal {
-				let everyRefusal = GenerationWork.$observer.withValue(nil) { NodeRecords.refusals(in: world, rootLazilyInstantiatedInstanceProperties: rootLazilyInstantiatedInstanceProperties) }
+				let everyRefusal = GenerationWork.$observer.withValue(nil) { NodeRecords.refusals(in: world, rootLazilyInstantiatedInstanceProperties: rootLazilyInstantiatedInstanceProperties, isSeamRoot: rootInfo.seamTree != nil) }
 				observer(NodeRecordsReport(root: root, refusal: refusal.rawValue, everyRefusal: everyRefusal.map(\.rawValue), isLaidOutFromNodeRecords: false, differences: [], recordCount: 0, treePlaceCount: 0, treeForcers: rootInfo.treeForcers))
 				return try await scopeGenerator.generatePlan()
 			}
@@ -109,10 +109,13 @@ extension DependencyTreeGenerator {
 	/// way the records differ from the tree's places, and each fact a check of the tree reads that the records' answer
 	/// for it misses (`TreeForcer`).
 	private static func comparison(of layout: NodeRecordsLayout, with tree: ScopeGenerator, of instantiable: Instantiable) async throws -> NodeRecordsReport {
-		// The work of planning it is no run's, so the tests that count a run's work count none of it.
-		let (treeCode, comparisons) = try await GenerationWork.$observer.withValue(nil) {
+		// The work of planning it is no run's, so the tests that count a run's work count none of it. Swift 6.4 (Xcode 27.2)
+		// reports "ambiguous use of 'withValue'" between `TaskLocal.withValue`'s two async overloads, one of them
+		// `nonisolated(nonsending)`, where the operation's type is inferred, so the operation and its result are typed.
+		let planned: PlannedTree = try await GenerationWork.$observer.withValue(nil, operation: { () async throws -> PlannedTree in
 			try await Self.treeCode(of: tree, besideRecordsBody: layout.rootBody)
-		}
+		})
+		let (treeCode, comparisons) = planned
 		let treeFulfillers = await tree.fulfillersOfTree(buildingMock: false)
 		let captures = await tree.nonSendableWrapperCaptures(ofTreeRootedAt: instantiable)
 		let factsTheRecordsMiss: [(holds: Bool, difference: String)] = [
@@ -133,9 +136,12 @@ extension DependencyTreeGenerator {
 		)
 	}
 
+	/// A tree's planned code, and each comparison of its root body with node records' (`treeCode(of:besideRecordsBody:)`).
+	private typealias PlannedTree = (code: GeneratedCode, comparisons: [(differences: [String], treePlaceCount: Int)])
+
 	/// The plan of `tree`'s code, and, for each time it laid out the root's body, each way that body differs from
 	/// `recordsBody`, node records' root body, and how many places it holds (`NodeRecordsObservation.differences(between:and:)`).
-	private static func treeCode(of tree: ScopeGenerator, besideRecordsBody recordsBody: [GeneratedCode]) async throws -> (code: GeneratedCode, comparisons: [(differences: [String], treePlaceCount: Int)]) {
+	private static func treeCode(of tree: ScopeGenerator, besideRecordsBody recordsBody: [GeneratedCode]) async throws -> PlannedTree {
 		let (stream, continuation) = AsyncStream.makeStream(of: (differences: [String], treePlaceCount: Int).self)
 		let code = try await NodeRecordsObservation.$rootBodyObserver.withValue({ treeBody in
 			continuation.yield(NodeRecordsObservation.differences(between: treeBody, and: recordsBody))
