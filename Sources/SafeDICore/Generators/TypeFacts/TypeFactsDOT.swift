@@ -174,8 +174,8 @@ struct TypeFactsDOT {
 	/// on (`unfolded`).
 	private static func column(_ column: Column, isWithoutFillsPassedOnOf full: Column) -> Bool {
 		column.node == full.node && column.forwarded == full.forwarded && column.items.count < full.items.count
-			&& column.items.elementsEqual(full.items.lazy.filter { item in
-				if case .declaration(_, _, true) = item {
+			&& column.items.elementsEqual(full.items.lazy.filter {
+				if case .declaration(_, _, true) = $0 {
 					false
 				} else {
 					true

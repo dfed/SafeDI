@@ -8281,6 +8281,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 			let targetKeys = dispatcher.cases.compactMap(\.target?.key)
 			let inlinedFillKeys = Set(targetKeys.filter { body.inlinedFills[$0] != nil })
+			let calledFunctionNames = dispatcher.cases.compactMap { dispatcherCase in
+				dispatcherCase.target.flatMap { body.inlinedFills[$0.key] == nil ? $0.name : nil }
+			}
 			let record = RootFunctionRecord(
 				key: RootFunctionKey(
 					calledSeam: dispatcher.seamType,
@@ -8290,14 +8293,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					fillsTakingPayloadFields: body.fillsTakingPayloadFields.intersection(targetKeys),
 					typesDeclaredEscaping: typesDeclaredEscaping,
 					labelsHiddenByReenteringCalls: labelsHiddenByReenteringCalls,
+					calledFunctionNames: calledFunctionNames,
 					indentation: leadingMemberWhitespace,
 				),
 				name: dispatcher.functionName,
 				declaration: .text(textWithoutAttributes),
 				isSendable: isSendable,
-				calls: dispatcher.cases.compactMap { dispatcherCase in
-					dispatcherCase.target.flatMap { body.inlinedFills[$0.key] == nil ? $0.name : nil }
-				},
+				calls: calledFunctionNames,
 			)
 			generatedProperties.append(.rootFunction(record))
 		}
