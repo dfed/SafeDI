@@ -143,7 +143,7 @@ struct NodeRecordsObservationTests {
 	@Test
 	func differences_nameTheField_whenTheClosingPlacesDiffer() {
 		let comparison = NodeRecordsObservation.differences(between: [Self.place(Self.closingRecord("a", closedOnFunctionName: "__safeDI_a_"))], and: [Self.place(Self.closingRecord("a"))])
-		#expect(comparison.differences == ["root.a: closedOnFunctionName is __safeDI_a_ in the tree, __safeDI_a by node records"])
+		#expect(comparison.differences == ["root.a made again: closedOnFunctionName is __safeDI_a_ in the tree, __safeDI_a by node records"])
 		#expect(comparison.treePlaceCount == 1)
 	}
 

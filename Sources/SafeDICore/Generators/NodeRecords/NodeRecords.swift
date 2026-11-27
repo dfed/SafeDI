@@ -289,6 +289,7 @@ struct NodeRecords: Sendable {
 		var variantsClosedOn = [Set<VariantID>](repeating: [], count: world.variantCount)
 		var cycleVariantsBuilt = [Set<VariantID>](repeating: [], count: world.variantCount)
 		var isOnPath = [Bool](repeating: false, count: world.variantCount)
+		var twins = TwinsOnPath(world: world, holdsCycle: holdsCycle)
 		var stack = [PlaceFrame(variant: 0, edgeIndices: edgeIndices(of: 0))]
 		isOnPath[0] = true
 		while let top = stack.last {
@@ -312,6 +313,7 @@ struct NodeRecords: Sendable {
 					stack[stack.count - 1].variantsClosedOn.formUnion(variantsClosedOn[Int(callee)])
 					stack[stack.count - 1].cycleVariantsBuilt.formUnion(cycleVariantsBuilt[Int(callee)])
 				} else {
+					try twins.enter(world.declaration(of: callee))
 					isOnPath[Int(callee)] = true
 					stack.append(PlaceFrame(variant: callee, edgeIndices: edgeIndices(of: world.declaration(of: callee))))
 				}
@@ -319,6 +321,7 @@ struct NodeRecords: Sendable {
 			}
 			stack.removeLast()
 			isOnPath[Int(top.variant)] = false
+			twins.leave(world.declaration(of: top.variant))
 			entries[Int(top.variant)] = top.entries
 			guard let parent = stack.indices.last else { continue }
 			isWalked[Int(top.variant)] = true
@@ -353,7 +356,7 @@ struct NodeRecords: Sendable {
 				switch entry {
 				case let .closer(closingOn: callee):
 					let closedOnDeclaration = world.declaration(of: callee)
-					let closer = try Self.closingRecord(closingOn: closedOnDeclaration, functionName: functionNames?.closedOnFunctionName(of: callee, inBodyOf: variant), in: world)
+					let closer = try Self.closingRecord(closingOn: closedOnDeclaration, from: variant, functionName: functionNames?.closedOnFunctionName(of: callee, inBodyOf: variant), in: world)
 					children.append(.indented(.place(PlacePlan(code: .empty, record: closer)), by: indentation))
 					closedOn.insert(callee)
 					// A call that hands a `Sendable` wrapper its function refers to the function it closes on from a

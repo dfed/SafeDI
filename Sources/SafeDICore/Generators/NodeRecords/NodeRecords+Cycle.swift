@@ -29,7 +29,7 @@ extension NodeRecords {
 
 	/// The record of `declaration`'s place, a node of kind `cycle`: built by its initializer as a stage-1 node is, its
 	/// children's places among which a call back to a place being built above it is that call's closing place
-	/// (`closingRecord(closingOn:in:)`).
+	/// (`closingRecord(closingOn:from:functionName:in:)`).
 	static func cycleRecord(
 		of declaration: DeclarationID,
 		variant: VariantID,
@@ -118,8 +118,9 @@ extension NodeRecords {
 	/// a call of the function that place declares, named `functionName` where the bodies between rename it
 	/// (`CycleFunctionNames`), which forwards what that place's wrapper forwards. The walk refuses a cycle whose function
 	/// could take a parameter for the cycle (`cycleTakesParameters`), so the function takes none
-	/// (`BuiltPlaceRecord.cycleParameters`), and the call passes none.
-	static func closingRecord(closingOn declaration: DeclarationID, functionName: String? = nil, in world: some NodeRecordSources) throws(NodeRecordRefusal) -> PlaceRecord {
+	/// (`BuiltPlaceRecord.cycleParameters`), and the call passes none. `caller` is the variant whose body holds the call,
+	/// which a production closer reads nothing of; a mock's closer, which passes what its caller binds, takes this site.
+	static func closingRecord(closingOn declaration: DeclarationID, from _: VariantID, functionName: String? = nil, in world: some NodeRecordSources) throws(NodeRecordRefusal) -> PlaceRecord {
 		// Every node a call reaches is built as a property: the root is called by none.
 		guard let property = world.property(of: declaration) else { throw .noInitializer }
 		let instantiable = world.scope(of: declaration).instantiable
@@ -164,6 +165,62 @@ extension NodeRecords {
 			return .built(named)
 		case .alias, .closer:
 			return record
+		}
+	}
+
+	/// The constants and lazily instantiated declarations on the walk's path, by label and the type built, in a world with
+	/// a cycle. Today's tree closes a cycle between two of a constant, a `LazilyInstantiated` and a
+	/// `SendableLazilyInstantiated` declaration of one label and type on each other (`ScopeGenerator.closedOnDeclaration`),
+	/// where the facts' variants hold two nodes: a twin, which the walk refuses (`cycleVariantsPartitionApart`) where a
+	/// place of one is built beneath a place of the other.
+	struct TwinsOnPath<World: NodeRecordSources> {
+		init(world: World, holdsCycle: Bool) {
+			self.world = world
+			self.holdsCycle = holdsCycle
+		}
+
+		/// Notes that the walk enters a place of `declaration`.
+		/// - Throws: `cycleVariantsPartitionApart` where a place of its twin is on the path.
+		mutating func enter(_ declaration: DeclarationID) throws(NodeRecordRefusal) {
+			guard holdsCycle, let twin = twinKey(of: declaration) else { return }
+			var counts = countsOnPath[twin.key, default: [0, 0, 0]]
+			guard counts.indices.allSatisfy({ $0 == twin.form || counts[$0] == 0 }) else { throw .cycleVariantsPartitionApart }
+			counts[twin.form] += 1
+			countsOnPath[twin.key] = counts
+		}
+
+		/// Notes that the walk leaves the place of `declaration` it entered.
+		mutating func leave(_ declaration: DeclarationID) {
+			guard holdsCycle, let twin = twinKey(of: declaration) else { return }
+			countsOnPath[twin.key, default: [0, 0, 0]][twin.form] -= 1
+		}
+
+		private struct LabelAndType: Hashable {
+			let label: String
+			let concreteType: TypeDescription
+		}
+
+		private let world: World
+		private let holdsCycle: Bool
+		/// By label and type, how many places of each form are on the path: a constant, a `LazilyInstantiated` and a
+		/// `SendableLazilyInstantiated`.
+		private var countsOnPath = [LabelAndType: [Int]]()
+
+		/// The label and type `declaration` builds, and its form's index in `countsOnPath`, or `nil` where it is neither a
+		/// constant nor lazily instantiated.
+		private func twinKey(of declaration: DeclarationID) -> (key: LabelAndType, form: Int)? {
+			let form = switch world.kind(of: declaration) {
+			case .constant:
+				0
+			case .lazy:
+				1
+			case .sendableLazy:
+				2
+			case .instantiator, .sendableInstantiator, .erasedInstantiator, .sendableErasedInstantiator, .alias, .hole:
+				-1
+			}
+			guard form >= 0, let property = world.property(of: declaration) else { return nil }
+			return (LabelAndType(label: property.label, concreteType: world.scope(of: declaration).instantiable.concreteInstantiable), form)
 		}
 	}
 
