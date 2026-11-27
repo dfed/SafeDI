@@ -290,7 +290,7 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 		var reports = [[MockWorldsTableReport]]()
 		for orderedDeclarations in [declarations, declarations.reversed()] {
 			let source = orderedDeclarations.joined(separator: "\n\n")
-			reports.append(try await Self.tableReports(filesToDelete: &filesToDelete) { filesToDelete in
+			await reports.append(try Self.tableReports(filesToDelete: &filesToDelete) { filesToDelete in
 				try await executeSafeDIToolTest(
 					swiftFileContent: [],
 					swiftFileContentByFilePath: ["Screens.swift": source],
