@@ -232,12 +232,18 @@ struct NodeRecords: Sendable {
 			}
 			typesDeclaredEscaping[Int(variant)] = escaping
 			records[Int(variant)] = record
-			places[Int(variant)] = switch record {
+			let place: GeneratedCode = switch record {
 			case let .alias(aliasRecord):
 				// A place written as text: the engine copies it as written.
 				.place(PlacePlan(code: .text(aliasRecord.text), record: record))
 			case .built, .closer:
 				.place(PlacePlan(code: .empty, record: record))
+			}
+			// A mock's `@Sendable` function captures its override from a local its parent's body binds just before it.
+			places[Int(variant)] = if let binding = Self.mockOverridesBindingPlace(of: declaration, record: record, in: world) {
+				.sequence([.place(PlacePlan(code: .empty, record: .built(binding))), place])
+			} else {
+				place
 			}
 		}
 		// Last, so that a world refused for a kind reports that kind first.
