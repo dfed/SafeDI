@@ -20,17 +20,19 @@
 
 extension DependencyTreeGenerator {
 	/// The value each receive is handed in each place the trees of the dependency tree's roots build its type, read from
-	/// the trees `generate` builds and generates code from, validated as `generate` validates them, without generating
-	/// their code, and the types those trees construct. A generator that holds no seam builds every type inline, a seam's
-	/// tree included, as a module that declares no seam generates it. Each supply and each type is listed once, however
-	/// many places hand or build it; the order is the trees'.
+	/// each root's per-type graph (`TypeFactsReceivedValueSupplies`) over the scopes `generate` builds its trees from,
+	/// validated as `generate` validates them, without generating their code, and the types those trees construct. A
+	/// generator that holds no seam builds every type inline, a seam's tree included, as a module that declares no seam
+	/// generates it. Each supply and each type is listed once, however many places hand or build it; the order is the
+	/// graphs'.
 	/// - Throws: The error `generate` reports when the trees are not valid.
 	public func receivedValueSupplies() async throws -> ReceivedValueSupplies {
 		let roots = try await dependencyTrees(unreadTypeComment: nil, ownAccessProof: ownAccessProof()).roots
 		var supplies = [ReceivedValueSupply]()
 		var constructedTypes = [TypeDescription]()
 		for root in roots {
-			let tree = await root.scopeGenerator.receivedValueSupplies(ofTreeRootedAt: root.instantiable)
+			// Read from the root's per-type graph, where a node stands for every place of its declaration.
+			let tree = TypeFactsReceivedValueSupplies(root: root.rootScope)
 			supplies.append(contentsOf: tree.supplies)
 			constructedTypes.append(contentsOf: tree.constructedTypes)
 		}

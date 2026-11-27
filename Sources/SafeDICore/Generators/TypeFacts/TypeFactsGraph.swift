@@ -1100,7 +1100,7 @@ struct TypeFactsGraph: Sendable {
 
 	/// Each node's immediate dominator from the root, node 0, along the edges `followsEdge` keeps (Cooper, Harvey and
 	/// Kennedy's iteration over reverse postorder): the root's is itself, and a node those edges do not reach has -1.
-	private static func immediateDominators(of graph: OrderedGraph<TypeFactsDeclaration>, followsEdge: (Int) -> Bool) -> [Int] {
+	static func immediateDominators(of graph: OrderedGraph<TypeFactsDeclaration>, followsEdge: (Int) -> Bool) -> [Int] {
 		let count = graph.nodes.count
 		// Postorder by an explicit stack, each node's edges in order.
 		var postorderNumber = [Int](repeating: -1, count: count)

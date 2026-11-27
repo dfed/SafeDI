@@ -432,6 +432,17 @@ public actor DependencyTreeGenerator {
 							}
 							observer(TypeFactsImportsComparison(root: rootInfo.typeDescription.asSource, foldedFulfillers: fulfillers, walkedFulfillers: walkedFulfillers))
 						}
+						if let observer = TypeFactsReceivedValueSuppliesObservation.comparesWalk {
+							await GenerationWork.$observer.withValue(nil) {
+								let folded = TypeFactsReceivedValueSupplies(root: rootInfo.rootScope)
+								let walked = await rootInfo.scopeGenerator.receivedValueSupplies(ofTreeRootedAt: rootInfo.instantiable)
+								observer(TypeFactsReceivedValueSuppliesComparison(
+									root: rootInfo.typeDescription.asSource,
+									folded: ReceivedValueSupplies(supplies: folded.supplies, constructedTypes: folded.constructedTypes),
+									walked: ReceivedValueSupplies(supplies: walked.supplies.uniqued(), constructedTypes: walked.constructedTypes.uniqued()),
+								))
+							}
+						}
 						return PlannedRoot(
 							typeDescription: rootInfo.typeDescription,
 							sourceFilePath: rootInfo.sourceFilePath,

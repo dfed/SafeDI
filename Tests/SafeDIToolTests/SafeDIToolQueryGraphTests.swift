@@ -1070,6 +1070,36 @@ struct SafeDIToolQueryGraphTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func graph_countsEdgesNotPaths_whenScreensOpenScreensOfTheNextLayer() async throws {
+		// Layers of four screens, each holding instantiators of three screens of the next layer and receiving `service`,
+		// under a root that declares `service` and builds the first layer, so the last layer is reached along
+		// 4 × 3^(layers - 1) paths. The fold reads the per-type graph, where a node stands for every place of its
+		// declaration: one pass over each edge, 1 + 4 + 12 × (layers - 1), and each declaration a screen's receive can read,
+		// one root edge for each of the first layer, three for each of the second and four for each later one, so 24 + 32
+		// more with each two layers. The walk it replaced entered every path: at four and six layers, 162 and 1,458 visits.
+		let visits = try await supplyVisitsInLayersOfScreens()
+		#expect(visits == [89, 145])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func graph_handsEveryScreenRootsService_whenScreensOpenScreensOfTheNextLayer() async throws {
+		// The layers of screens above, at four layers: a screen the fold reads once, as one node, still has the value
+		// every place of it is handed.
+		let report = try await graphOfLayersOfScreens(layerCount: 4)
+
+		var expectedSupplies = [String: String]()
+		for layer in 0..<4 {
+			for position in 0..<4 {
+				expectedSupplies["App.Screen\(layer)x\(position).service"] = "App.Root.service"
+			}
+		}
+		#expect(report.completeness == .trees)
+		#expect(Self.supplies(in: report) == expectedSupplies)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func graph_reportsPropertysPlainType_whenInstantiatedDependencyIsFulfilledByAnotherType() async throws {
 		let report = try await graph(of: [
 			"Root.swift": """
@@ -1218,6 +1248,87 @@ struct SafeDIToolQueryGraphTests: ~Copyable {
 		let moduleDirectory = try temporaryDirectory().appendingPathComponent("App")
 		_ = try createSwiftFixtureFiles(atFilePaths: filesByName, in: moduleDirectory, alongside: [])
 		return try await QueryGraph.parse(["--include", moduleDirectory.path]).graph()
+	}
+
+	/// The export of a module of `layerCount` layers of four screens, each holding instantiators of three screens of the
+	/// next layer, with `screenDeclarations` of its layer and position, beside `otherTypes`, under a root that declares
+	/// `rootDeclarations` and an instantiator of each screen of the first layer.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private mutating func graphOfLayersOfScreens(
+		layerCount: Int,
+		rootDeclarations: [FixtureProperty] = [FixtureProperty("@Instantiated", "service", "Service")],
+		screenDeclarations: (_ layer: Int, _ position: Int) -> [FixtureProperty] = { _, _ in [FixtureProperty("@Received", "service", "Service")] },
+		otherTypes: [String] = [Self.fixtureType(named: "Service", properties: [])],
+	) async throws -> QueryGraphReport {
+		var types = otherTypes
+		types.append(Self.fixtureType(
+			named: "Root",
+			isRoot: true,
+			properties: rootDeclarations + (0..<4).map { FixtureProperty("@Instantiated", "screen0x\($0)Builder", "Instantiator<Screen0x\($0)>") },
+		))
+		for layer in 0..<layerCount {
+			for position in 0..<4 {
+				var properties = screenDeclarations(layer, position)
+				if layer + 1 < layerCount {
+					properties += (0..<3).map { offset in
+						FixtureProperty("@Instantiated", "screen\(layer + 1)x\((position + offset) % 4)Builder", "Instantiator<Screen\(layer + 1)x\((position + offset) % 4)>")
+					}
+				}
+				types.append(Self.fixtureType(named: "Screen\(layer)x\(position)", properties: properties))
+			}
+		}
+		return try await graph(of: ["Screens.swift": types.joined(separator: "\n\n")])
+	}
+
+	/// The work of the fold that reads the value each receive is handed (`GenerationWork.Step.findingReceivedValueSupplies`)
+	/// as `query graph` exports `graphOfLayersOfScreens`, at four and at six layers.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private mutating func supplyVisitsInLayersOfScreens(
+		rootDeclarations: [FixtureProperty] = [FixtureProperty("@Instantiated", "service", "Service")],
+		screenDeclarations: (_ layer: Int, _ position: Int) -> [FixtureProperty] = { _, _ in [FixtureProperty("@Received", "service", "Service")] },
+		otherTypes: [String] = [Self.fixtureType(named: "Service", properties: [])],
+	) async throws -> [Int] {
+		var visitsByLayerCount = [Int]()
+		for layerCount in [4, 6] {
+			let (stream, continuation) = AsyncStream.makeStream(of: GenerationWork.self)
+			try await GenerationWork.$observer.withValue({ continuation.yield($0) }) {
+				_ = try await graphOfLayersOfScreens(layerCount: layerCount, rootDeclarations: rootDeclarations, screenDeclarations: screenDeclarations, otherTypes: otherTypes)
+			}
+			continuation.finish()
+			var visits = 0
+			for await work in stream where work.step == .findingReceivedValueSupplies {
+				visits += work.elementCount
+			}
+			visitsByLayerCount.append(visits)
+		}
+		return visitsByLayerCount
+	}
+
+	/// A property of a fixture's type: its macro, as written, its label and its type.
+	private struct FixtureProperty {
+		init(_ attribute: String, _ label: String, _ type: String) {
+			self.attribute = attribute
+			self.label = label
+			self.type = type
+		}
+
+		let attribute: String
+		let label: String
+		let type: String
+	}
+
+	/// The source of an `@Instantiable` class `name` that declares `properties`, with the initializer they need.
+	private static func fixtureType(named name: String, isRoot: Bool = false, properties: [FixtureProperty]) -> String {
+		"""
+		@Instantiable\(isRoot ? "(isRoot: true)" : "")
+		public final class \(name): Instantiable {
+		    public init(\(properties.map { "\($0.label): \($0.type)" }.joined(separator: ", "))) {
+		\(properties.map { "        self.\($0.label) = \($0.label)" }.joined(separator: "\n"))
+		    }
+
+		\(properties.map { "    \($0.attribute) let \($0.label): \($0.type)" }.joined(separator: "\n"))
+		}
+		"""
 	}
 
 	/// The provenance of each received dependency or alias of `report` that has one, by `<declaration id>.<label>`: each

@@ -3734,7 +3734,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// type is constructed, in the order the tree's code is generated, or `nil` where generation passes `nil`
 	/// (`unavailableProperties`). Where that declaration is a parameter of a builder function a lazy cycle closes on, the
 	/// value is the one each call of the function passes (see `OmissionFindings`). Also returns the concrete type of each
-	/// scope the tree constructs, in the order the walk meets them.
+	/// scope the tree constructs, in the order the walk meets them. Only the oracle of the fold that replaced it for
+	/// `query graph` runs it (`TypeFactsReceivedValueSuppliesObservation`), since it enters every path of the tree.
 	func receivedValueSupplies(ofTreeRootedAt instantiable: Instantiable) async -> (supplies: [ReceivedValueSupply], constructedTypes: [TypeDescription]) {
 		let findings = await receivedValueSupplies(
 			of: instantiable,
