@@ -132,7 +132,7 @@ enum FillPrototype {
 			carrierFillKeys: carrierFillKeys.sorted(),
 			dispatcherKeys: dispatcherKeys.sorted(),
 			refusedCallsByReason: refused.sorted { $0.key < $1.key }.map { (reason: $0.key, count: $0.value) },
-			worldRefusals: NodeRecords.refusals(in: world).map(\.rawValue),
+			worldRefusals: NodeRecords.refusals(in: world, declaredTypeNames: nil).map(\.rawValue),
 			nanoseconds: nanoseconds,
 		)
 	}
