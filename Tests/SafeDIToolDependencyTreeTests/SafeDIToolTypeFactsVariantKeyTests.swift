@@ -79,7 +79,7 @@ struct SafeDIToolTypeFactsVariantKeyTests: ~Copyable {
 	mutating func generate_keysNilWithTheWrapper_whenReceiveOnlyIfAvailableIsAnsweredLazilyUnderOneParentAndNilUnderTheOther() async throws {
 		// No answer in the declared form reaches `x`, so `nil` keys with the lazy wrapper (rule A's second stage): one optional
 		// wrapper parameter carries both.
-		let report = try await rootReport(of: [
+		let (report, refusals) = try await rootReportAndNodeRecordRefusals(of: [
 			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let first: First", "@Instantiated let second: Second"]),
 			seamFixtureType(named: "First", isFinalClass: true, declarations: ["@Instantiated let x: LazilyInstantiated<X>", "@Instantiated let child: Child"]),
 			seamFixtureType(named: "Second", isFinalClass: true, declarations: ["@Instantiated let child: Child"]),
@@ -88,6 +88,10 @@ struct SafeDIToolTypeFactsVariantKeyTests: ~Copyable {
 		])
 
 		#expect(variantCount(ofNodeDeclaring: "Child as child: Child", in: report) == 1, "\(report.world)")
+		// The records read a variant's keys alone, so they cannot tell the call that passes the wrapper's instance from the
+		// call that passes `nil`, and refuse the world. Lane 2's emitted half of rule 3's second stage (due Nov 30), which
+		// keys `nil` with the wrapper parameter in the code too, is the real fix, and lifts this refusal.
+		#expect(refusals == ["onlyIfAvailableAnsweredApart"])
 	}
 
 	@Test
@@ -671,7 +675,7 @@ struct SafeDIToolTypeFactsVariantKeyTests: ~Copyable {
 		// `nil` is keyed at `Third`'s call of `MidB`, and the wrapper at `Second`'s of `MidA`: the two meet only at `Leaf`,
 		// beneath both. What reaches the read is folded up the calls that bind nothing for it, so `MidB`'s `nil` still keys
 		// with the wrapper and `Leaf` has one variant, as 2.4.x writes one function.
-		let report = try await rootReport(of: [
+		let (report, refusals) = try await rootReportAndNodeRecordRefusals(of: [
 			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let second: Second", "@Instantiated let third: Third"]),
 			seamFixtureType(named: "Second", isFinalClass: true, declarations: ["@Instantiated let theme: LazilyInstantiated<Theme>", "@Instantiated let midA: MidA"]),
 			seamFixtureType(named: "Third", isFinalClass: true, declarations: ["@Instantiated let midB: MidB"]),
@@ -683,6 +687,10 @@ struct SafeDIToolTypeFactsVariantKeyTests: ~Copyable {
 
 		#expect(variantCount(ofNodeDeclaring: "Leaf as leafBuilder: Instantiator<Leaf>", in: report) == 1, "\(report.world)")
 		#expect(TypeFactsChecks.findings(of: report).findingsByCheck[10, default: []].isEmpty, "\(TypeFactsChecks.findings(of: report).findingsByCheck[10, default: []])")
+		// The records read a variant's keys alone, so they cannot tell the call that passes the wrapper's instance from the
+		// call that passes `nil`, and refuse the world. Lane 2's emitted half of rule 3's second stage (due Nov 30), which
+		// keys `nil` with the wrapper parameter in the code too, is the real fix, and lifts this refusal.
+		#expect(refusals == ["onlyIfAvailableAnsweredApart"])
 	}
 
 	@Test
@@ -1346,6 +1354,23 @@ struct SafeDIToolTypeFactsVariantKeyTests: ~Copyable {
 			reports.append(report)
 		}
 		return try #require(reports.last)
+	}
+
+	/// The root's facts report, and the refusals of the node records of the roots laid out from them.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private func rootReportAndNodeRecordRefusals(of types: [String], root: String = "Root") async throws -> (TypeFactsReport, [String?]) {
+		let (stream, continuation) = AsyncStream.makeStream(of: NodeRecordsReport.self)
+		let report = try await NodeRecordsObservation.$laysOutRoots.withValue(true) {
+			try await NodeRecordsObservation.$observer.withValue({ continuation.yield($0) }) {
+				try await rootReport(of: types, root: root)
+			}
+		}
+		continuation.finish()
+		var refusals = [String?]()
+		for await nodeRecordsReport in stream where nodeRecordsReport.root == root {
+			refusals.append(nodeRecordsReport.refusal)
+		}
+		return (report, refusals)
 	}
 
 	/// `Leaf` receives `theme` only if available, as `leafTheme`, and builds itself again through `leafBuilder`, so 2.4.x
