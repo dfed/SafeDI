@@ -409,7 +409,7 @@ extension DependencyTreeGenerator {
 			// ends holds, or the next level that ends where it ends none.
 			var cycleReentries = parent?.pendingCycleReentries
 			if depth > 0, let declaration = generator.declarationACycleClosesOn {
-				cycleReentries = cycleReentriesByGenerator[ObjectIdentifier(generator)] ?? DependencyTreeGenerator.declarationsBetween(closedOnScope: generator, closedOnDeclaration: declaration).map { between in
+				cycleReentries = cycleReentriesByGenerator[ObjectIdentifier(generator)] ?? DependencyTreeGenerator.declarationsBetween(closedOnScope: generator, closedOnDeclaration: declaration, countedBy: nil).map { between in
 					SeamSignature.Places.CycleReentry(
 						property: between.property,
 						declaringType: between.declaringType,

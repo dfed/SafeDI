@@ -2228,6 +2228,7 @@ extension DependencyTreeGenerator {
 		beneath scope: ScopeGenerator,
 		building scopeType: TypeDescription,
 		nestedCycles: [ObjectIdentifier: [DeclarationOnCyclePath]]?,
+		countedBy step: GenerationWork.Step?,
 	) -> [(declaration: DeclarationOnCyclePath, reenteringType: TypeDescription)] {
 		// `nil` for a generator no path beneath which reaches such a scope.
 		var declarationsBeneath = [ObjectIdentifier: DeclarationsToCycleClosingScopes?]()
@@ -2306,7 +2307,7 @@ extension DependencyTreeGenerator {
 				}
 			}
 		}
-		GenerationWork.record(generatorsRead, by: .collectingDeclarationsOfACycle)
+		GenerationWork.record(generatorsRead, by: step)
 		return joined(scope.children, of: scopeType, declaring: [])?.declarations ?? []
 	}
 
@@ -2322,7 +2323,9 @@ extension DependencyTreeGenerator {
 	///
 	/// The work grows with the scope generators of the tree and the cycles nested in it, never with the paths through
 	/// them: sixteen screens that each build three others hold tens of thousands of paths.
-	static func declarationsBetween(closedOnScope: ScopeGenerator, closedOnDeclaration: ScopeGenerator.BuiltDeclaration) -> [DeclarationBetween] {
+	/// - Parameter step: The step the walk's work counts under (`GenerationWork`): `nil` for the place graph's draft, which
+	///   only a test that observes the graph makes, so that the work counted is the generator's own.
+	static func declarationsBetween(closedOnScope: ScopeGenerator, closedOnDeclaration: ScopeGenerator.BuiltDeclaration, countedBy step: GenerationWork.Step? = .collectingDeclarationsOfACycle) -> [DeclarationBetween] {
 		let closedOnProperty = closedOnDeclaration.property
 		var ownLabels: Set<String> = [closedOnProperty.label]
 		for declaration in declarationsBound(by: closedOnScope, includingForwardedProperties: true, reason: .other) {
@@ -2354,6 +2357,7 @@ extension DependencyTreeGenerator {
 				beneath: nestedScope,
 				building: type,
 				nestedCycles: memo.declarationsOfNestedCycles,
+				countedBy: step,
 			).map(\.declaration)
 		}
 		return declarationsToScopes(
@@ -2361,6 +2365,7 @@ extension DependencyTreeGenerator {
 			beneath: closedOnScope,
 			building: closedOnDeclaration.concreteType,
 			nestedCycles: memo.declarationsOfNestedCycles,
+			countedBy: step,
 		).compactMap { pathDeclaration, reenteringType in
 			guard !ownLabels.contains(pathDeclaration.declaration.property.label) else { return nil }
 			// A nested cycle's parameter is bound by a declaration beneath the scope that takes it, so the chain ends.
@@ -2369,7 +2374,7 @@ extension DependencyTreeGenerator {
 			      let declaration = scope.declarationACycleClosesOn, let type = scope.builtInstantiable?.concreteInstantiable
 			{
 				let declarationsOnPaths = memo.declarationsOnPathsOfNestedCycles[scopeIdentifier]
-					?? declarationsToScopes(closingCycleOn: declaration, beneath: scope, building: type, nestedCycles: nil).map(\.declaration)
+					?? declarationsToScopes(closingCycleOn: declaration, beneath: scope, building: type, nestedCycles: nil, countedBy: step).map(\.declaration)
 				memo.declarationsOnPathsOfNestedCycles[scopeIdentifier] = declarationsOnPaths
 				guard let next = declarationsOnPaths.first(where: { $0.declaration.property.label == binding.declaration.property.label }) else { break }
 				binding = next
