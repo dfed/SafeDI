@@ -674,6 +674,16 @@ public actor DependencyTreeGenerator {
 				self.seamRoot = seamRoot
 				seamType = seam.concreteInstantiable
 			}
+
+			/// How the seam's tree hands each inner seam's enum up from a call (`ScopeGenerator.SeamRoot.callRoutes`).
+			var callRoutes: [SeamSignature.CallRoute] {
+				seamRoot.callRoutes
+			}
+
+			/// The seam's holes, by path (`SeamHoles(of:seamType:)`).
+			func makeSeamHoles() -> SeamHoles {
+				SeamHoles(of: seamRoot, seamType: seamType)
+			}
 		}
 
 		/// For a seam's own tree, what node records read of it beside its world, worked out only where it is read; `nil` for

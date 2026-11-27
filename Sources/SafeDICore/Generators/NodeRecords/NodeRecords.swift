@@ -179,7 +179,7 @@ struct NodeRecords: Sendable {
 		var places = [GeneratedCode?](repeating: nil, count: world.variantCount)
 		var records = [PlaceRecord?](repeating: nil, count: world.variantCount)
 		var typesDeclaredEscaping = [Set<TypeDescription>?](repeating: nil, count: world.variantCount)
-		let seamCallRoutes = seamTree.map { SeamCallRoutes(world: world, seamRoot: $0.seamRoot, seamType: $0.seamType) } ?? SeamCallRoutes()
+		let seamCallRoutes = seamTree.map { SeamCallRoutes(world: world, seamTree: $0) } ?? SeamCallRoutes()
 		var stack: [(variant: VariantID, childrenPushed: Bool)] = [(0, false)]
 		while let (variant, childrenPushed) = stack.popLast() {
 			let calls = world.calls(of: variant)
