@@ -1197,8 +1197,9 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 		""")
 		// A seam's root's keys are not yet seeded from its parameters, so `Screen`'s world, whose rename reads a deferred
 		// parameter's instance, is refused as `lazy` until they are; `Root`'s is laid out.
-		#expect(reports.filter { $0.root == "Screen" || $0.root == "Root" }.map(\.refusal) == ["lazy", nil])
-		#expect(reports.filter { $0.root == "Screen" || $0.root == "Root" }.map(\.isLaidOutFromNodeRecords) == [false, true])
+		// Sorted by root: the roots report in the order their builds finish.
+		#expect(reports.filter { $0.root == "Screen" || $0.root == "Root" }.sorted { $0.root < $1.root }.map(\.refusal) == [nil, "lazy"])
+		#expect(reports.filter { $0.root == "Screen" || $0.root == "Root" }.sorted { $0.root < $1.root }.map(\.isLaidOutFromNodeRecords) == [true, false])
 		#expect(reports.flatMap(\.differences) == [])
 	}
 
