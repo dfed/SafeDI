@@ -312,37 +312,78 @@ struct SafeDIToolNodeRecordsMockActorTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Store {
-		        nonisolated indirect enum __safeDI_Places: Sendable {
-		            case none
-		            case entered(slot: String?, entered: any Sendable, above: __safeDI_Places)
+		        nonisolated struct __safeDI_Configured<Configuration: Sendable>: Sendable {
+		            let configuration: Configuration
+		        }
+		        nonisolated final class __safeDI_Place: Sendable {
+		            let slot: Int?
+		            let isNearestOfType: Bool
+		            let configured: any Sendable
+		            let above: __safeDI_Place?
+		            let jump: __safeDI_Place?
+		            let nearestOfTypeAbove: __safeDI_Place?
+		            let depth: Int
+		            let entered0: UInt64
+		            init(slot: Int?, isNearestOfType: Bool, configured: any Sendable, above: __safeDI_Place?) {
+		                self.slot = slot
+		                self.isNearestOfType = isNearestOfType
+		                self.configured = configured
+		                self.above = above
+		                let depthAbove = above?.depth ?? 0
+		                let near = above?.jump
+		                let nearDepth = near?.depth ?? 0
+		                depth = depthAbove + 1
+		                jump = depthAbove - nearDepth == nearDepth - (near?.jump?.depth ?? 0) ? near?.jump : above
+		                nearestOfTypeAbove = above.flatMap { $0.isNearestOfType ? $0 : $0.nearestOfTypeAbove }
+		                let word = slot.map { $0 >> 6 } ?? -1
+		                let bit: UInt64 = slot.map { 1 << UInt64($0 & 63) } ?? 0
+		                entered0 = (above?.entered0 ?? 0) | (word == 0 ? bit : 0)
+		            }
+		            func has(_ slot: Int) -> Bool {
+		                let bit: UInt64 = 1 << UInt64(slot & 63)
+		                switch slot >> 6 {
+		                case 0: return entered0 & bit != 0
+		                default: return false
+		                }
+		            }
 		        }
 		        nonisolated struct __safeDI_Entered<Configuration: Sendable>: Sendable {
 		            let configuration: Configuration
-		            var places = __safeDI_Places.none
-		            func entering<Handed: Sendable>(_ slot: String, _ handed: Handed, nearestOfType: Bool = false) -> __safeDI_Entered<Handed> {
-		                var nearest: __safeDI_Entered<Handed>?
-		                var above = places
-		                while case let .entered(enteredSlot, entered, next) = above {
-		                    if enteredSlot == slot || nearestOfType && nearest == nil, let entered = entered as? __safeDI_Entered<Handed> {
-		                        if enteredSlot == slot { return .init(configuration: entered.configuration, places: above) }
-		                        nearest = entered
-		                    }
-		                    above = next
+		            var top: __safeDI_Place?
+		            func nearest<Handed: Sendable>(_: Handed.Type) -> Handed? {
+		                var place = top.flatMap { $0.isNearestOfType ? $0 : $0.nearestOfTypeAbove }
+		                while let candidate = place {
+		                    if let found = candidate.configured as? __safeDI_Configured<Handed> { return found.configuration }
+		                    place = candidate.nearestOfTypeAbove
 		                }
-		                let entered = __safeDI_Entered<Handed>(configuration: nearest?.configuration ?? handed)
-		                return .init(configuration: entered.configuration, places: .entered(slot: slot, entered: entered, above: places))
+		                return nil
+		            }
+		            func entering<Handed: Sendable>(_ slot: Int, _ handed: @autoclosure () -> Handed, nearestOfType: Bool = false) -> __safeDI_Entered<Handed> {
+		                if var place = top, place.has(slot) {
+		                    while place.slot != slot, let next = place.jump.flatMap({ $0.has(slot) ? $0 : nil }) ?? place.above {
+		                        place = next
+		                    }
+		                    if let found = place.configured as? __safeDI_Configured<Handed> {
+		                        return .init(configuration: found.configuration, top: place)
+		                    }
+		                }
+		                if nearestOfType, let nearest = nearest(Handed.self) {
+		                    return .init(configuration: nearest, top: __safeDI_Place(slot: slot, isNearestOfType: true, configured: __safeDI_Configured(configuration: nearest), above: top))
+		                }
+		                let configuration = handed()
+		                return .init(configuration: configuration, top: __safeDI_Place(slot: slot, isNearestOfType: nearestOfType, configured: __safeDI_Configured(configuration: configuration), above: top))
 		            }
 		        }
 		        let __safeDI_entered = __safeDI_Entered(configuration: ())
 		        func __safeDI_worker(__safeDI_entered: __safeDI_Entered<Worker.SafeDIMockConfiguration>) -> Worker {
-		            let storeBuilder = Instantiator<Store> { __safeDI_storeBuilder(__safeDI_entered: __safeDI_entered.entering("storeBuilder", Store.SafeDIMockConfiguration())) }
+		            let storeBuilder = Instantiator<Store> { __safeDI_storeBuilder(__safeDI_entered: __safeDI_entered.entering(1, Store.SafeDIMockConfiguration())) }
 		            return if let safeDIBuilder = __safeDI_entered.configuration.safeDIBuilder { safeDIBuilder(storeBuilder) } else { Worker(storeBuilder: storeBuilder) }
 		        }
 		        func __safeDI_storeBuilder(__safeDI_entered: __safeDI_Entered<Store.SafeDIMockConfiguration>) -> Store {
-		            let worker: Worker = __safeDI_worker(__safeDI_entered: __safeDI_entered.entering("worker", __safeDI_entered.configuration.worker))
+		            let worker: Worker = __safeDI_worker(__safeDI_entered: __safeDI_entered.entering(0, __safeDI_entered.configuration.worker))
 		            return if let safeDIBuilder = __safeDI_entered.configuration.safeDIBuilder { safeDIBuilder(worker) } else { Store(worker: worker) }
 		        }
-		        let worker: Worker = __safeDI_worker(__safeDI_entered: __safeDI_entered.entering("worker", safeDIOverrides.worker))
+		        let worker: Worker = __safeDI_worker(__safeDI_entered: __safeDI_entered.entering(0, safeDIOverrides.worker))
 		        return Store(worker: worker)
 		    }
 		}
