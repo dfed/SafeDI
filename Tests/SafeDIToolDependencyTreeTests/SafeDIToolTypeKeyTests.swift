@@ -1019,9 +1019,7 @@ struct SafeDIToolTypeKeyTests: ~Copyable {
 		                let t2Builder = SendableInstantiator<T2> {
 		                    __safeDI_t2Builder(t1: $0, t0: nil)
 		                }
-		                #sourceLocation(file: "\(output.fixtures["T1.swift"])", line: 12)
-		                let anyT1Alias: AnyT1? = AnyT1(t1)
-		                #sourceLocation()
+		                let anyT1Alias: AnyT1? = AnyT1(t1) // Declared as T1.anyT1Alias
 		                return T1(t0: t0, t2Builder: t2Builder, anyT1Alias: anyT1Alias, t1: t1)
 		            }
 		            let t1Builder = SendableInstantiator<T1> {
@@ -1044,9 +1042,7 @@ struct SafeDIToolTypeKeyTests: ~Copyable {
 		                    let t2Builder = SendableInstantiator<T2> {
 		                        __safeDI_t2Builder(t1: $0)
 		                    }
-		                    #sourceLocation(file: "\(output.fixtures["T1.swift"])", line: 12)
-		                    let anyT1Alias: AnyT1? = (t1 as T1?).map { AnyT1($0) }
-		                    #sourceLocation()
+		                    let anyT1Alias: AnyT1? = (t1 as T1?).map { AnyT1($0) } // Declared as T1.anyT1Alias
 		                    return T1(t0: t0, t2Builder: t2Builder, anyT1Alias: anyT1Alias, t1: t1)
 		                }
 		                let t1Builder = SendableInstantiator<T1> {

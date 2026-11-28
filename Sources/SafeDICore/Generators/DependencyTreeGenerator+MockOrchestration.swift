@@ -1039,12 +1039,12 @@ extension DependencyTreeGenerator {
 					// where they're promoted as root-level children.
 					continue
 				case let .aliased(fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable):
-					scope.propertiesToGenerate.append(.aliased(
-						dependency.property,
+					scope.propertiesToGenerate.append(Self.aliasedDependency(
+						dependency,
 						fulfilledBy: fulfillingProperty,
 						erasedToConcreteExistential: erasedToConcreteExistential,
 						onlyIfAvailable: onlyIfAvailable,
-						declarationReference: aliasDeclarationReferences.reference(to: dependency.declarationLocation),
+						declaredBy: scope.instantiable,
 					))
 				case .forwarded:
 					continue

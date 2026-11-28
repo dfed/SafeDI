@@ -230,8 +230,8 @@ def _safedi_compile_impl(ctx):
         "--combined-output",
         combined.path,
         # rules_swift hands swiftc the same execution-root-relative paths
-        # this rule writes to the CSV, so the generated `#sourceLocation`
-        # directives can name them and stay free of machine-specific paths.
+        # this rule writes to the CSV, so `generate` prints the paths of its
+        # own diagnostics as the CSV spells them, as swiftc prints its own.
         "--compiler-receives-input-paths-unchanged",
         # Every action is given the `.safedi` of every module beneath it
         # (`module_infos_beneath`), so a view can name the modules it

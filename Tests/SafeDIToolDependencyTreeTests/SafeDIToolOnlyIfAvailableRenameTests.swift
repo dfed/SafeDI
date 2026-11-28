@@ -98,9 +98,7 @@ struct SafeDIToolOnlyIfAvailableRenameTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_child(x: X?) -> Child {
-			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 2)
-			            let ax: X? = x
-			            #sourceLocation()
+			            let ax: X? = x // Declared as Child.ax
 			            let grand = Grand(ax: ax)
 			            return Child(ax: ax, grand: grand)
 			        }
@@ -173,9 +171,7 @@ struct SafeDIToolOnlyIfAvailableRenameTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_child(x: X?) -> Child {
-			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 2)
-			            let ax: X? = x
-			            #sourceLocation()
+			            let ax: X? = x // Declared as Child.ax
 			            let grand = Grand(ax: ax)
 			            return Child(ax: ax, grand: grand)
 			        }
@@ -263,9 +259,7 @@ struct SafeDIToolOnlyIfAvailableRenameTests: ~Copyable {
 			            return X(grand: grand, b: b)
 			        }
 			        func __safeDI_b() -> B {
-			            #sourceLocation(file: "\(output.fixtures["B.swift"])", line: 2)
-			            let ax: X? = nil
-			            #sourceLocation()
+			            let ax: X? = nil // Declared as B.ax
 			            return B(ax: ax)
 			        }
 			        func __safeDI_holderBuilder(x: X?) -> Holder {
@@ -327,9 +321,7 @@ struct SafeDIToolOnlyIfAvailableRenameTests: ~Copyable {
 			    public convenience init() {
 			        let token = Token()
 			        func __safeDI_child() -> Child {
-			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 2)
-			            let token: Token? = nil
-			            #sourceLocation()
+			            let token: Token? = nil // Declared as Child.token
 			            let grand = Grand(token: token)
 			            return Child(token: token, grand: grand)
 			        }
@@ -392,15 +384,11 @@ struct SafeDIToolOnlyIfAvailableRenameTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_optionalSpelling(token: Secret?) -> OptionalSpelling {
-			            #sourceLocation(file: "\(output.fixtures["OptionalSpelling.swift"])", line: 2)
-			            let auth: AnyAuth? = (token as Secret?).map { AnyAuth($0) }
-			            #sourceLocation()
+			            let auth: AnyAuth? = (token as Secret?).map { AnyAuth($0) } // Declared as OptionalSpelling.auth
 			            return OptionalSpelling(auth: auth)
 			        }
 			        func __safeDI_plainSpelling(token: Secret?) -> PlainSpelling {
-			            #sourceLocation(file: "\(output.fixtures["PlainSpelling.swift"])", line: 2)
-			            let auth: AnyAuth? = (token as Secret?).map { AnyAuth($0) }
-			            #sourceLocation()
+			            let auth: AnyAuth? = (token as Secret?).map { AnyAuth($0) } // Declared as PlainSpelling.auth
 			            return PlainSpelling(auth: auth)
 			        }
 			        func __safeDI_holderBuilder(token: Secret?) -> Holder {
@@ -468,9 +456,7 @@ struct SafeDIToolOnlyIfAvailableRenameTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_sub() -> Sub {
-			            #sourceLocation(file: "\(output.fixtures["Sub.swift"])", line: 2)
-			            let token: (any Auth)? = nil
-			            #sourceLocation()
+			            let token: (any Auth)? = nil // Declared as Sub.token
 			            let reader = Reader(token: token)
 			            return Sub(token: token, reader: reader)
 			        }
@@ -603,9 +589,7 @@ struct SafeDIToolOnlyIfAvailableRenameTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_child() -> Child {
-			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 2)
-			            let ax: X? = nil
-			            #sourceLocation()
+			            let ax: X? = nil // Declared as Child.ax
 			            let grand = Grand(ax: ax)
 			            return Child(ax: ax, grand: grand)
 			        }
@@ -681,9 +665,7 @@ struct SafeDIToolOnlyIfAvailableRenameTests: ~Copyable {
 			extension Top {
 			    public convenience init() {
 			        func __safeDI_child(service: Service) -> Child {
-			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 2)
-			            let sa: Service? = service
-			            #sourceLocation()
+			            let sa: Service? = service // Declared as Child.sa
 			            let holder: Holder = __safeDI_holder(sa: sa)
 			            return Child(sa: sa, holder: holder)
 			        }
@@ -769,9 +751,7 @@ struct SafeDIToolOnlyIfAvailableRenameTests: ~Copyable {
 			    public convenience init() {
 			        let x = X()
 			        func __safeDI_aBuilder(x: X?) -> A {
-			            #sourceLocation(file: "\(output.fixtures["A.swift"])", line: 2)
-			            let anyX: AnyX? = (x as X?).map { AnyX($0) }
-			            #sourceLocation()
+			            let anyX: AnyX? = (x as X?).map { AnyX($0) } // Declared as A.anyX
 			            let grand = Grand(anyX: anyX)
 			            func __safeDI_midBuilder() -> Mid {
 			                let x = X()
@@ -847,9 +827,7 @@ struct SafeDIToolOnlyIfAvailableRenameTests: ~Copyable {
 			    public convenience init() {
 			        let x = X()
 			        func __safeDI_aBuilder(x: X?) -> A {
-			            #sourceLocation(file: "\(output.fixtures["A.swift"])", line: 2)
-			            let anyX: AnyX? = (x as X?).map { AnyX($0) }
-			            #sourceLocation()
+			            let anyX: AnyX? = (x as X?).map { AnyX($0) } // Declared as A.anyX
 			            let grand = Grand(anyX: anyX)
 			            func __safeDI_midBuilder() -> Mid {
 			                let x = X()
@@ -916,9 +894,7 @@ struct SafeDIToolOnlyIfAvailableRenameTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_child() -> Child {
-			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 2)
-			            let ax: X? = nil
-			            #sourceLocation()
+			            let ax: X? = nil // Declared as Child.ax
 			            let grand = Grand(ax: nil)
 			            return Child(ax: ax, grand: grand)
 			        }
@@ -975,9 +951,7 @@ struct SafeDIToolOnlyIfAvailableRenameTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_child() -> Child {
-			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 2)
-			            let ax: X? = nil
-			            #sourceLocation()
+			            let ax: X? = nil // Declared as Child.ax
 			            return Child(ax: ax)
 			        }
 			        func __safeDI_holderBuilder(x: LazilyInstantiated<X>?) -> Holder {
@@ -1040,16 +1014,12 @@ struct SafeDIToolOnlyIfAvailableRenameTests: ~Copyable {
 			    public convenience init() {
 			        let x = X()
 			        func __safeDI_a() -> A {
-			            #sourceLocation(file: "\(output.fixtures["A.swift"])", line: 2)
-			            let ax: X? = x
-			            #sourceLocation()
+			            let ax: X? = x // Declared as A.ax
 			            return A(ax: ax)
 			        }
 			        let a: A = __safeDI_a()
 			        func __safeDI_b() -> B {
-			            #sourceLocation(file: "\(output.fixtures["B.swift"])", line: 2)
-			            let ax: X? = x
-			            #sourceLocation()
+			            let ax: X? = x // Declared as B.ax
 			            return B(ax: ax)
 			        }
 			        let b: B = __safeDI_b()
@@ -1137,9 +1107,7 @@ struct SafeDIToolOnlyIfAvailableRenameTests: ~Copyable {
 			        let secretToken: Token? = safeDIOverrides.secretToken
 			        let token = if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
 			        func __safeDI_child() -> Child {
-			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 2)
-			            let token: Token? = secretToken
-			            #sourceLocation()
+			            let token: Token? = secretToken // Declared as Child.token
 			            let grand = if let safeDIBuilder = safeDIOverrides.child.grand { safeDIBuilder(token) } else { Grand(token: token) }
 			            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(token, grand) } else { Child(token: token, grand: grand) }
 			        }

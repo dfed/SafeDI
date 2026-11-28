@@ -182,7 +182,6 @@ public struct ProjectFilePaths: Sendable {
 		let resolvedFilePath = realpath(reportedProjectRoot, nil)
 		defer { free(resolvedFilePath) }
 		let resolvedProjectRoot = resolvedFilePath.map { String(cString: $0) }
-		reportsResolvedProjectRoot = resolvedProjectRoot == reportedProjectRoot
 		normalizedProjectRoot = resolvedProjectRoot.map { NormalizedFilePath($0) } ?? reportedRoot
 		self.reportedRoot = reportedRoot
 		reportedRootPrefix = reportedRoot.directoryPrefix
@@ -194,12 +193,6 @@ public struct ProjectFilePaths: Sendable {
 	/// trailing `/`, but not normalized: the build system spells the files inside the root by joining this with their
 	/// paths inside it, and the manifest records it as its `projectRoot`.
 	public let reportedProjectRoot: String
-
-	/// Whether the reported root is spelled exactly as `realpath(3)` resolves it: absolute, through no symbolic
-	/// link, with no `.` or `..` component and no repeated or trailing `/`, and with each name in the case the file
-	/// system stores. A root that names no file is not. Foundation cannot answer this on Apple platforms, where its
-	/// resolution removes the leading `/private` that resolving `/tmp` adds.
-	public let reportsResolvedProjectRoot: Bool
 
 	/// The resolved project root, normalized. Every path inside the project is relative to it.
 	public let normalizedProjectRoot: NormalizedFilePath
@@ -227,9 +220,8 @@ public struct ProjectFilePaths: Sendable {
 		path.normalizedPath.path(relativeToDirectoryPrefix: rootPrefix)
 	}
 
-	/// How the build system spells the file at `path`, for the plugin to declare it as an input, for a
-	/// `#sourceLocation` directive the compiler compares with its own paths, and for a diagnostic an IDE maps to the
-	/// file it has open: the reported project root joined with the file's path inside the project, or, for a file
+	/// How the build system spells the file at `path`, for the plugin to declare it as an input, and for a diagnostic
+	/// an IDE maps to the file it has open: the reported project root joined with the file's path inside the project, or, for a file
 	/// outside the project, its absolute normalized path. The build system hands the compiler the paths it reported
 	/// to the plugin, which are inside the reported root. Normalizing the joined path would not keep that spelling:
 	/// on Apple platforms, Foundation removes a leading `/private` from paths such as `/private/tmp/…`, which the

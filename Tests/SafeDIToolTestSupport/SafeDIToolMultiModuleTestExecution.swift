@@ -165,11 +165,9 @@ enum MultiModuleIntegration: CaseIterable {
 	/// omitting that flag and passing `$SRCROOT`-relative paths. The harness names the combined file `<module name>.swift`, where
 	/// Bazel names both outputs after the rule label and Tuist writes `SafeDIGenerated.swift`, and its CSV names
 	/// each file by the absolute, unresolved path the harness created it under, where Bazel's entries are
-	/// execroot-relative and Tuist's `$SRCROOT`-relative: that changes only the text of `#sourceLocation`
-	/// directives, of diagnostics and of the paths the `.safedi` stores, never the tree or mock code. In
-	/// combined mode `generate()` normalizes no path and `run()` respells paths only when printing, so a
-	/// diagnostic cites the CSV's path and an alias's declaration is referenced by a `#sourceLocation`
-	/// directive naming it.
+	/// execroot-relative and Tuist's `$SRCROOT`-relative: that changes only the text of diagnostics and of the
+	/// paths the `.safedi` stores, never the tree or mock code. In combined mode `generate()` normalizes no path
+	/// and `run()` respells paths only when printing, so a diagnostic cites the CSV's path.
 	case moduleInfo
 	/// The SwiftPM plugin's invocations (`SafeDIGenerateDependencyTree.swift`): `scan` while planning the build
 	/// and, only when the manifest plans an output, `generate` with that manifest, as the plugin adds a build
@@ -181,8 +179,7 @@ enum MultiModuleIntegration: CaseIterable {
 	/// (the fixture's package name, which stands in for SwiftPM's package identity), its files spelled as the CSV
 	/// spells them, and the modules it depends on directly. The build system
 	/// spells a file to the compiler as the reported package directory joined with the CSV's relative path
-	/// (`FixturePaths.compilerPath(of:)`): an alias's declaration is referenced by a `#sourceLocation` directive
-	/// naming that spelling, a found additional file outside the package is listed by its normalized path, and a
+	/// (`FixturePaths.compilerPath(of:)`): a found additional file outside the package is listed by its normalized path, and a
 	/// diagnostic `generate()` throws cites the path the file was parsed under, the compiler's spelling
 	/// normalized (`NormalizedFilePath`), which `run()` respells as the build system's before printing it.
 	case swiftPackagePlugin

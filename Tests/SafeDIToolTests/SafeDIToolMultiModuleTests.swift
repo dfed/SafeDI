@@ -447,7 +447,7 @@ struct SafeDIToolMultiModuleTests: ~Copyable {
 
 	@Test(arguments: MultiModuleIntegration.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func multiModuleTest_referencesAliasDeclarationByDirective_whenAliasIsFulfilledByDependencyType(integration: MultiModuleIntegration) async throws {
+	mutating func multiModuleTest_namesAliasDeclarationInComment_whenAliasIsFulfilledByDependencyType(integration: MultiModuleIntegration) async throws {
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: [
 				Self.transitiveChain[0],
@@ -487,15 +487,8 @@ struct SafeDIToolMultiModuleTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 
-		// The directive names the file as the compiler is handed it: the CSV's absolute path under Bazel's
-		// invocation, and the reported package directory joined with the CSV's relative path under the plugin's.
+		// The comment names the declaration by its type and label, so both integrations generate the same code.
 		let app = try #require(output.modules["App"])
-		let carPath = switch integration {
-		case .moduleInfo:
-			app.fixtures["Car.swift"]
-		case .swiftPackagePlugin:
-			app.fixtures.compilerPath(of: "Car.swift")
-		}
 		let expectedGeneratedFiles: [String: String] = switch integration {
 		case .moduleInfo:
 			["App.swift": generatedFileHeader + """
@@ -507,9 +500,7 @@ struct SafeDIToolMultiModuleTests: ~Copyable {
 			    public convenience init() {
 			        let engine = Engine()
 			        func __safeDI_car() -> Car {
-			            #sourceLocation(file: "\(carPath)", line: 8)
-			            let motor: Engine = engine
-			            #sourceLocation()
+			            let motor: Engine = engine // Declared as Car.motor
 			            return Car(motor: motor)
 			        }
 			        let car: Car = __safeDI_car()
@@ -527,9 +518,7 @@ struct SafeDIToolMultiModuleTests: ~Copyable {
 			    public convenience init() {
 			        let engine = Engine()
 			        func __safeDI_car() -> Car {
-			            #sourceLocation(file: "\(carPath)", line: 8)
-			            let motor: Engine = engine
-			            #sourceLocation()
+			            let motor: Engine = engine // Declared as Car.motor
 			            return Car(motor: motor)
 			        }
 			        let car: Car = __safeDI_car()

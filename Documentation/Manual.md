@@ -723,7 +723,7 @@ public struct ProfileView: Instantiable {
 }
 ```
 
-`ofType:` must name the renamed property’s type exactly, or, for a `LazilyInstantiated` property, its instance type. SafeDI does not check that the new type can hold the original; the Swift compiler checks the generated assignment and reports a mismatch.
+`ofType:` must name the renamed property’s type exactly, or, for a `LazilyInstantiated` property, its instance type. SafeDI does not check that the new type can hold the original; the Swift compiler checks the generated assignment and reports a mismatch there. The assignment ends in a comment that names the renamed property by its type and label, `let userVendor: UserVendor = userManager // Declared as LoggedInView.userVendor`, so the error’s excerpt shows which declaration to fix.
 
 To receive the renamed dependency inside a type-erasing wrapper, add `erasedToConcreteExistential: true`, which wraps it as [`@Instantiated` erasure](#making-protocols-instantiable) does: a property `userVendor: AnyUserVendor` is assigned `AnyUserVendor(userManager)`.
 

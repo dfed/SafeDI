@@ -60,7 +60,6 @@ public actor DependencyTreeGenerator {
 		importStatements: [ImportStatement],
 		mockImportStatements: [ImportStatement],
 		typeDescriptionToFulfillingInstantiableMap: [TypeDescription: Instantiable],
-		aliasDeclarationReferences: AliasDeclarationReferences,
 		compilesGeneratedMocks: Bool,
 		emittingModule: EmittingModule? = nil,
 		seams: SeamResolution = .none,
@@ -96,7 +95,6 @@ public actor DependencyTreeGenerator {
 		// What the declarations spell is interned first, in the order of their keys, which no arrival order decides. The
 		// order assigns the IDs, which only an `==` reads, never output: the tests intern in other orders to show it.
 		internerSpace = ConstructionInternerSpace(declarationsOf: Self.declarationsInInterningOrder(of: typeDescriptionToFulfillingInstantiableMap))
-		self.aliasDeclarationReferences = aliasDeclarationReferences
 		self.compilesGeneratedMocks = compilesGeneratedMocks
 		self.emittingModule = emittingModule
 		self.seams = seams
@@ -587,7 +585,6 @@ public actor DependencyTreeGenerator {
 		return declarationOrder(declarations.count).map { declarations[$0] }
 	}
 
-	let aliasDeclarationReferences: AliasDeclarationReferences
 	/// See `init`.
 	let compilesGeneratedMocks: Bool
 	let emittingModule: EmittingModule?

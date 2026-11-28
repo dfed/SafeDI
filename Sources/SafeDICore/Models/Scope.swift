@@ -145,8 +145,8 @@ final class Scope: Hashable {
 			fulfilledBy: Property,
 			erasedToConcreteExistential: Bool,
 			onlyIfAvailable: Bool,
-			/// How the alias’s assignment refers to its `@Received` declaration.
-			declarationReference: AliasDeclarationReferences.Reference?,
+			/// The `@Received` declaration the alias’s assignment names in a comment, `Type.label`.
+			declarationReference: String,
 		)
 
 		/// The property this scope declares.
@@ -2048,7 +2048,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		fulfillingProperty: Property,
 		erasedToConcreteExistential: Bool,
 		onlyIfAvailable: Bool,
-		declarationReference: AliasDeclarationReferences.Reference?,
+		declarationReference: String,
 	) {
 		// An alias that keeps the label of the dependency it retypes is not in scope where its
 		// own value is read, so it does not shadow a lazily instantiated property further up the tree.

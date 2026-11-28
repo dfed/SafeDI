@@ -861,9 +861,7 @@ struct SafeDIToolInstantiatedOnlyIfAvailableTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_tracker(analytics: (any Analytics)?) -> Tracker {
-			            #sourceLocation(file: "\(output.fixtures["Tracker.swift"])", line: 2)
-			            let events: (any Analytics)? = analytics
-			            #sourceLocation()
+			            let events: (any Analytics)? = analytics // Declared as Tracker.events
 			            return Tracker(events: events)
 			        }
 			        func __safeDI_screen() -> Screen {
@@ -921,9 +919,7 @@ struct SafeDIToolInstantiatedOnlyIfAvailableTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_tracker(analytics: (any Analytics)?) -> Tracker {
-			            #sourceLocation(file: "\(output.fixtures["Tracker.swift"])", line: 2)
-			            let events: (any Analytics)? = analytics
-			            #sourceLocation()
+			            let events: (any Analytics)? = analytics // Declared as Tracker.events
 			            return Tracker(events: events)
 			        }
 			        func __safeDI_screen() -> Screen {

@@ -295,18 +295,6 @@ public struct Dependency: Codable, Hashable, Sendable {
 			}
 		}
 
-		/// The position as `AliasDeclarationReferences` reads it. A bridge for that file alone, which the rewrite of alias
-		/// bindings deletes: remove this with it, and read ``position`` everywhere else.
-		public var placement: AliasReferencePlacement {
-			position.map { .here(line: $0.line, column: $0.column) } ?? .unlocated
-		}
-
-		/// See ``placement``.
-		public enum AliasReferencePlacement: Sendable {
-			case here(line: Int, column: Int)
-			case unlocated
-		}
-
 		/// A string that two locations share exactly when they are equal.
 		public var identity: String {
 			if let position {

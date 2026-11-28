@@ -14258,8 +14258,7 @@ struct GraphFuzzerOutcomeDifference: Equatable {
 	/// `code` with the items of each of its lists and blocks in sorted order: each balanced `(…)`, `[…]` and generic `<…>`
 	/// group split at its own top-level commas, and each `{…}` block split at its own newlines and semicolons into its
 	/// declarations and statements (a multi-line one, whose other lines are inside a nested group or block, stays one
-	/// item, as does an `#if` region with everything up to its `#endif` and a `#sourceLocation(file:…)` run up to its
-	/// `#sourceLocation()`), each item put in this form itself and trimmed,
+	/// item, as does an `#if` region with everything up to its `#endif`), each item put in this form itself and trimmed,
 	/// and the items sorted, while everything outside the groups and blocks keeps its order. So two files compare equal
 	/// when they differ only in the order of siblings within one list or one block, recursively: an item moved to
 	/// another list or block, a value swapped between two calls, a changed nesting, a respelled type or a value moved to
@@ -14424,15 +14423,13 @@ private struct GraphFuzzerListOrderCanonicalizer {
 		return names.sorted().joined(separator: ", ") + item[inRange.lowerBound...]
 	}
 
-	/// `items` with each `#if` item and those after it up to its `#endif`, and each `#sourceLocation(file:…)` item and those
-	/// after it up to the `#sourceLocation()` that ends it, joined into one, in their order.
+	/// `items` with each `#if` item and those after it up to its `#endif` joined into one, in their order.
 	private static func joiningRegions(of items: [String]) -> [String] {
 		var joined = [String]()
 		var region = [String]()
 		var depth = 0
 		for item in items {
-			let opensRegion = item.hasPrefix("#if") || (item.hasPrefix("#sourceLocation(") && item != "#sourceLocation()")
-			if opensRegion {
+			if item.hasPrefix("#if") {
 				depth += 1
 			}
 			if depth > 0 {
@@ -14440,7 +14437,7 @@ private struct GraphFuzzerListOrderCanonicalizer {
 			} else {
 				joined.append(item)
 			}
-			if item.hasPrefix("#endif") || item == "#sourceLocation()", depth > 0 {
+			if item.hasPrefix("#endif"), depth > 0 {
 				depth -= 1
 				if depth == 0 {
 					joined.append(region.joined(separator: "; "))
@@ -17862,8 +17859,7 @@ enum GraphFuzzerOracle {
 	/// The top-level declarations each module of a split graph generates, by module name, on which the SwiftPM plugin
 	/// flow and the module-info flow must agree: every generated file but the oracle's own callers, in blocks that begin
 	/// where a line begins as `integrationComparedBlockStarts` say. What the flows spell differently is dropped first:
-	/// `#sourceLocation` directives, which only a flow that knows the compiler's spelling of a path emits, the header
-	/// lines every generated file opens with, the lines `integrationSpecificCommentLines` begin, and the comments of
+	/// the header lines every generated file opens with, the lines `integrationSpecificCommentLines` begin, and the comments of
 	/// `integrationSpecificTrailingComments`. The blocks are
 	/// a set, since the plugin repeats a module's imports in every file it writes, where a combined output states them
 	/// once.
@@ -17881,8 +17877,7 @@ enum GraphFuzzerOracle {
 			}
 			for line in contents.split(separator: "\n", omittingEmptySubsequences: false) {
 				let trimmedLine = line.trimmingCharacters(in: .whitespaces)
-				guard !trimmedLine.hasPrefix("#sourceLocation"),
-				      !generatedFileHeaderLines.contains(trimmedLine),
+				guard !generatedFileHeaderLines.contains(trimmedLine),
 				      !integrationSpecificCommentLines.contains(where: { trimmedLine.hasPrefix($0) })
 				else { continue }
 				let code = integrationSpecificTrailingComments.reduce(line) { code, comment in
@@ -17976,11 +17971,9 @@ enum GraphFuzzerOracle {
 	/// How the comment naming the types SafeDI counts as `public` because it reads no declaration of them begins.
 	static let unreadTypeCommentPrefix = "// SafeDI counts `"
 
-	/// The trailing comments generated code carries in one flow and not the other: `// Declared at …`, which refers to an
-	/// alias's declaration where a flow does not know the compiler's spelling of its path for a `#sourceLocation`
-	/// directive, and the comment a seam call carries saying what to do when it does not compile, which each flow words
-	/// for its own integration.
-	static let integrationSpecificTrailingComments = [" // Declared at ", " // If this line does not compile, add the SafeDI plugin", " // If this line does not compile, compile the code SafeDI generates"]
+	/// The trailing comments generated code carries in one flow and not the other: the comment a seam call carries saying
+	/// what to do when it does not compile, which each flow words for its own integration.
+	static let integrationSpecificTrailingComments = [" // If this line does not compile, add the SafeDI plugin", " // If this line does not compile, compile the code SafeDI generates"]
 
 	/// The failure of a graph whose `SafeDITool generate` output differs between two processes, which seed their
 	/// hashing differently, or `nil` when both processes give the same output.
@@ -18492,12 +18485,12 @@ enum GraphFuzzerOracle {
 	/// without a leading `/private`, since every spelling ends in that component. The directories above it are no part of
 	/// what the oracle compares, and a renaming must not rewrite them when it is undone: a macOS runner's temporary
 	/// directory, `/var/folders/h5/t85nd…/T`, holds `t8`, which undoing a label reversal reads as a label.
-	/// The path appears in generated code only in `#sourceLocation` paths and comments, so the code still compiles.
+	/// The path appears in generated code only in comments, so the code still compiles.
 	static func normalizer(fixtureDirectory: String) -> (String) -> String {
 		let uniqueComponent = (fixtureDirectory as NSString).lastPathComponent
 		guard !uniqueComponent.isEmpty else { return { $0 } }
-		// A path starts after whitespace, a quote, a backtick or an opening parenthesis, as the tool's diagnostics and
-		// `#sourceLocation` directives spell it.
+		// A path starts after whitespace, a quote, a backtick or an opening parenthesis, as the tool's diagnostics spell
+		// it, and as an older release's `#sourceLocation` directives do, which release acceptance compares.
 		let pattern = #"(?:[^\s"'`(]*/)?"# + NSRegularExpression.escapedPattern(for: uniqueComponent)
 		return { text in
 			guard text.contains(uniqueComponent) else { return text }
@@ -18725,7 +18718,7 @@ enum GraphFuzzerOracle {
 		}
 
 		/// Whether `fileName` belongs to this unit: a fixture staged as `input_<index>_<prefix>…`, a generated file
-		/// named `<prefix>…`, or a fixture named in a `#sourceLocation` directive.
+		/// named `<prefix>…`, or a fixture named in an older release's `#sourceLocation` directive.
 		func contains(fileName: Substring) -> Bool {
 			let typeNamePrefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
 			return fileName.hasPrefix(typeNamePrefix) || fileName.contains("_\(typeNamePrefix)")
@@ -18766,9 +18759,9 @@ enum GraphFuzzerOracle {
 
 		/// Records the warnings `unit`'s generated code draws in `compilerOutput`, the output of a compile that
 		/// `unit` passed, which reports every warning in `unit`'s files, and those its fixture draws.
-		mutating func recordGeneratedCodeWarnings(of unit: CompilationUnit, inCompilerOutput compilerOutput: String) throws {
+		mutating func recordGeneratedCodeWarnings(of unit: CompilationUnit, inCompilerOutput compilerOutput: String) {
 			inputWarningMessages[unit.seed, default: []].formUnion(warningMessagesInputsDraw(inCompilerOutput: compilerOutput, inputFiles: unit.inputFiles))
-			let warnings = try warningsOnlyGeneratedCodeDraws(
+			let warnings = warningsOnlyGeneratedCodeDraws(
 				inCompilerOutput: compilerOutput,
 				generatedFiles: unit.generatedFiles,
 				inputFiles: unit.inputFiles,
@@ -18810,7 +18803,7 @@ enum GraphFuzzerOracle {
 			let result = try await compile(remainingUnits)
 			guard result.exitCode != 0 else {
 				for unit in remainingUnits {
-					try compilation.recordGeneratedCodeWarnings(of: unit, inCompilerOutput: result.stderr)
+					compilation.recordGeneratedCodeWarnings(of: unit, inCompilerOutput: result.stderr)
 				}
 				break
 			}
@@ -18848,7 +18841,7 @@ enum GraphFuzzerOracle {
 					if unitResult.exitCode != 0 {
 						compilation.failures[unit.seed] = UnitDiagnostics(standardError: unitResult.stderr)
 					} else {
-						try compilation.recordGeneratedCodeWarnings(of: unit, inCompilerOutput: unitResult.stderr)
+						compilation.recordGeneratedCodeWarnings(of: unit, inCompilerOutput: unitResult.stderr)
 						compilingUnits.append(unit)
 					}
 				}

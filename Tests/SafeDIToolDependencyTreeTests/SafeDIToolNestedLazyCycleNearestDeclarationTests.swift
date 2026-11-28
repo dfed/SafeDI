@@ -483,7 +483,7 @@ struct SafeDIToolNestedLazyCycleNearestDeclarationTests: ~Copyable {
 				pDeclares: ["@Forwarded let l: L", "@Instantiated let uBuilder: Instantiator<U>"],
 				vDeclares: [#"@Received(fulfilledByDependencyNamed: "l", ofType: L.self) let renamed: L"#],
 			),
-			equals: { output in
+			equals: { _ in
 				"""
 				extension Root {
 				    public convenience init() {
@@ -513,9 +513,7 @@ struct SafeDIToolNestedLazyCycleNearestDeclarationTests: ~Copyable {
 				            return P(l: l, uBuilder: uBuilder)
 				        }
 				        func __safeDI_vBuilder(l: L) -> V {
-				            #sourceLocation(file: "\(output.fixtures["V.swift"])", line: 7)
-				            let renamed: L = l
-				            #sourceLocation()
+				            let renamed: L = l // Declared as V.renamed
 				            return V(renamed: renamed)
 				        }
 				        let wBuilder = Instantiator<W> {

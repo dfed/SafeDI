@@ -1829,13 +1829,9 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 			    ) -> Parent {
 			        func __safeDI_x() -> X {
 			            func __safeDI_b() -> B {
-			                #sourceLocation(file: "\(output.fixtures["B.swift"])", line: 4)
-			                let y: X? = nil
-			                #sourceLocation()
+			                let y: X? = nil // Declared as B.y
 			                func __safeDI_c() -> C {
-			                    #sourceLocation(file: "\(output.fixtures["C.swift"])", line: 4)
-			                    let z: X? = y
-			                    #sourceLocation()
+			                    let z: X? = y // Declared as C.z
 			                    let d = if let safeDIBuilder = safeDIOverrides.x.b.c.d { safeDIBuilder(z) } else { D(z: z) }
 			                    return if let safeDIBuilder = safeDIOverrides.x.b.c.safeDIBuilder { safeDIBuilder(z, d) } else { C(z: z, d: d) }
 			                }
@@ -2050,13 +2046,9 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 			    ) -> Parent {
 			        func __safeDI_x() -> X {
 			            func __safeDI_b() -> B {
-			                #sourceLocation(file: "\(output.fixtures["B.swift"])", line: 4)
-			                let y: X? = nil
-			                #sourceLocation()
+			                let y: X? = nil // Declared as B.y
 			                func __safeDI_c() -> C {
-			                    #sourceLocation(file: "\(output.fixtures["C.swift"])", line: 4)
-			                    let z: X? = y
-			                    #sourceLocation()
+			                    let z: X? = y // Declared as C.z
 			                    let d = if let safeDIBuilder = safeDIOverrides.x.b.c.d { safeDIBuilder(z) } else { D(z: z) }
 			                    return if let safeDIBuilder = safeDIOverrides.x.b.c.safeDIBuilder { safeDIBuilder(z, d) } else { C(z: z, d: d) }
 			                }
@@ -3563,9 +3555,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 			        func __safeDI_aBuilder() -> A {
 			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
 			            func __safeDI_b() -> B {
-			                #sourceLocation(file: "\(output.fixtures["B.swift"])", line: 7)
-			                let aBuilderAlias: Instantiator<A>? = aBuilder
-			                #sourceLocation()
+			                let aBuilderAlias: Instantiator<A>? = aBuilder // Declared as B.aBuilderAlias
 			                let c = if let safeDIBuilder = safeDIOverrides.aBuilder.b.c { safeDIBuilder(aBuilderAlias) } else { C(aBuilderAlias: aBuilderAlias) }
 			                return if let safeDIBuilder = safeDIOverrides.aBuilder.b.safeDIBuilder { safeDIBuilder(aBuilderAlias, c) } else { B(aBuilderAlias: aBuilderAlias, c: c) }
 			            }
@@ -3749,9 +3739,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 			        func __safeDI_aBuilder() -> A {
 			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
 			            func __safeDI_b() -> B {
-			                #sourceLocation(file: "\(output.fixtures["B.swift"])", line: 7)
-			                let aBuilderAlias: Instantiator<A>? = aBuilder
-			                #sourceLocation()
+			                let aBuilderAlias: Instantiator<A>? = aBuilder // Declared as B.aBuilderAlias
 			                let c = if let safeDIBuilder = safeDIOverrides.aBuilder.b.c { safeDIBuilder(aBuilderAlias) } else { C(aBuilderAlias: aBuilderAlias) }
 			                return if let safeDIBuilder = safeDIOverrides.aBuilder.b.safeDIBuilder { safeDIBuilder(aBuilderAlias, c) } else { B(aBuilderAlias: aBuilderAlias, c: c) }
 			            }
@@ -3968,9 +3956,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 			    ) -> Screen {
 			        func __safeDI_tracker() -> Tracker {
 			            func __safeDI_inner() -> Inner {
-			                #sourceLocation(file: "\(output.fixtures["Inner.swift"])", line: 7)
-			                let myTracker: Tracker? = nil
-			                #sourceLocation()
+			                let myTracker: Tracker? = nil // Declared as Inner.myTracker
 			                let leaf = if let safeDIBuilder = safeDIOverrides.tracker.inner.leaf { safeDIBuilder(myTracker) } else { Leaf(myTracker: myTracker) }
 			                return if let safeDIBuilder = safeDIOverrides.tracker.inner.safeDIBuilder { safeDIBuilder(myTracker, leaf) } else { Inner(myTracker: myTracker, leaf: leaf) }
 			            }
@@ -4172,9 +4158,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 			    ) -> Screen {
 			        func __safeDI_tracker() -> Tracker {
 			            func __safeDI_inner() -> Inner {
-			                #sourceLocation(file: "\(output.fixtures["Inner.swift"])", line: 7)
-			                let myTracker: Tracker? = nil
-			                #sourceLocation()
+			                let myTracker: Tracker? = nil // Declared as Inner.myTracker
 			                let leaf = if let safeDIBuilder = safeDIOverrides.tracker.inner.leaf { safeDIBuilder(myTracker) } else { Leaf(myTracker: myTracker) }
 			                return if let safeDIBuilder = safeDIOverrides.tracker.inner.safeDIBuilder { safeDIBuilder(myTracker, leaf) } else { Inner(myTracker: myTracker, leaf: leaf) }
 			            }
@@ -4358,9 +4342,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 			    ) -> Screen {
 			        func __safeDI_tracker() -> Tracker {
 			            func __safeDI_inner() -> Inner {
-			                #sourceLocation(file: "\(output.fixtures["Inner.swift"])", line: 7)
-			                let myTracker: Tracker? = nil
-			                #sourceLocation()
+			                let myTracker: Tracker? = nil // Declared as Inner.myTracker
 			                let leaf = if let safeDIBuilder = safeDIOverrides.tracker.inner.leaf { safeDIBuilder(myTracker) } else { Leaf(myTracker: myTracker) }
 			                return if let safeDIBuilder = safeDIOverrides.tracker.inner.safeDIBuilder { safeDIBuilder(myTracker, leaf) } else { Inner(myTracker: myTracker, leaf: leaf) }
 			            }
@@ -4626,9 +4608,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 			        func __safeDI_a() -> A {
 			            func __safeDI_tracker() -> Tracker {
 			                func __safeDI_inner() -> Inner {
-			                    #sourceLocation(file: "\(output.fixtures["Inner.swift"])", line: 7)
-			                    let myTracker: Tracker? = nil
-			                    #sourceLocation()
+			                    let myTracker: Tracker? = nil // Declared as Inner.myTracker
 			                    let leaf = if let safeDIBuilder = safeDIOverrides.a.tracker.inner.leaf { safeDIBuilder(myTracker) } else { Leaf(myTracker: myTracker) }
 			                    return if let safeDIBuilder = safeDIOverrides.a.tracker.inner.safeDIBuilder { safeDIBuilder(myTracker, leaf) } else { Inner(myTracker: myTracker, leaf: leaf) }
 			                }
@@ -4898,9 +4878,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 			        func __safeDI_a() -> A {
 			            func __safeDI_tracker() -> Tracker {
 			                func __safeDI_inner() -> Inner {
-			                    #sourceLocation(file: "\(output.fixtures["Inner.swift"])", line: 7)
-			                    let myTracker: Tracker? = nil
-			                    #sourceLocation()
+			                    let myTracker: Tracker? = nil // Declared as Inner.myTracker
 			                    let leaf = if let safeDIBuilder = safeDIOverrides.a.tracker.inner.leaf { safeDIBuilder(myTracker) } else { Leaf(myTracker: myTracker) }
 			                    return if let safeDIBuilder = safeDIOverrides.a.tracker.inner.safeDIBuilder { safeDIBuilder(myTracker, leaf) } else { Inner(myTracker: myTracker, leaf: leaf) }
 			                }

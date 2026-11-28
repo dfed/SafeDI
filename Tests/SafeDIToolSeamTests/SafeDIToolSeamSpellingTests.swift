@@ -122,9 +122,7 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 			    public init(__safeDI_onTap: @autoclosure @escaping () -> (() -> Void)?) {
 			        let onTap = LazilyInstantiated<(() -> Void)?>(__safeDI_onTap)
 			        @inline(never) func __safeDI_row() -> Row {
-			            #sourceLocation(file: "\(output.fixtures["Row.swift"])", line: 7)
-			            let action: (() -> Void)? = onTap.instance
-			            #sourceLocation()
+			            let action: (() -> Void)? = onTap.instance // Declared as Row.action
 			            return Row(action: action)
 			        }
 			        let row: Row = __safeDI_row()
@@ -165,9 +163,7 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 			            return List(row: row)
 			        }
 			        func __safeDI_row(onTap: @escaping () -> Void) -> Row {
-			            #sourceLocation(file: "\(inlineOutput.fixtures["Row.swift"])", line: 7)
-			            let action: (() -> Void)? = onTap
-			            #sourceLocation()
+			            let action: (() -> Void)? = onTap // Declared as Row.action
 			            return Row(action: action)
 			        }
 			        func __safeDI_screenBuilder(onTap: @escaping () -> Void) -> Screen {

@@ -1061,9 +1061,7 @@ struct SafeDIToolMockExistentialAnyTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Lone {
 			        let grand = if let safeDIBuilder = safeDIOverrides.grand { safeDIBuilder(shared) } else { GrandChild(shared: shared) }
-			        #sourceLocation(file: "\(output.fixtures["Lone.swift"])", line: 9)
-			        let other: \(spellings.mockedType) = shared
-			        #sourceLocation()
+			        let other: \(spellings.mockedType) = shared // Declared as Lone.other
 			        return Lone(grand: grand, other: other)
 			    }
 			}
@@ -1446,9 +1444,7 @@ struct SafeDIToolMockExistentialAnyTests: ~Copyable {
 			    ) -> Lone {
 			        let shared: \(spellings.mockedType) = if let safeDIBuilder = safeDIOverrides.shared { safeDIBuilder() } else { DefaultService() }
 			        let grand = if let safeDIBuilder = safeDIOverrides.grand { safeDIBuilder(shared) } else { GrandChild(shared: shared) }
-			        #sourceLocation(file: "\(output.fixtures["Lone.swift"])", line: 9)
-			        let other: \(spellings.mockedType) = shared
-			        #sourceLocation()
+			        let other: \(spellings.mockedType) = shared // Declared as Lone.other
 			        return Lone(grand: grand, other: other)
 			    }
 			}
@@ -1512,9 +1508,7 @@ struct SafeDIToolMockExistentialAnyTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Lone {
 			        let grand = if let safeDIBuilder = safeDIOverrides.grand { safeDIBuilder(shared) } else { GrandChild(shared: shared) }
-			        #sourceLocation(file: "\(output.fixtures["Lone.swift"])", line: 9)
-			        let other: any Service = shared
-			        #sourceLocation()
+			        let other: any Service = shared // Declared as Lone.other
 			        return Lone(grand: grand, other: other)
 			    }
 			}
@@ -1578,9 +1572,7 @@ struct SafeDIToolMockExistentialAnyTests: ~Copyable {
 			    ) -> Lone {
 			        let shared: any Service = if let safeDIBuilder = safeDIOverrides.shared { safeDIBuilder() } else { DefaultService() }
 			        let grand = if let safeDIBuilder = safeDIOverrides.grand { safeDIBuilder(shared) } else { GrandChild(shared: shared) }
-			        #sourceLocation(file: "\(output.fixtures["Lone.swift"])", line: 9)
-			        let other: any Service = shared
-			        #sourceLocation()
+			        let other: any Service = shared // Declared as Lone.other
 			        return Lone(grand: grand, other: other)
 			    }
 			}
@@ -1638,9 +1630,7 @@ struct SafeDIToolMockExistentialAnyTests: ~Copyable {
 			        shared: \(directReceive.spelling(aliasType: aliasType)),
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Lone {
-			        #sourceLocation(file: "\(output.fixtures["Lone.swift"])", line: \(directReceive.aliasLine))
-			        let other: \(aliasType) = shared
-			        #sourceLocation()
+			        let other: \(aliasType) = shared // Declared as Lone.other
 			        let grand = if let safeDIBuilder = safeDIOverrides.grand { safeDIBuilder(shared) } else { GrandChild(shared: shared) }
 			        return Lone(\(directReceive.returnArguments))
 			    }
@@ -1706,9 +1696,7 @@ struct SafeDIToolMockExistentialAnyTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Lone {
 			        let shared: \(spelling) = if let safeDIBuilder = safeDIOverrides.shared { safeDIBuilder() } else { DefaultService() }
-			        #sourceLocation(file: "\(output.fixtures["Lone.swift"])", line: \(directReceive.aliasLine))
-			        let other: \(aliasType) = shared
-			        #sourceLocation()
+			        let other: \(aliasType) = shared // Declared as Lone.other
 			        let grand = if let safeDIBuilder = safeDIOverrides.grand { safeDIBuilder(shared) } else { GrandChild(shared: shared) }
 			        return Lone(\(directReceive.returnArguments))
 			    }
@@ -1775,9 +1763,7 @@ struct SafeDIToolMockExistentialAnyTests: ~Copyable {
 			        shared: \(directReceive.spelling(aliasType: aliasType)),
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Lone {
-			        #sourceLocation(file: "\(output.fixtures["Lone.swift"])", line: \(directReceive.aliasLine))
-			        let other: \(aliasType) = shared
-			        #sourceLocation()
+			        let other: \(aliasType) = shared // Declared as Lone.other
 			        let grand = if let safeDIBuilder = safeDIOverrides.grand { safeDIBuilder(shared) } else { GrandChild(shared: shared) }
 			        return Lone(\(directReceive.returnArguments))
 			    }
@@ -1856,9 +1842,7 @@ struct SafeDIToolMockExistentialAnyTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Lone {
 			        let shared: \(spelling) = if let shared { shared } else if let safeDIBuilder = safeDIOverrides.shared { safeDIBuilder() } else { DefaultService() }
-			        #sourceLocation(file: "\(output.fixtures["Lone.swift"])", line: \(directReceive.aliasLine))
-			        let other: \(aliasType) = shared
-			        #sourceLocation()
+			        let other: \(aliasType) = shared // Declared as Lone.other
 			        let grand = if let safeDIBuilder = safeDIOverrides.grand { safeDIBuilder(shared) } else { GrandChild(shared: shared) }
 			        return Lone(\(directReceive.returnArguments))
 			    }
@@ -1936,9 +1920,7 @@ struct SafeDIToolMockExistentialAnyTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Lone {
 			        let shared: any Service = if let safeDIBuilder = safeDIOverrides.shared { safeDIBuilder() } else { DefaultService() }
-			        #sourceLocation(file: "\(output.fixtures["Lone.swift"])", line: 7)
-			        let other: (any Service)? = shared
-			        #sourceLocation()
+			        let other: (any Service)? = shared // Declared as Lone.other
 			        let grand = if let safeDIBuilder = safeDIOverrides.grand { safeDIBuilder(shared) } else { GrandChild(shared: shared) }
 			        return Lone(other: other, grand: grand)
 			    }
@@ -2015,9 +1997,7 @@ struct SafeDIToolMockExistentialAnyTests: ~Copyable {
 			            if let safeDIBuilder = safeDIOverrides.shared { safeDIBuilder() } else { DefaultService() }
 			        }
 			        let shared = LazilyInstantiated<any Service>(__safeDI_shared)
-			        #sourceLocation(file: "\(output.fixtures["Lone.swift"])", line: 7)
-			        let other: LazilyInstantiated<any Service> = shared
-			        #sourceLocation()
+			        let other: LazilyInstantiated<any Service> = shared // Declared as Lone.other
 			        let grand = if let safeDIBuilder = safeDIOverrides.grand { safeDIBuilder(shared) } else { GrandChild(shared: shared) }
 			        return Lone(other: other, grand: grand)
 			    }
@@ -2095,9 +2075,7 @@ struct SafeDIToolMockExistentialAnyTests: ~Copyable {
 			            if let safeDIBuilder = __safeDI_shared__safeDIBuilder { safeDIBuilder() } else { DefaultService() }
 			        }
 			        let shared = SendableLazilyInstantiated<any Service>(__safeDI_shared)
-			        #sourceLocation(file: "\(output.fixtures["Lone.swift"])", line: 7)
-			        let other: SendableLazilyInstantiated<any Service> = shared
-			        #sourceLocation()
+			        let other: SendableLazilyInstantiated<any Service> = shared // Declared as Lone.other
 			        let grand = if let safeDIBuilder = safeDIOverrides.grand { safeDIBuilder(shared) } else { GrandChild(shared: shared) }
 			        return Lone(other: other, grand: grand)
 			    }
@@ -2165,9 +2143,7 @@ struct SafeDIToolMockExistentialAnyTests: ~Copyable {
 			        shared: ErasedInstantiator<(), any Service>,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Lone {
-			        #sourceLocation(file: "\(output.fixtures["Lone.swift"])", line: 7)
-			        let other: ErasedInstantiator<(), any Service> = shared
-			        #sourceLocation()
+			        let other: ErasedInstantiator<(), any Service> = shared // Declared as Lone.other
 			        let grand = if let safeDIBuilder = safeDIOverrides.grand { safeDIBuilder(shared) } else { GrandChild(shared: shared) }
 			        return Lone(other: other, grand: grand)
 			    }
@@ -2248,9 +2224,7 @@ struct SafeDIToolMockExistentialAnyTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Lone {
 			        let shared = if let safeDIBuilder = safeDIOverrides.shared { safeDIBuilder() } else { DefaultService() }
-			        #sourceLocation(file: "\(output.fixtures["Lone.swift"])", line: 7)
-			        let other: any Service = shared
-			        #sourceLocation()
+			        let other: any Service = shared // Declared as Lone.other
 			        let grand = if let safeDIBuilder = safeDIOverrides.grand { safeDIBuilder(shared) } else { GrandChild(shared: shared) }
 			        return Lone(other: other, grand: grand)
 			    }
@@ -2322,9 +2296,7 @@ struct SafeDIToolMockExistentialAnyTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Lone {
 			        let shared: any Service = if let safeDIBuilder = safeDIOverrides.shared { safeDIBuilder() } else { DefaultService() }
-			        #sourceLocation(file: "\(output.fixtures["Lone.swift"])", line: 7)
-			        let other: any Service = shared
-			        #sourceLocation()
+			        let other: any Service = shared // Declared as Lone.other
 			        let grand = if let safeDIBuilder = safeDIOverrides.grand { safeDIBuilder(other) } else { GrandChild(other: other) }
 			        return Lone(other: other, grand: grand)
 			    }
@@ -2895,16 +2867,12 @@ struct SafeDIToolMockExistentialAnyTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Lone {
 			        func __safeDI_first() -> First {
-			            #sourceLocation(file: "\(output.fixtures["First.swift"])", line: 7)
-			            let other: any Service = shared
-			            #sourceLocation()
+			            let other: any Service = shared // Declared as First.other
 			            return if let safeDIBuilder = safeDIOverrides.first { safeDIBuilder(other) } else { First(other: other) }
 			        }
 			        let first: First = __safeDI_first()
 			        func __safeDI_second() -> Second {
-			            #sourceLocation(file: "\(output.fixtures["Second.swift"])", line: 7)
-			            let other: any Service = shared
-			            #sourceLocation()
+			            let other: any Service = shared // Declared as Second.other
 			            return if let safeDIBuilder = safeDIOverrides.second { safeDIBuilder(other) } else { Second(other: other) }
 			        }
 			        let second: Second = __safeDI_second()
