@@ -108,9 +108,19 @@ struct TypeKeyBodyValuePathTests {
 	}
 
 	@Test
-	func statements_keepsThePathKeysBody_whenACloserHandsACallThatReadsADeclaration() {
+	func statements_handsTheClosedOnFunctionTheResultOfACall_whenACloserHandsACallThatReadsADeclaration() throws {
 		let value = ValuePath.callHanding("entering", of: .passedArgument("cfg"), literal: "b", value: .read(Self.idRead), flags: [])
-		#expect(TypeKeyBody.statements(ofRootBody: Self.closerBody(handing: PassedArgument(parameterName: "cfg", type: .simple(name: "Cfg"), value: value, staysOutsideSendableFunctions: false))) == nil)
+		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.closerBody(handing: PassedArgument(parameterName: "cfg", type: .simple(name: "Cfg"), value: value, staysOutsideSendableFunctions: false))))
+		#expect(GeneratedCode.lines(statements).spelled() == """
+		        let id = 1
+		        func __safeDI_b(cfg: Cfg) -> B {
+		            let bBuilder = Instantiator<B> {
+		                __safeDI_b(cfg: cfg.entering("b", id))
+		            }
+		            return B(bBuilder: bBuilder)
+		        }
+		        let b: B = __safeDI_b(cfg: Cfg())
+		""")
 	}
 
 	@Test

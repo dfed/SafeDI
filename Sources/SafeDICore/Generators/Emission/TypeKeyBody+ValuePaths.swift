@@ -106,8 +106,6 @@ extension ValuePath {
 			value.reads + arguments
 		case let .implicitMemberCall(_, arguments):
 			arguments
-		case let .callHanding(_, value, _, handed, _):
-			value.reads + handed.reads
 		case let .spliced(segments):
 			segments.flatMap(\.reads)
 		}
@@ -128,8 +126,6 @@ extension ValuePath {
 			base.value.declaredFunctionNames
 		case let .call(_, value, _, _):
 			value.declaredFunctionNames
-		case let .callHanding(_, value, _, handed, _):
-			value.declaredFunctionNames + handed.declaredFunctionNames
 		case let .spliced(segments):
 			segments.flatMap { segment -> [String] in
 				switch segment {
@@ -159,8 +155,6 @@ extension ValuePath {
 			base.value.passedArgumentNames
 		case let .call(_, value, _, _):
 			value.passedArgumentNames
-		case let .callHanding(_, value, _, handed, _):
-			value.passedArgumentNames + handed.passedArgumentNames
 		case let .spliced(segments):
 			segments.flatMap { segment -> [String] in
 				guard case let .value(value) = segment else { return [] }
@@ -216,7 +210,6 @@ extension PassedArgument {
 		     .optionalMemberRead,
 		     .call,
 		     .implicitMemberCall,
-		     .callHanding,
 		     .emptyInitialization,
 		     .spliced:
 			part(parts: &parts)
@@ -350,16 +343,6 @@ extension TypeKeyLayout {
 				spelledArguments.append("\(argument.argumentLabel.spelledAsArgumentLabel): \(value)")
 			}
 			return ".\(name)(\(spelledArguments.joined(separator: ", ")))"
-		case let .callHanding(name, value, literal, handed, flags):
-			guard let receiver = spelledValuePath(value, inClass: owner, before: index),
-			      let handed = spelledValuePath(handed, inClass: owner, before: index)
-			else { return nil }
-			var spelledArguments = literal.map { [Self.spelledStringLiteral($0)] } ?? []
-			spelledArguments.append(handed)
-			for flag in flags {
-				spelledArguments.append("\(flag.spelledAsArgumentLabel): true")
-			}
-			return "\(receiver).\(name)(\(spelledArguments.joined(separator: ", ")))"
 		case let .spliced(segments):
 			var spelled = ""
 			for segment in segments {
@@ -494,7 +477,6 @@ struct StructuralKeyParts {
 		case member(name: String, base: Int, throughOptional: Bool)
 		case call(name: String, value: Int, arguments: [String], argumentsWrapper: String?)
 		case implicitMemberCall(name: String, arguments: [String])
-		case callHanding(name: String, value: Int, literal: String?, handed: Int, flags: [String])
 		case emptyInitialization(String)
 		case spliced([Segment])
 	}
@@ -543,9 +525,6 @@ struct StructuralKeyParts {
 				break reading
 			case let .implicitMemberCall(name, arguments):
 				node = .implicitMemberCall(name: name, arguments: arguments.map(\.shape))
-				break reading
-			case let .callHanding(name, value, literal, handed, flags):
-				node = .callHanding(name: name, value: id(of: value), literal: literal, handed: id(of: handed), flags: flags)
 				break reading
 			case let .emptyInitialization(type):
 				node = .emptyInitialization(type.asSource)
