@@ -501,7 +501,7 @@ def per_mock(rewrite):
         return '\n'.join(rewrite(a,b) for a,b in zip(ours,theirs))
     return whole
 MOCK=re.compile(r'^    (?:public )?(?:@\w+ )*static func mock\(')
-LOCAL=re.compile(r'^( *)let (__safeDI_(\w+?)__(?:overrides|safeDIBuilder)) = (safeDIOverrides(?:\.\w+)+)$')
+LOCAL=re.compile(r'^( *)let (__safeDI_(\w+?)__(?:overrides|(?:\w+_)?safeDIBuilder)) = (safeDIOverrides(?:\.\w+)+)$')
 def e3(text,walk):
     # entry 3: the walk reads an actor's overrides into a local before the actor's function, and the records
     # read a local wherever a function is handed its overrides in a closure. Which places the walk gives a
