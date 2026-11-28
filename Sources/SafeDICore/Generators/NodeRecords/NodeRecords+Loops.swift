@@ -207,7 +207,9 @@ extension NodeRecords {
 	/// its loop it rebinds, in the order it rebinds them, each a call of that member's builder function
 	/// (`ClosingPlaceRecord.rebindsLoopMember`). The rebinding names only the member's declaration, its label and type, so
 	/// every variant of `declaration` rebinds alike (oracle B, check 32 of the per-type facts' checks).
-	static func loopRebindings(of declaration: DeclarationID, in world: some NodeRecordSources, mockLoopLevels: MockLoopLevels = MockLoopLevels()) -> [GeneratedCode] {
+	/// - Parameter ownFunctionArguments: What a call of `declaration`'s own function hands it, which a member that makes only
+	///   itself again hands its rebinding of itself, under the names its function takes them by.
+	static func loopRebindings(of declaration: DeclarationID, in world: some NodeRecordSources, mockLoopLevels: MockLoopLevels = MockLoopLevels(), ownFunctionArguments: [PassedArgument] = []) -> [GeneratedCode] {
 		// In a mock, each rebinding hands the member's function what the member's level hands it.
 		let level = mockLoopLevelArgument(of: declaration, in: world, levels: mockLoopLevels)
 		return world.madeAgain(from: declaration).compactMap { member in
@@ -224,15 +226,13 @@ extension NodeRecords {
 			)
 			if let level {
 				closer.passedArguments = mockLoopRebindingArguments(of: member, level: level, in: world, levels: mockLoopLevels)
-			} else if member == declaration, let type = mockLoopOverridesType(of: member, in: world) {
-				// A member that makes only itself again hands the rebinding the overrides its own function was handed, which
-				// are the ones the walk's copy of the function reads at whichever level built it.
-				closer.passedArguments = [PassedArgument(
-					parameterName: ReservedName.mockOverridesParameterName,
-					type: type,
-					value: .passedArgument(ReservedName.mockOverridesParameterName),
-					staysOutsideSendableFunctions: true,
-				)]
+			} else if member == declaration {
+				// A member that makes only itself again hands the rebinding what its own function was handed, under the names
+				// the function takes it by, which the walk's copy of the function reads at whichever level built it. A
+				// function that captures its overrides takes nothing.
+				closer.passedArguments = ownFunctionArguments.map { argument in
+					PassedArgument(parameterName: argument.parameterName, type: argument.type, value: .passedArgument(argument.parameterName), staysOutsideSendableFunctions: argument.staysOutsideSendableFunctions)
+				}
 			}
 			return .indented(.place(PlacePlan(code: .empty, record: .closer(closer))), by: ScopeGenerator.standardIndent)
 		}
