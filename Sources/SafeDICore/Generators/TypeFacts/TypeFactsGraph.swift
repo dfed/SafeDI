@@ -1092,42 +1092,42 @@ struct TypeFactsGraph: Sendable {
 			edgeTargets.append(contentsOf: graph.edges(from: index))
 		}
 		func binding(edge: Int, readID: Int32) -> VariantBinding? {
-				// Every read the graph interns asks about a label: `ownReads` makes only value, optional and mock reads.
-				let read = readTable[Int(readID)]
-				let node = Int(sourceByEdge[edge])
-				let child = graph.nodes[Int(edgeTargets[edge])]
-				// A child answers its own label's read as the declaration being built, by the property it is built as; any
-				// other label by the last of its parent's bindings bound before the edge, so a declaration bound after the
-				// call does not answer it.
-				// Every binding, and every child's property, is a declaration of its node's scope, which the lookup finds by its
-				// spelling.
-				let bound: Property?
-				let beingBuilt: Bool
-				if let property = child.property, labels.existingID(of: property.label) == read.label {
-					bound = property
-					beingBuilt = true
-				} else {
-					let start = Int(bindingOffsets[node])
-					bound = bindings[start..<start + Int(bindingsBefore[edge])].last { $0.label == read.label }.map { properties.values[Int($0.property)] }
-					beingBuilt = false
-				}
-				guard let bound, let declaration = declarationsByLabelByNode[node][read.label]?.first(where: { $0.property == bound }), let property = properties.existingID(of: bound) else { return nil }
-				let kind = declaration.property.propertyType
-				let declarationForms = declaration.forms
-				let text = "\(read.channel.name) \(declarationForms)\(beingBuilt ? " being built" : "")"
-				// Rule 3, case 2: a value, `LazilyInstantiated` or `SendableLazilyInstantiated` being built is one cycle
-				// identity whichever twin the path entered, which 2.4.0 builds in one function and passes no parameter. The
-				// key names the label alone, not the type and label a cycle identity names elsewhere: a node declares a label
-				// once, and a being-built answer gives no parameter whose type could tell two keys apart.
-				let keyText: String = if beingBuilt, isTwin(kind) {
-					"\(read.channel.name) twin \(bound.label) being built"
-				} else if kind.isConstant {
-					text
-				} else {
-					// Rule 2: a wrapper still being built is passed and made again at the call, so it keys as the wrapper.
-					"\(read.channel.name) \(declarationForms)"
-				}
-				return VariantBinding(answer: answer(text: text, beingBuilt: beingBuilt, keyText: keyText, kind: kind, property: property), declaration: Int32(node))
+			// Every read the graph interns asks about a label: `ownReads` makes only value, optional and mock reads.
+			let read = readTable[Int(readID)]
+			let node = Int(sourceByEdge[edge])
+			let child = graph.nodes[Int(edgeTargets[edge])]
+			// A child answers its own label's read as the declaration being built, by the property it is built as; any
+			// other label by the last of its parent's bindings bound before the edge, so a declaration bound after the
+			// call does not answer it.
+			// Every binding, and every child's property, is a declaration of its node's scope, which the lookup finds by its
+			// spelling.
+			let bound: Property?
+			let beingBuilt: Bool
+			if let property = child.property, labels.existingID(of: property.label) == read.label {
+				bound = property
+				beingBuilt = true
+			} else {
+				let start = Int(bindingOffsets[node])
+				bound = bindings[start..<start + Int(bindingsBefore[edge])].last { $0.label == read.label }.map { properties.values[Int($0.property)] }
+				beingBuilt = false
+			}
+			guard let bound, let declaration = declarationsByLabelByNode[node][read.label]?.first(where: { $0.property == bound }), let property = properties.existingID(of: bound) else { return nil }
+			let kind = declaration.property.propertyType
+			let declarationForms = declaration.forms
+			let text = "\(read.channel.name) \(declarationForms)\(beingBuilt ? " being built" : "")"
+			// Rule 3, case 2: a value, `LazilyInstantiated` or `SendableLazilyInstantiated` being built is one cycle
+			// identity whichever twin the path entered, which 2.4.0 builds in one function and passes no parameter. The
+			// key names the label alone, not the type and label a cycle identity names elsewhere: a node declares a label
+			// once, and a being-built answer gives no parameter whose type could tell two keys apart.
+			let keyText: String = if beingBuilt, isTwin(kind) {
+				"\(read.channel.name) twin \(bound.label) being built"
+			} else if kind.isConstant {
+				text
+			} else {
+				// Rule 2: a wrapper still being built is passed and made again at the call, so it keys as the wrapper.
+				"\(read.channel.name) \(declarationForms)"
+			}
+			return VariantBinding(answer: answer(text: text, beingBuilt: beingBuilt, keyText: keyText, kind: kind, property: property), declaration: Int32(node))
 		}
 		func key(readID: Int32, answer: Int32) -> Int32 {
 			switch readTable[Int(readID)].channel {

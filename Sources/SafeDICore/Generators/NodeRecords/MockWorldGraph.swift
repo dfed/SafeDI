@@ -18,7 +18,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-
 /// A mock world as its node records read it (`NodeRecordSources`), in its own graph's dense numbering, assembled from its
 /// top graph (`TypeFactsGraph(root:forMockGeneration:sharedBelow:)`) and the mock worlds' shared graph
 /// (`MockWorldsSharedGraph`), with no fact computed again: two walks over integers number its declarations depth first
@@ -264,7 +263,11 @@ struct MockWorldGraph: NodeRecordSources, Sendable {
 		var bindingCount: Int32 = 0
 		for origin in graph.nodes {
 			bindingOffsets.append(bindingCount)
-			let offsets = if origin.isShared, let shared { shared.graph.facts.bindingOffsets } else { top.bindingOffsets }
+			let offsets = if origin.isShared, let shared {
+				shared.graph.facts.bindingOffsets
+			} else {
+				top.bindingOffsets
+			}
 			bindingCount += offsets[Int(origin.node) + 1] - offsets[Int(origin.node)]
 		}
 		var parentCounts = [Int32](repeating: 0, count: graph.nodes.count + 1)
