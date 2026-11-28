@@ -100,7 +100,7 @@ extension MockLowering.RootSurface {
 	/// construction's walk order is its rank among the records', which two walks that enter one tree's nodes in one order
 	/// share however they count.
 	var comparedMeaning: ComparedMeaning {
-		let ranks = Dictionary(uniqueKeysWithValues: configurations.indices.filter { configurations[$0].oneWayConstruction != nil }.sorted { configurations[$0].oneWayConstruction?.walkOrder ?? 0 < configurations[$1].oneWayConstruction?.walkOrder ?? 0 }.enumerated().map { ($1, $0) })
+		let ranks = Dictionary(configurations.indices.filter { configurations[$0].oneWayConstruction != nil }.sorted { configurations[$0].oneWayConstruction?.walkOrder ?? 0 < configurations[$1].oneWayConstruction?.walkOrder ?? 0 }.enumerated().map { ($1, $0) }) { first, _ in first }
 		return ComparedMeaning(
 			hasNodes: hasNodes,
 			buildsPropertyNode: buildsPropertyNode,

@@ -60,6 +60,17 @@ enum ConstructionTarget: Hashable, Sendable {
 		}
 	}
 
+	/// Whether the target is a call of another module's public mock, which builds its tree, and records its
+	/// configurations, in the called mock.
+	var isPublicMockCall: Bool {
+		switch self {
+		case .publicMockCall:
+			true
+		case .initializer, .instantiate, .mock, .unavailable:
+			false
+		}
+	}
+
 	/// The construction, with `arguments` spelled as the call's argument list: `callee` called with them, or `nil` for a
 	/// target that constructs nothing.
 	func spelled(passing arguments: String) -> String {

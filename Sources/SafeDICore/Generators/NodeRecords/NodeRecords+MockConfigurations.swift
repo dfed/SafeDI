@@ -44,31 +44,25 @@ extension NodeRecords {
 			if top.next < entries.count {
 				stack[stack.count - 1].next += 1
 				guard case let .place(child) = entries[top.next] else { continue }
+				// A call of another module's public mock builds its tree in the called mock, which records its configurations.
+				guard let record = mockBuiltRecord(of: child), !record.target.isPublicMockCall else { continue }
 				let childDeclaration = declarationByVariant[Int(child)]
-				switch kinds[Int(childDeclaration)] {
-				case .mockConstruction:
-					guard case let .built(record) = records[Int(child)] else { return nil }
-					let concreteType = record.concreteType.asSource
-					let ownConcreteType = top.variant == 0 ? nil : world.scope(of: declarationByVariant[Int(top.variant)]).instantiable.concreteInstantiable.asSource
-					let repeatsAncestor = !configuredAncestorTypes.insert(concreteType).inserted
-					stack.append(MockConfigurationFrame(
-						variant: child,
-						parentConcreteType: ownConcreteType,
-						requiresSendable: top.requiresSendable || record.isSendable || top.childrenAreBuiltForActorArgument,
-						childrenAreBuiltForActorArgument: Self.childrenAreBuiltForActorArgument(of: childDeclaration, isBuiltForActorArgument: top.childrenAreBuiltForActorArgument, in: world),
-						isReachable: top.isReachable && !isLeftOut(childDeclaration, beneath: ownConcreteType),
-						insertedType: repeatsAncestor ? nil : concreteType,
-						wasBeneathRepeatedAncestor: isBeneathRepeatedAncestor,
-						recordsConfiguration: !repeatsAncestor && !isBeneathRepeatedAncestor,
-						walkOrder: walkOrder,
-					))
-					walkOrder += 1
-					isBeneathRepeatedAncestor = isBeneathRepeatedAncestor || repeatsAncestor
-				case .rename, .mockUnavailableDependency, .publicMockCall:
-					break
-				case .builtByInitializer, .inlineSeam, .seamCall, .unavailableDependency, .receivesOnlyIfAvailable, .erased, .lazy, .sendable, .seamHole, .cycle:
-					return nil
-				}
+				let concreteType = record.concreteType.asSource
+				let ownConcreteType = top.variant == 0 ? nil : world.scope(of: declarationByVariant[Int(top.variant)]).instantiable.concreteInstantiable.asSource
+				let repeatsAncestor = !configuredAncestorTypes.insert(concreteType).inserted
+				stack.append(MockConfigurationFrame(
+					variant: child,
+					parentConcreteType: ownConcreteType,
+					requiresSendable: top.requiresSendable || record.isSendable || top.childrenAreBuiltForActorArgument,
+					childrenAreBuiltForActorArgument: Self.childrenAreBuiltForActorArgument(of: childDeclaration, isBuiltForActorArgument: top.childrenAreBuiltForActorArgument, in: world),
+					isReachable: top.isReachable && !isLeftOut(childDeclaration, beneath: ownConcreteType),
+					insertedType: repeatsAncestor ? nil : concreteType,
+					wasBeneathRepeatedAncestor: isBeneathRepeatedAncestor,
+					recordsConfiguration: !repeatsAncestor && !isBeneathRepeatedAncestor,
+					walkOrder: walkOrder,
+				))
+				walkOrder += 1
+				isBeneathRepeatedAncestor = isBeneathRepeatedAncestor || repeatsAncestor
 				continue
 			}
 			stack.removeLast()
@@ -107,7 +101,7 @@ extension NodeRecords {
 							switch entry {
 							case let .place(child):
 								let childDeclaration = declarationByVariant[Int(child)]
-								guard kinds[Int(childDeclaration)] == .mockConstruction, Self.isOverriddenByConfiguration(childDeclaration, in: world), let property = world.property(of: childDeclaration) else { return nil }
+								guard let record = mockBuiltRecord(of: child), !record.target.isPublicMockCall, Self.isOverriddenByConfiguration(childDeclaration, in: world), let property = world.property(of: childDeclaration) else { return nil }
 								return MockLowering.ConfigurationRecord.NestedChild(
 									concreteType: world.scope(of: childDeclaration).instantiable.concreteInstantiable,
 									recordIndex: top.finishedChildren.first(where: { $0.property == property })?.recordIndex,
@@ -141,40 +135,8 @@ extension NodeRecords {
 		handWrittenMockDefaultParameters: [TypeDescription: [ScopeGenerator.DefaultParameter]],
 	) -> MockLowering.ConfigurationRecord? {
 		let instantiable = world.scope(of: declaration).instantiable
-		let usesMockInitializer = world.construction(of: declaration) == .handWrittenMock && instantiable.mockInitializer != nil
-		var childFieldSources = [MockLowering.ConfigurationRecord.ChildFieldSource]()
-		for entry in children {
-			switch entry {
-			case let .place(child):
-				let childDeclaration = declarationByVariant[Int(child)]
-				switch kinds[Int(childDeclaration)] {
-				case .mockConstruction:
-					guard case let .built(record) = records[Int(child)], let property = world.property(of: childDeclaration) else { return nil }
-					let childInstantiable = world.scope(of: childDeclaration).instantiable
-					childFieldSources.append(.built(
-						bindingName: record.property.label,
-						hasConfiguration: Self.isOverriddenByConfiguration(childDeclaration, in: world),
-						requiresSendable: requiresSendable || record.isSendable || childrenAreBuiltForActorArgument,
-						concreteType: childInstantiable.concreteInstantiable,
-						builderParameters: MockLowering.BuilderParameters(of: childInstantiable, usesMockInitializer: world.construction(of: childDeclaration) == .handWrittenMock && childInstantiable.mockInitializer != nil),
-						propertyType: property.typeDescription,
-					))
-				case .publicMockCall:
-					guard let field = Self.mockPublicMockCallOverridesField(of: childDeclaration, in: world) else { return nil }
-					childFieldSources.append(.spelled(.init(name: field.name, typeSource: field.typeSource, defaultValue: field.defaultValue, sendableForm: Self.mockPublicMockCallSendableFieldForm(of: childDeclaration, in: world))))
-				case .rename, .mockUnavailableDependency:
-					break
-				case .builtByInitializer, .inlineSeam, .seamCall, .unavailableDependency, .receivesOnlyIfAvailable, .erased, .lazy, .sendable, .seamHole, .cycle:
-					return nil
-				}
-			case let .closer(closingOn: child):
-				let closedOn = declarationByVariant[Int(child)]
-				guard let property = world.property(of: closedOn) else { return nil }
-				let concreteType = world.scope(of: closedOn).instantiable.concreteInstantiable
-				let field = MockLowering.cycleClosingOverridesField(boundAs: property.label, concreteType: concreteType)
-				childFieldSources.append(.spelled(.init(name: field.name, typeSource: field.typeSource, defaultValue: field.defaultValue, sendableForm: .init(typeSource: field.typeSource, defaultValue: field.defaultValue, configuredTypeName: concreteType.asSource))))
-			}
-		}
+		let usesMockInitializer = Self.usesHandWrittenMock(declaration, in: world)
+		guard let childFieldSources = mockChildFieldSources(of: children, requiresSendable: requiresSendable, childrenAreBuiltForActorArgument: childrenAreBuiltForActorArgument, in: world) else { return nil }
 		let construction = ScopeGenerator.MockConstruction(instantiable: instantiable, useMockInitializer: usesMockInitializer, builderTypesDeclaredEscaping: [])
 		let handWrittenDefaults = handWrittenMockDefaultParameters[instantiable.concreteInstantiable, default: []]
 		// The configuration's default-valued fields are those its construction reads (`mockConfigurationFieldArguments(of:in:)`).
@@ -200,19 +162,11 @@ extension NodeRecords {
 	) -> MockLowering.OneWayConstruction? {
 		let instantiable = world.scope(of: declaration).instantiable
 		guard let property = world.property(of: declaration) else { return nil }
-		let usesMockInitializer = world.construction(of: declaration) == .handWrittenMock && instantiable.mockInitializer != nil
+		let usesMockInitializer = Self.usesHandWrittenMock(declaration, in: world)
 		let childProperties = children.compactMap { entry -> Property? in
 			switch entry {
-			case let .place(child):
-				let childDeclaration = declarationByVariant[Int(child)]
-				switch kinds[Int(childDeclaration)] {
-				case .mockConstruction, .publicMockCall:
-					return world.property(of: childDeclaration)
-				case .rename, .mockUnavailableDependency, .builtByInitializer, .inlineSeam, .seamCall, .unavailableDependency, .receivesOnlyIfAvailable, .erased, .lazy, .sendable, .seamHole, .cycle:
-					return nil
-				}
-			case let .closer(closingOn: child):
-				return world.property(of: declarationByVariant[Int(child)])
+			case let .place(child): mockBuiltRecord(of: child).flatMap { _ in world.property(of: declarationByVariant[Int(child)]) }
+			case let .closer(closingOn: child): world.property(of: declarationByVariant[Int(child)])
 			}
 		}
 		return MockLowering.OneWayConstruction(
