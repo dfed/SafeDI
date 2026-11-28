@@ -572,9 +572,13 @@ extension TypeFactsGraph: TypeFactsWorld {
 			guard let wrapper = unwrappedForms.first(where: { $0.asLazilyInstantiatedInstanceProperty != nil })
 				?? unwrappedForms.first.map({ Property(label: $0.label, typeDescription: .simple(name: wrapperName, generics: [$0.typeDescription])) })
 			else { return nil }
+			let parameter = arrivals.nilArrives(at: position - reads.startIndex, of: variant) ? wrapper.asOptionalProperty : wrapper
+			// Today's production tree takes the form its body receives, as below (`generatorProperty`).
+			let generatorProperty = forMockGeneration ? nil : CycleParameter.property(passing: forms, requiredForms: requiredForms.intersection(forms))?.property
 			return TypeFactsParameter(
-				property: arrivals.nilArrives(at: position - reads.startIndex, of: variant) ? wrapper.asOptionalProperty : wrapper,
+				property: parameter,
 				readsInstanceOfWrapper: true,
+				generatorProperty: generatorProperty == parameter ? nil : generatorProperty,
 			)
 		}
 		// A production function takes the wrapper a lazily instantiated declaration answers a read of its value with, and
