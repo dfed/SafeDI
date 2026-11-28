@@ -192,6 +192,43 @@ struct SafeDIToolNodeRecordsPublicMockLoopTests: ~Copyable {
 		return "Root.mock(safeDIOverrides: .init(\(root.joined(separator: ", "))))"
 	}
 
+	@Test(arguments: [true, false])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildsTheWalksValues_whenLoopOfBuildersInsidePublicMocksFillIsOverriddenOnEveryLap(consumerFillsPlace: Bool) async throws {
+		let modules = Self.fillModules(consumerFillsPlace: consumerFillsPlace)
+		let walkOutput = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		let (stream, continuation) = AsyncStream.makeStream(of: NodeRecordsReport.self)
+		var filesMade = [URL]()
+		let output = try await NodeRecordsObservation.$laysOutMockRoots.withValue(true) {
+			try await NodeRecordsObservation.$observer.withValue({ continuation.yield($0) }) {
+				try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesMade)
+			}
+		}
+		filesToDelete += filesMade
+		continuation.finish()
+		var reports = [NodeRecordsReport]()
+		for await report in stream where report.isMockRoot {
+			reports.append(report)
+		}
+		// A consumer's fill of a public mock's place is not laid out from node records yet (fills 2b); with nothing to fill,
+		// `Root`'s mock takes the place's builder and is laid out.
+		#expect(reports.map(\.root) == ["Root"])
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [!consumerFillsPlace])
+		let passed = "Root.mock(gadgetBuilder: { marked(Stub(), \"passed\") })"
+		let comparison = try await DifferentialValueOracle.compare(
+			feature: DifferentialValuePath(output: output, modules: modules),
+			knownRight: DifferentialValuePath(output: walkOutput, modules: modules),
+			probes: consumerFillsPlace ? [DifferentialValueProbe("Root.mock()"), DifferentialValueProbe(name: "passed gadget", expression: passed)] : [DifferentialValueProbe(name: "passed gadget", expression: passed)],
+			filesToDelete: &filesToDelete,
+		)
+		// Nothing is compared where compile verification is off.
+		guard let comparison else { return }
+		#expect(comparison.differences.isEmpty, "\(comparison.report)")
+		// The passed builder builds every gadget around the loop.
+		#expect(comparison.featureDescription.contains("\"passed\""), "No value is marked passed:\n\(comparison.featureDescription)")
+		#expect(comparison.featureDescription.contains("LoopB"), "The loop is not walked:\n\(comparison.featureDescription)")
+	}
+
 	// MARK: Fixtures
 
 	/// `Feed` declares the loop `A` → `bBuilder` → `B` → `aBuilder` → `A` and `Screen`'s public mock; `App`'s `Root`
@@ -311,6 +348,129 @@ struct SafeDIToolNodeRecordsPublicMockLoopTests: ~Copyable {
 		return [
 			ModuleFixture(name: "Feed", packageName: "feedpkg", swiftFileContentByFilePath: ["Screen.swift": feed]),
 			ModuleFixture(name: "App", packageName: "apppkg", swiftFileContentByFilePath: ["Root.swift": app], dependencies: ["Feed"]),
+		]
+	}
+
+	/// `Session` declares `Inner`, a `.public` type whose initializer is `internal`, holding a place of `Service`; `Feed`
+	/// declares `Outer`, a `.public` type that builds `Inner`, and fills the place with `Default`, which holds a place of
+	/// `Gadget` that only `App` fills and the builders of `LoopA` and `LoopB`, which receive each other's and each hold a
+	/// place of `Gadget`: a loop of builders inside the fill. `App`'s `Root` builds `Outer`, and `Live` fills `Gadget`, or
+	/// nothing does and `Root`'s mock takes its builder. `Stub`, a plain class, is the gadget a probe passes.
+	private static func fillModules(consumerFillsPlace: Bool) -> [ModuleFixture] {
+		let marked = """
+		public protocol Marked: AnyObject {
+		    var marker: String { get set }
+		}
+
+		public func marked<Value: Marked>(_ value: Value, _ marker: String) -> Value {
+		    value.marker = marker
+		    return value
+		}
+		"""
+		let session = """
+		import SafeDI
+
+		\(marked)
+
+		public protocol Service: AnyObject {}
+
+		@Instantiable(generateMock: .public)
+		public final class Inner: Instantiable, Marked {
+		    init(service: any Service) {
+		        self.service = service
+		    }
+
+		    @Instantiated let service: any Service
+		    public var marker = "built"
+		}
+		"""
+		let feed = """
+		import SafeDI
+		import Session
+
+		public protocol Gadget: AnyObject {}
+
+		public final class Stub: Gadget, Marked {
+		    public init() {}
+
+		    public var marker = "built"
+		}
+
+		@Instantiable(generateMock: .public)
+		public final class Outer: Instantiable, Marked {
+		    init(inner: Inner) {
+		        self.inner = inner
+		    }
+
+		    @Instantiated let inner: Inner
+		    public var marker = "built"
+		}
+
+		@Instantiable
+		public final class LoopA: Instantiable, Marked {
+		    public init(gadget: any Gadget, loopBBuilder: Instantiator<LoopB>) {
+		        self.gadget = gadget
+		        self.loopBBuilder = loopBBuilder
+		    }
+
+		    @Instantiated let gadget: any Gadget
+		    @Received let loopBBuilder: Instantiator<LoopB>
+		    public var marker = "built"
+		}
+
+		@Instantiable
+		public final class LoopB: Instantiable, Marked {
+		    public init(gadget: any Gadget, loopABuilder: Instantiator<LoopA>) {
+		        self.gadget = gadget
+		        self.loopABuilder = loopABuilder
+		    }
+
+		    @Instantiated let gadget: any Gadget
+		    @Received let loopABuilder: Instantiator<LoopA>
+		    public var marker = "built"
+		}
+
+		@Instantiable(fulfillingAdditionalTypes: [Service.self])
+		public final class Default: Service, Instantiable, Marked {
+		    public init(gadget: any Gadget, loopABuilder: Instantiator<LoopA>, loopBBuilder: Instantiator<LoopB>) {
+		        self.gadget = gadget
+		        self.loopABuilder = loopABuilder
+		        self.loopBBuilder = loopBBuilder
+		    }
+
+		    @Instantiated let gadget: any Gadget
+		    @Instantiated let loopABuilder: Instantiator<LoopA>
+		    @Instantiated let loopBBuilder: Instantiator<LoopB>
+		    public var marker = "built"
+		}
+		"""
+		let live = consumerFillsPlace ? """
+
+		@Instantiable(fulfillingAdditionalTypes: [Gadget.self])
+		public final class Live: Gadget, Instantiable, Marked {
+		    public init() {}
+
+		    public var marker = "built"
+		}
+		""" : ""
+		let app = """
+		import Feed
+		import SafeDI
+		import Session
+
+		@Instantiable(generateMock: true)
+		public final class Root: Instantiable {
+		    public init(outer: Outer) {
+		        self.outer = outer
+		    }
+
+		    @Instantiated let outer: Outer
+		}
+		""" + live
+		return [
+			ModuleFixture(name: "Session", packageName: "sessionpkg", swiftFileContentByFilePath: ["Inner.swift": session]),
+			ModuleFixture(name: "Feed", packageName: "feedpkg", swiftFileContentByFilePath: ["Outer.swift": feed], dependencies: ["Session"]),
+			ModuleFixture(name: "App", packageName: "apppkg", swiftFileContentByFilePath: ["Root.swift": app], dependencies: ["Feed", "Session"]),
 		]
 	}
 
