@@ -73,10 +73,6 @@ struct SafeDIToolSeamHoleSiteBodyTests: ~Copyable {
 		            self.panelBuilder = panelBuilder
 		            self.lazyPanel = lazyPanel
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(panel: .init(__safeDI_noScope: __safeDI_builder), panelBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) }, lazyPanel: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -85,10 +81,6 @@ struct SafeDIToolSeamHoleSiteBodyTests: ~Copyable {
 
 		        public init(api: @escaping () -> __safeDI_Built) {
 		            self.api = api
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(api: { __safeDI_builder() })
 		        }
 		    }
 

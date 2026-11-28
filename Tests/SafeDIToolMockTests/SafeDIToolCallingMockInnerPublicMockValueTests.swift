@@ -519,10 +519,6 @@ struct SafeDIToolCallingMockInnerPublicMockValueTests: ~Copyable {
 		        public init(api: @escaping (Db) -> __safeDI_Built) {
 		            self.api = api
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(api: { _ in __safeDI_builder() })
-		        }
 		    }
 
 		    // SafeDI counts `Api` as `public`: no module it reads declares it narrower. If `Api` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
@@ -633,10 +629,6 @@ struct SafeDIToolCallingMockInnerPublicMockValueTests: ~Copyable {
 		        public init(api: @escaping (LazilyInstantiated<Db>, K, Inner) -> __safeDI_Built, inner: Inner.__safeDI_ApiCarrier<__safeDI_Built>) {
 		            self.api = api
 		            self.inner = inner
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(api: { _, _, _ in __safeDI_builder() }, inner: .init(__safeDI_noScope: __safeDI_builder))
 		        }
 		    }
 

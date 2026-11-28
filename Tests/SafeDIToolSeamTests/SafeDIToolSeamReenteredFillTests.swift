@@ -87,10 +87,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		                public init(subBBuilder_secondBuilder: @escaping (subBBuilder_secondBuilder_Values) -> SubB.__safeDI_SecondCarrier<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<__safeDI_Built>>) {
 		                    self.subBBuilder_secondBuilder = subBBuilder_secondBuilder
 		                }
-
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.init(subBBuilder_secondBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
-		                }
 		            }
 		        }
 
@@ -104,10 +100,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		                public init(gadget: @escaping (gadget_Values) -> __safeDI_Built) {
 		                    self.gadget = gadget
 		                }
-
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.init(gadget: { _ in __safeDI_builder() })
-		                }
 		            }
 		        }
 
@@ -119,10 +111,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		            public init(top_firstBuilder: @escaping (top_firstBuilder_Values) -> Top.__safeDI_FirstCarrier<SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<__safeDI_Built>>, top_secondBuilder: @escaping (top_secondBuilder_Values) -> Top.__safeDI_SecondCarrier<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<__safeDI_Built>>) {
 		                self.top_firstBuilder = top_firstBuilder
 		                self.top_secondBuilder = top_secondBuilder
-		            }
-
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.init(top_firstBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }, top_secondBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 		            }
 		        }
 		    }
@@ -219,10 +207,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		                    self.gadget = gadget
 		                    self.subBBuilder_secondBuilder = subBBuilder_secondBuilder
 		                }
-
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.init(gadget: { _ in __safeDI_builder() }, subBBuilder_secondBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
-		                }
 		            }
 		        }
 
@@ -232,10 +216,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 
 		            public init(top_secondBuilder: @escaping (top_secondBuilder_Values) -> Top.__safeDI_SecondCarrier<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<__safeDI_Built>>) {
 		                self.top_secondBuilder = top_secondBuilder
-		            }
-
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.init(top_secondBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 		            }
 		        }
 		    }
@@ -316,10 +296,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		                public init(gadget: @escaping (gadget_Values) -> __safeDI_Built) {
 		                    self.gadget = gadget
 		                }
-
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.init(gadget: { _ in __safeDI_builder() })
-		                }
 		            }
 		        }
 		    }
@@ -339,10 +315,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		                public init(subBBuilder_secondBuilder: @escaping @Sendable (subBBuilder_secondBuilder_Values) -> SubB.__safeDI_SecondCarrier<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<__safeDI_Built>>) {
 		                    self.subBBuilder_secondBuilder = subBBuilder_secondBuilder
 		                }
-
-		                public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		                    self.init(subBBuilder_secondBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
-		                }
 		            }
 		        }
 
@@ -354,10 +326,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		            public init(top_firstBuilder_Sendable: @escaping @Sendable (top_firstBuilder_Sendable_Values) -> SafeDISendableScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<__safeDI_Built>, top_secondBuilder: @escaping @Sendable (top_secondBuilder_Values) -> Top.__safeDI_SecondCarrier<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<__safeDI_Built>>) {
 		                self.top_firstBuilder_Sendable = top_firstBuilder_Sendable
 		                self.top_secondBuilder = top_secondBuilder
-		            }
-
-		            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		                self.init(top_firstBuilder_Sendable: { _ in .init(__safeDI_noScope: __safeDI_builder) }, top_secondBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 		            }
 		        }
 		    }
@@ -448,10 +416,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		                public init(mid: @escaping (mid_Values) -> SafeDIScope_Gadget.Mid_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                    self.mid = mid
 		                }
-
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.init(mid: { _ in .init(__safeDI_noScope: __safeDI_builder) })
-		                }
 		            }
 		        }
 
@@ -464,10 +428,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 
 		                public init(gadget: @escaping (gadget_Values) -> __safeDI_Built) {
 		                    self.gadget = gadget
-		                }
-
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.init(gadget: { _ in __safeDI_builder() })
 		                }
 		            }
 		        }
@@ -482,10 +442,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		                public init(subB_secondBuilder: @escaping (subB_secondBuilder_Values) -> SubB.__safeDI_SecondCarrier<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<__safeDI_Built>>) {
 		                    self.subB_secondBuilder = subB_secondBuilder
 		                }
-
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.init(subB_secondBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
-		                }
 		            }
 		        }
 
@@ -497,10 +453,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		            public init(top_firstBuilder: @escaping (top_firstBuilder_Values) -> Top.__safeDI_FirstCarrier<SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<__safeDI_Built>>, top_secondBuilder: @escaping (top_secondBuilder_Values) -> Top.__safeDI_SecondCarrier<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<__safeDI_Built>>) {
 		                self.top_firstBuilder = top_firstBuilder
 		                self.top_secondBuilder = top_secondBuilder
-		            }
-
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.init(top_firstBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }, top_secondBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 		            }
 		        }
 		    }
@@ -598,10 +550,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		                public init(subB_secondBuilder: @escaping (subB_secondBuilder_Values) -> SubB.__safeDI_SecondCarrier<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<__safeDI_Built>>) {
 		                    self.subB_secondBuilder = subB_secondBuilder
 		                }
-
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.init(subB_secondBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
-		                }
 		            }
 		        }
 
@@ -615,10 +563,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		                public init(gadget: @escaping (gadget_Values) -> __safeDI_Built) {
 		                    self.gadget = gadget
 		                }
-
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.init(gadget: { _ in __safeDI_builder() })
-		                }
 		            }
 		        }
 
@@ -630,10 +574,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		            public init(top_firstBuilder: @escaping (top_firstBuilder_Values) -> Top.__safeDI_FirstCarrier<SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<__safeDI_Built>>, top_secondBuilder: @escaping (top_secondBuilder_Values) -> Top.__safeDI_SecondCarrier<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<__safeDI_Built>>) {
 		                self.top_firstBuilder = top_firstBuilder
 		                self.top_secondBuilder = top_secondBuilder
-		            }
-
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.init(top_firstBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }, top_secondBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 		            }
 		        }
 		    }
@@ -766,10 +706,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		                public init(subB_secondBuilder: @escaping (subB_secondBuilder_Values) -> SubB.__safeDI_SecondCarrier<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<__safeDI_Built>>) {
 		                    self.subB_secondBuilder = subB_secondBuilder
 		                }
-
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.init(subB_secondBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
-		                }
 		            }
 		        }
 
@@ -783,10 +719,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		                public init(gadget: @escaping (gadget_Values) -> __safeDI_Built) {
 		                    self.gadget = gadget
 		                }
-
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.init(gadget: { _ in __safeDI_builder() })
-		                }
 		            }
 		        }
 
@@ -798,10 +730,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		            public init(top_firstBuilder: @escaping (top_firstBuilder_Values) -> Top.__safeDI_FirstCarrier<SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<__safeDI_Built>>, top_secondBuilder: @escaping (top_secondBuilder_Values) -> Top.__safeDI_SecondCarrier<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<__safeDI_Built>>) {
 		                self.top_firstBuilder = top_firstBuilder
 		                self.top_secondBuilder = top_secondBuilder
-		            }
-
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.init(top_firstBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }, top_secondBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 		            }
 		        }
 		    }
@@ -1247,10 +1175,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		                public init(subB_secondBuilder: @escaping (subB_secondBuilder_Values) -> SubB.__safeDI_SecondCarrier<SafeDIScope_DefaultGadget_Gadget.DefaultSecond_Scope.__safeDI_Builder<__safeDI_Built>>) {
 		                    self.subB_secondBuilder = subB_secondBuilder
 		                }
-
-		                public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Int, __safeDI_Built>.Builder) {
-		                    self.init(subB_secondBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
-		                }
 		            }
 		        }
 
@@ -1264,10 +1188,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		                public init(gadgetBuilder: @escaping (gadgetBuilder_Values) -> ErasedInstantiator<Int, __safeDI_Built>.Builder) {
 		                    self.gadgetBuilder = gadgetBuilder
 		                }
-
-		                public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Int, __safeDI_Built>.Builder) {
-		                    self.init(gadgetBuilder: { _ in __safeDI_builder })
-		                }
 		            }
 		        }
 
@@ -1279,10 +1199,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		            public init(top_firstBuilder: @escaping (top_firstBuilder_Values) -> Top.__safeDI_FirstCarrier<SafeDIScope_DefaultGadget_Gadget.DefaultFirst_Scope.__safeDI_Builder<__safeDI_Built>>, top_secondBuilder: @escaping (top_secondBuilder_Values) -> Top.__safeDI_SecondCarrier<SafeDIScope_DefaultGadget_Gadget.DefaultSecond_Scope.__safeDI_Builder<__safeDI_Built>>) {
 		                self.top_firstBuilder = top_firstBuilder
 		                self.top_secondBuilder = top_secondBuilder
-		            }
-
-		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Int, __safeDI_Built>.Builder) {
-		                self.init(top_firstBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }, top_secondBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 		            }
 		        }
 		    }
@@ -1772,10 +1688,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		                public init(subB_secondBuilder: @escaping (subB_secondBuilder_Values) -> SubB.__safeDI_SecondCarrier<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<__safeDI_Built>>) {
 		                    self.subB_secondBuilder = subB_secondBuilder
 		                }
-
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.init(subB_secondBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
-		                }
 		            }
 		        }
 
@@ -1789,10 +1701,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		                public init(gadget: @escaping (gadget_Values) -> __safeDI_Built) {
 		                    self.gadget = gadget
 		                }
-
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.init(gadget: { _ in __safeDI_builder() })
-		                }
 		            }
 		        }
 
@@ -1804,10 +1712,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		            public init(top_firstBuilder: @escaping (top_firstBuilder_Values) -> Top.__safeDI_FirstCarrier<SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<__safeDI_Built>>, top_secondBuilder: @escaping (top_secondBuilder_Values) -> Top.__safeDI_SecondCarrier<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<__safeDI_Built>>) {
 		                self.top_firstBuilder = top_firstBuilder
 		                self.top_secondBuilder = top_secondBuilder
-		            }
-
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.init(top_firstBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }, top_secondBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 		            }
 		        }
 		    }
@@ -1827,10 +1731,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		                public init(gear: @escaping (gear_Values) -> __safeDI_Built) {
 		                    self.gear = gear
 		                }
-
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.init(gear: { _ in __safeDI_builder() })
-		                }
 		            }
 		        }
 
@@ -1840,10 +1740,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 
 		            public init(top_firstBuilder: @escaping (top_firstBuilder_Values) -> Top.__safeDI_FirstCarrier<SafeDIScope_Gear.DefaultFirst_Scope.__safeDI_Builder<__safeDI_Built>>) {
 		                self.top_firstBuilder = top_firstBuilder
-		            }
-
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.init(top_firstBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 		            }
 		        }
 		    }
@@ -1926,10 +1822,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 
 		        public init(gadget: @escaping (Top) -> __safeDI_Built) {
 		            self.gadget = gadget
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(gadget: { _ in __safeDI_builder() })
 		        }
 		    }
 
@@ -2356,10 +2248,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		        public init(subB: SubB.__safeDI_SecondCarrier<__safeDI_Built>) {
 		            self.subB = subB
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(subB: .init(__safeDI_noScope: __safeDI_builder))
-		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -2387,10 +2275,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		        public init(first: @escaping () -> __safeDI_Built) {
 		            self.first = first
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(first: { __safeDI_builder() })
-		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -2412,10 +2296,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 
 		        public init(second: @escaping (X) -> __safeDI_Built) {
 		            self.second = second
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(second: { _ in __safeDI_builder() })
 		        }
 		    }
 
@@ -2439,10 +2319,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		        public init(subA: SubA.__safeDI_FirstCarrier<__safeDI_Built>) {
 		            self.subA = subA
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(subA: .init(__safeDI_noScope: __safeDI_builder))
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -2451,10 +2327,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 
 		        public init(subB: SubB.__safeDI_SecondCarrier<__safeDI_Built>) {
 		            self.subB = subB
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(subB: .init(__safeDI_noScope: __safeDI_builder))
 		        }
 		    }
 
@@ -2505,10 +2377,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		                public init(relay_secondBuilder: @escaping (relay_secondBuilder_Values) -> Relay.__safeDI_SecondCarrier<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<__safeDI_Built>>) {
 		                    self.relay_secondBuilder = relay_secondBuilder
 		                }
-
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.init(relay_secondBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
-		                }
 		            }
 		        }
 
@@ -2522,10 +2390,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		                public init(gadget: @escaping (gadget_Values) -> __safeDI_Built) {
 		                    self.gadget = gadget
 		                }
-
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.init(gadget: { _ in __safeDI_builder() })
-		                }
 		            }
 		        }
 
@@ -2537,10 +2401,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		            public init(top_firstBuilder: @escaping (top_firstBuilder_Values) -> Top.__safeDI_FirstCarrier<SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<__safeDI_Built>>, top_secondBuilder: @escaping (top_secondBuilder_Values) -> Top.__safeDI_SecondCarrier<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<__safeDI_Built>>) {
 		                self.top_firstBuilder = top_firstBuilder
 		                self.top_secondBuilder = top_secondBuilder
-		            }
-
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.init(top_firstBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }, top_secondBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 		            }
 		        }
 		    }
@@ -2615,10 +2475,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 
 		        public init(host: Host.SafeDIScope_Gadget.__safeDI_Builder<__safeDI_Built>) {
 		            self.host = host
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(host: .init(__safeDI_noScope: __safeDI_builder))
 		        }
 		    }
 
@@ -3172,10 +3028,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		        public init(first: @escaping () -> __safeDI_Built) {
 		            self.first = first
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(first: { __safeDI_builder() })
-		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -3215,10 +3067,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 
 		        public init(subA: SubA.__safeDI_FirstCarrier<__safeDI_Built>) {
 		            self.subA = subA
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(subA: .init(__safeDI_noScope: __safeDI_builder))
 		        }
 		    }
 
@@ -3710,10 +3558,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		        public init(subB: SubB.__safeDI_SecondCarrier<__safeDI_Built>) {
 		            self.subB = subB
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(subB: .init(__safeDI_noScope: __safeDI_builder))
-		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -3741,10 +3585,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		        public init(first: @escaping (X) -> __safeDI_Built) {
 		            self.first = first
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(first: { _ in __safeDI_builder() })
-		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -3768,10 +3608,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		        public init(second: @escaping (X?) -> __safeDI_Built) {
 		            self.second = second
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(second: { _ in __safeDI_builder() })
-		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -3794,10 +3630,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		        public init(subA: SubA.__safeDI_FirstCarrier<__safeDI_Built>) {
 		            self.subA = subA
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(subA: .init(__safeDI_noScope: __safeDI_builder))
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -3806,10 +3638,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 
 		        public init(subB: SubB.__safeDI_SecondCarrier<__safeDI_Built>) {
 		            self.subB = subB
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(subB: .init(__safeDI_noScope: __safeDI_builder))
 		        }
 		    }
 
@@ -3870,10 +3698,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		                public init(mid: @escaping (mid_Values) -> SafeDIScope_Gadget.Mid_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                    self.mid = mid
 		                }
-
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.init(mid: { _ in .init(__safeDI_noScope: __safeDI_builder) })
-		                }
 		            }
 		        }
 
@@ -3886,10 +3710,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 
 		                public init(gadget: @escaping (gadget_Values) -> __safeDI_Built) {
 		                    self.gadget = gadget
-		                }
-
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.init(gadget: { _ in __safeDI_builder() })
 		                }
 		            }
 		        }
@@ -3904,10 +3724,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		                public init(relayBuilder_secondBuilder: @escaping (relayBuilder_secondBuilder_Values) -> Relay.__safeDI_SecondCarrier<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<__safeDI_Built>>) {
 		                    self.relayBuilder_secondBuilder = relayBuilder_secondBuilder
 		                }
-
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.init(relayBuilder_secondBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
-		                }
 		            }
 		        }
 
@@ -3919,10 +3735,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		            public init(top_firstBuilder: @escaping (top_firstBuilder_Values) -> Top.__safeDI_FirstCarrier<SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<__safeDI_Built>>, top_secondBuilder: @escaping (top_secondBuilder_Values) -> Top.__safeDI_SecondCarrier<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<__safeDI_Built>>) {
 		                self.top_firstBuilder = top_firstBuilder
 		                self.top_secondBuilder = top_secondBuilder
-		            }
-
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.init(top_firstBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }, top_secondBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 		            }
 		        }
 		    }
@@ -4356,10 +4168,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		                public init(relay_secondBuilder: @escaping (relay_secondBuilder_Values) -> Relay.__safeDI_SecondCarrier<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<__safeDI_Built>>) {
 		                    self.relay_secondBuilder = relay_secondBuilder
 		                }
-
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.init(relay_secondBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
-		                }
 		            }
 		        }
 
@@ -4373,10 +4181,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		                public init(gadget: @escaping (gadget_Values) -> __safeDI_Built) {
 		                    self.gadget = gadget
 		                }
-
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.init(gadget: { _ in __safeDI_builder() })
-		                }
 		            }
 		        }
 
@@ -4388,10 +4192,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		            public init(top_firstBuilder: @escaping (top_firstBuilder_Values) -> Top.__safeDI_FirstCarrier<SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<__safeDI_Built>>, top_secondBuilder: @escaping (top_secondBuilder_Values) -> Top.__safeDI_SecondCarrier<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<__safeDI_Built>>) {
 		                self.top_firstBuilder = top_firstBuilder
 		                self.top_secondBuilder = top_secondBuilder
-		            }
-
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.init(top_firstBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }, top_secondBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 		            }
 		        }
 		    }
@@ -4531,10 +4331,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		                public init(relay_secondBuilder: @escaping (relay_secondBuilder_Values) -> Relay.__safeDI_SecondCarrier<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<__safeDI_Built>>) {
 		                    self.relay_secondBuilder = relay_secondBuilder
 		                }
-
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.init(relay_secondBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
-		                }
 		            }
 		        }
 
@@ -4548,10 +4344,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		                public init(gadget: @escaping (gadget_Values) -> __safeDI_Built) {
 		                    self.gadget = gadget
 		                }
-
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.init(gadget: { _ in __safeDI_builder() })
-		                }
 		            }
 		        }
 
@@ -4563,10 +4355,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		            public init(top_firstBuilder: @escaping (top_firstBuilder_Values) -> Top.__safeDI_FirstCarrier<SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<__safeDI_Built>>, top_secondBuilder: @escaping (top_secondBuilder_Values) -> Top.__safeDI_SecondCarrier<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<__safeDI_Built>>) {
 		                self.top_firstBuilder = top_firstBuilder
 		                self.top_secondBuilder = top_secondBuilder
-		            }
-
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.init(top_firstBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }, top_secondBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 		            }
 		        }
 		    }
@@ -4712,10 +4500,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		                public init(outer_secondBuilder: @escaping (outer_secondBuilder_Values) -> Outer.__safeDI_SecondCarrier<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<__safeDI_Built>>) {
 		                    self.outer_secondBuilder = outer_secondBuilder
 		                }
-
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.init(outer_secondBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
-		                }
 		            }
 		        }
 
@@ -4729,10 +4513,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		                public init(gadget: @escaping (gadget_Values) -> __safeDI_Built) {
 		                    self.gadget = gadget
 		                }
-
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.init(gadget: { _ in __safeDI_builder() })
-		                }
 		            }
 		        }
 
@@ -4744,10 +4524,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		            public init(top_firstBuilder: @escaping (top_firstBuilder_Values) -> Top.__safeDI_FirstCarrier<SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<__safeDI_Built>>, top_secondBuilder: @escaping (top_secondBuilder_Values) -> Top.__safeDI_SecondCarrier<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<__safeDI_Built>>) {
 		                self.top_firstBuilder = top_firstBuilder
 		                self.top_secondBuilder = top_secondBuilder
-		            }
-
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.init(top_firstBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }, top_secondBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 		            }
 		        }
 		    }
@@ -4892,10 +4668,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		                public init(relayBuilder_secondBuilder: @escaping (relayBuilder_secondBuilder_Values) -> Relay.__safeDI_SecondCarrier<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<__safeDI_Built>>) {
 		                    self.relayBuilder_secondBuilder = relayBuilder_secondBuilder
 		                }
-
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.init(relayBuilder_secondBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
-		                }
 		            }
 		        }
 
@@ -4909,10 +4681,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		                public init(gadget: @escaping (gadget_Values) -> __safeDI_Built) {
 		                    self.gadget = gadget
 		                }
-
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.init(gadget: { _ in __safeDI_builder() })
-		                }
 		            }
 		        }
 
@@ -4924,10 +4692,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		            public init(top_firstBuilder: @escaping (top_firstBuilder_Values) -> Top.__safeDI_FirstCarrier<SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<__safeDI_Built>>, top_secondBuilder: @escaping (top_secondBuilder_Values) -> Top.__safeDI_SecondCarrier<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<__safeDI_Built>>) {
 		                self.top_firstBuilder = top_firstBuilder
 		                self.top_secondBuilder = top_secondBuilder
-		            }
-
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.init(top_firstBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }, top_secondBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 		            }
 		        }
 		    }
@@ -5063,10 +4827,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		                public init(gadget: @escaping (gadget_Values) -> __safeDI_Built) {
 		                    self.gadget = gadget
 		                }
-
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.init(gadget: { _ in __safeDI_builder() })
-		                }
 		            }
 		        }
 		    }
@@ -5086,10 +4846,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		                public init(relayBuilder_secondBuilder: @escaping @Sendable (relayBuilder_secondBuilder_Values) -> Relay.__safeDI_SecondCarrier<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<__safeDI_Built>>) {
 		                    self.relayBuilder_secondBuilder = relayBuilder_secondBuilder
 		                }
-
-		                public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		                    self.init(relayBuilder_secondBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
-		                }
 		            }
 		        }
 
@@ -5101,10 +4857,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		            public init(top_firstBuilder_Sendable: @escaping @Sendable (top_firstBuilder_Sendable_Values) -> SafeDISendableScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<__safeDI_Built>, top_secondBuilder: @escaping @Sendable (top_secondBuilder_Values) -> Top.__safeDI_SecondCarrier<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<__safeDI_Built>>) {
 		                self.top_firstBuilder_Sendable = top_firstBuilder_Sendable
 		                self.top_secondBuilder = top_secondBuilder
-		            }
-
-		            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		                self.init(top_firstBuilder_Sendable: { _ in .init(__safeDI_noScope: __safeDI_builder) }, top_secondBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 		            }
 		        }
 		    }
@@ -5236,10 +4988,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		                public init(relay_secondBuilder: @escaping (relay_secondBuilder_Values) -> Relay.__safeDI_SecondCarrier<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<__safeDI_Built>>) {
 		                    self.relay_secondBuilder = relay_secondBuilder
 		                }
-
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.init(relay_secondBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
-		                }
 		            }
 		        }
 
@@ -5253,10 +5001,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		                public init(gadget: @escaping (gadget_Values) -> __safeDI_Built) {
 		                    self.gadget = gadget
 		                }
-
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.init(gadget: { _ in __safeDI_builder() })
-		                }
 		            }
 		        }
 
@@ -5266,10 +5010,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 
 		            public init(top_firstBuilder: @escaping (top_firstBuilder_Values) -> Top.__safeDI_FirstCarrier<SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<__safeDI_Built>>) {
 		                self.top_firstBuilder = top_firstBuilder
-		            }
-
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.init(top_firstBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 		            }
 		        }
 		    }
@@ -5289,10 +5029,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		                public init(relayBuilder_secondBuilder: @escaping @Sendable (relayBuilder_secondBuilder_Values) -> Relay.__safeDI_SecondCarrier<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<__safeDI_Built>>) {
 		                    self.relayBuilder_secondBuilder = relayBuilder_secondBuilder
 		                }
-
-		                public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		                    self.init(relayBuilder_secondBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
-		                }
 		            }
 		        }
 
@@ -5304,10 +5040,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		            public init(top_firstBuilder_Sendable: @escaping @Sendable (top_firstBuilder_Sendable_Values) -> SafeDISendableScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<__safeDI_Built>, top_secondBuilder: @escaping @Sendable (top_secondBuilder_Values) -> Top.__safeDI_SecondCarrier<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<__safeDI_Built>>) {
 		                self.top_firstBuilder_Sendable = top_firstBuilder_Sendable
 		                self.top_secondBuilder = top_secondBuilder
-		            }
-
-		            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		                self.init(top_firstBuilder_Sendable: { _ in .init(__safeDI_noScope: __safeDI_builder) }, top_secondBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 		            }
 		        }
 		    }
@@ -5460,10 +5192,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		                public init(relay_secondBuilder: @escaping (relay_secondBuilder_Values) -> Relay.__safeDI_SecondCarrier<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<__safeDI_Built>>) {
 		                    self.relay_secondBuilder = relay_secondBuilder
 		                }
-
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.init(relay_secondBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
-		                }
 		            }
 		        }
 
@@ -5476,10 +5204,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 
 		                public init(gadget: @escaping (gadget_Values) -> __safeDI_Built) {
 		                    self.gadget = gadget
-		                }
-
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.init(gadget: { _ in __safeDI_builder() })
 		                }
 		            }
 		        }
@@ -5498,10 +5222,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		            public init(top_firstSendableBuilder: @escaping @Sendable (top_firstSendableBuilder_Values) -> Top.__safeDI_FirstSendableCarrier<SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<__safeDI_Built>>, top_secondBuilder: @escaping @Sendable (top_secondBuilder_Values) -> Top.__safeDI_SecondCarrier<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<__safeDI_Built>>) {
 		                self.top_firstSendableBuilder = top_firstSendableBuilder
 		                self.top_secondBuilder = top_secondBuilder
-		            }
-
-		            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		                self.init(top_firstSendableBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }, top_secondBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 		            }
 		        }
 		    }
@@ -5640,10 +5360,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		                public init(gadget: @escaping (gadget_Values) -> __safeDI_Built) {
 		                    self.gadget = gadget
 		                }
-
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.init(gadget: { _ in __safeDI_builder() })
-		                }
 		            }
 		        }
 
@@ -5656,10 +5372,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 
 		                public init(relay_secondBuilder: @escaping (relay_secondBuilder_Values) -> Relay.__safeDI_SecondCarrier<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<__safeDI_Built>>) {
 		                    self.relay_secondBuilder = relay_secondBuilder
-		                }
-
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.init(relay_secondBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 		                }
 		            }
 		        }
@@ -5680,10 +5392,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		                public init(hubBuilder: @escaping @Sendable (hubBuilder_Values) -> SafeDIScope_Gadget.Hub_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                    self.hubBuilder = hubBuilder
 		                }
-
-		                public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		                    self.init(hubBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
-		                }
 		            }
 		        }
 
@@ -5695,10 +5403,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		            public init(top_firstBuilder_Sendable: @escaping @Sendable (top_firstBuilder_Sendable_Values) -> SafeDISendableScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<__safeDI_Built>, top_secondBuilder: @escaping @Sendable (top_secondBuilder_Values) -> Top.__safeDI_SecondCarrier<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<__safeDI_Built>>) {
 		                self.top_firstBuilder_Sendable = top_firstBuilder_Sendable
 		                self.top_secondBuilder = top_secondBuilder
-		            }
-
-		            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		                self.init(top_firstBuilder_Sendable: { _ in .init(__safeDI_noScope: __safeDI_builder) }, top_secondBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 		            }
 		        }
 		    }
