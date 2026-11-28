@@ -98,6 +98,8 @@ extension ValuePath {
 			value.reads + arguments
 		case let .implicitMemberCall(_, arguments):
 			arguments
+		case let .implicitInitialization(_, values):
+			values.flatMap(\.reads)
 		}
 	}
 
@@ -116,6 +118,8 @@ extension ValuePath {
 			value.passedArgumentNames
 		case let .call(_, value, _, _):
 			value.passedArgumentNames
+		case let .implicitInitialization(_, values):
+			values.flatMap(\.passedArgumentNames)
 		}
 	}
 
@@ -138,6 +142,8 @@ extension ValuePath {
 			"new:\(type.asSource)"
 		case let .implicitMemberCall(name, arguments):
 			".\(name)(\(arguments.map(\.shape).joined(separator: ",")))"
+		case let .implicitInitialization(labels, values):
+			".init(\(zip(labels, values).map { "\($0):\($1.shape)" }.joined(separator: ",")))"
 		}
 	}
 }
@@ -169,9 +175,11 @@ extension PassedArgument {
 		case .emptyInitialization:
 			shape
 		case .member,
-		     .optionalMember:
+		     .optionalMember,
+		     .implicitInitialization:
 			// A member of a value that reads no declaration, such as a member of a value the function was handed or a loop
-			// member's field of its level's configuration, is the same text at every member.
+			// member's field of its level's configuration, or a new value made of such members, is the same text at every
+			// member.
 			value.reads.isEmpty ? shape : nil
 		case .rootDeclaration,
 		     .call,
@@ -306,6 +314,13 @@ extension TypeKeyLayout {
 				spelledArguments.append("\(argument.argumentLabel.spelledAsArgumentLabel): \(value)")
 			}
 			return ".\(name)(\(spelledArguments.joined(separator: ", ")))"
+		case let .implicitInitialization(labels, values):
+			var spelledArguments = [String]()
+			for (label, value) in zip(labels, values) {
+				guard let spelled = spelledValuePath(value, inClass: owner, before: index) else { return nil }
+				spelledArguments.append("\(label.spelledAsArgumentLabel): \(spelled)")
+			}
+			return ".init(\(spelledArguments.joined(separator: ", ")))"
 		}
 	}
 

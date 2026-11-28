@@ -2947,6 +2947,7 @@ enum GraphFuzzerGenerator {
 			retentionRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.retentionRandomSeedMask)
 			retentionLoopRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.retentionLoopRandomSeedMask)
 			builderReceivedBesideReceiveLeftNilRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.builderReceivedBesideReceiveLeftNilRandomSeedMask)
+			builderLoopAtTwoLevelsRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.builderLoopAtTwoLevelsRandomSeedMask)
 			sendableOnlyInsideClosureRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.sendableOnlyInsideClosureRandomSeedMask)
 			throwingAutoclosureRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.throwingAutoclosureRandomSeedMask)
 			sendableAutoclosureRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.sendableAutoclosureRandomSeedMask)
@@ -3299,7 +3300,10 @@ enum GraphFuzzerGenerator {
 		/// ring of two now and then has an instantiated cycle close on a member: the first member instantiates a third type
 		/// that declares both members' instantiators again, so each member built beneath it receives that type's, and the
 		/// first member's builder function takes the second's as a cycle parameter. The ring's wrappers are `Sendable` in a
-		/// `Sendable` graph and in half the mixed ones.
+		/// `Sendable` graph and in half the mixed ones. Half the rings of two that close no instantiated cycle, on a stream of
+		/// their own (`builderLoopAtTwoLevelsRandom`), are declared at two levels of different types instead: by `T9`, which
+		/// a root instantiates and whose mock is generated, and again by `LoopLevel`, which `T9` instantiates, so the mock's
+		/// loop is built at both levels and each level hands the members a configuration of `T9`'s overrides type.
 		private mutating func appendReceivedBuilderLoopMotif(to declarations: inout [TypeDeclaration]) {
 			let wrapper = sendability == .sendable || sendability == .mixed && random.percentChance(50) ? "SendableInstantiator" : "Instantiator"
 			func builder(_ index: Int) -> PropertyDeclaration {
@@ -3328,7 +3332,15 @@ enum GraphFuzzerGenerator {
 			}
 			let mockedIndex = random.percentChance(50) ? random.element(of: members) : nil
 			let builders = members.map(builder)
-			if !closesCycle, propertiesByIndex[9] == nil, random.percentChance(30) {
+			var mockedIndices: Set<Int> = mockedIndex.map { [$0] } ?? []
+			if length == 2, !closesCycle, builderLoopAtTwoLevelsRandom.percentChance(50) {
+				// The mocked `T9` declares the ring and builds `LoopLevel`, which declares it again.
+				let level = PropertyDeclaration(attribute: "@Instantiated", label: "loopLevel", type: "\(prefix)LoopLevel")
+				propertiesByIndex[9] = builderLoopAtTwoLevelsRandom.percentChance(50) ? [level] + builders : builders + [level]
+				mockedIndices.insert(9)
+				declarations[0].properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "t9", type: typeName(9)))
+				declarations.append(TypeDeclaration(name: "\(prefix)LoopLevel", instantiableArguments: [], properties: builders, declaresHelperTypes: false))
+			} else if !closesCycle, propertiesByIndex[9] == nil, random.percentChance(30) {
 				// A type a root instantiates as a constant declares the ring.
 				propertiesByIndex[9] = builders
 				declarations[0].properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "t9", type: typeName(9)))
@@ -3338,7 +3350,7 @@ enum GraphFuzzerGenerator {
 			for index in propertiesByIndex.keys.sorted() {
 				declarations.append(TypeDeclaration(
 					name: typeName(index),
-					instantiableArguments: index == mockedIndex ? ["generateMock: true"] : [],
+					instantiableArguments: mockedIndices.contains(index) ? ["generateMock: true"] : [],
 					properties: propertiesByIndex[index, default: []],
 					declaresHelperTypes: true,
 				))
@@ -3376,6 +3388,7 @@ enum GraphFuzzerGenerator {
 		}
 
 		private static let builderReceivedBesideReceiveLeftNilRandomSeedMask: UInt64 = 0x73656C6652656376
+		private static let builderLoopAtTwoLevelsRandomSeedMask: UInt64 = 0x4C6F6F704C766C73
 		/// The stream of the `Sendable` builder motif's closure default that is `@Sendable` only inside its type.
 		private static let sendableOnlyInsideClosureRandomSeedMask: UInt64 = 0x53656E64496E7369
 		/// The stream of the extension's throwing `@autoclosure` parameter.
@@ -3505,6 +3518,8 @@ enum GraphFuzzerGenerator {
 		/// Draws only `appendBuilderReceivedBesideReceiveLeftNilMotif`'s choices: whether a graph without another motif
 		/// ends with it, and its shapes.
 		private var builderReceivedBesideReceiveLeftNilRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only whether `appendReceivedBuilderLoopMotif`'s ring of two is declared at two levels of a mocked type's tree.
+		private var builderLoopAtTwoLevelsRandom: GraphFuzzerRandomNumberGenerator
 		private var sendableOnlyInsideClosureRandom: GraphFuzzerRandomNumberGenerator
 		private var throwingAutoclosureRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only whether the extension's `instantiate(…)` takes a `@Sendable` `@autoclosure` parameter.

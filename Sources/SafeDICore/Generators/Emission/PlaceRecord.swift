@@ -267,6 +267,9 @@ indirect enum ValuePath: Hashable, Sendable {
 	/// A new value of a type made by its initializer that takes no argument, spelled `<type>()`: it reads no declaration,
 	/// so it is a value of every call alike, and keyed as itself.
 	case emptyInitialization(TypeDescription)
+	/// A new value of the type the value is passed as, made by its initializer from `values` under `labels`, spelled
+	/// `.init(<label>: <value>, …)`: the parameters it passes nothing take their defaults.
+	case implicitInitialization(labels: [String], values: [ValuePath])
 }
 
 /// A value a call hands the function it calls on every call, which the function never captures: places that share one
