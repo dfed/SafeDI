@@ -37,20 +37,14 @@ enum NodeRecordsChecks {
 		// A seam call's record, as the engine is to spell it, must list what its text reads, binds and declares, and spell
 		// the text's guard line and builder arguments.
 		let seamCallObserver: @Sendable (SeamCallRecordObservation) -> Void = { call in
-			var mismatches = HoleSiteRecordObservation.recordMismatches(text: call.text, readNames: call.readNames, boundNames: call.boundNames, place: "a seam call")
+			for mismatch in HoleSiteRecordObservation.recordMismatches(text: call.text, readNames: call.readNames, boundNames: call.boundNames, keptFunctionNames: call.keptFunctionNames, place: "a seam call") {
+				Issue.record(Comment(rawValue: mismatch))
+			}
 			for (spelled, written) in zip(call.spelledFromRecord, call.written) where spelled != written {
-				mismatches.append("The record of a seam call spells `\(spelled)` where its text writes `\(written)`:\n\(call.text)")
+				Issue.record(Comment(rawValue: "The record of a seam call spells `\(spelled)` where its text writes `\(written)`:\n\(call.text)"))
 			}
 			if call.spelledFromRecord.count != call.written.count {
-				mismatches.append("The record of a seam call spells \(call.spelledFromRecord.count) statements and arguments where its text writes \(call.written.count):\n\(call.text)")
-			}
-			// The row's seam calls keep fills and dispatchers in place, which the record does not name yet: a known issue of
-			// the seam call records lane (2026-11-27) until it does, reported once per call with the start of its text, so
-			// that other lanes' runs are not flooded.
-			if let first = mismatches.first {
-				withKnownIssue("Seam call records lane, 2026-11-27: the record of a fill call does not yet name the fills and dispatchers the row keeps in place", isIntermittent: true) {
-					Issue.record(Comment(rawValue: "\(first.split(separator: "\n", omittingEmptySubsequences: false).prefix(12).joined(separator: "\n"))\n(\(mismatches.count) mismatches in all)"))
-				}
+				Issue.record(Comment(rawValue: "The record of a seam call spells \(call.spelledFromRecord.count) statements and arguments where its text writes \(call.written.count):\n\(call.text)"))
 			}
 			enclosingSeamCallObserver?(call)
 		}
