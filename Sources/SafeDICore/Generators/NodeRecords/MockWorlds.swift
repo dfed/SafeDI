@@ -18,8 +18,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import Foundation
-
 /// One mock root's world, built once before the module's mock roots are lowered (`MockWorlds`) and handed to its root's
 /// lowering (`ScopeGenerator.nodeRecordsMockStatements(of:world:bindsOnlyNodes:)`). It holds the world's node records,
 /// which hold the table's shared records where the world holds their rows, and the table, from which the layout reads
@@ -79,7 +77,10 @@ struct MockWorlds: Sendable {
 	///   - table: The mock worlds' table of `roots`, holding no shared record yet.
 	///   - sharedGraph: The shared graph of `table`'s shareable declarations, whose facts each world's are compared with.
 	static func build(roots: [ConstructionScope], table: MockWorldsTable, sharedGraph: MockWorldsSharedGraph) async throws -> MockWorlds {
-		let width = ProcessInfo.processInfo.activeProcessorCount
+		// Each pass reads the module's mock roots at the bound their lowering reads them at, a measured memory constant
+		// (`BoundedConcurrency.mockRootWidth`), never the processor count: a world's graphs and records are alive while its
+		// job runs. Widening the pre-pass needs a measurement of its peak memory first.
+		let width = BoundedConcurrency.mockRootWidth
 		// Each world's top graph, which stops at the shared declarations it reaches, and the calls it makes into them; and
 		// its graph built whole, which the observers compare with. A `.public` mock whose root reaches a hole is built
 		// whole: its holes are places, whose carrier edges are a fact of its whole tree.

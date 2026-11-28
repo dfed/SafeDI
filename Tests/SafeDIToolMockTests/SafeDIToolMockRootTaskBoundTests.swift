@@ -74,6 +74,46 @@ struct SafeDIToolMockRootTaskBoundTests: ~Copyable {
 		#expect(mostJobsRunning <= BoundedConcurrency.mockRootWidth, "\(mostJobsRunning) mock roots read at once, over the bound of \(BoundedConcurrency.mockRootWidth)")
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsNoMoreMockWorldsAtOnceThanTheMockRootBound_whenModuleGeneratesManyMocks() async throws {
+		// The mock worlds' pre-pass (`MockWorlds.build`) reads every mock root before any is lowered, and holds each world's
+		// graphs and records while its job runs, so it takes the lowering's bound, whatever the processor count.
+		let mockRootCount = 4 * BoundedConcurrency.mockRootWidth
+		let (starts, startContinuation) = AsyncStream.makeStream(of: Int.self)
+		let (reports, reportContinuation) = AsyncStream.makeStream(of: MockWorldsTableReport.self)
+		try await MockWorldsTableObservation.$observer.withValue({ reportContinuation.yield($0) }) {
+			try await BoundedTaskStart.$observer.withValue({ startContinuation.yield($0) }) {
+				_ = try await executeSafeDIToolTest(
+					swiftFileContent: (0..<mockRootCount).map { index in
+						"""
+						@Instantiable(generateMock: true)
+						public struct Screen\(index): Instantiable {
+						    public init() {}
+						}
+						"""
+					},
+					buildSwiftOutputDirectory: true,
+					filesToDelete: &filesToDelete,
+					activeCompilationConditions: ["DEBUG"],
+				)
+			}
+		}
+		startContinuation.finish()
+		reportContinuation.finish()
+		var mostJobsRunning = 0
+		for await jobsRunning in starts {
+			mostJobsRunning = max(mostJobsRunning, jobsRunning)
+		}
+		var worldCounts = [Int]()
+		for await report in reports {
+			worldCounts.append(report.worlds.count)
+		}
+		// The pre-pass ran, over every mock root.
+		#expect(worldCounts == [mockRootCount])
+		#expect(mostJobsRunning <= BoundedConcurrency.mockRootWidth, "\(mostJobsRunning) jobs ran at once, over the bound of \(BoundedConcurrency.mockRootWidth)")
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
