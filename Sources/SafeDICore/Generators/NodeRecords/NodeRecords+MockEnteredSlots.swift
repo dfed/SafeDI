@@ -57,7 +57,15 @@ extension NodeRecords {
 	/// Whether `declaration`'s function takes and hands on `__safeDI_entered`: it is on a cycle, enters a place, or lies
 	/// between a declaration off every cycle that enters one and a slot beneath it. The root never does.
 	static func takesMockEnteredPlaces(_ declaration: DeclarationID, in slots: MockEnteredSlots) -> Bool {
-		slots.takesEnteredPlacesByDeclaration[Int(declaration)]
+		mockEnteredPlacesForm(of: declaration, in: slots) == .takesAndHandsOn
+	}
+
+	/// The form of `declaration`'s function as to the entered places (`takesMockEnteredPlaces(_:in:)`), a member of the
+	/// shape a record is written in beside its variant's key. The facts cannot key a variant by it: whether a declaration
+	/// lies above a slot is known only once its world's cycles are, so a caller that shares records between worlds reads
+	/// it here and shares no variant whose declarations differ in it.
+	static func mockEnteredPlacesForm(of declaration: DeclarationID, in slots: MockEnteredSlots) -> MockEnteredPlacesForm {
+		slots.takesEnteredPlacesByDeclaration[Int(declaration)] ? .takesAndHandsOn : .takesNoPlaces
 	}
 }
 
@@ -246,6 +254,15 @@ struct MockEnteredSlots: Sendable {
 		let type: TypeDescription
 		let isBuiltWithHandWrittenMock: Bool
 	}
+}
+
+/// Whether a function of a mock's tree takes the places its cycles entered above it, in the one `__safeDI_entered`
+/// argument, and hands them on (`NodeRecords.mockEnteredPlacesForm(of:in:)`).
+enum MockEnteredPlacesForm: Hashable, Sendable {
+	/// The function takes no entered places: it reads its configuration where its parent holds it.
+	case takesNoPlaces
+	/// The function takes its configuration with the places entered above it, and hands them on.
+	case takesAndHandsOn
 }
 
 /// Which of the functions a mock root declares for the places its cycles enter its calls use, beside the one that looks
