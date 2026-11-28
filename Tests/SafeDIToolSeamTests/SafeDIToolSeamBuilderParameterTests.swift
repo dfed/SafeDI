@@ -129,7 +129,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		])
 		// The Manual's seam section shows this example's generated code under the plugin, read here so it cannot drift.
 		guard integration == .swiftPackagePlugin else { return }
-		let manual = try String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("Documentation/Manual.md"), encoding: .utf8)
+		let manual = try ManualCodeBlocks.manual()
 		let section = try #require(manual.components(separatedBy: "## Generating a dependency tree per module").dropFirst().first)
 			.components(separatedBy: "\n#").first ?? ""
 		let codeBlocks = section.components(separatedBy: "```swift\n").dropFirst().map { $0.components(separatedBy: "\n```").first ?? "" }
@@ -147,9 +147,9 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// The adoption guide declares `Feed`'s seam with a hole and `App`'s implementation of it, and "Calling a public mock
 		// from another module" calls the seam's public mock from another package; all three are read from the Manual, so
 		// none can stop compiling unnoticed. `Session` and `App`'s root are this test's.
-		let manual = try String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("Documentation/Manual.md"), encoding: .utf8)
-		let adoptionBlocks = try Self.swiftCodeBlocks(ofSectionTitled: "### Adopting SafeDI in a large codebase", in: manual)
-		let callBlocks = try Self.swiftCodeBlocks(ofSectionTitled: "#### Calling a public mock from another module", in: manual)
+		let manual = try ManualCodeBlocks.manual()
+		let adoptionBlocks = try ManualCodeBlocks.swiftCodeBlocks(ofSectionTitled: "### Adopting SafeDI in a large codebase", in: manual)
+		let callBlocks = try ManualCodeBlocks.swiftCodeBlocks(ofSectionTitled: "#### Calling a public mock from another module", in: manual)
 		#expect(adoptionBlocks.count == 2)
 		let feed = try #require(adoptionBlocks.first)
 		let app = try #require(adoptionBlocks.dropFirst().first)
@@ -7071,31 +7071,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 
 	static func gadget(declarations: [String]) -> String {
 		fulfillingType(named: "DefaultGadget", fulfilling: "Gadget", declarations: declarations)
-	}
-
-	/// The Swift code blocks of the Manual's section headed `heading`, up to its next heading of any level: the next line
-	/// outside a code block that begins with `#`, since a block may hold `#if DEBUG`.
-	private static func swiftCodeBlocks(ofSectionTitled heading: String, in manual: String) throws -> [String] {
-		let lines = manual.components(separatedBy: "\n")
-		let start = try #require(lines.firstIndex(of: heading))
-		var blocks = [String]()
-		var block: [String]?
-		for line in lines[(start + 1)...] {
-			if var blockLines = block {
-				if line == "```" {
-					blocks.append(blockLines.joined(separator: "\n"))
-					block = nil
-				} else {
-					blockLines.append(line)
-					block = blockLines
-				}
-			} else if line == "```swift" {
-				block = []
-			} else if line.hasPrefix("#") {
-				break
-			}
-		}
-		return blocks
 	}
 
 	/// The first extension of `seam` in `file`, which holds its scope struct and initializer.
