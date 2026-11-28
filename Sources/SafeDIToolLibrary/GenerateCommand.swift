@@ -66,6 +66,8 @@ public struct Generate: AsyncParsableCommand {
 
 	@Option(help: "The desired output location of the DOT file expressing the dependency trees of the roots and the types with `generateDependencyTree: true` this module declares. A module that declares neither writes an empty graph.") var dotFileOutput: String?
 
+	@Option(help: ArgumentHelp("Where to write, a line per root and seam this run generates, what made the run build its place tree, and then how many roots built one. For measuring the move to per-type facts, not for builds.", visibility: .hidden)) var treeForcersOutput: String?
+
 	@Option(help: "The name of the module this run generates code for: the module that compiles the files the input CSV and '--include' name. Each of those files’ declarations, and the '--module-info-output' file, record it, so a module that reads the file knows which module declares each type. Files reached through a #SafeDIConfiguration’s additionalDirectoriesToInclude belong to another module. Without this option and '--package-name', a run with '--swift-manifest' or '--output-directory' reads the module of each file from the target graph the SafeDIGenerator plugin writes beside its input CSV. Either way, the '--module-info-output' file also records, as modules this one depends on, the module each '--dependent-module-info-file-path' file, and each '--transitive-module-info-file-path' file this run reads, records.") var moduleName: String?
 
 	@Option(help: "The package of the module this run generates code for, as the compiler’s '-package-name' names it, recorded as '--module-name' is. Omit it when the compiler receives no '-package-name'.") var packageName: String?
@@ -568,6 +570,7 @@ public struct Generate: AsyncParsableCommand {
 
 		// The DOT graph, drawn by the call of `generate(_:)` that generates the module's code when the run asks for one.
 		var dotGraph: String?
+		var treeForcerLines = [String]()
 		// The signatures of the seams the module generates, from that same call, which its module info carries.
 		var storedSeamSignatures = [StoredSeamSignature]()
 		var storedPublicMockPlans = [StoredPublicMockPlan]()
@@ -767,10 +770,12 @@ public struct Generate: AsyncParsableCommand {
 					generatesDependencyTrees: true,
 					mocks: mockRequest,
 					generatesDOTTree: dotFileOutput != nil && listsPassTheirChecks,
+					namesNodeRecordRefusals: treeForcersOutput != nil,
 				))
 				warnings.append(contentsOf: results.warnings)
 				let (additionalMocksToGenerate, dependencyTreeDestinationsBySource) = try listChecks.get()
 				dotGraph = results.dotTree
+				treeForcerLines = results.treeForcers.lines
 				storedSeamSignatures = results.storedSeamSignatures
 				storedPublicMockPlans = results.mocks?.storedPublicMockPlans ?? []
 
@@ -1002,6 +1007,9 @@ public struct Generate: AsyncParsableCommand {
 			\(dotGraph)
 			}
 			""".write(toPath: dotFileOutput)
+		}
+		if let treeForcersOutput {
+			try treeForcerLines.map { $0 + "\n" }.joined().write(toPath: treeForcersOutput)
 		}
 		// Written last, once every validation passed, so a run that fails publishes no module info for its dependents to
 		// read; and only when its bytes change, so a dependent whose build compares modification times reruns only when
