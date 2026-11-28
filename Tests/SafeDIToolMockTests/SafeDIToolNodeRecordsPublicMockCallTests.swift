@@ -1446,6 +1446,128 @@ struct SafeDIToolNodeRecordsPublicMockCallTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_refusesCall_whenRecordsOfFilledCallsAreOnAndFilledPlaceIsErased() async throws {
+		// The fill of `Screen`'s place wraps `DefaultUserService` in the eraser the place names, which the records of a filled
+		// call do not spell yet.
+		let (_, reports) = try await NodeRecordsObservation.$recordsFilledCalls.withValue(true) {
+			try await mockOfRoot(
+				feed: """
+				import SafeDI
+
+				public protocol UserService {}
+
+				public struct AnyUserService: UserService {
+				    public init(_ userService: any UserService) {
+				        self.userService = userService
+				    }
+
+				    public let userService: any UserService
+				}
+
+				@Instantiable
+				public final class Analytics: Instantiable {
+				    public init() {}
+				}
+
+				@Instantiable(generateMock: .public)
+				public final class Screen: Instantiable {
+				    init(analytics: Analytics, userService: AnyUserService) {
+				        self.analytics = analytics
+				        self.userService = userService
+				    }
+
+				    @Instantiated let analytics: Analytics
+				    @Instantiated(fulfilledByType: "DefaultUserService", erasedToConcreteExistential: true) let userService: AnyUserService
+				}
+				""",
+				app: """
+				@Instantiable(generateMock: true)
+				public final class Root: Instantiable {
+				    public init(screen: Screen) {
+				        self.screen = screen
+				    }
+
+				    @Instantiated let screen: Screen
+				}
+
+				@Instantiable
+				public final class DefaultUserService: UserService, Instantiable {
+				    public init() {}
+				}
+				""",
+			)
+		}
+		#expect(reports.map(\.refusal) == ["publicMockCallFills"])
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [false])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_refusesCall_whenRecordsOfFilledCallsAreOnAndCallBindsReceiveAgain() async throws {
+		// `Root.mock()` promotes `user` in two forms, named apart, so the call of `F`'s public mock, which fills `api`, binds
+		// `user` again in its function, which a call spelled in place does not hold yet.
+		let (_, reports) = try await NodeRecordsObservation.$recordsFilledCalls.withValue(true) {
+			try await mockOfRoot(
+				feed: """
+				import SafeDI
+
+				public protocol Api {}
+
+				@Instantiable
+				public struct User: Instantiable {
+				    public init() {}
+				}
+
+				@Instantiable(generateMock: .public)
+				public struct F: Instantiable {
+				    init(user: User, api: any Api) {
+				        self.user = user
+				        self.api = api
+				    }
+
+				    @Received let user: User
+				    @Instantiated let api: any Api
+				}
+				""",
+				app: """
+				@Instantiable(fulfillingAdditionalTypes: [Api.self])
+				public struct Live: Api, Instantiable {
+				    public init() {}
+				}
+
+				@Instantiable
+				public struct Draft: Instantiable {
+				    public init() {}
+				}
+
+				@Instantiable
+				public struct G: Instantiable {
+				    public init(user: Draft) {
+				        self.user = user
+				    }
+
+				    @Received let user: Draft
+				}
+
+				@Instantiable(generateMock: true)
+				public struct Root: Instantiable {
+				    public init(f: F, g: G) {
+				        self.f = f
+				        self.g = g
+				    }
+
+				    @Instantiated let f: F
+				    @Instantiated let g: G
+				}
+				""",
+			)
+		}
+		#expect(reports.map(\.refusal) == ["publicMockCallFills"])
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [false])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_refusesCall_whenCallReceivesValueOnlyIfAvailableMockOverrides() async throws {
 		let (_, reports) = try await mockOfRoot(
 			feed: Self.screen(receivesSessionOnlyIfAvailable: true),
