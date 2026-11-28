@@ -222,16 +222,19 @@ public enum RootFunctionHoisting {
 			}
 			return sendableNames
 		}
-		var keptNames = keepingCallers(of: found.conflictingNames)
-		var declared = records.filter { !keptNames.contains($0.name) }
-		var sendable = sendableNames(among: declared)
-		var unsendable = Set(declared.filter { sendable.contains($0.name) && !$0.canBeDeclaredSendable }.map(\.name))
-		while !unsendable.isEmpty {
+		// A function made `@Sendable` whose text cannot be is kept in place with its callers, which can change what is
+		// `@Sendable`, until none is left. Fills are marked `@Sendable` where they are generated, so the first pass keeps
+		// none on every graph the tests and the corpora draw.
+		var keptNames = found.conflictingNames
+		var unsendable = Set<String>()
+		var declared: [RootFunctionRecord]
+		var sendable: Set<String>
+		repeat {
 			keptNames = keepingCallers(of: keptNames.union(unsendable))
 			declared = records.filter { !keptNames.contains($0.name) }
 			sendable = sendableNames(among: declared)
 			unsendable = Set(declared.filter { sendable.contains($0.name) && !$0.canBeDeclaredSendable }.map(\.name))
-		}
+		} while !unsendable.isEmpty
 		let rootFunctionNames = Set(records.map(\.name))
 		guard !declared.isEmpty else {
 			return Hoisting(rootFunctionNames: rootFunctionNames, declaredNames: [], declarations: [], body: statements)

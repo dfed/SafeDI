@@ -1128,21 +1128,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			// to a place it passes up, reads its places.
 			let placesQuery = scope.calledBuilders.flatMap { $0.places.cases.isEmpty ? nil : SeamSignature.Places.Query(of: $0.places, calledPlaces: { [placesOfSeamsBeneath = $0.placesOfSeamsBeneath] in placesOfSeamsBeneath($0)?.places }) }
 			var caseFieldsByCaseKey = placesByCaseKey.mapValues { places in
-				var holdingCases = [SeamSignature.Places.Query.ResolvedCase]()
-				var holdingCasesSeen = Set<HoldingCaseKey>()
-				var readsEveryPlaceFromGraph = placesQuery != nil
-				if let placesQuery, let calledBuilders = scope.calledBuilders {
-					for place in places {
-						guard let holding = calledBuilders.holdingCase(ofSite: place.site, in: placesQuery) else {
-							readsEveryPlaceFromGraph = false
-							break
-						}
-						if holdingCasesSeen.insert(HoldingCaseKey(graph: ObjectIdentifier(holding.query), caseIndex: holding.caseIndex)).inserted {
-							holdingCases.append(holding)
-						}
-					}
-				}
-				var caseFields = if readsEveryPlaceFromGraph, let firstPlace = places.first {
+				var caseFields = if let placesQuery, let firstPlace = places.first, let holdingCases = scope.calledBuilders?.holdingCases(ofSites: places.map(\.site), in: placesQuery) {
 					ScopeGenerator.caseFields(ofResolvedCases: holdingCases, hole: firstPlace)
 				} else {
 					ScopeGenerator.caseFields(of: places)
