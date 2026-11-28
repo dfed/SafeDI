@@ -416,8 +416,14 @@ struct NodeRecords: Sendable {
 				// In a mock's world, a call of a declaration whose twin's place is on the path closes the cycle on that place, as
 				// today's tree closes it (`ScopeGenerator.closedOnDeclaration`): a mock's function on a cycle reads its
 				// configuration from the place it is handed, whatever form built it (`mockPlace`).
+				// So does a call of a declaration whose own place is on the path in the other family: the facts key a mock's body
+				// by whether a `@Sendable` function encloses it, for the local the walk reads its overrides into there, and a
+				// function on a cycle reads no local.
 				let calleeDeclaration = world.declaration(of: callee)
-				let closedOnTwin = enteredSlots == nil || isOnPath[Int(callee)] ? nil : stack.last(where: { twins.isTwin(world.declaration(of: $0.variant), of: calleeDeclaration) })?.variant
+				let closedOnTwin = enteredSlots == nil || isOnPath[Int(callee)] ? nil : stack.last(where: { frame in
+					let declaration = world.declaration(of: frame.variant)
+					return twins.isTwin(declaration, of: calleeDeclaration) || declaration == calleeDeclaration && world.keys(of: frame.variant) == world.keys(of: callee)
+				})?.variant
 				if let closedOnVariant = isOnPath[Int(callee)] ? callee : closedOnTwin {
 					let callee = closedOnVariant
 					// The places between the place the call closes on and the call: what they declare, and the parameters of

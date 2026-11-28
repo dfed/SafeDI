@@ -45,8 +45,10 @@ extension NodeRecords {
 		let override = Property(label: name, typeDescription: record.property.typeDescription)
 		// The walk binds the property to `nil` inside a `@Sendable` function. No record does: `mock()` takes an override only
 		// where a type outside every `@Sendable` function declares the property, the declaration is every declaring type's
-		// child, and a node built in a `@Sendable` function shares no child (`mockSendableRefusals(of:in:)`). The read is
-		// marked, so that the engine refuses the layout should that refusal be lifted.
+		// child, and a node built in a `@Sendable` function shares no child (`mockSendableRefusals(of:in:)`), but one on a
+		// cycle, whose world is refused where such a node is built in a `@Sendable` function or beneath one
+		// (`checkMockCycles(in:slots:)`). The read is marked, so that the engine refuses the layout should either refusal be
+		// lifted.
 		var read = PlaceRead(argumentLabel: record.property.label, label: name, property: override, source: .binding(label: name))
 		read.staysOutsideSendableFunctions = true
 		return AliasPlaceRecord(property: record.property, fulfillingProperty: nil, text: "let \(record.property.asSource) = \(name)", reads: [read])
