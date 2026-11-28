@@ -94,10 +94,10 @@ struct SafeDIToolNodeRecordsOptionalParameterTests: ~Copyable {
 
 	@Test(arguments: ShapeLaidOut.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_failsNoDifference_whenSeamInModuleKeepsRootsTreeAndOnlyOneCallerAnswersReadOnlyIfAvailable(shape: ShapeLaidOut) async throws {
-		// A seam in the module keeps every root's tree, so the root is compared with its records and not laid out from
-		// them: the records are laid out for the comparison alone, which approves the optional parameter's difference only
-		// where the two texts are equal.
+	mutating func generate_laysRootOutFromRecordsAsTheTreeWritesIt_whenSeamInModuleAndOnlyOneCallerAnswersReadOnlyIfAvailable(shape: ShapeLaidOut) async throws {
+		// A root of a module that holds a seam is laid out from its records where nothing in its world forces its tree
+		// (`seamWorldRootLayout`): this root calls no seam, so its records lay it out, and the comparison approves the
+		// optional parameter's difference only where the two texts are equal.
 		let seam = """
 		@Instantiable(generateDependencyTree: true)
 		public struct Harbor: Instantiable {
@@ -124,7 +124,7 @@ struct SafeDIToolNodeRecordsOptionalParameterTests: ~Copyable {
 		for await report in stream where report.root == "Root" {
 			reports.append(report)
 		}
-		#expect(reports.map(\.isLaidOutFromNodeRecords) == [false])
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
 		#expect(reports.map(\.differences.isEmpty) == [false])
 		#expect(reports.map { $0.comparedTexts.map { $0.tree == $0.nodeRecords } } == [true])
 	}
