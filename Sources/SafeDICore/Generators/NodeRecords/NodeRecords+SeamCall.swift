@@ -130,16 +130,14 @@ struct SeamCallRoutes: Sendable {
 		var routesByCall = [Call: (read: PassedUp?, count: Int)]()
 		for callRoute in seamTree.callRoutes where !callRoute.reentersEnclosingFill {
 			// The node at the end of the route's path: each step the child of the step before built as the step's property. A
-			// path into a fill names no edge's property, and leaves its call without a read.
-			var declaration: DeclarationID = 0
+			// path into a fill names no edge's property and leaves its call without a read; today a world that holds a call that
+			// fills a place is refused before its routes are read (`NodeRecordRefusal.fill`, from
+			// `refusalsOfBuiltByInitializer(_:in:)`), so every route's path names edges.
+			var declaration: DeclarationID? = 0
 			for property in callRoute.sitePath {
-				guard let child = world.edges(from: declaration).first(where: { world.property(of: $0) == property }) else {
-					declaration = -1
-					break
-				}
-				declaration = child
+				declaration = declaration.flatMap { node in world.edges(from: node).first { world.property(of: $0) == property } }
 			}
-			guard declaration > 0,
+			guard let declaration, declaration > 0,
 			      let calledBuilder = world.scope(of: declaration).seamCall?.calledBuilders.builders.first(where: { $0.enumKey == callRoute.innerKey })
 			else { continue }
 			// A call whose case is nested in another's binds the payloads of the cases on its route before the places that lead
