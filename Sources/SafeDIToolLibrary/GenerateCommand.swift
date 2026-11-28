@@ -72,7 +72,7 @@ public struct Generate: AsyncParsableCommand {
 
 	@Option(help: "The package of the module this run generates code for, as the compiler’s '-package-name' names it, recorded as '--module-name' is. Omit it when the compiler receives no '-package-name'.") var packageName: String?
 
-	@Flag(help: "Does nothing, and is accepted so that a build that passes it keeps working: every '--module-info-output' file stores each declaration’s file and its rank there, never its line or column, so a line moved in a module changes no file a module that lists it reads.") var moduleInfoPositionsInOwnFile = false
+	@Flag(help: "Accepted for compatibility, and changes nothing: a '--module-info-output' file holds no line or column.") var moduleInfoPositionsInOwnFile = false
 
 	@Flag(help: "Bazel passes this: a cached action replays its warnings, so a warning about another module’s declaration prints its file and message without a line.") var warningsMayBeReplayedFromCache = false
 
