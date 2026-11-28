@@ -309,36 +309,36 @@ struct NodeRecords: Sendable {
 			guard kinds[Int(declaration)] != .publicMockCall || mockNamesReadApart.wrapperArgumentNames[Int(variant)].isEmpty else { throw NodeRecordRefusal.mockRootBindsOtherThanNodes }
 			func makeRecord(children: [GeneratedCode]) throws -> PlaceRecord {
 				switch kinds[Int(declaration)] {
-			// A hole's place is made above, from no record.
-			case .builtByInitializer, .erased, .lazy, .sendable, .seamHole:
-				// One record serves the four: what tells them apart, it reads of the node.
-				try .built(Self.builtByInitializerRecord(of: declaration, variant: variant, in: world, lazilyInstantiatedInstanceProperties: instanceProperties, typesDeclaredEscaping: escaping, children: children))
-			case .inlineSeam:
-				try .built(Self.inlineSeamRecord(of: declaration, variant: variant, in: world, lazilyInstantiatedInstanceProperties: instanceProperties, typesDeclaredEscaping: escaping, children: children))
-			case .seamCall:
-				try .alias(Self.seamCallRecord(of: declaration, variant: variant, in: world, routes: seamCallRoutes, lazilyInstantiatedInstanceProperties: instanceProperties, typesDeclaredEscaping: escaping, children: children))
-			case .receivesOnlyIfAvailable:
-				try .built(Self.receivesOnlyIfAvailableRecord(
-					of: declaration,
-					variant: variant,
-					in: world,
-					answers: onlyIfAvailableAnswers,
-					lazilyInstantiatedInstanceProperties: instanceProperties,
-					typesDeclaredEscaping: escaping,
-					children: children,
-				))
-			case .unavailableDependency:
-				try .alias(Self.unavailableDependencyRecord(of: declaration, in: world))
-			case .rename:
-				try .alias(Self.renameRecord(of: declaration, variant: variant, in: world, answers: onlyIfAvailableAnswers, wrapperName: mockNamesReadApart.wrapperNamesReadByRenames[variant]))
-			case .cycle:
-				try .built(Self.cycleRecord(of: declaration, variant: variant, in: world, lazilyInstantiatedInstanceProperties: instanceProperties, typesDeclaredEscaping: escaping, children: children))
-			case .mockConstruction:
-				try .built(Self.mockDecoratedRecord(of: declaration, variant: variant, in: world, unavailableProperties: onlyIfAvailableAnswers.unavailableProperties(of: variant), lazilyInstantiatedInstanceProperties: instanceProperties, receivesBoundAgain: mockNamesReadApart.receivesBoundAgain[Int(variant)], enteredSlots: enteredSlots, wrapperArgumentNames: mockNamesReadApart.wrapperArgumentNames[Int(variant)], typesDeclaredEscaping: escaping, children: children))
-			case .mockUnavailableDependency:
-				try .alias(Self.mockUnavailableDependencyRecord(of: declaration, in: world))
-			case .publicMockCall:
-				try .built(Self.publicMockCallRecord(of: declaration, variant: variant, in: world, receivesBoundAgain: mockNamesReadApart.receivesBoundAgain[Int(variant)], typesDeclaredEscaping: escaping, children: children))
+				// A hole's place is made above, from no record.
+				case .builtByInitializer, .erased, .lazy, .sendable, .seamHole:
+					// One record serves the four: what tells them apart, it reads of the node.
+					try .built(Self.builtByInitializerRecord(of: declaration, variant: variant, in: world, lazilyInstantiatedInstanceProperties: instanceProperties, typesDeclaredEscaping: escaping, children: children))
+				case .inlineSeam:
+					try .built(Self.inlineSeamRecord(of: declaration, variant: variant, in: world, lazilyInstantiatedInstanceProperties: instanceProperties, typesDeclaredEscaping: escaping, children: children))
+				case .seamCall:
+					try .alias(Self.seamCallRecord(of: declaration, variant: variant, in: world, routes: seamCallRoutes, lazilyInstantiatedInstanceProperties: instanceProperties, typesDeclaredEscaping: escaping, children: children))
+				case .receivesOnlyIfAvailable:
+					try .built(Self.receivesOnlyIfAvailableRecord(
+						of: declaration,
+						variant: variant,
+						in: world,
+						answers: onlyIfAvailableAnswers,
+						lazilyInstantiatedInstanceProperties: instanceProperties,
+						typesDeclaredEscaping: escaping,
+						children: children,
+					))
+				case .unavailableDependency:
+					try .alias(Self.unavailableDependencyRecord(of: declaration, in: world))
+				case .rename:
+					try .alias(Self.renameRecord(of: declaration, variant: variant, in: world, answers: onlyIfAvailableAnswers, wrapperName: mockNamesReadApart.wrapperNamesReadByRenames[variant]))
+				case .cycle:
+					try .built(Self.cycleRecord(of: declaration, variant: variant, in: world, lazilyInstantiatedInstanceProperties: instanceProperties, typesDeclaredEscaping: escaping, children: children))
+				case .mockConstruction:
+					try .built(Self.mockDecoratedRecord(of: declaration, variant: variant, in: world, unavailableProperties: onlyIfAvailableAnswers.unavailableProperties(of: variant), lazilyInstantiatedInstanceProperties: instanceProperties, receivesBoundAgain: mockNamesReadApart.receivesBoundAgain[Int(variant)], enteredSlots: enteredSlots, wrapperArgumentNames: mockNamesReadApart.wrapperArgumentNames[Int(variant)], typesDeclaredEscaping: escaping, children: children))
+				case .mockUnavailableDependency:
+					try .alias(Self.mockUnavailableDependencyRecord(of: declaration, in: world))
+				case .publicMockCall:
+					try .built(Self.publicMockCallRecord(of: declaration, variant: variant, in: world, receivesBoundAgain: mockNamesReadApart.receivesBoundAgain[Int(variant)], typesDeclaredEscaping: escaping, children: children))
 				}
 			}
 			var madeRecord = try makeRecord(children: childrenRebindingItself(with: []))
