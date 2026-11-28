@@ -412,13 +412,12 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 		    }
 		}
 		"""])
-		// `Screen`'s own tree reads its deferred parameter through its memo, which a record would read from its variant's
-		// key; a seam's root's keys are not yet seeded from its parameters, so its world is refused as `lazy` until they
-		// are.
+		// `Screen`'s own tree reads its deferred parameter through its memo, which node records read from the key the
+		// root's parameter seeds, as its tree does; a seam's own tree is compared, not laid out.
 		#expect(reports.map(\.root) == ["Screen", "Root"])
-		#expect(reports.map(\.refusal) == ["lazy", nil])
+		#expect(reports.map(\.refusal) == ["notLaidOut", nil])
 		#expect(reports.map(\.isLaidOutFromNodeRecords) == [false, true])
-		#expect(reports.map(\.recordCount) == [0, 2])
+		#expect(reports.map(\.recordCount) == [1, 2])
 		#expect(reports.flatMap(\.differences) == [])
 	}
 

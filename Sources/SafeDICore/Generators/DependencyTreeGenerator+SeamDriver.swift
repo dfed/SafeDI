@@ -1667,7 +1667,7 @@ extension DependencyTreeGenerator {
 		seamRoot: ScopeGenerator.SeamRoot,
 		declaredTypeNames: DeclaredTypeNames,
 	) throws -> (generator: ScopeGenerator, rootScope: ConstructionScope) {
-		let (nearestDeclarations, lazilyInstantiatedInstanceProperties, _) = seamRootDeclarations(of: rootScope.instantiable, seamRoot: seamRoot)
+		let (nearestDeclarations, lazilyInstantiatedInstanceProperties, _, _) = seamRootDeclarations(of: rootScope.instantiable, seamRoot: seamRoot)
 		// A seam's tree reads its own `SeamHoles`, constant within the tree but not across trees, so it keeps a memo of its
 		// own, for one pass: a seam without holes reuses its places within a pass, and one with holes stores none.
 		var constructionMemo = ConstructionMemo()
@@ -1692,10 +1692,11 @@ extension DependencyTreeGenerator {
 	static func seamRootDeclarations(
 		of seam: Instantiable,
 		seamRoot: ScopeGenerator.SeamRoot,
-	) -> (nearestDeclarations: NearestDeclarations, lazilyInstantiatedInstanceProperties: Set<Property>, nonSendableWrapperLabels: Set<String>) {
+	) -> (nearestDeclarations: NearestDeclarations, lazilyInstantiatedInstanceProperties: Set<Property>, nonSendableWrapperLabels: Set<String>, handedProperties: [Property]) {
 		var nearestDeclarations = NearestDeclarations()
 		var lazilyInstantiatedInstanceProperties = Set<Property>()
 		var nonSendableWrapperLabels = Set<String>()
+		var handedProperties = [Property]()
 		let autoclosureCallByLabel = seamRoot.autoclosureCallByLabel(of: seam)
 		for parameter in seamRoot.signature.parameters {
 			let property = parameter.property
@@ -1714,6 +1715,13 @@ extension DependencyTreeGenerator {
 			if parameter.isDeferred, autoclosureCallByLabel[property.label] == nil {
 				lazilyInstantiatedInstanceProperties.insert(property.asUnwrappedProperty)
 			}
+			// The form the tree reads the label in: the memo a deferred parameter is held in, whose instance is the by-value
+			// form the tree reads (`lazilyInstantiatedInstanceProperties`), or the parameter itself.
+			if case let .deferred(isSendable) = parameter.deferral, autoclosureCallByLabel[property.label] == nil {
+				handedProperties.append(Property(label: property.label, typeDescription: .simple(name: isSendable ? "SendableLazilyInstantiated" : "LazilyInstantiated", generics: [property.asUnwrappedProperty.typeDescription])))
+			} else {
+				handedProperties.append(property)
+			}
 			// A `@Sendable` function of the tree that reads a parameter held in a wrapper that is not `Sendable` captures
 			// it, as `ScopeGenerator.nonSendableWrapperCaptures(ofTreeRootedAt:)` declares them: a wrapper parameter, or
 			// the memo of a deferred one that no `@Sendable` function was found to read.
@@ -1726,7 +1734,7 @@ extension DependencyTreeGenerator {
 				nonSendableWrapperLabels.insert(property.label)
 			}
 		}
-		return (nearestDeclarations, lazilyInstantiatedInstanceProperties, nonSendableWrapperLabels)
+		return (nearestDeclarations, lazilyInstantiatedInstanceProperties, nonSendableWrapperLabels, handedProperties)
 	}
 
 	/// A seam's tree kept for emission, with the modules its file imports for the types it builds, read from the

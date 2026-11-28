@@ -45,8 +45,9 @@ extension DependencyTreeGenerator {
 	/// records, or the root is of a module without seams, whose forcers name the kind already.
 	static func nodeRecordRefusal(ofSeamWorldRoot rootInfo: RootScopeInfo, declaredTypeNames: DeclaredTypeNames) -> [TreeForcer] {
 		guard rootInfo.treeForcers.contains(.seamWorld), let rootScope = rootInfo.rootScope else { return [] }
-		let world = TypeFactsGraph(root: rootScope, forMockGeneration: false)
-		guard case let .failure(refusal) = NodeRecords.refusingWhatRecordsThrow({ try NodeRecords(world: world, seamTree: rootInfo.seamTree, declaredTypeNames: declaredTypeNames) }) else { return [] }
+		let seamTree = rootInfo.seamTree
+		let world = TypeFactsGraph(root: rootScope, forMockGeneration: false, seamRootDeclarations: seamTree?.handedProperties ?? [])
+		guard case let .failure(refusal) = NodeRecords.refusingWhatRecordsThrow({ try NodeRecords(world: world, seamTree: seamTree, declaredTypeNames: declaredTypeNames) }) else { return [] }
 		return [.nodeRecordKind(refusal.rawValue)]
 	}
 
@@ -71,7 +72,7 @@ extension DependencyTreeGenerator {
 			let seamTree = rootInfo.seamTree
 			// The work of making the records is no run's, so the tests that count a run's work count none of it.
 			let (world, records) = GenerationWork.$observer.withValue(nil) {
-				let world = TypeFactsGraph(root: rootScope, forMockGeneration: false)
+				let world = TypeFactsGraph(root: rootScope, forMockGeneration: false, seamRootDeclarations: seamTree?.handedProperties ?? [])
 				let seamHoles = seamTree.map { $0.makeSeamHoles() }
 				return (world, NodeRecords.refusingWhatRecordsThrow { try NodeRecords(world: world, seamTree: seamTree, seamHoles: seamHoles, declaredTypeNames: declaredTypeNames) })
 			}

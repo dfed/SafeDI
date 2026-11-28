@@ -131,7 +131,10 @@ struct TypeFactsGraph: Sendable {
 	///     binds or pins (`ReadChannel.mock`), and whose types are built with their hand-written mocks.
 	///   - mockRootNames: What a mock root's lowering names that the node records of its world read; empty for a
 	///     production root's world, and read by no fact of the graph.
-	init(root: ConstructionScope, forMockGeneration: Bool, mockRootNames: MockRootNames = MockRootNames()) {
+	///   - seamRootDeclarations: What a seam's own root is handed, each in the form its tree reads it under its label: a
+	///     parameter, or the `LazilyInstantiated` a deferred one is held in (`RootScopeInfo.SeamTree.handedProperties`).
+	///     They answer the root's reads from above, as no node's declaration does. Empty for any other root.
+	init(root: ConstructionScope, forMockGeneration: Bool, mockRootNames: MockRootNames = MockRootNames(), seamRootDeclarations: [Property] = []) {
 		// Building the graph is an edge: it reads each record's properties and labels once per node, and interns them. The
 		// walk asks for a node's edges once, when it first reaches the node, so in node order, and each edge's entry among
 		// its scope's properties to generate, or among its fills, is appended in edge order.
@@ -758,6 +761,13 @@ struct TypeFactsGraph: Sendable {
 		self.fills = fills
 		self.fillPathEntries = fillPathEntries
 		self.propertyFacts = propertyFacts
+		// What a seam's root is handed answers its tree's reads of a label no node declares.
+		var seamRootDeclarationByLabel = [Int32: Property]()
+		for property in seamRootDeclarations {
+			guard let label = labels.existingID(of: property.label) else { continue }
+			_ = properties.id(of: property)
+			seamRootDeclarationByLabel[label] = property
+		}
 		propertyTable = properties.values
 		typeTable = types.values
 		moduleNames = modules.values
@@ -806,7 +816,7 @@ struct TypeFactsGraph: Sendable {
 		self.readOffsets = readOffsets
 		self.labelColumn = labelColumn
 		self.labelOffsets = labelOffsets
-		let answers = Self.answers(of: graph, reads: reads, readTable: readInterner.values, labels: labels, bindings: bindings, bindingOffsets: bindingOffsets, bindingsBefore: bindingsBefore, properties: properties, forms: (table: formInterner.values, readFromAbove: formsReadFromAbove), madeAgain: madeAgain.map { ($0, madeAgainByNode, loopParentByMember) })
+		let answers = Self.answers(of: graph, reads: reads, readTable: readInterner.values, labels: labels, bindings: bindings, bindingOffsets: bindingOffsets, bindingsBefore: bindingsBefore, properties: properties, forms: (table: formInterner.values, readFromAbove: formsReadFromAbove), madeAgain: madeAgain.map { ($0, madeAgainByNode, loopParentByMember) }, seamRootDeclarationByLabel: seamRootDeclarationByLabel)
 		answerIsBeingBuilt = answers.isBeingBuilt
 		answerIsMadeAgain = answers.isMadeAgain
 		answerTexts = answers.texts
@@ -976,6 +986,7 @@ struct TypeFactsGraph: Sendable {
 		properties: TypeFactsInterner<Property>,
 		forms: (table: [OnlyIfAvailableForm], readFromAbove: ReadsFromAbove),
 		madeAgain: (edges: MadeAgainEdges, targetsByNode: [[LoopTarget]], parentByMember: [Int32])?,
+		seamRootDeclarationByLabel: [Int32: Property],
 	) -> (variants: TypeFactsVariants, isBeingBuilt: [Bool], isMadeAgain: [Bool], texts: [String], keys: [Int32], properties: [Int32]) {
 		var answerIDByText = [String: Int32]()
 		var texts = [String]()
@@ -1064,7 +1075,15 @@ struct TypeFactsGraph: Sendable {
 		let variants = TypeFactsVariants(
 			graph: graph,
 			reads: reads,
-			rootAnswer: { _ in nil },
+			// A seam's root is handed its parameters, which answer its tree's reads of their labels, as the root's body binds
+			// them before every node; any other root is handed nothing. The answer keys by the form handed, as a node's
+			// declaration of that form would.
+			rootAnswer: { readID in
+				let read = readTable[Int(readID)]
+				guard read.channel.asksAboutLabel, let handed = seamRootDeclarationByLabel[read.label], let property = properties.existingID(of: handed) else { return nil }
+				let text = "\(read.channel.name) \(handed.asSource) handed to the root"
+				return VariantBinding(answer: answer(text: text, beingBuilt: false, keyText: text, kind: handed.propertyType, property: property), declaration: 0)
+			},
 			binding: { edge, readID in
 				// Every read the graph interns asks about a label: `ownReads` makes only value, optional and mock reads.
 				let read = readTable[Int(readID)]

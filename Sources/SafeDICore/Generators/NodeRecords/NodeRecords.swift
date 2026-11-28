@@ -652,19 +652,17 @@ struct NodeRecords: Sendable {
 	}
 
 	/// Refuses `declaration`'s world where its type reads what a seam's root is handed in a way node records do not write:
-	/// as `lazy`, a receive or a rename of one of the instances of `LazilyInstantiated` properties the root is handed,
-	/// which its tree reads through the wrapper and the records would read as a binding of the label; as `renameOrHole`,
+	/// as `lazy`, a rename of one of the instances of `LazilyInstantiated` properties the root is handed, which its tree
+	/// binds from the wrapper's instance; as `renameOrHole`,
 	/// the seam's own rename that keeps a deferred parameter's label, which the tree binds from the parameter's
 	/// autoclosure and writes no record of.
 	private static func checkReadsNoSeamRootValue(of seamTree: DependencyTreeGenerator.RootScopeInfo.SeamTree?, _ declaration: DeclarationID, in world: some NodeRecordVariantFacts) throws(NodeRecordRefusal) {
 		guard let seamTree else { return }
 		let readsAnInstance = world.scope(of: declaration).instantiable.dependencies.contains { dependency in
 			switch dependency.source {
-			case .received:
-				seamTree.rootLazilyInstantiatedInstanceProperties.contains(dependency.property.asUnwrappedProperty)
 			case let .aliased(fulfillingProperty, _, _):
 				seamTree.rootLazilyInstantiatedInstanceProperties.contains(fulfillingProperty.asUnwrappedProperty)
-			case .instantiated, .forwarded:
+			case .received, .instantiated, .forwarded:
 				false
 			}
 		}

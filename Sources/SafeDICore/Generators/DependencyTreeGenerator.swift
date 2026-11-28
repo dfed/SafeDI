@@ -655,6 +655,10 @@ public actor DependencyTreeGenerator {
 			let rootNonSendableWrapperLabels: Set<String>
 			/// The seam's parameters, the nearest declarations of their labels in its tree, in signature order.
 			let parameters: [Property]
+			/// What the seam's root is handed, each in the form its tree reads it under its label, in signature order: a
+			/// parameter, or the `LazilyInstantiated` a deferred one is held in. Its world's keys read them
+			/// (`TypeFactsGraph(root:forMockGeneration:mockRootNames:seamRootDeclarations:)`).
+			let handedProperties: [Property]
 			/// The labels of the deferred parameters the seam's own rename of the label reads from the autoclosure
 			/// (`ScopeGenerator.SeamRoot.autoclosureCallByLabel(of:)`).
 			let autoclosureLabels: Set<String>
@@ -668,6 +672,7 @@ public actor DependencyTreeGenerator {
 				let declarations = DependencyTreeGenerator.seamRootDeclarations(of: seam, seamRoot: seamRoot)
 				rootLazilyInstantiatedInstanceProperties = declarations.lazilyInstantiatedInstanceProperties
 				rootNonSendableWrapperLabels = declarations.nonSendableWrapperLabels
+				handedProperties = declarations.handedProperties
 				parameters = seamRoot.signature.parameters.map(\.property)
 				autoclosureLabels = Set(seamRoot.autoclosureCallByLabel(of: seam).keys)
 				signature = seamRoot.signature
