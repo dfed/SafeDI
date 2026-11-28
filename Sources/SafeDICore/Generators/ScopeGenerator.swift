@@ -4659,9 +4659,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let wrapperDeclaration: VisibleDeclaration?
 			let capturingBuilder: SendableBuilder
 			let unwrappedReceivedProperty = receivedProperty.asUnwrappedProperty
-			if let declaration = declarationsByLabel[receivedProperty.label]?.first(where: {
-				$0.property.asUnwrappedProperty == unwrappedReceivedProperty || $0.instanceProperty?.asUnwrappedProperty == unwrappedReceivedProperty
-			}) {
+			// Where a mock binds a wrapper of each kind around the instance a by-value read reads, the read inside a
+			// `@Sendable` function reads the `Sendable` one, as `MockLowering.lazyWrapperTypeNames(insideSendableFunction:)`
+			// orders them for the mock's code.
+			let declarationsOfLabel = declarationsByLabel[receivedProperty.label]
+			if let declaration = (sendableBuilderDepth > 0 ? declarationsOfLabel?.first(where: {
+				$0.provides(unwrappedReceivedProperty) && !$0.property.propertyType.isNonSendableWrapper
+			}) : nil) ?? declarationsOfLabel?.first(where: { $0.provides(unwrappedReceivedProperty) }) {
 				guard declaration.property.propertyType.isNonSendableWrapper,
 				      declaration.sendableBuilderDepth < sendableBuilderDepth
 				else { return nil }

@@ -241,7 +241,11 @@ extension MockLowering.Walk {
 		let overrideBuilders = publicMockCall.takesOverrides ? nil : generator.publicMockOverrideBuilders
 		// The member that configures the call is a `@Sendable` closure where the call is built inside a `@Sendable` function,
 		// or where the configuration holding it is `@Sendable`-typed (`publicMockOverridesMember(sendable:)`).
-		let overridesAreSendable = isInsideSendableFunction || generator.buildsInSendableFunction || parentConcreteType.map(sendableConfigurationTypeNames.contains) ?? false
+		// The call's builder function is `@Sendable` where it is built inside a `@Sendable` function, and a read there of a
+		// lazy wrapper's instance reads the `Sendable` wrapper the mock binds of its label before the other.
+		let callIsInsideSendableFunction = isInsideSendableFunction || generator.buildsInSendableFunction
+		let lazyWrapperTypeNames = MockLowering.lazyWrapperTypeNames(insideSendableFunction: callIsInsideSendableFunction)
+		let overridesAreSendable = callIsInsideSendableFunction || parentConcreteType.map(sendableConfigurationTypeNames.contains) ?? false
 		let node = MockLowering.PublicMockCallNode(
 			property: property,
 			calledType: instantiable.concreteInstantiable,
@@ -324,7 +328,7 @@ extension MockLowering.Walk {
 				} else if dependency.source.isReceived,
 				          lazilyInstantiatedInstances.contains(dependency.property.asUnwrappedProperty),
 				          let wrapperName = lazilyInstantiatedNamesOfLabels[dependency.property.label].flatMap({ namesByType in
-				          	[Dependency.lazilyInstantiatedType, Dependency.sendableLazilyInstantiatedType].compactMap { namesByType[.simple(name: $0, generics: [dependency.property.typeDescription.unwrapped])] }.first
+				          	lazyWrapperTypeNames.compactMap { namesByType[.simple(name: $0, generics: [dependency.property.typeDescription.unwrapped])] }.first
 				          })
 				{
 					// The instance of the wrapper `mock()` binds apart from the instance it takes
@@ -334,7 +338,7 @@ extension MockLowering.Walk {
 				          dependency.source.isReceived,
 				          lazilyInstantiatedInstances.contains(dependency.property.asUnwrappedProperty),
 				          let wrapperParameterName = publicMockWrapperParameterNames[dependency.property.label].flatMap({ namesByType in
-				          	[Dependency.lazilyInstantiatedType, Dependency.sendableLazilyInstantiatedType].lazy.compactMap { namesByType[.simple(name: $0, generics: [dependency.property.typeDescription.unwrapped])] }.first
+				          	lazyWrapperTypeNames.lazy.compactMap { namesByType[.simple(name: $0, generics: [dependency.property.typeDescription.unwrapped])] }.first
 				          })
 				{
 					// The instance of the wrapper a public mock takes as a parameter, which `mock()` names apart where its root
@@ -343,7 +347,7 @@ extension MockLowering.Walk {
 				} else if dependency.source.isReceived,
 				          lazilyInstantiatedInstances.contains(dependency.property.asUnwrappedProperty),
 				          let (wrapperType, renamedName) = renames[dependency.property.label].flatMap({ namesByType in
-				          	[Dependency.lazilyInstantiatedType, Dependency.sendableLazilyInstantiatedType].lazy.compactMap { wrapperName -> (TypeDescription, String)? in
+				          	lazyWrapperTypeNames.lazy.compactMap { wrapperName -> (TypeDescription, String)? in
 				          		let wrapperType = TypeDescription.simple(name: wrapperName, generics: [dependency.property.typeDescription.unwrapped])
 				          		return namesByType[wrapperType].map { (wrapperType, $0) }
 				          	}.first
@@ -486,7 +490,7 @@ extension MockLowering.Walk {
 			guard case .received = dependency.source, !generator.unavailableOptionalProperties.contains(dependency.property), let names = renames[dependency.property.label] else { continue }
 			if generator.mockLoweringLazilyInstantiatedInstanceProperties.contains(dependency.property.asUnwrappedProperty) {
 				let instanceType = dependency.property.typeDescription.unwrapped
-				guard let (wrapperType, name) = [Dependency.lazilyInstantiatedType, Dependency.sendableLazilyInstantiatedType]
+				guard let (wrapperType, name) = lazyWrapperTypeNames
 					.lazy
 					.map({ TypeDescription.simple(name: $0, generics: [instanceType]) })
 					.compactMap({ wrapperType in names[wrapperType].map { (wrapperType, $0) } })

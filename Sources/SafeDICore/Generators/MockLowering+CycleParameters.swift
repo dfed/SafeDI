@@ -27,8 +27,9 @@ extension MockLowering {
 	/// (`ScopeGenerator.OrderedChild.unavailableProperties`), a parameter it passes `nil` among them, as the emitter's
 	/// `cycleParameterArgumentUnavailableProperties` reads them. `renames` are the names the mock binds a label apart
 	/// under, and `lazilyInstantiatedNames` the wrappers it binds around the instances it is passed, as
-	/// `mockCycleParameterArguments` reads them.
-	static func cycleParameterArguments(of generator: ScopeGenerator, inScope _: Set<Property>, unavailableProperties: Set<Property>, renames: [String: [TypeDescription: String]], lazilyInstantiatedNames: [String: [TypeDescription: String]]) -> [String] {
+	/// `mockCycleParameterArguments` reads them. `insideSendableFunction` says whether the call is made inside a `@Sendable`
+	/// function: the node's own `Sendable` wrapper's closure, or one around it.
+	static func cycleParameterArguments(of generator: ScopeGenerator, inScope _: Set<Property>, unavailableProperties: Set<Property>, renames: [String: [TypeDescription: String]], lazilyInstantiatedNames: [String: [TypeDescription: String]], insideSendableFunction: Bool) -> [String] {
 		let lazilyInstantiatedInstanceProperties = generator.mockLoweringCallSiteLazilyInstantiatedInstanceProperties
 		var arguments = [String]()
 		for parameter in generator.cycleParameters {
@@ -40,7 +41,7 @@ extension MockLowering {
 				// A deliberate gap, as the emitter's: see "Eager instances at a lazy cycle's calls" in `cycle-generation.md`. The
 				// instance is read from the wrapper of its label the mock names apart, where it names one apart.
 				let instanceType = parameter.property.asUnwrappedProperty.typeDescription
-				let wrapperName = [Dependency.lazilyInstantiatedType, Dependency.sendableLazilyInstantiatedType].lazy.compactMap { renames[label]?[.simple(name: $0, generics: [instanceType])] }.first
+				let wrapperName = lazyWrapperTypeNames(insideSendableFunction: insideSendableFunction).lazy.compactMap { renames[label]?[.simple(name: $0, generics: [instanceType])] }.first
 				value = "\(wrapperName ?? label).\(Dependency.lazilyInstantiatedInstancePropertyName)"
 			} else {
 				// The binding the label is named apart under (`mockCycleParameterArguments`).
