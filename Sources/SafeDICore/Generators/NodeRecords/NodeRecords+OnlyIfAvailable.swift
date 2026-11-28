@@ -91,7 +91,7 @@ extension NodeRecords {
 /// sources instead.
 struct OnlyIfAvailableAnswers: Sendable {
 	/// - Parameters:
-	///   - world: A world each of whose nodes is of a kind `NodeRecords` makes, off every cycle.
+	///   - world: A world each of whose nodes is of a kind `NodeRecords` makes.
 	///   - rootParameters: A seam's parameters, which its root is handed as the nearest declarations of their labels
 	///     (`DependencyTreeGenerator.seamRootDeclarations(of:seamRoot:)`), or what a mock root's body is declared inside,
 	///     the parameters of `mock()` and the overrides it binds before its nodes; empty for any other root.
@@ -183,8 +183,13 @@ struct OnlyIfAvailableAnswers: Sendable {
 				if let existingContext = contextByVariant[Int(callee)] {
 					let labelsOneCallAnswers = Set(existingContext.keys).symmetricDifference(calleeContext.keys)
 					// The layout engine passes a read only if available `nil` per view, as the tree does
-					// (`TypeKeyBody.passesNil`), so calls that answer a label apart share the variant. A rename only if available is bound where its scope is built, to the declaration or to `nil`, by one
-					// statement for every call, so a label one fulfills is not taken as a parameter.
+					// (`TypeKeyBody.passesNil`), so calls that answer a label apart share the variant. That holds for a
+					// member of a cycle too, whose calls each read through the view of the call (the `typeIsOnCycle` shape of
+					// `SafeDIToolNodeRecordsOptionalParameterTests`); where the member itself reads the label, its variant
+					// holds an optional parameter's key, which `checkVariantsPartitionAlike` refuses (that suite's
+					// `cycleMemberReadsTheLabel` test). A rename only if available is bound where its
+					// scope is built, to the declaration or to `nil`, by one statement for every call, so a label one fulfills
+					// is not taken as a parameter.
 					// A world with a hole or a fill writes the places beneath them from its sites' code, which passes `nil` where
 					// one call sees no declaration, so it takes no such parameter either.
 					// A lazy wrapper one call answers and another does not is refused still: judging its capture in a
@@ -298,7 +303,13 @@ struct OnlyIfAvailableAnswers: Sendable {
 		return nil
 	}
 
-	/// The properties `variant`'s construction is passed `nil` for.
+	/// The properties `variant`'s construction is passed `nil` for: the declarations a rename only if available is bound
+	/// to `nil` in place of. A receive only if available is passed `nil` per view by the layout engine
+	/// (`TypeKeyBody.passesNil`), which every reader of this set leaves to it: a construction reads through
+	/// `PlaceRead(argument:passing:)`, which marks the read (`builtByInitializerRecord`, and through it
+	/// `mockDecoratedRecord`). A cycle's arguments (`cycleArguments`) carry no mark, and need none: a variant on a cycle
+	/// that calls answer a label apart holds an optional parameter's key, and its world is refused
+	/// (`checkVariantsPartitionAlike`), so every call of a laid out cycle variant passes the same.
 	func unavailableProperties(of variant: VariantID) -> Set<Property> {
 		unavailablePropertiesByVariant[Int(variant)]
 	}

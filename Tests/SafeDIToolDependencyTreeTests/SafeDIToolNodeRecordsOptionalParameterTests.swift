@@ -25,7 +25,7 @@ import Testing
 @testable import SafeDIToolTestSupport
 
 /// A production root one of whose types is built where a label it receives only if available has a declaration and where
-/// it has none, off every cycle, laid out from node records (`OnlyIfAvailableAnswers`,
+/// it has none, on a cycle or off it, laid out from node records (`OnlyIfAvailableAnswers`,
 /// `DeclarationsAnsweringReads`): the type's function takes the label as one optional parameter, and the call that finds
 /// no declaration passes `nil`, as the tree writes it.
 struct SafeDIToolNodeRecordsOptionalParameterTests: ~Copyable {
@@ -182,6 +182,20 @@ struct SafeDIToolNodeRecordsOptionalParameterTests: ~Copyable {
 		#expect(reports.map(\.refusal) == ["onlyIfAvailableAnsweredApart"])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_refusesWorldAsCycleVariantsPartitionApart_whenCycleMemberReceivesLabelOnlyOneCallerAnswers() async throws {
+		// `Leaf` receives `session` only if available and builds itself again through `leafBuilder`, so its function would
+		// take `session` as a cycle parameter, which `A`'s call passes `nil` and `B`'s call its `session`. Its variant
+		// holds an optional parameter's key, so the world is refused, and the tree writes the root.
+		let treeOutput = try await executeSafeDIToolTest(swiftFileContent: [Self.fixtureOfCycleMemberReadingSession], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: [Self.fixtureOfCycleMemberReadingSession], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(reports.map(\.refusal) == ["cycleVariantsPartitionApart"])
+		#expect(output.dependencyTreeFiles == treeOutput.dependencyTreeFiles)
+	}
+
 	@Test(arguments: LazyWrapperAnsweredApart.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsCaptureError_whenALazyWrapperOneCallOfAVariantAnswersIsReadInsideASendableFunction(shape: LazyWrapperAnsweredApart) async {
@@ -196,6 +210,33 @@ struct SafeDIToolNodeRecordsOptionalParameterTests: ~Copyable {
 	}
 
 	// MARK: Shapes
+
+	/// `A` builds `Leaf` where nothing declares `session`, and `B` where it does; `Leaf` receives it and is on a cycle.
+	private static let fixtureOfCycleMemberReadingSession =
+		"""
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let a: A
+		    @Instantiated let b: B
+		    public init(a: A, b: B) { self.a = a; self.b = b }
+		}
+		@Instantiable public final class A: Instantiable {
+		    @Instantiated let leafBuilder: Instantiator<Leaf>
+		    public init(leafBuilder: Instantiator<Leaf>) { self.leafBuilder = leafBuilder }
+		}
+		@Instantiable public final class B: Instantiable {
+		    @Instantiated let session: Session
+		    @Instantiated let leafBuilder: Instantiator<Leaf>
+		    public init(session: Session, leafBuilder: Instantiator<Leaf>) { self.session = session; self.leafBuilder = leafBuilder }
+		}
+		@Instantiable public final class Leaf: Instantiable {
+		    @Received(onlyIfAvailable: true) let session: Session?
+		    @Instantiated let leafBuilder: Instantiator<Leaf>
+		    public init(session: Session?, leafBuilder: Instantiator<Leaf>) { self.session = session; self.leafBuilder = leafBuilder }
+		}
+		@Instantiable public final class Session: Instantiable {
+		    public init() {}
+		}
+		"""
 
 	enum ShapeLaidOut: CaseIterable {
 		/// `A` declares no `session`, and `B` builds one before its `viewModel`.

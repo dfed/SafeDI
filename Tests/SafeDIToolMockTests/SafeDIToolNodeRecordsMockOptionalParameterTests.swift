@@ -175,6 +175,83 @@ struct SafeDIToolNodeRecordsMockOptionalParameterTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_passesEachCallsNearestDeclaration_whenOnlyOneCallerDeclaresLabelReceivedOnlyIfAvailable() async throws {
+		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: ["Root.swift": Self.fixtureOfOneCallerDeclaringSession], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+
+		#expect(reports.filter(\.isMockRoot).map(\.everyRefusal) == [[]])
+		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [true])
+		// `mock()` binds `session` from its overrides before any node, so no call of `__safeDI_readerBuilder` passes `nil`:
+		// `A`'s passes the root's `session`, and `B`'s the `session` it builds.
+		#expect(output.mockFiles["Root+SafeDIMock.swift"] == generatedFileHeader + """
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            a: A.SafeDIMockConfiguration = .init(),
+		            b: B.SafeDIMockConfiguration = .init(),
+		            session: Session? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                a: a,
+		                b: b
+		            )
+		            self.session = session
+		        }
+
+		        var a: A.SafeDIMockConfiguration { __safeDI_storage.a }
+		        var b: B.SafeDIMockConfiguration { __safeDI_storage.b }
+		        let session: Session?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                a: A.SafeDIMockConfiguration,
+		                b: B.SafeDIMockConfiguration
+		            ) {
+		                self.a = a
+		                self.b = b
+		            }
+
+		            let a: A.SafeDIMockConfiguration
+		            let b: B.SafeDIMockConfiguration
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        let session: Session? = safeDIOverrides.session
+		        func __safeDI_readerBuilder(session: Session?, safeDIOverrides: ((Session?) -> Reader)?) -> Reader {
+		            if let safeDIBuilder = safeDIOverrides { safeDIBuilder(session) } else { Reader(session: session) }
+		        }
+		        func __safeDI_a(safeDIOverrides: A.SafeDIMockConfiguration) -> A {
+		            let readerBuilder = Instantiator<Reader> {
+		                __safeDI_readerBuilder(session: session, safeDIOverrides: safeDIOverrides.readerBuilder)
+		            }
+		            return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(readerBuilder) } else { A(readerBuilder: readerBuilder) }
+		        }
+		        let a: A = __safeDI_a(safeDIOverrides: safeDIOverrides.a)
+		        func __safeDI_b(safeDIOverrides: B.SafeDIMockConfiguration) -> B {
+		            let session = if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session() }
+		            let readerBuilder = Instantiator<Reader> {
+		                __safeDI_readerBuilder(session: session, safeDIOverrides: safeDIOverrides.readerBuilder)
+		            }
+		            return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(session, readerBuilder) } else { B(session: session, readerBuilder: readerBuilder) }
+		        }
+		        let b: B = __safeDI_b(safeDIOverrides: safeDIOverrides.b)
+		        return Root(a: a, b: b)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Root+SafeDIMock.swift"] ?? "")")
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -281,6 +358,37 @@ struct SafeDIToolNodeRecordsMockOptionalParameterTests: ~Copyable {
 	    public init() {}
 
 	    public var marker = "built"
+	}
+	"""
+
+	/// A mock root whose `A` builds a `Reader`, which receives `session` only if available, where nothing declares it,
+	/// and whose `B` builds one where `session` is declared.
+	private static let fixtureOfOneCallerDeclaringSession = """
+	@Instantiable(generateMock: true)
+	public final class Root: Instantiable {
+	    public init(a: A, b: B) { self.a = a; self.b = b }
+	    @Instantiated let a: A
+	    @Instantiated let b: B
+	}
+	@Instantiable
+	public final class A: Instantiable {
+	    public init(readerBuilder: Instantiator<Reader>) { self.readerBuilder = readerBuilder }
+	    @Instantiated let readerBuilder: Instantiator<Reader>
+	}
+	@Instantiable
+	public final class B: Instantiable {
+	    public init(session: Session, readerBuilder: Instantiator<Reader>) { self.session = session; self.readerBuilder = readerBuilder }
+	    @Instantiated let session: Session
+	    @Instantiated let readerBuilder: Instantiator<Reader>
+	}
+	@Instantiable
+	public final class Reader: Instantiable {
+	    public init(session: Session?) { self.session = session }
+	    @Received(onlyIfAvailable: true) let session: Session?
+	}
+	@Instantiable
+	public final class Session: Instantiable {
+	    public init() {}
 	}
 	"""
 
