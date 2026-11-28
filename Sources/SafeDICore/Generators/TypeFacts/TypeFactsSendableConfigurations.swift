@@ -18,7 +18,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-
 /// The concrete types whose `SafeDIMockConfiguration` a mock root's tree reads inside a `Sendable` scope, which takes the
 /// `Sendable` form: a type built for a property beneath a `@Sendable` builder function, or beneath what an actor's
 /// initializer is handed, whose configuration has a field (a child built for a property, a default-valued parameter of its

@@ -651,7 +651,7 @@ enum TypeFactsChecks {
 			answersByRead[readOfAnswer(answer), default: []].append(answer)
 		}
 		var owed = Set<String>()
-		for (read, answers) in answersByRead {
+		for (_, answers) in answersByRead {
 			if answers.count == 2 {
 				let (first, second) = (answers[0], answers[1])
 				let differs = { (field: String) in self.field(field, of: first) != self.field(field, of: second) }
