@@ -221,10 +221,10 @@ struct PublicMockFilledCallRecords: Sendable {
 			let caseKey = ScopeGenerator.fillCaseKey(of: facts.hole)
 			if let functionName = names.functionName(ofFill: caseKey), let scopeParameterName = names.scopeParameterName(ofFill: caseKey) {
 				fills.append(FilledCallRecords.Fill(
-				facts: facts,
-				signature: FilledCallRecords.signature(of: facts, isSendable: decisions.sendableKeys.contains(facts.key)),
-				functionName: functionName,
-				scopeParameterName: scopeParameterName,
+					facts: facts,
+					signature: FilledCallRecords.signature(of: facts, isSendable: decisions.sendableKeys.contains(facts.key)),
+					functionName: functionName,
+					scopeParameterName: scopeParameterName,
 					callerDeclarations: callerSources.visibleDeclarations(facts: facts, call: call, variant: variant),
 				))
 			}

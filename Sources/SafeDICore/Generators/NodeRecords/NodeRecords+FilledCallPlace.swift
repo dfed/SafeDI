@@ -174,10 +174,9 @@ extension FilledCallRecords.Fill {
 	/// What a fill's body is laid out with: the declarations around it (`outerDeclarations`), and the names in scope
 	/// where it is declared.
 	private func bodyDeclarations(namesInScope: Set<String>) -> (outerDeclarations: [Property], namesInScope: Set<String>) {
-		let outerDeclarations = self.outerDeclarations
+		let outerDeclarations = outerDeclarations
 		return (outerDeclarations, namesInScope.union(outerDeclarations.map(\.label) + [scopeParameterName]))
 	}
-
 }
 
 extension FilledCallRecords {
