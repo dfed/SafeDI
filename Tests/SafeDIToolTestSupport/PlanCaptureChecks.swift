@@ -26,10 +26,10 @@ enum PlanCaptureChecks {
 	/// capture of a wrapper that is not `Sendable` in a `@Sendable` function, which no walk then reports, and hands each
 	/// root to `enclosingObserver` too.
 	static func comparing<Result>(
-		handingOn enclosingObserver: (@Sendable (_ root: String, _ todaysWalkFindsCapture: Bool) -> Void)?,
+		handingOn enclosingObserver: TaskLocalFunction<@Sendable (_ root: String, _ todaysWalkFindsCapture: Bool) -> Void>?,
 		_ operation: () async throws -> Result,
 	) async throws -> Result {
-		try await PlanCaptureObservation.$observer.withValue({ root, todaysWalkFindsCapture in
+		try await PlanCaptureObservation.$observer.withValue(TaskLocalFunction { root, todaysWalkFindsCapture in
 			if todaysWalkFindsCapture {
 				Issue.record(Comment(rawValue: """
 				Today's tree of \(root) captures a wrapper that is not `Sendable` in a `@Sendable` function, but its code is \

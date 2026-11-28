@@ -43,7 +43,7 @@ extension DependencyTreeGenerator {
 		// The root of each mock root's world, by mocked type, where a test observes node records: handed on through a task
 		// local, so that a run no test observes threads nothing through the mock roots' construction.
 		let worldRootRecording = AsyncStream.makeStream(of: (mockedType: TypeDescription, worldRoot: ConstructionScope).self)
-		return try await NodeRecordsObservation.$recordsMockWorldRoot.withValue({ worldRootRecording.continuation.yield(($0, $1)) }) {
+		return try await NodeRecordsObservation.$recordsMockWorldRoot.withValue(TaskLocalFunction { worldRootRecording.continuation.yield(($0, $1)) }) {
 			try await generateMockCode(
 				mockConditionalCompilation: mockConditionalCompilation,
 				currentModuleSourceFilePaths: currentModuleSourceFilePaths,

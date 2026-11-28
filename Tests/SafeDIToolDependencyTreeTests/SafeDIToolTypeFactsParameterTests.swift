@@ -330,7 +330,7 @@ struct SafeDIToolTypeFactsParameterTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private mutating func rootReport(of types: [String], forMockGeneration: Bool = false) async throws -> TypeFactsReport {
 		let (stream, continuation) = AsyncStream.makeStream(of: TypeFactsReport.self)
-		_ = try await ConstructionMemoOracle.$observer.withValue({ _, _, report in continuation.yield(report) }) {
+		_ = try await ConstructionMemoOracle.$observer.withValue(TaskLocalFunction { _, _, report in continuation.yield(report) }) {
 			try await executeSafeDIToolTest(swiftFileContent: types, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		}
 		continuation.finish()

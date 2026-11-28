@@ -170,7 +170,7 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 		let output = TestTemporaryDirectory.uniquePath(prefix: "TreeForcers", pathExtension: "txt")
 		filesToDelete.append(output)
 		let (stream, continuation) = AsyncStream.makeStream(of: Int.self)
-		_ = try await HeldCodeTasks.$observer.withValue({ continuation.yield($0) }) {
+		_ = try await HeldCodeTasks.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: files,
 				buildSwiftOutputDirectory: true,

@@ -678,18 +678,16 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func resolvingReferences_keepsFileUnchanged_whenItsViewRefersToNoModuleBesideFileThatRefersToOne() async throws {
+	mutating func resolvingReferences_resolvesOnlyReferencedModule_whenOneFileRefersToModuleBesideFileThatRefersToNone() async throws {
 		let modulesBeneathCSV = try writeModulesBeneath([Self.moduleInfoFile(named: "Deep", ownEntryChecksum: 1)])
+		let zed = Self.moduleInfoFile(named: "Zed")
 		let resolved = try await ModuleReferenceResolver(transitiveModuleInfoListPath: modulesBeneathCSV).resolvingReferences(in: [
 			(Self.fileReferringToDeep, "/App.safedi"),
-			(Self.moduleInfoFile(named: "Zed"), "/Zed.safedi"),
+			(zed, "/Zed.safedi"),
 		])
-		#expect(resolved.map(\.path) == ["/App.safedi", "/Zed.safedi"])
-		#expect(resolved[0].file.view.references.isEmpty)
-		#expect(resolved[0].file.view.declarations.map(\.moduleName) == ["Deep"])
-		#expect(resolved[1].file.moduleName == "Zed")
-		#expect(resolved[1].file.view.references.isEmpty)
-		#expect(resolved[1].file.view.declarations.isEmpty)
+		#expect(resolved.entries(of: Self.fileReferringToDeep.view).map(\.entry.moduleName) == ["Deep"])
+		#expect(resolved.entries(of: Self.fileReferringToDeep.view).map(\.checksum) == [1])
+		#expect(resolved.entries(of: zed.view).isEmpty)
 	}
 
 	@Test
@@ -707,7 +705,7 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 			view: ModuleInfoView(moduleGraph: [], declarations: [], references: [ViewedModuleReference(moduleName: "Other", checksum: 2)]),
 		)
 		let resolved = try await resolver.resolvingReferences(in: [(fileReferringToOther, "/Middle.safedi")])
-		#expect(resolved.map { $0.file.view.declarations.map(\.moduleName) } == [["Other"]])
+		#expect(resolved.entries(of: fileReferringToOther.view).map(\.entry.moduleName) == ["Other"])
 		#expect(await resolver.headReadPaths == headReadPathsAfterFirstCall)
 		#expect(headReadPathsAfterFirstCall.count == 2)
 	}

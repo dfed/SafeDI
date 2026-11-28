@@ -28,10 +28,10 @@ enum PlaceReadsChecks {
 	/// Runs `operation` while comparing each place's reads with its declaration's planned labels, handing each to
 	/// `enclosingObserver` too, and records an issue for each place that read a label the plan does not hold.
 	static func comparing<Result>(
-		handingOn enclosingObserver: (@Sendable (_ type: String, _ property: String, _ labelsRead: [String], _ labelsPlanned: [String]) -> Void)?,
+		handingOn enclosingObserver: TaskLocalFunction<@Sendable (_ type: String, _ property: String, _ labelsRead: [String], _ labelsPlanned: [String]) -> Void>?,
 		_ operation: () async throws -> Result,
 	) async throws -> Result {
-		try await PlaceReadsObservation.$observer.withValue({ type, property, labelsRead, labelsPlanned in
+		try await PlaceReadsObservation.$observer.withValue(TaskLocalFunction { type, property, labelsRead, labelsPlanned in
 			let unplannedLabels = labelsRead.filter { !labelsPlanned.contains($0) }
 			if !unplannedLabels.isEmpty {
 				Issue.record(Comment(rawValue: """

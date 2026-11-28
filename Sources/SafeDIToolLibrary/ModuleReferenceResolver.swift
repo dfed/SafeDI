@@ -20,7 +20,7 @@
 
 import Foundation
 
-/// Replaces the references a view holds with the entries they refer to, each read from its module's own file: a file the
+/// Resolves the references views hold to the entries they refer to, each read once from its module's own file: a file the
 /// run was given, or else one `--transitive-module-info-file-path` lists. The first time a reference names a module the
 /// given files do not describe, the resolver reads the first fields of every listed file (`ModuleInfoFile.Head`) to learn
 /// which module each describes, and then reads whole, without its view, only each file a reference resolves to.
@@ -37,15 +37,16 @@ actor ModuleReferenceResolver {
 	/// list spells it. Its module name is all the run took from such a file.
 	private(set) var headReadPaths = Set<String>()
 
-	/// `files` with every reference in their views replaced by the entry it refers to.
+	/// The entry each reference in the views of `files` resolves to, with those of the resolver's earlier calls: each
+	/// module's once, outside any file's view, so that a module many views refer to is held, and compared, once.
 	/// - Throws: `UnresolvableModuleReferenceError` when no file describes a referenced module, and
 	///   `ModuleInfoDisagreementError` when the file that does describes it differently from the reference.
-	func resolvingReferences(in files: [(file: ModuleInfoFile, path: String)]) async throws -> [(file: ModuleInfoFile, path: String)] {
+	func resolvingReferences(in files: [(file: ModuleInfoFile, path: String)]) async throws -> ResolvedModuleReferences {
 		guard files.contains(where: { !$0.file.view.references.isEmpty }) else {
-			return files
+			return ResolvedModuleReferences(entriesByModuleName: ownEntries)
 		}
 		for (file, path) in files where ownEntries[file.moduleName] == nil {
-			ownEntries[file.moduleName] = OwnEntry(file: file, path: path)
+			ownEntries[file.moduleName] = ResolvedModuleReferences.OwnEntry(file: file, path: path)
 		}
 		var referringPathsByUnresolvedName = [String: [String]]()
 		for (file, path) in files {
@@ -71,7 +72,7 @@ actor ModuleReferenceResolver {
 			for (listedPath, (file, path)) in try await zip(pathsToRead, Generate.loadSafeDIModuleInfo(at: pathsToRead, readingViews: false)) {
 				openedPaths.insert(listedPath)
 				if ownEntries[file.moduleName] == nil {
-					ownEntries[file.moduleName] = OwnEntry(file: file, path: path)
+					ownEntries[file.moduleName] = ResolvedModuleReferences.OwnEntry(file: file, path: path)
 				}
 			}
 		}
@@ -81,42 +82,22 @@ actor ModuleReferenceResolver {
 		{
 			throw UnresolvableModuleReferenceError(moduleName: moduleName, referringFilePaths: Set(referringPaths).sorted())
 		}
-		return try files.map { file, path in
-			guard !file.view.references.isEmpty else {
-				return (file, path)
-			}
-			var declarations = file.view.declarations
+		for (file, path) in files {
 			for reference in file.view.references {
 				// safedi-source-rule: allow forceUnwrap — every reference's module was resolved above, or the run threw.
 				let ownEntry = ownEntries[reference.moduleName]!
 				guard ownEntry.checksum == reference.checksum else {
 					throw ModuleInfoDisagreementError(moduleName: reference.moduleName, filePaths: [path, ownEntry.path])
 				}
-				declarations.append(ownEntry.entry)
 			}
-			return (
-				file.replacingView(with: ModuleInfoView(moduleGraph: file.view.moduleGraph, declarations: declarations)),
-				path,
-			)
 		}
+		return ResolvedModuleReferences(entriesByModuleName: ownEntries)
 	}
 
 	// MARK: Private
 
-	private struct OwnEntry {
-		init(file: ModuleInfoFile, path: String) {
-			entry = file.ownEntry
-			checksum = file.ownEntryChecksum ?? entry.checksum
-			self.path = path
-		}
-
-		let entry: ViewedModule
-		let checksum: UInt64
-		let path: String
-	}
-
 	private let transitiveModuleInfoListPath: String?
-	private var ownEntries = [String: OwnEntry]()
+	private var ownEntries = [String: ResolvedModuleReferences.OwnEntry]()
 	private var cachedTransitiveHeadsByModuleName: [String: [(path: String, ownEntryChecksum: UInt64?)]]?
 
 	/// The read of the head of the transitive list's file at `index`. A struct, never a tuple
@@ -161,4 +142,37 @@ actor ModuleReferenceResolver {
 		cachedTransitiveHeadsByModuleName = headsByModuleName
 		return headsByModuleName
 	}
+}
+
+/// The entries the references of a run's views resolve to, each module's read once from its own file, by module name.
+/// Holds those entries, which the run's given files hold too, for as long as the run reads the views.
+struct ResolvedModuleReferences: Sendable {
+	/// A module's entry as its own file holds it, with the checksum of its bytes, which a reference to it holds.
+	struct OwnEntry: Sendable {
+		init(file: ModuleInfoFile, path: String) {
+			entry = file.ownEntry
+			checksum = file.ownEntryChecksum ?? entry.checksum
+			self.path = path
+		}
+
+		let entry: ViewedModule
+		let checksum: UInt64
+		let path: String
+	}
+
+	let entriesByModuleName: [String: OwnEntry]
+
+	/// The declarations `view` carries: its copies, then the entry each of its references resolves to, each with the
+	/// checksum it is known by, which a copy is not.
+	func entries(of view: ModuleInfoView) -> [ViewedModuleEntry] {
+		view.declarations.map { ViewedModuleEntry(entry: $0, checksum: nil) }
+			+ view.references.compactMap { entriesByModuleName[$0.moduleName].map { ViewedModuleEntry(entry: $0.entry, checksum: $0.checksum) } }
+	}
+}
+
+/// A module's declarations as a view carries them, with the checksum of their bytes (`ViewedModule.checksum`) when it is
+/// known without encoding them: a reference's, or a file's stored checksum of its own entry.
+struct ViewedModuleEntry: Sendable {
+	let entry: ViewedModule
+	let checksum: UInt64?
 }

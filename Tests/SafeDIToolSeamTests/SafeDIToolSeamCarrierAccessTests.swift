@@ -75,10 +75,6 @@ struct SafeDIToolSeamCarrierAccessTests: ~Copyable {
 		        public init(screenBuilder: __safeDI_ApiCarrier_Screen<__safeDI_Built>) {
 		            self.screenBuilder = screenBuilder
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(screenBuilder: .init(__safeDI_noScope: __safeDI_builder))
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -88,10 +84,6 @@ struct SafeDIToolSeamCarrierAccessTests: ~Copyable {
 		        public init(detailBuilder: @escaping (__safeDI_ScreenValues2) -> __safeDI_ApiCarrier_Detail<__safeDI_Built>) {
 		            self.detailBuilder = detailBuilder
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(detailBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -100,10 +92,6 @@ struct SafeDIToolSeamCarrierAccessTests: ~Copyable {
 
 		        public init(api: @escaping () -> __safeDI_Built) {
 		            self.api = api
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(api: { __safeDI_builder() })
 		        }
 		    }
 

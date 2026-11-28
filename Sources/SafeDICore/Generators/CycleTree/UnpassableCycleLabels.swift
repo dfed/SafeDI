@@ -24,12 +24,12 @@
 public enum UnpassableCycleLabelObservation {
 	/// Called for each production root with the root's type, whether the detector keeps it on today's tree, and whether
 	/// today's tree reports a label no one parameter can pass.
-	@TaskLocal public static var observer: (@Sendable (_ root: String, _ detectorFires: Bool, _ todaysTreeReports: Bool) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (_ root: String, _ detectorFires: Bool, _ todaysTreeReports: Bool) -> Void>?
 	/// Called for each production root with the root's type, the labels the per-type facts find no one parameter can
 	/// pass (`TypeFactsGraph.cycleFunctionParameters()`) and those today's tree reports, each as `<built type>.<label>`,
 	/// sorted; then the parameters of each function a lazy cycle closes on as the facts find them and as today's tree
 	/// declares them, one line per place that takes one, sorted. Called for each mock root too.
-	@TaskLocal public static var factsObserver: (@Sendable (_ root: String, _ factsLabels: [String], _ todaysTreeLabels: [String], _ factsParameterLines: [String], _ todaysTreeParameterLines: [String]) -> Void)?
+	@TaskLocal public static var factsObserver: TaskLocalFunction<@Sendable (_ root: String, _ factsLabels: [String], _ todaysTreeLabels: [String], _ factsParameterLines: [String], _ todaysTreeParameterLines: [String]) -> Void>?
 }
 
 extension TypeFactsGraph {

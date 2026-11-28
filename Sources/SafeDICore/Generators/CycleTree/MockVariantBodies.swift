@@ -23,11 +23,11 @@
 public enum MockVariantBodyObservation {
 	/// Called, for each place of a mock root's tree that reaches a cycle, with the mocked type, what the place is, and
 	/// the receives today's place and its body pass `nil`, each sorted.
-	@TaskLocal public static var observer: (@Sendable (_ mockRoot: String, _ place: String, _ todaysUnavailableProperties: [String], _ bodysUnavailableProperties: [String]) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (_ mockRoot: String, _ place: String, _ todaysUnavailableProperties: [String], _ bodysUnavailableProperties: [String]) -> Void>?
 	/// Called, for each mock root that reaches a cycle, with the mocked type, each body of a type on a cycle the plan
 	/// builds, in the order the plan first calls it, and the bodies today's places of such types take that the plan does
 	/// not build.
-	@TaskLocal public static var planObserver: (@Sendable (_ mockRoot: String, _ bodiesOfPlan: [String], _ todaysBodiesPlanLacks: [String]) -> Void)?
+	@TaskLocal public static var planObserver: TaskLocalFunction<@Sendable (_ mockRoot: String, _ bodiesOfPlan: [String], _ todaysBodiesPlanLacks: [String]) -> Void>?
 }
 
 extension DependencyTreeGenerator {

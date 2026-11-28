@@ -128,6 +128,16 @@ public struct GenerationWork: Sendable {
 		/// edge the one walk of the world's graph visits, each key a call adds or resolves, and each key a summary hands its
 		/// parent. A node stands for every place of its declaration, so the declarations and the keys count, not the paths.
 		case foldingFillSendability
+		/// Resolving what the module that declares a public mock sees (`SeamResolution.ForeignPublicMock.visibleDeclarations`),
+		/// which reads every declaration of that module and of each module it depends on directly: each resolution counts
+		/// one. A walk of the places built inline resolved it again at each scope beneath the public mock, so a mock root
+		/// beneath another module's public mock spent seconds where every other root spent milliseconds; each walk resolves
+		/// each module once.
+		case resolvingWhatAPublicMocksModuleSees
+		/// Finding the facts producers still owe each declaration of a world (`TypeFactsGraph.owedFactsByNode`): each
+		/// declaration, each edge, and each declaration a walk down from the fills reaches, once per world. Asked of each
+		/// declaration with a walk up its parents, a chain of n declarations walked n² parents.
+		case findingOwedFacts
 	}
 
 	/// The step that did the work.
@@ -136,7 +146,7 @@ public struct GenerationWork: Sendable {
 	public let elementCount: Int
 
 	/// Called with the work of a counted step each time the step runs, when set: by the tests, never by the tool.
-	@TaskLocal public static var observer: (@Sendable (GenerationWork) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (GenerationWork) -> Void>?
 
 	/// Hands `observer`, when set, the work `step` did, when `step` is not `nil`.
 	static func record(_ elementCount: Int, by step: Step?) {

@@ -195,10 +195,6 @@ struct SafeDIToolTypeFactsFamilyTests: ~Copyable {
 		        public init(plainBuilder: __safeDI_ApiCarrier_Plain<__safeDI_Built>) {
 		            self.plainBuilder = plainBuilder
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(plainBuilder: .init(__safeDI_noScope: __safeDI_builder))
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -207,10 +203,6 @@ struct SafeDIToolTypeFactsFamilyTests: ~Copyable {
 
 		        public init(leaf: __safeDI_ApiCarrier_Leaf<__safeDI_Built>) {
 		            self.leaf = leaf
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(leaf: .init(__safeDI_noScope: __safeDI_builder))
 		        }
 		    }
 
@@ -221,10 +213,6 @@ struct SafeDIToolTypeFactsFamilyTests: ~Copyable {
 		        public init(leaf: __safeDI_ApiCarrier_Leaf<__safeDI_Built>) {
 		            self.leaf = leaf
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(leaf: .init(__safeDI_noScope: __safeDI_builder))
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -234,10 +222,6 @@ struct SafeDIToolTypeFactsFamilyTests: ~Copyable {
 		        public init(api: @escaping (Clock) -> __safeDI_Built) {
 		            self.api = api
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(api: { _ in __safeDI_builder() })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -246,10 +230,6 @@ struct SafeDIToolTypeFactsFamilyTests: ~Copyable {
 
 		        public init(sharedBuilder: @escaping @Sendable () -> __safeDI_ApiCarrier_Shared<__safeDI_Built>) {
 		            self.sharedBuilder = sharedBuilder
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		            self.init(sharedBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
 		    }
 
@@ -365,7 +345,7 @@ struct SafeDIToolTypeFactsFamilyTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private func typeFactsReport(ofRoot root: String, forMockGeneration: Bool, _ run: (inout [URL]) async throws -> Void) async throws -> TypeFactsReport {
 		let (stream, continuation) = AsyncStream.makeStream(of: TypeFactsReport.self)
-		try await ConstructionMemoOracle.$observer.withValue({ _, _, report in continuation.yield(report) }) {
+		try await ConstructionMemoOracle.$observer.withValue(TaskLocalFunction { _, _, report in continuation.yield(report) }) {
 			var filesToDelete = [URL]()
 			defer {
 				for file in filesToDelete {

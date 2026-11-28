@@ -48,7 +48,7 @@ struct SafeDIToolLabelsReadFromAboveTests: ~Copyable {
 		// `y`, enters the cycle at `B`: a walk from there finishes `A` while `B` is still in progress. `One` declares `y`
 		// above `A` and `Two` does not, so `Two`'s tree reads `y` from above it, where nothing declares it.
 		let (stream, continuation) = AsyncStream.makeStream(of: Answer.self)
-		await LabelsReadFromAboveObservation.$observer.withValue({ type, _, byComponent, byPasses in
+		await LabelsReadFromAboveObservation.$observer.withValue(TaskLocalFunction { type, _, byComponent, byPasses in
 			continuation.yield(Answer(type: type, byComponent: byComponent, byPasses: byPasses))
 		}) {
 			// Whether the tree is rejected is the validation walk's subject, not this test's: it reads what the walk asked.

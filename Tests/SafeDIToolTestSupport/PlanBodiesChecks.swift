@@ -27,10 +27,10 @@ enum PlanBodiesChecks {
 	/// Runs `operation` while comparing the two, handing each comparison to `enclosingObserver` too, and records an issue
 	/// for each root one of whose places today takes a body the plan does not build.
 	static func comparing<Result>(
-		handingOn enclosingObserver: (@Sendable (_ root: String, _ bodiesOfPlan: [String], _ todaysBodiesPlanLacks: [String], _ twinValues: [String]) -> Void)?,
+		handingOn enclosingObserver: TaskLocalFunction<@Sendable (_ root: String, _ bodiesOfPlan: [String], _ todaysBodiesPlanLacks: [String], _ twinValues: [String]) -> Void>?,
 		_ operation: () async throws -> Result,
 	) async throws -> Result {
-		try await PlanBodiesObservation.$observer.withValue({ root, bodiesOfPlan, todaysBodiesPlanLacks, twinValues in
+		try await PlanBodiesObservation.$observer.withValue(TaskLocalFunction { root, bodiesOfPlan, todaysBodiesPlanLacks, twinValues in
 			if !todaysBodiesPlanLacks.isEmpty {
 				Issue.record(Comment(rawValue: """
 				The plan of \(root) builds no body that places of today's tree take:

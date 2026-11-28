@@ -97,7 +97,7 @@ struct SafeDIToolSeamFillSendabilityFactsTests: ~Copyable {
 			app.append(seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let seam0: Seam0"]))
 			let modules = SafeDIToolSeamBuilderParameterTests.modules(feature: core, app: app)
 			let (stream, continuation) = AsyncStream.makeStream(of: GenerationWork.self)
-			try await GenerationWork.$observer.withValue({ continuation.yield($0) }) {
+			try await GenerationWork.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 				_ = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: depth == 8 ? .recordingIssues : .skipped, filesToDelete: &filesToDelete)
 			}
 			continuation.finish()
@@ -135,7 +135,7 @@ struct SafeDIToolSeamFillSendabilityFactsTests: ~Copyable {
 			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let host: Host"])].map { "import Feature\nimport Middle\n\n" + $0 }, dependencies: ["Feature", "Middle"]),
 		]
 		let (stream, continuation) = AsyncStream.makeStream(of: TypeFactsReport.self)
-		_ = try await ConstructionMemoOracle.$observer.withValue({ _, _, report in continuation.yield(report) }) {
+		_ = try await ConstructionMemoOracle.$observer.withValue(TaskLocalFunction { _, _, report in continuation.yield(report) }) {
 			try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		}
 		continuation.finish()

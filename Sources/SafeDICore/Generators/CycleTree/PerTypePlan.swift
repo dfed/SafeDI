@@ -145,8 +145,8 @@ struct PerTypePlan: Sendable {
 /// What the tests read of each tree's plan: set by the tests, never by the tool.
 public enum PerTypePlanObservation {
 	/// Called with the plan of each tree a root builds that reaches a cycle, as text (`PerTypePlan.projection`).
-	@TaskLocal public static var observer: (@Sendable (_ projection: String) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (_ projection: String) -> Void>?
 	/// Handed the projection of the bodies each plan's declarations are built as (`PlanVariants.projection`), after
 	/// `observer` is handed the plan's own, where both are set.
-	@TaskLocal public static var variantsObserver: (@Sendable (_ projection: String) -> Void)?
+	@TaskLocal public static var variantsObserver: TaskLocalFunction<@Sendable (_ projection: String) -> Void>?
 }

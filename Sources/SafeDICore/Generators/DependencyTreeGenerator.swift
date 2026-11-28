@@ -1212,7 +1212,7 @@ public actor DependencyTreeGenerator {
 				)
 			}
 			if let observer = UnpassableCycleLabelObservation.factsObserver, let todaysTree {
-				TypeFactsGraph(root: constructionScope, forMockGeneration: false).compareCycleFunctionParameters(of: typeDescription.asSource, with: todaysTree, observer: observer)
+				TypeFactsGraph(root: constructionScope, forMockGeneration: false).compareCycleFunctionParameters(of: typeDescription.asSource, with: todaysTree, observer: observer.function)
 			}
 		}
 		return roots

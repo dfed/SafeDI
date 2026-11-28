@@ -107,7 +107,7 @@ struct SafeDIToolSeamTreeReuseTests: ~Copyable {
 		let (stream, continuation) = AsyncStream.makeStream(of: ReusedSeamTree.self)
 		var filesToDelete = filesToDelete
 		defer { self.filesToDelete = filesToDelete }
-		_ = try await SeamTreeReuseObservation.$comparesBuiltTrees.withValue({ continuation.yield($0) }) {
+		_ = try await SeamTreeReuseObservation.$comparesBuiltTrees.withValue(TaskLocalFunction { continuation.yield($0) }) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
 					"""
@@ -180,7 +180,7 @@ struct SafeDIToolSeamTreeReuseTests: ~Copyable {
 		let (stream, continuation) = AsyncStream.makeStream(of: ReusedSeamTree.self)
 		var filesToDelete = filesToDelete
 		defer { self.filesToDelete = filesToDelete }
-		_ = try await SeamTreeReuseObservation.$comparesBuiltTrees.withValue({ continuation.yield($0) }) {
+		_ = try await SeamTreeReuseObservation.$comparesBuiltTrees.withValue(TaskLocalFunction { continuation.yield($0) }) {
 			try await executeSafeDIToolMultiModuleTest(modules: SafeDIToolSeamBuilderParameterTests.modules(feature: feature, app: app), integration: .moduleInfo, filesToDelete: &filesToDelete)
 		}
 		continuation.finish()

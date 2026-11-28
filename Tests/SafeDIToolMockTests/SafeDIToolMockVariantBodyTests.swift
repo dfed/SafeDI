@@ -393,7 +393,7 @@ struct SafeDIToolMockVariantBodyTests: ~Copyable {
 		let (stream, continuation) = AsyncStream.makeStream(of: Bodies.self)
 		// A test that observes a comparison compares every root; one that asks compares as the checks every test runs do.
 		try await RootTreeChoiceObservation.$comparesOnlyRootsThePlanAdmits.withValue(comparingOnlyRootsThePlanAdmits) {
-			try await MockVariantBodyObservation.$observer.withValue({ _, place, todaysUnavailableProperties, bodysUnavailableProperties in
+			try await MockVariantBodyObservation.$observer.withValue(TaskLocalFunction { _, place, todaysUnavailableProperties, bodysUnavailableProperties in
 				continuation.yield(Bodies(place: place, todaysUnavailableProperties: todaysUnavailableProperties, bodysUnavailableProperties: bodysUnavailableProperties))
 			}) {
 				_ = try await executeSafeDIToolTest(
