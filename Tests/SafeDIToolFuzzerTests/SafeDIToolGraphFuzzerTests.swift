@@ -4678,7 +4678,7 @@ struct SafeDIToolGraphFuzzerTests {
 	private static func toolRunsLayingOutMockRoots(of fixture: GraphFuzzerFixture) async throws -> (toolRuns: GraphFuzzerToolRuns, mockRootReports: [NodeRecordsReport]) {
 		let (stream, continuation) = AsyncStream.makeStream(of: NodeRecordsReport.self)
 		let toolRuns = try await NodeRecordsObservation.$laysOutMockRoots.withValue(true) {
-			try await NodeRecordsObservation.$observer.withValue({ continuation.yield($0) }) {
+			try await NodeRecordsObservation.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 				try await GraphFuzzerOracle.toolRuns(of: fixture, multiModuleRenamings: [])
 			}
 		}

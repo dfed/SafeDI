@@ -98,7 +98,7 @@ struct MockRootTreeChecks: Sendable {
 /// must find nothing in the tree, on every test graph. The tree is checked for what the scopes left out only where it is
 /// set.
 public enum MockRootTreeChecksObservation {
-	@TaskLocal public static var comparesTree: (@Sendable (MockRootTreeChecksComparison) -> Void)?
+	@TaskLocal public static var comparesTree: TaskLocalFunction<@Sendable (MockRootTreeChecksComparison) -> Void>?
 }
 
 /// One mock root's tree checks, as its scopes answered them and as its tree does.

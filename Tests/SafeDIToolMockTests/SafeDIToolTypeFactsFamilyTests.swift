@@ -365,7 +365,7 @@ struct SafeDIToolTypeFactsFamilyTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private func typeFactsReport(ofRoot root: String, forMockGeneration: Bool, _ run: (inout [URL]) async throws -> Void) async throws -> TypeFactsReport {
 		let (stream, continuation) = AsyncStream.makeStream(of: TypeFactsReport.self)
-		try await ConstructionMemoOracle.$observer.withValue({ _, _, report in continuation.yield(report) }) {
+		try await ConstructionMemoOracle.$observer.withValue(TaskLocalFunction { _, _, report in continuation.yield(report) }) {
 			var filesToDelete = [URL]()
 			defer {
 				for file in filesToDelete {

@@ -27,12 +27,12 @@ import Testing
 enum MockRootTreeChecksOracle {
 	/// Runs `operation` while comparing the tree checks of every mock root it makes, handing each comparison to
 	/// `enclosingObserver` too, and records an issue for each check the scopes left out that finds something in the tree.
-	static func comparing<Result>(handingOn enclosingObserver: (@Sendable (MockRootTreeChecksComparison) -> Void)?, _ operation: () async throws -> Result) async throws -> Result {
+	static func comparing<Result>(handingOn enclosingObserver: TaskLocalFunction<@Sendable (MockRootTreeChecksComparison) -> Void>?, _ operation: () async throws -> Result) async throws -> Result {
 		let (comparisons, continuation) = AsyncStream.makeStream(of: MockRootTreeChecksComparison.self)
 		// A run that throws is compared too: the comparisons are made before any mock root's tree is validated.
 		let result: Swift.Result<Result, any Error>
 		do {
-			result = try await .success(MockRootTreeChecksObservation.$comparesTree.withValue({ comparison in
+			result = try await .success(MockRootTreeChecksObservation.$comparesTree.withValue(TaskLocalFunction { comparison in
 				continuation.yield(comparison)
 				enclosingObserver?(comparison)
 			}) {

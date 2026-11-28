@@ -216,7 +216,7 @@ extension DependencyTreeGenerator {
 			mockRoots.filter { treeChecksByMockedType[$0.instantiable.concreteInstantiable]?.needsTree(check) ?? true }
 		}
 		if let observer = MockRootTreeChecksObservation.comparesTree {
-			await Self.compareTreeChecks(of: mockRoots, treeChecksByMockedType: treeChecksByMockedType, handingTo: observer)
+			await Self.compareTreeChecks(of: mockRoots, treeChecksByMockedType: treeChecksByMockedType, handingTo: observer.function)
 		}
 		try Self.validateFills(
 			inTreesRootedAt: mockRootsNeedingTree(for: .fills).map(\.scopeGenerator),

@@ -77,7 +77,7 @@ struct SafeDIToolCodeTaskTests: ~Copyable {
 		// path: each body's tree is counted as a root's tree is.
 		let (stream, continuation) = AsyncStream.makeStream(of: Int.self)
 		_ = try await RootTreeChoiceObservation.$scopeGeneratorLimitOverride.withValue(0) {
-			try await HeldCodeTasks.$observer.withValue({ continuation.yield($0) }) {
+			try await HeldCodeTasks.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 				try await executeSafeDIToolTest(
 					swiftFileContent: [
 						"""

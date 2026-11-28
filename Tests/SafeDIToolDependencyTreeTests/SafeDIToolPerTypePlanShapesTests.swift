@@ -2995,7 +2995,7 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 	) async throws -> (choices: [String: RootTreeChoiceObservation.PerPathReason?], files: [String: String]) {
 		let (stream, continuation) = AsyncStream.makeStream(of: (String, RootTreeChoiceObservation.PerPathReason?).self)
 		let output = try await RootTreeChoiceObservation.$scopeGeneratorLimitOverride.withValue(0) {
-			try await RootTreeChoiceObservation.$observer.withValue({ root, perPathReason in
+			try await RootTreeChoiceObservation.$observer.withValue(TaskLocalFunction { root, perPathReason in
 				continuation.yield((root, perPathReason))
 			}) {
 				try await executeSafeDIToolTest(

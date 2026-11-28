@@ -129,7 +129,7 @@ struct SafeDIToolMockRootTreeChecksTests: ~Copyable {
 	/// The checks each mock root's scopes say need its tree, by mocked type, of a run over `swiftFileContent`.
 	private mutating func needingTreeByRoot(of swiftFileContent: [String]) async throws -> [String: Set<MockRootTreeCheck>] {
 		let (comparisons, continuation) = AsyncStream.makeStream(of: MockRootTreeChecksComparison.self)
-		_ = try await MockRootTreeChecksObservation.$comparesTree.withValue({ continuation.yield($0) }) {
+		_ = try await MockRootTreeChecksObservation.$comparesTree.withValue(TaskLocalFunction { continuation.yield($0) }) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: swiftFileContent,
 				buildSwiftOutputDirectory: true,

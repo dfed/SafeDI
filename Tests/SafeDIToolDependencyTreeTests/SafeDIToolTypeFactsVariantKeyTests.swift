@@ -1479,7 +1479,7 @@ struct SafeDIToolTypeFactsVariantKeyTests: ~Copyable {
 	private func rootReportAndNodeRecordRefusals(of types: [String], root: String = "Root") async throws -> (TypeFactsReport, [String?]) {
 		let (stream, continuation) = AsyncStream.makeStream(of: NodeRecordsReport.self)
 		let report = try await NodeRecordsObservation.$laysOutRoots.withValue(true) {
-			try await NodeRecordsObservation.$observer.withValue({ continuation.yield($0) }) {
+			try await NodeRecordsObservation.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 				try await rootReport(of: types, root: root)
 			}
 		}

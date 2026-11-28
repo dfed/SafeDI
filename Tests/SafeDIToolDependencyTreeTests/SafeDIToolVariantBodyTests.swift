@@ -370,7 +370,7 @@ struct SafeDIToolVariantBodyTests: ~Copyable {
 		// The root reaches `Flow` before `Detail`, which builds `Flow` again beneath a forwarded `mark`: the plan walks the
 		// path through `Detail` too, so `Screen`'s cycle gets a body that reads `Detail`'s `mark` beside the one that reads `nil`.
 		let (stream, continuation) = AsyncStream.makeStream(of: Plan.self)
-		try await PlanBodiesObservation.$observer.withValue({ root, bodiesOfPlan, todaysBodiesPlanLacks, twinValues in
+		try await PlanBodiesObservation.$observer.withValue(TaskLocalFunction { root, bodiesOfPlan, todaysBodiesPlanLacks, twinValues in
 			continuation.yield(Plan(root: root, bodiesOfPlan: bodiesOfPlan, todaysBodiesPlanLacks: todaysBodiesPlanLacks, twinValues: twinValues))
 		}) {
 			_ = try await executeSafeDIToolTest(
