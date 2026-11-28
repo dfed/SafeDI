@@ -90,8 +90,9 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_buildsNoTree_whenRootHasNoDependencies() async throws {
-		// A root with no dependencies is laid out from its records, which hold no place, and builds no tree.
+	mutating func generate_buildsNoTree_whenRootBuildsNothing() async throws {
+		// A root with no dependencies has no generated initializer: its node records lay it out as nothing, as its tree
+		// would write it, so nothing forces its tree.
 		let (forcers, _) = try await treeForcers(of: [
 			"""
 			@Instantiable(isRoot: true)

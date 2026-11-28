@@ -265,6 +265,9 @@ protocol TypeFactsWorld {
 	var variantCount: Int { get }
 	func declaration(of variant: VariantID) -> DeclarationID
 	func family(of variant: VariantID) -> VariantFamily
+	/// Whether a call builds the variant's body inside a `@Sendable` function, folded over every call into it, so that its
+	/// function is `@Sendable` once any call needs it (`TypeFactsGraph.sendableMarks(of:graph:edgeOpens:)`). Not on the key.
+	func buildsInSendableFunction(_ variant: VariantID) -> Bool
 	/// The key every call into the variant shares, one per read of `reads(of:)` of its declaration, in that order: an
 	/// answer ID with what a parameter carries left out. A call's own answers are `sources(ofCall:of:)`.
 	func keys(of variant: VariantID) -> ArraySlice<AnswerID>
@@ -438,6 +441,10 @@ extension TypeFactsGraph: TypeFactsWorld {
 
 	func family(of variant: VariantID) -> VariantFamily {
 		variants.family(of: Int(variant))
+	}
+
+	func buildsInSendableFunction(_ variant: VariantID) -> Bool {
+		variantBuildsInSendableFunction[Int(variant)]
 	}
 
 	func keys(of variant: VariantID) -> ArraySlice<AnswerID> {
