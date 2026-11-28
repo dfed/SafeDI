@@ -2975,6 +2975,7 @@ enum GraphFuzzerGenerator {
 			optionalPlaceRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.optionalPlaceRandomSeedMask)
 			nestedCycleRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.nestedCycleRandomSeedMask)
 			renamedLazyReaderRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.renamedLazyReaderRandomSeedMask)
+			renameSplitRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.renameSplitRandomSeedMask)
 			seamDependencyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ GraphFuzzerSeamDependencyDraw.seamRandomSeedMask)
 			prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
 			// One draw decides, so graphs that are not mixed draw exactly what they drew before mixed graphs existed.
@@ -3062,6 +3063,8 @@ enum GraphFuzzerGenerator {
 			finalDeclarations = addingTypeBuiltAgainThroughSecondLazyCycle(to: finalDeclarations)
 			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
 			finalDeclarations = addingReadersOfRenamedLazyInstance(to: finalDeclarations)
+			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
+			finalDeclarations = addingRenameFulfilledByValueAndWrapper(to: finalDeclarations)
 			// In a graph split across modules, every file names its module and imports the seam's, so that a type of the
 			// caller can name what the seam's module declares, such as the creation stamps' counter.
 			let isSplit = finalDeclarations.contains { $0.module == .seamModule }
@@ -3560,6 +3563,9 @@ enum GraphFuzzerGenerator {
 		/// Draws only `addingReadersOfRenamedLazyInstance`'s choices: whether a graph gains `RenamedLazyTop`'s tree, and
 		/// every shape of that tree.
 		private var renamedLazyReaderRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only `addingRenameFulfilledByValueAndWrapper`'s choices: whether a graph gains `RenameSplitRoot`'s tree, and
+		/// every shape of that tree.
+		private var renameSplitRandom: GraphFuzzerRandomNumberGenerator
 		/// The files `markerFreeFileRandom` moved a declaration into: each named, holding the declaration alone, and in the
 		/// module of the type, `ownerName`, whose file it was drawn in.
 		private var markerFreeFiles = [(ownerName: String, fileName: String, declaration: String)]()
@@ -8501,6 +8507,66 @@ enum GraphFuzzerGenerator {
 		}
 
 		private static let renamedLazyReaderRandomSeedMask: UInt64 = 0x52656E4C617A79
+
+		// MARK: A rename fulfilled by a value and by a wrapper
+
+		/// The base corpus's draw, in one graph of sixteen, of one type whose rename is fulfilled by a label one parent
+		/// declares as a value and another as a lazily instantiated wrapper of it. `RenameSplitRoot`, a root, instantiates
+		/// `RenameSplitLazyParent` and `RenameSplitValueParent`, in either order. The lazy parent declares
+		/// `renameSplitValue` as a `LazilyInstantiated<RenameSplitValue>` (or its `Sendable` kind in a `Sendable` graph) and
+		/// builds `RenameSplitReader` through an `Instantiator`, directly, or beneath `RenameSplitHolder`; the value parent
+		/// declares the label as a `RenameSplitValue` and builds the reader directly or beneath the holder. The reader
+		/// renames the label, `@Received(fulfilledByDependencyNamed: "renameSplitValue", ofType: RenameSplitValue.self)`, so
+		/// beneath the lazy parent its rename reads the wrapper's instance and beneath the value parent the value itself.
+		/// The two paths can share the reader's node records, whose key does not tell the forms apart, so a layout that
+		/// judged only the first path met wrote the value's spelling beneath the wrapper too, which does not compile.
+		/// `renameSplitRandom` draws only for this pass, after every other, and only in the base corpus.
+		private mutating func addingRenameFulfilledByValueAndWrapper(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			guard features.isEmpty, renameSplitRandom.percentChance(6) else { return declarations }
+			var declarations = declarations
+			let lazyParentComesFirst = renameSplitRandom.percentChance(50)
+			// 0: through an `Instantiator`; 1: directly; 2: beneath the holder.
+			let lazyPath = renameSplitRandom.integer(in: 0...2)
+			let valuePathUsesHolder = renameSplitRandom.percentChance(50)
+			let instantiator = sendability == .sendable ? "SendableInstantiator" : "Instantiator"
+			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
+			func append(_ name: String, isRoot: Bool = false, _ properties: [PropertyDeclaration]) {
+				declarations.append(TypeDeclaration(
+					name: name,
+					instantiableArguments: isRoot ? ["isRoot: true"] : [],
+					properties: properties,
+					declaresHelperTypes: false,
+					additionalConformances: conformances,
+				))
+			}
+			let valueName = "\(prefix)RenameSplitValue"
+			let readerName = "\(prefix)RenameSplitReader"
+			let holderName = "\(prefix)RenameSplitHolder"
+			let wrapped = "\(lazilyInstantiatedWrapper(isSendable: sendability == .sendable))<\(valueName)>"
+			let reader = PropertyDeclaration(attribute: "@Instantiated", label: "renameSplitReader", type: readerName)
+			let holder = PropertyDeclaration(attribute: "@Instantiated", label: "renameSplitHolder", type: holderName)
+			append(valueName, [])
+			append(readerName, [PropertyDeclaration(attribute: "@Received(fulfilledByDependencyNamed: \"renameSplitValue\", ofType: \(valueName).self)", label: "renameSplitRenamed", type: valueName)])
+			if lazyPath == 2 || valuePathUsesHolder {
+				append(holderName, [reader])
+			}
+			let lazyParentReach = switch lazyPath {
+			case 0:
+				PropertyDeclaration(attribute: "@Instantiated", label: "renameSplitReaderBuilder", type: "\(instantiator)<\(readerName)>")
+			case 1:
+				reader
+			default:
+				holder
+			}
+			append("\(prefix)RenameSplitLazyParent", [lazyParentReach, PropertyDeclaration(attribute: "@Instantiated", label: "renameSplitValue", type: wrapped)])
+			append("\(prefix)RenameSplitValueParent", [PropertyDeclaration(attribute: "@Instantiated", label: "renameSplitValue", type: valueName), valuePathUsesHolder ? holder : reader])
+			let lazyParent = PropertyDeclaration(attribute: "@Instantiated", label: "renameSplitLazyParent", type: "\(prefix)RenameSplitLazyParent")
+			let valueParent = PropertyDeclaration(attribute: "@Instantiated", label: "renameSplitValueParent", type: "\(prefix)RenameSplitValueParent")
+			append("\(prefix)RenameSplitRoot", isRoot: true, lazyParentComesFirst ? [lazyParent, valueParent] : [valueParent, lazyParent])
+			return declarations
+		}
+
+		private static let renameSplitRandomSeedMask: UInt64 = 0x52656E53706C6974
 
 		// MARK: Cycle parameters
 
@@ -17386,12 +17452,12 @@ enum GraphFuzzerOracle {
 		let (((firstOutcome, placeLevelDisagreements), placeFacts), rootFunctionKeyDisagreements) = try await collectingRootFunctionKeyDisagreements(during: {
 			try await collectingPlaceFacts(during: {
 				try await collectingPlaceLevelDisagreements(during: {
-					try await ValidationWalkObservation.$observer.withValue({ observation in
+					try await ValidationWalkObservation.$observer.withValue(TaskLocalFunction { observation in
 						if case .skippedCleanSubtree = observation {
 							skippedSubtreesContinuation.yield()
 						}
 					}) {
-						try await SeamFillSharing.$observer.withValue({ fillsOfCallsContinuation.yield($0) }) {
+						try await SeamFillSharing.$observer.withValue(TaskLocalFunction { fillsOfCallsContinuation.yield($0) }) {
 							try await toolOutcome(of: fixture)
 						}
 					}

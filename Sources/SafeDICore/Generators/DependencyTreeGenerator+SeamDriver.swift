@@ -506,15 +506,18 @@ extension DependencyTreeGenerator {
 				typeDescription: typeDescription,
 				instantiable: scope.instantiable,
 				sourceFilePath: typeDescriptionToFulfillingInstantiableMap[typeDescription]?.sourceFilePath,
-				fulfillers: TypeFactsImports(root: rootScope).fulfillers,
-				receivedValueSupplies: TypeFactsReceivedValueSupplies.whereRead(root: rootScope),
-				scopeGenerator: record.createScopeGenerator(
+				built: .tree(record.createScopeGenerator(
 					in: table,
 					lazilyInstantiatedInstanceProperties: [],
 					erasedToConcreteExistential: false,
 					declaredTypeNames: declaredTypeNames,
 					constructionMemo: &constructionMemo,
-				),
+				)),
+				fulfillers: TypeFactsImports(root: rootScope).fulfillers,
+				receivedValueSupplies: TypeFactsReceivedValueSupplies.whereRead(root: rootScope),
+				// A test compares the records of a seam world's production root with its tree's places, and no run lays it
+				// out from them until node records make a seam call (`NodeRecords`).
+				rootScope: RootScopeInfo.kept(rootScope),
 			))
 		}
 		for (seam, seamRoot, seamRootScope) in generatedSeams {
@@ -536,12 +539,14 @@ extension DependencyTreeGenerator {
 			let scopeGenerator: ScopeGenerator
 			let fulfillers: Set<FulfillerImports.Fulfiller>
 			let receivedValueSupplies: ReceivedValueSupplies?
+			let rootScope: ConstructionScope?
 			if let firstPassTree = firstPassTrees.removeValue(forKey: seam.concreteInstantiable) {
 				scopeGenerator = ScopeGenerator.reseating(treeRootedAt: firstPassTree.generator, of: seam.concreteInstantiable, seamRoot: seamRoot)
 				// The pass's tree holds no seam call or fill (`confirmingPassFindsNothingNew`), so every record it reaches is
 				// the base's, which the seam world's table holds too: its declarations are those of the tree built anew.
 				fulfillers = firstPassTree.fulfillers
 				receivedValueSupplies = firstPassTree.receivedValueSupplies
+				rootScope = firstPassTree.rootScope
 				if let observer = SeamTreeReuseObservation.comparesBuiltTrees {
 					let treeBuiltAnew = try builtTree().generator
 					observer(ReusedSeamTree(
@@ -555,14 +560,19 @@ extension DependencyTreeGenerator {
 				scopeGenerator = tree.generator
 				fulfillers = TypeFactsImports(root: tree.rootScope).fulfillers
 				receivedValueSupplies = TypeFactsReceivedValueSupplies.whereRead(root: tree.rootScope)
+				rootScope = RootScopeInfo.kept(tree.rootScope)
 			}
+			// A test compares the records of a seam's own tree with its tree's places, and no run lays the seam's
+			// initializers out from them: they are written around its tree's body (`ScopeGenerator.generateSeamRootCode`).
 			rootScopeGenerators.append(RootScopeInfo(
 				typeDescription: seam.concreteInstantiable,
 				instantiable: seam,
 				sourceFilePath: seam.sourceFilePath,
+				built: .tree(scopeGenerator),
 				fulfillers: fulfillers,
 				receivedValueSupplies: receivedValueSupplies,
-				scopeGenerator: scopeGenerator,
+				rootScope: rootScope,
+				ownSeamRoot: finalSeamRoot,
 			))
 		}
 		// The signature of each seam this module generates, sorted by seam, which its module info carries for the modules
@@ -1123,6 +1133,7 @@ extension DependencyTreeGenerator {
 								generator: generator,
 								fulfillers: TypeFactsImports(root: tree.rootScope).fulfillers,
 								receivedValueSupplies: TypeFactsReceivedValueSupplies.whereRead(root: tree.rootScope),
+								rootScope: RootScopeInfo.kept(tree.rootScope),
 							)
 						}
 					}
@@ -1654,27 +1665,7 @@ extension DependencyTreeGenerator {
 		seamRoot: ScopeGenerator.SeamRoot,
 		declaredTypeNames: DeclaredTypeNames,
 	) throws -> (generator: ScopeGenerator, rootScope: ConstructionScope) {
-		var nearestDeclarations = NearestDeclarations()
-		var lazilyInstantiatedInstanceProperties = Set<Property>()
-		let autoclosureCallByLabel = seamRoot.autoclosureCallByLabel(of: rootScope.instantiable)
-		for parameter in seamRoot.signature.parameters {
-			let property = parameter.property
-			// Each parameter is the nearest declaration of its label in the seam's tree. An optional one also stands for the
-			// non-optional form it is made from, which the tree reads as a value that may be `nil`. A non-optional wrapper
-			// parameter offers its instance, as a received wrapper does inline; an optional one offers nothing but itself.
-			var providedForms = CycleParameter.forms(providedBy: property)
-			providedForms.insert(property.asUnwrappedProperty)
-			nearestDeclarations.replace(property, providing: providedForms)
-			if let instanceProperty = property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding {
-				lazilyInstantiatedInstanceProperties.insert(instanceProperty)
-			}
-			// A deferred parameter is held in a `LazilyInstantiated` under its label, whose instance the tree reads wherever
-			// it reads the label, as it reads a received wrapper's instance – except one the seam's own alias of its label
-			// reads from the autoclosure (`SeamRoot.autoclosureCallByLabel`). The memo provides only the by-value forms.
-			if parameter.isDeferred, autoclosureCallByLabel[property.label] == nil {
-				lazilyInstantiatedInstanceProperties.insert(property.asUnwrappedProperty)
-			}
-		}
+		let (nearestDeclarations, lazilyInstantiatedInstanceProperties) = seamRootDeclarations(of: rootScope.instantiable, seamRoot: seamRoot)
 		// A seam's tree reads its own `SeamHoles`, constant within the tree but not across trees, so it keeps a memo of its
 		// own, for one pass: a seam without holes reuses its places within a pass, and one with holes stores none.
 		var constructionMemo = ConstructionMemo()
@@ -1693,6 +1684,33 @@ extension DependencyTreeGenerator {
 		)
 	}
 
+	/// What a seam's root is handed (`seamRootGenerator`): its parameters, as the nearest declarations of their labels, and
+	/// the instances of `LazilyInstantiated` properties among them, a deferred parameter's memo included.
+	static func seamRootDeclarations(of seam: Instantiable, seamRoot: ScopeGenerator.SeamRoot) -> (nearestDeclarations: NearestDeclarations, lazilyInstantiatedInstanceProperties: Set<Property>) {
+		var nearestDeclarations = NearestDeclarations()
+		var lazilyInstantiatedInstanceProperties = Set<Property>()
+		let autoclosureCallByLabel = seamRoot.autoclosureCallByLabel(of: seam)
+		for parameter in seamRoot.signature.parameters {
+			let property = parameter.property
+			// Each parameter is the nearest declaration of its label in the seam's tree. An optional one also stands for the
+			// non-optional form it is made from, which the tree reads as a value that may be `nil`. A non-optional wrapper
+			// parameter offers its instance, as a received wrapper does inline; an optional one offers nothing but itself.
+			var providedForms = CycleParameter.forms(providedBy: property)
+			providedForms.insert(property.asUnwrappedProperty)
+			nearestDeclarations.replace(property, providing: providedForms)
+			if let instanceProperty = property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding {
+				lazilyInstantiatedInstanceProperties.insert(instanceProperty)
+			}
+			// A deferred parameter is held in a `LazilyInstantiated` under its label, whose instance the tree reads wherever
+			// it reads the label, as it reads a received wrapper's instance – except one the seam's own alias of its label
+			// reads from the autoclosure (`SeamRoot.autoclosureCallByLabel`). The memo provides only the by-value forms.
+			if parameter.isDeferred, autoclosureCallByLabel[property.label] == nil {
+				lazilyInstantiatedInstanceProperties.insert(property.asUnwrappedProperty)
+			}
+		}
+		return (nearestDeclarations, lazilyInstantiatedInstanceProperties)
+	}
+
 	/// A seam's tree kept for emission, with the modules its file imports for the types it builds, read from the
 	/// declarations it was built from (`TypeFactsImports`) when it is kept, so that the table its root scope was frozen
 	/// into, a copy of the module's frozen map, is freed once the generator is built rather than held for every seam.
@@ -1702,6 +1720,9 @@ extension DependencyTreeGenerator {
 		/// The supplies of the tree, read where it is built, or `nil` where nothing reads them
 		/// (`TypeFactsReceivedValueSupplies.whereRead(root:)`).
 		let receivedValueSupplies: ReceivedValueSupplies?
+		/// The root scope the tree is built from, kept only where node records are made of it beside the tree
+		/// (`RootScopeInfo.kept(_:)`).
+		let rootScope: ConstructionScope?
 	}
 
 	/// Every receive in the tree `generator` roots, `seam`'s, that leaves the seam – each `@Received` dependency and
@@ -2562,12 +2583,12 @@ public enum SeamSignatureObservation {
 	/// Called, when set, for each seam whose first signature pass settled it without the pass that confirms it
 	/// (`DependencyTreeGenerator.confirmingPassFindsNothingNew`), after running that pass anyway as every second pass runs:
 	/// the two must find the same signature. The tool generates from the first pass's either way.
-	@TaskLocal public static var confirmsSkippedPasses: (@Sendable (SkippedConfirmingPass) -> Void)?
+	@TaskLocal public static var confirmsSkippedPasses: TaskLocalFunction<@Sendable (SkippedConfirmingPass) -> Void>?
 	/// When set, how many tasks settle one level of a module's seam components at once, in place of the processor
 	/// count, so that a test runs a level on one task or on several whatever machine runs it.
 	@TaskLocal public static var width: Int?
 	/// Called, when set, for each level of a module's seam components, in level order, with how many tasks settle it.
-	@TaskLocal public static var observesLevels: (@Sendable (SeamSignatureLevel) -> Void)?
+	@TaskLocal public static var observesLevels: TaskLocalFunction<@Sendable (SeamSignatureLevel) -> Void>?
 }
 
 /// One level of a module's seam components, as `seamSignatures` settles it.
@@ -2588,7 +2609,7 @@ public struct SeamSignatureLevel: Equatable, Sendable {
 public enum SeamTreeReuseObservation {
 	/// Called, when set, for each seam whose tree emission made again, with the code of that tree and of the tree built
 	/// anew as emission builds every other seam's: the two must be the same text.
-	@TaskLocal public static var comparesBuiltTrees: (@Sendable (ReusedSeamTree) -> Void)?
+	@TaskLocal public static var comparesBuiltTrees: TaskLocalFunction<@Sendable (ReusedSeamTree) -> Void>?
 }
 
 /// A seam whose tree emission made again from its first signature pass's, with the code of both trees.

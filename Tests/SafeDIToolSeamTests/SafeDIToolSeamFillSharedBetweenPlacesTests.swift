@@ -385,6 +385,39 @@ struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_unfoldsFillEdgesOfACall_whenItsFirstPlaceIsBeneathAFillOfItsOwnHole() async throws {
+		// `LiveGadget`'s `homeBuilder` is first drawn beneath the fill of `Home`'s `gadget`, where it passes that fill on and
+		// draws no edge, and then beneath the fill of `Office`'s, where it fills `gadget` itself: the declaration's column is
+		// the second, so the unfolded DOT graph draws the fill edge where the tree does.
+		let modules = SafeDIToolSeamBuilderParameterTests.modules(
+			feature: [
+				"public protocol Gadget {}",
+				seamFixtureType(named: "Home", isSeam: true, declarations: ["@Instantiated let gadget: any Gadget"]),
+				seamFixtureType(named: "Office", isSeam: true, declarations: ["@Instantiated let gadget: any Gadget"]),
+			],
+			app: [
+				SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "LiveGadget", fulfilling: "Gadget", declarations: ["@Instantiated let homeBuilder: Instantiator<Home>"]),
+				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let home: Home", "@Instantiated let office: Office"]),
+			],
+		)
+		let (stream, continuation) = AsyncStream.makeStream(of: TypeFactsReport.self)
+		_ = try await ConstructionMemoOracle.$observer.withValue(TaskLocalFunction { _, _, report in continuation.yield(report) }) {
+			try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		}
+		continuation.finish()
+		var reports = [TypeFactsReport]()
+		for await report in stream where report.root == "Root" && !report.forMockGeneration {
+			reports.append(report)
+		}
+		let report = try #require(reports.last)
+
+		let fillEdge = "    \"homeBuilder: Instantiator<Home>\" -- \"gadget: any Gadget\""
+		#expect(report.dot.drawnByTree.split(separator: "\n").contains { $0 == fillEdge }, "\(report.dot.drawnByTree)")
+		#expect(report.dot.unfolded.split(separator: "\n").contains { $0 == fillEdge }, "\(report.dot.unfolded)")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_buildsFillOfEveryPlaceInLaterPass_whenFillOfAnotherPlaceBuildsSeamAgain() async {
 		// `LiveGadget`, which fills `Home`'s `gadget`, builds `Home` again, and that call passes on every fill of the call
 		// that encloses it, by the key of each fill's place: every place gets a fill of its own from the next pass on.
@@ -572,7 +605,7 @@ struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
 		var thrownError: (any Error)?
 		var filesToDelete = filesToDelete
 		do {
-			try await SeamFillSharing.$observer.withValue({ continuation.yield($0) }) {
+			try await SeamFillSharing.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 				try await body(&filesToDelete)
 			}
 		} catch {

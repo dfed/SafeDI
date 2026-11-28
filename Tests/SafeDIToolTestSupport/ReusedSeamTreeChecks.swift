@@ -28,9 +28,9 @@ import Testing
 enum ReusedSeamTreeChecks {
 	/// Runs `operation` while observing every reused seam tree, handing each to `enclosingObserver` too, then records an
 	/// issue for each whose code differs from the tree built anew.
-	static func comparing<Result>(handingOn enclosingObserver: (@Sendable (ReusedSeamTree) -> Void)?, _ operation: () async throws -> Result) async throws -> Result {
+	static func comparing<Result>(handingOn enclosingObserver: TaskLocalFunction<@Sendable (ReusedSeamTree) -> Void>?, _ operation: () async throws -> Result) async throws -> Result {
 		let (reusedTrees, continuation) = AsyncStream.makeStream(of: ReusedSeamTree.self)
-		let result = try await SeamTreeReuseObservation.$comparesBuiltTrees.withValue({ reusedTree in
+		let result = try await SeamTreeReuseObservation.$comparesBuiltTrees.withValue(TaskLocalFunction { reusedTree in
 			continuation.yield(reusedTree)
 			enclosingObserver?(reusedTree)
 		}) {

@@ -30,6 +30,41 @@ extension DependencyTreeGenerator {
 		storesPublicMockPlans: Bool,
 		publicMockContext: PublicMockContext?,
 	) async throws -> MockGenerationResult {
+		guard NodeRecordsObservation.observer != nil else {
+			return try await generateMockCode(
+				mockConditionalCompilation: mockConditionalCompilation,
+				currentModuleSourceFilePaths: currentModuleSourceFilePaths,
+				additionalMocksToGenerate: additionalMocksToGenerate,
+				storesPublicMockPlans: storesPublicMockPlans,
+				publicMockContext: publicMockContext,
+				worldRootRecording: nil,
+			)
+		}
+		// The root of each mock root's world, by mocked type, where a test observes node records: handed on through a task
+		// local, so that a run no test observes threads nothing through the mock roots' construction.
+		let worldRootRecording = AsyncStream.makeStream(of: (mockedType: TypeDescription, worldRoot: ConstructionScope).self)
+		return try await NodeRecordsObservation.$recordsMockWorldRoot.withValue(TaskLocalFunction { worldRootRecording.continuation.yield(($0, $1)) }) {
+			try await generateMockCode(
+				mockConditionalCompilation: mockConditionalCompilation,
+				currentModuleSourceFilePaths: currentModuleSourceFilePaths,
+				additionalMocksToGenerate: additionalMocksToGenerate,
+				storesPublicMockPlans: storesPublicMockPlans,
+				publicMockContext: publicMockContext,
+				worldRootRecording: worldRootRecording,
+			)
+		}
+	}
+
+	/// - Parameter worldRootRecording: Where the root of each mock root's world arrives, by mocked type, where a test
+	///   observes node records.
+	private func generateMockCode(
+		mockConditionalCompilation: String?,
+		currentModuleSourceFilePaths: Set<String>?,
+		additionalMocksToGenerate: Set<String>,
+		storesPublicMockPlans: Bool,
+		publicMockContext: PublicMockContext?,
+		worldRootRecording: (stream: AsyncStream<(mockedType: TypeDescription, worldRoot: ConstructionScope)>, continuation: AsyncStream<(mockedType: TypeDescription, worldRoot: ConstructionScope)>.Continuation)?,
+	) async throws -> MockGenerationResult {
 		var receivedPropertiesCache = ReceivedPropertiesCache()
 		// The plans of the public mocks of other modules this module's mock trees call, computed once each.
 		var foreignPublicMockPlans = PublicMockPlans()
@@ -223,10 +258,18 @@ extension DependencyTreeGenerator {
 			foreignPublicMocks: foreignPublicMocks,
 		)
 		let fulfillingInstantiables = typeDescriptionToFulfillingInstantiableMap
+		var recordedWorldRoots = [TypeDescription: ConstructionScope]()
+		if let worldRootRecording {
+			worldRootRecording.continuation.finish()
+			for await (mockedType, worldRoot) in worldRootRecording.stream {
+				recordedWorldRoots[mockedType] = worldRoot
+			}
+		}
+		let worldRoots = recordedWorldRoots
 		let loweredRoots = try await BoundedConcurrency.map(mockRoots, width: BoundedConcurrency.mockRootWidth) { instantiableAndMockRoot, _ in
 			let (instantiable, mockRoot) = instantiableAndMockRoot
 			async let fulfillers = mockRoot.fulfillersOfMock(mockDefaults: flatParameterMockDefaults)
-			let lowered = try await mockRoot.lowerMockRoot(context: mockContext)
+			let lowered = try await mockRoot.lowerMockRoot(context: mockContext, worldRoot: worldRoots[instantiable.concreteInstantiable])
 			return await (
 				root: GeneratedRoot(
 					typeDescription: instantiable.concreteInstantiable,

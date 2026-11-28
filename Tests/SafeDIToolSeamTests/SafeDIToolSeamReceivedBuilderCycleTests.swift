@@ -607,10 +607,6 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			        public init(aBuilder: __safeDI_WidgetCarrier_A<__safeDI_Built>) {
 			            self.aBuilder = aBuilder
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(aBuilder: .init(__safeDI_noScope: __safeDI_builder))
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -619,10 +615,6 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 
 			        public init(widget: @escaping (Instantiator<B>) -> __safeDI_Built) {
 			            self.widget = widget
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(widget: { _ in __safeDI_builder() })
 			        }
 			    }
 
@@ -709,10 +701,6 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			        public init(widget: @escaping (SendableInstantiator<B>) -> __safeDI_Built) {
 			            self.widget = widget
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(widget: { _ in __safeDI_builder() })
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -721,10 +709,6 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 
 			        public init(aBuilder: @escaping @Sendable () -> __safeDI_WidgetCarrier_A<__safeDI_Built>) {
 			            self.aBuilder = aBuilder
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			            self.init(aBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
 			    }
 
@@ -815,10 +799,6 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			        public init(xBuilder: __safeDI_WidgetCarrier_X<__safeDI_Built>) {
 			            self.xBuilder = xBuilder
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(xBuilder: .init(__safeDI_noScope: __safeDI_builder))
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -827,10 +807,6 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 
 			        public init(p: __safeDI_WidgetCarrier_P<__safeDI_Built>) {
 			            self.p = p
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(p: .init(__safeDI_noScope: __safeDI_builder))
 			        }
 			    }
 
@@ -841,10 +817,6 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			        public init(aBuilder: __safeDI_WidgetCarrier_A<__safeDI_Built>) {
 			            self.aBuilder = aBuilder
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(aBuilder: .init(__safeDI_noScope: __safeDI_builder))
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -853,10 +825,6 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 
 			        public init(widget: @escaping (Instantiator<B>, Instantiator<X>) -> __safeDI_Built) {
 			            self.widget = widget
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(widget: { _, _ in __safeDI_builder() })
 			        }
 			    }
 
@@ -967,10 +935,6 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            self.aBuilder = aBuilder
 			            self.bBuilder = bBuilder
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(aBuilder: .init(__safeDI_noScope: __safeDI_builder), bBuilder: .init(__safeDI_noScope: __safeDI_builder))
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -980,10 +944,6 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			        public init(widget: @escaping (Instantiator<B>, Mark) -> __safeDI_Built) {
 			            self.widget = widget
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(widget: { _, _ in __safeDI_builder() })
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -992,10 +952,6 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 
 			        public init(widget: @escaping (Instantiator<A>, Mark) -> __safeDI_Built) {
 			            self.widget = widget
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(widget: { _, _ in __safeDI_builder() })
 			        }
 			    }
 
@@ -1115,10 +1071,6 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			        public init(bBuilder: __safeDI_WidgetCarrier_B<__safeDI_Built>) {
 			            self.bBuilder = bBuilder
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(bBuilder: .init(__safeDI_noScope: __safeDI_builder))
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1127,10 +1079,6 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 
 			        public init(widget: @escaping (Instantiator<A>, Mark) -> __safeDI_Built) {
 			            self.widget = widget
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(widget: { _, _ in __safeDI_builder() })
 			        }
 			    }
 
@@ -1199,10 +1147,6 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            self.bBuilder = bBuilder
 			            self.leaf = leaf
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(aBuilder: .init(__safeDI_noScope: __safeDI_builder), bBuilder: .init(__safeDI_noScope: __safeDI_builder), leaf: { _, _, _ in .init(__safeDI_noScope: __safeDI_builder) })
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1214,10 +1158,6 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            self.leaf = leaf
 			            self.widget = widget
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(leaf: { _, _ in .init(__safeDI_noScope: __safeDI_builder) }, widget: { _, _, _ in __safeDI_builder() })
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1227,10 +1167,6 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			        public init(leaf: @escaping (Instantiator<A>, Instantiator<C>) -> __safeDI_WidgetCarrier_Leaf<__safeDI_Built>) {
 			            self.leaf = leaf
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(leaf: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1239,10 +1175,6 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 
 			        public init(widget: @escaping () -> __safeDI_Built) {
 			            self.widget = widget
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(widget: { __safeDI_builder() })
 			        }
 			    }
 
@@ -1358,10 +1290,6 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            self.flow = flow
 			            self.a = a
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(flow: { _ in .init(__safeDI_noScope: __safeDI_builder) }, a: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1371,10 +1299,6 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			        public init(aBuilder: __safeDI_WidgetCarrier_A<__safeDI_Built>) {
 			            self.aBuilder = aBuilder
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(aBuilder: .init(__safeDI_noScope: __safeDI_builder))
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1383,10 +1307,6 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 
 			        public init(widget: @escaping (Instantiator<B>?, Mark) -> __safeDI_Built) {
 			            self.widget = widget
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(widget: { _, _ in __safeDI_builder() })
 			        }
 			    }
 

@@ -238,7 +238,7 @@ struct SafeDIToolCallingMockInlineHoleBuilderTests: ~Copyable {
 		for leafCount in [1, 20] {
 			let modules = Self.modules(rootAttribute: "@Instantiable(generateMock: true)", leafCountOfG: leafCount)
 			let (stream, continuation) = AsyncStream.makeStream(of: GenerationWork.self)
-			_ = try await GenerationWork.$observer.withValue({ continuation.yield($0) }) { [modules] in
+			_ = try await GenerationWork.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) { [modules] in
 				try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
 			}
 			continuation.finish()

@@ -884,7 +884,7 @@ public enum ConstructionMemoOracle {
 	/// its code: one with the construction memo, shared across the trees created with one memo, and one without it. The
 	/// two must hold the same data on every path. The build without the memo walks every place, which `typeFacts` holds
 	/// beside the tree's graph of per-type facts, for the test to compare.
-	@TaskLocal public static var observer: (@Sendable (_ treeBuiltWithMemo: any Sendable, _ treeBuiltWithoutMemo: any Sendable, _ typeFacts: TypeFactsReport) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (_ treeBuiltWithMemo: any Sendable, _ treeBuiltWithoutMemo: any Sendable, _ typeFacts: TypeFactsReport) -> Void>?
 
 	/// Whether `DependencyTreeGenerator` creates its mock roots in reverse type order, so that a memo shared between them
 	/// carries other trees' generators to each; what it generates must not change.
@@ -892,12 +892,12 @@ public enum ConstructionMemoOracle {
 
 	/// Called with the concrete type of each place `Scope.createScopeGenerator` keys and looks up in a construction memo,
 	/// when set: by the tests, never by the tool. The oracle's own builds are not reported.
-	@TaskLocal public static var keyedPlaceObserver: (@Sendable (_ concreteType: String) -> Void)?
+	@TaskLocal public static var keyedPlaceObserver: TaskLocalFunction<@Sendable (_ concreteType: String) -> Void>?
 
 	/// Called with the concrete type of each place `Scope.createScopeGenerator` reuses from a construction memo within a
 	/// pass, and whether the pass is a tree's first, when set: by the tests, never by the tool. The oracle's own builds are
 	/// not reported.
-	@TaskLocal public static var reusedPlaceObserver: (@Sendable (_ concreteType: String, _ isFirstPass: Bool) -> Void)?
+	@TaskLocal public static var reusedPlaceObserver: TaskLocalFunction<@Sendable (_ concreteType: String, _ isFirstPass: Bool) -> Void>?
 }
 
 /// What a place's log keeps of the reads its subtree made: the elements each place adds to what the logs and the memo
@@ -906,7 +906,7 @@ public enum ConstructionMemoOracle {
 /// grow with the places. Handed to `observer`, which the tests set, never the tool.
 public enum ConstructionLogStorage {
 	/// Called with the elements each place's kept log adds, when set: by the tests, never by the tool.
-	@TaskLocal public static var observer: (@Sendable (Int) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (Int) -> Void>?
 
 	/// Hands `observer`, when set, the elements a place's kept log adds.
 	static func record(_ elementCount: Int) {

@@ -130,6 +130,10 @@ public struct GenerationWork: Sendable {
 		/// beneath another module's public mock spent seconds where every other root spent milliseconds; each walk resolves
 		/// each module once.
 		case resolvingWhatAPublicMocksModuleSees
+		/// Finding the facts producers still owe each declaration of a world (`TypeFactsGraph.owedFactsByNode`): each
+		/// declaration, each edge, and each declaration a walk down from the fills reaches, once per world. Asked of each
+		/// declaration with a walk up its parents, a chain of n declarations walked n² parents.
+		case findingOwedFacts
 	}
 
 	/// The step that did the work.
@@ -138,7 +142,7 @@ public struct GenerationWork: Sendable {
 	public let elementCount: Int
 
 	/// Called with the work of a counted step each time the step runs, when set: by the tests, never by the tool.
-	@TaskLocal public static var observer: (@Sendable (GenerationWork) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (GenerationWork) -> Void>?
 
 	/// Hands `observer`, when set, the work `step` did, when `step` is not `nil`.
 	static func record(_ elementCount: Int, by step: Step?) {

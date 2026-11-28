@@ -26,8 +26,8 @@ import Testing
 extension HoleSiteRecordObservation {
 	/// An observer that records an issue for each way the site's record disagrees with its text, then hands the site to
 	/// `enclosingObserver`.
-	static func checkingRecords(handingOn enclosingObserver: (@Sendable (HoleSiteRecordObservation) -> Void)?) -> @Sendable (HoleSiteRecordObservation) -> Void {
-		{ site in
+	static func checkingRecords(handingOn enclosingObserver: TaskLocalFunction<@Sendable (HoleSiteRecordObservation) -> Void>?) -> TaskLocalFunction<@Sendable (HoleSiteRecordObservation) -> Void> {
+		TaskLocalFunction { site in
 			for mismatch in site.recordMismatches {
 				Issue.record(Comment(rawValue: mismatch))
 			}
@@ -39,23 +39,28 @@ extension HoleSiteRecordObservation {
 	/// binding, a read the text does not make, and a binding the text does not declare. A name the text reads that starts
 	/// with a capital letter, or that it calls directly, is a type, which no record lists.
 	var recordMismatches: [String] {
+		Self.recordMismatches(text: text, readNames: readNames, boundNames: boundNames, place: "a hole’s site")
+	}
+
+	/// Each way the record of `place`, written as `text`, disagrees with it, as `recordMismatches` says of a hole's site.
+	static func recordMismatches(text: String, readNames: [String]?, boundNames: [String], place: String) -> [String] {
 		let syntax = Parser.parse(source: text)
 		let visitor = NameVisitor(viewMode: .sourceAccurate)
 		visitor.walk(syntax)
 		let bound = Set(boundNames.map(Self.withoutBackticks))
 		var mismatches = [String]()
 		for name in Self.withoutBackticks(visitor.declaredNames).symmetricDifference(bound).sorted() {
-			mismatches.append("The record of a hole’s site lists `\(name)` as bound where its text \(bound.contains(name) ? "does not declare it" : "declares it unlisted"):\n\(text)")
+			mismatches.append("The record of \(place) lists `\(name)` as bound where its text \(bound.contains(name) ? "does not declare it" : "declares it unlisted"):\n\(text)")
 		}
 		guard let readNames else { return mismatches }
 		let reads = Set(readNames.map(Self.withoutBackticks))
 		let referenced = Self.withoutBackticks(visitor.referencedNames)
 		for name in reads.subtracting(referenced).sorted() {
-			mismatches.append("The record of a hole’s site lists a read of `\(name)` its text does not make:\n\(text)")
+			mismatches.append("The record of \(place) lists a read of `\(name)` its text does not make:\n\(text)")
 		}
 		let typeNames = Self.withoutBackticks(visitor.calledNames)
 		for name in referenced.subtracting(reads).subtracting(bound).subtracting(typeNames).sorted() where name.first?.isUppercase == false {
-			mismatches.append("The text of a hole’s site reads `\(name)`, which its record does not list:\n\(text)")
+			mismatches.append("The text of \(place) reads `\(name)`, which its record does not list:\n\(text)")
 		}
 		return mismatches
 	}

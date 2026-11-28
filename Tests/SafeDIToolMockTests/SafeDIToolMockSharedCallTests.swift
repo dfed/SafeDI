@@ -200,7 +200,7 @@ struct SafeDIToolMockSharedCallTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private mutating func reusedTypesOnFirstPass(appTypes: [String]) async throws -> Set<String> {
 		let (stream, continuation) = AsyncStream.makeStream(of: String.self)
-		_ = try await ConstructionMemoOracle.$reusedPlaceObserver.withValue({ concreteType, isFirstPass in
+		_ = try await ConstructionMemoOracle.$reusedPlaceObserver.withValue(TaskLocalFunction { concreteType, isFirstPass in
 			guard isFirstPass else { return }
 			continuation.yield(concreteType)
 		}) { [appTypes] in

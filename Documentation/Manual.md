@@ -899,10 +899,6 @@ extension Service {
         public init(profile: @escaping (Analytics) -> __safeDI_UserServiceCarrier_Profile<__safeDI_Built>) {
             self.profile = profile
         }
-
-        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-            self.init(profile: { _ in .init(__safeDI_noScope: __safeDI_builder) })
-        }
     }
 
     /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -911,10 +907,6 @@ extension Service {
 
         public init(userService: @escaping () -> __safeDI_Built) {
             self.userService = userService
-        }
-
-        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-            self.init(userService: { __safeDI_builder() })
         }
     }
 
@@ -1418,7 +1410,7 @@ To add the SafeDI framework as a dependency to a package utilizing [Swift Packag
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/dfed/SafeDI.git", from: "2.4.1"),
+    .package(url: "https://github.com/dfed/SafeDI.git", from: "2.4.2"),
 ]
 ```
 
@@ -1525,7 +1517,7 @@ Unlike the Xcode project plugin, the Swift package plugin finds the source files
 
 #### Bazel
 
-Add `bazel_dep(name = "safedi", version = "2.4.1")` to your `MODULE.bazel`, then declare each first-party Swift module ([Generating your dependency tree](#generating-your-dependency-tree)) with `safedi_swift_library` in place of `swift_library`:
+Add `bazel_dep(name = "safedi", version = "2.4.2")` to your `MODULE.bazel`, then declare each first-party Swift module ([Generating your dependency tree](#generating-your-dependency-tree)) with `safedi_swift_library` in place of `swift_library`:
 
 ```python
 load("@safedi//bazel:safedi.bzl", "safedi_swift_library")
@@ -1558,7 +1550,7 @@ The edit-loop gain needs a compile that recompiles only the files whose bytes ch
 
 See [`bazel/safedi.bzl`](../bazel/safedi.bzl).
 
-A module that no SafeDI module depends on, such as your app, sets `is_depended_upon = False` on its `safedi_swift_library` or `safedi_compile`. SafeDI then writes no `.safedi` for it, which saves the time the top module of a deep graph spends writing a copy of what its dependencies’ files carry. A module that lists it in `safedi_deps` fails analysis with an error that names the attribute, and `SafeDITool query needs` cannot read the module.
+A module that no SafeDI module depends on, such as your app, sets `is_depended_upon = False` on its `safedi_swift_library` or `safedi_compile`. SafeDI then writes no `.safedi` for it, which saves the time the top module of a deep graph spends writing a copy of what its dependencies’ files carry. A module that lists it in `safedi_deps` fails analysis with an error that names the attribute, and neither `SafeDITool query needs` nor `query graph` can read the module.
 
 For [Stardoc](https://github.com/bazelbuild/stardoc) and other `bzl_library` tooling, a `bzl_library` of your own that loads `safedi.bzl` can list `@safedi//bazel:safedi` in its `deps`.
 
@@ -1590,7 +1582,7 @@ Depend on SafeDI in `Tuist/Package.swift`, so that `tuist install` fetches the S
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/dfed/SafeDI.git", from: "2.4.1"),
+    .package(url: "https://github.com/dfed/SafeDI.git", from: "2.4.2"),
 ]
 ```
 
@@ -2121,7 +2113,7 @@ This plugin will:
 ### Manual migration
 
 1. Update your `swift-tools-version` to 6.2 or later
-2. Update your SafeDI dependency to `from: "2.4.1"`
+2. Update your SafeDI dependency to `from: "2.4.2"`
 3. If you have `.safedi/configuration/include.csv` or `.safedi/configuration/additionalImportedModules.csv`, add a `#SafeDIConfiguration` in your root module with the equivalent values and delete the CSV files
 4. If you don’t have CSV configuration files and do not need other SafeDI configuration options, no `#SafeDIConfiguration()` declaration is required
 
