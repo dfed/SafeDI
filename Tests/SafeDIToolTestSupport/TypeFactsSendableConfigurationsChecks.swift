@@ -31,7 +31,7 @@ enum TypeFactsSendableConfigurationsChecks {
 	/// to `enclosingObserver` too, and records an issue for each mock root whose two sets differ.
 	static func comparing<Result>(handingOn enclosingObserver: (@Sendable (TypeFactsSendableConfigurationsComparison) -> Void)?, _ operation: () async throws -> Result) async throws -> Result {
 		let (comparisons, continuation) = AsyncStream.makeStream(of: TypeFactsSendableConfigurationsComparison.self)
-		let result = try await TypeFactsSendableConfigurationsObservation.$comparesWalk.withValue({ comparison in
+		let result = try await TypeFactsSendableConfigurationsObservation.$comparesWalk.withValue(TaskLocalFunction { comparison in
 			continuation.yield(comparison)
 			enclosingObserver?(comparison)
 		}) {

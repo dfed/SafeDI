@@ -41,8 +41,19 @@ extension NodeRecords {
 	static func renameClaim(of declaration: DeclarationID, in world: some NodeRecordVariantFacts) -> NodeRecordClaim? {
 		guard world.kind(of: declaration) == .alias else { return nil }
 		// A rename of a builder that does not erase it can be a member of a loop of builders, which the tree rebinds where
-		// the loop holds only builders (`ScopeGenerator.isLoopBuilder(amongSiblings:)`): a loop of builders, refused.
-		let isLoopBuilder = rename(of: declaration, in: world).map { !$0.erasedToConcreteExistential && ScopeGenerator.isBuilder($0.property) } ?? false
+		// the loop holds only builders: a loop of builders, refused. One only if available is a member only where a sibling
+		// builds the builder it renames (`ScopeGenerator.isLoopBuilder(amongSiblings:)`); any other is bound from its
+		// fulfilling property, as a rename of a value is.
+		let isLoopBuilder = rename(of: declaration, in: world).map { rename in
+			guard !rename.erasedToConcreteExistential, ScopeGenerator.isBuilder(rename.property) else { return false }
+			guard rename.onlyIfAvailable else { return true }
+			return world.scope(of: declaration).propertiesToGenerate.contains { sibling in
+				guard case let .instantiated(siblingProperty, _, _, _) = sibling else { return false }
+				return siblingProperty.label == rename.fulfillingProperty.label
+					&& ScopeGenerator.isBuilder(siblingProperty)
+					&& ScopeGenerator.provides(siblingProperty, aFormReadBy: rename.fulfillingProperty)
+			}
+		} ?? false
 		return NodeRecordClaim(kind: .rename, discharges: renameDischarges, refusals: isLoopBuilder ? [.builderLoop] : [])
 	}
 
@@ -50,10 +61,10 @@ extension NodeRecords {
 	private static func rename(
 		of declaration: DeclarationID,
 		in world: some NodeRecordVariantFacts,
-	) -> (property: Property, fulfillingProperty: Property, erasedToConcreteExistential: Bool, declarationReference: AliasDeclarationReferences.Reference?)? {
+	) -> (property: Property, fulfillingProperty: Property, erasedToConcreteExistential: Bool, onlyIfAvailable: Bool, declarationReference: AliasDeclarationReferences.Reference?)? {
 		world.scope(of: declaration).propertiesToGenerate.lazy.compactMap { propertyToGenerate in
-			if case let .aliased(property, fulfillingProperty, erasedToConcreteExistential, _, declarationReference) = propertyToGenerate, property == world.property(of: declaration) {
-				(property, fulfillingProperty, erasedToConcreteExistential, declarationReference)
+			if case let .aliased(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable, declarationReference) = propertyToGenerate, property == world.property(of: declaration) {
+				(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable, declarationReference)
 			} else {
 				nil
 			}
@@ -74,7 +85,7 @@ extension NodeRecords {
 		answers: OnlyIfAvailableAnswers,
 		wrapperName: String? = nil,
 	) throws(NodeRecordRefusal) -> AliasPlaceRecord {
-		guard let (declaredProperty, renamedProperty, erasedToConcreteExistential, declarationReference) = rename(of: declaration, in: world) else { throw .renameOrHole }
+		guard let (declaredProperty, renamedProperty, erasedToConcreteExistential, _, declarationReference) = rename(of: declaration, in: world) else { throw .renameOrHole }
 		// A rename of a mock root's level whose label another value of the level binds is bound under the name the root gives
 		// it apart, which the root's construction reads and each receive of it beneath binds again under its label
 		// (`mockNamesReadApart(in:)`), as the walk binds it (`MockLowering.rootLevelBindingNames(of:besideNamesTaken:)`).

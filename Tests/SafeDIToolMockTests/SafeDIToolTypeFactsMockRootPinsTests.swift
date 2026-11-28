@@ -26,7 +26,7 @@ import Testing
 
 /// The mock root's pins as the per-type facts make them from the graph (`TypeFactsMockRootPins`): each variant of a mock's
 /// world passes `nil` to the receives only if available a required receive of their label pins, and every place of the
-/// tree passes `nil` to exactly its variant's (check 36).
+/// tree passes `nil` to exactly its variant's (check 40).
 struct SafeDIToolTypeFactsMockRootPinsTests: ~Copyable {
 	// MARK: Initialization
 
@@ -359,7 +359,7 @@ struct SafeDIToolTypeFactsMockRootPinsTests: ~Copyable {
 		// and the instance of a lazy wrapper under `Second`, which one optional parameter cannot be, so its variants split
 		// on the wrapper kind. Of the module's worlds, the root's holds that debt, and none holds a debt of type.
 		let (stream, continuation) = AsyncStream.makeStream(of: TypeFactsReport.self)
-		_ = try await ConstructionMemoOracle.$observer.withValue({ _, _, report in continuation.yield(report) }) {
+		_ = try await ConstructionMemoOracle.$observer.withValue(TaskLocalFunction { _, _, report in continuation.yield(report) }) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
 					seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let first: First", "@Instantiated let second: Second"]),
@@ -399,7 +399,7 @@ struct SafeDIToolTypeFactsMockRootPinsTests: ~Copyable {
 		var filesMade = [URL]()
 		defer { filesToDelete += filesMade }
 		let output = try await NodeRecordsObservation.$laysOutMockRoots.withValue(true) {
-			try await NodeRecordsObservation.$observer.withValue({ continuation.yield($0) }) {
+			try await NodeRecordsObservation.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 				try await body(&filesMade)
 			}
 		}
@@ -468,7 +468,7 @@ struct SafeDIToolTypeFactsMockRootPinsTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private mutating func mockReport(of types: [String], skipCompileVerification: Bool = false) async throws -> TypeFactsReport {
 		let (stream, continuation) = AsyncStream.makeStream(of: TypeFactsReport.self)
-		_ = try await ConstructionMemoOracle.$observer.withValue({ _, _, report in continuation.yield(report) }) {
+		_ = try await ConstructionMemoOracle.$observer.withValue(TaskLocalFunction { _, _, report in continuation.yield(report) }) {
 			try await executeSafeDIToolTest(swiftFileContent: types, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete, skipCompileVerification: skipCompileVerification)
 		}
 		continuation.finish()
@@ -488,10 +488,10 @@ struct SafeDIToolTypeFactsMockRootPinsTests: ~Copyable {
 		return passedNil
 	}
 
-	/// Check 36, as every tree runs it: each place passes `nil` to exactly what the pins along its path pin.
+	/// Check 40, as every tree runs it: each place passes `nil` to exactly what the pins along its path pin.
 	private func expectPlacesPassNilAsTheirPathsPin(in report: TypeFactsReport) {
 		let result = TypeFactsChecks.findings(of: report)
-		#expect(result.comparedByCheck[36, default: 0] > 0, "\(report.world)")
-		#expect(result.findingsByCheck[36] == nil, "\(result.findingsByCheck[36] ?? []): \(report.world)")
+		#expect(result.comparedByCheck[40, default: 0] > 0, "\(report.world)")
+		#expect(result.findingsByCheck[40] == nil, "\(result.findingsByCheck[40] ?? []): \(report.world)")
 	}
 }

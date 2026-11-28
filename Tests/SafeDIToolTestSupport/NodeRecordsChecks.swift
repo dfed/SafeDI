@@ -53,7 +53,7 @@ enum NodeRecordsChecks {
 		let enclosingSeamCallObserver = SeamCallRecordObservation.observer
 		// A seam call's record, as the engine is to spell it, must list what its text reads, binds and declares, and spell
 		// the text's guard line and builder arguments.
-		let seamCallObserver: @Sendable (SeamCallRecordObservation) -> Void = { call in
+		let seamCallObserver = TaskLocalFunction<@Sendable (SeamCallRecordObservation) -> Void> { call in
 			if let boundNames = call.boundNames {
 				for mismatch in HoleSiteRecordObservation.recordMismatches(text: call.text, readNames: call.readNames, boundNames: boundNames, place: "a seam call") {
 					Issue.record(Comment(rawValue: mismatch))
@@ -69,7 +69,7 @@ enum NodeRecordsChecks {
 		}
 		let enclosingDispatcherObserver = DispatcherRecordObservation.observer
 		// A dispatcher's declaration, spelled from the call's records alone, must be the text the tree writes.
-		let dispatcherObserver: @Sendable (DispatcherRecordObservation) -> Void = { dispatcher in
+		let dispatcherObserver = TaskLocalFunction<@Sendable (DispatcherRecordObservation) -> Void> { dispatcher in
 			if dispatcher.spelledFromRecord != dispatcher.text {
 				Issue.record(Comment(rawValue: "The records of a dispatcher spell\n\(dispatcher.spelledFromRecord)\nwhere the tree writes\n\(dispatcher.text)"))
 			}
@@ -77,7 +77,7 @@ enum NodeRecordsChecks {
 		}
 		let enclosingFillObserver = FillSignatureObservation.observer
 		// A fill's function, up to its tree, spelled from the fill's record alone, must be the text the tree writes.
-		let fillObserver: @Sendable (FillSignatureObservation) -> Void = { fill in
+		let fillObserver = TaskLocalFunction<@Sendable (FillSignatureObservation) -> Void> { fill in
 			if fill.spelledFromRecord != fill.written {
 				Issue.record(Comment(rawValue: "The record of a fill spells\n\(fill.spelledFromRecord.joined(separator: "\n"))\nwhere the tree writes\n\(fill.written.joined(separator: "\n"))"))
 			}
@@ -92,10 +92,10 @@ enum NodeRecordsChecks {
 		}
 	}
 
-	private static func checkingNodeRecords<Result>(laysOutRoots: Bool, laysOutMockRoots: Bool, reportPath: String?, testName: String, enclosingObserver: (@Sendable (NodeRecordsReport) -> Void)?, _ body: () async throws -> Result) async rethrows -> Result {
+	private static func checkingNodeRecords<Result>(laysOutRoots: Bool, laysOutMockRoots: Bool, reportPath: String?, testName: String, enclosingObserver: TaskLocalFunction<@Sendable (NodeRecordsReport) -> Void>?, _ body: () async throws -> Result) async rethrows -> Result {
 		try await NodeRecordsObservation.$laysOutRoots.withValue(laysOutRoots) {
 			try await NodeRecordsObservation.$laysOutMockRoots.withValue(laysOutMockRoots) {
-				try await NodeRecordsObservation.$observer.withValue({ report in
+				try await NodeRecordsObservation.$observer.withValue(TaskLocalFunction { report in
 					let outcome = Self.outcome(of: report)
 					for difference in outcome.differences {
 						Issue.record(Comment(rawValue: "Node records differ from the tree’s records of root \(report.root): \(difference)"))

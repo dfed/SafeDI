@@ -632,7 +632,10 @@ func executeSafeDIToolMultiModuleTest(
 																										// Every mock root’s `Sendable` configurations from its world’s fold must equal the walk of its generator tree’s
 																										// (`TypeFactsSendableConfigurationsChecks`).
 																										try await TypeFactsSendableConfigurationsChecks.comparing(handingOn: TypeFactsSendableConfigurationsObservation.comparesWalk) {
-																											try await tool.generate()
+																											// Every call of a plan the per-type facts key must take the body, and its function the parameter order, the plan’s own rules give (`PlanFactsKeyChecks`).
+																											try await PlanFactsKeyChecks.comparing(handingOn: PlanFactsKeyObservation.observer) {
+																												try await tool.generate()
+																											}
 																										}
 																									}
 																								}

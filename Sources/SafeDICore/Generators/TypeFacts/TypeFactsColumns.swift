@@ -60,6 +60,30 @@ struct TypeFactsFill: Hashable, Sendable {
 	/// The run of `TypeFactsGraph.fillPathEntries` the fill is built beneath, root first.
 	let stackStart: Int32
 	let stackCount: Int32
+	/// Whether the seam the fill is passed to takes it `@Sendable`: one input of `buildsInSendableFunction`.
+	let holeIsSendable: Bool
+	/// Whether the fill builds its tree in a `@Sendable` function of its own, the tree's mark
+	/// (`ScopeGenerator.buildsInSendableFunction(ofFill:)`): where the seam takes it `@Sendable`, a `@Sendable`-family
+	/// dispatcher of its call reaches it, or a `@Sendable` function inside the call's fills refers to it, found by one fold
+	/// up the call nesting (`TypeFactsFillSendability`).
+	let buildsInSendableFunction: Bool
+	/// The fill's key (`ScopeGenerator.fillKey(of:)`), which names its place, by its position in
+	/// `TypeFactsGraph.fillKeyTexts`.
+	let key: Int32
+	/// The run of `TypeFactsGraph.fillHandedMemos` the fill takes: the memo it takes of each label some route hands it a
+	/// memo of, as the tree's fill takes it (`ScopeGenerator.FillDispatcher.memosHanded(toFills:ofPublicMockCall:labelsReadOnlyAsPlaceField:readingSendableWrapper:among:)`,
+	/// the `SendableLazilyInstantiated` its tree reads beside the value applied), by label. Empty for nearly every fill.
+	let handedMemoStart: Int32
+	let handedMemoCount: Int32
+}
+
+/// The memo a fill takes of one label some route hands it a memo of (`ScopeGenerator.FillDispatcher.HandedMemo`): the
+/// label's and the memo's property's IDs, and the memo's deferral, which says whether it serves a
+/// `SendableLazilyInstantiated`.
+struct TypeFactsHandedMemo: Hashable, Sendable {
+	let label: Int32
+	let property: Int32
+	let deferral: SeamSignature.Parameter.Deferral
 }
 
 /// One entry of a fill's path: the property built and the concrete type built for it, by the world's IDs.

@@ -250,7 +250,7 @@ struct TypeFactsSendableConfigurations: Sendable {
 /// (`ScopeGenerator.sendableConfigurationTypeNames(ofMockRootOf:)`), handed to `comparesWalk`, which the tests set, never
 /// the tool: the two must be equal on every test and fuzzer graph. The walk runs only where it is set.
 public enum TypeFactsSendableConfigurationsObservation {
-	@TaskLocal public static var comparesWalk: (@Sendable (TypeFactsSendableConfigurationsComparison) -> Void)?
+	@TaskLocal public static var comparesWalk: TaskLocalFunction<@Sendable (TypeFactsSendableConfigurationsComparison) -> Void>?
 }
 
 /// One mock root's `Sendable` configurations, from the fold and from the walk.

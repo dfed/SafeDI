@@ -40,7 +40,7 @@ enum MockRootTreeChecksOracle {
 		// A run that throws is compared too: the comparisons are made before any mock root's tree is validated.
 		let result: Swift.Result<Result, any Error>
 		do {
-			result = try await .success(MockRootTreeChecksObservation.$comparesTree.withValue({ comparison in
+			result = try await .success(MockRootTreeChecksObservation.$comparesTree.withValue(TaskLocalFunction { comparison in
 				continuation.yield(comparison)
 				enclosingObserver?(comparison)
 			}) {

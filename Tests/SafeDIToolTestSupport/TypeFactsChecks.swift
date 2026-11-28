@@ -64,6 +64,47 @@ enum TypeFactsChecks {
 		if let path = environment["SAFEDI_TYPE_FACTS_LOG"], !path.isEmpty {
 			append(result.line, toFileAt: path)
 		}
+		ParameterTally.shared.add(result, root: report.root)
+	}
+
+	/// What check 35 found in every world this process observed, each function and variant counted once however many
+	/// times the oracle built its root: the graph fuzzer's long run prints it in its report (`parameter-facts`).
+	final class ParameterTally: Sendable {
+		static let shared = ParameterTally()
+
+		struct Counts: Equatable {
+			/// Functions whose parameter the facts drop because every call passes `nil` for it, and the roots that hold one.
+			var droppedParameterFunctions = 0
+			var droppedParameterRoots = 0
+			/// The facts' parameters the tree captures instead, by the calls into their variant: none, one, two or more.
+			var capturedParametersByCalls = [0, 0, 0]
+		}
+
+		var counts: Counts {
+			lock.withLock {
+				Counts(
+					droppedParameterFunctions: droppedParameterFunctions.count,
+					droppedParameterRoots: Set(droppedParameterFunctions.map { $0.prefix { $0 != "|" } }).count,
+					capturedParametersByCalls: capturedParametersByVariant.values.reduce(into: [0, 0, 0]) { $0[min($1.calls, 2)] += $1.count },
+				)
+			}
+		}
+
+		func add(_ result: Result, root: String) {
+			guard !result.check35DroppedParameterFunctions.isEmpty || !result.check35CapturedParameterVariants.isEmpty else { return }
+			lock.withLock {
+				for function in result.check35DroppedParameterFunctions {
+					droppedParameterFunctions.insert("\(root)|\(function)")
+				}
+				for captured in result.check35CapturedParameterVariants {
+					capturedParametersByVariant["\(root)|\(captured.variant)"] = (captured.calls, captured.count)
+				}
+			}
+		}
+
+		private let lock = NSLock()
+		nonisolated(unsafe) private var droppedParameterFunctions = Set<String>()
+		nonisolated(unsafe) private var capturedParametersByVariant = [String: (calls: Int, count: Int)]()
 	}
 
 	struct Result {
@@ -101,6 +142,11 @@ enum TypeFactsChecks {
 		/// captures the value where it is nested, each variant counted at its first place; and the text they would add
 		/// were each a parameter: its declaration in the signature and its argument at each call of the variant.
 		var check35CapturedParameters = 0
+		/// The variants those parameters are of, each with the calls into it and how many it has.
+		var check35CapturedParameterVariants = [(variant: Int, calls: Int, count: Int)]()
+		/// The functions whose every parameter the facts lack is one the facts drop, the rest being in the tree's order:
+		/// a parameter that every call passes `nil` (approved difference 18).
+		var check35DroppedParameterFunctions = [String]()
 		var check35CapturedParameterBytes = 0
 		var line = ""
 	}
@@ -354,12 +400,12 @@ enum TypeFactsChecks {
 				}
 			}
 		}
-		// Check 36: each place of a mock passes `nil` to the receives only if available the pins along its path say it pins.
+		// Check 40: each place of a mock passes `nil` to the receives only if available the pins along its path say it pins.
 		var comparedPins = 0
 		for (index, variant) in factsVariantByPlace.enumerated() where report.forMockGeneration && !places[index].closesCycle && variant != nil {
 			comparedPins += 1
 			if places[index].receivesPassedNil != places[index].pinsPassNil {
-				add(36, "place \(index) \(places[index].declaration) passes `nil` to \(places[index].receivesPassedNil) where the pins along its path pin \(places[index].pinsPassNil)")
+				add(40, "place \(index) \(places[index].declaration) passes `nil` to \(places[index].receivesPassedNil) where the pins along its path pin \(places[index].pinsPassNil)")
 			}
 		}
 		// An alias leaf has no place of its own: the parent's place logs the nearest declaration of the fulfilling label, whose
@@ -452,16 +498,27 @@ enum TypeFactsChecks {
 			// The facts' variant takes a parameter for every read its function does not capture, where the tree's function
 			// takes one only for a label declared again inside a cycle that closes on it: the tree's are among the facts',
 			// in the facts' order.
-			var remaining = report.variantParameters[variant][...]
+			// The generator's cycle parameter is the value where a production function takes the wrapper a lazily
+			// instantiated declaration answers it with (`TypeFactsWorld.parameterType(of:_:arrivals:)`), which the facts
+			// give: compared as the value.
+			let factsParameters = report.forMockGeneration ? report.variantParameters[variant] : report.variantParameters[variant].map { parameter in
+				for wrapper in ["SendableLazilyInstantiated<", "LazilyInstantiated<"] {
+					guard let range = parameter.range(of: ": \(wrapper)"), parameter.hasSuffix(">"), !generator.cycleParameters.contains(parameter) else { continue }
+					return parameter[..<range.lowerBound] + ": " + parameter[range.upperBound...].dropLast()
+				}
+				return parameter
+			}
+			var remaining = factsParameters[...]
 			let areAmongTheFacts = generator.cycleParameters.allSatisfy { parameter in
 				guard let position = remaining.firstIndex(of: parameter) else { return false }
 				remaining = remaining[(position + 1)...]
 				return true
 			}
-			if areAmongTheFacts, report.variantParameters[variant].count > generator.cycleParameters.count, variantsWithParametersTheTreeCaptures.insert(variant).inserted {
+			if areAmongTheFacts, factsParameters.count > generator.cycleParameters.count, variantsWithParametersTheTreeCaptures.insert(variant).inserted {
 				var treeParameters = generator.cycleParameters[...]
 				let callCount = report.variantCalls.reduce(0) { $0 + $1.count { $0 == variant } }
-				for parameter in report.variantParameters[variant] {
+				result.check35CapturedParameterVariants.append((variant, callCount, factsParameters.count - generator.cycleParameters.count))
+				for parameter in factsParameters {
 					guard parameter != treeParameters.first else {
 						treeParameters = treeParameters.dropFirst()
 						continue
@@ -473,7 +530,16 @@ enum TypeFactsChecks {
 				}
 			}
 			if !areAmongTheFacts {
-				add(35, "the function of \(nodeDescription(node)) takes \(generator.cycleParameters) where the facts give its variant \(report.variantParameters[variant])")
+				var treeParameters = generator.cycleParameters[...]
+				let factsAreAmongTheTree = factsParameters.allSatisfy { parameter in
+					guard let position = treeParameters.firstIndex(of: parameter) else { return false }
+					treeParameters = treeParameters[(position + 1)...]
+					return true
+				}
+				if factsAreAmongTheTree, generator.cycleParameters.filter({ !factsParameters.contains($0) }).allSatisfy({ $0.hasSuffix("?") }) {
+					result.check35DroppedParameterFunctions.append(nodeDescription(node))
+				}
+				add(35, "the function of \(nodeDescription(node)) takes \(generator.cycleParameters) where the facts give its variant \(factsParameters)")
 			}
 		}
 		// Check 33.
@@ -603,7 +669,7 @@ enum TypeFactsChecks {
 				}
 			}
 		}
-		compared[36] = comparedPins
+		compared[40] = comparedPins
 		result.comparedByCheck.merge(compared) { $0 + $1 }
 		let unwalkedNodes = report.nodes.count - nodesSeen.count - report.nodes.count(where: \.isLeaf)
 		let twinNodes = report.nodes.count { $0.twin >= 0 }
@@ -734,7 +800,7 @@ enum TypeFactsChecks {
 	private static func keyedAnswers(of place: TypeFactsReport.Place, declared: Set<String>) -> Set<String> {
 		var answers = Set<String>()
 		// A mock read's answer, whether the place passes `nil`, is a value one optional parameter carries, so it keys no
-		// variant (`TypeFactsMockRootPins`); check 36 compares it place by place.
+		// variant (`TypeFactsMockRootPins`); check 40 compares it place by place.
 		for answer in place.answeredReads where !answer.hasPrefix("optional(") && !answer.hasPrefix("mock(") {
 			// A nearest declaration that only receives only if available read (`optionalValue`) keys by rule 1 too.
 			let read = String(answer.prefix { $0 != " " })
@@ -756,7 +822,8 @@ enum TypeFactsChecks {
 		return reads
 	}
 
-	static let lastCheck = 36
+	/// The last check's number; 38 is unused, so its count stays 0.
+	static let lastCheck = 40
 
 	/// Checks 11 to 31: each column of the graph against what the generator decided at each place.
 	///
@@ -785,6 +852,17 @@ enum TypeFactsChecks {
 	/// 32. Oracle B: each member a variant makes again is called as the variant that each body calling the maker calls for
 	///     that member at its own edge, and the maker has such a body. It reads the variants alone, so it runs on every tree
 	///     with a loop of builders, refused or not.
+	/// 36. What the place requires, the receives inside the fills beneath it counted, is its node's fold along every
+	///     edge (`requiredIncludingFills`), in a production world, outside a fill, and where no cycle explains a
+	///     difference (34 and 35 are other lanes' checks).
+	/// 37. Each fill a place passes builds in a `@Sendable` function (`ScopeGenerator.buildsInSendableFunction(ofFill:)`)
+	///     exactly where the facts' fold says so (`TypeFactsFill.buildsInSendableFunction`, `TypeFactsFillSendability`),
+	///     the fill's edge found by the fill's key, since two fills of one call can fill places of one property.
+	/// 39. Each fill a place passes takes the memos the place's generator hands it (`Scope.Fill.labelsHandedAsMemo`, the
+	///     fill's fields of those labels), exactly the facts' column (`TypeFactsFill.handedMemoStart`): which labels, each
+	///     memo's property, and its deferral, the `SendableLazilyInstantiated` its tree reads beside the value applied
+	///     (`ScopeGenerator.FillDispatcher.sendableWrapperReads(ofLabelsHandedAsMemo:labelsReadOnlyAsPlaceField:among:)`),
+	///     the fill's edge found by its key as in 37.
 	///
 	/// 33, outside the columns: a production world keys by family only the bodies
 	/// of a seam's tree with a hole beneath, fills included, which read their cases from the `@Sendable` carrier inside a
@@ -798,7 +876,7 @@ enum TypeFactsChecks {
 	/// marked body makes again is marked. Exempt by shape: a variant inside only by another variant's closing place, and a
 	/// fill beneath fills marked by a fill's chain.
 	///
-	/// Check 36, beside check 10, reads each place's path: a place of a mock passes `nil` to exactly the receives only if
+	/// Check 40, beside check 10, reads each place's path: a place of a mock passes `nil` to exactly the receives only if
 	/// available the pins along its path pin (`TypeFactsMockRootPins.receivesPassedNil(alongPath:)`), as the walk judged
 	/// them. A pin keys no variant, so check 10 leaves mock reads out.
 	private static func columnChecks(
@@ -877,6 +955,19 @@ enum TypeFactsChecks {
 				let fillTargets = zip(facts.edges, facts.edgeFacts).filter(\.1.isFill).map(\.0)
 				if fillChildren.count > facts.fillCount || fillChildren.contains(where: { places[$0].node.map { !fillTargets.contains($0) } ?? true }) {
 					add(28, "place \(index) \(place.declaration) passes \(fillChildren.count) fills where its node passes \(facts.fillCount)")
+				}
+				// Check 37.
+				for fillChild in fillChildren {
+					guard let fillKey = places[fillChild].fillKey, let edge = facts.edgeFacts.first(where: { $0.isFill && $0.fillKey == fillKey }) else { continue }
+					count(37)
+					if places[fillChild].fillBuildsInSendableFunction != edge.fillBuildsInSendableFunction {
+						add(37, "place \(index) \(place.declaration) builds fill \(places[fillChild].declaration) in a `@Sendable` function \(places[fillChild].fillBuildsInSendableFunction.map { "\($0)" } ?? "unrecorded") where the facts say \(edge.fillBuildsInSendableFunction) (the seam takes it `@Sendable` \(edge.fillHoleIsSendable))")
+					}
+					// Check 39.
+					count(39)
+					if places[fillChild].fillHandedMemos != edge.fillHandedMemos {
+						add(39, "place \(index) \(place.declaration) hands fill \(places[fillChild].declaration) the memos \(places[fillChild].fillHandedMemos.map { "\($0)" } ?? "unrecorded") where the facts say \(edge.fillHandedMemos)")
+					}
 				}
 			}
 			// Check 23 and 24.
@@ -957,6 +1048,13 @@ enum TypeFactsChecks {
 				}
 				let differences = receiveDifferences.map { "\($0.0) \($0.1) where its node's union is \($0.2)" }.joined(separator: ", ")
 				add(isExplainedReceive && isSubset ? 17 : 16, "place \(index) \(place.declaration) receives \(differences)")
+			}
+			// Check 36. The fold along every edge counts what the fills beneath read, as the generator's required receives do.
+			if !subtreeClosesCycle[index], !isInsideFill[index], !report.forMockGeneration, !facts.isOnCycle {
+				count(36)
+				if spellingsOfOneType(generator.required) != spellingsOfOneType(facts.requiredIncludingFills) {
+					add(36, "place \(index) \(place.declaration) requires \(generator.required) where its node's fold including fills is \(facts.requiredIncludingFills)")
+				}
 			}
 			// Check 18 and 19.
 			count(explained ? 19 : 18)

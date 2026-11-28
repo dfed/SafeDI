@@ -170,7 +170,7 @@ struct SafeDIToolMockRootTreeChecksTests: ~Copyable {
 		let (comparisons, continuation) = AsyncStream.makeStream(of: MockRootTreeChecksComparison.self)
 		var didThrow = false
 		do {
-			_ = try await MockRootTreeChecksObservation.$comparesTree.withValue({ continuation.yield($0) }) {
+			_ = try await MockRootTreeChecksObservation.$comparesTree.withValue(TaskLocalFunction { continuation.yield($0) }) {
 				try await executeSafeDIToolTest(
 					swiftFileContent: swiftFileContent,
 					buildSwiftOutputDirectory: true,

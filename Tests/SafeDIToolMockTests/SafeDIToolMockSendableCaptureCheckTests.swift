@@ -332,7 +332,7 @@ struct SafeDIToolMockSendableCaptureCheckTests: ~Copyable {
 			"""], dependencies: ["Core"]),
 		]
 		let (comparisons, continuation) = AsyncStream.makeStream(of: MockRootTreeChecksComparison.self)
-		_ = try await MockRootTreeChecksObservation.$comparesTree.withValue({ continuation.yield($0) }) {
+		_ = try await MockRootTreeChecksObservation.$comparesTree.withValue(TaskLocalFunction { continuation.yield($0) }) {
 			try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		}
 		continuation.finish()
@@ -356,7 +356,7 @@ struct SafeDIToolMockSendableCaptureCheckTests: ~Copyable {
 	/// which reports an error exactly where `expectsError`.
 	private mutating func sendableCaptureFindingByRoot(of swiftFileContent: [String], expectsError: Bool = false) async -> [String: SendableCaptureFinding] {
 		let (comparisons, continuation) = AsyncStream.makeStream(of: MockRootTreeChecksComparison.self)
-		await MockRootTreeChecksObservation.$comparesTree.withValue({ continuation.yield($0) }) {
+		await MockRootTreeChecksObservation.$comparesTree.withValue(TaskLocalFunction { continuation.yield($0) }) {
 			do {
 				_ = try await executeSafeDIToolTest(
 					swiftFileContent: swiftFileContent,

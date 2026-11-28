@@ -1195,19 +1195,16 @@ extension DependencyTreeGenerator {
 			propertiesToGenerate = scope.propertiesToGenerate
 			declarations = ScopeDeclarations(scope: scope)
 			// A seam call's fills, in a production tree, call no public mock, so only a public mock call's are walked, unless the
-			// walk asks what a seam's fill receives (`ReceivedPropertiesCache.walksSeamCallFills`).
+			// walk asks what a seam's fill receives (`ReceivedPropertiesCache.walksSeamCallFills`). It hands a fill no memo a
+			// route on a carried route hands it (`ScopeGenerator.FillDispatcher.memosHanded(toFills:ofPublicMockCall:labelsReadOnlyAsPlaceField:readingSendableWrapper:among:)`),
+			// which the tree decides from the call's dispatchers as it builds the fills, after this walk, and which the
+			// per-type facts pass (`FillsOfCall.structBindings(receivedByFillTarget:)`): a fill that takes one binds the place's
+			// field here, which a seam's fill's `optionalLazilyInstantiatedLabels` alone reads.
 			var fills = [(scope: Scope, fieldForms: Set<Property>)]()
 			if scope.publicMockCall != nil || walksSeamCallFills && scope.seamCall != nil {
 				let innerScopeReaders = scope.calledBuilders.map { InnerScopeReaders(enumsByKey: $0.enumsByKey) }
 				for case let .fill(hole, fillScope) in scope.holeArguments {
-					// A public mock takes no deferred parameter, so its fill binds every field, but one that a level of an inner
-					// seam's enum holds on some route to the place and not on another, which the fill reads of the caller's scope
-					// on that other route (`InnerScopeReaders.labelsSomeInnerRouteLacks(of:)`). A seam's fill reads a field bound
-					// from a deferred parameter of the caller's scope too (`fillUnderConstruction`).
-					let labelsSomeInnerRouteLacks = innerScopeReaders?.labelsSomeInnerRouteLacks(of: hole) ?? []
-					let boundLabels = Set(hole.fields.filter { scope.publicMockCall != nil || !$0.isDeferredParameter }.map(\.property.label))
-					// The fill declares the property it builds too (`ScopeGenerator.propertiesBeingBuilt(byFillOf:)`).
-					fills.append((fillScope, ScopeGenerator.fieldForms(of: hole, boundLabels: boundLabels.subtracting(labelsSomeInnerRouteLacks)).union(ScopeGenerator.propertiesBeingBuilt(byFillOf: hole))))
+					fills.append((fillScope, ScopeGenerator.structBindings(ofFillOf: hole, passedByPublicMockCall: scope.publicMockCall != nil, innerScopeReaders: innerScopeReaders).hiddenFromCaller))
 				}
 			}
 			self.fills = fills

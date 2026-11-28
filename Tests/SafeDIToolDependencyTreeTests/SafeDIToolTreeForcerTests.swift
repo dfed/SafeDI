@@ -46,7 +46,7 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 	mutating func generate_buildsTreeOnlyForRootNodeRecordsRefuse_whenNothingElseReadsTrees() async throws {
 		let (forcers, heldTaskCounts) = try await treeForcers(of: Self.plainAndLoopingRoots)
 		#expect(forcers == """
-		Looping\tkind cycleReceivesBuilder
+		Looping\tkind cycle
 		Plain\tnone
 		roots that built a tree: 1 of 2
 
@@ -60,7 +60,7 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 	mutating func generate_buildsEveryRootsTree_whenRunDrawsDOTGraph() async throws {
 		let (forcers, heldTaskCounts) = try await treeForcers(of: Self.plainAndLoopingRoots, buildDOTFileOutput: true)
 		#expect(forcers == """
-		Looping\tkind cycleReceivesBuilder, DOT graph
+		Looping\tkind cycle, DOT graph
 		Plain\tDOT graph
 		roots that built a tree: 2 of 2
 
@@ -186,12 +186,13 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 	private var filesToDelete: [URL]
 
 	/// `Plain`, a root node records lay out, and `Looping`, a root they refuse, since a type of its tree builds itself
-	/// again through an `Instantiator` that a type beneath it receives.
+	/// again through an `Instantiator` and a type beneath it receives a `LazilyInstantiated` wrapper.
 	private static let plainAndLoopingRoots = [
 		seamFixtureType(named: "Looping", isRoot: true, declarations: ["@Instantiated let stepBuilder: Instantiator<Step>"]),
 		seamFixtureType(named: "Plain", isRoot: true, declarations: ["@Instantiated let service: Service"]),
-		seamFixtureType(named: "Step", declarations: ["@Instantiated let stepBuilder: Instantiator<Step>", "@Instantiated let detail: Detail"]),
-		seamFixtureType(named: "Detail", declarations: ["@Received let stepBuilder: Instantiator<Step>"]),
+		seamFixtureType(named: "Step", declarations: ["@Instantiated let stepBuilder: Instantiator<Step>", "@Instantiated let tag: LazilyInstantiated<Tag>", "@Instantiated let detail: Detail"]),
+		seamFixtureType(named: "Detail", declarations: ["@Received let tag: LazilyInstantiated<Tag>"]),
+		seamFixtureType(named: "Tag", declarations: []),
 		seamFixtureType(named: "Service", declarations: []),
 	]
 
@@ -284,7 +285,7 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 		let output = TestTemporaryDirectory.uniquePath(prefix: "TreeForcers", pathExtension: "txt")
 		filesToDelete.append(output)
 		let (stream, continuation) = AsyncStream.makeStream(of: Int.self)
-		_ = try await HeldCodeTasks.$observer.withValue({ continuation.yield($0) }) {
+		_ = try await HeldCodeTasks.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: files,
 				buildSwiftOutputDirectory: true,

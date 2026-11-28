@@ -31,7 +31,7 @@ struct SafeDIToolSkippedConfirmingPassTests {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func generate_skipsConfirmingPassesOfSeamsWithHoles_whenSeamSmokeSeedsRun() async throws {
 		let (stream, continuation) = AsyncStream.makeStream(of: SkippedConfirmingPass.self)
-		try await SeamSignatureObservation.$confirmsSkippedPasses.withValue({ continuation.yield($0) }) {
+		try await SeamSignatureObservation.$confirmsSkippedPasses.withValue(TaskLocalFunction { continuation.yield($0) }) {
 			for seed in SafeDIToolGraphFuzzerTests.seamSmokeSeeds {
 				let fixture = GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateDependencyTree])
 				_ = try await GraphFuzzerOracle.toolOutcome(of: fixture)

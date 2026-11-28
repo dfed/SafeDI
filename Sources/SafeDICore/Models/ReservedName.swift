@@ -290,6 +290,12 @@ public enum ReservedName: Hashable, Sendable {
 	/// member can be named `builder`.
 	static let noScopeParameterName = "\(builderFunctionNamePrefix)builder"
 
+	/// The name of the local function that builds the level of a seam's scope enum `enumType`, as a module that does not
+	/// declare it spells it, from one builder, where code needs that level with no scope (`ScopeGenerator.LevelsWithoutScope`).
+	static func levelWithoutScopeFunctionName(ofEnum enumType: TypeDescription) -> String {
+		"\(noScopeArgumentLabel)_\(enumType.asIdentifier)"
+	}
+
 	/// The name under which a generated initializer reads the parameter that sets a member labeled `self`
 	/// (`String.spelledAsAssigningParameterName`): a parameter named `self` would hide the instance the initializer assigns
 	/// to.

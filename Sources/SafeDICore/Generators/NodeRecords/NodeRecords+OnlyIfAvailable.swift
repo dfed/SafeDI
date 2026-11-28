@@ -77,8 +77,9 @@ extension NodeRecords {
 ///
 /// Rule 1 of the per-type facts keys a read only if available alike whether it is `nil` or a value, so one variant can be
 /// called where the read is `nil` and where it is a value. Such a variant reads the value: its function takes the label
-/// as one optional parameter, and the call that finds no declaration passes `nil` (`context(merging:with:)`), a member
-/// of a cycle like any other, whose calls around the cycle hand the parameter on. So does a variant one call of which
+/// as one optional parameter, and the call that finds no declaration passes `nil` (`context(merging:with:)`). A member of
+/// a production cycle does so only where its function takes each such label as a parameter (`TypeFactsOutcome.parameter`);
+/// a mock's, like any other, whose calls around the cycle hand the parameter on. So does a variant one call of which
 /// sees a declaration and another that declaration's optional form, as beneath a mock root's override of a receive only
 /// if available and beneath a type that instantiates the label. A world in which two calls of one variant see
 /// declarations of one label that differ otherwise is refused (`onlyIfAvailableAnsweredApart`). Only the labels some
@@ -261,7 +262,11 @@ struct OnlyIfAvailableAnswers: Sendable {
 					// statement for every call, so a label one fulfills is not taken as a parameter.
 					// A world with a hole or a fill writes the places beneath them from its sites' code, which passes `nil` where
 					// one call sees no declaration, so it takes no such parameter either.
-					guard labelsOneCallAnswers.isEmpty || (!holdsHoleOrFill && renamedLabels.isDisjoint(with: labelsOneCallAnswers)) else {
+					// A member of a production cycle takes what its calls answer as its cycle parameters, whose rows are made per
+					// call: each call passes what it sees, so a label one call answers is merged where the member's function takes
+					// it as a parameter, and refused where the function captures it.
+					let cycleMemberTakesLabels = world.isMockWorld || !world.isOnCycle(world.declaration(of: callee)) || Self.takesAsParameters(labelsOneCallAnswers, callee, in: world)
+					guard labelsOneCallAnswers.isEmpty || (!holdsHoleOrFill && cycleMemberTakesLabels && renamedLabels.isDisjoint(with: labelsOneCallAnswers)) else {
 						throw .onlyIfAvailableAnsweredApart
 					}
 					// The facts key `nil` with a lazy wrapper where no answer in the declared form reaches the read (rule A's
@@ -294,7 +299,7 @@ struct OnlyIfAvailableAnswers: Sendable {
 					let pinning = try Self.pins(of: dependency, among: pinsByVariant[Int(variant)][dependency.property.label] ?? [])
 					if pinning.isPinnedAtEveryCall {
 						unavailablePropertiesByVariant[Int(variant)].insert(dependency.property)
-					} else if try Self.binding(reading: dependency.property, in: context) == nil {
+					} else if Self.binding(reading: dependency.property, in: context) == nil {
 						unavailablePropertiesByVariant[Int(variant)].insert(dependency.property)
 					} else if !pinning.pins.isEmpty {
 						pinsOfReceiveByVariant[Int(variant)][dependency.property] = pinning.pins
@@ -321,7 +326,7 @@ struct OnlyIfAvailableAnswers: Sendable {
 						if !childBindings.isEmpty {
 							renameContext[fulfillingProperty.label] = childBindings
 						}
-						binding = try Self.binding(reading: fulfillingProperty, in: renameContext)
+						binding = Self.binding(reading: fulfillingProperty, in: renameContext)
 					}
 					if let binding {
 						renameBindingByVariant[Int(callee)] = .bound(fulfillingBindingIsOptional: binding.typeDescription.isOptional)
@@ -347,6 +352,17 @@ struct OnlyIfAvailableAnswers: Sendable {
 		/// Whether the mock root's own type declares the receive: the mock root's level holds the binding itself, so no
 		/// function of its own binds `nil` for only what it builds.
 		let isMockRootsOwn: Bool
+	}
+
+	/// Whether `variant`'s tree reads each of `labels` from above, and its function takes every such read as a parameter
+	/// (`TypeFactsOutcome.parameter`).
+	private static func takesAsParameters(_ labels: Set<String>, _ variant: VariantID, in world: some NodeRecordSources) -> Bool {
+		var labelsTaken = Set<String>()
+		for (read, outcome) in zip(world.reads(of: world.declaration(of: variant)), world.outcomes(of: variant)) where labels.contains(world.text(ofLabel: world.read(read).label)) {
+			guard outcome == .parameter else { return false }
+			labelsTaken.insert(world.text(ofLabel: world.read(read).label))
+		}
+		return labelsTaken == labels
 	}
 
 	/// How a rename only if available is bound where its scope is built.
@@ -397,17 +413,12 @@ struct OnlyIfAvailableAnswers: Sendable {
 	}
 
 	/// The declaration in `context` a read only if available of `property` is passed, or `nil` where none is available.
-	private static func binding(reading property: Property, in context: [String: [Binding]]) throws(NodeRecordRefusal) -> Property? {
-		let providingBindings = (context[property.label] ?? []).filter { binding in
-			binding.state != .hiddenAvailable && ScopeGenerator.provides(binding.property, aFormReadBy: property)
-		}
-		if let available = providingBindings.first(where: { $0.state == .available }) {
-			return available.property
-		}
-		// An `Instantiator` still being built, or built after the branch, is given to the read where its loop of builders
-		// holds only builders (`ReceivedBuilderLoops`), which rebinds it: a loop of builders, refused.
-		guard !providingBindings.contains(where: \.property.propertyType.isInstantiator) else { throw .builderLoop }
-		return nil
+	/// A declaration still being built, or built after the branch, is passed nothing: where the tree passes a builder of
+	/// its loop instead, the loop's member rebinds it at its top, which its context holds (`TypeFactsWorld.madeAgain(from:)`).
+	private static func binding(reading property: Property, in context: [String: [Binding]]) -> Property? {
+		(context[property.label] ?? []).first { binding in
+			binding.state == .available && ScopeGenerator.provides(binding.property, aFormReadBy: property)
+		}?.property
 	}
 
 	/// The pins of the mock root's binding of the label of `dependency`, which a variant's type receives only if

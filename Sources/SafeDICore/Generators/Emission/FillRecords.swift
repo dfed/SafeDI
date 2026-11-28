@@ -169,7 +169,7 @@ public struct FillSignatureObservation: Sendable {
 	public let spelledFromRecord: [String]
 
 	/// Called with each fill as its function is written, when set: by the tests, never by the tool.
-	@TaskLocal public static var observer: (@Sendable (FillSignatureObservation) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (FillSignatureObservation) -> Void>?
 }
 
 /// What a call that fills a builder hands its dispatchers of the caller's scope, shared by every builder it fills.
@@ -221,5 +221,5 @@ public struct DispatcherRecordObservation: Sendable {
 	public let spelledFromRecord: String
 
 	/// Called with each dispatcher as its declaration is written, when set: by the tests, never by the tool.
-	@TaskLocal public static var observer: (@Sendable (DispatcherRecordObservation) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (DispatcherRecordObservation) -> Void>?
 }

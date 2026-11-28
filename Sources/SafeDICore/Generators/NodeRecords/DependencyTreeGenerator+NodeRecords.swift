@@ -127,15 +127,17 @@ extension DependencyTreeGenerator {
 			} else {
 				laidOutCode
 			}
-			// A root the engine cannot lay out even for the comparison shows no text to approve that difference against, so
-			// where its records differ from the tree's in no other way its world is reported as one function cannot serve
+			// One variant serving a call that answers a read only if available and a call that does not differs from the
+			// tree's place at the second call, which only the laid-out text shows passing `nil`. Where the engine cannot lay
+			// the root out, nothing shows it, so its world is reported as one function cannot serve
 			// (`onlyIfAvailableAnsweredApart`), and it keeps its tree's code.
-			if comparedCode == nil, holdsDifferenceOfOptionalParameter, rootInfo.ownSeamRoot == nil,
-			   // safedi-source-rule: allow stringScan — only where a test observes node records, once for each difference of a root that keeps its tree.
-			   comparisons.allSatisfy({ $0.differences.allSatisfy { $0.contains(": \(NodeRecordsReport.argumentsOfOptionalParameterDifferenceName) is ") } })
-			{
-				let refusal = NodeRecordRefusal.onlyIfAvailableAnsweredApart.rawValue
-				observer(NodeRecordsReport(root: root, refusal: refusal, everyRefusal: [refusal], isLaidOutFromNodeRecords: false, differences: [], recordCount: 0, treePlaceCount: 0, treeForcers: rootInfo.treeForcers))
+			let differsOnlyByOptionalParameter = comparisons.allSatisfy { comparison in
+				// safedi-source-rule: allow stringScan — only where a test observes node records, once for each difference of a root that keeps its tree.
+				comparison.differences.allSatisfy { $0.contains(": \(NodeRecordsReport.argumentsOfOptionalParameterDifferenceName) is ") }
+			}
+			guard comparedCode != nil || !holdsDifferenceOfOptionalParameter || rootInfo.ownSeamRoot != nil || !differsOnlyByOptionalParameter else {
+				let everyRefusal = GenerationWork.$observer.withValue(nil) { NodeRecords.refusals(in: world, seamTree: seamTree, declaredTypeNames: declaredTypeNames) }
+				observer(NodeRecordsReport(root: root, refusal: NodeRecordRefusal.onlyIfAvailableAnsweredApart.rawValue, everyRefusal: NodeRecordRefusal.allCases.filter { Set(everyRefusal + [.onlyIfAvailableAnsweredApart]).contains($0) }.map(\.rawValue), isLaidOutFromNodeRecords: false, differences: [], recordCount: 0, treePlaceCount: 0, treeForcers: rootInfo.treeForcers))
 				return treeCode
 			}
 			// A root whose tree's body holds nothing is compared nowhere.
@@ -199,7 +201,7 @@ extension DependencyTreeGenerator {
 	/// `recordsBody`, node records' root body, and how many places it holds (`NodeRecordsObservation.differences(between:and:)`).
 	private static func treeCode(of tree: ScopeGenerator, besideRecordsBody recordsBody: [GeneratedCode]) async throws -> PlannedTree {
 		let (stream, continuation) = AsyncStream.makeStream(of: (differences: [String], treePlaceCount: Int).self)
-		let code = try await NodeRecordsObservation.$rootBodyObserver.withValue({ treeBody in
+		let code = try await NodeRecordsObservation.$rootBodyObserver.withValue(TaskLocalFunction { treeBody in
 			continuation.yield(NodeRecordsObservation.differences(between: treeBody, and: recordsBody))
 		}) {
 			try await tree.generatePlan()

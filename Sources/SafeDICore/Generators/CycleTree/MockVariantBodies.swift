@@ -23,11 +23,11 @@
 public enum MockVariantBodyObservation {
 	/// Called, for each place of a mock root's tree that reaches a cycle, with the mocked type, what the place is, and
 	/// the receives today's place and its body pass `nil`, each sorted.
-	@TaskLocal public static var observer: (@Sendable (_ mockRoot: String, _ place: String, _ todaysUnavailableProperties: [String], _ bodysUnavailableProperties: [String]) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (_ mockRoot: String, _ place: String, _ todaysUnavailableProperties: [String], _ bodysUnavailableProperties: [String]) -> Void>?
 	/// Called, for each mock root that reaches a cycle, with the mocked type, each body of a type on a cycle the plan
 	/// builds, in the order the plan first calls it, and the bodies today's places of such types take that the plan does
 	/// not build.
-	@TaskLocal public static var planObserver: (@Sendable (_ mockRoot: String, _ bodiesOfPlan: [String], _ todaysBodiesPlanLacks: [String]) -> Void)?
+	@TaskLocal public static var planObserver: TaskLocalFunction<@Sendable (_ mockRoot: String, _ bodiesOfPlan: [String], _ todaysBodiesPlanLacks: [String]) -> Void>?
 }
 
 extension DependencyTreeGenerator {
@@ -61,12 +61,17 @@ extension DependencyTreeGenerator {
 		// A tree that calls another module's public mock is not compared: the call reads the caller's declarations for its
 		// fills' trees, as a production root's seam call does, and a body has no edge for a fill. Nor, under the checks
 		// every test runs, is a tree whose shape the plan does not admit
-		// (`RootTreeChoiceObservation.comparesOnlyRootsThePlanAdmits`).
+		// (`RootTreeChoiceObservation.comparesOnlyRootsThePlanAdmits`), or one that builds a value and its lazily
+		// instantiated twin (`CallPlaceShadow.twinValues`). A mock gives the two one slot, so a place entered as the
+		// wrapper beneath the value's function takes a body the plan of a mock does not build. The plan learns no new
+		// shape: such a mock root keeps its tree, as a production root with a twin keeps its plan's own keys
+		// (`keysBodiesByFacts(inTreeOf:)`) and node records refuse it (`NodeRecords.TwinsOnPath`).
 		guard observer != nil || planObserver != nil,
 		      !reachesCallOfPublicMock(from: mockRootScope),
 		      !RootTreeChoiceObservation.comparesOnlyRootsThePlanAdmits
 		      || shapeOutsidePerTypePlan(inTreeOf: mockRootScope, cache: &cache)?.reason == nil,
-		      let shadow = CallPlaceShadow(root: mockRootScope, cache: &cache)
+		      let shadow = CallPlaceShadow(root: mockRootScope, cache: &cache),
+		      !RootTreeChoiceObservation.comparesOnlyRootsThePlanAdmits || shadow.twinValues.isEmpty
 		else { return }
 		let mockRoot = instantiable.concreteInstantiable.asSource
 		let rootNearestDeclarations = NearestDeclarations.binding(boundProperties, passingNilTo: receivesPassedNil)

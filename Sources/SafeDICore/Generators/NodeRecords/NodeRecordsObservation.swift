@@ -46,14 +46,14 @@ public enum NodeRecordsObservation {
 	/// Handed each mocked type and its mock root's world (`MockWorldRoot`) as the mock root is built, where a test observes node records
 	/// (`DependencyTreeGenerator.createMockRootScopeGenerator`). A task local rather than a parameter: an optional closure
 	/// threaded through the mock roots' construction raised the peak memory of a run that sets none by a fifth on Linux.
-	@TaskLocal static var recordsMockWorldRoot: (@Sendable (TypeDescription, MockWorldRoot) -> Void)?
+	@TaskLocal static var recordsMockWorldRoot: TaskLocalFunction<@Sendable (TypeDescription, MockWorldRoot) -> Void>?
 
 	/// Handed each root's report, where set. Only a test sets it.
-	@TaskLocal public static var observer: (@Sendable (NodeRecordsReport) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (NodeRecordsReport) -> Void>?
 
 	/// Handed the body of the root a tree's places build, beside the node records made for the same root, where a root's
 	/// plan is observed: set by the generator around one root's plan.
-	@TaskLocal static var rootBodyObserver: (@Sendable (_ rootBody: [GeneratedCode]) -> Void)?
+	@TaskLocal static var rootBodyObserver: TaskLocalFunction<@Sendable (_ rootBody: [GeneratedCode]) -> Void>?
 
 	/// The ways `nodeRecordsBody`, the root's body node records make, differs from `treeBody`, the body the tree's places
 	/// make: a line per difference, each naming the place by the labels on its path, and how many places the tree's body
@@ -171,13 +171,21 @@ public enum NodeRecordsObservation {
 		return differences
 	}
 
-	/// Whether each argument of `nodeRecords` is `tree`'s, or reads the nearest declaration of its label where `tree`'s,
-	/// the same argument otherwise, reads `nil`.
+	/// Whether each argument of `nodeRecords` is `tree`'s, or reads the optional parameter of one function that serves a
+	/// call that answers a read only if available and a call that does not: the nearest declaration of its label where
+	/// `tree`'s, the same argument otherwise, reads `nil`, by value or, where the declaration is a lazily instantiated
+	/// wrapper, as its instance (a wrapper still being built where `tree` reads `nil`, which the facts key as the wrapper);
+	/// or, where the parameter is a lazily instantiated wrapper some call passes `nil` (rule 3), the wrapper's instance
+	/// through the optional where `tree`'s reads `nil` or the instance.
 	static func differOnlyWhereTreeReadsNilOfLabel(_ tree: [PlaceRead], _ nodeRecords: [PlaceRead]) -> Bool {
 		guard tree.count == nodeRecords.count else { return false }
 		for (treeRead, nodeRecordsRead) in zip(tree, nodeRecords) where treeRead != nodeRecordsRead {
-			let treeReadWithRecordsSource = PlaceRead(argumentLabel: treeRead.argumentLabel, label: treeRead.label, property: treeRead.property, source: .binding(label: treeRead.label), staysOutsideSendableFunctions: treeRead.staysOutsideSendableFunctions)
-			guard treeRead.source == .nil, treeReadWithRecordsSource == nodeRecordsRead else { return false }
+			let readsValue = treeRead.source == .nil
+				&& (nodeRecordsRead.source == .binding(label: treeRead.label) || nodeRecordsRead.source == .lazyInstance(label: treeRead.label, throughOptional: false))
+			let readsWrappersInstance = (treeRead.source == .nil || treeRead.source == .lazyInstance(label: treeRead.label, throughOptional: false))
+				&& nodeRecordsRead.source == .lazyInstance(label: treeRead.label, throughOptional: true)
+			let treeReadWithRecordsSource = PlaceRead(argumentLabel: treeRead.argumentLabel, label: treeRead.label, property: treeRead.property, source: nodeRecordsRead.source, staysOutsideSendableFunctions: treeRead.staysOutsideSendableFunctions)
+			guard readsValue || readsWrappersInstance, treeReadWithRecordsSource == nodeRecordsRead else { return false }
 		}
 		return true
 	}

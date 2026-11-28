@@ -554,6 +554,16 @@ extension DependencyTreeGenerator {
 			nil
 		}
 		let treeChecks = worldFindsSendableCapture.map { scopeTreeChecks.answeringSendableCaptures(fromWorld: $0) } ?? scopeTreeChecks
+		// The labels the facts of the mock root's world find no one parameter can pass, beside those its tree reports,
+		// where a test compares the two (`UnpassableCycleLabelObservation.factsObserver`).
+		if let observer = UnpassableCycleLabelObservation.factsObserver {
+			let world = TypeFactsGraph(root: ConstructionScope(table: mockRootTable, record: mockRootRecord), forMockGeneration: true)
+			observer(
+				"mock of \(instantiable.concreteInstantiable.asSource)",
+				Set(world.unpassableCycleLabels().map { "\(world.graph.nodes[Int($0.declaration)].scope.instantiable.concreteInstantiable.asSource).\($0.label)" }).sorted(),
+				Set(generator.unpassableCycleLabelsInTree.map { "\($0.builtType.asSource).\($0.forms.first?.label ?? "")" }).sorted(),
+			)
+		}
 		// A tree whose scopes declare no label they receive in two forms holds no unpassable label (`MockRootTreeChecks`).
 		if treeChecks.needsTree(.cycleLabels) {
 			try Self.validateCycleLabelsArePassable(inTreesRootedAt: [generator])

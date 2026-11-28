@@ -38,9 +38,10 @@
 /// decided after its world is built (`ScopeGenerator.instancesReadThroughPublicMockWrapperParameters(of:mockDefaults:)`),
 /// and reach the world with the mock root tree checks' move of the capture check off the tree.
 ///
-/// Each variant is resolved once, from the first call a walk from the root meets: a second call's capture is found only
-/// where its key differs, which makes a variant of its own. The check goes when the facts fold captures per variant
-/// (`TypeFactsOutcome`), the per-type facts' form of `nonSendableWrapperCaptures`.
+/// Each variant is resolved from the first call a walk from the root meets, and read again where a later call answers a
+/// read only if available that it left unanswered, as rule 1 keys such a read alike either way: a variant built where a
+/// wrapper is not yet available and again where it is captures it at the second. The check goes when the facts fold
+/// captures per variant (`TypeFactsOutcome`), the per-type facts' form of `nonSendableWrapperCaptures`.
 ///
 /// Memory: the declaration that answers each read, one ID per key of every variant, while the check runs; none in a world
 /// that opens no `@Sendable` function.
@@ -98,11 +99,11 @@ struct DeclarationsAnsweringReads: Sendable {
 		while let caller = stack.popLast() {
 			let callerAnsweringDeclarations = answeringDeclarations[Int(caller)] ?? []
 			let edgeFacts = world.edgeFacts(from: world.declaration(of: caller))
-			for (edgeIndex, callee) in world.calls(of: caller).enumerated() where answeringDeclarations[Int(callee)] == nil {
+			for (edgeIndex, callee) in world.calls(of: caller).enumerated() {
 				let opensSendableFunction = Self.opensSendableFunction(edgeFacts[edgeFacts.startIndex + edgeIndex])
+				let calleeReads = world.reads(of: world.declaration(of: callee))
 				var calleeAnsweringDeclarations = [DeclarationID]()
-				callerByVariant[Int(callee)] = caller
-				for (source, readID) in zip(world.sources(ofCall: edgeIndex, of: caller), world.reads(of: world.declaration(of: callee))) {
+				for source in world.sources(ofCall: edgeIndex, of: caller).prefix(calleeReads.count) {
 					let answeringDeclaration: DeclarationID = switch source.kind {
 					case .none:
 						-1
@@ -112,6 +113,32 @@ struct DeclarationsAnsweringReads: Sendable {
 						callerAnsweringDeclarations[Int(source.payload)]
 					}
 					calleeAnsweringDeclarations.append(answeringDeclaration)
+				}
+				// Every call into a variant answers a read by value alike, since the variant's key holds the forms its
+				// declaration provides, and crosses the one edge from its type to it, which opens a `@Sendable` function at
+				// every call or at none. A read only if available is the exception: rule 1 keys it alike whether a call answers
+				// it or not, so the variant is resolved as a call that answers it does, and read again, with everything it
+				// calls, whichever call comes first. A capture is only ever added, so the order the calls are met in never
+				// changes what is found.
+				var calleeAnswers = calleeAnsweringDeclarations
+				if let resolved = answeringDeclarations[Int(callee)] {
+					var merged = resolved
+					for (index, readID) in calleeReads.enumerated() where merged[index] < 0 && calleeAnsweringDeclarations[index] >= 0 {
+						switch world.read(readID).channel {
+						case .optional, .optionalValue:
+							merged[index] = calleeAnsweringDeclarations[index]
+						case .value, .alias, .madeAgain, .mock, .carrier, .fill, .family, .override:
+							break
+						}
+					}
+					guard merged != resolved else { continue }
+					calleeAnswers = merged
+				} else {
+					callerByVariant[Int(callee)] = caller
+				}
+				answeringDeclarations[Int(callee)] = calleeAnswers
+				stack.append(callee)
+				for (answeringDeclaration, readID) in zip(calleeAnswers, calleeReads) {
 					let read = world.read(readID)
 					guard opensSendableFunction, read.channel.asksAboutLabel else { continue }
 					let label = world.text(ofLabel: read.label)
@@ -145,8 +172,6 @@ struct DeclarationsAnsweringReads: Sendable {
 						sendableFunctionCapturesWrapper = true
 					}
 				}
-				answeringDeclarations[Int(callee)] = calleeAnsweringDeclarations
-				stack.append(callee)
 			}
 		}
 		self.sendableFunctionCapturesWrapper = sendableFunctionCapturesWrapper

@@ -116,7 +116,7 @@ struct SafeDIToolNodeRecordsOptionalParameterTests: ~Copyable {
 		let (stream, continuation) = AsyncStream.makeStream(of: NodeRecordsReport.self)
 		var filesMade = [URL]()
 		defer { filesToDelete += filesMade }
-		_ = try await NodeRecordsObservation.$observer.withValue({ continuation.yield($0) }) {
+		_ = try await NodeRecordsObservation.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 			try await executeSafeDIToolTest(swiftFileContent: [shape.fixture, seam], buildSwiftOutputDirectory: true, filesToDelete: &filesMade)
 		}
 		continuation.finish()
@@ -138,7 +138,7 @@ struct SafeDIToolNodeRecordsOptionalParameterTests: ~Copyable {
 		let (stream, continuation) = AsyncStream.makeStream(of: NodeRecordsReport.self)
 		var filesMade = [URL]()
 		defer { filesToDelete += filesMade }
-		_ = try await NodeRecordsObservation.$observer.withValue({ continuation.yield($0) }) {
+		_ = try await NodeRecordsObservation.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
 					"""
@@ -284,15 +284,17 @@ struct SafeDIToolNodeRecordsOptionalParameterTests: ~Copyable {
 		case declarationOfTheLabel
 		case declarationOfAnotherLabel
 		case lazyInstanceOfTheLabel
+		case lazyInstanceThroughOptionalOfTheLabel
+		case lazyInstanceOfAnotherLabel
 		case anotherArgumentLabel
 		case oneArgumentMore
 		case noArgument
 
 		var isOfAnOptionalParameter: Bool {
 			switch self {
-			case .theSame, .declarationOfTheLabel:
+			case .theSame, .declarationOfTheLabel, .lazyInstanceOfTheLabel, .lazyInstanceThroughOptionalOfTheLabel:
 				true
-			case .declarationOfAnotherLabel, .lazyInstanceOfTheLabel, .anotherArgumentLabel, .oneArgumentMore, .noArgument:
+			case .declarationOfAnotherLabel, .lazyInstanceOfAnotherLabel, .anotherArgumentLabel, .oneArgumentMore, .noArgument:
 				false
 			}
 		}
@@ -312,6 +314,10 @@ struct SafeDIToolNodeRecordsOptionalParameterTests: ~Copyable {
 			[unchanged, PlaceRead(argumentLabel: "mark", label: "mark", property: property, source: .binding(label: "name"))]
 		case .lazyInstanceOfTheLabel:
 			[unchanged, PlaceRead(argumentLabel: "mark", label: "mark", property: property, source: .lazyInstance(label: "mark", throughOptional: false))]
+		case .lazyInstanceThroughOptionalOfTheLabel:
+			[unchanged, PlaceRead(argumentLabel: "mark", label: "mark", property: property, source: .lazyInstance(label: "mark", throughOptional: true))]
+		case .lazyInstanceOfAnotherLabel:
+			[unchanged, PlaceRead(argumentLabel: "mark", label: "mark", property: property, source: .lazyInstance(label: "name", throughOptional: false))]
 		case .anotherArgumentLabel:
 			[unchanged, PlaceRead(argumentLabel: "other", label: "mark", property: property, source: .binding(label: "mark"))]
 		case .oneArgumentMore:
@@ -320,48 +326,6 @@ struct SafeDIToolNodeRecordsOptionalParameterTests: ~Copyable {
 			[]
 		}
 		#expect(NodeRecordsObservation.differOnlyWhereTreeReadsNilOfLabel(tree, nodeRecords) == recordsArguments.isOfAnOptionalParameter)
-	}
-
-	/// `Leaf` builds itself again through `leafBuilder`, which `A` builds where nothing declares `session` and `B` where it
-	/// does, and reads none of it: a type on a cycle merges what its calls see as any other type does.
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_laysOutRootAsTheTreeWritesIt_whenTypeOnCycleIsBuiltWhereOnlyOneCallerDeclaresLabel() async throws {
-		let fixture = """
-		@Instantiable(isRoot: true) public final class Root: Instantiable {
-		    @Instantiated let a: A
-		    @Instantiated let b: B
-		    @Instantiated let reader: Reader
-		    public init(a: A, b: B, reader: Reader) { self.a = a; self.b = b; self.reader = reader }
-		}
-		@Instantiable public final class A: Instantiable {
-		    @Instantiated let leafBuilder: Instantiator<Leaf>
-		    public init(leafBuilder: Instantiator<Leaf>) { self.leafBuilder = leafBuilder }
-		}
-		@Instantiable public final class B: Instantiable {
-		    @Instantiated let session: Session
-		    @Instantiated let leafBuilder: Instantiator<Leaf>
-		    public init(session: Session, leafBuilder: Instantiator<Leaf>) { self.session = session; self.leafBuilder = leafBuilder }
-		}
-		@Instantiable public final class Leaf: Instantiable {
-		    @Instantiated let leafBuilder: Instantiator<Leaf>
-		    public init(leafBuilder: Instantiator<Leaf>) { self.leafBuilder = leafBuilder }
-		}
-		@Instantiable public final class Session: Instantiable {
-		    public init() {}
-		}
-		@Instantiable public final class Reader: Instantiable {
-		    @Received(onlyIfAvailable: true) let session: Session?
-		    public init(session: Session?) { self.session = session }
-		}
-		"""
-		let treeOutput = try await executeSafeDIToolTest(swiftFileContent: [fixture], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
-		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
-			try await executeSafeDIToolTest(swiftFileContent: [fixture], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
-		}
-		#expect(reports.map(\.refusal) == [nil])
-		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
-		#expect(output.dependencyTreeFiles == treeOutput.dependencyTreeFiles)
 	}
 
 	@Test(arguments: ShapeRefused.allCases)
@@ -582,6 +546,8 @@ struct SafeDIToolNodeRecordsOptionalParameterTests: ~Copyable {
 		/// `Avatar` is built inside the root's `session`, which nothing answers; inside `A`'s `session`, whose being built hides
 		/// the root's; and inside `B`, which reads the root's. One function taking the root's would be handed it inside `A` too.
 		case declarationAboveIsHidden
+		/// `Leaf` builds itself again through `leafBuilder`, which `A` builds where nothing declares `session` and `B` where it does.
+		case typeIsOnCycle
 		/// `Holder` renames `session` only if available, which only `B` declares: the rename is one statement, bound to `nil` or not.
 		case labelFulfillsRename
 
@@ -608,6 +574,35 @@ struct SafeDIToolNodeRecordsOptionalParameterTests: ~Copyable {
 				    public init(avatar: Avatar) { self.avatar = avatar }
 				}
 				@Instantiable public final class Avatar: Instantiable {
+				    @Received(onlyIfAvailable: true) let session: Session?
+				    public init(session: Session?) { self.session = session }
+				}
+				"""
+			case .typeIsOnCycle:
+				"""
+				@Instantiable(isRoot: true) public final class Root: Instantiable {
+				    @Instantiated let a: A
+				    @Instantiated let b: B
+				    @Instantiated let reader: Reader
+				    public init(a: A, b: B, reader: Reader) { self.a = a; self.b = b; self.reader = reader }
+				}
+				@Instantiable public final class A: Instantiable {
+				    @Instantiated let leafBuilder: Instantiator<Leaf>
+				    public init(leafBuilder: Instantiator<Leaf>) { self.leafBuilder = leafBuilder }
+				}
+				@Instantiable public final class B: Instantiable {
+				    @Instantiated let session: Session
+				    @Instantiated let leafBuilder: Instantiator<Leaf>
+				    public init(session: Session, leafBuilder: Instantiator<Leaf>) { self.session = session; self.leafBuilder = leafBuilder }
+				}
+				@Instantiable public final class Leaf: Instantiable {
+				    @Instantiated let leafBuilder: Instantiator<Leaf>
+				    public init(leafBuilder: Instantiator<Leaf>) { self.leafBuilder = leafBuilder }
+				}
+				@Instantiable public final class Session: Instantiable {
+				    public init() {}
+				}
+				@Instantiable public final class Reader: Instantiable {
 				    @Received(onlyIfAvailable: true) let session: Session?
 				    public init(session: Session?) { self.session = session }
 				}
@@ -730,7 +725,7 @@ struct SafeDIToolNodeRecordsOptionalParameterTests: ~Copyable {
 		var filesMade = [URL]()
 		defer { filesToDelete += filesMade }
 		let output = try await NodeRecordsObservation.$laysOutRoots.withValue(true) {
-			try await NodeRecordsObservation.$observer.withValue({ continuation.yield($0) }) {
+			try await NodeRecordsObservation.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 				try await body(&filesMade)
 			}
 		}

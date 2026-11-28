@@ -77,9 +77,6 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	/// A node on a cycle is built at two places whose trees close the cycle on different places above them, so that one
 	/// place of its variant cannot stand for both.
 	case cycleMemberBuiltTwoWays
-	/// A world with a cycle in which a type receives a builder, whose call today's tree makes through a function it
-	/// declares for the loop of builders it closes.
-	case cycleReceivesBuilder
 	/// The function a call closes a cycle on takes a parameter of a label some declaration holds lazily, which a call can
 	/// find as the wrapper at its site where the records read the callee's view.
 	case cycleTakesParameters
@@ -116,6 +113,14 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	/// A loop of builders in a seam's own tree, whose levels the tree holds in a box and whose members bind its holes'
 	/// payloads, which node records do not write.
 	case builderLoopBoxed
+	/// A member of a loop of builders whose function takes cycle parameters, or that closes a cycle on a function that
+	/// does: the tree wraps it through a `__safeDI_<label>_received` function its loop's parent declares, which no record
+	/// lays out yet.
+	case builderLoopTakesCycleParameters
+	/// A cycle whose closed-on function, or a function between it and the call that closes it, makes a member of a loop of
+	/// builders again: the type key engine declares the cycle's functions together where the cycle is first entered,
+	/// where the tree nests each in the body that builds it.
+	case cycleHoldsLoopRebinding
 	/// Making the records, or laying the root out from them, threw something other than a refusal
 	/// (`NodeRecords.refusingWhatRecordsThrow(_:)`). The world keeps its tree, which reports whatever it reports.
 	case recordsThrew
@@ -255,9 +260,6 @@ struct NodeRecords: Sendable {
 		// A world whose edges close a cycle builds each node's children in the order step 0's sibling-order fixed point gives
 		// them (`TypeFactsEdge.buildPosition`), which `NodeBuildOrder` stands in for only off every cycle.
 		let order: NodeBuildOrder? = holdsCycle ? nil : try NodeBuildOrder(world: world)
-		if holdsCycle {
-			try Self.refuseReceivedBuilders(inWorldWithCycle: world)
-		}
 		// A mock root's functions on a cycle are handed the places entered above them (`NodeRecords+MockCycle.swift`).
 		let enteredSlots = holdsCycle && world.isMockWorld ? MockEnteredSlots(world: world) : nil
 		if let enteredSlots {
@@ -291,6 +293,7 @@ struct NodeRecords: Sendable {
 			isMadeSendable: Bool,
 			cycleParameters: [Property],
 			callCycleArguments: [PlaceRead],
+			instanceProperties: Set<Property>,
 		) throws -> (place: GeneratedCode, record: PlaceRecord?, escaping: Set<TypeDescription>, loopOverridesBinding: GeneratedCode?) {
 			// A hole's place is its site's code, written as text, and the payloads bound before it: places, not one record.
 			guard kinds[Int(declaration)] != .seamHole else {
@@ -310,8 +313,6 @@ struct NodeRecords: Sendable {
 			func childrenRebindingItself(with ownFunctionArguments: [PassedArgument]) -> [GeneratedCode] {
 				Self.mockPlaceBuilderBindings(of: declaration, in: world).map(\.place) + Self.loopRebindings(of: declaration, in: world, mockLoopLevels: mockLoopLevels, ownFunctionArguments: ownFunctionArguments, enteredSlots: enteredSlots) + builtChildren
 			}
-			// What a receive by value reads as a wrapper's instance, which every record of a construction passes its arguments.
-			let instanceProperties = Self.lazilyInstantiatedInstanceProperties(of: declaration, variant: variant, in: world)
 			// A wrapper `mock()` binds around a value it takes is passed to each receiver by a name apart from its label, which
 			// a public mock's call does not read (`mockNamesReadApart(in:)`).
 			guard kinds[Int(declaration)] != .publicMockCall || mockNamesReadApart.wrapperArgumentNames[Int(variant)].isEmpty else { throw NodeRecordRefusal.mockRootBindsOtherThanNodes }
@@ -324,7 +325,9 @@ struct NodeRecords: Sendable {
 				case .inlineSeam:
 					try .built(Self.inlineSeamRecord(of: declaration, variant: variant, in: world, lazilyInstantiatedInstanceProperties: instanceProperties, typesDeclaredEscaping: escaping, children: children))
 				case .seamCall:
-					try .alias(Self.seamCallRecord(of: declaration, variant: variant, in: world, routes: seamCallRoutes, lazilyInstantiatedInstanceProperties: instanceProperties, typesDeclaredEscaping: escaping, children: children))
+					// A call of a seam makes again the members of a loop of builders it makes before its guard, and builds its
+					// children after it.
+					try .alias(Self.seamCallRecord(of: declaration, variant: variant, in: world, routes: seamCallRoutes, lazilyInstantiatedInstanceProperties: instanceProperties, typesDeclaredEscaping: escaping, loopRebindings: Array(children.dropLast(builtChildren.count)), children: builtChildren))
 				case .receivesOnlyIfAvailable:
 					try .built(Self.receivesOnlyIfAvailableRecord(
 						of: declaration,
@@ -397,6 +400,19 @@ struct NodeRecords: Sendable {
 		// above them. A variant's place is made once and shared, which holds only where every place that reads it closes on
 		// the same places above: each place notes the variants on a cycle its tree closes on above it and those it builds,
 		// and a second place of the variant must have the first on its path and none of the second.
+		// What arrives at each read of each variant, which types a function's parameters (rule 3): folded only in a world
+		// whose walk meets a call that closes a cycle, the only one whose functions take parameters, and kept while the
+		// records are made.
+		var readArrivals: TypeFactsReadArrivals?
+		func arrivals() -> TypeFactsReadArrivals {
+			if let readArrivals {
+				return readArrivals
+			} else {
+				let folded = TypeFactsReadArrivals(world: world)
+				readArrivals = folded
+				return folded
+			}
+		}
 		var entries = [[BodyEntry]](repeating: [], count: world.variantCount)
 		var postOrder = [VariantID]()
 		var isWalked = [Bool](repeating: false, count: world.variantCount)
@@ -505,46 +521,121 @@ struct NodeRecords: Sendable {
 			// takes a label as a parameter only where a place between it and a call that closes on it declares that label,
 			// or takes it as a parameter of its own function (`CycleParameter`).
 			cycleParametersByVariant[Int(variant)] = []
+			// Where a production function takes the wrapper that answers a read of its value, today's tree takes the value, and
+			// so do the records while they are compared with the tree's: the generator's form, as check 35 projects it in
+			// `TypeFactsChecks`. Once the tree goes, the records take the fact's wrapper unchanged.
 			func isTaken(_ parameter: TypeFactsParameter) -> Bool {
 				let label = parameter.property.label
 				return labelsDeclaredBetween[Int(variant)].contains(label)
 					|| variantsBetween[Int(variant)].contains { $0 != variant && cycleParameters(of: $0).contains { $0.property.label == label } }
 			}
-			var parameters = world.parameters(of: variant).filter(isTaken)
+			func generatorForm(of parameter: TypeFactsParameter) -> TypeFactsParameter {
+				parameter.generatorProperty.map { TypeFactsParameter(property: $0, readsInstanceOfWrapper: false) } ?? parameter
+			}
+			var parameters = world.parameters(of: variant, arrivals: arrivals()).filter(isTaken).map(generatorForm(of:))
 			// A call that closes the cycle on its twin's place, in a mock's world, calls this variant's function, which the
 			// facts fold no parameter for where only the twin's own place is closed on: the function takes the twin's too.
 			// Its body and its calls read each from this variant's view, which finds what the twin's does: a label only
 			// one of the two has available is refused before this (`onlyIfAvailableAnsweredApart`), and one some
 			// declaration holds lazily below.
 			for twin in twinsClosedOn[Int(variant)] {
-				for parameter in world.parameters(of: twin) where isTaken(parameter) && !parameters.contains(where: { $0.property.label == parameter.property.label }) {
-					parameters.append(parameter)
+				for parameter in world.parameters(of: twin, arrivals: arrivals()) where isTaken(parameter) && !parameters.contains(where: { $0.property.label == parameter.property.label }) {
+					parameters.append(generatorForm(of: parameter))
 				}
 			}
 			cycleParametersByVariant[Int(variant)] = parameters
 			return parameters
 		}
-		// Each call of a function passes a parameter what the nearest declaration of its label at the call is, which the
-		// records read from the callee's view alone (`cycleArguments(of:unavailableProperties:lazilyInstantiatedInstanceProperties:)`):
-		// where some declaration holds the label lazily, calls can find the wrapper at one site and the value at another.
-		let lazilyHeldLabels = Set((0..<Int32(declarationCount)).compactMap { declaration -> String? in
-			switch world.kind(of: declaration) {
-			case .lazy, .sendableLazy:
-				world.property(of: declaration)?.label
-			case .constant, .instantiator, .sendableInstantiator, .erasedInstantiator, .sendableErasedInstantiator, .alias, .hole:
-				nil
+		// What a receive by value reads as a wrapper's instance (`lazilyInstantiatedInstanceProperties`), at each place's
+		// own construction and at the call of its function. The variant's key answers it (`lazilyInstantiatedInstanceProperties(of:variant:in:)`),
+		// but inside a function a lazy cycle closes on, the function's parameter is the nearest declaration of its label, as
+		// today's tree has it (`CycleParameter`): a parameter by value hides a wrapper above, and a wrapper parameter offers
+		// its instance, read through the optional where `nil` arrives. Found by a walk from the root with a stack; a place
+		// shared by two bodies must see one set from both, or the world keeps its tree.
+		// Every variant of `postOrder` is a place the walk from the root reaches, so the walk resolves each.
+		var instancePropertiesAtCall = [Set<Property>](repeating: [], count: world.variantCount)
+		var isResolved = [Bool](repeating: false, count: world.variantCount)
+		var instancePropertiesInFunction = [Set<Property>](repeating: [], count: world.variantCount)
+		func applying(_ parameters: [String: TypeFactsParameter], to properties: Set<Property>) -> Set<Property> {
+			guard !parameters.isEmpty else { return properties }
+			var applied = properties.filter { parameters[$0.label] == nil }
+			for parameter in parameters.values {
+				let wrapper = parameter.property.asUnwrappedProperty
+				guard wrapper.propertyType.isLazilyInstantiated, let instance = wrapper.asLazilyInstantiatedInstanceProperty else { continue }
+				applied.insert(parameter.property.typeDescription.isOptional ? instance.asOptionalProperty : instance)
 			}
-		})
-		for variant in postOrder where !variantsBetween[Int(variant)].isEmpty {
-			guard !cycleParameters(of: variant).contains(where: { lazilyHeldLabels.contains($0.property.label) }) else {
-				throw NodeRecordRefusal.cycleTakesParameters
+			return applied
+		}
+		var placesToResolve: [(variant: VariantID, parametersInScope: [String: TypeFactsParameter])] = [(0, [:])]
+		while let (variant, parametersInScope) = placesToResolve.popLast() {
+			// Only the labels the variant's own function takes are read at its call (`cycleArguments`), so a parameter of an
+			// enclosing function the variant does not take never sets two places of it apart.
+			let labelsTaken = Set(cycleParameters(of: variant).map(\.property.label))
+			let atCall = applying(parametersInScope, to: Self.lazilyInstantiatedInstanceProperties(of: world.declaration(of: variant), variant: variant, in: world)).filter { labelsTaken.contains($0.label) }
+			if isResolved[Int(variant)] {
+				guard instancePropertiesAtCall[Int(variant)] == atCall else { throw NodeRecordRefusal.cycleTakesParameters }
+				continue
+			}
+			instancePropertiesAtCall[Int(variant)] = atCall
+			isResolved[Int(variant)] = true
+			var parametersInFunction = parametersInScope
+			for parameter in cycleParameters(of: variant) {
+				parametersInFunction[parameter.property.label] = parameter
+			}
+			// Rule 3: a variant keyed with a wrapper where some call passes `nil` takes the optional wrapper, which its own
+			// construction reads through (`theme?.instance`), whichever call resolved it. Its children read their own.
+			var parametersOfConstruction = parametersInFunction
+			let keys = world.keys(of: variant)
+			if keys.contains(TypeFactsGraph.optionalLazilyInstantiatedParameterKey) || keys.contains(TypeFactsGraph.optionalSendableLazilyInstantiatedParameterKey) {
+				for parameter in world.parameters(of: variant, arrivals: arrivals()) where parameter.readsInstanceOfWrapper && parameter.property.typeDescription.isOptional {
+					parametersOfConstruction[parameter.property.label] = parameter
+				}
+			}
+			instancePropertiesInFunction[Int(variant)] = applying(parametersOfConstruction, to: Self.lazilyInstantiatedInstanceProperties(of: world.declaration(of: variant), variant: variant, in: world))
+			// A label the place declares is its own children's nearest declaration.
+			for label in Self.labelsDeclared(by: world.declaration(of: variant), in: world) {
+				parametersInFunction[label] = nil
+			}
+			for case let .place(callee) in entries[Int(variant)].reversed() {
+				placesToResolve.append((callee, parametersInFunction))
 			}
 		}
-		func cycleArguments(of variant: VariantID) -> [PlaceRead] {
+		// A loop member whose function takes cycle parameters, or whose place closes a cycle on such a function, is wrapped
+		// through a `__safeDI_<label>_received` function (`ScopeGenerator`'s loop rebindings). The facts give a label a
+		// loop makes again no parameter, so any function a cycle closes on counts, whatever its parameters.
+		for variant in postOrder where !variantsBetween[Int(variant)].isEmpty {
+			let isLoopMember = { (declaration: DeclarationID) in
+				world.parents(of: declaration).contains { parent in
+					world.edgeFacts(from: parent.parent).contains { $0.child == declaration && $0.loop >= 0 }
+				}
+			}
+			let closesFromLoopMember = variantsBetween[Int(variant)].contains { between in
+				entries[Int(between)].contains { entry in
+					guard case let .closer(closingOn: callee, _) = entry, callee == variant else { return false }
+					return world.edgeFacts(from: world.declaration(of: between)).contains { $0.child == world.declaration(of: variant) && $0.loop >= 0 }
+				}
+			}
+			guard !isLoopMember(world.declaration(of: variant)), !closesFromLoopMember else {
+				throw NodeRecordRefusal.builderLoopTakesCycleParameters
+			}
+			guard !([variant] + variantsBetween[Int(variant)]).contains(where: { !world.madeAgain(from: world.declaration(of: $0)).isEmpty }) else {
+				throw NodeRecordRefusal.cycleHoldsLoopRebinding
+			}
+		}
+		// What the body of `variant` reads as a wrapper's instance, where a call in it closes a cycle: its function's, but for
+		// the labels it declares itself, whose own declarations are nearer.
+		func instancePropertiesInBody(of variant: VariantID) -> Set<Property> {
+			let scope = world.scope(of: world.declaration(of: variant))
+			return instancePropertiesInFunction[Int(variant)].filter { !scope.declaredLabels.contains($0.label) }.union(scope.declaredLazilyInstantiatedInstanceProperties)
+		}
+		// Each call of a function passes each parameter what the nearest declaration of its label at the call is: the place's
+		// own call what the body around it holds, and a call that closes a cycle on it what the body holding that call holds,
+		// so a call that holds the wrapper and another that holds the value each pass their own.
+		func cycleArguments(of variant: VariantID, holding instanceProperties: Set<Property>) -> [PlaceRead] {
 			Self.cycleArguments(
 				of: cycleParameters(of: variant),
 				unavailableProperties: onlyIfAvailableAnswers.unavailableProperties(of: variant),
-				lazilyInstantiatedInstanceProperties: Self.lazilyInstantiatedInstanceProperties(of: world.declaration(of: variant), variant: variant, in: world),
+				lazilyInstantiatedInstanceProperties: instanceProperties,
 			)
 		}
 		func body(of variant: VariantID) throws -> (children: [GeneratedCode], escaping: Set<TypeDescription>, closedOnFromSendableFunction: Set<VariantID>, closedOn: Set<VariantID>) {
@@ -565,7 +656,7 @@ struct NodeRecords: Sendable {
 						building: builtDeclaration,
 						from: variant,
 						functionName: functionNames?.closedOnFunctionName(of: callee, inBodyOf: variant),
-						cycleArguments: cycleArguments(of: callee),
+						cycleArguments: cycleArguments(of: callee, holding: instancePropertiesInBody(of: variant)),
 						in: world,
 						enteredSlots: enteredSlots,
 					)
@@ -620,7 +711,8 @@ struct NodeRecords: Sendable {
 				isMadeSendable: isMadeSendable,
 				// Only a function a cycle closes on takes parameters; every other captures what it reads.
 				cycleParameters: body.closedOn.contains(variant) ? cycleParameters(of: variant).map(\.property) : [],
-				callCycleArguments: body.closedOn.contains(variant) ? cycleArguments(of: variant) : [],
+				callCycleArguments: body.closedOn.contains(variant) ? cycleArguments(of: variant, holding: instancePropertiesAtCall[Int(variant)]) : [],
+				instanceProperties: instancePropertiesInFunction[Int(variant)],
 			)
 			records[Int(variant)] = record
 			places[Int(variant)] = place
