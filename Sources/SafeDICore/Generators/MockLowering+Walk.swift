@@ -553,7 +553,7 @@ extension MockLowering {
 		/// Whether the nodes the walk is at build what an actor's initializer is handed, outside every lazy wrapper's builder
 		/// function: the initializer takes each argument into the actor's isolation, so in Swift 6 the argument must share no
 		/// region with `safeDIOverrides`, which `mock()` is handed. Such a node reads its overrides into a local first, as a
-		/// `@Sendable` builder function does, of the `Sendable` form (`ScopeGenerator.sendableConfigurationTypeNames(ofMockRootOf:)`), so no
+		/// `@Sendable` builder function does, of the `Sendable` form (`TypeFactsSendableConfigurations`), so no
 		/// builder function beneath it captures the overrides; capturing them would join the argument to their region.
 		var isInsideActorArgument = false
 		// The loop of builders the node being built is a member of, the members of its level's loops,
@@ -1323,7 +1323,7 @@ extension MockLowering {
 			)
 			// A function that builds a node with a configuration reads that configuration whole into one local: its type is built
 			// in a `@Sendable` function, so the configuration takes the `Sendable` form, and every configuration beneath it
-			// does too (`ScopeGenerator.sendableConfigurationTypeNames(ofMockRootOf:)`), so each field is proven `Sendable` and the
+			// does too (`TypeFactsSendableConfigurations`), so each field is proven `Sendable` and the
 			// configuration is `Sendable`. A public mock's configurations are never `Sendable`, so its functions read each field.
 			let configurationPath = startsForSendableFunction && hasConfiguration && !buildsPublicMock ? nodePath : nil
 			let enclosingExtractor = startsExtraction ? startExtraction(inFunctionNamed: node.functionName, configurationPath: configurationPath) : sendableOverrideExtractor

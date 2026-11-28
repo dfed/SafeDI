@@ -377,7 +377,11 @@ func executeSafeDIToolTest(
 																							try await ValidationWalkObservation.$foldComparison.withValue(FulfillmentFoldChecks.comparison(handingOn: ValidationWalkObservation.foldComparison)) {
 																								// A mock root's tree check its scopes left out must find nothing in its tree (`MockRootTreeChecksOracle`).
 																								try await MockRootTreeChecksOracle.comparing(handingOn: MockRootTreeChecksObservation.comparesTree) {
-																									try await tool.generate()
+																									// Every mock root’s `Sendable` configurations from its world’s fold must equal the walk of its generator tree’s
+																									// (`TypeFactsSendableConfigurationsChecks`).
+																									try await TypeFactsSendableConfigurationsChecks.comparing(handingOn: TypeFactsSendableConfigurationsObservation.comparesWalk) {
+																										try await tool.generate()
+																									}
 																								}
 																							}
 																						}
