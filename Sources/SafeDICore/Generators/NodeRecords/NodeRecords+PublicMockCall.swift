@@ -73,9 +73,9 @@ extension NodeRecords {
 	/// `overrideClosureType`). The call's record and the member of its parent's configuration both ask here.
 	static func publicMockCallOverrideType(of call: PublicMockCall, calledType: TypeDescription, calledFunction: Initializer, builtAs property: Property) -> TypeDescription {
 		if call.takesOverrides {
-			return .nested(name: ReservedName.mockOverridesTypeName, parentType: calledType, generics: [])
+			.nested(name: ReservedName.mockOverridesTypeName, parentType: calledType, generics: [])
 		} else {
-			return .unknown(text: "(\(publicMockCallOverrideClosureType(of: call, calledFunction: calledFunction, builtAs: property)))?")
+			.unknown(text: "(\(publicMockCallOverrideClosureType(of: call, calledFunction: calledFunction, builtAs: property)))?")
 		}
 	}
 
