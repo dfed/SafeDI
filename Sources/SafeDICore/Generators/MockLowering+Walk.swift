@@ -245,11 +245,12 @@ extension ScopeGenerator {
 			let bindsOnlyNodes = rootReceiverBindingIndex == bindingsBeforeNodes
 				&& !signature.uncoveredRootParameters.contains(where: \.isSendableAutoclosure)
 				&& bindsOnlyPassedUpBuilders
-				// A node the root's level names apart is bound under that name by its record, and a parameter or override
+				// A node or an alias the root's level names apart is bound under that name by its record, and a parameter or override
 				// under the name `mock()` gives it, an uncovered dependency's included; any other name is neither's.
 				&& rootRenames.allSatisfy { label, names in
 					names.allSatisfy { type, name in
 						walk.rootPropertyNodeBindingNames.contains(name)
+							|| walk.rootAliasBindingNamesApart.contains(name)
 							|| signature.renamesByLabelAndType[label]?[type] == name
 							|| signature.uncoveredParameterNamesByLabelAndType[label]?[type] == name
 							|| signature.lazilyInstantiatedBindingNamesByLabelAndType[label]?[type] == name
@@ -497,6 +498,8 @@ extension MockLowering {
 		var sendableAutoclosureBindings = [Property: ScopeGenerator.SendableAutoclosureParameter]()
 		/// The names the property nodes of the mock root's level are bound under.
 		var rootPropertyNodeBindingNames = Set<String>()
+		/// The names apart the aliases of the mock root's level are bound under (`nameRootAliasesApart(among:bindingNames:)`).
+		var rootAliasBindingNamesApart = Set<String>()
 		/// The labels of the dependencies the tree receives that the mock cannot build, which an alias of the mock root's
 		/// level is named apart from.
 		var rootFlatReceivedLabels = Set<String>()
@@ -619,6 +622,10 @@ extension MockLowering {
 				for (generator, bindingName) in zip(generators, bindingNames) {
 					guard case .property = generator.scopeData, let bindingName else { continue }
 					rootPropertyNodeBindingNames.insert(bindingName)
+				}
+				for (generator, bindingName) in zip(generators, bindingNames) {
+					guard case let .alias(property, _, _, _, _) = generator.scopeData, let bindingName, bindingName != property.label else { continue }
+					rootAliasBindingNamesApart.insert(bindingName)
 				}
 			}
 			// A level whose nodes take part in a cycle renames a builder function that would hide an
