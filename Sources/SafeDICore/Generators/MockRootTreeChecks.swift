@@ -109,4 +109,6 @@ public struct MockRootTreeChecksComparison: Sendable {
 	public let needingTree: Set<MockRootTreeCheck>
 	/// The checks that find something in the root's tree, of those the scopes left out.
 	public let findingInTreeWithoutNeed: Set<MockRootTreeCheck>
+	/// Whether the root's world (`DeclarationsAnsweringReads`) and its tree find a `Sendable` capture.
+	public let sendableCaptureFinding: (world: Bool, tree: Bool)
 }

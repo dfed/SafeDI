@@ -41,12 +41,19 @@ struct DeclarationsAnsweringReads: Sendable {
 	///   - world: A production root's world.
 	///   - rootNonSendableWrapperLabels: The labels of what the root is handed in an `Instantiator`, an
 	///     `ErasedInstantiator` or a `LazilyInstantiated`. Empty unless the root is a seam's own.
-	init(world: some NodeRecordSources, rootNonSendableWrapperLabels: Set<String> = []) {
+	///   - mockRootParameters: What a mock root takes from `mock()` for receives its tree makes that nothing in the tree
+	///     declares, by label and type. A receive of a label the root also declares in a form that answers no receive of
+	///     its type (neither the type nor a lazy wrapper's instance) is one of them, named apart, so a read of the label
+	///     the root answers resolves by label and type: each receive beneath the call reads the parameter of its own form
+	///     where `mock()` takes one, and the root's declaration otherwise. Empty unless the root is a mock root.
+	init(world: some NodeRecordSources, rootNonSendableWrapperLabels: Set<String> = [], mockRootParameters: Set<Property> = []) {
 		guard (0..<Int32(world.declarationCount)).contains(where: { world.edgeFacts(from: $0).contains { Self.opensSendableFunction($0) } }) else {
 			sendableFunctionCapturesWrapper = false
 			return
 		}
 		var sendableFunctionCapturesWrapper = false
+		let receiveTypes = mockRootParameters.isEmpty ? [] : Self.receiveTypesReadFromAbove(in: world, labels: Set(mockRootParameters.map(\.label)))
+		let root = world.declaration(of: 0)
 		// For each variant reached, the declaration that answers each of its reads, -1 where none does. No node is above
 		// the root, so what the root is handed answers what its tree reads.
 		var answeringDeclarations = [[DeclarationID]?](repeating: nil, count: world.variantCount)
@@ -75,14 +82,38 @@ struct DeclarationsAnsweringReads: Sendable {
 					let read = world.read(readID)
 					guard opensSendableFunction, read.channel.asksAboutLabel else { continue }
 					let label = world.text(ofLabel: read.label)
-					let readsNonSendableWrapper = if answeringDeclaration >= 0 {
-						world.scope(of: answeringDeclaration).sortedDeclaredPropertyForms.contains { declared in
+					// A read the mock root answers resolves by each form the receives beneath the call read it in
+					// (`mockRootParameters`): a receive reads the root's declaration of its form, or of its instance where that
+					// is a lazy wrapper; else the parameter `mock()` takes of a lazy wrapper whose instance it is; else the
+					// parameter of its form. A receive none of them answers is read by label, as any other world reads.
+					var capturesMockRootParameter = false
+					var resolvedReadsWrapper: Bool?
+					if !receiveTypes.isEmpty, answeringDeclaration < 0 || answeringDeclaration == root {
+						let types = receiveTypes[Int(world.declaration(of: callee))][label] ?? []
+						let rootForms = world.scope(of: root).sortedDeclaredPropertyForms.map(\.property).filter { $0.label == label }
+						let parameters = mockRootParameters.filter { $0.label == label }.sorted()
+						var readsByLabel = types.isEmpty && world.property(of: world.declaration(of: callee))?.label != label
+						var readsWrapper = false
+						for type in types {
+							let receive = Property(label: label, typeDescription: type).asUnwrappedProperty
+							if let declared = rootForms.first(where: { $0 == receive || $0.asLazilyInstantiatedInstanceProperty == receive }) {
+								readsWrapper = readsWrapper || Self.isNonSendableWrapper(declared)
+							} else if let parameter = parameters.first(where: { $0.asUnwrappedProperty.asLazilyInstantiatedInstanceProperty == receive }) ?? parameters.first(where: { $0.asUnwrappedProperty == receive }) {
+								capturesMockRootParameter = capturesMockRootParameter || Self.isNonSendableWrapper(parameter)
+							} else {
+								readsByLabel = true
+							}
+						}
+						// The callee's own label, which it reads only to rebind it, is no receive: a world that reads nothing
+						// else of the label beneath the call reads nothing the root binds.
+						resolvedReadsWrapper = readsByLabel ? nil : readsWrapper
+					}
+					let readsNonSendableWrapper = resolvedReadsWrapper ?? (answeringDeclaration >= 0
+						? world.scope(of: answeringDeclaration).sortedDeclaredPropertyForms.contains { declared in
 							declared.property.label == label && !declared.property.propertyType.isConstant && !declared.property.propertyType.isSendable
 						}
-					} else {
-						rootNonSendableWrapperLabels.contains(label)
-					}
-					if readsNonSendableWrapper, !Self.isPassedNil(read.channel, of: label, answeredBy: answeringDeclaration, aboveCallOf: callee, by: caller, callerByVariant: callerByVariant, in: world) {
+						: rootNonSendableWrapperLabels.contains(label))
+					if capturesMockRootParameter || (readsNonSendableWrapper && !Self.isPassedNil(read.channel, of: label, answeredBy: answeringDeclaration, aboveCallOf: callee, by: caller, callerByVariant: callerByVariant, in: world)) {
 						sendableFunctionCapturesWrapper = true
 					}
 				}
@@ -122,6 +153,57 @@ struct DeclarationsAnsweringReads: Sendable {
 		case .value, .alias, .madeAgain, .mock, .carrier, .fill, .family, .override:
 			return false
 		}
+	}
+
+	/// Whether `property` is a wrapper that is not `Sendable`, read as itself or through its instance.
+	private static func isNonSendableWrapper(_ property: Property) -> Bool {
+		!property.asUnwrappedProperty.propertyType.isConstant && !property.asUnwrappedProperty.propertyType.isSendable
+	}
+
+	/// For each declaration, the types each receive of its tree that reads one of `labels` from above it declares, by
+	/// label: its own receives' and aliases' fulfilling properties, and its children's where it reads the label from above
+	/// too, folded to a fixed point over the edges, which may close cycles.
+	private static func receiveTypesReadFromAbove(in world: some NodeRecordSources, labels: Set<String>) -> [[String: Set<TypeDescription>]] {
+		let count = world.declarationCount
+		var labelsReadFromAbove = [Set<String>]()
+		var types = [[String: Set<TypeDescription>]](repeating: [:], count: count)
+		for declaration in 0..<count {
+			let readLabels = Set(world.reads(of: DeclarationID(declaration)).lazy.map(world.read).filter(\.channel.asksAboutLabel).map { world.text(ofLabel: $0.label) }).intersection(labels)
+			labelsReadFromAbove.append(readLabels)
+			switch world.kind(of: DeclarationID(declaration)) {
+			case .alias, .hole:
+				continue
+			case .constant, .instantiator, .erasedInstantiator, .lazy, .sendableInstantiator, .sendableErasedInstantiator, .sendableLazy:
+				break
+			}
+			for dependency in world.scope(of: DeclarationID(declaration)).instantiable.dependencies {
+				let received: Property
+				switch dependency.source {
+				case .received:
+					received = dependency.property
+				case let .aliased(fulfillingProperty, _, _):
+					received = fulfillingProperty
+				case .instantiated, .forwarded:
+					continue
+				}
+				if readLabels.contains(received.label) {
+					types[declaration][received.label, default: []].insert(received.typeDescription)
+				}
+			}
+		}
+		var changed = true
+		while changed {
+			changed = false
+			for declaration in (0..<count).reversed() {
+				for child in world.edges(from: DeclarationID(declaration)) {
+					for (label, childTypes) in types[Int(child)] where labelsReadFromAbove[declaration].contains(label) && !childTypes.isSubset(of: types[declaration][label] ?? []) {
+						types[declaration][label, default: []].formUnion(childTypes)
+						changed = true
+					}
+				}
+			}
+		}
+		return types
 	}
 
 	private static func opensSendableFunction(_ edge: TypeFactsEdge) -> Bool {

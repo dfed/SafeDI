@@ -23,10 +23,12 @@ import SafeDICore
 import Testing
 
 /// The oracle of a mock root's tree checks read from its scopes (`MockRootTreeChecks`): a check the scopes say needs no
-/// tree must find nothing in the tree (`MockRootTreeChecksObservation.comparesTree`), on every test graph.
+/// tree must find nothing in the tree (`MockRootTreeChecksObservation.comparesTree`), and the root's world must find a
+/// `Sendable` capture exactly where the tree does, on every test graph.
 enum MockRootTreeChecksOracle {
 	/// Runs `operation` while comparing the tree checks of every mock root it makes, handing each comparison to
-	/// `enclosingObserver` too, and records an issue for each check the scopes left out that finds something in the tree.
+	/// `enclosingObserver` too, and records an issue for each check the scopes left out that finds something in the tree
+	/// and for each root whose world and tree disagree on a `Sendable` capture.
 	static func comparing<Result>(handingOn enclosingObserver: (@Sendable (MockRootTreeChecksComparison) -> Void)?, _ operation: () async throws -> Result) async throws -> Result {
 		let (comparisons, continuation) = AsyncStream.makeStream(of: MockRootTreeChecksComparison.self)
 		// A run that throws is compared too: the comparisons are made before any mock root's tree is validated.
@@ -42,7 +44,11 @@ enum MockRootTreeChecksOracle {
 			result = .failure(error)
 		}
 		continuation.finish()
-		for await comparison in comparisons where !comparison.findingInTreeWithoutNeed.isEmpty {
+		for await comparison in comparisons {
+			if comparison.sendableCaptureFinding.world != comparison.sendableCaptureFinding.tree {
+				Issue.record(Comment(rawValue: "The world of the mock of \(comparison.root) finds a Sendable capture: \(comparison.sendableCaptureFinding.world); its tree: \(comparison.sendableCaptureFinding.tree)"))
+			}
+			guard !comparison.findingInTreeWithoutNeed.isEmpty else { continue }
 			Issue.record(Comment(rawValue: """
 			The scopes of the mock of \(comparison.root) said these checks need no tree, but each finds something in it: \
 			\(comparison.findingInTreeWithoutNeed.map(\.rawValue).sorted())

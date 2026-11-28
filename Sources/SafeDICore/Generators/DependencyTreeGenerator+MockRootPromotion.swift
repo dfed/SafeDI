@@ -22,6 +22,10 @@
 struct MockRootTree {
 	let generator: ScopeGenerator
 	let treeChecks: MockRootTreeChecks
+	/// Where a test compares the tree's checks (`MockRootTreeChecksObservation`): whether the per-type facts of the root's
+	/// world find a `Sendable` capture (`DeclarationsAnsweringReads`), resolving what `mock()` takes by label and type.
+	/// `nil` otherwise.
+	var worldFindsSendableCapture: Bool? = nil
 }
 
 extension DependencyTreeGenerator {
@@ -494,6 +498,15 @@ extension DependencyTreeGenerator {
 		// The root of the mock root's world, which node records are made of
 		// (`ScopeGenerator.nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:)`), where a test observes them.
 		NodeRecordsObservation.recordsMockWorldRoot?(instantiable.concreteInstantiable, ConstructionScope(table: mockRootTable, record: mockRootRecord))
+		let worldFindsSendableCapture: Bool? = if MockRootTreeChecksObservation.comparesTree != nil {
+			DeclarationsAnsweringReads(
+				world: TypeFactsGraph(root: ConstructionScope(table: mockRootTable, record: mockRootRecord), forMockGeneration: true),
+				rootNonSendableWrapperLabels: Set((allReceived + instantiable.dependencies.filter { $0.source == .forwarded }.map(\.property)).filter { !$0.propertyType.isConstant && !$0.propertyType.isSendable }.map(\.label)),
+				mockRootParameters: allReceived,
+			).sendableFunctionCapturesWrapper
+		} else {
+			nil
+		}
 		// A public mock's tree built with builders has holes, whose places no memo holds, so only the tree built without
 		// them shares the mock roots' memo.
 		func mockRootGenerator(builders: ShapedBuilders?, constructionMemo: inout ConstructionMemo) throws -> ScopeGenerator {
@@ -565,7 +578,7 @@ extension DependencyTreeGenerator {
 		// another module's public mock passes up the places it cannot fill: `mock()` takes builders for them, shaped as a
 		// seam's are. The sites' fields are what is in scope there, read from the tree as a seam's are, and the tree is built
 		// again so that each site calls its builder, and each call hands its builders up.
-		guard instantiable.generateMock == .public, let publicMockContext, generator.containsBuildSite || generator.passesUpBuilder else { return MockRootTree(generator: generator, treeChecks: treeChecks) }
+		guard instantiable.generateMock == .public, let publicMockContext, generator.containsBuildSite || generator.passesUpBuilder else { return MockRootTree(generator: generator, treeChecks: treeChecks, worldFindsSendableCapture: worldFindsSendableCapture) }
 		// The root level holds what `mock()` binds under its bare label before its tree, as a seam's holds its parameters; the
 		// builders do not change what it binds, so the generator built without them gives it.
 		let rootLevel = await Self.publicMockRootLevel(
@@ -625,8 +638,8 @@ extension DependencyTreeGenerator {
 		if let error = DependencyTreeGeneratorError.reportingAll(of: errors) {
 			throw error
 		}
-		guard buildersNamedApart.builders.map(SeamSignature.CallShape.Builder.init) != builders.builders.map(SeamSignature.CallShape.Builder.init) else { return MockRootTree(generator: builtGenerator, treeChecks: treeChecks) }
-		return try MockRootTree(generator: mockRootGeneratorWithHoles(builders: buildersNamedApart), treeChecks: treeChecks)
+		guard buildersNamedApart.builders.map(SeamSignature.CallShape.Builder.init) != builders.builders.map(SeamSignature.CallShape.Builder.init) else { return MockRootTree(generator: builtGenerator, treeChecks: treeChecks, worldFindsSendableCapture: worldFindsSendableCapture) }
+		return try MockRootTree(generator: mockRootGeneratorWithHoles(builders: buildersNamedApart), treeChecks: treeChecks, worldFindsSendableCapture: worldFindsSendableCapture)
 	}
 
 	/// What a public mock's root level holds beside the root's children: the payload of every case of its root enums, and the
