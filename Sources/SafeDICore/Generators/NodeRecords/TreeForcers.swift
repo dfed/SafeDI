@@ -28,9 +28,8 @@
 ///   parameter keeps its tree (`SeamCallCheck.tierOmitsParameter`).
 /// - `nonSendableWrapperCaptures` judges a `@Sendable` builder function, which only a `Sendable` wrapper or a cycle makes:
 ///   node records refuse a world in which one captures a wrapper (`NodeRecordRefusal.sendableFunctionCapturesWrapper`,
-///   from `DeclarationsAnsweringReads`), and every cycle (`.cycle`), which `unpassableCycleLabelsInTree` judges too. A
-///   seam call that defers a parameter `@Sendable` is one more such function, which no fact reads yet, so a world that
-///   holds one keeps its tree (`SeamCallCheck.defersSendableParameter`).
+///   from `DeclarationsAnsweringReads`, which reads a seam call's `@Sendable` deferrals as one more such function), and
+///   every cycle (`.cycle`), which `unpassableCycleLabelsInTree` judges too.
 /// - `fulfillersOfTree`, the imports, is folded over the root's declarations (`TypeFactsImports`).
 ///
 /// Where a test observes node records, the tree is built beside the records all the same, and each of these is checked
@@ -71,10 +70,6 @@ public enum SeamCallCheck: String, Hashable, Sendable {
 	/// A call of a seam's tier omits a parameter, or one no tier takes: `seamTierOmissions` judges, from the tree, whether
 	/// the caller would hand it a value (`validateNoSeamTierOmitsProvidedValue`).
 	case tierOmitsParameter = "seam call omits a parameter"
-	/// A call of a seam's tier hands a parameter the seam defers `@Sendable`, which the call's `@Sendable` closure
-	/// captures: `nonSendableWrapperCaptures` judges, from the tree, whether that captures a wrapper that is not
-	/// `Sendable` (`NonSendableWrapperCapture.capturingSeamType`).
-	case defersSendableParameter = "seam call defers a parameter @Sendable"
 }
 
 /// What a run can read of every root's tree beside its code, which no root's node records stand in for yet.

@@ -23,9 +23,11 @@
 /// follows what each call hands its callee (`TypeFactsWorld.sources(ofCall:of:)`), which no record reads.
 ///
 /// An edge that opens a `@Sendable` function (`TypeFactsEdge.opens`) builds its child inside that function, so every
-/// read of the child's tree that a declaration above the child answers is made from outside the function: a capture
-/// where that declaration is an `Instantiator`, an `ErasedInstantiator` or a `LazilyInstantiated`, read as itself or as
-/// its instance, a parameter of a seam's own root included (`rootNonSendableWrapperLabels`), which its generated
+/// read of the child's tree that a declaration above the child answers is made from outside the function. A call of a
+/// seam's generated initializer hands each parameter the seam defers `@Sendable` to a `@Sendable` closure, which
+/// captures what the call passes, as the tree's capture walk reads it, so the call's read of such a label is one too. A
+/// capture is a read of either kind where that declaration is an `Instantiator`, an `ErasedInstantiator` or a
+/// `LazilyInstantiated`, read as itself or as its instance, a parameter of a seam's own root included (`rootNonSendableWrapperLabels`), which its generated
 /// initializer declares outside every function. A read a declaration inside the function answers is none of the call's
 /// sources. A read of any channel counts, but for a read only if available of the declaration still being built around
 /// the call, which is passed `nil` and captures nothing (`isPassedNil`).
@@ -42,7 +44,7 @@ struct DeclarationsAnsweringReads: Sendable {
 	///   - rootNonSendableWrapperLabels: The labels of what the root is handed in an `Instantiator`, an
 	///     `ErasedInstantiator` or a `LazilyInstantiated`. Empty unless the root is a seam's own.
 	init(world: some NodeRecordSources, rootNonSendableWrapperLabels: Set<String> = []) {
-		guard (0..<Int32(world.declarationCount)).contains(where: { world.edgeFacts(from: $0).contains { Self.opensSendableFunction($0) } }) else {
+		guard (0..<Int32(world.declarationCount)).contains(where: { world.edgeFacts(from: $0).contains { Self.opensSendableFunction($0) } || !Self.sendableDeferredLabels(of: $0, in: world).isEmpty }) else {
 			sendableFunctionCapturesWrapper = false
 			return
 		}
@@ -60,6 +62,7 @@ struct DeclarationsAnsweringReads: Sendable {
 			let edgeFacts = world.edgeFacts(from: world.declaration(of: caller))
 			for (edgeIndex, callee) in world.calls(of: caller).enumerated() where answeringDeclarations[Int(callee)] == nil {
 				let opensSendableFunction = Self.opensSendableFunction(edgeFacts[edgeFacts.startIndex + edgeIndex])
+				let sendableDeferredLabels = Self.sendableDeferredLabels(of: world.declaration(of: callee), in: world)
 				var calleeAnsweringDeclarations = [DeclarationID]()
 				callerByVariant[Int(callee)] = caller
 				for (source, readID) in zip(world.sources(ofCall: edgeIndex, of: caller), world.reads(of: world.declaration(of: callee))) {
@@ -73,8 +76,9 @@ struct DeclarationsAnsweringReads: Sendable {
 					}
 					calleeAnsweringDeclarations.append(answeringDeclaration)
 					let read = world.read(readID)
-					guard opensSendableFunction, read.channel.asksAboutLabel else { continue }
+					guard read.channel.asksAboutLabel else { continue }
 					let label = world.text(ofLabel: read.label)
+					guard opensSendableFunction || sendableDeferredLabels.contains(label) else { continue }
 					let readsNonSendableWrapper = if answeringDeclaration >= 0 {
 						world.scope(of: answeringDeclaration).sortedDeclaredPropertyForms.contains { declared in
 							declared.property.label == label && !declared.property.propertyType.isConstant && !declared.property.propertyType.isSendable
@@ -122,6 +126,11 @@ struct DeclarationsAnsweringReads: Sendable {
 		case .value, .alias, .madeAgain, .mock, .carrier, .fill, .family, .override:
 			return false
 		}
+	}
+
+	/// The labels of the parameters the seam `declaration` calls defers `@Sendable`; empty where it calls none.
+	private static func sendableDeferredLabels(of declaration: DeclarationID, in world: some NodeRecordSources) -> Set<String> {
+		Set(world.scope(of: declaration).seamCall?.parameters.filter { $0.deferral == .deferred(isSendable: true) }.map(\.property.label) ?? [])
 	}
 
 	private static func opensSendableFunction(_ edge: TypeFactsEdge) -> Bool {
