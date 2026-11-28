@@ -63,8 +63,8 @@ extension DependencyTreeGenerator {
 	/// otherwise. Where a test observes node records (`NodeRecordsObservation`), each root's records are compared with its
 	/// tree's at every place, and a root laid out from them is compared with the tree built beside them: its code, its
 	/// imports, and the checks its records stand in for (`TreeForcer`). A forced root whose world node records accept is
-	/// laid out from them where the test turns `NodeRecordsObservation.laysOutRoots` on. A run no test observes builds
-	/// no tree beside the records.
+	/// laid out from them where `NodeRecordsObservation.laysOutRoots` is on, whether or not a test observes them. A run no
+	/// test observes builds no tree beside the records.
 	static func plannedRootCode(of rootInfo: RootScopeInfo, declaredTypeNames: DeclaredTypeNames) async throws -> GeneratedCode {
 		let root = rootInfo.instantiable.concreteInstantiable.asSource
 		switch rootInfo.built {
@@ -77,10 +77,21 @@ extension DependencyTreeGenerator {
 			}
 			return layout.code
 		case let .tree(scopeGenerator):
-			guard let observer = NodeRecordsObservation.observer, let rootScope = rootInfo.rootScope else {
+			guard let rootScope = rootInfo.rootScope, NodeRecordsObservation.observer != nil || NodeRecordsObservation.laysOutRoots else {
 				return try await scopeGenerator.generatePlan()
 			}
 			let seamTree = rootInfo.seamTree
+			// A run with `laysOutRoots` on and no observer lays the root out as an observed run does, and plans its tree only
+			// where the records refuse its world or the engine cannot lay it out: the observer records, and chooses nothing.
+			guard let observer = NodeRecordsObservation.observer else {
+				// A seam's own root is never laid out here, so its records are not made.
+				guard rootInfo.ownSeamRoot == nil else { return try await scopeGenerator.generatePlan() }
+				let records = NodeRecords.refusingWhatRecordsThrow { try NodeRecords(world: TypeFactsGraph(root: rootScope, forMockGeneration: false), seamTree: seamTree, seamHoles: seamTree.map { $0.makeSeamHoles() }, declaredTypeNames: declaredTypeNames) }
+				guard case let .success(nodeRecords) = records, let code = laidOutCode(of: rootInfo, nodeRecords: nodeRecords) else {
+					return try await scopeGenerator.generatePlan()
+				}
+				return code
+			}
 			// The work of making the records is no run's, so the tests that count a run's work count none of it.
 			let (world, records) = GenerationWork.$observer.withValue(nil) {
 				let world = TypeFactsGraph(root: rootScope, forMockGeneration: false)
@@ -98,10 +109,8 @@ extension DependencyTreeGenerator {
 			}
 			// A seam's own tree is compared and never laid out here: its initializers are written around its body. A root its
 			// records cannot lay out keeps its tree's code.
-			let laidOutCode: GeneratedCode? = if NodeRecordsObservation.laysOutRoots, rootInfo.ownSeamRoot == nil,
-			                                     case let .success(code) = NodeRecords.refusingWhatRecordsThrow({ try laidOutRootCode(of: rootInfo.instantiable, body: nodeRecords.rootBody) })
-			{
-				code
+			let laidOutCode: GeneratedCode? = if NodeRecordsObservation.laysOutRoots {
+				Self.laidOutCode(of: rootInfo, nodeRecords: nodeRecords)
 			} else {
 				nil
 			}
@@ -210,6 +219,16 @@ extension DependencyTreeGenerator {
 			comparisons.append(comparison)
 		}
 		return (code, comparisons)
+	}
+
+	/// The code of `rootInfo` laid out from `nodeRecords`, its world's records, where `NodeRecordsObservation.laysOutRoots`
+	/// is on, or `nil` for a seam's own root, whose initializers are written around its tree's body, and where the engine
+	/// cannot lay every statement out. Read alike whether or not a test observes node records.
+	private static func laidOutCode(of rootInfo: RootScopeInfo, nodeRecords: NodeRecords) -> GeneratedCode? {
+		guard rootInfo.ownSeamRoot == nil,
+		      case let .success(code) = NodeRecords.refusingWhatRecordsThrow({ try laidOutRootCode(of: rootInfo.instantiable, body: nodeRecords.rootBody) })
+		else { return nil }
+		return code
 	}
 
 	/// The extension that declares `instantiable`'s generated initializer, its body laid out from `body`, node records'
