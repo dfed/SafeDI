@@ -57,6 +57,42 @@ extension DependencyTreeGenerator {
 		scopesWithValidatedDeclarations: inout Set<ObjectIdentifier>,
 		constructionMemo: inout ConstructionMemo,
 	) async throws -> MockRootTree {
+		let promoted = try await promoteMockRootScope(
+			for: instantiable,
+			scope: scope,
+			typeDescriptionToScopeMap: typeDescriptionToScopeMap,
+			frozenScopeMap: frozenScopeMap,
+			flatParameterMockDefaults: flatParameterMockDefaults,
+			erasedToConcreteTypeMap: erasedToConcreteTypeMap,
+			publicMockContext: publicMockContext,
+			emittingModule: emittingModule,
+			checksConstructions: checksConstructions,
+			receivedPropertiesCache: &cache,
+			childrenRequiringEachOtherValidation: &childrenRequiringEachOtherValidation,
+			promotedScopesValidatedForHiddenReceives: &promotedScopesValidatedForHiddenReceives,
+			scopesWithValidatedDeclarations: &scopesWithValidatedDeclarations,
+		)
+		return try await buildMockRootTree(of: promoted, receivedPropertiesCache: &cache, constructionMemo: &constructionMemo)
+	}
+
+	/// The first half of `createMockRootScopeGenerator`: everything it decides and validates of the mock root before its
+	/// generator tree is built, which `buildMockRootTree(of:receivedPropertiesCache:constructionMemo:)` builds from it. The
+	/// parameters are `createMockRootScopeGenerator`'s.
+	func promoteMockRootScope(
+		for instantiable: Instantiable,
+		scope: Scope,
+		typeDescriptionToScopeMap: [TypeDescription: Scope],
+		frozenScopeMap: FrozenScopeMap,
+		flatParameterMockDefaults: [TypeDescription: ScopeGenerator.FlatParameterMockDefault],
+		erasedToConcreteTypeMap: [TypeDescription: TypeDescription],
+		publicMockContext: PublicMockContext?,
+		emittingModule: EmittingModule?,
+		checksConstructions: Bool = true,
+		receivedPropertiesCache cache: inout ReceivedPropertiesCache,
+		childrenRequiringEachOtherValidation: inout ChildrenRequiringEachOtherValidation,
+		promotedScopesValidatedForHiddenReceives: inout Set<ObjectIdentifier>,
+		scopesWithValidatedDeclarations: inout Set<ObjectIdentifier>,
+	) async throws -> PromotedMockRoot {
 		// Recursively collect all transitive received properties from the scope tree
 		// and any promoted scopes' subtrees. Results are cached per Scope identity
 		// (via ObjectIdentifier) so each scope outside a cycle is visited at most once.
@@ -481,14 +517,48 @@ extension DependencyTreeGenerator {
 		// Build the final ScopeGenerator once. The mock root binds every received
 		// property it does not promote — as a `mock()` parameter or a `SafeDIOverrides`
 		// entry — so each is receivable throughout the tree.
-		// The instances the tree reads by value through a wrapper a public mock takes as a parameter, which it reads as
-		// `<label>.instance` when it builds the type that reads it, as production reads a received wrapper's instance.
-		var instancesReadThroughWrapperParameters = Set<Property>()
 		let (mockRootTable, mockRootRecord) = MockRootPlan(mockRootScope: mockRootScope, frozenScopeMap: frozenScopeMap).freezingRoot()
 		// The root of the mock root's world, which node records are made of
 		// (`ScopeGenerator.nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:)`), where a test observes them.
 		let worldRoot = ConstructionScope(table: mockRootTable, record: mockRootRecord)
 		NodeRecordsObservation.recordsMockWorldRoot?(instantiable.concreteInstantiable, MockWorldRoot(scope: worldRoot, receivesPassedNil: receivesPassedNil))
+		return PromotedMockRoot(
+			instantiable: instantiable,
+			mockRootScope: mockRootScope,
+			frozenScopeMap: frozenScopeMap,
+			flatParameterMockDefaults: flatParameterMockDefaults,
+			publicMockContext: publicMockContext,
+			scopeTreeChecks: scopeTreeChecks,
+			mockRootTable: mockRootTable,
+			mockRootRecord: mockRootRecord,
+			allReceived: allReceived,
+			receivesPassedNil: receivesPassedNil,
+			surfacedByPublicMockCalls: surfacedByPublicMockCalls,
+		)
+	}
+
+	/// The second half of `createMockRootScopeGenerator`: the generator tree of the mock root `promoted` holds, and the
+	/// checks of the root that read it.
+	func buildMockRootTree(
+		of promoted: PromotedMockRoot,
+		receivedPropertiesCache cache: inout ReceivedPropertiesCache,
+		constructionMemo: inout ConstructionMemo,
+	) async throws -> MockRootTree {
+		let instantiable = promoted.instantiable
+		let mockRootScope = promoted.mockRootScope
+		let frozenScopeMap = promoted.frozenScopeMap
+		let flatParameterMockDefaults = promoted.flatParameterMockDefaults
+		let publicMockContext = promoted.publicMockContext
+		let scopeTreeChecks = promoted.scopeTreeChecks
+		let mockRootTable = promoted.mockRootTable
+		let mockRootRecord = promoted.mockRootRecord
+		var allReceived = promoted.allReceived
+		let receivesPassedNil = promoted.receivesPassedNil
+		let surfacedByPublicMockCalls = promoted.surfacedByPublicMockCalls
+		let worldRoot = promoted.worldRoot
+		// The instances the tree reads by value through a wrapper a public mock takes as a parameter, which it reads as
+		// `<label>.instance` when it builds the type that reads it, as production reads a received wrapper's instance.
+		var instancesReadThroughWrapperParameters = Set<Property>()
 		// A public mock's tree built with builders has holes, whose places no memo holds, so only the tree built without
 		// them shares the mock roots' memo.
 		func mockRootGenerator(builders: ShapedBuilders?, constructionMemo: inout ConstructionMemo) throws -> ScopeGenerator {
@@ -541,23 +611,7 @@ extension DependencyTreeGenerator {
 		// with the tree's on every root where a test asks. It reads what the mock root binds once the tree is final: what it
 		// binds once the values only calls of public mocks receive inside `@Sendable` functions are left out, and the
 		// wrappers a public mock takes whose instances its tree reads, which the tree declares above its root.
-		let worldFindsSendableCapture: Bool? = if scopeTreeChecks.asksWorldForSendableCaptures || MockRootTreeChecksObservation.comparesTree != nil {
-			DeclarationsAnsweringReads(
-				world: TypeFactsGraph(root: ConstructionScope(table: mockRootTable, record: mockRootRecord), forMockGeneration: true),
-				mockRoot: DeclarationsAnsweringReads.MockRoot(
-					boundLabels: Set(allReceived.map(\.label)),
-					wrapperParameters: instancesReadThroughWrapperParameters.sorted().flatMap { instanceProperty in
-						allReceived.filter { property in
-							property.label == instanceProperty.label
-								&& property.propertyType.isLazilyInstantiated
-								&& property.asValidatedForDependencyCycles.asUnwrappedProperty == instanceProperty.asUnwrappedProperty
-						}.map { DeclarationsAnsweringReads.Declaration(property: $0.asUnwrappedProperty, instanceProperty: instanceProperty) }.sorted { $0.property < $1.property }
-					},
-				),
-			).sendableFunctionCapturesWrapper
-		} else {
-			nil
-		}
+		let worldFindsSendableCapture = Self.worldFindsSendableCapture(of: promoted, boundProperties: allReceived, instancesReadThroughWrapperParameters: instancesReadThroughWrapperParameters)
 		let treeChecks = worldFindsSendableCapture.map { scopeTreeChecks.answeringSendableCaptures(fromWorld: $0) } ?? scopeTreeChecks
 		// A tree whose scopes declare no label they receive in two forms holds no unpassable label (`MockRootTreeChecks`).
 		if treeChecks.needsTree(.cycleLabels) {
@@ -666,6 +720,53 @@ extension DependencyTreeGenerator {
 			return MockRootTree(generator: builtGenerator, worldRoot: worldRoot, treeChecks: treeChecks, worldFindsSendableCapture: worldFindsSendableCapture)
 		}
 		return try MockRootTree(generator: mockRootGeneratorWithHoles(builders: buildersNamedApart), worldRoot: worldRoot, treeChecks: treeChecks, worldFindsSendableCapture: worldFindsSendableCapture)
+	}
+
+	/// Where the root's scopes ask its world (`MockRootTreeChecks.asksWorldForSendableCaptures`), or a test compares the
+	/// tree's checks, whether the per-type facts of the world of the mock root `promoted` holds find a `Sendable` capture
+	/// (`DeclarationsAnsweringReads`), with the root binding `boundProperties` and taking the wrappers of
+	/// `instancesReadThroughWrapperParameters`; `nil` otherwise.
+	static func worldFindsSendableCapture(of promoted: PromotedMockRoot, boundProperties: Set<Property>, instancesReadThroughWrapperParameters: Set<Property>) -> Bool? {
+		guard promoted.scopeTreeChecks.asksWorldForSendableCaptures || MockRootTreeChecksObservation.comparesTree != nil else { return nil }
+		return DeclarationsAnsweringReads(
+			world: TypeFactsGraph(root: ConstructionScope(table: promoted.mockRootTable, record: promoted.mockRootRecord), forMockGeneration: true),
+			mockRoot: DeclarationsAnsweringReads.MockRoot(
+				boundLabels: Set(boundProperties.map(\.label)),
+				wrapperParameters: instancesReadThroughWrapperParameters.sorted().flatMap { instanceProperty in
+					boundProperties.filter { property in
+						property.label == instanceProperty.label
+							&& property.propertyType.isLazilyInstantiated
+							&& property.asValidatedForDependencyCycles.asUnwrappedProperty == instanceProperty.asUnwrappedProperty
+					}.map { DeclarationsAnsweringReads.Declaration(property: $0.asUnwrappedProperty, instanceProperty: instanceProperty) }.sorted { $0.property < $1.property }
+				},
+			),
+		).sendableFunctionCapturesWrapper
+	}
+
+	/// What `promoteMockRootScope` decides of a mock root before its generator tree is built: its promoted scope, frozen into
+	/// the table its world and its tree are both made from, and what the mock root binds. Held on the generator's actor
+	/// only until the tree is built, or, for a root `generateMockCode` lays out from node records with no tree
+	/// (`UnbuiltMockRoot`), until its records are known to accept it.
+	struct PromotedMockRoot {
+		let instantiable: Instantiable
+		let mockRootScope: Scope
+		let frozenScopeMap: FrozenScopeMap
+		let flatParameterMockDefaults: [TypeDescription: ScopeGenerator.FlatParameterMockDefault]
+		let publicMockContext: PublicMockContext?
+		/// Which checks of the root's tree its scopes say can find anything there (`MockRootTreeChecks`).
+		let scopeTreeChecks: MockRootTreeChecks
+		let mockRootTable: ScopeTable
+		let mockRootRecord: ScopeRecord
+		/// What the mock root binds of what its tree and its promoted scopes' trees receive.
+		let allReceived: Set<Property>
+		let receivesPassedNil: MockReceivesPassedNil
+		/// What only the calls of other modules' public mocks in the tree pass, which the mock root binds too.
+		let surfacedByPublicMockCalls: Set<Property>
+
+		/// The root of the mock root's world.
+		var worldRoot: ConstructionScope {
+			ConstructionScope(table: mockRootTable, record: mockRootRecord)
+		}
 	}
 
 	/// A mock root's generator tree and the root of its world, which every build of the generator is made from: the world

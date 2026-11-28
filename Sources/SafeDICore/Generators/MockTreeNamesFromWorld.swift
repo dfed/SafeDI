@@ -111,7 +111,14 @@ enum MockTreeNamesFromWorld {
 	static func treeNames(of instantiable: Instantiable, worldRoot: ConstructionScope, passesNilToPinnedReceives: Bool, declarationVisits: inout Int) -> Answer {
 		guard instantiable.generateMock != .public else { return .refused(.publicMockRoot) }
 		guard !passesNilToPinnedReceives else { return .refused(.pins) }
-		let world = TypeFactsGraph(root: worldRoot, forMockGeneration: true)
+		return treeNames(of: instantiable, world: TypeFactsGraph(root: worldRoot, forMockGeneration: true), passesNilToPinnedReceives: passesNilToPinnedReceives, declarationVisits: &declarationVisits)
+	}
+
+	/// The same, read from `world`, the mock root's world (`TypeFactsGraph(root:forMockGeneration:)`), which a caller that
+	/// reads the world again builds once.
+	static func treeNames(of instantiable: Instantiable, world: TypeFactsGraph, passesNilToPinnedReceives: Bool, declarationVisits: inout Int) -> Answer {
+		guard instantiable.generateMock != .public else { return .refused(.publicMockRoot) }
+		guard !passesNilToPinnedReceives else { return .refused(.pins) }
 		let declarationCount = world.declarationCount
 
 		// Each reached declaration's children, read once; the reach refuses what the world cannot answer.
@@ -420,7 +427,11 @@ extension MockTreeNamesFromWorld {
 	/// A root the world answers calls no public mock and is none, so it receives nothing only such a call does and takes no
 	/// builder.
 	static func rootInputs(of worldRoot: ConstructionScope, spelledAs bound: Set<Property>) -> (inputs: MockRootParameterInputs, childrenInBuildOrder: [Property])? {
-		let world = TypeFactsGraph(root: worldRoot, forMockGeneration: true)
+		rootInputs(ofWorld: TypeFactsGraph(root: worldRoot, forMockGeneration: true), spelledAs: bound)
+	}
+
+	/// The same, read from `world`, the mock root's world, which a caller that reads the world again builds once.
+	static func rootInputs(ofWorld world: TypeFactsGraph, spelledAs bound: Set<Property>) -> (inputs: MockRootParameterInputs, childrenInBuildOrder: [Property])? {
 		// The world tells every two spellings apart, and a set of received properties keeps the most explicit of each.
 		func properties(_ rows: BitRows) -> Set<Property> {
 			var properties = Set<Property>()
@@ -444,7 +455,7 @@ extension MockTreeNamesFromWorld {
 			requiredReceivedProperties: properties(world.receives.required),
 			onlyIfAvailableUnwrappedReceivedProperties: properties(world.receives.onlyIfAvailableUnwrapped),
 			typesDeclaredEscaping: Set(world.typesDeclaredEscaping.columns(inRow: 0).map { world.typeTable[Int($0)] }),
-			propertiesToDeclare: worldRoot.propertiesToDeclare,
+			propertiesToDeclare: world.scope(of: 0).propertiesToDeclare,
 			receivedOnlyByPublicMockCalls: [],
 			passedByPublicMockCalls: [],
 			passedByPublicMockCallLabelsReadInsideSendableFunctions: [],

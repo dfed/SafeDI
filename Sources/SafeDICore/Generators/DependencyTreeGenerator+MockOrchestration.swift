@@ -47,7 +47,7 @@ extension DependencyTreeGenerator {
 		let worldRootRecording = AsyncStream.makeStream(of: (mockedType: TypeDescription, worldRoot: MockWorldRoot).self)
 		// What each mock root's promotion decides before its tree is built, which the tree names comparison reads.
 		let promotionRecording = AsyncStream.makeStream(of: MockRootPromotion.self)
-		return try await NodeRecordsObservation.$recordsMockWorldRoot.withValue({ worldRootRecording.continuation.yield(($0, $1)) }) {
+		return try await NodeRecordsObservation.$recordsMockWorldRoot.withValue(TaskLocalFunction { worldRootRecording.continuation.yield(($0, $1)) }) {
 			try await MockTreeNamesObservation.$recordsMockRootPromotion.withValue(TaskLocalFunction { promotionRecording.continuation.yield($0) }) {
 				try await generateMockCode(
 					mockConditionalCompilation: mockConditionalCompilation,
@@ -96,6 +96,11 @@ extension DependencyTreeGenerator {
 		var promotedScopesValidatedForHiddenReceives = Set<ObjectIdentifier>()
 		var scopesWithValidatedDeclarations = Set<ObjectIdentifier>()
 		var mockRoots = [(instantiable: Instantiable, scopeGenerator: ScopeGenerator)]()
+		// Where node records lay mock roots out, the internal mock roots that need no generator tree, each with its
+		// promotion, from which its tree is built after all where its records refuse it (`UnbuiltMockRoot`). Only where no
+		// other module's public mock is called: the module's checks of those calls read every root's tree.
+		let leavesTreesUnbuilt = NodeRecordsObservation.laysOutMockRoots && MockRootTreeSkipObservation.leavesTreesUnbuilt && seams.foreignPublicMocks.isEmpty
+		var unbuiltMockRoots = [(instantiable: Instantiable, unbuilt: UnbuiltMockRoot, promoted: PromotedMockRoot)]()
 		// The imports each mock root's file takes for the types its tree builds, folded over its world as soon as the mock
 		// root is accepted, so no world's table is kept until the roots are lowered.
 		var foldedMockImportsByType = [TypeDescription: Set<FulfillerImports.Fulfiller>]()
@@ -140,7 +145,7 @@ extension DependencyTreeGenerator {
 
 			// Each mock root reports the first error it finds, and the errors of every mock root are reported.
 			do {
-				let mockRootTree = try await createMockRoot(
+				let promoted = try await promoteMockRoot(
 					for: instantiable,
 					scope: scope,
 					// A `generateMock: true` type declared in this module gets its mock whether
@@ -154,8 +159,27 @@ extension DependencyTreeGenerator {
 					childrenRequiringEachOtherValidation: &childrenRequiringEachOtherValidation,
 					promotedScopesValidatedForHiddenReceives: &promotedScopesValidatedForHiddenReceives,
 					scopesWithValidatedDeclarations: &scopesWithValidatedDeclarations,
-					constructionMemo: &constructionMemo,
 				)
+				if leavesTreesUnbuilt {
+					switch UnbuiltMockRoot.leavingTreeUnbuilt(
+						promoted,
+						worldFindsSendableCapture: Self.worldFindsSendableCapture(of: promoted, boundProperties: promoted.allReceived, instancesReadThroughWrapperParameters: []),
+						flatParameterMockDefaults: flatParameterMockDefaults,
+					) {
+					case let .leftUnbuilt(unbuilt):
+						let worldRoot = promoted.worldRoot
+						foldedMockImportsByType[instantiable.concreteInstantiable] = TypeFactsImports(root: worldRoot, buildingMock: true).fulfillers
+						foldedSendableConfigurationTypeNamesByType[instantiable.concreteInstantiable] = TypeFactsSendableConfigurations(
+							root: worldRoot,
+							mockedTypeIsActor: instantiable.declarationType == .actorType,
+						).typeNames
+						unbuiltMockRoots.append((instantiable: instantiable, unbuilt: unbuilt, promoted: promoted))
+						continue
+					case let .keepsTree(refusal):
+						MockRootTreeSkipObservation.observer?(MockRootTreeSkipReport(root: instantiable.concreteInstantiable.asSource, outcome: refusal.rawValue))
+					}
+				}
+				let mockRootTree = try await buildMockRootTree(of: promoted, receivedPropertiesCache: &receivedPropertiesCache, constructionMemo: &constructionMemo)
 				let mockRoot = mockRootTree.generator
 				if instantiable.generateMock == .public, let publicMockContext {
 					var findings = await mockRoot.publicMockFindings(of: instantiable, context: publicMockContext, mockDefaults: flatParameterMockDefaults)
@@ -274,6 +298,9 @@ extension DependencyTreeGenerator {
 		// across every root that references the type, so the annotation has to agree, and each root's lowering reads the
 		// union. Each is folded from the root's world (`TypeFactsSendableConfigurations`).
 		var sendableConfigurationTypeNames = Set<String>()
+		for (instantiable, _, _) in unbuiltMockRoots {
+			sendableConfigurationTypeNames.formUnion(foldedSendableConfigurationTypeNamesByType[instantiable.concreteInstantiable, default: []])
+		}
 		for (instantiable, mockRoot) in mockRoots {
 			let foldedTypeNames = foldedSendableConfigurationTypeNamesByType[instantiable.concreteInstantiable, default: []]
 			sendableConfigurationTypeNames.formUnion(foldedTypeNames)
@@ -297,6 +324,25 @@ extension DependencyTreeGenerator {
 			publicMockContext: publicMockContext,
 			foreignPublicMocks: foreignPublicMocks,
 		)
+		// Each root left unbuilt is laid out from its node records with no tree; where they refuse it, its tree is built after
+		// all, in type order, and it is lowered with the others. Its promotion passed, and the build's own checks do not
+		// reach such a root (it holds no erased instantiator, no check of its tree is needed, and it is no public mock), so
+		// the build throws nothing the loop above would have collected; anything it threw would still fail the run.
+		let unbuiltLowerings = try await BoundedConcurrency.map(unbuiltMockRoots.map { ($0.instantiable, $0.unbuilt) }, width: BoundedConcurrency.mockRootWidth) { instantiableAndUnbuilt, _ in
+			ScopeGenerator.lowerUnbuiltMockRoot(instantiableAndUnbuilt.1, of: instantiableAndUnbuilt.0, context: mockContext)
+		}
+		var laidOutUnbuiltMockRoots = [(instantiable: Instantiable, unbuilt: UnbuiltMockRoot, lowered: MockLowering.Result)]()
+		for ((instantiable, unbuilt, promoted), lowered) in zip(unbuiltMockRoots, unbuiltLowerings) {
+			if let lowered {
+				laidOutUnbuiltMockRoots.append((instantiable: instantiable, unbuilt: unbuilt, lowered: lowered))
+				MockRootTreeSkipObservation.observer?(MockRootTreeSkipReport(root: instantiable.concreteInstantiable.asSource, outcome: MockRootTreeSkipReport.leftUnbuilt))
+			} else {
+				try await mockRoots.append((instantiable: instantiable, scopeGenerator: buildMockRootTree(of: promoted, receivedPropertiesCache: &receivedPropertiesCache, constructionMemo: &constructionMemo).generator))
+				MockRootTreeSkipObservation.observer?(MockRootTreeSkipReport(root: instantiable.concreteInstantiable.asSource, outcome: MockRootTreeSkipReport.builtAfterRecordsRefused))
+			}
+		}
+		unbuiltMockRoots = []
+		mockRoots.sort { $0.instantiable.concreteInstantiable < $1.instantiable.concreteInstantiable }
 		let fulfillingInstantiables = typeDescriptionToFulfillingInstantiableMap
 		var recordedWorldRoots = [TypeDescription: MockWorldRoot]()
 		if let worldRootRecording {
@@ -315,7 +361,7 @@ extension DependencyTreeGenerator {
 		}
 		let promotions = recordedPromotions
 		let foldedMockImports = foldedMockImportsByType
-		let loweredRoots = try await BoundedConcurrency.map(mockRoots, width: BoundedConcurrency.mockRootWidth) { instantiableAndMockRoot, _ in
+		let loweredTreeRoots = try await BoundedConcurrency.map(mockRoots, width: BoundedConcurrency.mockRootWidth) { instantiableAndMockRoot, _ in
 			let (instantiable, mockRoot) = instantiableAndMockRoot
 			let foldedFulfillers = foldedMockImports[instantiable.concreteInstantiable, default: []]
 			if let observer = TypeFactsImportsObservation.comparesWalk {
@@ -341,6 +387,24 @@ extension DependencyTreeGenerator {
 				),
 			)
 		}
+
+		// The roots laid out with no tree join the others in type order.
+		let loweredRoots = (loweredTreeRoots + laidOutUnbuiltMockRoots.map { instantiable, unbuilt, lowered in
+			(
+				root: GeneratedRoot(
+					typeDescription: instantiable.concreteInstantiable,
+					sourceFilePath: instantiable.sourceFilePath,
+					code: "",
+					fulfillers: foldedMockImports[instantiable.concreteInstantiable, default: []].union(unbuilt.fulfillersOfMockOutsideTree(of: instantiable, mockDefaults: flatParameterMockDefaults)),
+				),
+				lowered: MockLowering.LoweredRoot(
+					mockedType: instantiable.concreteInstantiable,
+					lowered: lowered,
+					emittedMergedCode: "",
+					mockedTypeFulfiller: fulfillingInstantiables[instantiable.concreteInstantiable].flatMap(FulfillerImports.Fulfiller.init(instantiable:)),
+				),
+			)
+		}).sorted { $0.root.typeDescription < $1.root.typeDescription }
 
 		// The second whole-module gate, not run by `requirements(of:)`: a type whose constructions read its configuration
 		// two ways is rejected, read from the records of every root's lowering. It runs after the roots are lowered, so
@@ -783,6 +847,61 @@ extension DependencyTreeGenerator {
 		scopesWithValidatedDeclarations: inout Set<ObjectIdentifier>,
 		constructionMemo: inout ConstructionMemo,
 	) async throws -> MockRootTree {
+		try validateNoHandWrittenMockSharesGeneratedMockName(of: instantiable, generatedMockReason: generatedMockReason, mockScopes: mockScopes)
+		return try await createMockRootScopeGenerator(
+			for: instantiable,
+			scope: scope,
+			typeDescriptionToScopeMap: mockScopes.typeDescriptionToScopeMap,
+			frozenScopeMap: mockScopes.frozenScopeMap,
+			flatParameterMockDefaults: mockScopes.flatParameterMockDefaults,
+			erasedToConcreteTypeMap: mockScopes.erasedToConcreteTypeMap,
+			publicMockContext: publicMockContext,
+			emittingModule: emittingModule,
+			checksConstructions: checksConstructions,
+			receivedPropertiesCache: &receivedPropertiesCache,
+			childrenRequiringEachOtherValidation: &childrenRequiringEachOtherValidation,
+			promotedScopesValidatedForHiddenReceives: &promotedScopesValidatedForHiddenReceives,
+			scopesWithValidatedDeclarations: &scopesWithValidatedDeclarations,
+			constructionMemo: &constructionMemo,
+		)
+	}
+
+	/// What `createMockRoot` decides of the mock root of `instantiable` before its generator tree is built, which
+	/// `buildMockRootTree(of:receivedPropertiesCache:constructionMemo:)` builds; the parameters are `createMockRoot`'s.
+	func promoteMockRoot(
+		for instantiable: Instantiable,
+		scope: Scope,
+		generatedMockReason: GeneratedMockReason?,
+		mockScopes: MockScopes,
+		publicMockContext: PublicMockContext?,
+		emittingModule: EmittingModule?,
+		checksConstructions: Bool = true,
+		receivedPropertiesCache: inout ReceivedPropertiesCache,
+		childrenRequiringEachOtherValidation: inout ChildrenRequiringEachOtherValidation,
+		promotedScopesValidatedForHiddenReceives: inout Set<ObjectIdentifier>,
+		scopesWithValidatedDeclarations: inout Set<ObjectIdentifier>,
+	) async throws -> PromotedMockRoot {
+		try validateNoHandWrittenMockSharesGeneratedMockName(of: instantiable, generatedMockReason: generatedMockReason, mockScopes: mockScopes)
+		return try await promoteMockRootScope(
+			for: instantiable,
+			scope: scope,
+			typeDescriptionToScopeMap: mockScopes.typeDescriptionToScopeMap,
+			frozenScopeMap: mockScopes.frozenScopeMap,
+			flatParameterMockDefaults: mockScopes.flatParameterMockDefaults,
+			erasedToConcreteTypeMap: mockScopes.erasedToConcreteTypeMap,
+			publicMockContext: publicMockContext,
+			emittingModule: emittingModule,
+			checksConstructions: checksConstructions,
+			receivedPropertiesCache: &receivedPropertiesCache,
+			childrenRequiringEachOtherValidation: &childrenRequiringEachOtherValidation,
+			promotedScopesValidatedForHiddenReceives: &promotedScopesValidatedForHiddenReceives,
+			scopesWithValidatedDeclarations: &scopesWithValidatedDeclarations,
+		)
+	}
+
+	/// Rejects a hand-written method also named `mock` beside the `mock()` generated for `instantiable` for
+	/// `generatedMockReason`.
+	private func validateNoHandWrittenMockSharesGeneratedMockName(of instantiable: Instantiable, generatedMockReason: GeneratedMockReason?, mockScopes: MockScopes) throws {
 		// A hand-written method also named `mock` can be confused with the
 		// generated `mock()`: identical signatures redeclare, overlapping ones
 		// make calls ambiguous or silently pick the generated method, and a
@@ -801,23 +920,6 @@ extension DependencyTreeGenerator {
 				)
 			}
 		}
-
-		return try await createMockRootScopeGenerator(
-			for: instantiable,
-			scope: scope,
-			typeDescriptionToScopeMap: mockScopes.typeDescriptionToScopeMap,
-			frozenScopeMap: mockScopes.frozenScopeMap,
-			flatParameterMockDefaults: mockScopes.flatParameterMockDefaults,
-			erasedToConcreteTypeMap: mockScopes.erasedToConcreteTypeMap,
-			publicMockContext: publicMockContext,
-			emittingModule: emittingModule,
-			checksConstructions: checksConstructions,
-			receivedPropertiesCache: &receivedPropertiesCache,
-			childrenRequiringEachOtherValidation: &childrenRequiringEachOtherValidation,
-			promotedScopesValidatedForHiddenReceives: &promotedScopesValidatedForHiddenReceives,
-			scopesWithValidatedDeclarations: &scopesWithValidatedDeclarations,
-			constructionMemo: &constructionMemo,
-		)
 	}
 
 	/// Hands `observer` each of `mockRoots` with the checks its scopes said need its tree, and those of the others that find

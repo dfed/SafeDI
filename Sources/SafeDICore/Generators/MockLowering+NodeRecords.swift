@@ -27,7 +27,8 @@ extension ScopeGenerator {
 	/// records out. Each node reads its override from the overrides its body's function was
 	/// handed (`NodeRecords.mockConfigurationField(named:)`), which the root's body reads of `mock()`'s own parameter. The
 	/// root is reported to the test that observes node records (`NodeRecordsObservation.observer`), which alone hands a
-	/// mock root its world. The world answers its records `rootNames`, the names the root's level binds its nodes apart under.
+	/// mock root its world. The world answers its records `rootNames`, the names the root's level binds its nodes apart
+	/// under.
 	/// A node's receive only if available reads `outerDeclarations`, the parameters of `mock()` and the overrides it binds
 	/// before its nodes, where no node nearer it declares the label, as the walk passes them.
 	///
@@ -35,8 +36,17 @@ extension ScopeGenerator {
 	/// Anything the records throw refuses the world (`NodeRecords.refusingWhatRecordsThrow(_:)`), whose walk reports it.
 	@inline(never)
 	static func nodeRecordsMockStatements(of instantiable: Instantiable, worldRoot: ConstructionScope, bindsOnlyNodes: Bool, sendableConfigurationTypeNames: Set<String>, rootNames: MockRootNames, outerDeclarations: [Property], handWrittenMockDefaultParameters: [TypeDescription: [ScopeGenerator.DefaultParameter]]) -> (statements: String, surface: MockLowering.RootSurface)? {
-		let world = TypeFactsGraph(root: worldRoot, forMockGeneration: true, mockRootNames: rootNames)
+		nodeRecordsMockStatements(of: instantiable, world: TypeFactsGraph(root: worldRoot, forMockGeneration: true, mockRootNames: rootNames), bindsOnlyNodes: bindsOnlyNodes, sendableConfigurationTypeNames: sendableConfigurationTypeNames, outerDeclarations: outerDeclarations, handWrittenMockDefaultParameters: handWrittenMockDefaultParameters, reportsRefusal: true)
+	}
+
+	/// The same, laid out from `world`, the mock root's world naming what the root's level binds its nodes apart under
+	/// (`TypeFactsGraph.naming(_:)`), which a root left unbuilt built before (`UnbuiltMockRoot`). A refusal is reported only
+	/// where `reportsRefusal` holds: such a root's tree is built after a refusal, and its walk asks the records again
+	/// (`lowerUnbuiltMockRoot(_:of:context:)`).
+	@inline(never)
+	static func nodeRecordsMockStatements(of instantiable: Instantiable, world: TypeFactsGraph, bindsOnlyNodes: Bool, sendableConfigurationTypeNames: Set<String>, outerDeclarations: [Property], handWrittenMockDefaultParameters: [TypeDescription: [ScopeGenerator.DefaultParameter]], reportsRefusal: Bool) -> (statements: String, surface: MockLowering.RootSurface)? {
 		func report(refusal: NodeRecordRefusal?, everyRefusal: [NodeRecordRefusal], isLaidOut: Bool, recordCount: Int) {
+			guard isLaidOut || reportsRefusal else { return }
 			var report = NodeRecordsReport(
 				root: instantiable.concreteInstantiable.asSource,
 				refusal: refusal?.rawValue,

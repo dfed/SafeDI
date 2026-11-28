@@ -4153,15 +4153,26 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// (`TypeFactsImports(root:buildingMock:)`).
 	/// - Parameter mockDefaults: The hand-written mock a flat parameter of each type defaults to.
 	func fulfillersOfMockOutsideTree(mockDefaults: [TypeDescription: FlatParameterMockDefault]) -> Set<FulfillerImports.Fulfiller> {
+		guard case let .root(instantiable, _) = scopeData else { return [] }
+		return Self.fulfillersOfMockOutsideTree(of: instantiable, mockDefaults: mockDefaults) { mockDefaults in
+			mockRootParameters(instantiable: instantiable, mockDefaults: mockDefaults)
+		}
+	}
+
+	/// The same for the mock of `instantiable`, whose parameters with the defaults it is handed `parameters` classifies.
+	static func fulfillersOfMockOutsideTree(
+		of instantiable: Instantiable,
+		mockDefaults: [TypeDescription: FlatParameterMockDefault],
+		parameters classifiedParameters: ([TypeDescription: FlatParameterMockDefault]) -> MockRootParameters,
+	) -> Set<FulfillerImports.Fulfiller> {
 		var fulfillers = Set<FulfillerImports.Fulfiller>()
-		guard case let .root(instantiable, _) = scopeData else { return fulfillers }
 		if let fulfiller = FulfillerImports.Fulfiller(instantiable: instantiable) {
 			fulfillers.insert(fulfiller)
 		}
 		// The parameters are worked out again here only for a default that can need an import, which few mocks have.
 		let mockDefaults = mockDefaults.filter { !$0.value.fulfillers.isEmpty }
 		guard !mockDefaults.isEmpty else { return fulfillers }
-		let parameters = mockRootParameters(instantiable: instantiable, mockDefaults: mockDefaults)
+		let parameters = classifiedParameters(mockDefaults)
 		for forwardedParameterDefault in parameters.forwardedParameterDefaults.values {
 			if case let .handWrittenMock(mockDefault) = forwardedParameterDefault {
 				fulfillers.formUnion(mockDefault.fulfillers)

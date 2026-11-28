@@ -1322,7 +1322,15 @@ struct TypeFactsGraph: Sendable {
 	let holesArePlaces: Bool
 
 	/// What a mock root's lowering names that the node records of its world read (`NodeRecordSources`).
-	let mockRootNames: MockRootNames
+	private(set) var mockRootNames: MockRootNames
+
+	/// This world, its node records reading `mockRootNames`, which no fact of the graph reads, so a mock root's world built
+	/// before its lowering names anything serves its records too.
+	func naming(_ mockRootNames: MockRootNames) -> TypeFactsGraph {
+		var named = self
+		named.mockRootNames = mockRootNames
+		return named
+	}
 
 	/// What each node's subtree reads from above it, by read ID.
 	let reads: ReadsFromAbove

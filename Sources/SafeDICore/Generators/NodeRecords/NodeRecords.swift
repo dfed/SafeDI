@@ -422,7 +422,11 @@ struct NodeRecords: Sendable {
 				// by whether a `@Sendable` function encloses it, for the local the walk reads its overrides into there, and a
 				// function on a cycle reads no local.
 				let calleeDeclaration = world.declaration(of: callee)
-				let closedOnTwin = enteredSlots == nil || isOnPath[Int(callee)] ? nil : stack.last(where: { frame in
+				// Only a frame of the declaration or of its twin can match, and the walk enters every frame but the root's in
+				// `twins`, so the path is searched only where `twins` holds one, or where the callee is the root's declaration:
+				// a search per call made the walk quadratic in the depth of a ring.
+				let mayCloseOnPlaceAbove = calleeDeclaration == 0 || twins.holdsPlaceOfItOrItsTwin(calleeDeclaration)
+				let closedOnTwin = enteredSlots == nil || isOnPath[Int(callee)] || !mayCloseOnPlaceAbove ? nil : stack.last(where: { frame in
 					let declaration = world.declaration(of: frame.variant)
 					return twins.isTwin(declaration, of: calleeDeclaration) || declaration == calleeDeclaration && world.keys(of: frame.variant) == world.keys(of: callee)
 				})?.variant

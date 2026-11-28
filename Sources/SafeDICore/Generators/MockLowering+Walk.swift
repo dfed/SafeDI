@@ -177,39 +177,16 @@ extension ScopeGenerator {
 		// (`rootArgumentList`).
 		let lazilyInstantiatedInstances = Set(propertiesToGenerate.compactMap(\.mockLoweringDeclaredLazilyInstantiatedInstanceProperty))
 			.union(mockLoweringLazilyInstantiatedInstanceProperties)
-		// The mocked type's own receive of a flat received parameter or override named apart is bound
-		// again under its label before the tree, unless the root's level binds that label (`generateMockRootCode`'s
-		// `rootDependenciesToRebind`), when the mocked type is passed the name.
-		let rootLevelBindingNames = walk.rootPropertyNodeBindingNames.union(signature.onlyIfAvailableOverrides.map(\.name))
-		var rootRenames = walk.rootRenames
-		// The mocked type's own receive of a wrapper `mock()` binds is passed its binding by name.
-		for (label, names) in signature.lazilyInstantiatedBindingNamesByLabelAndType {
-			rootRenames[label, default: [:]].merge(names) { _, wrapperName in wrapperName }
-		}
-		var rootReceiverBindingLines = [String]()
-		var rootReceivesBoundAgain = [Property]()
-		for dependency in instantiable.dependencies where dependency.source.isReceived {
-			guard let names = signature.renamesByLabelAndType[dependency.property.label],
-			      let name = names[dependency.property.typeDescription] ?? names[dependency.property.asUnwrappedProperty.typeDescription],
-			      !rootLevelBindingNames.contains(dependency.property.label)
-			else { continue }
-			rootReceiverBindingLines.append("\(bodyIndent)let \(dependency.property.label): \(dependency.property.typeDescription.asSource) = \(name)")
-			rootReceivesBoundAgain.append(dependency.property)
-			rootRenames[dependency.property.label]?[dependency.property.typeDescription] = nil
-		}
-		let linesBoundBesideNodes = signature.lazilyInstantiatedBindingLines(indent: bodyIndent) + rootReceiverBindingLines
+		let rootArguments = MockLowering.rootArguments(of: instantiable, signature: signature, namesApart: walk.rootRenames, propertyNodeBindingNames: walk.rootPropertyNodeBindingNames, nodeProperties: Set(nodes.map(\.property)), bodyIndent: bodyIndent)
+		let rootRenames = rootArguments.renames
+		let rootReceivesBoundAgain = rootArguments.receivesBoundAgain
+		let linesBoundBesideNodes = signature.lazilyInstantiatedBindingLines(indent: bodyIndent) + rootArguments.bindingLines
 		bindingLines.insert(contentsOf: linesBoundBesideNodes, at: rootReceiverBindingIndex)
 		// The mocked type's own receive or instantiation of a lazy wrapper's instance is passed the
 		// wrapper's instance, and a receive only if available of the optional form of a node or a parameter of `mock()` is passed
 		// that binding, as `generateReturnArgumentList` passes them.
 		// A public mock's root passes its instances alike (`publicMockWithTree`).
 		let rootInstancesReadByValue = MockLowering.rootInstancesReadByValue(of: instantiable, among: lazilyInstantiatedInstances)
-		// A public mock's root passes them alike, as `generateReturnArgumentList` does for every root.
-		let rootOptionalForms = MockLowering.rootOptionalFormsProvidedByNodes(of: instantiable, nodeProperties: Set(nodes.map(\.property)).union(signature.properties), renames: rootRenames)
-		// Each such receive of a node named apart is passed the node's name.
-		for (label, names) in MockLowering.rootOptionalFormRenames(of: rootOptionalForms, renames: rootRenames) {
-			rootRenames[label, default: [:]].merge(names) { renamed, _ in renamed }
-		}
 		let builders = (walk.filledCallBuilders.parameters + signature.placeOnlyBuilderDeclarations).sorted { $0.label < $1.label }
 		// What the mock declares of its nodes beside their statements, which the records give a root they lay out.
 		var surface = MockLowering.RootSurface(
@@ -320,7 +297,7 @@ extension ScopeGenerator {
 	/// The mock of `instantiable` whose tree's top-level nodes are `nodes`, in generation order, bound by `bindingLines`:
 	/// its `SafeDIOverrides` where a node has an override, its members in the inline order of `inlineOrderedNodes`, and `mock()`, which takes `signature`'s parameters, the builders
 	/// `builders` (each label and declaration, in label order, listed among the flat received parameters) and the overrides, binds each node and returns the type built from them.
-	private static func mockWithTree(of instantiable: Instantiable, signature: MockLowering.RootSignature, surface: MockLowering.RootSurface, bindingLines: [String], builders: [(label: String, declaration: String)], rootRenames: [String: [TypeDescription: String]], unavailableProperties: Set<Property>, instancesReadByValue: Set<Property>, context: MockContext) -> String {
+	static func mockWithTree(of instantiable: Instantiable, signature: MockLowering.RootSignature, surface: MockLowering.RootSurface, bindingLines: [String], builders: [(label: String, declaration: String)], rootRenames: [String: [TypeDescription: String]], unavailableProperties: Set<Property>, instancesReadByValue: Set<Property>, context: MockContext) -> String {
 		let indent = standardIndent
 		let bodyIndent = "\(indent)\(indent)"
 		let typeName = instantiable.concreteInstantiable.asSource

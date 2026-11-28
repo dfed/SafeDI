@@ -157,7 +157,11 @@ extension MockLowering {
 	/// builds only the first (`orderedPropertiesToGenerate`). A fill is no child of the root's level, and a hole's site
 	/// binds no property node.
 	static func rootLevelNodes(ofWorldRootedAt worldRoot: ConstructionScope) -> [LevelNode] {
-		let world = TypeFactsGraph(root: worldRoot, forMockGeneration: true)
+		rootLevelNodes(ofWorld: TypeFactsGraph(root: worldRoot, forMockGeneration: true))
+	}
+
+	/// The same, read from `world`, the mock root's world, which a root left unbuilt builds once (`UnbuiltMockRoot`).
+	static func rootLevelNodes(ofWorld world: TypeFactsGraph) -> [LevelNode] {
 		var listed = Set<Property>()
 		var nodes = [LevelNode]()
 		for edge in world.edgeFacts(from: 0).sorted(by: { $0.buildPosition < $1.buildPosition }) where !edge.isFill {
