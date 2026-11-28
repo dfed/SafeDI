@@ -21,6 +21,17 @@
 import SafeDICore
 import Testing
 
+/// Test only, deleted with the per-site walk: whether the observer compares the place graph's answers along each route
+/// with the per-site walk's (`placesOracleMismatches`, `placeVariantMismatches`). The query answers over every route of
+/// the graph, and the way down from a scope a cycle closes on is read from the graph alone, so on a tangle of cycles no
+/// type always encloses, where which member a call closes on depends on the members above it, the graph answers routes
+/// no tree builds and the walk's answers along a tree's route can differ. Only such a tangle's tests turn it off; the
+/// values a fill reads on a tangle are asserted against the inline build (`SafeDIToolSeamHoleOnCycleTests`, "Laps
+/// around a ring").
+enum SeamPlaceTreeRoutes {
+	@TaskLocal static var areCompared = true
+}
+
 extension SeamPlaceLevels {
 	/// A description of each place whose levels, read nearest first, do not hold exactly the fields of its scope struct and
 	/// the declarations it carries no field of: each label is decided by the nearest level that declares it, a field where
@@ -83,11 +94,25 @@ extension SeamPlaceLevels {
 		return ["The route query answers \(report.mismatches) questions of `\(seamType.asSource)` otherwise than the per-site walk: " + report.mismatchSamples.joined(separator: "; ")]
 	}
 
+	/// Test only, deleted before merge: each way the seam's place graph answers otherwise than its per-site walk
+	/// (`SeamPlacesOracle`).
+	var placesOracleMismatches: [String] {
+		placesObservation.map(SeamPlacesOracle.mismatches(of:)) ?? []
+	}
+
+	/// Test only, deleted before merge: a `validateFills` call's findings judged by case otherwise than per place
+	/// (`FillCaseJudgementOracle`).
+	var fillJudgementMismatches: [String] {
+		fillJudgement.map(FillCaseJudgementOracle.mismatches(of:)) ?? []
+	}
+
 	/// An observer that records an issue for each place whose levels do not hold its fields (`pathStructMismatches`), then
 	/// hands the levels to `enclosingObserver`, the observer the caller set, if any.
 	static func checkingPathStructs(handingOn enclosingObserver: (@Sendable (SeamPlaceLevels) -> Void)?) -> @Sendable (SeamPlaceLevels) -> Void {
 		{ placeLevels in
-			for mismatch in placeLevels.pathStructMismatches {
+			// Test only, deleted before merge: the place graph must answer as the per-site walk (`SeamPlacesOracle`).
+			let routeAnswerMismatches = SeamPlaceTreeRoutes.areCompared ? placeLevels.placesOracleMismatches + placeLevels.placeVariantMismatches : []
+			for mismatch in placeLevels.pathStructMismatches + routeAnswerMismatches + placeLevels.routeStepMismatches + placeLevels.callShapeComparisonMismatches + placeLevels.callShapeFoldMismatches + placeLevels.placeCaseFactMismatches + placeLevels.fillJudgementMismatches + placeLevels.caseFieldsMismatches {
 				Issue.record(Comment(rawValue: mismatch))
 			}
 			enclosingObserver?(placeLevels)
@@ -109,7 +134,7 @@ func collectingPlaceLevelDisagreements<Result>(during operation: () async throws
 	let (stream, continuation) = AsyncStream.makeStream(of: [String].self)
 	let enclosingObserver = SeamPlaceLevels.observer
 	let result = try await SeamPlaceLevels.$observer.withValue({ placeLevels in
-		continuation.yield(placeLevels.levelDisagreements() + placeLevels.routeQueryShadowMismatches)
+		continuation.yield(placeLevels.levelDisagreements() + placeLevels.routeQueryShadowMismatches + placeLevels.placesOracleMismatches + placeLevels.routeStepMismatches + placeLevels.placeVariantMismatches + placeLevels.callShapeComparisonMismatches + placeLevels.callShapeFoldMismatches + placeLevels.placeCaseFactMismatches + placeLevels.fillJudgementMismatches + placeLevels.caseFieldsMismatches)
 		enclosingObserver?(placeLevels)
 	}) {
 		try await operation()

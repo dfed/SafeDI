@@ -484,6 +484,19 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	}
 
 	@Test
+	func placeGraphLevel_writesNoByteForItsLists_whenEveryListIsEmpty() throws {
+		// Beside its flags, a level that holds no list writes its key and the index of its declarations alone.
+		let level = try SeamSignature.Places.Level.sample(isDistinct: false)
+		var levelWriter = BinaryWriter()
+		levelWriter.write(level)
+		var keyWriter = BinaryWriter()
+		keyWriter.write(level.key)
+
+		#expect(level.fillBaseStack.isEmpty && level.pathSegment.isEmpty && level.pathTypes.isEmpty && level.parents.isEmpty && level.declaredSegmentByParent.isEmpty)
+		#expect(levelWriter.bytes.count == keyWriter.bytes.count + 2)
+	}
+
+	@Test
 	func binaryFileReadError_explains_whenBodyHoldsFieldFlagNoFieldReads() {
 		let error = BinaryFileReadError(kind: .moduleInfo, reason: .malformedBody(.unreadFieldFlags(offset: 7)))
 
@@ -633,6 +646,9 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		signatureWriter.write([SeamSignature.Builder]())
 		signatureWriter.write([SeamSignature.ScopeEnum]())
 		signatureWriter.write(Set<TypeDescription>())
+		// A place graph whose levels' declarations and cycle re-entries carry positions too, and the case of no hole.
+		try signatureWriter.write(SeamSignature.Places.sample(isDistinct: true))
+		signatureWriter.write([Int]())
 		let signature: SeamSignature = try read(signatureWriter.encoded)
 		let signatures = try [StoredSeamSignature(seamType: TypeDescription.sample(isDistinct: true), signature: signature), StoredSeamSignature.sample(isDistinct: false)]
 		func file(holding seamSignatures: [StoredSeamSignature]) -> ModuleInfoFile {
@@ -655,10 +671,10 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		// The body `moduleInfoData` wrote of copies of these signatures with every position `nil`, captured when SafeDITool
 		// still made those copies, and captured again when format version 3 moved the signatures into an encoding of their
 		// own; the public mock plans that follow the signatures were added by hand, as were the two fields a cycle re-entry
-		// declaration gained (no called seam, and a place in no further `@Sendable` function), and format version 4 doubled the count of each list of siblings written whole (`writeDifference(of:in:)`). When a hole's field took field flags, the one field these signatures write in full lost seven bytes, its four absent optionals and four false Booleans becoming one byte of flags, and the encoding's length went from 235 to 228. When a signature stopped holding its seam's call routes, the signature these write in full lost the byte of its empty list of them. The comparison leaves out the header, whose schema fingerprint every layout change moves.
+		// declaration gained (no called seam, and a place in no further `@Sendable` function), and format version 4 doubled the count of each list of siblings written whole (`writeDifference(of:in:)`). The bytes each signature ends with, its place graph and the case of each hole, were captured when the graph joined the signature: nothing before them changed but the encoding's length. They were captured again when the graph came to hold each list of declarations once: the encoding's length and the graph's own bytes alone changed. When a level and a case came to write an empty list as a flag alone, the graph lost ten counts of zero, the level's six empty lists and the case's four, and the encoding's length went from 256 to 246, and the cycle re-entry declaration's two fields made it 248. When a hole's field took field flags, the one field these signatures write in full lost seven bytes, its four absent optionals and four false Booleans becoming one byte of flags. When a signature stopped holding its seam's call routes, the signature these write in full lost the byte of its empty list of them. With both, the encoding's length is 240. The comparison leaves out the header, whose schema fingerprint every layout change moves.
 		let bodyWithoutPositions: [UInt8] = [
 			0x02, 0x06, 0x4D, 0x6F, 0x64, 0x75, 0x6C, 0x65, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-			0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x01, 0x01, 0x00, 0x00, 0x00, 0xE5, 0x01, 0x03, 0x00, 0x08,
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x01, 0x01, 0x00, 0x00, 0x00, 0xF0, 0x01, 0x03, 0x00, 0x08,
 			0x64, 0x69, 0x73, 0x74, 0x69, 0x6E, 0x63, 0x74, 0x11, 0x5F, 0x5F, 0x73, 0x61, 0x66, 0x65, 0x44,
 			0x49, 0x5F, 0x64, 0x69, 0x73, 0x74, 0x69, 0x6E, 0x63, 0x74, 0x02, 0x00, 0x01, 0x00, 0x00, 0x01,
 			0x01, 0x01, 0x01, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x01, 0x01, 0x01, 0x01, 0x00, 0x01,
@@ -673,11 +689,8 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 			0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x03, 0x02, 0x02, 0x00, 0x02, 0x02, 0x00, 0x00, 0x00, 0x00,
 			0x02, 0x02, 0x02, 0x02, 0x00, 0x02, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00,
 			0x02, 0x02, 0x00, 0x02, 0x02, 0x01, 0x02, 0x01, 0x00, 0x02, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00,
-			0x02, 0x00,
-			// No public mock plans: no mocked type, `compilesGeneratedMocks` false, and an encoding of no plan.
-			0x00, 0x00, 0x02, 0x00, 0x00,
-			// The empty view.
-			0x00, 0x00, 0x00,
+			0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x02,
+			0x00, 0x00, 0x00, 0x00, 0x00,
 		]
 		// A module info file's header is its first 30 bytes.
 		let headerLength = 30
@@ -745,6 +758,18 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		SeamSignature.ScopeEnum.Case.self,
 		SeamSignature.ScopeEnum.Case.Kind.self,
 		SeamSignature.Builder.self,
+		SeamSignature.Places.self,
+		SeamSignature.Places.Level.self,
+		SeamSignature.Places.LevelKey.self,
+		SeamSignature.Places.Declaration.self,
+		SeamSignature.Places.ChildFacts.self,
+		SeamSignature.Places.Buildability.self,
+		SeamSignature.Places.FillFieldHiding.self,
+		SeamSignature.Places.SendableFunctionOpened.self,
+		SeamSignature.Places.StackEntry.self,
+		SeamSignature.Places.Case.self,
+		SeamSignature.Places.Case.Access.self,
+		SeamSignature.Places.CalledCase.self,
 		TypeAccessProof.Cause.self,
 		TypeAccessProof.Prover.self,
 		TypeAccessProof.MemberKind.self,
@@ -1704,6 +1729,40 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 			moduleMembershipArguments: ["--module-name", "Feature", "--package-name", "Shop"],
 		)
 		return try ModuleInfoFile(moduleInfoData: Data(contentsOf: URL(fileURLWithPath: output.writtenModuleInfoOutputPath))).publicMockPlans
+	}
+
+	/// A module whose seam instantiates `placeCount` values no type of the module fulfills, all on the seam's own type, so
+	/// that each place's level lists the values bound before it and those bound after it.
+	private static func seamSource(placeCount: Int) -> String {
+		var source = (0..<placeCount).map { "public protocol Api\($0) {}" }.joined(separator: "\n")
+		source += "\n\n@Instantiable(generateDependencyTree: true)\npublic struct Home: Instantiable {\n    public init("
+		source += (0..<placeCount).map { "api\($0): any Api\($0)" }.joined(separator: ", ")
+		source += ") {}\n\n"
+		source += (0..<placeCount).map { "    @Instantiated let api\($0): any Api\($0)" }.joined(separator: "\n")
+		source += "\n}"
+		return source
+	}
+
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private mutating func seamSignatures(ofModuleWithPlaceCount placeCount: Int) async throws -> ModuleSeamSignatures {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [Self.seamSource(placeCount: placeCount)],
+			buildCombinedOutput: true,
+			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "Feature", "--package-name", "Shop"],
+		)
+		return try ModuleInfoFile(moduleInfoData: Data(contentsOf: URL(fileURLWithPath: output.writtenModuleInfoOutputPath))).seamSignatures
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_storesSeamSignatureThatGrowsWithItsPlaces_whenEachPlaceOfOneTypeListsEveryOtherPlace() async throws {
+		// Each of N places of one type lists its N - 1 siblings, as fields or as declarations bound after it, in its hole and
+		// in the level of the place graph that leads to it: neither may be written once per place in full.
+		let twentyPlaces = try await seamSignatures(ofModuleWithPlaceCount: 20).encoding(writingPositionsAsAbsent: true).count
+		let fortyPlaces = try await seamSignatures(ofModuleWithPlaceCount: 40).encoding(writingPositionsAsAbsent: true).count
+
+		#expect(fortyPlaces * 2 < twentyPlaces * 5, "\(twentyPlaces) bytes at twenty places, \(fortyPlaces) at forty")
 	}
 
 	@Test
@@ -2795,7 +2854,12 @@ private func writeFieldSamples<Member: BinarySchemaMember>(
 		var flags = BinaryFieldFlags()
 		let fieldsStart = writer.startFields()
 		for field in fields {
-			if let flaggedType = field.type as? any BinaryFlaggedSample.Type {
+			if field.isAbsentWhenEmpty {
+				guard let listType = field.type as? any BinaryAbsentWhenEmptySample.Type else {
+					throw MissingSampleError(typeName: String(reflecting: field.type))
+				}
+				try listType.writeAbsentWhenEmptySample(isDistinct: isDistinct(field), to: &writer, flags: &flags)
+			} else if let flaggedType = field.type as? any BinaryFlaggedSample.Type {
 				try flaggedType.writeFlaggedSample(isDistinct: isDistinct(field), to: &writer, flags: &flags)
 			} else {
 				try writeSample(of: field.type, isDistinct: isDistinct(field), to: &writer)
@@ -2823,6 +2887,17 @@ extension Bool: BinaryFlaggedSample {
 extension Optional: BinaryFlaggedSample where Wrapped: BinarySample {
 	fileprivate static func writeFlaggedSample(isDistinct: Bool, to writer: inout BinaryWriter, flags: inout BinaryFieldFlags) throws {
 		try writer.writeOptional(sample(isDistinct: isDistinct), flaggedIn: &flags)
+	}
+}
+
+/// A list a struct that writes field flags writes as a flag alone when it is empty.
+private protocol BinaryAbsentWhenEmptySample {
+	static func writeAbsentWhenEmptySample(isDistinct: Bool, to writer: inout BinaryWriter, flags: inout BinaryFieldFlags) throws
+}
+
+extension Array: BinaryAbsentWhenEmptySample where Element: BinarySample {
+	fileprivate static func writeAbsentWhenEmptySample(isDistinct: Bool, to writer: inout BinaryWriter, flags: inout BinaryFieldFlags) throws {
+		try writer.writeAbsentWhenEmpty(sample(isDistinct: isDistinct), flaggedIn: &flags)
 	}
 }
 
@@ -3025,6 +3100,18 @@ extension SeamSignature.ScopeEnum.Values: BinarySample {}
 extension SeamSignature.ScopeEnum.Case: BinarySample {}
 extension SeamSignature.ScopeEnum.Case.Kind: BinarySample {}
 extension SeamSignature.Builder: BinarySample {}
+extension SeamSignature.Places: BinarySample {}
+extension SeamSignature.Places.Level: BinarySample {}
+extension SeamSignature.Places.LevelKey: BinarySample {}
+extension SeamSignature.Places.Declaration: BinarySample {}
+extension SeamSignature.Places.ChildFacts: BinarySample {}
+extension SeamSignature.Places.Buildability: BinarySample {}
+extension SeamSignature.Places.FillFieldHiding: BinarySample {}
+extension SeamSignature.Places.SendableFunctionOpened: BinarySample {}
+extension SeamSignature.Places.StackEntry: BinarySample {}
+extension SeamSignature.Places.Case: BinarySample {}
+extension SeamSignature.Places.Case.Access: BinarySample {}
+extension SeamSignature.Places.CalledCase: BinarySample {}
 extension TypeAccessProof.Cause: BinarySample {}
 extension TypeAccessProof.Prover: BinarySample {}
 extension TypeAccessProof.MemberKind: BinarySample {}

@@ -67,6 +67,8 @@ extension StoredPublicMockPlan: BinarySchemaMember {
 				BinaryLayoutField("holes", \.holes),
 				BinaryLayoutField("builders", \.builders),
 				BinaryLayoutField("scopeEnums", \.scopeEnums),
+				BinaryLayoutField("places", \.places),
+				BinaryLayoutField("caseIndexByHole", \.caseIndexByHole),
 				BinaryLayoutField("receivers", \.receivers),
 				BinaryLayoutField("typesDeclaredEscaping", \.typesDeclaredEscaping),
 			],
@@ -84,6 +86,8 @@ extension StoredPublicMockPlan: BinarySchemaMember {
 			holes: reader.read(),
 			builders: reader.read(),
 			scopeEnums: reader.read(),
+			places: reader.read(),
+			caseIndexByHole: reader.read(),
 			receivers: reader.read(),
 			typesDeclaredEscaping: reader.read(),
 		)
@@ -98,6 +102,8 @@ extension StoredPublicMockPlan: BinarySchemaMember {
 		writer.write(holes)
 		writer.write(builders)
 		writer.write(scopeEnums)
+		writer.write(places)
+		writer.write(caseIndexByHole)
 		writer.write(receivers)
 		writer.write(typesDeclaredEscaping)
 	}

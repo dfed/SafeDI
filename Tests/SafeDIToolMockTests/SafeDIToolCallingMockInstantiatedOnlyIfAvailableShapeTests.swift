@@ -92,10 +92,13 @@ struct SafeDIToolCallingMockInstantiatedOnlyIfAvailableShapeTests: ~Copyable {
 			        analyticsOptionalBuilder: (() -> (any Analytics)?)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Home {
+			        func __safeDI_fillBody_6EFA7C59FB17E125() -> (any Analytics)? {
+			            let analytics: (any Analytics)? = AnalyticsImpl()
+			            return analytics
+			        }
 			        func __safeDI_screen() -> Screen {
 			            func __safeDI_analyticsOptionalBuilder_Screen_analytics() -> (any Analytics)? {
-			                let analytics: (any Analytics)? = AnalyticsImpl()
-			                return analytics
+			                return __safeDI_fillBody_6EFA7C59FB17E125()
 			            }
 			            func __safeDI_analyticsOptionalBuilder_Screen() -> Screen.SafeDIMockScope_AnalyticsOptional.__safeDI_Builder<(any Analytics)?> {
 			                .init(analytics: { _ in __safeDI_analyticsOptionalBuilder_Screen_analytics() })
@@ -250,10 +253,13 @@ struct SafeDIToolCallingMockInstantiatedOnlyIfAvailableShapeTests: ~Copyable {
 		        analyticsOptionalBuilder: (() -> (any Analytics)?)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Home {
+		        func __safeDI_fillBody_407038FFA44EE666() -> (any Analytics)? {
+		            let analytics: (any Analytics)? = AnalyticsFake.mock()
+		            return analytics
+		        }
 		        func __safeDI_screen() -> Screen {
 		            func __safeDI_analyticsOptionalBuilder_Screen_analytics() -> (any Analytics)? {
-		                let analytics: (any Analytics)? = AnalyticsFake.mock()
-		                return analytics
+		                return __safeDI_fillBody_407038FFA44EE666()
 		            }
 		            func __safeDI_analyticsOptionalBuilder_Screen() -> Screen.SafeDIMockScope_AnalyticsOptional.__safeDI_Builder<(any Analytics)?> {
 		                .init(analytics: { _ in __safeDI_analyticsOptionalBuilder_Screen_analytics() })
@@ -327,10 +333,13 @@ struct SafeDIToolCallingMockInstantiatedOnlyIfAvailableShapeTests: ~Copyable {
 		        analyticsOptionalBuilder: (() -> (any Analytics)?)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Home {
+		        func __safeDI_fillBody_F20613FB935C28B4() -> (any Analytics)? {
+		            let analytics: (any Analytics)? = AnalyticsService.instantiate()
+		            return analytics
+		        }
 		        func __safeDI_screen() -> Screen {
 		            func __safeDI_analyticsOptionalBuilder_Screen_analytics() -> (any Analytics)? {
-		                let analytics: (any Analytics)? = AnalyticsService.instantiate()
-		                return analytics
+		                return __safeDI_fillBody_F20613FB935C28B4()
 		            }
 		            func __safeDI_analyticsOptionalBuilder_Screen() -> Screen.SafeDIMockScope_AnalyticsOptional.__safeDI_Builder<(any Analytics)?> {
 		                .init(analytics: { _ in __safeDI_analyticsOptionalBuilder_Screen_analytics() })
@@ -408,10 +417,13 @@ struct SafeDIToolCallingMockInstantiatedOnlyIfAvailableShapeTests: ~Copyable {
 		        analyticsOptionalBuilder: (() -> Analytics?)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Home {
+		        func __safeDI_fillBody_192FB52E4519A9BD() -> Analytics? {
+		            let analytics: Analytics? = AnalyticsImpl()
+		            return analytics
+		        }
 		        func __safeDI_screen() -> Screen {
 		            func __safeDI_analyticsOptionalBuilder_Screen_analytics() -> Analytics? {
-		                let analytics: Analytics? = AnalyticsImpl()
-		                return analytics
+		                return __safeDI_fillBody_192FB52E4519A9BD()
 		            }
 		            func __safeDI_analyticsOptionalBuilder_Screen() -> Screen.SafeDIMockScope_AnalyticsOptional.__safeDI_Builder<Analytics?> {
 		                .init(analytics: { _ in __safeDI_analyticsOptionalBuilder_Screen_analytics() })
@@ -489,10 +501,13 @@ struct SafeDIToolCallingMockInstantiatedOnlyIfAvailableShapeTests: ~Copyable {
 		        tracking_AnalyticsOptionalBuilder: (() -> (any Tracking.Analytics)?)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Home {
+		        func __safeDI_fillBody_1646DF37F2228751() -> (any Tracking.Analytics)? {
+		            let analytics: (any Tracking.Analytics)? = AnalyticsImpl()
+		            return analytics
+		        }
 		        func __safeDI_screen() -> Screen {
 		            func __safeDI_tracking_AnalyticsOptionalBuilder_Screen_analytics() -> (any Tracking.Analytics)? {
-		                let analytics: (any Tracking.Analytics)? = AnalyticsImpl()
-		                return analytics
+		                return __safeDI_fillBody_1646DF37F2228751()
 		            }
 		            func __safeDI_tracking_AnalyticsOptionalBuilder_Screen() -> Screen.SafeDIMockScope_Tracking_AnalyticsOptional.__safeDI_Builder<(any Tracking.Analytics)?> {
 		                .init(analytics: { _ in __safeDI_tracking_AnalyticsOptionalBuilder_Screen_analytics() })

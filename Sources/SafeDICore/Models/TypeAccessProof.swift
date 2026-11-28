@@ -277,7 +277,7 @@ public struct TypeAccessProof: Sendable {
 	}
 
 	/// How the narrowest type a parameter names is proven.
-	indirect public enum Cause: Codable, Sendable {
+	indirect public enum Cause: Codable, Hashable, Sendable {
 		/// The type's own `@Instantiable` declaration, outside every extension, proves it.
 		case ownDeclaration(type: TypeDescription, level: AccessLevel)
 		/// The type's plain declarations (`PlainTypeDeclaration`), each in its module, prove it at `level`, the
@@ -314,7 +314,7 @@ public struct TypeAccessProof: Sendable {
 
 	/// A member that mentions a type, at the level it proves the type: its own level capped by the proof of the entry
 	/// it belongs to, which `cap` says is the reason when it is narrower than the member's own.
-	public struct Prover: Codable, Sendable {
+	public struct Prover: Codable, Hashable, Sendable {
 		public init(carrier: TypeDescription, member: MemberKind, argumentLabels: [String], level: AccessLevel, location: Dependency.DeclarationLocation?, cap: Cause?) {
 			self.carrier = carrier
 			self.member = member

@@ -159,6 +159,19 @@ extension DependencyTreeGenerator {
 				for (seamType, seamRoot) in storedSeamRoots {
 					seamRoots[seamType] = seamRoot
 				}
+				// A stored place graph refers to the cases of the seams its own seams call and pass places up from
+				// (`SeamSignature.Places.CalledCase`). Such a seam's module is one this module's trees may not reach, so
+				// its stored signatures are read too, from the view the referring module was computed over, and never
+				// computed: a module without them leaves the reference unresolved. Only a file that stores a graph with
+				// such a reference reads another for it.
+				let referencedSeams = storedSeamRoots.flatMap { $0.seamRoot?.signature.places.cases.compactMap(\.passedUp) ?? [] }.filter { !$0.isPublicMock && seamRoots[$0.seamType] == nil }
+				if !referencedSeams.isEmpty {
+					let seamsSeen = seams.foreignDeclarations(seenByModuleNamed: module.moduleName).seams
+					let referencedModuleNames = Set(referencedSeams.compactMap { seamsSeen[$0.seamType]?.declaringModule.moduleName }).subtracting(computedModules)
+					modulesToCompute.append(contentsOf: foreignModulesByName.filter { referenced in
+						referencedModuleNames.contains(referenced.moduleName) && referenced.seams.allSatisfy { $0.seam.storedSignatures != nil }
+					}.sorted { $0.moduleName > $1.moduleName })
+				}
 				continue
 			}
 			// Resolved once per module, on its first visit.
@@ -289,6 +302,16 @@ extension DependencyTreeGenerator {
 				let ownSignature = ownSeamRoot?.signature
 				let callersFailed = callersComputation.failedSeams.contains(seamType)
 				let callersSignature: SeamSignature? = callersFailed ? nil : (callersComputation.seamRoots[seamType] ?? nil)?.signature
+				// Test only, deleted before merge: the tests check that comparing the call shapes with a hole per case finds what
+				// comparing them with a hole per site does.
+				if let observer = SeamPlaceLevels.observer {
+					var comparison = SeamPlaceLevels(seamType: seamType, places: [])
+					comparison.callShapeComparison = .init(
+						differsPerSite: callersFailed || ownSignature?.callShapeHeldPerSite != callersSignature?.callShapeHeldPerSite,
+						differsPerCase: callersFailed || ownSignature?.callShape != callersSignature?.callShape,
+					)
+					observer(comparison)
+				}
 				guard callersFailed || ownSignature?.callShape != callersSignature?.callShape else { continue }
 				let labelsCallersFailedOn = callersFailed ? Self.parameterLabels(namedBy: callersComputation.errors, about: seam) : nil
 				if let declaration = Self.unseenDeclarationToName(
@@ -713,9 +736,11 @@ extension DependencyTreeGenerator {
 		}
 	}
 
-	/// The enums `seamRoot`'s signature declares itself, rather than carries from a seam it reaches.
+	/// The enums `seamRoot`'s signature declares itself, rather than carries from a seam it reaches, as a module that
+	/// calls the seam is handed them (`SeamSignature.placesHandedToCallers`): a seam that carries them hands on the
+	/// places its own call of the seam held, and no other.
 	private static func ownScopeEnums(of seamRoot: ScopeGenerator.SeamRoot) -> [SeamSignature.ScopeEnum] {
-		seamRoot.signature.scopeEnums.filter { $0.key.seamType == seamRoot.signature.seamType }
+		seamRoot.signature.placesHandedToCallers.scopeEnums.filter { $0.key.seamType == seamRoot.signature.seamType }
 	}
 
 	/// The passes a strongly connected component of `seamCount` seams may take to settle before
@@ -883,6 +908,16 @@ extension DependencyTreeGenerator {
 					for scopeEnum in ownScopeEnumsBySeamType[seamType] ?? [] {
 						reachedScopeEnums[scopeEnum.key] = scopeEnum
 					}
+				}
+				// A reached seam's place graph refers to the cases of the seams it calls and passes places up from
+				// (`SeamSignature.Places.CalledCase`), which the component's own trees may not reach: their roots come
+				// along, so that a reference through two seams resolves (`CalledBuilders.placesOfSeamsBeneath`). No tree
+				// of the component holds such a seam, so its enums do not.
+				var referencedSeamTypes = reachedSeamRoots.values.flatMap { $0?.signature.places.cases.compactMap(\.passedUp) ?? [] }
+				while let reference = referencedSeamTypes.popLast() {
+					guard !reference.isPublicMock, reachedSeamRoots[reference.seamType] == nil, case let referencedRoot?? = knownSeamRoots[reference.seamType] else { continue }
+					reachedSeamRoots[reference.seamType] = .some(referencedRoot)
+					referencedSeamTypes += referencedRoot.signature.places.cases.compactMap(\.passedUp)
 				}
 				return SeamComponentInput(plan: plan, knownSeamRoots: reachedSeamRoots, ownScopeEnums: reachedScopeEnums)
 			}
@@ -1485,6 +1520,14 @@ extension DependencyTreeGenerator {
 	) -> [TypeDescription: Scope] {
 		var typeDescriptionToScopeMap = [TypeDescription: Scope]()
 		var scopes = [Scope]()
+		// The place graph of each seam that holds one, with the seam's places, which a case of a place passed up through two
+		// seams refers into. Only a run that drafts the graphs holds any.
+		var calledBySeamUnderConstruction = [TypeDescription: SeamSignature.Places.Called]()
+		for (seamType, seamRoot) in seamRoots {
+			guard let signature = seamRoot?.signature, !signature.places.cases.isEmpty else { continue }
+			calledBySeamUnderConstruction[seamType] = SeamSignature.Places.Called(places: signature.places, holes: signature.holes, caseIndexByHole: signature.caseIndexByHole)
+		}
+		let calledBySeam = calledBySeamUnderConstruction
 		// Visited in type order: a type the map holds under several keys gets one scope whichever key is met first.
 		for typeDescription in reachableTypeDescriptions.sortedBySpelling() {
 			guard let instantiable = instantiables[typeDescription], typeDescriptionToScopeMap[instantiable.concreteInstantiable] == nil else { continue }
@@ -1520,14 +1563,15 @@ extension DependencyTreeGenerator {
 				// or a public mock; from outside that package the generated code does not compile (row 4b's B4.10b,
 				// M8.35b): a stated limit, never pinned.
 				let unreachableTierIsReported = reachedTier == nil && checkingModule != nil
+				let handed = signature.placesHandedToCallers
 				scope = Scope(
 					instantiable: leafInstantiable,
 					builtInlineSeamComment: builtInlineSeamComment(leafInstantiable),
 					seamCall: SeamCall(
 						parameters: signature.parameters(ofTierAt: tier),
-						holes: signature.holes.map { $0.atTier(tier) },
+						holes: handed.holes.map { $0.atTier(tier) },
 						builders: signature.builders.map { $0.atTier(tier) },
-						scopeEnums: signature.scopeEnums,
+						scopeEnums: handed.scopeEnums,
 						guardTypeName: signature.guardTypeName,
 						comment: seams.foreignSeams[instantiable.concreteInstantiable]?.callComment ?? .noComment,
 						unreachableTierIsReported: unreachableTierIsReported,
@@ -1540,6 +1584,10 @@ extension DependencyTreeGenerator {
 						callerModuleName: callerModule.moduleName,
 						seamPackageName: instantiable.packageName,
 						callerPackageName: callerModule.packageName,
+						places: signature.places,
+						caseIndexByHole: handed.caseIndexByHole,
+						placesOfSeamsBeneath: { calledBySeam[$0.seamType] },
+						everyPlace: handed.everyPlace,
 					),
 				)
 			} else {
@@ -1571,17 +1619,41 @@ extension DependencyTreeGenerator {
 		// Which labels each fill reads only if available, once every scope's tree is complete, for a place whose fields hold a
 		// `LazilyInstantiated`: a fill takes such a wrapper optionally where the caller hands it
 		// (`Scope.Fill.optionalLazilyInstantiatedLabels`). No other fill's parameters depend on it, so no other fill is walked.
-		// The walk enters the fills of the seam calls inside the fulfilling type's tree, which receive from the fill's scope as
-		// the fill's tree does.
+		// A call handed one place per case holds the case's other routes only in its place graph, where a route the handed place
+		// is not on can hold the wrapper the case's fill takes: such a call's every fill is walked where any level of the graph,
+		// or of the graph of a seam beneath that the case passes through, declares a wrapper. The walk enters the fills of the seam calls inside the fulfilling type's tree, which receive from
+		// the fill's scope as the fill's tree does.
 		var receivedPropertiesCache = ReceivedPropertiesCache(walksSeamCallFills: true)
-		for scope in scopes where scope.seamCall != nil {
-			for case let .fill(hole, fulfillingScope) in scope.holeArguments where hole.fields.contains(where: { $0.property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding != nil }) {
+		for scope in scopes {
+			guard let calledBuilders = scope.seamCall?.calledBuilders else { continue }
+			let placesDeclareWrapper = Self.declaresLazilyInstantiatedValue(calledBuilders.places, placesOfSeamsBeneath: calledBuilders.placesOfSeamsBeneath)
+			for case let .fill(hole, fulfillingScope) in scope.holeArguments where placesDeclareWrapper || hole.fields.contains(where: { $0.property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding != nil }) {
 				let received = Self.collectReceivedProperties(from: fulfillingScope, cache: &receivedPropertiesCache)
 				let requiredLabels = Set(received.received.subtracting(received.onlyIfAvailable).map(\.label))
 				scope.fillLabelsReadOnlyIfAvailable[hole.site] = Set(received.received.map(\.label)).subtracting(requiredLabels)
 			}
 		}
 		return typeDescriptionToScopeMap
+	}
+
+	/// Whether a level of `places`, or of the graph of a seam beneath whose case it presents or fills
+	/// (`placesOfSeamsBeneath`), declares a `LazilyInstantiated` value: a route through a call of a seam beneath reaches the
+	/// case's place through that seam's levels, which only its own graph holds.
+	private static func declaresLazilyInstantiatedValue(_ places: SeamSignature.Places, placesOfSeamsBeneath: (SeamSignature.Places.CalledCase) -> SeamSignature.Places.Called?) -> Bool {
+		var graphs = [places]
+		var calledCasesSeen = Set<SeamSignature.Places.CalledCase>()
+		while let graph = graphs.popLast() {
+			let declaresWrapper = graph.levels.indices.contains { level in
+				graph.declarations(ofLevel: level).contains { $0.field.property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding != nil }
+			}
+			guard !declaresWrapper else { return true }
+			for calledCase in graph.cases.compactMap(\.passedUp) + graph.levels.compactMap(\.key.filledCase) where calledCasesSeen.insert(calledCase).inserted {
+				if let called = placesOfSeamsBeneath(calledCase) {
+					graphs.append(called.places)
+				}
+			}
+		}
+		return false
 	}
 
 	/// Fills `scope.propertiesToGenerate` from `typeDescriptionToScopeMap`, as `createTypeDescriptionToScopeMapping`
@@ -1897,21 +1969,27 @@ extension DependencyTreeGenerator {
 			}
 			// The scope's children receive what it creates – its instantiated, aliased, and forwarded properties, with
 			// the instance of each lazily instantiated one – beside what encloses it.
-			let childProvidedProperties = providedProperties.union(visited.providedProperties)
-			let childDeclaredLabels = frame.declaredLabels.union(visited.providedProperties.map(\.label))
+			// But a fill of a case nested by type provides no label its tree reads of the caller's scope on a route that
+			// holds none (`ScopeGenerator.fillLabelsReadOfCallerOnSomeRoute`): on that route the read is one of the scopes
+			// above the fill, so it leaves the seam where none of them provides it, and the seam takes a parameter the
+			// root dispatcher hands the fill.
+			let labelsReadOfCaller = visited.fillLabelsReadOfCallerOnSomeRoute
+			let visitedProvidedProperties = labelsReadOfCaller.isEmpty ? visited.providedProperties : visited.providedProperties.filter { !labelsReadOfCaller.contains($0.label) }
+			let childProvidedProperties = providedProperties.union(visitedProvidedProperties)
+			let childDeclaredLabels = frame.declaredLabels.union(visitedProvidedProperties.map(\.label))
 			// A declaration of a label hides an enclosing fill's binding of it; a fill's own binding is nearer than either.
 			var childFillsBindingLabels = frame.fillsBindingLabels
-			for property in visited.providedProperties where !childFillsBindingLabels.isEmpty {
+			for property in visitedProvidedProperties where !childFillsBindingLabels.isEmpty {
 				childFillsBindingLabels[property.label] = nil
 			}
-			for label in visited.fillStructBoundLabels {
+			for label in visited.fillStructBoundLabels where !labelsReadOfCaller.contains(label) {
 				childFillsBindingLabels[label] = visited
 			}
 			let firstChildIndex = generatorsToVisit.endIndex
 			for child in visited.children {
 				// A fill binds the fields of the hole's struct its tree reads, which hide every declaration of their labels
 				// above it, but for those bound from a deferred parameter, which it reads from the caller's scope.
-				let fillFieldLabels = child.fillStructBoundLabels
+				let fillFieldLabels = child.fillStructBoundLabels.subtracting(child.fillLabelsReadOfCallerOnSomeRoute)
 				generatorsToVisit.append(Frame(
 					generator: child,
 					providedProperties: childProvidedProperties,
@@ -1966,11 +2044,14 @@ extension DependencyTreeGenerator {
 				// A site reads every parameter whose label no scope enclosing it declares, so the subtree that holds one reads
 				// every label.
 				var reads = Reads(labels: [], requests: [], readsEveryLabel: visited.holeSite != nil)
-				let providedLabels = Set(visited.providedProperties.map(\.label))
+				// A fill provides no label its tree reads of the caller's scope on some route, as in the walk.
+				let labelsReadOfCaller = visited.fillLabelsReadOfCallerOnSomeRoute
+				let providedProperties = labelsReadOfCaller.isEmpty ? visited.providedProperties : visited.providedProperties.filter { !labelsReadOfCaller.contains($0.label) }
+				let providedLabels = Set(providedProperties.map(\.label))
 				for child in visited.children {
 					if let childReads = readsByGenerator[ObjectIdentifier(child)] {
 						reads.labels.formUnion(childReads.labels.subtracting(providedLabels))
-						for request in childReads.requests where !Self.isProvided(request, by: visited.providedProperties) {
+						for request in childReads.requests where !Self.isProvided(request, by: providedProperties) {
 							reads.requests.insert(request)
 						}
 						reads.readsEveryLabel = reads.readsEveryLabel || childReads.readsEveryLabel
@@ -2254,16 +2335,18 @@ extension DependencyTreeGenerator {
 			}
 			return SeamSignature.Parameter(property: parameter.property, isPassThrough: parameter.isPassThrough, access: parameter.access, tierAccess: min(parameter.access, seamTypeAccess), isOnlyIfAvailable: parameter.isOnlyIfAvailable, requiredThroughAlias: parameter.requiredThroughAlias, deferral: parameter.deferral, internalName: internalName, receivers: parameter.receivers, accessCause: parameter.accessCause, otherInitializerArgumentsAccess: parameter.otherInitializerArgumentsAccess)
 		}
+		let holesAndPlaces = Self.holes(of: seam, generator: generator, parameters: parameters, proof: proof, instantiables: instantiables)
 		let shapedBuilders = Self.shapedBuilders(
 			of: seam,
 			generator: generator,
-			holes: Self.holes(of: seam, generator: generator, parameters: parameters, proof: proof, instantiables: instantiables),
+			holesAndPlaces: holesAndPlaces,
 			parameters: parameters,
 			treeFunctionNames: Self.builderFunctionNamesOfProperties(in: generator, includingHoleSites: false),
 			proof: proof,
 			instantiables: instantiables,
 			ownScopeEnums: ownScopeEnums,
 		)
+		holesAndPlaces.handOnObservedPlaceLevels(with: shapedBuilders)
 		let holes = shapedBuilders.holes
 		let tiers = Self.tiers(of: seam, parameters: parameters)
 		for omitted in parameters where omitted.tierAccess < seamTypeAccess && !omitted.isOnlyIfAvailable {
@@ -2365,6 +2448,8 @@ extension DependencyTreeGenerator {
 				builders: shapedBuilders.builders,
 				scopeEnums: shapedBuilders.scopeEnums,
 				typesDeclaredEscaping: generator.typesDeclaredEscaping.intersection(parameters.map(\.property.typeDescription)),
+				places: holesAndPlaces.places,
+				caseIndexByHole: holesAndPlaces.caseIndices(of: holes),
 			),
 			callRoutes: shapedBuilders.callRoutes,
 			routeMembersBySite: shapedBuilders.routeMembersBySite,

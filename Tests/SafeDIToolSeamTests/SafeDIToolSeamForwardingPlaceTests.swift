@@ -110,26 +110,32 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_pairGadget_GadgetBuilder_Host_erased(analytics: Analytics) -> ErasedInstantiator<(count: Int, name: String), any Gadget>.Builder {
+		            return __safeDI_fillBody_F2A172BAB83DC6CB(analytics: analytics)
+		        }
+		        func __safeDI_fillBody_F2A172BAB83DC6CB(analytics: Analytics) -> ErasedInstantiator<(count: Int, name: String), any Gadget>.Builder {
+		            func __safeDI_erased(count: Int, name: String) -> PairGadget {
+		                PairGadget(count: count, name: name, analytics: analytics)
+		            }
+		            return { forwarded in __safeDI_erased(count: forwarded.count, name: forwarded.name) }
+		        }
+		        func __safeDI_pairPanelBuilder_Host_held(analytics: Analytics) -> Instantiator<PairPanel>.Builder {
+		            return __safeDI_fillBody_D0ADDD197C3103A2(analytics: analytics)
+		        }
+		        func __safeDI_fillBody_D0ADDD197C3103A2(analytics: Analytics) -> Instantiator<PairPanel>.Builder {
+		            func __safeDI_held(count: Int, name: String) -> DefaultPairPanel {
+		                DefaultPairPanel(count: count, name: name, analytics: analytics)
+		            }
+		            return { forwarded in __safeDI_held(count: forwarded.count, name: forwarded.name) }
+		        }
+		        func __safeDI_pairGadget_GadgetBuilder_Host() -> Host.__safeDI_PairGadget_GadgetCarrier<any Gadget> {
+		            .init(erased: { values_navigator, values_analytics in __safeDI_pairGadget_GadgetBuilder_Host_erased(analytics: values_analytics) })
+		        }
+		        func __safeDI_pairPanelBuilder_Host() -> Host.__safeDI_PairPanelCarrier<PairPanel> {
+		            .init(held: { values_navigator, values_analytics, values_erased in __safeDI_pairPanelBuilder_Host_held(analytics: values_analytics) })
+		        }
 		        func __safeDI_host() -> Host {
 		            _ = Host.__safeDI_Host_DCEBCFDE6FCC78B2.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_pairGadget_GadgetBuilder_Host_erased(analytics: Analytics) -> ErasedInstantiator<(count: Int, name: String), any Gadget>.Builder {
-		                func __safeDI_erased(count: Int, name: String) -> PairGadget {
-		                    PairGadget(count: count, name: name, analytics: analytics)
-		                }
-		                return { forwarded in __safeDI_erased(count: forwarded.count, name: forwarded.name) }
-		            }
-		            func __safeDI_pairPanelBuilder_Host_held(analytics: Analytics) -> Instantiator<PairPanel>.Builder {
-		                func __safeDI_held(count: Int, name: String) -> DefaultPairPanel {
-		                    DefaultPairPanel(count: count, name: name, analytics: analytics)
-		                }
-		                return { forwarded in __safeDI_held(count: forwarded.count, name: forwarded.name) }
-		            }
-		            func __safeDI_pairGadget_GadgetBuilder_Host() -> Host.__safeDI_PairGadget_GadgetCarrier<any Gadget> {
-		                .init(erased: { values_navigator, values_analytics in __safeDI_pairGadget_GadgetBuilder_Host_erased(analytics: values_analytics) })
-		            }
-		            func __safeDI_pairPanelBuilder_Host() -> Host.__safeDI_PairPanelCarrier<PairPanel> {
-		                .init(held: { values_navigator, values_analytics, values_erased in __safeDI_pairPanelBuilder_Host_held(analytics: values_analytics) })
-		            }
 		            return Host(__safeDI_pairGadget_GadgetBuilder: __safeDI_pairGadget_GadgetBuilder_Host(), __safeDI_pairPanelBuilder: __safeDI_pairPanelBuilder_Host())
 		        }
 		        let host: Host = __safeDI_host()
@@ -241,23 +247,26 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_liveGadget_AnyGadgetBuilder_Host_Toolbar_Scope_panelBuilder(theme: Theme, style: Style) -> ErasedInstantiator<String, AnyGadget>.Builder {
+		            return __safeDI_fillBody_55DFD00D277FF10B(theme: theme, style: style)
+		        }
+		        func __safeDI_fillBody_55DFD00D277FF10B(theme: Theme, style: Style) -> ErasedInstantiator<String, AnyGadget>.Builder {
+		            func __safeDI_panelBuilder(title: String) -> LiveGadget {
+		                LiveGadget(title: title, theme: theme, style: style)
+		            }
+		            return { forwarded in AnyGadget(__safeDI_panelBuilder(title: forwarded)) }
+		        }
+		        func __safeDI_liveGadget_AnyGadgetBuilder_Host() -> Host.__safeDI_LiveGadget_AnyGadgetCarrier<AnyGadget> {
+		            .init(shell: { values_navigator, values_theme in __safeDI_liveGadget_AnyGadgetBuilder_Host_Shell_Scope(theme: values_theme) })
+		        }
+		        func __safeDI_liveGadget_AnyGadgetBuilder_Host_Shell_Scope(theme: Theme) -> Host.__safeDI_LiveGadget_AnyGadgetCarrier_Shell<AnyGadget> {
+		            .init(toolbar: { values_style in __safeDI_liveGadget_AnyGadgetBuilder_Host_Toolbar_Scope(style: values_style, theme: theme) })
+		        }
+		        func __safeDI_liveGadget_AnyGadgetBuilder_Host_Toolbar_Scope(style: Style, theme: Theme) -> Host.__safeDI_LiveGadget_AnyGadgetCarrier_Toolbar<AnyGadget> {
+		            .init(panelBuilder: { __safeDI_liveGadget_AnyGadgetBuilder_Host_Toolbar_Scope_panelBuilder(theme: theme, style: style) })
+		        }
 		        func __safeDI_host() -> Host {
 		            _ = Host.__safeDI_Host_BCD415DCFDB56A23.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_liveGadget_AnyGadgetBuilder_Host_Toolbar_Scope_panelBuilder(theme: Theme, style: Style) -> ErasedInstantiator<String, AnyGadget>.Builder {
-		                func __safeDI_panelBuilder(title: String) -> LiveGadget {
-		                    LiveGadget(title: title, theme: theme, style: style)
-		                }
-		                return { forwarded in AnyGadget(__safeDI_panelBuilder(title: forwarded)) }
-		            }
-		            func __safeDI_liveGadget_AnyGadgetBuilder_Host() -> Host.__safeDI_LiveGadget_AnyGadgetCarrier<AnyGadget> {
-		                .init(shell: { values_navigator, values_theme in __safeDI_liveGadget_AnyGadgetBuilder_Host_Shell_Scope(theme: values_theme) })
-		            }
-		            func __safeDI_liveGadget_AnyGadgetBuilder_Host_Shell_Scope(theme: Theme) -> Host.__safeDI_LiveGadget_AnyGadgetCarrier_Shell<AnyGadget> {
-		                .init(toolbar: { values_style in __safeDI_liveGadget_AnyGadgetBuilder_Host_Toolbar_Scope(style: values_style, theme: theme) })
-		            }
-		            func __safeDI_liveGadget_AnyGadgetBuilder_Host_Toolbar_Scope(style: Style, theme: Theme) -> Host.__safeDI_LiveGadget_AnyGadgetCarrier_Toolbar<AnyGadget> {
-		                .init(panelBuilder: { __safeDI_liveGadget_AnyGadgetBuilder_Host_Toolbar_Scope_panelBuilder(theme: theme, style: style) })
-		            }
 		            return Host(__safeDI_liveGadget_AnyGadgetBuilder: __safeDI_liveGadget_AnyGadgetBuilder_Host())
 		        }
 		        let host: Host = __safeDI_host()
@@ -321,17 +330,20 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_panelBuilder_Host_held(analytics: Analytics) -> Instantiator<Panel>.Builder {
+		            return __safeDI_fillBody_628717A157D1CC3F(analytics: analytics)
+		        }
+		        func __safeDI_fillBody_628717A157D1CC3F(analytics: Analytics) -> Instantiator<Panel>.Builder {
+		            func __safeDI_held(name: String) -> DefaultPanel {
+		                DefaultPanel(name: name, analytics: analytics)
+		            }
+		            return { forwarded in __safeDI_held(name: forwarded) }
+		        }
+		        func __safeDI_panelBuilder_Host() -> Host.__safeDI_PanelCarrier<Panel> {
+		            .init(held: { values_navigator, values_analytics in __safeDI_panelBuilder_Host_held(analytics: values_analytics) })
+		        }
 		        func __safeDI_host() -> Host {
 		            _ = Host.__safeDI_Host_3579F61D065CC7F8.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_panelBuilder_Host_held(analytics: Analytics) -> Instantiator<Panel>.Builder {
-		                func __safeDI_held(name: String) -> DefaultPanel {
-		                    DefaultPanel(name: name, analytics: analytics)
-		                }
-		                return { forwarded in __safeDI_held(name: forwarded) }
-		            }
-		            func __safeDI_panelBuilder_Host() -> Host.__safeDI_PanelCarrier<Panel> {
-		                .init(held: { values_navigator, values_analytics in __safeDI_panelBuilder_Host_held(analytics: values_analytics) })
-		            }
 		            return Host(__safeDI_panelBuilder: __safeDI_panelBuilder_Host())
 		        }
 		        let host: Host = __safeDI_host()
@@ -395,17 +407,20 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_emptyPanelBuilder_Host_held(analytics: Analytics) -> Instantiator<EmptyPanel>.Builder {
+		            return __safeDI_fillBody_1FAB92EF0A237880(analytics: analytics)
+		        }
+		        func __safeDI_fillBody_1FAB92EF0A237880(analytics: Analytics) -> Instantiator<EmptyPanel>.Builder {
+		            func __safeDI_held() -> DefaultEmptyPanel {
+		                DefaultEmptyPanel(analytics: analytics)
+		            }
+		            return { _ in __safeDI_held() }
+		        }
+		        func __safeDI_emptyPanelBuilder_Host() -> Host.__safeDI_EmptyPanelCarrier<EmptyPanel> {
+		            .init(held: { values_navigator, values_analytics in __safeDI_emptyPanelBuilder_Host_held(analytics: values_analytics) })
+		        }
 		        func __safeDI_host() -> Host {
 		            _ = Host.__safeDI_Host_A74361A4F13BEE57.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_emptyPanelBuilder_Host_held(analytics: Analytics) -> Instantiator<EmptyPanel>.Builder {
-		                func __safeDI_held() -> DefaultEmptyPanel {
-		                    DefaultEmptyPanel(analytics: analytics)
-		                }
-		                return { _ in __safeDI_held() }
-		            }
-		            func __safeDI_emptyPanelBuilder_Host() -> Host.__safeDI_EmptyPanelCarrier<EmptyPanel> {
-		                .init(held: { values_navigator, values_analytics in __safeDI_emptyPanelBuilder_Host_held(analytics: values_analytics) })
-		            }
 		            return Host(__safeDI_emptyPanelBuilder: __safeDI_emptyPanelBuilder_Host())
 		        }
 		        let host: Host = __safeDI_host()
@@ -594,23 +609,29 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_panelBuilder_Host_held(analytics: Analytics) -> Instantiator<Panel>.Builder {
+		            return __safeDI_fillBody_628717A157D1CC3F(analytics: analytics)
+		        }
+		        func __safeDI_fillBody_628717A157D1CC3F(analytics: Analytics) -> Instantiator<Panel>.Builder {
+		            func __safeDI_held(name: String) -> DefaultPanel {
+		                DefaultPanel(name: name, analytics: analytics)
+		            }
+		            return { forwarded in __safeDI_held(name: forwarded) }
+		        }
+		        func __safeDI_panelBuilder_Host_erased(analytics: Analytics) -> ErasedInstantiator<Panel.ForwardedProperties, Panel>.Builder {
+		            return __safeDI_fillBody_F125FAB6F2AD609C(analytics: analytics)
+		        }
+		        func __safeDI_fillBody_F125FAB6F2AD609C(analytics: Analytics) -> ErasedInstantiator<Panel.ForwardedProperties, Panel>.Builder {
+		            func __safeDI_erased(name: String) -> DefaultPanel {
+		                DefaultPanel(name: name, analytics: analytics)
+		            }
+		            return { forwarded in __safeDI_erased(name: forwarded) }
+		        }
+		        func __safeDI_panelBuilder_Host() -> Host.__safeDI_PanelCarrier<Panel> {
+		            .init(held: { values_navigator, values_analytics in __safeDI_panelBuilder_Host_held(analytics: values_analytics) }, erased: { values_navigator, values_analytics, values_held in __safeDI_panelBuilder_Host_erased(analytics: values_analytics) })
+		        }
 		        func __safeDI_host() -> Host {
 		            _ = Host.__safeDI_Host_F940D7E3A6BF3A52.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_panelBuilder_Host_held(analytics: Analytics) -> Instantiator<Panel>.Builder {
-		                func __safeDI_held(name: String) -> DefaultPanel {
-		                    DefaultPanel(name: name, analytics: analytics)
-		                }
-		                return { forwarded in __safeDI_held(name: forwarded) }
-		            }
-		            func __safeDI_panelBuilder_Host_erased(analytics: Analytics) -> ErasedInstantiator<Panel.ForwardedProperties, Panel>.Builder {
-		                func __safeDI_erased(name: String) -> DefaultPanel {
-		                    DefaultPanel(name: name, analytics: analytics)
-		                }
-		                return { forwarded in __safeDI_erased(name: forwarded) }
-		            }
-		            func __safeDI_panelBuilder_Host() -> Host.__safeDI_PanelCarrier<Panel> {
-		                .init(held: { values_navigator, values_analytics in __safeDI_panelBuilder_Host_held(analytics: values_analytics) }, erased: { values_navigator, values_analytics, values_held in __safeDI_panelBuilder_Host_erased(analytics: values_analytics) })
-		            }
 		            return Host(__safeDI_panelBuilder: __safeDI_panelBuilder_Host())
 		        }
 		        let host: Host = __safeDI_host()
@@ -680,23 +701,29 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_pairPanelBuilder_Host_held(analytics: Analytics) -> Instantiator<PairPanel>.Builder {
+		            return __safeDI_fillBody_D0ADDD197C3103A2(analytics: analytics)
+		        }
+		        func __safeDI_fillBody_D0ADDD197C3103A2(analytics: Analytics) -> Instantiator<PairPanel>.Builder {
+		            func __safeDI_held(count: Int, name: String) -> DefaultPairPanel {
+		                DefaultPairPanel(count: count, name: name, analytics: analytics)
+		            }
+		            return { forwarded in __safeDI_held(count: forwarded.count, name: forwarded.name) }
+		        }
+		        func __safeDI_pairPanelBuilder_Host_erased(analytics: Analytics) -> ErasedInstantiator<PairPanel.ForwardedProperties, PairPanel>.Builder {
+		            return __safeDI_fillBody_0E323E46C02A8EC3(analytics: analytics)
+		        }
+		        func __safeDI_fillBody_0E323E46C02A8EC3(analytics: Analytics) -> ErasedInstantiator<PairPanel.ForwardedProperties, PairPanel>.Builder {
+		            func __safeDI_erased(count: Int, name: String) -> DefaultPairPanel {
+		                DefaultPairPanel(count: count, name: name, analytics: analytics)
+		            }
+		            return { forwarded in __safeDI_erased(count: forwarded.count, name: forwarded.name) }
+		        }
+		        func __safeDI_pairPanelBuilder_Host() -> Host.__safeDI_PairPanelCarrier<PairPanel> {
+		            .init(held: { values_navigator, values_analytics in __safeDI_pairPanelBuilder_Host_held(analytics: values_analytics) }, erased: { values_navigator, values_analytics, values_held in __safeDI_pairPanelBuilder_Host_erased(analytics: values_analytics) })
+		        }
 		        func __safeDI_host() -> Host {
 		            _ = Host.__safeDI_Host_BC602462D77F598A.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_pairPanelBuilder_Host_held(analytics: Analytics) -> Instantiator<PairPanel>.Builder {
-		                func __safeDI_held(count: Int, name: String) -> DefaultPairPanel {
-		                    DefaultPairPanel(count: count, name: name, analytics: analytics)
-		                }
-		                return { forwarded in __safeDI_held(count: forwarded.count, name: forwarded.name) }
-		            }
-		            func __safeDI_pairPanelBuilder_Host_erased(analytics: Analytics) -> ErasedInstantiator<PairPanel.ForwardedProperties, PairPanel>.Builder {
-		                func __safeDI_erased(count: Int, name: String) -> DefaultPairPanel {
-		                    DefaultPairPanel(count: count, name: name, analytics: analytics)
-		                }
-		                return { forwarded in __safeDI_erased(count: forwarded.count, name: forwarded.name) }
-		            }
-		            func __safeDI_pairPanelBuilder_Host() -> Host.__safeDI_PairPanelCarrier<PairPanel> {
-		                .init(held: { values_navigator, values_analytics in __safeDI_pairPanelBuilder_Host_held(analytics: values_analytics) }, erased: { values_navigator, values_analytics, values_held in __safeDI_pairPanelBuilder_Host_erased(analytics: values_analytics) })
-		            }
 		            return Host(__safeDI_pairPanelBuilder: __safeDI_pairPanelBuilder_Host())
 		        }
 		        let host: Host = __safeDI_host()
@@ -1002,32 +1029,37 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_defaultGadget_GadgetBuilder_Host_lazy(_ scope_navigator: Navigator, _ scope_analytics: Analytics, _ scope_now: any Gadget) -> any Gadget {
+		            return __safeDI_fillBody_3E990D9978E9E106(analytics: scope_analytics)
+		        }
+		        func __safeDI_fillBody_3E990D9978E9E106(analytics: Analytics) -> any Gadget {
+		            func __safeDI_lazy() -> DefaultGadget {
+		                DefaultGadget(analytics: analytics)
+		            }
+		            return __safeDI_lazy()
+		        }
+		        func __safeDI_defaultGadget_GadgetBuilder_Host_later(analytics: Analytics) -> ErasedInstantiator<(), any Gadget>.Builder {
+		            return __safeDI_fillBody_6747DB56BF68B622(analytics: analytics)
+		        }
+		        func __safeDI_fillBody_6747DB56BF68B622(analytics: Analytics) -> ErasedInstantiator<(), any Gadget>.Builder {
+		            func __safeDI_later() -> DefaultGadget {
+		                DefaultGadget(analytics: analytics)
+		            }
+		            return { _ in __safeDI_later() }
+		        }
+		        func __safeDI_defaultGadget_GadgetBuilder_Host() -> Host.__safeDI_DefaultGadget_GadgetCarrier<any Gadget> {
+		            .init(
+		                now: { scope_navigator, scope_analytics in
+		                    let analytics = scope_analytics
+		                    let now: any Gadget = DefaultGadget(analytics: analytics)
+		                    return now
+		                },
+		                lazy: { scope_navigator, scope_analytics, scope_now in __safeDI_defaultGadget_GadgetBuilder_Host_lazy(scope_navigator, scope_analytics, scope_now) },
+		                later: { values_navigator, values_analytics, values_now, values_lazy in __safeDI_defaultGadget_GadgetBuilder_Host_later(analytics: values_analytics) }
+		            )
+		        }
 		        func __safeDI_host() -> Host {
 		            _ = Host.__safeDI_Host_ACD71CE8CCB8ADDC.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_defaultGadget_GadgetBuilder_Host_lazy(_ scope_navigator: Navigator, _ scope_analytics: Analytics, _ scope_now: any Gadget) -> any Gadget {
-		                let analytics = scope_analytics
-		                func __safeDI_lazy() -> DefaultGadget {
-		                    DefaultGadget(analytics: analytics)
-		                }
-		                return __safeDI_lazy()
-		            }
-		            func __safeDI_defaultGadget_GadgetBuilder_Host_later(analytics: Analytics) -> ErasedInstantiator<(), any Gadget>.Builder {
-		                func __safeDI_later() -> DefaultGadget {
-		                    DefaultGadget(analytics: analytics)
-		                }
-		                return { _ in __safeDI_later() }
-		            }
-		            func __safeDI_defaultGadget_GadgetBuilder_Host() -> Host.__safeDI_DefaultGadget_GadgetCarrier<any Gadget> {
-		                .init(
-		                    now: { scope_navigator, scope_analytics in
-		                        let analytics = scope_analytics
-		                        let now: any Gadget = DefaultGadget(analytics: analytics)
-		                        return now
-		                    },
-		                    lazy: { scope_navigator, scope_analytics, scope_now in __safeDI_defaultGadget_GadgetBuilder_Host_lazy(scope_navigator, scope_analytics, scope_now) },
-		                    later: { values_navigator, values_analytics, values_now, values_lazy in __safeDI_defaultGadget_GadgetBuilder_Host_later(analytics: values_analytics) }
-		                )
-		            }
 		            return Host(__safeDI_defaultGadget_GadgetBuilder: __safeDI_defaultGadget_GadgetBuilder_Host())
 		        }
 		        let host: Host = __safeDI_host()
@@ -1092,24 +1124,27 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_emptyPanelBuilder_Host_held(analytics: Analytics) -> Instantiator<EmptyPanel>.Builder {
+		            return __safeDI_fillBody_1FAB92EF0A237880(analytics: analytics)
+		        }
+		        func __safeDI_fillBody_1FAB92EF0A237880(analytics: Analytics) -> Instantiator<EmptyPanel>.Builder {
+		            func __safeDI_held() -> DefaultEmptyPanel {
+		                DefaultEmptyPanel(analytics: analytics)
+		            }
+		            return { _ in __safeDI_held() }
+		        }
+		        func __safeDI_emptyPanelBuilder_Host() -> Host.__safeDI_EmptyPanelCarrier<EmptyPanel> {
+		            .init(
+		                now: { scope_analytics in
+		                    let analytics = scope_analytics
+		                    let now: EmptyPanel = DefaultEmptyPanel(analytics: analytics)
+		                    return now
+		                },
+		                held: { values_analytics, values_now in __safeDI_emptyPanelBuilder_Host_held(analytics: values_analytics) }
+		            )
+		        }
 		        func __safeDI_host() -> Host {
 		            _ = Host.__safeDI_Host_A36506A93772F608.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_emptyPanelBuilder_Host_held(analytics: Analytics) -> Instantiator<EmptyPanel>.Builder {
-		                func __safeDI_held() -> DefaultEmptyPanel {
-		                    DefaultEmptyPanel(analytics: analytics)
-		                }
-		                return { _ in __safeDI_held() }
-		            }
-		            func __safeDI_emptyPanelBuilder_Host() -> Host.__safeDI_EmptyPanelCarrier<EmptyPanel> {
-		                .init(
-		                    now: { scope_analytics in
-		                        let analytics = scope_analytics
-		                        let now: EmptyPanel = DefaultEmptyPanel(analytics: analytics)
-		                        return now
-		                    },
-		                    held: { values_analytics, values_now in __safeDI_emptyPanelBuilder_Host_held(analytics: values_analytics) }
-		                )
-		            }
 		            return Host(__safeDI_emptyPanelBuilder: __safeDI_emptyPanelBuilder_Host())
 		        }
 		        let host: Host = __safeDI_host()
@@ -1174,23 +1209,29 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_defaultGadget_GadgetBuilder_Host_tuple(analytics: Analytics) -> ErasedInstantiator<(), any Gadget>.Builder {
+		            return __safeDI_fillBody_A94164D402F7AB0E(analytics: analytics)
+		        }
+		        func __safeDI_fillBody_A94164D402F7AB0E(analytics: Analytics) -> ErasedInstantiator<(), any Gadget>.Builder {
+		            func __safeDI_tuple() -> DefaultGadget {
+		                DefaultGadget(analytics: analytics)
+		            }
+		            return { _ in __safeDI_tuple() }
+		        }
+		        func __safeDI_defaultGadget_GadgetBuilder_Host_void(analytics: Analytics) -> ErasedInstantiator<Void, any Gadget>.Builder {
+		            return __safeDI_fillBody_B28582127DE82181(analytics: analytics)
+		        }
+		        func __safeDI_fillBody_B28582127DE82181(analytics: Analytics) -> ErasedInstantiator<Void, any Gadget>.Builder {
+		            func __safeDI_void() -> DefaultGadget {
+		                DefaultGadget(analytics: analytics)
+		            }
+		            return { _ in __safeDI_void() }
+		        }
+		        func __safeDI_defaultGadget_GadgetBuilder_Host() -> Host.__safeDI_DefaultGadget_GadgetCarrier<any Gadget> {
+		            .init(tuple: { values_analytics in __safeDI_defaultGadget_GadgetBuilder_Host_tuple(analytics: values_analytics) }, void: { values_analytics, values_tuple in __safeDI_defaultGadget_GadgetBuilder_Host_void(analytics: values_analytics) })
+		        }
 		        func __safeDI_host() -> Host {
 		            _ = Host.__safeDI_Host_6A2DE84FCC3C8625.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_defaultGadget_GadgetBuilder_Host_tuple(analytics: Analytics) -> ErasedInstantiator<(), any Gadget>.Builder {
-		                func __safeDI_tuple() -> DefaultGadget {
-		                    DefaultGadget(analytics: analytics)
-		                }
-		                return { _ in __safeDI_tuple() }
-		            }
-		            func __safeDI_defaultGadget_GadgetBuilder_Host_void(analytics: Analytics) -> ErasedInstantiator<Void, any Gadget>.Builder {
-		                func __safeDI_void() -> DefaultGadget {
-		                    DefaultGadget(analytics: analytics)
-		                }
-		                return { _ in __safeDI_void() }
-		            }
-		            func __safeDI_defaultGadget_GadgetBuilder_Host() -> Host.__safeDI_DefaultGadget_GadgetCarrier<any Gadget> {
-		                .init(tuple: { values_analytics in __safeDI_defaultGadget_GadgetBuilder_Host_tuple(analytics: values_analytics) }, void: { values_analytics, values_tuple in __safeDI_defaultGadget_GadgetBuilder_Host_void(analytics: values_analytics) })
-		            }
 		            return Host(__safeDI_defaultGadget_GadgetBuilder: __safeDI_defaultGadget_GadgetBuilder_Host())
 		        }
 		        let host: Host = __safeDI_host()
@@ -1254,23 +1295,29 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_emptyPanelBuilder_Host_held(analytics: Analytics) -> Instantiator<EmptyPanel>.Builder {
+		            return __safeDI_fillBody_1FAB92EF0A237880(analytics: analytics)
+		        }
+		        func __safeDI_fillBody_1FAB92EF0A237880(analytics: Analytics) -> Instantiator<EmptyPanel>.Builder {
+		            func __safeDI_held() -> DefaultEmptyPanel {
+		                DefaultEmptyPanel(analytics: analytics)
+		            }
+		            return { _ in __safeDI_held() }
+		        }
+		        func __safeDI_emptyPanelBuilder_Host_later(analytics: Analytics) -> ErasedInstantiator<(), EmptyPanel>.Builder {
+		            return __safeDI_fillBody_5E39DB487259F8A9(analytics: analytics)
+		        }
+		        func __safeDI_fillBody_5E39DB487259F8A9(analytics: Analytics) -> ErasedInstantiator<(), EmptyPanel>.Builder {
+		            func __safeDI_later() -> DefaultEmptyPanel {
+		                DefaultEmptyPanel(analytics: analytics)
+		            }
+		            return { _ in __safeDI_later() }
+		        }
+		        func __safeDI_emptyPanelBuilder_Host() -> Host.__safeDI_EmptyPanelCarrier<EmptyPanel> {
+		            .init(held: { values_analytics in __safeDI_emptyPanelBuilder_Host_held(analytics: values_analytics) }, later: { values_analytics, values_held in __safeDI_emptyPanelBuilder_Host_later(analytics: values_analytics) })
+		        }
 		        func __safeDI_host() -> Host {
 		            _ = Host.__safeDI_Host_95CA33EFFEB5D3F9.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_emptyPanelBuilder_Host_held(analytics: Analytics) -> Instantiator<EmptyPanel>.Builder {
-		                func __safeDI_held() -> DefaultEmptyPanel {
-		                    DefaultEmptyPanel(analytics: analytics)
-		                }
-		                return { _ in __safeDI_held() }
-		            }
-		            func __safeDI_emptyPanelBuilder_Host_later(analytics: Analytics) -> ErasedInstantiator<(), EmptyPanel>.Builder {
-		                func __safeDI_later() -> DefaultEmptyPanel {
-		                    DefaultEmptyPanel(analytics: analytics)
-		                }
-		                return { _ in __safeDI_later() }
-		            }
-		            func __safeDI_emptyPanelBuilder_Host() -> Host.__safeDI_EmptyPanelCarrier<EmptyPanel> {
-		                .init(held: { values_analytics in __safeDI_emptyPanelBuilder_Host_held(analytics: values_analytics) }, later: { values_analytics, values_held in __safeDI_emptyPanelBuilder_Host_later(analytics: values_analytics) })
-		            }
 		            return Host(__safeDI_emptyPanelBuilder: __safeDI_emptyPanelBuilder_Host())
 		        }
 		        let host: Host = __safeDI_host()
@@ -1684,26 +1731,29 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_panelBuilder_Inner_part(analytics: Analytics) -> Instantiator<Panel>.Builder {
+		            return __safeDI_fillBody_BEA678126FB96713(analytics: analytics)
+		        }
+		        func __safeDI_fillBody_BEA678126FB96713(analytics: Analytics) -> Instantiator<Panel>.Builder {
+		            func __safeDI_part(name: String) -> DefaultPanel {
+		                DefaultPanel(name: name, analytics: analytics)
+		            }
+		            return { forwarded in __safeDI_part(name: forwarded) }
+		        }
+		        func __safeDI_panelBuilder_Outer() -> Outer.__safeDI_PanelCarrier<Panel> {
+		            .init(inner: __safeDI_panelBuilder_Inner())
+		        }
+		        func __safeDI_panelBuilder_Inner() -> Inner.__safeDI_PanelCarrier<Panel> {
+		            .init(part: { values_analytics in __safeDI_panelBuilder_Inner_part(analytics: values_analytics) })
+		        }
 		        let analytics = Analytics()
 		        func __safeDI_outer() -> Outer {
 		            _ = Outer.__safeDI_Outer_17A2541A54A1BA64.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_panelBuilder_Inner_part(analytics: Analytics) -> Instantiator<Panel>.Builder {
-		                func __safeDI_part(name: String) -> DefaultPanel {
-		                    DefaultPanel(name: name, analytics: analytics)
-		                }
-		                return { forwarded in __safeDI_part(name: forwarded) }
-		            }
 		            @Sendable nonisolated func __safeDI_panelSendableBuilder_Inner_sendablePart() -> SendableInstantiator<Panel>.Builder {
 		                @Sendable nonisolated func __safeDI_sendablePart(name: String) -> DefaultPanel {
 		                    DefaultPanel(name: name, analytics: analytics)
 		                }
 		                return { forwarded in __safeDI_sendablePart(name: forwarded) }
-		            }
-		            func __safeDI_panelBuilder_Outer() -> Outer.__safeDI_PanelCarrier<Panel> {
-		                .init(inner: __safeDI_panelBuilder_Inner())
-		            }
-		            func __safeDI_panelBuilder_Inner() -> Inner.__safeDI_PanelCarrier<Panel> {
-		                .init(part: { values_analytics in __safeDI_panelBuilder_Inner_part(analytics: values_analytics) })
 		            }
 		            @Sendable nonisolated func __safeDI_panelSendableBuilder_Outer() -> Outer.__safeDI_PanelSendableCarrier<Panel> {
 		                .init(inner_Sendable: __safeDI_panelSendableBuilder_Inner())
@@ -1841,26 +1891,29 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_defaultGadget_GadgetBuilder_Inner_later(analytics: Analytics) -> ErasedInstantiator<(), any Gadget>.Builder {
+		            return __safeDI_fillBody_6747DB56BF68B622(analytics: analytics)
+		        }
+		        func __safeDI_fillBody_6747DB56BF68B622(analytics: Analytics) -> ErasedInstantiator<(), any Gadget>.Builder {
+		            func __safeDI_later() -> DefaultGadget {
+		                DefaultGadget(analytics: analytics)
+		            }
+		            return { _ in __safeDI_later() }
+		        }
+		        func __safeDI_defaultGadget_GadgetBuilder_Outer() -> Outer.__safeDI_DefaultGadget_GadgetCarrier<any Gadget> {
+		            .init(inner: __safeDI_defaultGadget_GadgetBuilder_Inner())
+		        }
+		        func __safeDI_defaultGadget_GadgetBuilder_Inner() -> Inner.__safeDI_DefaultGadget_GadgetCarrier<any Gadget> {
+		            .init(later: { values_analytics in __safeDI_defaultGadget_GadgetBuilder_Inner_later(analytics: values_analytics) })
+		        }
 		        let analytics = Analytics()
 		        func __safeDI_outer() -> Outer {
 		            _ = Outer.__safeDI_Outer_3122D8C9B6F7918D.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_defaultGadget_GadgetBuilder_Inner_later(analytics: Analytics) -> ErasedInstantiator<(), any Gadget>.Builder {
-		                func __safeDI_later() -> DefaultGadget {
-		                    DefaultGadget(analytics: analytics)
-		                }
-		                return { _ in __safeDI_later() }
-		            }
 		            @Sendable nonisolated func __safeDI_defaultGadget_GadgetSendableBuilder_Inner_sendableLater() -> SendableErasedInstantiator<(), any Gadget>.Builder {
 		                @Sendable nonisolated func __safeDI_sendableLater() -> DefaultGadget {
 		                    DefaultGadget(analytics: analytics)
 		                }
 		                return { _ in __safeDI_sendableLater() }
-		            }
-		            func __safeDI_defaultGadget_GadgetBuilder_Outer() -> Outer.__safeDI_DefaultGadget_GadgetCarrier<any Gadget> {
-		                .init(inner: __safeDI_defaultGadget_GadgetBuilder_Inner())
-		            }
-		            func __safeDI_defaultGadget_GadgetBuilder_Inner() -> Inner.__safeDI_DefaultGadget_GadgetCarrier<any Gadget> {
-		                .init(later: { values_analytics in __safeDI_defaultGadget_GadgetBuilder_Inner_later(analytics: values_analytics) })
 		            }
 		            @Sendable nonisolated func __safeDI_defaultGadget_GadgetSendableBuilder_Outer() -> Outer.__safeDI_DefaultGadget_GadgetSendableCarrier<any Gadget> {
 		                .init(inner_Sendable: __safeDI_defaultGadget_GadgetSendableBuilder_Inner())
@@ -1942,18 +1995,21 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_analytics: @autoclosure @escaping () -> Analytics, __safeDI_serviceBuilder: __safeDI_ServiceCarrier<any Service>) {
 		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
+		        @inline(never) func __safeDI_panelBuilder_Inner_part(analytics: Analytics) -> Instantiator<Panel>.Builder {
+		            return __safeDI_fillBody_B318A30E2E009621(analytics: analytics)
+		        }
+		        @inline(never) func __safeDI_fillBody_B318A30E2E009621(analytics: Analytics) -> Instantiator<Panel>.Builder {
+		            @inline(never) func __safeDI_part(name: String) -> DefaultPanel {
+		                DefaultPanel(name: name, analytics: analytics)
+		            }
+		            return { forwarded in __safeDI_part(name: forwarded) }
+		        }
+		        @inline(never) func __safeDI_panelBuilder_Inner() -> Inner.__safeDI_PanelCarrier<Panel> {
+		            .init(part: { values_analytics, values_service in __safeDI_panelBuilder_Inner_part(analytics: values_analytics) })
+		        }
 		        let navigator = Navigator()
 		        @inline(never) func __safeDI_inner() -> Inner {
 		            _ = Inner.__safeDI_Inner_00C173140CDE351A.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            @inline(never) func __safeDI_panelBuilder_Inner_part(analytics: Analytics) -> Instantiator<Panel>.Builder {
-		                @inline(never) func __safeDI_part(name: String) -> DefaultPanel {
-		                    DefaultPanel(name: name, analytics: analytics)
-		                }
-		                return { forwarded in __safeDI_part(name: forwarded) }
-		            }
-		            @inline(never) func __safeDI_panelBuilder_Inner() -> Inner.__safeDI_PanelCarrier<Panel> {
-		                .init(part: { values_analytics, values_service in __safeDI_panelBuilder_Inner_part(analytics: values_analytics) })
-		            }
 		            return Inner(__safeDI_analytics: analytics.instance, __safeDI_panelBuilder: __safeDI_panelBuilder_Inner(), __safeDI_serviceBuilder: __safeDI_serviceBuilder.inner)
 		        }
 		        let inner: Inner = __safeDI_inner()
@@ -2052,20 +2108,23 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_liveGadget_GadgetBuilder_Home_Screen_Scope_panel(id: Int) -> ErasedInstantiator<String, any Gadget>.Builder {
+		            return __safeDI_fillBody_55D071755F974A0E(id: id)
+		        }
+		        func __safeDI_fillBody_55D071755F974A0E(id: Int) -> ErasedInstantiator<String, any Gadget>.Builder {
+		            func __safeDI_panel(title: String) -> LiveGadget {
+		                LiveGadget(title: title, id: id)
+		            }
+		            return { forwarded in __safeDI_panel(title: forwarded) }
+		        }
+		        func __safeDI_liveGadget_GadgetBuilder_Home() -> Home.__safeDI_LiveGadget_GadgetCarrier<any Gadget> {
+		            .init(screenBuilder: __safeDI_liveGadget_GadgetBuilder_Home_Screen_Scope())
+		        }
+		        func __safeDI_liveGadget_GadgetBuilder_Home_Screen_Scope() -> Home.__safeDI_LiveGadget_GadgetCarrier_Screen<any Gadget> {
+		            .init(panel: { values_id in __safeDI_liveGadget_GadgetBuilder_Home_Screen_Scope_panel(id: values_id) }, next: { values_id, values_panel in __safeDI_liveGadget_GadgetBuilder_Home_Screen_Scope() })
+		        }
 		        func __safeDI_home() -> Home {
 		            _ = Home.__safeDI_Home_FA2271C05D02DC50.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_liveGadget_GadgetBuilder_Home_Screen_Scope_panel(id: Int) -> ErasedInstantiator<String, any Gadget>.Builder {
-		                func __safeDI_panel(title: String) -> LiveGadget {
-		                    LiveGadget(title: title, id: id)
-		                }
-		                return { forwarded in __safeDI_panel(title: forwarded) }
-		            }
-		            func __safeDI_liveGadget_GadgetBuilder_Home() -> Home.__safeDI_LiveGadget_GadgetCarrier<any Gadget> {
-		                .init(screenBuilder: __safeDI_liveGadget_GadgetBuilder_Home_Screen_Scope())
-		            }
-		            func __safeDI_liveGadget_GadgetBuilder_Home_Screen_Scope() -> Home.__safeDI_LiveGadget_GadgetCarrier_Screen<any Gadget> {
-		                .init(panel: { values_id in __safeDI_liveGadget_GadgetBuilder_Home_Screen_Scope_panel(id: values_id) }, next: { values_id, values_panel in __safeDI_liveGadget_GadgetBuilder_Home_Screen_Scope() })
-		            }
 		            return Home(__safeDI_liveGadget_GadgetBuilder: __safeDI_liveGadget_GadgetBuilder_Home())
 		        }
 		        let home: Home = __safeDI_home()
@@ -2196,23 +2255,26 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_liveGadget_GadgetBuilder_Home_Screen_Scope_panel(id: Int) -> ErasedInstantiator<String, any Gadget>.Builder {
+		            return __safeDI_fillBody_55D071755F974A0E(id: id)
+		        }
+		        func __safeDI_fillBody_55D071755F974A0E(id: Int) -> ErasedInstantiator<String, any Gadget>.Builder {
+		            func __safeDI_panel(title: String) -> LiveGadget {
+		                LiveGadget(title: title, id: id)
+		            }
+		            return { forwarded in __safeDI_panel(title: forwarded) }
+		        }
+		        func __safeDI_liveGadget_GadgetBuilder_Outer() -> Outer.__safeDI_LiveGadget_GadgetCarrier<any Gadget> {
+		            .init(home: __safeDI_liveGadget_GadgetBuilder_Home())
+		        }
+		        func __safeDI_liveGadget_GadgetBuilder_Home() -> Home.__safeDI_LiveGadget_GadgetCarrier<any Gadget> {
+		            .init(screenBuilder: __safeDI_liveGadget_GadgetBuilder_Home_Screen_Scope())
+		        }
+		        func __safeDI_liveGadget_GadgetBuilder_Home_Screen_Scope() -> Home.__safeDI_LiveGadget_GadgetCarrier_Screen<any Gadget> {
+		            .init(panel: { values_id in __safeDI_liveGadget_GadgetBuilder_Home_Screen_Scope_panel(id: values_id) }, next: { values_id, values_panel in __safeDI_liveGadget_GadgetBuilder_Home_Screen_Scope() })
+		        }
 		        func __safeDI_outer() -> Outer {
 		            _ = Outer.__safeDI_Outer_050544FCB3C79E0B.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_liveGadget_GadgetBuilder_screenBuilder_Home_Screen_Scope_panel(id: Int) -> ErasedInstantiator<String, any Gadget>.Builder {
-		                func __safeDI_panel(title: String) -> LiveGadget {
-		                    LiveGadget(title: title, id: id)
-		                }
-		                return { forwarded in __safeDI_panel(title: forwarded) }
-		            }
-		            func __safeDI_liveGadget_GadgetBuilder_Outer() -> Outer.__safeDI_LiveGadget_GadgetCarrier<any Gadget> {
-		                .init(home: __safeDI_liveGadget_GadgetBuilder_Home())
-		            }
-		            func __safeDI_liveGadget_GadgetBuilder_Home() -> Home.__safeDI_LiveGadget_GadgetCarrier<any Gadget> {
-		                .init(screenBuilder: __safeDI_liveGadget_GadgetBuilder_Home_Screen_Scope())
-		            }
-		            func __safeDI_liveGadget_GadgetBuilder_Home_Screen_Scope() -> Home.__safeDI_LiveGadget_GadgetCarrier_Screen<any Gadget> {
-		                .init(panel: { values_id in __safeDI_liveGadget_GadgetBuilder_screenBuilder_Home_Screen_Scope_panel(id: values_id) }, next: { values_id, values_panel in __safeDI_liveGadget_GadgetBuilder_Home_Screen_Scope() })
-		            }
 		            return Outer(__safeDI_liveGadget_GadgetBuilder: __safeDI_liveGadget_GadgetBuilder_Outer())
 		        }
 		        let outer: Outer = __safeDI_outer()
@@ -2298,26 +2360,32 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_builtGadget_GadgetBuilder_Host_built() -> ErasedInstantiator<Built, any Gadget>.Builder {
+		            return __safeDI_fillBody_CECD642F876C292A()
+		        }
+		        func __safeDI_fillBody_CECD642F876C292A() -> ErasedInstantiator<Built, any Gadget>.Builder {
+		            func __safeDI_built(built: Built) -> BuiltGadget {
+		                BuiltGadget(built: built)
+		            }
+		            return { forwarded in __safeDI_built(built: forwarded) }
+		        }
+		        @Sendable nonisolated func __safeDI_pairBuiltGadget_GadgetSendableBuilder_Host_pair() -> SendableErasedInstantiator<(built: Built, count: Int), any Gadget>.Builder {
+		            return __safeDI_fillBody_D6FCEEC806CF9AFB()
+		        }
+		        @Sendable nonisolated func __safeDI_fillBody_D6FCEEC806CF9AFB() -> SendableErasedInstantiator<(built: Built, count: Int), any Gadget>.Builder {
+		            @Sendable nonisolated func __safeDI_pair(built: Built, count: Int) -> PairBuiltGadget {
+		                PairBuiltGadget(built: built, count: count)
+		            }
+		            return { forwarded in __safeDI_pair(built: forwarded.built, count: forwarded.count) }
+		        }
+		        func __safeDI_builtGadget_GadgetBuilder_Host() -> Host.__safeDI_BuiltGadget_GadgetCarrier<any Gadget> {
+		            .init(built: { __safeDI_builtGadget_GadgetBuilder_Host_built() })
+		        }
+		        @Sendable nonisolated func __safeDI_pairBuiltGadget_GadgetSendableBuilder_Host() -> Host.__safeDI_PairBuiltGadget_GadgetSendableCarrier<any Gadget> {
+		            .init(pair: { __safeDI_pairBuiltGadget_GadgetSendableBuilder_Host_pair() })
+		        }
 		        func __safeDI_host() -> Host {
 		            _ = Host.__safeDI_Host_0A9531797AE452B1.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_builtGadget_GadgetBuilder_Host_built() -> ErasedInstantiator<Built, any Gadget>.Builder {
-		                func __safeDI_built(built: Built) -> BuiltGadget {
-		                    BuiltGadget(built: built)
-		                }
-		                return { forwarded in __safeDI_built(built: forwarded) }
-		            }
-		            @Sendable nonisolated func __safeDI_pairBuiltGadget_GadgetSendableBuilder_Host_pair() -> SendableErasedInstantiator<(built: Built, count: Int), any Gadget>.Builder {
-		                @Sendable nonisolated func __safeDI_pair(built: Built, count: Int) -> PairBuiltGadget {
-		                    PairBuiltGadget(built: built, count: count)
-		                }
-		                return { forwarded in __safeDI_pair(built: forwarded.built, count: forwarded.count) }
-		            }
-		            func __safeDI_builtGadget_GadgetBuilder_Host() -> Host.__safeDI_BuiltGadget_GadgetCarrier<any Gadget> {
-		                .init(built: { __safeDI_builtGadget_GadgetBuilder_Host_built() })
-		            }
-		            @Sendable nonisolated func __safeDI_pairBuiltGadget_GadgetSendableBuilder_Host() -> Host.__safeDI_PairBuiltGadget_GadgetSendableCarrier<any Gadget> {
-		                .init(pair: { __safeDI_pairBuiltGadget_GadgetSendableBuilder_Host_pair() })
-		            }
 		            return Host(__safeDI_builtGadget_GadgetBuilder: __safeDI_builtGadget_GadgetBuilder_Host(), __safeDI_pairBuiltGadget_GadgetSendableBuilder: __safeDI_pairBuiltGadget_GadgetSendableBuilder_Host())
 		        }
 		        let host: Host = __safeDI_host()
@@ -2417,26 +2485,32 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_builtBuilder_Host_held() -> Instantiator<Built>.Builder {
+		            return __safeDI_fillBody_416036851B49B5D3()
+		        }
+		        func __safeDI_fillBody_416036851B49B5D3() -> Instantiator<Built>.Builder {
+		            func __safeDI_held(title: String) -> DefaultBuilt {
+		                DefaultBuilt(title: title)
+		            }
+		            return { forwarded in __safeDI_held(title: forwarded) }
+		        }
+		        @Sendable nonisolated func __safeDI_builtSendableBuilder_Host_sendableHeld() -> SendableInstantiator<Built>.Builder {
+		            return __safeDI_fillBody_A7B5EAE082D70A79()
+		        }
+		        @Sendable nonisolated func __safeDI_fillBody_A7B5EAE082D70A79() -> SendableInstantiator<Built>.Builder {
+		            @Sendable nonisolated func __safeDI_sendableHeld(title: String) -> DefaultBuilt {
+		                DefaultBuilt(title: title)
+		            }
+		            return { forwarded in __safeDI_sendableHeld(title: forwarded) }
+		        }
+		        func __safeDI_builtBuilder_Host() -> Host.__safeDI_BuiltCarrier<Built> {
+		            .init(held: { __safeDI_builtBuilder_Host_held() })
+		        }
+		        @Sendable nonisolated func __safeDI_builtSendableBuilder_Host() -> Host.__safeDI_BuiltSendableCarrier<Built> {
+		            .init(sendableHeld: { __safeDI_builtSendableBuilder_Host_sendableHeld() })
+		        }
 		        func __safeDI_host() -> Host {
 		            _ = Host.__safeDI_Host_1C91A3D63DD12B71.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_builtBuilder_Host_held() -> Instantiator<Built>.Builder {
-		                func __safeDI_held(title: String) -> DefaultBuilt {
-		                    DefaultBuilt(title: title)
-		                }
-		                return { forwarded in __safeDI_held(title: forwarded) }
-		            }
-		            @Sendable nonisolated func __safeDI_builtSendableBuilder_Host_sendableHeld() -> SendableInstantiator<Built>.Builder {
-		                @Sendable nonisolated func __safeDI_sendableHeld(title: String) -> DefaultBuilt {
-		                    DefaultBuilt(title: title)
-		                }
-		                return { forwarded in __safeDI_sendableHeld(title: forwarded) }
-		            }
-		            func __safeDI_builtBuilder_Host() -> Host.__safeDI_BuiltCarrier<Built> {
-		                .init(held: { __safeDI_builtBuilder_Host_held() })
-		            }
-		            @Sendable nonisolated func __safeDI_builtSendableBuilder_Host() -> Host.__safeDI_BuiltSendableCarrier<Built> {
-		                .init(sendableHeld: { __safeDI_builtSendableBuilder_Host_sendableHeld() })
-		            }
 		            return Host(__safeDI_builtBuilder: __safeDI_builtBuilder_Host(), __safeDI_builtSendableBuilder: __safeDI_builtSendableBuilder_Host())
 		        }
 		        let host: Host = __safeDI_host()
@@ -2487,26 +2561,29 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_panelBuilder_Host_held(forwarded: Mark) -> Instantiator<Panel>.Builder {
+		            return __safeDI_fillBody_1778578639CCA1FC(forwarded: forwarded)
+		        }
+		        func __safeDI_fillBody_1778578639CCA1FC(forwarded: Mark) -> Instantiator<Panel>.Builder {
+		            func __safeDI_held(name: String, forwarded: Mark?) -> LoopPanel {
+		                let reader = MarkReader(forwarded: forwarded)
+		                func __safeDI_tangleBuilder() -> Tangle {
+		                    let forwarded = Mark()
+		                    let held = Instantiator<Panel> {
+		                        __safeDI_held(name: $0, forwarded: forwarded)
+		                    }
+		                    return Tangle(forwarded: forwarded, held: held)
+		                }
+		                let tangleBuilder = Instantiator<Tangle>(__safeDI_tangleBuilder)
+		                return LoopPanel(name: name, reader: reader, tangleBuilder: tangleBuilder)
+		            }
+		            return { forwarded_ in __safeDI_held(name: forwarded_, forwarded: forwarded) }
+		        }
+		        func __safeDI_panelBuilder_Host() -> Host.__safeDI_PanelCarrier<Panel> {
+		            .init(held: { values_forwarded in __safeDI_panelBuilder_Host_held(forwarded: values_forwarded) })
+		        }
 		        func __safeDI_host() -> Host {
 		            _ = Host.__safeDI_Host_CF31C504C391FFF4.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_panelBuilder_Host_held(forwarded: Mark) -> Instantiator<Panel>.Builder {
-		                func __safeDI_held(name: String, forwarded: Mark?) -> LoopPanel {
-		                    let reader = MarkReader(forwarded: forwarded)
-		                    func __safeDI_tangleBuilder() -> Tangle {
-		                        let forwarded = Mark()
-		                        let held = Instantiator<Panel> {
-		                            __safeDI_held(name: $0, forwarded: forwarded)
-		                        }
-		                        return Tangle(forwarded: forwarded, held: held)
-		                    }
-		                    let tangleBuilder = Instantiator<Tangle>(__safeDI_tangleBuilder)
-		                    return LoopPanel(name: name, reader: reader, tangleBuilder: tangleBuilder)
-		                }
-		                return { forwarded_ in __safeDI_held(name: forwarded_, forwarded: forwarded) }
-		            }
-		            func __safeDI_panelBuilder_Host() -> Host.__safeDI_PanelCarrier<Panel> {
-		                .init(held: { values_forwarded in __safeDI_panelBuilder_Host_held(forwarded: values_forwarded) })
-		            }
 		            return Host(__safeDI_panelBuilder: __safeDI_panelBuilder_Host())
 		        }
 		        let host: Host = __safeDI_host()
@@ -2594,17 +2671,20 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_themedGadget_GadgetBuilder_Host_panel(theme: LazilyInstantiated<Theme>) -> ErasedInstantiator<String, any Gadget>.Builder {
+		            return __safeDI_fillBody_6FDFCC3DFAD08048(theme: theme)
+		        }
+		        func __safeDI_fillBody_6FDFCC3DFAD08048(theme: LazilyInstantiated<Theme>) -> ErasedInstantiator<String, any Gadget>.Builder {
+		            func __safeDI_panel(title: String) -> ThemedGadget {
+		                ThemedGadget(title: title, theme: theme.instance)
+		            }
+		            return { forwarded in __safeDI_panel(title: forwarded) }
+		        }
+		        func __safeDI_themedGadget_GadgetBuilder_Host() -> Host.__safeDI_ThemedGadget_GadgetCarrier<any Gadget> {
+		            .init(panel: { values_theme in __safeDI_themedGadget_GadgetBuilder_Host_panel(theme: values_theme) })
+		        }
 		        func __safeDI_host() -> Host {
 		            _ = Host.__safeDI_Host_4504BB2CCED29B61.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_themedGadget_GadgetBuilder_Host_panel(theme: LazilyInstantiated<Theme>) -> ErasedInstantiator<String, any Gadget>.Builder {
-		                func __safeDI_panel(title: String) -> ThemedGadget {
-		                    ThemedGadget(title: title, theme: theme.instance)
-		                }
-		                return { forwarded in __safeDI_panel(title: forwarded) }
-		            }
-		            func __safeDI_themedGadget_GadgetBuilder_Host() -> Host.__safeDI_ThemedGadget_GadgetCarrier<any Gadget> {
-		                .init(panel: { values_theme in __safeDI_themedGadget_GadgetBuilder_Host_panel(theme: values_theme) })
-		            }
 		            return Host(__safeDI_themedGadget_GadgetBuilder: __safeDI_themedGadget_GadgetBuilder_Host())
 		        }
 		        let host: Host = __safeDI_host()
@@ -2711,28 +2791,31 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        @Sendable nonisolated func __safeDI_emptyPanelBuilder_Host_Owner_Scope_held(analytics: Analytics) -> Instantiator<EmptyPanel>.Builder {
+		            return __safeDI_fillBody_7EA3C0230632739A(analytics: analytics)
+		        }
+		        @Sendable nonisolated func __safeDI_fillBody_7EA3C0230632739A(analytics: Analytics) -> Instantiator<EmptyPanel>.Builder {
+		            func __safeDI_held() -> DefaultEmptyPanel {
+		                DefaultEmptyPanel(analytics: analytics)
+		            }
+		            return { _ in __safeDI_held() }
+		        }
+		        func __safeDI_emptyPanelBuilder_Host() -> Host.__safeDI_EmptyPanelCarrier<EmptyPanel> {
+		            .init(
+		                now: { scope_analytics in
+		                    let analytics = scope_analytics
+		                    let now: EmptyPanel = DefaultEmptyPanel(analytics: analytics)
+		                    return now
+		                },
+		                owner: { values_analytics, values_now in __safeDI_emptyPanelBuilder_Host_Owner_Scope(analytics: values_analytics) }
+		            )
+		        }
+		        @Sendable nonisolated func __safeDI_emptyPanelBuilder_Host_Owner_Scope(analytics: Analytics) -> Host.__safeDI_EmptyPanelCarrier_Owner<EmptyPanel> {
+		            .init(held: { __safeDI_emptyPanelBuilder_Host_Owner_Scope_held(analytics: analytics) })
+		        }
 		        let analytics = Analytics()
 		        func __safeDI_host() -> Host {
 		            _ = Host.__safeDI_Host_186A330777B1EAFE.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            @Sendable nonisolated func __safeDI_emptyPanelBuilder_Host_Owner_Scope_held(analytics: Analytics) -> Instantiator<EmptyPanel>.Builder {
-		                func __safeDI_held() -> DefaultEmptyPanel {
-		                    DefaultEmptyPanel(analytics: analytics)
-		                }
-		                return { _ in __safeDI_held() }
-		            }
-		            func __safeDI_emptyPanelBuilder_Host() -> Host.__safeDI_EmptyPanelCarrier<EmptyPanel> {
-		                .init(
-		                    now: { scope_analytics in
-		                        let analytics = scope_analytics
-		                        let now: EmptyPanel = DefaultEmptyPanel(analytics: analytics)
-		                        return now
-		                    },
-		                    owner: { values_analytics, values_now in __safeDI_emptyPanelBuilder_Host_Owner_Scope(analytics: values_analytics) }
-		                )
-		            }
-		            @Sendable nonisolated func __safeDI_emptyPanelBuilder_Host_Owner_Scope(analytics: Analytics) -> Host.__safeDI_EmptyPanelCarrier_Owner<EmptyPanel> {
-		                .init(held: { __safeDI_emptyPanelBuilder_Host_Owner_Scope_held(analytics: analytics) })
-		            }
 		            @Sendable nonisolated func __safeDI_emptyPanelSendableBuilder_Host() -> Host.__safeDI_EmptyPanelSendableCarrier<EmptyPanel> {
 		                .init(ownerBuilder: { __safeDI_emptyPanelBuilder_Host_Owner_Scope(analytics: analytics) })
 		            }
@@ -2828,32 +2911,41 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_stringPanelBuilder_Host_later() -> ErasedInstantiator<(), StringPanel>.Builder {
+		            return __safeDI_fillBody_B704D99203BC79A3()
+		        }
+		        func __safeDI_fillBody_B704D99203BC79A3() -> ErasedInstantiator<(), StringPanel>.Builder {
+		            func __safeDI_later() -> DefaultStringPanel {
+		                DefaultStringPanel()
+		            }
+		            return { _ in __safeDI_later() }
+		        }
+		        func __safeDI_stringPanelBuilder_Host_same() -> ErasedInstantiator<StringPanel.ForwardedProperties, StringPanel>.Builder {
+		            return __safeDI_fillBody_D60F78598A42244C()
+		        }
+		        func __safeDI_fillBody_D60F78598A42244C() -> ErasedInstantiator<StringPanel.ForwardedProperties, StringPanel>.Builder {
+		            func __safeDI_same() -> DefaultStringPanel {
+		                DefaultStringPanel()
+		            }
+		            return { _ in __safeDI_same() }
+		        }
+		        func __safeDI_stringPanelBuilder_Host_Owner_Scope_held() -> Instantiator<StringPanel>.Builder {
+		            return __safeDI_fillBody_71D4BDDA71817384()
+		        }
+		        func __safeDI_fillBody_71D4BDDA71817384() -> Instantiator<StringPanel>.Builder {
+		            func __safeDI_held() -> DefaultStringPanel {
+		                DefaultStringPanel()
+		            }
+		            return { _ in __safeDI_held() }
+		        }
+		        func __safeDI_stringPanelBuilder_Host() -> Host.__safeDI_StringPanelCarrier<StringPanel> {
+		            .init(later: { __safeDI_stringPanelBuilder_Host_later() }, same: { values_later in __safeDI_stringPanelBuilder_Host_same() }, owner: { values_later, values_same in __safeDI_stringPanelBuilder_Host_Owner_Scope() })
+		        }
+		        func __safeDI_stringPanelBuilder_Host_Owner_Scope() -> Host.__safeDI_StringPanelCarrier_Owner<StringPanel> {
+		            .init(held: { __safeDI_stringPanelBuilder_Host_Owner_Scope_held() })
+		        }
 		        func __safeDI_host() -> Host {
 		            _ = Host.__safeDI_Host_189626ACC022E750.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_stringPanelBuilder_Host_later() -> ErasedInstantiator<(), StringPanel>.Builder {
-		                func __safeDI_later() -> DefaultStringPanel {
-		                    DefaultStringPanel()
-		                }
-		                return { _ in __safeDI_later() }
-		            }
-		            func __safeDI_stringPanelBuilder_Host_same() -> ErasedInstantiator<StringPanel.ForwardedProperties, StringPanel>.Builder {
-		                func __safeDI_same() -> DefaultStringPanel {
-		                    DefaultStringPanel()
-		                }
-		                return { _ in __safeDI_same() }
-		            }
-		            func __safeDI_stringPanelBuilder_Host_Owner_Scope_held() -> Instantiator<StringPanel>.Builder {
-		                func __safeDI_held() -> DefaultStringPanel {
-		                    DefaultStringPanel()
-		                }
-		                return { _ in __safeDI_held() }
-		            }
-		            func __safeDI_stringPanelBuilder_Host() -> Host.__safeDI_StringPanelCarrier<StringPanel> {
-		                .init(later: { __safeDI_stringPanelBuilder_Host_later() }, same: { values_later in __safeDI_stringPanelBuilder_Host_same() }, owner: { values_later, values_same in __safeDI_stringPanelBuilder_Host_Owner_Scope() })
-		            }
-		            func __safeDI_stringPanelBuilder_Host_Owner_Scope() -> Host.__safeDI_StringPanelCarrier_Owner<StringPanel> {
-		                .init(held: { __safeDI_stringPanelBuilder_Host_Owner_Scope_held() })
-		            }
 		            return Host(__safeDI_stringPanelBuilder: __safeDI_stringPanelBuilder_Host())
 		        }
 		        let host: Host = __safeDI_host()
@@ -2937,26 +3029,32 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        @Sendable nonisolated func __safeDI_stringPanelSendableBuilder_Host_later() -> SendableErasedInstantiator<(), StringPanel>.Builder {
+		            return __safeDI_fillBody_AC778246C54A0661()
+		        }
+		        @Sendable nonisolated func __safeDI_fillBody_AC778246C54A0661() -> SendableErasedInstantiator<(), StringPanel>.Builder {
+		            @Sendable nonisolated func __safeDI_later() -> DefaultStringPanel {
+		                DefaultStringPanel()
+		            }
+		            return { _ in __safeDI_later() }
+		        }
+		        @Sendable nonisolated func __safeDI_stringPanelSendableBuilder_Host_Owner_Scope_held() -> Instantiator<StringPanel>.Builder {
+		            return __safeDI_fillBody_C50320B184DB28F2()
+		        }
+		        @Sendable nonisolated func __safeDI_fillBody_C50320B184DB28F2() -> Instantiator<StringPanel>.Builder {
+		            func __safeDI_held() -> DefaultStringPanel {
+		                DefaultStringPanel()
+		            }
+		            return { _ in __safeDI_held() }
+		        }
+		        @Sendable nonisolated func __safeDI_stringPanelSendableBuilder_Host() -> Host.__safeDI_StringPanelSendableCarrier<StringPanel> {
+		            .init(later: { __safeDI_stringPanelSendableBuilder_Host_later() }, ownerBuilder: { __safeDI_stringPanelBuilder_Host_Owner_Scope() })
+		        }
+		        @Sendable nonisolated func __safeDI_stringPanelBuilder_Host_Owner_Scope() -> Host.__safeDI_StringPanelCarrier_Owner<StringPanel> {
+		            .init(held: { __safeDI_stringPanelSendableBuilder_Host_Owner_Scope_held() })
+		        }
 		        func __safeDI_host() -> Host {
 		            _ = Host.__safeDI_Host_78716D203C47A583.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            @Sendable nonisolated func __safeDI_stringPanelSendableBuilder_Host_later() -> SendableErasedInstantiator<(), StringPanel>.Builder {
-		                @Sendable nonisolated func __safeDI_later() -> DefaultStringPanel {
-		                    DefaultStringPanel()
-		                }
-		                return { _ in __safeDI_later() }
-		            }
-		            @Sendable nonisolated func __safeDI_stringPanelSendableBuilder_Host_Owner_Scope_held() -> Instantiator<StringPanel>.Builder {
-		                func __safeDI_held() -> DefaultStringPanel {
-		                    DefaultStringPanel()
-		                }
-		                return { _ in __safeDI_held() }
-		            }
-		            @Sendable nonisolated func __safeDI_stringPanelSendableBuilder_Host() -> Host.__safeDI_StringPanelSendableCarrier<StringPanel> {
-		                .init(later: { __safeDI_stringPanelSendableBuilder_Host_later() }, ownerBuilder: { __safeDI_stringPanelBuilder_Host_Owner_Scope() })
-		            }
-		            @Sendable nonisolated func __safeDI_stringPanelBuilder_Host_Owner_Scope() -> Host.__safeDI_StringPanelCarrier_Owner<StringPanel> {
-		                .init(held: { __safeDI_stringPanelSendableBuilder_Host_Owner_Scope_held() })
-		            }
 		            return Host(__safeDI_stringPanelSendableBuilder: __safeDI_stringPanelSendableBuilder_Host())
 		        }
 		        let host: Host = __safeDI_host()
@@ -3209,26 +3307,32 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_mainPanelBuilder_Host_held() -> Instantiator<MainPanel>.Builder {
+		            return __safeDI_fillBody_908F59B88CB6973C()
+		        }
+		        func __safeDI_fillBody_908F59B88CB6973C() -> Instantiator<MainPanel>.Builder {
+		            func __safeDI_held(name: String) -> DefaultMainPanel {
+		                DefaultMainPanel(name: name)
+		            }
+		            return { forwarded in __safeDI_held(name: forwarded) }
+		        }
+		        @Sendable nonisolated func __safeDI_mainPanelSendableBuilder_Host_sendableHeld() -> SendableInstantiator<MainPanel>.Builder {
+		            return __safeDI_fillBody_FE17763FFDE47B1A()
+		        }
+		        @Sendable nonisolated func __safeDI_fillBody_FE17763FFDE47B1A() -> SendableInstantiator<MainPanel>.Builder {
+		            @Sendable nonisolated func __safeDI_sendableHeld(name: String) -> DefaultMainPanel {
+		                DefaultMainPanel(name: name)
+		            }
+		            return { forwarded in __safeDI_sendableHeld(name: forwarded) }
+		        }
+		        func __safeDI_mainPanelBuilder_Host() -> Host.__safeDI_MainPanelCarrier<MainPanel> {
+		            .init(held: { __safeDI_mainPanelBuilder_Host_held() })
+		        }
+		        @Sendable nonisolated func __safeDI_mainPanelSendableBuilder_Host() -> Host.__safeDI_MainPanelSendableCarrier<MainPanel> {
+		            .init(sendableHeld: { __safeDI_mainPanelSendableBuilder_Host_sendableHeld() })
+		        }
 		        func __safeDI_host() -> Host {
 		            _ = Host.__safeDI_Host_8A0068669CCAF7BD.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_mainPanelBuilder_Host_held() -> Instantiator<MainPanel>.Builder {
-		                func __safeDI_held(name: String) -> DefaultMainPanel {
-		                    DefaultMainPanel(name: name)
-		                }
-		                return { forwarded in __safeDI_held(name: forwarded) }
-		            }
-		            @Sendable nonisolated func __safeDI_mainPanelSendableBuilder_Host_sendableHeld() -> SendableInstantiator<MainPanel>.Builder {
-		                @Sendable nonisolated func __safeDI_sendableHeld(name: String) -> DefaultMainPanel {
-		                    DefaultMainPanel(name: name)
-		                }
-		                return { forwarded in __safeDI_sendableHeld(name: forwarded) }
-		            }
-		            func __safeDI_mainPanelBuilder_Host() -> Host.__safeDI_MainPanelCarrier<MainPanel> {
-		                .init(held: { __safeDI_mainPanelBuilder_Host_held() })
-		            }
-		            @Sendable nonisolated func __safeDI_mainPanelSendableBuilder_Host() -> Host.__safeDI_MainPanelSendableCarrier<MainPanel> {
-		                .init(sendableHeld: { __safeDI_mainPanelSendableBuilder_Host_sendableHeld() })
-		            }
 		            return Host(__safeDI_mainPanelBuilder: __safeDI_mainPanelBuilder_Host(), __safeDI_mainPanelSendableBuilder: __safeDI_mainPanelSendableBuilder_Host())
 		        }
 		        let host: Host = __safeDI_host()
@@ -3331,20 +3435,23 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_panelBuilder_Host_Owner_Scope_held(analytics: Analytics) -> Instantiator<Panel>.Builder {
+		            return __safeDI_fillBody_628717A157D1CC3F(analytics: analytics)
+		        }
+		        func __safeDI_fillBody_628717A157D1CC3F(analytics: Analytics) -> Instantiator<Panel>.Builder {
+		            func __safeDI_held(name: String) -> DefaultPanel {
+		                DefaultPanel(name: name, analytics: analytics)
+		            }
+		            return { forwarded in __safeDI_held(name: forwarded) }
+		        }
+		        func __safeDI_panelBuilder_Host() -> Host.__safeDI_PanelCarrier<Panel> {
+		            .init(owner: { values_analytics in __safeDI_panelBuilder_Host_Owner_Scope(analytics: values_analytics) })
+		        }
+		        func __safeDI_panelBuilder_Host_Owner_Scope(analytics: Analytics) -> Host.__safeDI_PanelCarrier_Owner<Panel> {
+		            .init(held: { __safeDI_panelBuilder_Host_Owner_Scope_held(analytics: analytics) })
+		        }
 		        func __safeDI_host() -> Host {
 		            _ = Host.__safeDI_Host_3FD0696F93E2AF30.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_panelBuilder_Host_Owner_Scope_held(analytics: Analytics) -> Instantiator<Panel>.Builder {
-		                func __safeDI_held(name: String) -> DefaultPanel {
-		                    DefaultPanel(name: name, analytics: analytics)
-		                }
-		                return { forwarded in __safeDI_held(name: forwarded) }
-		            }
-		            func __safeDI_panelBuilder_Host() -> Host.__safeDI_PanelCarrier<Panel> {
-		                .init(owner: { values_analytics in __safeDI_panelBuilder_Host_Owner_Scope(analytics: values_analytics) })
-		            }
-		            func __safeDI_panelBuilder_Host_Owner_Scope(analytics: Analytics) -> Host.__safeDI_PanelCarrier_Owner<Panel> {
-		                .init(held: { __safeDI_panelBuilder_Host_Owner_Scope_held(analytics: analytics) })
-		            }
 		            return Host(__safeDI_panelBuilder: __safeDI_panelBuilder_Host())
 		        }
 		        let host: Host = __safeDI_host()
@@ -3419,17 +3526,20 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_tokenGadget_GadgetBuilder_Host_erased() -> ErasedInstantiator<Token, any Gadget>.Builder {
+		            return __safeDI_fillBody_E8B252AB1D6F5FF4()
+		        }
+		        func __safeDI_fillBody_E8B252AB1D6F5FF4() -> ErasedInstantiator<Token, any Gadget>.Builder {
+		            func __safeDI_erased(token: Token) -> TokenGadget {
+		                TokenGadget(token: token)
+		            }
+		            return { forwarded in __safeDI_erased(token: forwarded) }
+		        }
+		        func __safeDI_tokenGadget_GadgetBuilder_Host() -> Host.__safeDI_TokenGadget_GadgetCarrier<any Gadget> {
+		            .init(erased: { __safeDI_tokenGadget_GadgetBuilder_Host_erased() })
+		        }
 		        func __safeDI_host() -> Host {
 		            _ = Host.__safeDI_Host_19C2FF16BD4AB24A.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_tokenGadget_GadgetBuilder_Host_erased() -> ErasedInstantiator<Token, any Gadget>.Builder {
-		                func __safeDI_erased(token: Token) -> TokenGadget {
-		                    TokenGadget(token: token)
-		                }
-		                return { forwarded in __safeDI_erased(token: forwarded) }
-		            }
-		            func __safeDI_tokenGadget_GadgetBuilder_Host() -> Host.__safeDI_TokenGadget_GadgetCarrier<any Gadget> {
-		                .init(erased: { __safeDI_tokenGadget_GadgetBuilder_Host_erased() })
-		            }
 		            return Host(__safeDI_tokenGadget_GadgetBuilder: __safeDI_tokenGadget_GadgetBuilder_Host())
 		        }
 		        let host: Host = __safeDI_host()

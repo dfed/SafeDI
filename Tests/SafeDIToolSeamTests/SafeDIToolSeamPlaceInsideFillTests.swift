@@ -187,6 +187,47 @@ struct SafeDIToolSeamPlaceInsideFillTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func placesQuery_followsEachFillOnAPlacesRoutesIntoTheCaseItFills_whenOneFillTypeFillsPlacesOfTwoOfInnersCases() async throws {
+		// `Outer` fills `Inner`'s `service` at `Inner`'s root and in its `Screen` with `DefaultService`, whose `gadget` only
+		// `App` can build: `Outer`'s place `gadget` is one case reached through two fills, each of a place of another case of
+		// `Inner`'s graph. Only the `Screen` case's route declares `id`, so a fill `App` generates for `gadget` reads it there
+		// and from `Outer`'s own scope on the other route, which the called cases' answers say.
+		let (stream, continuation) = AsyncStream.makeStream(of: SeamSignature.Places.Observation.self)
+		_ = try await SeamPlaceLevels.$observer.withValue({ placeLevels in
+			if let observation = placeLevels.placesObservation, observation.seamType.asSource == "Outer" {
+				continuation.yield(observation)
+			}
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modules(
+					feature: Self.inner(screen: ["@Forwarded public let id: Int"]),
+					middle: [
+						Self.fulfillingType(named: "DefaultService", fulfilling: "Service", declarations: ["@Instantiated public let gadget: any Gadget"]),
+						seamFixtureType(named: "Outer", isSeam: true, declarations: ["@Instantiated public let inner: Inner"]),
+					],
+					app: Self.appFillingGadget,
+				),
+				integration: .moduleInfo,
+				compileVerification: .skipped,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		continuation.finish()
+		var observations = [SeamSignature.Places.Observation]()
+		for await observation in stream {
+			observations.append(observation)
+		}
+		let observation = try #require(observations.first)
+		#expect(observation.places.cases.count == 1)
+		let query = SeamSignature.Places.Query(of: observation.places, calledPlaces: observation.calledPlaces(of:))
+		let filledCases = query.filledCases(onRoutesTo: 0)
+		#expect(filledCases.map { observation.places.levels[$0.fillLevel].key.filledCase?.seamType.asSource } == ["Inner", "Inner"])
+		#expect(Set(filledCases.map(\.filledCase.caseIndex)).count == 2)
+		#expect(Set(filledCases.map { $0.filledCase.query.answers(ofLabel: "id", at: $0.filledCase.caseIndex) == [.callersOwn] }) == [true, false])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_spellsEveryBuilderAndStructOverTheMostExplicitSpelling_whenPlacesInsideFillSpellTheirTypeWithAndWithoutAny() async throws {
 		// `DefaultService` holds six places of `Gadget`: the last it declares spells `any Gadget`, the others `Gadget`. Every
 		// builder, struct and level function is over `any Gadget`, the most explicit spelling, whatever the places are named:
@@ -1008,9 +1049,6 @@ struct SafeDIToolSeamPlaceInsideFillTests: ~Copyable {
 
 			extension Root {
 			    public init() {
-			        func __safeDI_gadgetBuilder_Outer() -> Outer.SafeDIScope_Gadget.__safeDI_Builder<any Gadget> {
-			            .init(inner_serviceBuilder: { _ in __safeDI_gadgetBuilder_Outer_Inner(session: session) })
-			        }
 			        func __safeDI_gadgetBuilder_Outer_DefaultService_Scope(session: Session) -> Outer.SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget> {
 			            .init(gadget: { _ in
 			                let gadget: any Gadget = LiveGadget(session: session)
@@ -1026,6 +1064,9 @@ struct SafeDIToolSeamPlaceInsideFillTests: ~Copyable {
 			        let session = Session()
 			        func __safeDI_outer() -> Outer {
 			            _ = Outer.__safeDI_Outer_E3A1642416DBF4A5.self // If this line does not compile, compile the code SafeDI generates for module Middle into Middle: under Bazel, add Middle’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            func __safeDI_gadgetBuilder_Outer() -> Outer.SafeDIScope_Gadget.__safeDI_Builder<any Gadget> {
+			                .init(inner_serviceBuilder: { _ in __safeDI_gadgetBuilder_Outer_Inner(session: session) })
+			            }
 			            return Outer(__safeDI_gadgetBuilder: __safeDI_gadgetBuilder_Outer())
 			        }
 			        let outer: Outer = __safeDI_outer()
@@ -1830,9 +1871,6 @@ struct SafeDIToolSeamPlaceInsideFillTests: ~Copyable {
 
 			extension Root {
 			    public init() {
-			        func __safeDI_gadgetBuilder_Outer() -> Outer.SafeDIScope_Gadget.__safeDI_Builder<any Gadget> {
-			            .init(inner_serviceBuilder: { _ in __safeDI_gadgetBuilder_Outer_Inner(session: session) })
-			        }
 			        func __safeDI_gadgetBuilder_Outer_DefaultService_Scope(session: Session) -> Outer.SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget> {
 			            .init(gadget: { _ in
 			                let gadget: any Gadget = LiveGadget(session: session)
@@ -1851,6 +1889,9 @@ struct SafeDIToolSeamPlaceInsideFillTests: ~Copyable {
 			        let session = Session()
 			        func __safeDI_outer() -> Outer {
 			            _ = Outer.__safeDI_Outer_DE81A6D88D2CA239.self // If this line does not compile, compile the code SafeDI generates for module Middle into Middle: under Bazel, add Middle’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            func __safeDI_gadgetBuilder_Outer() -> Outer.SafeDIScope_Gadget.__safeDI_Builder<any Gadget> {
+			                .init(inner_serviceBuilder: { _ in __safeDI_gadgetBuilder_Outer_Inner(session: session) })
+			            }
 			            return Outer(__safeDI_gadgetBuilder: __safeDI_gadgetBuilder_Outer())
 			        }
 			        let outer: Outer = __safeDI_outer()

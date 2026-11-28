@@ -457,23 +457,26 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_liveApi_ApiBuilder_Home_Leaf_Scope_apiBuilder() -> ErasedInstantiator<Built, any Api>.Builder {
+		            return __safeDI_fillBody_AE6C668D9EABCAE6()
+		        }
+		        func __safeDI_fillBody_AE6C668D9EABCAE6() -> ErasedInstantiator<Built, any Api>.Builder {
+		            func __safeDI_apiBuilder(built: Built) -> LiveApi {
+		                LiveApi(built: built)
+		            }
+		            return { forwarded in __safeDI_apiBuilder(built: forwarded) }
+		        }
+		        func __safeDI_liveApi_ApiBuilder_Home() -> Home.__safeDI_LiveApi_ApiCarrier<any Api> {
+		            .init(detailBuilder: __safeDI_liveApi_ApiBuilder_Home_Detail_Scope())
+		        }
+		        func __safeDI_liveApi_ApiBuilder_Home_Detail_Scope() -> Home.__safeDI_LiveApi_ApiCarrier_Detail<any Api> {
+		            .init(leafBuilder: __safeDI_liveApi_ApiBuilder_Home_Leaf_Scope())
+		        }
+		        func __safeDI_liveApi_ApiBuilder_Home_Leaf_Scope() -> Home.__safeDI_LiveApi_ApiCarrier_Leaf<any Api> {
+		            .init(apiBuilder: { __safeDI_liveApi_ApiBuilder_Home_Leaf_Scope_apiBuilder() })
+		        }
 		        func __safeDI_home() -> Home {
 		            _ = Home.__safeDI_Home_9134C880C0249592.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_liveApi_ApiBuilder_Home_Leaf_Scope_apiBuilder() -> ErasedInstantiator<Built, any Api>.Builder {
-		                func __safeDI_apiBuilder(built: Built) -> LiveApi {
-		                    LiveApi(built: built)
-		                }
-		                return { forwarded in __safeDI_apiBuilder(built: forwarded) }
-		            }
-		            func __safeDI_liveApi_ApiBuilder_Home() -> Home.__safeDI_LiveApi_ApiCarrier<any Api> {
-		                .init(detailBuilder: __safeDI_liveApi_ApiBuilder_Home_Detail_Scope())
-		            }
-		            func __safeDI_liveApi_ApiBuilder_Home_Detail_Scope() -> Home.__safeDI_LiveApi_ApiCarrier_Detail<any Api> {
-		                .init(leafBuilder: __safeDI_liveApi_ApiBuilder_Home_Leaf_Scope())
-		            }
-		            func __safeDI_liveApi_ApiBuilder_Home_Leaf_Scope() -> Home.__safeDI_LiveApi_ApiCarrier_Leaf<any Api> {
-		                .init(apiBuilder: { __safeDI_liveApi_ApiBuilder_Home_Leaf_Scope_apiBuilder() })
-		            }
 		            return Home(__safeDI_liveApi_ApiBuilder: __safeDI_liveApi_ApiBuilder_Home())
 		        }
 		        let home: Home = __safeDI_home()
@@ -563,23 +566,26 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_liveApi_ApiBuilder_Home_Leaf_Scope_apiBuilder() -> ErasedInstantiator<(built: Built, id: Int), any Api>.Builder {
+		            return __safeDI_fillBody_6BB989D8FE1BA293()
+		        }
+		        func __safeDI_fillBody_6BB989D8FE1BA293() -> ErasedInstantiator<(built: Built, id: Int), any Api>.Builder {
+		            func __safeDI_apiBuilder(built: Built, id: Int) -> LiveApi {
+		                LiveApi(built: built, id: id)
+		            }
+		            return { forwarded in __safeDI_apiBuilder(built: forwarded.built, id: forwarded.id) }
+		        }
+		        func __safeDI_liveApi_ApiBuilder_Home() -> Home.__safeDI_LiveApi_ApiCarrier<any Api> {
+		            .init(detailBuilder: __safeDI_liveApi_ApiBuilder_Home_Detail_Scope())
+		        }
+		        func __safeDI_liveApi_ApiBuilder_Home_Detail_Scope() -> Home.__safeDI_LiveApi_ApiCarrier_Detail<any Api> {
+		            .init(leafBuilder: __safeDI_liveApi_ApiBuilder_Home_Leaf_Scope())
+		        }
+		        func __safeDI_liveApi_ApiBuilder_Home_Leaf_Scope() -> Home.__safeDI_LiveApi_ApiCarrier_Leaf<any Api> {
+		            .init(apiBuilder: { __safeDI_liveApi_ApiBuilder_Home_Leaf_Scope_apiBuilder() })
+		        }
 		        func __safeDI_home() -> Home {
 		            _ = Home.__safeDI_Home_98BA726F198227ED.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_liveApi_ApiBuilder_Home_Leaf_Scope_apiBuilder() -> ErasedInstantiator<(built: Built, id: Int), any Api>.Builder {
-		                func __safeDI_apiBuilder(built: Built, id: Int) -> LiveApi {
-		                    LiveApi(built: built, id: id)
-		                }
-		                return { forwarded in __safeDI_apiBuilder(built: forwarded.built, id: forwarded.id) }
-		            }
-		            func __safeDI_liveApi_ApiBuilder_Home() -> Home.__safeDI_LiveApi_ApiCarrier<any Api> {
-		                .init(detailBuilder: __safeDI_liveApi_ApiBuilder_Home_Detail_Scope())
-		            }
-		            func __safeDI_liveApi_ApiBuilder_Home_Detail_Scope() -> Home.__safeDI_LiveApi_ApiCarrier_Detail<any Api> {
-		                .init(leafBuilder: __safeDI_liveApi_ApiBuilder_Home_Leaf_Scope())
-		            }
-		            func __safeDI_liveApi_ApiBuilder_Home_Leaf_Scope() -> Home.__safeDI_LiveApi_ApiCarrier_Leaf<any Api> {
-		                .init(apiBuilder: { __safeDI_liveApi_ApiBuilder_Home_Leaf_Scope_apiBuilder() })
-		            }
 		            return Home(__safeDI_liveApi_ApiBuilder: __safeDI_liveApi_ApiBuilder_Home())
 		        }
 		        let home: Home = __safeDI_home()

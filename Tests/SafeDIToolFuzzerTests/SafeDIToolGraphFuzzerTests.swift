@@ -1337,6 +1337,46 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
+	func acceptedDrawFeatureCounts_holdAtLeastTenGraphs_forSeamCallReachedOnTwoPaths() {
+		// A type of the roots' module that calls the seam on two paths of a root, which the type key lays out in one function
+		// both paths call, stands in for unit tests of that layout's values only while it lands in at least ten graphs the
+		// tool accepts, which the value comparator judges against the inline and visible builds.
+		for feature in GraphFuzzerSeamDrawFeature.allCases where feature.isSeamCallReachedOnTwoPathsShape {
+			#expect(Self.seamCorpusAcceptedDrawFeatureCounts[feature, default: 0] >= Self.gatingDrawJudgedGraphFloor, "\(feature.rawValue) is pinned in fewer than ten accepted graphs")
+		}
+	}
+
+	@Test
+	func acceptedDrawFeatureCounts_holdAtLeastTenGraphs_forSendableFillKeptInItsCall() {
+		// A `@Sendable` fill that stays in its call and calls a seam it fills itself, whose dispatcher the root declares at its
+		// top, stands in for unit tests of that dispatcher's `@Sendable` marking only while it lands in at least ten graphs the
+		// tool accepts, whose generated code the compile judges.
+		for feature in GraphFuzzerSeamDrawFeature.allCases where feature.isSendableFillKeptInItsCallShape {
+			#expect(Self.seamCorpusAcceptedDrawFeatureCounts[feature, default: 0] >= Self.gatingDrawJudgedGraphFloor, "\(feature.rawValue) is pinned in fewer than ten accepted graphs")
+		}
+	}
+
+	@Test
+	func acceptedDrawFeatureCounts_holdAtLeastTenGraphs_forRootDispatcherHandingCallersValue() {
+		// Two calls of a seam, each beneath a type that declares the value the call's root dispatcher hands a fill, stand in for
+		// unit tests of keeping that dispatcher in its call only while they land in at least ten graphs the tool accepts, whose
+		// values the value comparator judges against the inline build.
+		for feature in GraphFuzzerSeamDrawFeature.allCases where feature.isRootDispatcherHandingCallersValueShape {
+			#expect(Self.seamCorpusAcceptedDrawFeatureCounts[feature, default: 0] >= Self.gatingDrawJudgedGraphFloor, "\(feature.rawValue) is pinned in fewer than ten accepted graphs")
+		}
+	}
+
+	@Test
+	func acceptedDrawFeatureCounts_holdAtLeastTenGraphs_forEachSharedFillBodyShape() {
+		// Calls of a seam at two depths, and places at two levels of it, whose fills share one body that each adapter calls
+		// with its own level's values, stand in for unit tests of those adapters only while each lands in at least ten graphs
+		// the tool accepts, whose values the value comparator judges against the inline and visible builds.
+		for feature in GraphFuzzerSeamDrawFeature.allCases where feature.isSharedFillBodyShape {
+			#expect(Self.seamCorpusAcceptedDrawFeatureCounts[feature, default: 0] >= Self.gatingDrawJudgedGraphFloor, "\(feature.rawValue) is pinned in fewer than ten accepted graphs")
+		}
+	}
+
+	@Test
 	func acceptedDrawFeatureCounts_holdAtLeastTenGraphs_forEachLazyRouteShape() {
 		// Two routes to one case whose fill reads a value one route binds lazily and the caller holds by value – with a
 		// `SendableLazilyInstantiated`, read only if available, and beneath an instantiator – stand in for unit tests of the
@@ -7461,7 +7501,7 @@ struct SafeDIToolGraphFuzzerTests {
 		omittedValueGraphCount: seamCorpusOmittedValueGraphCount,
 		errorMarkers: seamCorpusErrorMarkers,
 		errorGraphCounts: seamCorpusErrorGraphCounts,
-		drawFeaturesCountedWhenAccepted: Set(GraphFuzzerSeamDrawFeature.allCases.filter { $0.isAliasSpellingRollShape || $0.isCycleParameterShape || $0.isForwardedLabelAcrossSeamCallShape || $0.isRetentionShape || $0.isErasurePlaceShape || $0.isForwardingPlaceShape || $0.isPassedUpPlaceReadingPassingSeamsValueShape || $0.isFixedSeamCallDefectShape || $0.isOptionalPlaceShape || $0.isReadThroughViewShape || $0.isScreenPlaceShape || $0.isLazyRouteShape }),
+		drawFeaturesCountedWhenAccepted: Set(GraphFuzzerSeamDrawFeature.allCases.filter { $0.isAliasSpellingRollShape || $0.isCycleParameterShape || $0.isForwardedLabelAcrossSeamCallShape || $0.isRetentionShape || $0.isErasurePlaceShape || $0.isForwardingPlaceShape || $0.isPassedUpPlaceReadingPassingSeamsValueShape || $0.isFixedSeamCallDefectShape || $0.isOptionalPlaceShape || $0.isReadThroughViewShape || $0.isSeamCallReachedOnTwoPathsShape || $0.isSendableFillKeptInItsCallShape || $0.isRootDispatcherHandingCallersValueShape || $0.isSharedFillBodyShape || $0.isScreenPlaceShape || $0.isLazyRouteShape }),
 		acceptedDrawFeatureCounts: seamCorpusAcceptedDrawFeatureCounts,
 		readTwinGraphCount: seamCorpusReadTwinGraphCount,
 		retentionCounts: seamCorpusRetentionCounts,

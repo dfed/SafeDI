@@ -236,10 +236,13 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
 			        let id: Int? = safeDIOverrides.id
+			        func __safeDI_fillBody_4CB2CAA8B8FF9930(tag: Tag, id: Int?) -> any Gadget {
+			            let gadget: any Gadget = LiveGadget(tag: tag, id: id)
+			            return gadget
+			        }
 			        func __safeDI_outer() -> Outer {
 			            func __safeDI_gadgetBuilder_Outer_DefaultService_Scope_gadget(_ scope: Outer.SafeDIMockScope_Gadget.DefaultService_Scope.gadget_Values, tag: Tag, id: Int?) -> any Gadget {
-			                let gadget: any Gadget = LiveGadget(tag: tag, id: id)
-			                return gadget
+			                return __safeDI_fillBody_4CB2CAA8B8FF9930(tag: tag, id: id)
 			            }
 			            func __safeDI_gadgetBuilder_Outer(id: Int?) -> Outer.SafeDIMockScope_Gadget.__safeDI_Builder<any Gadget> {
 			                .init(inner_serviceBuilder: { values in __safeDI_gadgetBuilder_Outer_Inner(id: id, tag: values.tag) })
@@ -1255,11 +1258,13 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
 			        let id: Int? = safeDIOverrides.id
+			        func __safeDI_fillBody_C918DB9956166250(tool: Tool, tag: Tag, id: Int?) -> any Gadget {
+			            let gadget: any Gadget = LiveGadget(tag: tag, tool: tool, id: id)
+			            return gadget
+			        }
 			        func __safeDI_outer() -> Outer {
 			            func __safeDI_gadgetBuilder_Outer_Widget_Scope_gadget(_ scope: Outer.SafeDIMockScope_Gadget.Widget_Scope.gadget_Values, tag: Tag, id: Int?) -> any Gadget {
-			                let tool = scope.tool
-			                let gadget: any Gadget = LiveGadget(tag: tag, tool: tool, id: id)
-			                return gadget
+			                return __safeDI_fillBody_C918DB9956166250(tool: scope.tool, tag: tag, id: id)
 			            }
 			            func __safeDI_gadgetBuilder_Outer(id: Int?) -> Outer.SafeDIMockScope_Gadget.__safeDI_Builder<any Gadget> {
 			                .init(inner_serviceBuilder: { values in __safeDI_gadgetBuilder_Outer_Inner(id: id, tag: values.tag) })
@@ -1527,10 +1532,13 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
 			        let id: Int? = safeDIOverrides.id
+			        func __safeDI_fillBody_62F6F34C38C281D0(label: Label, id: Int?) -> any Gadget {
+			            let gadget: any Gadget = LiveGadget(label: label, id: id)
+			            return gadget
+			        }
 			        func __safeDI_outer() -> Outer {
 			            func __safeDI_gadgetBuilder_Outer_DefaultPart_Scope_gadget(_ scope: Outer.SafeDIMockScope_Gadget.DefaultPart_Scope.gadget_Values, label: Label, id: Int?) -> any Gadget {
-			                let gadget: any Gadget = LiveGadget(label: label, id: id)
-			                return gadget
+			                return __safeDI_fillBody_62F6F34C38C281D0(label: label, id: id)
 			            }
 			            func __safeDI_gadgetBuilder_Outer(id: Int?) -> Outer.SafeDIMockScope_Gadget.__safeDI_Builder<any Gadget> {
 			                .init(inner_serviceBuilder: { _ in __safeDI_gadgetBuilder_Outer_Inner(id: id) })
@@ -1777,10 +1785,13 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
 			        let id: Int? = safeDIOverrides.id
+			        @Sendable nonisolated func __safeDI_fillBody_E496E9B22040345A(id: Int?) -> any Gadget {
+			            let gadget: any Gadget = LiveGadget(id: id)
+			            return gadget
+			        }
 			        func __safeDI_outer() -> Outer {
 			            @Sendable nonisolated func __safeDI_gadgetBuilder_Outer_DefaultService_Scope_gadget(_ scope: Outer.SafeDIMockScope_Gadget.DefaultService_Scope.gadget_Values, id: Int?) -> any Gadget {
-			                let gadget: any Gadget = LiveGadget(id: id)
-			                return gadget
+			                return __safeDI_fillBody_E496E9B22040345A(id: id)
 			            }
 			            func __safeDI_gadgetBuilder_Outer(id: Int?) -> Outer.SafeDIMockScope_Gadget.__safeDI_Builder<any Gadget> {
 			                .init(inner_serviceBuilder: { _ in __safeDI_gadgetBuilder_Outer_Inner_SafeDIMockScope_Service(id: id) })
@@ -2811,9 +2822,9 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			            func __safeDI_serviceBuilder_Inner_service(_ scope: Inner.SafeDIMockScope_Service.service_Values, __safeDI_innerBuilder_serviceBuilder: SafeDIMockScope_Gadget.__safeDI_Builder<any Gadget>) -> any Service {
 			                func __safeDI_service() -> Outer {
 			                    let gadget: any Gadget = __safeDI_innerBuilder_serviceBuilder.gadget(SafeDIMockScope_Gadget.gadget_Values())
-			                    let __safeDI_gadgetBuilder_innerBuilder_serviceBuilder_ = __safeDI_innerBuilder_serviceBuilder.innerBuilder_serviceBuilder(SafeDIMockScope_Gadget.innerBuilder_serviceBuilder_Values(gadget: gadget))
+			                    let __safeDI_gadgetBuilder_innerBuilder_serviceBuilder = __safeDI_innerBuilder_serviceBuilder.innerBuilder_serviceBuilder(SafeDIMockScope_Gadget.innerBuilder_serviceBuilder_Values(gadget: gadget))
 			                    func __safeDI_innerBuilder() -> Inner {
-			                        Inner.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Inner(up: __safeDI_gadgetBuilder_innerBuilder_serviceBuilder_))
+			                        Inner.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Inner(up: __safeDI_gadgetBuilder_innerBuilder_serviceBuilder))
 			                    }
 			                    let innerBuilder = Instantiator<Inner>(__safeDI_innerBuilder)
 			                    return Outer(gadget: gadget, innerBuilder: innerBuilder)

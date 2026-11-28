@@ -1412,26 +1412,29 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			        serviceBuilder: (() -> any Service)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
+			        func __safeDI_fillBody_08A3C1CF2B26B335() -> any Service {
+			            func __safeDI_service() -> DefaultService {
+			                func __safeDI_aBuilder() -> LoopA {
+			                    let bBuilder = Instantiator<LoopB>(__safeDI_bBuilder)
+			                    let gadget: any Gadget = LiveGadget()
+			                    return LoopA(gadget: gadget, bBuilder: bBuilder)
+			                }
+			                let aBuilder = Instantiator<LoopA>(__safeDI_aBuilder)
+			                func __safeDI_bBuilder() -> LoopB {
+			                    let aBuilder = Instantiator<LoopA>(__safeDI_aBuilder)
+			                    let gadget: any Gadget = LiveGadget()
+			                    return LoopB(gadget: gadget, aBuilder: aBuilder)
+			                }
+			                let bBuilder = Instantiator<LoopB>(__safeDI_bBuilder)
+			                return DefaultService(aBuilder: aBuilder, bBuilder: bBuilder)
+			            }
+			            let service: any Service = __safeDI_service()
+			            return service
+			        }
 			        func __safeDI_outer() -> Outer {
 			            func __safeDI_inner() -> Inner {
 			                func __safeDI_serviceBuilder_Inner_service() -> any Service {
-			                    func __safeDI_service() -> DefaultService {
-			                        func __safeDI_aBuilder() -> LoopA {
-			                            let bBuilder = Instantiator<LoopB>(__safeDI_bBuilder)
-			                            let gadget: any Gadget = LiveGadget()
-			                            return LoopA(gadget: gadget, bBuilder: bBuilder)
-			                        }
-			                        let aBuilder = Instantiator<LoopA>(__safeDI_aBuilder)
-			                        func __safeDI_bBuilder() -> LoopB {
-			                            let aBuilder = Instantiator<LoopA>(__safeDI_aBuilder)
-			                            let gadget: any Gadget = LiveGadget()
-			                            return LoopB(gadget: gadget, aBuilder: aBuilder)
-			                        }
-			                        let bBuilder = Instantiator<LoopB>(__safeDI_bBuilder)
-			                        return DefaultService(aBuilder: aBuilder, bBuilder: bBuilder)
-			                    }
-			                    let service: any Service = __safeDI_service()
-			                    return service
+			                    return __safeDI_fillBody_08A3C1CF2B26B335()
 			                }
 			                func __safeDI_serviceBuilder_Inner() -> Inner.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 			                    .init(service: { _ in __safeDI_serviceBuilder_Inner_service() })

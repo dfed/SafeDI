@@ -389,10 +389,13 @@ struct SafeDIToolPublicMockInnerRouteReadTests: ~Copyable {
 		        thingBuilder: (() -> any Thing)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
+		        func __safeDI_fillBody_C1AA9D91E87720F2(token: Token?) -> any Thing {
+		            let thing: any Thing = LiveThing(token: token)
+		            return thing
+		        }
 		        func __safeDI_outer() -> Outer {
 		            func __safeDI_thingBuilder_Outer_DefaultGadget_Scope_thing(_ scope: Outer.SafeDIMockScope_Thing.DefaultGadget_Scope.thing_Values, token: Token?) -> any Thing {
-		                let thing: any Thing = LiveThing(token: token)
-		                return thing
+		                return __safeDI_fillBody_C1AA9D91E87720F2(token: token)
 		            }
 		            func __safeDI_thingBuilder_Outer() -> Outer.SafeDIMockScope_Thing.__safeDI_Builder<any Thing> {
 		                .init(inner_gadgetBuilder: { _ in __safeDI_thingBuilder_Outer_Inner() })
