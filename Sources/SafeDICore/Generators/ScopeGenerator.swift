@@ -7625,10 +7625,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let (text, rootFunctionNames) = code.spelledWithoutRootFunctions()
 		let keptFunctionNames = seamCallBody.keptFunctionNames + builderCallArguments.flatMap(\.levelFunctionNames)
 		// A member of a loop of builders makes its rebindings again in the call's body, which the loop stage records. A call
-		// that fills a place is observed apart (`observeFilledCall`).
-		if let observer = SeamCallRecordObservation.observer, !fillsAPlace, reboundProperties.isEmpty, forwardedProperties.isEmpty {
-			// Every builder argument passes a struct up (the guard above and `fillsAPlace`), in the order the seam's builders
-			// are taken.
+		// that fills a place has its names checked here, and its guard line and builder arguments apart (`observeFilledCall`).
+		if let observer = SeamCallRecordObservation.observer, reboundProperties.isEmpty, forwardedProperties.isEmpty {
+			// Every builder argument of a call that fills no place passes a struct up (the guard above), in the order the seam's
+			// builders are taken.
 			let passedOn = zip(seamCall.calledBuilders.builders, builderCallArguments).compactMap { builder, builderCallArgument in
 				builderCallArgument.passedUpStruct.map { passedUpStruct in
 					(
@@ -7664,11 +7664,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			)
 			observer(SeamCallRecordObservation(
 				text: text,
-				readNames: record.arguments.filter { $0.source != .nil }.map(\.label) + passedOn.map(\.structName),
+				readNames: (record.arguments + fillReads).filter { $0.source != .nil }.map(\.label) + passedOn.map(\.structName),
 				boundNames: [property.label] + (declaredFunctionName.map { [$0] } ?? []) + keptFunctionNames,
 				keptFunctionNames: keptFunctionNames,
-				spelledFromRecord: (record.leadingStatement.map { [$0.spelled] } ?? []) + passedOn.map { "\($0.label): \($0.read.member.spelled(on: $0.structName, caseName: $0.read.caseName))" },
-				written: [seamCall.guardLine(for: instantiable.concreteInstantiable)] + passedOn.map(\.written),
+				spelledFromRecord: fillsAPlace ? [] : (record.leadingStatement.map { [$0.spelled] } ?? []) + passedOn.map { "\($0.label): \($0.read.member.spelled(on: $0.structName, caseName: $0.read.caseName))" },
+				written: fillsAPlace ? [] : [seamCall.guardLine(for: instantiable.concreteInstantiable)] + passedOn.map(\.written),
 			))
 		}
 		var record = AliasPlaceRecord(property: property, fulfillingProperty: nil, text: text, reads: reads)
