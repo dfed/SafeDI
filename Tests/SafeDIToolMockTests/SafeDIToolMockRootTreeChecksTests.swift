@@ -53,7 +53,7 @@ struct SafeDIToolMockRootTreeChecksTests: ~Copyable {
 	}
 
 	@Test
-	mutating func mock_needsTreeForSendableCapturesAlone_whenTreeBuildsSendableInstantiator() async throws {
+	mutating func mock_needsNoTreeForAnyCheck_whenWorldFindsNoCaptureInTreeBuildingSendableInstantiator() async throws {
 		let needingTreeByRoot = try await needingTreeByRoot(of: [
 			"""
 			@Instantiable(generateMock: true)
@@ -72,6 +72,44 @@ struct SafeDIToolMockRootTreeChecksTests: ~Copyable {
 			}
 			""",
 		])
+		#expect(needingTreeByRoot == ["Screen": []])
+	}
+
+	@Test
+	mutating func mock_needsTreeForSendableCapturesAlone_whenWorldFindsSendableBuilderCapturingInstantiator() async throws {
+		let needingTreeByRoot = try await needingTreeByRoot(
+			of: [
+				"""
+				@Instantiable(generateMock: true)
+				public final class Screen: Instantiable {
+				    public init(gizmoBuilder: Instantiator<Gizmo>, detailBuilder: SendableInstantiator<Detail>) {
+				        self.gizmoBuilder = gizmoBuilder
+				        self.detailBuilder = detailBuilder
+				    }
+
+				    @Instantiated let gizmoBuilder: Instantiator<Gizmo>
+				    @Instantiated let detailBuilder: SendableInstantiator<Detail>
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Detail: Instantiable {
+				    public init(gizmoBuilder: Instantiator<Gizmo>) {
+				        self.gizmoBuilder = gizmoBuilder
+				    }
+
+				    @Received let gizmoBuilder: Instantiator<Gizmo>
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Gizmo: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			throwsError: true,
+		)
 		#expect(needingTreeByRoot == ["Screen": [.sendableCaptures]])
 	}
 
@@ -127,16 +165,23 @@ struct SafeDIToolMockRootTreeChecksTests: ~Copyable {
 	private var filesToDelete: [URL]
 
 	/// The checks each mock root's scopes say need its tree, by mocked type, of a run over `swiftFileContent`.
-	private mutating func needingTreeByRoot(of swiftFileContent: [String]) async throws -> [String: Set<MockRootTreeCheck>] {
+	/// Where `throwsError`, the run must throw, as a capture's error does: its roots are compared before any tree is checked.
+	private mutating func needingTreeByRoot(of swiftFileContent: [String], throwsError: Bool = false) async throws -> [String: Set<MockRootTreeCheck>] {
 		let (comparisons, continuation) = AsyncStream.makeStream(of: MockRootTreeChecksComparison.self)
-		_ = try await MockRootTreeChecksObservation.$comparesTree.withValue({ continuation.yield($0) }) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: swiftFileContent,
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
+		var didThrow = false
+		do {
+			_ = try await MockRootTreeChecksObservation.$comparesTree.withValue({ continuation.yield($0) }) {
+				try await executeSafeDIToolTest(
+					swiftFileContent: swiftFileContent,
+					buildSwiftOutputDirectory: true,
+					filesToDelete: &filesToDelete,
+				)
+			}
+		} catch {
+			didThrow = true
 		}
 		continuation.finish()
+		#expect(didThrow == throwsError)
 		var needingTreeByRoot = [String: Set<MockRootTreeCheck>]()
 		for await comparison in comparisons {
 			needingTreeByRoot[comparison.root] = comparison.needingTree
