@@ -553,9 +553,10 @@ extension DependencyTreeGenerator {
 			return (body, VariantAnswers.arguments(arguments, of: labels, makingAgain: labelsMadeAgainAtCall))
 		}
 
-		/// Whether the per-type facts' variants key the bodies of `root`'s plan: where every scope of its tree reads only
-		/// required values, by value or through an instantiator. A value read only if available, an optional one, and a
-		/// lazily instantiated one keep the plan's own key until the facts' keys of those reads are wired too.
+		/// Whether the per-type facts' variants key the bodies of `root`'s plan: where no scope of its tree reads a value
+		/// only if available. Such a read keeps the plan's own key: the facts key a read some calls answer and others
+		/// leave `nil` as one optional parameter, and answer a sibling built after the call, where the plan keeps a body
+		/// for each, as today's tree writes them.
 		static func keysBodiesByFacts(inTreeOf root: Scope) -> Bool {
 			var visitedScopes: Set = [ObjectIdentifier(root)]
 			var scopesToVisit = [root]
@@ -567,13 +568,7 @@ extension DependencyTreeGenerator {
 					case .forwarded, .instantiated:
 						false
 					}
-					let isLazilyInstantiated = switch dependency.property.propertyType {
-					case .lazilyInstantiated, .sendableLazilyInstantiated:
-						true
-					case .constant, .erasedInstantiator, .instantiator, .sendableErasedInstantiator, .sendableInstantiator:
-						false
-					}
-					guard !isReadOnlyIfAvailable, !isLazilyInstantiated, !dependency.property.typeDescription.isOptional else { return false }
+					guard !isReadOnlyIfAvailable else { return false }
 				}
 				for case let .instantiated(_, childScope, _) in scope.propertiesToGenerate where visitedScopes.insert(ObjectIdentifier(childScope)).inserted {
 					scopesToVisit.append(childScope)
