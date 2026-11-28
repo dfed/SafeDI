@@ -72,18 +72,33 @@ extension NodeRecords {
 		// A member another level builds too has one function, whose level's argument is typed as the loop's home level's
 		// (`MockLoopLevels.homeLevelByMember`), so every level that builds a member hands it the members' fields of its own
 		// overrides, and must build each member and read those overrides alike at each. A member that makes only itself
-		// again takes no level (`mockLoopLevels(in:)`), so any level builds it.
-		guard members.allSatisfy({ member in
-			guard world.madeAgain(from: member) != [member] else { return true }
-			let component = mockLoopComponent(of: member, in: world)
-			let parents = world.parents(of: member)
-			let overrides = mockOverridesOfChildren(of: level, in: world)
-			return parents.allSatisfy { parent in
-				(parent.parent == 0 || !world.isOnCycle(parent.parent))
-					&& mockOverridesOfChildren(of: parent.parent, in: world) == overrides
-					&& component.allSatisfy(world.edges(from: parent.parent).contains)
+		// again takes no level (`mockLoopLevels(in:)`), so any level builds it. Each loop's members are found once, and
+		// each level's edges are one set, both dying with this check, so a level costs its members times their parents.
+		// The overrides are compared as the paths each level reads them by, which agree only because every level's
+		// function takes its overrides under one name (`ReservedName.mockOverridesParameterName`): a level whose
+		// configuration were named apart would be refused here.
+		let overrides = mockOverridesOfChildren(of: level, in: world)
+		var componentByMember = [DeclarationID: Set<DeclarationID>]()
+		var edgesByLevel = [DeclarationID: Set<DeclarationID>]()
+		for member in members where world.madeAgain(from: member) != [member] {
+			let component: Set<DeclarationID>
+			if let found = componentByMember[member] {
+				component = found
+			} else {
+				component = Set(mockLoopComponent(of: member, in: world))
+				for componentMember in component {
+					componentByMember[componentMember] = component
+				}
 			}
-		}) else { return false }
+			for parent in world.parents(of: member) {
+				guard parent.parent == 0 || !world.isOnCycle(parent.parent),
+				      mockOverridesOfChildren(of: parent.parent, in: world) == overrides
+				else { return false }
+				let edges = edgesByLevel[parent.parent] ?? Set(world.edges(from: parent.parent))
+				edgesByLevel[parent.parent] = edges
+				guard component.isSubset(of: edges) else { return false }
+			}
+		}
 		return members.allSatisfy { member in
 			world.property(of: member)?.propertyType.isSendable == false
 				&& world.scope(of: member).publicMockCall == nil
@@ -199,6 +214,8 @@ extension NodeRecords {
 		let parents = world.parents(of: member)
 		// Every level that builds the member reads these overrides alike (`mockLoopRefusesNothing(ofMember:in:)`).
 		let overrides = mockOverridesOfChildren(of: parents.first?.parent ?? 0, in: world)
+		// One value serves every call of the member's function, and every level builds every member of the loop, so where
+		// any level is of another type, the home level too hands the value made of its fields rather than its overrides.
 		let value: ValuePath
 		if parents.allSatisfy({ mockLoopLevelType(of: $0.parent, in: world) == type }) {
 			value = overrides
