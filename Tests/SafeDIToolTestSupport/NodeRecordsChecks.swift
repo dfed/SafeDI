@@ -26,10 +26,17 @@ import Testing
 /// names a file, each root's outcome is appended to it as a line: the test, the root, `laid out`, `accepted`, or the
 /// refusal's kind, the count of differences, every refusal the world holds, and `mock` for a mock's root. Where `SAFEDI_NODE_RECORDS_LAY_OUT` is `1`, every root node records accept is laid out from them.
 enum NodeRecordsChecks {
+	/// Whether a run started here lays its roots out from node records: where a test set it around the run, or
+	/// `SAFEDI_NODE_RECORDS_LAY_OUT` is `1`. A mode a run generates in, which `ToolComparisonChecks` keeps where it
+	/// leaves the comparisons out.
+	static var laysOutRootsHere: Bool {
+		NodeRecordsObservation.laysOutRoots || ProcessInfo.processInfo.environment["SAFEDI_NODE_RECORDS_LAY_OUT"] == "1"
+	}
+
 	static func checking<Result>(_ body: () async throws -> Result) async rethrows -> Result {
 		let reportPath = ProcessInfo.processInfo.environment["SAFEDI_NODE_RECORDS_REPORT"]
 		let testName = Test.current?.name ?? "unknown test"
-		let laysOutRoots = NodeRecordsObservation.laysOutRoots || ProcessInfo.processInfo.environment["SAFEDI_NODE_RECORDS_LAY_OUT"] == "1"
+		let laysOutRoots = laysOutRootsHere
 		let enclosingObserver = NodeRecordsObservation.observer
 		let enclosingSeamCallObserver = SeamCallRecordObservation.observer
 		// A seam call's record, as the engine is to spell it, must list what its text reads, binds and declares, and spell

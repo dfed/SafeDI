@@ -2204,6 +2204,41 @@ jobs:
       - name: Prepare Coverage Reports
         run: |
           llvm-cov export -format="lcov" .build/x86_64-unknown-linux-gnu/release/SafeDIPackageTests.xctest -instr-profile .build/x86_64-unknown-linux-gnu/release/codecov/default.profdata > coverage.lcov
+      # A first reading of "Check Line Coverage on Linux", as soon as this job's
+      # report exists: that check needs the Xcode 26 job's report too, which
+      # arrives last, so a pull request whose new lines no test executes
+      # learned it only when the whole run ended (run 46024890534: 8 lines,
+      # in this job's report at minute 64, reported at minute 85). It lists the
+      # lines this pull request adds or changes since main's newest commit
+      # that this job's tests did not execute, as warnings and in the summary,
+      # and never fails: a line only the Xcode 26 job's tests execute is on
+      # the list too, and the check itself still decides.
+      - name: Install Python for the Provisional Coverage List
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: ./.github/actions/retry
+        with:
+          command: command -v python3 >/dev/null || { apt-get update && apt-get install -y --no-install-recommends python3; }
+      - name: List Changed Lines the Linux Tests Did Not Execute
+        if: ${{ github.event_name == 'pull_request' }}
+        continue-on-error: true
+        run: |
+          git config --global --add safe.directory "$PWD"
+          git fetch --no-tags --depth=1 origin main
+          git diff --name-only --diff-filter=ACMR FETCH_HEAD HEAD -- 'Sources/*.swift' 'Plugins/*.swift' > "$RUNNER_TEMP/changed-files.txt"
+          list="$RUNNER_TEMP/linux-unexecuted-changed-lines.txt"
+          if git diff -U0 --no-color FETCH_HEAD HEAD -- 'Sources/*.swift' 'Plugins/*.swift' \
+            | python3 -I Scripts/changed-line-coverage.py --files "$RUNNER_TEMP/changed-files.txt" coverage.lcov > "$list"; then
+            echo "Every line this pull request adds or changes since main is executed by the Linux tests."
+          else
+            cat "$list"
+            echo "::warning::The Linux tests did not execute some lines this pull request adds or changes. \"Check Line Coverage on Linux\" fails on each unless the Xcode 26 tests execute it. See this job's summary."
+            {
+              echo "### Changed lines the Linux tests did not execute (provisional)"
+              echo '```'
+              cat "$list"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
       # Staged, uploaded and removed as in the macOS job, for the same
       # reasons, before curl is installed for Codecov.
       - name: Stage Coverage Report for the Line Coverage Check

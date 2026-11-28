@@ -16517,6 +16517,10 @@ enum GraphFuzzerOracle {
 	///   which seed was running if the tool crashes the process.
 	/// - Parameter isolatedSeeds: The seeds whose value graphs are each compared on their own
 	///   (`valueComparisons(of:isolatingValueGraphsOf:)`).
+	/// - Parameter comparingToolWithItselfForOneSeedInFour: Whether the comparisons of two computations of the tool
+	///   (`ToolComparisonChecks`) are made only for the seeds that are multiples of four, as a long run asks: its
+	///   shards run every corpus graph on every pull request, and the ordinary suite makes every comparison on every
+	///   graph it runs.
 	/// - Parameter concurrentToolRuns: How many seeds' graphs the tool runs at once. The results are in the order of
 	///   `seeds` whatever it is. A long run passes 1: its batches already run side by side, and with one seed running
 	///   per batch the last seed a batch recorded is the one a crash interrupted.
@@ -16525,6 +16529,7 @@ enum GraphFuzzerOracle {
 		features: Set<GraphFuzzerGeneratorFeature> = [],
 		isolatingValueGraphsOf isolatedSeeds: Set<UInt64> = [],
 		concurrentToolRuns: Int = ProcessInfo.processInfo.activeProcessorCount,
+		comparingToolWithItselfForOneSeedInFour: Bool = false,
 		willRunSeed: @escaping @Sendable (UInt64) -> Void = { _ in },
 	) async throws -> [GraphFuzzerResult] {
 		await ProcessSlots.shared.takePlaceInLine(for: Test.current?.id)
@@ -16533,7 +16538,11 @@ enum GraphFuzzerOracle {
 		let toolRuns = try await valuesInOrder(of: seeds, concurrent: concurrentToolRuns) { seed in
 			try await GraphFuzzerPhaseAccount.measuring(.toolRuns) {
 				willRunSeed(seed)
-				return try await self.toolRuns(of: GraphFuzzerGenerator.fixture(forSeed: seed, features: features))
+				// The seeds a long run leaves the comparisons out of are chosen by seed, so a seed's run is the same every time.
+				let leavesComparisonsOut = comparingToolWithItselfForOneSeedInFour && !seed.isMultiple(of: 4)
+				return try await ToolComparisonChecks.$forced.withValue(leavesComparisonsOut ? false : ToolComparisonChecks.forced) {
+					try await self.toolRuns(of: GraphFuzzerGenerator.fixture(forSeed: seed, features: features))
+				}
 			}
 		}
 		return try await results(of: toolRuns, isolatingValueGraphsOf: isolatedSeeds)

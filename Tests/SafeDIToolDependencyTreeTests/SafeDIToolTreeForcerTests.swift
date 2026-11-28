@@ -167,7 +167,8 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 		let output = TestTemporaryDirectory.uniquePath(prefix: "TreeForcers", pathExtension: "txt")
 		filesToDelete.append(output)
 		let (stream, continuation) = AsyncStream.makeStream(of: Int.self)
-		_ = try await HeldCodeTasks.$observer.withValue({ continuation.yield($0) }) {
+		// With the comparisons made (`ToolComparisonChecks`): what forces a root's tree includes what they read.
+		_ = try await ToolComparisonChecks.$forced.withValue(true) { try await HeldCodeTasks.$observer.withValue({ continuation.yield($0) }) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: files,
 				buildSwiftOutputDirectory: true,
@@ -176,7 +177,7 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 				moduleMembershipArguments: moduleMembershipArguments,
 				treeForcersOutput: output,
 			)
-		}
+		} }
 		continuation.finish()
 		var heldTaskCounts = [Int]()
 		for await count in stream {
