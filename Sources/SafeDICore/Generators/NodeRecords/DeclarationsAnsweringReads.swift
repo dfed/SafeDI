@@ -260,7 +260,7 @@ struct DeclarationsAnsweringReads: Sendable {
 
 	/// What a variant's record assumes of the answer to one of its reads: the property the answering declaration declares
 	/// under the read's label (its form, optional or not, erased or not), whether the read is handed that declaration's
-	/// instance of a wrapper, whether the answering node itself is erased, and whether the read is made across a
+	/// instance of a wrapper, whether the node built under the label is erased, and whether the read is made across a
 	/// `@Sendable` function, which captures the answer rather than being passed it.
 	private struct AnswerForm: Equatable {
 		let declaredProperty: Property?
@@ -315,7 +315,7 @@ struct DeclarationsAnsweringReads: Sendable {
 		return AnswerForm(
 			declaredProperty: scope.sortedDeclaredPropertyForms.first(where: { $0.property.label == label })?.property,
 			readsInstance: isHandedNearestDeclaration(channel) && scope.declaredLazilyInstantiatedInstanceProperties.contains(where: { $0.label == label }),
-			isErased: world.isErased(declaration),
+			isErased: world.edges(from: declaration).contains { world.property(of: $0)?.label == label && world.isErased($0) },
 			isCaptured: isCaptured,
 		)
 	}
