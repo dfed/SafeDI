@@ -847,6 +847,11 @@ def e26(text,walk):
             lines=result;changed=True
     if changed and '\n'.join(lines)==text: return walk
     return text
+def declared_again(name):
+    """matches a line that declares a name: a let, var or for (a tuple too), a closure's parameter, or a
+    function's parameter"""
+    name=re.escape(name)
+    return re.compile(r'\b(?:let|var|for)\s+\(?(?:[\w`, ]*,\s*)?`?'+name+r'`?\b|\{ *(?:[\w`, ]*, *)?`?'+name+r'`?(?: *,[\w`, ]*)? in\b|\bfunc [^(]+\((?:.*, )?(?:\w+ )?`?'+name+r'`?: ')
 def bind_handed_parameter(lines,name,parameter,label,taken):
     """the walk's lines with one parameter of every function of one name bound in the function's body to the
     one name every call hands it, or None where the calls do not all hand one parameter of mock()"""
@@ -881,7 +886,7 @@ def bind_handed_parameter(lines,name,parameter,label,taken):
     if len(handed)!=1: return None
     value=handed.pop()
     if value not in taken or value==label: return None
-    if any(re.search(r'\b(?:let|var) `?'+re.escape(value)+r'`?\b|\{ *(?:[\w`, ]*, *)?`?'+re.escape(value)+r'`?(?: *,[\w`, ]*)? in\b',line) for line in lines): return None
+    if any(declared_again(value).search(line) for line in lines): return None
     for i in sorted(declarations,reverse=True):
         f=FUNC.match(lines[i])
         parameters=[p for p in split_top(f.group(4)) if p!=parameter]
@@ -970,6 +975,9 @@ def e19(text,walk=None):
         for label,local in locals_.items():
             if not any(line==indent+'let '+local+' = safeDIOverrides.'+label for line in lines[f+1:b]): return text
         if len(set(locals_.values()))!=len(locals_): return text
+        # a local declared a second time in the level function (a binding, a closure's or a nested function's
+        # parameter) could be another value where a member reads it after nesting: refused
+        if any(sum(1 for line in lines[f+1:fend] if declared_again(local).search(line))!=1 for local in locals_.values()): return text
         stand_in='__safeDI_entry19_'+level
         SENDABLE_LOOPS[stand_in]=locals_
         by_local={local:label for label,local in locals_.items()}
@@ -1015,7 +1023,7 @@ def compare(records_path, walk_path):
     walk = open(walk_path).read()
     try:
         text, used = rewritten(records, walk)
-    except Exception as error:  # a shape no rewrite expects fails closed
+    except (Exception, SystemExit) as error:  # a shape no rewrite expects, or one a rewrite refuses, fails closed
         return used_none, 'rewrite failed: ' + repr(error)
     if text == walk:
         return used, None
