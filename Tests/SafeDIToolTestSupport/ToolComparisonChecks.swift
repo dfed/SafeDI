@@ -74,6 +74,7 @@ enum ToolComparisonChecks {
 	/// Runs `generate` with every comparison set around it, or, where none is made, with only the modes a run generates
 	/// in (`ConstructionInternerOrder`, `NodeRecordsChecks.laysOutRootsHere`). An observer a test set around its own run stays set either way: each comparison
 	/// hands on what it observes, and where none is made nothing replaces the test’s.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	static func aroundGenerate(_ generate: () async throws -> Generate.Output) async throws -> Generate.Output {
 		guard areMade else {
 			return try await NodeRecordsObservation.$laysOutRoots.withValue(NodeRecordsChecks.laysOutRootsHere) {
