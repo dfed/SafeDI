@@ -266,6 +266,30 @@ struct SafeDIToolTypeFactsParameterTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_typesMadeAgainMateAsParameter_whenOnlyOneParentHasTheFunctionMakeTheMateAgain() async throws {
+		// Two parents build `B` as `bBuilder`. `Root`'s is a member of the loop of builders `Root` declares, and makes its
+		// mate `A` again, which `StepB` declares between `B` and the `bBuilder` that closes the cycle on it: that variant
+		// takes `aBuilder`. `Other`'s is no member of a loop, makes nothing again, and captures `Root`'s `aBuilder`. The
+		// first variant's read of `aBuilder` comes to a parameter by itself here, so this pins the two variants' parameters
+		// and not which of a variant's or a declaration's mates the function reads.
+		let report = try await rootReport(of: [
+			seamFixtureType(named: "DetailA", isFinalClass: true, declarations: ["@Received let bBuilder: Instantiator<B>"]),
+			seamFixtureType(named: "DetailB", isFinalClass: true, declarations: ["@Received let aBuilder: Instantiator<A>"]),
+			seamFixtureType(named: "A", isFinalClass: true, declarations: ["@Instantiated let detail: DetailA", "@Instantiated let stepBuilder: Instantiator<StepA>"]),
+			seamFixtureType(named: "B", isFinalClass: true, declarations: ["@Instantiated let detail: DetailB", "@Instantiated let stepBuilder: Instantiator<StepB>"]),
+			seamFixtureType(named: "StepA", isFinalClass: true, declarations: ["@Instantiated let bBuilder: Instantiator<B>", "@Instantiated let aBuilder: Instantiator<A>"]),
+			seamFixtureType(named: "StepB", isFinalClass: true, declarations: ["@Instantiated let aBuilder: Instantiator<A>", "@Instantiated let bBuilder: Instantiator<B>"]),
+			seamFixtureType(named: "Other", isFinalClass: true, declarations: ["@Instantiated let bBuilder: Instantiator<B>", "@Instantiated let a: A"]),
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let aBuilder: Instantiator<A>", "@Instantiated let bBuilder: Instantiator<B>", "@Instantiated let other: Other"]),
+		])
+
+		#expect(try parameters(ofVariantsOf: "A ", in: report) == [["bBuilder: Instantiator<B>"]])
+		#expect(try parameters(ofVariantsOf: "B ", in: report) == [["aBuilder: Instantiator<A>"], []])
+		#expect(TypeFactsChecks.findings(of: report).findingsByCheck[35, default: []].isEmpty)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_typesNoParameter_whenLoopOfOneMakesItselfAgain() async throws {
 		// `Detail`, inside `Screen`, receives `screenBuilder`, the builder of `Screen` itself, which `Step` closes the
 		// cycle with: a member's own label is rebound, never a parameter, so the tree writes `__safeDI_screenBuilder()`.

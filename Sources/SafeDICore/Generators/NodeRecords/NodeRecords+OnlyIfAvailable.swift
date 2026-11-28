@@ -245,8 +245,8 @@ struct OnlyIfAvailableAnswers: Sendable {
 	}
 
 	/// What a call sees of a label its caller's children declare as `bindings`, which are nearer than `shadowed`, what the
-	/// caller sees of the label: the children built before the call, and each `Instantiator` not built yet, which a loop
-	/// of builders may give the read (`binding(reading:in:)`). A child not built yet gives a read nothing, so it is left
+	/// caller sees of the label: the children built before the call, and each `Instantiator` not built yet, which tells two
+	/// calls apart, though it gives a read nothing (`binding(reading:in:)`). Any other child not built yet is left
 	/// out, and a call that sees only such children sees no declaration (`nil`), as a call does whose caller declares none;
 	/// where a declaration above is available, though, the children hide it, which the mark `hiddenAvailable` keeps.
 	private static func nearestBindings(_ bindings: [Binding], shadowing shadowed: [Binding]?) -> [Binding]? {

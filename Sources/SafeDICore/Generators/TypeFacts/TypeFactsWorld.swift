@@ -223,18 +223,22 @@ protocol TypeFactsWorld {
 	func firstRoute(to declaration: DeclarationID) -> [DeclarationID]
 
 	func edges(from declaration: DeclarationID) -> ArraySlice<Int32>
-	/// The members of loops of builders the declaration's body makes again at its top, in the order it rebinds them: a
-	/// column of its own beside `edges(from:)`, which the reads closure and the variants read and the build order,
-	/// `isOnCycle` and `firstRoute` do not.
+	/// The members of loops of builders the variant's body makes again at its top, in the order it rebinds them: the set
+	/// of the parent's edge that made the variant, a column of its own beside `calls(of:)`, which the reads closure and
+	/// the variants read and the build order, `isOnCycle` and `firstRoute` do not. One node two parents build can make
+	/// a set again under one and none, or another, under the other: its variants key apart, since a rebinding's answer
+	/// keys as itself.
 	///
-	/// A writer reads the member's own arguments from here too: its argument for a label of `madeAgainLabels(from:)` is
-	/// always that label's rebinding, whatever source its read's answer names. The rebinding shadows the member's own
-	/// receives of the labels it makes again, so those reads leave its row, but for one: the read of the label it is built
-	/// as, which a loop of one makes again too and still reaches above, answered as its parent's declaration being built.
+	/// The parent's edge answers every read of a rebound label from beneath the member "made again" (`isMadeAgain`), its
+	/// own label's included where it makes itself again, so a writer's argument for such a read is the rebinding.
+	func madeAgain(of variant: VariantID) -> ArraySlice<Int32>
+	/// The label the variant rebinds each member of `madeAgain(of:)` as, in that order.
+	func madeAgainLabels(of variant: VariantID) -> ArraySlice<WorldLabelID>
+	/// Until node records write per variant: `madeAgain(of:)` of every variant of the declaration, empty where they differ.
 	func madeAgain(from declaration: DeclarationID) -> ArraySlice<Int32>
 	/// The label the declaration rebinds each member of `madeAgain(from:)` as, in that order.
 	func madeAgainLabels(from declaration: DeclarationID) -> ArraySlice<WorldLabelID>
-	/// The loop members whose parents' loops make different members again, which a stage that writes from nodes refuses.
+	/// The loop members whose variants make different sets again, which a stage that writes from nodes refuses.
 	var loopMembersSharedApart: [Int32] { get }
 	func edgeFacts(from declaration: DeclarationID) -> ArraySlice<TypeFactsEdge>
 	/// Owed: the graph's bindings carry the world's IDs (`TypeFactsGraph.worldBindings(of:)`) until the snapshot looks a
@@ -279,11 +283,12 @@ protocol TypeFactsWorld {
 	func calls(of variant: VariantID) -> ArraySlice<VariantID>
 	/// Where each answer a call hands its callee comes from, in the callee's read order.
 	func sources(ofCall edgeIndex: Int, of variant: VariantID) -> ArraySlice<AnswerSource>
-	/// The variant each member the variant's declaration makes again calls, in `madeAgain(from:)`'s order: a call from the
+	/// The variant each member the variant makes again calls, in `madeAgain(of:)`'s order: a call from the
 	/// top of the declaration's body, handed its answers there.
 	func madeAgainCalls(of variant: VariantID) -> ArraySlice<VariantID>
-	/// Where each answer a made-again call hands its callee comes from, in the callee's read order: `bound` by the caller
-	/// for a label it rebinds, else passed through from the caller's own answers.
+	/// Where each answer a made-again call hands its callee comes from, in the callee's read order: `bound` by what the
+	/// loop's parent binds at its edge to the member, the member's own rebindings first, else passed through from the
+	/// caller's own answers.
 	func sources(ofMadeAgainCall index: Int, of variant: VariantID) -> ArraySlice<AnswerSource>
 	/// Called by exactly one call and off every cycle; not whether the body is a function (`BuiltPlaceRecord.hasFunction`).
 	func isCalledOnce(_ variant: VariantID) -> Bool
@@ -386,11 +391,27 @@ extension TypeFactsGraph: TypeFactsWorld {
 	}
 
 	func madeAgain(from declaration: DeclarationID) -> ArraySlice<Int32> {
-		madeAgain?.targets(of: Int(declaration)) ?? []
+		madeAgainSet(of: declaration).map { madeAgain?.targets(ofSet: $0) ?? [] } ?? []
 	}
 
 	func madeAgainLabels(from declaration: DeclarationID) -> ArraySlice<WorldLabelID> {
-		madeAgain?.labels(of: Int(declaration)) ?? []
+		madeAgainSet(of: declaration).map { madeAgain?.labels(ofSet: $0) ?? [] } ?? []
+	}
+
+	func madeAgain(of variant: VariantID) -> ArraySlice<Int32> {
+		madeAgain?.targets(ofSet: variants.madeAgainSet(of: Int(variant))) ?? []
+	}
+
+	func madeAgainLabels(of variant: VariantID) -> ArraySlice<WorldLabelID> {
+		madeAgain?.labels(ofSet: variants.madeAgainSet(of: Int(variant))) ?? []
+	}
+
+	/// The set every variant of `declaration` makes again, `nil` where it makes none or its variants differ.
+	private func madeAgainSet(of declaration: DeclarationID) -> Int32? {
+		guard !madeAgainSetByNode.isEmpty, madeAgainSetByNode[Int(declaration)] > 0 else {
+			return nil
+		}
+		return madeAgainSetByNode[Int(declaration)]
 	}
 
 	func edgeFacts(from declaration: DeclarationID) -> ArraySlice<TypeFactsEdge> {
@@ -616,28 +637,27 @@ extension TypeFactsGraph: TypeFactsWorld {
 			guard readByLabel[label].map({ isAnsweredByWrapper && !$0.isAnsweredByWrapper }) ?? true else { continue }
 			readByLabel[label] = (read, isAnsweredByWrapper)
 		}
-		let madeAgainParameters = madeAgainParameters(of: declaration)
+		let madeAgainParameters = madeAgainParameters(of: declaration, makingAgain: madeAgain(of: variant))
 		return parameterOrder(of: declaration).compactMap { label in
 			if let read = readByLabel[label] {
 				parameterType(of: variant, read.read, arrivals: arrivals)
 			} else {
-				madeAgainParameters[label].map { TypeFactsParameter(property: $0, readsInstanceOfWrapper: false) }
+				madeAgainParameters[labelTexts[Int(label)]].map { TypeFactsParameter(property: $0, readsInstanceOfWrapper: false) }
 			}
 		}
 	}
 
-	/// The loop mates the function of `declaration` takes as parameters where it would otherwise make them again at its
-	/// top, by label, each as the property its loop declares it as: a mate whose label a declaration between the
-	/// function and a call that closes a cycle on it declares. The function a cycle closes on then takes the mate, and
-	/// each call rebinds it before the call. A declaration is between where the function reaches it and it reaches the
-	/// function: one of the function's component. The member's own label is never one: a loop of one rebinds itself.
+	/// Of `mates`, the loop mates a variant of `declaration` makes again, those its function takes as parameters where it
+	/// would otherwise make them again at its top, by label, each as the property its loop declares it as: a mate whose
+	/// label a declaration between the function and a call that closes a cycle on it declares. The function a cycle
+	/// closes on then takes the mate, and each call rebinds it before the call. A declaration is between where the
+	/// function reaches it and it reaches the function: one of the function's component. The member's own label is never
+	/// one: a loop of one rebinds itself.
 	///
-	/// Read from the mates a declaration makes again whatever parent builds it (`madeAgain(from:)`), which is every
-	/// variant's set except for the declarations of `loopMembersSharedApart`.
-	private func madeAgainParameters(of declaration: DeclarationID) -> [WorldLabelID: Property] {
-		let mates = madeAgain(from: declaration)
+	/// The mates are a variant's (`madeAgain(of:)`), since two parents can have one declaration make other mates again;
+	/// the order of a declaration's parameters reads every mate any parent has it make again.
+	private func madeAgainParameters(of declaration: DeclarationID, makingAgain mates: ArraySlice<Int32>) -> [String: Property] {
 		guard !mates.isEmpty, isOnCycle(declaration) else { return [:] }
-		let mateLabels = madeAgainLabels(from: declaration)
 		let ownLabel = graph.nodes[Int(declaration)].property.map(\.label)
 		var labelsDeclaredBetween = Set<String>()
 		for other in 0..<Int32(declarationCount) where other != declaration && isOnCycle(other) && component(of: other) == component(of: declaration) {
@@ -647,10 +667,10 @@ extension TypeFactsGraph: TypeFactsWorld {
 				}
 			}
 		}
-		var parameters = [WorldLabelID: Property]()
-		for (mate, label) in zip(mates, mateLabels) {
+		var parameters = [String: Property]()
+		for mate in mates {
 			if let property = graph.nodes[Int(mate)].property, property.label != ownLabel, labelsDeclaredBetween.contains(property.label) {
-				parameters[label] = property
+				parameters[property.label] = property
 			}
 		}
 		return parameters
@@ -661,16 +681,17 @@ extension TypeFactsGraph: TypeFactsWorld {
 	private func parameterOrder(of declaration: DeclarationID, walking: Set<DeclarationID>) -> [WorldLabelID] {
 		// The declaration's own label is no parameter: every call is made where a declaration of it is being built.
 		let ownLabel = graph.nodes[Int(declaration)].property.map(\.label)
-		var unmet = Set(labels(of: declaration).filter { labelTexts[Int($0)] != ownLabel }).union(madeAgainParameters(of: declaration).keys)
+		var labelIDs = [String: WorldLabelID]()
+		for (index, text) in labelTexts.enumerated() where labelIDs[text] == nil {
+			labelIDs[text] = WorldLabelID(index)
+		}
+		var unmet = Set(labels(of: declaration).filter { labelTexts[Int($0)] != ownLabel })
+			.union(madeAgainParameters(of: declaration, makingAgain: madeAgain?.targets(of: Int(declaration)) ?? []).keys.compactMap { labelIDs[$0] })
 		var order = [WorldLabelID]()
 		func meet(_ label: WorldLabelID) {
 			if unmet.remove(label) != nil {
 				order.append(label)
 			}
-		}
-		var labelIDs = [String: WorldLabelID]()
-		for (index, text) in labelTexts.enumerated() where labelIDs[text] == nil {
-			labelIDs[text] = WorldLabelID(index)
 		}
 		let walking = walking.union([declaration])
 		var visited = Set<Int>()

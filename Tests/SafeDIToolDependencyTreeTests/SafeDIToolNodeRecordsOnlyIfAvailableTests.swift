@@ -351,6 +351,49 @@ struct SafeDIToolNodeRecordsOnlyIfAvailableTests: ~Copyable {
 		#expect(reports.flatMap(\.differences) == [])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_refusesWorldAsMemberSharedApart_whenAnotherParentBuildsLoopMembersTypeThatReceivesSiblingOnlyIfAvailable() async throws {
+		// `Other` builds `A` too, beside no `bBuilder`: the root's `A` reads its rebinding, `Other`'s the root's `bBuilder`,
+		// two bodies of one node, which node records refuse.
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: [
+				seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let aBuilder: Instantiator<A>", "@Instantiated let bBuilder: Instantiator<B>", "@Instantiated let other: Other"]),
+				seamFixtureType(named: "Other", isFinalClass: true, declarations: ["@Instantiated let aBuilder: Instantiator<A>"]),
+				seamFixtureType(named: "A", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let bBuilder: Instantiator<B>?"]),
+				seamFixtureType(named: "B", isFinalClass: true, declarations: ["@Received let aBuilder: Instantiator<A>"]),
+			], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_aBuilder() -> A {
+			            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			            return A(bBuilder: bBuilder)
+			        }
+			        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			        func __safeDI_bBuilder() -> B {
+			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			            return B(aBuilder: aBuilder)
+			        }
+			        let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			        func __safeDI_other() -> Other {
+			            func __safeDI_aBuilder() -> A {
+			                A(bBuilder: bBuilder)
+			            }
+			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			            return Other(aBuilder: aBuilder)
+			        }
+			        let other: Other = __safeDI_other()
+			        self.init(aBuilder: aBuilder, bBuilder: bBuilder, other: other)
+			    }
+			}
+			""",
+		])
+		#expect(reports.map(\.refusal) == ["builderLoopSharedApart"])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
