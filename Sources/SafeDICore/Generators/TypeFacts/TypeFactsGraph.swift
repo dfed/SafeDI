@@ -173,6 +173,11 @@ struct TypeFactsGraph: Sendable {
 
 		// Per node: the property it is built as, the type it builds, and its kind.
 		let nodeProperties = nodes.map { node in node.property.map { properties.id(of: $0) } ?? -1 }
+		// What a seam's root is handed is interned with the nodes' properties, before any column sized by the property count
+		// is built, so a handed form no node declares or reads has the facts of every other property.
+		for property in seamRootDeclarations {
+			_ = properties.id(of: property)
+		}
 		let builtTypes = nodes.map { node in
 			switch node.key.leaf {
 			case .none:
@@ -763,9 +768,7 @@ struct TypeFactsGraph: Sendable {
 		self.propertyFacts = propertyFacts
 		// What a seam's root is handed answers its tree's reads of a label no node declares.
 		var seamRootDeclarationByLabel = [Int32: Property]()
-		for property in seamRootDeclarations {
-			guard let label = labels.existingID(of: property.label) else { continue }
-			_ = properties.id(of: property)
+		for case let (property, label?) in zip(seamRootDeclarations, seamRootDeclarations.map({ labels.existingID(of: $0.label) })) {
 			seamRootDeclarationByLabel[label] = property
 		}
 		propertyTable = properties.values
