@@ -128,6 +128,7 @@ extension HoleSiteRecordObservation {
 			return .visitChildren
 		}
 	}
+
 	/// The names a function's text reads of the code around it: each name it refers to that neither it nor a function or
 	/// closure inside it declares, as a parameter or a value, around the reference. A name declared anywhere in a function or
 	/// closure is taken as declared throughout it, as Swift lets a local function be called before its declaration.
