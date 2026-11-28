@@ -1550,7 +1550,7 @@ The edit-loop gain needs a compile that recompiles only the files whose bytes ch
 
 See [`bazel/safedi.bzl`](../bazel/safedi.bzl).
 
-A module that no SafeDI module depends on, such as your app, sets `is_depended_upon = False` on its `safedi_swift_library` or `safedi_compile`. SafeDI then writes no `.safedi` for it, which saves the time the top module of a deep graph spends writing a copy of what its dependencies’ files carry. A module that lists it in `safedi_deps` fails analysis with an error that names the attribute, and `SafeDITool query needs` cannot read the module.
+A module that no SafeDI module depends on, such as your app, sets `is_depended_upon = False` on its `safedi_swift_library` or `safedi_compile`. SafeDI then writes no `.safedi` for it, which saves the time the top module of a deep graph spends writing a copy of what its dependencies’ files carry. A module that lists it in `safedi_deps` fails analysis with an error that names the attribute, and neither `SafeDITool query needs` nor `query graph` can read the module.
 
 For [Stardoc](https://github.com/bazelbuild/stardoc) and other `bzl_library` tooling, a `bzl_library` of your own that loads `safedi.bzl` can list `@safedi//bazel:safedi` in its `deps`.
 
