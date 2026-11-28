@@ -169,14 +169,29 @@ struct FillFacts: Sendable {
 			dispatcher.cases.contains { $0.carriesDeferredFields && $0.values?.contains(where: \.isDeferredParameter) == true }
 		}
 		guard !handsMemo else { return .refused(.fillHandedMemo) }
-		// The fill nodes the call passes, one per fill argument, in their order.
+		// The fill nodes the call passes, one per fill argument, in the order of the call's fill arguments (`TypeFactsGraph`),
+		// by the key of the place each fills: a fill is matched to its node by its key, never by its position among the fills.
 		let fillNodes = world.edges(from: call).filter { world.construction(of: $0) == .fill }
+		let filledHoles = scope.holeArguments.compactMap { holeArgument -> SeamSignature.Hole? in
+			switch holeArgument {
+			case let .fill(hole, _, _):
+				hole
+			case .passUp:
+				nil
+			}
+		}
+		var fillNodeByKey = [String: DeclarationID]()
+		for (hole, fillNode) in zip(filledHoles, fillNodes) {
+			fillNodeByKey[ScopeGenerator.fillKey(of: hole)] = fillNode
+		}
 		var allFacts = [FillFacts]()
-		for ((fill, _, _), fillNode) in zip(callFills.fills, fillNodes) where fill.emitsCode {
-			// A public mock's root binds a value again in the forms its tree reads, so a level can hold a label in a form the
-			// fill's tree does not read, which the fill then reads from the caller: the forms it reads decide what it binds.
-			let formsRead = scope.publicMockCall == nil ? nil : scope.fillReceivedProperties[fill.hole.site] ?? []
-			allFacts.append(facts(of: fill, node: fillNode, readingForms: formsRead, in: world, readsInnerScopes: levelsOfCallingTree != nil && readsInnerScopes(fillNode, in: world), log: &log))
+		for (fill, _, _) in callFills.fills where fill.emitsCode {
+			if let fillNode = fillNodeByKey[fill.key] {
+				// A public mock's root binds a value again in the forms its tree reads, so a level can hold a label in a form the
+				// fill's tree does not read, which the fill then reads from the caller: the forms it reads decide what it binds.
+				let formsRead = scope.publicMockCall == nil ? nil : scope.fillReceivedProperties[fill.hole.site] ?? []
+				allFacts.append(facts(of: fill, node: fillNode, readingForms: formsRead, in: world, readsInnerScopes: levelsOfCallingTree != nil && readsInnerScopes(fillNode, in: world), log: &log))
+			}
 		}
 		return .facts(allFacts)
 	}
@@ -293,17 +308,30 @@ struct FillFacts: Sendable {
 /// What a call hands each read a fill makes of the caller's scope, on one of the call's variants (step 3, row 2): the
 /// caller's nearest declaration of the read's label, or `nil` where none answers it. Per variant, since the declarations
 /// above a call are the one thing two routes to it can differ in.
-enum FillCallerSources {
+struct FillCallerSources {
+	/// The sources of `world`'s fills' caller reads, which look each variant's caller up in a map made once.
+	init(world: TypeFactsGraph) {
+		self.world = world
+		var callerByVariant = [(caller: VariantID, edge: Int)?](repeating: nil, count: world.variantCount)
+		for caller in 0..<Int32(world.variantCount) {
+			let calls = world.calls(of: caller)
+			for (edge, callee) in calls.enumerated() where callerByVariant[Int(callee)] == nil {
+				callerByVariant[Int(callee)] = (caller, edge)
+			}
+		}
+		self.callerByVariant = callerByVariant
+	}
+
 	/// The source of each of `facts`' caller reads, in their order, where `call` is reached as `variant`.
-	static func of(facts: FillFacts, call: DeclarationID, variant: VariantID, in world: TypeFactsGraph) -> [ArgumentSource] {
-		zip(declarations(facts: facts, call: call, variant: variant, in: world), facts.parametersTakenOfCallerReads).map { declared, parameter in
-			declared.map { argument(reading: parameter, declaredAs: $0) } ?? .nil
+	func of(facts: FillFacts, call: DeclarationID, variant: VariantID) -> [ArgumentSource] {
+		zip(declarations(facts: facts, call: call, variant: variant), facts.parametersTakenOfCallerReads).map { declared, parameter in
+			declared.map { Self.argument(reading: parameter, declaredAs: $0) } ?? .nil
 		}
 	}
 
 	/// The caller's declaration that answers each of `facts`' caller reads, in their order, where `call` is reached as
 	/// `variant`, or `nil` where none does.
-	static func declarations(facts: FillFacts, call: DeclarationID, variant: VariantID, in world: TypeFactsGraph) -> [Property?] {
+	func declarations(facts: FillFacts, call: DeclarationID, variant: VariantID) -> [Property?] {
 		let edges = world.edges(from: call)
 		let reads = Array(world.reads(of: facts.declaration))
 		guard let edge = edges.firstIndex(of: facts.declaration) else { return facts.callerReads.map { _ in nil } }
@@ -313,16 +341,31 @@ enum FillCallerSources {
 			let readIndex = reads.indices.first { world.read(reads[$0]).channel == .value && world.text(ofLabel: world.read(reads[$0]).label) == callerRead.label }
 				?? reads.indices.first { world.read(reads[$0]).channel == .optionalValue && world.text(ofLabel: world.read(reads[$0]).label) == callerRead.label }
 			guard let readIndex, readIndex < sources.count else { return nil }
-			return declaration(of: callerRead.label, answering: sources[readIndex], callee: variant, in: world)
+			return declaration(of: callerRead.label, answering: sources[readIndex], callee: variant)
 		}
 	}
 
+	/// The declaration visible where `call`, reached as `variant`, declares the fill `facts` are of, of each label the fill's
+	/// tree reads from above it, in label order: one of the call's own children, else the caller's nearest declaration.
+	func visibleDeclarations(facts: FillFacts, call: DeclarationID, variant: VariantID) -> [Property] {
+		facts.readLabels.compactMap { label in
+			world.edges(from: call).lazy.filter { world.construction(of: $0) != .fill }.compactMap { world.property(of: $0) }.first { $0.label == label }
+				?? nearestDeclaration(of: label, above: variant)
+		}
+	}
+
+	// MARK: Private
+
+	private let world: TypeFactsGraph
+	/// The variant that calls each variant, and the index of the edge it calls it on; `nil` for the root's.
+	private let callerByVariant: [(caller: VariantID, edge: Int)?]
+
 	/// The declaration that answers a read `source` hands `callee`, built before the read, or `nil` where none does.
-	private static func declaration(of label: String, answering source: AnswerSource, callee: VariantID, in world: TypeFactsGraph) -> Property? {
+	private func declaration(of label: String, answering source: AnswerSource, callee: VariantID) -> Property? {
 		// The call's own edge to the fill answers a read of a field the fill binds with that field (the fill channel): a caller
 		// read is a field no place of the case carries, so the caller's nearest declaration of the label answers it.
 		guard source.kind != .bound || source.payload != world.declaration(of: callee) else {
-			return nearestDeclaration(of: label, above: callee, in: world)
+			return nearestDeclaration(of: label, above: callee)
 		}
 		var source = source
 		var callee = callee
@@ -330,7 +373,9 @@ enum FillCallerSources {
 			switch source.kind {
 			case .none:
 				// No declaration before the call answers the read: the scope that makes the call builds a declaration of its own
-				// made after the call first, where it makes one.
+				// made after the call first, where it makes one. That is the tree's answer: a scope's nearest declarations hold
+				// every label the scope builds, wherever it builds it (`NearestDeclarations`), and the fill facts observation
+				// compares this answer with the tree's in every test that fills a place.
 				return world.edges(from: world.declaration(of: callee)).lazy.filter { world.construction(of: $0) != .fill }.compactMap { world.property(of: $0) }.first { $0.label == label }
 			case .bound:
 				// The declaration that binds the read: a property its scope builds, else one its type receives or forwards.
@@ -339,7 +384,7 @@ enum FillCallerSources {
 					?? world.scope(of: binder).instantiable.dependencies.lazy.map(\.property).first { $0.label == label }
 			case .passedThrough:
 				// The callee's caller answers its read at the position the source names.
-				guard let (caller, edge) = self.caller(of: callee, in: world) else { return nil }
+				guard let (caller, edge) = callerByVariant[Int(callee)] else { return nil }
 				source = world.sources(ofCall: edge, of: caller)[world.sources(ofCall: edge, of: caller).startIndex + Int(source.payload)]
 				callee = caller
 			}
@@ -348,18 +393,9 @@ enum FillCallerSources {
 
 	/// The nearest declaration of `label` in the scopes that enclose `variant`'s declaration: a property one of them builds, else
 	/// one its type receives or forwards.
-	/// The declaration visible where `call`, reached as `variant`, declares the fill `facts` are of, of each label the fill's
-	/// tree reads from above it, in label order: one of the call's own children, else the caller's nearest declaration.
-	static func visibleDeclarations(facts: FillFacts, call: DeclarationID, variant: VariantID, in world: TypeFactsGraph) -> [Property] {
-		facts.readLabels.compactMap { label in
-			world.edges(from: call).lazy.filter { world.construction(of: $0) != .fill }.compactMap { world.property(of: $0) }.first { $0.label == label }
-				?? nearestDeclaration(of: label, above: variant, in: world)
-		}
-	}
-
-	private static func nearestDeclaration(of label: String, above variant: VariantID, in world: TypeFactsGraph) -> Property? {
+	private func nearestDeclaration(of label: String, above variant: VariantID) -> Property? {
 		var variant = variant
-		while let (caller, _) = caller(of: variant, in: world) {
+		while let (caller, _) = callerByVariant[Int(variant)] {
 			let binder = world.declaration(of: caller)
 			if let declared = world.edges(from: binder).lazy.filter({ world.construction(of: $0) != .fill }).compactMap({ world.property(of: $0) }).first(where: { $0.label == label })
 				?? world.scope(of: binder).instantiable.dependencies.lazy.map(\.property).first(where: { $0.label == label })
@@ -367,17 +403,6 @@ enum FillCallerSources {
 				return declared
 			}
 			variant = caller
-		}
-		return nil
-	}
-
-	/// The variant that calls `variant`, and the index of the edge it calls it on.
-	private static func caller(of variant: VariantID, in world: TypeFactsGraph) -> (VariantID, Int)? {
-		for caller in 0..<Int32(world.variantCount) {
-			let calls = world.calls(of: caller)
-			if let index = calls.firstIndex(of: variant) {
-				return (caller, index - calls.startIndex)
-			}
 		}
 		return nil
 	}
@@ -421,6 +446,7 @@ public struct FillFactsObservation: Sendable {
 		let routeCounts = FillFacts.routeCounts(in: world)
 		var fromRecords = [String: String]()
 		var refusals = [NodeRecordRefusal]()
+		let callerSources = FillCallerSources(world: world)
 		for declaration in 0..<Int32(world.declarationCount) where world.construction(of: declaration) == .seamCall {
 			let scope = world.scope(of: declaration)
 			guard scope.holeArguments.contains(where: {
@@ -437,7 +463,7 @@ public struct FillFactsObservation: Sendable {
 				case let .facts(allFacts):
 					let variant = (0..<Int32(world.variantCount)).first { world.declaration(of: $0) == declaration } ?? 0
 					for facts in allFacts {
-						let sources = FillCallerSources.of(facts: facts, call: declaration, variant: variant, in: world)
+						let sources = callerSources.of(facts: facts, call: declaration, variant: variant)
 						fromRecords[facts.key] = facts.projection + "; sources: " + zip(facts.callerReads, sources).map { "\($0.label) \($1.spelled)" }.joined(separator: ", ")
 					}
 				case let .refused(refusal):
@@ -455,13 +481,18 @@ extension NodeRecords {
 	/// does but `fill`, and refuses the call with why node records leave it to the tree (`FillFacts.refusal(ofCall:in:routeCount:)`),
 	/// or `fill` where no reason holds, until the call's record is assembled.
 	static func filledSeamCallClaim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
+		// A mock root's world builds every seam inline, so it holds no seam call to fill (`seamCallClaim(of:in:)`), and its nodes
+		// are the mock writer's alone (`claim(of:in:)`): the same check guards both seam call claims.
 		guard !world.isMockWorld, world.construction(of: declaration) == .seamCall, fillsAPlace(declaration, in: world) else { return nil }
 		let scope = world.scope(of: declaration)
 		let forwardsValues = scope.instantiable.dependencies.contains { $0.source == .forwarded }
 		let routeCount = (0..<Int32(world.variantCount)).count(where: { world.declaration(of: $0) == declaration })
 		// A call held in a wrapper, erased or not, or in a `@Sendable` function is bound as a built place of its form is, which
-		// discharges what that form's claim does.
-		let wrapperDischarges = (erasedClaim(of: declaration, in: world) ?? lazyClaim(of: declaration, in: world) ?? sendableClaim(of: declaration, in: world))?.discharges ?? []
+		// discharges what each claim of its form does: the three claim apart kinds of wrapper today, and their union stays
+		// right where a form is claimed by more than one.
+		let wrapperDischarges = [erasedClaim(of: declaration, in: world), lazyClaim(of: declaration, in: world), sendableClaim(of: declaration, in: world)].reduce(into: Set<NodeRecordRefusal>()) { discharges, claim in
+			discharges.formUnion(claim?.discharges ?? [])
+		}
 		return NodeRecordClaim(
 			kind: .seamCall,
 			discharges: Set<NodeRecordRefusal>([.construction, .fill]).union(wrapperDischarges),

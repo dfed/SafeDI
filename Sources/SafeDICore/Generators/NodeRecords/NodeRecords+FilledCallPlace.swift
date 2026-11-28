@@ -67,13 +67,13 @@ extension NodeRecords {
 		for child in childPlaces {
 			if let fills = fillsByDeclaration[child.declaration] {
 				for fill in fills {
-					let lines = try records.functionLines(of: fill, place: child.place, typesDeclaredEscaping: typesDeclaredEscapingOf(fill.facts.declaration), namesInScope: namesInScope)
+					let typesEscaping = typesDeclaredEscapingOf(fill.facts.declaration)
 					if records.decisions.inlinedFillKeys.contains(fill.facts.key),
-					   let inlinedFill = ScopeGenerator.FillDispatcher.InlinedFill(hole: fill.facts.hole, carrierUse: fill.facts.carrierUse, builtProperty: world.property(of: fill.facts.declaration), code: lines.map { indent + $0 }.joined(separator: "\n"), leadingMemberWhitespace: indent)
+					   let inlinedFill = try ScopeGenerator.FillDispatcher.InlinedFill(hole: fill.facts.hole, carrierUse: fill.facts.carrierUse, builtProperty: world.property(of: fill.facts.declaration), code: records.functionLines(of: fill, place: child.place, typesDeclaredEscaping: typesEscaping, namesInScope: namesInScope).map { indent + $0 }.joined(separator: "\n"), leadingMemberWhitespace: indent)
 					{
 						inlinedFills[fill.facts.key] = inlinedFill
 					} else {
-						statements.append(.indented(.text(lines.joined(separator: "\n") + "\n"), by: indent))
+						try statements.append(.indented(records.functionCode(of: fill, place: child.place, typesDeclaredEscaping: typesEscaping, namesInScope: namesInScope), by: indent))
 					}
 				}
 			} else {
@@ -122,33 +122,60 @@ extension NodeRecords {
 	}
 }
 
+extension FilledCallRecords.Fill {
+	/// The declarations around the fill's body: what the fill binds of its case and takes as a function's parameters, and
+	/// what it reads of the caller's scope and takes no parameter of, which it captures as the caller declares it.
+	var outerDeclarations: [Property] {
+		let taken = signature.bound.map(\.field.property) + signature.parameters.map(\.property)
+		let takenLabels = Set(taken.map(\.label))
+		let captured = callerDeclarations.filter { !takenLabels.contains($0.label) }
+		let capturedLabels = Set(captured.map(\.label))
+		return captured + facts.parametersTakenOfCallerReads.filter { !takenLabels.contains($0.label) && !capturedLabels.contains($0.label) } + taken
+	}
+}
+
 extension FilledCallRecords {
-	/// The lines of the function of `fill`, whose place is `place`, as the tree writes them with no indentation: its lines up to its tree,
-	/// its place laid out with what it binds and takes declared around it, the return of a constant's value, and its close.
-	/// - Throws: `NodeRecordRefusal.notLaidOut` where the engine cannot lay the place out.
+	/// The function of `fill`, whose place is `place`, as the tree writes it with no indentation: its lines up to its tree,
+	/// its place laid out with what it binds, takes and captures declared around it, the return of a constant's value, and
+	/// its close.
 	/// - Parameter namesInScope: The names visible where the call declares the fill, beside what the fill binds and takes.
+	/// - Throws: `NodeRecordRefusal.notLaidOut` where the engine cannot lay the place out.
+	func functionCode(of fill: Fill, place: GeneratedCode, typesDeclaredEscaping: Set<TypeDescription>, namesInScope: Set<String>) throws(NodeRecordRefusal) -> GeneratedCode {
+		let (outerDeclarations, names) = bodyDeclarations(of: fill, namesInScope: namesInScope)
+		guard let body = TypeKeyBody.statements(ofBodyHolding: place, outerDeclarations: outerDeclarations, namesInScope: names) else { throw .notLaidOut }
+		let indent = ScopeGenerator.standardIndent
+		var lines = [GeneratedCode]()
+		for line in fill.signature.spelledSignature(functionName: fill.functionName, scopeParameterName: fill.scopeParameterName, indent: indent, typesDeclaredEscaping: typesDeclaredEscaping) {
+			lines.append(.text(line))
+		}
+		lines.append(.indented(.lines(body), by: indent))
+		if fill.signature.returnsBoundValue {
+			lines.append(.text(indent + "return \(fill.facts.hole.property.label)"))
+		}
+		lines.append(.text("}"))
+		return .lines(lines)
+	}
+
+	/// `functionCode(of:place:typesDeclaredEscaping:namesInScope:)`'s lines, for a fill a dispatcher's case holds, whose
+	/// body it takes as lines (`TypeKeyBody.lines(ofBodyHolding:outerDeclarations:namesInScope:)`, a bridge).
 	func functionLines(of fill: Fill, place: GeneratedCode, typesDeclaredEscaping: Set<TypeDescription>, namesInScope: Set<String>) throws(NodeRecordRefusal) -> [String] {
+		let (outerDeclarations, names) = bodyDeclarations(of: fill, namesInScope: namesInScope)
+		guard let body = TypeKeyBody.lines(ofBodyHolding: place, outerDeclarations: outerDeclarations, namesInScope: names) else { throw .notLaidOut }
 		let indent = ScopeGenerator.standardIndent
 		var lines = fill.signature.spelledSignature(functionName: fill.functionName, scopeParameterName: fill.scopeParameterName, indent: indent, typesDeclaredEscaping: typesDeclaredEscaping)
-		// The fill's body reads what it binds of its case and what it takes as declarations around it, as a function's
-		// parameters; a name it declares stays apart from them.
-		let taken = fill.signature.bound.map(\.field.property) + fill.signature.parameters.map(\.property)
-		// What the fill reads of the caller's scope and takes no parameter of, it captures as the caller declares it.
-		let takenLabels = Set(taken.map(\.label))
-		let captured = fill.callerDeclarations.filter { !takenLabels.contains($0.label) }
-		let capturedLabels = Set(captured.map(\.label))
-		let outerDeclarations = captured + fill.facts.parametersTakenOfCallerReads.filter { !takenLabels.contains($0.label) && !capturedLabels.contains($0.label) } + taken
-		guard let body = TypeKeyBody.lines(
-			ofBodyHolding: place,
-			outerDeclarations: outerDeclarations,
-			namesInScope: namesInScope.union(outerDeclarations.map(\.label) + [fill.scopeParameterName]),
-		) else { throw .notLaidOut }
 		lines += body.map { indent + $0 }
-		if fill.signature.returnsBoundValue, let label = fill.facts.hole.property.label as String? {
-			lines.append(indent + "return \(label)")
+		if fill.signature.returnsBoundValue {
+			lines.append(indent + "return \(fill.facts.hole.property.label)")
 		}
 		lines.append("}")
 		return lines
+	}
+
+	/// What a fill's body is laid out with: the declarations around it (`Fill.outerDeclarations`), and the names in scope
+	/// where it is declared.
+	private func bodyDeclarations(of fill: Fill, namesInScope: Set<String>) -> (outerDeclarations: [Property], namesInScope: Set<String>) {
+		let outerDeclarations = fill.outerDeclarations
+		return (outerDeclarations, namesInScope.union(outerDeclarations.map(\.label) + [fill.scopeParameterName]))
 	}
 
 	/// The declarations of the call's dispatchers, in the order the call declares them, each indented by `indent`: a root
