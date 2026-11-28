@@ -173,19 +173,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: Self.modules(
-					feature: [
-						"public protocol Api {}",
-						seamFixtureType(named: "L", isFinalClass: true, declarations: []),
-						seamFixtureType(named: "Hub", isSeam: true, declarations: ["@Instantiated public let api: any Api"]),
-						seamFixtureType(named: "Shell", isSeam: true, declarations: ["@Instantiated public let wBuilder: Instantiator<W>"]),
-					] + (throughSecondCycle ? [
-						seamFixtureType(named: "W", declarations: ["@Instantiated public let hub: Hub", "@Instantiated public let uBuilder: Instantiator<U>"]),
-						seamFixtureType(named: "U", declarations: ["@Instantiated public let pBuilder: Instantiator<P>", "@Instantiated public let wBuilder: Instantiator<W>"]),
-						seamFixtureType(named: "P", declarations: ["@Instantiated public let l: L", "@Instantiated public let uBuilder: Instantiator<U>"]),
-					] : [
-						seamFixtureType(named: "W", declarations: ["@Instantiated public let hub: Hub", "@Instantiated public let pBuilder: Instantiator<P>"]),
-						seamFixtureType(named: "P", declarations: ["@Instantiated public let l: L", "@Instantiated public let wBuilder: Instantiator<W>"]),
-					]),
+					feature: Self.shellCallingHubInsideCycle(throughSecondCycle: throughSecondCycle),
 					app: [
 						Self.liveApi(["@Received public let l: L"]),
 						seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated public let l: L", "@Instantiated public let shell: Shell"]),
@@ -195,6 +183,35 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 				filesToDelete: &filesToDelete,
 			)
 		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func presentedCycleReentryDeclarations_namesDeclarationCycleHandsTypeBuiltAgain_whenSeamCallIsInsideCycle() async throws {
+		// The re-entries of the cycle around `Shell`'s call of `Hub` are a question of `Shell`'s graph, which names `P`'s `l`,
+		// handed to the `W` built again, whose call builds `Hub`.
+		let modules = Self.modules(
+			feature: Self.shellCallingHubInsideCycle(throughSecondCycle: false),
+			app: [Self.liveApi([]), seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated public let shell: Shell"])],
+		)
+		let (stream, continuation) = AsyncStream.makeStream(of: SeamSignature.Places.Observation.self)
+		_ = try await SeamPlaceLevels.$observer.withValue(TaskLocalFunction { placeLevels in
+			if let observation = placeLevels.placesObservation, observation.seamType.asSource == "Shell" {
+				continuation.yield(observation)
+			}
+		}) {
+			try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+		}
+		continuation.finish()
+		var observationOfShell: SeamSignature.Places.Observation?
+		for await observation in stream {
+			observationOfShell = observation
+		}
+		let shell = try #require(observationOfShell)
+		let caseIndex = try #require(shell.places.cases.indices.first { shell.places.cases[$0].passedUp != nil })
+		let query = SeamSignature.Places.Query(of: shell.places, calledPlaces: shell.calledPlaces(of:))
+		let declarations = query.presentedCycleReentryDeclarations(ofLabel: "l", reading: .callersOwn, at: caseIndex)
+		#expect(declarations.map { "\($0.declaringType.asSource) declares \($0.property.asSource); \($0.reenteringType.asSource) closes on \($0.closedOnProperty.asSource); builder of \($0.calledSeamType?.asSource ?? "no seam")" } == ["P declares l: L; P closes on wBuilder: Instantiator<W>; builder of Hub"])
 	}
 
 	@Test
@@ -523,10 +540,6 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			            self.tBuilder = tBuilder
 			            self.cBuilder = cBuilder
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(tBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) }, cBuilder: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -538,10 +551,6 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			            self.cBuilder = cBuilder
 			            self.api = api
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(cBuilder: { _, _ in .init(__safeDI_noScope: __safeDI_builder) }, api: { _, _, _ in __safeDI_builder() })
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -550,10 +559,6 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 
 			        public init(tBuilder: @escaping (Mark) -> __safeDI_ApiCarrier_T<__safeDI_Built>) {
 			            self.tBuilder = tBuilder
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(tBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			        }
 			    }
 
@@ -672,10 +677,6 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			            self.cBuilder = cBuilder
 			            self.t = t
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(tBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) }, cBuilder: { _, _ in .init(__safeDI_noScope: __safeDI_builder) }, t: { _, _, _ in .init(__safeDI_noScope: __safeDI_builder) })
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -687,10 +688,6 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			            self.cBuilder = cBuilder
 			            self.api = api
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(cBuilder: { _, _ in .init(__safeDI_noScope: __safeDI_builder) }, api: { _, _, _ in __safeDI_builder() })
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -699,10 +696,6 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 
 			        public init(tBuilder: @escaping (Mark) -> __safeDI_ApiCarrier_T<__safeDI_Built>) {
 			            self.tBuilder = tBuilder
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(tBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			        }
 			    }
 
@@ -842,10 +835,6 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			            self.cBuilder = cBuilder
 			            self.t = t
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(tBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) }, cBuilder: { _, _ in .init(__safeDI_noScope: __safeDI_builder) }, t: { _, _, _ in .init(__safeDI_noScope: __safeDI_builder) })
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -857,10 +846,6 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			            self.cBuilder = cBuilder
 			            self.api = api
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(cBuilder: { _, _ in .init(__safeDI_noScope: __safeDI_builder) }, api: { _, _, _ in __safeDI_builder() })
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -869,10 +854,6 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 
 			        public init(tBuilder: @escaping (Mark) -> __safeDI_ApiCarrier_T<__safeDI_Built>) {
 			            self.tBuilder = tBuilder
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(tBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			        }
 			    }
 
@@ -1143,10 +1124,6 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			        public init(api: @escaping (A) -> __safeDI_Built) {
 			            self.api = api
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(api: { _ in __safeDI_builder() })
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1156,10 +1133,6 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			        public init(a_Sendable: __safeDI_ApiSendableCarrier_A<__safeDI_Built>) {
 			            self.a_Sendable = a_Sendable
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			            self.init(a_Sendable: .init(__safeDI_noScope: __safeDI_builder))
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1168,10 +1141,6 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 
 			        public init(bBuilder: @escaping @Sendable () -> __safeDI_ApiCarrier_B<__safeDI_Built>) {
 			            self.bBuilder = bBuilder
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			            self.init(bBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
 			    }
 
@@ -1306,6 +1275,24 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 		)
 	}
 
+	/// `Feature`'s declarations where `Shell` builds `W`, which calls `Hub` and whose cycle declares `l` again: `P` directly,
+	/// or `P` in a second cycle through `U`. `Hub` holds a place of `Api`, which `Feature` cannot fill.
+	private static func shellCallingHubInsideCycle(throughSecondCycle: Bool) -> [String] {
+		[
+			"public protocol Api {}",
+			seamFixtureType(named: "L", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "Hub", isSeam: true, declarations: ["@Instantiated public let api: any Api"]),
+			seamFixtureType(named: "Shell", isSeam: true, declarations: ["@Instantiated public let wBuilder: Instantiator<W>"]),
+		] + (throughSecondCycle ? [
+			seamFixtureType(named: "W", declarations: ["@Instantiated public let hub: Hub", "@Instantiated public let uBuilder: Instantiator<U>"]),
+			seamFixtureType(named: "U", declarations: ["@Instantiated public let pBuilder: Instantiator<P>", "@Instantiated public let wBuilder: Instantiator<W>"]),
+			seamFixtureType(named: "P", declarations: ["@Instantiated public let l: L", "@Instantiated public let uBuilder: Instantiator<U>"]),
+		] : [
+			seamFixtureType(named: "W", declarations: ["@Instantiated public let hub: Hub", "@Instantiated public let pBuilder: Instantiator<P>"]),
+			seamFixtureType(named: "P", declarations: ["@Instantiated public let l: L", "@Instantiated public let wBuilder: Instantiator<W>"]),
+		])
+	}
+
 	/// `Feature`, in package `Shop`, and `App`, in package `Other`, which imports it.
 	private static func modules(feature: [String], app: [String]) -> [ModuleFixture] {
 		[
@@ -1326,6 +1313,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 		probe: DifferentialValueProbe,
 		expectedFeatureFile: (name: String, contents: String)? = nil,
 		expectedApp: String? = nil,
+		expectedValues: String? = nil,
 		sourceLocation: SourceLocation = #_sourceLocation,
 	) async throws {
 		let modules = Self.modules(feature: feature, app: [fulfiller, root])
@@ -1345,6 +1333,456 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			probes: [probe],
 			filesToDelete: &filesToDelete,
 			sourceLocation: sourceLocation,
+		)
+		if let expectedValues {
+			let description = try await DifferentialValueOracle.describe(SafeDIToolSeamBuilderParameterTests.differentialValuePath(of: output, modules: modules), probes: [probe], filesToDelete: &filesToDelete)
+			#expect(description == expectedValues, sourceLocation: sourceLocation)
+		}
+	}
+
+	// MARK: Laps around a ring
+
+	// Each test builds a ring a seam's place is on, walks several laps through every call that closes it, and pins which
+	// declaration each read gets, beside the inline build's. Every lap reads the declaration nearest on its run-time route,
+	// which the fold over (function, binding) that answers a place's re-entries assumes: a label a ring declares again is a
+	// parameter of each member's function that reads it (`ScopeGenerator.cycleParameterSearch`, over the labels
+	// `CycleClosingRedeclaredLabels` collects between a closed-on scope and its closing call), never a capture, and each
+	// closing call passes the labels its own scope binds.
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_fillReadsNearestMarkOnEveryLap_whenThreeRingMembersEachDeclareOneMarkAndReceiveTheOthers() async throws {
+		let members = ["M0", "M1", "M2"]
+		var feature = ["public protocol Api {}"]
+		for member in members {
+			let others = members.filter { $0 != member }
+			feature.append(seamFixtureType(named: "Mark\(member)", isFinalClass: true, declarations: []))
+			feature.append(seamFixtureType(named: member, declarations: ["@Instantiated public let mark\(member): Mark\(member)"] + others.map { "@Received public let mark\($0): Mark\($0)" } + others.map { "@Instantiated public let \($0.lowercased())Builder: Instantiator<\($0)>" } + ["@Instantiated public let api: any Api"]))
+		}
+		feature.append(seamFixtureType(named: "Hub", isSeam: true, declarations: members.map { "@Instantiated public let mark\($0): Mark\($0)" } + members.map { "@Instantiated public let \($0.lowercased())Builder: Instantiator<\($0)>" }))
+		try await expectValuesEqualInlineBuild(
+			feature: feature,
+			fulfiller: Self.liveApi(members.map { "@Received public let mark\($0): Mark\($0)" }),
+			root: seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated public let hub: Hub"]),
+			probe: DifferentialValueProbe(name: "which member’s mark each lap’s api reads", expression: #"""
+			{ () -> [String] in
+			    let hub = Root().hub
+			    var out = [String]()
+			    func owner(_ mark: AnyObject, _ hubMark: AnyObject, _ path: [(String, AnyObject)]) -> String {
+			        for (index, element) in path.enumerated().reversed() where element.1 === mark { return "\(element.0)@\(index)" }
+			        return mark === hubMark ? "hub" : "other"
+			    }
+			    func report(_ api: any Api, _ path: [(String, AnyObject)]) {
+			        let live = api as! LiveApi
+			        out.append(path.map(\.0).joined(separator: ">") + ": " + owner(live.markM0, hub.markM0, path) + " " + owner(live.markM1, hub.markM1, path) + " " + owner(live.markM2, hub.markM2, path))
+			    }
+			    func visitM0(_ m: M0, _ path: [(String, AnyObject)]) {
+			        let p = path + [("M0", m.markM0 as AnyObject)]
+			        report(m.api, p)
+			        guard p.count < 4 else { return }
+			        visitM1(m.m1Builder.instantiate(), p)
+			        visitM2(m.m2Builder.instantiate(), p)
+			    }
+			    func visitM1(_ m: M1, _ path: [(String, AnyObject)]) {
+			        let p = path + [("M1", m.markM1 as AnyObject)]
+			        report(m.api, p)
+			        guard p.count < 4 else { return }
+			        visitM0(m.m0Builder.instantiate(), p)
+			        visitM2(m.m2Builder.instantiate(), p)
+			    }
+			    func visitM2(_ m: M2, _ path: [(String, AnyObject)]) {
+			        let p = path + [("M2", m.markM2 as AnyObject)]
+			        report(m.api, p)
+			        guard p.count < 4 else { return }
+			        visitM0(m.m0Builder.instantiate(), p)
+			        visitM1(m.m1Builder.instantiate(), p)
+			    }
+			    visitM0(hub.m0Builder.instantiate(), [])
+			    return out
+			}()
+			"""#),
+			expectedValues: """
+			probe which member’s mark each lap’s api reads
+			Array<String>
+			  0: String "M0: M0@0 hub hub"
+			  1: String "M0>M1: M0@0 M1@1 hub"
+			  2: String "M0>M1>M0: M0@2 M1@1 hub"
+			  3: String "M0>M1>M0>M1: M0@2 M1@3 hub"
+			  4: String "M0>M1>M0>M2: M0@2 M1@1 M2@3"
+			  5: String "M0>M1>M2: M0@0 M1@1 M2@2"
+			  6: String "M0>M1>M2>M0: M0@3 M1@1 M2@2"
+			  7: String "M0>M1>M2>M1: M0@0 M1@3 M2@2"
+			  8: String "M0>M2: M0@0 hub M2@1"
+			  9: String "M0>M2>M0: M0@2 hub M2@1"
+			  10: String "M0>M2>M0>M1: M0@2 M1@3 M2@1"
+			  11: String "M0>M2>M0>M2: M0@2 hub M2@3"
+			  12: String "M0>M2>M1: M0@0 M1@2 M2@1"
+			  13: String "M0>M2>M1>M0: M0@3 M1@2 M2@1"
+			  14: String "M0>M2>M1>M2: M0@0 M1@2 M2@3"
+
+			""",
+		)
+	}
+
+	@Test(arguments: [3, 4])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_fillFirstReadsRingsDeclarationOnLapAfterChainOfRenames_whenEachRingMemberRenamesTheLabelBeforeIt(renameCount: Int) async throws {
+		// The ring is R<n> > … > R1 > D > R<n>, where R<i> receives l<i+1> renamed from l<i> and D declares l1; the fill
+		// reads l<n+1>. Each lap moves the declaration one label along the chain, so the lap after `renameCount` laps is the
+		// first to read D's l1: the number of laps the fold answers for grows with the chain.
+		let renamers = (1...renameCount).reversed().map { "R\($0)" }
+		var feature = ["public protocol Api {}", seamFixtureType(named: "L", isFinalClass: true, declarations: [])]
+		feature.append(seamFixtureType(named: "Hub", isSeam: true, declarations: (1...renameCount).map { "@Instantiated public let l\($0): L" } + ["@Instantiated public let \(renamers[0].lowercased())Builder: Instantiator<\(renamers[0])>"]))
+		for (index, renamer) in renamers.enumerated() {
+			let label = renameCount - index
+			let next = index + 1 < renamers.count ? renamers[index + 1] : "D"
+			feature.append(seamFixtureType(named: renamer, declarations: ["@Received(fulfilledByDependencyNamed: \"l\(label)\", ofType: L.self) public let l\(label + 1): L"] + (index == 0 ? ["@Instantiated public let api: any Api"] : []) + ["@Instantiated public let \(next.lowercased())Builder: Instantiator<\(next)>"]))
+		}
+		feature.append(seamFixtureType(named: "D", declarations: ["@Instantiated public let l1: L", "@Instantiated public let \(renamers[0].lowercased())Builder: Instantiator<\(renamers[0])>"]))
+		let first = renamers[0]
+		let walkToD = renamers.dropFirst().map { "\($0.lowercased())Builder" } + ["dBuilder"]
+		try await expectValuesEqualInlineBuild(
+			feature: feature,
+			fulfiller: Self.liveApi(["@Received public let l\(renameCount + 1): L"]),
+			root: seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated public let hub: Hub"]),
+			probe: DifferentialValueProbe(name: "whose l each lap’s api reads", expression: """
+			{ () -> [String] in
+			    let hub = Root().hub
+			    var named: [(String, L)] = [\((1...renameCount).map { "(\"hub.l\($0)\", hub.l\($0))" }.joined(separator: ", "))]
+			    var out = [String]()
+			    var member = hub.\(first.lowercased())Builder.instantiate()
+			    for lap in 1 ... \(renameCount + 2) {
+			        let read = (member.api as! LiveApi).l\(renameCount + 1)
+			        out.append("lap \\(lap): " + (named.first { $0.1 === read }?.0 ?? "other"))
+			        let d = member\(walkToD.map { ".\($0).instantiate()" }.joined())
+			        named.append(("D of lap \\(lap)", d.l1))
+			        member = d.\(first.lowercased())Builder.instantiate()
+			    }
+			    return out
+			}()
+			"""),
+			expectedValues: renameCount == 3 ? """
+			probe whose l each lap’s api reads
+			Array<String>
+			  0: String "lap 1: hub.l3"
+			  1: String "lap 2: hub.l2"
+			  2: String "lap 3: hub.l1"
+			  3: String "lap 4: D of lap 1"
+			  4: String "lap 5: D of lap 2"
+
+			""" : """
+			probe whose l each lap’s api reads
+			Array<String>
+			  0: String "lap 1: hub.l4"
+			  1: String "lap 2: hub.l3"
+			  2: String "lap 3: hub.l2"
+			  3: String "lap 4: hub.l1"
+			  4: String "lap 5: D of lap 1"
+			  5: String "lap 6: D of lap 2"
+
+			""",
+		)
+	}
+
+	@Test(arguments: [false, true])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesLabelRingDeclaresAgainAsParameterOfReadersFunction_whenReaderIsBuiltInsideRingMembersBody(readerIsOnRing: Bool) async throws {
+		// X reads `l`, which B, on the ring, declares again. Off the ring X is A's child; on it, X builds B. Either way X's
+		// function takes `l` as a parameter, never a capture of the scope it is declared in, so each lap reads the `l` of
+		// the lap before.
+		try await expectValuesEqualInlineBuild(
+			feature: [
+				"public protocol Api {}",
+				seamFixtureType(named: "L", isFinalClass: true, declarations: []),
+				seamFixtureType(named: "Hub", isSeam: true, declarations: ["@Instantiated public let l: L", "@Instantiated public let aBuilder: Instantiator<A>"]),
+				seamFixtureType(named: "A", declarations: ["@Instantiated public let xBuilder: Instantiator<X>"] + (readerIsOnRing ? [] : ["@Instantiated public let bBuilder: Instantiator<B>"])),
+				seamFixtureType(named: "X", declarations: ["@Received public let l: L", "@Instantiated public let api: any Api"] + (readerIsOnRing ? ["@Instantiated public let bBuilder: Instantiator<B>"] : [])),
+				seamFixtureType(named: "B", declarations: ["@Instantiated public let l: L", "@Instantiated public let aBuilder: Instantiator<A>"]),
+			],
+			fulfiller: Self.liveApi(["@Received public let l: L"]),
+			root: seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated public let hub: Hub"]),
+			probe: DifferentialValueProbe(name: "whose l each lap’s X and its api read", expression: """
+			{ () -> [String] in
+			    let hub = Root().hub
+			    var named: [(String, L)] = [("hub", hub.l)]
+			    var out = [String]()
+			    var a = hub.aBuilder.instantiate()
+			    for lap in 1 ... 4 {
+			        let x = a.xBuilder.instantiate()
+			        func owner(_ l: L) -> String { named.first { $0.1 === l }?.0 ?? "other" }
+			        out.append("lap \\(lap): \\(owner(x.l)) \\(owner((x.api as! LiveApi).l))")
+			        let b = \(readerIsOnRing ? "x" : "a").bBuilder.instantiate()
+			        named.append(("B of lap \\(lap)", b.l))
+			        a = b.aBuilder.instantiate()
+			    }
+			    return out
+			}()
+			"""),
+			expectedFeatureFile: ("Feature.swift", readerIsOnRing ? """
+			extension Hub {
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public final class __safeDI_ApiCarrier<__safeDI_Built> {
+			        public let aBuilder: (L) -> __safeDI_ApiCarrier_A<__safeDI_Built>
+
+			        public init(aBuilder: @escaping (L) -> __safeDI_ApiCarrier_A<__safeDI_Built>) {
+			            self.aBuilder = aBuilder
+			        }
+
+			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			            self.init(aBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
+			        }
+			    }
+
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public final class __safeDI_ApiCarrier_A<__safeDI_Built> {
+			        public let xBuilder: (L) -> __safeDI_ApiCarrier_X<__safeDI_Built>
+
+			        public init(xBuilder: @escaping (L) -> __safeDI_ApiCarrier_X<__safeDI_Built>) {
+			            self.xBuilder = xBuilder
+			        }
+
+			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			            self.init(xBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
+			        }
+			    }
+
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public final class __safeDI_ApiCarrier_X<__safeDI_Built> {
+			        public let api: (Instantiator<B>) -> __safeDI_Built
+
+			        public init(api: @escaping (Instantiator<B>) -> __safeDI_Built) {
+			            self.api = api
+			        }
+
+			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			            self.init(api: { _ in __safeDI_builder() })
+			        }
+			    }
+
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+			    public init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
+			        let l = L()
+			        let __safeDI_apiBuilder_aBuilder = __safeDI_apiBuilder.aBuilder(l)
+			        @inline(never) func __safeDI_aBuilder(l: L) -> A {
+			            let __safeDI_apiBuilder_xBuilder = __safeDI_apiBuilder_aBuilder.xBuilder(l)
+			            let xBuilder = Instantiator<X> {
+			                __safeDI_xBuilder(l: l, __safeDI_apiBuilder_xBuilder: __safeDI_apiBuilder_xBuilder)
+			            }
+			            return A(xBuilder: xBuilder)
+			        }
+			        @inline(never) func __safeDI_xBuilder(l: L, __safeDI_apiBuilder_xBuilder: __safeDI_ApiCarrier_X<any Api>) -> X {
+			            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			            let api: any Api = __safeDI_apiBuilder_xBuilder.api(bBuilder)
+			            return X(l: l, api: api, bBuilder: bBuilder)
+			        }
+			        @inline(never) func __safeDI_bBuilder() -> B {
+			            let l = L()
+			            let aBuilder = Instantiator<A> {
+			                __safeDI_aBuilder(l: l)
+			            }
+			            return B(l: l, aBuilder: aBuilder)
+			        }
+			        let aBuilder = Instantiator<A> {
+			            __safeDI_aBuilder(l: l)
+			        }
+			        self.init(l: l, aBuilder: aBuilder)
+			    }
+			}
+
+			extension Hub {
+			    public enum __safeDI_Hub_A81E82AF600D9E71 {}
+			}
+			""" : """
+			extension Hub {
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public final class __safeDI_ApiCarrier<__safeDI_Built> {
+			        public let aBuilder: (L) -> __safeDI_ApiCarrier_A<__safeDI_Built>
+
+			        public init(aBuilder: @escaping (L) -> __safeDI_ApiCarrier_A<__safeDI_Built>) {
+			            self.aBuilder = aBuilder
+			        }
+
+			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			            self.init(aBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
+			        }
+			    }
+
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public final class __safeDI_ApiCarrier_A<__safeDI_Built> {
+			        public let xBuilder: (L, Instantiator<B>) -> __safeDI_ApiCarrier_X<__safeDI_Built>
+
+			        public init(xBuilder: @escaping (L, Instantiator<B>) -> __safeDI_ApiCarrier_X<__safeDI_Built>) {
+			            self.xBuilder = xBuilder
+			        }
+
+			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			            self.init(xBuilder: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
+			        }
+			    }
+
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public final class __safeDI_ApiCarrier_X<__safeDI_Built> {
+			        public let api: () -> __safeDI_Built
+
+			        public init(api: @escaping () -> __safeDI_Built) {
+			            self.api = api
+			        }
+
+			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			            self.init(api: { __safeDI_builder() })
+			        }
+			    }
+
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+			    public init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
+			        let l = L()
+			        let __safeDI_apiBuilder_aBuilder = __safeDI_apiBuilder.aBuilder(l)
+			        @inline(never) func __safeDI_aBuilder(l: L) -> A {
+			            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			            let __safeDI_apiBuilder_xBuilder = __safeDI_apiBuilder_aBuilder.xBuilder(l, bBuilder)
+			            let xBuilder = Instantiator<X> {
+			                __safeDI_xBuilder(l: l, __safeDI_apiBuilder_xBuilder: __safeDI_apiBuilder_xBuilder)
+			            }
+			            return A(xBuilder: xBuilder, bBuilder: bBuilder)
+			        }
+			        @inline(never) func __safeDI_bBuilder() -> B {
+			            let l = L()
+			            let aBuilder = Instantiator<A> {
+			                __safeDI_aBuilder(l: l)
+			            }
+			            return B(l: l, aBuilder: aBuilder)
+			        }
+			        @inline(never) func __safeDI_xBuilder(l: L, __safeDI_apiBuilder_xBuilder: __safeDI_ApiCarrier_X<any Api>) -> X {
+			            let api: any Api = __safeDI_apiBuilder_xBuilder.api()
+			            return X(l: l, api: api)
+			        }
+			        let aBuilder = Instantiator<A> {
+			            __safeDI_aBuilder(l: l)
+			        }
+			        self.init(l: l, aBuilder: aBuilder)
+			    }
+			}
+
+			extension Hub {
+			    public enum __safeDI_Hub_B1DF1D25EC5280B1 {}
+			}
+			"""),
+			expectedValues: """
+			probe whose l each lap’s X and its api read
+			Array<String>
+			  0: String "lap 1: hub hub"
+			  1: String "lap 2: B of lap 1 B of lap 1"
+			  2: String "lap 3: B of lap 2 B of lap 2"
+			  3: String "lap 4: B of lap 3 B of lap 3"
+
+			""",
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_closingCallPassesItsOwnSidesDeclaration_whenRingMemberIsBuiltBeneathValueAndBeneathLazilyInstantiatedWrapper() async throws {
+		// Leaf receives `theme` only if available; First declares it as a value, Second as a `LazilyInstantiated`, and Mid,
+		// between each Leaf and its closing call, declares it again as a wrapper. Each side's Leaf has a function of its own,
+		// and each closing call hands it the `theme` of its own Mid.
+		try await expectValuesEqualInlineBuild(
+			feature: [
+				"public protocol Api {}",
+				seamFixtureType(named: "Theme", isFinalClass: true, declarations: []),
+				seamFixtureType(named: "Hub", isSeam: true, declarations: ["@Instantiated public let first: First", "@Instantiated public let second: Second"]),
+				seamFixtureType(named: "First", declarations: ["@Instantiated public let theme: Theme", "@Instantiated public let leafBuilder: Instantiator<Leaf>"]),
+				seamFixtureType(named: "Second", declarations: ["@Instantiated public let theme: LazilyInstantiated<Theme>", "@Instantiated public let leafBuilder: Instantiator<Leaf>"]),
+				seamFixtureType(named: "Leaf", declarations: ["@Received(onlyIfAvailable: true) public let theme: Theme?", "@Instantiated public let midBuilder: Instantiator<Mid>", "@Instantiated public let api: any Api"]),
+				seamFixtureType(named: "Mid", declarations: ["@Instantiated public let theme: LazilyInstantiated<Theme>", "@Instantiated public let leafBuilder: Instantiator<Leaf>"]),
+			],
+			fulfiller: Self.liveApi(["@Received(onlyIfAvailable: true) public let theme: Theme?"]),
+			root: seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated public let hub: Hub"]),
+			probe: DifferentialValueProbe(name: "whose theme each lap’s Leaf and its api read", expression: """
+			{ () -> [String] in
+			    let hub = Root().hub
+			    var out = [String]()
+			    for (side, start, sideTheme) in [("First", hub.first.leafBuilder, hub.first.theme), ("Second", hub.second.leafBuilder, hub.second.theme.instance)] {
+			        var named: [(String, Theme)] = [(side, sideTheme)]
+			        var leaf = start.instantiate()
+			        for lap in 1 ... 3 {
+			            func owner(_ theme: Theme?) -> String { theme.map { theme in named.last { $0.1 === theme }?.0 ?? "other" } ?? "nil" }
+			            out.append("\\(side) lap \\(lap): \\(owner(leaf.theme)) \\(owner((leaf.api as! LiveApi).theme))")
+			            let mid = leaf.midBuilder.instantiate()
+			            named.append(("Mid of lap \\(lap)", mid.theme.instance))
+			            leaf = mid.leafBuilder.instantiate()
+			        }
+			    }
+			    return out
+			}()
+			"""),
+			expectedValues: """
+			probe whose theme each lap’s Leaf and its api read
+			Array<String>
+			  0: String "First lap 1: First First"
+			  1: String "First lap 2: Mid of lap 1 Mid of lap 1"
+			  2: String "First lap 3: Mid of lap 2 Mid of lap 2"
+			  3: String "Second lap 1: Second Second"
+			  4: String "Second lap 2: Mid of lap 1 Mid of lap 1"
+			  5: String "Second lap 3: Mid of lap 2 Mid of lap 2"
+
+			""",
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_fillReadsBothLabelsFromOneDeclarer_whenTwoWaysRoundRingEachDeclareBothLabels() async throws {
+		// R receives l1 and l2, and A and B, the two ways round the ring, each declare both: on every route the fill reads
+		// both of the nearest declarer, never one label of one way and the other of the other.
+		try await expectValuesEqualInlineBuild(
+			feature: [
+				"public protocol Api {}",
+				seamFixtureType(named: "L", isFinalClass: true, declarations: []),
+				seamFixtureType(named: "Hub", isSeam: true, declarations: ["@Instantiated public let l1: L", "@Instantiated public let l2: L", "@Instantiated public let rBuilder: Instantiator<R>"]),
+				seamFixtureType(named: "R", declarations: ["@Received public let l1: L", "@Received public let l2: L", "@Instantiated public let aBuilder: Instantiator<A>", "@Instantiated public let bBuilder: Instantiator<B>", "@Instantiated public let api: any Api"]),
+				seamFixtureType(named: "A", declarations: ["@Instantiated public let l1: L", "@Instantiated public let l2: L", "@Instantiated public let rBuilder: Instantiator<R>"]),
+				seamFixtureType(named: "B", declarations: ["@Instantiated public let l1: L", "@Instantiated public let l2: L", "@Instantiated public let rBuilder: Instantiator<R>"]),
+			],
+			fulfiller: Self.liveApi(["@Received public let l1: L", "@Received public let l2: L"]),
+			root: seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated public let hub: Hub"]),
+			probe: DifferentialValueProbe(name: "whose l1 and l2 each route’s api reads", expression: """
+			{ () -> [String] in
+			    let hub = Root().hub
+			    var out = [String]()
+			    func visit(_ r: R, _ path: String, _ named: [(String, L, L)]) {
+			        let live = r.api as! LiveApi
+			        out.append("\\(path): \\(named.last { $0.1 === live.l1 }?.0 ?? "other") \\(named.last { $0.2 === live.l2 }?.0 ?? "other")")
+			        guard named.count < 4 else { return }
+			        let a = r.aBuilder.instantiate()
+			        visit(a.rBuilder.instantiate(), path + ">A>R", named + [("A of lap \\(named.count)", a.l1, a.l2)])
+			        let b = r.bBuilder.instantiate()
+			        visit(b.rBuilder.instantiate(), path + ">B>R", named + [("B of lap \\(named.count)", b.l1, b.l2)])
+			    }
+			    visit(hub.rBuilder.instantiate(), "R", [("hub", hub.l1, hub.l2)])
+			    return out
+			}()
+			"""),
+			expectedValues: """
+			probe whose l1 and l2 each route’s api reads
+			Array<String>
+			  0: String "R: hub hub"
+			  1: String "R>A>R: A of lap 1 A of lap 1"
+			  2: String "R>A>R>A>R: A of lap 2 A of lap 2"
+			  3: String "R>A>R>A>R>A>R: A of lap 3 A of lap 3"
+			  4: String "R>A>R>A>R>B>R: B of lap 3 B of lap 3"
+			  5: String "R>A>R>B>R: B of lap 2 B of lap 2"
+			  6: String "R>A>R>B>R>A>R: A of lap 3 A of lap 3"
+			  7: String "R>A>R>B>R>B>R: B of lap 3 B of lap 3"
+			  8: String "R>B>R: B of lap 1 B of lap 1"
+			  9: String "R>B>R>A>R: A of lap 2 A of lap 2"
+			  10: String "R>B>R>A>R>A>R: A of lap 3 A of lap 3"
+			  11: String "R>B>R>A>R>B>R: B of lap 3 B of lap 3"
+			  12: String "R>B>R>B>R: B of lap 2 B of lap 2"
+			  13: String "R>B>R>B>R>A>R: A of lap 3 A of lap 3"
+			  14: String "R>B>R>B>R>B>R: B of lap 3 B of lap 3"
+
+			""",
 		)
 	}
 

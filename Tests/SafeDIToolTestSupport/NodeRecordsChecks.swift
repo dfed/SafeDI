@@ -34,7 +34,7 @@ enum NodeRecordsChecks {
 		let enclosingSeamCallObserver = SeamCallRecordObservation.observer
 		// A seam call's record, as the engine is to spell it, must list what its text reads, binds and declares, and spell
 		// the text's guard line and builder arguments.
-		let seamCallObserver: @Sendable (SeamCallRecordObservation) -> Void = { call in
+		let seamCallObserver = TaskLocalFunction<@Sendable (SeamCallRecordObservation) -> Void> { call in
 			if let boundNames = call.boundNames {
 				for mismatch in HoleSiteRecordObservation.recordMismatches(text: call.text, readNames: call.readNames, boundNames: boundNames, place: "a seam call") {
 					Issue.record(Comment(rawValue: mismatch))
@@ -50,7 +50,7 @@ enum NodeRecordsChecks {
 		}
 		let enclosingDispatcherObserver = DispatcherRecordObservation.observer
 		// A dispatcher's declaration, spelled from the call's records alone, must be the text the tree writes.
-		let dispatcherObserver: @Sendable (DispatcherRecordObservation) -> Void = { dispatcher in
+		let dispatcherObserver = TaskLocalFunction<@Sendable (DispatcherRecordObservation) -> Void> { dispatcher in
 			if dispatcher.spelledFromRecord != dispatcher.text {
 				Issue.record(Comment(rawValue: "The records of a dispatcher spell\n\(dispatcher.spelledFromRecord)\nwhere the tree writes\n\(dispatcher.text)"))
 			}
@@ -58,7 +58,7 @@ enum NodeRecordsChecks {
 		}
 		let enclosingFillObserver = FillSignatureObservation.observer
 		// A fill's function, up to its tree, spelled from the fill's record alone, must be the text the tree writes.
-		let fillObserver: @Sendable (FillSignatureObservation) -> Void = { fill in
+		let fillObserver = TaskLocalFunction<@Sendable (FillSignatureObservation) -> Void> { fill in
 			if fill.spelledFromRecord != fill.written {
 				Issue.record(Comment(rawValue: "The record of a fill spells\n\(fill.spelledFromRecord.joined(separator: "\n"))\nwhere the tree writes\n\(fill.written.joined(separator: "\n"))"))
 			}
@@ -73,20 +73,43 @@ enum NodeRecordsChecks {
 		}
 	}
 
-	private static func checkingNodeRecords<Result>(laysOutRoots: Bool, reportPath: String?, testName: String, enclosingObserver: (@Sendable (NodeRecordsReport) -> Void)?, _ body: () async throws -> Result) async rethrows -> Result {
+	private static func checkingNodeRecords<Result>(laysOutRoots: Bool, reportPath: String?, testName: String, enclosingObserver: TaskLocalFunction<@Sendable (NodeRecordsReport) -> Void>?, _ body: () async throws -> Result) async rethrows -> Result {
 		try await NodeRecordsObservation.$laysOutRoots.withValue(laysOutRoots) {
-			try await NodeRecordsObservation.$observer.withValue({ report in
-				for difference in report.differences {
+			try await NodeRecordsObservation.$observer.withValue(TaskLocalFunction { report in
+				let outcome = Self.outcome(of: report)
+				for difference in outcome.differences {
 					Issue.record(Comment(rawValue: "Node records differ from the tree’s records of root \(report.root): \(difference)"))
 				}
 				if let reportPath {
-					let outcome = report.isLaidOutFromNodeRecords ? "laid out" : report.refusal ?? "accepted"
-					append("\(testName)\t\(report.root)\t\(outcome)\t\(report.differences.count)\t\(report.everyRefusal.joined(separator: ","))\t\(report.isMockRoot ? "mock" : "")\n", toFileAt: reportPath)
+					let state = report.isLaidOutFromNodeRecords ? "laid out" : report.refusal ?? "accepted"
+					append("\(testName)\t\(report.root)\t\(state)\t\(outcome.differences.count)\t\(report.everyRefusal.joined(separator: ","))\t\(report.isMockRoot ? "mock" : "")\t\(outcome.approvedEntries.map(String.init).joined(separator: ","))\n", toFileAt: reportPath)
 				}
 				enclosingObserver?(report)
 			}) {
 				try await body()
 			}
+		}
+	}
+
+	/// The differences of `report` that fail its test, and the entries of the approved differences that account for the
+	/// rest. A root's differences are approved only together: the code laid out from its records, each approved
+	/// difference it holds rewritten as the tree writes it (`ApprovedDifferences`), is the tree's code byte for byte.
+	/// Then the records' differences from the tree's, place by place, are that rewrite's and fail nothing. A difference
+	/// no text shows always fails, as does every difference of a root whose two texts were not both laid out.
+	static func outcome(of report: NodeRecordsReport, approving approvedDifferences: [ApprovedDifference] = ApprovedDifferences.all) -> (differences: [String], approvedEntries: [Int]) {
+		guard !report.differences.isEmpty, let texts = report.comparedTexts else { return (report.differences, []) }
+		// One function with an optional parameter serves a call that answers a read only if available and a call that
+		// does not: its record reads the declaration where the tree's place at the second call reads `nil`, and the two
+		// write the same code, the call passing `nil`. The comparison names exactly that difference
+		// (`NodeRecordsReport.argumentsOfOptionalParameterDifferenceName`), no text shows it, and no rewrite of the
+		// approved differences runs for it, so it is counted under no entry. Any other difference of a root whose texts
+		// are equal fails (`ApprovedDifferencesTests`).
+		if texts.nodeRecords == texts.tree, report.differences.allSatisfy({ $0.contains(": \(NodeRecordsReport.argumentsOfOptionalParameterDifferenceName) is ") }) {
+			return (report.differencesNoTextShows, [])
+		} else if let normalized = ApprovedDifferences.normalized(nodeRecordsText: texts.nodeRecords, treeText: texts.tree, by: approvedDifferences) {
+			return (report.differencesNoTextShows, normalized.entries)
+		} else {
+			return (report.differences, [])
 		}
 	}
 

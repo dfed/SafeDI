@@ -96,7 +96,7 @@ struct SafeDIToolVariantBodyTests: ~Copyable {
 		// by `Root`, and `screenBuilder` being built. Every place of today's tree takes one of them.
 		var plans = [Plan]()
 		let (stream, continuation) = AsyncStream.makeStream(of: Plan.self)
-		try await PlanBodiesObservation.$observer.withValue({ root, bodiesOfPlan, todaysBodiesPlanLacks, twinValues in
+		try await PlanBodiesObservation.$observer.withValue(TaskLocalFunction { root, bodiesOfPlan, todaysBodiesPlanLacks, twinValues in
 			continuation.yield(Plan(root: root, bodiesOfPlan: bodiesOfPlan, todaysBodiesPlanLacks: todaysBodiesPlanLacks, twinValues: twinValues))
 		}) {
 			_ = try await executeSafeDIToolTest(
@@ -152,7 +152,7 @@ struct SafeDIToolVariantBodyTests: ~Copyable {
 		// through `Root`'s `LazilyInstantiated`, `clock` from `Root`, and `theme`, which nothing declares.
 		var calls = [[String]]()
 		let (stream, continuation) = AsyncStream.makeStream(of: [String].self)
-		try await PlanCallsObservation.$observer.withValue({ root, calls in
+		try await PlanCallsObservation.$observer.withValue(TaskLocalFunction { root, calls in
 			continuation.yield([root] + calls)
 		}) {
 			_ = try await executeSafeDIToolTest(
@@ -219,7 +219,7 @@ struct SafeDIToolVariantBodyTests: ~Copyable {
 		// since the nearest declaration of `home` there is `Panel`'s. `Detail`'s call is answered as `Root`'s is.
 		var plans = [Plan]()
 		let (stream, continuation) = AsyncStream.makeStream(of: Plan.self)
-		try await PlanBodiesObservation.$observer.withValue({ root, bodiesOfPlan, todaysBodiesPlanLacks, twinValues in
+		try await PlanBodiesObservation.$observer.withValue(TaskLocalFunction { root, bodiesOfPlan, todaysBodiesPlanLacks, twinValues in
 			continuation.yield(Plan(root: root, bodiesOfPlan: bodiesOfPlan, todaysBodiesPlanLacks: todaysBodiesPlanLacks, twinValues: twinValues))
 		}) {
 			_ = try await executeSafeDIToolTest(
@@ -284,7 +284,7 @@ struct SafeDIToolVariantBodyTests: ~Copyable {
 			let roles = (0..<screenCount).map { ContextRole.allCases[$0 % ContextRole.allCases.count] }
 			let targets = (0..<screenCount).map { screen in [1, 3, 7].map { (screen + $0) % screenCount }.sorted() }
 			let (stream, continuation) = AsyncStream.makeStream(of: Plan.self)
-			try await PlanBodiesObservation.$observer.withValue({ root, bodiesOfPlan, todaysBodiesPlanLacks, twinValues in
+			try await PlanBodiesObservation.$observer.withValue(TaskLocalFunction { root, bodiesOfPlan, todaysBodiesPlanLacks, twinValues in
 				continuation.yield(Plan(root: root, bodiesOfPlan: bodiesOfPlan, todaysBodiesPlanLacks: todaysBodiesPlanLacks, twinValues: twinValues))
 			}) {
 				_ = try await executeSafeDIToolTest(
@@ -314,7 +314,7 @@ struct SafeDIToolVariantBodyTests: ~Copyable {
 		var counts = [Int]()
 		for memberCount in [8, 16] {
 			let (stream, continuation) = AsyncStream.makeStream(of: Plan.self)
-			try await PlanBodiesObservation.$observer.withValue({ root, bodiesOfPlan, todaysBodiesPlanLacks, twinValues in
+			try await PlanBodiesObservation.$observer.withValue(TaskLocalFunction { root, bodiesOfPlan, todaysBodiesPlanLacks, twinValues in
 				continuation.yield(Plan(root: root, bodiesOfPlan: bodiesOfPlan, todaysBodiesPlanLacks: todaysBodiesPlanLacks, twinValues: twinValues))
 			}) {
 				_ = try await executeSafeDIToolTest(
@@ -343,7 +343,7 @@ struct SafeDIToolVariantBodyTests: ~Copyable {
 		var hubBodyCounts = [Int?]()
 		for memberCount in [3, 4] {
 			let (stream, continuation) = AsyncStream.makeStream(of: Plan.self)
-			try await PlanBodiesObservation.$observer.withValue({ root, bodiesOfPlan, todaysBodiesPlanLacks, twinValues in
+			try await PlanBodiesObservation.$observer.withValue(TaskLocalFunction { root, bodiesOfPlan, todaysBodiesPlanLacks, twinValues in
 				continuation.yield(Plan(root: root, bodiesOfPlan: bodiesOfPlan, todaysBodiesPlanLacks: todaysBodiesPlanLacks, twinValues: twinValues))
 			}) {
 				_ = try await executeSafeDIToolTest(
@@ -370,7 +370,7 @@ struct SafeDIToolVariantBodyTests: ~Copyable {
 		// The root reaches `Flow` before `Detail`, which builds `Flow` again beneath a forwarded `mark`: the plan walks the
 		// path through `Detail` too, so `Screen`'s cycle gets a body that reads `Detail`'s `mark` beside the one that reads `nil`.
 		let (stream, continuation) = AsyncStream.makeStream(of: Plan.self)
-		try await PlanBodiesObservation.$observer.withValue({ root, bodiesOfPlan, todaysBodiesPlanLacks, twinValues in
+		try await PlanBodiesObservation.$observer.withValue(TaskLocalFunction { root, bodiesOfPlan, todaysBodiesPlanLacks, twinValues in
 			continuation.yield(Plan(root: root, bodiesOfPlan: bodiesOfPlan, todaysBodiesPlanLacks: todaysBodiesPlanLacks, twinValues: twinValues))
 		}) {
 			_ = try await executeSafeDIToolTest(
@@ -433,7 +433,7 @@ struct SafeDIToolVariantBodyTests: ~Copyable {
 		// by label, so `Detail` reads `Flow`'s declaration, which provides no `Stamp?`, and nothing above `Flow` answers a
 		// read: neither `Screen` nor `Flow` is keyed by `mark`, and only `Detail` takes it, optionally.
 		let (stream, continuation) = AsyncStream.makeStream(of: Plan.self)
-		try await PlanBodiesObservation.$observer.withValue({ root, bodiesOfPlan, todaysBodiesPlanLacks, twinValues in
+		try await PlanBodiesObservation.$observer.withValue(TaskLocalFunction { root, bodiesOfPlan, todaysBodiesPlanLacks, twinValues in
 			continuation.yield(Plan(root: root, bodiesOfPlan: bodiesOfPlan, todaysBodiesPlanLacks: todaysBodiesPlanLacks, twinValues: twinValues))
 		}) {
 			_ = try await executeSafeDIToolTest(
@@ -496,7 +496,7 @@ struct SafeDIToolVariantBodyTests: ~Copyable {
 		// opens `Screen` beneath no `Context`, and `Flow` beneath its own. `Screen`'s body takes `context` optionally, as
 		// the value the alias reads, so both calls share it.
 		let (stream, continuation) = AsyncStream.makeStream(of: Plan.self)
-		try await PlanBodiesObservation.$observer.withValue({ root, bodiesOfPlan, todaysBodiesPlanLacks, twinValues in
+		try await PlanBodiesObservation.$observer.withValue(TaskLocalFunction { root, bodiesOfPlan, todaysBodiesPlanLacks, twinValues in
 			continuation.yield(Plan(root: root, bodiesOfPlan: bodiesOfPlan, todaysBodiesPlanLacks: todaysBodiesPlanLacks, twinValues: twinValues))
 		}) {
 			_ = try await executeSafeDIToolTest(
@@ -618,7 +618,7 @@ struct SafeDIToolVariantBodyTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private mutating func bodies(of swiftFileContent: String) async throws -> [Bodies] {
 		let (stream, continuation) = AsyncStream.makeStream(of: Bodies.self)
-		try await VariantBodyObservation.$observer.withValue({ place, todaysUnavailableProperties, bodysUnavailableProperties in
+		try await VariantBodyObservation.$observer.withValue(TaskLocalFunction { place, todaysUnavailableProperties, bodysUnavailableProperties in
 			continuation.yield(Bodies(place: place, todaysUnavailableProperties: todaysUnavailableProperties, bodysUnavailableProperties: bodysUnavailableProperties))
 		}) {
 			_ = try await executeSafeDIToolTest(

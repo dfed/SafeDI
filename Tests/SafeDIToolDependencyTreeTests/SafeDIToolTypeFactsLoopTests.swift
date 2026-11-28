@@ -284,6 +284,68 @@ struct SafeDIToolTypeFactsLoopTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_answersOptionalReadMadeAgain_whenLoopMemberReceivesLaterSiblingsBuilderOnlyIfAvailable() async throws {
+		// `A` receives `bBuilder` only if available and `B` receives `aBuilder`. The root binds `bBuilder` after `aBuilder`,
+		// but `A`'s function begins by making `bBuilder` again, so `A`'s construction reads that: the read stays inside
+		// `A`, where nothing the root binds later can answer it nil.
+		let report = try await rootReport(of: [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let aBuilder: Instantiator<A>", "@Instantiated let bBuilder: Instantiator<B>"]),
+			seamFixtureType(named: "A", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let bBuilder: Instantiator<B>?"]),
+			seamFixtureType(named: "B", isFinalClass: true, declarations: ["@Received let aBuilder: Instantiator<A>"]),
+		])
+		let a = try node(declaring: "A as aBuilder: Instantiator<A>", in: report)
+		let b = try node(declaring: "B as bBuilder: Instantiator<B>", in: report)
+
+		#expect(report.nodes[a].madeAgain == [b] && report.nodes[b].madeAgain == [a], "\(report.world)")
+		#expect(report.variantCountsByNode[a] == 1 && report.variantCountsByNode[b] == 1, "\(report.world)")
+		#expect(report.nodes[a].readsFromAbove == ["value(aBuilder)"], "\(report.world)")
+		#expect(try report.variantMadeAgainCallSources[variant(of: a, in: report)] == [["bound madeAgain"]], "\(report.world)")
+		expectMadeAgainCallsNameTheParentsCalls(in: report)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_answersOptionalReadMadeAgain_whenTypeReceivesInstantiatorThatBuildsItOnlyIfAvailable() async throws {
+		// A loop of one: `Editor` receives `editorBuilder`, the `Instantiator` being built around it, only if available.
+		// `Editor`'s function begins by making `editorBuilder` again, so its construction reads that. Its reads of its own
+		// label reach above, answered by the root's declaration being built, which keys as the rebinding does (rule 2),
+		// never as nil.
+		let report = try await rootReport(of: [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let editorBuilder: Instantiator<Editor>"]),
+			seamFixtureType(named: "Editor", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let editorBuilder: Instantiator<Editor>?"]),
+		])
+		let editor = try node(declaring: "Editor as editorBuilder: Instantiator<Editor>", in: report)
+
+		#expect(report.nodes[editor].madeAgain == [editor], "\(report.world)")
+		#expect(report.variantCountsByNode[editor] == 1, "\(report.world)")
+		#expect(report.nodes[editor].readsFromAbove == ["value(editorBuilder)", "optionalValue(editorBuilder)", "optional(editorBuilder)"], "\(report.world)")
+		#expect(report.variantCallSources[0] == [["bound beingBuilt", "bound beingBuilt", "bound beingBuilt"]], "\(report.world)")
+		#expect(try report.variantMadeAgainCallSources[variant(of: editor, in: report)] == [["bound madeAgain", "bound madeAgain", "bound madeAgain"]], "\(report.world)")
+		expectMadeAgainCallsNameTheParentsCalls(in: report)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keysEachInnerMemberOnce_whenSiblingBuilderIsReceivedInsideLazyCycleOfEarlierSibling() async throws {
+		// `A` and `B` instantiate one another lazily; `A` receives `qBuilder` and `Q` receives `bBuilder`, so `bBuilder` and
+		// `qBuilder` make each other again.
+		let report = try await rootReport(of: [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let aBuilder: Instantiator<A>", "@Instantiated let bBuilder: Instantiator<B>", "@Instantiated let qBuilder: Instantiator<Q>"]),
+			seamFixtureType(named: "A", isFinalClass: true, declarations: ["@Instantiated let innerBBuilder: Instantiator<B>", "@Received let qBuilder: Instantiator<Q>"]),
+			seamFixtureType(named: "B", isFinalClass: true, declarations: ["@Instantiated let innerABuilder: Instantiator<A>"]),
+			seamFixtureType(named: "Q", isFinalClass: true, declarations: ["@Received let bBuilder: Instantiator<B>"]),
+		])
+		let innerA = try node(declaring: "A as innerABuilder: Instantiator<A>", in: report)
+		let innerB = try node(declaring: "B as innerBBuilder: Instantiator<B>", in: report)
+
+		// Each inner member is placed beneath every path into the lazy cycle, and every call of it keys alike.
+		#expect(report.places.count(where: { $0.node == innerA }) == 3 && report.places.count(where: { $0.node == innerB }) == 3, "\(report.world)")
+		#expect(report.variantCountsByNode[innerA] == 1 && report.variantCountsByNode[innerB] == 1, "\(report.world)")
+		expectMadeAgainCallsNameTheParentsCalls(in: report)
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -296,7 +358,7 @@ struct SafeDIToolTypeFactsLoopTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private func rootReportAndOutput(of types: [String], skipCompileVerification: Bool = false, forMockGeneration: Bool = false) async throws -> (report: TypeFactsReport, output: TestOutput) {
 		let (stream, continuation) = AsyncStream.makeStream(of: TypeFactsReport.self)
-		let output = try await ConstructionMemoOracle.$observer.withValue({ _, _, report in continuation.yield(report) }) {
+		let output = try await ConstructionMemoOracle.$observer.withValue(TaskLocalFunction { _, _, report in continuation.yield(report) }) {
 			var filesToDelete = [URL]()
 			defer {
 				for file in filesToDelete {

@@ -625,11 +625,14 @@ func executeSafeDIToolMultiModuleTest(
 																					try await PlanSendableChecks.comparing(handingOn: PlanSendableObservation.observer) {
 																						try await PlanCaptureChecks.comparing(handingOn: PlanCaptureObservation.observer) {
 																							try await UnpassableCycleLabelChecks.checking(handingOn: UnpassableCycleLabelObservation.observer) {
-																								// The fold that decides whether any route is walked must send every graph the walk rejects to the walk (`FulfillmentFoldChecks`).
 																								// Every seam's reads its facts produce must equal its tree's (`SeamTreeReadsChecks`).
 																								try await SeamTreeReadsChecks.comparing(handingOn: SeamTreeReadsObservation.comparesFacts) {
+																									// The fold that decides whether any route is walked must send every graph the walk rejects to the walk (`FulfillmentFoldChecks`).
 																									try await ValidationWalkObservation.$foldComparison.withValue(FulfillmentFoldChecks.comparison(handingOn: ValidationWalkObservation.foldComparison)) {
-																										try await tool.generate()
+																										// Every call of a plan the per-type facts key must take the body, and its function the parameter order, the plan’s own rules give (`PlanFactsKeyChecks`).
+																										try await PlanFactsKeyChecks.comparing(handingOn: PlanFactsKeyObservation.observer) {
+																											try await tool.generate()
+																										}
 																									}
 																								}
 																							}
@@ -689,6 +692,15 @@ func executeSafeDIToolMultiModuleTest(
 		var moduleInfoFile = try moduleInfoOutput.map { try ModuleInfoFile(moduleInfoData: Data(contentsOf: $0)) }
 		if let writtenFile = moduleInfoFile {
 			StoredBlockDecodeChecks.expectStoredBlocksReadBackAsWritten(in: writtenFile, writtenByRunOfModuleNamed: moduleName, sourceLocation: sourceLocation)
+			if let computedSignatures = generateOutput?.seamSignaturesWrittenToModuleInfo {
+				// Each seam's place graph reads back from the file as the graph the run computed (`StoredPlaceGraphChecks`), so
+				// what the oracles check of a computed graph holds of the graph a module above decodes.
+				StoredPlaceGraphChecks.expectGraphsReadBackAsComputed(ofSeamSignatures: computedSignatures, in: writtenFile, writtenByRunOfModuleNamed: moduleName, sourceLocation: sourceLocation)
+			}
+			if let computedPlans = generateOutput?.publicMockPlansWrittenToModuleInfo {
+				// And each public mock's, which a module whose mocks call it decodes.
+				StoredPlaceGraphChecks.expectGraphsReadBackAsComputed(ofPublicMockPlans: computedPlans, in: writtenFile, writtenByRunOfModuleNamed: moduleName, sourceLocation: sourceLocation)
+			}
 		}
 		if discardsStoredSeamSignatures, let moduleInfoOutput, let writtenFile = moduleInfoFile {
 			// The modules above compute every seam's signature again, as the SwiftPM plugin's flow does.
@@ -953,7 +965,7 @@ enum SplitPositionsRun {
 		// that keeps nothing, so both runs read their files' graphs and differ in where the positions are stored alone,
 		// and the whole run's observer sees no place twice.
 		let splitRun: Result<Generate.Output, any Error> = await Task.detached {
-			await SeamPlaceLevels.$observer.withValue({ _ in }) {
+			await SeamPlaceLevels.$observer.withValue(TaskLocalFunction { _ in }) {
 				do {
 					return try await .success(Generate.parse(splitArguments).generate())
 				} catch {

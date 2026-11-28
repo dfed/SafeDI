@@ -257,10 +257,6 @@ struct SafeDIToolPublicMockPromotedHoleTests: ~Copyable {
 				        public init(leaf: @escaping (SendableInstantiator<D>) -> __safeDI_ApiCarrier_Leaf<__safeDI_Built>) {
 				            self.leaf = leaf
 				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(leaf: { _ in .init(__safeDI_noScope: __safeDI_builder) })
-				        }
 				    }
 
 				    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -269,10 +265,6 @@ struct SafeDIToolPublicMockPromotedHoleTests: ~Copyable {
 
 				        public init(api: @escaping () -> __safeDI_Built) {
 				            self.api = api
-				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(api: { __safeDI_builder() })
 				        }
 				    }
 
@@ -2700,10 +2692,13 @@ struct SafeDIToolPublicMockPromotedHoleTests: ~Copyable {
 				        apiBuilder: (() -> any Api)? = nil,
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> Screen {
+				        func __safeDI_fillBody_CF02C2716DA66B07() -> any Api {
+				            let api: any Api = LiveApi()
+				            return api
+				        }
 				        func __safeDI_other() -> Other {
 				            func __safeDI_apiBuilder_Other_api() -> any Api {
-				                let api: any Api = LiveApi()
-				                return api
+				                return __safeDI_fillBody_CF02C2716DA66B07()
 				            }
 				            func __safeDI_apiBuilder_Other() -> Other.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
 				                .init(api: { _ in __safeDI_apiBuilder_Other_api() })
@@ -2996,8 +2991,11 @@ struct SafeDIToolPublicMockPromotedHoleTests: ~Copyable {
 				        let __safeDI_other__safeDIBuilder = safeDIOverrides.other
 				        @Sendable nonisolated func __safeDI_other() -> Other {
 				            func __safeDI_apiBuilder_Other_api() -> any Api {
-				                let api: any Api = LiveApi()
-				                return api
+				                func __safeDI_fillBody_CF02C2716DA66B07() -> any Api {
+				                    let api: any Api = LiveApi()
+				                    return api
+				                }
+				                return __safeDI_fillBody_CF02C2716DA66B07()
 				            }
 				            func __safeDI_apiBuilder_Other() -> Other.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
 				                .init(api: { _ in __safeDI_apiBuilder_Other_api() })
@@ -3064,10 +3062,6 @@ struct SafeDIToolPublicMockPromotedHoleTests: ~Copyable {
 
 				        public init(api: @escaping () -> __safeDI_Built) {
 				            self.api = api
-				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(api: { __safeDI_builder() })
 				        }
 				    }
 
@@ -3312,10 +3306,13 @@ struct SafeDIToolPublicMockPromotedHoleTests: ~Copyable {
 				        apiBuilder: (() -> any Api)? = nil,
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> Screen {
+				        func __safeDI_fillBody_CF02C2716DA66B07() -> any Api {
+				            let api: any Api = LiveApi()
+				            return api
+				        }
 				        func __safeDI_other() -> Other {
 				            func __safeDI_apiBuilder_Other_api() -> any Api {
-				                let api: any Api = LiveApi()
-				                return api
+				                return __safeDI_fillBody_CF02C2716DA66B07()
 				            }
 				            func __safeDI_apiBuilder_Other() -> Other.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
 				                .init(api: { _ in __safeDI_apiBuilder_Other_api() })

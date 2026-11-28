@@ -38,7 +38,7 @@ public struct Generate: AsyncParsableCommand {
 
 	@Option(parsing: .upToNextOption, help: "Deprecated, and removed in SafeDI 3.0: list these modules in the module’s `#SafeDIConfiguration(additionalImportedModules:)` instead. The names of modules to import in the generated code, in addition to the import statements found in files that declare @Instantiable types.") var additionalImportedModules: [String] = []
 
-	@Option(help: "Where to write this module’s `.safedi` module info file, which the modules that list this one read through '--dependent-module-info-file-path' or '--transitive-module-info-file-path'. Pass it in every module’s run, a module that declares a root included, as SafeDI’s Bazel rule and Tuist plugin do. Name the file with the `.safedi` extension, which `query needs --module-info` drops to name the module. Requires '--module-name': a module info file names the module it describes. Written only when the run succeeds, and only when its bytes change.") var moduleInfoOutput: String?
+	@Option(help: "Where to write this module’s `.safedi` module info file, which the modules that list this one read through '--dependent-module-info-file-path' or '--transitive-module-info-file-path'. Pass it in every module’s run, a module that declares a root included, as SafeDI’s Bazel rule and Tuist plugin do. Name the file with the `.safedi` extension. Requires '--module-name': a module info file names the module it describes, and `query --module-info` names the module that name, whatever the file is called. Written only when the run succeeds, and only when its bytes change.") var moduleInfoOutput: String?
 
 	@Option(help: "A path to a CSV file containing paths of SafeDI representations of other modules to parse: the `.safedi` file of each module this module depends on – each module whose types this module or the code SafeDI generates for its roots and mocks uses, so a module that declares a root lists every module beneath it, except those '--transitive-module-info-file-path' names that its dependency trees need. Each carries what a type of a module it depends on declared with `generateDependencyTree: true` or `generateMock: .public` needs, so a module is never listed only for such a type of another module.") var dependentModuleInfoFilePath: String?
 
@@ -160,6 +160,13 @@ public struct Generate: AsyncParsableCommand {
 		public let warnings: [SourceDiagnostic]
 		/// The module this run generated code for, with the module that declares each of its declarations.
 		public let module: ModuleInfo
+		/// The signatures of its module’s seams as the run computed them and wrote them into its module info, or `nil` for a
+		/// run that wrote no module info. The tests read it, never the tool: the multi-module harness compares the place
+		/// graph the file holds of each seam, read back, with the graph computed.
+		public let seamSignaturesWrittenToModuleInfo: [StoredSeamSignature]?
+		/// The plans of its module’s public mocks as the run computed them and handed them to its module info, or `nil` for
+		/// a run that wrote no module info. The tests read it, never the tool, as they read the signatures above.
+		public let publicMockPlansWrittenToModuleInfo: [StoredPublicMockPlan]?
 		/// The modules whose info this run read, in the order it combined their declarations.
 		let dependentModuleNames: [String?]
 		/// What the run built on its way to its outputs, which nothing reads: held here so that `run()` can keep it from
@@ -364,7 +371,8 @@ public struct Generate: AsyncParsableCommand {
 				activeCompilationConditions: suppliedCompilationConditions,
 			),
 		)
-		let listedModuleInfoFiles = try await referenceResolver.resolvingReferences(in: unresolvedListedModuleInfoFiles)
+		let listedModuleInfoFiles = unresolvedListedModuleInfoFiles
+		let listedReferences = try await referenceResolver.resolvingReferences(in: listedModuleInfoFiles)
 		// A reserved name is a mistake in the module's own files whatever its trees hold, so it is reported before any is
 		// built. A module that depends on this one never reads these declarations, so only this run reports them.
 		let reservedTypeNameDeclarations = parsed.module.reservedTypeNameDeclarations
@@ -419,8 +427,9 @@ public struct Generate: AsyncParsableCommand {
 		} else {
 			parsedModuleInfo = initialModule
 		}
-		let (dependentModuleInfoFiles, pathsBeneathOpened) = try await moduleInfoFilesIncludingThoseBeneath(
+		let (dependentModuleInfoFiles, references, pathsBeneathOpened) = try await moduleInfoFilesIncludingThoseBeneath(
 			listedFiles: listedModuleInfoFiles,
+			listedReferences: listedReferences,
 			listedPaths: listedModuleInfoPaths,
 			ownModule: parsedModuleInfo,
 			referenceResolver: referenceResolver,
@@ -450,6 +459,7 @@ public struct Generate: AsyncParsableCommand {
 			directModules: dependentModuleInfoFiles,
 			ownModuleDeclaresSeamOrPublicMock: module.instantiables.contains { $0.generatesDependencyTree || $0.generateMock == .public },
 			viewsReferToModules: moduleInfoViewsReferToModules,
+			references: references,
 		)
 
 		// The modules each module of the module infos this run reads depends on directly, which that module's run read:
@@ -1068,6 +1078,8 @@ public struct Generate: AsyncParsableCommand {
 		return Output(
 			warnings: warnings,
 			module: module,
+			seamSignaturesWrittenToModuleInfo: moduleInfoDestination.map { _ in storedSeamSignatures },
+			publicMockPlansWrittenToModuleInfo: moduleInfoDestination.map { _ in storedPublicMockPlans },
 			dependentModuleNames: dependentModuleNames,
 			// Only what the run reads until its end: holding a value it is done with sooner would raise its peak memory.
 			builtValues: [generator, moduleInfoViewToWrite],
@@ -2140,32 +2152,34 @@ public struct Generate: AsyncParsableCommand {
 	}
 
 	/// `listedFiles`, read from `listedPaths`, with those of the files `--transitive-module-info-file-path` lists that
-	/// `ModulesBeneathSelection` picks, in the order of the paths of them all, and the path of each file beneath it opened,
-	/// which `--unused-inputs-list-output` leaves out. Opens every file beneath, to choose among them, only when the
+	/// `ModulesBeneathSelection` picks, in the order of the paths of them all, the entries the references of all their
+	/// views resolve to, and the path of each file beneath it opened, which `--unused-inputs-list-output` leaves out. Opens every file beneath, to choose among them, only when the
 	/// module's trees reach a type that the module and `listedFiles` do not declare, and otherwise none.
 	/// - Throws: When a file cannot be read.
 	private func moduleInfoFilesIncludingThoseBeneath(
 		listedFiles: [(file: ModuleInfoFile, path: String)],
+		listedReferences: ResolvedModuleReferences,
 		listedPaths: [String],
 		ownModule: ModuleInfo,
 		referenceResolver: ModuleReferenceResolver,
-	) async throws -> (files: [(file: ModuleInfoFile, path: String)], pathsBeneathOpened: [String]) {
+	) async throws -> (files: [(file: ModuleInfoFile, path: String)], references: ResolvedModuleReferences, pathsBeneathOpened: [String]) {
 		// A run given no modules beneath builds no selection, whose tables hold every declaration read.
 		guard let transitiveModuleInfoFilePath else {
-			return (files: listedFiles, pathsBeneathOpened: [])
+			return (files: listedFiles, references: listedReferences, pathsBeneathOpened: [])
 		}
-		var selection = ModulesBeneathSelection(ownModule: ownModule, listedFiles: listedFiles.map(\.file))
+		var selection = ModulesBeneathSelection(ownModule: ownModule, listedFiles: listedFiles.map(\.file), references: listedReferences)
 		guard selection.reachesTypeNothingReadDeclares() else {
-			return (files: listedFiles, pathsBeneathOpened: [])
+			return (files: listedFiles, references: listedReferences, pathsBeneathOpened: [])
 		}
 		let otherPaths = try Set(moduleInfoPaths(listedIn: transitiveModuleInfoFilePath)).subtracting(listedPaths).sorted()
 		let otherFiles = try await loadSafeDIModuleInfo(at: otherPaths, readingViews: false)
 		let pathsToRead = selection.indicesOfFilesToRead(among: otherFiles.map(\.file)).sorted().map { otherPaths[$0] }
-		let filesToRead = try await referenceResolver.resolvingReferences(in: loadSafeDIModuleInfo(at: pathsToRead))
+		let filesToRead = try await loadSafeDIModuleInfo(at: pathsToRead)
+		let references = try await referenceResolver.resolvingReferences(in: filesToRead)
 		let files = zip(listedPaths + pathsToRead, listedFiles + filesToRead)
 			.sorted { $0.0 < $1.0 }
 			.map(\.1)
-		return (files: files, pathsBeneathOpened: otherPaths)
+		return (files: files, references: references, pathsBeneathOpened: otherPaths)
 	}
 
 	/// Where `--module-info-output` writes the module's info, and the module it names, or `nil` when the run writes none.

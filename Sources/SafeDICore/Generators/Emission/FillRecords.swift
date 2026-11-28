@@ -67,7 +67,10 @@ struct DispatcherRecord: Sendable {
 }
 
 /// The function of a fill: the place it fills, built in its body, and how the function takes and binds the case's values.
-/// The fill's place is a built place among the call's children whose record holds this signature.
+/// The fill's place is a built place among the call's children whose record holds this signature. A deliberate gap: the
+/// record spells a fill that binds its fields itself, never one that calls a shared body (`sharedFillBodyFunction`), whose
+/// fields are its body's arguments, so `FillSignatureObservation` observes only the first; the record learns the shared
+/// form before records lay out a fill that calls one.
 struct FillSignature: Sendable {
 	/// How the fill takes the values of its case (`lanes/node-records-fills/fill-body-record.md`).
 	enum Form: Sendable {
@@ -169,7 +172,7 @@ public struct FillSignatureObservation: Sendable {
 	public let spelledFromRecord: [String]
 
 	/// Called with each fill as its function is written, when set: by the tests, never by the tool.
-	@TaskLocal public static var observer: (@Sendable (FillSignatureObservation) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (FillSignatureObservation) -> Void>?
 }
 
 /// What a call that fills a builder hands its dispatchers of the caller's scope, shared by every builder it fills.
@@ -201,7 +204,7 @@ struct FilledCallFields: Sendable {
 		for dispatcher in dispatchers where parametersByKey[dispatcher.key] == nil {
 			parametersByKey[dispatcher.key] = dispatcher.parameters
 		}
-		return record.dispatcher.declaration(
+		return record.dispatcher.declarationAndCaptures(
 			isSendable: asRootFunction ? false : record.isSendable,
 			indent: indent,
 			inlinedFills: inlinedFills,
@@ -211,7 +214,7 @@ struct FilledCallFields: Sendable {
 			typesDeclaredEscaping: typesDeclaredEscaping,
 			fillsTakingPayloadFields: fillsTakingPayloadFields,
 			labelsHiddenByReenteringCalls: labelsHiddenByReenteringCalls,
-		)
+		).text
 	}
 }
 
@@ -221,5 +224,5 @@ public struct DispatcherRecordObservation: Sendable {
 	public let spelledFromRecord: String
 
 	/// Called with each dispatcher as its declaration is written, when set: by the tests, never by the tool.
-	@TaskLocal public static var observer: (@Sendable (DispatcherRecordObservation) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (DispatcherRecordObservation) -> Void>?
 }

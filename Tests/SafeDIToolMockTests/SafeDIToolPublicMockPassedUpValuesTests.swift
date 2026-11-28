@@ -75,6 +75,29 @@ struct SafeDIToolPublicMockPassedUpValuesTests: ~Copyable {
 		)
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_compiles_whenTwoCallsOfPublicMockEachPresentPlaceItHoldsOnTwoRoutes() async throws {
+		_ = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				ModuleFixture(name: "Inner", packageName: "Shop", swiftFileContent: [
+					"public protocol Api {}",
+					seamFixtureType(named: "Detail", isFinalClass: true, declarations: ["@Instantiated public let api: any Api"]),
+					seamFixtureType(named: "First", isFinalClass: true, declarations: ["@Instantiated public let detail: Detail"]),
+					seamFixtureType(named: "Second", isFinalClass: true, declarations: ["@Instantiated public let detail: Detail"]),
+					Self.publicMockType(named: "Holder", declarations: ["@Instantiated public let first: First", "@Instantiated public let second: Second"]),
+				]),
+				ModuleFixture(name: "Outer", packageName: "Other", swiftFileContent: [
+					seamFixtureType(named: "Left", isFinalClass: true, declarations: ["@Instantiated public let holder: Holder"]),
+					seamFixtureType(named: "Right", isFinalClass: true, declarations: ["@Instantiated public let holder: Holder"]),
+					Self.publicMockType(named: "Home", declarations: ["@Instantiated public let left: Left", "@Instantiated public let right: Right"]),
+				].map { "import Inner\n\n" + $0 }, dependencies: ["Inner"]),
+			],
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]

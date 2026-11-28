@@ -335,10 +335,13 @@ struct SafeDIToolCallingMockOnlyIfAvailableOverrideTests: ~Copyable {
 		        apiBuilder: (() -> any Api)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
+		        func __safeDI_fillBody_4B36035601BEA37A(token: Token?) -> any Api {
+		            let api: any Api = LiveApi(token: token)
+		            return api
+		        }
 		        func __safeDI_feed() -> Feed {
 		            func __safeDI_apiBuilder_Feed_Model_Scope_api(_ scope: Feed.SafeDIMockScope_Api.Model_Scope.api_Values, token: Token?) -> any Api {
-		                let api: any Api = LiveApi(token: token)
-		                return api
+		                return __safeDI_fillBody_4B36035601BEA37A(token: token)
 		            }
 		            func __safeDI_apiBuilder_Feed(token: Token?) -> Feed.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
 		                .init(page: { _ in __safeDI_apiBuilder_Feed_Page_Scope() }, model: { _ in __safeDI_apiBuilder_Feed_Model_Scope_(token: token) })

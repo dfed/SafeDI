@@ -201,18 +201,21 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		    ) -> Screen {
 		        func __safeDI_page() -> Page {
 		            func __safeDI_serviceBuilder_Page_service() -> any Service {
-		                func __safeDI_service() -> DefaultService {
-		                    func __safeDI_book() -> Book {
-		                        func __safeDI_serviceBuilder_Book() -> Book.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
-		                            .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page() })
+		                func __safeDI_fillBody_96A855B3BD35F2C0() -> any Service {
+		                    func __safeDI_service() -> DefaultService {
+		                        func __safeDI_book() -> Book {
+		                            func __safeDI_serviceBuilder_Book() -> Book.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
+		                                .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page() })
+		                            }
+		                            return Book.__safeDI_mock(serviceBuilder: serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Book())
 		                        }
-		                        return Book.__safeDI_mock(serviceBuilder: serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Book())
+		                        let book: Book = __safeDI_book()
+		                        return DefaultService(book: book)
 		                    }
-		                    let book: Book = __safeDI_book()
-		                    return DefaultService(book: book)
+		                    let service: any Service = __safeDI_service()
+		                    return service
 		                }
-		                let service: any Service = __safeDI_service()
-		                return service
+		                return __safeDI_fillBody_96A855B3BD35F2C0()
 		            }
 		            func __safeDI_serviceBuilder_Page() -> Page.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 		                .init(service: { _ in __safeDI_serviceBuilder_Page_service() })
@@ -392,18 +395,21 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		    ) -> Screen {
 		        func __safeDI_page() -> Page {
 		            func __safeDI_serviceBuilder_Page_service() -> any Service {
-		                func __safeDI_service() -> DefaultService {
-		                    func __safeDI_book() -> Book {
-		                        func __safeDI_serviceBuilder_Book() -> Book.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
-		                            .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page() })
+		                func __safeDI_fillBody_1D06A76F6097A5EF() -> any Service {
+		                    func __safeDI_service() -> DefaultService {
+		                        func __safeDI_book() -> Book {
+		                            func __safeDI_serviceBuilder_Book() -> Book.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
+		                                .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page() })
+		                            }
+		                            return Book.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Book())
 		                        }
-		                        return Book.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Book())
+		                        let book: Book = __safeDI_book()
+		                        return DefaultService(book: book)
 		                    }
-		                    let book: Book = __safeDI_book()
-		                    return DefaultService(book: book)
+		                    let service: any Service = __safeDI_service()
+		                    return service
 		                }
-		                let service: any Service = __safeDI_service()
-		                return service
+		                return __safeDI_fillBody_1D06A76F6097A5EF()
 		            }
 		            func __safeDI_serviceBuilder_Page() -> Page.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 		                .init(service: { _ in __safeDI_serviceBuilder_Page_service() })
@@ -579,18 +585,21 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		    ) -> Screen {
 		        func __safeDI_page() -> Page {
 		            func __safeDI_serviceBuilder_Page_service() -> any Service {
-		                func __safeDI_service() -> DefaultService {
-		                    func __safeDI_book() -> Book {
-		                        func __safeDI_serviceBuilder_Book() -> Book.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
-		                            .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page() })
+		                func __safeDI_fillBody_96A855B3BD35F2C0() -> any Service {
+		                    func __safeDI_service() -> DefaultService {
+		                        func __safeDI_book() -> Book {
+		                            func __safeDI_serviceBuilder_Book() -> Book.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
+		                                .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page() })
+		                            }
+		                            return Book.__safeDI_mock(serviceBuilder: serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Book())
 		                        }
-		                        return Book.__safeDI_mock(serviceBuilder: serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Book())
+		                        let book: Book = __safeDI_book()
+		                        return DefaultService(book: book)
 		                    }
-		                    let book: Book = __safeDI_book()
-		                    return DefaultService(book: book)
+		                    let service: any Service = __safeDI_service()
+		                    return service
 		                }
-		                let service: any Service = __safeDI_service()
-		                return service
+		                return __safeDI_fillBody_96A855B3BD35F2C0()
 		            }
 		            func __safeDI_serviceBuilder_Page() -> Page.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 		                .init(service: { _ in __safeDI_serviceBuilder_Page_service() })
@@ -763,18 +772,21 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		    ) -> Screen {
 		        func __safeDI_page() -> Page {
 		            @Sendable nonisolated func __safeDI_serviceBuilder_Page_service() -> any Service {
-		                func __safeDI_service() -> DefaultService {
-		                    func __safeDI_book() -> Book {
-		                        @Sendable nonisolated func __safeDI_serviceSendableBuilder_Book() -> Book.SafeDISendableMockScope_Service.__safeDI_Builder<any Service> {
-		                            .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page() })
+		                @Sendable nonisolated func __safeDI_fillBody_27D7B6FE6819A7EE() -> any Service {
+		                    func __safeDI_service() -> DefaultService {
+		                        func __safeDI_book() -> Book {
+		                            @Sendable nonisolated func __safeDI_serviceSendableBuilder_Book() -> Book.SafeDISendableMockScope_Service.__safeDI_Builder<any Service> {
+		                                .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page() })
+		                            }
+		                            return Book.__safeDI_mock(serviceSendableBuilder: serviceSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceSendableBuilder_Book())
 		                        }
-		                        return Book.__safeDI_mock(serviceSendableBuilder: serviceSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceSendableBuilder_Book())
+		                        let book: Book = __safeDI_book()
+		                        return DefaultService(book: book)
 		                    }
-		                    let book: Book = __safeDI_book()
-		                    return DefaultService(book: book)
+		                    let service: any Service = __safeDI_service()
+		                    return service
 		                }
-		                let service: any Service = __safeDI_service()
-		                return service
+		                return __safeDI_fillBody_27D7B6FE6819A7EE()
 		            }
 		            @Sendable nonisolated func __safeDI_serviceBuilder_Page() -> Page.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 		                .init(service: { _ in __safeDI_serviceBuilder_Page_service() })
@@ -947,17 +959,20 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		    ) -> Screen {
 		        func __safeDI_page() -> Page {
 		            func __safeDI_defaultService_ServiceBuilder_Page_serviceBuilder() -> ErasedInstantiator<Int, any Service>.Builder {
-		                func __safeDI_serviceBuilder(id: Int) -> DefaultService {
-		                    func __safeDI_book() -> Book {
-		                        func __safeDI_defaultService_ServiceBuilder_Book() -> Book.SafeDIMockScope_DefaultService_Service.__safeDI_Builder<any Service> {
-		                            .init(pageBuilder: { _ in __safeDI_defaultService_ServiceBuilder_Page() })
+		                func __safeDI_fillBody_A399512076616081() -> ErasedInstantiator<Int, any Service>.Builder {
+		                    func __safeDI_serviceBuilder(id: Int) -> DefaultService {
+		                        func __safeDI_book() -> Book {
+		                            func __safeDI_defaultService_ServiceBuilder_Book() -> Book.SafeDIMockScope_DefaultService_Service.__safeDI_Builder<any Service> {
+		                                .init(pageBuilder: { _ in __safeDI_defaultService_ServiceBuilder_Page() })
+		                            }
+		                            return Book.__safeDI_mock(defaultService_ServiceBuilder: defaultService_ServiceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_defaultService_ServiceBuilder_Book())
 		                        }
-		                        return Book.__safeDI_mock(defaultService_ServiceBuilder: defaultService_ServiceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_defaultService_ServiceBuilder_Book())
+		                        let book: Book = __safeDI_book()
+		                        return DefaultService(id: id, book: book)
 		                    }
-		                    let book: Book = __safeDI_book()
-		                    return DefaultService(id: id, book: book)
+		                    return { forwarded in __safeDI_serviceBuilder(id: forwarded) }
 		                }
-		                return { forwarded in __safeDI_serviceBuilder(id: forwarded) }
+		                return __safeDI_fillBody_A399512076616081()
 		            }
 		            func __safeDI_defaultService_ServiceBuilder_Page() -> Page.SafeDIMockScope_DefaultService_Service.__safeDI_Builder<any Service> {
 		                .init(serviceBuilder: { _ in __safeDI_defaultService_ServiceBuilder_Page_serviceBuilder() })
@@ -1132,18 +1147,21 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		        let token = if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
 		        func __safeDI_page() -> Page {
 		            func __safeDI_serviceBuilder_Page_service(_ scope: Page.SafeDIMockScope_Service.service_Values, token: Token) -> any Service {
-		                func __safeDI_service() -> DefaultService {
-		                    func __safeDI_book() -> Book {
-		                        func __safeDI_serviceBuilder_Book() -> Book.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
-		                            .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page(token: token) })
+		                func __safeDI_fillBody_DA07357132A73330(token: Token) -> any Service {
+		                    func __safeDI_service() -> DefaultService {
+		                        func __safeDI_book() -> Book {
+		                            func __safeDI_serviceBuilder_Book() -> Book.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
+		                                .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page(token: token) })
+		                            }
+		                            return Book.__safeDI_mock(serviceBuilder: serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Book())
 		                        }
-		                        return Book.__safeDI_mock(serviceBuilder: serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Book())
+		                        let book: Book = __safeDI_book()
+		                        return DefaultService(token: token, book: book)
 		                    }
-		                    let book: Book = __safeDI_book()
-		                    return DefaultService(token: token, book: book)
+		                    let service: any Service = __safeDI_service()
+		                    return service
 		                }
-		                let service: any Service = __safeDI_service()
-		                return service
+		                return __safeDI_fillBody_DA07357132A73330(token: token)
 		            }
 		            func __safeDI_serviceBuilder_Page(token: Token) -> Page.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 		                .init(service: { scope in __safeDI_serviceBuilder_Page_service(scope, token: token) })
@@ -1171,6 +1189,13 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		let modules = graph.modules(.mock)
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 		let spelling = Self.appSpellingTakingServiceBuilder(of: caller)
+		// The shared fill body is named by its text, which reads the builder by the name the caller’s kind gives it.
+		let fillBodyName = switch caller {
+		case .internal, .listed:
+			"__safeDI_fillBody_7F6C51B1594C1D6B"
+		case .public:
+			"__safeDI_fillBody_E503D965686D5D48"
+		}
 
 		#expect(output.modules["Core"]?.generatedFiles == ["Core.swift": generatedFileHeader + """
 		#if canImport(SafeDI)
@@ -1319,23 +1344,26 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		\(spelling.generatedOnlyMock)        let token = if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
 		        func __safeDI_page() -> Page {
 		            func __safeDI_serviceBuilder_Page_service(_ scope: Page.SafeDIMockScope_Service.service_Values, token: Token) -> any Service {
-		                func __safeDI_service() -> DefaultService {
-		                    func __safeDI_middle() -> Middle {
-		                        let token = Token()
-		                        func __safeDI_book() -> Book {
-		                            func __safeDI_serviceBuilder_Book() -> Book.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
-		                                .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page(token: token) })
+		                func \(fillBodyName)(token: Token) -> any Service {
+		                    func __safeDI_service() -> DefaultService {
+		                        func __safeDI_middle() -> Middle {
+		                            let token = Token()
+		                            func __safeDI_book() -> Book {
+		                                func __safeDI_serviceBuilder_Book() -> Book.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
+		                                    .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page(token: token) })
+		                                }
+		                                return Book.__safeDI_mock(serviceBuilder: \(spelling.builder).map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Book())
 		                            }
-		                            return Book.__safeDI_mock(serviceBuilder: \(spelling.builder).map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Book())
+		                            let book: Book = __safeDI_book()
+		                            return Middle(token: token, book: book)
 		                        }
-		                        let book: Book = __safeDI_book()
-		                        return Middle(token: token, book: book)
+		                        let middle: Middle = __safeDI_middle()
+		                        return DefaultService(token: token, middle: middle)
 		                    }
-		                    let middle: Middle = __safeDI_middle()
-		                    return DefaultService(token: token, middle: middle)
+		                    let service: any Service = __safeDI_service()
+		                    return service
 		                }
-		                let service: any Service = __safeDI_service()
-		                return service
+		                return \(fillBodyName)(token: token)
 		            }
 		            func __safeDI_serviceBuilder_Page(token: Token) -> Page.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 		                .init(service: { scope in __safeDI_serviceBuilder_Page_service(scope, token: token) })
@@ -1362,6 +1390,13 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		let modules = graph.modules(.mock)
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 		let spelling = Self.appSpellingTakingServiceBuilder(of: caller)
+		// The shared fill body is named by its text, which reads the builder by the name the caller’s kind gives it.
+		let fillBodyName = switch caller {
+		case .internal, .listed:
+			"__safeDI_fillBody_7F6C51B1594C1D6B"
+		case .public:
+			"__safeDI_fillBody_E503D965686D5D48"
+		}
 
 		#expect(output.modules["Core"]?.generatedFiles == ["Core.swift": generatedFileHeader + """
 		#if canImport(SafeDI)
@@ -1566,23 +1601,26 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		\(spelling.generatedOnlyMock)        let token = if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
 		        func __safeDI_shelf() -> Shelf {
 		            func __safeDI_serviceBuilder_Page_service(_ scope: Page.SafeDIMockScope_Service.service_Values, token: Token) -> any Service {
-		                func __safeDI_service() -> DefaultService {
-		                    func __safeDI_middle() -> Middle {
-		                        let token = Token()
-		                        func __safeDI_book() -> Book {
-		                            func __safeDI_serviceBuilder_Book() -> Book.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
-		                                .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page(token: token) })
+		                func \(fillBodyName)(token: Token) -> any Service {
+		                    func __safeDI_service() -> DefaultService {
+		                        func __safeDI_middle() -> Middle {
+		                            let token = Token()
+		                            func __safeDI_book() -> Book {
+		                                func __safeDI_serviceBuilder_Book() -> Book.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
+		                                    .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page(token: token) })
+		                                }
+		                                return Book.__safeDI_mock(serviceBuilder: \(spelling.builder).map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Book())
 		                            }
-		                            return Book.__safeDI_mock(serviceBuilder: \(spelling.builder).map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Book())
+		                            let book: Book = __safeDI_book()
+		                            return Middle(token: token, book: book)
 		                        }
-		                        let book: Book = __safeDI_book()
-		                        return Middle(token: token, book: book)
+		                        let middle: Middle = __safeDI_middle()
+		                        return DefaultService(token: token, middle: middle)
 		                    }
-		                    let middle: Middle = __safeDI_middle()
-		                    return DefaultService(token: token, middle: middle)
+		                    let service: any Service = __safeDI_service()
+		                    return service
 		                }
-		                let service: any Service = __safeDI_service()
-		                return service
+		                return \(fillBodyName)(token: token)
 		            }
 		            func __safeDI_serviceBuilder_Shelf(token: Token) -> Shelf.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 		                .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page(token: token) })
@@ -1816,20 +1854,23 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		\(spelling.generatedOnlyMock)        let token = if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
 		        func __safeDI_shelf() -> Shelf {
 		            func __safeDI_serviceBuilder_Page_service(_ scope: Page.SafeDIMockScope_Service.service_Values, token: Token) -> any Service {
-		                func __safeDI_service() -> DefaultService {
-		                    func __safeDI_middle() -> Middle {
-		                        let token = Token()
-		                        func __safeDI_pageBuilder() -> Page {
-		                            Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Page(token: token))
+		                func __safeDI_fillBody_D7BF7D1F67CB2A2D(token: Token) -> any Service {
+		                    func __safeDI_service() -> DefaultService {
+		                        func __safeDI_middle() -> Middle {
+		                            let token = Token()
+		                            func __safeDI_pageBuilder() -> Page {
+		                                Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Page(token: token))
+		                            }
+		                            let pageBuilder = Instantiator<Page>(__safeDI_pageBuilder)
+		                            return Middle(token: token, pageBuilder: pageBuilder)
 		                        }
-		                        let pageBuilder = Instantiator<Page>(__safeDI_pageBuilder)
-		                        return Middle(token: token, pageBuilder: pageBuilder)
+		                        let middle: Middle = __safeDI_middle()
+		                        return DefaultService(token: token, middle: middle)
 		                    }
-		                    let middle: Middle = __safeDI_middle()
-		                    return DefaultService(token: token, middle: middle)
+		                    let service: any Service = __safeDI_service()
+		                    return service
 		                }
-		                let service: any Service = __safeDI_service()
-		                return service
+		                return __safeDI_fillBody_D7BF7D1F67CB2A2D(token: token)
 		            }
 		            func __safeDI_serviceBuilder_Shelf(token: Token) -> Shelf.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 		                .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page(token: token) })
@@ -1859,6 +1900,13 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		let modules = graph.modules(.mock)
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 		let spelling = Self.appSpellingTakingServiceBuilder(of: caller)
+		// The shared fill body is named by its text, which reads the builder by the name the caller’s kind gives it.
+		let fillBodyName = switch caller {
+		case .internal, .listed:
+			"__safeDI_fillBody_405CB0EDE3396FF4"
+		case .public:
+			"__safeDI_fillBody_D9ED0083632C963B"
+		}
 
 		#expect(output.modules["Core"]?.generatedFiles == ["Core.swift": generatedFileHeader + """
 		#if canImport(SafeDI)
@@ -2083,21 +2131,24 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		    ) -> Screen {
 		\(spelling.generatedOnlyMock)        func __safeDI_page() -> Page {
 		            func __safeDI_serviceBuilder_Page_service() -> any Service {
-		                func __safeDI_service() -> DefaultService {
-		                    func __safeDI_book() -> Book {
-		                        func __safeDI_serviceBuilder_Book() -> Book.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
-		                            .init(binderBuilder: { _ in __safeDI_serviceBuilder_Book_Binder_Scope() })
+		                func \(fillBodyName)() -> any Service {
+		                    func __safeDI_service() -> DefaultService {
+		                        func __safeDI_book() -> Book {
+		                            func __safeDI_serviceBuilder_Book() -> Book.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
+		                                .init(binderBuilder: { _ in __safeDI_serviceBuilder_Book_Binder_Scope() })
+		                            }
+		                            func __safeDI_serviceBuilder_Book_Binder_Scope() -> Book.SafeDIMockScope_Service.Binder_Scope.__safeDI_Builder<any Service> {
+		                                .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page() })
+		                            }
+		                            return Book.__safeDI_mock(serviceBuilder: \(spelling.builder).map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Book())
 		                        }
-		                        func __safeDI_serviceBuilder_Book_Binder_Scope() -> Book.SafeDIMockScope_Service.Binder_Scope.__safeDI_Builder<any Service> {
-		                            .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page() })
-		                        }
-		                        return Book.__safeDI_mock(serviceBuilder: \(spelling.builder).map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Book())
+		                        let book: Book = __safeDI_book()
+		                        return DefaultService(book: book)
 		                    }
-		                    let book: Book = __safeDI_book()
-		                    return DefaultService(book: book)
+		                    let service: any Service = __safeDI_service()
+		                    return service
 		                }
-		                let service: any Service = __safeDI_service()
-		                return service
+		                return \(fillBodyName)()
 		            }
 		            func __safeDI_serviceBuilder_Page() -> Page.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 		                .init(service: { _ in __safeDI_serviceBuilder_Page_service() })
@@ -2432,6 +2483,13 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		let modules = graph.modules(.mock)
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 		let spelling = Self.appSpellingTakingServiceBuilder(of: caller)
+		// The shared fill body is named by its text, which reads the builder by the name the caller’s kind gives it.
+		let fillBodyName = switch caller {
+		case .internal, .listed:
+			"__safeDI_fillBody_8B08A0FCDA9069A8"
+		case .public:
+			"__safeDI_fillBody_B69E5673F2090CAB"
+		}
 
 		#expect(output.modules["Core"]?.generatedFiles == ["Core.swift": generatedFileHeader + """
 		#if canImport(SafeDI)
@@ -2645,19 +2703,21 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		\(spelling.generatedOnlyMock)        let token = if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
 		        func __safeDI_page() -> Page {
 		            func __safeDI_serviceBuilder_Page_service(_ scope: Page.SafeDIMockScope_Service.service_Values) -> any Service {
-		                let token = scope.token
-		                func __safeDI_service() -> DefaultService {
-		                    func __safeDI_book() -> Book {
-		                        func __safeDI_serviceBuilder_Book() -> Book.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
-		                            .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page() })
+		                func \(fillBodyName)(token: Token) -> any Service {
+		                    func __safeDI_service() -> DefaultService {
+		                        func __safeDI_book() -> Book {
+		                            func __safeDI_serviceBuilder_Book() -> Book.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
+		                                .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page() })
+		                            }
+		                            return Book.__safeDI_mock(serviceBuilder: \(spelling.builder).map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Book())
 		                        }
-		                        return Book.__safeDI_mock(serviceBuilder: \(spelling.builder).map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Book())
+		                        let book: Book = __safeDI_book()
+		                        return DefaultService(token: token, book: book)
 		                    }
-		                    let book: Book = __safeDI_book()
-		                    return DefaultService(token: token, book: book)
+		                    let service: any Service = __safeDI_service()
+		                    return service
 		                }
-		                let service: any Service = __safeDI_service()
-		                return service
+		                return \(fillBodyName)(token: scope.token)
 		            }
 		            func __safeDI_serviceBuilder_Page() -> Page.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 		                .init(service: { scope in __safeDI_serviceBuilder_Page_service(scope) })
@@ -2963,33 +3023,38 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 			        let token = if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
 			        func __safeDI_page() -> Page {
 			            func __safeDI_serviceBuilder_Page_service(_ scope: Page.SafeDIMockScope_Service.service_Values) -> any Service {
-			                let token = scope.token
-			                func __safeDI_service() -> DefaultService {
-			                    func __safeDI_chapter() -> Chapter {
-			                        func __safeDI_storeBuilder_Chapter_store(_ scope: Chapter.SafeDIMockScope_Store.store_Values, token: Token) -> any Store {
-			                            func __safeDI_store() -> DefaultStore {
-			                                func __safeDI_book() -> Book {
-			                                    func __safeDI_serviceBuilder_Book() -> Book.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
-			                                        .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page() })
+			                func __safeDI_fillBody_97003B36C45B31D3(token: Token) -> any Service {
+			                    func __safeDI_service() -> DefaultService {
+			                        func __safeDI_chapter() -> Chapter {
+			                            func __safeDI_storeBuilder_Chapter_store(_ scope: Chapter.SafeDIMockScope_Store.store_Values, token: Token) -> any Store {
+			                                func __safeDI_fillBody_9A91278A66F50B60(token: Token) -> any Store {
+			                                    func __safeDI_store() -> DefaultStore {
+			                                        func __safeDI_book() -> Book {
+			                                            func __safeDI_serviceBuilder_Book() -> Book.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
+			                                                .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page() })
+			                                            }
+			                                            return Book.__safeDI_mock(serviceBuilder: serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Book())
+			                                        }
+			                                        let book: Book = __safeDI_book()
+			                                        return DefaultStore(token: token, book: book)
 			                                    }
-			                                    return Book.__safeDI_mock(serviceBuilder: serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Book())
+			                                    let store: any Store = __safeDI_store()
+			                                    return store
 			                                }
-			                                let book: Book = __safeDI_book()
-			                                return DefaultStore(token: token, book: book)
+			                                return __safeDI_fillBody_9A91278A66F50B60(token: token)
 			                            }
-			                            let store: any Store = __safeDI_store()
-			                            return store
+			                            func __safeDI_storeBuilder_Chapter(token: Token) -> Chapter.SafeDIMockScope_Store.__safeDI_Builder<any Store> {
+			                                .init(store: { scope in __safeDI_storeBuilder_Chapter_store(scope, token: token) })
+			                            }
+			                            return Chapter.__safeDI_mock(storeBuilder: storeBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_storeBuilder_Chapter(token: token))
 			                        }
-			                        func __safeDI_storeBuilder_Chapter(token: Token) -> Chapter.SafeDIMockScope_Store.__safeDI_Builder<any Store> {
-			                            .init(store: { scope in __safeDI_storeBuilder_Chapter_store(scope, token: token) })
-			                        }
-			                        return Chapter.__safeDI_mock(storeBuilder: storeBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_storeBuilder_Chapter(token: token))
+			                        let chapter: Chapter = __safeDI_chapter()
+			                        return DefaultService(chapter: chapter)
 			                    }
-			                    let chapter: Chapter = __safeDI_chapter()
-			                    return DefaultService(chapter: chapter)
+			                    let service: any Service = __safeDI_service()
+			                    return service
 			                }
-			                let service: any Service = __safeDI_service()
-			                return service
+			                return __safeDI_fillBody_97003B36C45B31D3(token: scope.token)
 			            }
 			            func __safeDI_serviceBuilder_Page() -> Page.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 			                .init(service: { scope in __safeDI_serviceBuilder_Page_service(scope) })
@@ -3065,33 +3130,38 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 			        let token = if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
 			        func __safeDI_page() -> Page {
 			            func __safeDI_serviceBuilder_Page_service(_ scope: Page.SafeDIMockScope_Service.service_Values) -> any Service {
-			                let token = scope.token
-			                func __safeDI_service() -> DefaultService {
-			                    func __safeDI_chapter() -> Chapter {
-			                        func __safeDI_storeBuilder_Chapter_store(_ scope: Chapter.SafeDIMockScope_Store.store_Values, token: Token) -> any Store {
-			                            func __safeDI_store() -> DefaultStore {
-			                                func __safeDI_book() -> Book {
-			                                    func __safeDI_serviceBuilder_Book() -> Book.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
-			                                        .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page() })
+			                func __safeDI_fillBody_9D6F20006B47652B(token: Token) -> any Service {
+			                    func __safeDI_service() -> DefaultService {
+			                        func __safeDI_chapter() -> Chapter {
+			                            func __safeDI_storeBuilder_Chapter_store(_ scope: Chapter.SafeDIMockScope_Store.store_Values, token: Token) -> any Store {
+			                                func __safeDI_fillBody_9679985497422E8F(token: Token) -> any Store {
+			                                    func __safeDI_store() -> DefaultStore {
+			                                        func __safeDI_book() -> Book {
+			                                            func __safeDI_serviceBuilder_Book() -> Book.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
+			                                                .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page() })
+			                                            }
+			                                            return Book.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Book())
+			                                        }
+			                                        let book: Book = __safeDI_book()
+			                                        return DefaultStore(token: token, book: book)
 			                                    }
-			                                    return Book.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Book())
+			                                    let store: any Store = __safeDI_store()
+			                                    return store
 			                                }
-			                                let book: Book = __safeDI_book()
-			                                return DefaultStore(token: token, book: book)
+			                                return __safeDI_fillBody_9679985497422E8F(token: token)
 			                            }
-			                            let store: any Store = __safeDI_store()
-			                            return store
+			                            func __safeDI_storeBuilder_Chapter(token: Token) -> Chapter.SafeDIMockScope_Store.__safeDI_Builder<any Store> {
+			                                .init(store: { scope in __safeDI_storeBuilder_Chapter_store(scope, token: token) })
+			                            }
+			                            return Chapter.__safeDI_mock(storeBuilder: __safeDI_storeBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_storeBuilder_Chapter(token: token))
 			                        }
-			                        func __safeDI_storeBuilder_Chapter(token: Token) -> Chapter.SafeDIMockScope_Store.__safeDI_Builder<any Store> {
-			                            .init(store: { scope in __safeDI_storeBuilder_Chapter_store(scope, token: token) })
-			                        }
-			                        return Chapter.__safeDI_mock(storeBuilder: __safeDI_storeBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_storeBuilder_Chapter(token: token))
+			                        let chapter: Chapter = __safeDI_chapter()
+			                        return DefaultService(chapter: chapter)
 			                    }
-			                    let chapter: Chapter = __safeDI_chapter()
-			                    return DefaultService(chapter: chapter)
+			                    let service: any Service = __safeDI_service()
+			                    return service
 			                }
-			                let service: any Service = __safeDI_service()
-			                return service
+			                return __safeDI_fillBody_9D6F20006B47652B(token: scope.token)
 			            }
 			            func __safeDI_serviceBuilder_Page() -> Page.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 			                .init(service: { scope in __safeDI_serviceBuilder_Page_service(scope) })

@@ -46,6 +46,8 @@ enum TypeKeyBody {
 	/// path key nests it. It applies only where the path key writes each loop once, and exists
 	/// so that a root laid out from node records writes the path key's bytes where the path key keeps 2.4.0's form for a
 	/// loop; once the records place functions themselves, placement comes from them and this goes.
+	/// - Parameter hoisting: The root functions `rootBody` reaches (`RootFunctionHoisting.hoisting(_:indentation:)`), which a
+	///   caller that keeps the path key's body where this returns `nil` reads once for both.
 	static func statements(
 		ofRootBody rootBody: [GeneratedCode],
 		outerDeclarations: [Property] = [],
@@ -53,12 +55,14 @@ enum TypeKeyBody {
 		rootPassedArgumentNames: Set<String> = [],
 		laysOutEveryLoop: Bool = false,
 		declaresLoopMembersAsThePathKeyDoes: Bool = false,
+		hoisting: RootFunctionHoisting.Hoisting? = nil,
+		indentation: String = rootStatementIndentation,
 	) -> [GeneratedCode]? {
 		var layout = TypeKeyLayout()
 		layout.declareOuter(outerDeclarations)
 		layout.namesInScope = namesInScope.union(rootPassedArgumentNames)
 		layout.rootPassedArgumentNames = rootPassedArgumentNames
-		guard case let .success(statements) = layOut(rootBody, in: &layout, laysOutEveryLoop: laysOutEveryLoop, declaresLoopMembersAsThePathKeyDoes: declaresLoopMembersAsThePathKeyDoes) else { return nil }
+		guard case let .success(statements) = layOut(rootBody, in: &layout, laysOutEveryLoop: laysOutEveryLoop, declaresLoopMembersAsThePathKeyDoes: declaresLoopMembersAsThePathKeyDoes, hoisting: hoisting, indentation: indentation) else { return nil }
 		return statements
 	}
 
@@ -88,20 +92,16 @@ enum TypeKeyBody {
 
 	/// `rootBody` laid out by `layout`, which holds the declarations before it and the variants its call places call, or
 	/// the stage of the layout that kept the path key's body. Where `laysOutEveryLoop` holds, a loop of builders the path key
-	/// writes once is laid out too.
-	private static func layOut(_ rootBody: [GeneratedCode], in layout: inout TypeKeyLayout, laysOutEveryLoop: Bool = false, declaresLoopMembersAsThePathKeyDoes: Bool = false) -> Result<[GeneratedCode], TypeKeyRefusal> {
+	/// writes once is laid out too. `hoisting` and `indentation` are `statements(ofRootBody:…)`'s.
+	private static func layOut(_ rootBody: [GeneratedCode], in layout: inout TypeKeyLayout, laysOutEveryLoop: Bool = false, declaresLoopMembersAsThePathKeyDoes: Bool = false, hoisting: RootFunctionHoisting.Hoisting? = nil, indentation: String = rootStatementIndentation) -> Result<[GeneratedCode], TypeKeyRefusal> {
 		// The root functions the plan's places call are declared once, before every statement, as the path key declares
-		// them (`RootFunctionHoisting`); a root that keeps one in place keeps the path key's body, since the type key spells
-		// a place written as text without them.
-		let rootFunctionNames = Set(RootFunctionHoisting.records(in: rootBody).map(\.name))
-		var rootFunctionDeclarations = [GeneratedCode]()
-		if !rootFunctionNames.isEmpty {
-			let hoisted = RootFunctionHoisting.hoisted(rootBody, indentation: rootStatementIndentation)
-			guard let body = hoisted.last, case let .omittingRootFunctions(_, declaredNames) = body.node, declaredNames == rootFunctionNames else { return .failure(.rootFunctionKeptInPlace) }
-			rootFunctionDeclarations = hoisted.dropLast()
-			layout.rootFunctionNames = rootFunctionNames
-			layout.namesInScope.formUnion(rootFunctionNames)
-		}
+		// them (`RootFunctionHoisting`). A statement of the root's body that holds one the path key keeps in place keeps the
+		// path key's code, which declares it where its call does, and every other statement is laid out by type.
+		let hoisting = hoisting ?? RootFunctionHoisting.hoisting(rootBody, indentation: rootStatementIndentation)
+		let rootFunctionDeclarations = hoisting.declarations
+		layout.rootFunctionNames = hoisting.declaredNames
+		layout.keptRootFunctionNames = hoisting.rootFunctionNames.subtracting(hoisting.declaredNames)
+		layout.namesInScope.formUnion(hoisting.rootFunctionNames)
 		guard layout.read(rootBody) else { return .failure(.placeNotRead) }
 		GenerationWork.record(layout.bodies.count - 1, by: .layingOutTypeKeyViews)
 		guard layout.computeReads() else { return .failure(.readsNotResolved) }
@@ -120,8 +120,25 @@ enum TypeKeyBody {
 		guard layout.checkValuePaths() else { return .failure(.valuePathResolvesOtherwise) }
 		layout.computeDecoratorsAndNames()
 		guard layout.checkSendableMarks() else { return .failure(.sendableMarkDiffers) }
-		guard let statements = layout.spelledRootStatements() else { return .failure(.statementNotSpelled) }
+		guard let statements = layout.spelledRootStatements(indentation: indentation) else { return .failure(.statementNotSpelled) }
 		return .success(rootFunctionDeclarations + statements)
+	}
+
+	/// The statements of a function the root declares whose body is one tree's statements (`ScopeGenerator.generateFillCode`
+	/// makes one), in the type key's layout, each indented by `indentation`, or `nil` where the function keeps `functionBody`,
+	/// its tree's statements in the path key's layout. `outerDeclarations` are the function's parameters. The root functions
+	/// the tree declares that the root declares beside the function, `declaredNames`, are left out, as the root's own
+	/// statements leave them out; every other one stays where the tree declares it: a statement that holds one keeps the path
+	/// key's code.
+	static func statements(ofFunctionBody functionBody: [GeneratedCode], outerDeclarations: [Property], omittingRootFunctionsNamed declaredNames: Set<String>, indentation: String) -> [GeneratedCode]? {
+		let heldNames = Set(RootFunctionHoisting.records(in: functionBody).map(\.name))
+		return statements(
+			ofRootBody: functionBody,
+			outerDeclarations: outerDeclarations,
+			namesInScope: Set(outerDeclarations.map(\.label)),
+			hoisting: RootFunctionHoisting.Hoisting(rootFunctionNames: heldNames, declaredNames: heldNames.intersection(declaredNames), declarations: [], body: functionBody),
+			indentation: indentation,
+		)
 	}
 
 	/// The indentation of a root's statements, which every root body is written after.
@@ -232,6 +249,10 @@ struct TypeKeyLayout {
 		/// Whether a closer beneath the node's own body, rather than one of its own statements, calls a function declared
 		/// outside it.
 		var closesBeneathItsBody = false
+		/// The names among `closedOnFunctionNames` that a member of a loop of builders calls, rebinding a sibling
+		/// (`ClosingPlaceRecord.rebindsLoopMember`): the only names a statement's function can answer. A node whose domain
+		/// holds none resolves each name to an enclosing place's function, with no look-up among statements.
+		var loopMemberFunctionNames = Set<String>()
 	}
 
 	/// What tells two places of one plan node apart (`Body`).
@@ -295,6 +316,9 @@ struct TypeKeyLayout {
 	/// The root functions the root declares before its statements, which the text of a statement kept as the path key's code
 	/// leaves out.
 	var rootFunctionNames = Set<String>()
+	/// The root functions the path key keeps where their calls declare them (`RootFunctionHoisting`): a statement of the
+	/// root's body that holds one keeps the path key's code.
+	var keptRootFunctionNames = Set<String>()
 	/// The names bound around the root's body, which no function the layout declares takes.
 	var namesInScope = Set<String>()
 	/// The parameters of the function the root's body is written in that a value path of the root's body may name as a

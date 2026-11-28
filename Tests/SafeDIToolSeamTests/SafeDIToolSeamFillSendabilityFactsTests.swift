@@ -97,7 +97,7 @@ struct SafeDIToolSeamFillSendabilityFactsTests: ~Copyable {
 			app.append(seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let seam0: Seam0"]))
 			let modules = SafeDIToolSeamBuilderParameterTests.modules(feature: core, app: app)
 			let (stream, continuation) = AsyncStream.makeStream(of: GenerationWork.self)
-			try await GenerationWork.$observer.withValue({ continuation.yield($0) }) {
+			try await GenerationWork.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 				_ = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: depth == 8 ? .recordingIssues : .skipped, filesToDelete: &filesToDelete)
 			}
 			continuation.finish()
@@ -107,7 +107,9 @@ struct SafeDIToolSeamFillSendabilityFactsTests: ~Copyable {
 			}
 			work.append(count)
 		}
-		#expect(work == [64, 256])
+		// 13 visits per call: the two graphs that hold every call visit five per call, and three graphs per call that hold
+		// one call visit one each.
+		#expect(work == [104, 416])
 	}
 
 	@Test
@@ -180,7 +182,7 @@ struct SafeDIToolSeamFillSendabilityFactsTests: ~Copyable {
 			}
 			types.append(seamFixtureType(named: "Tail", isFinalClass: true, declarations: ["@Instantiated let link\(length - 1)Builder: Instantiator<Link\(length - 1)>"]))
 			let (stream, continuation) = AsyncStream.makeStream(of: GenerationWork.self)
-			let report = try await GenerationWork.$observer.withValue({ continuation.yield($0) }) {
+			let report = try await GenerationWork.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 				try await Self.report(ofRoot: "Root") {
 					try await executeSafeDIToolTest(swiftFileContent: types, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete, skipCompileVerification: length != 8)
 				}
@@ -230,7 +232,7 @@ struct SafeDIToolSeamFillSendabilityFactsTests: ~Copyable {
 	/// The report of the whole production tree of `root` the memo oracle observes while `generate` runs.
 	private static func report(ofRoot root: String, generate: () async throws -> some Any) async throws -> TypeFactsReport {
 		let (stream, continuation) = AsyncStream.makeStream(of: TypeFactsReport.self)
-		_ = try await ConstructionMemoOracle.$observer.withValue({ _, _, report in continuation.yield(report) }, operation: generate)
+		_ = try await ConstructionMemoOracle.$observer.withValue(TaskLocalFunction { _, _, report in continuation.yield(report) }, operation: generate)
 		continuation.finish()
 		var reports = [TypeFactsReport]()
 		for await report in stream where report.root == root && !report.forMockGeneration {
@@ -275,7 +277,7 @@ struct SafeDIToolSeamFillSendabilityFactsTests: ~Copyable {
 			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let host: Host"])].map { "import Feature\nimport Middle\n\n" + $0 }, dependencies: ["Feature", "Middle"]),
 		]
 		let (stream, continuation) = AsyncStream.makeStream(of: TypeFactsReport.self)
-		_ = try await ConstructionMemoOracle.$observer.withValue({ _, _, report in continuation.yield(report) }) {
+		_ = try await ConstructionMemoOracle.$observer.withValue(TaskLocalFunction { _, _, report in continuation.yield(report) }) {
 			try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		}
 		continuation.finish()

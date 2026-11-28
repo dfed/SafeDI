@@ -60,6 +60,8 @@ extension SeamSignature: BinarySchemaMember {
 				BinaryLayoutField("builders", \.builders),
 				BinaryLayoutField("scopeEnums", \.scopeEnums),
 				BinaryLayoutField("typesDeclaredEscaping", \.typesDeclaredEscaping),
+				BinaryLayoutField("places", \.places),
+				BinaryLayoutField("caseIndexByHole", \.caseIndexByHole),
 			],
 			unwrittenProperties: ["callShape", "guardTypeName"],
 		)
@@ -75,6 +77,8 @@ extension SeamSignature: BinarySchemaMember {
 			builders: reader.read(),
 			scopeEnums: reader.read(),
 			typesDeclaredEscaping: reader.read(),
+			places: reader.read(),
+			caseIndexByHole: reader.read(),
 		)
 	}
 
@@ -87,6 +91,8 @@ extension SeamSignature: BinarySchemaMember {
 		writer.write(builders)
 		writer.write(scopeEnums)
 		writer.write(typesDeclaredEscaping)
+		writer.write(places)
+		writer.write(caseIndexByHole)
 	}
 }
 

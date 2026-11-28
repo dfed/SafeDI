@@ -93,8 +93,6 @@ enum TypeKeyRefusal: Error, Hashable, Sendable {
 
 	// The layout of the root's body and its variants, in the order of its stages (`TypeKeyBody.layOut`).
 
-	/// A root function a place calls is declared in place, where the type key spells no place written as text.
-	case rootFunctionKeptInPlace
 	/// A place is not one the walk of the bodies reads (`TypeKeyLayout.read(_:)`).
 	case placeNotRead
 	/// A view's reads from outside it do not resolve (`computeReads`).

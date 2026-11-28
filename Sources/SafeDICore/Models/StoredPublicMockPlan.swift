@@ -34,6 +34,8 @@ public struct StoredPublicMockPlan: Codable, Sendable {
 		holes: [SeamSignature.Hole],
 		builders: [SeamSignature.Builder],
 		scopeEnums: [SeamSignature.ScopeEnum],
+		places: SeamSignature.Places = SeamSignature.Places(levels: [], cases: []),
+		caseIndexByHole: [Int] = [],
 		receivers: [Receiver],
 		typesDeclaredEscaping: [TypeDescription],
 	) {
@@ -45,6 +47,8 @@ public struct StoredPublicMockPlan: Codable, Sendable {
 		self.holes = holes
 		self.builders = builders
 		self.scopeEnums = scopeEnums
+		self.places = places
+		self.caseIndexByHole = caseIndexByHole
 		self.receivers = receivers
 		self.typesDeclaredEscaping = typesDeclaredEscaping
 	}
@@ -65,6 +69,11 @@ public struct StoredPublicMockPlan: Codable, Sendable {
 	public let builders: [SeamSignature.Builder]
 	/// Every enum the builders reach.
 	public let scopeEnums: [SeamSignature.ScopeEnum]
+	/// The mock's place graph by case, beside `holes` while readers move to it; empty unless the place graph is drafted
+	/// (`SeamSignature.places`).
+	public let places: SeamSignature.Places
+	/// The case of each of `holes` in `places`, -1 for a place a call passes up; empty where `places` is.
+	public let caseIndexByHole: [Int]
 	/// The declarations in the mock's tree that receive a parameter a tier can omit – one narrower than `public`, or on
 	/// no tier – in tree order, which the error about a value such a tier drops notes. No other receiver is read.
 	public let receivers: [Receiver]

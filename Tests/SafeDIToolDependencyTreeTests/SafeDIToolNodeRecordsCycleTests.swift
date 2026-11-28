@@ -439,8 +439,64 @@ struct SafeDIToolNodeRecordsCycleTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsTheTreesLayout_whenFunctionBetweenCycleClosingCallAndClosedOnFunctionMakesLoopMemberAgain() async throws {
+		// `T1` makes its own `t1Builder` again and closes the cycle on `T3`'s function, which `T0` builds `T1` in: the tree
+		// nests each function in the body that builds it, where the engine would declare the three together in `Host`'s.
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let hostBuilder: Instantiator<Host>"]),
+					seamFixtureType(named: "Host", isFinalClass: true, declarations: ["@Forwarded let t1Builder: Instantiator<T1>", "@Instantiated let t3Builder: Instantiator<T3>"]),
+					seamFixtureType(named: "T3", isFinalClass: true, declarations: ["@Instantiated let t0Builder: Instantiator<T0>", "@Received let t1Builder: Instantiator<T1>"]),
+					seamFixtureType(named: "T0", isFinalClass: true, declarations: ["@Instantiated let t1Builder: Instantiator<T1>"]),
+					seamFixtureType(named: "T1", isFinalClass: true, declarations: ["@Instantiated let t3Builder: Instantiator<T3>"]),
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_hostBuilder(t1Builder: Instantiator<T1>) -> Host {
+			            func __safeDI_t3Builder(t1Builder: Instantiator<T1>) -> T3 {
+			                func __safeDI_t0Builder() -> T0 {
+			                    func __safeDI_t1Builder() -> T1 {
+			                        let t1Builder = Instantiator<T1>(__safeDI_t1Builder)
+			                        let t3Builder = Instantiator<T3> {
+			                            __safeDI_t3Builder(t1Builder: t1Builder)
+			                        }
+			                        return T1(t3Builder: t3Builder)
+			                    }
+			                    let t1Builder = Instantiator<T1>(__safeDI_t1Builder)
+			                    return T0(t1Builder: t1Builder)
+			                }
+			                let t0Builder = Instantiator<T0>(__safeDI_t0Builder)
+			                return T3(t0Builder: t0Builder, t1Builder: t1Builder)
+			            }
+			            let t3Builder = Instantiator<T3> {
+			                __safeDI_t3Builder(t1Builder: t1Builder)
+			            }
+			            return Host(t1Builder: t1Builder, t3Builder: t3Builder)
+			        }
+			        let hostBuilder = Instantiator<Host> {
+			            __safeDI_hostBuilder(t1Builder: $0)
+			        }
+			        self.init(hostBuilder: hostBuilder)
+			    }
+			}
+			""",
+		])
+		#expect(reports.map(\.refusal) == ["cycleHoldsLoopRebinding"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_keepsTheTreesLayout_whenTypeReceivesBuilderInWorldWithCycle() async throws {
-		// `Detail` receives `screenBuilder`, which the cycle of `Screen` and `Step` builds.
+		// `Detail` receives `screenBuilder`, which the cycle of `Screen` and `Step` builds: `Screen` is a loop of one, which
+		// rebinds `screenBuilder` at its top, and the cycle closes on its function. The records refuse a loop member a cycle
+		// closes on, which the tree can wrap through a `_received` function, whatever the facts' parameters.
 		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -491,7 +547,82 @@ struct SafeDIToolNodeRecordsCycleTests: ~Copyable {
 			}
 			""",
 		])
-		#expect(reports.map(\.refusal) == ["cycleReceivesBuilder"])
+		#expect(reports.map(\.refusal) == ["builderLoopTakesCycleParameters"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysOutRootAsTheTreeDoes_whenCycleReentersNodeWhoseReceiveAnotherDeclarationAnswers() async throws {
+		// `Reader` receives `tag`, which the root declares above `A` and `B` declares on the cycle of `A` and `B`: the call
+		// from `B` closes the cycle on `A`'s function, which takes `tag` as a parameter, the facts' parameter of `A`, and
+		// is passed the root's `tag` and `B`'s.
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true) public final class Root: Instantiable {
+					    @Instantiated let tag: Instantiator<Tag>
+					    @Instantiated let aBuilder: Instantiator<A>
+					    public init(tag: Instantiator<Tag>, aBuilder: Instantiator<A>) { self.tag = tag; self.aBuilder = aBuilder }
+					}
+
+					@Instantiable public final class A: Instantiable {
+					    @Instantiated let reader: Reader
+					    @Instantiated let b: B
+					    public init(reader: Reader, b: B) { self.reader = reader; self.b = b }
+					}
+
+					@Instantiable public final class B: Instantiable {
+					    @Instantiated let tag: Instantiator<Tag>
+					    @Instantiated let aBuilder: Instantiator<A>
+					    public init(tag: Instantiator<Tag>, aBuilder: Instantiator<A>) { self.tag = tag; self.aBuilder = aBuilder }
+					}
+
+					@Instantiable public final class Reader: Instantiable {
+					    @Received let tag: Instantiator<Tag>
+					    public init(tag: Instantiator<Tag>) { self.tag = tag }
+					}
+
+					@Instantiable public final class Tag: Instantiable {
+					    public init() {}
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_tag() -> Tag {
+			            Tag()
+			        }
+			        let tag = Instantiator<Tag>(__safeDI_tag)
+			        func __safeDI_aBuilder(tag: Instantiator<Tag>) -> A {
+			            let reader = Reader(tag: tag)
+			            let b: B = __safeDI_b()
+			            return A(reader: reader, b: b)
+			        }
+			        func __safeDI_b() -> B {
+			            let tag = Instantiator<Tag>(__safeDI_tag)
+			            let aBuilder = Instantiator<A> {
+			                __safeDI_aBuilder(tag: tag)
+			            }
+			            return B(tag: tag, aBuilder: aBuilder)
+			        }
+			        let aBuilder = Instantiator<A> {
+			            __safeDI_aBuilder(tag: tag)
+			        }
+			        self.init(tag: tag, aBuilder: aBuilder)
+			    }
+			}
+			""",
+		])
+		#expect(reports.map(\.refusal) == [nil])
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
+		#expect(reports.flatMap(\.differences) == [])
 	}
 
 	@Test
@@ -1099,9 +1230,9 @@ struct SafeDIToolNodeRecordsCycleTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_keepsTheTreesLayout_whenCycleMemberReceivesValueOnlyIfAvailable() async throws {
-		// `B`, on the cycle of `A` and `B`, receives `session` only if available, so its variants key it as an optional
-		// parameter.
+	mutating func generate_laysOutRootAsTheTreeDoes_whenEveryCallAnswersValueCycleMemberReceivesOnlyIfAvailable() async throws {
+		// `B`, on the cycle of `A` and `B`, receives `session` only if available, so its variant keys it as an optional
+		// parameter. `Root` declares `session` before the cycle, so every call of `B` answers it: one body, as the tree's.
 		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -1151,12 +1282,139 @@ struct SafeDIToolNodeRecordsCycleTests: ~Copyable {
 			}
 			""",
 		])
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsTheTreesLayout_whenNoCallAnswersValueCycleMemberReceivesOnlyIfAvailable() async throws {
+		// `B`, on the cycle of `A` and `B`, receives `session` only if available, so its variant keys it as an optional
+		// parameter, and no type declares `session`: every call of `B` passes `nil`.
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true) public final class Root: Instantiable {
+					    @Instantiated let aBuilder: Instantiator<A>
+					    public init(aBuilder: Instantiator<A>) { self.aBuilder = aBuilder }
+					}
+
+					@Instantiable public final class Session: Instantiable {
+					    public init() {}
+					}
+
+					@Instantiable public final class A: Instantiable {
+					    @Instantiated let bBuilder: Instantiator<B>
+					    public init(bBuilder: Instantiator<B>) { self.bBuilder = bBuilder }
+					}
+
+					@Instantiable public final class B: Instantiable {
+					    @Received(onlyIfAvailable: true) let session: Session?
+					    @Instantiated let aBuilder: Instantiator<A>
+					    public init(session: Session?, aBuilder: Instantiator<A>) { self.session = session; self.aBuilder = aBuilder }
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_aBuilder() -> A {
+			            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			            return A(bBuilder: bBuilder)
+			        }
+			        func __safeDI_bBuilder() -> B {
+			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			            return B(session: nil, aBuilder: aBuilder)
+			        }
+			        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			        self.init(aBuilder: aBuilder)
+			    }
+			}
+			""",
+		])
 		#expect(reports.map(\.refusal) == ["cycleVariantsPartitionApart"])
 	}
 
 	// MARK: Private
 
 	private var filesToDelete: [URL]
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysOutRootAsTheTreeDoes_whenCycleClosesThroughErasedInstantiator() async throws {
+		// `A` is built at the root and again inside `C`, which `B` builds through an erased instantiator. Both calls of `A`
+		// read its label from a scope that declares it as a plain constant: that `C` is built erased changes nothing `A`
+		// reads, so one variant serves both.
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true) public final class Root: Instantiable {
+					    @Instantiated let a: A
+					    public init(a: A) { self.a = a }
+					}
+
+					@Instantiable public final class A: Instantiable {
+					    @Instantiated let b: B
+					    public init(b: B) { self.b = b }
+					}
+
+					@Instantiable public final class B: Instantiable {
+					    @Instantiated(fulfilledByType: "C", erasedToConcreteExistential: true) let cBuilder: ErasedInstantiator<(), AnyC>
+					    public init(cBuilder: ErasedInstantiator<(), AnyC>) { self.cBuilder = cBuilder }
+					}
+
+					@Instantiable(fulfillingAdditionalTypes: [CProtocol.self]) public final class C: Instantiable, CProtocol {
+					    @Instantiated let a: A
+					    public init(a: A) { self.a = a }
+					}
+
+					public protocol CProtocol {}
+
+					public struct AnyC: CProtocol {
+					    public init(_ c: any CProtocol) {
+					        self.c = c
+					    }
+
+					    public let c: any CProtocol
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_a() -> A {
+			            let b: B = __safeDI_b()
+			            return A(b: b)
+			        }
+			        func __safeDI_b() -> B {
+			            let cBuilder = ErasedInstantiator<(), AnyC> {
+			                AnyC(__safeDI_cBuilder())
+			            }
+			            return B(cBuilder: cBuilder)
+			        }
+			        func __safeDI_cBuilder() -> C {
+			            let a: A = __safeDI_a()
+			            return C(a: a)
+			        }
+			        let a: A = __safeDI_a()
+			        self.init(a: a)
+			    }
+			}
+			""",
+		])
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
+	}
 
 	private static func layingOutRoots<Output>(
 		filesToDelete: inout [URL],
@@ -1166,7 +1424,7 @@ struct SafeDIToolNodeRecordsCycleTests: ~Copyable {
 		var filesMade = [URL]()
 		defer { filesToDelete += filesMade }
 		let output = try await NodeRecordsObservation.$laysOutRoots.withValue(true) {
-			try await NodeRecordsObservation.$observer.withValue({ continuation.yield($0) }) {
+			try await NodeRecordsObservation.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 				try await body(&filesMade)
 			}
 		}

@@ -63,8 +63,10 @@ public struct GenerationWork: Sendable {
 		/// plan node's places that agree on what they read outside it, is laid out once, so the views count, not the places.
 		case layingOutTypeKeyViews
 		/// Finding the root functions a root's body holds (`RootFunctionHoisting`): each level of the plan the walk reads.
-		/// A place records whether a root function is beneath it, so the walk reads no tree of a place that holds none,
-		/// and its levels do not grow with the paths through the tree.
+		/// A place records whether a root function is beneath it, so the walk reads no tree of a place that holds none.
+		/// A root's body is walked once, and the type key's layout reads that walk's result. Where a root reaches a filled
+		/// seam call along many inline paths, each path's places are code of their own, so the levels grow with the paths
+		/// as the generated code does, and no faster.
 		case findingRootFunctions
 		/// Looking a place up in the construction memo (`ConstructionMemo.reuse(of:in:besideCallGenerators:drawing:)`): each
 		/// candidate of the place's key whose log the lookup asks. The candidates are found by what their reads of the
@@ -128,6 +130,28 @@ public struct GenerationWork: Sendable {
 		/// edge the one walk of the world's graph visits, each key a call adds or resolves, and each key a summary hands its
 		/// parent. A node stands for every place of its declaration, so the declarations and the keys count, not the paths.
 		case foldingFillSendability
+		/// Walking a tree for the fills `DependencyTreeGenerator.validateFills` judges: each generator the walk visits, each
+		/// child it queues, and each label it carries or clears of what the calls of enclosing public mock calls hide. The
+		/// walk enters only a generator whose subtree holds a call or a fill.
+		case walkingTreeForFills
+		/// Reading what a fill's tree reads outside the fill (`DependencyTreeGenerator.FillTreeReads`), and judging those
+		/// reads against a place (`DependencyTreeGenerator.findingsOfFill`): each scope the walk visits, with the properties
+		/// provided above it and the fill's scopes above it that it hands its children, and each read a judgement takes.
+		case readingFillTrees
+		/// Finding what the calls inside a seam call's fills hide from each fill
+		/// (`DependencyTreeGenerator.hiddenByReenteringCalls(ofFills:)`): each generator of a fill's tree the walk visits, with
+		/// the declarations on its path it hands its children.
+		case findingDeclarationsHiddenByReenteringCalls
+		/// Resolving what the module that declares a public mock sees (`SeamResolution.ForeignPublicMock.visibleDeclarations`),
+		/// which reads every declaration of that module and of each module it depends on directly: each resolution counts
+		/// one. A walk of the places built inline resolved it again at each scope beneath the public mock, so a mock root
+		/// beneath another module's public mock spent seconds where every other root spent milliseconds; each walk resolves
+		/// each module once.
+		case resolvingWhatAPublicMocksModuleSees
+		/// Finding the facts producers still owe each declaration of a world (`TypeFactsGraph.owedFactsByNode`): each
+		/// declaration, each edge, and each declaration a walk down from the fills reaches, once per world. Asked of each
+		/// declaration with a walk up its parents, a chain of n declarations walked n² parents.
+		case findingOwedFacts
 	}
 
 	/// The step that did the work.
@@ -136,7 +160,7 @@ public struct GenerationWork: Sendable {
 	public let elementCount: Int
 
 	/// Called with the work of a counted step each time the step runs, when set: by the tests, never by the tool.
-	@TaskLocal public static var observer: (@Sendable (GenerationWork) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (GenerationWork) -> Void>?
 
 	/// Hands `observer`, when set, the work `step` did, when `step` is not `nil`.
 	static func record(_ elementCount: Int, by step: Step?) {

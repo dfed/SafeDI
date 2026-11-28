@@ -296,10 +296,13 @@ struct SafeDIToolPublicMockRootLevelTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
 			        let session_lazilyInstantiated = LazilyInstantiated<Session> { session }
+			        func __safeDI_fillBody_6F93F13C15FF08AB(session: LazilyInstantiated<Session>) -> any Api {
+			            let api: any Api = Live(session: session.instance)
+			            return api
+			        }
 			        func __safeDI_detailBuilder() -> Detail {
 			            func __safeDI_apiBuilder_Detail_api(session: LazilyInstantiated<Session>) -> any Api {
-			                let api: any Api = Live(session: session.instance)
-			                return api
+			                return __safeDI_fillBody_6F93F13C15FF08AB(session: session)
 			            }
 			            func __safeDI_apiBuilder_Detail() -> Detail.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
 			                .init(api: { values in __safeDI_apiBuilder_Detail_api(session: values.session) })
@@ -863,10 +866,13 @@ struct SafeDIToolPublicMockRootLevelTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
 			        let token: Token? = safeDIOverrides.token
+			        func __safeDI_fillBody_17FCFC39C81E6072(token: Token?) -> any Api {
+			            let api: any Api = Live(token: token)
+			            return api
+			        }
 			        func __safeDI_detailBuilder() -> Detail {
 			            func __safeDI_apiBuilder_Detail_api(token: Token?) -> any Api {
-			                let api: any Api = Live(token: token)
-			                return api
+			                return __safeDI_fillBody_17FCFC39C81E6072(token: token)
 			            }
 			            func __safeDI_apiBuilder_Detail() -> Detail.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
 			                .init(api: { values in __safeDI_apiBuilder_Detail_api(token: values.token) })
@@ -1487,10 +1493,13 @@ struct SafeDIToolPublicMockRootLevelTests: ~Copyable {
 			        format: @escaping (Int) -> String,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
+			        func __safeDI_fillBody_57C85B5B19A6C10A(format: @escaping (Int) -> String) -> any Api {
+			            let api: any Api = Live(format: format)
+			            return api
+			        }
 			        func __safeDI_detailBuilder() -> Detail {
 			            func __safeDI_apiBuilder_Detail_api(format: @escaping (Int) -> String) -> any Api {
-			                let api: any Api = Live(format: format)
-			                return api
+			                return __safeDI_fillBody_57C85B5B19A6C10A(format: format)
 			            }
 			            func __safeDI_apiBuilder_Detail() -> Detail.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
 			                .init(api: { values in __safeDI_apiBuilder_Detail_api(format: values.format) })
@@ -1610,10 +1619,13 @@ struct SafeDIToolPublicMockRootLevelTests: ~Copyable {
 			        apiBuilder __safeDI_apiBuilder: (() -> any Api)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
+			        func __safeDI_fillBody_FE95FFCB0B4BAE65(id: Int) -> any Api {
+			            let api: any Api = Live(id: id)
+			            return api
+			        }
 			        func __safeDI_detailBuilder(id: Int) -> Detail {
 			            func __safeDI_apiBuilder_Detail_api(id: Int) -> any Api {
-			                let api: any Api = Live(id: id)
-			                return api
+			                return __safeDI_fillBody_FE95FFCB0B4BAE65(id: id)
 			            }
 			            func __safeDI_apiBuilder_Detail() -> Detail.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
 			                .init(api: { values in __safeDI_apiBuilder_Detail_api(id: values.id) })
@@ -2201,10 +2213,13 @@ struct SafeDIToolPublicMockRootLevelTests: ~Copyable {
 			        apiBuilder: (() -> any Api)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
+			        func __safeDI_fillBody_D559B1DD4A7F3625() -> any Api {
+			            let api: any Api = Live()
+			            return api
+			        }
 			        func __safeDI_detail() -> Detail {
 			            func __safeDI_apiBuilder__Detail_api() -> any Api {
-			                let api: any Api = Live()
-			                return api
+			                return __safeDI_fillBody_D559B1DD4A7F3625()
 			            }
 			            func __safeDI_apiBuilder__Detail() -> Detail.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
 			                .init(api: { _ in __safeDI_apiBuilder__Detail_api() })
@@ -2346,10 +2361,6 @@ struct SafeDIToolPublicMockRootLevelTests: ~Copyable {
 				        public init(api: @escaping (Int) -> __safeDI_Built) {
 				            self.api = api
 				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(api: { _ in __safeDI_builder() })
-				        }
 				    }
 
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -2416,10 +2427,6 @@ struct SafeDIToolPublicMockRootLevelTests: ~Copyable {
 
 				        public init(api: @escaping (Session) -> __safeDI_Built) {
 				            self.api = api
-				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(api: { _ in __safeDI_builder() })
 				        }
 				    }
 
@@ -2488,10 +2495,6 @@ struct SafeDIToolPublicMockRootLevelTests: ~Copyable {
 				        public init(api: @escaping (Token?) -> __safeDI_Built) {
 				            self.api = api
 				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(api: { _ in __safeDI_builder() })
-				        }
 				    }
 
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -2559,10 +2562,6 @@ struct SafeDIToolPublicMockRootLevelTests: ~Copyable {
 				        public init(api: @escaping (LazilyInstantiated<Session>) -> __safeDI_Built) {
 				            self.api = api
 				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(api: { _ in __safeDI_builder() })
-				        }
 				    }
 
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -2629,10 +2628,6 @@ struct SafeDIToolPublicMockRootLevelTests: ~Copyable {
 
 				        public init(api: @escaping (LazilyInstantiated<Session>?) -> __safeDI_Built) {
 				            self.api = api
-				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(api: { _ in __safeDI_builder() })
 				        }
 				    }
 

@@ -85,6 +85,7 @@ KNOWN_WORDS = {
     # Counted against no pin, so nothing is derived from it.
     "clean-subtree-skips",
     "per-type-plan",
+    "parameter-facts",
 }
 
 NOT_DERIVED = [

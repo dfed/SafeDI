@@ -52,7 +52,7 @@ struct SafeDIToolFulfillmentFoldTests: ~Copyable {
 			let fixture = try Self.fuzzerDraw(forSeed: seed, beneathLayers: layerCount)
 			let (stream, continuation) = AsyncStream.makeStream(of: ValidationWalkObservation.self)
 			_ = try await FulfillmentFoldChecks.$comparesFoldWithWalk.withValue(false) {
-				try await ValidationWalkObservation.$observer.withValue({ continuation.yield($0) }) {
+				try await ValidationWalkObservation.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 					try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete, skipCompileVerification: true)
 				}
 			}
@@ -92,7 +92,7 @@ struct SafeDIToolFulfillmentFoldTests: ~Copyable {
 			seamFixtureType(named: "Detail", declarations: ["@Instantiated let token: Instantiator<Token>", "@Instantiated let screenBuilder: Instantiator<Screen>"]),
 		]
 		let (stream, continuation) = AsyncStream.makeStream(of: FulfillmentFoldComparison.self)
-		let errorDescription: String? = try await ValidationWalkObservation.$foldComparison.withValue({ continuation.yield($0) }) {
+		let errorDescription: String? = try await ValidationWalkObservation.$foldComparison.withValue(TaskLocalFunction { continuation.yield($0) }) {
 			do {
 				_ = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 				return nil

@@ -125,10 +125,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			        public init(panel: __safeDI_ServiceCarrier_Panel<__safeDI_Built>) {
 			            self.panel = panel
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(panel: .init(__safeDI_noScope: __safeDI_builder))
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -137,10 +133,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 			        public init(service: @escaping () -> __safeDI_Built) {
 			            self.service = service
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(service: { __safeDI_builder() })
 			        }
 			    }
 
@@ -212,10 +204,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            self.panel = panel
 			            self.row = row
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(panel: .init(__safeDI_noScope: __safeDI_builder), row: { _ in .init(__safeDI_noScope: __safeDI_builder) })
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -225,10 +213,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			        public init(service: @escaping () -> __safeDI_Built) {
 			            self.service = service
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(service: { __safeDI_builder() })
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -237,10 +221,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 			        public init(service: @escaping () -> __safeDI_Built) {
 			            self.service = service
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(service: { __safeDI_builder() })
 			        }
 			    }
 
@@ -323,10 +303,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            self.first = first
 			            self.second = second
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(first: .init(__safeDI_noScope: __safeDI_builder), second: { _ in .init(__safeDI_noScope: __safeDI_builder) })
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -335,10 +311,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 			        public init(service: @escaping () -> __safeDI_Built) {
 			            self.service = service
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(service: { __safeDI_builder() })
 			        }
 			    }
 
@@ -388,10 +360,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			        public init(first: @escaping () -> __safeDI_Built, second: @escaping (any Service) -> __safeDI_Built) {
 			            self.first = first
 			            self.second = second
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(first: { __safeDI_builder() }, second: { _ in __safeDI_builder() })
 			        }
 			    }
 
@@ -461,10 +429,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			        public init(gadget: @escaping (any Service) -> __safeDI_Built) {
 			            self.gadget = gadget
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(gadget: { _ in __safeDI_builder() })
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -473,10 +437,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 			        public init(service: @escaping () -> __safeDI_Built) {
 			            self.service = service
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(service: { __safeDI_builder() })
 			        }
 			    }
 
@@ -553,10 +513,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		        public init(erased: @escaping (any Service) -> __safeDI_Built) {
 		            self.erased = erased
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(erased: { _ in __safeDI_builder() })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -565,10 +521,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 		        public init(plain: @escaping () -> __safeDI_Built) {
 		            self.plain = plain
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(plain: { __safeDI_builder() })
 		        }
 		    }
 
@@ -605,10 +557,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		        public init(service: @escaping () -> __safeDI_Built) {
 		            self.service = service
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(service: { __safeDI_builder() })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -617,10 +565,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 		        public init(other: @escaping (any Service) -> __safeDI_Built) {
 		            self.other = other
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(other: { _ in __safeDI_builder() })
 		        }
 		    }
 
@@ -659,10 +603,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		            self.first = first
 		            self.second = second
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(first: { __safeDI_builder() }, second: { _ in __safeDI_builder() })
-		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -699,10 +639,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		        public init(first: @escaping () -> __safeDI_Built, second: @escaping (any (P & Q)) -> __safeDI_Built) {
 		            self.first = first
 		            self.second = second
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(first: { __safeDI_builder() }, second: { _ in __safeDI_builder() })
 		        }
 		    }
 
@@ -871,10 +807,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		            self.first = first
 		            self.second = second
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(first: { __safeDI_builder() }, second: { _ in __safeDI_builder() })
-		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -920,10 +852,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		            self.first = first
 		            self.second = second
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(first: { __safeDI_builder() }, second: { _ in __safeDI_builder() })
-		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -965,10 +893,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            self.inner = inner
 			            self.service = service
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(inner: .init(__safeDI_noScope: __safeDI_builder), service: { _ in __safeDI_builder() })
-			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -995,10 +919,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 			        public init(service: @escaping () -> __safeDI_Built) {
 			            self.service = service
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(service: { __safeDI_builder() })
 			        }
 			    }
 
@@ -1084,15 +1004,17 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		            self.inner = inner
 		            self.service = service
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(inner: .init(__safeDI_noScope: __safeDI_builder), service: { _ in __safeDI_builder() })
-		        }
 		    }
 
 		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
 		    public init(serviceBuilder: @escaping () -> any Service) {
-		        self.init(__safeDI_serviceBuilder: .init(__safeDI_noScope: serviceBuilder))
+		        @Sendable nonisolated func __safeDI_noScope_Host_SafeDICarrierScope_Service<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Host.__safeDI_ServiceCarrier<__safeDI_Built> {
+		            .init(inner: __safeDI_noScope_Inner_SafeDICarrierScope_Service(__safeDI_builder), service: { _ in __safeDI_builder() })
+		        }
+		        @Sendable nonisolated func __safeDI_noScope_Inner_SafeDICarrierScope_Service<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Inner.__safeDI_ServiceCarrier<__safeDI_Built> {
+		            .init(service: { __safeDI_builder() })
+		        }
+		        self.init(__safeDI_serviceBuilder: __safeDI_noScope_Host_SafeDICarrierScope_Service(serviceBuilder))
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -1120,15 +1042,14 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		        public init(service: @escaping () -> __safeDI_Built) {
 		            self.service = service
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(service: { __safeDI_builder() })
-		        }
 		    }
 
 		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
 		    public init(serviceBuilder: @escaping () -> any Service) {
-		        self.init(__safeDI_serviceBuilder: .init(__safeDI_noScope: serviceBuilder))
+		        @Sendable nonisolated func __safeDI_noScope_Inner_SafeDICarrierScope_Service<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Inner.__safeDI_ServiceCarrier<__safeDI_Built> {
+		            .init(service: { __safeDI_builder() })
+		        }
+		        self.init(__safeDI_serviceBuilder: __safeDI_noScope_Inner_SafeDICarrierScope_Service(serviceBuilder))
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -1183,10 +1104,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            self.first = first
 			            self.second = second
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(first: .init(__safeDI_noScope: __safeDI_builder), second: .init(__safeDI_noScope: __safeDI_builder))
-			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -1217,10 +1134,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 			        public init(service: @escaping () -> __safeDI_Built) {
 			            self.service = service
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(service: { __safeDI_builder() })
 			        }
 			    }
 
@@ -1285,10 +1198,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			        public init(service: @escaping () -> __safeDI_Built) {
 			            self.service = service
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(service: { __safeDI_builder() })
-			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -1310,10 +1219,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 			        public init(mid: Mid.__safeDI_ServiceCarrier<__safeDI_Built>) {
 			            self.mid = mid
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(mid: .init(__safeDI_noScope: __safeDI_builder))
 			        }
 			    }
 
@@ -1340,10 +1245,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 			        public init(deep: Deep.__safeDI_ServiceCarrier<__safeDI_Built>) {
 			            self.deep = deep
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(deep: .init(__safeDI_noScope: __safeDI_builder))
 			        }
 			    }
 
@@ -1415,10 +1316,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		        public init(deep: Deep.__safeDI_ServiceCarrier<__safeDI_Built>) {
 		            self.deep = deep
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(deep: .init(__safeDI_noScope: __safeDI_builder))
-		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -1461,10 +1358,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			        public init(plain: Inner.__safeDI_ServiceCarrier<__safeDI_Built>) {
 			            self.plain = plain
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(plain: .init(__safeDI_noScope: __safeDI_builder))
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1473,10 +1366,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 			        public init(held: @escaping @Sendable () -> Inner.__safeDI_ServiceCarrier<__safeDI_Built>) {
 			            self.held = held
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			            self.init(held: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
 			    }
 
@@ -1508,10 +1397,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 			        public init(service: @escaping () -> __safeDI_Built) {
 			            self.service = service
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(service: { __safeDI_builder() })
 			        }
 			    }
 
@@ -1579,10 +1464,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			        public init(service: @escaping () -> __safeDI_Built) {
 			            self.service = service
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(service: { __safeDI_builder() })
-			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -1605,10 +1486,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			        public init(inner: Inner.__safeDI_ServiceCarrier<__safeDI_Built>) {
 			            self.inner = inner
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(inner: .init(__safeDI_noScope: __safeDI_builder))
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1617,10 +1494,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 			        public init(inner_Sendable: Inner.__safeDI_ServiceSendableCarrier<__safeDI_Built>) {
 			            self.inner_Sendable = inner_Sendable
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			            self.init(inner_Sendable: .init(__safeDI_noScope: __safeDI_builder))
 			        }
 			    }
 
@@ -1648,10 +1521,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			        public init(plain: Deep.__safeDI_ServiceCarrier<__safeDI_Built>) {
 			            self.plain = plain
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(plain: .init(__safeDI_noScope: __safeDI_builder))
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1660,10 +1529,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 			        public init(held: @escaping @Sendable () -> Deep.__safeDI_ServiceCarrier<__safeDI_Built>) {
 			            self.held = held
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			            self.init(held: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
 			    }
 
@@ -1747,10 +1612,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			        public init(service: @escaping () -> __safeDI_Built) {
 			            self.service = service
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(service: { __safeDI_builder() })
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1759,10 +1620,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 			        public init(job: @escaping @Sendable () -> __safeDI_ServiceCarrier_Job<__safeDI_Built>) {
 			            self.job = job
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			            self.init(job: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
 			    }
 
@@ -1842,10 +1699,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			        public init(inner_Sendable: Inner.__safeDI_ServiceSendableCarrier<__safeDI_Built>) {
 			            self.inner_Sendable = inner_Sendable
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			            self.init(inner_Sendable: .init(__safeDI_noScope: __safeDI_builder))
-			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -1868,10 +1721,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 			        public init(held_Sendable: Inner.__safeDI_ServiceSendableCarrier<__safeDI_Built>) {
 			            self.held_Sendable = held_Sendable
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			            self.init(held_Sendable: .init(__safeDI_noScope: __safeDI_builder))
 			        }
 			    }
 
@@ -1897,10 +1746,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			        public init(inner_Sendable: Inner.__safeDI_ServiceSendableCarrier<__safeDI_Built>, held_Sendable: Inner.__safeDI_ServiceSendableCarrier<__safeDI_Built>) {
 			            self.inner_Sendable = inner_Sendable
 			            self.held_Sendable = held_Sendable
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			            self.init(inner_Sendable: .init(__safeDI_noScope: __safeDI_builder), held_Sendable: .init(__safeDI_noScope: __safeDI_builder))
 			        }
 			    }
 
@@ -1965,10 +1810,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            self.service = service
 			            self.bBuilder = bBuilder
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(service: { _ in __safeDI_builder() }, bBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
-			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -1995,10 +1836,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 			        public init(aBuilder: @escaping () -> A.__safeDI_ServiceCarrier<__safeDI_Built>) {
 			            self.aBuilder = aBuilder
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(aBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
 			    }
 
@@ -2069,10 +1906,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			        public init(service: @escaping (Instantiator<B>) -> __safeDI_Built) {
 			            self.service = service
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(service: { _ in __safeDI_builder() })
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -2081,10 +1914,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 			        public init(bBuilder_Sendable: @escaping @Sendable () -> B.__safeDI_ServiceSendableCarrier<__safeDI_Built>) {
 			            self.bBuilder_Sendable = bBuilder_Sendable
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			            self.init(bBuilder_Sendable: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
 			    }
 
@@ -2114,10 +1943,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			        public init(aBuilder: @escaping @Sendable () -> A.__safeDI_ServiceCarrier<__safeDI_Built>, aBuilder_Sendable: @escaping @Sendable () -> A.__safeDI_ServiceSendableCarrier<__safeDI_Built>) {
 			            self.aBuilder = aBuilder
 			            self.aBuilder_Sendable = aBuilder_Sendable
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			            self.init(aBuilder: { .init(__safeDI_noScope: __safeDI_builder) }, aBuilder_Sendable: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
 			    }
 
@@ -2189,10 +2014,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            self.service = service
 			            self.nextBuilder = nextBuilder
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(service: { _ in __safeDI_builder() }, nextBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
-			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -2262,10 +2083,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            self.service = service
 			            self.step = step
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(service: { _ in __safeDI_builder() }, step: { .init(__safeDI_noScope: __safeDI_builder) })
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -2274,10 +2091,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 			        public init(sBuilder: @escaping () -> S.__safeDI_ServiceCarrier<__safeDI_Built>) {
 			            self.sBuilder = sBuilder
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(sBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
 			    }
 
@@ -2355,10 +2168,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		            self.bBuilder = bBuilder
 		            self.c = c
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(bBuilder: { .init(__safeDI_noScope: __safeDI_builder) }, c: .init(__safeDI_noScope: __safeDI_builder))
-		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -2390,10 +2199,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		        public init(aBuilder: @escaping () -> A.__safeDI_ServiceCarrier<__safeDI_Built>) {
 		            self.aBuilder = aBuilder
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(aBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
-		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -2419,10 +2224,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 		        public init(service: @escaping () -> __safeDI_Built) {
 		            self.service = service
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(service: { __safeDI_builder() })
 		        }
 		    }
 
@@ -2526,10 +2327,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			        public init(maker: @escaping () -> ErasedInstantiator<(count: Int, name: Name), __safeDI_Built>.Builder) {
 			            self.maker = maker
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<(count: Int, name: Name), __safeDI_Built>.Builder) {
-			            self.init(maker: { __safeDI_builder })
-			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -2551,17 +2348,20 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        func __safeDI_namedGadget_AnyGadgetBuilder_Host_maker() -> ErasedInstantiator<(count: Int, name: Name), AnyGadget>.Builder {
+			            return __safeDI_fillBody_60F13CDE44B58A54()
+			        }
+			        func __safeDI_fillBody_60F13CDE44B58A54() -> ErasedInstantiator<(count: Int, name: Name), AnyGadget>.Builder {
+			            func __safeDI_maker(count: Int, name: Name) -> NamedGadget {
+			                NamedGadget(name: name, count: count)
+			            }
+			            return { forwarded in AnyGadget(__safeDI_maker(count: forwarded.count, name: forwarded.name)) }
+			        }
+			        func __safeDI_namedGadget_AnyGadgetBuilder_Host() -> Host.__safeDI_NamedGadget_AnyGadgetCarrier<AnyGadget> {
+			            .init(maker: { __safeDI_namedGadget_AnyGadgetBuilder_Host_maker() })
+			        }
 			        func __safeDI_host() -> Host {
 			            _ = Host.__safeDI_Host_CA1A5978999B46CD.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            func __safeDI_namedGadget_AnyGadgetBuilder_Host_maker() -> ErasedInstantiator<(count: Int, name: Name), AnyGadget>.Builder {
-			                func __safeDI_maker(count: Int, name: Name) -> NamedGadget {
-			                    NamedGadget(name: name, count: count)
-			                }
-			                return { forwarded in AnyGadget(__safeDI_maker(count: forwarded.count, name: forwarded.name)) }
-			            }
-			            func __safeDI_namedGadget_AnyGadgetBuilder_Host() -> Host.__safeDI_NamedGadget_AnyGadgetCarrier<AnyGadget> {
-			                .init(maker: { __safeDI_namedGadget_AnyGadgetBuilder_Host_maker() })
-			            }
 			            return Host(__safeDI_namedGadget_AnyGadgetBuilder: __safeDI_namedGadget_AnyGadgetBuilder_Host())
 			        }
 			        let host: Host = __safeDI_host()
@@ -2594,10 +2394,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			        public init(`default`: @escaping () -> __safeDI_Built, `my leaf`: @escaping (any Service) -> __safeDI_Built) {
 			            self.`default` = `default`
 			            self.`my leaf` = `my leaf`
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(default: { __safeDI_builder() }, `my leaf`: { _ in __safeDI_builder() })
 			        }
 			    }
 
@@ -2648,10 +2444,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		        public init(kp: @escaping (any URLLoader) -> __safeDI_Built) {
 		            self.kp = kp
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(kp: { _ in __safeDI_builder() })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -2660,10 +2452,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 		        public init(loader: @escaping () -> __safeDI_Built) {
 		            self.loader = loader
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(loader: { __safeDI_builder() })
 		        }
 		    }
 
@@ -2699,10 +2487,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		        public init(loader: @escaping () -> __safeDI_Built) {
 		            self.loader = loader
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(loader: { __safeDI_builder() })
-		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -2735,10 +2519,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 		        public init(service: @escaping (Int) -> __safeDI_Built) {
 		            self.service = service
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(service: { _ in __safeDI_builder() })
 		        }
 		    }
 
@@ -2774,10 +2554,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		        public init(service: @escaping () -> __safeDI_Built, service_Values: @escaping (any Service) -> __safeDI_Built) {
 		            self.service = service
 		            self.service_Values = service_Values
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(service: { __safeDI_builder() }, service_Values: { _ in __safeDI_builder() })
 		        }
 		    }
 
@@ -2815,10 +2591,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		        public init(nested: @escaping () -> __safeDI_Built) {
 		            self.nested = nested
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(nested: { __safeDI_builder() })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -2827,10 +2599,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 		        public init(joined: @escaping (Outer.Thing) -> __safeDI_Built) {
 		            self.joined = joined
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(joined: { _ in __safeDI_builder() })
 		        }
 		    }
 
@@ -2873,10 +2641,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		        public init(nested: @escaping (Int) -> __safeDI_Built) {
 		            self.nested = nested
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(nested: { _ in __safeDI_builder() })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -2885,10 +2649,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 		        public init(joined: @escaping (Int, Outer.Thing) -> __safeDI_Built) {
 		            self.joined = joined
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(joined: { _, _ in __safeDI_builder() })
 		        }
 		    }
 
@@ -2945,6 +2705,16 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        func __safeDI_serviceBuilder_Inner_Inner_job(_ scope__scope: Token) -> any Service {
+			            let job: any Service = DefaultService()
+			            return job
+			        }
+			        func __safeDI_serviceBuilder_Host() -> Host.__safeDI_ServiceCarrier<any Service> {
+			            .init(inner: __safeDI_serviceBuilder_Inner(), innerJob: __safeDI_serviceBuilder_Inner_Inner_job_())
+			        }
+			        func __safeDI_serviceBuilder_Inner() -> Inner.__safeDI_ServiceCarrier<any Service> {
+			            .init(job: { scope_scope in __safeDI_serviceBuilder_Inner_Inner_job(scope_scope) })
+			        }
 			        func __safeDI_serviceBuilder_Inner_Inner_job_() -> Inner_Inner_job.__safeDI_ServiceCarrier<any Service> {
 			            .init(service: {
 			                let service: any Service = DefaultService()
@@ -2965,16 +2735,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			        }
 			        func __safeDI_host() -> Host {
 			            _ = Host.__safeDI_Host_21F652AED089ABCB.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            func __safeDI_serviceBuilder_Inner_Inner_job(_ scope__scope: Token) -> any Service {
-			                let job: any Service = DefaultService()
-			                return job
-			            }
-			            func __safeDI_serviceBuilder_Host() -> Host.__safeDI_ServiceCarrier<any Service> {
-			                .init(inner: __safeDI_serviceBuilder_Inner(), innerJob: __safeDI_serviceBuilder_Inner_Inner_job_())
-			            }
-			            func __safeDI_serviceBuilder_Inner() -> Inner.__safeDI_ServiceCarrier<any Service> {
-			                .init(job: { scope_scope in __safeDI_serviceBuilder_Inner_Inner_job(scope_scope) })
-			            }
 			            return Host(__safeDI_serviceBuilder: __safeDI_serviceBuilder_Host(), __safeDI_serviceSendableBuilder: __safeDI_serviceSendableBuilder_Host())
 			        }
 			        let host: Host = __safeDI_host()
@@ -3069,10 +2829,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		        public init(inner: Inner.__safeDI_ServiceCarrier<__safeDI_Built>) {
 		            self.inner = inner
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(inner: .init(__safeDI_noScope: __safeDI_builder))
-		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -3098,10 +2854,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 		        public init(service: @escaping () -> __safeDI_Built) {
 		            self.service = service
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(service: { __safeDI_builder() })
 		        }
 		    }
 
@@ -3189,10 +2941,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		        public init(deep: Deep.__safeDI_ServiceCarrier<__safeDI_Built>) {
 		            self.deep = deep
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(deep: .init(__safeDI_noScope: __safeDI_builder))
-		        }
 		    }
 
 		    // SafeDI counts `Service` as `public`: no module it reads declares it narrower. If `Service` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
@@ -3263,10 +3011,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 		        public init(part: @escaping @Sendable () -> SendableErasedInstantiator<String, __safeDI_Built>.Builder) {
 		            self.part = part
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<String, __safeDI_Built>.Builder) {
-		            self.init(part: { __safeDI_builder })
 		        }
 		    }
 
@@ -3355,6 +3099,17 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        func __safeDI_serviceBuilder_Inner_service(_ scope_deep: Deep) -> any Service {
+			            return __safeDI_fillBody_220E4FCEBC0CCEE2()
+			        }
+			        func __safeDI_fillBody_220E4FCEBC0CCEE2() -> any Service {
+			            func __safeDI_service() -> DefaultService {
+			                let gadget: any Gadget = DefaultGadget()
+			                return DefaultService(gadget: gadget)
+			            }
+			            let service: any Service = __safeDI_service()
+			            return service
+			        }
 			        func __safeDI_gadgetBuilder_Host() -> Host.__safeDI_GadgetCarrier<any Gadget> {
 			            .init(inner: __safeDI_gadgetBuilder_Inner())
 			        }
@@ -3367,22 +3122,14 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			                return gadget
 			            })
 			        }
+			        func __safeDI_serviceBuilder_Host() -> Host.__safeDI_ServiceCarrier<any Service> {
+			            .init(inner: __safeDI_serviceBuilder_Inner())
+			        }
+			        func __safeDI_serviceBuilder_Inner() -> Inner.__safeDI_ServiceCarrier<any Service> {
+			            .init(service: { scope_deep in __safeDI_serviceBuilder_Inner_service(scope_deep) })
+			        }
 			        func __safeDI_host() -> Host {
 			            _ = Host.__safeDI_Host_6C150D4BF5C855DE.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            func __safeDI_serviceBuilder_Inner_service(_ scope_deep: Deep) -> any Service {
-			                func __safeDI_service() -> DefaultService {
-			                    let gadget: any Gadget = DefaultGadget()
-			                    return DefaultService(gadget: gadget)
-			                }
-			                let service: any Service = __safeDI_service()
-			                return service
-			            }
-			            func __safeDI_serviceBuilder_Host() -> Host.__safeDI_ServiceCarrier<any Service> {
-			                .init(inner: __safeDI_serviceBuilder_Inner())
-			            }
-			            func __safeDI_serviceBuilder_Inner() -> Inner.__safeDI_ServiceCarrier<any Service> {
-			                .init(service: { scope_deep in __safeDI_serviceBuilder_Inner_service(scope_deep) })
-			            }
 			            return Host(__safeDI_gadgetBuilder: __safeDI_gadgetBuilder_Host(), __safeDI_serviceBuilder: __safeDI_serviceBuilder_Host())
 			        }
 			        let host: Host = __safeDI_host()
@@ -3523,19 +3270,146 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		], visible: Self.modules(feature: feature + [fulfiller], app: [root]), probes: [DifferentialValueProbe("Root().home.listBuilder.instantiate().detailBuilder.instantiate().settingsBuilder.instantiate().service")])
 	}
 
+	/// Four seams that build each other through instantiators, three of which hold a place `service` of their own: every
+	/// seam passes up the places of the others, most through more than one call.
+	private static var fourSeamsInCyclesFeature: [String] {
+		[
+			service,
+			type("S0", seam: true, ["@Instantiated public let to1: Instantiator<S1>", "@Instantiated public let to3: Instantiator<S3>", "@Instantiated public let service: any Service"]),
+			type("S1", seam: true, ["@Instantiated public let to0: Instantiator<S0>", "@Instantiated public let to2: Instantiator<S2>", "@Instantiated public let service: any Service"]),
+			type("S2", seam: true, ["@Instantiated public let to0: Instantiator<S0>", "@Instantiated public let to3: Instantiator<S3>"]),
+			type("S3", seam: true, ["@Instantiated public let to0: Instantiator<S0>", "@Instantiated public let to1: Instantiator<S1>", "@Instantiated public let to2: Instantiator<S2>", "@Instantiated public let service: any Service"]),
+		]
+	}
+
+	private static let fourSeamsInCyclesFulfiller = fulfilling("DefaultService", "Service")
+	private static let fourSeamsInCyclesRoot = root(["@Instantiated public let s0: S0"])
+	private static var fourSeamsInCyclesModules: [ModuleFixture] {
+		modules(feature: fourSeamsInCyclesFeature, app: [fourSeamsInCyclesFulfiller, fourSeamsInCyclesRoot])
+	}
+
+	/// Each seam's place graph over `fourSeamsInCyclesModules` as its last pass computed it, once the signatures have
+	/// settled, with the graphs its references resolve to.
+	private mutating func lastObservationsOfFourSeamsInCycles() async throws -> [String: SeamSignature.Places.Observation] {
+		let (stream, continuation) = AsyncStream.makeStream(of: SeamSignature.Places.Observation.self)
+		let enclosingObserver = SeamPlaceLevels.observer
+		var writtenFiles = [URL]()
+		_ = try await SeamPlaceLevels.$observer.withValue(TaskLocalFunction { placeLevels in
+			if let observation = placeLevels.placesObservation {
+				continuation.yield(observation)
+			}
+			enclosingObserver?(placeLevels)
+		}) {
+			try await executeSafeDIToolMultiModuleTest(modules: Self.fourSeamsInCyclesModules, integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &writtenFiles)
+		}
+		filesToDelete += writtenFiles
+		continuation.finish()
+		var lastObservationBySeam = [String: SeamSignature.Places.Observation]()
+		for await observation in stream {
+			lastObservationBySeam[observation.seamType.asSource] = observation
+		}
+		return lastObservationBySeam
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func called_handsPlaceEachReasonNames_whenSeamsThatPresentThePlaceCallEachOther() async throws {
+		let lastObservationBySeam = try await lastObservationsOfFourSeamsInCycles()
+		// Each declaration a place holds as bound by a seam that passes it up names, in its reason, the called seam's place
+		// the call presents. Where no case stores the declaration with that reason, the run hands the same place, under the
+		// same builder label and case name, for the case the call's case refers to.
+		var reasonsCompared = 0
+		var reasonsNotHanded = [String]()
+		for (seam, observation) in lastObservationBySeam {
+			let query = SeamSignature.Places.Query(of: observation.places, calledPlaces: observation.calledPlaces(of:))
+			for (hole, caseIndex) in zip(observation.siteHoles, observation.caseIndexBySite) where observation.places.cases[caseIndex].passedUp != nil {
+				let additions = try #require(query.presentationAdditions(of: caseIndex))
+				let holding = try #require(query.holdingCase(of: caseIndex))
+				let stored = Set(additions.calledCopyDeclarations + holding.query.places.cases[holding.caseIndex].calledCopyDeclarations)
+				for declaration in hole.uncarriedDeclarations where !stored.contains(declaration) {
+					guard case let .boundByPassingUpSeam(passingSeam, _, place) = declaration.reason else { continue }
+					reasonsCompared += 1
+					let isHanded = additions.boundOnPathsToCalls.contains { bound in
+						let presentingPlaces = bound.presentingCase.query.places
+						guard bound.declaration.property == declaration.property, bound.declaration.declaringType == declaration.declaringType,
+						      presentingPlaces.levels.first(where: \.key.isSeamRoot)?.key.builtType == passingSeam,
+						      let reference = presentingPlaces.cases[bound.presentingCase.caseIndex].passedUp,
+						      let calledHole = observation.called(of: reference)?.hole(ofCaseAt: reference.caseIndex)
+						else { return false }
+						return calledHole.scopeSeamType == place.seamType && calledHole.ownerType == place.ownerType && calledHole.property == place.property
+							&& calledHole.instantiatedType == place.instantiatedType && calledHole.builderLabel == place.builderLabel && calledHole.enumPlace?.caseName == place.caseName
+					}
+					if !isHanded {
+						reasonsNotHanded.append("\(seam): \(declaration.property.asSource) of \(declaration.declaringType.asSource), bound by \(passingSeam.asSource), presenting \(place.builderLabel)")
+					}
+				}
+			}
+		}
+		#expect(reasonsCompared > 0)
+		#expect(reasonsNotHanded.sorted() == [])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func holdingCase_isCaseOfSeamThatHoldsPlace_whenReferencesOfTwoSeamsCasesLeadToEachOther() async throws {
+		let lastObservationBySeam = try await lastObservationsOfFourSeamsInCycles()
+		func seamAndProperty(_ resolved: SeamSignature.Places.Query.ResolvedCase) -> String {
+			let places = resolved.query.places
+			let seam = places.levels.first(where: \.key.isSeamRoot)?.key.builtType?.asSource ?? "no seam"
+			return "\(seam).\(places.levels[places.cases[resolved.caseIndex].ownerLevel].key.nextProperty?.label ?? "a call")"
+		}
+		// `S0` presents `S3`'s `service` first through its call of `S1`, and `S1` presents it first through its call of
+		// `S0`: the references of those two cases lead to each other. `S0` also presents the place through its call of `S3`.
+		var holdersOfCasesWhoseReferencesLoop = [String: Set<String>]()
+		var holdersBySeam = [String: Set<String>]()
+		for (seam, observation) in lastObservationBySeam {
+			let query = SeamSignature.Places.Query(of: observation.places, calledPlaces: observation.calledPlaces(of:))
+			for caseIndex in observation.places.cases.indices where observation.places.cases[caseIndex].passedUp != nil {
+				let holder = query.holdingCase(of: caseIndex).map(seamAndProperty) ?? "none"
+				holdersBySeam[seam, default: []].insert(holder)
+				if let end = query.casesPresented(from: caseIndex).last, end.query.places.cases[end.caseIndex].passedUp != nil {
+					holdersOfCasesWhoseReferencesLoop[seam, default: []].insert(holder)
+				}
+			}
+		}
+		#expect(holdersBySeam == [
+			"S0": ["S1.service", "S3.service", "S0.service"],
+			"S1": ["S0.service", "S3.service", "S1.service"],
+			"S2": ["S0.service", "S1.service", "S3.service"],
+			"S3": ["S0.service", "S1.service", "S3.service"],
+		])
+		#expect(holdersOfCasesWhoseReferencesLoop["S0"]?.contains("S3.service") == true)
+		#expect(holdersOfCasesWhoseReferencesLoop["S1"]?.contains("S3.service") == true)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func pathToHoldingSeam_passesNoSeamTwice_whenSeamsThatPresentThePlaceCallEachOther() async throws {
+		let lastObservationBySeam = try await lastObservationsOfFourSeamsInCycles()
+		/// The path through the calls from `seam` down to `S3`, which holds the place `service` asked of.
+		func pathToServiceOfS3(from seam: String) throws -> [String] {
+			let observation = try #require(lastObservationBySeam[seam])
+			let query = SeamSignature.Places.Query(of: observation.places, calledPlaces: observation.calledPlaces(of:))
+			let caseOfPlace = try #require(observation.places.cases.indices.first { caseIndex in
+				guard observation.places.cases[caseIndex].passedUp != nil, let holding = query.holdingCase(of: caseIndex) else { return false }
+				return holding.query.places.levels.first(where: \.key.isSeamRoot)?.key.builtType?.asSource == "S3"
+			})
+			return try #require(query.pathToHoldingSeam(of: caseOfPlace)).sitePath.map(\.asSource)
+		}
+		// `S0` declares its call of `S1` before its call of `S3`, so the path starts through `S1`. `S1` declares its call of
+		// `S0` first, which the path has passed, so it goes on through `S2`, whose call of `S0` it leaves out the same way.
+		let pathFromS0 = try pathToServiceOfS3(from: "S0")
+		#expect(pathFromS0 == ["to1: Instantiator<S1>", "to2: Instantiator<S2>", "to3: Instantiator<S3>"])
+		// `S2` declares its call of `S0` first. From `S0`, the call of `S1` declared first leads on only through `S0` and
+		// `S2`, both passed, so the path takes `S0`'s call of `S3`.
+		let pathFromS2 = try pathToServiceOfS3(from: "S2")
+		#expect(pathFromS2 == ["to0: Instantiator<S0>", "to3: Instantiator<S3>"])
+	}
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_settlesSignatures_whenFourSeamsFormSeveralCyclesOfInstantiators() async throws {
-		let feature = [
-			Self.service,
-			Self.type("S0", seam: true, ["@Instantiated public let to1: Instantiator<S1>", "@Instantiated public let to3: Instantiator<S3>", "@Instantiated public let service: any Service"]),
-			Self.type("S1", seam: true, ["@Instantiated public let to0: Instantiator<S0>", "@Instantiated public let to2: Instantiator<S2>", "@Instantiated public let service: any Service"]),
-			Self.type("S2", seam: true, ["@Instantiated public let to0: Instantiator<S0>", "@Instantiated public let to3: Instantiator<S3>"]),
-			Self.type("S3", seam: true, ["@Instantiated public let to0: Instantiator<S0>", "@Instantiated public let to1: Instantiator<S1>", "@Instantiated public let to2: Instantiator<S2>", "@Instantiated public let service: any Service"]),
-		]
-		let fulfiller = Self.fulfilling("DefaultService", "Service")
-		let root = Self.root(["@Instantiated public let s0: S0"])
-		try await expectOutput(of: Self.modules(feature: feature, app: [fulfiller, root]), [
+		try await expectOutput(of: Self.fourSeamsInCyclesModules, [
 			"App": ["App.swift": """
 			#if canImport(Feature)
 			import Feature
@@ -3586,7 +3460,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			    }
 			}
 			"""],
-		], visible: Self.modules(feature: feature + [fulfiller], app: [root]), probes: [DifferentialValueProbe("Root().s0.to3.instantiate().to2.instantiate().to3.instantiate().service")])
+		], visible: Self.modules(feature: Self.fourSeamsInCyclesFeature + [Self.fourSeamsInCyclesFulfiller], app: [Self.fourSeamsInCyclesRoot]), probes: [DifferentialValueProbe("Root().s0.to3.instantiate().to2.instantiate().to3.instantiate().service")])
 	}
 
 	@Test
@@ -3982,15 +3856,14 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		        public init(maker: @escaping () -> ErasedInstantiator<Callback, __safeDI_Built>.Builder) {
 		            self.maker = maker
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Callback, __safeDI_Built>.Builder) {
-		            self.init(maker: { __safeDI_builder })
-		        }
 		    }
 
 		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
 		    public init(impl_ServiceBuilder: @escaping ErasedInstantiator<Callback, any Service>.Builder) {
-		        self.init(__safeDI_impl_ServiceBuilder: .init(__safeDI_noScope: impl_ServiceBuilder))
+		        @Sendable nonisolated func __safeDI_noScope_Host_SafeDICarrierScope_Impl_Service<__safeDI_Built>(_ __safeDI_builder: @escaping ErasedInstantiator<Callback, __safeDI_Built>.Builder) -> Host.__safeDI_Impl_ServiceCarrier<__safeDI_Built> {
+		            .init(maker: { __safeDI_builder })
+		        }
+		        self.init(__safeDI_impl_ServiceBuilder: __safeDI_noScope_Host_SafeDICarrierScope_Impl_Service(impl_ServiceBuilder))
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -4032,10 +3905,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			        public init(zsvc: @escaping (Kind, Name) -> __safeDI_Built) {
 			            self.zsvc = zsvc
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(zsvc: { _, _ in __safeDI_builder() })
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -4045,10 +3914,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			        public init(service: @escaping () -> __safeDI_Built) {
 			            self.service = service
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(service: { __safeDI_builder() })
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -4057,10 +3922,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 			        public init(job: @escaping @Sendable () -> __safeDI_ServiceCarrier_Job<__safeDI_Built>) {
 			            self.job = job
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			            self.init(job: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
 			    }
 
@@ -4140,10 +4001,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			        public init(service: @escaping () -> __safeDI_Built) {
 			            self.service = service
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(service: { __safeDI_builder() })
-			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -4165,10 +4022,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 			        public init(inner: `My Inner`.__safeDI_ServiceCarrier<__safeDI_Built>) {
 			            self.inner = inner
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(inner: .init(__safeDI_noScope: __safeDI_builder))
 			        }
 			    }
 
@@ -4508,10 +4361,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 		        public init(maker: @escaping () -> ErasedInstantiator<Unread, __safeDI_Built>.Builder) {
 		            self.maker = maker
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Unread, __safeDI_Built>.Builder) {
-		            self.init(maker: { __safeDI_builder })
 		        }
 		    }
 

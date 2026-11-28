@@ -91,7 +91,7 @@ struct GeneratedCode: Sendable {
 	/// A function the root may declare once at its top, written as the call declares it where the root does not
 	/// (`Node.rootFunction`).
 	static func rootFunction(_ record: RootFunctionRecord) -> GeneratedCode {
-		GeneratedCode(storage: .children(Children(.rootFunction(record), [.text(record.spelled(isSendable: record.isSendable))])))
+		GeneratedCode(storage: .children(Children(.rootFunction(record), [record.spelled(isSendable: record.isSendable)])))
 	}
 
 	/// The body of a `@Sendable` function (`Node.sendableFunction`).

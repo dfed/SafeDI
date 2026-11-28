@@ -166,7 +166,7 @@ struct SafeDIToolPlanVariantsTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private mutating func projections(of swiftFileContent: String) async throws -> [String] {
 		let (stream, continuation) = AsyncStream.makeStream(of: String.self)
-		try await PerTypePlanObservation.$variantsObserver.withValue({ projection in
+		try await PerTypePlanObservation.$variantsObserver.withValue(TaskLocalFunction { projection in
 			continuation.yield(projection)
 		}) {
 			_ = try await executeSafeDIToolTest(

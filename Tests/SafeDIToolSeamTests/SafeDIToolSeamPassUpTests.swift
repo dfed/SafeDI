@@ -84,10 +84,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 				        public init(detail: @escaping (LazilyInstantiated<Logger>) -> __safeDI_ApiCarrier_Detail<__safeDI_Built>) {
 				            self.detail = detail
 				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(detail: { _ in .init(__safeDI_noScope: __safeDI_builder) })
-				        }
 				    }
 
 				    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -96,10 +92,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 
 				        public init(api: @escaping () -> __safeDI_Built) {
 				            self.api = api
-				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(api: { __safeDI_builder() })
 				        }
 				    }
 
@@ -128,10 +120,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 
 				        public init(inner: Inner.__safeDI_ApiCarrier<__safeDI_Built>) {
 				            self.inner = inner
-				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(inner: .init(__safeDI_noScope: __safeDI_builder))
 				        }
 				    }
 
@@ -206,10 +194,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 				        public init(detail: @escaping (LazilyInstantiated<Logger>) -> __safeDI_ApiCarrier_Detail<__safeDI_Built>) {
 				            self.detail = detail
 				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(detail: { _ in .init(__safeDI_noScope: __safeDI_builder) })
-				        }
 				    }
 
 				    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -218,10 +202,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 
 				        public init(api: @escaping () -> __safeDI_Built) {
 				            self.api = api
-				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(api: { __safeDI_builder() })
 				        }
 				    }
 
@@ -250,10 +230,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 
 				        public init(inner: Inner.__safeDI_ApiCarrier<__safeDI_Built>) {
 				            self.inner = inner
-				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(inner: .init(__safeDI_noScope: __safeDI_builder))
 				        }
 				    }
 
@@ -330,10 +306,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 				        public init(detailBuilder: @escaping (LazilyInstantiated<Logger>, LazilyInstantiated<Tag?>) -> __safeDI_ApiCarrier_Detail<__safeDI_Built>) {
 				            self.detailBuilder = detailBuilder
 				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(detailBuilder: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
-				        }
 				    }
 
 				    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -342,10 +314,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 
 				        public init(api: @escaping () -> __safeDI_Built) {
 				            self.api = api
-				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(api: { __safeDI_builder() })
 				        }
 				    }
 
@@ -376,10 +344,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 				        public init(inner: Inner.__safeDI_ApiCarrier<__safeDI_Built>) {
 				            self.inner = inner
 				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(inner: .init(__safeDI_noScope: __safeDI_builder))
-				        }
 				    }
 
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -407,10 +371,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 
 				        public init(middle: Middle.__safeDI_ApiCarrier<__safeDI_Built>) {
 				            self.middle = middle
-				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(middle: .init(__safeDI_noScope: __safeDI_builder))
 				        }
 				    }
 
@@ -489,10 +449,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 				        public init(detailBuilder: @escaping (LazilyInstantiated<Logger>, LazilyInstantiated<Tag?>) -> __safeDI_ApiCarrier_Detail<__safeDI_Built>) {
 				            self.detailBuilder = detailBuilder
 				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(detailBuilder: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
-				        }
 				    }
 
 				    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -501,10 +457,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 
 				        public init(api: @escaping () -> __safeDI_Built) {
 				            self.api = api
-				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(api: { __safeDI_builder() })
 				        }
 				    }
 
@@ -534,10 +486,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 
 				        public init(inner: Inner.__safeDI_ApiCarrier<__safeDI_Built>) {
 				            self.inner = inner
-				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(inner: .init(__safeDI_noScope: __safeDI_builder))
 				        }
 				    }
 
@@ -569,10 +517,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 
 				        public init(middle: Middle.__safeDI_ApiCarrier<__safeDI_Built>) {
 				            self.middle = middle
-				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(middle: .init(__safeDI_noScope: __safeDI_builder))
 				        }
 				    }
 
@@ -675,10 +619,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 				                public init(api: @escaping (api_Values) -> __safeDI_Built) {
 				                    self.api = api
 				                }
-
-				                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				                    self.init(api: { _ in __safeDI_builder() })
-				                }
 				            }
 				        }
 
@@ -688,10 +628,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 
 				            public init(nest_serviceBuilder: @escaping (nest_serviceBuilder_Values) -> Nest.__safeDI_ServiceCarrier<SafeDIScope_Api.NestImpl_Scope.__safeDI_Builder<__safeDI_Built>>) {
 				                self.nest_serviceBuilder = nest_serviceBuilder
-				            }
-
-				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				                self.init(nest_serviceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 				            }
 				        }
 				    }
@@ -734,10 +670,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 				        public init(inner: Inner.SafeDIScope_Api.__safeDI_Builder<__safeDI_Built>) {
 				            self.inner = inner
 				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(inner: .init(__safeDI_noScope: __safeDI_builder))
-				        }
 				    }
 
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -765,10 +697,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 
 				        public init(service: @escaping () -> __safeDI_Built) {
 				            self.service = service
-				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(service: { __safeDI_builder() })
 				        }
 				    }
 
@@ -804,28 +732,31 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 
 				extension Root {
 				    public convenience init() {
+				        func __safeDI_apiBuilder_Inner_Detail_Scope_api(_ scope_readerBuilder: Instantiator<Reader>, logger: LazilyInstantiated<Logger>) -> any Api {
+				            return __safeDI_fillBody_B445A709CD95B397(logger: logger)
+				        }
+				        func __safeDI_fillBody_B445A709CD95B397(logger: LazilyInstantiated<Logger>) -> any Api {
+				            func __safeDI_jobBuilder() -> Job {
+				                Job(logger: logger.instance)
+				            }
+				            func __safeDI_api() -> LiveApi {
+				                let jobBuilder = Instantiator<Job>(__safeDI_jobBuilder)
+				                return LiveApi(jobBuilder: jobBuilder)
+				            }
+				            let api: any Api = __safeDI_api()
+				            return api
+				        }
+				        func __safeDI_apiBuilder_Outer() -> Outer.__safeDI_ApiCarrier<any Api> {
+				            .init(inner: __safeDI_apiBuilder_Inner())
+				        }
+				        func __safeDI_apiBuilder_Inner() -> Inner.__safeDI_ApiCarrier<any Api> {
+				            .init(detail: { values_logger in __safeDI_apiBuilder_Inner_Detail_Scope(logger: values_logger) })
+				        }
+				        func __safeDI_apiBuilder_Inner_Detail_Scope(logger: LazilyInstantiated<Logger>) -> Inner.__safeDI_ApiCarrier_Detail<any Api> {
+				            .init(api: { scope_readerBuilder in __safeDI_apiBuilder_Inner_Detail_Scope_api(scope_readerBuilder, logger: logger) })
+				        }
 				        func __safeDI_outer() -> Outer {
 				            _ = Outer.__safeDI_Outer_596630904AB994DF.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-				            func __safeDI_apiBuilder_Inner_Detail_Scope_api(_ scope_readerBuilder: Instantiator<Reader>, logger: LazilyInstantiated<Logger>) -> any Api {
-				                func __safeDI_api() -> LiveApi {
-				                    func __safeDI_jobBuilder() -> Job {
-				                        Job(logger: logger.instance)
-				                    }
-				                    let jobBuilder = Instantiator<Job>(__safeDI_jobBuilder)
-				                    return LiveApi(jobBuilder: jobBuilder)
-				                }
-				                let api: any Api = __safeDI_api()
-				                return api
-				            }
-				            func __safeDI_apiBuilder_Outer() -> Outer.__safeDI_ApiCarrier<any Api> {
-				                .init(inner: __safeDI_apiBuilder_Inner())
-				            }
-				            func __safeDI_apiBuilder_Inner() -> Inner.__safeDI_ApiCarrier<any Api> {
-				                .init(detail: { values_logger in __safeDI_apiBuilder_Inner_Detail_Scope(logger: values_logger) })
-				            }
-				            func __safeDI_apiBuilder_Inner_Detail_Scope(logger: LazilyInstantiated<Logger>) -> Inner.__safeDI_ApiCarrier_Detail<any Api> {
-				                .init(api: { scope_readerBuilder in __safeDI_apiBuilder_Inner_Detail_Scope_api(scope_readerBuilder, logger: logger) })
-				            }
 				            return Outer(__safeDI_apiBuilder: __safeDI_apiBuilder_Outer())
 				        }
 				        let outer: Outer = __safeDI_outer()
@@ -842,10 +773,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 				        public init(detail: @escaping (LazilyInstantiated<Logger>) -> __safeDI_ApiCarrier_Detail<__safeDI_Built>) {
 				            self.detail = detail
 				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(detail: { _ in .init(__safeDI_noScope: __safeDI_builder) })
-				        }
 				    }
 
 				    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -854,10 +781,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 
 				        public init(api: @escaping (Instantiator<Reader>) -> __safeDI_Built) {
 				            self.api = api
-				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(api: { _ in __safeDI_builder() })
 				        }
 				    }
 
@@ -890,10 +813,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 
 				        public init(inner: Inner.__safeDI_ApiCarrier<__safeDI_Built>) {
 				            self.inner = inner
-				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(inner: .init(__safeDI_noScope: __safeDI_builder))
 				        }
 				    }
 
@@ -969,10 +888,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 				        public init(api: @escaping () -> __safeDI_Built) {
 				            self.api = api
 				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(api: { __safeDI_builder() })
-				        }
 				    }
 
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -999,10 +914,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 
 				        public init(inner: Inner.__safeDI_ApiCarrier<__safeDI_Built>) {
 				            self.inner = inner
-				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(inner: .init(__safeDI_noScope: __safeDI_builder))
 				        }
 				    }
 
@@ -1071,10 +982,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 				        public init(api: @escaping () -> __safeDI_Built) {
 				            self.api = api
 				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(api: { __safeDI_builder() })
-				        }
 				    }
 
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -1101,10 +1008,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 
 				        public init(innerBuilder: @escaping @Sendable () -> Inner.__safeDI_ApiCarrier<__safeDI_Built>) {
 				            self.innerBuilder = innerBuilder
-				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-				            self.init(innerBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 				        }
 				    }
 
@@ -1176,10 +1079,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 				        public init(api: @escaping () -> __safeDI_Built) {
 				            self.api = api
 				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(api: { __safeDI_builder() })
-				        }
 				    }
 
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -1207,10 +1106,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 				        public init(inner: Inner.__safeDI_ApiCarrier<__safeDI_Built>) {
 				            self.inner = inner
 				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(inner: .init(__safeDI_noScope: __safeDI_builder))
-				        }
 				    }
 
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -1236,10 +1131,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 
 				        public init(outer: Outer.__safeDI_ApiCarrier<__safeDI_Built>) {
 				            self.outer = outer
-				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(outer: .init(__safeDI_noScope: __safeDI_builder))
 				        }
 				    }
 
@@ -1312,10 +1203,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 				            self.api = api
 				            self.screenBuilder = screenBuilder
 				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(api: { _ in __safeDI_builder() }, screenBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
-				        }
 				    }
 
 				    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1324,10 +1211,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 
 				        public init(homeBuilder: @escaping () -> Home.__safeDI_ApiCarrier<__safeDI_Built>) {
 				            self.homeBuilder = homeBuilder
-				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(homeBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 				        }
 				    }
 
@@ -1408,10 +1291,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 				        public init(service: @escaping () -> __safeDI_Built) {
 				            self.service = service
 				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(service: { __safeDI_builder() })
-				        }
 				    }
 
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -1449,10 +1328,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 				                public init(gadget: @escaping (gadget_Values) -> __safeDI_Built) {
 				                    self.gadget = gadget
 				                }
-
-				                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				                    self.init(gadget: { _ in __safeDI_builder() })
-				                }
 				            }
 				        }
 
@@ -1462,10 +1337,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 
 				            public init(inner_serviceBuilder: @escaping (inner_serviceBuilder_Values) -> Inner.__safeDI_ServiceCarrier<SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<__safeDI_Built>>) {
 				                self.inner_serviceBuilder = inner_serviceBuilder
-				            }
-
-				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				                self.init(inner_serviceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 				            }
 				        }
 				    }
@@ -1505,6 +1376,31 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 			inline: Self.carriedModules(fulfillersInFeature: true),
 			probes: [DifferentialValueProbe("{ let outer = Root().outer; let service = outer.inner.service as! DefaultService; let gadget = service.gadget as! LiveGadget; return [gadget.tag === outer.tag, gadget.logger === service.logger] }()")],
 		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keysFillHoldingPlaceByFamily_whenFillOfInnerSeamIsHandedInsideSendableInstantiator() async throws {
+		// `Outer`'s tree calls `Inner` in `innerBuilder`'s `@Sendable` function and hands it `DefaultService` as a fill, which
+		// holds `Outer`'s place `gadget`: the call holds no hole along its own edges, but the fill reads the case from the
+		// `@Sendable` carrier, so the per-type facts key the fill `@Sendable` and mark it built inside that function.
+		let (stream, continuation) = AsyncStream.makeStream(of: TypeFactsReport.self)
+		try await ConstructionMemoOracle.$observer.withValue(TaskLocalFunction { _, _, report in continuation.yield(report) }) {
+			_ = try await executeSafeDIToolMultiModuleTest(modules: Self.carriedModules(isSendable: true), integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
+		}
+		continuation.finish()
+		var reports = [TypeFactsReport]()
+		for await report in stream where report.root == "Outer" && !report.forMockGeneration {
+			reports.append(report)
+		}
+		let report = try #require(reports.last)
+
+		let fill = try #require(report.nodes.firstIndex { $0.description.hasPrefix("DefaultService as service") }, "\(report.world)")
+		let variants = report.variantNodes.indices.filter { report.variantNodes[$0] == fill }
+		#expect(variants.map { report.variantFamilies[$0] } == ["sendable"], "\(report.world)")
+		#expect(variants.map { report.variantBuildsInSendableFunction[$0] } == [true], "\(report.world)")
+		let findings = TypeFactsChecks.findings(of: report).findingsByCheck
+		#expect(findings[33] == nil && findings[34] == nil, "\(findings)")
 	}
 
 	@Test
@@ -1554,10 +1450,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 				        public init(service: @escaping () -> __safeDI_Built) {
 				            self.service = service
 				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(service: { __safeDI_builder() })
-				        }
 				    }
 
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -1591,10 +1483,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 				                public init(gadget: @escaping (gadget_Values) -> __safeDI_Built) {
 				                    self.gadget = gadget
 				                }
-
-				                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				                    self.init(gadget: { _ in __safeDI_builder() })
-				                }
 				            }
 				        }
 				    }
@@ -1608,10 +1496,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 
 				            public init(innerBuilder_serviceBuilder: @escaping @Sendable (innerBuilder_serviceBuilder_Values) -> Inner.__safeDI_ServiceCarrier<SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<__safeDI_Built>>) {
 				                self.innerBuilder_serviceBuilder = innerBuilder_serviceBuilder
-				            }
-
-				            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-				                self.init(innerBuilder_serviceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 				            }
 				        }
 				    }
@@ -1705,10 +1589,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 				        public init(innermost: Innermost.__safeDI_ServiceCarrier<__safeDI_Built>) {
 				            self.innermost = innermost
 				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(innermost: .init(__safeDI_noScope: __safeDI_builder))
-				        }
 				    }
 
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -1736,10 +1616,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 				        public init(detailBuilder: @escaping (Logger) -> __safeDI_ServiceCarrier_Detail<__safeDI_Built>) {
 				            self.detailBuilder = detailBuilder
 				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(detailBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
-				        }
 				    }
 
 				    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1748,10 +1624,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 
 				        public init(service: @escaping () -> __safeDI_Built) {
 				            self.service = service
-				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(service: { __safeDI_builder() })
 				        }
 				    }
 
@@ -1794,10 +1666,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 				                public init(gadget: @escaping (gadget_Values) -> __safeDI_Built) {
 				                    self.gadget = gadget
 				                }
-
-				                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				                    self.init(gadget: { _ in __safeDI_builder() })
-				                }
 				            }
 				        }
 
@@ -1807,10 +1675,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 
 				            public init(inner_serviceBuilder: @escaping (inner_serviceBuilder_Values) -> Inner.__safeDI_ServiceCarrier<SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<__safeDI_Built>>) {
 				                self.inner_serviceBuilder = inner_serviceBuilder
-				            }
-
-				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				                self.init(inner_serviceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 				            }
 				        }
 				    }
@@ -1917,10 +1781,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 				        public init(service: @escaping () -> __safeDI_Built) {
 				            self.service = service
 				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(service: { __safeDI_builder() })
-				        }
 				    }
 
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -1958,10 +1818,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 				                public init(gadget: @escaping (gadget_Values) -> __safeDI_Built) {
 				                    self.gadget = gadget
 				                }
-
-				                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				                    self.init(gadget: { _ in __safeDI_builder() })
-				                }
 				            }
 				        }
 
@@ -1971,10 +1827,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 
 				            public init(inner_serviceBuilder: @escaping (inner_serviceBuilder_Values) -> Inner.__safeDI_ServiceCarrier<SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<__safeDI_Built>>) {
 				                self.inner_serviceBuilder = inner_serviceBuilder
-				            }
-
-				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				                self.init(inner_serviceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 				            }
 				        }
 				    }
@@ -1998,10 +1850,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 				                public init(widget: @escaping (widget_Values) -> __safeDI_Built) {
 				                    self.widget = widget
 				                }
-
-				                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				                    self.init(widget: { _ in __safeDI_builder() })
-				                }
 				            }
 				        }
 
@@ -2011,10 +1859,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 
 				            public init(inner_serviceBuilder: @escaping (inner_serviceBuilder_Values) -> Inner.__safeDI_ServiceCarrier<SafeDIScope_Widget.DefaultService_Scope.__safeDI_Builder<__safeDI_Built>>) {
 				                self.inner_serviceBuilder = inner_serviceBuilder
-				            }
-
-				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				                self.init(inner_serviceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 				            }
 				        }
 				    }
@@ -2112,10 +1956,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 				            public init(inner_serviceBuilder: @escaping (inner_serviceBuilder_Values) -> Inner.__safeDI_ServiceCarrier<GadgetSeam.__safeDI_GadgetCarrier<__safeDI_Built>>) {
 				                self.inner_serviceBuilder = inner_serviceBuilder
 				            }
-
-				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				                self.init(inner_serviceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
-				            }
 				        }
 				    }
 
@@ -2156,10 +1996,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 				        public init(gadget: @escaping () -> __safeDI_Built) {
 				            self.gadget = gadget
 				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(gadget: { __safeDI_builder() })
-				        }
 				    }
 
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -2182,10 +2018,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 
 				        public init(service: @escaping () -> __safeDI_Built) {
 				            self.service = service
-				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(service: { __safeDI_builder() })
 				        }
 				    }
 
@@ -2223,20 +2055,23 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 
 				extension Root {
 				    public convenience init() {
+				        @Sendable nonisolated func __safeDI_gadgetSendableBuilder_GadgetSeam_gadget() -> any Gadget {
+				            return __safeDI_fillBody_150ACE2CF9F52F50()
+				        }
+				        @Sendable nonisolated func __safeDI_fillBody_150ACE2CF9F52F50() -> any Gadget {
+				            @Sendable nonisolated func __safeDI_gadget() -> LiveGadget {
+				                LiveGadget()
+				            }
+				            return __safeDI_gadget()
+				        }
+				        @Sendable nonisolated func __safeDI_gadgetSendableBuilder_Feature() -> Feature.SafeDISendableScope_Gadget.__safeDI_Builder<any Gadget> {
+				            .init(inner_serviceBuilder_Sendable: { _ in __safeDI_gadgetSendableBuilder_GadgetSeam() })
+				        }
+				        @Sendable nonisolated func __safeDI_gadgetSendableBuilder_GadgetSeam() -> GadgetSeam.__safeDI_GadgetSendableCarrier<any Gadget> {
+				            .init(gadget: { __safeDI_gadgetSendableBuilder_GadgetSeam_gadget() })
+				        }
 				        func __safeDI_feature() -> Feature {
 				            _ = Feature.__safeDI_Feature_5C1A0D75D74A217D.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-				            @Sendable nonisolated func __safeDI_gadgetSendableBuilder_GadgetSeam_gadget() -> any Gadget {
-				                @Sendable nonisolated func __safeDI_gadget() -> LiveGadget {
-				                    LiveGadget()
-				                }
-				                return __safeDI_gadget()
-				            }
-				            @Sendable nonisolated func __safeDI_gadgetSendableBuilder_Feature() -> Feature.SafeDISendableScope_Gadget.__safeDI_Builder<any Gadget> {
-				                .init(inner_serviceBuilder_Sendable: { _ in __safeDI_gadgetSendableBuilder_GadgetSeam() })
-				            }
-				            @Sendable nonisolated func __safeDI_gadgetSendableBuilder_GadgetSeam() -> GadgetSeam.__safeDI_GadgetSendableCarrier<any Gadget> {
-				                .init(gadget: { __safeDI_gadgetSendableBuilder_GadgetSeam_gadget() })
-				            }
 				            return Feature(__safeDI_gadgetSendableBuilder: __safeDI_gadgetSendableBuilder_Feature())
 				        }
 				        let feature: Feature = __safeDI_feature()
@@ -2259,10 +2094,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 
 				            public init(inner_serviceBuilder_Sendable: @escaping @Sendable (inner_serviceBuilder_Sendable_Values) -> GadgetSeam.__safeDI_GadgetSendableCarrier<__safeDI_Built>) {
 				                self.inner_serviceBuilder_Sendable = inner_serviceBuilder_Sendable
-				            }
-
-				            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-				                self.init(inner_serviceBuilder_Sendable: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 				            }
 				        }
 				    }
@@ -2304,10 +2135,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 				        public init(gadget: @escaping @Sendable () -> __safeDI_Built) {
 				            self.gadget = gadget
 				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-				            self.init(gadget: { __safeDI_builder() })
-				        }
 				    }
 
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -2333,10 +2160,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 
 				        public init(service: @escaping () -> __safeDI_Built) {
 				            self.service = service
-				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(service: { __safeDI_builder() })
 				        }
 				    }
 
@@ -2408,10 +2231,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 				            public init(inner_serviceSendableBuilder: @escaping @Sendable (inner_serviceSendableBuilder_Values) -> GadgetSeam.__safeDI_GadgetCarrier<__safeDI_Built>) {
 				                self.inner_serviceSendableBuilder = inner_serviceSendableBuilder
 				            }
-
-				            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-				                self.init(inner_serviceSendableBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
-				            }
 				        }
 				    }
 
@@ -2451,10 +2270,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 				        public init(gadget: @escaping () -> __safeDI_Built) {
 				            self.gadget = gadget
 				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(gadget: { __safeDI_builder() })
-				        }
 				    }
 
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -2477,10 +2292,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 
 				        public init(service: @escaping @Sendable () -> __safeDI_Built) {
 				            self.service = service
-				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-				            self.init(service: { __safeDI_builder() })
 				        }
 				    }
 
@@ -2569,10 +2380,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 				                public init(gadget: @escaping (gadget_Values) -> __safeDI_Built) {
 				                    self.gadget = gadget
 				                }
-
-				                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				                    self.init(gadget: { _ in __safeDI_builder() })
-				                }
 				            }
 				        }
 
@@ -2582,10 +2389,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 
 				            public init(inner_serviceBuilder: @escaping (inner_serviceBuilder_Values) -> Inner.__safeDI_ServiceCarrier<SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<__safeDI_Built>>) {
 				                self.inner_serviceBuilder = inner_serviceBuilder
-				            }
-
-				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				                self.init(inner_serviceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 				            }
 				        }
 				    }
@@ -2643,10 +2446,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 				            self.screenBuilder = screenBuilder
 				            self.service = service
 				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(screenBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) }, service: { _, _ in __safeDI_builder() })
-				        }
 				    }
 
 				    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -2655,10 +2454,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 
 				        public init(service: @escaping (Int) -> __safeDI_Built) {
 				            self.service = service
-				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(service: { _ in __safeDI_builder() })
 				        }
 				    }
 
@@ -2742,10 +2537,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 				            public init(inner_serviceBuilder_Sendable: @escaping @Sendable (inner_serviceBuilder_Sendable_Values) -> GadgetSeam.__safeDI_GadgetSendableCarrier<__safeDI_Built>) {
 				                self.inner_serviceBuilder_Sendable = inner_serviceBuilder_Sendable
 				            }
-
-				            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-				                self.init(inner_serviceBuilder_Sendable: { _ in .init(__safeDI_noScope: __safeDI_builder) })
-				            }
 				        }
 				    }
 
@@ -2786,10 +2577,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 				        public init(gadget: @escaping () -> __safeDI_Built) {
 				            self.gadget = gadget
 				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(gadget: { __safeDI_builder() })
-				        }
 				    }
 
 				    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -2798,10 +2585,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 
 				        public init(holderBuilder: @escaping @Sendable () -> __safeDI_GadgetCarrier_GadgetHolder<__safeDI_Built>) {
 				            self.holderBuilder = holderBuilder
-				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-				            self.init(holderBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 				        }
 				    }
 
@@ -2830,10 +2613,6 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 
 				        public init(service: @escaping () -> __safeDI_Built) {
 				            self.service = service
-				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(service: { __safeDI_builder() })
 				        }
 				    }
 
@@ -2953,6 +2732,361 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 			ModuleFixture(name: "Mid", packageName: "Shop", swiftFileContent: mid.map { "import Up\n\n" + $0 }, dependencies: ["Up"]),
 			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: app.map { "import Mid\nimport Up\n\n" + $0 }, dependencies: ["Up", "Mid"]),
 		]
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func casePlaces_keepPlaceACallPassesUpAsACaseOfItsOwn_whenTwoSeamsPassUpThePlaceOfTheSeamTheyCall() async throws {
+		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.twoLevelPassUpModules(), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+		let signatures = try #require(output.modules["Feature"]?.generateOutput?.seamSignaturesWrittenToModuleInfo)
+		let casePlacesBySeam = Dictionary(signatures.map { ($0.seamType.asSource, $0.signature?.casePlaces ?? []) }, uniquingKeysWith: { first, _ in first })
+		// `Inner`'s `api` is a case of its place graph. `Middle` and `Outer` pass the place up: each holds a case of the call
+		// that presents it, which refers to the case of the seam it calls.
+		#expect(casePlacesBySeam.mapValues { $0.map(\.caseIndex) } == ["Inner": [0], "Middle": [0], "Outer": [0]])
+		let references = Dictionary(signatures.map { ($0.seamType.asSource, $0.signature?.places.cases.map { "\($0.passedUp?.seamType.asSource ?? "own") \($0.passedUp?.caseIndex ?? -1)" } ?? []) }, uniquingKeysWith: { first, _ in first })
+		#expect(references == ["Inner": ["own -1"], "Middle": ["Inner 0"], "Outer": ["Middle 0"]])
+		#expect(casePlacesBySeam.mapValues { $0.map { $0.hole.sitePath.map(\.label) } } == ["Inner": [["detailBuilder", "api"]], "Middle": [["detailBuilder", "api"]], "Outer": [["detailBuilder", "api"]]])
+	}
+
+	/// `Inner`, in `Base`, holds the place `api`; `Middle`, in `Mid`, calls `Inner` and passes the place up; `Outer`, in
+	/// `App`, calls `Middle` and passes it up again.
+	private static var placePassedUpThroughTwoModules: [ModuleFixture] {
+		[
+			ModuleFixture(name: "Base", packageName: "Shop", swiftFileContent: [
+				"public protocol Api: AnyObject {}",
+				"""
+				@Instantiable
+				public final class Detail: Instantiable {
+				    public init(api: any Api) { self.api = api }
+				    @Instantiated public let api: any Api
+				}
+				""",
+				seamFixtureType(named: "Inner", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let detailBuilder: Instantiator<Detail>"]),
+			]),
+			ModuleFixture(name: "Mid", packageName: "Shop", swiftFileContent: [
+				"import Base\n\n" + seamFixtureType(named: "Middle", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let inner: Inner"]),
+			], dependencies: ["Base"]),
+			ModuleFixture(name: "App", packageName: "Shop", swiftFileContent: [
+				"import Mid\n\n" + seamFixtureType(named: "Outer", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let middle: Middle"]),
+			], dependencies: ["Mid"]),
+		]
+	}
+
+	/// The place graph of `Outer` as the run of `App` computes it over `placePassedUpThroughTwoModules`, with the graphs its
+	/// references resolve to.
+	private mutating func observationOfOuterOverPlacePassedUpThroughTwoModules() async throws -> SeamSignature.Places.Observation {
+		try await observationOfOuter(over: Self.placePassedUpThroughTwoModules)
+	}
+
+	/// The place graph of `Outer` as the last run over `modules` computes it, with the graphs its references resolve to.
+	private mutating func observationOfOuter(over modules: [ModuleFixture]) async throws -> SeamSignature.Places.Observation {
+		try await observation(ofSeamNamed: "Outer", over: modules)
+	}
+
+	/// The place graph of the seam named `seamName` as the last run over `modules` computes it, with the graphs its
+	/// references resolve to.
+	private mutating func observation(ofSeamNamed seamName: String, over modules: [ModuleFixture]) async throws -> SeamSignature.Places.Observation {
+		let (stream, continuation) = AsyncStream.makeStream(of: SeamSignature.Places.Observation.self)
+		let enclosingObserver = SeamPlaceLevels.observer
+		var writtenFiles = [URL]()
+		_ = try await SeamPlaceLevels.$observer.withValue(TaskLocalFunction { placeLevels in
+			if let observation = placeLevels.placesObservation {
+				continuation.yield(observation)
+			}
+			enclosingObserver?(placeLevels)
+		}) {
+			try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &writtenFiles)
+		}
+		filesToDelete += writtenFiles
+		continuation.finish()
+		var observationOfSeam: SeamSignature.Places.Observation?
+		for await observation in stream where observation.seamType.asSource == seamName {
+			observationOfSeam = observation
+		}
+		return try #require(observationOfSeam)
+	}
+
+	private static func seamAndCase(_ resolved: SeamSignature.Places.Query.ResolvedCase) -> String {
+		"\(resolved.query.places.levels.first(where: \.key.isSeamRoot)?.key.builtType?.asSource ?? "no seam") \(resolved.caseIndex)"
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func pathToHoldingSeam_runsThroughTheCallOfEachSeam_whenTwoSeamsPassUpThePlaceOfTheSeamTheyCall() async throws {
+		let outer = try await observationOfOuterOverPlacePassedUpThroughTwoModules()
+		let query = SeamSignature.Places.Query(of: outer.places, calledPlaces: outer.calledPlaces(of:))
+		#expect(try Self.seamAndCase(#require(query.holdingCase(of: 0))) == "Inner 0")
+		let path = try #require(query.pathToHoldingSeam(of: 0))
+		// `Outer`'s call is its property `middle`, `Middle`'s its property `inner`; the place's own path, `detailBuilder` then
+		// `api`, is `Inner`'s.
+		#expect(path.calls.map { Self.seamAndCase($0.presentingCase) } == ["Outer 0", "Middle 0"])
+		#expect(path.sitePath.map(\.asSource) == ["middle: Middle", "inner: Inner"])
+		#expect(path.declaredPath.map(\.property.asSource) == ["middle: Middle", "inner: Inner"])
+		#expect(path.types.map(\.type.asSource) == ["Middle", "Inner"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func presentedAnswers_areDeclarationsOfSeamsOnTheWay_whenNoDeclarationOfHoldingSeamAnswersRead() async throws {
+		let outer = try await observationOfOuterOverPlacePassedUpThroughTwoModules()
+		let query = SeamSignature.Places.Query(of: outer.places, calledPlaces: outer.calledPlaces(of:))
+		func spelled(_ answers: [SeamSignature.Places.Query.PresentedAnswer]?) -> [String]? {
+			answers?.map { answer in
+				switch answer {
+				case let .ofHoldingSeam(.field(level, index)), let .ofHoldingSeam(.uncarried(level, index)), let .ofHoldingSeam(.boundOutsideSendableFunction(level, index, _)):
+					"Inner’s \(query.holdingCase(of: 0)?.query.places.declaration(level: level, declaration: index).field.property.asSource ?? "nothing")"
+				case .ofHoldingSeam(.callersOwn):
+					"Inner’s caller’s own"
+				case let .boundByPassingUpSeam(presentingCase, .field(level, index)), let .boundByPassingUpSeam(presentingCase, .uncarried(level, index)), let .boundByPassingUpSeam(presentingCase, .boundOutsideSendableFunction(level, index, _)):
+					"\(Self.seamAndCase(presentingCase)) binds \(presentingCase.query.places.declaration(level: level, declaration: index).field.property.asSource)"
+				case let .boundByPassingUpSeam(presentingCase, .callersOwn):
+					"\(Self.seamAndCase(presentingCase)) binds nothing"
+				case .callersOwn:
+					"the caller’s own"
+				}
+			}
+		}
+		// `Inner`'s tree declares `detailBuilder`, which builds the place's owner; `Middle` binds `inner` and `Outer` binds
+		// `middle` on the paths to their calls; nothing declares `logger`.
+		#expect(spelled(query.presentedAnswers(ofLabel: "detailBuilder", at: 0)) == ["Inner’s detailBuilder: Instantiator<Detail>"])
+		#expect(spelled(query.presentedAnswers(ofLabel: "inner", at: 0)) == ["Middle 0 binds inner: Inner"])
+		#expect(spelled(query.presentedAnswers(ofLabel: "middle", at: 0)) == ["Outer 0 binds middle: Middle"])
+		#expect(spelled(query.presentedAnswers(ofLabel: "logger", at: 0)) == ["the caller’s own"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func presentationAdditions_holdWhatEachSeamBindsOnThePathToItsCall_whenTwoSeamsPassUpThePlaceOfTheSeamTheyCall() async throws {
+		let outer = try await observationOfOuterOverPlacePassedUpThroughTwoModules()
+		let query = SeamSignature.Places.Query(of: outer.places, calledPlaces: outer.calledPlaces(of:))
+		let additions = try #require(query.presentationAdditions(of: 0))
+		#expect(additions.boundOnPathsToCalls.map { "\(Self.seamAndCase($0.presentingCase)) binds \($0.declaration.property.asSource)" } == ["Outer 0 binds middle: Middle", "Middle 0 binds inner: Inner"])
+		#expect(additions.calledCopyDeclarations.isEmpty)
+		#expect(!additions.isPassedOnSendable)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func pathToHoldingSeam_runsThroughTheCallDeclaredFirstInSource_whenTwentyCallsPresentOnePlace() async throws {
+		// `Inner`, in `Base`, holds the place `api`. Twenty seams of `Mid` each call `Inner` and pass the place up, and `Outer`
+		// calls all twenty: one place, which twenty calls present. `Outer` declares its calls in an order that follows
+		// neither their labels nor the order in which `Mid` declares their types, so that a choice by label, by type or by
+		// the order of an unordered collection names another call.
+		let declarationOrder = [13, 4, 17, 0, 9, 19, 2, 11, 6, 15, 1, 8, 18, 3, 12, 7, 16, 5, 14, 10]
+		let typeOrder = [8, 15, 3, 19, 11, 0, 6, 14, 2, 17, 10, 5, 13, 1, 18, 7, 12, 4, 16, 9]
+		func name(_ index: Int) -> String {
+			index < 10 ? "0\(index)" : "\(index)"
+		}
+		let modules = [
+			Self.placePassedUpThroughTwoModules[0],
+			ModuleFixture(name: "Mid", packageName: "Shop", swiftFileContent: [
+				"import Base\n\n" + typeOrder.map { seamFixtureType(named: "Middle\(name($0))", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let inner: Inner"]) }.joined(separator: "\n\n"),
+			], dependencies: ["Base"]),
+			ModuleFixture(name: "App", packageName: "Shop", swiftFileContent: [
+				"import Mid\n\n" + seamFixtureType(named: "Outer", isSeam: true, isFinalClass: true, declarations: declarationOrder.map { "@Instantiated public let middle\(name($0)): Middle\(name($0))" }),
+			], dependencies: ["Mid"]),
+		]
+		let outer = try await observationOfOuter(over: modules)
+		let query = SeamSignature.Places.Query(of: outer.places, calledPlaces: outer.calledPlaces(of:))
+		#expect(query.casesPresentingSamePlaces(as: 0).count == 20)
+		for caseIndex in outer.places.cases.indices {
+			let path = try #require(query.pathToHoldingSeam(of: caseIndex))
+			// `middle13` is the call `Outer` declares first.
+			#expect(path.sitePath.map(\.asSource) == ["middle13: Middle13", "inner: Inner"])
+			#expect(path.calls.last.map { Self.seamAndCase($0.presentingCase) } == "Middle13 0")
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func presentedAnswers_nameTheDeclarationNearestThePlace_whenTwoSeamsOnTheWayDeclareTheLabel() async throws {
+		// `Inner`'s tree declares no `logger`. `Middle` declares one beside its call of `Inner`, and `Outer` declares another
+		// beside its call of `Middle`: a fill of the place reads `Middle`'s, which stands between it and `Outer`'s.
+		let logger = """
+		@Instantiable
+		public final class Logger: Instantiable { public init() {} }
+		"""
+		let modules = [
+			ModuleFixture(name: "Base", packageName: "Shop", swiftFileContent: Self.placePassedUpThroughTwoModules[0].swiftFileContent + [logger]),
+			ModuleFixture(name: "Mid", packageName: "Shop", swiftFileContent: [
+				"import Base\n\n" + seamFixtureType(named: "Middle", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let logger: Logger", "@Instantiated public let inner: Inner"]),
+			], dependencies: ["Base"]),
+			ModuleFixture(name: "App", packageName: "Shop", swiftFileContent: [
+				"import Base\nimport Mid\n\n" + seamFixtureType(named: "Outer", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let logger: Logger", "@Instantiated public let middle: Middle"]),
+			], dependencies: ["Base", "Mid"]),
+		]
+		let outer = try await observationOfOuter(over: modules)
+		let query = SeamSignature.Places.Query(of: outer.places, calledPlaces: outer.calledPlaces(of:))
+		let answers = try #require(query.presentedAnswers(ofLabel: "logger", at: 0))
+		let seamsThatBind = answers.map { answer in
+			switch answer {
+			case .ofHoldingSeam:
+				"Inner"
+			case let .boundByPassingUpSeam(presentingCase, _):
+				Self.seamAndCase(presentingCase)
+			case .callersOwn:
+				"the caller"
+			}
+		}
+		#expect(seamsThatBind == ["Middle 0"])
+	}
+
+	/// `Holder`, a seam, holds the place `api` of `Detail`, and its tree builds `Turn`, which declares `logger` and then
+	/// builds `Caller`, a seam whose tree builds `Holder`. So `Caller` passes `Holder`'s place up, and `Holder`'s own tree
+	/// presents its place back to it through its call of `Caller`, on a path that binds `Turn`'s `logger`.
+	private static var seamCalledBackByTheSeamItCalls: [ModuleFixture] {
+		[
+			ModuleFixture(name: "Base", packageName: "Shop", swiftFileContent: [
+				"public protocol Api: AnyObject {}",
+				"""
+				@Instantiable
+				public final class Logger: Instantiable { public init() {} }
+				""",
+				"""
+				@Instantiable
+				public final class Detail: Instantiable {
+				    public init(api: any Api) { self.api = api }
+				    @Instantiated public let api: any Api
+				}
+				""",
+				seamFixtureType(named: "Holder", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let detailBuilder: Instantiator<Detail>", "@Instantiated public let turnBuilder: Instantiator<Turn>"]),
+				seamFixtureType(named: "Turn", isFinalClass: true, declarations: ["@Instantiated public let logger: Logger", "@Instantiated public let callerBuilder: Instantiator<Caller>"]),
+				seamFixtureType(named: "Caller", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let holderBuilder: Instantiator<Holder>"]),
+			]),
+		]
+	}
+
+	private static func seamsThatAnswer(_ answers: [SeamSignature.Places.Query.PresentedAnswer], holdingSeam: String) -> [String] {
+		answers.map { answer in
+			switch answer {
+			case .ofHoldingSeam:
+				holdingSeam
+			case let .boundByPassingUpSeam(presentingCase, _):
+				seamAndCase(presentingCase)
+			case .callersOwn:
+				"the caller"
+			}
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func presentedAnswers_nameDeclarationHoldingSeamBindsOnPathToItsCallBack_whenHoldingSeamCallsSeamThatPassesItsPlaceUp() async throws {
+		// A fill of the place `Caller` passes up reads `logger` in the world of `Caller`'s caller where `Caller` is built
+		// there, and behind `Turn`'s `logger` where `Holder`'s tree builds `Caller`: `Holder`'s case of that call, its
+		// second after its own place's, binds it.
+		let caller = try await observation(ofSeamNamed: "Caller", over: Self.seamCalledBackByTheSeamItCalls)
+		let query = SeamSignature.Places.Query(of: caller.places, calledPlaces: caller.calledPlaces(of:))
+		#expect(try Self.seamAndCase(#require(query.holdingCase(of: 0))) == "Holder 0")
+		let answers = try #require(query.presentedAnswers(ofLabel: "logger", at: 0))
+		#expect(Self.seamsThatAnswer(answers, holdingSeam: "Holder") == ["Holder 1", "the caller"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func presentedAnswers_nameDeclarationSeamBindsOnPathToItsCallBack_whenSeamIsAskedOfItsOwnPlace() async throws {
+		// `Holder`'s own place is read by `Holder`'s caller with no seam between, and, where `Caller` built this `Holder`
+		// inside another `Holder`'s tree, behind `Turn`'s `logger`. No call leads to the place: it is the seam's own.
+		let holder = try await observation(ofSeamNamed: "Holder", over: Self.seamCalledBackByTheSeamItCalls)
+		let query = SeamSignature.Places.Query(of: holder.places, calledPlaces: holder.calledPlaces(of:))
+		let answers = try #require(query.presentedAnswers(ofLabel: "logger", at: 0))
+		#expect(Self.seamsThatAnswer(answers, holdingSeam: "Holder") == ["Holder 1", "the caller"])
+		#expect(try #require(query.pathToHoldingSeam(of: 0)).calls.isEmpty)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func casesPresentingSamePlaces_linkCasesOfBothCalls_whenEachPresentsBothPlacesOfOneCaseOfPublicMock() async throws {
+		// `Holder`’s public mock holds the place `api` of `Detail` beneath `First` and beneath `Second`: one case with two
+		// places, and a public mock hands a caller every place. `Left`’s and `Right`’s public mocks each call it and pass both
+		// places up, and `Home`’s calls both: the case of its call of `Right` presents each place the case of its call of
+		// `Left` presented before, so it is linked to that case once, by whichever place is added second.
+		let publicMockType = { (name: String, declarations: [String]) in
+			seamFixtureType(named: name, isFinalClass: true, declarations: declarations)
+				.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(generateMock: .public)\n")
+				.replacingOccurrences(of: "    public init(", with: "    init(")
+		}
+		let modules = [
+			ModuleFixture(name: "Base", packageName: "Shop", swiftFileContent: [
+				"public protocol Api {}",
+				seamFixtureType(named: "Detail", isFinalClass: true, declarations: ["@Instantiated public let api: any Api"]),
+				seamFixtureType(named: "First", isFinalClass: true, declarations: ["@Instantiated public let detail: Detail"]),
+				seamFixtureType(named: "Second", isFinalClass: true, declarations: ["@Instantiated public let detail: Detail"]),
+				publicMockType("Holder", ["@Instantiated public let first: First", "@Instantiated public let second: Second"]),
+			]),
+			ModuleFixture(name: "Mid", packageName: "Shop", swiftFileContent: [
+				"import Base\n\n" + publicMockType("Left", ["@Instantiated public let holder: Holder"]),
+				"import Base\n\n" + publicMockType("Right", ["@Instantiated public let holder: Holder"]),
+			], dependencies: ["Base"]),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
+				"import Mid\n\n" + publicMockType("Home", ["@Instantiated public let left: Left", "@Instantiated public let right: Right"]),
+			], dependencies: ["Mid"]),
+		]
+		let home = try await observation(ofSeamNamed: "Home", over: modules)
+		let query = SeamSignature.Places.Query(of: home.places, calledPlaces: home.calledPlaces(of:), ofPublicMock: true)
+		#expect(home.places.cases.map { $0.passedUp?.seamType.asSource } == ["Left", "Right"])
+		#expect(home.siteHoles.map { $0.site.path.map(\.label).joined(separator: ".") }.sorted() == ["first.detail.api", "second.detail.api"])
+		#expect(home.places.cases.map(\.firstCasePresentingSamePlaces) == [nil, 0])
+		#expect(home.places.cases.indices.map { query.casesPresentingSamePlaces(as: $0) } == [[0, 1], [0, 1]])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func called_handsPlaceOfCaseEachCallPresents_whenTwoSeamsPassUpThePlaceOfTheSeamTheyCall() async throws {
+		let outer = try await observationOfOuterOverPlacePassedUpThroughTwoModules()
+		let query = SeamSignature.Places.Query(of: outer.places, calledPlaces: outer.calledPlaces(of:))
+		let additions = try #require(query.presentationAdditions(of: 0))
+		// `Outer`'s call presents `Middle`'s place, which `Middle` passes up from `Inner`; `Middle`'s call presents `Inner`'s
+		// own. Each is the place `api` of `Detail`, which `Inner`'s tree holds, under the builder label its seam gives it.
+		let placesPresented = try additions.boundOnPathsToCalls.map { bound in
+			let reference = try #require(bound.presentingCase.query.places.cases[bound.presentingCase.caseIndex].passedUp)
+			let hole = try #require(outer.called(of: reference)?.hole(ofCaseAt: reference.caseIndex))
+			return "\(Self.seamAndCase(bound.presentingCase)) presents \(reference.seamType.asSource)’s \(hole.property.asSource) of \(hole.ownerType.asSource), held by \(hole.scopeSeamType.asSource)"
+		}
+		#expect(placesPresented == ["Outer 0 presents Middle’s api: any Api of Detail, held by Inner", "Middle 0 presents Inner’s api: any Api of Detail, held by Inner"])
+		#expect(outer.called(of: SeamSignature.Places.CalledCase(seamType: TypeDescription.simple(name: "Middle"), isPublicMock: false, caseIndex: 1))?.hole(ofCaseAt: 1) == nil)
+	}
+
+	@Test(arguments: [false, true])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func casesPresented_endAtCaseOfSeamTwoModulesBeneath_whenRunIsHandedOnlyTheMiddleModulesFile(viewsReferToModules: Bool) async throws {
+		// `Inner`, in `Base`, holds the place `api`; `Middle`, in `Mid`, calls `Inner` and passes the place up; `Outer`, in
+		// `App`, calls `Middle` and passes it up again. `App` lists only `Mid`: its view carries `Base`'s seam signatures, or,
+		// where views refer to modules, as Bazel's do, the run is told of `Base`'s own file. Either way `Outer`'s case refers
+		// to `Middle`'s, whose reference to `Inner`'s case resolves to the graph `Base`'s own run computed.
+		let (stream, continuation) = AsyncStream.makeStream(of: SeamSignature.Places.Observation.self)
+		let enclosingObserver = SeamPlaceLevels.observer
+		var writtenFiles = [URL]()
+		let output = try await SeamPlaceLevels.$observer.withValue(TaskLocalFunction { placeLevels in
+			if let observation = placeLevels.placesObservation {
+				continuation.yield(observation)
+			}
+			enclosingObserver?(placeLevels)
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.placePassedUpThroughTwoModules,
+				integration: .moduleInfo,
+				compileVerification: .skipped,
+				modulesBeneath: viewsReferToModules ? { $0 } : nil,
+				viewsReferToModules: viewsReferToModules,
+				filesToDelete: &writtenFiles,
+			)
+		}
+		filesToDelete += writtenFiles
+		continuation.finish()
+		var observationOfOuter: SeamSignature.Places.Observation?
+		for await observation in stream where observation.seamType.asSource == "Outer" {
+			observationOfOuter = observation
+		}
+		let outer = try #require(observationOfOuter)
+		let chain = SeamSignature.Places.Query(of: outer.places, calledPlaces: outer.calledPlaces(of:)).casesPresented(from: 0)
+		let seamAndCase = chain.map { resolved in
+			"\(resolved.query.places.levels.first(where: \.key.isSeamRoot)?.key.builtType?.asSource ?? "no seam") \(resolved.caseIndex)"
+		}
+		#expect(seamAndCase == ["Outer 0", "Middle 0", "Inner 0"])
+		let computedInner = try #require(output.modules["Base"]?.generateOutput?.seamSignaturesWrittenToModuleInfo?.first { $0.seamType.asSource == "Inner" }?.signature?.places)
+		let resolvedInner = try #require(chain.last?.query.places)
+		#expect(StoredPlaceGraphChecks.firstDifference(between: resolvedInner, and: computedInner, at: "the places of `Inner`") == nil)
 	}
 
 	/// `Inner` builds `Detail`, which receives `logger` and instantiates `api: any Api`; `Outer` instantiates `logger` and calls

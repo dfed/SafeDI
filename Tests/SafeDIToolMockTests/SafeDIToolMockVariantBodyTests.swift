@@ -332,6 +332,51 @@ struct SafeDIToolMockVariantBodyTests: ~Copyable {
 		])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_comparesNoBody_whenTreeBuildsValueAndItsLazilyInstantiatedTwinAndOnlyAdmittedRootsAreCompared() async throws {
+		// `A` and `C` build `t0: T0`, and `B` builds `t0: LazilyInstantiated<T0>`: twins, which a mock gives one slot. The
+		// place `B` enters as the wrapper beneath the value's function takes a body the plan of a mock does not build, so
+		// the checks every test runs, which compare only the roots the plan admits, leave the mock of `Hub` its tree.
+		let bodies = try await bodies(comparingOnlyRootsThePlanAdmits: true, of:
+			"""
+			@Instantiable(generateMock: true) public final class Hub: Instantiable {
+			    @Instantiated let aBuilder: Instantiator<A>
+			    @Instantiated let bBuilder: Instantiator<B>
+			    public init(aBuilder: Instantiator<A>, bBuilder: Instantiator<B>) { self.aBuilder = aBuilder; self.bBuilder = bBuilder }
+			}
+
+			@Instantiable public final class A: Instantiable {
+			    @Instantiated let t0: T0
+			    @Instantiated let cBuilder: Instantiator<C>
+			    public init(t0: T0, cBuilder: Instantiator<C>) { self.t0 = t0; self.cBuilder = cBuilder }
+			}
+
+			@Instantiable public final class B: Instantiable {
+			    @Instantiated let t0: LazilyInstantiated<T0>
+			    @Instantiated let cBuilder: Instantiator<C>
+			    public init(t0: LazilyInstantiated<T0>, cBuilder: Instantiator<C>) { self.t0 = t0; self.cBuilder = cBuilder }
+			}
+
+			@Instantiable public final class C: Instantiable {
+			    @Instantiated let t0: T0
+			    public init(t0: T0) { self.t0 = t0 }
+			}
+
+			@Instantiable public final class T0: Instantiable {
+			    @Instantiated let aBuilder: Instantiator<A>
+			    @Instantiated let bBuilder: Instantiator<B>
+			    @Instantiated let again: Instantiator<A>
+			    @Instantiated let other: Instantiator<B>
+			    public init(aBuilder: Instantiator<A>, bBuilder: Instantiator<B>, again: Instantiator<A>, other: Instantiator<B>) {
+			        self.aBuilder = aBuilder; self.bBuilder = bBuilder; self.again = again; self.other = other
+			    }
+			}
+			""")
+
+		#expect(bodies == [])
+	}
+
 	// MARK: Private
 
 	private struct Bodies: Equatable {
@@ -344,16 +389,19 @@ struct SafeDIToolMockVariantBodyTests: ~Copyable {
 
 	/// Each comparison the tool hands on while it generates from `swiftFileContent`, in the order handed on.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	private mutating func bodies(of swiftFileContent: String) async throws -> [Bodies] {
+	private mutating func bodies(comparingOnlyRootsThePlanAdmits: Bool = false, of swiftFileContent: String) async throws -> [Bodies] {
 		let (stream, continuation) = AsyncStream.makeStream(of: Bodies.self)
-		try await MockVariantBodyObservation.$observer.withValue({ _, place, todaysUnavailableProperties, bodysUnavailableProperties in
-			continuation.yield(Bodies(place: place, todaysUnavailableProperties: todaysUnavailableProperties, bodysUnavailableProperties: bodysUnavailableProperties))
-		}) {
-			_ = try await executeSafeDIToolTest(
-				swiftFileContent: [swiftFileContent],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
+		// A test that observes a comparison compares every root; one that asks compares as the checks every test runs do.
+		try await RootTreeChoiceObservation.$comparesOnlyRootsThePlanAdmits.withValue(comparingOnlyRootsThePlanAdmits) {
+			try await MockVariantBodyObservation.$observer.withValue(TaskLocalFunction { _, place, todaysUnavailableProperties, bodysUnavailableProperties in
+				continuation.yield(Bodies(place: place, todaysUnavailableProperties: todaysUnavailableProperties, bodysUnavailableProperties: bodysUnavailableProperties))
+			}) {
+				_ = try await executeSafeDIToolTest(
+					swiftFileContent: [swiftFileContent],
+					buildSwiftOutputDirectory: true,
+					filesToDelete: &filesToDelete,
+				)
+			}
 		}
 		continuation.finish()
 		var bodies = [Bodies]()

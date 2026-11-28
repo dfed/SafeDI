@@ -262,7 +262,7 @@ extension TypeKeyLayout {
 	/// place: a member of a loop of builders calling a sibling's. Any other closer calls an enclosing place's function or a
 	/// statement the view's key pins (`KeyedDeclaration.absolute`).
 	func closesOnSibling(_ closer: ClosingPlaceRecord, from body: Int) -> Bool {
-		guard body != 0, case let .statement(declaringBody, _, _) = resolvedFunction(named: closer.closedOnFunctionName, from: body) else { return false }
+		guard closer.rebindsLoopMember || enclosingFunction(named: closer.closedOnFunctionName, from: body) == 0, body != 0, case let .statement(declaringBody, _, _) = resolvedFunction(named: closer.closedOnFunctionName, from: body) else { return false }
 		return declaringBody == bodies[body].parent
 	}
 

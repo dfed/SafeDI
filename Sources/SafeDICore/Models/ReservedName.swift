@@ -153,6 +153,16 @@ public enum ReservedName: Hashable, Sendable {
 		"\(functionName)_loopLevels".spelledAsJoinedIdentifier
 	}
 
+	/// The name of the function a fill of a seam call that reads nothing of the code around the call calls with what it binds
+	/// (`ScopeGenerator.generateFillCode`), after the hash of the function's text: every fill whose tree writes that text
+	/// calls one function, which the root declares once (`RootFunctionHoisting`).
+	static func fillBodyFunctionName(hash: String) -> String {
+		"\(fillBodyFunctionNamePrefix)\(hash)"
+	}
+
+	/// What every `fillBodyFunctionName(hash:)` starts with.
+	static let fillBodyFunctionNamePrefix = "\(builderFunctionNamePrefix)fillBody_"
+
 	/// The start of the name of each private final class a seam declares beside its initializers when its tree holds a
 	/// loop's levels in one box, which the hash of what the class holds follows (`ScopeGenerator.LoopLevelsType`).
 	static let loopLevelsTypeName = "\(builderFunctionNamePrefix)LoopLevels"
@@ -246,6 +256,12 @@ public enum ReservedName: Hashable, Sendable {
 	/// The parameter name under which that initializer takes the builder: apart from every property label, since a
 	/// member can be named `builder`.
 	static let noScopeParameterName = "\(builderFunctionNamePrefix)builder"
+
+	/// The name of the local function that builds the level of a seam's scope enum `enumType`, as a module that does not
+	/// declare it spells it, from one builder, where code needs that level with no scope (`ScopeGenerator.LevelsWithoutScope`).
+	static func levelWithoutScopeFunctionName(ofEnum enumType: TypeDescription) -> String {
+		"\(noScopeArgumentLabel)_\(enumType.asIdentifier)"
+	}
 
 	/// The name under which a generated initializer reads the parameter that sets a member labeled `self`
 	/// (`String.spelledAsAssigningParameterName`): a parameter named `self` would hide the instance the initializer assigns

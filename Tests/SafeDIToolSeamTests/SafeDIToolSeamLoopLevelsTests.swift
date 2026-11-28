@@ -65,10 +65,6 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			            self.screenBBuilder = screenBBuilder
 			            self.screenCBuilder = screenCBuilder
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(screenABuilder: .init(__safeDI_noScope: __safeDI_builder), screenBBuilder: .init(__safeDI_noScope: __safeDI_builder), screenCBuilder: .init(__safeDI_noScope: __safeDI_builder))
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -77,10 +73,6 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 
 			        public init(api: @escaping (Int, Instantiator<ScreenB>) -> __safeDI_Built) {
 			            self.api = api
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(api: { _, _ in __safeDI_builder() })
 			        }
 			    }
 
@@ -91,10 +83,6 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			        public init(api: @escaping (Int, Instantiator<ScreenC>) -> __safeDI_Built) {
 			            self.api = api
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(api: { _, _ in __safeDI_builder() })
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -103,10 +91,6 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 
 			        public init(api: @escaping (Int, Instantiator<ScreenA>) -> __safeDI_Built) {
 			            self.api = api
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(api: { _, _ in __safeDI_builder() })
 			        }
 			    }
 
@@ -303,10 +287,6 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			            self.screenABuilder = screenABuilder
 			            self.screenBBuilder = screenBBuilder
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(screenABuilder: .init(__safeDI_noScope: __safeDI_builder), screenBBuilder: .init(__safeDI_noScope: __safeDI_builder))
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -320,10 +300,6 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			            self.tabXBuilder = tabXBuilder
 			            self.tabYBuilder = tabYBuilder
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(api: { _ in __safeDI_builder() }, tabXBuilder: { _, _ in .init(__safeDI_noScope: __safeDI_builder) }, tabYBuilder: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -332,10 +308,6 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 
 			        public init(api: @escaping (Instantiator<ScreenA>) -> __safeDI_Built) {
 			            self.api = api
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(api: { _ in __safeDI_builder() })
 			        }
 			    }
 
@@ -346,10 +318,6 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			        public init(api: @escaping (Instantiator<TabY>) -> __safeDI_Built) {
 			            self.api = api
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(api: { _ in __safeDI_builder() })
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -358,10 +326,6 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 
 			        public init(api: @escaping (Instantiator<TabX>) -> __safeDI_Built) {
 			            self.api = api
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(api: { _ in __safeDI_builder() })
 			        }
 			    }
 
@@ -535,10 +499,6 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			        public init(flowBuilder: __safeDI_ApiCarrier_Flow<__safeDI_Built>) {
 			            self.flowBuilder = flowBuilder
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(flowBuilder: .init(__safeDI_noScope: __safeDI_builder))
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -550,10 +510,6 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			            self.aBuilder = aBuilder
 			            self.bBuilder = bBuilder
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(aBuilder: .init(__safeDI_noScope: __safeDI_builder), bBuilder: .init(__safeDI_noScope: __safeDI_builder))
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -563,10 +519,6 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			        public init(api: @escaping (Instantiator<B>, Instantiator<Flow>) -> __safeDI_Built) {
 			            self.api = api
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(api: { _, _ in __safeDI_builder() })
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -575,10 +527,6 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 
 			        public init(api: @escaping (Instantiator<A>) -> __safeDI_Built) {
 			            self.api = api
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(api: { _ in __safeDI_builder() })
 			        }
 			    }
 
@@ -717,10 +665,6 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			            self.screenABuilder = screenABuilder
 			            self.screenBBuilder = screenBBuilder
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(screenABuilder: .init(__safeDI_noScope: __safeDI_builder), screenBBuilder: .init(__safeDI_noScope: __safeDI_builder))
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -730,10 +674,6 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			        public init(api: @escaping (Instantiator<ScreenB>) -> __safeDI_Built) {
 			            self.api = api
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(api: { _ in __safeDI_builder() })
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -742,10 +682,6 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 
 			        public init(api: @escaping (Instantiator<ScreenA>) -> __safeDI_Built) {
 			            self.api = api
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(api: { _ in __safeDI_builder() })
 			        }
 			    }
 
@@ -822,10 +758,6 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			            self.flowA = flowA
 			            self.flowB = flowB
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(flowA: .init(__safeDI_noScope: __safeDI_builder), flowB: { _ in .init(__safeDI_noScope: __safeDI_builder) })
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -837,10 +769,6 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			            self.aBuilder = aBuilder
 			            self.bBuilder = bBuilder
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(aBuilder: .init(__safeDI_noScope: __safeDI_builder), bBuilder: .init(__safeDI_noScope: __safeDI_builder))
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -850,10 +778,6 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			        public init(api: @escaping (Instantiator<B>) -> __safeDI_Built) {
 			            self.api = api
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(api: { _ in __safeDI_builder() })
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -862,10 +786,6 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 
 			        public init(api: @escaping (Instantiator<A>) -> __safeDI_Built) {
 			            self.api = api
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(api: { _ in __safeDI_builder() })
 			        }
 			    }
 
@@ -979,10 +899,6 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			        public init(service: @escaping () -> __safeDI_Built) {
 			            self.service = service
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(service: { __safeDI_builder() })
-			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -1065,10 +981,6 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			                    self.aBuilder = aBuilder
 			                    self.bBuilder = bBuilder
 			                }
-
-			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.init(aBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) }, bBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
-			                }
 			            }
 			        }
 
@@ -1083,10 +995,6 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 
 			                public init(gadget: @escaping (gadget_Values) -> __safeDI_Built) {
 			                    self.gadget = gadget
-			                }
-
-			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.init(gadget: { _ in __safeDI_builder() })
 			                }
 			            }
 			        }
@@ -1103,10 +1011,6 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			                public init(gadget: @escaping (gadget_Values) -> __safeDI_Built) {
 			                    self.gadget = gadget
 			                }
-
-			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.init(gadget: { _ in __safeDI_builder() })
-			                }
 			            }
 			        }
 
@@ -1116,10 +1020,6 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 
 			            public init(inner_serviceBuilder: @escaping (inner_serviceBuilder_Values) -> Inner.__safeDI_ServiceCarrier<SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<__safeDI_Built>>) {
 			                self.inner_serviceBuilder = inner_serviceBuilder
-			            }
-
-			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.init(inner_serviceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 			            }
 			        }
 			    }
@@ -1412,26 +1312,29 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			        serviceBuilder: (() -> any Service)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
+			        func __safeDI_fillBody_08A3C1CF2B26B335() -> any Service {
+			            func __safeDI_service() -> DefaultService {
+			                func __safeDI_aBuilder() -> LoopA {
+			                    let bBuilder = Instantiator<LoopB>(__safeDI_bBuilder)
+			                    let gadget: any Gadget = LiveGadget()
+			                    return LoopA(gadget: gadget, bBuilder: bBuilder)
+			                }
+			                let aBuilder = Instantiator<LoopA>(__safeDI_aBuilder)
+			                func __safeDI_bBuilder() -> LoopB {
+			                    let aBuilder = Instantiator<LoopA>(__safeDI_aBuilder)
+			                    let gadget: any Gadget = LiveGadget()
+			                    return LoopB(gadget: gadget, aBuilder: aBuilder)
+			                }
+			                let bBuilder = Instantiator<LoopB>(__safeDI_bBuilder)
+			                return DefaultService(aBuilder: aBuilder, bBuilder: bBuilder)
+			            }
+			            let service: any Service = __safeDI_service()
+			            return service
+			        }
 			        func __safeDI_outer() -> Outer {
 			            func __safeDI_inner() -> Inner {
 			                func __safeDI_serviceBuilder_Inner_service() -> any Service {
-			                    func __safeDI_service() -> DefaultService {
-			                        func __safeDI_aBuilder() -> LoopA {
-			                            let bBuilder = Instantiator<LoopB>(__safeDI_bBuilder)
-			                            let gadget: any Gadget = LiveGadget()
-			                            return LoopA(gadget: gadget, bBuilder: bBuilder)
-			                        }
-			                        let aBuilder = Instantiator<LoopA>(__safeDI_aBuilder)
-			                        func __safeDI_bBuilder() -> LoopB {
-			                            let aBuilder = Instantiator<LoopA>(__safeDI_aBuilder)
-			                            let gadget: any Gadget = LiveGadget()
-			                            return LoopB(gadget: gadget, aBuilder: aBuilder)
-			                        }
-			                        let bBuilder = Instantiator<LoopB>(__safeDI_bBuilder)
-			                        return DefaultService(aBuilder: aBuilder, bBuilder: bBuilder)
-			                    }
-			                    let service: any Service = __safeDI_service()
-			                    return service
+			                    return __safeDI_fillBody_08A3C1CF2B26B335()
 			                }
 			                func __safeDI_serviceBuilder_Inner() -> Inner.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 			                    .init(service: { _ in __safeDI_serviceBuilder_Inner_service() })

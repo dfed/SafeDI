@@ -166,6 +166,8 @@ extension ScopeGenerator {
 			indent: bodyIndent,
 			lines: &bindingLines,
 		)
+		// The shared bodies of the calls' fills, declared once before the tree, which captures nothing.
+		bindingLines.insert(contentsOf: walk.fillBodies.map { $0.hoisted(atIndentation: bodyIndent, isSendable: $0.isSendable, omittingRootFunctionsNamed: []).spelled() }, at: rootReceiverBindingIndex)
 		// The mocked type is passed its own dependencies by label, and the builder functions beneath bind theirs, so the root's
 		// level names apart only labels neither reads.
 		// The mocked type's construction reads the names its own dependencies are bound apart under.
@@ -411,6 +413,11 @@ extension MockLowering {
 		var uncoveredProperties: Set<Property>
 		// The configurations of the nodes the walk finished, children before their node.
 		var configurationRecords = [ConfigurationRecord]()
+		/// The shared bodies of the fills of the tree's calls of other modules' public mocks that `mock()` declares once,
+		/// before its tree, in the order the walk first reached them (`declareFillBodies(of:isInsideSendableFunction:)`).
+		var fillBodies = [RootFunctionRecord]()
+		/// The keys of `fillBodies`, by name.
+		var fillBodyKeysByName = [String: RootFunctionKey]()
 		/// The default-valued parameters of each type's hand-written mock, by concrete type, whose defaults the fields of the
 		/// type's configuration take (`MockLowering+Defaults.swift`).
 		var handWrittenMockDefaultParameters = [TypeDescription: [ScopeGenerator.DefaultParameter]]()

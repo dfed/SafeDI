@@ -71,6 +71,12 @@ enum SourceRule: String, CaseIterable {
 	/// built with `-enable-testing`, passed. A task group's element is a struct of the same fields, which those builds
 	/// compile correctly.
 	case taskGroupTupleElement
+	/// A `@TaskLocal` whose value is a function, optional or not. Swift 6.3's release builds (Swift 6.3.3 on Linux, the
+	/// published binaries' toolchain, and Xcode 26.4's) crash in `swift_task_localValuePush` ("Bad pointer dereference at
+	/// 0xfffffffffffffff8") whenever `withValue` binds such a value, `nil` included, so 2.4.2's `query graph` crashed; the
+	/// tests, built in debug, passed. A task-local function is held in a `TaskLocalFunction`, a struct, which every build
+	/// binds.
+	case taskLocalFunction
 	/// A mock, an override, a configuration, a seam, a hole or a fill named in a type key file (`TypeKeyBody*.swift`) or
 	/// in `PlaceRecord.swift`, in an identifier or a literal: the type key lays out any body from its places' records
 	/// and knows no feature, so a feature that needs something of it records a fact in general terms on the place, and
@@ -113,6 +119,8 @@ enum SourceRule: String, CaseIterable {
 			path.hasPrefix("Tests/SafeDIToolTestSupport/")
 		case .uncheckedConcurrency, .taskGroupTupleElement:
 			path.hasPrefix("Sources/") || path.hasPrefix("Plugins/")
+		case .taskLocalFunction:
+			path.hasPrefix("Sources/") || path.hasPrefix("Plugins/") || path.hasPrefix("Tests/SafeDIToolTestSupport/")
 		case .engineFeatureName:
 			path.hasPrefix("Sources/SafeDICore/Generators/Emission/TypeKeyBody") || path == "Sources/SafeDICore/Generators/Emission/PlaceRecord.swift"
 		case .typeFactsFoldModelName:
@@ -454,6 +462,44 @@ private final class SourceRuleVisitor: SyntaxVisitor {
 			record(.testableImport, at: importDeclaration.importKeyword, "a release build compiles `SafeDIToolTestSupport` without `-enable-testing`, which rejects `@testable import`")
 		}
 		return .visitChildren
+	}
+
+	override func visit(_ node: VariableDeclSyntax) -> SyntaxVisitorContinueKind {
+		let isTaskLocal = node.attributes.contains { element in
+			element.as(AttributeSyntax.self)?.attributeName.trimmedDescription == "TaskLocal"
+		}
+		if isTaskLocal {
+			for binding in node.bindings where Self.holdsFunction(binding) {
+				record(.taskLocalFunction, at: binding.pattern, "a task-local function crashes Swift 6.3’s release builds in `swift_task_localValuePush` when `withValue` binds it: hold it in a `TaskLocalFunction`")
+			}
+		}
+		return .visitChildren
+	}
+
+	/// Whether `binding`, a binding of a `@TaskLocal`, holds a function: its type, through any optional, parentheses and
+	/// attributes, is a function type, or, without a type, its value is a closure.
+	private static func holdsFunction(_ binding: PatternBindingSyntax) -> Bool {
+		guard var type = binding.typeAnnotation?.type else {
+			return binding.initializer?.value.is(ClosureExprSyntax.self) ?? false
+		}
+		while true {
+			if let optional = type.as(OptionalTypeSyntax.self) {
+				type = optional.wrappedType
+			} else if let implicitlyUnwrapped = type.as(ImplicitlyUnwrappedOptionalTypeSyntax.self) {
+				type = implicitlyUnwrapped.wrappedType
+			} else if let attributed = type.as(AttributedTypeSyntax.self) {
+				type = attributed.baseType
+			} else if let tuple = type.as(TupleTypeSyntax.self), tuple.elements.count == 1, let element = tuple.elements.first, element.firstName == nil {
+				type = element.type
+			} else if let identifier = type.as(IdentifierTypeSyntax.self), identifier.name.text == "Optional",
+			          let arguments = identifier.genericArgumentClause?.arguments, arguments.count == 1,
+			          let argument = arguments.first.flatMap({ TypeSyntax($0.argument) })
+			{
+				type = argument
+			} else {
+				return type.is(FunctionTypeSyntax.self)
+			}
+		}
 	}
 
 	override func visit(_ node: RegexLiteralExprSyntax) -> SyntaxVisitorContinueKind {

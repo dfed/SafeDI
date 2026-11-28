@@ -1338,6 +1338,65 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsTodaysCaptureError_whenTwoBuildsOfTypeHandItsSendableBuilderNilAndNonSendableWrapper() async {
+		// `Root` builds `T0` twice: through `anyT0Builder`, built before `lazyT4` since `T4` receives it, so `T1`'s receive only if
+		// available of `lazyT4` is passed `nil`; and through `t0Builder`, built after `lazyT4`, whose `T1`, built in a `@Sendable`
+		// function, would capture it: seam corpus seed 580's shape. No root reaches a cycle, so none is laid out from a plan.
+		let choices = await choicesThrowingTodaysError(
+			of: Self.twoBuildsHandingNilAndNonSendableWrapper,
+			diagnostics: Self.twoBuildsCaptureDiagnostics,
+		)
+
+		#expect(choices.isEmpty)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsTodaysCaptureError_whenTwoCallsOfVariantOnCycleAreHandedNilAndNonSendableWrapper() async {
+		// `Root` builds `T0` through `anyT0Builder`, where nothing above declares `lazyT4`, so `T1`'s receive only if available
+		// is passed `nil`, and `X` builds it through `t0Builder` beneath its own `lazyT4`, which `T1`, built in a `@Sendable`
+		// function, would capture. `T1` is on a cycle through `T5`, so `Root` reaches a cycle and `T0`'s two builds would be
+		// calls of one variant whose reads of `lazyT4` the calls answer differently. A receive only if available keeps the root
+		// on today's tree, whose walk judges every path's capture.
+		let choices = await choicesThrowingTodaysError(
+			of: Self.twoCallsOfVariantOnCycle(t1Receives: "@Received(onlyIfAvailable: true) let t4: LazilyInstantiated<T4>?", rootDeclares: nil),
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["T1.swift"]):2:5: error: @Received property `t4: LazilyInstantiated<T4>?` cannot be received inside a `@Sendable` function in chain: Root -> X -> T0 -> T1 -> T5 -> T1. SafeDI builds `anyT1Builder: SendableErasedInstantiator<(), AnyT1>` on `T0` in a `@Sendable` function, which cannot capture `t4: LazilyInstantiated<T4>` on `X`, because `LazilyInstantiated<T4>` is not `Sendable`. Declare `t4` on `X`, and this property, as `SendableLazilyInstantiated<T4>` to fix. A `SendableLazilyInstantiated` requires its instance type, `T4`, to be `Sendable`.
+				\(fixtures["X.swift"]):2:5: note: `t4: LazilyInstantiated<T4>` is declared here
+				\(fixtures["T1.swift"]):2:5: error: @Received property `t4: LazilyInstantiated<T4>?` cannot be received inside a `@Sendable` function in chain: Root -> X -> T0 -> T1. SafeDI builds `anyT1Builder: SendableErasedInstantiator<(), AnyT1>` on `T0` in a `@Sendable` function, which cannot capture `t4: LazilyInstantiated<T4>` on `X`, because `LazilyInstantiated<T4>` is not `Sendable`. Declare `t4` on `X`, and this property, as `SendableLazilyInstantiated<T4>` to fix. A `SendableLazilyInstantiated` requires its instance type, `T4`, to be `Sendable`.
+				\(fixtures["X.swift"]):2:5: note: `t4: LazilyInstantiated<T4>` is declared here
+				"""
+			},
+		)
+
+		#expect(choices == ["Root": .holdsValueOnlyIfAvailable])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsTodaysCaptureError_whenTwoCallsOfVariantOnCycleReadValueAndInstanceOfNonSendableWrapper() async {
+		// As above with a required receive by value: `Root` declares `t4` as a value, which `anyT0Builder`'s `T1` reads, and `X`
+		// declares it as a `LazilyInstantiated`, whose instance `t0Builder`'s `T1`, built in a `@Sendable` function, would read
+		// through the wrapper it captures. A label that a scope other than the root declares keeps the root on today's tree, so
+		// no variant's calls are answered by different declarations.
+		let choices = await choicesThrowingTodaysError(
+			of: Self.twoCallsOfVariantOnCycle(t1Receives: "@Received let t4: T4", rootDeclares: "@Instantiated let t4: T4"),
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["T1.swift"]):2:5: error: @Received property `t4: T4` cannot be received inside a `@Sendable` function in chain: Root -> X -> T0 -> T1 -> T5 -> T1. SafeDI builds `anyT1Builder: SendableErasedInstantiator<(), AnyT1>` on `T0` in a `@Sendable` function, which cannot capture `t4: LazilyInstantiated<T4>` on `X`, because `LazilyInstantiated<T4>` is not `Sendable`. Declare `t4` on `X` as `SendableLazilyInstantiated<T4>` to fix. A `SendableLazilyInstantiated` requires its instance type, `T4`, to be `Sendable`.
+				\(fixtures["X.swift"]):2:5: note: `t4: LazilyInstantiated<T4>` is declared here
+				\(fixtures["T1.swift"]):2:5: error: @Received property `t4: T4` cannot be received inside a `@Sendable` function in chain: Root -> X -> T0 -> T1. SafeDI builds `anyT1Builder: SendableErasedInstantiator<(), AnyT1>` on `T0` in a `@Sendable` function, which cannot capture `t4: LazilyInstantiated<T4>` on `X`, because `LazilyInstantiated<T4>` is not `Sendable`. Declare `t4` on `X` as `SendableLazilyInstantiated<T4>` to fix. A `SendableLazilyInstantiated` requires its instance type, `T4`, to be `Sendable`.
+				\(fixtures["X.swift"]):2:5: note: `t4: LazilyInstantiated<T4>` is declared here
+				"""
+			},
+		)
+
+		#expect(choices == ["Root": .receivesLabelDeclaredOutsideItsCycle])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_reportsTodaysCaptureError_whenSendableBuilderInBodyOfCycleCapturesInstantiatorDeclaredBesideIt() async {
 		// `S1`, on the cycle, declares `xBuilder` outside the `@Sendable` builder function of `wBuilder`, which builds `W`,
 		// which receives it.
@@ -2941,6 +3000,109 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 		return declarations.joined(separator: "\n\n")
 	}
 
+	/// `Root`, which builds `T0` before and after `lazyT4`, and `T0`'s `T1`, which receives `lazyT4` only if available in a
+	/// `@Sendable` function.
+	private static let twoBuildsHandingNilAndNonSendableWrapper = [
+		"""
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let lazyT4: LazilyInstantiated<T4>
+		    @Instantiated let t0Builder: Instantiator<T0>
+		    @Instantiated(fulfilledByType: "T0", erasedToConcreteExistential: true) let anyT0Builder: SendableErasedInstantiator<(), AnyT0>
+		    public init(lazyT4: LazilyInstantiated<T4>, t0Builder: Instantiator<T0>, anyT0Builder: SendableErasedInstantiator<(), AnyT0>) { self.lazyT4 = lazyT4; self.t0Builder = t0Builder; self.anyT0Builder = anyT0Builder }
+		}
+		""",
+		"""
+		@Instantiable public final class T0: Instantiable, @unchecked Sendable {
+		    @Instantiated(fulfilledByType: "T1", erasedToConcreteExistential: true) let anyT1Builder: SendableErasedInstantiator<(), AnyT1>
+		    public init(anyT1Builder: SendableErasedInstantiator<(), AnyT1>) { self.anyT1Builder = anyT1Builder }
+		}
+		public final class AnyT0: Sendable {
+		    public init(_ value: T0) { self.value = value }
+		    public let value: T0
+		}
+		""",
+		"""
+		@Instantiable public final class T1: Instantiable, @unchecked Sendable {
+		    @Received(onlyIfAvailable: true) let lazyT4: LazilyInstantiated<T4>?
+		    public init(lazyT4: LazilyInstantiated<T4>?) { self.lazyT4 = lazyT4 }
+		}
+		public final class AnyT1: Sendable {
+		    public init(_ value: T1) { self.value = value }
+		    public let value: T1
+		}
+		""",
+		"""
+		@Instantiable public final class T4: Instantiable, @unchecked Sendable {
+		    @Received let anyT0Builder: SendableErasedInstantiator<(), AnyT0>
+		    public init(anyT0Builder: SendableErasedInstantiator<(), AnyT0>) { self.anyT0Builder = anyT0Builder }
+		}
+		""",
+	]
+
+	/// The capture `twoBuildsHandingNilAndNonSendableWrapper` makes through `t0Builder`'s `T0`.
+	private static func twoBuildsCaptureDiagnostics(_ fixtures: FixturePaths) -> String {
+		"""
+		\(fixtures["T1.swift"]):2:5: error: @Received property `lazyT4: LazilyInstantiated<T4>?` cannot be received inside a `@Sendable` function in chain: Root -> T0 -> T1. SafeDI builds `anyT1Builder: SendableErasedInstantiator<(), AnyT1>` on `T0` in a `@Sendable` function, which cannot capture `lazyT4: LazilyInstantiated<T4>` on `Root`, because `LazilyInstantiated<T4>` is not `Sendable`. Declare `lazyT4` on `Root`, and this property, as `SendableLazilyInstantiated<T4>` to fix. A `SendableLazilyInstantiated` requires its instance type, `T4`, to be `Sendable`.
+		\(fixtures["Root.swift"]):2:5: note: `lazyT4: LazilyInstantiated<T4>` is declared here
+		"""
+	}
+
+	/// `Root`, which builds `T0` through `anyT0Builder` beside `rootDeclares`, and `X`, which builds it through `t0Builder`
+	/// beneath its `t4: LazilyInstantiated<T4>`; `T0` builds `T1`, which `t1Receives`, in a `@Sendable` function, and `T1`
+	/// is on a cycle through `T5`.
+	private static func twoCallsOfVariantOnCycle(t1Receives: String, rootDeclares: String?) -> [String] {
+		let t1Initializer = t1Receives.hasSuffix("?") ? "t4: LazilyInstantiated<T4>?" : "t4: T4"
+		let rootDeclarations = rootDeclares.map { "\n    \($0)" } ?? ""
+		let rootParameters = rootDeclares == nil ? "" : ", t4: T4"
+		let rootAssignments = rootDeclares == nil ? "" : "; self.t4 = t4"
+		return [
+			"""
+			@Instantiable(isRoot: true) public final class Root: Instantiable {
+			    @Instantiated(fulfilledByType: "T0", erasedToConcreteExistential: true) let anyT0Builder: SendableErasedInstantiator<(), AnyT0>
+			    @Instantiated let x: X\(rootDeclarations)
+			    public init(anyT0Builder: SendableErasedInstantiator<(), AnyT0>, x: X\(rootParameters)) { self.anyT0Builder = anyT0Builder; self.x = x\(rootAssignments) }
+			}
+			""",
+			"""
+			@Instantiable public final class X: Instantiable {
+			    @Instantiated let t4: LazilyInstantiated<T4>
+			    @Instantiated let t0Builder: Instantiator<T0>
+			    public init(t4: LazilyInstantiated<T4>, t0Builder: Instantiator<T0>) { self.t4 = t4; self.t0Builder = t0Builder }
+			}
+			""",
+			"""
+			@Instantiable public final class T0: Instantiable, @unchecked Sendable {
+			    @Instantiated(fulfilledByType: "T1", erasedToConcreteExistential: true) let anyT1Builder: SendableErasedInstantiator<(), AnyT1>
+			    public init(anyT1Builder: SendableErasedInstantiator<(), AnyT1>) { self.anyT1Builder = anyT1Builder }
+			}
+			public final class AnyT0: Sendable {
+			    public init(_ value: T0) { self.value = value }
+			    public let value: T0
+			}
+			""",
+			"""
+			@Instantiable public final class T1: Instantiable, @unchecked Sendable {
+			    \(t1Receives)
+			    @Instantiated let t5Builder: Instantiator<T5>
+			    public init(\(t1Initializer), t5Builder: Instantiator<T5>) { self.t4 = t4; self.t5Builder = t5Builder }
+			}
+			public final class AnyT1: Sendable {
+			    public init(_ value: T1) { self.value = value }
+			    public let value: T1
+			}
+			""",
+			"""
+			@Instantiable public final class T5: Instantiable, @unchecked Sendable {
+			    @Instantiated let t1Builder: Instantiator<T1>
+			    public init(t1Builder: Instantiator<T1>) { self.t1Builder = t1Builder }
+			}
+			""",
+			"""
+			@Instantiable public final class T4: Instantiable, @unchecked Sendable { public init() {} }
+			""",
+		]
+	}
+
 	private static func withoutSourceLocations(_ file: String) -> String {
 		file.split(separator: "\n", omittingEmptySubsequences: false).filter { !$0.contains("#sourceLocation(file:") }.joined(separator: "\n")
 	}
@@ -2956,7 +3118,7 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 	) async -> [String: RootTreeChoiceObservation.PerPathReason?] {
 		let (stream, continuation) = AsyncStream.makeStream(of: (String, RootTreeChoiceObservation.PerPathReason?).self)
 		await RootTreeChoiceObservation.$scopeGeneratorLimitOverride.withValue(0) {
-			await RootTreeChoiceObservation.$observer.withValue({ root, perPathReason in
+			await RootTreeChoiceObservation.$observer.withValue(TaskLocalFunction { root, perPathReason in
 				continuation.yield((root, perPathReason))
 			}) {
 				await assertThrowsError(diagnostics: diagnostics, sourceLocation: sourceLocation) {
@@ -2994,7 +3156,7 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 	) async throws -> (choices: [String: RootTreeChoiceObservation.PerPathReason?], files: [String: String]) {
 		let (stream, continuation) = AsyncStream.makeStream(of: (String, RootTreeChoiceObservation.PerPathReason?).self)
 		let output = try await RootTreeChoiceObservation.$scopeGeneratorLimitOverride.withValue(0) {
-			try await RootTreeChoiceObservation.$observer.withValue({ root, perPathReason in
+			try await RootTreeChoiceObservation.$observer.withValue(TaskLocalFunction { root, perPathReason in
 				continuation.yield((root, perPathReason))
 			}) {
 				try await executeSafeDIToolTest(
@@ -3049,7 +3211,7 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 		// With no place allowed, every root's tree per path is abandoned at once, so each root is laid out from its plan
 		// wherever a root past the limit would be. `nil` leaves the limit the tool ships with.
 		let output = try await RootTreeChoiceObservation.$scopeGeneratorLimitOverride.withValue(scopeGeneratorLimit) {
-			try await RootTreeChoiceObservation.$observer.withValue({ root, perPathReason in
+			try await RootTreeChoiceObservation.$observer.withValue(TaskLocalFunction { root, perPathReason in
 				continuation.yield((root, perPathReason))
 			}) {
 				try await executeSafeDIToolTest(

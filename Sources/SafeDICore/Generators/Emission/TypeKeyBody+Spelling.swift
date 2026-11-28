@@ -79,7 +79,7 @@ extension TypeKeyLayout {
 
 	// MARK: Spelling
 
-	mutating func spelledRootStatements() -> [GeneratedCode]? {
+	mutating func spelledRootStatements(indentation: String = TypeKeyBody.rootStatementIndentation) -> [GeneratedCode]? {
 		var functionCode = [GeneratedCode](repeating: .empty, count: membersByClass.count)
 		let classesByDepth = membersByClass.indices.dropFirst().sorted { placementDepth[$0] > placementDepth[$1] }
 		for owner in classesByDepth {
@@ -123,7 +123,7 @@ extension TypeKeyLayout {
 				lineEnd: representative.lineEnd,
 			).spelled()
 		}
-		return spelledStatements(ofClass: 0, indentation: TypeKeyBody.rootStatementIndentation, functionCode: functionCode)
+		return spelledStatements(ofClass: 0, indentation: indentation, functionCode: functionCode)
 	}
 
 	/// The statements of `owner`'s body, each with the functions declared before it, each indented by `indentation`.

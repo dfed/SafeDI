@@ -113,9 +113,35 @@ extension DependencyTreeGenerator {
 				try await Self.treeCode(of: scopeGenerator, besideRecordsBody: nodeRecords.rootBody)
 			})
 			let (treeCode, comparisons) = planned
+			// A root that keeps its tree's code is still laid out from its records where they differ from the tree's by an
+			// optional parameter's argument, for the comparison alone: a test approves that difference only where the two
+			// texts are equal. A seam's own tree is never laid out here, so the difference fails there.
+			let holdsDifferenceOfOptionalParameter = comparisons.contains { comparison in
+				// safedi-source-rule: allow stringScan — only where a test observes node records, once for each difference of a root that keeps its tree.
+				comparison.differences.contains { $0.contains(": \(NodeRecordsReport.argumentsOfOptionalParameterDifferenceName) is ") }
+			}
+			let comparedCode: GeneratedCode? = if laidOutCode == nil, holdsDifferenceOfOptionalParameter, rootInfo.ownSeamRoot == nil,
+			                                      case let .success(code) = NodeRecords.refusingWhatRecordsThrow({ try laidOutRootCode(of: rootInfo.instantiable, body: nodeRecords.rootBody) })
+			{
+				code
+			} else {
+				laidOutCode
+			}
+			// One variant serving a call that answers a read only if available and a call that does not differs from the
+			// tree's place at the second call, which only the laid-out text shows passing `nil`. Where the engine cannot lay
+			// the root out, nothing shows it, so the records are refused as before that merge (`nodeHasSeveralVariants`).
+			let differsOnlyByOptionalParameter = comparisons.allSatisfy { comparison in
+				// safedi-source-rule: allow stringScan — only where a test observes node records, once for each difference of a root that keeps its tree.
+				comparison.differences.allSatisfy { $0.contains(": \(NodeRecordsReport.argumentsOfOptionalParameterDifferenceName) is ") }
+			}
+			guard comparedCode != nil || !holdsDifferenceOfOptionalParameter || !differsOnlyByOptionalParameter else {
+				let everyRefusal = GenerationWork.$observer.withValue(nil) { NodeRecords.refusals(in: world, seamTree: seamTree, declaredTypeNames: declaredTypeNames) }
+				observer(NodeRecordsReport(root: root, refusal: NodeRecordRefusal.nodeHasSeveralVariants.rawValue, everyRefusal: NodeRecordRefusal.allCases.filter { Set(everyRefusal + [.nodeHasSeveralVariants]).contains($0) }.map(\.rawValue), isLaidOutFromNodeRecords: false, differences: [], recordCount: 0, treePlaceCount: 0, treeForcers: rootInfo.treeForcers))
+				return treeCode
+			}
 			// A root whose tree's body holds nothing is compared nowhere.
 			for comparison in comparisons {
-				observer(NodeRecordsReport(
+				var report = NodeRecordsReport(
 					root: root,
 					refusal: laidOutCode == nil && NodeRecordsObservation.laysOutRoots ? NodeRecordRefusal.notLaidOut.rawValue : nil,
 					everyRefusal: [],
@@ -124,7 +150,9 @@ extension DependencyTreeGenerator {
 					recordCount: nodeRecords.recordCount,
 					treePlaceCount: comparison.treePlaceCount,
 					treeForcers: rootInfo.treeForcers,
-				))
+				)
+				report.comparedTexts = comparedCode.map { NodeRecordsComparedTexts(tree: treeCode.spelled(), nodeRecords: $0.spelled()) }
+				observer(report)
 			}
 			return laidOutCode ?? treeCode
 		}
@@ -142,12 +170,15 @@ extension DependencyTreeGenerator {
 		})
 		let (treeCode, comparisons) = planned
 		let captures = await tree.nonSendableWrapperCaptures(ofTreeRootedAt: instantiable)
+		let texts = NodeRecordsComparedTexts(tree: treeCode.spelled(), nodeRecords: layout.code.spelled())
+		// The texts' difference comes first, and what no text shows after it, which a test that accepts an approved
+		// difference of the texts still reports (`NodeRecordsReport.differencesNoTextShows`).
 		let factsTheRecordsMiss: [(holds: Bool, difference: String)] = [
-			(treeCode.spelled() == layout.code.spelled(), "root: the code laid out from node records differs from the tree’s"),
+			(texts.tree == texts.nodeRecords, "root: the code laid out from node records differs from the tree’s"),
 			(captures.isEmpty, "root: the tree’s @Sendable builder functions capture a wrapper, which node records cannot see"),
 			(tree.unpassableCycleLabelsInTree.isEmpty, "root: the tree holds a label no cycle parameter can pass, which node records cannot see"),
 		]
-		return NodeRecordsReport(
+		var report = NodeRecordsReport(
 			root: instantiable.concreteInstantiable.asSource,
 			refusal: nil,
 			everyRefusal: [],
@@ -157,6 +188,9 @@ extension DependencyTreeGenerator {
 			treePlaceCount: comparisons.map(\.treePlaceCount).reduce(0, +),
 			treeForcers: [],
 		)
+		report.comparedTexts = texts
+		report.differencesNoTextShows = factsTheRecordsMiss.dropFirst().filter { !$0.holds }.map(\.difference)
+		return report
 	}
 
 	/// A tree's planned code, and each comparison of its root body with node records' (`treeCode(of:besideRecordsBody:)`).
@@ -166,7 +200,7 @@ extension DependencyTreeGenerator {
 	/// `recordsBody`, node records' root body, and how many places it holds (`NodeRecordsObservation.differences(between:and:)`).
 	private static func treeCode(of tree: ScopeGenerator, besideRecordsBody recordsBody: [GeneratedCode]) async throws -> PlannedTree {
 		let (stream, continuation) = AsyncStream.makeStream(of: (differences: [String], treePlaceCount: Int).self)
-		let code = try await NodeRecordsObservation.$rootBodyObserver.withValue({ treeBody in
+		let code = try await NodeRecordsObservation.$rootBodyObserver.withValue(TaskLocalFunction { treeBody in
 			continuation.yield(NodeRecordsObservation.differences(between: treeBody, and: recordsBody))
 		}) {
 			try await tree.generatePlan()

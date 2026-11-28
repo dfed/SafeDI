@@ -167,15 +167,14 @@ struct SafeDIToolSeamPassedUpValuesTests: ~Copyable {
 		        public init(api: @escaping (Int) -> __safeDI_Built) {
 		            self.api = api
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(api: { _ in __safeDI_builder() })
-		        }
 		    }
 
 		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
 		    public convenience init(id: Int, apiBuilder: @escaping () -> any Api) {
-		        self.init(__safeDI_id: id, __safeDI_apiBuilder: .init(__safeDI_noScope: apiBuilder))
+		        @Sendable nonisolated func __safeDI_noScope_Detail_SafeDICarrierScope_Api<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Detail.__safeDI_ApiCarrier<__safeDI_Built> {
+		            .init(api: { _ in __safeDI_builder() })
+		        }
+		        self.init(__safeDI_id: id, __safeDI_apiBuilder: __safeDI_noScope_Detail_SafeDICarrierScope_Api(apiBuilder))
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -205,15 +204,17 @@ struct SafeDIToolSeamPassedUpValuesTests: ~Copyable {
 		            self.api = api
 		            self.detailBuilder = detailBuilder
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(api: { _, _ in __safeDI_builder() }, detailBuilder: .init(__safeDI_noScope: __safeDI_builder))
-		        }
 		    }
 
 		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
 		    public init(id: Int, apiBuilder: @escaping () -> any Api) {
-		        self.init(__safeDI_id: id, __safeDI_apiBuilder: .init(__safeDI_noScope: apiBuilder))
+		        @Sendable nonisolated func __safeDI_noScope_List_SafeDICarrierScope_Api<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> List.__safeDI_ApiCarrier<__safeDI_Built> {
+		            .init(api: { _, _ in __safeDI_builder() }, detailBuilder: __safeDI_noScope_Detail_SafeDICarrierScope_Api(__safeDI_builder))
+		        }
+		        @Sendable nonisolated func __safeDI_noScope_Detail_SafeDICarrierScope_Api<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Detail.__safeDI_ApiCarrier<__safeDI_Built> {
+		            .init(api: { _ in __safeDI_builder() })
+		        }
+		        self.init(__safeDI_id: id, __safeDI_apiBuilder: __safeDI_noScope_List_SafeDICarrierScope_Api(apiBuilder))
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -293,15 +294,14 @@ struct SafeDIToolSeamPassedUpValuesTests: ~Copyable {
 		            self.api = api
 		            self.nextBuilder = nextBuilder
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(api: { _, _ in __safeDI_builder() }, nextBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
-		        }
 		    }
 
 		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
 		    public convenience init(id: Int, apiBuilder: @escaping () -> any Api) {
-		        self.init(__safeDI_id: id, __safeDI_apiBuilder: .init(__safeDI_noScope: apiBuilder))
+		        @Sendable nonisolated func __safeDI_noScope_Node_SafeDICarrierScope_Api<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Node.__safeDI_ApiCarrier<__safeDI_Built> {
+		            .init(api: { _, _ in __safeDI_builder() }, nextBuilder: { __safeDI_noScope_Node_SafeDICarrierScope_Api(__safeDI_builder) })
+		        }
+		        self.init(__safeDI_id: id, __safeDI_apiBuilder: __safeDI_noScope_Node_SafeDICarrierScope_Api(apiBuilder))
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -393,6 +393,230 @@ struct SafeDIToolSeamPassedUpValuesTests: ~Copyable {
 
 			""")
 		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_handsEachRouteItsNearestValue_whenRootFillsPlaceTwoSeamsUpWhoseSecondRouteAloneReadsRootsValue() async throws {
+		// `Home` holds a place of `Api` under `first` and under `second`, one case, and `Shell` passes it up to `Root`, whose
+		// `LiveApi` receives `token`. Inline, the `LiveApi` under `first` reads `First`’s token, and the one under `second`,
+		// where nothing between `Root` and the place declares one, reads `Root`’s.
+		let modules = Self.innerAndOuterModules(
+			inner: [
+				seamFixtureType(named: "Token", isFinalClass: true, declarations: []),
+				seamFixtureType(named: "Panel", isFinalClass: true, declarations: ["@Instantiated public let api: any Api"]),
+				seamFixtureType(named: "First", isFinalClass: true, declarations: ["@Instantiated public let token: Token", "@Instantiated public let panel: Panel"]),
+				seamFixtureType(named: "Second", isFinalClass: true, declarations: ["@Instantiated public let panel: Panel"]),
+				seamFixtureType(named: "Home", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let first: First", "@Instantiated public let second: Second"]),
+			],
+			outer: [
+				seamFixtureType(named: "Shell", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let home: Home"]),
+			],
+			app: [
+				SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "LiveApi", fulfilling: "Api", declarations: ["@Received public let token: Token"]),
+				seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated public let token: Token", "@Instantiated public let shell: Shell"]),
+				"""
+				func eachApiReadsItsNearestToken() -> [Bool] {
+				    let root = Root()
+				    let home = root.shell.home
+				    return [(home.first.panel.api as? LiveApi)?.token === home.first.token, (home.second.panel.api as? LiveApi)?.token === root.token]
+				}
+				""",
+			],
+		)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		let description = try await DifferentialValueOracle.describe(
+			DifferentialValuePath(output: output, modules: modules),
+			probes: [DifferentialValueProbe("eachApiReadsItsNearestToken()")],
+			filesToDelete: &filesToDelete,
+		)
+		if compileVerificationIsEnabled {
+			#expect(description == """
+			probe eachApiReadsItsNearestToken()
+			Array<Bool>
+			  0: Bool true
+			  1: Bool true
+
+			""")
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsDeclarationBoundAfterPlace_whenRootFillsPlaceTwoSeamsUpWhoseSecondRouteAloneLeavesLabelUncarried() async {
+		// `Home` holds a place of `Api` under `first` and under `second`, one case, and `Shell` passes it up to `Root`. Only
+		// `Second` declares `token`, which receives `panel` and so is built after it: inline, the `LiveApi` under `second`
+		// would read it, and no builder is handed it, so the second route alone makes `Root`’s fill an error.
+		let modules = Self.innerAndOuterModules(
+			inner: [
+				seamFixtureType(named: "Token", isFinalClass: true, declarations: ["@Received public let panel: Panel"]),
+				seamFixtureType(named: "Panel", isFinalClass: true, declarations: ["@Instantiated public let api: any Api"]),
+				seamFixtureType(named: "First", isFinalClass: true, declarations: ["@Instantiated public let panel: Panel"]),
+				seamFixtureType(named: "Second", isFinalClass: true, declarations: ["@Instantiated public let panel: Panel", "@Instantiated public let token: Token"]),
+				seamFixtureType(named: "Home", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let first: First", "@Instantiated public let second: Second"]),
+			],
+			outer: [
+				seamFixtureType(named: "Shell", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let home: Home"]),
+			],
+			app: [
+				SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "LiveApi", fulfilling: "Api", declarations: ["@Received(onlyIfAvailable: true) public let token: Token?"]),
+				seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated public let shell: Shell"]),
+			],
+		)
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["LiveApi.swift"]):10:5: error: `LiveApi` receives `token: Token?`, which `Second` builds only after `Home`’s tree calls the builder for `Panel`’s `api: any Api` (`api` of `apiBuilder`), so SafeDI does not hand it to that builder. Declare an @Instantiable type that fulfills `Api` in module `Inner` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Inner"]!["Second.swift"]):9:5: note: `Second` declares `token: Token` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_handsEachRouteItsLazyValueOrNone_whenRootFillsPlaceOnTwoRoutesOfOneCaseOnlyOneOfWhichInstantiatesItLazily() async throws {
+		// `Home` holds a place of `Api` under `model` and under `desk.model`, one case. Only `Desk` instantiates `token`, and
+		// lazily: the `LiveApi` under `desk` reads that token, and the one under `model`, where nothing declares it, reads none.
+		let modules = [
+			ModuleFixture(name: "Inner", packageName: "Shop", swiftFileContent: [
+				"public protocol Api {}",
+				seamFixtureType(named: "Token", isFinalClass: true, declarations: []),
+				seamFixtureType(named: "Model", isFinalClass: true, declarations: ["@Instantiated public let api: any Api"]),
+				seamFixtureType(named: "Desk", isFinalClass: true, declarations: ["@Instantiated public let token: LazilyInstantiated<Token>", "@Instantiated public let model: Model"]),
+				seamFixtureType(named: "Home", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let model: Model", "@Instantiated public let desk: Desk"]),
+			]),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
+				SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "LiveApi", fulfilling: "Api", declarations: ["@Received(onlyIfAvailable: true) public let token: Token?"]),
+				seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated public let home: Home"]),
+				"""
+				func eachApiReadsItsRoutesToken() -> [Bool] {
+				    let home = Root().home
+				    return [(home.model.api as? LiveApi)?.token == nil, (home.desk.model.api as? LiveApi)?.token === home.desk.token.instance]
+				}
+				""",
+			].map { "import Inner\n\n" + $0 }, dependencies: ["Inner"]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		let description = try await DifferentialValueOracle.describe(
+			DifferentialValuePath(output: output, modules: modules),
+			probes: [DifferentialValueProbe("eachApiReadsItsRoutesToken()")],
+			filesToDelete: &filesToDelete,
+		)
+		if compileVerificationIsEnabled {
+			#expect(description == """
+			probe eachApiReadsItsRoutesToken()
+			Array<Bool>
+			  0: Bool true
+			  1: Bool true
+
+			""")
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_handsEachRouteItsLazyValueOrNone_whenOuterSeamPassesUpPlaceOnTwoRoutesOfOneCaseOnlyOneOfWhichInstantiatesItLazily() async throws {
+		// `Home`'s `wing` holds a place of `Api` under `model` and under `desk.model`, one case, which `Shell` passes up.
+		// Only `Desk` instantiates `token`, and lazily, and `Wing` builds `model` first, so the place a call of `Shell` is
+		// handed for the case is the one no route to which binds the token: only `Home`'s graph holds the wrapper. The
+		// `LiveApi` under `desk` reads that token, and the one under `model` reads none.
+		let modules = [
+			ModuleFixture(name: "Inner", packageName: "Shop", swiftFileContent: [
+				"public protocol Api {}",
+				seamFixtureType(named: "Token", isFinalClass: true, declarations: []),
+				seamFixtureType(named: "Model", isFinalClass: true, declarations: ["@Instantiated public let api: any Api"]),
+				seamFixtureType(named: "Desk", isFinalClass: true, declarations: ["@Instantiated public let token: LazilyInstantiated<Token>", "@Instantiated public let model: Model"]),
+				seamFixtureType(named: "Wing", isFinalClass: true, declarations: ["@Instantiated public let model: Model", "@Instantiated public let desk: Desk"]),
+				seamFixtureType(named: "Home", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let wing: Wing"]),
+				seamFixtureType(named: "Shell", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let home: Home"]),
+			]),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
+				SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "LiveApi", fulfilling: "Api", declarations: ["@Received(onlyIfAvailable: true) public let token: Token?"]),
+				seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated public let shell: Shell"]),
+				"""
+				func eachApiReadsItsRoutesToken() -> [Bool] {
+				    let wing = Root().shell.home.wing
+				    return [(wing.model.api as? LiveApi)?.token == nil, (wing.desk.model.api as? LiveApi)?.token === wing.desk.token.instance]
+				}
+				""",
+			].map { "import Inner\n\n" + $0 }, dependencies: ["Inner"]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		let description = try await DifferentialValueOracle.describe(
+			DifferentialValuePath(output: output, modules: modules),
+			probes: [DifferentialValueProbe("eachApiReadsItsRoutesToken()")],
+			filesToDelete: &filesToDelete,
+		)
+		if compileVerificationIsEnabled {
+			#expect(description == """
+			probe eachApiReadsItsRoutesToken()
+			Array<Bool>
+			  0: Bool true
+			  1: Bool true
+
+			""")
+		}
+	}
+
+	@Test
+	mutating func generate_takesPassedUpBuilderUnderHoleTypesLabel_whenOuterSeamPassesUpPlaceOnTwoRoutesOfOneCase() async throws {
+		// `Home` holds a place of `Api` under `first` and under `second`, one case, and `Shell` passes it up. Both modules
+		// generate plain initializers: `Shell`’s takes the builder as `apiBuilder`, the label of its hole type, whatever
+		// SafeDI names the places apart by inside generated code.
+		let modules = Self.innerAndOuterModules(
+			inner: [
+				seamFixtureType(named: "Token", isFinalClass: true, declarations: ["@Received public let panel: Panel"]),
+				seamFixtureType(named: "Panel", isFinalClass: true, declarations: ["@Instantiated public let api: any Api"]),
+				seamFixtureType(named: "First", isFinalClass: true, declarations: ["@Instantiated public let panel: Panel"]),
+				seamFixtureType(named: "Second", isFinalClass: true, declarations: ["@Instantiated public let panel: Panel", "@Instantiated public let token: Token"]),
+				seamFixtureType(named: "Home", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let first: First", "@Instantiated public let second: Second"]),
+			],
+			outer: [
+				seamFixtureType(named: "Shell", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let home: Home"]),
+			],
+		)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["Outer"]?.generatedFiles == ["Outer.swift": generatedFileHeader + """
+		#if canImport(Inner)
+		import Inner
+		#endif
+
+		extension Shell {
+		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		    nonisolated public final class __safeDI_ApiCarrier<__safeDI_Built> {
+		        public let home: Home.__safeDI_ApiCarrier<__safeDI_Built>
+
+		        public init(home: Home.__safeDI_ApiCarrier<__safeDI_Built>) {
+		            self.home = home
+		        }
+
+		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		            self.init(home: .init(__safeDI_noScope: __safeDI_builder))
+		        }
+		    }
+
+		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
+		    public convenience init(apiBuilder: @escaping () -> any Api) {
+		        self.init(__safeDI_apiBuilder: .init(__safeDI_noScope: apiBuilder))
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// From code you write, call the initializer above instead.
+		    public convenience init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
+		        @inline(never) func __safeDI_home() -> Home {
+		            _ = Home.__safeDI_Home_C01BC793F644CA9D.self // If this line does not compile, compile the code SafeDI generates for module Inner into Inner: under Bazel, add Inner’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return Home(__safeDI_apiBuilder: __safeDI_apiBuilder.home)
+		        }
+		        let home: Home = __safeDI_home()
+		        self.init(home: home)
+		    }
+		}
+
+		extension Shell {
+		    public enum __safeDI_Shell_DAACB8FD775DD84C {}
+		}
+		"""])
 	}
 
 	// MARK: Private
