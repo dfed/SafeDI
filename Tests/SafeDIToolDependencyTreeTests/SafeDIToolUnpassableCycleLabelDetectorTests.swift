@@ -145,7 +145,7 @@ struct SafeDIToolUnpassableCycleLabelDetectorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private mutating func detections(of swiftFileContent: String) async throws -> (TestOutput, [String: Detection]) {
 		let (stream, continuation) = AsyncStream.makeStream(of: (String, Detection).self)
-		let output = try await UnpassableCycleLabelObservation.$observer.withValue({ root, detectorFires, todaysTreeReports in
+		let output = try await UnpassableCycleLabelObservation.$observer.withValue(TaskLocalFunction { root, detectorFires, todaysTreeReports in
 			continuation.yield((root, Detection(detectorFires: detectorFires, todaysTreeReports: todaysTreeReports)))
 		}) {
 			try await executeSafeDIToolTest(

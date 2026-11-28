@@ -108,6 +108,10 @@ extension TypeKeyLayout {
 			forwardedProperties: record.forwardedProperties.map(\.asSource),
 			reads: reads[body],
 		))]
+		// A function that begins with a statement of its kind's writes other text than one that does not.
+		if let leadingStatement = record.leadingStatement {
+			key.append(parts.id(of: .leadingStatement(leadingStatement)))
+		}
 		// A function that returns the property's type spells it, and erases in its body.
 		if record.returnsPropertyType {
 			key.append(parts.id(of: .text("returns|\(record.property.typeDescription.asSource)|\(record.isErased)")))
@@ -175,6 +179,8 @@ extension TypeKeyLayout {
 	func inPlaceCallShape(_ call: InPlaceCall) -> String {
 		let record = call.record
 		var shape = [
+			// The property's form, which decides the wrapper the call is bound in (`bindingOfInPlaceCall(of:)`).
+			"\(record.property.propertyType)",
 			record.property.asSource,
 			record.concreteType.asSource,
 			record.target.callee,
@@ -184,7 +190,9 @@ extension TypeKeyLayout {
 			record.functionName,
 			record.lineEnd,
 			record.typesDeclaredEscaping.map(\.asSource).sorted().joined(separator: ","),
-			record.leadingStatement?.spelled ?? "",
+			record.leadingStatement.map { "\($0)" } ?? "",
+			// The values the call is forwarded, which its function takes as parameters.
+			record.forwardedProperties.map(\.asSource).joined(separator: ","),
 		]
 		for (position, argument) in record.arguments.enumerated() {
 			shape.append("argument|\(argument.argumentLabel)|\(argument.label)|\(argument.property.asSource)|\(record.argumentValues[position].map { "\($0)" } ?? "")")

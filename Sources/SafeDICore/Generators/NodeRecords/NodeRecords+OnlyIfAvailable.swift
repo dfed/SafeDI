@@ -76,11 +76,13 @@ extension NodeRecords {
 /// `propertiesGeneratedLater` a scope's children are generated with find them for today's tree.
 ///
 /// Rule 1 of the per-type facts keys a read only if available alike whether it is `nil` or a value, so one variant can be
-/// called where the read is `nil` and where it is a value. Off every cycle, such a variant reads the value: its function
-/// takes the label as one optional parameter, and the call that finds no declaration passes `nil`
-/// (`context(merging:with:)`). A world in which two calls of one variant see different declarations of one label, or in
-/// which a member of a cycle is called both ways, is refused (`onlyIfAvailableAnsweredApart`). Only the labels some receive
-/// only if available reads are followed, so a world without one costs nothing.
+/// called where the read is `nil` and where it is a value. Such a variant reads the value: its function takes the label
+/// as one optional parameter, and the call that finds no declaration passes `nil` (`context(merging:with:)`), a member
+/// of a cycle like any other, whose calls around the cycle hand the parameter on. So does a variant one call of which
+/// sees a declaration and another that declaration's optional form, as beneath a mock root's override of a receive only
+/// if available and beneath a type that instantiates the label. A world in which two calls of one variant see
+/// declarations of one label that differ otherwise is refused (`onlyIfAvailableAnsweredApart`). Only the labels some
+/// receive only if available reads are followed, so a world without one costs nothing.
 ///
 /// Holds, per variant, the set of the properties it is passed `nil` for, for as long as the world's records are made.
 ///
@@ -253,14 +255,22 @@ struct OnlyIfAvailableAnswers: Sendable {
 						}
 					}
 				}
+				// A fill's body is a function of its own, which declares what the fill binds, takes and captures around it
+				// (`FilledCallRecords.Fill.outerDeclarations`).
+				if NodeRecordsObservation.recordsFilledCalls, world.construction(of: world.declaration(of: callee)) == .fill, case let .success(records) = world.filledCallRecords(of: declaration),
+				   let fill = records.fills.first(where: { $0.facts.declaration == world.declaration(of: callee) })
+				{
+					for property in fill.outerDeclarations where labels.contains(property.label) {
+						calleeContext[property.label] = [Binding(property: property, state: .available)]
+					}
+				}
 				if let existingContext = contextByVariant[Int(callee)] {
 					let labelsOneCallAnswers = Set(existingContext.keys).symmetricDifference(calleeContext.keys)
-					// A member of a cycle takes what its calls answer as its cycle parameters, whose rows are made per call. A
-					// rename only if available is bound where its scope is built, to the declaration or to `nil`, by one
+					// A rename only if available is bound where its scope is built, to the declaration or to `nil`, by one
 					// statement for every call, so a label one fulfills is not taken as a parameter.
 					// A world with a hole or a fill writes the places beneath them from its sites' code, which passes `nil` where
 					// one call sees no declaration, so it takes no such parameter either.
-					guard labelsOneCallAnswers.isEmpty || (!holdsHoleOrFill && !world.isOnCycle(world.declaration(of: callee)) && renamedLabels.isDisjoint(with: labelsOneCallAnswers)) else {
+					guard labelsOneCallAnswers.isEmpty || (!holdsHoleOrFill && renamedLabels.isDisjoint(with: labelsOneCallAnswers)) else {
 						throw .onlyIfAvailableAnsweredApart
 					}
 					// The facts key `nil` with a lazy wrapper where no answer in the declared form reaches the read (rule A's
@@ -377,14 +387,17 @@ struct OnlyIfAvailableAnswers: Sendable {
 	/// What a variant sees of each followed label, where one call of it sees `existing` and another `other`. A label one
 	/// call sees no declaration of takes what the other call sees: the variant's function takes the label as one optional
 	/// parameter, which the call that sees nothing passes `nil` (the engine's `TypeKeyBody.spelledArgument`), so one
-	/// variant serves a call that answers a read only if available and a call that does not. Each merge only adds a
-	/// label, so the result does not depend on the order the calls are met in.
-	/// - Throws: `onlyIfAvailableAnsweredApart` where the two calls see different declarations of one label.
+	/// variant serves a call that answers a read only if available and a call that does not. Where the calls see
+	/// declarations that differ only in that one's is the optional form of the other's, the variant sees the optional
+	/// ones, which the same parameter carries. Each merge only adds a label or makes a declaration optional, so the
+	/// result does not depend on the order the calls are met in.
+	/// - Throws: `onlyIfAvailableAnsweredApart` where the two calls see declarations of one label that differ otherwise.
 	private static func context(merging existing: [String: [Binding]], with other: [String: [Binding]]) throws(NodeRecordRefusal) -> [String: [Binding]] {
 		var merged = existing
 		for (label, bindings) in other {
 			if let existingBindings = existing[label] {
-				guard existingBindings == bindings else { throw .onlyIfAvailableAnsweredApart }
+				guard existingBindings.map(\.unwrapped) == bindings.map(\.unwrapped) else { throw .onlyIfAvailableAnsweredApart }
+				merged[label] = zip(existingBindings, bindings).map { $0.property.typeDescription.isOptional ? $0 : $1 }
 			} else {
 				merged[label] = bindings
 			}
@@ -456,6 +469,11 @@ struct OnlyIfAvailableAnswers: Sendable {
 
 		let property: Property
 		let state: State
+
+		/// The declaration of the unwrapped form of the property, built as this one is.
+		var unwrapped: Binding {
+			Binding(property: property.asUnwrappedProperty, state: state)
+		}
 	}
 
 	/// By variant.

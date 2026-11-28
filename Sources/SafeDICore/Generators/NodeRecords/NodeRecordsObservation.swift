@@ -30,6 +30,17 @@ public enum NodeRecordsObservation {
 	/// plan before it is turned on for every run, or generate time doubles.
 	@TaskLocal public static var laysOutRoots = false
 
+	/// Whether a run no test observes lays out each root of a module with seams that built its tree, a seam's own root or a
+	/// root a `TreeForcer` holds of, from its node records where they accept its world and the engine lays every statement
+	/// out, without planning its tree's body. A root no `TreeForcer` holds of builds no tree and is laid out from its records
+	/// whatever this says. A prototype's switch, for timing such a module: off unless the tool's environment turns it on.
+	@TaskLocal public static var laysOutSeamWorldRootsInRun = false
+
+	/// Whether node records make the record of a root's seam call that fills places of the seam it calls
+	/// (`NodeRecords.filledSeamCallRecord`) where its records assemble, rather than refusing it as `fill`. Off until the
+	/// engine lays every such call out as the tree writes it: only a test turns it on.
+	@TaskLocal public static var recordsFilledCalls = false
+
 	/// The nodes a test claims as a kind would (`NodeRecords.claim(of:in:)`), by their concrete type's name, each
 	/// with the raw values of the refusals the claim discharges. Only a test sets it.
 	@TaskLocal public static var claimsForTesting = [String: [String]]()
@@ -46,14 +57,14 @@ public enum NodeRecordsObservation {
 	/// Handed each mocked type and its mock root's world (`MockWorldRoot`) as the mock root is built, where a test observes node records
 	/// (`DependencyTreeGenerator.createMockRootScopeGenerator`). A task local rather than a parameter: an optional closure
 	/// threaded through the mock roots' construction raised the peak memory of a run that sets none by a fifth on Linux.
-	@TaskLocal static var recordsMockWorldRoot: (@Sendable (TypeDescription, MockWorldRoot) -> Void)?
+	@TaskLocal static var recordsMockWorldRoot: TaskLocalFunction<@Sendable (TypeDescription, MockWorldRoot) -> Void>?
 
 	/// Handed each root's report, where set. Only a test sets it.
-	@TaskLocal public static var observer: (@Sendable (NodeRecordsReport) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (NodeRecordsReport) -> Void>?
 
 	/// Handed the body of the root a tree's places build, beside the node records made for the same root, where a root's
 	/// plan is observed: set by the generator around one root's plan.
-	@TaskLocal static var rootBodyObserver: (@Sendable (_ rootBody: [GeneratedCode]) -> Void)?
+	@TaskLocal static var rootBodyObserver: TaskLocalFunction<@Sendable (_ rootBody: [GeneratedCode]) -> Void>?
 
 	/// The ways `nodeRecordsBody`, the root's body node records make, differs from `treeBody`, the body the tree's places
 	/// make: a line per difference, each naming the place by the labels on its path, and how many places the tree's body
@@ -85,6 +96,11 @@ public enum NodeRecordsObservation {
 				}
 				let placePath = "\(path).\(label)"
 				guard case let .place(treePlan) = treeInner.node, let treeRecord = treePlan.record else {
+					// The tree plans no call that fills a place (`ScopeGenerator.seamCallRecord`), whose record node records make
+					// alone: the root's text, which the engine lays out from it, is compared instead.
+					if fillsAPlace(nodeRecordsRecord) {
+						continue
+					}
 					differences.append("\(placePath): the tree writes no place’s record")
 					continue
 				}
@@ -106,6 +122,12 @@ public enum NodeRecordsObservation {
 			}
 		}
 		return (differences, treePlaceCount)
+	}
+
+	/// Whether `record` is a call that fills a place, whose record only node records make (`ScopeGenerator.seamCallRecord`).
+	private static func fillsAPlace(_ record: PlaceRecord) -> Bool {
+		guard case let .alias(alias) = record, let call = alias.call else { return false }
+		return !(call.record.callFields?.builtClosures.isEmpty ?? true)
 	}
 
 	private static func unindented(_ code: GeneratedCode) -> (indentation: String, code: GeneratedCode) {

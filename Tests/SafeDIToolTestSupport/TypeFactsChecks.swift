@@ -354,13 +354,12 @@ enum TypeFactsChecks {
 				}
 			}
 		}
-		// Check 36: each place of a mock passes `nil` to the receives only if available its variant says it pins.
+		// Check 36: each place of a mock passes `nil` to the receives only if available the pins along its path say it pins.
 		var comparedPins = 0
-		for (index, variant) in factsVariantByPlace.enumerated() where report.forMockGeneration && !places[index].closesCycle {
-			guard let variant else { continue }
+		for (index, variant) in factsVariantByPlace.enumerated() where report.forMockGeneration && !places[index].closesCycle && variant != nil {
 			comparedPins += 1
-			if places[index].receivesPassedNil != report.variantReceivesPassedNil[variant] {
-				add(36, "place \(index) \(places[index].declaration) passes `nil` to \(places[index].receivesPassedNil) where its variant \(variant) pins \(report.variantReceivesPassedNil[variant])")
+			if places[index].receivesPassedNil != places[index].pinsPassNil {
+				add(36, "place \(index) \(places[index].declaration) passes `nil` to \(places[index].receivesPassedNil) where the pins along its path pin \(places[index].pinsPassNil)")
 			}
 		}
 		// An alias leaf has no place of its own: the parent's place logs the nearest declaration of the fulfilling label, whose
@@ -613,6 +612,11 @@ enum TypeFactsChecks {
 			line.append(" check\(check)=\(result.findingsByCheck[check]?.count ?? 0)")
 		}
 		line.append(" check10Exempted=\(result.check10ExemptedPairs) check34Exempted=\(result.check34ExemptedVariants) check10SilentNil=\(result.check10SilentNilReads) nilOrderReads=\(result.nilOrderReads) nilOrderFewerFunctions=\(result.nilOrderFewerFunctions) nilOrderPlaces=\(result.nilOrderPlaces) sendableGapProxy=\(result.sendableGapProxyNodes) check35ClosedOnByAnotherVariant=\(result.check35ClosedOnByAnotherVariant) check35CapturedParameters=\(result.check35CapturedParameters) check35CapturedParameterBytes=\(result.check35CapturedParameterBytes)")
+		var fillRefusalCounts = [String: Int]()
+		for refusal in report.fillRefusals {
+			fillRefusalCounts[refusal ?? "modeled", default: 0] += 1
+		}
+		line.append(" fills=\(fillRefusalCounts.sorted { $0.key < $1.key }.map { "\($0.key):\($0.value)" }.joined(separator: ","))")
 		line.append(" check10Owed=\(result.check10OwedByFact.sorted { $0.key < $1.key }.map { "\($0.key):\($0.value)" }.joined(separator: ",")) check10OwedUncovered=\(result.check10OwedUncovered.count) test=\(Test.current?.name ?? "")")
 		for check in 11...lastCheck {
 			line.append(" compared\(check)=\(result.comparedByCheck[check] ?? 0)")
@@ -642,8 +646,7 @@ enum TypeFactsChecks {
 	}
 
 	/// The facts a producer still owes that tell apart the answers two places of one variant give, the symmetric
-	/// difference of their keyed answers: per read, `mockRootPin` for a mock read, which no node owes since the pins'
-	/// producer (`TypeFactsMockRootPins`) answers it, so a difference there counts as unowed; for two answers of one read, the first
+	/// difference of their keyed answers: per read, for two answers of one read, the first
 	/// field that differs names it (`fillBeingBuilt` for being built at one only, `mockRootRecord` for what is pinned or
 	/// read above, `mockRootBinding` for what the mock root binds, `madeAgain` for a builder's bindings); `unowed`
 	/// otherwise, a read one place asks among them.
@@ -653,10 +656,8 @@ enum TypeFactsChecks {
 			answersByRead[readOfAnswer(answer), default: []].append(answer)
 		}
 		var owed = Set<String>()
-		for (read, answers) in answersByRead {
-			if read.hasPrefix("mock(") {
-				owed.insert("mockRootPin")
-			} else if answers.count == 2 {
+		for (_, answers) in answersByRead {
+			if answers.count == 2 {
 				let (first, second) = (answers[0], answers[1])
 				let differs = { (field: String) in self.field(field, of: first) != self.field(field, of: second) }
 				if (field("being built", of: first) == "[]") != (field("being built", of: second) == "[]") {
@@ -670,6 +671,10 @@ enum TypeFactsChecks {
 				} else {
 					owed.insert("unowed")
 				}
+			} else if answers.count == 1, field("being built", of: answers[0]) != "[]" {
+				// One place reads a label being built that the other does not read at all: a call beneath one fill of a
+				// declaration passes that fill on, and beneath another fills the place itself.
+				owed.insert("fillBeingBuilt")
 			} else {
 				owed.insert("unowed")
 			}
@@ -737,7 +742,9 @@ enum TypeFactsChecks {
 	/// still being built left out of a read whose declaration is a wrapper (rule 2), which the text shows by its type.
 	private static func keyedAnswers(of place: TypeFactsReport.Place, declared: Set<String>) -> Set<String> {
 		var answers = Set<String>()
-		for answer in place.answeredReads where !answer.hasPrefix("optional(") {
+		// A mock read's answer, whether the place passes `nil`, is a value one optional parameter carries, so it keys no
+		// variant (`TypeFactsMockRootPins`); check 36 compares it place by place.
+		for answer in place.answeredReads where !answer.hasPrefix("optional(") && !answer.hasPrefix("mock(") {
 			// A nearest declaration that only receives only if available read (`optionalValue`) keys by rule 1 too.
 			let read = String(answer.prefix { $0 != " " })
 			if read.hasPrefix("value("), !declared.contains(read), declared.contains("optionalValue(" + read.dropFirst("value(".count)) {
@@ -800,8 +807,9 @@ enum TypeFactsChecks {
 	/// marked body makes again is marked. Exempt by shape: a variant inside only by another variant's closing place, and a
 	/// fill beneath fills marked by a fill's chain.
 	///
-	/// Check 36, beside check 10, reads each place's variant: a place of a mock passes `nil` to exactly the receives only if
-	/// available its variant pins (`TypeFactsMockRootPins`), as the walk judged them.
+	/// Check 36, beside check 10, reads each place's path: a place of a mock passes `nil` to exactly the receives only if
+	/// available the pins along its path pin (`TypeFactsMockRootPins.receivesPassedNil(alongPath:)`), as the walk judged
+	/// them. A pin keys no variant, so check 10 leaves mock reads out.
 	private static func columnChecks(
 		of report: TypeFactsReport,
 		subtreeClosesCycle: [Bool],
@@ -1044,7 +1052,8 @@ enum TypeFactsChecks {
 		}.sorted()
 	}
 
-	private static func append(_ line: String, toFileAt path: String) {
+	/// Appends `line` to the file at `path`, creating it, for a sweep's log.
+	static func append(_ line: String, toFileAt path: String) {
 		let descriptor = open(path, O_WRONLY | O_APPEND | O_CREAT, 0o644)
 		guard descriptor >= 0 else { return }
 		defer { close(descriptor) }

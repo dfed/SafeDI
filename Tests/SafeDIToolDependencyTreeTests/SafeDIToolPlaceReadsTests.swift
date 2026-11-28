@@ -140,7 +140,7 @@ struct SafeDIToolPlaceReadsTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private mutating func reads(of swiftFileContent: String) async throws -> [Reads] {
 		let (stream, continuation) = AsyncStream.makeStream(of: Reads.self)
-		try await PlaceReadsObservation.$observer.withValue({ type, property, labelsRead, labelsPlanned in
+		try await PlaceReadsObservation.$observer.withValue(TaskLocalFunction { type, property, labelsRead, labelsPlanned in
 			continuation.yield(Reads(type: type, property: property, labelsRead: labelsRead, labelsPlanned: labelsPlanned))
 		}) {
 			_ = try await executeSafeDIToolTest(

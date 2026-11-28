@@ -44,14 +44,18 @@ public enum MockRootTreeCheck: String, CaseIterable, Hashable, Sendable {
 /// - A builder function is `@Sendable` only where its property is a `Sendable` wrapper, a fill makes it so, or a cycle
 ///   closes on it from inside a `@Sendable` function that already is one (`ScopeGenerator.buildsInSendableFunction`),
 ///   so a tree no scope of which declares, receives or builds a `Sendable` wrapper, and that holds no call, has none.
+///   Where a scope does and the tree holds no call, the root's world answers instead
+///   (`answeringSendableCaptures(fromWorld:)`): its capture check finds every capture the tree's walk finds, so a world
+///   that finds none leaves the walk nothing to find, and one that finds any keeps the walk, which reports the error.
 ///
 /// A public mock's tree holds holes, whose sites a `Sendable` wrapper can hold, so each of its checks needs its tree.
 ///
-/// Memory: the set of scopes visited, while the walk runs; afterwards three flags.
+/// Memory: the set of scopes visited, while the walk runs; afterwards four flags.
 struct MockRootTreeChecks: Sendable {
 	init(mockRootScope: Scope, isPublicMock: Bool) {
 		guard !isPublicMock else {
 			needingTree = Set(MockRootTreeCheck.allCases)
+			holdsCall = true
 			return
 		}
 		var holdsCall = false
@@ -82,10 +86,32 @@ struct MockRootTreeChecks: Sendable {
 			needingTree.insert(.sendableCaptures)
 		}
 		self.needingTree = needingTree
+		self.holdsCall = holdsCall
 	}
 
 	/// The checks that need the root's generator tree.
-	let needingTree: Set<MockRootTreeCheck>
+	private(set) var needingTree: Set<MockRootTreeCheck>
+
+	/// Whether a scope of the tree calls another module's seam or public mock, or holds a fill, whose captures only the
+	/// tree's walk judges (`ScopeGenerator.nonSendableWrapperCaptures`' fill branch); `true` for a public mock, whose
+	/// wrapper parameters and holes its world does not hold yet.
+	let holdsCall: Bool
+
+	/// Whether the root's world must answer the `Sendable` capture check: its scopes say the check needs the tree, and no
+	/// call is in it.
+	var asksWorldForSendableCaptures: Bool {
+		needingTree.contains(.sendableCaptures) && !holdsCall
+	}
+
+	/// These checks, with the `Sendable` capture check left out where the root's world asks for it and finds no capture
+	/// (`DeclarationsAnsweringReads`).
+	func answeringSendableCaptures(fromWorld worldFindsCapture: Bool) -> MockRootTreeChecks {
+		var checks = self
+		if asksWorldForSendableCaptures, !worldFindsCapture {
+			checks.needingTree.remove(.sendableCaptures)
+		}
+		return checks
+	}
 
 	/// Whether `check` needs the root's generator tree.
 	func needsTree(_ check: MockRootTreeCheck) -> Bool {
@@ -98,7 +124,7 @@ struct MockRootTreeChecks: Sendable {
 /// must find nothing in the tree, on every test graph. The tree is checked for what the scopes left out only where it is
 /// set.
 public enum MockRootTreeChecksObservation {
-	@TaskLocal public static var comparesTree: (@Sendable (MockRootTreeChecksComparison) -> Void)?
+	@TaskLocal public static var comparesTree: TaskLocalFunction<@Sendable (MockRootTreeChecksComparison) -> Void>?
 }
 
 /// One mock root's tree checks, as its scopes answered them and as its tree does.
@@ -109,4 +135,7 @@ public struct MockRootTreeChecksComparison: Sendable {
 	public let needingTree: Set<MockRootTreeCheck>
 	/// The checks that find something in the root's tree, of those the scopes left out.
 	public let findingInTreeWithoutNeed: Set<MockRootTreeCheck>
+	/// Whether the root's world (`DeclarationsAnsweringReads`) and its tree find a `Sendable` capture; the world's is `nil`
+	/// where the world's check did not run.
+	public let sendableCaptureFinding: (world: Bool?, tree: Bool)
 }

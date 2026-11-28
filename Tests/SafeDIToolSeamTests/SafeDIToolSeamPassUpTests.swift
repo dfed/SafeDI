@@ -1514,7 +1514,7 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 		// holds `Outer`'s place `gadget`: the call holds no hole along its own edges, but the fill reads the case from the
 		// `@Sendable` carrier, so the per-type facts key the fill `@Sendable` and mark it built inside that function.
 		let (stream, continuation) = AsyncStream.makeStream(of: TypeFactsReport.self)
-		try await ConstructionMemoOracle.$observer.withValue({ _, _, report in continuation.yield(report) }) {
+		try await ConstructionMemoOracle.$observer.withValue(TaskLocalFunction { _, _, report in continuation.yield(report) }) {
 			_ = try await executeSafeDIToolMultiModuleTest(modules: Self.carriedModules(isSendable: true), integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 		}
 		continuation.finish()

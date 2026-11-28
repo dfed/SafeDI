@@ -119,6 +119,7 @@ struct SafeDIToolGenerationLayerTests: ~Copyable {
 	mutating func generate_provesNoAccess_whenModuleCallsForeignSeamAndGeneratesNoSeamOrPublicMock() async throws {
 		// `App`'s root calls `Feature`'s seam `Service`, whose signature `App` reads from `Feature`'s module info. `App`
 		// generates no seam and declares no public mock, so nothing in its run reads a proof of its declarations' access.
+		// Nothing forces `Root`'s tree, so `App`'s run lays `Root` out from its node records and builds no tree of it.
 		let layers = try await Self.countLayers {
 			_ = try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -136,7 +137,6 @@ struct SafeDIToolGenerationLayerTests: ~Copyable {
 			"Feature: access proof of Feature": 1,
 			"Feature: tree of Service": 1,
 			"App: seam signatures of App": 1,
-			"App: tree of Root": 1,
 		])
 	}
 
@@ -359,7 +359,7 @@ struct SafeDIToolGenerationLayerTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private static func countLayers(_ body: () async throws -> Void) async throws -> [String: Int] {
 		let (stream, continuation) = AsyncStream.makeStream(of: String.self)
-		try await GenerationLayerObservation.$observer.withValue({ runModuleName, layer in
+		try await GenerationLayerObservation.$observer.withValue(TaskLocalFunction { runModuleName, layer in
 			let layerDescription = switch layer {
 			case let .seamSignatures(moduleName, inCallersView):
 				"seam signatures of \(moduleName ?? "nil")\(inCallersView ? " in its callers’ view" : "")"

@@ -658,8 +658,9 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_laysRootOutFromItsPlanWithTodaysCode_whenTypeOnCycleHoldsBuilderOfSeamForwardedValue() async throws {
-		// A screen on a cycle holds a builder of a seam, which is forwarded a value its call binds inside its function.
+	mutating func generate_keepsRootOnTodaysTree_whenTypeOnCycleHoldsBuilderOfSeamForwardedValue() async throws {
+		// A screen on a cycle holds a builder of a seam, which is forwarded a value its call binds inside its function: the
+		// tree writes no record of such a call yet, so the root keeps today's tree.
 		let choices = try await choicesGeneratingTodaysCode(of: """
 		@Instantiable(isRoot: true) public final class Root: Instantiable {
 		    @Instantiated let service: Service
@@ -695,7 +696,7 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 		@Instantiable public final class Leaf: Instantiable { public init() {} }
 		""")
 
-		#expect(choices == ["Root": nil])
+		#expect(choices == ["Root": .callsSeamForwardedValues])
 	}
 
 	@Test
@@ -2956,7 +2957,7 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 	) async -> [String: RootTreeChoiceObservation.PerPathReason?] {
 		let (stream, continuation) = AsyncStream.makeStream(of: (String, RootTreeChoiceObservation.PerPathReason?).self)
 		await RootTreeChoiceObservation.$scopeGeneratorLimitOverride.withValue(0) {
-			await RootTreeChoiceObservation.$observer.withValue({ root, perPathReason in
+			await RootTreeChoiceObservation.$observer.withValue(TaskLocalFunction { root, perPathReason in
 				continuation.yield((root, perPathReason))
 			}) {
 				await assertThrowsError(diagnostics: diagnostics, sourceLocation: sourceLocation) {
@@ -2994,7 +2995,7 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 	) async throws -> (choices: [String: RootTreeChoiceObservation.PerPathReason?], files: [String: String]) {
 		let (stream, continuation) = AsyncStream.makeStream(of: (String, RootTreeChoiceObservation.PerPathReason?).self)
 		let output = try await RootTreeChoiceObservation.$scopeGeneratorLimitOverride.withValue(0) {
-			try await RootTreeChoiceObservation.$observer.withValue({ root, perPathReason in
+			try await RootTreeChoiceObservation.$observer.withValue(TaskLocalFunction { root, perPathReason in
 				continuation.yield((root, perPathReason))
 			}) {
 				try await executeSafeDIToolTest(
@@ -3049,7 +3050,7 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 		// With no place allowed, every root's tree per path is abandoned at once, so each root is laid out from its plan
 		// wherever a root past the limit would be. `nil` leaves the limit the tool ships with.
 		let output = try await RootTreeChoiceObservation.$scopeGeneratorLimitOverride.withValue(scopeGeneratorLimit) {
-			try await RootTreeChoiceObservation.$observer.withValue({ root, perPathReason in
+			try await RootTreeChoiceObservation.$observer.withValue(TaskLocalFunction { root, perPathReason in
 				continuation.yield((root, perPathReason))
 			}) {
 				try await executeSafeDIToolTest(

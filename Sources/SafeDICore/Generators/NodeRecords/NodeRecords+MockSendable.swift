@@ -151,7 +151,7 @@ extension NodeRecords {
 		let instantiable = world.scope(of: declaration).instantiable
 		let isConfigured = isConfigured(declaration, in: world)
 		let usesHandWrittenMock = world.construction(of: declaration) == .handWrittenMock && instantiable.mockInitializer != nil
-		let type = mockOverrideType(of: built, usesHandWrittenMock: usesHandWrittenMock, isConfigured: isConfigured, instantiable: instantiable)
+		let type = mockOverrideType(of: built, usesHandWrittenMock: usesHandWrittenMock, isConfigured: isConfigured, isSendable: built.isSendable, instantiable: instantiable)
 		let local = mockOverridesLocal(ofNodeLabeled: built.property.label, typed: type, isConfigured: isConfigured)
 		return mockOverridesBinding(of: local, to: mockConfigurationField(of: declaration, named: built.property.label, in: world, slots: slots))
 	}

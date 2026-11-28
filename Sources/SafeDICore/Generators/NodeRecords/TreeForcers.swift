@@ -22,16 +22,21 @@
 /// yet, or a reader of the tree that has no fold over the per-type facts yet. A root that none holds builds no tree. Its
 /// code is laid out from its node records (`NodeRecordsLayout`), and each check that reads a root's tree reads them:
 ///
-/// - `validateFills` and `seamTierOmissions` judge seam calls and fills, which a module without seams has none of.
+/// - `validateFills` and `seamTierOmissions` judge seam calls and fills, which a module without seams has none of. In a
+///   module with seams, node records refuse every fill (`.fill`), a world that holds one makes no records at
+///   all (`SeamCallCheck.passesFill`), and a production root's world whose seam call omits a
+///   parameter keeps its tree (`SeamCallCheck.tierOmitsParameter`).
 /// - `nonSendableWrapperCaptures` judges a `@Sendable` builder function, which only a `Sendable` wrapper or a cycle makes:
 ///   node records refuse a world in which one captures a wrapper (`NodeRecordRefusal.sendableFunctionCapturesWrapper`,
-///   from `DeclarationsAnsweringReads`), and every cycle (`.cycle`), which `unpassableCycleLabelsInTree` judges too.
+///   from `DeclarationsAnsweringReads`), and every cycle (`.cycle`), which `unpassableCycleLabelsInTree` judges too. A
+///   seam call that defers a parameter `@Sendable` is one more such function, which no fact reads yet, so a world that
+///   holds one keeps its tree (`SeamCallCheck.defersSendableParameter`).
 /// - `fulfillersOfTree`, the imports, is folded over the root's declarations (`TypeFactsImports`).
 ///
 /// Where a test observes node records, the tree is built beside the records all the same, and each of these is checked
 /// against it (`DependencyTreeGenerator.plannedRootCode(of:declaredTypeNames:)`).
 public enum TreeForcer: Hashable, Sendable, CustomStringConvertible {
-	/// The module holds a seam, whose roots node records do not lay out yet. Where the run names refusals
+	/// The root is a seam's own, which node records do not lay out yet. Where the run names refusals
 	/// (`GenerationRequest.namesNodeRecordRefusals`), the kind node records refuse the root's world with follows it.
 	case seamWorld
 	/// Node records refused the root's world, with this kind: a `NodeRecordRefusal`'s raw value, `notLaidOut` where the
@@ -39,6 +44,8 @@ public enum TreeForcer: Hashable, Sendable, CustomStringConvertible {
 	case nodeRecordKind(String)
 	/// The run reads every root's tree beside its code.
 	case reader(TreeReader)
+	/// A check of the root's seam calls reads its tree, where no fact answers it yet.
+	case seamCallCheck(SeamCallCheck)
 
 	public var description: String {
 		switch self {
@@ -48,8 +55,26 @@ public enum TreeForcer: Hashable, Sendable, CustomStringConvertible {
 			"kind \(kind)"
 		case let .reader(reader):
 			reader.rawValue
+		case let .seamCallCheck(check):
+			check.rawValue
 		}
 	}
+}
+
+/// What a check of a production root's seam calls reads of its tree before any code is generated, which no fact of its
+/// world answers yet: a root of a module with seams whose world holds such a call keeps its tree, whatever its node
+/// records make, so the check reports what it reports without them.
+public enum SeamCallCheck: String, Hashable, Sendable {
+	/// A seam call passes a fill, whose fills and dispatchers only the tree's fill pass makes, and which `validateFills`
+	/// judges from the tree. Node records refuse such a world (`NodeRecordRefusal.fill`), so its root makes none.
+	case passesFill = "seam call passes a fill"
+	/// A call of a seam's tier omits a parameter, or one no tier takes: `seamTierOmissions` judges, from the tree, whether
+	/// the caller would hand it a value (`validateNoSeamTierOmitsProvidedValue`).
+	case tierOmitsParameter = "seam call omits a parameter"
+	/// A call of a seam's tier hands a parameter the seam defers `@Sendable`, which the call's `@Sendable` closure
+	/// captures: `nonSendableWrapperCaptures` judges, from the tree, whether that captures a wrapper that is not
+	/// `Sendable` (`NonSendableWrapperCapture.capturingSeamType`).
+	case defersSendableParameter = "seam call defers a parameter @Sendable"
 }
 
 /// What a run can read of every root's tree beside its code, which no root's node records stand in for yet.
@@ -93,6 +118,11 @@ struct NodeRecordsLayout: Sendable {
 		guard let code = try DependencyTreeGenerator.laidOutRootCode(of: instantiable, body: nodeRecords.rootBody) else {
 			throw NodeRecordRefusal.notLaidOut
 		}
+		self.init(code: code, nodeRecords: nodeRecords)
+	}
+
+	/// The layout `code` writes, of a root whose records are `nodeRecords`.
+	init(code: GeneratedCode, nodeRecords: NodeRecords) {
 		self.code = code
 		rootBody = nodeRecords.rootBody
 		recordCount = nodeRecords.recordCount

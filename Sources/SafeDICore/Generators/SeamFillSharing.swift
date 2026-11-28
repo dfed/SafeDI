@@ -39,5 +39,5 @@ public enum SeamFillSharing {
 	}
 
 	/// Called with what each call that fills a place built, when set: by the tests, never by the tool.
-	@TaskLocal public static var observer: (@Sendable (FillsOfCall) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (FillsOfCall) -> Void>?
 }

@@ -45,7 +45,7 @@ enum MockKindsAcceptance {
 		}
 		let (reportStream, reportContinuation) = AsyncStream.makeStream(of: NodeRecordsReport.self)
 		let laidOut = try await NodeRecordsObservation.$laysOutMockRoots.withValue(true) {
-			try await NodeRecordsObservation.$observer.withValue({ reportContinuation.yield($0) }) {
+			try await NodeRecordsObservation.$observer.withValue(TaskLocalFunction { reportContinuation.yield($0) }) {
 				try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixtureFiles, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 			}
 		}

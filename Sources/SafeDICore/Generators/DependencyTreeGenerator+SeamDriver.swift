@@ -447,11 +447,14 @@ extension DependencyTreeGenerator {
 	///   - foreignSeamRoots: The signatures of the foreign seams this module's trees reach (`computeForeignSeamRoots()`).
 	///   - unreadTypeComment: The comment the `public` initializers of the seams this module generates carry.
 	///   - ownAccessProof: The proof of every type's access over the module's declarations (`ownAccessProof()`).
+	///   - readersOfEveryTree: What reads every root's tree this run (`TreeForcer.reader`), which keeps a root that is none
+	///     of this module's own seams from being laid out from its node records.
 	func seamWorldRootScopeGenerators(
 		validatedWorld: ValidatedWorld,
 		foreignSeamRoots: [TypeDescription: ScopeGenerator.SeamRoot?],
 		unreadTypeComment: UnreadTypeComment?,
 		ownAccessProof: OwnAccessProof,
+		readersOfEveryTree: [TreeForcer],
 		plansCyclesPerType: Bool,
 		drawsTrees: Bool,
 	) async throws -> (roots: [RootScopeInfo], rootsOfOtherModules: [Instantiable], storedSeamSignatures: [StoredSeamSignature]) {
@@ -500,12 +503,48 @@ extension DependencyTreeGenerator {
 			checkingSeamTrees: generatedSeams.map { (instantiable: $0.seam, scope: $0.rootScope) },
 		)
 		var constructionMemo = ConstructionMemo()
-		// A root is built as in a module without seams: today's tree per path, or its per-type plan past the limit, where
-		// each seam its tree calls is a leaf. What a scope of the seam world receives is collected apart from the
-		// validated scopes'.
+		// Each root is laid out from its node records where they stand in for its tree, as in a module without seams; every
+		// other root is built as there, today's tree per path or its per-type plan past the limit, where each seam its tree
+		// calls is a leaf; the module's own seams below keep theirs (`TreeForcer.seamWorld`). The trees a test builds beside
+		// the node records keep a memo of their own, so that the trees a plain run builds share what they share without
+		// them. What a scope of the seam world receives is collected apart from the validated scopes'.
+		var comparisonMemo = ConstructionMemo()
 		var receivedPropertiesCache = ReceivedPropertiesCache()
-		var rootScopeGenerators = try await rootTrees(
-			of: rootScopesToGenerate.rootScopes,
+		var roots = [RootScopeInfo?]()
+		var rootsBuiltAsTrees = [(index: Int, typeDescription: TypeDescription, scope: Scope, treeForcers: [TreeForcer])]()
+		for (typeDescription, scope) in rootScopesToGenerate.rootScopes {
+			let (table, record) = seamWorld.frozenScopeMap.freezing(rootScope: scope)
+			let constructionScope = ConstructionScope(table: table, record: record)
+			let (layout, treeForcers) = try Self.seamWorldRootLayout(of: scope.instantiable, constructionScope: constructionScope, declaredTypeNames: declaredTypeNames, readersOfEveryTree: readersOfEveryTree)
+			guard let layout else {
+				rootsBuiltAsTrees.append((index: roots.count, typeDescription: typeDescription, scope: scope, treeForcers: treeForcers))
+				roots.append(nil)
+				continue
+			}
+			func tree(memo: inout ConstructionMemo) throws -> ScopeGenerator {
+				try record.createScopeGenerator(
+					in: table,
+					lazilyInstantiatedInstanceProperties: [],
+					erasedToConcreteExistential: false,
+					declaredTypeNames: declaredTypeNames,
+					constructionMemo: &memo,
+				)
+			}
+			// The work of building it is no run's, so the tests that count a run's work count none of it.
+			let comparisonTree = try NodeRecordsObservation.observer == nil ? nil : GenerationWork.$observer.withValue(nil) { try tree(memo: &comparisonMemo) }
+			roots.append(RootScopeInfo(
+				typeDescription: typeDescription,
+				instantiable: scope.instantiable,
+				sourceFilePath: typeDescriptionToFulfillingInstantiableMap[typeDescription]?.sourceFilePath,
+				built: .nodeRecords(layout, comparisonTree: comparisonTree),
+				fulfillers: TypeFactsImports(root: constructionScope, buildingMock: false).fulfillers,
+				receivedValueSupplies: TypeFactsReceivedValueSupplies.whereRead(root: constructionScope),
+				rootScope: RootScopeInfo.kept(constructionScope),
+				treeForcers: treeForcers,
+			))
+		}
+		let trees = try await rootTrees(
+			of: rootsBuiltAsTrees.map { (typeDescription: $0.typeDescription, scope: $0.scope) },
 			frozenScopeMap: seamWorld.frozenScopeMap,
 			plansCyclesPerType: plansCyclesPerType,
 			drawsTrees: drawsTrees,
@@ -515,6 +554,11 @@ extension DependencyTreeGenerator {
 			constructionMemo: &constructionMemo,
 			cache: &receivedPropertiesCache,
 		)
+		for (rootBuiltAsTree, var tree) in zip(rootsBuiltAsTrees, trees) {
+			tree.treeForcers = rootBuiltAsTree.treeForcers
+			roots[rootBuiltAsTree.index] = tree
+		}
+		var rootScopeGenerators = roots.compactMap(\.self)
 		for (seam, seamRoot, seamRootScope) in generatedSeams {
 			var seamRoot = seamRoot
 			seamRoot.unreadTypeComment = unreadTypeComment
@@ -528,6 +572,33 @@ extension DependencyTreeGenerator {
 					seamRoot: finalSeamRoot,
 					declaredTypeNames: declaredTypeNames,
 				)
+			}
+			// A seam whose own root's node records accept its world is laid out from them, and builds no tree for its code;
+			// a test that observes node records builds the tree beside them, to compare the two.
+			let (table, record) = seamWorld.frozenScopeMap.freezing(rootScope: seamRootScope)
+			let constructionScope = ConstructionScope(table: table, record: record)
+			if let layout = try Self.ownSeamRootLayout(of: seam, seamRoot: finalSeamRoot, constructionScope: constructionScope, declaredTypeNames: declaredTypeNames, readersOfEveryTree: readersOfEveryTree) {
+				let firstPassTree = firstPassTrees.removeValue(forKey: seam.concreteInstantiable)
+				// The work of building it is no run's, so the tests that count a run's work count none of it.
+				let comparisonTree: ScopeGenerator? = if NodeRecordsObservation.observer == nil {
+					nil
+				} else {
+					try GenerationWork.$observer.withValue(nil) {
+						try firstPassTree.map { ScopeGenerator.reseating(treeRootedAt: $0.generator, of: seam.concreteInstantiable, seamRoot: finalSeamRoot) } ?? builtTree().generator
+					}
+				}
+				rootScopeGenerators.append(RootScopeInfo(
+					typeDescription: seam.concreteInstantiable,
+					instantiable: seam,
+					sourceFilePath: seam.sourceFilePath,
+					built: .nodeRecords(layout, comparisonTree: comparisonTree),
+					fulfillers: TypeFactsImports(root: constructionScope, buildingMock: false).fulfillers,
+					receivedValueSupplies: TypeFactsReceivedValueSupplies.whereRead(root: constructionScope),
+					rootScope: RootScopeInfo.kept(constructionScope),
+					ownSeamRoot: finalSeamRoot,
+					treeForcers: [],
+				))
+				continue
 			}
 			// A tree its first signature pass settled is made again from the final signature, which it holds as the tree
 			// built here would (`seam-signature-passes.md`); the pass's tree is released once it is.
@@ -2596,12 +2667,12 @@ public enum SeamSignatureObservation {
 	/// Called, when set, for each seam whose first signature pass settled it without the pass that confirms it
 	/// (`DependencyTreeGenerator.confirmingPassFindsNothingNew`), after running that pass anyway as every second pass runs:
 	/// the two must find the same signature. The tool generates from the first pass's either way.
-	@TaskLocal public static var confirmsSkippedPasses: (@Sendable (SkippedConfirmingPass) -> Void)?
+	@TaskLocal public static var confirmsSkippedPasses: TaskLocalFunction<@Sendable (SkippedConfirmingPass) -> Void>?
 	/// When set, how many tasks settle one level of a module's seam components at once, in place of the processor
 	/// count, so that a test runs a level on one task or on several whatever machine runs it.
 	@TaskLocal public static var width: Int?
 	/// Called, when set, for each level of a module's seam components, in level order, with how many tasks settle it.
-	@TaskLocal public static var observesLevels: (@Sendable (SeamSignatureLevel) -> Void)?
+	@TaskLocal public static var observesLevels: TaskLocalFunction<@Sendable (SeamSignatureLevel) -> Void>?
 }
 
 /// One level of a module's seam components, as `seamSignatures` settles it.
@@ -2622,7 +2693,7 @@ public struct SeamSignatureLevel: Equatable, Sendable {
 public enum SeamTreeReuseObservation {
 	/// Called, when set, for each seam whose tree emission made again, with the code of that tree and of the tree built
 	/// anew as emission builds every other seam's: the two must be the same text.
-	@TaskLocal public static var comparesBuiltTrees: (@Sendable (ReusedSeamTree) -> Void)?
+	@TaskLocal public static var comparesBuiltTrees: TaskLocalFunction<@Sendable (ReusedSeamTree) -> Void>?
 }
 
 /// A seam whose tree emission made again from its first signature pass's, with the code of both trees.

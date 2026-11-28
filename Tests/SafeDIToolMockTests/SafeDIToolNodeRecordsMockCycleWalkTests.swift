@@ -576,8 +576,10 @@ struct SafeDIToolNodeRecordsMockCycleWalkTests: ~Copyable {
 		)
 	}
 
-	/// `B`, on the cycle of `B` and `C`, receives `session` only if available, and its one variant is built where nothing
-	/// declares `session` (beneath `Root`) and where `A` does: each lap's `B` holds `nil` or the `session` its own `A` built.
+	/// `B`, on the cycle of `B` and `C`, receives `session` only if available, and is built beneath `Root`, where the mock
+	/// binds its override of the receive, an optional, and beneath `A`, which instantiates `session`. An optional or its
+	/// value is a difference one optional parameter carries, so `B` has one variant, whose function takes `session` as that
+	/// parameter and hands it on around the cycle.
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_buildsTheWalksValues_whenCycleMemberReceivesValueOnlyIfAvailableWhereOnlySomePathsDeclareIt() async throws {
@@ -636,13 +638,14 @@ struct SafeDIToolNodeRecordsMockCycleWalkTests: ~Copyable {
 				""",
 			],
 			probes: [
-				DifferentialValueProbe("Root.mock().bBuilder.instantiate().cBuilder.instantiate().bBuilder.instantiate().cBuilder.instantiate()"),
-				DifferentialValueProbe("Root.mock().aBuilder.instantiate().bBuilder.instantiate().cBuilder.instantiate().bBuilder.instantiate().cBuilder.instantiate()"),
-				DifferentialValueProbe(name: "overridden.bBuilder.instantiate().cBuilder.instantiate().bBuilder.instantiate()", expression: "Root.mock(safeDIOverrides: \(Self.partitionOverrides)).bBuilder.instantiate().cBuilder.instantiate().bBuilder.instantiate()"),
-				DifferentialValueProbe(name: "overridden.aBuilder.instantiate()", expression: "Root.mock(safeDIOverrides: \(Self.partitionOverrides)).aBuilder.instantiate()"),
-				DifferentialValueProbe(name: "overridden.aBuilder.instantiate().bBuilder.instantiate().cBuilder.instantiate().bBuilder.instantiate()", expression: "Root.mock(safeDIOverrides: \(Self.partitionOverrides)).aBuilder.instantiate().bBuilder.instantiate().cBuilder.instantiate().bBuilder.instantiate()"),
+				DifferentialValueProbe("Root.mock().bBuilder.instantiate()"),
+				DifferentialValueProbe("Root.mock().bBuilder.instantiate().cBuilder.instantiate().bBuilder.instantiate()"),
+				DifferentialValueProbe("Root.mock().aBuilder.instantiate().bBuilder.instantiate()"),
+				DifferentialValueProbe("Root.mock().aBuilder.instantiate().bBuilder.instantiate().cBuilder.instantiate().bBuilder.instantiate().cBuilder.instantiate().bBuilder.instantiate()"),
+				DifferentialValueProbe(name: "overridden.bBuilder.instantiate().cBuilder.instantiate().bBuilder.instantiate()", expression: "Root.mock(safeDIOverrides: .init(aBuilder: .init(session: { marked(Session(), \"a.session\") }), session: marked(Session(), \"session\"))).bBuilder.instantiate().cBuilder.instantiate().bBuilder.instantiate()"),
+				DifferentialValueProbe(name: "overridden.aBuilder.instantiate().bBuilder.instantiate().cBuilder.instantiate().bBuilder.instantiate()", expression: "Root.mock(safeDIOverrides: .init(aBuilder: .init(session: { marked(Session(), \"a.session\") }), session: marked(Session(), \"session\"))).aBuilder.instantiate().bBuilder.instantiate().cBuilder.instantiate().bBuilder.instantiate()"),
 			],
-			markers: ["b", "a", "a.session", "a.b"],
+			markers: ["session", "a.session"],
 		)
 	}
 
@@ -999,6 +1002,10 @@ struct SafeDIToolNodeRecordsMockCycleWalkTests: ~Copyable {
 	/// `P` is on no cycle and built in a function that is not `@Sendable`, and it enters the cycle at `A`, which a
 	/// `@Sendable` function builds: that function cannot capture `P`'s configuration, which is not of the `Sendable` form,
 	/// so `P`'s body binds `A`'s configuration to a local before it and hands the places that local.
+	///
+	/// It is also the value cell of approved difference 24 in a mock: `B`'s function, which the walk nests in `A`'s
+	/// `@Sendable nonisolated` function, is declared once beside it and marked `@Sendable nonisolated`, and `A`'s function
+	/// calls it.
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_buildsTheWalksValues_whenFunctionOnNoCycleEntersCycleAtSendableFunction() async throws {
@@ -1475,68 +1482,69 @@ struct SafeDIToolNodeRecordsMockCycleWalkTests: ~Copyable {
 
 	/// `Preview` builds `Root`’s `editor` again as a `LazilyInstantiated`, closing the cycle on the place by value, and
 	/// declares the `theme` the editor’s `Toolbar` receives only if available: nothing above `Root`’s `editor` declares
-	/// it, so the root’s call hands `nil` where the closing call hands the preview’s `theme`, and the function the two
-	/// calls share was made from the root’s view alone. The walk writes the mock.
+	/// it but the mock’s own override, so the root’s call hands that optional where the closing call hands the preview’s
+	/// `theme`, and the function the two calls share takes `theme` as one optional parameter.
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_isWrittenByTheWalk_whenLazyTwinClosesCycleOnPlaceByValueAndOnlyTheTwinsViewHasLabelTheCycleReceives() async throws {
-		let fixture = [
-			"Marked.swift": Self.markedFile,
-			"Root.swift": """
-			@Instantiable(generateMock: true)
-			public final class Root: Instantiable, Marked {
-			    public init(editor: Editor) { self.editor = editor }
-			    @Instantiated let editor: Editor
-			    public var marker = ""
-			}
-			""",
-			"Editor.swift": """
-			@Instantiable
-			public final class Editor: Instantiable, Marked {
-			    public init(previewBuilder: Instantiator<Preview>, toolbar: Toolbar) {
-			        self.previewBuilder = previewBuilder
-			        self.toolbar = toolbar
-			    }
-			    @Instantiated let previewBuilder: Instantiator<Preview>
-			    @Instantiated let toolbar: Toolbar
-			    public var marker = ""
-			}
-			""",
-			"Preview.swift": """
-			@Instantiable
-			public final class Preview: Instantiable, Marked {
-			    public init(theme: Theme, editor: LazilyInstantiated<Editor>) {
-			        self.theme = theme
-			        self.editor = editor
-			    }
-			    @Instantiated let theme: Theme
-			    @Instantiated let editor: LazilyInstantiated<Editor>
-			    public var marker = ""
-			}
-			""",
-			"Toolbar.swift": """
-			@Instantiable
-			public final class Toolbar: Instantiable, Marked {
-			    public init(theme: Theme?) { self.theme = theme }
-			    @Received(onlyIfAvailable: true) let theme: Theme?
-			    public var marker = ""
-			}
-			""",
-			"Theme.swift": """
-			@Instantiable
-			public final class Theme: Instantiable, Marked {
-			    public init() {}
-			    public var marker = ""
-			}
-			""",
-		]
-		let walkOutput = try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
-		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { [fixture] filesToDelete in
-			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
-		}
-		#expect(reports.filter(\.isMockRoot).map(\.everyRefusal) == [["onlyIfAvailableAnsweredApart"]])
-		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [false])
-		#expect(output.generatedFiles == walkOutput.generatedFiles)
+	mutating func mock_buildsTheWalksValues_whenLazyTwinClosesCycleOnPlaceByValueAndOnlyTheTwinsViewHasLabelTheCycleReceives() async throws {
+		try await expectWalksValues(
+			fixture: [
+				"Root.swift": """
+				@Instantiable(generateMock: true)
+				public final class Root: Instantiable, Marked {
+				    public init(editor: Editor) { self.editor = editor }
+				    @Instantiated let editor: Editor
+				    public var marker = ""
+				}
+				""",
+				"Editor.swift": """
+				@Instantiable
+				public final class Editor: Instantiable, Marked {
+				    public init(previewBuilder: Instantiator<Preview>, toolbar: Toolbar) {
+				        self.previewBuilder = previewBuilder
+				        self.toolbar = toolbar
+				    }
+				    @Instantiated let previewBuilder: Instantiator<Preview>
+				    @Instantiated let toolbar: Toolbar
+				    public var marker = ""
+				}
+				""",
+				"Preview.swift": """
+				@Instantiable
+				public final class Preview: Instantiable, Marked {
+				    public init(theme: Theme, editor: LazilyInstantiated<Editor>) {
+				        self.theme = theme
+				        self.editor = editor
+				    }
+				    @Instantiated let theme: Theme
+				    @Instantiated let editor: LazilyInstantiated<Editor>
+				    public var marker = ""
+				}
+				""",
+				"Toolbar.swift": """
+				@Instantiable
+				public final class Toolbar: Instantiable, Marked {
+				    public init(theme: Theme?) { self.theme = theme }
+				    @Received(onlyIfAvailable: true) let theme: Theme?
+				    public var marker = ""
+				}
+				""",
+				"Theme.swift": """
+				@Instantiable
+				public final class Theme: Instantiable, Marked {
+				    public init() {}
+				    public var marker = ""
+				}
+				""",
+			],
+			probes: [
+				DifferentialValueProbe("Root.mock()"),
+				DifferentialValueProbe(name: "the root’s editor’s toolbar holds no theme", expression: "Root.mock().editor.toolbar.theme == nil"),
+				DifferentialValueProbe(name: "the preview’s editor’s toolbar holds the preview’s theme", expression: "{ () -> Bool in let preview = Root.mock().editor.previewBuilder.instantiate(); return preview.editor.instance.toolbar.theme === preview.theme }()"),
+				DifferentialValueProbe(name: "overridden", expression: #"{ () -> (Root, Preview, Editor) in let root = Root.mock(safeDIOverrides: .init(theme: marked(Theme(), "theme"))); let preview = root.editor.previewBuilder.instantiate(); return (root, preview, preview.editor.instance) }()"#),
+			],
+			markers: ["theme"],
+		)
 	}
 
 	/// `Logger` receives `t3Builder` only if available, so `Home` and `T0` each build `logger` after `t3Builder`, whose
@@ -2248,9 +2256,6 @@ struct SafeDIToolNodeRecordsMockCycleWalkTests: ~Copyable {
 	/// Overrides of each of the three places of the ring two entries give `Root`'s mock.
 	private static let ringOverrides = ".init(parentBuilder: .init({ marked(Parent(childBuilder: $0), \"parent\") }), childBuilder: .init(parentBuilder: .init({ marked(Parent(childBuilder: $0), \"child.parent\") }), { marked(Child(parentBuilder: $0), \"child\") }))"
 
-	/// Overrides of the places of `B` beneath `Root` and beneath `A`, and of `A` and its `session`.
-	private static let partitionOverrides = #".init(bBuilder: .init({ marked(B(session: $0, cBuilder: $1), "b") }), aBuilder: .init(session: { marked(Session(), "a.session") }, bBuilder: .init({ marked(B(session: $0, cBuilder: $1), "a.b") }), { marked(A(session: $0, bBuilder: $1), "a") }))"#
-
 	/// Overrides of the `session` `Root`, `Hub` and the first lap's `Step` each declare.
 	private static let parameterOverrides = #".init(session: { marked(Session(), "session") }, screenBuilder: .init(midBuilder: .init(stepBuilder: .init(session: { marked(Session(), "step.session") }))), hubBuilder: .init(session: { marked(Session(), "hub.session") }))"#
 
@@ -2303,7 +2308,7 @@ struct SafeDIToolNodeRecordsMockCycleWalkTests: ~Copyable {
 		var filesMade = [URL]()
 		defer { filesToDelete += filesMade }
 		let output = try await NodeRecordsObservation.$laysOutMockRoots.withValue(true) {
-			try await NodeRecordsObservation.$observer.withValue({ continuation.yield($0) }) {
+			try await NodeRecordsObservation.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 				try await body(&filesMade)
 			}
 		}

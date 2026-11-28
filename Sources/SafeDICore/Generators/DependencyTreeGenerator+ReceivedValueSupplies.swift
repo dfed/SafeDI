@@ -37,6 +37,7 @@ extension DependencyTreeGenerator {
 		}
 		var supplies = [ReceivedValueSupply]()
 		var constructedTypes = [TypeDescription]()
+		// Every root's tree is built per path here (`plansCyclesPerType`).
 		var unfulfilledReceiveLabels = Set<String>()
 		if !unfulfilledReceiveLocations.isEmpty {
 			for instantiable in typeDescriptionToFulfillingInstantiableMap.values {

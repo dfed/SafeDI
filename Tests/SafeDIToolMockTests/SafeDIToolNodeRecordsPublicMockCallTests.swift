@@ -1269,7 +1269,7 @@ struct SafeDIToolNodeRecordsPublicMockCallTests: ~Copyable {
 		let (stream, continuation) = AsyncStream.makeStream(of: NodeRecordsReport.self)
 		var filesMade = [URL]()
 		let output = try await NodeRecordsObservation.$laysOutMockRoots.withValue(true) {
-			try await NodeRecordsObservation.$observer.withValue({ continuation.yield($0) }) {
+			try await NodeRecordsObservation.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 				try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesMade)
 			}
 		}
@@ -1418,7 +1418,7 @@ struct SafeDIToolNodeRecordsPublicMockCallTests: ~Copyable {
 		defer { filesToDelete += filesMade }
 		let output = try await NodeRecordsObservation.$laysOutMockRoots.withValue(true) {
 			try await NodeRecordsObservation.$laysOutRoots.withValue(true) {
-				try await NodeRecordsObservation.$observer.withValue({ continuation.yield($0) }) {
+				try await NodeRecordsObservation.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 					try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesMade)
 				}
 			}

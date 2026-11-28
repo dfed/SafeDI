@@ -629,7 +629,11 @@ func executeSafeDIToolMultiModuleTest(
 																								try await ValidationWalkObservation.$foldComparison.withValue(FulfillmentFoldChecks.comparison(handingOn: ValidationWalkObservation.foldComparison)) {
 																									// A mock root's tree check its scopes left out must find nothing in its tree (`MockRootTreeChecksOracle`).
 																									try await MockRootTreeChecksOracle.comparing(handingOn: MockRootTreeChecksObservation.comparesTree) {
-																										try await tool.generate()
+																										// Every mock root’s `Sendable` configurations from its world’s fold must equal the walk of its generator tree’s
+																										// (`TypeFactsSendableConfigurationsChecks`).
+																										try await TypeFactsSendableConfigurationsChecks.comparing(handingOn: TypeFactsSendableConfigurationsObservation.comparesWalk) {
+																											try await tool.generate()
+																										}
 																									}
 																								}
 																							}
@@ -954,9 +958,9 @@ enum SplitPositionsRun {
 		// whole run's reports alone.
 		let laysOutRoots = NodeRecordsChecks.laysOutRoots
 		let laysOutMockRoots = NodeRecordsChecks.laysOutMockRoots
-		var nodeRecordsObserver: (@Sendable (NodeRecordsReport) -> Void)?
+		var nodeRecordsObserver: TaskLocalFunction<@Sendable (NodeRecordsReport) -> Void>?
 		if laysOutMockRoots || NodeRecordsObservation.observer != nil {
-			nodeRecordsObserver = { _ in }
+			nodeRecordsObserver = TaskLocalFunction { _ in }
 		}
 		let splitObserver = nodeRecordsObserver
 		let splitRun: Result<Generate.Output, any Error> = await Task.detached {

@@ -89,7 +89,7 @@ struct SafeDIToolTypeFactsMockRootPinsTests: ~Copyable {
 		])
 
 		#expect(passedNilByPlace(in: report) == ["Leaf as leaf: Leaf": ["token: Token?"]], "\(report.world)")
-		expectPlacesPassNilAsTheirVariants(in: report)
+		expectPlacesPassNilAsTheirPathsPin(in: report)
 	}
 
 	@Test
@@ -128,7 +128,7 @@ struct SafeDIToolTypeFactsMockRootPinsTests: ~Copyable {
 		])
 
 		#expect(passedNilByPlace(in: report) == ["Leaf as leaf: Leaf": ["token: Token?"]], "\(report.world)")
-		expectPlacesPassNilAsTheirVariants(in: report)
+		expectPlacesPassNilAsTheirPathsPin(in: report)
 	}
 
 	@Test
@@ -193,8 +193,9 @@ struct SafeDIToolTypeFactsMockRootPinsTests: ~Copyable {
 		let leafPlaces = report.places.indices.filter { report.places[$0].declaration == "Leaf as leaf: Leaf" }
 		#expect(leafPlaces.map { report.places[$0].receivesPassedNil }.sorted { $0.count < $1.count } == [[], ["token: Token?"]], "\(report.world)")
 		let leafNode = try #require(leafPlaces.first.flatMap { report.places[$0].node })
-		#expect(report.variantNodes.indices.filter { report.variantNodes[$0] == leafNode }.map { report.variantReceivesPassedNil[$0] }.sorted { $0.count < $1.count } == [[], ["token: Token?"]], "\(report.world)")
-		expectPlacesPassNilAsTheirVariants(in: report)
+		#expect(report.variantNodes.filter { $0 == leafNode }.count == 1, "\(report.world)")
+		#expect(leafPlaces.map { report.places[$0].pinsPassNil }.sorted { $0.count < $1.count } == [[], ["token: Token?"]], "\(report.world)")
+		expectPlacesPassNilAsTheirPathsPin(in: report)
 	}
 
 	@Test
@@ -256,22 +257,23 @@ struct SafeDIToolTypeFactsMockRootPinsTests: ~Copyable {
 		])
 
 		#expect(report.places.filter { $0.declaration == "Leaf as leaf: Leaf" }.map(\.receivesPassedNil) == [[]], "\(report.world)")
-		expectPlacesPassNilAsTheirVariants(in: report)
+		expectPlacesPassNilAsTheirPathsPin(in: report)
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mockRootPins_leaveTheRingToTheWalk_whenRequiredReceiveOnLazyCycleIsAboveTheReceiveOnlyOnTheSecondLap() async throws {
-		// The ring's `token: Token?` override is named apart from `B`'s `token: Instantiator<Token>` (`token_Token`), which the
-		// node records do not lay out yet, so the mock keeps the walk's code: lap two's `Leaf` reads lap one's override, as
-		// production reads the one declaration above both.
+		// The ring's `token: Token?` override is named apart from `B`'s `token: Instantiator<Token>` (`token_Token`). The pin
+		// keys no variant, so the ring's laps share the reader's variant, whose calls answer its read only if available apart,
+		// which the node records do not lay out yet, so the mock keeps the walk's code: lap two's `Leaf` reads lap one's
+		// override, as production reads the one declaration above both.
 		let fixture = Self.secondLapRingFixture
 		let walkOutput = try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
 			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		}
 
-		#expect(reports.filter(\.isMockRoot).map(\.refusal) == ["mockOverrideNotParentField"])
+		#expect(reports.filter(\.isMockRoot).map(\.refusal) == ["onlyIfAvailableAnsweredApart"])
 		#expect(output.generatedFiles == walkOutput.generatedFiles)
 	}
 
@@ -313,7 +315,74 @@ struct SafeDIToolTypeFactsMockRootPinsTests: ~Copyable {
 		let report = try await mockReport(of: [root, leaf, token], skipCompileVerification: true)
 
 		#expect(passedNilByPlace(in: report) == ["Leaf as leaf: Leaf": labels.map { "\($0): Token?" }.sorted()], "\(report.world)")
-		expectPlacesPassNilAsTheirVariants(in: report)
+		expectPlacesPassNilAsTheirPathsPin(in: report)
+	}
+
+	@Test(arguments: [2, 4, 8])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mockRootPins_keepOneVariantOfTheReader_whenEachOfKLayersPinsItsLabelOnOneSide(layerCount: Int) async throws {
+		// The growth row of the pins: layer i's left parent requires `token<i>` by value, which pins the reader's
+		// `token<i>: Instantiator<Token<i>>?` beneath it to `nil`, and its right parent pins nothing, so the reader is
+		// reached under every subset of pinned labels. A pinned read and an unpinned one are `nil` and the value in the one
+		// optional form, which a parameter carries, so the reader keeps one variant (the lead's ruling of 2026-11-28):
+		// variants that followed the subsets would grow as 2^k.
+		var types = [seamFixtureType(named: "Root", isFinalClass: true, declarations: ["@Instantiated let leaf: Leaf", "@Instantiated let left0: Left0", "@Instantiated let right0: Right0"])
+			.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(generateMock: true)\n")]
+		// The leaf's two children make the mock promote both forms of every label.
+		types.append(seamFixtureType(named: "Leaf", isFinalClass: true, declarations: ["@Instantiated let first: First", "@Instantiated let second: Second"]))
+		types.append(seamFixtureType(named: "First", isFinalClass: true, declarations: (0..<layerCount).map { "@Received let token\($0): Token\($0)" }))
+		types.append(seamFixtureType(named: "Second", isFinalClass: true, declarations: (0..<layerCount).map { "@Received let token\($0): Instantiator<Token\($0)>" }))
+		types.append(seamFixtureType(named: "Reader", isFinalClass: true, declarations: (0..<layerCount).map { "@Received(onlyIfAvailable: true) let token\($0): Instantiator<Token\($0)>?" }))
+		for layer in 0..<layerCount {
+			let next = layer == layerCount - 1
+				? ["@Instantiated let reader: Reader"]
+				: ["@Instantiated let left\(layer + 1): Left\(layer + 1)", "@Instantiated let right\(layer + 1): Right\(layer + 1)"]
+			types.append(seamFixtureType(named: "Token\(layer)", isFinalClass: true, declarations: []))
+			types.append(seamFixtureType(named: "Left\(layer)", isFinalClass: true, declarations: ["@Received let token\(layer): Token\(layer)"] + next))
+			types.append(seamFixtureType(named: "Right\(layer)", isFinalClass: true, declarations: next))
+		}
+		let report = try await mockReport(of: types, skipCompileVerification: true)
+
+		let readerNodes = report.nodes.indices.filter { report.nodes[$0].description.hasPrefix("Reader") }
+		let readerVariantCounts = readerNodes.map { report.variantCountsByNode[$0] }
+		let readerPlaces = report.places.count { $0.declaration == "Reader as reader: Reader" }
+		#expect(readerPlaces == 1 << layerCount, "\(layerCount) layers")
+		#expect(readerVariantCounts == [1], "\(layerCount) layers: reader variants \(readerVariantCounts), all variants \(report.variantNodes.count), places \(report.places.count)")
+		#expect(report.formDebts.isEmpty, "\(report.world)")
+		expectPlacesPassNilAsTheirPathsPin(in: report)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func formDebts_countOneWorldSplitOnWrapperKind_whenReaderIsHandedValueUnderOneParentAndLazyWrapperUnderTheOther() async throws {
+		// The form debt no parameter carries: `Reader` reads `token` only if available, and is handed the value under `First`
+		// and the instance of a lazy wrapper under `Second`, which one optional parameter cannot be, so its variants split
+		// on the wrapper kind. Of the module's worlds, the root's holds that debt, and none holds a debt of type.
+		let (stream, continuation) = AsyncStream.makeStream(of: TypeFactsReport.self)
+		_ = try await ConstructionMemoOracle.$observer.withValue(TaskLocalFunction { _, _, report in continuation.yield(report) }) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let first: First", "@Instantiated let second: Second"]),
+					seamFixtureType(named: "First", isFinalClass: true, declarations: ["@Instantiated let token: Token", "@Instantiated let reader: Reader"]),
+					seamFixtureType(named: "Second", isFinalClass: true, declarations: ["@Instantiated let token: LazilyInstantiated<Token>", "@Instantiated let reader: Reader"]),
+					seamFixtureType(named: "Reader", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let token: Token?"]),
+					seamFixtureType(named: "Token", isFinalClass: true, declarations: []),
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		continuation.finish()
+		var worldsByDebt = [String: Int]()
+		var worlds = 0
+		for await report in stream {
+			worlds += 1
+			for debt in report.formDebts {
+				worldsByDebt[debt, default: 0] += 1
+			}
+		}
+		#expect(worlds > 0)
+		#expect(worldsByDebt == ["wrapperKind": 1], "\(worlds) worlds")
 	}
 
 	// MARK: Private
@@ -330,7 +399,7 @@ struct SafeDIToolTypeFactsMockRootPinsTests: ~Copyable {
 		var filesMade = [URL]()
 		defer { filesToDelete += filesMade }
 		let output = try await NodeRecordsObservation.$laysOutMockRoots.withValue(true) {
-			try await NodeRecordsObservation.$observer.withValue({ continuation.yield($0) }) {
+			try await NodeRecordsObservation.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 				try await body(&filesMade)
 			}
 		}
@@ -399,7 +468,7 @@ struct SafeDIToolTypeFactsMockRootPinsTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private mutating func mockReport(of types: [String], skipCompileVerification: Bool = false) async throws -> TypeFactsReport {
 		let (stream, continuation) = AsyncStream.makeStream(of: TypeFactsReport.self)
-		_ = try await ConstructionMemoOracle.$observer.withValue({ _, _, report in continuation.yield(report) }) {
+		_ = try await ConstructionMemoOracle.$observer.withValue(TaskLocalFunction { _, _, report in continuation.yield(report) }) {
 			try await executeSafeDIToolTest(swiftFileContent: types, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete, skipCompileVerification: skipCompileVerification)
 		}
 		continuation.finish()
@@ -410,18 +479,17 @@ struct SafeDIToolTypeFactsMockRootPinsTests: ~Copyable {
 		return try #require(reports.last)
 	}
 
-	/// The receives each node's first variant pins, by the declaration of the node's first place, where it pins any.
+	/// The receives the pins along each place's path pass `nil`, by the place's declaration, where they pin any.
 	private func passedNilByPlace(in report: TypeFactsReport) -> [String: [String]] {
 		var passedNil = [String: [String]]()
-		for place in report.places where !place.closesCycle {
-			guard let node = place.node, let variant = report.variantNodes.firstIndex(of: node), !report.variantReceivesPassedNil[variant].isEmpty else { continue }
-			passedNil[place.declaration] = report.variantReceivesPassedNil[variant]
+		for place in report.places where !place.closesCycle && !place.pinsPassNil.isEmpty {
+			passedNil[place.declaration] = place.pinsPassNil
 		}
 		return passedNil
 	}
 
-	/// Check 36, as every tree runs it: each place passes `nil` to exactly what its variant pins.
-	private func expectPlacesPassNilAsTheirVariants(in report: TypeFactsReport) {
+	/// Check 36, as every tree runs it: each place passes `nil` to exactly what the pins along its path pin.
+	private func expectPlacesPassNilAsTheirPathsPin(in report: TypeFactsReport) {
 		let result = TypeFactsChecks.findings(of: report)
 		#expect(result.comparedByCheck[36, default: 0] > 0, "\(report.world)")
 		#expect(result.findingsByCheck[36] == nil, "\(result.findingsByCheck[36] ?? []): \(report.world)")

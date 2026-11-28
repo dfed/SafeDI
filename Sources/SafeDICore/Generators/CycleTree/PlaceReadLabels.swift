@@ -36,5 +36,5 @@ struct PlaceReadLabels: Sendable {
 public enum PlaceReadsObservation {
 	/// Called with the type the place builds, the property it is built as, the labels read and the labels planned, each
 	/// sorted.
-	@TaskLocal public static var observer: (@Sendable (_ type: String, _ property: String, _ labelsRead: [String], _ labelsPlanned: [String]) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (_ type: String, _ property: String, _ labelsRead: [String], _ labelsPlanned: [String]) -> Void>?
 }

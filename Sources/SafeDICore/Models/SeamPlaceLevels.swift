@@ -122,5 +122,5 @@ public struct SeamPlaceLevels: Sendable, Equatable {
 
 	/// Called with the levels of every computation of a seam's holes, when set: by the tests and the graph fuzzer, never by
 	/// the tool.
-	@TaskLocal public static var observer: (@Sendable (SeamPlaceLevels) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (SeamPlaceLevels) -> Void>?
 }

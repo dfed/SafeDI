@@ -88,7 +88,8 @@ enum TypeKeyBody {
 
 	/// `rootBody` laid out by `layout`, which holds the declarations before it and the variants its call places call, or
 	/// the stage of the layout that kept the path key's body. Where `laysOutEveryLoop` holds, a loop of builders the path key
-	/// writes once is laid out too.
+	/// writes once is laid out too, and where `declaresLoopMembersAsThePathKeyDoes` holds, its members are declared as
+	/// `statements(ofRootBody:…)` says.
 	private static func layOut(_ rootBody: [GeneratedCode], in layout: inout TypeKeyLayout, laysOutEveryLoop: Bool = false, declaresLoopMembersAsThePathKeyDoes: Bool = false) -> Result<[GeneratedCode], TypeKeyRefusal> {
 		// The root functions the plan's places call are declared once, before every statement, as the path key declares
 		// them (`RootFunctionHoisting`); a root that keeps one in place keeps the path key's body, since the type key spells

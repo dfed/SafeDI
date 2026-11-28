@@ -101,6 +101,16 @@ enum TypeFactsFunctionOpened: UInt8, Sendable {
 	case sendableInstantiatorBuilder
 	case sendableLazyWrapper
 	case otherSendableFunction
+
+	/// Whether the function is `@Sendable`.
+	var isSendable: Bool {
+		switch self {
+		case .sendableInstantiatorBuilder, .sendableLazyWrapper, .otherSendableFunction:
+			true
+		case .none, .instantiatorBuilder:
+			false
+		}
+	}
 }
 
 /// One edge's facts, parallel to the graph's edge targets.
@@ -196,8 +206,8 @@ struct TypeFactsAnswer: Equatable, Sendable {
 struct TypeFactsOwedFacts: OptionSet, Sendable {
 	let rawValue: UInt8
 
-	/// The seam fill producer: whether a hole's property is still being built inside its own fill. Set on a fill and
-	/// on every declaration beneath one.
+	/// The fill channel (track C): whether a hole's property is still being built inside its own fill. Set on a fill the
+	/// channel refuses (`TypeFactsFillRefusal`) and on every declaration beneath one.
 	static let fillBeingBuilt = TypeFactsOwedFacts(rawValue: 1 << 0)
 	/// The mock root's required-receive records: what a read finds pinned or read above it. Set on every
 	/// declaration of a mock world.
@@ -305,6 +315,15 @@ protocol TypeFactsWorld {
 	/// received, never on their spelling.
 	/// Walked when asked, never while the world is built.
 	func parameterOrder(of declaration: DeclarationID) -> [WorldLabelID]
+
+	// The fill channel: the fills each call passes, in edge order.
+	var fillCount: Int { get }
+	/// The fill at `index`: its edge, the seam it fills a place of, and why the channel does not model it yet, if it does not.
+	func fill(_ index: Int) -> TypeFactsFill
+	/// The fields the fill at `index` binds for its tree, in their declared order: the call's edge to the fill answers a read
+	/// of one, and every other read of the fill's tree but its place's own label, which the fill builds, goes on to the
+	/// call's caller.
+	func fields(ofFill index: Int) -> ArraySlice<TypeFactsFillField>
 	/// The parameter the variant's function takes for a read its subtree makes from above, were the read a parameter,
 	/// or `nil` where it takes none: the read has no answer, its answer is still being built where the function is
 	/// called (a call that closes a cycle on it, a twin being built), it asks about no value of a label, or no one
@@ -635,11 +654,12 @@ extension TypeFactsGraph: TypeFactsWorld {
 		if forMockGeneration {
 			owed.formUnion([.mockRootRecord, .mockRootBinding])
 		}
-		// A declaration is beneath a fill where any of its routes enters one: a walk up its parents.
+		// A declaration is beneath a fill the channel refuses where any of its routes enters one: a walk up its parents, past
+		// the fills it models.
 		var visited: Set = [declaration]
 		var pending = [declaration]
 		while let current = pending.popLast() {
-			guard !graph.nodes[Int(current)].key.isFill else {
+			guard !isRefusedFill(current) else {
 				owed.insert(.fillBeingBuilt)
 				break
 			}
@@ -648,5 +668,52 @@ extension TypeFactsGraph: TypeFactsWorld {
 			}
 		}
 		return owed
+	}
+
+	/// Whether `declaration` is a fill the channel refuses: a search of the sorted column.
+	private func isRefusedFill(_ declaration: DeclarationID) -> Bool {
+		var low = 0
+		var high = refusedFillDeclarations.count
+		while low < high {
+			let middle = (low + high) / 2
+			if refusedFillDeclarations[middle] < declaration {
+				low = middle + 1
+			} else {
+				high = middle
+			}
+		}
+		return low < refusedFillDeclarations.count && refusedFillDeclarations[low] == declaration
+	}
+
+	var fillCount: Int {
+		fills.count
+	}
+
+	func fill(_ index: Int) -> TypeFactsFill {
+		fills[index]
+	}
+
+	/// The indices of the fills whose edges are among `edges`, one node's: the fills are in edge order, as the graph meets
+	/// each node's fill arguments, so they are found by halving.
+	func fillIndices(ofEdgesIn edges: Range<Int>) -> Range<Int> {
+		func firstFill(atOrAfter edge: Int) -> Int {
+			var low = 0
+			var high = fills.count
+			while low < high {
+				let middle = (low + high) / 2
+				if Int(fills[middle].edge) < edge {
+					low = middle + 1
+				} else {
+					high = middle
+				}
+			}
+			return low
+		}
+		return firstFill(atOrAfter: edges.lowerBound)..<firstFill(atOrAfter: edges.upperBound)
+	}
+
+	func fields(ofFill index: Int) -> ArraySlice<TypeFactsFillField> {
+		let fill = fills[index]
+		return fillFields[Int(fill.fieldStart)..<Int(fill.fieldStart + fill.fieldCount)]
 	}
 }

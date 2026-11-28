@@ -104,10 +104,12 @@ struct SafeDIToolSeamTreeReuseTests: ~Copyable {
 		// `Home`, a seam of this module, instantiates `Service`, a seam in a directory a `#SafeDIConfiguration` adds, which no
 		// run generates the initializer of: `Home`'s tree builds it inline, with a comment that says so. The comment is the
 		// scope's (`Scope.builtInlineSeamComment`), so the first signature pass's tree carries it only if that pass's scopes do.
+		// Node records lay out `Home`'s own world, which calls no seam and holds no hole, without its tree, so the run draws
+		// the DOT graph, which reads every tree, to reuse it.
 		let (stream, continuation) = AsyncStream.makeStream(of: ReusedSeamTree.self)
 		var filesToDelete = filesToDelete
 		defer { self.filesToDelete = filesToDelete }
-		_ = try await SeamTreeReuseObservation.$comparesBuiltTrees.withValue({ continuation.yield($0) }) {
+		_ = try await SeamTreeReuseObservation.$comparesBuiltTrees.withValue(TaskLocalFunction { continuation.yield($0) }) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
 					"""
@@ -129,6 +131,7 @@ struct SafeDIToolSeamTreeReuseTests: ~Copyable {
 					seamFixtureType(named: "Profile", declarations: ["@Instantiated let userService: any UserService"]),
 				],
 				buildSwiftOutputDirectory: true,
+				buildDOTFileOutput: true,
 				filesToDelete: &filesToDelete,
 				moduleMembershipArguments: ["--module-name", "App"],
 			)
@@ -180,7 +183,7 @@ struct SafeDIToolSeamTreeReuseTests: ~Copyable {
 		let (stream, continuation) = AsyncStream.makeStream(of: ReusedSeamTree.self)
 		var filesToDelete = filesToDelete
 		defer { self.filesToDelete = filesToDelete }
-		_ = try await SeamTreeReuseObservation.$comparesBuiltTrees.withValue({ continuation.yield($0) }) {
+		_ = try await SeamTreeReuseObservation.$comparesBuiltTrees.withValue(TaskLocalFunction { continuation.yield($0) }) {
 			try await executeSafeDIToolMultiModuleTest(modules: SafeDIToolSeamBuilderParameterTests.modules(feature: feature, app: app), integration: .moduleInfo, filesToDelete: &filesToDelete)
 		}
 		continuation.finish()

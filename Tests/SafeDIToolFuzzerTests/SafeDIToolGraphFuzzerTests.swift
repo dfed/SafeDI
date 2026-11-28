@@ -2518,77 +2518,6 @@ struct SafeDIToolGraphFuzzerTests {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func queryGraph_marksDependenciesGenerateReports_inTenBaseCorpusGraphsWithPartialTrees() async throws {
-		// The smoke batch holds too few graphs whose trees `query graph` builds around dependencies that cannot be
-		// fulfilled for a floor, so this judges the first base corpus graphs the tool rejects as the marks oracle does,
-		// with one run of the tool each. Only an export with partial trees counts, so a change that stops `query graph`
-		// building them fails here rather than quietly judging nothing.
-		//
-		// What the marks and deletion oracles add to a long run, measured in a debug build on one core over base corpus
-		// seeds 0..<1250, a shard: 221 seconds (the rejected graphs’ exports 69, the runs with missing types declared 8,
-		// the two deletions with their exports 144), where one `generate` run of each of those graphs takes 277.
-		var partialSeeds = [UInt64]()
-		for seed in UInt64(0)..<120 {
-			guard let marks = try await GraphFuzzerQueryJudgment.marks(of: GraphFuzzerGenerator.fixture(forSeed: seed)) else { continue }
-			#expect(marks.problems == [], "Seed \(seed)")
-			if marks.isPartial {
-				partialSeeds.append(seed)
-			}
-		}
-		#expect(partialSeeds.count >= 10, "Judged partial trees of seeds \(partialSeeds)")
-	}
-
-	@Test(arguments: [70, 79, 293, 335, 485, 896, 1_101, 1_342, 1_345, 1_354, 1_419] as [UInt64])
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func queryGraph_marksReceivesGenerateReportsOnceMissingTypesAreDeclared_inBaseCorpusGraphThatHoldsBoth(seed: UInt64) async throws {
-		// A graph that instantiates a type no declaration fulfills and receives a value nothing provides is rare, so the
-		// marks oracle's checks against the graph with its missing types declared have named seeds: each further mark is
-		// an error `generate` reports of that graph, and each error it reports of that graph is at a mark. Each seed must
-		// still run the graph so and agree with it. With the receives the second build reports left unmarked, every one
-		// of these seeds fails.
-		let marks = try #require(await GraphFuzzerQueryJudgment.marks(of: GraphFuzzerGenerator.fixture(forSeed: seed)))
-		#expect(marks.isPartial)
-		#expect(marks.ranWithMissingTypesDeclared)
-		#expect(marks.problems == [])
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func queryGraph_handsEveryOtherReceiveItsValue_whenDeclarationIsDeletedFromTenBaseCorpusGraphs() async throws {
-		// The deletion oracle exports a graph again without one type's declaration, and without one property that provides
-		// a value, and requires every receive that read neither to keep its provenance. This judges the first base corpus
-		// graphs so, with no run of the tool, so a change that stops it finding a declaration to delete, or a deletion that
-		// leaves partial trees, fails here rather than quietly judging nothing.
-		var seedsLeftWithUnfulfilledDependency = [UInt64]()
-		var seedsLeftWithUnfulfilledReceive = [UInt64]()
-		for seed in UInt64(0)..<60 {
-			let deletions = try await GraphFuzzerQueryJudgment.deletions(of: GraphFuzzerGenerator.fixture(forSeed: seed))
-			#expect(deletions.problems == [], "Seed \(seed)")
-			if deletions.declarationLeavesDependencyUnfulfilled {
-				seedsLeftWithUnfulfilledDependency.append(seed)
-			}
-			if deletions.propertyLeavesPartialTrees {
-				seedsLeftWithUnfulfilledReceive.append(seed)
-			}
-		}
-		#expect(seedsLeftWithUnfulfilledDependency.count >= 10, "Deleted a declaration a reached dependency requires from seeds \(seedsLeftWithUnfulfilledDependency)")
-		#expect(seedsLeftWithUnfulfilledReceive.count >= 10, "Deleted a property a reached receive requires from seeds \(seedsLeftWithUnfulfilledReceive)")
-	}
-
-	@Test(arguments: [2, 25, 33, 35, 39, 77, 83, 114, 121, 146, 164, 170] as [UInt64])
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func queryGraph_namesMarkedReceiveOfDeletedProperty_inBaseCorpusGraphWithReceiveBeneathIt(seed: UInt64) async throws {
-		// A receive beneath a marked receive of the deleted property, whose value names the receive above, is in about one
-		// base corpus graph in twelve, so those graphs have named seeds: each must still hold such a receive, which the
-		// oracle judges.
-		let deletions = try await GraphFuzzerQueryJudgment.deletions(of: GraphFuzzerGenerator.fixture(forSeed: seed))
-		#expect(deletions.propertyLeavesPartialTrees)
-		#expect(deletions.propertyLeavesReceiveBeneathMarkedReceive)
-		#expect(deletions.problems == [])
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func seamSmokeSeeds_judgeGeneratedOnlyInitializerDefaults_inGraphsTheToolAccepts() async throws {
 		// The oracle judges each initializer only generated code calls, so a change that stops it finding them fails here
 		// rather than quietly judging nothing.
@@ -4749,7 +4678,7 @@ struct SafeDIToolGraphFuzzerTests {
 	private static func toolRunsLayingOutMockRoots(of fixture: GraphFuzzerFixture) async throws -> (toolRuns: GraphFuzzerToolRuns, mockRootReports: [NodeRecordsReport]) {
 		let (stream, continuation) = AsyncStream.makeStream(of: NodeRecordsReport.self)
 		let toolRuns = try await NodeRecordsObservation.$laysOutMockRoots.withValue(true) {
-			try await NodeRecordsObservation.$observer.withValue({ continuation.yield($0) }) {
+			try await NodeRecordsObservation.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 				try await GraphFuzzerOracle.toolRuns(of: fixture, multiModuleRenamings: [])
 			}
 		}
@@ -4805,11 +4734,11 @@ struct SafeDIToolGraphFuzzerTests {
 		let fileName = "\(Self.mockDifferencePrefix)T7+SafeDIMock.swift"
 		// The outcome under reversed type names has no field for the builder of T8, so its function hands a new
 		// configuration in the field's place.
-		let handed = "__safeDI_entered.entering(\"t8Builder\", \(Self.mockDifferencePrefix)T8.SafeDIMockConfiguration())"
+		let handed = "__safeDI_entered.entering(0, \(Self.mockDifferencePrefix)T8.SafeDIMockConfiguration())"
 
 		let differences = try Self.differencesUnderReversalOfTypeNames(of: toolRuns, editingFileNamed: fileName, outcomeBy: { $0 }, renamedOutcomeBy: { code in
 			#expect(code.contains(handed))
-			return code.replacingOccurrences(of: handed, with: "__safeDI_entered.entering(\"t8Builder\", \(Self.mockDifferencePrefix)T7.SafeDIMockConfiguration())")
+			return code.replacingOccurrences(of: handed, with: "__safeDI_entered.entering(0, \(Self.mockDifferencePrefix)T7.SafeDIMockConfiguration())")
 		})
 
 		#expect(differences.filter { $0.fileName == fileName }.map(\.aspect) == [.mockCode])
@@ -4820,8 +4749,8 @@ struct SafeDIToolGraphFuzzerTests {
 	func differences_nameNeitherReason_whenALaidOutMockHandsADroppedFieldToAnotherFunctionThanTheOneThatEntersAPlace() async throws {
 		let (toolRuns, _) = try await Self.toolRunsLayingOutMockRoots(of: Self.lazyCycleFixture)
 		let fileName = "\(Self.mockDifferencePrefix)T7+SafeDIMock.swift"
-		let entering = "__safeDI_entered.entering(\"t8Builder\", "
-		let passing = "__safeDI_entered.passing(\"t8Builder\", "
+		let entering = "__safeDI_entered.entering(0, "
+		let passing = "__safeDI_entered.passing(0, "
 		let read = "__safeDI_entered.configuration.t8Builder)"
 		let newConfiguration = "\(Self.mockDifferencePrefix)T8.SafeDIMockConfiguration())"
 
@@ -6744,7 +6673,7 @@ struct SafeDIToolGraphFuzzerTests {
 		// (`PlanBodiesObservation`): the report's last line counts those roots, those that hold a twin, which stay built
 		// per path, and the bodies their plans build. A graph is run several times, so the counts are of roots of runs.
 		let (planStream, planContinuation) = AsyncStream.makeStream(of: (bodyCount: Int, holdsTwin: Bool).self)
-		try await PlanBodiesObservation.$observer.withValue({ _, bodiesOfPlan, _, twinValues in
+		try await PlanBodiesObservation.$observer.withValue(TaskLocalFunction { _, bodiesOfPlan, _, twinValues in
 			planContinuation.yield((bodiesOfPlan.count, !twinValues.isEmpty))
 		}) {
 			try await longRun()

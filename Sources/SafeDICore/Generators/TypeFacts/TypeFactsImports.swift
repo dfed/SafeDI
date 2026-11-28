@@ -70,7 +70,7 @@ struct TypeFactsImports: Sendable {
 /// (`ScopeGenerator.fulfillersOfTree(buildingMock:)`), handed to `comparesWalk`, which the tests set, never the tool: the
 /// two must be equal on every test and fuzzer graph. The walk runs only where it is set, uncounted by `GenerationWork`.
 public enum TypeFactsImportsObservation {
-	@TaskLocal public static var comparesWalk: (@Sendable (TypeFactsImportsComparison) -> Void)?
+	@TaskLocal public static var comparesWalk: TaskLocalFunction<@Sendable (TypeFactsImportsComparison) -> Void>?
 }
 
 /// One root's imports, from the fold and from the walk.

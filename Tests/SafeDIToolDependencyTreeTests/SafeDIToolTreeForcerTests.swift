@@ -25,7 +25,8 @@ import Testing
 @testable import SafeDIToolTestSupport
 
 /// What makes `generate` build a root's place tree (`TreeForcer`): a root node records lay out, which nothing else reads
-/// the tree of, builds none, and `--tree-forcers-output` lists, for each root and seam, what made the run build its tree.
+/// the tree of, builds none, a root of a module with seams that is none of its own seams included, and
+/// `--tree-forcers-output` lists, for each root and seam, what made the run build its tree.
 struct SafeDIToolTreeForcerTests: ~Copyable {
 	// MARK: Initialization
 
@@ -70,8 +71,8 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_buildsEveryTree_whenModuleHoldsSeam() async throws {
-		let (forcers, _) = try await treeForcers(
+	mutating func generate_buildsNoTreeForSeamsOwnRoot_whenItsNodeRecordsAcceptItsWorld() async throws {
+		let (forcers, heldTaskCounts) = try await treeForcers(
 			of: [
 				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let screen: Screen"]),
 				seamFixtureType(named: "Screen", isSeam: true, declarations: ["@Instantiated let service: Service"]),
@@ -79,9 +80,53 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 			],
 			moduleMembershipArguments: ["--module-name", "Feature"],
 		)
-		// Node records make the records of the root's world, which calls the seam, and of the seam's own world.
+		// Node records lay out the root's world, which calls the seam and passes it no fill, and the seam's own world, so
+		// neither builds a tree.
 		#expect(forcers == """
-		Root\tseam world
+		Root\tnone
+		Screen\tnone
+		roots that built a tree: 0 of 2
+
+		""")
+		#expect(heldTaskCounts == [])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsTreeForSeamsOwnRoot_whenItsWorldCallsAnotherSeam() async throws {
+		let (forcers, _) = try await treeForcers(
+			of: [
+				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let screen: Screen"]),
+				seamFixtureType(named: "Screen", isSeam: true, declarations: ["@Instantiated let panel: Panel"]),
+				seamFixtureType(named: "Panel", isSeam: true, declarations: ["@Instantiated let service: Service"]),
+				seamFixtureType(named: "Service", declarations: []),
+			],
+			moduleMembershipArguments: ["--module-name", "Feature"],
+		)
+		// A call of a seam is checked on the tree of the seam that makes it (`validateNoSeamTierOmitsProvidedValue`).
+		#expect(forcers == """
+		Root\tnone
+		Panel\tnone
+		Screen\tseam world
+		roots that built a tree: 1 of 3
+
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsSeamsOwnRootsTree_whenRunDrawsDOTGraph() async throws {
+		let (forcers, _) = try await treeForcers(
+			of: [
+				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let screen: Screen"]),
+				seamFixtureType(named: "Screen", isSeam: true, declarations: ["@Instantiated let service: Service"]),
+				seamFixtureType(named: "Service", declarations: []),
+			],
+			buildDOTFileOutput: true,
+			moduleMembershipArguments: ["--module-name", "Feature"],
+		)
+		#expect(forcers == """
+		Root\tDOT graph
 		Screen\tseam world
 		roots that built a tree: 2 of 2
 
@@ -90,10 +135,28 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsAppRootsTree_whenModuleHoldsSeamAndNodeRecordsRefuseRootsWorld() async throws {
+		// `Root`'s tree builds `Step` again through an `Instantiator` that `Detail` receives, a loop node records refuse.
+		let (forcers, _) = try await treeForcers(
+			of: Self.rootCallingOwnSeam(rootDeclarations: ["@Instantiated let stepBuilder: Instantiator<Step>"]) + [
+				seamFixtureType(named: "Step", declarations: ["@Instantiated let stepBuilder: Instantiator<Step>", "@Instantiated let detail: Detail"]),
+				seamFixtureType(named: "Detail", declarations: ["@Received let stepBuilder: Instantiator<Step>"]),
+			],
+			moduleMembershipArguments: ["--module-name", "Feature"],
+		)
+		#expect(forcers == """
+		Root\tkind cycleReceivesBuilder
+		Screen\tnone
+		roots that built a tree: 1 of 2
+
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_laysOutRoot_whenRootHasNoDependencies() async throws {
 		// A root with no dependencies has no generated initializer, which the engine lays out from its records as the tree
-		// writes it. `generate_buildsTree_whenRenameKeepingItsLabelReadsRenameKeepingItsLabelAbove` is a root the engine
-		// cannot lay out yet.
+		// writes it.
 		let (forcers, _) = try await treeForcers(of: [
 			"""
 			@Instantiable(isRoot: true)
@@ -105,6 +168,28 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 		#expect(forcers == """
 		Root\tnone
 		roots that built a tree: 0 of 1
+
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsAppRootsTree_whenRootsSeamCallDefersParameterSendable() async throws {
+		// `Screen`'s `Panel`, built in a `SendableInstantiator`'s `@Sendable` function, receives `token`, so the seam defers
+		// its pass-through `token` `@Sendable`, and the capture check reads `Root`'s call of it from `Root`'s tree.
+		let (forcers, _) = try await treeForcers(
+			of: [
+				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let token: Token", "@Instantiated let screen: Screen"]),
+				seamFixtureType(named: "Screen", isSeam: true, declarations: ["@Instantiated let panelBuilder: SendableInstantiator<Panel>"]),
+				seamFixtureType(named: "Panel", declarations: ["@Received let token: Token"], conformances: ", Sendable"),
+				seamFixtureType(named: "Token", declarations: [], conformances: ", Sendable"),
+			],
+			moduleMembershipArguments: ["--module-name", "Feature"],
+		)
+		#expect(forcers == """
+		Root\tseam call defers a parameter @Sendable
+		Screen\tseam world, kind lazy
+		roots that built a tree: 2 of 2
 
 		""")
 	}
@@ -125,6 +210,43 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsAppRootsTree_whenRootsSeamCallOmitsParameter() async throws {
+		// `Library`'s `Panel`, whose `public` tier omits the `token` its `Badge` receives only if available, since `Token`
+		// is internal: `App`'s call of that tier is one `validateNoSeamTierOmitsProvidedValue` judges from `Root`'s tree.
+		let forcersByRoot = try await treeForcersReported(byModules: [
+			ModuleFixture(
+				name: "Library",
+				packageName: "App",
+				swiftFileContent: [
+					seamFixtureType(named: "Panel", isSeam: true, declarations: ["@Instantiated let badge: Badge"]),
+					"""
+					@Instantiable
+					public struct Badge: Instantiable {
+					    init(token: Token?) {
+					        self.token = token
+					    }
+
+					    @Received(onlyIfAvailable: true) let token: Token?
+					}
+					""",
+					"""
+					@Instantiable
+					struct Token: Instantiable {
+					    init() {}
+					}
+					""",
+				],
+				dependencies: [],
+			),
+			ModuleFixture(name: "Feature", packageName: "Other", swiftFileContent: [
+				"import Library\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let panel: Panel"]),
+			], dependencies: ["Library"]),
+		])
+		#expect(forcersByRoot["Root"] == ["seam call omits a parameter"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_laysOutRoot_whenRenameOfSharedTypeIsFulfilledByValueOnFirstPathAndWrapperOnSecond() async throws {
 		let (forcers, _) = try await treeForcers(of: Self.renameFulfilledByWrapperAndValue(lazyParentFirst: false))
 		// The same world with the root's properties swapped: which record each variant gets does not follow which parent is
@@ -134,6 +256,39 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 		roots that built a tree: 0 of 1
 
 		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_makesNoNodeRecordsOfAppRoot_whenRootsSeamCallPassesFill() async throws {
+		// `Library`'s seam `Panel` instantiates `Service`, which only `Feature` implements, so `Feature`'s call of `Panel`
+		// fills that hole. The walk of `Root`'s world finds the fill before node records are made, so the forcer is the
+		// walk's, not the kind node records would refuse the world with (`kind fill`).
+		let forcersByRoot = try await treeForcersReported(byModules: [
+			ModuleFixture(
+				name: "Library",
+				packageName: "App",
+				swiftFileContent: [
+					seamFixtureType(named: "Panel", isSeam: true, declarations: ["@Instantiated let service: any Service"]),
+					"""
+					public protocol Service {}
+					""",
+				],
+				dependencies: [],
+			),
+			ModuleFixture(name: "Feature", packageName: "App", swiftFileContent: [
+				"import Library\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let panel: Panel"]),
+				"""
+				import Library
+
+				@Instantiable(fulfillingAdditionalTypes: [(any Service).self])
+				public struct DefaultService: Instantiable, Service {
+				    public init() {}
+				}
+				""",
+			], dependencies: ["Library"]),
+		])
+		#expect(forcersByRoot["Root"] == ["seam call passes a fill"])
 	}
 
 	@Test
@@ -151,14 +306,14 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_buildsTree_whenRenameKeepingItsLabelReadsRenameKeepingItsLabelAbove() async throws {
+	mutating func generate_laysOutRoot_whenRenameKeepingItsLabelReadsRenameKeepingItsLabelAbove() async throws {
 		// `Detail`, beneath `Settings`, renames `analytics` under its own label too: its key names `Settings`' rename, the
 		// nearest declaration, never the wrapper above `Settings`, so its record matches the tree's code
-		// (`NodeRecordsChecks`). The engine does not lay a root out from an erased rename that keeps its label yet.
+		// (`NodeRecordsChecks`), and the engine lays the root out, the rename read before its binding as one from outside.
 		let (forcers, _) = try await treeForcers(of: Self.keepLabelRenames(nestedRename: true))
 		#expect(forcers == """
-		Root\tkind notLaidOut
-		roots that built a tree: 1 of 1
+		Root\tnone
+		roots that built a tree: 0 of 1
 
 		""")
 	}
@@ -194,6 +349,15 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 		seamFixtureType(named: "Detail", declarations: ["@Received let stepBuilder: Instantiator<Step>"]),
 		seamFixtureType(named: "Service", declarations: []),
 	]
+
+	/// `Root`, which builds `Screen`, a seam of its own module, beside `rootDeclarations`, and `Screen`'s `Service`.
+	private static func rootCallingOwnSeam(rootDeclarations: [String]) -> [String] {
+		[
+			seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let screen: Screen"] + rootDeclarations),
+			seamFixtureType(named: "Screen", isSeam: true, declarations: ["@Instantiated let service: Service"]),
+			seamFixtureType(named: "Service", declarations: []),
+		]
+	}
 
 	/// A root that instantiates `analytics` as a `LazilyInstantiated<Analytics>` and builds `Settings`, which renames it under
 	/// its own label as an `EventTracker`; with `nestedRename`, `Settings` builds `Detail`, which renames `Settings`' rename
@@ -284,7 +448,7 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 		let output = TestTemporaryDirectory.uniquePath(prefix: "TreeForcers", pathExtension: "txt")
 		filesToDelete.append(output)
 		let (stream, continuation) = AsyncStream.makeStream(of: Int.self)
-		_ = try await HeldCodeTasks.$observer.withValue({ continuation.yield($0) }) {
+		_ = try await HeldCodeTasks.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: files,
 				buildSwiftOutputDirectory: true,
@@ -300,5 +464,21 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 			heldTaskCounts.append(count)
 		}
 		return (try String(contentsOf: output, encoding: .utf8), heldTaskCounts)
+	}
+
+	/// What made the run of each of `modules` build each root's tree, by root, as the node records report each root a run
+	/// generates (`NodeRecordsReport.treeForcers`): empty for a root laid out from its node records alone.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private mutating func treeForcersReported(byModules modules: [ModuleFixture]) async throws -> [String: [String]] {
+		let (stream, continuation) = AsyncStream.makeStream(of: NodeRecordsReport.self)
+		_ = try await NodeRecordsObservation.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
+			try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		}
+		continuation.finish()
+		var forcersByRoot = [String: [String]]()
+		for await report in stream where !report.isMockRoot {
+			forcersByRoot[report.root] = report.treeForcers.map(\.description)
+		}
+		return forcersByRoot
 	}
 }

@@ -154,6 +154,18 @@ struct ConstructionScope: Sendable {
 		}
 	}
 
+	/// Whether a call of this scope fills a hole (`HoleArgument.fill`), read from the record without making the fill's scope.
+	var fillsAHole: Bool {
+		record.holeArguments.contains { argument in
+			switch argument {
+			case .fill:
+				true
+			case .passUp:
+				false
+			}
+		}
+	}
+
 	let table: ScopeTable
 	fileprivate let record: ScopeRecord
 }
