@@ -146,6 +146,13 @@ jobs:
   # middle. The label and the base are read as they are now, not as the event carried them, so label first, then
   # push.
   #
+  # A pull request labelled `clean-build` builds from nothing: every restore of a build SwiftPM or xcodebuild made is
+  # skipped ("Restore Build Directory" in each job that has one, the DocC build's, and the Package example's
+  # scratch directories and DerivedData); Bazel's cache, which is keyed by content, stays.
+  # It is for a run whose result a restored build could have made, red or green: a re-run restores the same
+  # build, so only a build from nothing tells the two apart. Read as it is now too, so label first, then re-run.
+  # The test build takes 10 to 17 minutes on Linux from nothing, and about 24 on macOS.
+  #
   # Any doubt runs everything: a pull request from a fork, or one whose pull requests cannot be listed, gets an
   # empty output. On a push to main and on the schedule the job is skipped, its output is empty, and every job
   # runs. A full run pays for it with the seconds a Linux runner takes to start and answer; the macOS build jobs
@@ -159,6 +166,7 @@ jobs:
       pull-requests: read
     outputs:
       stacked-under: ${{ steps.find.outputs.stacked-under }}
+      clean-build: ${{ steps.find.outputs.clean-build }}
     steps:
       # Twice the longest it should take, and then some: the two kinds of call "Find Builds a Pull Request Passed
       # on This Tree" makes took 1 second. Not yet measured on a runner; set it from the first runs.
@@ -177,6 +185,10 @@ jobs:
             let above
             try {
               const { data: live } = await github.rest.pulls.get({ ...context.repo, pull_number: pullRequest.number })
+              if (live.labels.some(label => label.name === 'clean-build')) {
+                core.info('Labelled clean-build: no job restores a build directory.')
+                core.setOutput('clean-build', 'true')
+              }
               if (live.labels.some(label => label.name === 'run-all-checks')) {
                 core.info('Labelled run-all-checks: every job runs.')
                 return
@@ -580,7 +592,7 @@ jobs:
       # Xcode 26" gives at its own cache key.
       - name: Cache Build Directory
         id: docc-cache
-        if: ${{ needs.stack-position.outputs.stacked-under == '' }}
+        if: ${{ needs.stack-position.outputs.stacked-under == '' && needs.stack-position.outputs.clean-build != 'true' }}
         uses: actions/cache/restore@v6
         with:
           path: .build
@@ -897,6 +909,7 @@ jobs:
       # image or Package.resolved before.
       - name: Restore the Native Builds' Scratch Directories
         id: native-scratch
+        if: ${{ needs.stack-position.outputs.clean-build != 'true' }}
         uses: actions/cache/restore@v6
         with:
           path: |
@@ -909,6 +922,7 @@ jobs:
       # stamped checkout and a tar round trip (run 44203313851).
       - name: Restore the xcodebuild Builds' DerivedData
         id: xcodebuild-derived-data
+        if: ${{ needs.stack-position.outputs.clean-build != 'true' }}
         uses: actions/cache/restore@v6
         with:
           path: |
@@ -1497,6 +1511,7 @@ jobs:
       # every run until it lands.
       - name: Restore Build Directory
         id: build-cache
+        if: ${{ needs.stack-position.outputs.clean-build != 'true' }}
         uses: actions/cache/restore@v6
         with:
           path: .build
@@ -1825,6 +1840,7 @@ jobs:
       # too: two pull requests each held a 546 MB copy of this build.
       - name: Restore Build Directory
         id: build-cache
+        if: ${{ needs.stack-position.outputs.clean-build != 'true' }}
         uses: actions/cache/restore@v6
         with:
           path: .build
@@ -2618,6 +2634,7 @@ jobs:
       # build from nothing makes.
       - name: Restore Build Directory
         id: build-cache
+        if: ${{ needs.stack-position.outputs.clean-build != 'true' }}
         uses: actions/cache/restore@v6
         with:
           path: .build
@@ -3549,6 +3566,7 @@ jobs:
       # build made before the sources were stamped from being restored.
       - name: Restore Build Directory
         id: build-cache
+        if: ${{ needs.stack-position.outputs.clean-build != 'true' }}
         uses: actions/cache/restore@v6
         with:
           path: .build
