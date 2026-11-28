@@ -158,6 +158,18 @@ extension MockLowering {
 
 extension ScopeGenerator {
 	/// The property this generator's node builds, where it is a node that builds one rather than an alias.
+	/// The node as its level's binding names read it (`MockLowering.levelBindingNames(of:besideParametersKeepingTheirLabels:)`).
+	nonisolated var mockLevelNode: MockLowering.LevelNode {
+		switch scopeData {
+		case let .property(_, property, _, _, _, _):
+			.property(property, isUnavailableDependency: isUnavailableDependency)
+		case let .alias(property, _, _, _, _):
+			.alias(property)
+		case .root, .hole, .fill:
+			.other
+		}
+	}
+
 	nonisolated var mockLoweringBuiltProperty: Property? {
 		if case let .property(_, property, _, _, _, _) = scopeData, !isUnavailableDependency {
 			property

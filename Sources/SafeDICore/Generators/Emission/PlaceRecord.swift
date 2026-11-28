@@ -317,6 +317,11 @@ indirect enum ValuePath: Hashable, Sendable {
 	/// otherwise model: each value a read the engine checks, each text as written, and each function one a statement
 	/// before the value's in the same body declares (`ValueSegment.declaredFunction`).
 	case spliced([ValueSegment])
+	/// The overrides the body that builds a record's node hands its children, before the body is known: a record reads
+	/// its own configuration as a member of it, so that its text is the same under every body that places it. The body
+	/// that places the record resolves it (`resolvingHandedToChildrenByPlacingBody(to:)`) before any of it is spelled, and
+	/// no path the writer is handed holds it.
+	case handedToChildrenByPlacingBody
 }
 
 extension ValuePath {
@@ -331,13 +336,13 @@ extension ValuePath {
 	}
 
 	/// A call of the member `name` of `value` that hands it `handed`, spelled
-	/// `<value>.<name>("<literal>", <handed>, <flag>: true, …)`: the string literal first where `literal` is set, and `true`
+	/// `<value>.<name>(<slot>, <handed>, <flag>: true, …)`: the slot's number first where `slot` is set, and `true`
 	/// under each label of `flags` last. It is the two values spliced with the text between them, so it reads what they
 	/// read, and where neither reads a declaration it is the same text wherever its function is called.
-	static func callHanding(_ name: String, of value: ValuePath, literal: String?, value handed: ValuePath, flags: [String]) -> ValuePath {
+	static func callHanding(_ name: String, of value: ValuePath, slot: Int?, value handed: ValuePath, flags: [String]) -> ValuePath {
 		var opening = ".\(name)("
-		if let literal {
-			opening += "\(TypeKeyLayout.spelledStringLiteral(literal)), "
+		if let slot {
+			opening += "\(slot), "
 		}
 		var closing = ""
 		for flag in flags {

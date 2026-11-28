@@ -367,16 +367,27 @@ struct NodeRecords: Sendable {
 				built.declaresOnlyItsFunction = true
 				record = .built(built)
 			}
-			let place: GeneratedCode = switch record {
+			// The record reads its configuration of the overrides the body that places it hands its children, which each
+			// body resolves (`mockPlace(_:record:of:builtBy:in:slots:)`); its place stands for it in its first parent's body.
+			let firstParentsOverrides = world.isMockWorld ? Self.mockOverridesOfChildren(of: world.parents(of: declaration).first?.parent ?? 0, in: world, slots: enteredSlots) : nil
+			let placedRecord: PlaceRecord = if let firstParentsOverrides, case let .built(built) = record {
+				.built(built.resolvingHandedToChildrenByPlacingBody(to: firstParentsOverrides))
+			} else {
+				record
+			}
+			let place: GeneratedCode = switch placedRecord {
 			case let .alias(aliasRecord):
 				// A place written as text: the engine copies it as written. A property nothing fulfills that `mock()` binds
 				// before its nodes is no place.
 				Self.isBoundBeforeMockNodes(declaration, in: world) ? .sequence([]) : .place(PlacePlan(code: .text(aliasRecord.text), record: record))
 			case .built, .closer:
-				.place(PlacePlan(code: .empty, record: record))
+				.place(PlacePlan(code: .empty, record: placedRecord))
 			}
-			// A mock's `@Sendable` function captures its override from a local its parent's body binds just before it.
-			let binding = Self.mockOverridesBindingPlace(of: declaration, record: record, in: world, slots: enteredSlots).map { GeneratedCode.place(PlacePlan(code: .empty, record: .built($0))) }
+			// A mock's `@Sendable` function captures its override from a local its parent's body binds just before it, which
+			// a node with one parent has, or with the root alone as its parents (`mockSendableRefusals(of:in:)`).
+			let binding = Self.mockOverridesBindingPlace(of: declaration, record: record, in: world, slots: enteredSlots).map { binding in
+				GeneratedCode.place(PlacePlan(code: .empty, record: .built(firstParentsOverrides.map(binding.resolvingHandedToChildrenByPlacingBody(to:)) ?? binding)))
+			}
 			// A member of a loop of builders calls the functions of the others, which capture their locals, so its level
 			// binds every member's local before the first member (`mockLoopOverridesBindings`).
 			let loopOverridesBinding = Self.isMockLoopMember(declaration, in: world) ? binding : nil
@@ -637,6 +648,8 @@ struct NodeRecords: Sendable {
 		mockLoopSendableStructDeclarations = mockLoopLevels.sendableStructByLevel.sorted(by: { $0.key < $1.key }).flatMap(\.value.declaration)
 		mockEnteredPlacesUse = enteredSlots.flatMap { $0.slots.isEmpty ? nil : $0.use }
 		mockConfigurationTypeNamesHandedWithPlacesThatMustBeSendable = enteredSlots.flatMap { Self.mockConfigurationTypeNamesHandedWithPlacesThatMustBeSendable(in: world, slots: $0) }
+		self.kinds = kinds
+		bodyEntries = world.isMockWorld ? entries : []
 		declarationByVariant = (0..<Int32(world.variantCount)).map(world.declaration(of:))
 	}
 
@@ -654,7 +667,7 @@ struct NodeRecords: Sendable {
 	let mockLoopSendableStructDeclarations: [String]
 
 	/// Which functions a mock root's calls enter the places of its cycles with, which decides what `mock()` declares for
-	/// them (`MockEnteredSlot.mockEnteredPlacesDeclaration(isSendable:entersNearest:passes:leavesOut:)`); `nil` for a world with no
+	/// them (`MockEnteredSlot.mockEnteredPlacesDeclaration(isSendable:entersNearest:passes:leavesOut:slotCount:)`); `nil` for a world with no
 	/// cycle and for a production root's.
 	let mockEnteredPlacesUse: MockEnteredPlacesUse?
 
@@ -669,10 +682,17 @@ struct NodeRecords: Sendable {
 	}
 
 	/// Each variant's declaration.
-	private let declarationByVariant: [DeclarationID]
+	let declarationByVariant: [DeclarationID]
 
 	/// By variant.
-	private let records: [PlaceRecord?]
+	let records: [PlaceRecord?]
+
+	/// Each declaration's kind.
+	let kinds: [NodeRecordKind]
+
+	/// What each variant's body holds, in the order it builds it, by variant, in a mock root's world; empty in a production
+	/// root's.
+	let bodyEntries: [[BodyEntry]]
 
 	/// A place `init(world:seamTree:seamHoles:declaredTypeNames:)`'s walk is making: its variant, its node's edges in build
 	/// order and the next to walk, what its body holds so far, and what the places walked beneath it hand it.

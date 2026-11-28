@@ -42,10 +42,10 @@
 /// - receives a label only if available that the module's worlds declare lazily anywhere: what a `nil` answer keys as
 ///   there (`TypeFactsGraph`'s rule A) is folded over every call into the declaration in its world;
 /// - receives a label only if available that a mock root may pin (some world both requires the label and receives it
-///   only if available): its mock read (`ReadChannel.mock`) is answered by what the world's root pins above it, a context
-///   of the world's own pin sets, and beneath it by what the world's required receives pin (`TypeFactsMockRootPins`), so
-///   the shared graph, which pins nothing, answers no such read. This is wider than needed, the frontier's call could
-///   carry the context by value, but it keeps every key the shared graph is seeded with world-independent.
+///   only if available): whether a place passes it `nil` follows the path from the world's mock root to the place
+///   (`TypeFactsMockRootPins.receivesPassedNil(alongPath:)`), the world's own required receives above it and beneath its
+///   type, so the shared graph, which has no mock root, decides no such pin. This is wider than needed, a place's path
+///   could be carried by value, but it keeps what the shared graph holds world-independent.
 ///
 /// A mock root's own declaration is never shareable, and a world keeps the declarations its root builds itself in its
 /// own graph whatever the table says (`topDeclarations(ofWorld:)`): their records are made for that world alone. These

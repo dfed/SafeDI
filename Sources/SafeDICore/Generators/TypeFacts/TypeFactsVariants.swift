@@ -103,10 +103,6 @@ struct TypeFactsVariants: Sendable {
 	///   - madeAgain: The world's made-again calls, and what a node binds at its top for a read of a member it makes again
 	///     (an answer for each read of a label it rebinds, `nil` for the others, which pass through from the caller's own
 	///     answers); `nil` for a world with no loop of builders.
-	///   - refine: What a node adds, at the edge, to a key it passes through without binding the read: a key in place of the
-	///     caller's, or `nil` to hand the caller's on as it is. A mock root's pins are the one reader: a required receive the
-	///     node makes pins, for the places beneath it, the declaration a read of its label resolves to
-	///     (`TypeFactsMockRootPins`). Not applied to a made-again call, which builds no place of its own.
 	init(
 		graph: OrderedGraph<some Hashable & Sendable>,
 		reads: ReadsFromAbove,
@@ -115,7 +111,6 @@ struct TypeFactsVariants: Sendable {
 		family: (_ edge: Int, _ callerFamily: VariantFamily) -> VariantFamily,
 		key: (_ read: Int32, _ answer: Int32, _ target: Int32) -> Int32,
 		madeAgain: (edges: MadeAgainEdges, binding: (_ node: Int, _ read: Int32) -> VariantBinding?)? = nil,
-		refine: ((_ edge: Int, _ read: Int32, _ callerKey: Int32) -> Int32?)? = nil,
 		bucket: (_ node: Int32, _ family: VariantFamily, _ keys: [Int32]) -> Int = TypeFactsVariants.hash,
 	) {
 		var rootKeys = [Int32]()
@@ -125,7 +120,7 @@ struct TypeFactsVariants: Sendable {
 			rootKeys.append(key(read, answer?.answer ?? -1, 0))
 			rootSources.append(answer.map { .bound($0.declaration, answer: $0.answer) } ?? .none)
 		}
-		self.init(graph: graph, reads: reads, seeds: [Seed(node: 0, family: .plain, keys: rootKeys)], rootSources: rootSources, binding: binding, family: family, key: key, madeAgain: madeAgain, refine: refine, bucket: bucket)
+		self.init(graph: graph, reads: reads, seeds: [Seed(node: 0, family: .plain, keys: rootKeys)], rootSources: rootSources, binding: binding, family: family, key: key, madeAgain: madeAgain, bucket: bucket)
 	}
 
 	/// A body the worklist starts from where no root of the graph is: a call made from outside the graph, of `node` in
@@ -148,7 +143,7 @@ struct TypeFactsVariants: Sendable {
 		family: (_ edge: Int, _ callerFamily: VariantFamily) -> VariantFamily,
 		key: (_ read: Int32, _ answer: Int32, _ target: Int32) -> Int32,
 	) {
-		self.init(graph: graph, reads: reads, seeds: seeds, rootSources: [], binding: binding, family: family, key: key, madeAgain: nil, refine: nil, bucket: TypeFactsVariants.hash)
+		self.init(graph: graph, reads: reads, seeds: seeds, rootSources: [], binding: binding, family: family, key: key, madeAgain: nil, bucket: TypeFactsVariants.hash)
 	}
 
 	private init(
@@ -160,7 +155,6 @@ struct TypeFactsVariants: Sendable {
 		family: (_ edge: Int, _ callerFamily: VariantFamily) -> VariantFamily,
 		key: (_ read: Int32, _ answer: Int32, _ target: Int32) -> Int32,
 		madeAgain: (edges: MadeAgainEdges, binding: (_ node: Int, _ read: Int32) -> VariantBinding?)?,
-		refine: ((_ edge: Int, _ read: Int32, _ callerKey: Int32) -> Int32?)?,
 		bucket: (_ node: Int32, _ family: VariantFamily, _ keys: [Int32]) -> Int,
 	) {
 		var columns = Columns()
@@ -195,7 +189,7 @@ struct TypeFactsVariants: Sendable {
 		var next = 0
 		/// Appends the call of `target` from `caller`, a variant of `node`, with the answers `binding` gives and the caller's
 		/// own passed through for the rest.
-		func appendCall(of target: Int32, from caller: Int, of node: Int, family calleeFamily: () -> VariantFamily, binding: (_ read: Int32) -> VariantBinding?, refine: (_ read: Int32, _ callerKey: Int32) -> Int32?) {
+		func appendCall(of target: Int32, from caller: Int, of node: Int, family calleeFamily: () -> VariantFamily, binding: (_ read: Int32) -> VariantBinding?) {
 			scratchKeys.removeAll(keepingCapacity: true)
 			scratchSources.removeAll(keepingCapacity: true)
 			reads.rows.forEachColumn(inRow: Int(target)) { read, _ in
@@ -205,10 +199,8 @@ struct TypeFactsVariants: Sendable {
 					scratchSources.append(.bound(bound.declaration, answer: bound.answer))
 				} else if let position = reads.rows.rank(of: read, inRow: node) {
 					// The caller's key, as it is: an answer its callers share, which is all a body shared by them can hand
-					// on. It is a key already, so `key` is never applied to it again; a node that adds to it at the edge hands
-					// on the key it makes instead.
-					let callerKey = columns.key(ofVariant: caller, at: position)
-					scratchKeys.append(refine(read, callerKey) ?? callerKey)
+					// on. It is a key already, so `key` is never applied to it again.
+					scratchKeys.append(columns.key(ofVariant: caller, at: position))
 					scratchSources.append(.passedThrough(Int32(position)))
 				} else {
 					scratchKeys.append(key(read, -1, target))
@@ -229,7 +221,7 @@ struct TypeFactsVariants: Sendable {
 			columns.callOffsets.append(Int32(columns.callees.count))
 			for (edgeIndex, target) in graph.edges(from: node).enumerated() {
 				let edge = graph.edgeOffset(of: node) + edgeIndex
-				appendCall(of: target, from: caller, of: node, family: { family(edge, callerFamily) }, binding: { binding(edge, $0) }, refine: { read, callerKey in refine?(edge, read, callerKey) })
+				appendCall(of: target, from: caller, of: node, family: { family(edge, callerFamily) }, binding: { binding(edge, $0) })
 			}
 			if let madeAgain {
 				columns.madeAgainOffsets.append(Int32(columns.callees.count))
@@ -238,7 +230,7 @@ struct TypeFactsVariants: Sendable {
 				// rebinds only `@Sendable` members (a plain one is `nonSendableWrapperCaptures`' error), each of whose edges
 				// fixes its family whatever it is given.
 				for (target, parentEdge) in zip(madeAgain.edges.targets(of: node), madeAgain.edges.parentEdges(of: node)) {
-					appendCall(of: target, from: caller, of: node, family: { family(Int(parentEdge), callerFamily) }, binding: { madeAgain.binding(node, $0) }, refine: { _, _ in nil })
+					appendCall(of: target, from: caller, of: node, family: { family(Int(parentEdge), callerFamily) }, binding: { madeAgain.binding(node, $0) })
 				}
 			}
 		}

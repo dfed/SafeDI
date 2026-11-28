@@ -92,6 +92,10 @@ extension DependencyTreeGenerator {
 		var foldedMockImportsByType = [TypeDescription: Set<FulfillerImports.Fulfiller>]()
 		// Which checks of each mock root's tree can find anything in it, by mocked type (`MockRootTreeChecks`).
 		var treeChecksByMockedType = [TypeDescription: MockRootTreeChecks]()
+		// The concrete types whose configuration each mock root's tree reads in a `Sendable` scope, folded from its world.
+		var foldedSendableConfigurationTypeNamesByType = [TypeDescription: Set<String>]()
+		// Whether each mock root's world finds a `Sendable` capture, where a test compares it with the tree.
+		var worldFindsSendableCaptureByMockedType = [TypeDescription: Bool?]()
 		// The public mocks the module's own files declare, whose plans its module info carries.
 		var ownPublicMockTypes = Set<TypeDescription>()
 		// One memo for the mock roots, shared between them as `sharingBetweenMockRoots` says.
@@ -163,8 +167,13 @@ extension DependencyTreeGenerator {
 					}
 				}
 				foldedMockImportsByType[instantiable.concreteInstantiable] = TypeFactsImports(root: mockRootTree.worldRoot, buildingMock: true).fulfillers
+				foldedSendableConfigurationTypeNamesByType[instantiable.concreteInstantiable] = TypeFactsSendableConfigurations(
+					root: mockRootTree.worldRoot,
+					mockedTypeIsActor: instantiable.declarationType == .actorType,
+				).typeNames
 				mockRoots.append((instantiable: instantiable, scopeGenerator: mockRoot))
 				treeChecksByMockedType[instantiable.concreteInstantiable] = mockRootTree.treeChecks
+				worldFindsSendableCaptureByMockedType[instantiable.concreteInstantiable] = mockRootTree.worldFindsSendableCapture
 			} catch let error as DependencyTreeGeneratorError {
 				mockRootErrors.append(error)
 			}
@@ -217,7 +226,7 @@ extension DependencyTreeGenerator {
 			mockRoots.filter { treeChecksByMockedType[$0.instantiable.concreteInstantiable]?.needsTree(check) ?? true }
 		}
 		if let observer = MockRootTreeChecksObservation.comparesTree {
-			await Self.compareTreeChecks(of: mockRoots, treeChecksByMockedType: treeChecksByMockedType, handingTo: observer)
+			await Self.compareTreeChecks(of: mockRoots, treeChecksByMockedType: treeChecksByMockedType, worldFindsSendableCaptureByMockedType: worldFindsSendableCaptureByMockedType, handingTo: observer)
 		}
 		try Self.validateFills(
 			inTreesRootedAt: mockRootsNeedingTree(for: .fills).map(\.scopeGenerator),
@@ -254,12 +263,18 @@ extension DependencyTreeGenerator {
 		//
 		// The sendable configuration types are unioned across every root before any root is lowered: a struct is shared
 		// across every root that references the type, so the annotation has to agree, and each root's lowering reads the
-		// union. They are read from the generator trees.
-		let sendableConfigurationTypeNames = try await BoundedConcurrency.map(mockRoots, width: BoundedConcurrency.mockRootWidth) { instantiableAndMockRoot, _ in
-			let (instantiable, mockRoot) = instantiableAndMockRoot
-			return mockRoot.sendableConfigurationTypeNames(ofMockRootOf: instantiable)
-		}.reduce(into: Set<String>()) { union, names in
-			union.formUnion(names)
+		// union. Each is folded from the root's world (`TypeFactsSendableConfigurations`).
+		var sendableConfigurationTypeNames = Set<String>()
+		for (instantiable, mockRoot) in mockRoots {
+			let foldedTypeNames = foldedSendableConfigurationTypeNamesByType[instantiable.concreteInstantiable, default: []]
+			sendableConfigurationTypeNames.formUnion(foldedTypeNames)
+			if let observer = TypeFactsSendableConfigurationsObservation.comparesWalk {
+				observer(TypeFactsSendableConfigurationsComparison(
+					root: "mock of " + instantiable.concreteInstantiable.asSource,
+					foldedTypeNames: foldedTypeNames,
+					walkedTypeNames: mockRoot.sendableConfigurationTypeNames(ofMockRootOf: instantiable),
+				))
+			}
 		}
 		let mockDeclarationLocations = mockDeclarationLocationsOfTypesWithHandWrittenMocks()
 
@@ -806,22 +821,25 @@ extension DependencyTreeGenerator {
 	private static func compareTreeChecks(
 		of mockRoots: [(instantiable: Instantiable, scopeGenerator: ScopeGenerator)],
 		treeChecksByMockedType: [TypeDescription: MockRootTreeChecks],
+		worldFindsSendableCaptureByMockedType: [TypeDescription: Bool?],
 		handingTo observer: @Sendable (MockRootTreeChecksComparison) -> Void,
 	) async {
 		for (instantiable, mockRoot) in mockRoots {
 			let needingTree = treeChecksByMockedType[instantiable.concreteInstantiable]?.needingTree ?? Set(MockRootTreeCheck.allCases)
-			// The capture walk is the costly one, so it runs only where the scopes left the check out.
-			var capturesWrapper = false
-			if !needingTree.contains(.sendableCaptures) {
-				capturesWrapper = await !mockRoot.nonSendableWrapperCaptures(ofTreeRootedAt: instantiable).isEmpty
-			}
+			// The capture walk runs for every root, which the world's capture check is compared with.
+			let capturesWrapper = await !mockRoot.nonSendableWrapperCaptures(ofTreeRootedAt: instantiable).isEmpty
 			let findings: [(check: MockRootTreeCheck, findsSomething: Bool)] = [
 				(.cycleLabels, !mockRoot.unpassableCycleLabelsInTree.isEmpty),
 				(.fills, mockRoot.treeHoldsCallOrFill),
 				(.sendableCaptures, capturesWrapper),
 			]
 			let findingInTreeWithoutNeed = Set(findings.filter { $0.findsSomething && !needingTree.contains($0.check) }.map(\.check))
-			observer(MockRootTreeChecksComparison(root: instantiable.concreteInstantiable.asSource, needingTree: needingTree, findingInTreeWithoutNeed: findingInTreeWithoutNeed))
+			observer(MockRootTreeChecksComparison(
+				root: instantiable.concreteInstantiable.asSource,
+				needingTree: needingTree,
+				findingInTreeWithoutNeed: findingInTreeWithoutNeed,
+				sendableCaptureFinding: (world: worldFindsSendableCaptureByMockedType[instantiable.concreteInstantiable] ?? nil, tree: capturesWrapper),
+			))
 		}
 	}
 

@@ -87,7 +87,7 @@ extension NodeRecords {
 		let instantiable = world.scope(of: declaration).instantiable
 		// An actor is claimed as any node is. The closure that overrides it takes each argument `sending`
 		// (`MockLowering.BuilderParameters`), and what it is sent is built by functions that are each handed their
-		// configuration, the `Sendable` form beneath an actor (`ScopeGenerator.sendableConfigurationTypeNames(ofMockRootOf:)`),
+		// configuration, the `Sendable` form beneath an actor (`TypeFactsSendableConfigurations`),
 		// so none captures `mock()`'s overrides, as the walk's read of them into a local before each function keeps its own
 		// from doing.
 		// A wrapper the actor builds calls its function in a closure, which would capture the configuration the actor's
@@ -111,7 +111,7 @@ extension NodeRecords {
 	/// fields of its configuration its construction reads; the receives the node binds again before its children), and
 	/// then sets the override's fields (`mockConstructionRecord`). An erased node's override returns the property's type
 	/// (`mockErasedDecoration(of:)`). The local a `@Sendable` function reads its override from is a place before the node's,
-	/// which the walk of the records puts there (`mockOverridesBindingPlace(of:record:in:)`).
+	/// which the walk of the records puts there (`mockOverridesBindingPlace(of:record:in:slots:)`).
 	static func mockDecoratedRecord(
 		of declaration: DeclarationID,
 		variant: VariantID,

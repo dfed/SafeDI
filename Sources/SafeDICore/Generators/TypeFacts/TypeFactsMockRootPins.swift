@@ -26,34 +26,21 @@
 ///
 /// A receive is pinned only where the nearest declaration of its label is the mock root's, and then either wherever its
 /// type is built (a required receive on its type, or beneath it back to a declaration of the label, pins it) or in the
-/// places beneath a required receive above it that pins it. So a mock read (`ReadChannel.mock`) of a label is answered
-/// by a context: a declaration nearer than the root's, or the root's with the read sets of the required receives above the
-/// place (`Context`). The root answers its own reads and its edges with its own context, a node that declares or rebinds
-/// the label answers its edges with a nearer declaration, and a node that hands the read on adds its own required receives
-/// of the label (`TypeFactsVariants`' `refine`). A label no required receive can pin a receive of in the world is
-/// answered by nothing, so it never tells two places apart.
+/// places beneath a required receive above it that pins it. A pin never keys a variant: a pinned receive is handed `nil`
+/// where another place of its type is handed the mock root's value, one optional of the receive's own form, which one
+/// parameter carries, so a variant that split on it would grow as two to the power of the pinned labels
+/// (`TypeFactsFormDebt`). So the pins are facts of the nodes, folded along a path only for a place: what a place passes
+/// `nil` given the path that reaches it (`receivesPassedNil(alongPath:)`).
 ///
-/// It holds, for the graph's lifetime, a few entries per label some required receive can pin a receive of: the receive
+/// It holds, for its owner's lifetime, a few entries per label some required receive can pin a receive of: the receive
 /// sets, the types pinned wherever built, and each node's required read sets of such labels.
 struct TypeFactsMockRootPins: Sendable {
-	/// What a place's mock read of a label resolves to above it.
-	enum Context: Hashable, Sendable {
-		/// A declaration of the label nearer than the mock root's, which pins nothing.
-		case nearer
-		/// The mock root's declaration, with the sets of properties each required receive of the label above the place reads
-		/// (`pinSets` IDs, sorted and distinct): each pins a receive it shares no declaration with.
-		case root(pinnedAbove: [Int32])
-	}
-
 	/// - Parameters:
-	///   - graph: The mock root's world, whose root is the mock root.
+	///   - graph: The mock root's world, or a graph that holds it.
+	///   - root: The node of `graph` that is the mock root, whose own and promoted children the walk starts from.
 	///   - edgeIsFill: Whether each edge, by its position among every node's edges, is a fill, which the walk enters no
 	///     tree of.
-	///   - labels: The world's labels, which every read of a pinnable label names.
-	///   - frontierRequiredReads: For each node that is a frontier of a mock world's top graph, the required receives of its
-	///     subtree in the shared graph that the walk below would collect beneath it, by label (`FrontierRows.requiredReads`);
-	///     `nil` for every other node, or empty for a world built whole.
-	init(graph: OrderedGraph<TypeFactsDeclaration>, edgeIsFill: [Bool], labels: TypeFactsInterner<String>, frontierRequiredReads: [[TypeFactsGraph.FrontierRows.RequiredRead]?] = []) {
+	init(graph: OrderedGraph<TypeFactsDeclaration>, root: Int, edgeIsFill: [Bool]) {
 		let nodes = graph.nodes
 		var pinSets = TypeFactsInterner<Set<Property>>()
 		// Each node's required receives of a label and its receives of one only if available, as the walk judges them.
@@ -61,15 +48,7 @@ struct TypeFactsMockRootPins: Sendable {
 		var onlyIfAvailableByNode = [[(property: Property, dependency: Dependency)]]()
 		var declaredLabelsByNode = [Set<String>]()
 		requiredByNode.reserveCapacity(nodes.count)
-		for (index, node) in nodes.enumerated() {
-			if node.key.leaf == .none, index < frontierRequiredReads.count, let required = frontierRequiredReads[index] {
-				// A frontier has no children here: its subtree's required receives stand in its own place, and the declarations
-				// that stop the walk beneath it already stopped them.
-				requiredByNode.append(required.map { ($0.label, pinSets.id(of: $0.propertiesRead)) })
-				onlyIfAvailableByNode.append(DependencyTreeGenerator.onlyIfAvailableReceivesFromAbove(of: node.scope))
-				declaredLabelsByNode.append([])
-				continue
-			}
+		for node in nodes {
 			guard node.key.leaf == .none else {
 				requiredByNode.append([])
 				onlyIfAvailableByNode.append([])
@@ -102,7 +81,7 @@ struct TypeFactsMockRootPins: Sendable {
 
 		// The root's edges to the children it promotes, whose trees production builds above the mocked type: the walk starts
 		// each of them afresh, and the mocked type's own receives pin nothing in them.
-		let rootScope = nodes[0].scope
+		let rootScope = nodes[root].scope
 		let ownChildProperties = Set(rootScope.instantiable.dependencies.compactMap { dependency -> Property? in
 			switch dependency.source {
 			case .instantiated:
@@ -112,9 +91,11 @@ struct TypeFactsMockRootPins: Sendable {
 			}
 		})
 		var promotedEdges = Set<Int>()
-		for (index, target) in graph.edges(from: 0).enumerated() {
+		var promotedChildren = Set<Int>()
+		for (index, target) in graph.edges(from: root).enumerated() {
 			if let property = nodes[Int(target)].property, nodes[Int(target)].key.leaf == .none, !edgeIsFill[index], !ownChildProperties.contains(property) {
 				promotedEdges.insert(index)
+				promotedChildren.insert(Int(target))
 			}
 		}
 		/// The children of `node` a tree of the walk enters: no fill, no leaf, and at the root only the mocked type's own.
@@ -122,7 +103,7 @@ struct TypeFactsMockRootPins: Sendable {
 			let offset = graph.edgeOffset(of: node)
 			var children = [Int]()
 			for (index, target) in graph.edges(from: node).enumerated()
-				where !edgeIsFill[offset + index] && nodes[Int(target)].key.leaf == .none && !(node == 0 && promotedEdges.contains(index))
+				where !edgeIsFill[offset + index] && nodes[Int(target)].key.leaf == .none && !(node == root && promotedEdges.contains(index))
 			{
 				children.append(Int(target))
 			}
@@ -133,7 +114,7 @@ struct TypeFactsMockRootPins: Sendable {
 		// starts at the mocked type and at each promoted child, and judges every type it reaches before a declaration of the
 		// label against the required receives on it and beneath it, back to a declaration of the label.
 		var pinnedWhereverBuilt = [String: [TypeDescription: Set<Property>]]()
-		let starts = [0] + graph.edges(from: 0).enumerated().compactMap { index, target in
+		let starts = [root] + graph.edges(from: root).enumerated().compactMap { index, target in
 			promotedEdges.contains(index) ? Int(target) : nil
 		}
 		for label in pinnableLabels.sorted() {
@@ -168,51 +149,46 @@ struct TypeFactsMockRootPins: Sendable {
 			}
 		}
 
-		var requiredSetsByNodeAndLabel = [[Int32: [Int32]]]()
+		var requiredSetsByNodeAndLabel = [[String: [Int32]]]()
 		requiredSetsByNodeAndLabel.reserveCapacity(nodes.count)
 		for required in requiredByNode {
-			var setsByLabel = [Int32: [Int32]]()
+			var setsByLabel = [String: [Int32]]()
 			for (label, set) in required where pinnableLabels.contains(label) {
-				guard let labelID = labels.existingID(of: label) else { continue }
-				setsByLabel[labelID, default: []].append(set)
+				setsByLabel[label, default: []].append(set)
 			}
 			requiredSetsByNodeAndLabel.append(setsByLabel)
 		}
+		self.nodes = nodes
 		self.pinSets = pinSets.values
-		self.pinnableLabels = Set(pinnableLabels.compactMap { labels.existingID(of: $0) })
+		self.pinnableLabels = pinnableLabels
 		self.pinnedWhereverBuilt = pinnedWhereverBuilt
 		self.requiredSetsByNodeAndLabel = requiredSetsByNodeAndLabel
-		self.promotedEdges = promotedEdges
+		self.promotedChildren = promotedChildren
 		self.onlyIfAvailableByNode = onlyIfAvailableByNode
+		self.declaredLabelsByNode = declaredLabelsByNode
 	}
 
-	/// Whether some required receive of the label in the world can pin a receive of it only if available.
-	func isPinnable(_ label: Int32) -> Bool {
-		pinnableLabels.contains(label)
-	}
-
-	/// The context the root answers a mock read of a pinnable label with at its edge with `index` among its edges: its own
-	/// required receives of the label pin the places beneath, but for a child it promotes.
-	func rootContext(atEdge index: Int, label: Int32) -> Context {
-		promotedEdges.contains(index) ? .root(pinnedAbove: []) : .root(pinnedAbove: (requiredSetsByNodeAndLabel[0][label] ?? []).sortedDistinct)
-	}
-
-	/// The context `node` hands on for a mock read of `label` it does not bind, given the one it was handed: its own
-	/// required receives of the label added, or `nil` where it adds none.
-	func context(handedOnBy node: Int, label: Int32, from context: Context) -> Context? {
-		guard case let .root(pinnedAbove) = context, let sets = requiredSetsByNodeAndLabel[node][label] else { return nil }
-		let refined = (pinnedAbove + sets).sortedDistinct
-		return refined == pinnedAbove ? nil : .root(pinnedAbove: refined)
-	}
-
-	/// The properties a place of `node` passes `nil` for, of those its type's dependencies receive only if available, given
-	/// the context of each label's mock read above the place: `contextOfLabel` returns `nil` for a label nothing pins.
-	func receivesPassedNil(at node: Int, type: TypeDescription, scope: ConstructionScope, contextOfLabel: (String) -> Context?) -> Set<Property> {
+	/// The properties the place at the end of `path` passes `nil` for, of those its type's dependencies receive only if
+	/// available: `path` is the place's nodes from the mock root down, the place's own last. A label's receives are pinned
+	/// from above only where no node on the path is built as the label and none above the place declares it, so that the
+	/// mock root's declaration is the nearest, by the required receives of each node above the place. A child the root
+	/// promotes is built above the mocked type in production, so neither the mocked type's declarations nor its required
+	/// receives are above the places of its tree.
+	func receivesPassedNil(alongPath path: [Int]) -> Set<Property> {
+		guard let node = path.last else { return [] }
+		let above = path.count > 1 && promotedChildren.contains(path[1]) ? path.dropFirst().dropLast() : path.dropLast()
+		let scope = nodes[node].scope
 		var passedNil = Set<Property>()
 		for receive in onlyIfAvailableByNode[node] where scope.createdBinding(of: receive.property) == nil {
-			guard case let .root(pinnedAbove) = contextOfLabel(receive.property.label) else { continue }
-			let isPinned = pinnedWhereverBuilt[receive.property.label]?[type]?.contains(receive.property) == true
-				|| pinnedAbove.contains { DependencyTreeGenerator.requiredReceive(reading: pinSets[Int($0)], pinsReceiveOf: receive.dependency) }
+			let label = receive.property.label
+			guard pinnableLabels.contains(label),
+			      !path.contains(where: { nodes[$0].property?.label == label }),
+			      !above.contains(where: { declaredLabelsByNode[$0].contains(label) })
+			else { continue }
+			let isPinned = pinnedWhereverBuilt[label]?[scope.instantiable.concreteInstantiable]?.contains(receive.property) == true
+				|| above.contains { above in
+					requiredSetsByNodeAndLabel[above][label]?.contains { DependencyTreeGenerator.requiredReceive(reading: pinSets[Int($0)], pinsReceiveOf: receive.dependency) } == true
+				}
 			if isPinned {
 				passedNil.insert(receive.property)
 			}
@@ -220,79 +196,13 @@ struct TypeFactsMockRootPins: Sendable {
 		return passedNil
 	}
 
+	private let nodes: [TypeFactsDeclaration]
 	private let pinSets: [Set<Property>]
-	private let pinnableLabels: Set<Int32>
+	private let pinnableLabels: Set<String>
 	private let pinnedWhereverBuilt: [String: [TypeDescription: Set<Property>]]
-	private let requiredSetsByNodeAndLabel: [[Int32: [Int32]]]
-	/// The root's edges, by index among its edges, to the children it promotes.
-	private let promotedEdges: Set<Int>
+	private let requiredSetsByNodeAndLabel: [[String: [Int32]]]
+	/// The root's children it promotes, whose trees production builds above the mocked type.
+	private let promotedChildren: Set<Int>
 	private let onlyIfAvailableByNode: [[(property: Property, dependency: Dependency)]]
-}
-
-extension TypeFactsMockRootPins {
-	/// The context each answer ID of a mock read stands for, in flat columns by answer ID, for the graph's lifetime: a kind
-	/// per answer and the pinned sets of each root context, a few entries per mock answer.
-	struct ContextColumns: Sendable {
-		/// - Parameters:
-		///   - contexts: The context of each mock answer, by answer ID.
-		///   - answerCount: How many answers the world has; IDs are `0..<answerCount`.
-		init(contexts: [Int32: Context], answerCount: Int) {
-			var kinds = [Kind]()
-			var pinnedAboveOffsets = [Int32]()
-			var pinnedAbove = [Int32]()
-			kinds.reserveCapacity(answerCount)
-			pinnedAboveOffsets.reserveCapacity(answerCount + 1)
-			for answer in 0..<answerCount {
-				pinnedAboveOffsets.append(Int32(pinnedAbove.count))
-				switch contexts[Int32(answer)] {
-				case .none:
-					kinds.append(.none)
-				case .nearer:
-					kinds.append(.nearer)
-				case let .root(pinned):
-					kinds.append(.root)
-					pinnedAbove.append(contentsOf: pinned)
-				}
-			}
-			pinnedAboveOffsets.append(Int32(pinnedAbove.count))
-			self.kinds = kinds
-			self.pinnedAboveOffsets = pinnedAboveOffsets
-			self.pinnedAbove = pinnedAbove
-		}
-
-		/// The context the answer stands for, or `nil` for an answer of no mock read and for -1, the key of a read nothing
-		/// answers (a mock read whose label no declaration above binds). Every other answer ID is one of `0..<answerCount`,
-		/// as every key and answer of the world is.
-		func context(ofAnswer answer: Int32) -> Context? {
-			guard answer >= 0 else { return nil }
-			let index = Int(answer)
-			switch kinds[index] {
-			case .none:
-				return nil
-			case .nearer:
-				return .nearer
-			case .root:
-				return .root(pinnedAbove: Array(pinnedAbove[Int(pinnedAboveOffsets[index])..<Int(pinnedAboveOffsets[index + 1])]))
-			}
-		}
-
-		private enum Kind: UInt8, Sendable {
-			case none
-			case nearer
-			case root
-		}
-
-		/// Each answer's kind of context, by answer ID.
-		private let kinds: [Kind]
-		/// Where each answer's pinned sets start in `pinnedAbove`, with one more entry for the end.
-		private let pinnedAboveOffsets: [Int32]
-		/// The pinned sets of every root context, answer after answer.
-		private let pinnedAbove: [Int32]
-	}
-}
-
-extension [Int32] {
-	fileprivate var sortedDistinct: [Int32] {
-		Array(Set(self)).sorted()
-	}
+	private let declaredLabelsByNode: [Set<String>]
 }

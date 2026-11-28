@@ -150,8 +150,9 @@ extension TypeFactsGraph {
 			let kindPosition: Int
 		}
 
-		/// A required receive of the subtree that a mock root's pins collect beneath the declaration: its label and the
-		/// properties it reads (`TypeFactsMockRootPins`), each once.
+		/// A required receive of the subtree that a mock root's pins collect beneath the declaration, which a top graph's
+		/// frontier has no edges to: its label and the properties it reads, each once, for a walk of the world's pins over
+		/// the top graph (`TypeFactsMockRootPins`) to read in their place.
 		struct RequiredRead: Hashable, Sendable {
 			let label: String
 			let propertiesRead: Set<Property>
@@ -547,8 +548,8 @@ extension TypeFactsGraph {
 		return parts.joined(separator: "; ")
 	}
 
-	/// A variant's facts as text, by value: its family, its keys, its `@Sendable` mark, each call's sources by the read
-	/// they answer, and the receives its mock passes `nil`. Its outcomes are folded over the calls into it, which are
+	/// A variant's facts as text, by value: its family, its keys, its `@Sendable` mark, and each call's sources by the read
+	/// they answer; what a mock passes `nil` is a fact of a place, not of a variant. Its outcomes are folded over the calls into it, which are
 	/// compared apart (`outcomeCells(of:world:)`), and its parameters follow from its keys and its outcomes.
 	func variantFacts(of variant: Int) -> String {
 		var parts = ["\(variants.family(of: variant)) sendable \(variantBuildsInSendableFunction[variant])"]
@@ -565,7 +566,6 @@ extension TypeFactsGraph {
 			}
 			parts.append("call \(edgeIndex) \(zip(calleeReads, sources).map { "\($0): \($1)" }.sorted())")
 		}
-		parts.append("passed nil \(receivesPassedNil(of: VariantID(variant)).map(\.asSource).sorted())")
 		return parts.joined(separator: "; ")
 	}
 }

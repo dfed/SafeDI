@@ -97,14 +97,14 @@ extension NodeRecords {
 			.callHanding(
 				ReservedName.mockEnteringFunctionName,
 				of: entered,
-				literal: slot.name,
+				slot: Int(slots.slotIndexByDeclaration[Int(declaration)]),
 				value: configuration,
 				flags: slot.nearestOfTypeSlotName == nil ? [] : [ReservedName.mockEnteringNearestOfTypeArgumentLabel],
 			)
 		} else if mockNearestOfTypeEntered(by: declaration, in: slots) != nil {
-			.callHanding(ReservedName.mockEnteringNearestFunctionName, of: entered, literal: nil, value: configuration, flags: [])
+			.callHanding(ReservedName.mockEnteringNearestFunctionName, of: entered, slot: nil, value: configuration, flags: [])
 		} else {
-			.callHanding(ReservedName.mockPassingFunctionName, of: entered, literal: nil, value: configuration, flags: [])
+			.callHanding(ReservedName.mockPassingFunctionName, of: entered, slot: nil, value: configuration, flags: [])
 		}
 		return [
 			// No call inside a `@Sendable` function hands the configuration or the places on, but where a function that takes
@@ -146,16 +146,18 @@ extension NodeRecords {
 	static let mockEnteredConfiguration = ValuePath.member(ReservedName.mockEnteredConfigurationMemberName, of: .passedArgument(ReservedName.mockEnteredPlacesParameterName))
 
 	/// `place`, the place of `declaration` whose record is `record`, as the body of `parent`'s place holds it. One place
-	/// stands for a node in every body that builds it, and a function that takes the places entered is handed by each
-	/// parent a field of that parent's own configuration, or none along an edge the configurations leave out, so each
-	/// body's place hands its own values to the one function (`TypeKeyLayout` keeps the values of each call). A node whose
-	/// function takes no places reads its override as a field of the configuration its first parent's body reads
-	/// (`mockConfigurationField(of:named:in:slots:)`), which a function that takes the places reads of its one argument
-	/// and every other body of the overrides it was handed: where `parent`'s body reads another configuration than the
-	/// first parent's, its place reads the field of its own, in the value it hands the node's function, or, for a node
-	/// built in place, in the closure the construction tries first. Every other place is the same in each body.
+	/// stands for a node in every body that builds it, its record resolved for its first parent's body
+	/// (`.handedToChildrenByPlacingBody`), and a function that takes the places entered is handed by each parent a
+	/// field of that parent's own configuration, or none along an edge the configurations leave out, so each body's place
+	/// hands its own values to the one function (`TypeKeyLayout` keeps the values of each call). A node whose function
+	/// takes no places reads its override as a field of the overrides the body that places it hands its children
+	/// (`mockConfigurationField(named:)`): where `parent`'s body hands other overrides than the first parent's, its place
+	/// resolves the record to its own, in the value it hands the node's function, or, for a node built in place, in the
+	/// closure the construction tries first. Every other place is the same in each body.
 	static func mockPlace(_ place: GeneratedCode, record: PlaceRecord?, of declaration: DeclarationID, builtBy parent: DeclarationID, in world: some NodeRecordSources, slots: MockEnteredSlots?) -> GeneratedCode {
-		guard let slots, case var .built(built) = record else { return place }
+		guard let slots, case let .built(unresolved) = record else { return place }
+		let overrides = mockOverridesOfChildren(of: parent, in: world, slots: slots)
+		var built = unresolved.resolvingHandedToChildrenByPlacingBody(to: overrides)
 		if takesMockEnteredPlaces(declaration, in: slots) {
 			let label = built.property.label
 			let handed = mockArgumentsHanded(to: declaration, labeled: label, by: parent, in: world, slots: slots)
@@ -164,34 +166,11 @@ extension NodeRecords {
 			guard let local = mockEnteredConfigurationLocal(of: declaration, labeled: label, handedBy: parent, in: world, slots: slots) else {
 				return .place(PlacePlan(code: .empty, record: .built(built)))
 			}
-			let binding = mockOverridesBinding(of: local, to: .member(label, of: mockOverridesOfChildren(of: parent, in: world, slots: slots)))
+			let binding = mockOverridesBinding(of: local, to: .member(label, of: overrides))
 			return .sequence([.place(PlacePlan(code: .empty, record: .built(binding))), .place(PlacePlan(code: .empty, record: .built(built)))])
 		} else {
 			let firstParent = world.parents(of: declaration).first?.parent ?? 0
-			guard takesMockEnteredPlaces(parent, in: slots) != takesMockEnteredPlaces(firstParent, in: slots) else { return place }
-			let label = built.property.label
-			let fieldOfFirstParent = mockConfigurationField(of: declaration, named: label, in: world, slots: slots)
-			let field = ValuePath.member(label, of: mockOverridesOfChildren(of: parent, in: world, slots: slots))
-			if built.hasFunction {
-				built.passedArguments = built.passedArguments.map { argument in
-					PassedArgument(
-						parameterName: argument.parameterName,
-						type: argument.type,
-						value: argument.value == fieldOfFirstParent ? field : argument.value,
-						staysOutsideSendableFunctions: argument.staysOutsideSendableFunctions,
-					)
-				}
-			} else {
-				built.alternatives = built.alternatives.map { alternative in
-					ConstructionAlternative(
-						closure: alternative.closure == fieldOfFirstParent ? field : alternative.closure,
-						bindingName: alternative.bindingName,
-						requiresAbsent: alternative.requiresAbsent,
-						use: alternative.use,
-						resultWrapper: alternative.resultWrapper,
-					)
-				}
-			}
+			guard overrides != mockOverridesOfChildren(of: firstParent, in: world, slots: slots) else { return place }
 		}
 		return .place(PlacePlan(code: .empty, record: .built(built)))
 	}
@@ -203,7 +182,7 @@ extension NodeRecords {
 	///
 	/// A value a function builds of an argument that is not `Sendable` cannot be sent, and the closure that calls a
 	/// `@Sendable` function captures the places it hands, so there `mock()` declares the places in their `Sendable` form
-	/// (`MockEnteredSlot.mockEnteredPlacesDeclaration(isSendable:entersNearest:passes:leavesOut:)`), which holds only configurations
+	/// (`MockEnteredSlot.mockEnteredPlacesDeclaration(isSendable:entersNearest:passes:leavesOut:slotCount:)`), which holds only configurations
 	/// of the `Sendable` form: the root's lowering, which knows which types take that form, refuses the world where one
 	/// of these does not, as `mockActor` where an actor is sent the value and otherwise as `sendable`
 	/// (`ScopeGenerator.nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:sendableConfigurationTypeNames:rootNames:outerDeclarations:)`).
