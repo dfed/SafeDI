@@ -38,6 +38,7 @@ enum ApprovedDifferences {
 	/// Every approved difference the check of node records knows, in the order it applies them.
 	static let all: [ApprovedDifference] = [
 		ApprovedDifference(entry: 13, name: "optional channel, rule A", rewrite: OptionalChannelRewrite.rewritten),
+		ApprovedDifference(entry: 28, name: "one function for properties of one type", rewrite: SharedFunctionRewrite.rewritten),
 	]
 
 	/// The records' text after each approved difference that it holds is rewritten as the tree writes it, and the entries
@@ -89,6 +90,91 @@ enum OptionalChannelRewrite {
 
 	/// The wrappers whose instance answers a read of the unwrapped form.
 	static let wrapperNames = ["LazilyInstantiated", "SendableLazilyInstantiated"]
+}
+
+/// Entry 28, one function for several properties of one type (lead, 2026-11-28). Laid out by type, the properties of one
+/// type whose bodies are alike share one builder function, named for the first of them in the order the walk builds
+/// them, never by label; the tree writes a copy for each property, under the property's own name. The rewrite gives each
+/// later property's statement a copy of the shared function, declared just before the statement as the tree declares
+/// it, and calls the copy there. A copy is the shared function with only its name changed, so the rewritten text equals
+/// the tree's only where the tree's copies differ by name alone and every reader captures the same declarations; where
+/// the first property's statement does not call the function under its own name, nothing is rewritten.
+enum SharedFunctionRewrite {
+	static func rewritten(_ nodeRecordsText: String, treeText: String) -> String? {
+		var code = FunctionText(nodeRecordsText)
+		var copied = false
+		while code.copyNextSharedFunction(treeText: treeText) {
+			copied = true
+		}
+		return copied ? code.text : nil
+	}
+}
+
+extension FunctionText {
+	/// Gives the next statement that calls a function named for an earlier property a copy of that function named for its
+	/// own property, which the tree's text declares, and returns whether it found one.
+	mutating func copyNextSharedFunction(treeText: String) -> Bool {
+		for function in functions {
+			let indentation = String(lines[function.range.lowerBound].prefix { $0 == " " })
+			guard let property = Self.property(namedBy: function.name),
+			      let scopeEnd = lines[function.range.upperBound...].firstIndex(where: { Self.closesScope(at: indentation, $0) })
+			else { continue }
+			let statements = Self.statementStarts(in: function.range.upperBound..<scopeEnd, indentation: indentation, of: lines)
+			var callers = [(start: Int, property: String)]()
+			for (position, start) in statements.enumerated() {
+				let end = position + 1 < statements.count ? statements[position + 1] : scopeEnd
+				guard lines[start..<end].contains(where: { Self.references(function.name, in: $0) }),
+				      let statementProperty = Self.boundProperty(of: lines[start], indentation: indentation)
+				else { continue }
+				callers.append((start, statementProperty))
+			}
+			guard callers.first?.property == property else { continue }
+			for caller in callers.dropFirst().reversed() {
+				let copyName = "__safeDI_" + caller.property
+				guard copyName != function.name, treeText.contains("func \(copyName)("),
+				      !functions.contains(where: { $0.name == copyName })
+				else { continue }
+				let end = statements.first { $0 > caller.start } ?? scopeEnd
+				for index in caller.start..<end {
+					lines[index] = Self.replacingReferences(to: function.name, with: copyName, in: lines[index])
+				}
+				let copy = lines[function.range].enumerated().map { offset, line in
+					offset == 0 ? Self.replacingReferences(to: function.name, with: copyName, in: line) : line
+				}
+				lines.insert(contentsOf: copy, at: caller.start)
+				return true
+			}
+		}
+		return false
+	}
+
+	/// The property a builder function named `__safeDI_<label>` builds.
+	private static func property(namedBy functionName: String) -> String? {
+		guard functionName.hasPrefix("__safeDI_") else { return nil }
+		return String(functionName.dropFirst("__safeDI_".count))
+	}
+
+	/// Whether `line` closes the scope whose statements are at `indentation`.
+	private static func closesScope(at indentation: String, _ line: String) -> Bool {
+		let lineIndentation = line.prefix { $0 == " " }
+		return lineIndentation.count < indentation.count && !line.dropFirst(lineIndentation.count).isEmpty
+	}
+
+	/// The first line of each statement in `range` whose indentation is `indentation`, a function declaration's included.
+	private static func statementStarts(in range: Range<Int>, indentation: String, of lines: [String]) -> [Int] {
+		range.filter { index in
+			let line = lines[index]
+			return line.hasPrefix(indentation) && line.dropFirst(indentation.count).first.map { $0 != " " && $0 != "}" } == true
+		}
+	}
+
+	/// The label a statement's first line binds, `let <label>` or `let <label>: <type>`.
+	private static func boundProperty(of line: String, indentation: String) -> String? {
+		let statement = line.dropFirst(indentation.count)
+		guard statement.hasPrefix("let ") else { return nil }
+		let label = statement.dropFirst("let ".count).prefix { isIdentifierCharacter($0) }
+		return label.isEmpty ? nil : String(label)
+	}
 }
 
 /// Generated code as lines, read as the builder functions it declares.
