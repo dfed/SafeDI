@@ -47,7 +47,9 @@ extension NodeRecords {
 				// A call of another module's public mock builds its tree in the called mock, which records its configurations.
 				guard let record = mockBuiltRecord(of: child), !record.target.isPublicMockCall else { continue }
 				let childDeclaration = declarationByVariant[Int(child)]
-				let concreteType = record.concreteType.asSource
+				// The type the node's declaration builds, as the walk enters it: a record's concrete type is the property's where
+				// a declaration names the type that fulfills it.
+				let concreteType = world.scope(of: childDeclaration).instantiable.concreteInstantiable.asSource
 				let ownConcreteType = top.variant == 0 ? nil : world.scope(of: declarationByVariant[Int(top.variant)]).instantiable.concreteInstantiable.asSource
 				let repeatsAncestor = !configuredAncestorTypes.insert(concreteType).inserted
 				stack.append(MockConfigurationFrame(
