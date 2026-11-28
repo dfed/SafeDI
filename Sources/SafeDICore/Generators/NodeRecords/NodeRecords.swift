@@ -574,6 +574,11 @@ struct NodeRecords: Sendable {
 				}
 			}
 			if let loopBindingsIndex {
+				// After the locals, the struct a loop of `@Sendable` members is handed is made of them (`NodeRecords+Loops.swift`).
+				let declaration = world.declaration(of: variant)
+				loopBindings += Self.mockLoopSendableStructBindings(atLevel: declaration, in: world, levels: mockLoopLevels).map { binding in
+					.indented(.place(PlacePlan(code: .empty, record: .built(binding))), by: indentation)
+				}
 				children.insert(contentsOf: loopBindings, at: loopBindingsIndex)
 			}
 			return (children, escaping, fromSendableFunction, closedOn)
@@ -614,6 +619,7 @@ struct NodeRecords: Sendable {
 		}
 		self.rootBody = rootBody
 		self.records = records
+		mockLoopSendableStructDeclarations = mockLoopLevels.sendableStructByLevel.sorted(by: { $0.key < $1.key }).flatMap(\.value.declaration)
 		mockEnteredPlacesUse = enteredSlots.flatMap { $0.slots.isEmpty ? nil : $0.use }
 		mockConfigurationTypeNamesHandedWithPlacesThatMustBeSendable = enteredSlots.flatMap { Self.mockConfigurationTypeNamesHandedWithPlacesThatMustBeSendable(in: world, slots: $0) }
 		declarationByVariant = (0..<Int32(world.variantCount)).map(world.declaration(of:))
@@ -627,6 +633,10 @@ struct NodeRecords: Sendable {
 	/// The root's body: a place for each of the root's children, in the order the root builds them, indented as a root's
 	/// statements are.
 	let rootBody: [GeneratedCode]
+
+	/// The declarations of the `Sendable` structs a mock root's loops of `@Sendable` members are handed their level's
+	/// overrides in, which `mock()` declares before its body, their lines unindented (`NodeRecords.SendableLoopStruct`).
+	let mockLoopSendableStructDeclarations: [String]
 
 	/// Which functions a mock root's calls enter the places of its cycles with, which decides what `mock()` declares for
 	/// them (`MockEnteredSlot.mockEnteredPlacesDeclaration(isSendable:entersNearest:passes:)`); `nil` for a world with no
