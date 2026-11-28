@@ -21,22 +21,31 @@
 extension DependencyTreeGenerator {
 	/// The layout of `instantiable`'s code from the node records of its world, the root `constructionScope` builds, and
 	/// what forces its tree (`TreeForcer`): the kind node records refused, then `readersOfEveryTree`. The layout is `nil`
-	/// wherever anything forces the tree, and wherever the switch to node records is off
-	/// (`NodeRecordsObservation.buildsNoTreeForAcceptedRoots`), where nothing but `readersOfEveryTree` is named.
-	/// - Throws: What an initializer's arguments throw, as the tree's construction of the same place throws it.
+	/// wherever anything forces the tree, and for a world that holds a cycle, whose records are only compared.
+	/// Anything the records throw refuses the world (`NodeRecords.refusingWhatRecordsThrow(_:)`), whose tree reports it.
 	static func nodeRecordsLayout(
 		of instantiable: Instantiable,
 		constructionScope: ConstructionScope,
 		declaredTypeNames: DeclaredTypeNames,
 		readersOfEveryTree: [TreeForcer],
-	) throws -> (layout: NodeRecordsLayout?, treeForcers: [TreeForcer]) {
-		// Until the switch to node records lands, a run makes no records of a root it builds the tree of anyway.
-		guard NodeRecordsObservation.buildsNoTreeForAcceptedRoots else { return (nil, readersOfEveryTree) }
+	) -> (layout: NodeRecordsLayout?, treeForcers: [TreeForcer]) {
+		// A root every tree's reader forces is built from its tree, so only a test that observes node records makes its
+		// world, to name what they refuse.
+		guard readersOfEveryTree.isEmpty || NodeRecordsObservation.observer != nil else { return (nil, readersOfEveryTree) }
 		let world = TypeFactsGraph(root: constructionScope, forMockGeneration: false)
-		do {
-			let layout = try NodeRecordsLayout(of: instantiable, nodeRecords: NodeRecords(world: world, declaredTypeNames: declaredTypeNames))
+		switch NodeRecords.refusingWhatRecordsThrow({ () throws -> NodeRecordsLayout? in
+			let nodeRecords = try NodeRecords(world: world, declaredTypeNames: declaredTypeNames)
+			// A world that holds a cycle keeps its tree, or its plan by type, until node records write every production
+			// cycle root as today's tree does: its records are made and compared beside the tree where a test observes
+			// them (`plannedRootCode(of:declaredTypeNames:)`), and what forces the tree is named as the kind they refused
+			// before they made any cycle's records.
+			guard !(0..<Int32(world.declarationCount)).contains(where: world.isOnCycle) else { return nil }
+			return try NodeRecordsLayout(of: instantiable, nodeRecords: nodeRecords)
+		}) {
+		case let .success(layout):
+			guard let layout else { return (nil, [.nodeRecordKind(NodeRecordRefusal.cycle.rawValue)] + readersOfEveryTree) }
 			return (readersOfEveryTree.isEmpty ? layout : nil, readersOfEveryTree)
-		} catch let refusal as NodeRecordRefusal {
+		case let .failure(refusal):
 			return (nil, [.nodeRecordKind(refusal.rawValue)] + readersOfEveryTree)
 		}
 	}
@@ -44,10 +53,9 @@ extension DependencyTreeGenerator {
 	/// The kind node records refuse the world of `rootInfo`, a root of a module with seams, with; empty where they make its
 	/// records, or the root is of a module without seams, whose forcers name the kind already.
 	static func nodeRecordRefusal(ofSeamWorldRoot rootInfo: RootScopeInfo, declaredTypeNames: DeclaredTypeNames) -> [TreeForcer] {
-		guard rootInfo.treeForcers.contains(.seamWorld) else { return [] }
-		let world = TypeFactsGraph(root: rootInfo.rootScope, forMockGeneration: false)
-		let records = Result { () throws -> NodeRecords in try NodeRecords(world: world, seamTree: rootInfo.seamTree, declaredTypeNames: declaredTypeNames) }
-		guard case let .failure(error) = records, let refusal = error as? NodeRecordRefusal else { return [] }
+		guard rootInfo.treeForcers.contains(.seamWorld), let rootScope = rootInfo.rootScope else { return [] }
+		let world = TypeFactsGraph(root: rootScope, forMockGeneration: false)
+		guard case let .failure(refusal) = NodeRecords.refusingWhatRecordsThrow({ try NodeRecords(world: world, seamTree: rootInfo.seamTree, declaredTypeNames: declaredTypeNames) }) else { return [] }
 		return [.nodeRecordKind(refusal.rawValue)]
 	}
 
@@ -60,42 +68,68 @@ extension DependencyTreeGenerator {
 	static func plannedRootCode(of rootInfo: RootScopeInfo, declaredTypeNames: DeclaredTypeNames) async throws -> GeneratedCode {
 		let root = rootInfo.instantiable.concreteInstantiable.asSource
 		switch rootInfo.built {
+		case let .perType(code, _):
+			// A root laid out from the per-type plan of its cycles, which node records refuse (`cycle`).
+			return code
 		case let .nodeRecords(layout, comparisonTree):
 			if let comparisonTree, let observer = NodeRecordsObservation.observer {
 				try await observer(comparison(of: layout, with: comparisonTree, of: rootInfo.instantiable))
 			}
 			return layout.code
 		case let .tree(scopeGenerator):
-			guard let observer = NodeRecordsObservation.observer else {
+			guard let observer = NodeRecordsObservation.observer, let rootScope = rootInfo.rootScope else {
 				return try await scopeGenerator.generatePlan()
 			}
 			let seamTree = rootInfo.seamTree
 			// The work of making the records is no run's, so the tests that count a run's work count none of it.
 			let (world, records) = GenerationWork.$observer.withValue(nil) {
-				let world = TypeFactsGraph(root: rootInfo.rootScope, forMockGeneration: false)
-				let seamHoles = seamTree.map { SeamHoles(of: $0.seamRoot, seamType: $0.seamType) }
-				return (world, Result { () throws -> NodeRecords in try NodeRecords(world: world, seamTree: seamTree, seamHoles: seamHoles, declaredTypeNames: declaredTypeNames) })
+				let world = TypeFactsGraph(root: rootScope, forMockGeneration: false)
+				let seamHoles = seamTree.map { $0.makeSeamHoles() }
+				return (world, NodeRecords.refusingWhatRecordsThrow { try NodeRecords(world: world, seamTree: seamTree, seamHoles: seamHoles, declaredTypeNames: declaredTypeNames) })
 			}
 			let nodeRecords: NodeRecords
-			do {
-				nodeRecords = try records.get()
-			} catch let refusal as NodeRecordRefusal {
+			switch records {
+			case let .success(made):
+				nodeRecords = made
+			case let .failure(refusal):
 				let everyRefusal = GenerationWork.$observer.withValue(nil) { NodeRecords.refusals(in: world, seamTree: seamTree, declaredTypeNames: declaredTypeNames) }
 				observer(NodeRecordsReport(root: root, refusal: refusal.rawValue, everyRefusal: everyRefusal.map(\.rawValue), isLaidOutFromNodeRecords: false, differences: [], recordCount: 0, treePlaceCount: 0, treeForcers: rootInfo.treeForcers))
 				return try await scopeGenerator.generatePlan()
 			}
-			// A seam's own tree is compared and never laid out here: its initializers are written around its body.
-			let laidOutCode: GeneratedCode? = if NodeRecordsObservation.laysOutRoots, rootInfo.ownSeamRoot == nil {
-				try laidOutRootCode(of: rootInfo.instantiable, body: nodeRecords.rootBody)
+			// A seam's own tree is compared and never laid out here: its initializers are written around its body. A root its
+			// records cannot lay out keeps its tree's code.
+			let laidOutCode: GeneratedCode? = if NodeRecordsObservation.laysOutRoots, rootInfo.ownSeamRoot == nil,
+			                                     case let .success(code) = NodeRecords.refusingWhatRecordsThrow({ try laidOutRootCode(of: rootInfo.instantiable, body: nodeRecords.rootBody) })
+			{
+				code
 			} else {
 				nil
 			}
 			// The tree's places are planned beside node records' so that the two are compared, even where the root is
-			// laid out from node records.
-			let (treeCode, comparisons) = try await treeCode(of: scopeGenerator, besideRecordsBody: nodeRecords.rootBody)
+			// laid out from node records. There the laid-out code is the run's, so the tests that count a run's work count
+			// none of the tree's planning; the operation is typed for the reason `comparison(of:with:of:)` gives.
+			let observerOfTreeWork = laidOutCode == nil ? GenerationWork.observer : nil
+			let planned: PlannedTree = try await GenerationWork.$observer.withValue(observerOfTreeWork, operation: { () async throws -> PlannedTree in
+				try await Self.treeCode(of: scopeGenerator, besideRecordsBody: nodeRecords.rootBody)
+			})
+			let (treeCode, comparisons) = planned
+			// A root that keeps its tree's code is still laid out from its records where they differ from the tree's by an
+			// optional parameter's argument, for the comparison alone: a test approves that difference only where the two
+			// texts are equal. A seam's own tree is never laid out here, so the difference fails there.
+			let holdsDifferenceOfOptionalParameter = comparisons.contains { comparison in
+				// safedi-source-rule: allow stringScan — only where a test observes node records, once for each difference of a root that keeps its tree.
+				comparison.differences.contains { $0.contains(": \(NodeRecordsReport.argumentsOfOptionalParameterDifferenceName) is ") }
+			}
+			let comparedCode: GeneratedCode? = if laidOutCode == nil, holdsDifferenceOfOptionalParameter, rootInfo.ownSeamRoot == nil,
+			                                      case let .success(code) = NodeRecords.refusingWhatRecordsThrow({ try laidOutRootCode(of: rootInfo.instantiable, body: nodeRecords.rootBody) })
+			{
+				code
+			} else {
+				laidOutCode
+			}
 			// A root whose tree's body holds nothing is compared nowhere.
 			for comparison in comparisons {
-				observer(NodeRecordsReport(
+				var report = NodeRecordsReport(
 					root: root,
 					refusal: laidOutCode == nil && NodeRecordsObservation.laysOutRoots ? NodeRecordRefusal.notLaidOut.rawValue : nil,
 					everyRefusal: [],
@@ -104,7 +138,9 @@ extension DependencyTreeGenerator {
 					recordCount: nodeRecords.recordCount,
 					treePlaceCount: comparison.treePlaceCount,
 					treeForcers: rootInfo.treeForcers,
-				))
+				)
+				report.comparedTexts = comparedCode.map { NodeRecordsComparedTexts(tree: treeCode.spelled(), nodeRecords: $0.spelled()) }
+				observer(report)
 			}
 			return laidOutCode ?? treeCode
 		}
@@ -122,12 +158,15 @@ extension DependencyTreeGenerator {
 		})
 		let (treeCode, comparisons) = planned
 		let captures = await tree.nonSendableWrapperCaptures(ofTreeRootedAt: instantiable)
+		let texts = NodeRecordsComparedTexts(tree: treeCode.spelled(), nodeRecords: layout.code.spelled())
+		// The texts' difference comes first, and what no text shows after it, which a test that accepts an approved
+		// difference of the texts still reports (`NodeRecordsReport.differencesNoTextShows`).
 		let factsTheRecordsMiss: [(holds: Bool, difference: String)] = [
-			(treeCode.spelled() == layout.code.spelled(), "root: the code laid out from node records differs from the tree’s"),
+			(texts.tree == texts.nodeRecords, "root: the code laid out from node records differs from the tree’s"),
 			(captures.isEmpty, "root: the tree’s @Sendable builder functions capture a wrapper, which node records cannot see"),
 			(tree.unpassableCycleLabelsInTree.isEmpty, "root: the tree holds a label no cycle parameter can pass, which node records cannot see"),
 		]
-		return NodeRecordsReport(
+		var report = NodeRecordsReport(
 			root: instantiable.concreteInstantiable.asSource,
 			refusal: nil,
 			everyRefusal: [],
@@ -137,6 +176,9 @@ extension DependencyTreeGenerator {
 			treePlaceCount: comparisons.map(\.treePlaceCount).reduce(0, +),
 			treeForcers: [],
 		)
+		report.comparedTexts = texts
+		report.differencesNoTextShows = factsTheRecordsMiss.dropFirst().filter { !$0.holds }.map(\.difference)
+		return report
 	}
 
 	/// A tree's planned code, and each comparison of its root body with node records' (`treeCode(of:besideRecordsBody:)`).

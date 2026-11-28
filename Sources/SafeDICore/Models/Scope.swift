@@ -33,6 +33,10 @@ final class Scope: Hashable {
 	///     dependencies and builds nothing. `nil` for every other scope.
 	///   - isUnavailableDependency: Whether the scope stands for an `@Instantiated(onlyIfAvailable: true)` property that
 	///     no production declaration fulfills: it builds nothing, and generated code binds its property to `nil`.
+	///   - isCallPlace: Whether the scope stands, in a body of a tree's plan by declaration, for a child on a cycle: see
+	///     the property.
+	///   - callPlaceRequiredAliasFulfillingProperties: For a call place, what the tree it stands for requires through
+	///     `onlyIfAvailable` aliases: see the property.
 	init(
 		instantiable: Instantiable,
 		dependenciesLeftOut: [Dependency] = [],
@@ -40,8 +44,12 @@ final class Scope: Hashable {
 		seamCall: SeamCall? = nil,
 		publicMockCall: PublicMockCall? = nil,
 		isUnavailableDependency: Bool = false,
+		isCallPlace: Bool = false,
+		callPlaceRequiredAliasFulfillingProperties: Set<Property> = [],
 	) {
 		self.isUnavailableDependency = isUnavailableDependency
+		self.isCallPlace = isCallPlace
+		self.callPlaceRequiredAliasFulfillingProperties = callPlaceRequiredAliasFulfillingProperties
 		self.instantiable = instantiable
 		self.dependenciesLeftOut = dependenciesLeftOut
 		self.builtInlineSeamComment = builtInlineSeamComment
@@ -86,6 +94,19 @@ final class Scope: Hashable {
 	/// fulfill and declares no dependency, and generated code binds the property to `nil`, a declaration of its label like
 	/// the one a fulfilled property gets, so every receive, rename and argument beneath reads it as it reads that one.
 	let isUnavailableDependency: Bool
+
+	/// Whether the scope stands, in a body of a tree's plan by declaration (`DependencyTreeGenerator.CallPlaceShadow`), for
+	/// a child on a cycle: it has no children, `instantiable` receives what the child's whole tree receives from above,
+	/// and it closes no cycle, since a body calls the child's one function at its first build and where a path would
+	/// close on it alike. No seam's or public mock's call (`seamCall`, `publicMockCall`), so no reader of those takes it
+	/// for a seam's leaf.
+	let isCallPlace: Bool
+
+	/// For a call place, the properties the tree it stands for requires through `onlyIfAvailable` aliases whose label no
+	/// scope of that tree declares (`DependencyTreeGenerator.ReceivedProperties.requiredAliasFulfillingProperties`): the
+	/// call place has no children to carry them, so its generator carries them up, and the sibling that declares one is
+	/// built before it, as before the child it stands for today. Empty for every other scope.
+	let callPlaceRequiredAliasFulfillingProperties: Set<Property>
 
 	/// How a tree that reaches this scope calls the seam it stands for, or `nil` for a scope that builds its type.
 	let seamCall: SeamCall?
@@ -393,6 +414,10 @@ extension ScopeRecord {
 	///   - constructionMemo: The memo of the trees created before this one, whose generators the tree's first pass may
 	///     reuse when it is shared across trees, and which then keeps that pass's generators once the tree is created
 	///     (see `ConstructionMemo.Sharing`).
+	///   - scopeGeneratorLimit: The number of places the tree's passes may build or reuse between them, past which its
+	///     caller is asked whether to abandon the tree (`ScopeGeneratorLimitExceeded`, and the memo keeps nothing of
+	///     it), to build on with no limit, or to build on and be asked again past more places
+	///     (`ScopeGeneratorLimit.Answer`), or `nil` for a tree built whatever its size.
 	///
 	/// The tree is created again while a scope that a lazy cycle closes on finds other parameters for its builder
 	/// function than it was created with (see `CycleParameter`): its cycle-closing scopes, created before it, pass
@@ -418,6 +443,7 @@ extension ScopeRecord {
 		validatesForwardedProperties: Bool = true,
 		declaredTypeNames: DeclaredTypeNames,
 		constructionMemo: inout ConstructionMemo,
+		scopeGeneratorLimit: ScopeGeneratorLimit? = nil,
 	) throws -> ScopeGenerator {
 		var unrecordedPlaces: TypeFactsPlaces?
 		let scopeGenerator = try createdTree(
@@ -432,6 +458,7 @@ extension ScopeRecord {
 			declaredTypeNames: declaredTypeNames,
 			constructionMemo: &constructionMemo,
 			typeFactsPlaces: &unrecordedPlaces,
+			scopeGeneratorLimit: scopeGeneratorLimit,
 		)
 		if let observer = ConstructionMemoOracle.observer {
 			// The build with the memo shares it across every tree created with this memo, whatever the memo's own sharing,
@@ -450,6 +477,7 @@ extension ScopeRecord {
 					declaredTypeNames: declaredTypeNames,
 					constructionMemo: &oracleMemo,
 					typeFactsPlaces: &unrecordedPlaces,
+					scopeGeneratorLimit: nil,
 				)
 			} }
 			constructionMemo.oracleMemo = oracleMemo
@@ -471,6 +499,7 @@ extension ScopeRecord {
 					declaredTypeNames: declaredTypeNames,
 					constructionMemo: &unusedMemo,
 					typeFactsPlaces: &places,
+					scopeGeneratorLimit: nil,
 				)
 			} }
 			observer(treeBuiltWithMemo, treeBuiltWithoutMemo, TypeFactsReport(root: ConstructionScope(table: table, record: self), places: places ?? TypeFactsPlaces(), forMockGeneration: forMockGeneration, tree: treeBuiltWithoutMemo))
@@ -479,6 +508,9 @@ extension ScopeRecord {
 	}
 
 	/// The tree `createScopeGenerator` creates, in as many passes as it takes.
+	/// - Parameter scopeGeneratorLimit: The number of places the passes may build or reuse between them before the caller
+	///   is asked whether to abandon the tree (`ScopeGeneratorLimitExceeded`), or `nil` for a tree built whatever its
+	///   size. A tree within the limit, and one its caller keeps, is built exactly as without one.
 	private func createdTree(
 		in table: ScopeTable,
 		nearestDeclarations: NearestDeclarations,
@@ -491,7 +523,12 @@ extension ScopeRecord {
 		declaredTypeNames: DeclaredTypeNames,
 		constructionMemo: inout ConstructionMemo,
 		typeFactsPlaces: inout TypeFactsPlaces?,
+		scopeGeneratorLimit: ScopeGeneratorLimit?,
 	) throws -> ScopeGenerator {
+		// The places every pass so far has built or reused, which `scopeGeneratorLimit` bounds until its caller keeps the
+		// tree, and then no longer.
+		var scopeGeneratorCount = 0
+		var scopeGeneratorLimit = scopeGeneratorLimit
 		var previousPassGenerator: ScopeGenerator?
 		// The cycle parameters settled on the first pass's tree, which the second pass is built with in place of the first
 		// pass's findings (see `CycleParameterPlan`), or `nil` where the tree is not planned.
@@ -512,6 +549,15 @@ extension ScopeRecord {
 		var startOrderChanged: Bool
 		// Every pass reads the scopes as they are now, which nothing changes while the tree is built.
 		let root = ConstructionScope(table: table, record: self)
+		// The tree's plan by declaration, built only where a test reads it and read by nothing that generates code.
+		var placeReadLabels: PlaceReadLabels?
+		if PerTypePlanObservation.observer != nil || PerTypePlanObservation.variantsObserver != nil || PlaceReadsObservation.observer != nil, let plan = PerTypePlan(root: root) {
+			PerTypePlanObservation.observer?(plan.projection)
+			if let variantsObserver = PerTypePlanObservation.variantsObserver {
+				variantsObserver(PlanVariants(plan: plan).projection)
+			}
+			placeReadLabels = PlanVariants.placeReadLabels(of: plan)
+		}
 		// Within a pass, a memo that only this tree reads reuses a place's generator only at another place of the same scope,
 		// so no pass keys, looks up or stores a place of a scope the tree builds at one place only. A memo shared across trees
 		// keys every place, since a later tree can reach any of them, and so does the sharing oracle's build that offers each
@@ -531,6 +577,8 @@ extension ScopeRecord {
 				// The sharing oracle offers each place what a place after it built: the first pass starts from what a
 				// discarded build of the same pass stored, which the schedule asks newest first.
 				var discardedPlaces: TypeFactsPlaces?
+				var discardedCount = 0
+				var discardedLimit: ScopeGeneratorLimit?
 				_ = try createScopeGenerator(
 					nearestDeclarations: nearestDeclarations,
 					lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
@@ -548,6 +596,9 @@ extension ScopeRecord {
 					root: root,
 					scopesBuiltAtOnePlace: scopesBuiltAtOnePlace,
 					typeFactsPlaces: &discardedPlaces,
+					placeReadLabels: placeReadLabels,
+					scopeGeneratorLimit: &discardedLimit,
+					scopeGeneratorCount: &discardedCount,
 				)
 			}
 			// A recorded tree keeps the places of its last pass, which is the tree.
@@ -569,6 +620,9 @@ extension ScopeRecord {
 				root: root,
 				scopesBuiltAtOnePlace: scopesBuiltAtOnePlace,
 				typeFactsPlaces: &passPlaces,
+				placeReadLabels: placeReadLabels,
+				scopeGeneratorLimit: &scopeGeneratorLimit,
+				scopeGeneratorCount: &scopeGeneratorCount,
 			)
 			if passPlaces != nil {
 				typeFactsPlaces = passPlaces
@@ -660,6 +714,9 @@ extension ScopeRecord {
 		root: ConstructionScope,
 		scopesBuiltAtOnePlace: ScopesBuiltAtOnePlace?,
 		typeFactsPlaces: inout TypeFactsPlaces?,
+		placeReadLabels: PlaceReadLabels?,
+		scopeGeneratorLimit: inout ScopeGeneratorLimit?,
+		scopeGeneratorCount: inout Int,
 	) throws -> ScopeGenerator {
 		// The position of each scope under construction among the places recorded, where a test records them.
 		var placeIndices = [typeFactsPlaces?.start(TypeFactsDeclaration(scope: root, property: nil, propertyID: nil, erasedToConcreteExistential: false, isFill: false), parent: nil)]
@@ -673,7 +730,7 @@ extension ScopeRecord {
 			seamRoot: seamRoot,
 			mockBuilders: mockBuilders,
 			seamHoles: seamRoot.map { SeamHoles(of: $0, seamType: instantiable.concreteInstantiable) }
-				?? mockBuilders.map { SeamHoles(seamType: instantiable.concreteInstantiable, holes: $0.holes, builders: $0.builders, callRoutes: $0.callRoutes) }
+				?? mockBuilders.map { SeamHoles(seamType: instantiable.concreteInstantiable, holes: $0.holes, builders: $0.builders, callRoutes: $0.callRoutes, routeMembersBySite: $0.routeMembersBySite) }
 				?? SeamHoles(),
 			sitePath: [],
 			erasedToConcreteExistential: erasedToConcreteExistential,
@@ -693,6 +750,7 @@ extension ScopeRecord {
 		var lookupCount = 0
 		let keyedPlaceObserver = ConstructionMemoOracle.keyedPlaceObserver
 		let reusedPlaceObserver = ConstructionMemoOracle.reusedPlaceObserver
+		let placeReadsObserver = PlaceReadsObservation.observer
 		// The generators of the calls that pass fills this tree holds, none of which it may hold twice
 		// (`ConstructionMemo.Entry.callGenerators`).
 		var callGeneratorsInTree = Set<ObjectIdentifier>()
@@ -702,6 +760,19 @@ extension ScopeRecord {
 				switch propertyToGenerate {
 				case let .instantiated(property, scope, erasedToConcreteExistential, propertyID):
 					try scopeGeneratorsUnderConstruction[index].validateForwardedProperties(ofChildBuilding: scope, as: property)
+					// Every place counts, built or reused: a tree that grows with its paths reuses most of them.
+					scopeGeneratorCount += 1
+					if let limit = scopeGeneratorLimit, scopeGeneratorCount > limit.places {
+						switch limit.answer(limit.places) {
+						case .abandonsTree:
+							throw ScopeGeneratorLimitExceeded()
+						case .keepsTree:
+							// The caller keeps this tree: it is built on as if no limit had been given.
+							scopeGeneratorLimit = nil
+						case let .asksAgain(pastPlaces):
+							scopeGeneratorLimit = ScopeGeneratorLimit(places: pastPlaces, answer: limit.answer)
+						}
+					}
 					let key = reusesGenerators && scopesBuiltAtOnePlace?.contains(scope) != true
 						? scopeGeneratorsUnderConstruction[index].memoKey(ofChildBuilding: scope, as: property, id: propertyID, erasedToConcreteExistential: erasedToConcreteExistential)
 						: nil
@@ -768,6 +839,19 @@ extension ScopeRecord {
 				} else {
 					// Filtered once, for the memo and the parent alike.
 					let readsAnsweredAbove = createdScope.readsAnsweredAbove
+					// A call that passes fills reads the caller's declarations for its fills' trees, which the plan has no edge
+					// for yet, so a place whose subtree holds a call or a fill is not compared. Nor is a place inside a fill,
+					// which reads the fields of the place its fill fills: the plan has no node for it.
+					if let placeReadLabels, let placeReadsObserver, createdScope.recordsReads, !scopeGenerator.treeHoldsCallOrFill, !createdScope.isInsideFill, let built = createdScope.builtProperty {
+						placeReadsObserver(
+							createdScope.builtScope.instantiable.concreteInstantiable.asSource,
+							built.property.asSource,
+							// A place reads the declaration of its own property's label, which the scope that builds the place declares,
+							// to mark it as being built: the edge decides that answer, so no path's answers hold it.
+							readsAnsweredAbove.labelsOfReadsOfDeclarations.subtracting([built.property.label]).sorted(),
+							(placeReadLabels.plannedLabelsByPlace[PlaceReadLabels.Place(record: ObjectIdentifier(createdScope.builtScope.identity), property: built.id)] ?? []).sorted(),
+						)
+					}
 					let isSettled = createdScope.isSettled(building: scopeGenerator)
 					if let key = createdScope.memoKey, createdScope.isMemoizable {
 						memo.store(ConstructionMemo.Entry(
@@ -828,6 +912,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		self.placeHoldingPropertiesByType = placeHoldingPropertiesByType
 		self.depth = depth
 		self.recordsReads = recordsReads
+		self.builtProperty = builtProperty
 		// Every read of the context this scope inherits goes through `context`, logged, so a construction memo can tell
 		// whether another place inherits a context that answers the reads of this scope's subtree alike (see
 		// `ConstructionMemo`).
@@ -844,8 +929,12 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			// A scope closes a cycle where validation finds one: it repeats a declaration of the same property, as cycle
 			// validation sees it (a lazily instantiated property as the constant it stands for), built for the same
 			// concrete type. A lazily instantiated declaration's instance is on the stack just inside the declaration.
-			closedOn = contextStack.entryClosedOn(byPropertyID: propertyID, concreteTypeID: scope.concreteTypeID, interner: interner)
-			log.record(.declarationClosedOn(propertyID, scope.concreteTypeID), answer: .declarationClosedOn(closedOn?.entry.propertyID), depth: Self.depth(ofAnswerAt: closedOn?.entry.depth, insideFillOfCallAt: fillCallDepth))
+			// A call place closes on nothing, whatever is above it, so it reads nothing of the stack: its body calls the
+			// function of the declaration it stands for.
+			if !scope.isCallPlace {
+				closedOn = contextStack.entryClosedOn(byPropertyID: propertyID, concreteTypeID: scope.concreteTypeID, interner: interner)
+				log.record(.declarationClosedOn(propertyID, scope.concreteTypeID), answer: .declarationClosedOn(closedOn?.entry.propertyID), depth: Self.depth(ofAnswerAt: closedOn?.entry.depth, insideFillOfCallAt: fillCallDepth))
+			}
 			childContextStack.push(property, id: propertyID, concreteType: scope.instantiable.concreteInstantiable, concreteTypeID: scope.concreteTypeID, depth: depth, interner: interner)
 			// Building the property adds its forms to the nearest declaration of its label, which it reads.
 			let (buildingDeclaration, buildingDepth) = nearestDeclarations.resolving(property.label)
@@ -890,7 +979,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		// own label (see `ScopeGenerator.foundCycleParameters`).
 		var cycleParameterUnavailableProperties = Set<Property>()
 		for parameter in closedOnContext?.parameters ?? ownCycleParameters
-			where !parameter.isRequired && Self.binding(of: parameter.property, in: nearestDeclarations, log: &log) == nil
+			where !parameter.isRequired && Self.cycleArgumentBinding(of: parameter.property, in: nearestDeclarations, log: &log) == nil
 		{
 			cycleParameterUnavailableProperties.insert(parameter.property)
 		}
@@ -935,8 +1024,13 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		// A receive a mock passes `nil` reads nothing above this scope, though the mock root binds a form of it, since
 		// production always passes it `nil` in this place (see `NearestDeclarations.binding(_:passingNilTo:)`).
 		let concreteType = scope.instantiable.concreteInstantiable
+		// A receive of a property this scope creates itself reads that binding, so it asks nothing of the declarations
+		// above, and logs no read of them: a logged read no answer to which changes the place would only keep places from
+		// sharing a generator, and is a read the plan by declaration has no label for (base corpus seed 1856, a type that
+		// renames its own forwarded property only if available in a mock's tree, fails `PlaceReadsChecks` with the
+		// operands in the other order).
 		func isPassedNilByMock(_ property: Property, receivedBy dependency: Dependency) -> Bool {
-			Self.passesNil(to: property, receivedBy: dependency, on: concreteType, in: nearestDeclarations, log: &log) && scope.createdBinding(of: property) == nil
+			scope.createdBinding(of: property) == nil && Self.passesNil(to: property, receivedBy: dependency, on: concreteType, in: nearestDeclarations, log: &log)
 		}
 		var unavailableOptionalProperties = Set<Property>()
 		var receivesPassedNil = Set<Property>()
@@ -1317,6 +1411,14 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	private static func binding(of property: Property, in nearestDeclarations: NearestDeclarations, log: inout ConstructionLog) -> Property? {
 		let (binding, depth) = nearestDeclarations.resolvingBinding(of: property)
 		log.record(.binding(property), answer: .binding(binding), depth: depth)
+		return binding
+	}
+
+	/// The binding this scope passes a parameter `property` of the builder function a lazy cycle closes on, among
+	/// `nearestDeclarations`, logged in `log` as a read of what a cycle passes (`ConstructionLog.Read.cycleArgumentBinding`).
+	private static func cycleArgumentBinding(of property: Property, in nearestDeclarations: NearestDeclarations, log: inout ConstructionLog) -> Property? {
+		let (binding, depth) = nearestDeclarations.resolvingBinding(of: property)
+		log.record(.cycleArgumentBinding(property), answer: .binding(binding), depth: depth)
 		return binding
 	}
 
@@ -1906,6 +2008,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			ownerConcreteTypeStack: childContextStack.concreteTypesInnermostFirst,
 			ownerLazilyInstantiatedInstanceProperties: childLazilyInstantiatedInstanceProperties,
 			carrierSite: seamHoles.carrierSite(at: sitePath + [property]),
+			siteRouteMembers: seamHoles.routeMembers(at: sitePath + [property]),
 		))
 	}
 
@@ -2480,6 +2583,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			isUnavailableDependency: scope.isUnavailableDependency,
 			seamCall: scope.seamCall,
 			publicMockCall: scope.publicMockCall,
+			callPlaceRequiredAliasFulfillingProperties: scope.callPlaceRequiredAliasFulfillingProperties,
 			seamRoot: seamRoot,
 			mockBuilders: mockBuilders,
 			holeCallArguments: holeArguments.map { holeArgument in
@@ -2571,6 +2675,8 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	}
 
 	private let property: Property?
+	/// The property this place builds its scope as, with its ID, or `nil` for a root or a fill (`PlaceReadsObservation`).
+	let builtProperty: (property: Property, id: PropertyID)?
 	/// Whether this scope is in the tree of a fill a mock declares, whose types are built as the mock's tree built
 	/// inline builds them: each with its hand-written mock where `mockReturnTypeIsCompatible` says the mock builds it.
 	private let buildsWithHandWrittenMocks: Bool
@@ -2585,6 +2691,10 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	private let fillPathStackCount: Int
 	/// See `init(scope:property:contextStack:depth:fillPathStackCount:fillCallDepth:…)`.
 	private let fillCallDepth: Int?
+	/// Whether this scope is built inside a fill, whose tree reads the fields of the place it fills.
+	var isInsideFill: Bool {
+		fillCallDepth != nil
+	}
 
 	/// The depth a read of the stack or of the cycle parameter contexts is logged at, given `answerDepth`, the depth of the
 	/// scope that put the answer there, or `nil` for a miss. Outside a fill, a miss and the path of a seam whose hole is filled
@@ -2713,6 +2823,31 @@ extension Instantiable {
 	}
 }
 
+// MARK: - ScopeGeneratorLimit
+
+/// Thrown where a tree's passes have built or reused more places than the limit its caller gave it and the caller
+/// abandons the tree. Never reported: the caller that gave the limit catches it and builds the root another way.
+struct ScopeGeneratorLimitExceeded: Error {}
+
+/// How many places a tree's passes may build or reuse between them before its caller is asked what to do with it.
+/// A place is a property a scope of the tree instantiates, counted where its generator is built or reused from the
+/// construction memo: the count reads the declarations alone, never a name.
+struct ScopeGeneratorLimit {
+	/// What the caller answers once the tree holds more than `places` places.
+	enum Answer {
+		/// The tree is abandoned (`ScopeGeneratorLimitExceeded`).
+		case abandonsTree
+		/// The tree is built on with no limit, and nothing built so far is thrown away.
+		case keepsTree
+		/// The tree is built on, and the caller is asked again once it holds more than this many places.
+		case asksAgain(pastPlaces: Int)
+	}
+
+	let places: Int
+	/// The caller's answer for a tree that has passed `places`, which it is handed.
+	let answer: (_ places: Int) -> Answer
+}
+
 // MARK: - ErasedInstantiatorForwardedPropertiesMismatchError
 
 /// An `@Instantiated` `ErasedInstantiator` or `SendableErasedInstantiator` whose first generic argument is not the
@@ -2828,6 +2963,7 @@ struct SeamHoles: Sendable {
 		seamType = nil
 		routeCasesByCall = [:]
 		sitesByPath = [:]
+		routeMembersByPath = [:]
 		passedUpHolesBySite = [:]
 		valuesBindingsByPath = [:]
 		memberCallsInsideFunctionByPath = [:]
@@ -2858,7 +2994,7 @@ struct SeamHoles: Sendable {
 		carrierSitesByPath.isEmpty ? nil : carrierSitesByPath[sitePath]
 	}
 
-	init(seamType: TypeDescription, holes: [SeamSignature.Hole], builders: [SeamSignature.Builder], parameters: [SeamSignature.Parameter] = [], callRoutes: [SeamSignature.CallRoute] = [], scopeEnums: [SeamSignature.ScopeEnum] = [], holdsLoopPayloadsInBoxes: Bool = false) {
+	init(seamType: TypeDescription, holes: [SeamSignature.Hole], builders: [SeamSignature.Builder], parameters: [SeamSignature.Parameter] = [], callRoutes: [SeamSignature.CallRoute] = [], routeMembersBySite: [SeamSignature.Hole.Site: [SeamSignature.Hole.RouteStep.Member?]] = [:], scopeEnums: [SeamSignature.ScopeEnum] = [], holdsLoopPayloadsInBoxes: Bool = false) {
 		self.holdsLoopPayloadsInBoxes = holdsLoopPayloadsInBoxes
 		var routeCasesByCall = [RouteCall: RouteCase]()
 		let builderByEnum = Dictionary(builders.map { ($0.enumKey, $0) }, uniquingKeysWith: { first, _ in first })
@@ -2887,16 +3023,16 @@ struct SeamHoles: Sendable {
 		// Where the enums declare builder structs, each case on a route is a member call on the struct the step before it
 		// returned, the root's builder's for the first, bound before the step's property, or at the top of its builder
 		// function (`RouteStep.Member`). A route's steps lead to one place, so each step's parent is a fact of its path.
-		func bindValues(of route: [SeamSignature.Hole.RouteStep], onRouteTo sitePath: [Property], rootBuilderName: String) {
+		func bindValues(of route: [SeamSignature.Hole.RouteStep], members: [SeamSignature.Hole.RouteStep.Member?], onRouteTo sitePath: [Property], rootBuilderName: String) {
 			var parentName = rootBuilderName
-			for step in route {
+			for (step, member) in zip(route, members) {
 				// Each scope value the call hands, once: a seam's struct of the fill's own level per hole type and family whose places
 				// the fill holds, or a public mock's one inner scope.
 				let routeCall = step.innerScope.map { RouteCall(sitePath: $0.callPath(onRouteTo: sitePath), innerKey: $0.innerKey) }
 				if let innerScope = step.innerScope, let routeCall, !innerScopesByCall[routeCall, default: []].contains(where: { $0.name == innerScope.name }) {
 					innerScopesByCall[routeCall, default: []].append(innerScope)
 				}
-				if let member = step.member {
+				if let member {
 					valuesBindingsByName[member.bindingPath(onRouteTo: sitePath), default: [:]][member.bindingName] = ValuesBinding(member: member, parentName: parentName, caseName: step.caseName, isLetChild: isLetChild(ofCaseNamed: step.caseName, handed: member.valuesType))
 					parentName = member.bindingName
 					// A call's case for a builder it fills returns the called seam's struct, which the call's level functions are
@@ -2911,7 +3047,7 @@ struct SeamHoles: Sendable {
 		for callRoute in callRoutes {
 			guard let builder = builderByEnum[callRoute.rootKey] else { continue }
 			let builderName = builder.internalName
-			bindValues(of: callRoute.route, onRouteTo: callRoute.sitePath, rootBuilderName: builderName)
+			bindValues(of: callRoute.route, members: callRoute.routeMembers, onRouteTo: callRoute.sitePath, rootBuilderName: builderName)
 			// A call that re-enters an enclosing call's fill hands up nothing: it passes the enclosing call's level function the
 			// struct its last case's member returns (`carriedStruct(at:innerKey:carrying:)`).
 			guard !callRoute.reentersEnclosingFill else { continue }
@@ -2925,9 +3061,10 @@ struct SeamHoles: Sendable {
 			// The struct the call's own member is called on, typed where the seam's tree binds it: the builder, or the level the
 			// route's last member returns. The struct of a fill's own level, which the fill is handed, is typed by no binding.
 			let parentStep = callRoute.route.last
+			let parentMember = callRoute.routeMembers.last ?? nil
 			let memberParent: (name: String, type: TypeDescription)? = if parentStep?.innerScope != nil {
 				nil
-			} else if let member = parentStep?.member {
+			} else if let member = parentMember {
 				(member.bindingName, member.levelType)
 			} else {
 				(builderName, builder.parameterType)
@@ -2941,9 +3078,9 @@ struct SeamHoles: Sendable {
 				}
 			}
 			let memberCall = if callRoute.handsFillLevelStruct {
-				callRoute.route.last.flatMap { $0.innerScope?.name ?? $0.member?.bindingName }
+				parentStep?.innerScope?.name ?? parentMember?.bindingName
 			} else {
-				member.map { $0.spelled(on: callRoute.route.last.flatMap { $0.innerScope?.name ?? $0.member?.bindingName } ?? builderName, caseName: callRoute.caseName) }
+				member.map { $0.spelled(on: parentStep?.innerScope?.name ?? parentMember?.bindingName ?? builderName, caseName: callRoute.caseName) }
 			}
 			routeCasesByCall[RouteCall(sitePath: callRoute.sitePath, innerKey: callRoute.innerKey)] = RouteCase(
 				memberCall: memberCall,
@@ -2952,6 +3089,7 @@ struct SeamHoles: Sendable {
 		}
 		self.routeCasesByCall = routeCasesByCall
 		var sitesByPath = [[Property]: SeamSignature.Hole]()
+		var routeMembersByPath = [[Property]: [SeamSignature.Hole.RouteStep.Member?]]()
 		var passedUpHolesBySite = [SeamSignature.Hole.Site: SeamSignature.Hole]()
 		var namesBoundForBuilders = Set(holes.map(\.internalName) + holes.compactMap(\.wrapperFunctionName) + builders.map(\.internalName))
 		for hole in holes {
@@ -2961,7 +3099,9 @@ struct SeamHoles: Sendable {
 			}
 			sitesByPath[hole.sitePath] = hole
 			if let enumPlace = hole.enumPlace {
-				bindValues(of: enumPlace.route, onRouteTo: hole.sitePath, rootBuilderName: hole.internalName)
+				let members = routeMembersBySite[hole.site] ?? []
+				routeMembersByPath[hole.sitePath] = members
+				bindValues(of: enumPlace.route, members: members, onRouteTo: hole.sitePath, rootBuilderName: hole.internalName)
 			}
 		}
 		namesBoundForBuilders.formUnion(innerScopesByCall.values.flatMap { $0.map(\.name) })
@@ -3031,6 +3171,7 @@ struct SeamHoles: Sendable {
 		self.memberCallsInsideFunctionByPath = memberCallsInsideFunctionByPath
 		self.seamType = seamType
 		self.sitesByPath = sitesByPath
+		self.routeMembersByPath = routeMembersByPath
 		self.passedUpHolesBySite = passedUpHolesBySite
 		self.valuesBindingsByPath = valuesBindingsByPath
 		self.namesBoundForBuilders = namesBoundForBuilders
@@ -3250,6 +3391,12 @@ struct SeamHoles: Sendable {
 		sitesByPath[sitePath]
 	}
 
+	/// The member call each step of the route to the site at `sitePath` makes (`SeamSignature.Hole.RouteStep.Member`), in
+	/// the route's order: none where the signature holds no such site.
+	func routeMembers(at sitePath: [Property]) -> [SeamSignature.Hole.RouteStep.Member?] {
+		routeMembersByPath[sitePath] ?? []
+	}
+
 	/// The hole of this seam that takes the builder for `hole`'s site, which a call its tree makes presents: a site of
 	/// its own tree, which a call of the seam itself or of a seam that passes the site back presents, or a site it passes
 	/// up. `nil` when the signature holds none: a tree built to compute the signature, which generates nothing.
@@ -3332,6 +3479,7 @@ struct SeamHoles: Sendable {
 
 	private let routeCasesByCall: [RouteCall: RouteCase]
 	private let sitesByPath: [[Property]: SeamSignature.Hole]
+	private let routeMembersByPath: [[Property]: [SeamSignature.Hole.RouteStep.Member?]]
 	private let passedUpHolesBySite: [SeamSignature.Hole.Site: SeamSignature.Hole]
 	private let valuesBindingsByPath: [[Property]: [ValuesBinding]]
 	private let memberCallsInsideFunctionByPath: [[Property]: [ValuesBinding]]
@@ -3552,6 +3700,23 @@ struct NearestDeclarations: Sendable {
 	/// `MockReceivesPassedNil.promotedProperties`).
 	private var mockRootPromotedProperties = Set<Property>()
 
+	/// The nearest declarations of `labels` alone, as declarations a tree is given: what a body keyed by the answers to
+	/// those labels is built beneath, whatever else its path declares (`VariantBodyObservation`).
+	func keeping(labels: [String]) -> NearestDeclarations {
+		var kept = NearestDeclarations()
+		for label in labels {
+			if let nearestDeclaration = self[label] {
+				kept.set(nearestDeclaration, for: label)
+			}
+		}
+		// A mock root's declarations pass `nil` to the receives its bindings say production passes `nil`, wherever they
+		// are kept. A production root's declarations hold none of the three, so nothing kept of them moves.
+		kept.holdsReceivesPassedNil = holdsReceivesPassedNil
+		kept.judgesPlacesPinnedFromAbove = judgesPlacesPinnedFromAbove
+		kept.mockRootPromotedProperties = mockRootPromotedProperties
+		return kept
+	}
+
 	/// Makes `nearestDeclaration` the nearest declaration of `label`.
 	private mutating func set(_ nearestDeclaration: NearestDeclaration, for label: String) {
 		changedDeclarations[label] = nearestDeclaration
@@ -3621,7 +3786,13 @@ extension NearestDeclarations {
 	/// before any change: a construction memo logs each, since a declaration this changes is made at the scope's depth, inside
 	/// its subtree, from one above it.
 	mutating func recordRequiredReceives(of scope: ConstructionScope, reading: (_ label: String, _ declaration: NearestDeclaration?, _ depth: Int) -> Void) {
-		for (label, propertiesRead) in DependencyTreeGenerator.propertiesReadByRequiredReceivesFromAbove(of: scope) {
+		recordRequiredReceives(of: scope.instantiable, publicMockCall: scope.publicMockCall, reading: reading)
+	}
+
+	/// Records what each required receive of `instantiable`, built as `publicMockCall` where it is one, reads, as
+	/// `recordRequiredReceives(of:reading:)` does for a scope of a frozen table.
+	mutating func recordRequiredReceives(of instantiable: Instantiable, publicMockCall: PublicMockCall?, reading: (_ label: String, _ declaration: NearestDeclaration?, _ depth: Int) -> Void = { _, _, _ in }) {
+		for (label, propertiesRead) in DependencyTreeGenerator.propertiesReadByRequiredReceivesFromAbove(of: instantiable, publicMockCall: publicMockCall) {
 			let (declaration, depth) = resolving(label)
 			reading(label, declaration, depth)
 			if var nearestDeclaration = declaration,
@@ -3739,7 +3910,7 @@ extension Property {
 extension SeamHoles {
 	/// The holes, builders and routes of `seamRoot`, the seam root of `seamType`, as a tree of the seam reads them.
 	init(of seamRoot: ScopeGenerator.SeamRoot, seamType: TypeDescription) {
-		self.init(seamType: seamType, holes: seamRoot.signature.holes, builders: seamRoot.signature.builders, parameters: seamRoot.signature.parameters, callRoutes: seamRoot.signature.callRoutes, scopeEnums: seamRoot.signature.scopeEnums, holdsLoopPayloadsInBoxes: true)
+		self.init(seamType: seamType, holes: seamRoot.signature.holes, builders: seamRoot.signature.builders, parameters: seamRoot.signature.parameters, callRoutes: seamRoot.callRoutes, routeMembersBySite: seamRoot.routeMembersBySite, scopeEnums: seamRoot.signature.scopeEnums, holdsLoopPayloadsInBoxes: true)
 	}
 }
 

@@ -22,16 +22,16 @@ extension TypeKeyLayout {
 	// MARK: Classes
 
 	/// The type of a path declaration.
-	func type(of value: PathValue) -> TypeDescription? {
+	func type(of value: PathValue, label readLabel: String) -> TypeDescription? {
 		switch value {
 		case .none:
 			nil
 		case let .statement(body, index):
-			property(of: bodies[body].statements[index])?.typeDescription
+			property(of: bodies[body].statements[index], label: readLabel)?.typeDescription
 		case let .forwarded(body, label):
 			bodies[body].record?.parameterProperties.first(where: { $0.label == label })?.typeDescription
 		case let .cycleParameter(body, label):
-			bodies[body].record?.cycleParameters.first(where: { $0.label == label })?.typeDescription
+			bodies[body].cycleParameters.first(where: { $0.label == label })?.typeDescription
 		}
 	}
 
@@ -40,10 +40,11 @@ extension TypeKeyLayout {
 	mutating func computeClasses() {
 		let count = bodies.count
 		let families = bodies.map(\.isInSendableFamily)
-		var structuralKeys = [[String]: Int]()
+		var structuralKeys = [[Int]: Int]()
 		var classes = [Int](repeating: 0, count: count)
+		var parts = StructuralKeyParts()
 		for body in bodies.indices.dropFirst() {
-			let key = structuralKey(of: body, isInSendableFamily: families[body])
+			let key = structuralKey(of: body, isInSendableFamily: families[body], parts: &parts)
 			classes[body] = structuralKeys[key] ?? {
 				let id = structuralKeys.count + 1
 				structuralKeys[key] = id
@@ -56,7 +57,7 @@ extension TypeKeyLayout {
 		var groupedClasses = [[Int]: Int]()
 		var classesWithForms = [Int](repeating: 0, count: count)
 		for body in bodies.indices.dropFirst() {
-			let forms: [String?] = reads[body].map { label in type(of: resolution(of: label, atPlace: body))?.unwrapped.asSource }
+			let forms: [String?] = reads[body].map { label in type(of: resolution(of: label, atPlace: body), label: label)?.unwrapped.asSource }
 			var groups = groupsByClass[refined[body], default: []]
 			var groupIndex = groups.firstIndex { group in
 				zip(group, forms).allSatisfy { $0 == nil || $1 == nil || $0 == $1 }
@@ -90,55 +91,75 @@ extension TypeKeyLayout {
 			classByBody[body] = id
 			membersByClass[id].append(body)
 		}
+		// Every lookup in a class's body asks whether its function is handed a label, so each class's labels are kept once.
+		parameterLabelsByClass = membersByClass.map { members in
+			members.first.flatMap { bodies[$0].record }.map { Set($0.parameterProperties.map(\.label)) } ?? []
+		}
 	}
 
-	func structuralKey(of body: Int, isInSendableFamily: Bool) -> [String] {
+	func structuralKey(of body: Int, isInSendableFamily: Bool, parts: inout StructuralKeyParts) -> [Int] {
 		guard let record = bodies[body].record else { return [] }
-		var key = [
-			record.concreteType.asSource,
-			record.target.callee,
-			"\(record.isExtension)",
-			record.lineEnd,
-			"\(isInSendableFamily)",
-			record.forwardedProperties.map(\.asSource).joined(separator: ","),
-			reads[body].joined(separator: ","),
-		]
+		var key = [parts.id(of: .header(
+			concreteType: record.concreteType.asSource,
+			callee: record.target.callee,
+			isExtension: record.isExtension,
+			lineEnd: record.lineEnd,
+			isInSendableFamily: isInSendableFamily,
+			forwardedProperties: record.forwardedProperties.map(\.asSource),
+			reads: reads[body],
+		))]
 		for argument in record.arguments {
-			key.append("argument|\(argument.argumentLabel)|\(argument.label)|\(argument.property.asSource)")
+			key.append(parts.id(of: .argument(argumentLabel: argument.argumentLabel, label: argument.label, property: argument.property.asSource)))
 		}
-		key.append(contentsOf: record.constructionShape)
+		for shape in record.constructionShape(shapes: &parts) {
+			key.append(parts.id(of: .text(shape)))
+		}
 		// A place's own passed arguments are its function's parameters: only their names and types tell places apart, since
 		// each call hands its own values, which the caller's key holds.
 		for argument in record.passedArguments {
-			key.append("parameter|\(argument.parameterName)|\(argument.type.asSource)")
+			key.append(parts.id(of: .parameter(name: argument.parameterName, type: argument.type.asSource)))
+		}
+		// A variant of the per-type plan takes a parameter per label its body's answers declare (`CycleVariantRecord.parameters`):
+		// two variants of one declaration answered apart take other parameters, so they are no class of one, whose outcomes
+		// one member decides (`computeOutcomes`).
+		if variantBodies.contains(body) {
+			for parameter in bodies[body].cycleParameters {
+				key.append(parts.id(of: .variantParameter(parameter.asSource)))
+			}
 		}
 		for (index, statement) in bodies[body].statements.enumerated() {
-			key.append(statementShape(statement))
+			key.append(parts.id(of: statementPart(statement, parts: &parts)))
 			let passedArguments = passedArguments(ofStatementAt: index, inBody: body)
-			key.append("passedArguments|\(passedArguments.count)")
+			key.append(parts.id(of: .passedArgumentCount(passedArguments.count)))
 			if case .closer = statement {
-				key.append(contentsOf: passedArguments.map { $0.closerShape ?? $0.shape })
+				for argument in passedArguments {
+					key.append(parts.id(of: argument.closerPart(parts: &parts)))
+				}
 			} else {
-				key.append(contentsOf: passedArguments.map(\.shape))
+				for argument in passedArguments {
+					key.append(parts.id(of: argument.part(parts: &parts)))
+				}
 			}
 		}
 		return key
 	}
 
-	func statementShape(_ statement: Statement) -> String {
+	func statementPart(_ statement: Statement, parts: inout StructuralKeyParts) -> StructuralKeyParts.Part {
 		switch statement {
 		case let .built(child):
-			guard let record = bodies[child].record else { return "" }
-			return "call|\(record.property.asSource)|\(record.isErased)|\(record.isExtension)"
+			guard let record = bodies[child].record else { return .text("") }
+			return .call(property: record.property.asSource, isErased: record.isErased, isExtension: record.isExtension)
 		case let .closer(record, _):
-			return "call|\(record.property.asSource)|\(record.isErased)|\(record.isExtension)"
+			return .call(property: record.property.asSource, isErased: record.isErased, isExtension: record.isExtension)
 		case let .inline(record):
 			let arguments = record.arguments.map { "\($0.argumentLabel):\($0.label):\($0.property.asSource)" }.joined(separator: ",")
-			return "inline|\(record.property.asSource)|\(record.concreteType.asSource)|\(record.target.callee)|\(record.isErased)|\(record.isExtension)|\(record.lineEnd)|\(arguments)|\(record.constructionShape.joined(separator: ";"))"
+			return .text("inline|\(record.property.asSource)|\(record.concreteType.asSource)|\(record.target.callee)|\(record.isErased)|\(record.isExtension)|\(record.lineEnd)|\(arguments)|\(record.constructionShape(shapes: &parts).joined(separator: ";"))")
 		case let .alias(record):
 			let reads = record.listedReads.map { "\($0.label):\($0.property.asSource)" }.joined(separator: ",")
-			guard let call = record.call else { return "alias|\(record.text)|\(reads)" }
-			return "alias|\(inPlaceCallShape(call))|\(reads)"
+			// Two renames of one text read their value apart where one reads it only if available: the type they read
+			// differs, so the places are no class of one.
+			guard let call = record.call else { return .text("alias|\(record.text)|\(reads)|\(record.readsOnlyIfAvailable)") }
+			return .text("alias|\(inPlaceCallShape(call))|\(reads)|\(record.readsOnlyIfAvailable)")
 		}
 	}
 

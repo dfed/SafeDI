@@ -615,7 +615,30 @@ func executeSafeDIToolMultiModuleTest(
 													// Every root’s received values from its per-type graph must equal the walk of its generator tree’s
 													// (`TypeFactsReceivedValueSuppliesChecks`).
 													try await TypeFactsReceivedValueSuppliesChecks.comparing(handingOn: TypeFactsReceivedValueSuppliesObservation.comparesWalk) {
-														try await tool.generate()
+														try await LabelsReadFromAboveChecks.comparing(handingOn: LabelsReadFromAboveObservation.observer) {
+															try await CallPlaceOrderChecks.comparing(handingOn: CallPlaceOrderObservation.observer) {
+																try await PlaceReadsChecks.comparing(handingOn: PlaceReadsObservation.observer) {
+																	try await VariantBodyChecks.comparing(handingOn: VariantBodyObservation.observer) {
+																		try await PlanBodiesChecks.comparing(handingOn: PlanBodiesObservation.observer) {
+																			try await MockVariantBodyChecks.comparing {
+																				try await TwinIdentityChecks.comparing(handingOn: TwinIdentityObservation.observer) {
+																					try await PlanSendableChecks.comparing(handingOn: PlanSendableObservation.observer) {
+																						try await PlanCaptureChecks.comparing(handingOn: PlanCaptureObservation.observer) {
+																							try await UnpassableCycleLabelChecks.checking(handingOn: UnpassableCycleLabelObservation.observer) {
+																								// The fold that decides whether any route is walked must send every graph the walk rejects to the walk (`FulfillmentFoldChecks`).
+																								try await ValidationWalkObservation.$foldComparison.withValue(FulfillmentFoldChecks.comparison(handingOn: ValidationWalkObservation.foldComparison)) {
+																									try await tool.generate()
+																								}
+																							}
+																						}
+																					}
+																				}
+																			}
+																		}
+																	}
+																}
+															}
+														}
 													}
 												}
 											}

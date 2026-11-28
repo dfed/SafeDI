@@ -64,6 +64,47 @@ enum TypeFactsChecks {
 		if let path = environment["SAFEDI_TYPE_FACTS_LOG"], !path.isEmpty {
 			append(result.line, toFileAt: path)
 		}
+		ParameterTally.shared.add(result, root: report.root)
+	}
+
+	/// What check 35 found in every world this process observed, each function and variant counted once however many
+	/// times the oracle built its root: the graph fuzzer's long run prints it in its report (`parameter-facts`).
+	final class ParameterTally: Sendable {
+		static let shared = ParameterTally()
+
+		struct Counts: Equatable {
+			/// Functions whose parameter the facts drop because every call passes `nil` for it, and the roots that hold one.
+			var droppedParameterFunctions = 0
+			var droppedParameterRoots = 0
+			/// The facts' parameters the tree captures instead, by the calls into their variant: none, one, two or more.
+			var capturedParametersByCalls = [0, 0, 0]
+		}
+
+		var counts: Counts {
+			lock.withLock {
+				Counts(
+					droppedParameterFunctions: droppedParameterFunctions.count,
+					droppedParameterRoots: Set(droppedParameterFunctions.map { $0.prefix { $0 != "|" } }).count,
+					capturedParametersByCalls: capturedParametersByVariant.values.reduce(into: [0, 0, 0]) { $0[min($1.calls, 2)] += $1.count },
+				)
+			}
+		}
+
+		func add(_ result: Result, root: String) {
+			guard !result.check35DroppedParameterFunctions.isEmpty || !result.check35CapturedParameterVariants.isEmpty else { return }
+			lock.withLock {
+				for function in result.check35DroppedParameterFunctions {
+					droppedParameterFunctions.insert("\(root)|\(function)")
+				}
+				for captured in result.check35CapturedParameterVariants {
+					capturedParametersByVariant["\(root)|\(captured.variant)"] = (captured.calls, captured.count)
+				}
+			}
+		}
+
+		private let lock = NSLock()
+		nonisolated(unsafe) private var droppedParameterFunctions = Set<String>()
+		nonisolated(unsafe) private var capturedParametersByVariant = [String: (calls: Int, count: Int)]()
 	}
 
 	struct Result {
@@ -76,6 +117,8 @@ enum TypeFactsChecks {
 		var factsVariantCount = 0
 		/// Pairs of places of one variant that check 10 compared after setting aside a read one of them asks, answered none.
 		var check10ExemptedPairs = 0
+		/// Variants check 34 sets aside by shape: inside only by another variant's closing place, or a fill a fill's chain marks.
+		var check34ExemptedVariants = 0
 		/// Only-if-available reads one place of a pair asks and passes `nil` or the declared form, which the other does not ask.
 		var check10SilentNilReads = 0
 		/// Estimates of where the variants join `nil` to a function other than 2.4.x's, which passes it to the function of the
@@ -93,6 +136,18 @@ enum TypeFactsChecks {
 		/// place and by a `SendableLazilyInstantiated` at another. Wider than the gap: it does not ask whether the node is
 		/// reached inside a `@Sendable` function, which the report does not say.
 		var sendableGapProxyNodes = 0
+		/// Places check 35 leaves out: a place closes on their function whose variant in the facts is another.
+		var check35ClosedOnByAnotherVariant = 0
+		/// The facts' parameters of the variants check 35 compared that the tree's function does not take, because it
+		/// captures the value where it is nested, each variant counted at its first place; and the text they would add
+		/// were each a parameter: its declaration in the signature and its argument at each call of the variant.
+		var check35CapturedParameters = 0
+		/// The variants those parameters are of, each with the calls into it and how many it has.
+		var check35CapturedParameterVariants = [(variant: Int, calls: Int, count: Int)]()
+		/// The functions whose every parameter the facts lack is one the facts drop, the rest being in the tree's order:
+		/// a parameter that every call passes `nil` (approved difference 18).
+		var check35DroppedParameterFunctions = [String]()
+		var check35CapturedParameterBytes = 0
 		var line = ""
 	}
 
@@ -259,6 +314,8 @@ enum TypeFactsChecks {
 		}
 		// Check 10.
 		var factsVariantByPlace = [Int?](repeating: nil, count: places.count)
+		// The edge of its parent's node that each place is built at.
+		var edgeByPlace = [Int?](repeating: nil, count: places.count)
 		if let root = places.first, root.node == 0, !report.variantNodes.isEmpty {
 			factsVariantByPlace[0] = 0
 		}
@@ -269,6 +326,7 @@ enum TypeFactsChecks {
 			for child in children {
 				guard let childNode = places[child].node, let edge = edges[cursor...].firstIndex(of: childNode) else { continue }
 				factsVariantByPlace[child] = report.variantCalls[variant][edge]
+				edgeByPlace[child] = edge
 				cursor = edge + 1
 			}
 		}
@@ -409,10 +467,77 @@ enum TypeFactsChecks {
 				}
 			}
 		}
+		// Check 35 (34 is the production Sendable mark’s): a variant’s parameters, read from the facts alone, are the
+		// cycle parameters of the function the tree builds at each of its places. A place that closes a cycle builds no
+		// function.
+		// A function a place closes on whose own variant in the facts is another (a member built two ways, which is two
+		// declarations, or a call whose answers key it apart from the function’s first call) is two variants in the facts,
+		// which hold its parameters apart: counted, and no finding.
+		var placesClosedOnByAnotherVariant = Set<Int>()
+		var variantsWithParametersTheTreeCaptures = Set<Int>()
+		for (index, place) in places.enumerated() where place.closesCycle {
+			if let closedOn = closedOnPlace(of: index), factsVariantByPlace[closedOn] != factsVariantByPlace[index] {
+				placesClosedOnByAnotherVariant.insert(closedOn)
+			}
+		}
+		for (index, place) in places.enumerated() {
+			guard !place.closesCycle, let variant = factsVariantByPlace[index], let generator = place.generator, let node = place.node, report.nodes[node].owedFacts.isEmpty else { continue }
+			guard !placesClosedOnByAnotherVariant.contains(index) else {
+				result.check35ClosedOnByAnotherVariant += 1
+				continue
+			}
+			result.comparedByCheck[35, default: 0] += 1
+			// The facts' variant takes a parameter for every read its function does not capture, where the tree's function
+			// takes one only for a label declared again inside a cycle that closes on it: the tree's are among the facts',
+			// in the facts' order.
+			// The generator's cycle parameter is the value where a production function takes the wrapper a lazily
+			// instantiated declaration answers it with (`TypeFactsWorld.parameterType(of:_:arrivals:)`), which the facts
+			// give: compared as the value.
+			let factsParameters = report.forMockGeneration ? report.variantParameters[variant] : report.variantParameters[variant].map { parameter in
+				for wrapper in ["SendableLazilyInstantiated<", "LazilyInstantiated<"] {
+					guard let range = parameter.range(of: ": \(wrapper)"), parameter.hasSuffix(">"), !generator.cycleParameters.contains(parameter) else { continue }
+					return parameter[..<range.lowerBound] + ": " + parameter[range.upperBound...].dropLast()
+				}
+				return parameter
+			}
+			var remaining = factsParameters[...]
+			let areAmongTheFacts = generator.cycleParameters.allSatisfy { parameter in
+				guard let position = remaining.firstIndex(of: parameter) else { return false }
+				remaining = remaining[(position + 1)...]
+				return true
+			}
+			if areAmongTheFacts, factsParameters.count > generator.cycleParameters.count, variantsWithParametersTheTreeCaptures.insert(variant).inserted {
+				var treeParameters = generator.cycleParameters[...]
+				let callCount = report.variantCalls.reduce(0) { $0 + $1.count { $0 == variant } }
+				result.check35CapturedParameterVariants.append((variant, callCount, factsParameters.count - generator.cycleParameters.count))
+				for parameter in factsParameters {
+					guard parameter != treeParameters.first else {
+						treeParameters = treeParameters.dropFirst()
+						continue
+					}
+					result.check35CapturedParameters += 1
+					// `label: Type, ` in the signature, and `label: label, ` at each call.
+					let label = parameter.prefix { $0 != ":" }
+					result.check35CapturedParameterBytes += parameter.utf8.count + 2 + callCount * (2 * label.utf8.count + 4)
+				}
+			}
+			if !areAmongTheFacts {
+				var treeParameters = generator.cycleParameters[...]
+				let factsAreAmongTheTree = factsParameters.allSatisfy { parameter in
+					guard let position = treeParameters.firstIndex(of: parameter) else { return false }
+					treeParameters = treeParameters[(position + 1)...]
+					return true
+				}
+				if factsAreAmongTheTree, generator.cycleParameters.filter({ !factsParameters.contains($0) }).allSatisfy({ $0.hasSuffix("?") }) {
+					result.check35DroppedParameterFunctions.append(nodeDescription(node))
+				}
+				add(35, "the function of \(nodeDescription(node)) takes \(generator.cycleParameters) where the facts give its variant \(factsParameters)")
+			}
+		}
 		// Check 33.
 		if !report.forMockGeneration {
-			for line in report.world.split(separator: "\n") where line.hasPrefix("v") && line.contains(" sendable keys ") {
-				add(33, "a production variant keys by family: \(line)")
+			for (variant, family) in report.variantFamilies.enumerated() where family != "plain" && !(report.holesArePlaces && report.nodes[report.variantNodes[variant]].holdsCaseBeneath) {
+				add(33, "a production variant of a body holding no case keys by family: v\(variant) of \(report.nodes[report.variantNodes[variant]].description)")
 			}
 		}
 		result.factsVariantCount = report.variantNodes.count
@@ -462,14 +587,67 @@ enum TypeFactsChecks {
 		}
 		var compared = [Int: Int]()
 		columnChecks(of: report, subtreeClosesCycle: subtreeClosesCycle, closedOnPlace: closedOnPlace, childrenByPlace: childrenByPlace, add: add, compared: &compared)
-		result.comparedByCheck = compared
+		// Check 34.
+		// A place a closing place of another variant closes on: the old tree builds the two variants' bodies as the closed-on
+		// place's one function, which the closing place's `@Sendable` function makes `@Sendable`, where the facts world keys
+		// them apart by family (a seam's body with a case beneath).
+		var closedOnByOtherVariant = Set<Int>()
+		for (index, place) in places.enumerated() where place.closesCycle {
+			if let closedOn = closedOnPlace(of: index), let closingVariant = factsVariantByPlace[index], let closedOnVariant = factsVariantByPlace[closedOn], closingVariant != closedOnVariant {
+				closedOnByOtherVariant.insert(closedOn)
+			}
+		}
+		var placesMarkByVariant = [Bool?](repeating: nil, count: report.variantNodes.count)
+		var ownPlacesMarkByVariant = [Bool](repeating: false, count: report.variantNodes.count)
+		var everyPlaceIsBeneathFill = [Bool](repeating: true, count: report.variantNodes.count)
+		for case let (index, variant?) in factsVariantByPlace.enumerated() {
+			let placePath = path(of: index)
+			// A fill of a `Sendable` hole is a `@Sendable` closure, which the generator's place does not record: its edge says.
+			func isSendableFunction(_ place: Int) -> Bool {
+				guard places[place].generator?.buildsInSendableFunction != true else { return true }
+				guard places[place].isFill, let parent = places[place].parent, let parentNode = places[parent].node, let edge = edgeByPlace[place] else { return false }
+				return report.nodes[parentNode].edgeFacts[edge].opens == "otherSendableFunction"
+			}
+			placesMarkByVariant[variant] = (placesMarkByVariant[variant] ?? false) || placePath.contains(where: isSendableFunction)
+			ownPlacesMarkByVariant[variant] = ownPlacesMarkByVariant[variant] || placePath.contains { !closedOnByOtherVariant.contains($0) && isSendableFunction($0) }
+			everyPlaceIsBeneathFill[variant] = everyPlaceIsBeneathFill[variant] && placePath.contains { places[$0].isFill }
+		}
+		// A twin group shares one function, so a plain variant of a group whose function is `@Sendable` is marked, and so
+		// is every plain variant its calls hand the mark on to: those are marked apart from their family.
+		var markedApartFromFamily = Set<Int>()
+		var groupWorklist = report.variantOneFunctionGroups.indices.filter { report.variantOneFunctionGroups[$0] != nil && report.variantBuildsInSendableFunction[$0] && report.variantFamilies[$0] == "plain" }
+		while let variant = groupWorklist.popLast() {
+			guard markedApartFromFamily.insert(variant).inserted else { continue }
+			for callee in report.variantCalls[variant] where report.variantBuildsInSendableFunction[callee] && report.variantFamilies[callee] == "plain" {
+				groupWorklist.append(callee)
+			}
+		}
+		for (variant, mark) in report.variantBuildsInSendableFunction.enumerated() {
+			let node = report.nodes[report.variantNodes[variant]]
+			if let placesMark = placesMarkByVariant[variant] {
+				compared[34, default: 0] += 1
+				// Two shapes the places' marks miss: a variant whose places are inside only by a closing place of another
+				// variant (above), and a fill a `Sendable` fill's chain makes `@Sendable`, which 2.4.x writes `@Sendable`
+				// (`generate_declaresFillsSendable_whenSendableFillRefersToThemInChain`) and no place records.
+				let isExempt = placesMark ? !ownPlacesMarkByVariant[variant] : everyPlaceIsBeneathFill[variant]
+				if placesMark != mark, isExempt {
+					result.check34ExemptedVariants += 1
+				} else if placesMark != mark {
+					add(34, "v\(variant) of \(node.description) is marked \(mark ? "inside" : "outside") a `@Sendable` function where its places say \(placesMark ? "inside" : "outside")")
+				}
+			}
+			if report.forMockGeneration || (report.holesArePlaces && node.holdsCaseBeneath), !markedApartFromFamily.contains(variant), mark != (report.variantFamilies[variant] == "sendable") {
+				add(34, "v\(variant) of \(node.description), keyed \(report.variantFamilies[variant]), is marked \(mark ? "inside" : "outside") a `@Sendable` function")
+			}
+		}
+		result.comparedByCheck.merge(compared) { $0 + $1 }
 		let unwalkedNodes = report.nodes.count - nodesSeen.count - report.nodes.count(where: \.isLeaf)
 		let twinNodes = report.nodes.count { $0.twin >= 0 }
 		var line = "root=\(report.root) mock=\(report.forMockGeneration) nodes=\(report.nodes.count) unwalkedNodes=\(unwalkedNodes) places=\(places.count) variants=\(result.variantCount) factsVariants=\(result.factsVariantCount) worst=\(result.worstNodeVariantCount) twins=\(twinNodes)"
 		for check in 1...lastCheck {
 			line.append(" check\(check)=\(result.findingsByCheck[check]?.count ?? 0)")
 		}
-		line.append(" check10Exempted=\(result.check10ExemptedPairs) check10SilentNil=\(result.check10SilentNilReads) nilOrderReads=\(result.nilOrderReads) nilOrderFewerFunctions=\(result.nilOrderFewerFunctions) nilOrderPlaces=\(result.nilOrderPlaces) sendableGapProxy=\(result.sendableGapProxyNodes)")
+		line.append(" check10Exempted=\(result.check10ExemptedPairs) check34Exempted=\(result.check34ExemptedVariants) check10SilentNil=\(result.check10SilentNilReads) nilOrderReads=\(result.nilOrderReads) nilOrderFewerFunctions=\(result.nilOrderFewerFunctions) nilOrderPlaces=\(result.nilOrderPlaces) sendableGapProxy=\(result.sendableGapProxyNodes) check35ClosedOnByAnotherVariant=\(result.check35ClosedOnByAnotherVariant) check35CapturedParameters=\(result.check35CapturedParameters) check35CapturedParameterBytes=\(result.check35CapturedParameterBytes)")
 		line.append(" check10Owed=\(result.check10OwedByFact.sorted { $0.key < $1.key }.map { "\($0.key):\($0.value)" }.joined(separator: ",")) check10OwedUncovered=\(result.check10OwedUncovered.count) test=\(Test.current?.name ?? "")")
 		for check in 11...lastCheck {
 			line.append(" compared\(check)=\(result.comparedByCheck[check] ?? 0)")
@@ -614,7 +792,7 @@ enum TypeFactsChecks {
 		return reads
 	}
 
-	static let lastCheck = 33
+	static let lastCheck = 35
 
 	/// Checks 11 to 31: each column of the graph against what the generator decided at each place.
 	///
@@ -644,9 +822,16 @@ enum TypeFactsChecks {
 	///     that member at its own edge, and the maker has such a body. It reads the variants alone, so it runs on every tree
 	///     with a loop of builders, refused or not.
 	///
-	/// 33, outside the columns: a production world keys no variant by family. One body serves its places inside and
-	/// outside a `@Sendable` function, the mark folded over its calls, as 2.4.x writes it; only seam cases and mock bodies
-	/// key by family.
+	/// 33, outside the columns: a production world keys by family only the bodies
+	/// of a seam's tree with a hole beneath, fills included, which read their cases from the `@Sendable` carrier inside a
+	/// `@Sendable` function.
+	/// Every other body serves its places inside and outside a `@Sendable` function, the mark folded over its calls, as
+	/// 2.4.x writes it.
+	///
+	/// 34, outside the columns: a variant is marked built inside a `@Sendable` function exactly when one of its places is,
+	/// itself or a place above it building in one, a fill of a `Sendable` hole among them; where the world keys the variant
+	/// by family, the mark is its family, or a twin group's when a group shares one function of either family. Exempt by
+	/// shape: a variant inside only by another variant's closing place, and a fill beneath fills marked by a fill's chain.
 	private static func columnChecks(
 		of report: TypeFactsReport,
 		subtreeClosesCycle: [Bool],

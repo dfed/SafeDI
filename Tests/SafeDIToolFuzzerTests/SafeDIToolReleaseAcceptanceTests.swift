@@ -223,13 +223,14 @@ struct SafeDIToolReleaseAcceptanceTests {
 
 	@Test(arguments: GraphFuzzerReleaseAcceptanceCorpus.allCases)
 	func releaseAcceptanceFixture_drawsTheCorpusGraphWithoutFeaturesOlderReleaseRejects_whenDrawnForComparison(corpus: GraphFuzzerReleaseAcceptanceCorpus) {
-		// 2.3.0 rejects `@Instantiated(onlyIfAvailable: true)` and the `@Instantiable` actors `addingActorArgumentShapes`
-		// draws, every release rejects the shapes `addingPlaceStoodForShapes` draws, every release before the fix wrote a
-		// call that does not compile for `addingNestedFillHoleShapes`' unfilled gadget, and every release before the fix
-		// rejects the ring `addingSeamRingShapes` draws, so a graph drawing any of them would be class A, compared by nothing.
+		// 2.3.0 rejects `@Instantiated(onlyIfAvailable: true)`, erased or not, and the `@Instantiable` actors
+		// `addingActorArgumentShapes` draws, every release rejects the shapes `addingPlaceStoodForShapes` draws, every
+		// release before the fix wrote a call that does not compile for `addingNestedFillHoleShapes`' unfilled gadget, and
+		// every release before the fix rejects the ring `addingSeamRingShapes` draws, so a graph drawing any of them would
+		// be class A, compared by nothing.
 		func drawsFeatureOlderReleaseRejects(_ fixture: GraphFuzzerFixture) -> Bool {
 			let text = fixture.swiftFileContent.joined(separator: "\n")
-			return text.contains("@Instantiated(onlyIfAvailable: true") || text.range(of: #"actor \w+: Instantiable"#, options: .regularExpression) != nil || text.contains("_StoodForHome: Instantiable") || text.contains("_NestedFillPanelImpl: Instantiable") && !text.contains("_NestedFillGadgetImpl: Instantiable") || text.contains("_RingSeamA: Instantiable")
+			return text.range(of: #"@Instantiated\([^)]*onlyIfAvailable: true"#, options: .regularExpression) != nil || text.range(of: #"actor \w+: Instantiable"#, options: .regularExpression) != nil || text.contains("_StoodForHome: Instantiable") || text.contains("_NestedFillPanelImpl: Instantiable") && !text.contains("_NestedFillGadgetImpl: Instantiable") || text.contains("_RingSeamA: Instantiable")
 		}
 		var corpusGraphsDrawingOne = 0
 		for seed in UInt64(0)..<300 {

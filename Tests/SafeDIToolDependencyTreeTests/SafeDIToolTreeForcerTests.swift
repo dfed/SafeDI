@@ -46,7 +46,7 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 	mutating func generate_buildsTreeOnlyForRootNodeRecordsRefuse_whenNothingElseReadsTrees() async throws {
 		let (forcers, heldTaskCounts) = try await treeForcers(of: Self.plainAndLoopingRoots)
 		#expect(forcers == """
-		Looping\tkind cycle
+		Looping\tkind cycleReceivesBuilder
 		Plain\tnone
 		roots that built a tree: 1 of 2
 
@@ -60,7 +60,7 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 	mutating func generate_buildsEveryRootsTree_whenRunDrawsDOTGraph() async throws {
 		let (forcers, heldTaskCounts) = try await treeForcers(of: Self.plainAndLoopingRoots, buildDOTFileOutput: true)
 		#expect(forcers == """
-		Looping\tkind cycle, DOT graph
+		Looping\tkind cycleReceivesBuilder, DOT graph
 		Plain\tDOT graph
 		roots that built a tree: 2 of 2
 
@@ -88,18 +88,79 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 		""")
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsNoTree_whenRootBuildsNothing() async throws {
+		// A root with no dependencies has no generated initializer: its node records lay it out as nothing, as its tree
+		// would write it, so nothing forces its tree.
+		let (forcers, _) = try await treeForcers(of: [
+			"""
+			@Instantiable(isRoot: true)
+			public final class Root: Instantiable {
+			    public init() {}
+			}
+			""",
+		])
+		#expect(forcers == """
+		Root\tnone
+		roots that built a tree: 0 of 1
+
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsTree_whenRenameOfSharedTypeIsFulfilledByWrapperOnFirstPathAndValueOnSecond() async throws {
+		let (forcers, _) = try await treeForcers(of: Self.renameFulfilledByWrapperAndValue(lazyParentFirst: true))
+		// `Reader`'s rename is called beneath both parents, which answer its `x` as a wrapper's instance and as a value. The
+		// two forms key apart, so `Reader` has two variants, which a production world refuses.
+		#expect(forcers == """
+		Root\tkind nodeHasSeveralVariants
+		roots that built a tree: 1 of 1
+
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsTree_whenRenameOfSharedTypeIsFulfilledByValueOnFirstPathAndWrapperOnSecond() async throws {
+		let (forcers, _) = try await treeForcers(of: Self.renameFulfilledByWrapperAndValue(lazyParentFirst: false))
+		// The same world with the root's properties swapped: the refusal does not follow which parent is declared first.
+		#expect(forcers == """
+		Root\tkind nodeHasSeveralVariants
+		roots that built a tree: 1 of 1
+
+		""")
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
 
 	/// `Plain`, a root node records lay out, and `Looping`, a root they refuse, since a type of its tree builds itself
-	/// again through an `Instantiator`.
+	/// again through an `Instantiator` that a type beneath it receives.
 	private static let plainAndLoopingRoots = [
 		seamFixtureType(named: "Looping", isRoot: true, declarations: ["@Instantiated let stepBuilder: Instantiator<Step>"]),
 		seamFixtureType(named: "Plain", isRoot: true, declarations: ["@Instantiated let service: Service"]),
-		seamFixtureType(named: "Step", declarations: ["@Instantiated let stepBuilder: Instantiator<Step>"]),
+		seamFixtureType(named: "Step", declarations: ["@Instantiated let stepBuilder: Instantiator<Step>", "@Instantiated let detail: Detail"]),
+		seamFixtureType(named: "Detail", declarations: ["@Received let stepBuilder: Instantiator<Step>"]),
 		seamFixtureType(named: "Service", declarations: []),
 	]
+
+	/// A root whose two parents each build a `Reader` whose rename is fulfilled by `x`: `LazyParent` declares `x` as a
+	/// `LazilyInstantiated<X>` and builds `Reader` through an `Instantiator`, and `ValueParent` declares `x` as an `X`
+	/// and builds `Reader` beneath `Holder`. `lazyParentFirst` orders the root's two properties.
+	private static func renameFulfilledByWrapperAndValue(lazyParentFirst: Bool) -> [String] {
+		let parents = ["@Instantiated let lazyParent: LazyParent", "@Instantiated let valueParent: ValueParent"]
+		return [
+			seamFixtureType(named: "Root", isRoot: true, declarations: lazyParentFirst ? parents : parents.reversed()),
+			seamFixtureType(named: "LazyParent", declarations: ["@Instantiated let readerBuilder: Instantiator<Reader>", "@Instantiated let x: LazilyInstantiated<X>"]),
+			seamFixtureType(named: "ValueParent", declarations: ["@Instantiated let x: X", "@Instantiated let holder: Holder"]),
+			seamFixtureType(named: "Holder", declarations: ["@Instantiated let reader: Reader"]),
+			seamFixtureType(named: "Reader", declarations: [#"@Received(fulfilledByDependencyNamed: "x", ofType: X.self) let renamed: X"#]),
+			seamFixtureType(named: "X", declarations: []),
+		]
+	}
 
 	/// What `--tree-forcers-output` holds once `files` are generated, and the code tasks each tree the run built still
 	/// held once its code was planned, in the order the trees were counted.
@@ -108,18 +169,15 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 		let output = TestTemporaryDirectory.uniquePath(prefix: "TreeForcers", pathExtension: "txt")
 		filesToDelete.append(output)
 		let (stream, continuation) = AsyncStream.makeStream(of: Int.self)
-		// The switch to node records is on, as it is once it lands: a root they accept builds no tree.
-		_ = try await NodeRecordsObservation.$buildsNoTreeForAcceptedRoots.withValue(true) {
-			try await HeldCodeTasks.$observer.withValue({ continuation.yield($0) }) {
-				try await executeSafeDIToolTest(
-					swiftFileContent: files,
-					buildSwiftOutputDirectory: true,
-					buildDOTFileOutput: buildDOTFileOutput,
-					filesToDelete: &filesToDelete,
-					moduleMembershipArguments: moduleMembershipArguments,
-					treeForcersOutput: output,
-				)
-			}
+		_ = try await HeldCodeTasks.$observer.withValue({ continuation.yield($0) }) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: files,
+				buildSwiftOutputDirectory: true,
+				buildDOTFileOutput: buildDOTFileOutput,
+				filesToDelete: &filesToDelete,
+				moduleMembershipArguments: moduleMembershipArguments,
+				treeForcersOutput: output,
+			)
 		}
 		continuation.finish()
 		var heldTaskCounts = [Int]()

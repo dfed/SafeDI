@@ -217,7 +217,7 @@ extension ScopeGenerator {
 				&& builders.isEmpty
 				&& rootRenames.values.allSatisfy(\.isEmpty)
 				&& rootInstancesReadByValue.isEmpty
-			if let statements = try Self.nodeRecordsMockStatements(of: instantiable, worldRoot: worldRoot, bindsOnlyNodes: bindsOnlyNodes) {
+			if let statements = Self.nodeRecordsMockStatements(of: instantiable, worldRoot: worldRoot, bindsOnlyNodes: bindsOnlyNodes) {
 				bindingLines = [statements]
 			}
 		}
@@ -1575,9 +1575,10 @@ extension MockLowering {
 			return isErased ? "\(erasedTypeSource)(\(unerasedConstruction))" : unerasedConstruction
 		}
 
-		/// The type an erased node wraps what it builds in: its property's, or the type a wrapper builds.
+		/// The type an erased node wraps what it builds in: the type its property instantiates, which is the property's type
+		/// without the optionality of one instantiated only if available, or the type a wrapper builds, as production wraps it.
 		private var erasedTypeSource: String {
-			isWrapped ? property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource : property.typeDescription.asSource
+			property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource
 		}
 
 		// The name the node's level renames its builder function to, apart from an enclosing function

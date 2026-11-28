@@ -430,6 +430,17 @@ struct TypeFactsGraph: Sendable {
 		// A hole is a place only in a seam's own tree or a public mock's: in any other world it is a property passed `nil`.
 		let rootInstantiable = nodes[0].scope.instantiable
 		let holesArePlaces = rootInstantiable.generatesDependencyTree || (forMockGeneration && rootInstantiable.generateMock == .public)
+		// Whether a hole is beneath each node along every edge, fills included: a body whose subtree reads a case, its own or
+		// through a fill it hands a seam it calls, reads it from the carrier of the function that encloses it.
+		let casesBeneath = holesArePlaces && !forMockGeneration ? ReadsFromAbove(
+			graph: graph,
+			own: BitRows(rowCount: nodes.count, columnCount: 1) { node, insert in
+				if nodes[node].key.leaf == .hole {
+					insert(0)
+				}
+			},
+			hidden: BitRows(rowCount: nodes.count, columnCount: 1) { _, _ in },
+		).rows : BitRows(rowCount: nodes.count, columnCount: 1) { _, _ in }
 		let worldHoldsHoles = holesArePlaces && holesBeneath.contains(0, inRow: 0)
 		let carrierEdges = worldHoldsHoles ? Self.carrierEdges(of: graph, edgeIsFill: edgeIsFill, builtTypes: builtTypes, nodeProperties: nodeProperties) : []
 
@@ -687,6 +698,7 @@ struct TypeFactsGraph: Sendable {
 
 		self.graph = graph
 		self.forMockGeneration = forMockGeneration
+		self.holesArePlaces = holesArePlaces
 		self.constructions = constructions
 		self.kinds = kinds
 		self.nodeProperties = nodeProperties
@@ -699,6 +711,7 @@ struct TypeFactsGraph: Sendable {
 		self.typesBeneath = typesBeneath
 		self.typesDeclaredEscaping = typesDeclaredEscaping
 		self.holesBeneath = holesBeneath
+		self.casesBeneath = casesBeneath
 		self.parentOffsets = parentOffsets
 		self.parents = parents
 		self.fills = fills
@@ -752,7 +765,32 @@ struct TypeFactsGraph: Sendable {
 		self.readOffsets = readOffsets
 		self.labelColumn = labelColumn
 		self.labelOffsets = labelOffsets
-		let answers = Self.answers(of: graph, reads: reads, readTable: readInterner.values, labels: labels, bindings: bindings, bindingOffsets: bindingOffsets, bindingsBefore: bindingsBefore, properties: properties, forms: (table: formInterner.values, readFromAbove: formsReadFromAbove), madeAgain: madeAgain)
+		let edgeOpens = edgeFacts.map(\.opens)
+		let answers = Self.answers(
+			of: graph,
+			reads: reads,
+			readTable: readInterner.values,
+			labels: labels,
+			bindings: bindings,
+			bindingOffsets: bindingOffsets,
+			bindingsBefore: bindingsBefore,
+			properties: properties,
+			forms: (table: formInterner.values, readFromAbove: formsReadFromAbove),
+			// Production bodies have one variant, `@Sendable` a mark folded over call edges (`TypeFactsOutcomes`), so the
+			// root's `.plain` reaches every node. A mock's body reads its overrides from a local bound before the `@Sendable`
+			// function that encloses it, and its parent's configuration where none does, so a mock keys by its family. In a
+			// seam's own tree, a body holding a hole reads its cases from the `@Sendable` carrier inside a `@Sendable`
+			// function and from the plain one outside, so it keys by its family too, as does a body that hands such a body to a
+			// seam it calls as a fill; a body holding none stays one variant.
+			family: Self.familyOfCall(
+				forMockGeneration: forMockGeneration,
+				holesArePlaces: holesArePlaces,
+				casesBeneath: casesBeneath,
+				edgeTargets: graph.edgeTargets,
+				edgeOpens: edgeOpens,
+			),
+			madeAgain: madeAgain,
+		)
 		answerIsBeingBuilt = answers.isBeingBuilt
 		answerIsMadeAgain = answers.isMadeAgain
 		answerTexts = answers.texts
@@ -777,6 +815,9 @@ struct TypeFactsGraph: Sendable {
 		}
 		self.madeAgainSetByNode = madeAgainSetByNode
 		loopMembersSharedApart = membersSharedApart.sorted()
+		let oneFunctionGroups = Self.twinGroups(of: answers.variants, cycleIDs: cycleIDs, twins: twins, isOnCycle: graph.isOnCycle, readColumn: readColumn, readOffsets: readOffsets)
+		self.oneFunctionGroups = oneFunctionGroups
+		variantBuildsInSendableFunction = Self.sendableMarks(of: answers.variants, graph: graph, edgeOpens: edgeOpens, oneFunctionGroups: oneFunctionGroups)
 		let isBeingBuilt = answers.isBeingBuilt
 		let variantsOfAnswers = answers.variants
 		let readsByID = readInterner.values
@@ -822,6 +863,12 @@ struct TypeFactsGraph: Sendable {
 
 	/// The variants of the world's bodies, answered by what each node binds at its edges (`answers(of:reads:…)`).
 	let variants: TypeFactsVariants
+
+	/// The variants one function serves, twins' bodies of one key (`twinGroups(of:cycleIDs:twins:isOnCycle:readColumn:readOffsets:)`).
+	let oneFunctionGroups: [[Int]]
+
+	/// Per variant, whether a call builds its body inside a `@Sendable` function (`sendableMarks(of:graph:edgeOpens:oneFunctionGroups:)`).
+	let variantBuildsInSendableFunction: [Bool]
 
 	/// What each read of each variant comes to in its body.
 	let outcomes: TypeFactsOutcomes
@@ -943,6 +990,7 @@ struct TypeFactsGraph: Sendable {
 		bindingsBefore: [Int32],
 		properties: TypeFactsInterner<Property>,
 		forms: (table: [OnlyIfAvailableForm], readFromAbove: ReadsFromAbove),
+		family: (_ edge: Int, _ callerFamily: VariantFamily) -> VariantFamily,
 		madeAgain: MadeAgainEdges?,
 	) -> (variants: TypeFactsVariants, isBeingBuilt: [Bool], isMadeAgain: [Bool], texts: [String], keys: [Int32], properties: [Int32]) {
 		var answerIDByText = [String: Int32]()
@@ -1041,10 +1089,8 @@ struct TypeFactsGraph: Sendable {
 			return VariantBinding(answer: answer(text: "\(keyText) made again as node \(declaration.node)", beingBuilt: false, madeAgain: true, keyText: keyText, kind: declaration.kind, property: declaration.property), declaration: edgeTargets[edge])
 		}
 		func binding(at edge: Int, of readID: Int32) -> VariantBinding? {
+			// Every read the graph interns asks about a label: `ownReads` makes only value, optional and mock reads.
 			let read = readTable[Int(readID)]
-			guard read.channel.asksAboutLabel else {
-				return nil
-			}
 			// A member's rebinding at its top answers every read of the label from beneath it, before what its parent
 			// binds, its own label's included: a loop of one makes its own wrapper again.
 			if let rebinding = madeAgainAnswer(at: edge, for: read) {
@@ -1208,9 +1254,7 @@ struct TypeFactsGraph: Sendable {
 			reads: reads,
 			rootAnswer: { _ in nil },
 			binding: { edge, readID in binding(at: edge, of: readID) },
-			// Production bodies have one variant, `@Sendable` a mark folded over call edges; the family a seam's cases,
-			// builders and mock bodies key by is the edge facts' `opens`, which no producer feeds here yet.
-			family: { _, family in family },
+			family: family,
 			key: { readID, answer, target in
 				switch readTable[Int(readID)].channel {
 				case .optional, .optionalValue:
@@ -1247,6 +1291,8 @@ struct TypeFactsGraph: Sendable {
 
 	/// Whether the world is a mock root's.
 	let forMockGeneration: Bool
+	/// Whether the world's holes are places: a seam's own tree, or a public mock's.
+	let holesArePlaces: Bool
 
 	/// What each node's subtree reads from above it, by read ID.
 	let reads: ReadsFromAbove
@@ -1279,6 +1325,9 @@ struct TypeFactsGraph: Sendable {
 	let typesDeclaredEscaping: BitRows
 	/// Whether each node's subtree holds a hole: column 0.
 	let holesBeneath: BitRows
+	/// In a seam's own tree, whether a hole is beneath each node along every edge, fills included: column 0. Empty in any
+	/// other world.
+	let casesBeneath: BitRows
 	/// Every node's parents, each node's in a run starting at its offset; the last offset is the count.
 	let parentOffsets: [Int32]
 	let parents: [TypeFactsParent]
@@ -1595,6 +1644,109 @@ struct TypeFactsGraph: Sendable {
 			}
 		}
 		return dominators
+	}
+
+	/// The family a call builds its callee in, given the function its edge `opens` and its caller's family: a body inside a
+	/// `@Sendable` function is in the `@Sendable` family, and so is every body beneath it.
+	/// The family a call at an edge builds its callee in, given the caller's: its own family in a mock, and in a seam's
+	/// tree where a hole is beneath the callee along every edge, fills included (`casesBeneath`); the root's `.plain`
+	/// everywhere else.
+	static func familyOfCall(
+		forMockGeneration: Bool,
+		holesArePlaces: Bool,
+		casesBeneath: BitRows,
+		edgeTargets: [Int32],
+		edgeOpens: [TypeFactsFunctionOpened],
+	) -> (_ edge: Int, _ callerFamily: VariantFamily) -> VariantFamily {
+		if forMockGeneration {
+			{ edge, callerFamily in familyOfCall(opening: edgeOpens[edge], callerFamily: callerFamily) }
+		} else if holesArePlaces {
+			{ edge, callerFamily in casesBeneath.contains(0, inRow: Int(edgeTargets[edge])) ? familyOfCall(opening: edgeOpens[edge], callerFamily: callerFamily) : .plain }
+		} else {
+			{ _, callerFamily in callerFamily }
+		}
+	}
+
+	/// Per variant, whether a call builds its body inside a `@Sendable` function: the mark a body shared by calls inside
+	/// and outside one carries, folded over every call into it, so that its function is `@Sendable` once any call needs
+	/// it. A call opens such a function by `familyOfCall(opening:callerFamily:)`'s rule, and a call from a marked body
+	/// hands the mark on. Where a world keys a body by family (a mock's, and a seam's that holds a hole), the mark is its
+	/// family, except in a group below; elsewhere it is the one fact that tells a body's places inside and outside the
+	/// function apart.
+	///
+	/// `oneFunctionGroups` are the variants one function serves: a body and its twins of one key, the `Sendable`
+	/// wrapper's and the constant's (the lead's ruling for one `@Sendable` function), which share the mark, of any
+	/// family.
+	static func sendableMarks(of variants: TypeFactsVariants, graph: OrderedGraph<TypeFactsDeclaration>, edgeOpens: [TypeFactsFunctionOpened], oneFunctionGroups: [[Int]]) -> [Bool] {
+		var marks = [Bool](repeating: false, count: variants.count)
+		var groupOfVariant = [Int](repeating: -1, count: variants.count)
+		for (group, members) in oneFunctionGroups.enumerated() {
+			for member in members {
+				groupOfVariant[member] = group
+			}
+		}
+		// Each variant is visited once in order and again only when a call newly marks it: a call that closes a cycle
+		// reaches a variant made before its caller.
+		var worklist = Array((0..<variants.count).reversed())
+		while let variant = worklist.popLast() {
+			if marks[variant], groupOfVariant[variant] >= 0 {
+				for member in oneFunctionGroups[groupOfVariant[variant]] where !marks[member] {
+					marks[member] = true
+					worklist.append(member)
+				}
+			}
+			let callerFamily: VariantFamily = marks[variant] ? .sendable : .plain
+			let edgeOffset = graph.edgeOffset(of: Int(variants.node(of: variant)))
+			for (edgeIndex, callee) in variants.callees(of: variant).enumerated() where !marks[Int(callee)] && familyOfCall(opening: edgeOpens[edgeOffset + edgeIndex], callerFamily: callerFamily) == .sendable {
+				marks[Int(callee)] = true
+				worklist.append(Int(callee))
+			}
+		}
+		return marks
+	}
+
+	/// The variants of twin declarations, one cycle identity's, that read the same values from above and share a key,
+	/// each group of two or more in variant order, where a twin of the identity is on a cycle, as one that closes it on
+	/// the other is: one function serves each group, in a mock's world as in production's (mocks behave like
+	/// production), so the group ignores family. Twins of an identity no cycle runs through are siblings built apart, a
+	/// function each.
+	static func twinGroups(of variants: TypeFactsVariants, cycleIDs: [CycleID], twins: [Int32], isOnCycle: (Int) -> Bool, readColumn: [Int32], readOffsets: [Int32]) -> [[Int]] {
+		var identitiesOnCycles = Set<CycleID>()
+		for (node, identity) in cycleIDs.enumerated() where twins[node] >= 0 && isOnCycle(node) {
+			identitiesOnCycles.insert(identity)
+		}
+		var groupByBody = [TwinBody: Int]()
+		var groups = [[Int]]()
+		for variant in 0..<variants.count where identitiesOnCycles.contains(cycleIDs[Int(variants.node(of: variant))]) {
+			let node = Int(variants.node(of: variant))
+			let body = TwinBody(identity: cycleIDs[node], reads: Array(readColumn[Int(readOffsets[node])..<Int(readOffsets[node + 1])]), keys: Array(variants.keys(of: variant)))
+			if let group = groupByBody[body] {
+				groups[group].append(variant)
+			} else {
+				groupByBody[body] = groups.count
+				groups.append([variant])
+			}
+		}
+		return groups.filter { $0.count > 1 }
+	}
+
+	/// A body twin declarations share: their cycle identity, the values they read from above, and the variant's key.
+	/// A key is positional over its node's reads, so two twins' keys mean the same only over the same reads. Twins of
+	/// one identity whose reads differ may be a shape SafeDI cannot build; the reads keep such twins apart rather than
+	/// let equal positions merge bodies that differ.
+	private struct TwinBody: Hashable {
+		let identity: CycleID
+		let reads: [Int32]
+		let keys: [Int32]
+	}
+
+	static func familyOfCall(opening opens: TypeFactsFunctionOpened, callerFamily: VariantFamily) -> VariantFamily {
+		switch opens {
+		case .sendableInstantiatorBuilder, .sendableLazyWrapper, .otherSendableFunction:
+			.sendable
+		case .none, .instantiatorBuilder:
+			callerFamily
+		}
 	}
 
 	private static func opens(_ node: TypeFactsDeclaration) -> TypeFactsFunctionOpened {
