@@ -125,11 +125,6 @@ struct DeclarationsAnsweringReads: Sendable {
 	}
 
 	private static func opensSendableFunction(_ edge: TypeFactsEdge) -> Bool {
-		switch edge.opens {
-		case .sendableInstantiatorBuilder, .sendableLazyWrapper, .otherSendableFunction:
-			true
-		case .none, .instantiatorBuilder:
-			false
-		}
+		edge.opens.isSendable
 	}
 }

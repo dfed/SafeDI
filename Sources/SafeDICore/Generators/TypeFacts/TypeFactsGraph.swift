@@ -639,6 +639,21 @@ struct TypeFactsGraph: Sendable {
 			}
 		}
 
+		// The nodes some route builds inside a `@Sendable` function: beneath an edge that opens one, through every edge but a
+		// call of a cycle, whose callee's function is declared apart. Each node is marked once.
+		var buildsInsideSendableFunction = [Bool](repeating: false, count: nodes.count)
+		var insideSendableToVisit = [Int]()
+		for edge in edgeFacts.indices where edgeFacts[edge].opens.isSendable && !edgeFacts[edge].isCallEdge && !buildsInsideSendableFunction[Int(edgeFacts[edge].child)] {
+			buildsInsideSendableFunction[Int(edgeFacts[edge].child)] = true
+			insideSendableToVisit.append(Int(edgeFacts[edge].child))
+		}
+		while let node = insideSendableToVisit.popLast() {
+			for edge in graph.edgeIndices(from: node) where !edgeFacts[edge].isCallEdge && !buildsInsideSendableFunction[Int(edgeFacts[edge].child)] {
+				buildsInsideSendableFunction[Int(edgeFacts[edge].child)] = true
+				insideSendableToVisit.append(Int(edgeFacts[edge].child))
+			}
+		}
+
 		// The parents of each node, in the order the walk meets each edge, each with the bindings before its edge.
 		var parentCounts = [Int32](repeating: 0, count: nodes.count + 1)
 		for edge in 0..<graph.edgeCount {
@@ -804,6 +819,7 @@ struct TypeFactsGraph: Sendable {
 		self.nodeProperties = nodeProperties
 		self.builtTypes = builtTypes
 		self.edgeFacts = edgeFacts
+		self.buildsInsideSendableFunction = buildsInsideSendableFunction
 		self.bindings = bindings
 		self.bindingOffsets = bindingOffsets
 		self.twins = twins
@@ -1274,6 +1290,8 @@ struct TypeFactsGraph: Sendable {
 	let builtTypes: [Int32]
 	/// Each edge's facts, parallel to `graph.edgeTargets`.
 	let edgeFacts: [TypeFactsEdge]
+	/// Whether some route builds each node inside a `@Sendable` function.
+	private let buildsInsideSendableFunction: [Bool]
 	/// Every node's bindings, each node's in a run starting at its offset; the last offset is the count.
 	let bindings: [TypeFactsWorldBinding]
 	let bindingOffsets: [Int32]
@@ -1317,6 +1335,11 @@ struct TypeFactsGraph: Sendable {
 	/// The facts of the node's edges, parallel to `graph.edges(from:)`.
 	func edgeFacts(from index: Int) -> ArraySlice<TypeFactsEdge> {
 		edgeFacts[graph.edgeIndices(from: index)]
+	}
+
+	/// Whether some route builds `declaration` inside a `@Sendable` function: its own, or one around it.
+	func isBuiltInsideSendableFunction(_ declaration: DeclarationID) -> Bool {
+		buildsInsideSendableFunction[Int(declaration)]
 	}
 
 	/// The node's bindings, in the order its scope binds them.

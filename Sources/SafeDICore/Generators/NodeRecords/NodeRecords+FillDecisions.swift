@@ -61,14 +61,16 @@ struct FillEmissionDecisions: Sendable, Equatable {
 
 	/// The decisions of a call whose fills are `fills`, whose dispatchers are `dispatchers` (each with what it takes,
 	/// `DispatcherRecord.parameters`; its `isSendable` is not read), and whose root dispatcher hands its targets
-	/// `callerArguments` and `callerMemoArguments` of the caller's scope (`FilledCallFields`).
+	/// `callerArguments` and `callerMemoArguments` of the caller's scope (`FilledCallFields`). `isInsideSendableFunction`
+	/// says whether some route builds the call inside a `@Sendable` function.
 	static func of(
 		fills: [Fill],
 		dispatchers: [DispatcherRecord],
 		callerArguments: [Property: ArgumentSource],
 		callerMemoArguments: [Property: ArgumentSource],
+		isInsideSendableFunction: Bool = false,
 	) -> FillEmissionDecisions {
-		let sendableKeys = sendableKeys(fills: fills, dispatchers: dispatchers)
+		let sendableKeys = sendableKeys(fills: fills, dispatchers: dispatchers, isInsideSendableFunction: isInsideSendableFunction)
 		var parametersByKey = [String: [SeamSignature.Hole.Field]]()
 		for fill in fills {
 			parametersByKey[fill.key] = fill.parameters
@@ -104,10 +106,12 @@ struct FillEmissionDecisions: Sendable, Equatable {
 
 	/// The fills and dispatchers that are `@Sendable`: each a `@Sendable`-family argument of the call reaches – a fill of a
 	/// `@Sendable` builder, a dispatcher of a `@Sendable` family – and each such a dispatcher's case leads to. No fill of a
-	/// root's call refers to another by name, so nothing else makes one `@Sendable`.
-	private static func sendableKeys(fills: [Fill], dispatchers: [DispatcherRecord]) -> Set<String> {
+	/// root's call refers to another by name, so nothing else makes one `@Sendable` but the call's own place: a call built
+	/// inside a `@Sendable` function on some route calls its dispatchers there, so each of them is `@Sendable`, and each one
+	/// its cases lead to, as the tree marks a root function a `@Sendable` function reaches.
+	private static func sendableKeys(fills: [Fill], dispatchers: [DispatcherRecord], isInsideSendableFunction: Bool) -> Set<String> {
 		var keys = Set(fills.filter(\.hole.isSendable).map(\.key))
-		var dispatchersToVisit = dispatchers.filter(\.dispatcher.isSendableFamily)
+		var dispatchersToVisit = isInsideSendableFunction ? dispatchers : dispatchers.filter(\.dispatcher.isSendableFamily)
 		let dispatcherByKey = Dictionary(dispatchers.map { ($0.key, $0) }) { first, _ in first }
 		keys.formUnion(dispatchersToVisit.map(\.key))
 		while let dispatcher = dispatchersToVisit.popLast() {

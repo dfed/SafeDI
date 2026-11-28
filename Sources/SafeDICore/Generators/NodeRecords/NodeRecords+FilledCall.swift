@@ -110,6 +110,7 @@ struct FilledCallRecords: Sendable {
 			dispatchers: levels.dispatchers,
 			callerArguments: callerArguments,
 			callerMemoArguments: [:],
+			isInsideSendableFunction: world.isBuiltInsideSendableFunction(call),
 		)
 		var fills = [Fill]()
 		var seenCaseKeys = Set<String>()

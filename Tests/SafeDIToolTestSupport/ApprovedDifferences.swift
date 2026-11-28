@@ -361,10 +361,10 @@ struct FunctionText {
 }
 
 /// Entry 24, a filled call's root laid out by the type key. Node records lay out a root that calls a seam it fills as the
-/// type key lays out every root it lays out (entry 7): each builder function is declared once, at the top of the body
-/// that holds what it reads, a fill's functions at the top of the fill's body, each taking as parameters what the tree's
+/// type key lays out every root it lays out (entry 7): each builder function is declared once, where the tree declares
+/// it again in each parent that builds it, at the top of the body that holds what it reads, a fill's functions at the top of the fill's body, each taking as parameters what the tree's
 /// function, nested where it is built, captures. The rewrite takes every function out of both texts, innermost first
-/// (`FlattenedFunctionText`): where the two leave the same text and take out the same functions, the records' text is
+/// (`FlattenedFunctionText`): where the two leave the same text and take out the same distinct functions, the records' text is
 /// the tree's but for where it declares its functions and what they take, and the rewrite returns the tree's text. A
 /// text that declares no fill's dispatcher is never rewritten.
 enum FilledCallFunctionsRewrite {
@@ -381,8 +381,8 @@ enum FilledCallFunctionsRewrite {
 	}
 }
 
-/// Generated code with every function it declares taken out, innermost first: what remains, and the functions, sorted, each
-/// without the functions it declared and without its indentation. Every call of a function taken out, its declaration's
+/// Generated code with every function it declares taken out, innermost first: what remains, and the distinct functions,
+/// sorted, each without the functions it declared and without its indentation. Every call of a function taken out, its declaration's
 /// parameter list among them, takes no arguments, and a wrapper made of a closure that only calls one, `Instantiator<T> {`
 /// with the call on the next line, is the wrapper made of the function, `Instantiator<T>(name)`.
 struct FlattenedFunctionText: Equatable {
@@ -399,7 +399,12 @@ struct FlattenedFunctionText: Equatable {
 			lines.removeSubrange(function.range)
 		}
 		remainder = Self.erasingArguments(ofCallsTo: names, in: lines)
-		self.functions = functions.map { Self.erasingArguments(ofCallsTo: names, in: $0) }.sorted { $0.lexicographicallyPrecedes($1) }
+		// The tree declares a function again in each parent that builds it, where the type key declares it once.
+		var distinct = [[String]]()
+		for function in functions.map({ Self.erasingArguments(ofCallsTo: names, in: $0) }).sorted(by: { $0.lexicographicallyPrecedes($1) }) where distinct.last != function {
+			distinct.append(function)
+		}
+		self.functions = distinct
 	}
 
 	/// The name of the function `line` declares, after its attributes and modifiers, or `nil`.

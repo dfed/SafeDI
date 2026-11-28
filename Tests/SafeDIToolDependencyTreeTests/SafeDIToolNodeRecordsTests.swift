@@ -1565,6 +1565,34 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 		#expect(outcome.approvedEntries == [])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_marksAFilledCallsDispatchersSendable_whenTheCallIsBuiltInItsOwnSendableFunction() async throws {
+		// `Root` builds `Screen` through a `SendableInstantiator`, so the call is made inside a `@Sendable` function: the
+		// call's dispatchers, which the root declares, are `@Sendable`, as the tree's are.
+		let modules = [Self.modulesCallingAFilledSeamTwoPlacesBelowTheRoot[0], ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
+			"import Feature\n\n" + seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let screenBuilder: SendableInstantiator<Screen>"]),
+			"""
+			import Feature
+
+			@Instantiable(fulfillingAdditionalTypes: [Api.self])
+			public final class LiveApi: Api, Instantiable {
+			    public init() {}
+			}
+			""",
+		], dependencies: ["Feature"])]
+		let (_, reports) = try await NodeRecordsObservation.$recordsFilledCalls.withValue(true) {
+			try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+				try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .swiftPackagePlugin, filesToDelete: &filesToDelete)
+			}
+		}
+		let rootReports = reports.filter { $0.root == "Root" }
+		#expect(rootReports.map(\.isLaidOutFromNodeRecords) == [true])
+		let texts = try #require(rootReports.first?.comparedTexts)
+		#expect(texts.nodeRecords.components(separatedBy: "@Sendable nonisolated func __safeDI_apiBuilder_Screen").count == 3)
+		#expect(rootReports.map { NodeRecordsChecks.outcome(of: $0).differences } == [[]])
+	}
+
 	// MARK: Private
 
 	/// `App`'s `Root` builds `Outer`, which builds `Inner`, which calls `Feature`'s seam `Screen` and fills its hole `api`.
