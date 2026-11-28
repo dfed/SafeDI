@@ -122,6 +122,7 @@ struct SeamPlacesDeclarationDrafter {
 			carriers: Array(carriers.sorted { $0.position < $1.position }.prefix(2).map(\.property)),
 		)
 	}
+
 	/// A binding of `variant`'s scope as the place graph's list holds it, before any next property, with the places of its
 	/// buildability, which the cases the graph assembles name. The rows the facts do not give yet keep the walk's defaults.
 	func declaration(of binding: TypeFactsWorldBinding, atVariant variant: VariantID) -> (declaration: SeamSignature.Places.Declaration, placesInTree: [SeamPlacesPlaceInTree]) {
@@ -155,6 +156,7 @@ struct SeamPlacesDeclarationDrafter {
 		)
 		return (child.map(declaration.asChild) ?? declaration, buildability?.placesInTree ?? [])
 	}
+
 	/// A signature parameter as the root's list holds it: bound before any child, declared where its first receiver
 	/// declares it.
 	func parameterDeclaration(of parameter: SeamSignature.Parameter) -> SeamSignature.Places.Declaration {
