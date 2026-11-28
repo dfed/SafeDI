@@ -1002,6 +1002,10 @@ struct SafeDIToolNodeRecordsMockCycleWalkTests: ~Copyable {
 	/// `P` is on no cycle and built in a function that is not `@Sendable`, and it enters the cycle at `A`, which a
 	/// `@Sendable` function builds: that function cannot capture `P`'s configuration, which is not of the `Sendable` form,
 	/// so `P`'s body binds `A`'s configuration to a local before it and hands the places that local.
+	///
+	/// It is also the value cell of approved difference 24 in a mock: `B`'s function, which the walk nests in `A`'s
+	/// `@Sendable nonisolated` function, is declared once beside it and marked `@Sendable nonisolated`, and `A`'s function
+	/// calls it.
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_buildsTheWalksValues_whenFunctionOnNoCycleEntersCycleAtSendableFunction() async throws {
