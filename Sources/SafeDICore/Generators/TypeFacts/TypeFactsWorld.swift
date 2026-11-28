@@ -590,6 +590,25 @@ extension TypeFactsGraph: TypeFactsWorld {
 		fills[index]
 	}
 
+	/// The indices of the fills whose edges are among `edges`, one node's: the fills are in edge order, as the graph meets
+	/// each node's fill arguments, so they are found by halving.
+	func fillIndices(ofEdgesIn edges: Range<Int>) -> Range<Int> {
+		func firstFill(atOrAfter edge: Int) -> Int {
+			var low = 0
+			var high = fills.count
+			while low < high {
+				let middle = (low + high) / 2
+				if Int(fills[middle].edge) < edge {
+					low = middle + 1
+				} else {
+					high = middle
+				}
+			}
+			return low
+		}
+		return firstFill(atOrAfter: edges.lowerBound)..<firstFill(atOrAfter: edges.upperBound)
+	}
+
 	func fields(ofFill index: Int) -> ArraySlice<TypeFactsFillField> {
 		let fill = fills[index]
 		return fillFields[Int(fill.fieldStart)..<Int(fill.fieldStart + fill.fieldCount)]
