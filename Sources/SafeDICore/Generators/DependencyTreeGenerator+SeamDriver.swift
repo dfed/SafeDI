@@ -666,7 +666,15 @@ extension DependencyTreeGenerator {
 
 		/// The receive as the facts of the seam's world spell it (`TypeFactsGraph.receiverText`), for a test to compare.
 		var factsText: String {
-			TypeFactsGraph.receiverText(declaringType: declaringType, property: property, aliasProperty: aliasProperty, location: declarationLocation, moduleName: moduleName)
+			TypeFactsGraph.receiverText(
+				declaringType: declaringType,
+				property: property,
+				aliasProperty: aliasProperty,
+				location: declarationLocation,
+				moduleName: moduleName,
+				omittingCall: isNoTier ? nestedSeamCall.map { ($0.seamType, $0.tier, $0.parameterTierAccess == nil) } : nil,
+				isFromReportedSeamCall: isFromReportedSeamCall,
+			)
 		}
 
 		init(property: Property, instantiable: Instantiable, declarationLocation: Dependency.DeclarationLocation?, access: AccessLevel, aliasProperty: Property? = nil, isFromReportedSeamCall: Bool = false) {

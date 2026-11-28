@@ -193,6 +193,7 @@ public struct TypeFactsReport: Sendable {
 				firstRoute: graph.graph.firstRoute(to: index),
 				owedFacts: Self.names(of: graph.owedFacts(of: Int32(index))),
 				receiversLeavingRoot: receiverTextsByNode[index],
+				seamCall: graph.seamCall(of: Int32(index)).map(graph.seamCallText(of:)),
 			)
 		}
 		self.places = places.places.map { place in
@@ -321,6 +322,9 @@ public struct TypeFactsReport: Sendable {
 		/// The receives the node makes, or a seam call node passes on from inside the seam it calls, that leave the root,
 		/// each as `TypeFactsGraph.receiverText` spells it, in the world's order (`TypeFactsWorld.receiversLeavingRoot()`).
 		public let receiversLeavingRoot: [String]
+		/// The nested seam call the node makes, as `TypeFactsGraph.seamCallText(of:)` spells it, or `nil` for a node that
+		/// makes none (`TypeFactsWorld.seamCall(of:)`).
+		public let seamCall: String?
 	}
 
 	private static func names(of owed: TypeFactsOwedFacts) -> Set<String> {

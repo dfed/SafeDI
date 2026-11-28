@@ -39,6 +39,30 @@ struct TypeFactsRootReceiver: Hashable, Sendable {
 	let declarationLocation: Int32
 	/// The world's ID of the declaring type's module, or -1 where SafeDI knows none.
 	let declaringModule: Int32
+	/// Whether the receive reaches the root only through the nested seam call `node` is, which passes `nil` for it: a
+	/// parameter the called tier omits, or one no tier of the called seam takes (`SeamCall.omittedParameters`,
+	/// `noTierParameters`). No tier of the root's seam can then pass it on (`SeamSignature.noTierParameters`).
+	let isOmittedByCall: Bool
+	/// For a receive the call omits, whether no tier of the called seam takes it, rather than the called tier omitting
+	/// it. `false` for every other receive.
+	let isTakenByNoTier: Bool
+	/// Whether every node that makes the receive is a nested seam call the check of every construction is certain to
+	/// report (`SeamCall.unreachableTierIsReported`), so a tier of the root's seam that omits it reports no omission.
+	var isFromReportedSeamCall: Bool
+}
+
+/// A nested seam call of a world, by the node that makes it: the tier it calls, and whether the check of every
+/// construction is certain to report it (`SeamCall.unreachableTierIsReported`). Trivially copyable.
+struct TypeFactsSeamCall: Hashable, Sendable {
+	/// The node that makes the call.
+	let node: Int32
+	/// The world's ID of the seam called.
+	let seamType: Int32
+	/// The level of the tier called.
+	let tier: AccessLevel
+	/// Whether the module reaches no tier of the call and the check of every construction is certain to report the
+	/// declaration whose widening makes a tier reachable.
+	let isReportedByConstructionsCheck: Bool
 }
 
 extension TypeFactsGraph {
@@ -196,8 +220,15 @@ extension TypeFactsGraph {
 		}
 
 		var receivers = [TypeFactsRootReceiver]()
-		var kept = Set<ReceiverDeclaration>()
-		func keep(node: Int, property: Property, aliasProperty: Property?, declaringType: TypeDescription, location: Dependency.DeclarationLocation?, moduleName: String?) {
+		var keptIndexByDeclaration = [ReceiverDeclaration: Int]()
+		/// How a nested seam call passes a receive on: whether it omits it, whether no tier takes it, and whether the
+		/// call is one the check of every construction reports.
+		struct PassingCall {
+			let isOmitted: Bool
+			let isTakenByNoTier: Bool
+			let isReported: Bool
+		}
+		func keep(node: Int, property: Property, aliasProperty: Property?, declaringType: TypeDescription, location: Dependency.DeclarationLocation?, moduleName: String?, passingCall: PassingCall? = nil) {
 			let receiver = TypeFactsRootReceiver(
 				node: Int32(node),
 				property: properties.id(of: property),
@@ -206,8 +237,15 @@ extension TypeFactsGraph {
 				declaringType: types.id(of: declaringType),
 				declarationLocation: location.map { locations.id(of: $0) } ?? -1,
 				declaringModule: moduleName.map { modules.id(of: $0) } ?? -1,
+				isOmittedByCall: passingCall?.isOmitted ?? false,
+				isTakenByNoTier: passingCall?.isTakenByNoTier ?? false,
+				isFromReportedSeamCall: passingCall?.isReported ?? false,
 			)
-			if kept.insert(ReceiverDeclaration(declaringType: receiver.declaringType, declarationLocation: receiver.declarationLocation, property: receiver.property)).inserted {
+			let declaration = ReceiverDeclaration(declaringType: receiver.declaringType, declarationLocation: receiver.declarationLocation, property: receiver.property)
+			if let keptIndex = keptIndexByDeclaration[declaration] {
+				receivers[keptIndex].isFromReportedSeamCall = receivers[keptIndex].isFromReportedSeamCall && receiver.isFromReportedSeamCall
+			} else {
+				keptIndexByDeclaration[declaration] = receivers.endIndex
 				receivers.append(receiver)
 			}
 		}
@@ -222,19 +260,29 @@ extension TypeFactsGraph {
 			}
 			for candidate in candidatesByNode[index] where holds(openColumns, index, candidate.column) {
 				// A nested seam's pass-through stands for the receives inside that seam, which its signature carries.
+				let omitted = candidate.aliasProperty == nil ? omittedByLabel[candidate.property.label] : nil
 				let passedOn = candidate.aliasProperty == nil
-					? omittedByLabel[candidate.property.label] ?? seamCall?.parameters.first(where: { $0.property == candidate.property })
+					? omitted ?? seamCall?.parameters.first(where: { $0.property == candidate.property })
 					: nil
+				let passingCall = seamCall.flatMap { seamCall in
+					passedOn.map { _ in
+						PassingCall(
+							isOmitted: omitted != nil,
+							isTakenByNoTier: omitted != nil && !seamCall.omittedParameters.contains { $0.property.label == candidate.property.label },
+							isReported: seamCall.unreachableTierIsReported,
+						)
+					}
+				}
 				if let aliasProperty = candidate.aliasProperty {
 					// An alias is bound in its own scope's code, where the scope's own declarations provide its property too.
 					guard !holds(provided, index, candidate.column) else { continue }
 					keep(node: index, property: candidate.property, aliasProperty: aliasProperty, declaringType: instantiable.concreteInstantiable, location: candidate.dependency.declarationLocation, moduleName: instantiable.moduleName)
 				} else if let passedOn, !passedOn.receivers.isEmpty {
 					for receiver in passedOn.receivers {
-						keep(node: index, property: receiver.property, aliasProperty: receiver.aliasProperty, declaringType: receiver.declaringType, location: receiver.declarationLocation, moduleName: node.scope.moduleName(ofTypeHeldUnder: receiver.declaringType))
+						keep(node: index, property: receiver.property, aliasProperty: receiver.aliasProperty, declaringType: receiver.declaringType, location: receiver.declarationLocation, moduleName: node.scope.moduleName(ofTypeHeldUnder: receiver.declaringType), passingCall: passingCall)
 					}
 				} else {
-					keep(node: index, property: candidate.property, aliasProperty: nil, declaringType: instantiable.concreteInstantiable, location: candidate.dependency.declarationLocation, moduleName: instantiable.moduleName)
+					keep(node: index, property: candidate.property, aliasProperty: nil, declaringType: instantiable.concreteInstantiable, location: candidate.dependency.declarationLocation, moduleName: instantiable.moduleName, passingCall: passingCall)
 				}
 			}
 		}
@@ -270,6 +318,34 @@ extension TypeFactsGraph {
 		}
 	}
 
+	/// The nested seam calls of `graph`, in node order, with the index of each node's among them, -1 for a node that makes
+	/// none. An alias or a hole calls nothing.
+	static func seamCalls(of graph: OrderedGraph<TypeFactsDeclaration>, types: inout TypeFactsInterner<TypeDescription>) -> (calls: [TypeFactsSeamCall], indexByNode: [Int32]) {
+		var calls = [TypeFactsSeamCall]()
+		var indexByNode = [Int32](repeating: -1, count: graph.nodes.count)
+		for (index, node) in graph.nodes.enumerated() where node.key.leaf == .none {
+			guard let seamCall = node.scope.seamCall else { continue }
+			indexByNode[index] = Int32(calls.count)
+			calls.append(TypeFactsSeamCall(
+				node: Int32(index),
+				seamType: types.id(of: node.scope.instantiable.concreteInstantiable),
+				tier: seamCall.tier,
+				isReportedByConstructionsCheck: seamCall.unreachableTierIsReported,
+			))
+		}
+		return (calls, indexByNode)
+	}
+
+	/// The text of `seamCall`, which a test reads: the seam called, the tier, and whether the check of every construction
+	/// reports the call.
+	func seamCallText(of seamCall: TypeFactsSeamCall) -> String {
+		var text = "calls \(typeTable[Int(seamCall.seamType)].asSource) at tier \(seamCall.tier.spelling)"
+		if seamCall.isReportedByConstructionsCheck {
+			text.append(", reported")
+		}
+		return text
+	}
+
 	/// A receive's declaration, by the world's IDs, which a receive that leaves the root by several nodes keeps once.
 	private struct ReceiverDeclaration: Hashable {
 		let declaringType: Int32
@@ -279,29 +355,51 @@ extension TypeFactsGraph {
 
 	/// The text of a receive that leaves a seam's root, which a test compares with the receivers the walk of the seam's tree
 	/// finds (`TypeFactsRootReceiversObservation`): the declaring type, the property as the receiver spells it, the alias's
-	/// own property, where the receive is declared and in which module.
-	static func receiverText(declaringType: TypeDescription, property: Property, aliasProperty: Property?, location: Dependency.DeclarationLocation?, moduleName: String?) -> String {
+	/// own property, where the receive is declared and in which module, the nested seam call that omits it, and whether it
+	/// reaches the root only through calls the check of every construction reports.
+	/// A receive a nested seam call omits names the call (`omittingCall`): the seam called, its tier, and whether no tier
+	/// takes the receive.
+	static func receiverText(
+		declaringType: TypeDescription,
+		property: Property,
+		aliasProperty: Property?,
+		location: Dependency.DeclarationLocation?,
+		moduleName: String?,
+		omittingCall: (seamType: TypeDescription, tier: AccessLevel, isTakenByNoTier: Bool)?,
+		isFromReportedSeamCall: Bool,
+	) -> String {
 		let spelled = aliasProperty.map { ValueSpellings.fulfillingProperty(property, spelledAsAlias: $0) } ?? property
-		return receiverText(declaringType: declaringType, spelledAs: spelled.asSource, aliasProperty: aliasProperty, location: location, moduleName: moduleName)
+		return receiverText(declaringType: declaringType, spelledAs: spelled.asSource, aliasProperty: aliasProperty, location: location, moduleName: moduleName, omittingCall: omittingCall, isFromReportedSeamCall: isFromReportedSeamCall)
 	}
 
-	/// `receiverText(declaringType:property:aliasProperty:location:moduleName:)` of each receive that leaves the root, in
+	/// `receiverText(of:)` of each receive that leaves the root, in
 	/// the column's order.
 	var rootReceiverTexts: [String] {
 		rootReceivers.map(receiverText(of:))
 	}
 
 	func receiverText(of receiver: TypeFactsRootReceiver) -> String {
-		Self.receiverText(
+		let omittingCall = receiver.isOmittedByCall ? seamCall(of: receiver.node) : nil
+		return Self.receiverText(
 			declaringType: typeTable[Int(receiver.declaringType)],
 			spelledAs: receiverSpellings[Int(receiver.spelling)],
 			aliasProperty: receiver.aliasProperty >= 0 ? propertyTable[Int(receiver.aliasProperty)] : nil,
 			location: receiver.declarationLocation >= 0 ? declarationLocations[Int(receiver.declarationLocation)] : nil,
 			moduleName: receiver.declaringModule >= 0 ? moduleNames[Int(receiver.declaringModule)] : nil,
+			omittingCall: omittingCall.map { (typeTable[Int($0.seamType)], $0.tier, receiver.isTakenByNoTier) },
+			isFromReportedSeamCall: receiver.isFromReportedSeamCall,
 		)
 	}
 
-	private static func receiverText(declaringType: TypeDescription, spelledAs spelling: String, aliasProperty: Property?, location: Dependency.DeclarationLocation?, moduleName: String?) -> String {
+	private static func receiverText(
+		declaringType: TypeDescription,
+		spelledAs spelling: String,
+		aliasProperty: Property?,
+		location: Dependency.DeclarationLocation?,
+		moduleName: String?,
+		omittingCall: (seamType: TypeDescription, tier: AccessLevel, isTakenByNoTier: Bool)?,
+		isFromReportedSeamCall: Bool,
+	) -> String {
 		var text = "\(declaringType.asSource) receives \(spelling)"
 		if let aliasProperty {
 			text.append(" as alias \(aliasProperty.asSource)")
@@ -315,6 +413,12 @@ extension TypeFactsGraph {
 			}
 		}
 		text.append(" in \(moduleName ?? "no module")")
+		if let omittingCall {
+			text.append(" through the call of \(omittingCall.seamType.asSource) at tier \(omittingCall.tier.spelling), which passes nil for it: \(omittingCall.isTakenByNoTier ? "no tier takes it" : "the tier omits it")")
+		}
+		if isFromReportedSeamCall {
+			text.append(", through a call the check of every construction reports")
+		}
 		return text
 	}
 }

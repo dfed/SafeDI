@@ -146,17 +146,96 @@ struct SafeDIToolSeamTypeFactsReceiversTests: ~Copyable {
 		])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func receivers_nameOmittingCallAndItsTier_whenNestedSeamsTierOmitsReceive() async throws {
+		// A `.safedi` carries the signature without positions, so `Shell`'s run reads no location for `Service`'s receive.
+		let (shellReport, _) = try await seamReport(ofSeam: "Shell", modules: Self.tierOmissionModules, integration: .moduleInfo)
+
+		#expect(shellReport.nodes.map(\.receiversLeavingRoot) == [
+			[],
+			["Badge receives theme: Theme? in Base through the call of Service at tier public, which passes nil for it: the tier omits it"],
+		])
+		#expect(shellReport.nodes.map(\.seamCall) == [nil, "calls Service at tier public"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func receivers_nameOmittingCallAndNoTier_whenNestedSeamTakesReceiveOnNoTier() async throws {
+		let (outerReport, _) = try await seamReport(ofSeam: "Outer", modules: Self.tierOmissionModules, integration: .moduleInfo)
+
+		#expect(outerReport.nodes.map(\.receiversLeavingRoot) == [
+			[],
+			["Badge receives theme: Theme? in Base through the call of Shell at tier public, which passes nil for it: no tier takes it"],
+		])
+		#expect(outerReport.nodes.map(\.seamCall) == [nil, "calls Shell at tier public"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func receivers_markReceiveFromReportedCall_whenSeamCallsSeamItsModuleReachesNoTierOf() async throws {
+		let (stream, continuation) = AsyncStream.makeStream(of: TypeFactsReport.self)
+		var paths = [String: FixturePaths]()
+		await ConstructionMemoOracle.$observer.withValue({ _, _, report in continuation.yield(report) }) {
+			await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+				paths = fixtures
+				return """
+				\(NormalizedFilePath(fixtures["Feature"]!.compilerPath(of: "Service.swift")).path):2:1: error: `Service` is `package`, so module `App`, in another package, cannot construct it in the code SafeDI generates. Make `Service` `public` to fix.
+				\(NormalizedFilePath(fixtures["Feature"]!.compilerPath(of: "Service.swift")).path):2:1-2:8: fixit: public
+				"""
+			}) {
+				try await executeSafeDIToolMultiModuleTest(modules: [
+					ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+						seamFixtureType(named: "Badge", declarations: ["@Received(onlyIfAvailable: true) let theme: Theme?"]) + "\n\npublic struct Theme: Sendable {\n    public init() {}\n}",
+						"@Instantiable(generateDependencyTree: true)\npackage final class Service: Instantiable {\n    public init(badge: Badge) {\n        self.badge = badge\n    }\n\n    @Instantiated public let badge: Badge\n}",
+					]),
+					ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
+						"import Feature\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let panel: Panel"]),
+						"import Feature\n\n" + seamFixtureType(named: "Panel", isSeam: true, declarations: ["@Instantiated let service: Service"]),
+					], dependencies: ["Feature"]),
+				], integration: .moduleInfo, filesToDelete: &filesToDelete)
+			}
+		}
+		continuation.finish()
+		var reports = [TypeFactsReport]()
+		for await report in stream where report.root == "Panel" && !report.forMockGeneration {
+			reports.append(report)
+		}
+		let report = try #require(reports.last)
+		let feature = try #require(paths["Feature"])
+
+		#expect(report.nodes.map(\.receiversLeavingRoot) == [
+			[],
+			["Badge receives theme: Theme? at \(NormalizedFilePath(feature.compilerPath(of: "Badge.swift")).path):7:5 in Feature, through a call the check of every construction reports"],
+		])
+		#expect(report.nodes.map(\.seamCall) == [nil, "calls Service at tier package, reported"])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
 
+	/// `Service`, whose `public` tier omits `theme`, which its `Badge` receives and whose type is `package`; `Shell`, in
+	/// another package, which calls that tier, so no tier of `Shell` takes `theme`; and `Outer`, which calls `Shell`.
+	private static let tierOmissionModules = [
+		ModuleFixture(name: "Base", packageName: "Shop", swiftFileContent: [
+			"@Instantiable\npublic struct Badge: Instantiable {\n    package init(theme: Theme?) {\n        self.theme = theme\n    }\n\n    @Received(onlyIfAvailable: true) let theme: Theme?\n}\n\npackage struct Theme {}",
+			seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let badge: Badge"]),
+		]),
+		ModuleFixture(name: "Mid", packageName: "Other", swiftFileContent: ["import Base\n\n" + seamFixtureType(named: "Shell", isSeam: true, declarations: ["@Instantiated let service: Service"])], dependencies: ["Base"]),
+		ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
+			"import Mid\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let outer: Outer"]),
+			"import Mid\n\n" + seamFixtureType(named: "Outer", isSeam: true, declarations: ["@Instantiated let shell: Shell"]),
+		], dependencies: ["Base", "Mid"]),
+	]
+
 	/// The type facts report of the last tree built for `seam`'s own production world, and the run's output.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	private mutating func seamReport(ofSeam seam: String, modules: [ModuleFixture]) async throws -> (report: TypeFactsReport, output: MultiModuleTestOutput) {
+	private mutating func seamReport(ofSeam seam: String, modules: [ModuleFixture], integration: MultiModuleIntegration = .swiftPackagePlugin) async throws -> (report: TypeFactsReport, output: MultiModuleTestOutput) {
 		let (stream, continuation) = AsyncStream.makeStream(of: TypeFactsReport.self)
 		var filesToDelete = [URL]()
 		let output = try await ConstructionMemoOracle.$observer.withValue({ _, _, report in continuation.yield(report) }) {
-			try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .swiftPackagePlugin, filesToDelete: &filesToDelete)
+			try await executeSafeDIToolMultiModuleTest(modules: modules, integration: integration, filesToDelete: &filesToDelete)
 		}
 		self.filesToDelete.append(contentsOf: filesToDelete)
 		continuation.finish()

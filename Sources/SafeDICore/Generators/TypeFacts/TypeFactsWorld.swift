@@ -242,6 +242,10 @@ protocol TypeFactsWorld {
 	/// declarations that make them, each one's in declaration order (`TypeFactsRootReceiver`). What a seam's parameters
 	/// call their receivers.
 	func receiversLeavingRoot() -> ArraySlice<TypeFactsRootReceiver>
+	/// The nested seam call the declaration makes, or `nil` for one that makes none: the tier it calls, and whether the
+	/// check of every construction reports it. A receive that leaves the root through such a call that omits it names
+	/// the call by its node (`TypeFactsRootReceiver.isOmittedByCall`).
+	func seamCall(of declaration: DeclarationID) -> TypeFactsSeamCall?
 
 	/// What the node's subtree reads from above it, by read ID in increasing order.
 	func reads(of declaration: DeclarationID) -> ArraySlice<ReadID>
@@ -361,6 +365,11 @@ extension TypeFactsGraph: TypeFactsWorld {
 
 	func receiversLeavingRoot() -> ArraySlice<TypeFactsRootReceiver> {
 		rootReceivers[...]
+	}
+
+	func seamCall(of declaration: DeclarationID) -> TypeFactsSeamCall? {
+		let index = seamCallIndexByNode[Int(declaration)]
+		return index >= 0 ? seamCalls[Int(index)] : nil
 	}
 
 	func forms(of _: AnswerID) -> ArraySlice<PropertyID> {

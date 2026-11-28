@@ -623,6 +623,7 @@ struct TypeFactsGraph: Sendable {
 		var spellings = TypeFactsInterner<String>()
 		rootReceivers = Self.receiversLeavingRoot(of: graph, fillHoles: fillHoles, properties: &properties, types: &types, modules: &modules, locations: &locations, spellings: &spellings)
 		receiverSpellings = spellings.values
+		(seamCalls, seamCallIndexByNode) = Self.seamCalls(of: graph, types: &types)
 
 		// The bindings, fills and receivers intern properties no node holds, whose facts an answer's provided forms read.
 		let propertyFacts = Self.propertyFacts(of: &properties, labels: &labels, extending: propertyFactsOfNodes)
@@ -1128,6 +1129,10 @@ struct TypeFactsGraph: Sendable {
 	let rootReceivers: [TypeFactsRootReceiver]
 	/// Each receiver spelling ID's text: a receive's property as its receiver spells it, which only text reads.
 	let receiverSpellings: [String]
+	/// The nested seam calls, in node order (`seamCalls(of:types:)`).
+	let seamCalls: [TypeFactsSeamCall]
+	/// Each node's index in `seamCalls`, -1 for a node that makes no seam call.
+	let seamCallIndexByNode: [Int32]
 	let propertyFacts: TypeFactsPropertyFacts
 
 	/// Each read ID's read.
