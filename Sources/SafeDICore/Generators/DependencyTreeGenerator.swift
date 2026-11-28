@@ -423,8 +423,9 @@ public actor DependencyTreeGenerator {
 	/// Runs every whole-module check of `roots`, the trees this module generates, which their code needs to pass.
 	private func validateBeforeGeneratingCode(of roots: [RootScopeInfo]) async throws {
 		// A root laid out from its node records has no tree, and needs none of these checks: node records refuse a world
-		// with a fill (`fill`) or a seam call (`construction`), and one whose `@Sendable` function captures a wrapper that is
-		// not `Sendable` (`sendableFunctionCapturesWrapper`), so each such root keeps its tree.
+		// with a fill (`fill`) and one whose `@Sendable` function captures a wrapper that is not `Sendable`
+		// (`sendableFunctionCapturesWrapper`), and a world with a seam call that omits a parameter or defers one
+		// `@Sendable` keeps its tree (`SeamCallCheck`), so each root these checks could report keeps its tree.
 		try Self.validateFills(
 			inTreesRootedAt: roots.compactMap(\.scopeGenerator),
 			callerModule: seams.currentModule,
@@ -979,7 +980,8 @@ public actor DependencyTreeGenerator {
 		// A root planned per type holds no such label (`mayHaveUnpassableCycleLabel(inTreeOf:cache:)`), and a root laid out
 		// from its node records has no tree, and no cycle: node records refuse a world with one (`cycle`).
 		try Self.validateCycleLabelsArePassable(inTreesRootedAt: rootScopeGenerators.compactMap(\.scopeGenerator) + inlineForeignSeamTrees)
-		for root in rootScopeGenerators {
+		// A root laid out from its node records builds no tree.
+		for root in rootScopeGenerators where root.scopeGenerator != nil {
 			GenerationLayerObservation.record(.dependencyTree(of: root.typeDescription), inRunOf: seams.currentModule.moduleName)
 		}
 		return DependencyTrees(roots: rootScopeGenerators, warnings: generateWarnings(validatedScopes: validatedScopes), rootsOfOtherModules: rootsOfOtherModules, storedSeamSignatures: storedSeamSignatures)

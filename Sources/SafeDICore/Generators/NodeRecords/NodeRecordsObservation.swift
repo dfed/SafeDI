@@ -30,9 +30,10 @@ public enum NodeRecordsObservation {
 	/// plan before it is turned on for every run, or generate time doubles.
 	@TaskLocal public static var laysOutRoots = false
 
-	/// Whether a run no test observes lays out each root of a module with seams, a seam's own root included, from its node
-	/// records where they accept its world and the engine lays every statement out, without planning its tree's body. A
-	/// prototype's switch, for timing such a module: off unless the tool's environment turns it on.
+	/// Whether a run no test observes lays out each root of a module with seams that built its tree, a seam's own root or a
+	/// root a `TreeForcer` holds of, from its node records where they accept its world and the engine lays every statement
+	/// out, without planning its tree's body. A root no `TreeForcer` holds of builds no tree and is laid out from its records
+	/// whatever this says. A prototype's switch, for timing such a module: off unless the tool's environment turns it on.
 	@TaskLocal public static var laysOutSeamWorldRootsInRun = false
 
 	/// Whether node records make the record of a root's seam call that fills places of the seam it calls

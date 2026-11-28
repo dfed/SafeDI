@@ -447,7 +447,8 @@ extension DependencyTreeGenerator {
 	///   - foreignSeamRoots: The signatures of the foreign seams this module's trees reach (`computeForeignSeamRoots()`).
 	///   - unreadTypeComment: The comment the `public` initializers of the seams this module generates carry.
 	///   - ownAccessProof: The proof of every type's access over the module's declarations (`ownAccessProof()`).
-	///   - readersOfEveryTree: What this run reads of every root's tree beside its code, which keeps each seam's own tree.
+	///   - readersOfEveryTree: What reads every root's tree this run (`TreeForcer.reader`), which keeps a root that is none
+	///     of this module's own seams from being laid out from its node records.
 	func seamWorldRootScopeGenerators(
 		validatedWorld: ValidatedWorld,
 		foreignSeamRoots: [TypeDescription: ScopeGenerator.SeamRoot?],
@@ -502,18 +503,59 @@ extension DependencyTreeGenerator {
 			checkingSeamTrees: generatedSeams.map { (instantiable: $0.seam, scope: $0.rootScope) },
 		)
 		var constructionMemo = ConstructionMemo()
-		// A root is built as in a module without seams: today's tree per path, or its per-type plan past the limit, where
-		// each seam its tree calls is a leaf. What a scope of the seam world receives is collected apart from the
-		// validated scopes'.
+		// Each root is laid out from its node records where they stand in for its tree, as in a module without seams; every
+		// other root is built as there, today's tree per path or its per-type plan past the limit, where each seam its tree
+		// calls is a leaf; the module's own seams below keep theirs (`TreeForcer.seamWorld`). The trees a test builds beside
+		// the node records keep a memo of their own, so that the trees a plain run builds share what they share without
+		// them. What a scope of the seam world receives is collected apart from the validated scopes'.
+		var comparisonMemo = ConstructionMemo()
 		var receivedPropertiesCache = ReceivedPropertiesCache()
-		var rootScopeGenerators = try await rootTrees(
-			of: rootScopesToGenerate.rootScopes,
+		var roots = [RootScopeInfo?]()
+		var rootsBuiltAsTrees = [(index: Int, typeDescription: TypeDescription, scope: Scope, treeForcers: [TreeForcer])]()
+		for (typeDescription, scope) in rootScopesToGenerate.rootScopes {
+			let (table, record) = seamWorld.frozenScopeMap.freezing(rootScope: scope)
+			let constructionScope = ConstructionScope(table: table, record: record)
+			let (layout, treeForcers) = try Self.seamWorldRootLayout(of: scope.instantiable, constructionScope: constructionScope, declaredTypeNames: declaredTypeNames, readersOfEveryTree: readersOfEveryTree)
+			guard let layout else {
+				rootsBuiltAsTrees.append((index: roots.count, typeDescription: typeDescription, scope: scope, treeForcers: treeForcers))
+				roots.append(nil)
+				continue
+			}
+			func tree(memo: inout ConstructionMemo) throws -> ScopeGenerator {
+				try record.createScopeGenerator(
+					in: table,
+					lazilyInstantiatedInstanceProperties: [],
+					erasedToConcreteExistential: false,
+					declaredTypeNames: declaredTypeNames,
+					constructionMemo: &memo,
+				)
+			}
+			// The work of building it is no run's, so the tests that count a run's work count none of it.
+			let comparisonTree = try NodeRecordsObservation.observer == nil ? nil : GenerationWork.$observer.withValue(nil) { try tree(memo: &comparisonMemo) }
+			roots.append(RootScopeInfo(
+				typeDescription: typeDescription,
+				instantiable: scope.instantiable,
+				sourceFilePath: typeDescriptionToFulfillingInstantiableMap[typeDescription]?.sourceFilePath,
+				built: .nodeRecords(layout, comparisonTree: comparisonTree),
+				fulfillers: TypeFactsImports(root: constructionScope).fulfillers,
+				receivedValueSupplies: TypeFactsReceivedValueSupplies.whereRead(root: constructionScope),
+				rootScope: RootScopeInfo.kept(constructionScope),
+				treeForcers: treeForcers,
+			))
+		}
+		let trees = try await rootTrees(
+			of: rootsBuiltAsTrees.map { (typeDescription: $0.typeDescription, scope: $0.scope) },
 			frozenScopeMap: seamWorld.frozenScopeMap,
 			plansCyclesPerType: plansCyclesPerType,
 			drawsTrees: drawsTrees,
 			constructionMemo: &constructionMemo,
 			cache: &receivedPropertiesCache,
 		)
+		for (rootBuiltAsTree, var tree) in zip(rootsBuiltAsTrees, trees) {
+			tree.treeForcers = rootBuiltAsTree.treeForcers
+			roots[rootBuiltAsTree.index] = tree
+		}
+		var rootScopeGenerators = roots.compactMap(\.self)
 		for (seam, seamRoot, seamRootScope) in generatedSeams {
 			var seamRoot = seamRoot
 			seamRoot.unreadTypeComment = unreadTypeComment
