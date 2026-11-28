@@ -30,7 +30,8 @@ extension DependencyTreeGenerator {
 		storesPublicMockPlans: Bool,
 		publicMockContext: PublicMockContext?,
 	) async throws -> MockGenerationResult {
-		guard NodeRecordsObservation.observer != nil else {
+		// The tree names comparison reads the same roots (`MockTreeNamesObservation`).
+		guard NodeRecordsObservation.observer != nil || MockTreeNamesObservation.observer != nil else {
 			return try await generateMockCode(
 				mockConditionalCompilation: mockConditionalCompilation,
 				currentModuleSourceFilePaths: currentModuleSourceFilePaths,
@@ -38,25 +39,33 @@ extension DependencyTreeGenerator {
 				storesPublicMockPlans: storesPublicMockPlans,
 				publicMockContext: publicMockContext,
 				worldRootRecording: nil,
+				promotionRecording: nil,
 			)
 		}
 		// The root of each mock root's world, by mocked type, where a test observes node records: handed on through a task
 		// local, so that a run no test observes threads nothing through the mock roots' construction.
 		let worldRootRecording = AsyncStream.makeStream(of: (mockedType: TypeDescription, worldRoot: MockWorldRoot).self)
+		// What each mock root's promotion decides before its tree is built, which the tree names comparison reads.
+		let promotionRecording = AsyncStream.makeStream(of: MockRootPromotion.self)
 		return try await NodeRecordsObservation.$recordsMockWorldRoot.withValue({ worldRootRecording.continuation.yield(($0, $1)) }) {
-			try await generateMockCode(
-				mockConditionalCompilation: mockConditionalCompilation,
-				currentModuleSourceFilePaths: currentModuleSourceFilePaths,
-				additionalMocksToGenerate: additionalMocksToGenerate,
-				storesPublicMockPlans: storesPublicMockPlans,
-				publicMockContext: publicMockContext,
-				worldRootRecording: worldRootRecording,
-			)
+			try await MockTreeNamesObservation.$recordsMockRootPromotion.withValue(TaskLocalFunction { promotionRecording.continuation.yield($0) }) {
+				try await generateMockCode(
+					mockConditionalCompilation: mockConditionalCompilation,
+					currentModuleSourceFilePaths: currentModuleSourceFilePaths,
+					additionalMocksToGenerate: additionalMocksToGenerate,
+					storesPublicMockPlans: storesPublicMockPlans,
+					publicMockContext: publicMockContext,
+					worldRootRecording: worldRootRecording,
+					promotionRecording: promotionRecording,
+				)
+			}
 		}
 	}
 
 	/// - Parameter worldRootRecording: Where the root of each mock root's world arrives, by mocked type, where a test
 	///   observes node records.
+	/// - Parameter promotionRecording: Where what each mock root's promotion decides arrives, where a test compares tree
+	///   names.
 	private func generateMockCode(
 		mockConditionalCompilation: String?,
 		currentModuleSourceFilePaths: Set<String>?,
@@ -64,6 +73,7 @@ extension DependencyTreeGenerator {
 		storesPublicMockPlans: Bool,
 		publicMockContext: PublicMockContext?,
 		worldRootRecording: (stream: AsyncStream<(mockedType: TypeDescription, worldRoot: MockWorldRoot)>, continuation: AsyncStream<(mockedType: TypeDescription, worldRoot: MockWorldRoot)>.Continuation)?,
+		promotionRecording: (stream: AsyncStream<MockRootPromotion>, continuation: AsyncStream<MockRootPromotion>.Continuation)?,
 	) async throws -> MockGenerationResult {
 		var receivedPropertiesCache = ReceivedPropertiesCache()
 		// The plans of the public mocks of other modules this module's mock trees call, computed once each.
@@ -296,6 +306,14 @@ extension DependencyTreeGenerator {
 			}
 		}
 		let worldRoots = recordedWorldRoots
+		var recordedPromotions = [TypeDescription: MockRootPromotion]()
+		if let promotionRecording {
+			promotionRecording.continuation.finish()
+			for await promotion in promotionRecording.stream {
+				recordedPromotions[promotion.mockedType] = promotion
+			}
+		}
+		let promotions = recordedPromotions
 		let foldedMockImports = foldedMockImportsByType
 		let loweredRoots = try await BoundedConcurrency.map(mockRoots, width: BoundedConcurrency.mockRootWidth) { instantiableAndMockRoot, _ in
 			let (instantiable, mockRoot) = instantiableAndMockRoot
@@ -307,7 +325,7 @@ extension DependencyTreeGenerator {
 				observer(TypeFactsImportsComparison(root: "mock of " + instantiable.concreteInstantiable.asSource, foldedFulfillers: foldedFulfillers, walkedFulfillers: walkedFulfillers))
 			}
 			async let fulfillersOutsideTree = mockRoot.fulfillersOfMockOutsideTree(mockDefaults: flatParameterMockDefaults)
-			let lowered = try await mockRoot.lowerMockRoot(context: mockContext, worldRoot: worldRoots[instantiable.concreteInstantiable])
+			let lowered = try await mockRoot.lowerMockRoot(context: mockContext, worldRoot: worldRoots[instantiable.concreteInstantiable], promotion: promotions[instantiable.concreteInstantiable])
 			return await (
 				root: GeneratedRoot(
 					typeDescription: instantiable.concreteInstantiable,

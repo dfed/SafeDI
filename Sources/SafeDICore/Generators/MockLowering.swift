@@ -220,10 +220,25 @@ public enum MockLowering {
 extension ScopeGenerator {
 	/// This mock root's code, lowered from its finished generator tree. The walk rethrows what the steps it shares with the
 	/// emitter throw. `worldRoot` is the mock root's world, where a test observes node records
-	/// (`nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:sendableConfigurationTypeNames:rootNames:outerDeclarations:)`).
-	func lowerMockRoot(context: MockContext, worldRoot: MockWorldRoot? = nil) async throws -> MockLowering.Result {
+	/// (`nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:sendableConfigurationTypeNames:rootNames:outerDeclarations:)`),
+	/// and `promotion` what `createMockRootScopeGenerator` decided of the root, where a test compares tree names.
+	func lowerMockRoot(context: MockContext, worldRoot: MockWorldRoot? = nil, promotion: MockRootPromotion? = nil) async throws -> MockLowering.Result {
 		// A mock root's scope is always a root's.
 		guard case let .root(instantiable, _) = scopeData else { return MockLowering.Result(code: "") }
+		// Where a test compares them, the names `mock()`'s parameters are chosen from, read from the tree as
+		// `lowerRootSignature(of:context:)` reads them, and the signature itself, against those the root's world answers.
+		if let worldRoot, let promotion, let observer = MockTreeNamesObservation.observer {
+			observer(MockTreeNamesObservation.report(
+				of: instantiable,
+				tree: treeNames(of: instantiable, readsFills: false),
+				inputs: mockRootParameterInputs(of: instantiable),
+				childrenInBuildOrder: orderedChildrenComputedAfresh(propertiesGeneratedLater: []).compactMap(\.generator.property),
+				signature: lowerRootSignature(of: instantiable, context: context),
+				flatParameterMockDefaults: context.flatParameterMockDefaults,
+				worldRoot: worldRoot.scope,
+				promotion: promotion,
+			))
+		}
 		if instantiable.generateMock == .public, let publicMockContext = context.publicMockContext {
 			// A public mock's root (`MockLowering+PublicMocks.swift`).
 			return try await lowerPublicMockRoot(of: instantiable, publicMockContext: publicMockContext, context: context)

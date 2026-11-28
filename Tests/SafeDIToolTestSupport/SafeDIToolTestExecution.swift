@@ -380,7 +380,10 @@ func executeSafeDIToolTest(
 																									// Every mock root’s `Sendable` configurations from its world’s fold must equal the walk of its generator tree’s
 																									// (`TypeFactsSendableConfigurationsChecks`).
 																									try await TypeFactsSendableConfigurationsChecks.comparing(handingOn: TypeFactsSendableConfigurationsObservation.comparesWalk) {
-																										try await tool.generate()
+																										// Where a sweep names a report, each mock root's tree names beside its world's (`MockTreeNamesChecks`).
+																										try await MockTreeNamesChecks.sweeping {
+																											try await tool.generate()
+																										}
 																									}
 																								}
 																							}

@@ -532,6 +532,11 @@ extension DependencyTreeGenerator {
 				generator = try mockRootGenerator(builders: nil, constructionMemo: &constructionMemo)
 			}
 		}
+		MockTreeNamesObservation.recordsMockRootPromotion?(MockRootPromotion(
+			mockedType: instantiable.concreteInstantiable,
+			passesNilToPinnedReceives: !receivesPassedNil.pinnedWhereverBuilt.isEmpty || !receivesPassedNil.labelsPinnedFromAbove.isEmpty,
+			received: allReceived,
+		))
 		// The world's capture check answers the tree's where the root's scopes ask it (`MockRootTreeChecks`), and is compared
 		// with the tree's on every root where a test asks. It reads what the mock root binds once the tree is final: what it
 		// binds once the values only calls of public mocks receive inside `@Sendable` functions are left out, and the

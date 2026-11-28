@@ -10996,21 +10996,52 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		mockDefaults: [TypeDescription: FlatParameterMockDefault],
 		treeNames: MockTreeNames,
 	) -> MockRootParameters {
+		Self.mockRootParameters(instantiable: instantiable, mockDefaults: mockDefaults, treeNames: treeNames, inputs: mockRootParameterInputs(of: instantiable))
+	}
+
+	/// What `mockRootParameters(instantiable:mockDefaults:treeNames:inputs:)` reads of this mock root's generator.
+	func mockRootParameterInputs(of instantiable: Instantiable) -> MockRootParameterInputs {
+		MockRootParameterInputs(
+			receivedProperties: receivedProperties,
+			requiredReceivedProperties: requiredReceivedProperties,
+			onlyIfAvailableUnwrappedReceivedProperties: onlyIfAvailableUnwrappedReceivedProperties,
+			typesDeclaredEscaping: typesDeclaredEscaping,
+			propertiesToDeclare: propertiesToDeclare,
+			receivedOnlyByPublicMockCalls: receivedOnlyByPublicMockCalls,
+			passedByPublicMockCalls: passedByPublicMockCalls,
+			passedByPublicMockCallLabelsReadInsideSendableFunctions: passedByPublicMockCallLabelsReadInsideSendableFunctions(of: instantiable),
+			mockBuilders: mockBuilders,
+		)
+	}
+
+	/// The parameters of the mock of `instantiable`, classified from what its root receives and declares (`inputs`) and from
+	/// `treeNames`: the one classification, which a mock root's generator and its world both fill the inputs of.
+	static func mockRootParameters(
+		instantiable: Instantiable,
+		mockDefaults: [TypeDescription: FlatParameterMockDefault],
+		treeNames: MockTreeNames,
+		inputs: MockRootParameterInputs,
+	) -> MockRootParameters {
+		let mockBuilders = inputs.mockBuilders
+		let typesDeclaredEscaping = inputs.typesDeclaredEscaping
+		let propertiesToDeclare = inputs.propertiesToDeclare
+		let requiredReceivedProperties = inputs.requiredReceivedProperties
+		let receivedOnlyByPublicMockCalls = inputs.receivedOnlyByPublicMockCalls
 		// A public mock another module generated builds what its call does not pass, so `mock()` takes no parameter or
 		// override for what every such call omits. It takes what the calls pass, as a receive only if available that
 		// defaults to `nil`: a public mock as a parameter, so that its own callers can hand one instance down the chain, and
 		// an internal mock as an override, as it takes its own tree's.
 		let receivedOnlyByPublicMockCallsLeftOut = Self.receivedOnlyByPublicMockCallsLeftOut(
 			receivedOnlyByPublicMockCalls: receivedOnlyByPublicMockCalls,
-			passedByPublicMockCalls: passedByPublicMockCalls,
-			labelsReadInsideSendableFunctions: passedByPublicMockCallLabelsReadInsideSendableFunctions(of: instantiable),
+			passedByPublicMockCalls: inputs.passedByPublicMockCalls,
+			labelsReadInsideSendableFunctions: inputs.passedByPublicMockCallLabelsReadInsideSendableFunctions,
 		)
 		// Each in the mocked type's own spelling where it receives the dependency, and otherwise in the most explicit of its
 		// receivers' spellings in the tree, which the flat parameters and the `onlyIfAvailable` overrides and parameters declare.
-		let receivedProperties = MockedTypeSpellings(of: instantiable, treeReceivedProperties: receivedProperties).spellings(of: receivedProperties.subtracting(receivedOnlyByPublicMockCallsLeftOut))
+		let receivedProperties = MockedTypeSpellings(of: instantiable, treeReceivedProperties: inputs.receivedProperties).spellings(of: inputs.receivedProperties.subtracting(receivedOnlyByPublicMockCallsLeftOut))
 		let onlyIfAvailableUnwrappedReceivedProperties = receivedOnlyByPublicMockCalls.isEmpty
-			? onlyIfAvailableUnwrappedReceivedProperties
-			: onlyIfAvailableUnwrappedReceivedProperties.filter { property in
+			? inputs.onlyIfAvailableUnwrappedReceivedProperties
+			: inputs.onlyIfAvailableUnwrappedReceivedProperties.filter { property in
 				receivedProperties.contains(property) || receivedProperties.contains(property.asOptionalProperty)
 			}
 
