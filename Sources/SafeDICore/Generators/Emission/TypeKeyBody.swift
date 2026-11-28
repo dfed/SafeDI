@@ -18,7 +18,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-
 /// The production type key (R1): a root's body laid out so that the places that build one type alike share one builder
 /// function. Places are alike when they build one type in one way, in one family (plain or `@Sendable`), read the same
 /// labels they do not bind, write bodies of the same shape whose calls reach alike places, and resolve each read to a
