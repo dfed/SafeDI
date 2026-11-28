@@ -52,7 +52,9 @@ struct SafeDIToolNodeRecordsPublicMockLoopTests: ~Copyable {
 		/// `Holder`, which `Screen` instantiates, declares them.
 		case level
 
-		var testDescription: String { rawValue }
+		var testDescription: String {
+			rawValue
+		}
 	}
 
 	/// Which of the loop's members `App`'s mock passes the public mock.
@@ -61,7 +63,9 @@ struct SafeDIToolNodeRecordsPublicMockLoopTests: ~Copyable {
 		case some
 		case every
 
-		var testDescription: String { rawValue }
+		var testDescription: String {
+			rawValue
+		}
 	}
 
 	@Test(arguments: LoopPlace.allCases, PassedMembers.allCases)
@@ -204,10 +208,9 @@ struct SafeDIToolNodeRecordsPublicMockLoopTests: ~Copyable {
 		}
 		let loopParameters = members.map { label, type in "\(label): Instantiator<\(type)>" }.joined(separator: ", ")
 		let loopAssignments = members.map { label, _ in "        self.\(label) = \(label)" }
-		let owner: String
-		switch place {
+		let owner = switch place {
 		case .root:
-			owner = """
+			"""
 			@Instantiable(generateMock: .public)
 			public final class Screen: Instantiable, Marked {
 			    init(\(loopParameters), leaf: Leaf) {
@@ -221,7 +224,7 @@ struct SafeDIToolNodeRecordsPublicMockLoopTests: ~Copyable {
 			}
 			"""
 		case .level:
-			owner = """
+			"""
 			@Instantiable(generateMock: .public)
 			public final class Screen: Instantiable, Marked {
 			    init(holder: Holder) {
