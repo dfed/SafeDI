@@ -138,10 +138,10 @@ struct MockWorldsTable: Sendable {
 					onlyIfAvailableLabels[index].insert(receive.property.label)
 				}
 				for (label, _) in DependencyTreeGenerator.propertiesReadByRequiredReceivesFromAbove(of: scope.instantiable, publicMockCall: scope.publicMockCall) {
-						requiredLabels.insert(label)
+					requiredLabels.insert(label)
 				}
 				for (property, _) in scope.sortedDeclaredPropertyForms {
-						if property.propertyType.isLazilyInstantiated {
+					if property.propertyType.isLazilyInstantiated {
 						lazilyDeclaredLabels.insert(property.label)
 					}
 				}
