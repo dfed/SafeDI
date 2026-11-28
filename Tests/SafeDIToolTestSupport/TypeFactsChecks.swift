@@ -640,6 +640,27 @@ enum TypeFactsChecks {
 				add(34, "v\(variant) of \(node.description), keyed \(report.variantFamilies[variant]), is marked \(mark ? "inside" : "outside") a `@Sendable` function")
 			}
 		}
+		// A member made again in a marked body is built inside that body's `@Sendable` function, so its body is marked too:
+		// the fold over edges marks it as its parent's call of it (check 32), which `sendableMarks` relies on. Where no
+		// parent of the maker is marked, the maker's edge opens the function and the maker receives a plain member's builder
+		// from outside it, the capture error a loop that mixes plain and `Sendable` members gets
+		// (`run_throwsSendableCaptureError_whenSendableBuilderRequiresBuilderThatIsNotSendableOnItsLoop`).
+		var markedCallerCountByVariant = [Int](repeating: 0, count: report.variantCalls.count)
+		for (caller, calls) in report.variantCalls.enumerated() where report.variantBuildsInSendableFunction[caller] {
+			for callee in calls {
+				markedCallerCountByVariant[callee] += 1
+			}
+		}
+		for (maker, calls) in report.variantMadeAgainCalls.enumerated() where report.variantBuildsInSendableFunction[maker] {
+			for callee in calls {
+				compared[34, default: 0] += 1
+				if !report.variantBuildsInSendableFunction[callee], markedCallerCountByVariant[maker] == 0 {
+					result.check34ExemptedVariants += 1
+				} else if !report.variantBuildsInSendableFunction[callee] {
+					add(34, "v\(maker) of \(report.nodes[report.variantNodes[maker]].description) is marked inside a `@Sendable` function and makes v\(callee) of \(report.nodes[report.variantNodes[callee]].description) again, marked outside")
+				}
+			}
+		}
 		result.comparedByCheck.merge(compared) { $0 + $1 }
 		let unwalkedNodes = report.nodes.count - nodesSeen.count - report.nodes.count(where: \.isLeaf)
 		let twinNodes = report.nodes.count { $0.twin >= 0 }
@@ -830,8 +851,9 @@ enum TypeFactsChecks {
 	///
 	/// 34, outside the columns: a variant is marked built inside a `@Sendable` function exactly when one of its places is,
 	/// itself or a place above it building in one, a fill of a `Sendable` hole among them; where the world keys the variant
-	/// by family, the mark is its family, or a twin group's when a group shares one function of either family. Exempt by
-	/// shape: a variant inside only by another variant's closing place, and a fill beneath fills marked by a fill's chain.
+	/// by family, the mark is its family, or a twin group's when a group shares one function of either family; a member a
+	/// marked body makes again is marked. Exempt by shape: a variant inside only by another variant's closing place, and a
+	/// fill beneath fills marked by a fill's chain.
 	private static func columnChecks(
 		of report: TypeFactsReport,
 		subtreeClosesCycle: [Bool],
