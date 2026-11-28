@@ -2928,6 +2928,56 @@ struct SafeDIToolReceivedBuilderCycleTests: ~Copyable {
 		type("T4", "@Received(onlyIfAvailable: true) let t4Builder: Instantiator<T4>?", "@Received(onlyIfAvailable: true) let t2Builder: Instantiator<T2>?"),
 	]
 
+	// MARK: Tests – Growth
+
+	@Test(arguments: ["Instantiator", "SendableInstantiator"])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_writesCodeThatGrowsLinearlyWithMembers_whenRootBuildersReceiveOneAnotherInARing(wrapper: String) async throws {
+		// A ring of n members, each receiving the next: each function makes one member again, so the code grows as n.
+		var lengths = [Int: Int]()
+		for memberCount in [8, 16, 32] {
+			let output = try await executeSafeDIToolTest(
+				swiftFileContent: Self.loopOfBuilders(memberCount: memberCount, wrapper: wrapper) { member in [(member + 1) % memberCount] },
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+				skipCompileVerification: memberCount > 8,
+			)
+			lengths[memberCount] = try #require(output.generatedFiles?["Root+SafeDI.swift"]).utf8.count
+		}
+		let eight = try #require(lengths[8]), sixteen = try #require(lengths[16]), thirtyTwo = try #require(lengths[32])
+		#expect(Double(sixteen) / Double(eight) < 2.2 && Double(thirtyTwo) / Double(sixteen) < 2.2, "\(lengths)")
+	}
+
+	@Test(arguments: ["Instantiator", "SendableInstantiator"])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_writesCodeThatGrowsLinearlyWithReceives_whenEveryRootBuilderReceivesEveryOther(wrapper: String) async throws {
+		// A loop of n members, each receiving every other: the declarations hold n(n-1) receives, and each function makes
+		// the n-1 others again, so the code grows as the receives do, never faster.
+		var lengthsPerReceive = [Int: Double]()
+		for memberCount in [8, 16, 32] {
+			let output = try await executeSafeDIToolTest(
+				swiftFileContent: Self.loopOfBuilders(memberCount: memberCount, wrapper: wrapper) { member in (0..<memberCount).filter { $0 != member } },
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+				skipCompileVerification: memberCount > 8,
+			)
+			let length = try #require(output.generatedFiles?["Root+SafeDI.swift"]).utf8.count
+			lengthsPerReceive[memberCount] = Double(length) / Double(memberCount * (memberCount - 1))
+		}
+		let eight = try #require(lengthsPerReceive[8]), thirtyTwo = try #require(lengthsPerReceive[32])
+		#expect(thirtyTwo / eight < 1.1, "\(lengthsPerReceive)")
+	}
+
+	/// A root that instantiates `memberCount` builders of `wrapper`, each member receiving the builders `receives` names.
+	private static func loopOfBuilders(memberCount: Int, wrapper: String, receives: (Int) -> [Int]) -> [String] {
+		let conformances = wrapper == "SendableInstantiator" ? ", Sendable" : ""
+		var types = [type("Root", attributes: "(isRoot: true)", (0..<memberCount).map { "@Instantiated let m\($0)Builder: \(wrapper)<M\($0)>" })]
+		for member in 0..<memberCount {
+			types.append(type("M\(member)", receives(member).map { "@Received let m\($0)Builder: \(wrapper)<M\($0)>" }, conformances: conformances))
+		}
+		return types
+	}
+
 	private static func type(_ name: String, attributes: String = "", _ declarations: String..., conformances: String = "") -> String {
 		type(name, attributes: attributes, declarations, conformances: conformances)
 	}
