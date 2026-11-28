@@ -405,6 +405,45 @@ enum MockTreeNamesFromWorld {
 	}
 }
 
+/// What `mockRootParameters(instantiable:mockDefaults:treeNames:)` reads of a mock root's generator beside its tree's
+/// names, where neither a call of another module's public mock nor a public mock root adds more (each refused before
+/// these are compared), and the order the root builds its children in (`orderedChildrenComputedAfresh(propertiesGeneratedLater:)`).
+struct MockRootParameterInputs {
+	let receivedProperties: Set<Property>
+	let requiredReceivedProperties: Set<Property>
+	let onlyIfAvailableUnwrappedReceivedProperties: Set<Property>
+	let typesDeclaredEscaping: Set<TypeDescription>
+	/// The property of each child the root builds, in the order it builds them, aliases included.
+	let childrenInBuildOrder: [Property]
+}
+
+extension MockTreeNamesFromWorld {
+	/// The inputs the world whose root is `worldRoot` holds for its root: what the root's subtree receives from above it,
+	/// the names it declares `@escaping`, and its children in the order the world builds them.
+	static func rootInputs(of worldRoot: ConstructionScope) -> MockRootParameterInputs {
+		let world = TypeFactsGraph(root: worldRoot, forMockGeneration: true)
+		// The world tells every two spellings apart, and a set of received properties keeps the most explicit of each.
+		func properties(_ rows: BitRows) -> Set<Property> {
+			var properties = Set<Property>()
+			properties.formUnionKeepingMostExplicitSpelling(rows.columns(inRow: 0).map { world.propertyTable[Int($0)] })
+			return properties
+		}
+		// A child that lists a property a sibling before it lists is never built (`orderedPropertiesToGenerate`).
+		var listed = Set<Property>()
+		let childrenInBuildOrder = world.edgeFacts(from: 0)
+			.sorted { $0.buildPosition < $1.buildPosition }
+			.compactMap { world.property(of: $0.child) }
+			.filter { listed.insert($0).inserted }
+		return MockRootParameterInputs(
+			receivedProperties: properties(world.receives.received),
+			requiredReceivedProperties: properties(world.receives.required),
+			onlyIfAvailableUnwrappedReceivedProperties: properties(world.receives.onlyIfAvailableUnwrapped),
+			typesDeclaredEscaping: Set(world.typesDeclaredEscaping.columns(inRow: 0).map { world.typeTable[Int($0)] }),
+			childrenInBuildOrder: childrenInBuildOrder,
+		)
+	}
+}
+
 /// The comparison of each internal mock root's tree names (`ScopeGenerator.treeNames(of:readsFills:)`) with those its
 /// world answers (`MockTreeNamesFromWorld`), handed to `observer`, which only a test sets: a run that sets none builds no
 /// world for it and compares nothing.
@@ -442,13 +481,34 @@ public enum MockTreeNamesObservation {
 		return projections.map { MockTreeNamesReport.Field(field: $0.field, tree: $0.tree, world: $0.world) }
 	}
 
-	/// The report of the mocked type `instantiable`, whose tree's names are `tree`, against its world's answer.
-	static func report(of instantiable: Instantiable, tree: ScopeGenerator.TreeNames, worldRoot: ConstructionScope, passesNilToPinnedReceives: Bool) -> MockTreeNamesReport {
+	/// Every input of `tree` beside the same input of `world`, each projected to text, spellings included.
+	static func fields(of tree: MockRootParameterInputs, besideThoseOf world: MockRootParameterInputs) -> [MockTreeNamesReport.Field] {
+		func sorted(_ properties: Set<Property>) -> String {
+			properties.map(\.asSource).sorted().joined(separator: ", ")
+		}
+		let projections: [(field: String, tree: String, world: String)] = [
+			("receivedProperties", sorted(tree.receivedProperties), sorted(world.receivedProperties)),
+			("requiredReceivedProperties", sorted(tree.requiredReceivedProperties), sorted(world.requiredReceivedProperties)),
+			("onlyIfAvailableUnwrappedReceivedProperties", sorted(tree.onlyIfAvailableUnwrappedReceivedProperties), sorted(world.onlyIfAvailableUnwrappedReceivedProperties)),
+			("typesDeclaredEscaping", tree.typesDeclaredEscaping.map(\.asSource).sorted().joined(separator: ", "), world.typesDeclaredEscaping.map(\.asSource).sorted().joined(separator: ", ")),
+			("childrenInBuildOrder", tree.childrenInBuildOrder.map(\.asSource).joined(separator: ", "), world.childrenInBuildOrder.map(\.asSource).joined(separator: ", ")),
+		]
+		return projections.map { MockTreeNamesReport.Field(field: $0.field, tree: $0.tree, world: $0.world) }
+	}
+
+	/// The report of the mocked type `instantiable`, whose tree's names are `tree` and whose generator's other inputs to
+	/// `mockRootParameters(instantiable:mockDefaults:treeNames:)` are `inputs`, against its world's answer.
+	static func report(of instantiable: Instantiable, tree: ScopeGenerator.TreeNames, inputs: MockRootParameterInputs, worldRoot: ConstructionScope, passesNilToPinnedReceives: Bool) -> MockTreeNamesReport {
 		var declarationVisits = 0
 		let answer = MockTreeNamesFromWorld.treeNames(of: instantiable, worldRoot: worldRoot, passesNilToPinnedReceives: passesNilToPinnedReceives, declarationVisits: &declarationVisits)
 		return switch answer {
 		case let .names(world):
-			MockTreeNamesReport(root: instantiable.concreteInstantiable.asSource, refusal: nil, fields: fields(of: tree, besideThoseOf: world), declarationVisits: declarationVisits)
+			MockTreeNamesReport(
+				root: instantiable.concreteInstantiable.asSource,
+				refusal: nil,
+				fields: fields(of: tree, besideThoseOf: world) + fields(of: inputs, besideThoseOf: MockTreeNamesFromWorld.rootInputs(of: worldRoot)),
+				declarationVisits: declarationVisits,
+			)
 		case let .refused(refusal):
 			MockTreeNamesReport(root: instantiable.concreteInstantiable.asSource, refusal: refusal.rawValue, fields: [], declarationVisits: declarationVisits)
 		}

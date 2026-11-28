@@ -664,6 +664,44 @@ struct SafeDIToolMockTreeNamesWorldTests: ~Copyable {
 	}
 
 	@Test
+	mutating func treeNames_equalTreesInputs_whenMockRootListsPropertyAgainThatPromotedDependencyReceives() async throws {
+		// The mock root lists `bBuilder` again where the promoted `xBuilder`'s tree receives it, and builds only the first
+		// listing, as the world's build order does once it drops the second.
+		let report = try await report(of: "Root", in: [
+			"""
+			@Instantiable(generateMock: true)
+			public final class Root: Instantiable {
+			    public init(bBuilder: Instantiator<B>, xBuilder: Instantiator<X>) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			    @Instantiated let bBuilder: Instantiator<B>
+			    @Received let xBuilder: Instantiator<X>
+			}
+			""",
+			"""
+			@Instantiable
+			public final class X: Instantiable {
+			    public init(bBuilder: Instantiator<B>) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			    @Received let bBuilder: Instantiator<B>
+			}
+			""",
+			"""
+			@Instantiable
+			public final class B: Instantiable {
+			    public init() {}
+			}
+			""",
+		])
+		#expect(report.refusal == nil)
+		#expect(report.differences == [])
+		#expect(report.worldValue(of: "childrenInBuildOrder") == "bBuilder: Instantiator<B>, xBuilder: Instantiator<X>")
+	}
+
+	@Test
 	mutating func treeNames_refuses_whenMockPassesNilToReceivePinnedByRequiredReceive() async throws {
 		// `Screen`'s required `token: Instantiator<Token>` pins the `Leaf` `Screen` builds, which the mock passes `nil`
 		// (`MockReceivesPassedNil`), a fact of places the world does not hold.

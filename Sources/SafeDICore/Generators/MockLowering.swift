@@ -216,7 +216,19 @@ extension ScopeGenerator {
 		// Where a test compares them, the names `mock()`'s parameters are chosen from, read from the tree as
 		// `lowerRootSignature(of:context:)` reads them, against those the root's world answers.
 		if let worldRoot, let observer = MockTreeNamesObservation.observer {
-			observer(MockTreeNamesObservation.report(of: instantiable, tree: treeNames(of: instantiable, readsFills: false), worldRoot: worldRoot, passesNilToPinnedReceives: passesNilToPinnedReceives))
+			observer(MockTreeNamesObservation.report(
+				of: instantiable,
+				tree: treeNames(of: instantiable, readsFills: false),
+				inputs: MockRootParameterInputs(
+					receivedProperties: receivedProperties,
+					requiredReceivedProperties: requiredReceivedProperties,
+					onlyIfAvailableUnwrappedReceivedProperties: onlyIfAvailableUnwrappedReceivedProperties,
+					typesDeclaredEscaping: typesDeclaredEscaping,
+					childrenInBuildOrder: orderedChildrenComputedAfresh(propertiesGeneratedLater: []).compactMap(\.generator.property),
+				),
+				worldRoot: worldRoot,
+				passesNilToPinnedReceives: passesNilToPinnedReceives,
+			))
 		}
 		if instantiable.generateMock == .public, let publicMockContext = context.publicMockContext {
 			// A public mock's root (`MockLowering+PublicMocks.swift`).
