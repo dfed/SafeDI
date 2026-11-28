@@ -89,13 +89,22 @@ struct SafeDIToolSeamTreeReadsTests: ~Copyable {
 				"without hole sites: __safeDI_pollerBuilder",
 				"without hole sites: __safeDI_reader",
 			]
+		case .receivers:
+			[
+				"property=onTap: OnTap; declaringType=TapReader; location=TapReader.swift 0 here(line: 4, column: 5); access=public; module=Feature; instantiateMethodParameter=false; noTier=false; noTierCallTier=none; nestedSeamCall=none; alias=none; fromReportedSeamCall=false",
+				"property=config: Config; declaringType=TapReader; location=TapReader.swift 0 here(line: 5, column: 5); access=public; module=Feature; instantiateMethodParameter=false; noTier=false; noTierCallTier=none; nestedSeamCall=none; alias=none; fromReportedSeamCall=false",
+				"property=theme: Theme?; declaringType=Badge; location=Badge.swift 0 here(line: 4, column: 5); access=public; module=Feature; instantiateMethodParameter=false; noTier=false; noTierCallTier=none; nestedSeamCall=none; alias=none; fromReportedSeamCall=false",
+				"property=token: Token; declaringType=Detail; location=Detail.swift 0 here(line: 4, column: 5); access=public; module=Feature; instantiateMethodParameter=false; noTier=false; noTierCallTier=none; nestedSeamCall=none; alias=authToken: Token?; fromReportedSeamCall=false",
+				"property=session: Session; declaringType=Poller; location=Poller.swift 0 here(line: 4, column: 5); access=public; module=Feature; instantiateMethodParameter=false; noTier=false; noTierCallTier=none; nestedSeamCall=none; alias=none; fromReportedSeamCall=false",
+				"property=clock: Clock; declaringType=Ticker; location=Ticker.swift 0 here(line: 4, column: 5); access=public; module=Feature; instantiateMethodParameter=false; noTier=false; noTierCallTier=none; nestedSeamCall=none; alias=none; fromReportedSeamCall=false",
+			]
 		}
 		// `Panel`'s tree holds no alias and no escaping type; its builder function names are checked by the cells below.
 		let screenComparisons = comparisons.filter { $0.seam == "Screen" }
 		#expect(!screenComparisons.isEmpty)
 		for comparison in screenComparisons {
 			#expect(comparison.differences.map(\.field) == [field.rawValue])
-			#expect(comparison.differences.map(\.tree) == [tree])
+			#expect(comparison.differences.map(\.tree).map(Self.withFileNames) == [tree])
 			#expect(comparison.differences.map(\.facts) == [[]])
 		}
 	}
@@ -189,6 +198,67 @@ struct SafeDIToolSeamTreeReadsTests: ~Copyable {
 		#expect(comparisons.flatMap(\.differences).isEmpty)
 	}
 
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsNoDifferenceInReceivers_whenTypeReachedUnderTwoParentsReceivesLabelOnlyOneProvides(integration: MultiModuleIntegration) async throws {
+		// `Gauge` is built by `Dial`, which declares `unit`, and by `Knob`, which does not: its receive of `unit` leaves
+		// `Console` on `Knob`'s path alone, and is kept once, where the walk first reaches it, after `Knob`'s own receive.
+		let comparisons = try await observedComparisons(of: Self.twoParentsModules, under: integration)
+		#expect(Set(comparisons.map(\.seam)) == ["Console"])
+		#expect(comparisons.flatMap(\.differences).isEmpty)
+		let receivers = try await treeReceivers(ofSeam: "Console", in: Self.twoParentsModules, under: integration)
+		#expect(receivers == [
+			"property=label: Label; declaringType=Knob; location=Knob.swift 0 here(line: 4, column: 5); access=public; module=Panel; instantiateMethodParameter=false; noTier=false; noTierCallTier=none; nestedSeamCall=none; alias=none; fromReportedSeamCall=false",
+			"property=unit: Unit; declaringType=Gauge; location=Gauge.swift 0 here(line: 4, column: 5); access=public; module=Panel; instantiateMethodParameter=false; noTier=false; noTierCallTier=none; nestedSeamCall=none; alias=none; fromReportedSeamCall=false",
+		])
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsNoDifferenceInReceivers_whenAliasFulfillingPropertyLeavesSeamAndAliasOfOwnPropertyDoesNot(integration: MultiModuleIntegration) async throws {
+		// `Meter`'s alias of `unit` leaves `Console`; `Lamp`'s alias of `glow`, which `Lamp` instantiates, does not.
+		let comparisons = try await observedComparisons(of: Self.aliasModules, under: integration)
+		#expect(Set(comparisons.map(\.seam)) == ["Console"])
+		#expect(comparisons.flatMap(\.differences).isEmpty)
+		let receivers = try await treeReceivers(ofSeam: "Console", in: Self.aliasModules, under: integration)
+		#expect(receivers == [
+			"property=unit: Unit; declaringType=Meter; location=Meter.swift 0 here(line: 4, column: 5); access=public; module=Panel; instantiateMethodParameter=false; noTier=false; noTierCallTier=none; nestedSeamCall=none; alias=reading: Unit; fromReportedSeamCall=false",
+		])
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsNoDifferenceInReceivers_whenNestedSeamsTierOmitsReceiveOfItsTree(integration: MultiModuleIntegration) async throws {
+		// `Shell` calls the `public` tier of `Service`, which omits `theme`, a `package` type's value `Badge` receives: the
+		// receive reaches `Shell` as a no-tier receive, with the nested call that omits it.
+		let comparisons = try await observedComparisons(of: Self.noTierModules, under: integration)
+		#expect(Set(comparisons.map(\.seam)) == ["Service", "Shell"])
+		#expect(comparisons.flatMap(\.differences).isEmpty)
+		let receivers = try await treeReceivers(ofSeam: "Shell", in: Self.noTierModules, under: integration)
+		// Under module info `Shell` reads `Service`'s stored signature, which holds no positions.
+		let location = switch integration {
+		case .moduleInfo: "none"
+		case .swiftPackagePlugin: "Badge.swift 0 here(line: 4, column: 5)"
+		}
+		#expect(receivers == [
+			"property=theme: Theme?; declaringType=Badge; location=\(location); access=package; module=Base; instantiateMethodParameter=false; noTier=true; noTierCallTier=public; nestedSeamCall=Service of Base at public for public from Mid, parameter tier package, receiving [\"Badge\"]; alias=none; fromReportedSeamCall=false",
+		])
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsNoDifferenceInReceivers_whenLazyCycleClosesOnTypeThatReceives(integration: MultiModuleIntegration) async throws {
+		// `Page` builds `Page` again through `nextBuilder`, a cycle the tree closes there; `Page`'s receive of `unit` is
+		// one receiver, from the first build.
+		let comparisons = try await observedComparisons(of: Self.cycleModules, under: integration)
+		#expect(Set(comparisons.map(\.seam)) == ["Console"])
+		#expect(comparisons.flatMap(\.differences).isEmpty)
+		let receivers = try await treeReceivers(ofSeam: "Console", in: Self.cycleModules, under: integration)
+		#expect(receivers == [
+			"property=unit: Unit; declaringType=Page; location=Page.swift 0 here(line: 6, column: 5); access=public; module=Panel; instantiateMethodParameter=false; noTier=false; noTierCallTier=none; nestedSeamCall=none; alias=none; fromReportedSeamCall=false",
+		])
+	}
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_writesSameSignaturesAndCode_whenSignaturePassesProceedWithFactsReads() async throws {
@@ -229,6 +299,32 @@ struct SafeDIToolSeamTreeReadsTests: ~Copyable {
 			}
 		}
 		return (signatures, code)
+	}
+
+	/// The tree's receivers of `seam`, as the comparison spells them with each location's file named alone, from the first
+	/// comparison of `seam` while `modules` generate with the facts' receivers emptied.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private mutating func treeReceivers(ofSeam seam: String, in modules: [ModuleFixture], under integration: MultiModuleIntegration) async throws -> [String] {
+		var comparisons = [SeamTreeReadsComparison]()
+		try await withKnownIssue(isIntermittent: true) {
+			comparisons = try await SeamTreeReadsObservation.$perturbsFactsField.withValue(.receivers) {
+				try await observedComparisons(of: modules, under: integration)
+			}
+		}
+		let comparison = try #require(comparisons.first { $0.seam == seam })
+		return Self.withFileNames(comparison.differences.first { $0.field == SeamTreeReadsObservation.FactsField.receivers.rawValue }?.tree ?? [])
+	}
+
+	/// `spellings` with the path of each receiver's location spelled as its file's name alone.
+	private static func withFileNames(_ spellings: [String]) -> [String] {
+		spellings.map { spelling in
+			spelling.components(separatedBy: "; ").map { part in
+				guard part.hasPrefix("location="), part != "location=none" else { return part }
+				let location = part.dropFirst("location=".count)
+				let path = location.prefix { $0 != " " }
+				return "location=\(URL(fileURLWithPath: String(path)).lastPathComponent)\(location.dropFirst(path.count))"
+			}.joined(separator: "; ")
+		}
 	}
 
 	/// Every comparison the oracle makes while `modules`, `App` and `Feature` by default, generate.
@@ -479,6 +575,211 @@ struct SafeDIToolSeamTreeReadsTests: ~Copyable {
 		    @Instantiated public let outer: Outer
 		}
 		"""], dependencies: ["Core", "Session"]),
+	]
+
+	/// `Console`, a seam of `Panel`, builds `Gauge`, which receives `unit`, beneath `Dial`, which declares `unit`, and
+	/// beneath `Knob`, which does not and receives `label`.
+	private static let twoParentsModules = [
+		ModuleFixture(name: "Panel", packageName: "Desk", swiftFileContent: [
+			"""
+			@Instantiable
+			public final class Unit: Instantiable {
+			    public init() {}
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Label: Instantiable {
+			    public init() {}
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Gauge: Instantiable {
+			    public init(unit: Unit) { self.unit = unit }
+			    @Received let unit: Unit
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Dial: Instantiable {
+			    public init(unit: Unit, gauge: Gauge) { self.unit = unit; self.gauge = gauge }
+			    @Instantiated let unit: Unit
+			    @Instantiated let gauge: Gauge
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Knob: Instantiable {
+			    public init(label: Label, gauge: Gauge) { self.label = label; self.gauge = gauge }
+			    @Received let label: Label
+			    @Instantiated let gauge: Gauge
+			}
+			""",
+			"""
+			@Instantiable(generateDependencyTree: true)
+			public final class Console: Instantiable {
+			    public init(dial: Dial, knob: Knob) { self.dial = dial; self.knob = knob }
+			    @Instantiated let dial: Dial
+			    @Instantiated let knob: Knob
+			}
+			""",
+		]),
+		ModuleFixture(name: "App", packageName: "Desk", swiftFileContent: [
+			"""
+			import Panel
+
+			@Instantiable(isRoot: true)
+			public final class Root: Instantiable {
+			    public init(unit: Unit, label: Label, console: Console) { self.unit = unit; self.label = label; self.console = console }
+			    @Instantiated let unit: Unit
+			    @Instantiated let label: Label
+			    @Instantiated let console: Console
+			}
+			""",
+		], dependencies: ["Panel"]),
+	]
+
+	/// `Console`, a seam of `Panel`, builds `Meter`, whose alias `reading` is fulfilled by `unit`, and `Lamp`, whose alias
+	/// `shine` is fulfilled by `glow`, which `Lamp` instantiates.
+	private static let aliasModules = [
+		ModuleFixture(name: "Panel", packageName: "Desk", swiftFileContent: [
+			"""
+			@Instantiable
+			public final class Unit: Instantiable {
+			    public init() {}
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Glow: Instantiable {
+			    public init() {}
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Meter: Instantiable {
+			    public init(reading: Unit) { self.reading = reading }
+			    @Received(fulfilledByDependencyNamed: "unit", ofType: Unit.self) let reading: Unit
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Lamp: Instantiable {
+			    public init(glow: Glow, shine: Glow) { self.glow = glow; self.shine = shine }
+			    @Instantiated let glow: Glow
+			    @Received(fulfilledByDependencyNamed: "glow", ofType: Glow.self) let shine: Glow
+			}
+			""",
+			"""
+			@Instantiable(generateDependencyTree: true)
+			public final class Console: Instantiable {
+			    public init(meter: Meter, lamp: Lamp) { self.meter = meter; self.lamp = lamp }
+			    @Instantiated let meter: Meter
+			    @Instantiated let lamp: Lamp
+			}
+			""",
+		]),
+		ModuleFixture(name: "App", packageName: "Desk", swiftFileContent: [
+			"""
+			import Panel
+
+			@Instantiable(isRoot: true)
+			public final class Root: Instantiable {
+			    public init(unit: Unit, console: Console) { self.unit = unit; self.console = console }
+			    @Instantiated let unit: Unit
+			    @Instantiated let console: Console
+			}
+			""",
+		], dependencies: ["Panel"]),
+	]
+
+	/// `Console`, a seam of `Panel`, builds `Page`, which receives `unit` and builds itself again through `nextBuilder`.
+	private static let cycleModules = [
+		ModuleFixture(name: "Panel", packageName: "Desk", swiftFileContent: [
+			"""
+			@Instantiable
+			public final class Unit: Instantiable {
+			    public init() {}
+			}
+			""",
+			"""
+			import SafeDI
+
+			@Instantiable
+			public final class Page: Instantiable {
+			    public init(unit: Unit, nextBuilder: Instantiator<Page>) { self.unit = unit; self.nextBuilder = nextBuilder }
+			    @Received let unit: Unit
+			    @Instantiated let nextBuilder: Instantiator<Page>
+			}
+			""",
+			"""
+			@Instantiable(generateDependencyTree: true)
+			public final class Console: Instantiable {
+			    public init(page: Page) { self.page = page }
+			    @Instantiated let page: Page
+			}
+			""",
+		]),
+		ModuleFixture(name: "App", packageName: "Desk", swiftFileContent: [
+			"""
+			import Panel
+
+			@Instantiable(isRoot: true)
+			public final class Root: Instantiable {
+			    public init(unit: Unit, console: Console) { self.unit = unit; self.console = console }
+			    @Instantiated let unit: Unit
+			    @Instantiated let console: Console
+			}
+			""",
+		], dependencies: ["Panel"]),
+	]
+
+	/// `Service`, a seam of `Base`, builds `Badge`, which receives `theme`, of a `package` type, only if available, so its
+	/// `public` tier omits it; `Shell`, a seam of `Mid` in another package, calls that tier.
+	private static let noTierModules = [
+		ModuleFixture(name: "Base", packageName: "Shop", swiftFileContent: [
+			"""
+			package final class Theme {}
+			""",
+			"""
+			@Instantiable
+			public struct Badge: Instantiable {
+			    package init(theme: Theme?) { self.theme = theme }
+			    @Received(onlyIfAvailable: true) let theme: Theme?
+			}
+			""",
+			"""
+			@Instantiable(generateDependencyTree: true)
+			public struct Service: Instantiable {
+			    public init(badge: Badge) { self.badge = badge }
+			    @Instantiated let badge: Badge
+			}
+			""",
+		]),
+		ModuleFixture(name: "Mid", packageName: "Other", swiftFileContent: [
+			"""
+			import Base
+
+			@Instantiable(generateDependencyTree: true)
+			public struct Shell: Instantiable {
+			    public init(service: Service) { self.service = service }
+			    @Instantiated let service: Service
+			}
+			""",
+		], dependencies: ["Base"]),
+		ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
+			"""
+			import Base
+			import Mid
+
+			@Instantiable(isRoot: true)
+			public struct Root: Instantiable {
+			    public init(shell: Shell) { self.shell = shell }
+			    @Instantiated let shell: Shell
+			}
+			""",
+		], dependencies: ["Base", "Mid"]),
 	]
 
 	/// `Drawer`, a seam of `Supplies`, takes a builder for `pen`; `Desk`, a seam of `Office`, calls `Drawer` and fills the
