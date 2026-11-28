@@ -604,8 +604,8 @@ public enum ConstructionInternerMiss: Sendable {
 public enum ConstructionInternerObservation {
 	/// When set, a generator interns its declarations in the order this returns, a permutation of the positions of as many
 	/// declarations as it is passed, so that a test can show that no ID's value, which the order assigns, reaches output.
-	@TaskLocal public static var declarationOrder: (@Sendable (_ declarationCount: Int) -> [Int])?
+	@TaskLocal public static var declarationOrder: TaskLocalFunction<@Sendable (_ declarationCount: Int) -> [Int]>?
 	/// When set, called with each value a freeze interns that the generator's interner did not hold, and where it is read:
 	/// the closure test, which requires no value of `ConstructionInternerMiss.notExcluded`.
-	@TaskLocal public static var missObserver: (@Sendable (_ bucket: ConstructionInternerMiss, _ value: String) -> Void)?
+	@TaskLocal public static var missObserver: TaskLocalFunction<@Sendable (_ bucket: ConstructionInternerMiss, _ value: String) -> Void>?
 }

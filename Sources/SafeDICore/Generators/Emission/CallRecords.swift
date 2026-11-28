@@ -70,7 +70,7 @@ public struct SeamCallRecordObservation: Sendable {
 	public let written: [String]
 
 	/// Called with each call as its record is made, when set: by the tests, never by the tool.
-	@TaskLocal public static var observer: (@Sendable (SeamCallRecordObservation) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (SeamCallRecordObservation) -> Void>?
 }
 
 /// One builder a call hands the seam it calls, under the builder's label in the tier called.

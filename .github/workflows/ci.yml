@@ -2557,7 +2557,10 @@ jobs:
       # The only place a miscompile of the tool shows before a publish: 2.3.1's
       # release binaries, built as this job builds, made `query` return no
       # modules or crash, while every test passed, because no job ran a
-      # command of a binary built this way. A crash or wrong output ends the
+      # command of a binary built this way. 2.4.2's crashed on `query graph`
+      # over any root, which the script's chain, declaring none, did not
+      # reach; it now runs `query graph`, `query needs`, `generate` and `dump`
+      # over a root too. A crash or wrong output ends the
       # step at once; the limit is for a hang. Not yet measured on a runner
       # (under a minute on a 4-core Linux machine); set it from the first runs.
       - name: Run generate and query with the Release SafeDITool

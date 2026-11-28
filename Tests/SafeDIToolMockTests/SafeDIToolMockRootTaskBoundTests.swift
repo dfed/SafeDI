@@ -47,7 +47,7 @@ struct SafeDIToolMockRootTaskBoundTests: ~Copyable {
 	mutating func generate_readsNoMoreMockRootsAtOnceThanItsBound_whenModuleGeneratesManyMocks() async throws {
 		let mockRootCount = 4 * BoundedConcurrency.mockRootWidth
 		let (stream, continuation) = AsyncStream.makeStream(of: Int.self)
-		try await BoundedTaskStart.$observer.withValue({ continuation.yield($0) }) {
+		try await BoundedTaskStart.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 			_ = try await executeSafeDIToolTest(
 				swiftFileContent: (0..<mockRootCount).map { index in
 					"""

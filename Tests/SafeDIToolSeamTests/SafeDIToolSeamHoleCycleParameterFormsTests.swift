@@ -404,7 +404,7 @@ struct SafeDIToolSeamHoleCycleParameterFormsTests: ~Copyable {
 		let (stream, continuation) = AsyncStream.makeStream(of: String.self)
 		let modules = Self.modules(readerReceive: readerReceive, liveApiReceive: liveApiReceive)
 		var filesToDelete = filesToDelete
-		try await GenerationLayerObservation.$observer.withValue({ runModuleName, layer in
+		try await GenerationLayerObservation.$observer.withValue(TaskLocalFunction { runModuleName, layer in
 			switch layer {
 			case let .inlineTreeOfForeignSeam(type):
 				continuation.yield("\(runModuleName ?? "nil"): \(type.asSource)")
