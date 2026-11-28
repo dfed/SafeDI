@@ -75,6 +75,7 @@ public enum SeamPlacesOracle {
 		public var isCapped: Bool {
 			passedUpCasesCapped > 0
 		}
+
 		public var passedUpPathQuestions = 0
 		/// The cases compared whose places, the first of each case the called seam hands, carry fewer fields than the case.
 		public var passedUpCasesHandedFewerFields = 0
