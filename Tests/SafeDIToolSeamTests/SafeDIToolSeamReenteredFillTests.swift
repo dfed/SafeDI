@@ -5512,6 +5512,75 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		try await expectValuesEqualVisibleBuild(output, fixture)
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_findsNoUnpassableLabel_whenFillCallsItsSeamAgainBeneathDeclarationOfLabelFillReadsInTwoForms() async throws {
+		// `App`'s `Root` calls `F` and fills its `api2` with `Live2`, which receives `x: X` and builds `C`, which receives
+		// `x: LazilyInstantiated<X>?` only if available, and `Mid`, which declares `x: X` again and calls `F` again. The call
+		// inside the fill hands on the fill it was handed, so it closes no cycle on `Live2`'s function, and no label is one
+		// no one parameter can pass; inline, `F`'s `B` declares `x` above `Live2`, so the cycle on `F` takes none either.
+		let modules = [
+			ModuleFixture(name: "Feat", packageName: "Feat", swiftFileContent: [
+				"public protocol Api2 {}",
+				seamFixtureType(named: "F", isSeam: true, isFinalClass: true, declarations: ["@Instantiated let b: B"]),
+				seamFixtureType(named: "B", isFinalClass: true, declarations: ["@Instantiated let x: X", "@Instantiated let api2: any Api2"]),
+				seamFixtureType(named: "X", isFinalClass: true, declarations: []),
+			].map { "import SafeDI\n\n" + $0 }),
+			ModuleFixture(name: "App", packageName: "App", swiftFileContent: [
+				seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let f: F"]),
+				seamFixtureType(named: "Live2", isFinalClass: true, declarations: ["@Received let x: X", "@Instantiated let c: C", "@Instantiated let mid: Mid"], conformances: ", Api2")
+					.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(fulfillingAdditionalTypes: [Api2.self])\n"),
+				seamFixtureType(named: "C", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let x: LazilyInstantiated<X>?"]),
+				seamFixtureType(named: "Mid", isFinalClass: true, declarations: ["@Instantiated let x: X", "@Instantiated let builder: Instantiator<F>"]),
+			].map { "import Feat\nimport SafeDI\n\n" + $0 }, dependencies: ["Feat"]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, ["App.swift": generatedFileHeader + """
+		#if canImport(Feat)
+		import Feat
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_f() -> F {
+		            _ = F.__safeDI_F_CB1C9B244EF59452.self\(seamCallComment(seam: "F", module: "Feat"))
+		            func __safeDI_api2Builder_F_B_Scope_api2(_ scope_x: X) -> any Api2 {
+		                let x = scope_x
+		                func __safeDI_api2() -> Live2 {
+		                    let c = C(x: nil)
+		                    func __safeDI_mid() -> Mid {
+		                        let x = X()
+		                        func __safeDI_builder() -> F {
+		                            _ = F.__safeDI_F_CB1C9B244EF59452.self\(seamCallComment(seam: "F", module: "Feat"))
+		                            return F(__safeDI_api2Builder: __safeDI_api2Builder_F())
+		                        }
+		                        let builder = Instantiator<F>(__safeDI_builder)
+		                        return Mid(x: x, builder: builder)
+		                    }
+		                    let mid: Mid = __safeDI_mid()
+		                    return Live2(x: x, c: c, mid: mid)
+		                }
+		                let api2: any Api2 = __safeDI_api2()
+		                return api2
+		            }
+		            func __safeDI_api2Builder_F() -> F.__safeDI_Api2Carrier<any Api2> {
+		                .init(b: __safeDI_api2Builder_F_B_Scope())
+		            }
+		            func __safeDI_api2Builder_F_B_Scope() -> F.__safeDI_Api2Carrier_B<any Api2> {
+		                .init(api2: { scope_x in __safeDI_api2Builder_F_B_Scope_api2(scope_x) })
+		            }
+		            return F(__safeDI_api2Builder: __safeDI_api2Builder_F())
+		        }
+		        let f: F = __safeDI_f()
+		        self.init(f: f)
+		    }
+		}
+		"""])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]

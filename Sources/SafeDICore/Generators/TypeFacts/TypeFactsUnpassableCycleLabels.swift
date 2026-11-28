@@ -154,7 +154,7 @@ extension TypeFactsGraph {
 					let hiddenBeneath = hidden.union(declaredLabels[Int(declaration)])
 					let declaredBeneath = declaration == place.declaration ? declaredBelow : declaredBelow.union(declaredLabels[Int(declaration)])
 					let pathBeneath = path + [declaration]
-					for child in edges(from: declaration) {
+					for child in edges(from: declaration) where !reentersFill(child, in: pathBeneath, closesOn: { $0 == child }) {
 						if child == place.declaration {
 							body.labelsDeclaredBeforeACloser.formUnion(declaredBeneath)
 							// The declarations between the function and this call, each noted at its declaration of the label.
