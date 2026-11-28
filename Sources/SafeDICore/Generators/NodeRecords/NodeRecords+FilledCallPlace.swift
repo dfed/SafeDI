@@ -126,7 +126,7 @@ extension FilledCallRecords.Fill {
 	/// The declarations around the fill's body: what the fill binds of its case and takes as a function's parameters, and
 	/// what it reads of the caller's scope and takes no parameter of, which it captures as the caller declares it.
 	var outerDeclarations: [Property] {
-		let taken = signature.bound.map(\.field.property) + signature.parameters.map(\.property)
+		let taken = signature.bound.map(\.field.property) + signature.fieldsTakenUnbound.map(\.property) + signature.parameters.map(\.property)
 		let takenLabels = Set(taken.map(\.label))
 		let captured = callerDeclarations.filter { !takenLabels.contains($0.label) }
 		let capturedLabels = Set(captured.map(\.label))

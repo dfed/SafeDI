@@ -112,6 +112,10 @@ struct BuiltPlaceRecord: Sendable {
 	/// Whether the place declares its builder function and binds its value nowhere: other places call the function, and
 	/// nothing reads the value.
 	var declaresOnlyItsFunction = false
+	/// Whether the place is the body of a fill of a wrapper's place (`NodeRecordsObservation.recordsFilledCalls`), which
+	/// binds no wrapper but returns what the seam's builder of the wrapper takes: the value a lazy wrapper's function
+	/// builds, or the builder an instantiator keeps, a closure that hands the function what it is forwarded.
+	var returnsFromWrapperFill = false
 
 	/// The statement the place's builder function begins with, before its children.
 	var leadingStatement: CallGuard? {

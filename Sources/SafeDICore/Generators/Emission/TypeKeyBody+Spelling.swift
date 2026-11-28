@@ -172,6 +172,9 @@ extension TypeKeyLayout {
 			return "\(leadingLine)\(declaration.spelled) = \(value)\(record.lineEnd)"
 		case let .built(child):
 			guard let record = bodies[child].record else { return nil }
+			guard !record.returnsFromWrapperFill else {
+				return spelledReturnOfWrapperFill(calling: classByBody[child], record: record, inClass: owner, at: index)
+			}
 			return spelledCall(of: classByBody[child], binding: record.property, isErased: callErases(record.isErased, theFunctionOf: child), isExtension: record.isExtension, inClass: owner, at: index)
 		case let .closer(record, target):
 			return spelledCall(of: classByBody[target], binding: record.property, isErased: callErases(record.isErased, theFunctionOf: target), isExtension: record.isExtension, inClass: owner, at: index)
@@ -270,6 +273,38 @@ extension TypeKeyLayout {
 			}
 		}
 		return bindings + spelledCall(of: callee, binding: property, isErased: isErased, isExtension: isExtension, handing: arguments, representative: representative)
+	}
+
+	/// The return of a fill of a wrapper's place, at `index` of `owner`'s body, which calls `callee`'s function as the
+	/// tree's fill does: the value a lazy wrapper's function builds, or a closure that hands the function what the
+	/// instantiator forwards, named `forwarded` and spread by label where it is several values. `nil` where the call would
+	/// hand the function anything else, which no record of a fill spells yet.
+	private func spelledReturnOfWrapperFill(calling callee: Int, record: BuiltPlaceRecord, inClass owner: Int, at index: Int) -> String? {
+		guard let representative = representative(of: callee),
+		      record.cycleParameters.isEmpty,
+		      !reads[membersByClass[callee][0]].contains(where: { outcomes[callee][$0] == .passed }),
+		      passedArguments(ofStatementAt: index, inBody: owner == 0 ? 0 : membersByClass[owner][0]).isEmpty
+		else { return nil }
+		let isErased = record.isErased && representative.functionReturnType == nil
+		switch record.property.propertyType {
+		case .instantiator,
+		     .erasedInstantiator,
+		     .sendableInstantiator,
+		     .sendableErasedInstantiator:
+			let isOnly = representative.forwardedProperties.count == 1
+			let arguments = representative.forwardedProperties.map {
+				CallArgument(label: $0.label, source: .forwardedSpread(label: $0.label, isOnly: isOnly, spreadName: "forwarded")).spelled
+			}
+			let builtValue = Expression.call(function: functionNames[callee], arguments: arguments.joined(separator: ", "))
+				.erased(to: record.property.typeDescription.unwrapped.asInstantiatedType, where: isErased)
+				.spelled
+			return "return { \(arguments.isEmpty ? "_" : "forwarded") in \(builtValue) }"
+		case .lazilyInstantiated,
+		     .sendableLazilyInstantiated:
+			return "return \(Expression.call(function: functionNames[callee], arguments: "").erased(to: record.property.typeDescription.asInstantiatedType, where: isErased).spelled)"
+		case .constant:
+			return nil
+		}
 	}
 
 	/// The binding of `property` to a call of `callee`'s function that hands it `arguments`.

@@ -419,6 +419,11 @@ struct NodeRecords: Sendable {
 				built.declaresOnlyItsFunction = true
 				record = .built(built)
 			}
+			// A fill of a wrapper's place returns what the seam's builder of the wrapper takes, as the tree's fill does.
+			if case var .built(built) = record, NodeRecordsObservation.recordsFilledCalls, world.construction(of: declaration) == .fill, !built.property.propertyType.isConstant {
+				built.returnsFromWrapperFill = true
+				record = .built(built)
+			}
 			let place: GeneratedCode = switch record {
 			case let .alias(aliasRecord):
 				if Self.isBoundBeforeMockNodes(declaration, in: world) {

@@ -114,6 +114,30 @@ struct FillSignature: Sendable {
 	/// Whether the fill returns the value its body binds (a constant), rather than the wrapper's builder.
 	let returnsBoundValue: Bool
 
+	/// The fields the fill takes by themselves, binding none (forms `wrapperBuilder` and `payloadFields`), but an inner
+	/// seam's function, which the fill's tree does not read as the field.
+	var fieldsTakenUnbound: [SeamSignature.Hole.Field] {
+		switch form {
+		case let .wrapperBuilder(parameters, innerScopeLabels):
+			parameters.filter { !innerScopeLabels.contains($0.property.label) }
+		case let .payloadFields(parameters):
+			parameters
+		case .caseValues, .caseArguments, .carrierUse:
+			[]
+		}
+	}
+
+	/// Whether the fill returns an instantiator's builder that calls the inner seams it takes with the value the
+	/// instantiator forwards, which its body binds before its tree.
+	var callsInnerScopesWithForwardedValue: Bool {
+		switch form {
+		case let .wrapperBuilder(_, innerScopeLabels):
+			!innerScopeLabels.isEmpty
+		case .payloadFields, .caseValues, .caseArguments, .carrierUse:
+			false
+		}
+	}
+
 	/// The fill's function's first line, named `functionName`, then each line binding a value of its case, indented by
 	/// `indent`: what precedes the fill's tree. The function takes its case's values under `scopeParameterName`
 	/// (`FillNames.scopeParameterName(ofFill:)`).

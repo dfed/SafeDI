@@ -460,9 +460,9 @@ extension NodeRecords {
 		} else if NodeRecordsObservation.recordsFilledCalls {
 			switch world.filledCallRecords(of: declaration) {
 			case let .success(records):
-				// A fill of a wrapper returns what the wrapper's builder function builds, or the builder itself, where its place
-				// would bind the wrapper: no record spells that return yet.
-				records.fills.allSatisfy(\.facts.returnsBoundValue) ? [] : [.fill]
+				// A fill of an instantiator whose inner seams it calls with the forwarded value binds them first, which no record
+				// spells yet.
+				records.fills.contains(where: \.signature.callsInnerScopesWithForwardedValue) ? [.fill] : []
 			case let .failure(refusal):
 				[refusal]
 			}
