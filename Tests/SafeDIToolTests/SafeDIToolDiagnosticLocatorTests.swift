@@ -129,6 +129,49 @@ struct SafeDIToolDiagnosticLocatorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_locatesErrorsInTwoOfAnotherModulesFilesUnderResolvedRootOfInput_whenEachRecordedRelativePathOpensOnlyThere() async throws {
+		// As above, with two of `Feature`'s files that each open only under the execution root: the second is read under
+		// the roots the first found.
+		let project = try makeProject(
+			featureFiles: ["Cart.swift": Self.publicCart, "Store.swift": Self.publicStore],
+			appFiles: ["Cart.swift": Self.publicCart, "Store.swift": Self.publicStore, "Root.swift": Self.rootInstantiatingStoreAndCart],
+			underWorkingDirectory: true,
+		)
+		try await project.runFeature()
+		let executionRoot = project.root.appendingPathComponent("ExecutionRoot")
+		let appFiles = ["Cart.swift", "Root.swift", "Store.swift"].map(project.appPath)
+		for relativePath in [project.featurePath("Cart.swift"), project.featurePath("Store.swift")] + appFiles {
+			let destination = executionRoot.appendingPathComponent(relativePath)
+			try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
+			try FileManager.default.moveItem(atPath: relativePath, toPath: destination.path)
+		}
+		for relativePath in appFiles {
+			try FileManager.default.createSymbolicLink(atPath: relativePath, withDestinationPath: executionRoot.appendingPathComponent(relativePath).path)
+		}
+		#expect(!FileManager.default.fileExists(atPath: project.featurePath("Cart.swift")))
+		#expect(!FileManager.default.fileExists(atPath: project.featurePath("Store.swift")))
+		let (filesRead, filesReadContinuation) = AsyncStream<String>.makeStream()
+
+		let description = try await DiagnosticLocatorObservation.$fileReadObserver.withValue({ filesReadContinuation.yield($0) }) {
+			try await project.appErrorDescription()
+		}
+		filesReadContinuation.finish()
+
+		#expect(description == """
+		\(project.appPath("Cart.swift")):1:1: error: `Cart` is declared in modules `App` and `Feature`. SafeDI tells apart by name the @Instantiable types a module can name. Rename one.
+		\(project.featurePath("Cart.swift")):1:1: error: `Cart` is declared in modules `App` and `Feature`. SafeDI tells apart by name the @Instantiable types a module can name. Rename one.
+		\(project.appPath("Store.swift")):1:1: error: `Store` is declared in modules `App` and `Feature`. SafeDI tells apart by name the @Instantiable types a module can name. Rename one.
+		\(project.featurePath("Store.swift")):1:1: error: `Store` is declared in modules `App` and `Feature`. SafeDI tells apart by name the @Instantiable types a module can name. Rename one.
+		""")
+		var pathsRead = [String]()
+		for await path in filesRead {
+			pathsRead.append(path)
+		}
+		#expect(pathsRead.sorted() == [project.featurePath("Cart.swift"), project.featurePath("Store.swift")])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_reportsAccessErrorAtDeclarationWithFixItUnderResolvedRootOfInput_whenRecordedRelativePathOpensOnlyThere() async throws {
 		// As in a sandboxed Bazel action: the access check reads `Feature`'s file where the locator does, so the error lands
 		// at the declaration to widen, with its fix-it, rather than at `App`'s reference.
@@ -273,6 +316,26 @@ struct SafeDIToolDiagnosticLocatorTests: ~Copyable {
 	    }
 
 	    @Instantiated let store: Store
+	}
+	"""
+
+	private static let publicCart = """
+	@Instantiable
+	public final class Cart: Instantiable {
+	    public init() {}
+	}
+	"""
+
+	private static let rootInstantiatingStoreAndCart = """
+	@Instantiable(isRoot: true)
+	public final class Root: Instantiable {
+	    public init(store: Store, cart: Cart) {
+	        self.store = store
+	        self.cart = cart
+	    }
+
+	    @Instantiated let store: Store
+	    @Instantiated let cart: Cart
 	}
 	"""
 

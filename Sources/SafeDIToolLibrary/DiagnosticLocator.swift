@@ -85,13 +85,17 @@ struct DiagnosticLocator {
 		return Dependency.DeclarationLocation(filePath: location.filePath, line: position.line, column: position.column)
 	}
 
+	/// A fix-it's range of a diagnostic that `printsUnlocatedPosition` is unlocated: every fix-it takes its range from the
+	/// record its diagnostic takes its location from (`PublicMockGeneration.narrowerEnclosingType`,
+	/// `SeamAccessExplanation.declarationNotes`, `InaccessibleConstruction.sourceDiagnostic`,
+	/// `UnfulfillableProperty.sourceDiagnostics`), a declaration read from a `.safedi` file has neither a position nor a
+	/// located range, and one read from the run's own files has both. So a range that is located, or that its file no
+	/// longer locates, is kept as it is.
 	private mutating func locating(_ range: Dependency.SourceRange) -> Dependency.SourceRange {
-		switch range.span {
-		case .located:
-			range
-		case let .unlocated(owner, part):
-			locatedFile(recordedAt: owner.filePath)?.range(of: part, ofDeclarationRanked: owner.order) ?? range
-		}
+		guard case let .unlocated(owner, part) = range.span,
+		      let locatedRange = locatedFile(recordedAt: owner.filePath)?.range(of: part, ofDeclarationRanked: owner.order)
+		else { return range }
+		return locatedRange
 	}
 
 	private mutating func locatedFile(recordedAt recordedPath: String) -> LocatedFile? {
