@@ -91,6 +91,9 @@ struct SeamPlacesCaseDraft: Equatable, Sendable {
 	let passedUp: SeamSignature.Places.CalledCase?
 	/// The first case, in facts order, that presents the same places.
 	let firstCasePresentingSamePlaces: Int?
+	/// The least route from the seam's root to the owner level in source order, root first, the owner last: what names
+	/// the case, never the order a walk reached it in. Empty for a case passed up.
+	let namingRoute: [SeamPlacesLevelID]
 }
 
 /// The families a body is built in on the routes to it.
@@ -268,10 +271,81 @@ struct SeamPlacesDrafts: Sendable {
 		for site in sites {
 			let isSendableHole = world.graph.nodes[Int(site.hole)].property?.propertyType.isSendable ?? false
 			for (family, isSendable) in [(SeamPlacesFamilies.plain, false), (.sendable, true)] where families[Int(site.owner.variant)].contains(family) {
-				cases.append(SeamPlacesCaseDraft(owner: site.owner, isBuiltInSendableFunction: isSendable, siteOpensSendableFunction: isSendableHole, sites: [site], passedUp: nil, firstCasePresentingSamePlaces: nil))
+				cases.append(SeamPlacesCaseDraft(owner: site.owner, isBuiltInSendableFunction: isSendable, siteOpensSendableFunction: isSendableHole, sites: [site], passedUp: nil, firstCasePresentingSamePlaces: nil, namingRoute: []))
 			}
 		}
-		self.cases = cases
+		/// Where the property an edge builds is declared, which orders routes in source order: a fill's is none, after
+		/// every declared one.
+		func declaredProperty(of level: SeamPlacesLevelID) -> (location: Dependency.DeclarationLocation?, label: String) {
+			let declaration = world.declaration(of: level.variant)
+			let targets = world.edges(from: declaration)
+			let target = world.graph.nodes[Int(targets[targets.startIndex + Int(level.edge)])]
+			guard !target.key.isFill, let property = target.property else { return (nil, "") }
+			let location = world.graph.nodes[Int(declaration)].scope.instantiable.dependencies.first { $0.property == property }?.declarationLocation
+			return (location, property.label)
+		}
+		func precedes(_ lhs: SeamPlacesLevelID, _ rhs: SeamPlacesLevelID) -> Bool {
+			let (lhsLocation, lhsLabel) = declaredProperty(of: lhs)
+			let (rhsLocation, rhsLabel) = declaredProperty(of: rhs)
+			guard lhsLocation == rhsLocation else {
+				return Dependency.DeclarationLocation.precedesInSourceOrder(lhsLocation, rhsLocation)
+			}
+			return lhsLabel < rhsLabel
+		}
+		/// The least route to `owner` in source order: from the root down, each step the least edge from whose callee the
+		/// owner's variant is still reached, so no route is listed.
+		func namingRoute(to owner: SeamPlacesLevelID) -> [SeamPlacesLevelID] {
+			var reachesOwner = Set([owner.variant])
+			var up = [owner.variant]
+			while let variant = up.popLast() {
+				for parent in parentsByVariant[Int(variant)] where reachesOwner.insert(parent.variant).inserted {
+					up.append(parent.variant)
+				}
+			}
+			var route = [SeamPlacesLevelID]()
+			var variant = rootVariant
+			while variant != owner.variant {
+				let declaration = world.declaration(of: variant)
+				let callees = world.calls(of: variant)
+				let steps = world.edgeFacts(from: declaration).indices.compactMap { index -> SeamPlacesLevelID? in
+					let offset = index - world.edgeFacts(from: declaration).startIndex
+					let callee = callees[callees.startIndex + offset]
+					guard !world.edgeFacts(from: declaration)[index].isCallEdge, reachesOwner.contains(callee) else { return nil }
+					return SeamPlacesLevelID(variant: variant, edge: Int32(offset))
+				}
+				guard let step = steps.min(by: precedes) else { return [] }
+				route.append(step)
+				variant = callees[callees.startIndex + Int(step.edge)]
+			}
+			return route + [owner]
+		}
+		// The cases in builder-label order: by the hole's label, and the cases of one label by their naming routes.
+		let namedCases = cases.map { draftCase in
+			SeamPlacesCaseDraft(
+				owner: draftCase.owner,
+				isBuiltInSendableFunction: draftCase.isBuiltInSendableFunction,
+				siteOpensSendableFunction: draftCase.siteOpensSendableFunction,
+				sites: draftCase.sites,
+				passedUp: nil,
+				firstCasePresentingSamePlaces: nil,
+				namingRoute: namingRoute(to: draftCase.owner),
+			)
+		}
+		func holeLabel(of draftCase: SeamPlacesCaseDraft) -> String {
+			world.graph.nodes[Int(draftCase.sites[0].hole)].property?.label ?? ""
+		}
+		func routePrecedes(_ lhs: [SeamPlacesLevelID], _ rhs: [SeamPlacesLevelID]) -> Bool {
+			for (lhsLevel, rhsLevel) in zip(lhs, rhs) where lhsLevel != rhsLevel {
+				return precedes(lhsLevel, rhsLevel)
+			}
+			return lhs.count < rhs.count
+		}
+		self.cases = namedCases.sorted { lhs, rhs in
+			let (lhsLabel, rhsLabel) = (holeLabel(of: lhs), holeLabel(of: rhs))
+			guard lhsLabel == rhsLabel else { return lhsLabel < rhsLabel }
+			guard lhs.namingRoute == rhs.namingRoute else { return routePrecedes(lhs.namingRoute, rhs.namingRoute) }
+			return !lhs.isBuiltInSendableFunction && rhs.isBuiltInSendableFunction
+		}
 		self.levels = levels.map(withParents)
 		self.closingLevels = closingLevels.map(withParents)
 		self.sites = sites
@@ -321,7 +395,38 @@ struct SeamPlacesDrafts: Sendable {
 			let hole = world.graph.nodes[Int(draftCase.sites[0].hole)]
 			return "\(node.key.isFill ? "fill" : node.scope.instantiable.concreteInstantiable.asSource) before \(hole.property?.label ?? "fill") sendable \(draftCase.isBuiltInSendableFunction)"
 		})
+		// Each case's naming route, as the labels the code declares along it to the owner, beside the stored case of its key.
+		func storedKey(_ placeCase: SeamSignature.Places.Case) -> String {
+			let level = places.levels[placeCase.ownerLevel]
+			return "\(level.key.builtType?.asSource ?? "fill") \(level.key.nextProperty?.label ?? "fill") \(placeCase.isBuiltInSendableFunction)"
+		}
+		var storedRouteByKey = [String: [String]]()
+		for placeCase in places.cases where placeCase.passedUp == nil && storedRouteByKey[storedKey(placeCase)] == nil {
+			storedRouteByKey[storedKey(placeCase)] = placeCase.namingRoute.flatMap { places.levels[$0].pathSegment.map(\.label) }
+		}
+		var routeMismatches = [String]()
+		for draftCase in cases {
+			let declaration = world.declaration(of: draftCase.owner.variant)
+			let node = world.graph.nodes[Int(declaration)]
+			let hole = world.graph.nodes[Int(draftCase.sites[0].hole)]
+			let key = "\(node.key.isFill ? "fill" : node.scope.instantiable.concreteInstantiable.asSource) \(hole.property?.label ?? "fill") \(draftCase.isBuiltInSendableFunction)"
+			let draftRoute = draftCase.namingRoute.dropLast().map { level -> String in
+				let declaration = world.declaration(of: level.variant)
+				let targets = world.edges(from: declaration)
+				return world.graph.nodes[Int(targets[targets.startIndex + Int(level.edge)])].property?.label ?? "fill"
+			}
+			if let stored = storedRouteByKey[key], stored != draftRoute {
+				routeMismatches.append("\(key): facts \(draftRoute.joined(separator: ".")), stored \(stored.joined(separator: "."))")
+			}
+		}
+		let storedOrder = places.cases.filter { $0.passedUp == nil }.map(storedKey)
+		let draftOrder = cases.map { draftCase -> String in
+			let node = world.graph.nodes[Int(world.declaration(of: draftCase.owner.variant))]
+			let hole = world.graph.nodes[Int(draftCase.sites[0].hole)]
+			return "\(node.key.isFill ? "fill" : node.scope.instantiable.concreteInstantiable.asSource) \(hole.property?.label ?? "fill") \(draftCase.isBuiltInSendableFunction)"
+		}
 		return [
+			"naming routes: \(routeMismatches.count) differ of \(cases.count) \(routeMismatches.prefix(2)); case order \(storedOrder == draftOrder ? "same" : "differs, stored \(storedOrder.prefix(4)) facts \(draftOrder.prefix(4))")",
 			"levels: facts \(levels.count) (\(Set(levels.map(\.id.variant)).count) variants of \(declarations.count) declarations, \(draftKeys.count) type-and-next keys), closing-only \(closingLevels.count) (\(closingKeys.subtracting(draftKeys).count) more keys), stored \(places.levels.count) (\(storedKeys.count) keys); keys only in facts \(draftKeys.union(closingKeys).subtracting(storedKeys).count), only stored \(storedKeys.subtracting(draftKeys.union(closingKeys)).count) \(storedKeys.subtracting(draftKeys.union(closingKeys)).sorted().prefix(4)) only facts \(draftKeys.union(closingKeys).subtracting(storedKeys).sorted().prefix(4)); sites \(sites.count); cases: facts \(cases.count) (\(draftCaseKeys.count) keys), stored own \(places.cases.filter { $0.passedUp == nil }.count) (\(storedCaseKeys.count) keys), keys only in facts \(draftCaseKeys.subtracting(storedCaseKeys).sorted().prefix(3)), only stored \(storedCaseKeys.subtracting(draftCaseKeys).sorted().prefix(3)); variants \(world.variantCount), declarations \(world.declarationCount)",
 		]
 	}
