@@ -38,8 +38,10 @@ extension DependencyTreeGenerator {
 			// A world that holds a cycle keeps its tree, or its plan by type, until node records write every production
 			// cycle root as today's tree does: its records are made and compared beside the tree where a test observes
 			// them (`plannedRootCode(of:declaredTypeNames:)`), and what forces the tree is named as the kind they refused
-			// before they made any cycle's records.
-			guard !(0..<Int32(world.declarationCount)).contains(where: world.isOnCycle) else { return nil }
+			// before they made any cycle's records. A world whose cycle members are built two ways is laid out from the
+			// per-type plan of its cycles (`NodeRecords.cycleVariants`), whose code a test compares with the tree's byte for
+			// byte, since its tree grows with every path to each member.
+			guard !nodeRecords.cycleVariants.isEmpty || !(0..<Int32(world.declarationCount)).contains(where: world.isOnCycle) else { return nil }
 			return try NodeRecordsLayout(of: instantiable, nodeRecords: nodeRecords)
 		}) {
 		case let .success(layout):
@@ -99,7 +101,7 @@ extension DependencyTreeGenerator {
 			// A seam's own tree is compared and never laid out here: its initializers are written around its body. A root its
 			// records cannot lay out keeps its tree's code.
 			let laidOutCode: GeneratedCode? = if NodeRecordsObservation.laysOutRoots, rootInfo.ownSeamRoot == nil,
-			                                     case let .success(code) = NodeRecords.refusingWhatRecordsThrow({ try laidOutRootCode(of: rootInfo.instantiable, body: nodeRecords.rootBody) })
+			                                     case let .success(code) = NodeRecords.refusingWhatRecordsThrow({ try laidOutRootCode(of: rootInfo.instantiable, body: nodeRecords.rootBody, cycleVariants: nodeRecords.cycleVariants) })
 			{
 				code
 			} else {
@@ -112,7 +114,13 @@ extension DependencyTreeGenerator {
 			let planned: PlannedTree = try await GenerationWork.$observer.withValue(observerOfTreeWork, operation: { () async throws -> PlannedTree in
 				try await Self.treeCode(of: scopeGenerator, besideRecordsBody: nodeRecords.rootBody)
 			})
-			let (treeCode, comparisons) = planned
+			let (treeCode, placeComparisons) = planned
+			// A root laid out from the per-type plan of its cycles holds call places where the tree builds or closes on a place,
+			// so its records are compared with the tree by the code alone, byte for byte.
+			let comparisons = nodeRecords.cycleVariants.isEmpty ? placeComparisons : [(
+				differences: laidOutCode.map { $0.spelled() == treeCode.spelled() } == false ? ["root: the code laid out from node records differs from the tree’s"] : [],
+				treePlaceCount: placeComparisons.map(\.treePlaceCount).reduce(0, +),
+			)]
 			// A root that keeps its tree's code is still laid out from its records where they differ from the tree's by an
 			// optional parameter's argument, for the comparison alone: a test approves that difference only where the two
 			// texts are equal. A seam's own tree is never laid out here, so the difference fails there.
@@ -121,7 +129,7 @@ extension DependencyTreeGenerator {
 				comparison.differences.contains { $0.contains(": \(NodeRecordsReport.argumentsOfOptionalParameterDifferenceName) is ") }
 			}
 			let comparedCode: GeneratedCode? = if laidOutCode == nil, holdsDifferenceOfOptionalParameter, rootInfo.ownSeamRoot == nil,
-			                                      case let .success(code) = NodeRecords.refusingWhatRecordsThrow({ try laidOutRootCode(of: rootInfo.instantiable, body: nodeRecords.rootBody) })
+			                                      case let .success(code) = NodeRecords.refusingWhatRecordsThrow({ try laidOutRootCode(of: rootInfo.instantiable, body: nodeRecords.rootBody, cycleVariants: nodeRecords.cycleVariants) })
 			{
 				code
 			} else {
@@ -168,7 +176,9 @@ extension DependencyTreeGenerator {
 		let planned: PlannedTree = try await GenerationWork.$observer.withValue(nil, operation: { () async throws -> PlannedTree in
 			try await Self.treeCode(of: tree, besideRecordsBody: layout.rootBody)
 		})
-		let (treeCode, comparisons) = planned
+		let (treeCode, placeComparisons) = planned
+		// The texts' difference below is the only one a root laid out from the per-type plan of its cycles is compared by.
+		let comparisons = layout.isLaidOutFromCyclePlan ? placeComparisons.map { (differences: [String](), treePlaceCount: $0.treePlaceCount) } : placeComparisons
 		let captures = await tree.nonSendableWrapperCaptures(ofTreeRootedAt: instantiable)
 		let texts = NodeRecordsComparedTexts(tree: treeCode.spelled(), nodeRecords: layout.code.spelled())
 		// The texts' difference comes first, and what no text shows after it, which a test that accepts an approved
@@ -216,8 +226,13 @@ extension DependencyTreeGenerator {
 	/// The extension that declares `instantiable`'s generated initializer, its body laid out from `body`, node records'
 	/// root body; empty for a root with nothing to build, for which the tree generates nothing too; `nil` where the engine
 	/// cannot lay out every statement of the body.
-	static func laidOutRootCode(of instantiable: Instantiable, body: [GeneratedCode]) throws -> GeneratedCode? {
+	static func laidOutRootCode(of instantiable: Instantiable, body: [GeneratedCode], cycleVariants: [CycleVariantRecord] = []) throws -> GeneratedCode? {
 		guard let rootInitializer = try ScopeGenerator.rootInitializer(of: instantiable) else { return .empty }
+		// A root whose cycle members are called by index is laid out from the per-type plan of its cycles.
+		guard cycleVariants.isEmpty else {
+			guard let statements = TypeKeyBody.statements(ofRootBody: body, variants: cycleVariants) else { return nil }
+			return rootInitializer.spelled(writing: BuilderFunctionGraph(body: statements.map(Statement.verbatim)))
+		}
 		// A statement the engine cannot lay out would be copied as its text, which a node records place does not hold, so
 		// every loop of builders is laid out, as a mock's are, where the tree keeps the path key's body for one written once.
 		guard body.allSatisfy(\.statementsAreLaidOutByTypeKey),

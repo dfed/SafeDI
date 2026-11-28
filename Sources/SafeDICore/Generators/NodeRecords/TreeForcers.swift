@@ -86,15 +86,19 @@ struct NodeRecordsLayout: Sendable {
 	let rootBody: [GeneratedCode]
 	/// How many records node records made.
 	let recordCount: Int
+	/// Whether the root is laid out from the per-type plan of its cycles (`NodeRecords.cycleVariants`), whose call places
+	/// stand where the tree builds a place or closes on one, so that only the code compares with the tree's.
+	let isLaidOutFromCyclePlan: Bool
 
 	/// The layout of `instantiable`'s code from `nodeRecords`, which throws `NodeRecordRefusal.notLaidOut` where the
 	/// engine cannot lay them out.
 	init(of instantiable: Instantiable, nodeRecords: NodeRecords) throws {
-		guard let code = try DependencyTreeGenerator.laidOutRootCode(of: instantiable, body: nodeRecords.rootBody) else {
+		guard let code = try DependencyTreeGenerator.laidOutRootCode(of: instantiable, body: nodeRecords.rootBody, cycleVariants: nodeRecords.cycleVariants) else {
 			throw NodeRecordRefusal.notLaidOut
 		}
 		self.code = code
 		rootBody = nodeRecords.rootBody
 		recordCount = nodeRecords.recordCount
+		isLaidOutFromCyclePlan = !nodeRecords.cycleVariants.isEmpty
 	}
 }

@@ -62,8 +62,9 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	/// or `nil`), or a cycle's identity is twinned (a value and a lazily instantiated wrapper of it), where the facts'
 	/// variants and today's bodies may partition the cycle's places apart.
 	case cycleVariantsPartitionApart
-	/// A node on a cycle is built at two places whose trees close the cycle on different places above them, so that one
-	/// place of its variant cannot stand for both.
+	/// A node on a cycle is built at two places whose trees close the cycle on different places above them, in a world
+	/// whose loops of builders the per-type plan's calls do not make again, so that one place of its variant cannot stand
+	/// for both.
 	case cycleMemberBuiltTwoWays
 	/// The function a call closes a cycle on takes a parameter of a label some declaration holds lazily, which a call can
 	/// find as the wrapper at its site where the records read the callee's view.
@@ -327,6 +328,12 @@ struct NodeRecords: Sendable {
 		var labelsDeclaredBetween = [Set<String>](repeating: [], count: world.variantCount)
 		var variantsBetween = [Set<VariantID>](repeating: [], count: world.variantCount)
 		var twins = TwinsOnPath(world: world, holdsCycle: holdsCycle)
+		// Whether a variant's place is held by two bodies whose trees close the cycle on different places above it. Today's
+		// tree builds it once for each, closing on what is above it; the records keep one place per variant and lay the
+		// root out from the per-type plan instead (`TypeKeyBody.statements(ofRootBody:variants:)`), in which every call of
+		// a member of a cycle calls its variant's one function, declared in the root's body, so a call that closes on a
+		// place above and one that builds it again are one call.
+		var isBuiltTwoWays = false
 		var stack = [PlaceFrame(variant: 0, edgeIndices: edgeIndices(of: 0))]
 		isOnPath[0] = true
 		while let top = stack.last {
@@ -347,8 +354,8 @@ struct NodeRecords: Sendable {
 					stack[stack.count - 1].entries.append(.closer(closingOn: callee))
 					stack[stack.count - 1].variantsClosedOn.insert(callee)
 				} else if isWalked[Int(callee)] {
-					guard variantsClosedOn[Int(callee)].allSatisfy({ isOnPath[Int($0)] }), !cycleVariantsBuilt[Int(callee)].contains(where: { isOnPath[Int($0)] }) else {
-						throw NodeRecordRefusal.cycleMemberBuiltTwoWays
+					if !variantsClosedOn[Int(callee)].allSatisfy({ isOnPath[Int($0)] }) || cycleVariantsBuilt[Int(callee)].contains(where: { isOnPath[Int($0)] }) {
+						isBuiltTwoWays = true
 					}
 					// Today's tree closes the cycle on a place of the declaration, or of its twin, above, where the shared place
 					// builds it again.
@@ -385,7 +392,19 @@ struct NodeRecords: Sendable {
 			stack[parent].cycleVariantsBuilt.formUnion(built)
 		}
 		// The names each body gives the functions it declares and refers to, as today's tree names them.
-		let functionNames = try holdsCycle ? CycleFunctionNames(entries: entries, variantsClosedOn: variantsClosedOn, in: world) : nil
+		// The per-type plan names its variants' functions itself, and calls them by index rather than by name.
+		let functionNames = try holdsCycle && !isBuiltTwoWays ? CycleFunctionNames(entries: entries, variantsClosedOn: variantsClosedOn, in: world) : nil
+		// The variants on a cycle, each the body of one function of the per-type plan, by its index among them.
+		var cycleVariantIndex = [Int?](repeating: nil, count: world.variantCount)
+		var cycleVariants = [VariantID]()
+		if isBuiltTwoWays {
+			// A loop of builders makes its members again inside its members' functions, which the plan's calls do not.
+			guard (0..<Int32(declarationCount)).allSatisfy({ world.madeAgain(from: $0).isEmpty }) else { throw NodeRecordRefusal.cycleMemberBuiltTwoWays }
+			for variant in postOrder where world.isOnCycle(world.declaration(of: variant)) {
+				cycleVariantIndex[Int(variant)] = cycleVariants.count
+				cycleVariants.append(variant)
+			}
+		}
 		// Each place, made after the places its body holds.
 		// Every place a body holds is made before it (`postOrder`), so none reads `.empty`.
 		var places = [GeneratedCode](repeating: .empty, count: world.variantCount)
@@ -516,6 +535,10 @@ struct NodeRecords: Sendable {
 			var fromSendableFunction = Set<VariantID>()
 			var closedOn = Set<VariantID>()
 			for entry in entries[Int(variant)] {
+				if let index = Self.calledVariant(of: entry, cycleVariantIndex: cycleVariantIndex) {
+					children.append(.indented(.place(PlacePlan(code: .empty, record: try Self.callPlaceRecord(callingVariant: index, of: world.declaration(of: cycleVariants[index]), in: world))), by: indentation))
+					continue
+				}
 				switch entry {
 				case let .closer(closingOn: callee):
 					let closedOnDeclaration = world.declaration(of: callee)
@@ -563,8 +586,8 @@ struct NodeRecords: Sendable {
 				functionName: functionNames?.functionName(of: variant),
 				isMadeSendable: isMadeSendable,
 				// Only a function a cycle closes on takes parameters; every other captures what it reads.
-				cycleParameters: body.closedOn.contains(variant) ? cycleParameters(of: variant).map(\.property) : [],
-				callCycleArguments: body.closedOn.contains(variant) ? cycleArguments(of: variant, holding: instancePropertiesAtCall[Int(variant)]) : [],
+				cycleParameters: !isBuiltTwoWays && body.closedOn.contains(variant) ? cycleParameters(of: variant).map(\.property) : [],
+				callCycleArguments: !isBuiltTwoWays && body.closedOn.contains(variant) ? cycleArguments(of: variant, holding: instancePropertiesAtCall[Int(variant)]) : [],
 				instanceProperties: instancePropertiesInFunction[Int(variant)],
 			)
 			records[Int(variant)] = record
@@ -572,6 +595,10 @@ struct NodeRecords: Sendable {
 			typesDeclaredEscaping[Int(variant)] = escaping
 		}
 		let rootBody = try body(of: 0).children
+		self.cycleVariants = try cycleVariants.map { variant in
+			guard case let .built(built) = records[Int(variant)] else { throw NodeRecordRefusal.cycleMemberBuiltTwoWays }
+			return CycleVariantRecord(record: built, isInSendableFamily: built.isSendable || built.property.propertyType.isSendable, labels: [], answers: [])
+		}
 		// Last, so that a world refused for a kind reports that kind first.
 		for declaration in 0..<Int32(declarationCount) where Self.owesFacts(declaration, in: world) {
 			throw NodeRecordRefusal.readAnsweredTwoWays
@@ -589,6 +616,37 @@ struct NodeRecords: Sendable {
 	/// The root's body: a place for each of the root's children, in the order the root builds them, indented as a root's
 	/// statements are.
 	let rootBody: [GeneratedCode]
+
+	/// The bodies of the per-type plan's variants, each a variant on a cycle, which the root's body and theirs call by index
+	/// (`ClosingPlaceRecord.targetVariant`), or none where the root's body holds each place as today's tree builds it.
+	let cycleVariants: [CycleVariantRecord]
+
+	/// The index among `cycleVariantIndex`'s variants of the variant `entry` builds or closes on, or `nil` where it builds
+	/// a place of its own.
+	private static func calledVariant(of entry: BodyEntry, cycleVariantIndex: [Int?]) -> Int? {
+		switch entry {
+		case let .place(callee), let .closer(closingOn: callee):
+			cycleVariantIndex[Int(callee)]
+		}
+	}
+
+	/// The record of a call of the function of the per-type plan's variant at `index`, which builds `declaration`, and
+	/// whose body reads nothing from above as a parameter.
+	private static func callPlaceRecord(callingVariant index: Int, of declaration: DeclarationID, in world: some NodeRecordSources) throws(NodeRecordRefusal) -> PlaceRecord {
+		// Every node a call reaches is built as a property: the root is called by none.
+		guard let property = world.property(of: declaration) else { throw .noInitializer }
+		let instantiable = world.scope(of: declaration).instantiable
+		return .closer(ClosingPlaceRecord(
+			callingVariant: index,
+			property: property,
+			isErased: world.isErased(declaration),
+			isExtension: instantiable.declarationType.isExtension,
+			forwardedProperties: instantiable.dependencies.filter { $0.source == .forwarded }.map(\.property).sorted(),
+			labels: [],
+			answers: [],
+			arguments: [],
+		))
+	}
 
 	/// How many variants have a record, which is every variant but the root's.
 	var recordCount: Int {
