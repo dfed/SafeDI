@@ -174,6 +174,39 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 		#expect(forcersByRoot["Root"] == ["seam call omits a parameter"])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_makesNoNodeRecordsOfAppRoot_whenRootsSeamCallPassesFill() async throws {
+		// `Library`'s seam `Panel` instantiates `Service`, which only `Feature` implements, so `Feature`'s call of `Panel`
+		// fills that hole. The walk of `Root`'s world finds the fill before node records are made, so the forcer is the
+		// walk's, not the kind node records would refuse the world with (`kind fill`).
+		let forcersByRoot = try await treeForcersReported(byModules: [
+			ModuleFixture(
+				name: "Library",
+				packageName: "App",
+				swiftFileContent: [
+					seamFixtureType(named: "Panel", isSeam: true, declarations: ["@Instantiated let service: any Service"]),
+					"""
+					public protocol Service {}
+					""",
+				],
+				dependencies: [],
+			),
+			ModuleFixture(name: "Feature", packageName: "App", swiftFileContent: [
+				"import Library\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let panel: Panel"]),
+				"""
+				import Library
+
+				@Instantiable(fulfillingAdditionalTypes: [(any Service).self])
+				public struct DefaultService: Instantiable, Service {
+				    public init() {}
+				}
+				""",
+			], dependencies: ["Library"]),
+		])
+		#expect(forcersByRoot["Root"] == ["seam call passes a fill"])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]

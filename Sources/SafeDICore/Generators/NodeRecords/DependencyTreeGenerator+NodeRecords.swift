@@ -40,7 +40,10 @@ extension DependencyTreeGenerator {
 	/// `instantiable` is a root of a module with seams that is none of the module's own seams, and what forces its tree
 	/// (`TreeForcer`): the kind node records refused, then the checks of the world's seam calls that read the tree
 	/// (`seamCallChecks(in:)`), then `readersOfEveryTree`. The layout is `nil` wherever anything forces the tree. Unlike
-	/// `nodeRecordsLayout`, every run makes the records of such a root, since the seam world built every root's tree before.
+	/// `nodeRecordsLayout`, every run makes the records of such a root, since the seam world built every root's tree before,
+	/// except where a seam call of the world passes a fill (`SeamCallCheck.passesFill`): node records refuse every such
+	/// world (`NodeRecordRefusal.fill`), so the root goes to its tree without them. That walk only narrows: the records'
+	/// own refusal still judges every other world.
 	/// - Throws: What an initializer's arguments throw, as the tree's construction of the same place throws it.
 	static func seamWorldRootLayout(
 		of instantiable: Instantiable,
@@ -49,7 +52,9 @@ extension DependencyTreeGenerator {
 		readersOfEveryTree: [TreeForcer],
 	) throws -> (layout: NodeRecordsLayout?, treeForcers: [TreeForcer]) {
 		let world = TypeFactsGraph(root: constructionScope, forMockGeneration: false)
-		return try acceptedLayout(of: instantiable, world: world, declaredTypeNames: declaredTypeNames, forcers: seamCallChecks(in: world) + readersOfEveryTree)
+		let checks = seamCallChecks(in: world)
+		guard !checks.contains(.seamCallCheck(.passesFill)) else { return (nil, checks + readersOfEveryTree) }
+		return try acceptedLayout(of: instantiable, world: world, declaredTypeNames: declaredTypeNames, forcers: checks + readersOfEveryTree)
 	}
 
 	/// The layout of `instantiable`'s code from the node records of `world` where `forcers` is empty and the records lay
@@ -69,18 +74,27 @@ extension DependencyTreeGenerator {
 	}
 
 	/// The checks of `world`'s seam calls that read the tree, where no fact answers them yet (`SeamCallCheck`), in
-	/// `SeamCallCheck` order: a call that omits a parameter or takes one on no tier, whose omission of a value the tree
+	/// `SeamCallCheck` order: a call that passes a fill, whose fills `validateFills` judges, a call that omits a parameter
+	/// or takes one on no tier, whose omission of a value the tree
 	/// provides `validateNoSeamTierOmitsProvidedValue` reports, and a call that defers a parameter `@Sendable`, whose
 	/// capture of a wrapper that is not `Sendable` `NonSendableWrapperCapture.capturingSeamType` reports. Each is named
 	/// where any call of the world could make its check fire, whether or not it does.
 	static func seamCallChecks(in world: some NodeRecordSources) -> [TreeForcer] {
+		var passesFill = false
 		var omitsParameter = false
 		var defersSendableParameter = false
-		for seamCall in (0..<Int32(world.declarationCount)).lazy.compactMap({ world.scope(of: $0).seamCall }) {
-			omitsParameter = omitsParameter || !seamCall.omittedParameters.isEmpty || !seamCall.noTierParameters.isEmpty
-			defersSendableParameter = defersSendableParameter || seamCall.parameters.contains { $0.deferral == .deferred(isSendable: true) }
+		for scope in (0..<Int32(world.declarationCount)).lazy.map({ world.scope(of: $0) }) {
+			// The same fact node records refuse a fill on (`refusalsOfBuiltByInitializer(_:in:)`, `seamCallClaim(of:in:)`).
+			passesFill = passesFill || scope.fillsAHole
+			if let seamCall = scope.seamCall {
+				omitsParameter = omitsParameter || !seamCall.omittedParameters.isEmpty || !seamCall.noTierParameters.isEmpty
+				defersSendableParameter = defersSendableParameter || seamCall.parameters.contains { $0.deferral == .deferred(isSendable: true) }
+			}
 		}
 		var checks = [TreeForcer]()
+		if passesFill {
+			checks.append(.seamCallCheck(.passesFill))
+		}
 		if omitsParameter {
 			checks.append(.seamCallCheck(.tierOmitsParameter))
 		}
