@@ -751,7 +751,6 @@ enum GraphFuzzerMultiModuleProperty {
 /// plugin's code so reduced, until no alias binding carries a directive. A path is a module's own when it is under the
 /// module's `Sources/<Module>/` directory, as every fuzzer fixture lays its modules out.
 enum GraphFuzzerModuleInfoLocations {
-
 	/// `code` without the `#sourceLocation` directives that point into a file `moduleName` does not own, nor the
 	/// directive after each that ends it.
 	static func generatedCode(_ code: String, locatedByRunOfModuleNamed moduleName: String) -> String {
