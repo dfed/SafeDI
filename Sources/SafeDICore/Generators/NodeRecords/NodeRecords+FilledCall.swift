@@ -111,6 +111,11 @@ struct FilledCallRecords: Sendable {
 			callerArguments: callerArguments,
 			callerMemoArguments: [:],
 		)
+		// A call some route builds inside a `@Sendable` function calls its dispatchers there, so each of them is `@Sendable`,
+		// and each function their cases lead to, but a fill held in place, a closure of its dispatcher.
+		let keysInsideSendableFunction = world.isBuiltInsideSendableFunction(call)
+			? FillEmissionDecisions.keysReached(from: levels.dispatchers, among: levels.dispatchers).subtracting(decisions.inlinedFillKeys)
+			: []
 		var fills = [Fill]()
 		var seenCaseKeys = Set<String>()
 		for facts in allFacts {
@@ -121,13 +126,13 @@ struct FilledCallRecords: Sendable {
 			else { continue }
 			fills.append(Fill(
 				facts: facts,
-				signature: signature(of: facts, isSendable: decisions.sendableKeys.contains(facts.key)),
+				signature: signature(of: facts, isSendable: decisions.sendableKeys.contains(facts.key) || keysInsideSendableFunction.contains(facts.key)),
 				functionName: functionName,
 				scopeParameterName: scopeParameterName,
 				callerDeclarations: callerSources.visibleDeclarations(facts: facts, call: call, variant: variant),
 			))
 		}
-		let dispatchers = levels.dispatchers.map { DispatcherRecord(dispatcher: $0.dispatcher, parameters: $0.parameters, isSendable: decisions.sendableKeys.contains($0.key)) }
+		let dispatchers = levels.dispatchers.map { DispatcherRecord(dispatcher: $0.dispatcher, parameters: $0.parameters, isSendable: decisions.sendableKeys.contains($0.key) || keysInsideSendableFunction.contains($0.key)) }
 		let dispatcherByKey = Dictionary(dispatchers.map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first })
 		var closureArguments = [ClosureArgumentEntry]()
 		var builtClosures = [BuiltClosure]()

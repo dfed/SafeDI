@@ -247,12 +247,10 @@ extension DependencyTreeGenerator {
 				})
 			}
 			let (treeCode, comparisons) = planned
-			// A root whose tree's body holds nothing is compared nowhere, nor one that fills a place
-			// (`NodeRecordsObservation.holdsAFilledCall`).
-			let comparesText = !NodeRecordsObservation.holdsAFilledCall(nodeRecords.rootBody)
+			// A root whose tree's body holds nothing is compared nowhere.
 			// A hole's one record stands for its place only where one route reaches it (`holesReachedOnSeveralRoutes(in:)`).
 			let holeDifferences = NodeRecords.holesReachedOnSeveralRoutes(in: world).map { "root: node records accept the hole \($0), which more than one route reaches" }
-			let codeDifferences = (laidOutCode.map { !comparesText || $0.spelled() == treeCode.spelled() ? [] : ["root: the code laid out from node records differs from the tree’s"] } ?? []) + fillLevelDifferences + holeDifferences
+			let codeDifferences = (laidOutCode.map { $0.spelled() == treeCode.spelled() ? [] : ["root: the code laid out from node records differs from the tree’s"] } ?? []) + fillLevelDifferences + holeDifferences
 			// A root that keeps its tree's code is still laid out from its records where they differ from the tree's by an
 			// optional parameter's argument, for the comparison alone: a test approves that difference only where the two
 			// texts are equal. A seam's own tree is never laid out here, so the difference fails there.
@@ -332,7 +330,7 @@ extension DependencyTreeGenerator {
 		// Every file counts as the module's own, which decides only where an omission is reported, not whether it is.
 		let omissions = await tree.seamTierOmissions(ofTreeRootedAt: instantiable, isOwnFile: { _ in true })
 		let factsTheRecordsMiss: [(holds: Bool, difference: String)] = [
-			(NodeRecordsObservation.holdsAFilledCall(layout.rootBody) || texts.tree == texts.nodeRecords, "root: the code laid out from node records differs from the tree’s"),
+			(texts.tree == texts.nodeRecords, "root: the code laid out from node records differs from the tree’s"),
 			(captures.isEmpty, "root: the tree’s @Sendable builder functions capture a wrapper, which node records cannot see"),
 			(tree.unpassableCycleLabelsInTree.isEmpty, "root: the tree holds a label no cycle parameter can pass, which node records cannot see"),
 			(omissions.isEmpty, "root: the tree’s seam calls omit a value it provides, which node records cannot see"),
