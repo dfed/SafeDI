@@ -83,6 +83,16 @@ Everything SafeDI produces must be identical on every run over the same inputs: 
 - The generator's own hazards (the fulfilling-instantiable map, a loop over a `Set<Scope>`, choosing a diagnostic by source location) are under "Determinism in the generator" in `.claude/rules/generator-design.md`.
 - **What may follow names.** Generated code and signatures, which graphs are accepted, and which diagnostic is reported never depend on names or order. The order of suggestions inside one message, and a label sort of equivalent parameters (flat `mock()` parameters, overrides, a seam's pass-throughs), may. Fix an order-dependent choice in the change that notices it.
 
+## Growth
+
+`generate`'s work never grows with the number of paths through a graph, and nothing is exponential. Its time and peak memory are at most linear in the declarations and edges it reads, times the number of labels a type receives, plus the size of what it writes, with sorting allowed; what it writes (the `.safedi` file and the generated code) is at most linear in the same. Adopters' graphs are large and every build pays for `generate`, so work that grows with a product of two dimensions of a project, with a power of one, or by a factor with each layer is a defect, a quadratic step as much as an exponential one.
+
+- **A difference a parameter can carry is never a variant.** Where two places build a type alike but for a value, the type is generated once and takes the value; a second copy of its code or its facts is growth with places.
+- **A change that adds iteration proves its growth.** A new loop, walk, memo key or collection in the generator names what it grows with, and its pull request adds the proof: a growth row in `Scripts/generate-time-check.py` whose larger graph multiplies that dimension, or a counted step (`GenerationWork`) with a test that fails when its work grows faster than the dimension does.
+- **Anything else is listed debt or needs the maintainer's approval.** Debt is listed here or as a growth row whose limit is above its larger graph's own multiple, with what removes it. No change raises such a limit or adds a row with one; the change that removes the growth lowers or deletes it.
+- **Listed debt:** a tree emits a node for each path to a type, so an inline tree's code, and the time and memory to write it, grow with the paths (building each type once from node records and per-type facts removes it); a mock root's tree build grows faster than its types; the facts a long chain owes are found again at each link; the layout engine computes a partition twice; a seam's signature is still computed from its tree.
+- "`generate` time grows with the code it generates" in `.claude/rules/generator-design.md` says how a step counts its work.
+
 ## Code Style
 
 - **Compare for meaning through a projection.** A comparison for meaning (settling, the callers' view, a guard hash) uses an explicit projection, never the synthesized `==` or hash of a type that carries diagnostic payload.
