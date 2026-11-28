@@ -93,6 +93,7 @@ struct TypeFactsGeneratorFacts: Sendable {
 			false
 		}
 		callsPublicMock = generator.publicMockCall != nil
+		cycleParameters = generator.cycleParameters.map(\.property)
 	}
 
 	let childCount: Int
@@ -110,6 +111,8 @@ struct TypeFactsGeneratorFacts: Sendable {
 	let constructsWithHandWrittenMock: Bool
 	let callsSeam: Bool
 	let callsPublicMock: Bool
+	/// The parameters of the place's builder function that a cycle closing on it passes, in the function's order.
+	let cycleParameters: [Property]
 }
 
 /// A world's graph beside the places one build of its tree made, for a test to compare (`ConstructionMemoOracle`): each
@@ -128,6 +131,7 @@ public struct TypeFactsReport: Sendable {
 		self.graph = graph
 		self.root = root.instantiable.concreteInstantiable.asSource
 		self.forMockGeneration = forMockGeneration
+		holesArePlaces = graph.holesArePlaces
 		projection = graph.projection
 		world = Self.projection(of: graph)
 		var variantCounts = [Int](repeating: 0, count: graph.declarationCount)
@@ -136,6 +140,7 @@ public struct TypeFactsReport: Sendable {
 		}
 		variantCountsByNode = variantCounts
 		variantNodes = (0..<graph.variantCount).map { Int(graph.declaration(of: VariantID($0))) }
+		variantFamilies = (0..<graph.variantCount).map { "\(graph.family(of: VariantID($0)))" }
 		variantCalls = (0..<graph.variantCount).map { graph.calls(of: VariantID($0)).map(Int.init) }
 		variantMadeAgainCalls = (0..<graph.variantCount).map { graph.madeAgainCalls(of: VariantID($0)).map(Int.init) }
 		variantIsCalledOnce = (0..<graph.variantCount).map { graph.isCalledOnce(VariantID($0)) }
@@ -161,6 +166,7 @@ public struct TypeFactsReport: Sendable {
 			}
 		}
 		loopMembersSharedApart = graph.loopMembersSharedApart.map(Int.init)
+		variantParameters = (0..<graph.variantCount).map { graph.parameters(of: VariantID($0)).map(\.property.spelledWithoutAny) }
 		columnElementCount = graph.columnElementCount
 		edgeCount = graph.graph.edgeCount
 		func spelled(_ row: BitRows, of index: Int, _ spelling: (Int32) -> String) -> [String] {
@@ -283,6 +289,7 @@ public struct TypeFactsReport: Sendable {
 			constructsWithHandWrittenMock = facts.constructsWithHandWrittenMock
 			callsSeam = facts.callsSeam
 			callsPublicMock = facts.callsPublicMock
+			cycleParameters = facts.cycleParameters.map(\.spelledWithoutAny)
 		}
 
 		public let childCount: Int
@@ -298,6 +305,7 @@ public struct TypeFactsReport: Sendable {
 		public let constructsWithHandWrittenMock: Bool
 		public let callsSeam: Bool
 		public let callsPublicMock: Bool
+		public let cycleParameters: [String]
 	}
 
 	public struct Node: Sendable {
@@ -406,6 +414,8 @@ public struct TypeFactsReport: Sendable {
 	public let columnElementCount: Int
 	public let edgeCount: Int
 	public let forMockGeneration: Bool
+	/// Whether the world's holes are places: a seam's own tree, or a public mock's.
+	public let holesArePlaces: Bool
 	/// The graph as text, a line per node (`TypeFactsGraph.projection`).
 	public let projection: String
 	public let nodes: [Node]
@@ -417,6 +427,8 @@ public struct TypeFactsReport: Sendable {
 	public let variantCountsByNode: [Int]
 	/// Each variant's node.
 	public let variantNodes: [Int]
+	/// Each variant's family (`VariantFamily`), spelled as its case.
+	public let variantFamilies: [String]
 	/// The variant each edge of a variant's node calls, in edge order.
 	public let variantCalls: [[Int]]
 	/// The variant each made-again call of a variant calls, in the order its node rebinds the members.
@@ -432,6 +444,8 @@ public struct TypeFactsReport: Sendable {
 	public let variantMadeAgainCallSources: [[[String]]]
 	/// The loop members whose parents' loops make different members again.
 	public let loopMembersSharedApart: [Int]
+	/// The parameters each variant's function takes for what its subtree reads from above (`TypeFactsWorld.parameters(of:)`).
+	public let variantParameters: [[String]]
 
 	/// The world read through its interface only, as text: what a consumer of the frozen accessors sees.
 	private static func projection(of world: some TypeFactsWorld) -> String {
@@ -504,7 +518,7 @@ extension ConstructionLog.Read {
 			"\(ReadChannel.optional.name)(\(property.label))"
 		case let .passesNil(property, _, _):
 			"\(ReadChannel.mock.name)(\(property.label))"
-		case .declarationClosedOn, .cycleParameterContext:
+		case .declarationClosedOn, .cycleParameterContext, .cycleArgumentBinding:
 			nil
 		}
 	}

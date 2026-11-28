@@ -412,12 +412,13 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 		    }
 		}
 		"""])
-		// `Screen`'s own tree reads its deferred parameter through its memo, which node records read as its tree does; a
-		// seam's own tree is compared, not laid out.
+		// `Screen`'s own tree reads its deferred parameter through its memo, which a record would read from its variant's
+		// key; a seam's root's keys are not yet seeded from its parameters, so its world is refused as `lazy` until they
+		// are.
 		#expect(reports.map(\.root) == ["Screen", "Root"])
-		#expect(reports.map(\.refusal) == ["notLaidOut", nil])
+		#expect(reports.map(\.refusal) == ["lazy", nil])
 		#expect(reports.map(\.isLaidOutFromNodeRecords) == [false, true])
-		#expect(reports.map(\.recordCount) == [1, 2])
+		#expect(reports.map(\.recordCount) == [0, 2])
 		#expect(reports.flatMap(\.differences) == [])
 	}
 
@@ -517,10 +518,10 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_refusesWorldAsCallsAnswerAVariantApart_whenOneVariantsRenameReadsAValueUnderOneParentAndAWrapperUnderTheOther() async throws {
+	mutating func generate_laysOutRootFromNodeRecords_whenOneVariantsRenameReadsAValueUnderOneParentAndAWrapperUnderTheOther() async throws {
 		// `Reader` renames `x`, which `ValueParent` declares as an `X` and `LazyParent` as a `LazilyInstantiated<X>`: one
-		// variant whose rename is bound from the value under one parent and from the wrapper's instance under the other.
-		// Whichever parent the root builds first, the world keeps its tree.
+		// rename keyed by the form that answers it, so it has a variant beneath each parent, and each variant's record binds
+		// it as its own key says. Whichever parent the root builds first, the root is laid out from its records.
 		var everyRefusal = [[String]]()
 		for parents in [["lazyParent: LazyParent", "valueParent: ValueParent"], ["valueParent: ValueParent", "lazyParent: LazyParent"]] {
 			let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
@@ -620,11 +621,11 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 				"""
 			}
 			#expect(output.dependencyTreeFiles == ["Root+SafeDI.swift": expectedCode])
-			#expect(reports.map(\.refusal) == ["callsAnswerAVariantApart"])
+			#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
+			#expect(reports.flatMap(\.differences) == [])
 			everyRefusal += reports.map(\.everyRefusal)
 		}
-		// The rename beneath `LazyParent` reads the wrapper's instance as the tree's rule reads it, so it holds no `lazy`.
-		#expect(everyRefusal == [["callsAnswerAVariantApart"], ["callsAnswerAVariantApart"]])
+		#expect(everyRefusal == [[], []])
 	}
 
 	@Test

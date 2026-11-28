@@ -21,7 +21,7 @@
 extension NodeRecords {
 	/// Every kind `builtByInitializer` does not make that `declaration` is of, in the order they are checked: the refusals
 	/// another kind's claim may discharge.
-	static func refusalsOfBuiltByInitializer(_ declaration: DeclarationID, in world: some NodeRecordSources) -> [NodeRecordRefusal] {
+	static func refusalsOfBuiltByInitializer(_ declaration: DeclarationID, in world: some NodeRecordVariantFacts) -> [NodeRecordRefusal] {
 		var refusals = [NodeRecordRefusal]()
 		// Every other construction is a call of another module's code, a hand-written mock or a fill, which another kind
 		// makes or node records refuse.
@@ -86,7 +86,7 @@ extension NodeRecords {
 	/// is passed `nil` for `unavailableProperties`, and whose line constructing the type ends with `lineEnd`. Whether the
 	/// place is erased, is `@Sendable` and always declares its builder function, it reads of the node.
 	/// - Parameter lazilyInstantiatedInstanceProperties: The by-value properties the node's type receives as the instance
-	///   of a lazily instantiated property declared above it (`DeclarationsAnsweringReads`).
+	///   of a lazily instantiated property declared above it, as the variant's key says (`lazilyInstantiatedInstanceProperties(of:variant:in:)`).
 	/// - Parameter construction: Another function of the type that builds the node, with what calls it, for a kind that
 	///   builds a node otherwise than with its type's initializer; `nil` for the initializer.
 	/// - Parameter typeFunctionReturns: What the node's function returns, where it has one and a kind's construction can
@@ -95,22 +95,24 @@ extension NodeRecords {
 	///   property; `nil` for the world's.
 	/// - Parameter argumentsOfOtherValues: The construction's arguments no dependency fulfills whose values a kind sets
 	///   (`BuiltPlaceRecord.argumentValues`), each with its position among the arguments the call passes.
-	/// - Parameter uncoveredArgumentNames: The name each dependency the node's type instantiates that its scope does not
-	///   build is read by, by its label, where a mock names the parameter it takes for it apart from the label.
+	/// - Parameter argumentNamesApart: The name each dependency of the node's type is read by, by its property, where a mock
+	///   binds the value under another name than its label and passes it by that name: a dependency the type instantiates
+	///   that its scope does not build, whose parameter of `mock()` is named apart, or a receive of a lazy wrapper `mock()`
+	///   makes of an instance it takes.
 	/// - Parameter alwaysDeclaresFunction: Whether a kind builds the node in a function of its own whatever its body holds.
 	/// - Parameter declaresFunction: Whether the caller's kind begins the builder function with a statement of its own, so
 	///   that a constant declares it too.
 	static func builtByInitializerRecord(
 		of declaration: DeclarationID,
 		variant _: VariantID,
-		in world: some NodeRecordSources,
+		in world: some NodeRecordVariantFacts,
 		unavailableProperties: Set<Property> = [],
 		lazilyInstantiatedInstanceProperties: Set<Property>,
 		construction: (function: Initializer, target: ConstructionTarget)? = nil,
 		typeFunctionReturns: TypeDescription? = nil,
 		boundProperty: Property? = nil,
 		argumentsOfOtherValues: [(position: Int, argument: Initializer.Argument)] = [],
-		uncoveredArgumentNames: [String: String] = [:],
+		argumentNamesApart: [Property: String] = [:],
 		alwaysDeclaresFunction: Bool = false,
 		typesDeclaredEscaping: Set<TypeDescription>,
 		children: [GeneratedCode],
@@ -135,8 +137,8 @@ extension NodeRecords {
 			(false, false)
 		}
 		var reads = arguments.map { argument, dependency in
-			if case .instantiated = dependency.source, let name = uncoveredArgumentNames[dependency.property.label] {
-				// A dependency the mock cannot build reads the parameter `mock()` takes for it under its name apart.
+			if let name = argumentNamesApart[dependency.property] {
+				// The value `mock()` binds under its name apart.
 				PlaceRead(argumentLabel: argument.label, label: name, property: Property(label: name, typeDescription: dependency.property.typeDescription), source: .binding(label: name))
 			} else {
 				PlaceRead(argumentLabel: argument.label, label: dependency.property.label, property: dependency.property, source: argument.source)

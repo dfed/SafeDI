@@ -103,15 +103,18 @@ extension NodeRecords {
 	}
 
 	/// Where the children of `parent`, a node of a mock root's world, read their overrides: the local a node built in a
-	/// `@Sendable` function captures, and otherwise the overrides `parent`'s body was handed, which the root's body reads
-	/// of `mock()`'s own.
-	static func mockOverridesOfChildren(of parent: DeclarationID, in world: some NodeRecordSources) -> ValuePath {
+	/// `@Sendable` function captures; the configuration a function that takes the places `slots` enter was handed with
+	/// them (`mockEnteredConfiguration`); and otherwise the overrides `parent`'s body was handed, which the root's body
+	/// reads of `mock()`'s own.
+	static func mockOverridesOfChildren(of parent: DeclarationID, in world: some NodeRecordSources, slots: MockEnteredSlots?) -> ValuePath {
 		if parent != 0, isBuiltInSendableFunction(parent, in: world), capturesOverridesLocal(parent, in: world), let property = world.property(of: parent) {
 			.read(mockOverridesLocal(
 				ofNodeLabeled: property.label,
 				typed: mockConfigurationType(of: world.scope(of: parent).instantiable),
 				isConfigured: true,
 			))
+		} else if let slots, takesMockEnteredPlaces(parent, in: slots) {
+			mockEnteredConfiguration
 		} else {
 			.passedArgument(ReservedName.mockOverridesParameterName)
 		}
@@ -128,7 +131,7 @@ extension NodeRecords {
 	/// The place that binds `record`'s override before its `@Sendable` function, where `record` is the record of a mock
 	/// root's node built in one (`mockOverrideSlot(of:labeled:typed:in:hasFunction:handsOverridesToChildren:isSendable:)`),
 	/// and `nil` for any other record: the field of its parent's overrides under its label, built in place.
-	static func mockOverridesBindingPlace(of declaration: DeclarationID, record: PlaceRecord, in world: some NodeRecordSources) -> BuiltPlaceRecord? {
+	static func mockOverridesBindingPlace(of declaration: DeclarationID, record: PlaceRecord, in world: some NodeRecordSources, slots: MockEnteredSlots?) -> BuiltPlaceRecord? {
 		guard world.isMockWorld, case let .built(built) = record, built.isSendable || isWrapperSentToActor(declaration, in: world) else { return nil }
 		let instantiable = world.scope(of: declaration).instantiable
 		let isConfigured = isConfigured(declaration, in: world)
@@ -153,16 +156,16 @@ extension NodeRecords {
 			children: [],
 			node: PlanNode(),
 		)
-		binding.constructionValue = ConstructionValue(value: mockConfigurationField(of: declaration, named: built.property.label, in: world), resultWrapper: nil)
+		binding.constructionValue = ConstructionValue(value: mockConfigurationField(of: declaration, named: built.property.label, in: world, slots: slots), resultWrapper: nil)
 		return binding
 	}
 
 	/// Whether a node of a mock root's world has a configuration, as its record's override type says
-	/// (`mockConstructionRecord(of:variant:in:unavailableProperties:lazilyInstantiatedInstanceProperties:receivesBoundAgain:typesDeclaredEscaping:children:)`):
+	/// (`mockConstructionRecord(of:variant:in:unavailableProperties:lazilyInstantiatedInstanceProperties:receivesBoundAgain:wrapperArgumentNames:typesDeclaredEscaping:children:)`):
 	/// whether it builds a child with an override of its own (`buildsMockChildWithOverride(_:in:)`), or passes its
 	/// construction a field of its configuration (`mockConfigurationFieldArguments(of:in:)`). A node whose children are
 	/// all renames has none, so the local its override is bound to is named as a closure's.
-	private static func isConfigured(_ declaration: DeclarationID, in world: some NodeRecordSources) -> Bool {
+	static func isConfigured(_ declaration: DeclarationID, in world: some NodeRecordSources) -> Bool {
 		buildsMockChildWithOverride(declaration, in: world) || !mockConfigurationFieldArguments(of: declaration, in: world).isEmpty
 	}
 

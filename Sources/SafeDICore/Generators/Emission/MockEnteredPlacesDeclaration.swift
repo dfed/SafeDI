@@ -18,69 +18,66 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-/// The declaration of the places a mock root's functions enter (`ReservedName.mockEnteredPlacesTypeName`), from its
-/// slots (`NodeRecords+MockEnteredSlots.swift`).
+/// The declarations a mock root's functions on its tree's cycles enter places with (`NodeRecords+MockCycle.swift`).
 extension MockEnteredSlot {
-	/// The lines, unindented, of the struct a mock root declares once for the functions on its tree's cycles. A value
-	/// of it is the places entered along one path: a member per slot of `slots`, in their order, then one per
-	/// nearest-of-type member, in the order `slots` first names each. `Place` holds the configuration a place was
-	/// entered with and the places entered above it, so a function that finds its place there returns to both. A value
-	/// with no place entered is `.init()`, and `entering(<slot>:)` returns the value with one more place entered, which
-	/// is also the nearest of its type. `entering(<nearest-of-type member>:)` returns the value with that member alone
-	/// set, for a function on no cycle whose configuration is the nearest of its type for a slot beneath it.
+	/// The lines, unindented, a mock root writes once before its functions where its tree holds a cycle: an enum of the
+	/// places entered along one path, nearest first; a struct that pairs a configuration with those places, which a
+	/// function on a cycle is handed in one argument; and the value of that struct `mock()`'s own body hands on, with no
+	/// place entered.
 	///
-	/// The text follows `slots` and nothing else, so one list is one text on every run.
-	/// - Parameter isSendable: Whether a function that is handed the places is `@Sendable`. The struct and `Place` are
-	///   then `Sendable`, which the compiler proves from their stored properties, and `nonisolated`, so that a
-	///   `nonisolated` function can enter a place in a module whose declarations default to the main actor.
-	static func mockEnteredPlacesDeclaration(slots: [MockEnteredSlot], isSendable: Bool) -> [String] {
+	/// A place holds the slot it was entered under, `nil` for a place entered only as the nearest of its type, and its
+	/// configuration, boxed in the struct with no places so that a cast to the struct finds a place of one configuration
+	/// type alone: a cast to a configuration type that is optional would find a `nil` of any other. `entering` returns
+	/// the place entered before under a slot, with the places as they were when it was entered, and otherwise enters a new
+	/// one, with the nearest configuration of its type where told to look for one, else the configuration handed.
+	///
+	/// The text follows the three arguments and nothing else, so it is one text on every run.
+	/// - Parameter isSendable: Whether a function that is handed the places is `@Sendable`. The enum and the struct are
+	///   then `Sendable`, a place holds `any Sendable`, and both are `nonisolated`, so that a `nonisolated` function can
+	///   enter a place in a module whose declarations default to the main actor.
+	/// - Parameter entersNearest: Whether some function on no cycle enters the nearest place of its type alone.
+	/// - Parameter passes: Whether some function only hands the places on.
+	static func mockEnteredPlacesDeclaration(isSendable: Bool, entersNearest: Bool, passes: Bool) -> [String] {
 		let indent = ScopeGenerator.standardIndent
-		let typeName = ReservedName.mockEnteredPlacesTypeName
-		func placeType(of slot: MockEnteredSlot) -> String {
-			"Place<\(slot.configurationType.asSource).\(ScopeGenerator.mockConfigurationStructName)>"
-		}
+		let places = ReservedName.mockEnteredPlacesTypeName
+		let entered = ReservedName.mockEnteredTypeName
+		let configuration = ReservedName.mockEnteredConfigurationMemberName
+		let nearestOfType = ReservedName.mockEnteringNearestOfTypeArgumentLabel
+		let handed = isSendable ? "<Handed: Sendable>" : "<Handed>"
 		var lines = [
-			isSendable ? "nonisolated struct \(typeName): Sendable {" : "struct \(typeName) {",
-			isSendable ? "\(indent)nonisolated final class Place<Configuration: Sendable>: Sendable {" : "\(indent)final class Place<Configuration> {",
-			"\(indent)\(indent)let configuration: Configuration",
-			"\(indent)\(indent)let enteredAbove: \(typeName)",
-			"\(indent)\(indent)init(_ configuration: Configuration, above enteredAbove: \(typeName)) {",
-			"\(indent)\(indent)\(indent)self.configuration = configuration",
-			"\(indent)\(indent)\(indent)self.enteredAbove = enteredAbove",
+			isSendable ? "nonisolated indirect enum \(places): Sendable {" : "indirect enum \(places) {",
+			"\(indent)case none",
+			"\(indent)case entered(slot: String?, entered: \(isSendable ? "any Sendable" : "Any"), above: \(places))",
+			"}",
+			isSendable ? "nonisolated struct \(entered)<Configuration: Sendable>: Sendable {" : "struct \(entered)<Configuration> {",
+			"\(indent)let \(configuration): Configuration",
+			"\(indent)var places = \(places).none",
+			"\(indent)func \(ReservedName.mockEnteringFunctionName)\(handed)(_ slot: String, _ handed: Handed, \(nearestOfType): Bool = false) -> \(entered)<Handed> {",
+			"\(indent)\(indent)var nearest: \(entered)<Handed>?",
+			"\(indent)\(indent)var above = places",
+			"\(indent)\(indent)while case let .entered(enteredSlot, entered, next) = above {",
+			"\(indent)\(indent)\(indent)if enteredSlot == slot || \(nearestOfType) && nearest == nil, let entered = entered as? \(entered)<Handed> {",
+			"\(indent)\(indent)\(indent)\(indent)if enteredSlot == slot { return .init(\(configuration): entered.\(configuration), places: above) }",
+			"\(indent)\(indent)\(indent)\(indent)nearest = entered",
+			"\(indent)\(indent)\(indent)}",
+			"\(indent)\(indent)\(indent)above = next",
 			"\(indent)\(indent)}",
+			"\(indent)\(indent)let entered = \(entered)<Handed>(\(configuration): nearest?.\(configuration) ?? handed)",
+			"\(indent)\(indent)return .init(\(configuration): entered.\(configuration), places: .entered(slot: slot, entered: entered, above: places))",
 			"\(indent)}",
 		]
-		for slot in slots {
-			lines.append("\(indent)var \(slot.name): \(placeType(of: slot))?")
-		}
-		// Each nearest-of-type member once, with the first slot that names it, whose type is every such slot's.
-		var nearestOfTypeMembers = [(name: String, slot: MockEnteredSlot)]()
-		var nearestOfTypeSlotNames = Set<String>()
-		for slot in slots {
-			guard let nearestOfTypeSlotName = slot.nearestOfTypeSlotName, nearestOfTypeSlotNames.insert(nearestOfTypeSlotName).inserted else { continue }
-			nearestOfTypeMembers.append((name: nearestOfTypeSlotName, slot: slot))
-		}
-		for member in nearestOfTypeMembers {
-			lines.append("\(indent)var \(member.name): \(placeType(of: member.slot))?")
-		}
-		for slot in slots {
-			lines.append("\(indent)func entering(\(slot.name.spelledAsArgumentLabel) place: \(placeType(of: slot))) -> Self {")
-			lines.append("\(indent)\(indent)var entered = self")
-			lines.append("\(indent)\(indent)entered.\(slot.name) = place")
-			if let nearestOfTypeSlotName = slot.nearestOfTypeSlotName {
-				lines.append("\(indent)\(indent)entered.\(nearestOfTypeSlotName) = place")
-			}
-			lines.append("\(indent)\(indent)return entered")
+		if entersNearest {
+			lines.append("\(indent)func \(ReservedName.mockEnteringNearestFunctionName)\(handed)(_ handed: Handed) -> \(entered)<Handed> {")
+			lines.append("\(indent)\(indent).init(\(configuration): handed, places: .entered(slot: nil, entered: \(entered)<Handed>(\(configuration): handed), above: places))")
 			lines.append("\(indent)}")
 		}
-		for member in nearestOfTypeMembers {
-			lines.append("\(indent)func entering(\(member.name.spelledAsArgumentLabel) place: \(placeType(of: member.slot))) -> Self {")
-			lines.append("\(indent)\(indent)var entered = self")
-			lines.append("\(indent)\(indent)entered.\(member.name) = place")
-			lines.append("\(indent)\(indent)return entered")
+		if passes {
+			lines.append("\(indent)func \(ReservedName.mockPassingFunctionName)\(handed)(_ handed: Handed) -> \(entered)<Handed> {")
+			lines.append("\(indent)\(indent).init(\(configuration): handed, places: places)")
 			lines.append("\(indent)}")
 		}
 		lines.append("}")
+		lines.append("let \(ReservedName.mockEnteredPlacesParameterName) = \(entered)(\(configuration): ())")
 		return lines
 	}
 }

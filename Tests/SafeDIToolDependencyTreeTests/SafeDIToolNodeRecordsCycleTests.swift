@@ -376,8 +376,9 @@ struct SafeDIToolNodeRecordsCycleTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_keepsTheTreesLayout_whenTypeBetweenCycleMemberAndCloserDeclaresLabelTheCycleReceives() async throws {
-		// `Step`, between `Screen`'s place and the call that closes the cycle on it, declares `session`, which `Screen` receives.
+	mutating func generate_laysOutRootAsTheTreeDoes_whenTheFactsAnswerTheParametersOfTheFunctionACycleClosesOn() async throws {
+		// `Step`, between `Screen`'s place and the call that closes the cycle on it, declares `session`, which `Screen` receives,
+		// so `Screen`'s function takes it, as the facts answer.
 		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -433,7 +434,7 @@ struct SafeDIToolNodeRecordsCycleTests: ~Copyable {
 			}
 			""",
 		])
-		#expect(reports.map(\.refusal) == ["cycleTakesParameters"])
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
 	}
 
 	@Test
@@ -695,6 +696,279 @@ struct SafeDIToolNodeRecordsCycleTests: ~Copyable {
 			""",
 		])
 		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsTheTreesLayout_whenCallReachesAnotherVariantOfDeclarationOnThePath() async throws {
+		// `Root` declares `x` lazily and `Mid` declares it by value, so `Mid`'s call of `A` reaches another variant of `A`'s
+		// declaration than `Root`'s, where today's tree closes the cycle on `Root`'s place of it.
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true) public final class Root: Instantiable {
+					    @Instantiated let x: LazilyInstantiated<X>
+					    @Instantiated let aBuilder: Instantiator<A>
+					    public init(x: LazilyInstantiated<X>, aBuilder: Instantiator<A>) {
+					        self.x = x
+					        self.aBuilder = aBuilder
+					    }
+					}
+
+					@Instantiable public final class A: Instantiable {
+					    @Instantiated let midBuilder: Instantiator<Mid>
+					    @Instantiated let dBuilder: Instantiator<D>
+					    public init(midBuilder: Instantiator<Mid>, dBuilder: Instantiator<D>) {
+					        self.midBuilder = midBuilder
+					        self.dBuilder = dBuilder
+					    }
+					}
+
+					@Instantiable public final class Mid: Instantiable {
+					    @Instantiated let x: X
+					    @Instantiated let aBuilder: Instantiator<A>
+					    public init(x: X, aBuilder: Instantiator<A>) {
+					        self.x = x
+					        self.aBuilder = aBuilder
+					    }
+					}
+
+					@Instantiable public final class D: Instantiable {
+					    @Received let x: X
+					    public init(x: X) { self.x = x }
+					}
+
+					@Instantiable public final class X: Instantiable {
+					    public init() {}
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_x() -> X {
+			            X()
+			        }
+			        let x = LazilyInstantiated<X>(__safeDI_x)
+			        func __safeDI_aBuilder(x: LazilyInstantiated<X>) -> A {
+			            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
+			            let dBuilder = Instantiator<D> {
+			                __safeDI_dBuilder(x: x)
+			            }
+			            return A(midBuilder: midBuilder, dBuilder: dBuilder)
+			        }
+			        func __safeDI_midBuilder() -> Mid {
+			            let x = X()
+			            let aBuilder = Instantiator<A> {
+			                __safeDI_aBuilder(x: LazilyInstantiated<X> { x })
+			            }
+			            return Mid(x: x, aBuilder: aBuilder)
+			        }
+			        func __safeDI_dBuilder(x: LazilyInstantiated<X>) -> D {
+			            D(x: x.instance)
+			        }
+			        let aBuilder = Instantiator<A> {
+			            __safeDI_aBuilder(x: x)
+			        }
+			        self.init(x: x, aBuilder: aBuilder)
+			    }
+			}
+			""",
+		])
+		#expect(reports.map(\.refusal) == ["cycleVariantsPartitionApart"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsTheTreesLayout_whenSharedPlaceBuildsAnotherVariantOfDeclarationOnThePath() async throws {
+		// `Root` builds `Mid` first, whose tree builds the variant of `A` that reads `Mid`'s `x`. `Root`'s `aBuilder` then
+		// reaches `Mid`'s shared place beneath its own variant of `A`, where today's tree closes the cycle on that place.
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true) public final class Root: Instantiable {
+					    @Instantiated let x: LazilyInstantiated<X>
+					    @Instantiated let midBuilder: Instantiator<Mid>
+					    @Instantiated let aBuilder: Instantiator<A>
+					    public init(x: LazilyInstantiated<X>, midBuilder: Instantiator<Mid>, aBuilder: Instantiator<A>) {
+					        self.x = x
+					        self.midBuilder = midBuilder
+					        self.aBuilder = aBuilder
+					    }
+					}
+
+					@Instantiable public final class A: Instantiable {
+					    @Instantiated let midBuilder: Instantiator<Mid>
+					    @Instantiated let dBuilder: Instantiator<D>
+					    public init(midBuilder: Instantiator<Mid>, dBuilder: Instantiator<D>) {
+					        self.midBuilder = midBuilder
+					        self.dBuilder = dBuilder
+					    }
+					}
+
+					@Instantiable public final class Mid: Instantiable {
+					    @Instantiated let x: X
+					    @Instantiated let aBuilder: Instantiator<A>
+					    public init(x: X, aBuilder: Instantiator<A>) {
+					        self.x = x
+					        self.aBuilder = aBuilder
+					    }
+					}
+
+					@Instantiable public final class D: Instantiable {
+					    @Received let x: X
+					    public init(x: X) { self.x = x }
+					}
+
+					@Instantiable public final class X: Instantiable {
+					    public init() {}
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_x() -> X {
+			            X()
+			        }
+			        let x = LazilyInstantiated<X>(__safeDI_x)
+			        func __safeDI_midBuilder() -> Mid {
+			            let x = X()
+			            let aBuilder = Instantiator<A> {
+			                __safeDI_aBuilder(x: x)
+			            }
+			            return Mid(x: x, aBuilder: aBuilder)
+			        }
+			        func __safeDI_aBuilder(x: X) -> A {
+			            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
+			            let dBuilder = Instantiator<D> {
+			                __safeDI_dBuilder(x: LazilyInstantiated<X> { x })
+			            }
+			            return A(midBuilder: midBuilder, dBuilder: dBuilder)
+			        }
+			        func __safeDI_dBuilder(x: LazilyInstantiated<X>) -> D {
+			            D(x: x.instance)
+			        }
+			        let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
+			        func __safeDI_aBuilder_(x: LazilyInstantiated<X>) -> A {
+			            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder_)
+			            let dBuilder = Instantiator<D> {
+			                __safeDI_dBuilder(x: x)
+			            }
+			            return A(midBuilder: midBuilder, dBuilder: dBuilder)
+			        }
+			        func __safeDI_midBuilder_() -> Mid {
+			            let x = X()
+			            let aBuilder = Instantiator<A> {
+			                __safeDI_aBuilder_(x: LazilyInstantiated<X> { x })
+			            }
+			            return Mid(x: x, aBuilder: aBuilder)
+			        }
+			        let aBuilder = Instantiator<A> {
+			            __safeDI_aBuilder_(x: x)
+			        }
+			        self.init(x: x, midBuilder: midBuilder, aBuilder: aBuilder)
+			    }
+			}
+			""",
+		])
+		#expect(reports.map(\.refusal) == ["cycleVariantsPartitionApart"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsTheTreesLayout_whenSharedPlaceBuildsTwinOfPlaceOnThePath() async throws {
+		// `Root` builds `Second` first, whose `model` is on the cycle through `secondBuilder`. `First`'s lazy `model`, its
+		// twin, then reaches `secondBuilder`'s shared place, where today's tree closes the cycle on the lazy `model`.
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true) public final class Root: Instantiable {
+					    @Instantiated let secondBuilder: Instantiator<Second>
+					    @Instantiated let firstBuilder: Instantiator<First>
+					    public init(secondBuilder: Instantiator<Second>, firstBuilder: Instantiator<First>) {
+					        self.secondBuilder = secondBuilder
+					        self.firstBuilder = firstBuilder
+					    }
+					}
+
+					@Instantiable public final class First: Instantiable {
+					    @Instantiated let theme: Theme
+					    @Instantiated let model: LazilyInstantiated<Model>
+					    public init(theme: Theme, model: LazilyInstantiated<Model>) {
+					        self.theme = theme
+					        self.model = model
+					    }
+					}
+
+					@Instantiable public final class Second: Instantiable {
+					    @Instantiated let theme: Theme
+					    @Instantiated let model: Model
+					    public init(theme: Theme, model: Model) {
+					        self.theme = theme
+					        self.model = model
+					    }
+					}
+
+					@Instantiable public final class Model: Instantiable {
+					    @Received let theme: Theme
+					    @Instantiated let secondBuilder: Instantiator<Second>
+					    public init(theme: Theme, secondBuilder: Instantiator<Second>) {
+					        self.theme = theme
+					        self.secondBuilder = secondBuilder
+					    }
+					}
+
+					@Instantiable public final class Theme: Instantiable {
+					    public init() {}
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_secondBuilder() -> Second {
+			            let theme = Theme()
+			            let model: Model = __safeDI_model(theme: theme)
+			            return Second(theme: theme, model: model)
+			        }
+			        func __safeDI_model(theme: Theme) -> Model {
+			            let secondBuilder = Instantiator<Second>(__safeDI_secondBuilder)
+			            return Model(theme: theme, secondBuilder: secondBuilder)
+			        }
+			        let secondBuilder = Instantiator<Second>(__safeDI_secondBuilder)
+			        func __safeDI_firstBuilder() -> First {
+			            let theme = Theme()
+			            let model = LazilyInstantiated<Model> {
+			                __safeDI_model(theme: theme)
+			            }
+			            return First(theme: theme, model: model)
+			        }
+			        let firstBuilder = Instantiator<First>(__safeDI_firstBuilder)
+			        self.init(secondBuilder: secondBuilder, firstBuilder: firstBuilder)
+			    }
+			}
+			""",
+		])
+		#expect(reports.map(\.refusal) == ["cycleVariantsPartitionApart"])
 	}
 
 	@Test

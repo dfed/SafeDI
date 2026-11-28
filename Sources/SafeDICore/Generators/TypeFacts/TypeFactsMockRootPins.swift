@@ -65,7 +65,7 @@ struct TypeFactsMockRootPins: Sendable {
 				declaredLabelsByNode.append([])
 				continue
 			}
-			requiredByNode.append(DependencyTreeGenerator.propertiesReadByRequiredReceivesFromAbove(of: node.scope).map { ($0.label, pinSets.id(of: $0.propertiesRead)) })
+			requiredByNode.append(DependencyTreeGenerator.propertiesReadByRequiredReceivesFromAbove(of: node.scope.instantiable, publicMockCall: node.scope.publicMockCall).map { ($0.label, pinSets.id(of: $0.propertiesRead)) })
 			onlyIfAvailableByNode.append(DependencyTreeGenerator.onlyIfAvailableReceivesFromAbove(of: node.scope))
 			declaredLabelsByNode.append(DependencyTreeGenerator.labelsDeclared(by: node.scope))
 		}

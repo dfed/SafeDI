@@ -26,7 +26,7 @@ import Testing
 
 /// The mock root's pins as the per-type facts make them from the graph (`TypeFactsMockRootPins`): each variant of a mock's
 /// world passes `nil` to the receives only if available a required receive of their label pins, and every place of the
-/// tree passes `nil` to exactly its variant's (check 33).
+/// tree passes `nil` to exactly its variant's (check 36).
 struct SafeDIToolTypeFactsMockRootPinsTests: ~Copyable {
 	// MARK: Initialization
 
@@ -420,10 +420,10 @@ struct SafeDIToolTypeFactsMockRootPinsTests: ~Copyable {
 		return passedNil
 	}
 
-	/// Check 33, as every tree runs it: each place passes `nil` to exactly what its variant pins.
+	/// Check 36, as every tree runs it: each place passes `nil` to exactly what its variant pins.
 	private func expectPlacesPassNilAsTheirVariants(in report: TypeFactsReport) {
 		let result = TypeFactsChecks.findings(of: report)
-		#expect(result.comparedByCheck[33, default: 0] > 0, "\(report.world)")
-		#expect(result.findingsByCheck[33] == nil, "\(result.findingsByCheck[33] ?? []): \(report.world)")
+		#expect(result.comparedByCheck[36, default: 0] > 0, "\(report.world)")
+		#expect(result.findingsByCheck[36] == nil, "\(result.findingsByCheck[36] ?? []): \(report.world)")
 	}
 }

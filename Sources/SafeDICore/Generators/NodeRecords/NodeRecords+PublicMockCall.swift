@@ -80,7 +80,7 @@ extension NodeRecords {
 	/// (`TypeFactsWorld.sources(ofCall:of:)`), followed up through each call that passes its caller's answer through. A
 	/// declaration still being built, a lazy or optional form, or no declaration at all (where a mock binds its own
 	/// override of the value, which the root's body answers) is a shape this stage does not make. Calls that disagree are
-	/// among these, since every call that does not hand a declaration refuses, so none is `nodeHasSeveralVariants`.
+	/// among these, since every call that does not hand a declaration refuses.
 	private static func passedOnlyIfAvailable(
 		_ dependency: Dependency,
 		by declaration: DeclarationID,
@@ -120,6 +120,7 @@ extension NodeRecords {
 		variant: VariantID,
 		in world: some NodeRecordSources,
 		receivesBoundAgain: [MockReceiveBoundAgain],
+		enteredSlots: MockEnteredSlots?,
 		typesDeclaredEscaping: Set<TypeDescription>,
 		children _: [GeneratedCode],
 	) throws -> BuiltPlaceRecord {
@@ -134,7 +135,7 @@ extension NodeRecords {
 		let calledType = instantiable.concreteInstantiable
 		var arguments = [PlaceRead]()
 		// Each builder the call passes up is bound again under the label the leaf receives it as, first in the call's function,
-		// from the name `mock()` binds it apart by (`mockReceivesBoundAgain(in:)`).
+		// from the name `mock()` binds it apart by (`mockNamesReadApart(in:)`).
 		var builderStructValues = [Int: ValuePath]()
 		for calledArgument in initializer.arguments {
 			// The leaf receives a builder the call passes up as its label alone, which no argument's type matches: the called
@@ -180,7 +181,7 @@ extension NodeRecords {
 			let overridesType = TypeDescription.nested(name: ReservedName.mockOverridesTypeName, parentType: calledType, generics: [])
 			let overridesProperty = Property(label: ReservedName.mockOverridesParameterName, typeDescription: overridesType)
 			// The called mock's overrides are its own: the node hands no configuration to children, since it has none.
-			let slot = mockOverrideSlot(of: declaration, labeled: property.label, typed: overridesType, in: world, hasFunction: hasFunction, handsOverridesToChildren: false, isSendable: false)
+			let slot = mockOverrideSlot(of: declaration, labeled: property.label, typed: overridesType, in: world, hasFunction: hasFunction, handsOverridesToChildren: false, isSendable: false, slots: enteredSlots)
 			var values = builderStructValues
 			values[arguments.count] = slot.value
 			argumentValues = values
@@ -197,7 +198,7 @@ extension NodeRecords {
 					.asSource
 			}
 			let closureType = TypeDescription.unknown(text: "((\(parameterTypes.joined(separator: ", "))) -> \(property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource))?")
-			let slot = mockOverrideSlot(of: declaration, labeled: property.label, typed: closureType, in: world, hasFunction: hasFunction, handsOverridesToChildren: false, isSendable: false)
+			let slot = mockOverrideSlot(of: declaration, labeled: property.label, typed: closureType, in: world, hasFunction: hasFunction, handsOverridesToChildren: false, isSendable: false, slots: enteredSlots)
 			argumentValues = builderStructValues
 			alternatives = [ConstructionAlternative(
 				closure: slot.value,
@@ -228,7 +229,7 @@ extension NodeRecords {
 			children: receivesBoundAgain.map(\.place),
 			node: PlanNode(),
 		)
-		record.sharingFields = PlaceSharingFields(passedArguments: passedArguments, constructionValue: nil, alternatives: alternatives, argumentValues: argumentValues)
+		record.sharingFields = PlaceSharingFields(passedArguments: passedArguments, constructionValue: nil, alternatives: alternatives, argumentValues: argumentValues, functionReturnType: nil)
 		// An erased call's function returns the property's type, as an erased construction's does.
 		return isMockErased(declaration, in: world) ? mockErasedDecoration(of: record) : record
 	}

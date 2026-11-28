@@ -120,6 +120,7 @@ extension NodeRecords {
 		lazilyInstantiatedInstanceProperties: Set<Property>,
 		receivesBoundAgain: [MockReceiveBoundAgain],
 		enteredSlots: MockEnteredSlots?,
+		wrapperArgumentNames: [Property: String],
 		typesDeclaredEscaping: Set<TypeDescription>,
 		children: [GeneratedCode],
 	) throws -> BuiltPlaceRecord {
@@ -131,6 +132,7 @@ extension NodeRecords {
 			lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
 			receivesBoundAgain: receivesBoundAgain,
 			enteredSlots: enteredSlots,
+			wrapperArgumentNames: wrapperArgumentNames,
 			typesDeclaredEscaping: typesDeclaredEscaping,
 			children: children,
 		)

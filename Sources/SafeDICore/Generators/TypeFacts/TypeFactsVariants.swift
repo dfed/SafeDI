@@ -96,8 +96,8 @@ struct TypeFactsVariants: Sendable {
 	///     node whatever encloses them (production: `@Sendable` is a mark folded over call edges)
 	///     returns the caller's, so the root's `.plain` reaches every node; only seam contracts and mocks whose parameter
 	///     types differ by family key on it.
-	///   - key: The value of an answer to a read that a variant is told apart by. The two parameter rules live here: a
-	///     difference a parameter can carry projects to one key. It is applied once, to an answer a call binds or to -1 for
+	///   - key: The value of an answer to a read that a variant is told apart by, at a call of `target` (the root's own
+	///     reads: 0). The two parameter rules live here: a difference a parameter can carry projects to one key. It is applied once, to an answer a call binds or to -1 for
 	///     none, never to a key a call passes through, so it need not be idempotent: a key collapsed at one call reaches
 	///     every callee below unchanged.
 	///   - madeAgain: The world's made-again calls, and what a node binds at its top for a read of a member it makes again
@@ -113,7 +113,7 @@ struct TypeFactsVariants: Sendable {
 		rootAnswer: (_ read: Int32) -> VariantBinding?,
 		binding: (_ edge: Int, _ read: Int32) -> VariantBinding?,
 		family: (_ edge: Int, _ callerFamily: VariantFamily) -> VariantFamily,
-		key: (_ read: Int32, _ answer: Int32) -> Int32,
+		key: (_ read: Int32, _ answer: Int32, _ target: Int32) -> Int32,
 		madeAgain: (edges: MadeAgainEdges, binding: (_ node: Int, _ read: Int32) -> VariantBinding?)? = nil,
 		refine: ((_ edge: Int, _ read: Int32, _ callerKey: Int32) -> Int32?)? = nil,
 		bucket: (_ node: Int32, _ family: VariantFamily, _ keys: [Int32]) -> Int = TypeFactsVariants.hash,
@@ -143,7 +143,7 @@ struct TypeFactsVariants: Sendable {
 
 		reads.rows.forEachColumn(inRow: 0) { read, _ in
 			let answer = rootAnswer(read)
-			scratchKeys.append(key(read, answer?.answer ?? -1))
+			scratchKeys.append(key(read, answer?.answer ?? -1, 0))
 			columns.rootSources.append(answer.map { .bound($0.declaration, answer: $0.answer) } ?? .none)
 		}
 		_ = variant(of: 0, family: .plain)
@@ -156,7 +156,7 @@ struct TypeFactsVariants: Sendable {
 			reads.rows.forEachColumn(inRow: Int(target)) { read, _ in
 				work += 1
 				if let bound = binding(read) {
-					scratchKeys.append(key(read, bound.answer))
+					scratchKeys.append(key(read, bound.answer, target))
 					scratchSources.append(.bound(bound.declaration, answer: bound.answer))
 				} else if let position = reads.rows.rank(of: read, inRow: node) {
 					// The caller's key, as it is: an answer its callers share, which is all a body shared by them can hand
@@ -166,7 +166,7 @@ struct TypeFactsVariants: Sendable {
 					scratchKeys.append(refine(read, callerKey) ?? callerKey)
 					scratchSources.append(.passedThrough(Int32(position)))
 				} else {
-					scratchKeys.append(key(read, -1))
+					scratchKeys.append(key(read, -1, target))
 					scratchSources.append(.none)
 				}
 			}
