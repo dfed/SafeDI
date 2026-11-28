@@ -436,7 +436,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				fillParametersByKey[key] = child.fillParameterFields
 				for (label, argument) in child.fillCallerReads.argumentByLabel {
 					guard let field = child.fillCallerReads.parameterByLabel[label] else { continue }
-					callerReadFormsByLabel[label, default: [:]].merge([field.property: (field, argument.spelled)]) { form, _ in form }
+					// The first fill that reads a form hands it, as each fill reads the one scope enclosing the call.
+					if callerReadFormsByLabel[label]?[field.property] == nil {
+						callerReadFormsByLabel[label, default: [:]][field.property] = (field, argument.spelled)
+					}
 				}
 			}
 			if case let .fill(_, functionName) = child.scopeData {
