@@ -22,7 +22,7 @@
 /// share (`MockWorldsTable.sharedRecords`) and handed to each root's layout (`TypeKeyBody.statements(ofRootBody:…)`), which
 /// reads a node's facts here rather than working them out again for each root that holds the node.
 ///
-/// It holds each shared node's domain (`TypeKeyLayout.Domain`) for as long as the worlds that share the nodes are held:
+/// It holds each shared node's domain (`TypeKeyLayout.Domain`), structural key facts and declared statements, for as long as the worlds that share the nodes are held:
 /// from the build of the module's mock worlds until its last mock root is lowered.
 final class NodeLayoutFacts: Sendable {
 	/// The domain of each plan node of the shared records and the nodes beneath them, where every place beneath records
@@ -33,12 +33,16 @@ final class NodeLayoutFacts: Sendable {
 	let keyFactsByNode: [PlanNode: NodeKeyFacts]
 	/// The ids of the parts `keyFactsByNode` holds, which every root's key reads first.
 	let keyParts: FrozenStructuralKeyParts?
+	/// What each shared node's body declares of its statements, which every root's walk declares in the node's view
+	/// (`TypeKeyLayout.read(_:)`).
+	let declaredChildrenByNode: [PlanNode: TypeKeyLayout.DeclaredChildren]
 
 	/// The facts of `records`' nodes, each computed once.
 	init(records: some Sequence<BuiltPlaceRecord>) {
 		var layout = TypeKeyLayout()
 		var parts = StructuralKeyParts()
 		var keyFactsByNode = [PlanNode: NodeKeyFacts]()
+		var declaredChildrenByNode = [PlanNode: TypeKeyLayout.DeclaredChildren]()
 		// The type key lays out a body for a place that declares a function alone, and a shared record's children are shared
 		// records too.
 		for record in records where record.hasFunction {
@@ -46,7 +50,9 @@ final class NodeLayoutFacts: Sendable {
 			var facts = TypeKeyLayout.keyFacts(of: record, parts: &parts)
 			// A body's statements are its children's places, one each (`TypeKeyLayout.read(_:)`), and a body with a child that
 			// records nothing is never laid out.
-			let statementPartIDs = TypeKeyLayout.statementCodes(of: record.children).compactMap(TypeKeyLayout.record(of:)).map { childRecord in
+			let statements = TypeKeyLayout.statementCodes(of: record.children)
+			declaredChildrenByNode[record.node] = TypeKeyLayout.DeclaredChildren(declaringStatementsOf: statements)
+			let statementPartIDs = statements.compactMap(TypeKeyLayout.record(of:)).map { childRecord in
 				parts.id(of: TypeKeyLayout.statementPart(of: childRecord, parts: &parts))
 			}
 			facts.statementPartIDs = statementPartIDs
@@ -54,6 +60,7 @@ final class NodeLayoutFacts: Sendable {
 		}
 		domainsByNode = layout.domainsByNode
 		self.keyFactsByNode = keyFactsByNode
+		self.declaredChildrenByNode = declaredChildrenByNode
 		keyParts = parts.frozenIDs
 	}
 
@@ -63,6 +70,7 @@ final class NodeLayoutFacts: Sendable {
 	private init() {
 		domainsByNode = [:]
 		keyFactsByNode = [:]
+		declaredChildrenByNode = [:]
 		keyParts = nil
 	}
 }

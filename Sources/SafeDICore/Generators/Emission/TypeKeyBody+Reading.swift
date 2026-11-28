@@ -109,8 +109,15 @@ extension TypeKeyLayout {
 						))
 						viewsByKey[key] = newBody
 						statement = .built(body: newBody)
-						let children = Self.statementCodes(of: built.children)
-						declareChildren(children, ofBody: newBody)
+						let children: [GeneratedCode]
+						if let declared = nodeFacts.declaredChildrenByNode[built.node] {
+							children = declared.codes
+							declare(declared, ofBody: newBody)
+						} else {
+							let declared = DeclaredChildren(declaringStatementsOf: Self.statementCodes(of: built.children))
+							children = declared.codes
+							declare(declared, ofBody: newBody)
+						}
 						frames.append((body: newBody, children: children, next: 0))
 					}
 				} else {
@@ -214,36 +221,75 @@ extension TypeKeyLayout {
 
 	mutating func declareChildren(_ children: [GeneratedCode], ofBody body: Int) {
 		let first = bodies[body].statements.count
+		var declared = DeclaredChildren(codes: children, first: first)
+		declared.positionsByLabel = bodies[body].positionsByLabel
+		declared.positionsByDeclaredFunction = bodies[body].positionsByDeclaredFunction
+		declared.declare()
+		declare(declared, ofBody: body)
+	}
+
+	/// Declares in `body` what `declared` holds of its statements.
+	mutating func declare(_ declared: DeclaredChildren, ofBody body: Int) {
+		bodies[body].positionsByLabel = declared.positionsByLabel
+		bodies[body].positionsByDeclaredFunction = declared.positionsByDeclaredFunction
+		declaredFunctionsByBody[body] = declared.functions
+	}
+
+	/// What a body declares of its children's statements (`declareChildren(_:ofBody:)`): the positions of the labels each
+	/// binds, the positions of the functions text declares, and the functions a closer's function is resolved among. A
+	/// snapshot of shared plan nodes holds one for each node's body, whose statements start at its first position
+	/// (`NodeLayoutFacts.declaredChildrenByNode`).
+	struct DeclaredChildren: Sendable {
+		/// The body's statements (`statementCodes(of:)`).
+		let codes: [GeneratedCode]
+		/// The position of the first of `codes` among the body's statements.
+		let first: Int
+		var positionsByLabel = [String: [Int]]()
+		var positionsByDeclaredFunction = [String: [Int]]()
 		var functions = [String: DeclaredFunction]()
-		for (offset, code) in children.enumerated() {
-			let record = Self.record(of: code)
-			switch record {
-			case let .built(built):
-				if built.hasFunction, functions[built.functionName] == nil {
-					functions[built.functionName] = .statement(index: first + offset, record: built)
-				}
-			case let .alias(alias):
-				for name in alias.declaredFunctionNames where functions[name] == nil {
-					functions[name] = .text
-				}
-				for name in alias.declaredFunctionNames {
-					bodies[body].positionsByDeclaredFunction[name, default: []].append(first + offset)
-				}
-				for binding in alias.otherBindings {
-					bodies[body].positionsByLabel[binding.label, default: []].append(first + offset)
-				}
-			case .closer, nil:
-				break
-			}
-			guard let label = record.map(\.boundProperty.label) else { continue }
-			bodies[body].positionsByLabel[label, default: []].append(first + offset)
+
+		/// The declarations of a plan node's body, which holds `codes` alone.
+		init(declaringStatementsOf codes: [GeneratedCode]) {
+			GenerationWork.record(1, by: .declaringPlanNodeStatements)
+			self.init(codes: codes, first: 0)
+			declare()
 		}
-		declaredFunctionsByBody[body] = functions
+
+		fileprivate init(codes: [GeneratedCode], first: Int) {
+			self.codes = codes
+			self.first = first
+		}
+
+		fileprivate mutating func declare() {
+			for (offset, code) in codes.enumerated() {
+				let record = TypeKeyLayout.record(of: code)
+				switch record {
+				case let .built(built):
+					if built.hasFunction, functions[built.functionName] == nil {
+						functions[built.functionName] = .statement(index: first + offset, record: built)
+					}
+				case let .alias(alias):
+					for name in alias.declaredFunctionNames where functions[name] == nil {
+						functions[name] = .text
+					}
+					for name in alias.declaredFunctionNames {
+						positionsByDeclaredFunction[name, default: []].append(first + offset)
+					}
+					for binding in alias.otherBindings {
+						positionsByLabel[binding.label, default: []].append(first + offset)
+					}
+				case .closer, nil:
+					break
+				}
+				guard let label = record.map(\.boundProperty.label) else { continue }
+				positionsByLabel[label, default: []].append(first + offset)
+			}
+		}
 	}
 
 	/// A function a statement of a body declares: a place's, at its index among the body's statements, or one a place
 	/// written as text declares, which no closer's function resolves to.
-	enum DeclaredFunction {
+	enum DeclaredFunction: Sendable {
 		case statement(index: Int, record: BuiltPlaceRecord)
 		case text
 	}
