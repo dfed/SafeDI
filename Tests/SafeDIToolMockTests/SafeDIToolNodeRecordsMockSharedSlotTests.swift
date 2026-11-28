@@ -489,6 +489,8 @@ struct SafeDIToolNodeRecordsMockSharedSlotTests: ~Copyable {
 		            let above: __safeDI_Place?
 		            let jump: __safeDI_Place?
 		            let nearestOfTypeAbove: __safeDI_Place?
+		            let configuredType: ObjectIdentifier
+		            let nearestOfEachTypeAbove: [ObjectIdentifier: __safeDI_Place]
 		            let depth: Int
 		            let entered0: UInt64
 		            init(slot: Int?, isNearestOfType: Bool, configured: Any, above: __safeDI_Place?) {
@@ -501,7 +503,16 @@ struct SafeDIToolNodeRecordsMockSharedSlotTests: ~Copyable {
 		                let nearDepth = near?.depth ?? 0
 		                depth = depthAbove + 1
 		                jump = depthAbove - nearDepth == nearDepth - (near?.jump?.depth ?? 0) ? near?.jump : above
-		                nearestOfTypeAbove = above.flatMap { $0.isNearestOfType ? $0 : $0.nearestOfTypeAbove }
+		                let nearestAbove = above.flatMap { $0.isNearestOfType ? $0 : $0.nearestOfTypeAbove }
+		                nearestOfTypeAbove = nearestAbove
+		                configuredType = ObjectIdentifier(type(of: configured))
+		                if isNearestOfType, let nearestAbove {
+		                    var nearestOfEachType = nearestAbove.nearestOfEachTypeAbove
+		                    nearestOfEachType[nearestAbove.configuredType] = nearestAbove
+		                    nearestOfEachTypeAbove = nearestOfEachType
+		                } else {
+		                    nearestOfEachTypeAbove = [:]
+		                }
 		                let word = slot.map { $0 >> 6 } ?? -1
 		                let bit: UInt64 = slot.map { 1 << UInt64($0 & 63) } ?? 0
 		                entered0 = (above?.entered0 ?? 0) | (word == 0 ? bit : 0)
@@ -518,12 +529,13 @@ struct SafeDIToolNodeRecordsMockSharedSlotTests: ~Copyable {
 		            let configuration: Configuration
 		            var top: __safeDI_Place?
 		            func nearest<Handed>(_: Handed.Type) -> Handed? {
+		                let type = ObjectIdentifier(__safeDI_Configured<Handed>.self)
 		                var place = top.flatMap { $0.isNearestOfType ? $0 : $0.nearestOfTypeAbove }
-		                while let candidate = place {
-		                    if let found = candidate.configured as? __safeDI_Configured<Handed> { return found.configuration }
-		                    place = candidate.nearestOfTypeAbove
+		                if let candidate = place, candidate.configuredType != type {
+		                    place = candidate.nearestOfEachTypeAbove[type]
 		                }
-		                return nil
+		                guard let place, let found = place.configured as? __safeDI_Configured<Handed> else { return nil }
+		                return found.configuration
 		            }
 		            func entering<Handed>(_ slot: Int, _ handed: @autoclosure () -> Handed, nearestOfType: Bool = false) -> __safeDI_Entered<Handed> {
 		                if var place = top, place.has(slot) {
