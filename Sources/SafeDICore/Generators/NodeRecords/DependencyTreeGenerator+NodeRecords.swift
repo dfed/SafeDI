@@ -123,7 +123,7 @@ extension DependencyTreeGenerator {
 		// The work of reading the drafts is no run's, so the tests that count a run's work count none of it.
 		report.placesDraftDifferences = GenerationWork.$observer.withValue(nil) {
 			let drafts = SeamPlacesDrafts(world: TypeFactsGraph(root: rootScope, forMockGeneration: false))
-			return drafts.levelAndSiteDifferences(from: places) + drafts.passedUpCases().passedUpDifferences(from: places) + drafts.closedOnDifferences(from: places) + drafts.declarationListDifferences(from: places, parameters: parameters)
+			return drafts.levelAndSiteDifferences(from: places) + drafts.passedUpCases().passedUpDifferences(from: places) + drafts.closedOnDifferences(from: places) + drafts.declarationListDifferences(from: places, parameters: parameters) + drafts.levelFieldDifferences(from: places)
 		}
 		return report
 	}
