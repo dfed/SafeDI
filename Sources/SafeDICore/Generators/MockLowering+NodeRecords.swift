@@ -76,14 +76,21 @@ extension ScopeGenerator {
 			report(refusal: .mockDefaultValuedParameter, everyRefusal: [.mockDefaultValuedParameter], isLaidOut: false, recordCount: 0)
 			return nil
 		}
-		// Where the world's cycles enter places, `mock()` declares their struct and binds a value of it with none entered
+		// Where the world's cycles enter places, `mock()` declares what holds them and binds a value with none entered
 		// before its nodes, which its body and every function that takes no places hand a function that takes them
 		// (`NodeRecords+MockCycle.swift`).
-		let enteredSlots = nodeRecords.mockEnteredSlots
-		let enteredPlaces: [GeneratedCode] = enteredSlots.isEmpty ? [] : (
-			MockEnteredSlot.mockEnteredPlacesDeclaration(slots: enteredSlots, isSendable: false)
-				+ ["let \(ReservedName.mockEnteredPlacesParameterName) = \(ReservedName.mockEnteredPlacesTypeName)()"]
-		).map { .text("\(TypeKeyBody.rootStatementIndentation)\($0)") }
+		// Where an actor is sent a value a function handed the places builds, the places take their `Sendable` form, so that
+		// the value is built of nothing that cannot be sent. That form holds only configurations of the `Sendable` form,
+		// which every type built beneath an actor takes: a function handed the places whose type is built beneath none, as
+		// one on another cycle of the mock's is, keeps the walk's statements.
+		let placesThatMustBeSendable = nodeRecords.mockConfigurationTypeNamesHandedWithPlacesThatMustBeSendable
+		let refusalOfPlaces = placesThatMustBeSendable?.refusal(whereConfigurationsOfSendableFormAre: sendableConfigurationTypeNames)
+		guard refusalOfPlaces == nil else {
+			report(refusal: refusalOfPlaces, everyRefusal: [refusalOfPlaces].compactMap(\.self), isLaidOut: false, recordCount: 0)
+			return nil
+		}
+		let enteredPlaces: [GeneratedCode] = ((nodeRecords.mockEnteredPlacesUse.map { MockEnteredSlot.mockEnteredPlacesDeclaration(isSendable: placesThatMustBeSendable != nil, entersNearest: $0.entersNearest, passes: $0.passes, leavesOut: $0.leavesOut) } ?? []) + nodeRecords.mockLoopSendableStructDeclarations)
+			.map { .text("\(TypeKeyBody.rootStatementIndentation)\($0)") }
 		let statements = TypeKeyBody.statements(ofRootBody: nodeRecords.rootBody, outerDeclarations: outerDeclarations, namesInScope: Set(outerDeclarations.map(\.label)), rootPassedArgumentNames: [ReservedName.mockOverridesParameterName], laysOutEveryLoop: true)
 		report(refusal: statements == nil ? .notLaidOut : nil, everyRefusal: [], isLaidOut: statements != nil, recordCount: nodeRecords.recordCount)
 		return statements.map { GeneratedCode.lines(enteredPlaces + $0).spelled() }

@@ -73,14 +73,12 @@ public enum ReservedName: Hashable, Sendable {
 	/// The name of the parameter through which a generated `mock()` takes its overrides. Callers of a generated
 	/// `mock()` spell it, so it never changes.
 	public static let mockOverridesParameterName = "safeDIOverrides"
+	/// The name of the argument through which a function on a cycle of a generated mock's tree takes its configuration
+	/// with the places the functions above it entered, and of the value `mock()` binds with none entered.
+	public static let mockEnteredPlacesParameterName = "__safeDI_entered"
 	/// The name of the property, and initializer parameter, of each generated `SafeDIMockConfiguration` that
 	/// overrides how its type is built, and of the binding of that override in a construction expression.
 	public static let configurationBuilderPropertyName = "safeDIBuilder"
-	/// The name of the argument through which a function on a cycle of a generated mock's tree takes the places the
-	/// functions above it entered, and hands on its own.
-	public static let mockEnteredPlacesParameterName = "__safeDI_entered"
-	/// The name such a function binds the place it builds under, in the first line of its body.
-	public static let mockEnteredPlaceName = "__safeDI_place"
 
 	/// `name`, which must begin with `builderFunctionNamePrefix`, without the prefix.
 	public static func removingBuilderFunctionNamePrefix(from name: String) -> String {
@@ -154,9 +152,16 @@ public enum ReservedName: Hashable, Sendable {
 
 	/// The name of the parameter under which a mock's function of a member of a loop of builders takes the overrides of the
 	/// loop's level, a node of the type `typeIdentifier` names, or `mock()` itself, whose overrides every member's
-	/// configuration is a field of (`NodeRecords.mockLoopLevelArgument(of:in:levels:)`).
+	/// configuration is a field of (`NodeRecords.mockLoopLevelArgument(of:in:levels:slots:)`).
 	static func loopLevelConfigurationParameterName(ofTypeIdentifier typeIdentifier: String) -> String {
 		"\(builderFunctionNamePrefix)\(typeIdentifier)_loopConfiguration".spelledAsJoinedIdentifier
+	}
+
+	/// The name of the `Sendable` struct a generated `mock()` declares for the overrides a level, a node of the type
+	/// `typeIdentifier` names, hands the `@Sendable` members of its loops of builders, whose functions cannot take the
+	/// level's configuration (`NodeRecords.SendableLoopStruct`).
+	static func sendableLoopOverridesTypeName(ofTypeIdentifier typeIdentifier: String) -> String {
+		"\(builderFunctionNamePrefix)\(typeIdentifier)_LoopOverrides".spelledAsJoinedIdentifier
 	}
 
 	/// The name of the box a scope binds the levels and payloads of a loop of builders in, beside the builder function
@@ -168,9 +173,30 @@ public enum ReservedName: Hashable, Sendable {
 	/// The start of the name of each private final class a seam declares beside its initializers when its tree holds a
 	/// loop's levels in one box, which the hash of what the class holds follows (`ScopeGenerator.LoopLevelsType`).
 	static let loopLevelsTypeName = "\(builderFunctionNamePrefix)LoopLevels"
-	/// The name of the struct a generated `mock()` whose tree holds a cycle declares: the places the functions on a path
-	/// have entered, a slot for each property a path can close on (`MockEnteredSlot.mockEnteredPlacesDeclaration`).
-	static let mockEnteredPlacesTypeName = "\(builderFunctionNamePrefix)EnteredPlaces"
+	/// The name of the enum a generated `mock()` whose tree holds a cycle declares: the places the functions on a path
+	/// have entered, nearest first (`MockEnteredSlot.mockEnteredPlacesDeclaration`).
+	static let mockEnteredPlacesTypeName = "\(builderFunctionNamePrefix)Places"
+	/// The name of the struct such a `mock()` declares beside it, generic over a configuration: what a function on a
+	/// cycle is handed, its configuration with the places entered.
+	static let mockEnteredTypeName = "\(builderFunctionNamePrefix)Entered"
+	/// The member of that struct that holds the configuration.
+	static let mockEnteredConfigurationMemberName = "configuration"
+	/// The function of that struct a call of a function a path can close on hands the function its value with: the place
+	/// entered before under the call's slot where there is one, and otherwise a new place.
+	static let mockEnteringFunctionName = "entering"
+	/// The label under which that function is told to enter a new place with the nearest configuration of its type.
+	static let mockEnteringNearestOfTypeArgumentLabel = "nearestOfType"
+	/// The function a call of a function on no cycle hands the function its value with, where its configuration is the
+	/// nearest of its type for a place entered beneath it.
+	static let mockEnteringNearestFunctionName = "enteringNearest"
+	/// The function a call of a function that only hands the places on hands the function its value with.
+	static let mockPassingFunctionName = "passing"
+	/// The member of that struct that says whether its place was entered along an edge the configurations leave out, or
+	/// from a place entered so, which `mock()` declares where some place may be.
+	static let mockEnteredIsLeftOutMemberName = "isLeftOut"
+	/// The member of that struct a call along an edge the configurations leave out reads the value it enters a place
+	/// with from: the same configuration and places, entered left out.
+	static let mockEnteredLeavingOutMemberName = "leavingOut"
 
 	/// The name of the parameter through which a function building a hole held in an instantiator takes the value the
 	/// instantiator forwards.

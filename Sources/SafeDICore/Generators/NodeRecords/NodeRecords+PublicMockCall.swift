@@ -120,6 +120,7 @@ extension NodeRecords {
 		variant: VariantID,
 		in world: some NodeRecordSources,
 		receivesBoundAgain: [MockReceiveBoundAgain],
+		enteredSlots: MockEnteredSlots?,
 		typesDeclaredEscaping: Set<TypeDescription>,
 		children _: [GeneratedCode],
 	) throws -> BuiltPlaceRecord {
@@ -180,7 +181,7 @@ extension NodeRecords {
 			let overridesType = TypeDescription.nested(name: ReservedName.mockOverridesTypeName, parentType: calledType, generics: [])
 			let overridesProperty = Property(label: ReservedName.mockOverridesParameterName, typeDescription: overridesType)
 			// The called mock's overrides are its own: the node hands no configuration to children, since it has none.
-			let slot = mockOverrideSlot(of: declaration, labeled: property.label, typed: overridesType, in: world, hasFunction: hasFunction, handsOverridesToChildren: false, isSendable: false)
+			let slot = mockOverrideSlot(of: declaration, labeled: property.label, typed: overridesType, in: world, hasFunction: hasFunction, handsOverridesToChildren: false, isSendable: false, slots: enteredSlots)
 			var values = builderStructValues
 			values[arguments.count] = slot.value
 			argumentValues = values
@@ -197,7 +198,7 @@ extension NodeRecords {
 					.asSource
 			}
 			let closureType = TypeDescription.unknown(text: "((\(parameterTypes.joined(separator: ", "))) -> \(property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource))?")
-			let slot = mockOverrideSlot(of: declaration, labeled: property.label, typed: closureType, in: world, hasFunction: hasFunction, handsOverridesToChildren: false, isSendable: false)
+			let slot = mockOverrideSlot(of: declaration, labeled: property.label, typed: closureType, in: world, hasFunction: hasFunction, handsOverridesToChildren: false, isSendable: false, slots: enteredSlots)
 			argumentValues = builderStructValues
 			alternatives = [ConstructionAlternative(
 				closure: slot.value,

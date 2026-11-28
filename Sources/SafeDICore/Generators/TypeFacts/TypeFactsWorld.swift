@@ -199,8 +199,6 @@ struct TypeFactsOwedFacts: OptionSet, Sendable {
 	/// The fill channel (track C): whether a hole's property is still being built inside its own fill. Set on a fill the
 	/// channel refuses (`TypeFactsFillRefusal`) and on every declaration beneath one.
 	static let fillBeingBuilt = TypeFactsOwedFacts(rawValue: 1 << 0)
-	/// The mock root's pins: whether a mock read is pinned. Set on every declaration of a mock world.
-	static let mockRootPin = TypeFactsOwedFacts(rawValue: 1 << 1)
 	/// The mock root's required-receive records: what a read finds pinned or read above it. Set on every
 	/// declaration of a mock world.
 	static let mockRootRecord = TypeFactsOwedFacts(rawValue: 1 << 2)
@@ -265,6 +263,9 @@ protocol TypeFactsWorld {
 	var variantCount: Int { get }
 	func declaration(of variant: VariantID) -> DeclarationID
 	func family(of variant: VariantID) -> VariantFamily
+	/// Whether a call builds the variant's body inside a `@Sendable` function, folded over every call into it, so that its
+	/// function is `@Sendable` once any call needs it (`TypeFactsGraph.sendableMarks(of:graph:edgeOpens:)`). Not on the key.
+	func buildsInSendableFunction(_ variant: VariantID) -> Bool
 	/// The key every call into the variant shares, one per read of `reads(of:)` of its declaration, in that order: an
 	/// answer ID with what a parameter carries left out. A call's own answers are `sources(ofCall:of:)`.
 	func keys(of variant: VariantID) -> ArraySlice<AnswerID>
@@ -449,6 +450,10 @@ extension TypeFactsGraph: TypeFactsWorld {
 		variants.family(of: Int(variant))
 	}
 
+	func buildsInSendableFunction(_ variant: VariantID) -> Bool {
+		variantBuildsInSendableFunction[Int(variant)]
+	}
+
 	func keys(of variant: VariantID) -> ArraySlice<AnswerID> {
 		variants.keys(of: Int(variant))
 	}
@@ -510,6 +515,8 @@ extension TypeFactsGraph: TypeFactsWorld {
 		// A declaration being built is the one its own label's reads beneath it name, around the cycle it closes.
 		guard !answerIsBeingBuilt[Int(answer)] else { return true }
 		let declared = answerProperties[Int(answer)]
+		// A mock read's answer is what the mock root pins, no declaration.
+		guard declared >= 0 else { return false }
 		let label = readTable[Int(read)].label
 		return receives.received.columns(inRow: Int(declaration)).contains { received in
 			propertyFacts.labels[Int(received)] == label && propertyFacts.provides(declared, aFormReadBy: received)
@@ -635,7 +642,7 @@ extension TypeFactsGraph: TypeFactsWorld {
 	func owedFacts(of declaration: DeclarationID) -> TypeFactsOwedFacts {
 		var owed: TypeFactsOwedFacts = []
 		if forMockGeneration {
-			owed.formUnion([.mockRootPin, .mockRootRecord, .mockRootBinding])
+			owed.formUnion([.mockRootRecord, .mockRootBinding])
 		}
 		// A declaration is beneath a fill the channel refuses where any of its routes enters one: a walk up its parents, past
 		// the fills it models.

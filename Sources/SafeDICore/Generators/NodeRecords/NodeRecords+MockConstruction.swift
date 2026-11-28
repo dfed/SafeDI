@@ -122,18 +122,15 @@ extension NodeRecords {
 		// configuration; its function is still handed the overrides.
 		let isConfigured = buildsMockChildWithOverride(declaration, in: world) || !fieldArguments.isEmpty
 		let slotType = mockOverrideType(of: record, usesHandWrittenMock: handWrittenMock != nil, isConfigured: isConfigured, instantiable: instantiable)
-		// A function that takes the places its world's cycles enter is handed its overrides beside them by every call, a
-		// call that closes a cycle on it included, and begins by entering its place where it has one
-		// (`NodeRecords+MockCycle.swift`).
-		let slot: (value: ValuePath, passedArguments: [PassedArgument])
-		if let enteredSlots, takesMockEnteredPlaces(declaration, in: enteredSlots) {
-			slot = (
-				.passedArgument(ReservedName.mockOverridesParameterName),
+		// A function that takes the places its world's cycles enter is handed its configuration with them, in one argument,
+		// by every call, a call that closes a cycle on it included (`NodeRecords+MockCycle.swift`).
+		let slot: (value: ValuePath, passedArguments: [PassedArgument]) = if let enteredSlots, takesMockEnteredPlaces(declaration, in: enteredSlots) {
+			(
+				mockEnteredConfiguration,
 				mockArgumentsHanded(to: declaration, labeled: record.property.label, by: world.parents(of: declaration).first?.parent ?? 0, in: world, slots: enteredSlots),
 			)
-			record.callFields = mockEnteredPlace(of: declaration, in: enteredSlots).map { CallFields(leadingStatement: .enteredPlace($0), closureArguments: []) }
 		} else {
-			slot = mockOverrideSlot(
+			mockOverrideSlot(
 				of: declaration,
 				labeled: record.property.label,
 				typed: slotType,
@@ -141,9 +138,13 @@ extension NodeRecords {
 				hasFunction: record.hasFunction,
 				handsOverridesToChildren: isConfiguredForChildren,
 				isSendable: record.isSendable,
+				slots: enteredSlots,
 			)
 		}
 		record.passedArguments = slot.passedArguments
+		// A wrapper around a call that hands the places entered spells its closure on one line, so a function on a cycle
+		// is no longer than the walk's, whose wrapper is handed the function itself.
+		record.wrapsCallOnOneLine = enteredSlots.map { takesMockEnteredPlaces(declaration, in: $0) } ?? false
 		for (position, argument) in fieldArguments {
 			record.argumentValues[position] = mockConfigurationFieldValue(of: argument, readFrom: slot.value)
 		}
@@ -183,6 +184,8 @@ extension NodeRecords {
 	///   - hasFunction: Whether the node is built in a function of its own.
 	///   - handsOverridesToChildren: Whether the value is a configuration whose fields the node's children read.
 	///   - isSendable: Whether the node's function is `@Sendable`.
+	///   - slots: The slots of the places the world's cycles enter, and which nodes take them; `nil` for a world with no
+	///     cycle.
 	/// - Returns: The value the node's own construction reads, and what each call of its function hands it.
 	static func mockOverrideSlot(
 		of declaration: DeclarationID,
@@ -192,20 +195,22 @@ extension NodeRecords {
 		hasFunction: Bool,
 		handsOverridesToChildren: Bool,
 		isSendable: Bool,
+		slots: MockEnteredSlots?,
 	) -> (value: ValuePath, passedArguments: [PassedArgument]) {
-		let field = mockConfigurationField(of: declaration, named: label, in: world)
+		let field = mockConfigurationField(of: declaration, named: label, in: world, slots: slots)
 		guard hasFunction else { return (field, []) }
 		// A `@Sendable` function can neither capture the overrides nor be handed them: its value is read into a local before
 		// it (`mockOverridesBindingPlace(of:record:in:)`), which the function captures where the root's body declares both,
 		// and is handed elsewhere. A wrapper an actor is sent reads its value so too, since its closure is sent with it.
 		guard !isSendable, !isWrapperSentToActor(declaration, in: world) else { return mockSendableOverrideSlot(of: declaration, labeled: label, typed: type, in: world) }
 		if !handsOverridesToChildren, world.parents(of: declaration).allSatisfy({ $0.parent == 0 }) {
-			return (.member(label.spelledAsMemberDeclarationName, of: .rootDeclaration(ReservedName.mockOverridesParameterName)), [])
+			return (.member(label, of: .rootDeclaration(ReservedName.mockOverridesParameterName)), [])
 		} else {
-			// The overrides are not `Sendable`: no call inside a `@Sendable` function hands them on.
+			// The overrides are not `Sendable`: no call inside a `@Sendable` function hands them on, but those of the `Sendable`
+			// form a function that takes the places was handed with them.
 			return (
 				.passedArgument(ReservedName.mockOverridesParameterName),
-				[PassedArgument(parameterName: ReservedName.mockOverridesParameterName, type: type, value: field, staysOutsideSendableFunctions: true)],
+				[PassedArgument(parameterName: ReservedName.mockOverridesParameterName, type: type, value: field, staysOutsideSendableFunctions: mockOverridesStayOutsideSendableFunctions(of: declaration, in: slots))],
 			)
 		}
 	}
@@ -215,7 +220,7 @@ extension NodeRecords {
 	/// of `mock()`'s own, and a `@Sendable` function's of the local it captures (`mockOverridesOfChildren(of:in:)`). A
 	/// node with more than one parent has no parent built in a `@Sendable` function (`mockSendableRefusals(of:in:)`), so
 	/// its first parent's is every parent's.
-	static func mockConfigurationField(of declaration: DeclarationID, named label: String, in world: some NodeRecordSources) -> ValuePath {
-		.member(label.spelledAsMemberDeclarationName, of: mockOverridesOfChildren(of: world.parents(of: declaration).first?.parent ?? 0, in: world))
+	static func mockConfigurationField(of declaration: DeclarationID, named label: String, in world: some NodeRecordSources, slots: MockEnteredSlots?) -> ValuePath {
+		.member(label, of: mockOverridesOfChildren(of: world.parents(of: declaration).first?.parent ?? 0, in: world, slots: slots))
 	}
 }

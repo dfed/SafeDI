@@ -109,7 +109,7 @@ extension NodeRecords {
 			record.argumentValues = argumentValues
 		}
 		// Never `nil`: the node is of kind `seamCall` (`seamCallClaim(of:in:)`), whose construction is a call of the seam.
-		record.callFields = CallFields(leadingStatement: scope.seamCall.map { .callGuard($0.callGuard(for: construction.concreteType)) }, closureArguments: closureArguments)
+		record.callFields = CallFields(leadingStatement: scope.seamCall?.callGuard(for: construction.concreteType), closureArguments: closureArguments)
 		var alias = AliasPlaceRecord(property: construction.property, fulfillingProperty: nil, text: "", reads: reads)
 		alias.declaredFunctionNames = [construction.functionName]
 		alias.call = InPlaceCall(record: record, statementsBeforeLeadingStatement: [], statementsAfterLeadingStatement: children)
