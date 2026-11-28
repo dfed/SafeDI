@@ -1283,8 +1283,7 @@ jobs:
       # subdirectory of the workspace, as a user may. No target outputs a
       # `.safedi` file at the top level, so Bazel writes one to bazel-bin
       # from the disk cache only when `--remote_download_regex` asks for
-      # it, with the positions file beside it that `query` and `dump`
-      # read lines from. Kept out of the retry wrapper: the build above
+      # it. Kept out of the retry wrapper: the build above
       # fetched everything this runs.
       - name: Run SafeDITool through bazel run with a relative path
         timeout-minutes: 5
@@ -1292,8 +1291,8 @@ jobs:
         if: ${{ !cancelled() && steps.bazel-4.outcome == 'success' }}
         working-directory: Examples/ExampleBazelIntegration/Subproject
         run: |
-          bazelisk build --disk_cache="$HOME/.cache/bazel-disk" --repository_cache="$HOME/.cache/bazel-repository" '--remote_download_regex=.*\.safedi(positions)?$' //Subproject:Subproject
-          test -f ../bazel-bin/Subproject/Subproject_safedi.safedipositions
+          bazelisk build --disk_cache="$HOME/.cache/bazel-disk" --repository_cache="$HOME/.cache/bazel-repository" '--remote_download_regex=.*\.safedi$' //Subproject:Subproject
+          test -f ../bazel-bin/Subproject/Subproject_safedi.safedi
           bazelisk run --disk_cache="$HOME/.cache/bazel-disk" --repository_cache="$HOME/.cache/bazel-repository" @safedi//:SafeDITool -- dump ../bazel-bin/Subproject/Subproject_safedi.safedi > /dev/null
           bazelisk run --disk_cache="$HOME/.cache/bazel-disk" --repository_cache="$HOME/.cache/bazel-repository" @safedi//:SafeDITool -- query needs TitleFormatter --module-info ../bazel-bin/Subproject/Subproject_safedi.safedi > /dev/null
       # Optimized builds define `NDEBUG` and no `DEBUG`, so the rule must report the

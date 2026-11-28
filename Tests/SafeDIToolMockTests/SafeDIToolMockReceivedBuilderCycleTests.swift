@@ -639,17 +639,13 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			    ) -> Root {
 			        func __safeDI_t4Builder() -> T4 {
 			            let t4Builder = Instantiator<T4>(__safeDI_t4Builder)
-			            #sourceLocation(file: "\(output.fixtures["T4.swift"])", line: 8)
-			            let t4BuilderAlias: Instantiator<T4> = t4Builder
-			            #sourceLocation()
+			            let t4BuilderAlias: Instantiator<T4> = t4Builder // Declared as T4.t4BuilderAlias
 			            return if let safeDIBuilder = safeDIOverrides.t4Builder { safeDIBuilder(t4BuilderAlias, nil) } else { T4(t4BuilderAlias: t4BuilderAlias, t2Builder: nil) }
 			        }
 			        let t4Builder = Instantiator<T4>(__safeDI_t4Builder)
 			        func __safeDI_t3() -> T3 {
 			            func __safeDI_t4() -> T4 {
-			                #sourceLocation(file: "\(output.fixtures["T4.swift"])", line: 8)
-			                let t4BuilderAlias: Instantiator<T4> = t4Builder
-			                #sourceLocation()
+			                let t4BuilderAlias: Instantiator<T4> = t4Builder // Declared as T4.t4BuilderAlias
 			                return if let safeDIBuilder = safeDIOverrides.t3.t4 { safeDIBuilder(t4BuilderAlias, nil) } else { T4(t4BuilderAlias: t4BuilderAlias, t2Builder: nil) }
 			            }
 			            let t4: T4 = __safeDI_t4()
@@ -1113,15 +1109,11 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			    ) -> Screen {
 			        func __safeDI_nodeBuilder() -> Node {
 			            let middleBuilder: Instantiator<Node> = Instantiator<Node>(__safeDI_nodeBuilder)
-			            #sourceLocation(file: "\(output.fixtures["Node.swift"])", line: 7)
-			            let childBuilder: Instantiator<Node> = middleBuilder
-			            #sourceLocation()
+			            let childBuilder: Instantiator<Node> = middleBuilder // Declared as Node.childBuilder
 			            return if let safeDIBuilder = safeDIOverrides.nodeBuilder { safeDIBuilder(childBuilder) } else { Node(childBuilder: childBuilder) }
 			        }
 			        let nodeBuilder = Instantiator<Node>(__safeDI_nodeBuilder)
-			        #sourceLocation(file: "\(output.fixtures["Screen.swift"])", line: 7)
-			        let middleBuilder: Instantiator<Node> = nodeBuilder
-			        #sourceLocation()
+			        let middleBuilder: Instantiator<Node> = nodeBuilder // Declared as Screen.middleBuilder
 			        return Screen(middleBuilder: middleBuilder)
 			    }
 			}
@@ -1245,9 +1237,7 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			    ) -> A {
 			        func __safeDI_bBuilder() -> B {
 			            let xBuilder = Instantiator<X>(__safeDI_xBuilder)
-			            #sourceLocation(file: "\(output.fixtures["B.swift"])", line: 7)
-			            let xAlias: Instantiator<X> = xBuilder
-			            #sourceLocation()
+			            let xAlias: Instantiator<X> = xBuilder // Declared as B.xAlias
 			            return if let safeDIBuilder = safeDIOverrides.bBuilder { safeDIBuilder(xAlias) } else { B(xAlias: xAlias) }
 			        }
 			        func __safeDI_xBuilder() -> X {
@@ -3256,15 +3246,11 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			    ) -> Node {
 			        func __safeDI_nodeBuilder() -> Node {
 			            let nodeBuilder = Instantiator<Node>(__safeDI_nodeBuilder)
-			            #sourceLocation(file: "\(output.fixtures["Node.swift"])", line: 4)
-			            let childBuilder: Instantiator<Node> = nodeBuilder
-			            #sourceLocation()
+			            let childBuilder: Instantiator<Node> = nodeBuilder // Declared as Node.childBuilder
 			            return if let safeDIBuilder = safeDIOverrides.nodeBuilder { safeDIBuilder(childBuilder) } else { Node(childBuilder: childBuilder) }
 			        }
 			        let nodeBuilder = Instantiator<Node>(__safeDI_nodeBuilder)
-			        #sourceLocation(file: "\(output.fixtures["Node.swift"])", line: 4)
-			        let childBuilder: Instantiator<Node> = nodeBuilder
-			        #sourceLocation()
+			        let childBuilder: Instantiator<Node> = nodeBuilder // Declared as Node.childBuilder
 			        return Node(childBuilder: childBuilder)
 			    }
 			}
@@ -3324,15 +3310,11 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			        let __safeDI_nodeBuilder__safeDIBuilder = safeDIOverrides.nodeBuilder
 			        @Sendable nonisolated func __safeDI_nodeBuilder() -> Node {
 			            let nodeBuilder = SendableInstantiator<Node>(__safeDI_nodeBuilder)
-			            #sourceLocation(file: "\(output.fixtures["Node.swift"])", line: 4)
-			            let childBuilder: SendableInstantiator<Node> = nodeBuilder
-			            #sourceLocation()
+			            let childBuilder: SendableInstantiator<Node> = nodeBuilder // Declared as Node.childBuilder
 			            return if let safeDIBuilder = __safeDI_nodeBuilder__safeDIBuilder { safeDIBuilder(childBuilder) } else { Node(childBuilder: childBuilder) }
 			        }
 			        let nodeBuilder = SendableInstantiator<Node>(__safeDI_nodeBuilder)
-			        #sourceLocation(file: "\(output.fixtures["Node.swift"])", line: 4)
-			        let childBuilder: SendableInstantiator<Node> = nodeBuilder
-			        #sourceLocation()
+			        let childBuilder: SendableInstantiator<Node> = nodeBuilder // Declared as Node.childBuilder
 			        return Node(childBuilder: childBuilder)
 			    }
 			}
@@ -3409,15 +3391,11 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			    ) -> Node {
 			        func __safeDI_nodeBuilder() -> AnyNode {
 			            let nodeBuilder = ErasedInstantiator<(), AnyNode>(__safeDI_nodeBuilder)
-			            #sourceLocation(file: "\(output.fixtures["Node.swift"])", line: 4)
-			            let childBuilder: AnyNodeFactory = AnyNodeFactory(nodeBuilder)
-			            #sourceLocation()
+			            let childBuilder: AnyNodeFactory = AnyNodeFactory(nodeBuilder) // Declared as Node.childBuilder
 			            return if let safeDIBuilder = safeDIOverrides.nodeBuilder { safeDIBuilder(childBuilder) } else { AnyNode(Node(childBuilder: childBuilder)) }
 			        }
 			        let nodeBuilder = ErasedInstantiator<(), AnyNode>(__safeDI_nodeBuilder)
-			        #sourceLocation(file: "\(output.fixtures["Node.swift"])", line: 4)
-			        let childBuilder: AnyNodeFactory = AnyNodeFactory(nodeBuilder)
-			        #sourceLocation()
+			        let childBuilder: AnyNodeFactory = AnyNodeFactory(nodeBuilder) // Declared as Node.childBuilder
 			        return Node(childBuilder: childBuilder)
 			    }
 			}
@@ -3493,26 +3471,18 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			    ) -> Node {
 			        func __safeDI_nodeBuilder() -> Node {
 			            let nodeBuilder = Instantiator<Node>(__safeDI_nodeBuilder)
-			            #sourceLocation(file: "\(output.fixtures["Node.swift"])", line: 4)
-			            let middleBuilder: Instantiator<Node> = nodeBuilder
-			            #sourceLocation()
+			            let middleBuilder: Instantiator<Node> = nodeBuilder // Declared as Node.middleBuilder
 			            func __safeDI_child() -> Child {
-			                #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
-			                let childBuilder: Instantiator<Node> = middleBuilder
-			                #sourceLocation()
+			                let childBuilder: Instantiator<Node> = middleBuilder // Declared as Child.childBuilder
 			                return if let safeDIBuilder = safeDIOverrides.nodeBuilder.child { safeDIBuilder(childBuilder) } else { Child(childBuilder: childBuilder) }
 			            }
 			            let child: Child = __safeDI_child()
 			            return if let safeDIBuilder = safeDIOverrides.nodeBuilder.safeDIBuilder { safeDIBuilder(middleBuilder, child) } else { Node(middleBuilder: middleBuilder, child: child) }
 			        }
 			        let nodeBuilder = Instantiator<Node>(__safeDI_nodeBuilder)
-			        #sourceLocation(file: "\(output.fixtures["Node.swift"])", line: 4)
-			        let middleBuilder: Instantiator<Node> = nodeBuilder
-			        #sourceLocation()
+			        let middleBuilder: Instantiator<Node> = nodeBuilder // Declared as Node.middleBuilder
 			        func __safeDI_child() -> Child {
-			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
-			            let childBuilder: Instantiator<Node> = middleBuilder
-			            #sourceLocation()
+			            let childBuilder: Instantiator<Node> = middleBuilder // Declared as Child.childBuilder
 			            return if let safeDIBuilder = safeDIOverrides.child { safeDIBuilder(childBuilder) } else { Child(childBuilder: childBuilder) }
 			        }
 			        let child: Child = __safeDI_child()
@@ -3627,9 +3597,7 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			        func __safeDI_nodeBuilder() -> Node {
 			            let nodeBuilder = Instantiator<Node>(__safeDI_nodeBuilder)
 			            func __safeDI_child() -> Child {
-			                #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
-			                let childBuilder: Instantiator<Node> = nodeBuilder
-			                #sourceLocation()
+			                let childBuilder: Instantiator<Node> = nodeBuilder // Declared as Child.childBuilder
 			                return if let safeDIBuilder = safeDIOverrides.nodeBuilder.child { safeDIBuilder(childBuilder) } else { Child(childBuilder: childBuilder) }
 			            }
 			            let child: Child = __safeDI_child()
@@ -3661,7 +3629,6 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 			moduleMembershipArguments: ["--module-name", "DependentModule", "--package-name", "Example"],
 		)
-		let dependentModuleFixtures = dependentModuleOutput.fixtures
 
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -3717,15 +3684,11 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			    ) -> Node {
 			        func __safeDI_nodeBuilder() -> Node {
 			            let nodeBuilder = Instantiator<Node>(__safeDI_nodeBuilder)
-			            #sourceLocation(file: "\(dependentModuleFixtures["Node.swift"])", line: 4)
-			            let childBuilder: Instantiator<Node> = nodeBuilder
-			            #sourceLocation()
+			            let childBuilder: Instantiator<Node> = nodeBuilder // Declared as Node.childBuilder
 			            return if let safeDIBuilder = safeDIOverrides.nodeBuilder { safeDIBuilder(childBuilder) } else { Node(childBuilder: childBuilder) }
 			        }
 			        let nodeBuilder = Instantiator<Node>(__safeDI_nodeBuilder)
-			        #sourceLocation(file: "\(dependentModuleFixtures["Node.swift"])", line: 4)
-			        let childBuilder: Instantiator<Node> = nodeBuilder
-			        #sourceLocation()
+			        let childBuilder: Instantiator<Node> = nodeBuilder // Declared as Node.childBuilder
 			        return Node(childBuilder: childBuilder)
 			    }
 			}
@@ -3792,15 +3755,11 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			    ) -> Screen {
 			        func __safeDI_nodeBuilder() -> Node {
 			            let middleBuilder_Instantiator__Node: Instantiator<Node> = Instantiator<Node>(__safeDI_nodeBuilder)
-			            #sourceLocation(file: "\(output.fixtures["Node.swift"])", line: 7)
-			            let childBuilder: Instantiator<Node> = middleBuilder_Instantiator__Node
-			            #sourceLocation()
+			            let childBuilder: Instantiator<Node> = middleBuilder_Instantiator__Node // Declared as Node.childBuilder
 			            return if let safeDIBuilder = safeDIOverrides.nodeBuilder { safeDIBuilder(childBuilder) } else { Node(childBuilder: childBuilder) }
 			        }
 			        let nodeBuilder = Instantiator<Node>(__safeDI_nodeBuilder)
-			        #sourceLocation(file: "\(output.fixtures["Screen.swift"])", line: 8)
-			        let middleBuilder_Instantiator__Node: Instantiator<Node> = nodeBuilder
-			        #sourceLocation()
+			        let middleBuilder_Instantiator__Node: Instantiator<Node> = nodeBuilder // Declared as Screen.middleBuilder
 			        let middleBuilder = if let safeDIBuilder = safeDIOverrides.middleBuilder { safeDIBuilder() } else { Tool() }
 			        let other = if let safeDIBuilder = safeDIOverrides.other { safeDIBuilder(middleBuilder) } else { Other(middleBuilder: middleBuilder) }
 			        return Screen(middleBuilder: middleBuilder_Instantiator__Node, other: other)
@@ -3861,9 +3820,7 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			                return A(bBuilder: bBuilder)
 			            }
 			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-			            #sourceLocation(file: "\(output.fixtures["B.swift"])", line: 9)
-			            let aBuilderAlias: Instantiator<A> = aBuilder
-			            #sourceLocation()
+			            let aBuilderAlias: Instantiator<A> = aBuilder // Declared as B.aBuilderAlias
 			            return if let safeDIBuilder = safeDIOverrides.bBuilder.safeDIBuilder { safeDIBuilder(aBuilder, aBuilderAlias) } else { B(aBuilder: aBuilder, aBuilderAlias: aBuilderAlias) }
 			        }
 			        let bBuilder = Instantiator<B>(__safeDI_bBuilder)
@@ -3922,9 +3879,7 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			                return A(bBuilder: bBuilder)
 			            }
 			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-			            #sourceLocation(file: "\(output.fixtures["B.swift"])", line: 9)
-			            let aBuilderAlias: Instantiator<A>? = aBuilder
-			            #sourceLocation()
+			            let aBuilderAlias: Instantiator<A>? = aBuilder // Declared as B.aBuilderAlias
 			            return if let safeDIBuilder = safeDIOverrides.bBuilder.safeDIBuilder { safeDIBuilder(aBuilder, aBuilderAlias) } else { B(aBuilder: aBuilder, aBuilderAlias: aBuilderAlias) }
 			        }
 			        let bBuilder = Instantiator<B>(__safeDI_bBuilder)
@@ -3984,9 +3939,7 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			                return A(bBuilder: bBuilder, aBuilder: aBuilder)
 			            }
 			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-			            #sourceLocation(file: "\(output.fixtures["B.swift"])", line: 9)
-			            let aBuilderAlias: Instantiator<A>? = aBuilder
-			            #sourceLocation()
+			            let aBuilderAlias: Instantiator<A>? = aBuilder // Declared as B.aBuilderAlias
 			            return if let safeDIBuilder = safeDIOverrides.bBuilder.safeDIBuilder { safeDIBuilder(aBuilder, aBuilderAlias) } else { B(aBuilder: aBuilder, aBuilderAlias: aBuilderAlias) }
 			        }
 			        let bBuilder = Instantiator<B>(__safeDI_bBuilder)
@@ -4050,9 +4003,7 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			                if let safeDIBuilder = safeDIOverrides.bBuilder.aBuilder { safeDIBuilder(c) } else { A(c: c) }
 			            }
 			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-			            #sourceLocation(file: "\(output.fixtures["B.swift"])", line: 11)
-			            let aBuilderAlias: Instantiator<A> = aBuilder
-			            #sourceLocation()
+			            let aBuilderAlias: Instantiator<A> = aBuilder // Declared as B.aBuilderAlias
 			            return if let safeDIBuilder = safeDIOverrides.bBuilder.safeDIBuilder { safeDIBuilder(c, aBuilder, aBuilderAlias) } else { B(c: c, aBuilder: aBuilder, aBuilderAlias: aBuilderAlias) }
 			        }
 			        let bBuilder = Instantiator<B>(__safeDI_bBuilder)

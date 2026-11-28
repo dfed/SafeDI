@@ -152,12 +152,6 @@ public struct QueryGraph: AsyncParsableCommand {
 			importStatements: [],
 			mockImportStatements: [],
 			typeDescriptionToFulfillingInstantiableMap: productionMap,
-			// No code is generated, so no alias declaration is referenced.
-			aliasDeclarationReferences: AliasDeclarationReferences(
-				declarationFilePaths: [],
-				compilerFilePaths: nil,
-				commentFilePath: { $0 },
-			),
 			compilesGeneratedMocks: false,
 			unfulfilledReceiveLocations: unfulfilledReceiveLocations,
 		)
@@ -268,7 +262,7 @@ public struct QueryGraphReport: Encodable, Equatable, Sendable {
 		}
 
 		errors = resolutionDiagnostics.map { diagnostic in
-			GraphError(message: diagnostic.message, filePath: attribution(of: diagnostic.location?.filePath), line: diagnostic.location?.lineAndColumn?.line)
+			GraphError(message: diagnostic.message, filePath: attribution(of: diagnostic.location?.filePath), line: diagnostic.location?.position?.line)
 		}
 		declarations = productionInstantiables.map { instantiable in
 			let declarationID = id(of: instantiable)
@@ -277,7 +271,7 @@ public struct QueryGraphReport: Encodable, Equatable, Sendable {
 				typeName: instantiable.concreteInstantiable.asSource,
 				module: instantiable.moduleName,
 				filePath: attribution(of: instantiable.declarationLocation?.filePath ?? instantiable.sourceFilePath),
-				line: instantiable.declarationLocation?.lineAndColumn?.line,
+				line: instantiable.declarationLocation?.position?.line,
 				declarationKind: GraphDeclaration.DeclarationKind(instantiable.declarationType),
 				fulfills: instantiable.instantiableTypes.map(\.asSource),
 				isRoot: instantiable.isRoot,
@@ -462,7 +456,7 @@ public struct GraphDependency: Encodable, Equatable, Sendable {
 		type = dependency.property.typeDescription.asSource
 		wrapper = dependency.property.typeDescription.propertyType.wrapperTypeName
 		self.filePath = filePath
-		line = dependency.declarationLocation?.lineAndColumn?.line
+		line = dependency.declarationLocation?.position?.line
 		switch dependency.source {
 		case let .instantiated(fulfillingTypeDescription, erasedToConcreteExistential):
 			source = .instantiated

@@ -1144,9 +1144,7 @@ struct SafeDIToolKeywordLabelTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let `default` = if let safeDIBuilder = safeDIOverrides.`default` { safeDIBuilder() } else { Analytics() }
-		        #sourceLocation(file: "\(output.fixtures["Screen.swift"])", line: 8)
-		        let default_EventTracker: EventTracker = `default`
-		        #sourceLocation()
+		        let default_EventTracker: EventTracker = `default` // Declared as Screen.`default`
 		        return Screen(default: default_EventTracker)
 		    }
 		}

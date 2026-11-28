@@ -8465,9 +8465,9 @@ enum GraphFuzzerGenerator {
 		/// the instance under every one of them, in an order drawn apart from the labels'. So creating `RenamedLazyTop`
 		/// creates the value, and the warning that says so names the reader's receive declared first
 		/// (`InstantiationAnalysis`' `recordReads(whileCreating:)`), never the first label. The multi-module partition
-		/// puts the reader in a module beneath the root's when it splits the tree, where a run over module info files that
-		/// store positions apart reads the receives' places by their order in the reader's file alone, and must name the
-		/// same one (`SplitPositionsRun`). `renamedLazyReaderRandom` draws only for this pass, after every other, and only
+		/// puts the reader in a module beneath the root's when it splits the tree, where a run over module info files, which
+		/// store no line or column, reads the receives' places by their rank in the reader's file alone, and must name the
+		/// same one. `renamedLazyReaderRandom` draws only for this pass, after every other, and only
 		/// in the base corpus.
 		private mutating func addingReadersOfRenamedLazyInstance(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
 			guard features.isEmpty, renamedLazyReaderRandom.percentChance(12) else { return declarations }
@@ -14258,8 +14258,7 @@ struct GraphFuzzerOutcomeDifference: Equatable {
 	/// `code` with the items of each of its lists and blocks in sorted order: each balanced `(…)`, `[…]` and generic `<…>`
 	/// group split at its own top-level commas, and each `{…}` block split at its own newlines and semicolons into its
 	/// declarations and statements (a multi-line one, whose other lines are inside a nested group or block, stays one
-	/// item, as does an `#if` region with everything up to its `#endif` and a `#sourceLocation(file:…)` run up to its
-	/// `#sourceLocation()`), each item put in this form itself and trimmed,
+	/// item, as does an `#if` region with everything up to its `#endif`), each item put in this form itself and trimmed,
 	/// and the items sorted, while everything outside the groups and blocks keeps its order. So two files compare equal
 	/// when they differ only in the order of siblings within one list or one block, recursively: an item moved to
 	/// another list or block, a value swapped between two calls, a changed nesting, a respelled type or a value moved to
@@ -14424,15 +14423,13 @@ private struct GraphFuzzerListOrderCanonicalizer {
 		return names.sorted().joined(separator: ", ") + item[inRange.lowerBound...]
 	}
 
-	/// `items` with each `#if` item and those after it up to its `#endif`, and each `#sourceLocation(file:…)` item and those
-	/// after it up to the `#sourceLocation()` that ends it, joined into one, in their order.
+	/// `items` with each `#if` item and those after it up to its `#endif` joined into one, in their order.
 	private static func joiningRegions(of items: [String]) -> [String] {
 		var joined = [String]()
 		var region = [String]()
 		var depth = 0
 		for item in items {
-			let opensRegion = item.hasPrefix("#if") || (item.hasPrefix("#sourceLocation(") && item != "#sourceLocation()")
-			if opensRegion {
+			if item.hasPrefix("#if") {
 				depth += 1
 			}
 			if depth > 0 {
@@ -14440,7 +14437,7 @@ private struct GraphFuzzerListOrderCanonicalizer {
 			} else {
 				joined.append(item)
 			}
-			if item.hasPrefix("#endif") || item == "#sourceLocation()", depth > 0 {
+			if item.hasPrefix("#endif"), depth > 0 {
 				depth -= 1
 				if depth == 0 {
 					joined.append(region.joined(separator: "; "))
@@ -14799,6 +14796,7 @@ struct GraphFuzzerFailure: Equatable {
 		/// which declares that type `public` where SafeDI reads it, gets another verdict, other diagnostics, or other
 		/// generated code: SafeDI counts the type otherwise than as `public` (decision 54).
 		case readTwinDiffers = "the graph with each type SafeDI reads no declaration of declared public where SafeDI reads it gives other results"
+		case lineShiftChangesOutput = "the graph with every declaration moved down and to the right gives other results than its positions in diagnostics"
 		/// The tool accepts a graph with a hole and the same graph without its second place of a hole
 		/// (`GraphFuzzerGenerator.fixtureWithoutSecondHolePlace`), and a builder label, scope type or case name it generates
 		/// for the graph without the place is gone from what it generates for the graph with it: a hand-written caller that
@@ -15665,6 +15663,8 @@ struct GraphFuzzerToolRuns {
 	///     run, with its rename undone, when the graph names a type no declaration SafeDI reads declares.
 	///   - readTwinPluginOutcome: The outcome of the read twin as `pluginOutcome` was run, with its rename undone, when the
 	///     graph has both.
+	///   - lineShiftRuns: The run `firstOutcome` is of, with the module info it wrote, and the run of the graph with every
+	///     line shifted (`GraphFuzzerLineShift.shifted(_:)`), for a graph of the seam or public mock corpus.
 	///   - valueOracle: The value oracle's run of a base corpus graph the tool accepts.
 	///   - withoutSecondHolePlaceOutcome: The outcome of the graph without its second place of a hole
 	///     (`GraphFuzzerGenerator.fixtureWithoutSecondHolePlace`), when it has one, with the place it leaves out.
@@ -15703,6 +15703,7 @@ struct GraphFuzzerToolRuns {
 		recomputedSignaturesOutcome: GraphFuzzerToolOutcome? = nil,
 		readTwinOutcome: GraphFuzzerToolOutcome? = nil,
 		readTwinPluginOutcome: GraphFuzzerToolOutcome? = nil,
+		lineShiftRuns: (run: GraphFuzzerToolRun, shiftedRun: GraphFuzzerToolRun)? = nil,
 		valueOracle: GraphFuzzerValueOracleRun? = nil,
 		withoutSecondHolePlaceOutcome: (place: String, outcome: GraphFuzzerToolOutcome)? = nil,
 		placeLevelDisagreements: [String] = [],
@@ -15746,8 +15747,11 @@ struct GraphFuzzerToolRuns {
 		self.recomputedSignaturesOutcome = recomputedSignaturesOutcome
 		self.readTwinOutcome = readTwinOutcome
 		self.readTwinPluginOutcome = readTwinPluginOutcome
+		self.lineShiftRuns = lineShiftRuns
 		self.valueOracle = valueOracle
 	}
+
+	let lineShiftRuns: (run: GraphFuzzerToolRun, shiftedRun: GraphFuzzerToolRun)?
 
 	let fixture: GraphFuzzerFixture
 	let firstOutcome: GraphFuzzerToolOutcome
@@ -16013,6 +16017,18 @@ struct GraphFuzzerToolRuns {
 			)
 		}
 		return nil
+	}
+
+	/// The failure of a graph whose run with every line shifted differs from its run as drawn beyond the diagnostics'
+	/// positions (`GraphFuzzerLineShift.difference(between:and:)`), or `nil`; a graph of the base corpus is judged by
+	/// `GraphFuzzerMultiModuleRuns.lineShiftFailure`.
+	var lineShiftFailure: GraphFuzzerFailure? {
+		guard let lineShiftRuns, let difference = GraphFuzzerLineShift.difference(between: lineShiftRuns.run, and: lineShiftRuns.shiftedRun) else { return nil }
+		return GraphFuzzerFailure(
+			seed: fixture.seed,
+			kind: .lineShiftChangesOutput,
+			details: "With every declaration moved down and to the right, the graph changes \(difference).\nAs drawn:\n\(lineShiftRuns.run.outcome.description)\nShifted:\n\(lineShiftRuns.shiftedRun.outcome.description)",
+		)
 	}
 
 	/// The failure of a graph whose seam takes a builder for a hole that the tool accepts while it rejects the graph's
@@ -16615,7 +16631,7 @@ enum GraphFuzzerOracle {
 			let renamedGraphFailures = runs.renamedGraphFailures(refutingOrderOf: valueComparisons.listOrderRefutations[runs.fixture.seed] ?? [:])
 			var failures = [runs.runsDifferFailure, runs.cleanSubtreeSkipFailure, runs.differentialFailure, runs.acceptanceDifferentialFailure, runs.integrationsDisagreeFailure, runs.storedSeamSignaturesDisagreeFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.seamRejectedWhereInlineAcceptsFailure, runs.nilArgumentFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.publicMockRootLevelFailure, runs.publicMockOverrideClosureFailure, runs.publicMockOverridesOrderFailure, runs.omittedValueFailure, codeCompilationFailures[runs.fixture.seed], runs.valueOracleFixtureFailure].compactMap(\.self)
 			failures.append(contentsOf: valueComparisons.failures[runs.fixture.seed] ?? [])
-			failures.append(contentsOf: [runs.wrapperParameterFailure, runs.generatedCodeCallsEntryMeantForPeopleFailure, runs.generatedOnlyInitializerTakesDefaultFailure, runs.carrierMemberReadApartFailure, runs.configurationStorageFailure, runs.handWrittenMockBypassFailure, runs.readTwinFailure, runs.holeNameStabilityFailure, runs.builderSurfaceFailure, builderCallFailures[runs.fixture.seed], runs.builderLabelFailure, runs.sameSupplyFailure, runs.sameSupplyEditRejectedFailure, runs.addedSupplyFailure, runs.forwardedValuesFailure, runs.forwardingRemedyFailure, runs.remedyBuildersFailure, runs.callingMockFailure, runs.placeLevelsFailure, runs.rootFunctionKeyFailure, runs.placesJudgedByAnotherPlacesFillFailure, runs.placeChainFailure, runs.secondPathFailure, runs.multiModuleFailures.first, runs.remedyFailure, runs.querySuppliersFailure, runs.queryUnfulfilledFailure, runs.queryDeletionFailure].compactMap(\.self))
+			failures.append(contentsOf: [runs.wrapperParameterFailure, runs.generatedCodeCallsEntryMeantForPeopleFailure, runs.generatedOnlyInitializerTakesDefaultFailure, runs.carrierMemberReadApartFailure, runs.configurationStorageFailure, runs.handWrittenMockBypassFailure, runs.readTwinFailure, runs.lineShiftFailure, runs.multiModuleRuns.compactMap(\.lineShiftFailure).first, runs.holeNameStabilityFailure, runs.builderSurfaceFailure, builderCallFailures[runs.fixture.seed], runs.builderLabelFailure, runs.sameSupplyFailure, runs.sameSupplyEditRejectedFailure, runs.addedSupplyFailure, runs.forwardedValuesFailure, runs.forwardingRemedyFailure, runs.remedyBuildersFailure, runs.callingMockFailure, runs.placeLevelsFailure, runs.rootFunctionKeyFailure, runs.placesJudgedByAnotherPlacesFillFailure, runs.placeChainFailure, runs.secondPathFailure, runs.multiModuleFailures.first, runs.remedyFailure, runs.querySuppliersFailure, runs.queryUnfulfilledFailure, runs.queryDeletionFailure].compactMap(\.self))
 			failures.append(contentsOf: runs.scopeCaseFailures)
 			// Whether a closure a level function returns keeps a level's values, read from the generated text, so it judges
 			// with compiles and without.
@@ -17449,7 +17465,7 @@ enum GraphFuzzerOracle {
 		// The call of `addingPlacesOfOneCaseShapes`' seam must build one fill per kind of place
 		// (`placesJudgedByAnotherPlacesFillFailure`).
 		let (fillsOfCallsStream, fillsOfCallsContinuation) = AsyncStream.makeStream(of: SeamFillSharing.FillsOfCall.self)
-		let (((firstOutcome, placeLevelDisagreements), placeFacts), rootFunctionKeyDisagreements) = try await collectingRootFunctionKeyDisagreements(during: {
+		let (((firstRun, placeLevelDisagreements), placeFacts), rootFunctionKeyDisagreements) = try await collectingRootFunctionKeyDisagreements(during: {
 			try await collectingPlaceFacts(during: {
 				try await collectingPlaceLevelDisagreements(during: {
 					try await ValidationWalkObservation.$observer.withValue(TaskLocalFunction { observation in
@@ -17458,12 +17474,13 @@ enum GraphFuzzerOracle {
 						}
 					}) {
 						try await SeamFillSharing.$observer.withValue(TaskLocalFunction { fillsOfCallsContinuation.yield($0) }) {
-							try await toolOutcome(of: fixture)
+							try await toolRun(of: fixture)
 						}
 					}
 				})
 			})
 		})
+		let firstOutcome = firstRun.outcome
 		fillsOfCallsContinuation.finish()
 		var fillsOfCalls = [SeamFillSharing.FillsOfCall]()
 		for await fills in fillsOfCallsStream {
@@ -17505,6 +17522,12 @@ enum GraphFuzzerOracle {
 		let recomputedSignaturesOutcome: GraphFuzzerToolOutcome? = fixture.modules != nil && (fixture.declaresSeam || GraphFuzzerGeneratorFeature.features(drawnIn: fixture).contains(.generateMockPublic))
 			? try await toolOutcome(of: fixture, discardingStoredSeamSignatures: true)
 			: nil
+		// A graph of the seam or public mock corpus is run again with every line of every file shifted, which must change
+		// nothing but the diagnostics' positions (`lineShiftFailure`). The base corpus's graphs are shifted where they are
+		// split across modules (`GraphFuzzerMultiModuleRuns.lineShiftFailure`), whose run writes `.safedi` files.
+		let lineShiftedRun: GraphFuzzerToolRun? = GraphFuzzerGeneratorFeature.features(drawnIn: fixture).isEmpty
+			? nil
+			: try await toolRun(of: fixture, shiftingLines: true)
 		// A graph that names a type no declaration SafeDI reads declares is run again as its read twin, which declares that
 		// type `public` where SafeDI reads it, under each flow the graph is run under: SafeDI counts the type as `public`, so
 		// the two must agree but for the comment naming it (`readTwinFailure`).
@@ -17622,6 +17645,7 @@ enum GraphFuzzerOracle {
 			recomputedSignaturesOutcome: recomputedSignaturesOutcome,
 			readTwinOutcome: readTwinOutcome,
 			readTwinPluginOutcome: readTwinPluginOutcome,
+			lineShiftRuns: lineShiftedRun.map { (run: firstRun, shiftedRun: $0) },
 			valueOracle: valueOracle,
 			withoutSecondHolePlaceOutcome: withoutSecondHolePlaceOutcome,
 			placeLevelDisagreements: placeLevelDisagreements,
@@ -17657,17 +17681,22 @@ enum GraphFuzzerOracle {
 	/// The tool's outcome for `fixture`, as `toolOutcome(of:fileNames:integration:listsTransitiveDependencies:)` gives it,
 	/// with the name of the module whose `generate` rejected a graph split across modules: `nil` where the tool accepts the
 	/// graph, or where the graph is in one module, which is then the module that rejects it.
-	static func toolRun(of fixture: GraphFuzzerFixture, fileNames: [String]? = nil, integration: MultiModuleIntegration = .moduleInfo, listsTransitiveDependencies: Bool = false, discardingStoredSeamSignatures: Bool = false) async throws -> (outcome: GraphFuzzerToolOutcome, rejectingModuleName: String?) {
+	///
+	/// - Parameter shiftingLines: Whether the files the tool reads hold the fixture's content with every line shifted
+	///   (`GraphFuzzerLineShift.shifted(_:)`), while the files' names, modules, and the callers the oracle adds stay the
+	///   fixture's.
+	static func toolRun(of fixture: GraphFuzzerFixture, fileNames: [String]? = nil, integration: MultiModuleIntegration = .moduleInfo, listsTransitiveDependencies: Bool = false, discardingStoredSeamSignatures: Bool = false, shiftingLines: Bool = false) async throws -> GraphFuzzerToolRun {
 		// A stored block that does not read back is reported by the run's harness, which knows no seed (`StoredBlockDecodeChecks`).
 		try await StoredBlockDecodeChecks.$runDescription.withValue("graph fuzzer seed \(fixture.seed)") {
-			try await toolRunOfGraph(of: fixture, fileNames: fileNames, integration: integration, listsTransitiveDependencies: listsTransitiveDependencies, discardingStoredSeamSignatures: discardingStoredSeamSignatures)
+			try await toolRunOfGraph(of: fixture, fileNames: fileNames, integration: integration, listsTransitiveDependencies: listsTransitiveDependencies, discardingStoredSeamSignatures: discardingStoredSeamSignatures, shiftingLines: shiftingLines)
 		}
 	}
 
-	/// See `toolRun(of:fileNames:integration:listsTransitiveDependencies:discardingStoredSeamSignatures:)`.
-	private static func toolRunOfGraph(of fixture: GraphFuzzerFixture, fileNames: [String]?, integration: MultiModuleIntegration, listsTransitiveDependencies: Bool, discardingStoredSeamSignatures: Bool) async throws -> (outcome: GraphFuzzerToolOutcome, rejectingModuleName: String?) {
+	/// See `toolRun(of:fileNames:integration:listsTransitiveDependencies:discardingStoredSeamSignatures:shiftingLines:)`.
+	private static func toolRunOfGraph(of fixture: GraphFuzzerFixture, fileNames: [String]?, integration: MultiModuleIntegration, listsTransitiveDependencies: Bool, discardingStoredSeamSignatures: Bool, shiftingLines: Bool) async throws -> GraphFuzzerToolRun {
+		let swiftFileContent = shiftingLines ? fixture.swiftFileContent.map(GraphFuzzerLineShift.shifted(_:)) : fixture.swiftFileContent
 		if let modules = fixture.modules {
-			return try await splitToolRun(of: fixture, modules: modules, fileNames: fileNames ?? fixture.fileNames, integration: integration, listsTransitiveDependencies: listsTransitiveDependencies, discardingStoredSeamSignatures: discardingStoredSeamSignatures)
+			return try await splitToolRun(of: fixture, swiftFileContent: swiftFileContent, modules: modules, fileNames: fileNames ?? fixture.fileNames, integration: integration, listsTransitiveDependencies: listsTransitiveDependencies, discardingStoredSeamSignatures: discardingStoredSeamSignatures)
 		}
 		var filesToDelete = [URL]()
 		defer {
@@ -17677,8 +17706,8 @@ enum GraphFuzzerOracle {
 		}
 		do {
 			let output = try await executeSafeDIToolTest(
-				swiftFileContent: fileNames == nil ? fixture.swiftFileContent : [],
-				swiftFileContentByFilePath: fileNames.map { Dictionary(uniqueKeysWithValues: zip($0, fixture.swiftFileContent)) } ?? [:],
+				swiftFileContent: fileNames == nil ? swiftFileContent : [],
+				swiftFileContentByFilePath: fileNames.map { Dictionary(uniqueKeysWithValues: zip($0, swiftFileContent)) } ?? [:],
 				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 				skipCompileVerification: true,
@@ -17687,15 +17716,15 @@ enum GraphFuzzerOracle {
 				recordDirectory: nil,
 			)
 			let normalize = try normalizer(fixtureDirectory: fixtureDirectory(of: fileNames ?? fixture.fileNames, in: output.fixtures, seed: fixture.seed).path)
-			return (.accepted(
+			return GraphFuzzerToolRun(outcome: .accepted(
 				generatedFiles: addingSeamCallers(to: (output.generatedFiles ?? [:]).mapValues(normalize), seamTypeAccess: fixture.seamTypeAccess),
 				warnings: output.warnings.map { normalize("\($0)") },
-			), nil)
+			), rejectingModuleName: nil)
 		} catch let error as SafeDIToolTestError {
 			let directory = try fixtureDirectory(of: fileNames ?? fixture.fileNames, in: error.fixtures, seed: fixture.seed)
 			// `executeSafeDIToolTest` schedules the fixture directory for deletion only when `generate` succeeds.
 			filesToDelete.append(directory)
-			return (.rejected(diagnostics: normalizer(fixtureDirectory: directory.path)("\(error.underlyingError)")), nil)
+			return GraphFuzzerToolRun(outcome: .rejected(diagnostics: normalizer(fixtureDirectory: directory.path)("\(error.underlyingError)")), rejectingModuleName: nil)
 		} catch {
 			// `executeSafeDIToolTest` wraps every error `generate` throws, so this is the harness failing, such as a
 			// fixture it could not write: not the tool rejecting the graph.
@@ -17714,7 +17743,8 @@ enum GraphFuzzerOracle {
 	/// reaches a place through a seam beneath the seam's module (`GraphFuzzerFixture.modulesListingEveryModuleBeneath`).
 	/// Each generated file is keyed by its module's name and its own (`FuzzFeature/Type+SafeDI.swift`), and the outcome is
 	/// the first module's error, if any, with that module's name.
-	private static func splitToolRun(of fixture: GraphFuzzerFixture, modules: [GraphFuzzerModule], fileNames: [String], integration: MultiModuleIntegration, listsTransitiveDependencies: Bool, discardingStoredSeamSignatures: Bool) async throws -> (outcome: GraphFuzzerToolOutcome, rejectingModuleName: String?) {
+	/// The files hold `swiftFileContent`, the fixture's content or its shifted content, in the fixture's order.
+	private static func splitToolRun(of fixture: GraphFuzzerFixture, swiftFileContent: [String], modules: [GraphFuzzerModule], fileNames: [String], integration: MultiModuleIntegration, listsTransitiveDependencies: Bool, discardingStoredSeamSignatures: Bool) async throws -> GraphFuzzerToolRun {
 		var filesToDelete = [URL]()
 		defer {
 			for fileToDelete in filesToDelete {
@@ -17727,7 +17757,7 @@ enum GraphFuzzerOracle {
 			ModuleFixture(
 				name: module.name,
 				packageName: module.packageName,
-				swiftFileContentByFilePath: Dictionary(uniqueKeysWithValues: modules.indices.filter { modules[$0] == module }.map { (fileNames[$0], fixture.swiftFileContent[$0]) }),
+				swiftFileContentByFilePath: Dictionary(uniqueKeysWithValues: modules.indices.filter { modules[$0] == module }.map { (fileNames[$0], swiftFileContent[$0]) }),
 				dependencies: (dependencyLists[module] ?? []).map(\.name),
 				omitsPackageName: fixture.modulesOmittingPackageName.contains(module),
 			)
@@ -17752,20 +17782,24 @@ enum GraphFuzzerOracle {
 				}
 				warnings += moduleOutput.warnings.map { normalize("\($0)") }
 			}
-			return (.accepted(
-				generatedFiles: addingOverrideClosureCallers(
-					to: addingPublicMockCallers(
-						to: addingSeamCallers(to: generatedFiles, seamTypeAccess: fixture.seamTypeAccess, modules: presentModules),
+			return GraphFuzzerToolRun(
+				outcome: .accepted(
+					generatedFiles: addingOverrideClosureCallers(
+						to: addingPublicMockCallers(
+							to: addingSeamCallers(to: generatedFiles, seamTypeAccess: fixture.seamTypeAccess, modules: presentModules),
+							of: fixture,
+						),
 						of: fixture,
 					),
-					of: fixture,
+					warnings: warnings,
 				),
-				warnings: warnings,
-			), nil)
+				rejectingModuleName: nil,
+				moduleInfoTexts: GraphFuzzerLineShift.moduleInfoTexts(of: output.modules),
+			)
 		} catch let error as SafeDIToolMultiModuleTestError {
 			// The harness registers the fixture root for deletion before it writes anything.
 			let normalize = normalizer(fixtureDirectory: filesToDelete.first?.path ?? "")
-			return (.rejected(diagnostics: normalize("\(error.underlyingError)")), error.moduleName)
+			return GraphFuzzerToolRun(outcome: .rejected(diagnostics: normalize("\(error.underlyingError)")), rejectingModuleName: error.moduleName, moduleInfoTexts: GraphFuzzerLineShift.moduleInfoTexts(of: error.outputs))
 		} catch {
 			throw GraphFuzzerInfrastructureError(description: "The test harness failed for seed \(fixture.seed) before or after SafeDITool ran: \(error)")
 		}
@@ -17825,8 +17859,7 @@ enum GraphFuzzerOracle {
 	/// The top-level declarations each module of a split graph generates, by module name, on which the SwiftPM plugin
 	/// flow and the module-info flow must agree: every generated file but the oracle's own callers, in blocks that begin
 	/// where a line begins as `integrationComparedBlockStarts` say. What the flows spell differently is dropped first:
-	/// `#sourceLocation` directives, which only a flow that knows the compiler's spelling of a path emits, the header
-	/// lines every generated file opens with, the lines `integrationSpecificCommentLines` begin, and the comments of
+	/// the header lines every generated file opens with, the lines `integrationSpecificCommentLines` begin, and the comments of
 	/// `integrationSpecificTrailingComments`. The blocks are
 	/// a set, since the plugin repeats a module's imports in every file it writes, where a combined output states them
 	/// once.
@@ -17844,8 +17877,7 @@ enum GraphFuzzerOracle {
 			}
 			for line in contents.split(separator: "\n", omittingEmptySubsequences: false) {
 				let trimmedLine = line.trimmingCharacters(in: .whitespaces)
-				guard !trimmedLine.hasPrefix("#sourceLocation"),
-				      !generatedFileHeaderLines.contains(trimmedLine),
+				guard !generatedFileHeaderLines.contains(trimmedLine),
 				      !integrationSpecificCommentLines.contains(where: { trimmedLine.hasPrefix($0) })
 				else { continue }
 				let code = integrationSpecificTrailingComments.reduce(line) { code, comment in
@@ -17939,11 +17971,9 @@ enum GraphFuzzerOracle {
 	/// How the comment naming the types SafeDI counts as `public` because it reads no declaration of them begins.
 	static let unreadTypeCommentPrefix = "// SafeDI counts `"
 
-	/// The trailing comments generated code carries in one flow and not the other: `// Declared at …`, which refers to an
-	/// alias's declaration where a flow does not know the compiler's spelling of its path for a `#sourceLocation`
-	/// directive, and the comment a seam call carries saying what to do when it does not compile, which each flow words
-	/// for its own integration.
-	static let integrationSpecificTrailingComments = [" // Declared at ", " // If this line does not compile, add the SafeDI plugin", " // If this line does not compile, compile the code SafeDI generates"]
+	/// The trailing comments generated code carries in one flow and not the other: the comment a seam call carries saying
+	/// what to do when it does not compile, which each flow words for its own integration.
+	static let integrationSpecificTrailingComments = [" // If this line does not compile, add the SafeDI plugin", " // If this line does not compile, compile the code SafeDI generates"]
 
 	/// The failure of a graph whose `SafeDITool generate` output differs between two processes, which seed their
 	/// hashing differently, or `nil` when both processes give the same output.
@@ -18455,12 +18485,12 @@ enum GraphFuzzerOracle {
 	/// without a leading `/private`, since every spelling ends in that component. The directories above it are no part of
 	/// what the oracle compares, and a renaming must not rewrite them when it is undone: a macOS runner's temporary
 	/// directory, `/var/folders/h5/t85nd…/T`, holds `t8`, which undoing a label reversal reads as a label.
-	/// The path appears in generated code only in `#sourceLocation` paths and comments, so the code still compiles.
+	/// The path appears in generated code only in comments, so the code still compiles.
 	static func normalizer(fixtureDirectory: String) -> (String) -> String {
 		let uniqueComponent = (fixtureDirectory as NSString).lastPathComponent
 		guard !uniqueComponent.isEmpty else { return { $0 } }
-		// A path starts after whitespace, a quote, a backtick or an opening parenthesis, as the tool's diagnostics and
-		// `#sourceLocation` directives spell it.
+		// A path starts after whitespace, a quote, a backtick or an opening parenthesis, as the tool's diagnostics spell
+		// it, and as an older release's `#sourceLocation` directives do, which release acceptance compares.
 		let pattern = #"(?:[^\s"'`(]*/)?"# + NSRegularExpression.escapedPattern(for: uniqueComponent)
 		return { text in
 			guard text.contains(uniqueComponent) else { return text }
@@ -18688,7 +18718,7 @@ enum GraphFuzzerOracle {
 		}
 
 		/// Whether `fileName` belongs to this unit: a fixture staged as `input_<index>_<prefix>…`, a generated file
-		/// named `<prefix>…`, or a fixture named in a `#sourceLocation` directive.
+		/// named `<prefix>…`, or a fixture named in an older release's `#sourceLocation` directive.
 		func contains(fileName: Substring) -> Bool {
 			let typeNamePrefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
 			return fileName.hasPrefix(typeNamePrefix) || fileName.contains("_\(typeNamePrefix)")
@@ -18729,9 +18759,9 @@ enum GraphFuzzerOracle {
 
 		/// Records the warnings `unit`'s generated code draws in `compilerOutput`, the output of a compile that
 		/// `unit` passed, which reports every warning in `unit`'s files, and those its fixture draws.
-		mutating func recordGeneratedCodeWarnings(of unit: CompilationUnit, inCompilerOutput compilerOutput: String) throws {
+		mutating func recordGeneratedCodeWarnings(of unit: CompilationUnit, inCompilerOutput compilerOutput: String) {
 			inputWarningMessages[unit.seed, default: []].formUnion(warningMessagesInputsDraw(inCompilerOutput: compilerOutput, inputFiles: unit.inputFiles))
-			let warnings = try warningsOnlyGeneratedCodeDraws(
+			let warnings = warningsOnlyGeneratedCodeDraws(
 				inCompilerOutput: compilerOutput,
 				generatedFiles: unit.generatedFiles,
 				inputFiles: unit.inputFiles,
@@ -18773,7 +18803,7 @@ enum GraphFuzzerOracle {
 			let result = try await compile(remainingUnits)
 			guard result.exitCode != 0 else {
 				for unit in remainingUnits {
-					try compilation.recordGeneratedCodeWarnings(of: unit, inCompilerOutput: result.stderr)
+					compilation.recordGeneratedCodeWarnings(of: unit, inCompilerOutput: result.stderr)
 				}
 				break
 			}
@@ -18811,7 +18841,7 @@ enum GraphFuzzerOracle {
 					if unitResult.exitCode != 0 {
 						compilation.failures[unit.seed] = UnitDiagnostics(standardError: unitResult.stderr)
 					} else {
-						try compilation.recordGeneratedCodeWarnings(of: unit, inCompilerOutput: unitResult.stderr)
+						compilation.recordGeneratedCodeWarnings(of: unit, inCompilerOutput: unitResult.stderr)
 						compilingUnits.append(unit)
 					}
 				}

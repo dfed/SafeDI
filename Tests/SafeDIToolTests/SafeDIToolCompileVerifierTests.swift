@@ -39,10 +39,10 @@ struct SafeDIToolCompileVerifierTests: ~Copyable {
 
 	@Test
 	func warningsOnlyGeneratedCodeDraws_reportsWarning_whenGeneratedFileDrawsIt() throws {
-		let generatedFile = try generatedFile(containing: Self.redirectingGeneratedCode)
-		let warning = "\(generatedFile.path):7:13: warning: initialization of immutable value 'third' was never used"
+		let generatedFile = try generatedFile(containing: Self.generatedCode)
+		let warning = "\(generatedFile.path):5:13: warning: initialization of immutable value 'third' was never used"
 
-		#expect(try warningsOnlyGeneratedCodeDraws(
+		#expect(warningsOnlyGeneratedCodeDraws(
 			inCompilerOutput: warning + "\n",
 			generatedFiles: [generatedFile],
 			inputFiles: [inputFile],
@@ -51,12 +51,12 @@ struct SafeDIToolCompileVerifierTests: ~Copyable {
 
 	@Test
 	func warningsOnlyGeneratedCodeDraws_omitsWarning_whenInputFileDrawsTheSameMessage() throws {
-		let generatedFile = try generatedFile(containing: Self.redirectingGeneratedCode)
+		let generatedFile = try generatedFile(containing: Self.generatedCode)
 
-		#expect(try warningsOnlyGeneratedCodeDraws(
+		#expect(warningsOnlyGeneratedCodeDraws(
 			inCompilerOutput: """
 			\(inputFile.path):3:9: warning: will never be executed
-			\(generatedFile.path):7:13: warning: will never be executed
+			\(generatedFile.path):5:13: warning: will never be executed
 
 			""",
 			generatedFiles: [generatedFile],
@@ -68,11 +68,11 @@ struct SafeDIToolCompileVerifierTests: ~Copyable {
 	func warningsOnlyGeneratedCodeDraws_reportsWarning_whenOnlyAnotherGraphsInputFileDrawsTheSameMessage() throws {
 		// The fuzzer compiles several graphs together and asks about each graph's files in turn, so another graph's
 		// fixture excuses nothing.
-		let generatedFile = try generatedFile(containing: Self.redirectingGeneratedCode)
+		let generatedFile = try generatedFile(containing: Self.generatedCode)
 		let otherInputFile = directory.appendingPathComponent("input_0_Other.swift")
-		let warning = "\(generatedFile.path):7:13: warning: will never be executed"
+		let warning = "\(generatedFile.path):5:13: warning: will never be executed"
 
-		#expect(try warningsOnlyGeneratedCodeDraws(
+		#expect(warningsOnlyGeneratedCodeDraws(
 			inCompilerOutput: """
 			\(otherInputFile.path):3:9: warning: will never be executed
 			\(warning)
@@ -85,142 +85,16 @@ struct SafeDIToolCompileVerifierTests: ~Copyable {
 
 	@Test
 	func warningsOnlyGeneratedCodeDraws_omitsWarning_whenOnlyInputFileDrawsIt() throws {
-		let generatedFile = try generatedFile(containing: Self.redirectingGeneratedCode)
+		let generatedFile = try generatedFile(containing: Self.generatedCode)
 
-		#expect(try warningsOnlyGeneratedCodeDraws(
+		#expect(warningsOnlyGeneratedCodeDraws(
 			inCompilerOutput: "\(inputFile.path):3:13: warning: initialization of immutable value 'fixtureOwn' was never used\n",
 			generatedFiles: [generatedFile],
 			inputFiles: [inputFile],
 		) == [])
 	}
 
-	// MARK: Tests – `#sourceLocation` redirections
-
-	@Test
-	func warningsOnlyGeneratedCodeDraws_reportsWarning_whenSourceLocationDirectiveAttributesGeneratedLineToDeclaration() throws {
-		let generatedFile = try generatedFile(containing: Self.redirectingGeneratedCode)
-		let warning = "\(Self.declarationFilePath):8:13: warning: initialization of immutable value 'first' was never used"
-
-		#expect(try warningsOnlyGeneratedCodeDraws(
-			inCompilerOutput: warning + "\n",
-			generatedFiles: [generatedFile],
-			inputFiles: [inputFile],
-		) == [warning])
-	}
-
-	@Test
-	func warningsOnlyGeneratedCodeDraws_reportsWarning_whenLaterLineOfSourceLocationRedirectionDrawsIt() throws {
-		let generatedFile = try generatedFile(containing: Self.redirectingGeneratedCode)
-		let warning = "\(Self.declarationFilePath):9:13: warning: initialization of immutable value 'second' was never used"
-
-		#expect(try warningsOnlyGeneratedCodeDraws(
-			inCompilerOutput: warning + "\n",
-			generatedFiles: [generatedFile],
-			inputFiles: [inputFile],
-		) == [warning])
-	}
-
-	@Test
-	func warningsOnlyGeneratedCodeDraws_reportsWarning_whenSourceLocationDirectiveNamesRelativePath() throws {
-		// The compiler reports the directive's path as spelled, without resolving it.
-		let generatedFile = try generatedFile(containing: """
-		extension Fixture {
-		    func generated() {
-		        #sourceLocation(file: "Sources/Fixture.swift", line: 8)
-		        let first = 1
-		        #sourceLocation()
-		    }
-		}
-		""")
-		let warning = "Sources/Fixture.swift:8:13: warning: initialization of immutable value 'first' was never used"
-
-		#expect(try warningsOnlyGeneratedCodeDraws(
-			inCompilerOutput: warning + "\n",
-			generatedFiles: [generatedFile],
-			inputFiles: [inputFile],
-		) == [warning])
-	}
-
-	@Test
-	func warningsOnlyGeneratedCodeDraws_omitsWarning_whenInputFileDrawsTheSameMessageAsRedirectedLine() throws {
-		let generatedFile = try generatedFile(containing: Self.redirectingGeneratedCode)
-
-		#expect(try warningsOnlyGeneratedCodeDraws(
-			inCompilerOutput: """
-			\(inputFile.path):3:9: warning: will never be executed
-			\(Self.declarationFilePath):8:13: warning: will never be executed
-
-			""",
-			generatedFiles: [generatedFile],
-			inputFiles: [inputFile],
-		) == [])
-	}
-
-	@Test
-	func warningsOnlyGeneratedCodeDraws_omitsWarning_whenDeclarationFileDrawsItAfterSourceLocationRedirectionEnds() throws {
-		// The redirection covers lines 8 and 9 of the declaration's file; line 10 is the file's own.
-		let generatedFile = try generatedFile(containing: Self.redirectingGeneratedCode)
-
-		#expect(try warningsOnlyGeneratedCodeDraws(
-			inCompilerOutput: "\(Self.declarationFilePath):10:13: warning: initialization of immutable value 'fixtureOwn' was never used\n",
-			generatedFiles: [generatedFile],
-			inputFiles: [inputFile],
-		) == [])
-	}
-
-	@Test
-	func warningsOnlyGeneratedCodeDraws_omitsWarning_whenOnlyAnotherGeneratedFileRedirectsTheLine() throws {
-		// The fuzzer compiles several graphs together and asks about each graph's generated files in turn.
-		_ = try generatedFile(containing: Self.redirectingGeneratedCode)
-		let otherGeneratedFile = try generatedFile(named: "Other+SafeDI.swift", containing: "extension Other {}\n")
-
-		#expect(try warningsOnlyGeneratedCodeDraws(
-			inCompilerOutput: "\(Self.declarationFilePath):8:13: warning: initialization of immutable value 'first' was never used\n",
-			generatedFiles: [otherGeneratedFile],
-			inputFiles: [inputFile],
-		) == [])
-	}
-
-	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"))
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func verifyModulesCompile_reportsGeneratedCodeWarning_whenSourceLocationDirectiveAttributesItToFixture() async throws {
-		// The fixture is staged under another name, so the directive names a file the compile is not given, as a
-		// directive SafeDITool generates names the fixture `executeSafeDIToolTest` wrote.
-		let fixture = directory.appendingPathComponent("Fixture.swift")
-		try "public struct Fixture {}\n".write(to: fixture, atomically: true, encoding: .utf8)
-		var filesToDelete = [URL]()
-		defer {
-			for fileToDelete in filesToDelete {
-				try? FileManager.default.removeItem(at: fileToDelete)
-			}
-		}
-
-		let compilation = try #require(try await verifyModulesCompile(
-			[ModuleCompileSources(
-				moduleName: "Probe",
-				packageName: nil,
-				dependencyModuleNames: [],
-				inputSwiftFiles: [fixture],
-				generatedFiles: ["Fixture+SafeDI.swift": """
-				extension Fixture {
-				    func generated() {
-				        #sourceLocation(file: "\(fixture.path)", line: 1)
-				        let unused = 1
-				        #sourceLocation()
-				    }
-				}
-				"""],
-				activeCompilationConditions: [],
-				mockConditionalCompilation: nil,
-			)],
-			recordsIssues: false,
-			filesToDelete: &filesToDelete,
-		))
-
-		let warnings = try #require(compilation.modules.first).generatedCodeWarnings
-		#expect(warnings.count == 1, "Unexpected warnings \(warnings)")
-		#expect(warnings.allSatisfy { $0.hasPrefix("\(fixture.path):1:13: warning: initialization of immutable value 'unused' was never used") }, "Unexpected warnings \(warnings)")
-	}
+	// MARK: Tests – Compiling modules
 
 	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
@@ -468,18 +342,12 @@ struct SafeDIToolCompileVerifierTests: ~Copyable {
 		return file
 	}
 
-	/// The declaration's file that `redirectingGeneratedCode` names, which no compile is given.
-	private static let declarationFilePath = "/fixtures/Fixture.swift"
-
-	/// Generated code whose lines 4 and 5 a `#sourceLocation` directive attributes to lines 8 and 9 of
-	/// `declarationFilePath`, and whose line 7 is its own.
-	private static let redirectingGeneratedCode = """
+	/// Generated code whose line 5 declares `third`.
+	private static let generatedCode = """
 	extension Fixture {
 	    func generated() {
-	        #sourceLocation(file: "\(declarationFilePath)", line: 8)
 	        let first = 1
 	        let second = 2
-	        #sourceLocation()
 	        let third = 3
 	    }
 	}

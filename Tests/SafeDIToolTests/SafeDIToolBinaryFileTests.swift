@@ -71,8 +71,6 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		var writer = BinaryWriter()
 		writer.write("File.swift")
 		writer.write(Int.min)
-		writer.write(3)
-		writer.write(5)
 		let encoded = writer.encoded
 
 		let location = try encoded.withUnsafeBytes { bytes in
@@ -82,8 +80,9 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 			return location
 		}
 
-		#expect(location == Dependency.DeclarationLocation(filePath: "File.swift", order: -4_611_686_018_427_387_903, placement: .here(line: 3, column: 5)))
-		#expect(location.order == -4_611_686_018_427_387_903)
+		#expect(location == Dependency.DeclarationLocation(filePath: "File.swift", order: Int.min))
+		#expect(location.order == Int.min)
+		#expect(location.position == nil)
 	}
 
 	@Test
@@ -491,6 +490,27 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	}
 
 	@Test
+	func binaryReader_throws_whenRangeWithoutLinesAndColumnsIsReadOutsideItsDeclaration() throws {
+		// A module info file writes every range of its own entry without its lines and columns, which the reader of
+		// the declaration it belongs to rebuilds; a range read alone has no declaration to rebuild it from.
+		var writer = BinaryWriter()
+		writer.locationRanks = LocationRanks(ranking: [])
+		writer.write(Dependency.SourceRange(startLine: 3, startColumn: 5, endLine: 3, endColumn: 9))
+		let bytes = writer.encoded
+
+		#expect(throws: BinaryDecodingError.rangeWithoutOwner(offset: bytes.count - writer.bytes.count)) {
+			let _: Dependency.SourceRange = try read(bytes)
+		}
+	}
+
+	@Test
+	func binaryFileReadError_explains_whenBodyHoldsRangeWithoutOwner() {
+		let error = BinaryFileReadError(kind: .moduleInfo, reason: .malformedBody(.rangeWithoutOwner(offset: 7)))
+
+		#expect(error.description == "The module info file’s body holds a source range without its lines and columns at byte 7, outside every declaration whose location it could belong to.")
+	}
+
+	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_writesEachSpellingOfLabel_whenLabelsAreCanonicallyEquivalentAndGenerateReadsScanCache() async throws {
 		let output = try await executeSafeDIToolTest(
@@ -620,7 +640,7 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	}
 
 	@Test
-	func moduleInfoDataWritingSeamSignaturesWithoutPositions_writesWhatModuleInfoDataWritesOfTheSignaturesWithoutPositions_whenTheSignaturesCarryPositions() throws {
+	func moduleInfoData_writesTheSignaturesWithoutPositions_whenTheSignaturesCarryPositions() throws {
 		// A run writes the signatures it computed, which carry their declarations' positions, without making their
 		// copies without positions: the bytes must be those the copies wrote.
 		// A distinct sample holds a value in each optional field it declares, so its hole and receiver carry positions.
@@ -681,9 +701,13 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		]
 		// A module info file's header is its first 30 bytes.
 		let headerLength = 30
-		// The samples carry positions, so writing them as they are writes other bytes.
-		#expect(try Array(file(holding: signatures).moduleInfoData.dropFirst(headerLength)) != bodyWithoutPositions)
-		#expect(try Array(file(holding: signatures).moduleInfoDataWritingSeamSignaturesWithoutPositions.dropFirst(headerLength)) == bodyWithoutPositions)
+		// The samples carry positions, so an encoding that writes them writes other bytes.
+		var writerWithPositions = BinaryWriter()
+		writerWithPositions.write(signatures)
+		var writerWithoutPositions = BinaryWriter()
+		writerWithoutPositions.writingPositionsAsAbsent { $0.write(signatures) }
+		#expect(writerWithPositions.encoded != writerWithoutPositions.encoded)
+		#expect(try Array(file(holding: signatures).moduleInfoData.dropFirst(headerLength)) == bodyWithoutPositions)
 	}
 
 	@Test
@@ -1246,6 +1270,97 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func moduleInfoData_writesIdenticalBody_whenTwoRunsDifferOnlyInLinesAndColumns() async throws {
+		// A `.safedi` stores each location as its file and its rank there, and rebuilds each range from its declaration,
+		// so moving every declaration of a file down and to the right, in the same order, changes no byte of its body. One
+		// file holds more than twenty locations, so a rank written in another order than the file's, or a line or a
+		// column written at all, moves the bytes.
+		let ledgerSource = """
+		@Instantiable
+		public final class Ledger: Instantiable {
+		    public init(alpha: Alpha, beta: Beta, gamma: Gamma, delta: Delta) {
+		        self.alpha = alpha
+		        self.beta = beta
+		        self.gamma = gamma
+		        self.delta = delta
+		    }
+
+		    @Instantiated let alpha: Alpha
+		    @Instantiated let beta: Beta
+		    @Instantiated let gamma: Gamma
+		    @Instantiated let delta: Delta
+		}
+
+		@Instantiable(generateMock: .public)
+		public final class Alpha: Instantiable {
+		    public init(beta: Beta) {
+		        self.beta = beta
+		    }
+
+		    @Received let beta: Beta
+		}
+
+		@Instantiable
+		public final class Beta: Instantiable {
+		    public init() {}
+		}
+
+		@Instantiable
+		public final class Gamma: Instantiable {
+		    public init(beta: Beta, epsilon: Epsilon) {
+		        self.beta = beta
+		        self.epsilon = epsilon
+		    }
+
+		    @Received let beta: Beta
+		    @Instantiated let epsilon: Epsilon
+		}
+
+		@Instantiable
+		public final class Delta: Instantiable {
+		    public init(gamma: Gamma) {
+		        self.gamma = gamma
+		    }
+
+		    @Received let gamma: Gamma
+		}
+
+		@Instantiable
+		public final class Epsilon: Instantiable {
+		    public init() {}
+		}
+		"""
+		func moduleInfo(of source: String) async throws -> (text: String, file: ModuleInfoFile) {
+			let output = try await executeSafeDIToolMultiModuleTest(
+				modules: [ModuleFixture(name: "Ledgers", packageName: "Shop", swiftFileContent: [source])],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+			let path = try #require(output.modules["Ledgers"]?.moduleInfoOutputPath)
+			let data = try #require(FileManager.default.contents(atPath: path))
+			return try (#require(GraphFuzzerLineShift.moduleInfoTexts(of: output.modules)["Ledgers"]), ModuleInfoFile.reading(moduleInfoData: data, readingView: false))
+		}
+		let shiftedSource = GraphFuzzerLineShift.shifted(ledgerSource)
+		#expect(shiftedSource != ledgerSource)
+
+		let (text, file) = try await moduleInfo(of: ledgerSource)
+		let (shiftedText, shiftedFile) = try await moduleInfo(of: shiftedSource)
+
+		// Each run writes its fixtures under a directory of its own, whose path the texts spell alike and whose checksum
+		// they leave out (`GraphFuzzerLineShift.moduleInfoText(_:fixtureRoot:)`), so the files compare byte for byte. The
+		// comparison reports where the bytes first differ rather than printing them.
+		let bytes = text.unicodeScalars.map(\.value)
+		let shiftedBytes = shiftedText.unicodeScalars.map(\.value)
+		#expect(bytes.count == shiftedBytes.count)
+		#expect(zip(bytes, shiftedBytes).enumerated().first { $0.element.0 != $0.element.1 }?.offset == nil)
+		#expect(file.locationCountsByFilePath.count == 1)
+		#expect(try #require(file.locationCountsByFilePath.values.first) >= 20)
+		#expect(Array(file.locationCountsByFilePath.values) == Array(shiftedFile.locationCountsByFilePath.values))
+		#expect(file.instantiables.allSatisfy { $0.declarationLocation != nil && $0.declarationLocation?.position == nil })
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func dump_printsEverythingModuleInfoFileHoldsAsJSON() async throws {
 		let upstream = try await executeSafeDIToolTest(
 			swiftFileContent: [Self.upstreamServiceSource],
@@ -1408,7 +1523,16 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 			moduleMembershipArguments: ["--module-name", "Kitchen", "--package-name", "Restaurant"],
 		)
 
-		#expect(try reflectedDescription(of: output.writtenModuleInfo) == reflectedDescription(of: output.generateOutput.module))
+		// A module info file records each location as its file and its rank there, so its declarations read back
+		// without their lines and columns; every other fact reads back as generate held it.
+		let written = try output.writtenModuleInfo
+		let generated = output.generateOutput.module
+		#expect(written.moduleName == "Kitchen")
+		#expect(written.moduleName == generated.moduleName)
+		#expect(written.packageName == generated.packageName)
+		#expect(written.dependencyModuleNames == generated.dependencyModuleNames)
+		#expect(written.instantiables.compactMap(\.moduleName) == ["Kitchen", "Kitchen"])
+		#expect(reflectedDescription(of: written.instantiables.map { $0.withoutPositions() }) == reflectedDescription(of: generated.instantiables.map { $0.withoutPositions() }))
 	}
 
 	@Test

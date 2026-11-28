@@ -573,7 +573,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		}
 		""")
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		let tokenReaderPath = try #require(output.modules["Other"]).fixtures["TokenReader.swift"]
 		#expect(output.modules["Other"]?.generatedFiles == ["Other.swift": generatedFileHeader + """
 		#if canImport(Core)
 		import Core
@@ -594,9 +593,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                let chainToken = scope_chainToken.instance
 		                func __safeDI_holeService() -> HoleImpl {
 		                    @Sendable nonisolated func __safeDI_readerBuilder() -> TokenReader {
-		                        #sourceLocation(file: "\(tokenReaderPath)", line: 8)
-		                        let token: ChainToken = chainToken
-		                        #sourceLocation()
+		                        let token: ChainToken = chainToken // Declared as TokenReader.token
 		                        return TokenReader(token: token)
 		                    }
 		                    let readerBuilder = SendableInstantiator<TokenReader>(__safeDI_readerBuilder)
@@ -7951,8 +7948,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		// memo for the alias too.
 		let modules = Self.chainTokenModules(thingImpl: Self.thingImplReadingThroughAlias(tokenType: "ChainToken", readerType: "ChainToken"), topChainToken: Self.rootSendableChainToken)
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		// The alias binds its value under a `#sourceLocation` of its declaration.
-		let thingImplPath = try #require(output.modules["Top"]).fixtures["ThingImpl.swift"]
 		#expect(output.modules["Core"]?.generatedFiles == ["Core.swift": generatedFileHeader + """
 		#if canImport(SafeDI)
 		import SafeDI
@@ -8143,9 +8138,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            _ = Mid.__safeDI_Mid_B2235C50011622D6.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_thingServiceBuilder_Mid_Worker_Scope_thing(_ scope: Mid.SafeDIScope_ThingService.Worker_Scope.thing_Values, chainToken: LazilyInstantiated<ChainToken>) -> any ThingService {
 		                func __safeDI_thing() -> ThingImpl {
-		                    #sourceLocation(file: "\(thingImplPath)", line: 9)
-		                    let token: ChainToken = chainToken.instance
-		                    #sourceLocation()
+		                    let token: ChainToken = chainToken.instance // Declared as ThingImpl.token
 		                    let reader = WrapperReader(chainToken: chainToken.instance)
 		                    return ThingImpl(token: token, reader: reader)
 		                }
@@ -8183,8 +8176,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		// The second remedy of the error with the alias: the alias renames the wrapper, so the tree reads no value.
 		let modules = Self.chainTokenModules(thingImpl: Self.thingImplReadingThroughAlias(tokenType: "SendableLazilyInstantiated<ChainToken>", readerType: "SendableLazilyInstantiated<ChainToken>"), topChainToken: Self.rootSendableChainToken)
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		// The alias binds its value under a `#sourceLocation` of its declaration.
-		let thingImplPath = try #require(output.modules["Top"]).fixtures["ThingImpl.swift"]
 		#expect(output.modules["Core"]?.generatedFiles == ["Core.swift": generatedFileHeader + """
 		#if canImport(SafeDI)
 		import SafeDI
@@ -8375,9 +8366,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            _ = Mid.__safeDI_Mid_B2235C50011622D6.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_thingServiceBuilder_Mid_Worker_Scope_thing(_ scope: Mid.SafeDIScope_ThingService.Worker_Scope.thing_Values) -> any ThingService {
 		                func __safeDI_thing() -> ThingImpl {
-		                    #sourceLocation(file: "\(thingImplPath)", line: 9)
-		                    let token: SendableLazilyInstantiated<ChainToken> = chainToken
-		                    #sourceLocation()
+		                    let token: SendableLazilyInstantiated<ChainToken> = chainToken // Declared as ThingImpl.token
 		                    let reader = WrapperReader(chainToken: chainToken)
 		                    return ThingImpl(token: token, reader: reader)
 		                }
