@@ -19,7 +19,7 @@
 // SOFTWARE.
 
 import Foundation
-import SafeDICore
+@testable import SafeDICore
 import Testing
 @testable import SafeDIToolLibrary
 @testable import SafeDIToolTestSupport
@@ -1413,26 +1413,7 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 		// the level `detailBuilder` opens: the call's dispatchers sit in a place two places below the root, where the root's
 		// functions are found only if every place on the way holds its children's code. Node records lay out the whole root
 		// by type, where the tree nests each function where it is built.
-		let modules = [
-			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
-				"public protocol Api {}",
-				seamFixtureType(named: "Screen", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let detailBuilder: Instantiator<Detail>"]),
-				seamFixtureType(named: "Detail", isFinalClass: true, declarations: ["@Instantiated public let api: any Api"]),
-			], dependencies: []),
-			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
-				"import Feature\n\n" + seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let outer: Outer"]),
-				"import Feature\n\n" + seamFixtureType(named: "Outer", isFinalClass: true, declarations: ["@Instantiated let inner: Inner"]),
-				"import Feature\n\n" + seamFixtureType(named: "Inner", isFinalClass: true, declarations: ["@Instantiated let screen: Screen"]),
-				"""
-				import Feature
-
-				@Instantiable(fulfillingAdditionalTypes: [Api.self])
-				public final class LiveApi: Api, Instantiable {
-				    public init() {}
-				}
-				""",
-			], dependencies: ["Feature"]),
-		]
+		let modules = Self.modulesCallingAFilledSeamTwoPlacesBelowTheRoot
 		let (output, reports) = try await NodeRecordsObservation.$recordsFilledCalls.withValue(true) {
 			try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
 				// Under the plugin, which runs no second pass over module info files that store their positions apart: that pass
@@ -1477,7 +1458,11 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 		let rootReports = reports.filter { $0.root == "Root" }
 		#expect(rootReports.map(\.refusal) == [nil])
 		#expect(rootReports.map(\.isLaidOutFromNodeRecords) == [true])
-		#expect(reports.flatMap(\.differences) == [])
+		// The root's text differs from the tree's only where it declares its functions, which entry 24 approves.
+		let outcomes = rootReports.map { NodeRecordsChecks.outcome(of: $0) }
+		#expect(outcomes.map(\.differences) == [[]])
+		#expect(outcomes.map(\.approvedEntries) == [[24]])
+		#expect(reports.filter { $0.root != "Root" }.flatMap(\.differences) == [])
 	}
 
 	@Test
@@ -1549,10 +1534,61 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 		let rootReports = reports.filter { $0.root == "Root" }
 		#expect(rootReports.map(\.refusal) == [nil])
 		#expect(rootReports.map(\.isLaidOutFromNodeRecords) == [true])
-		#expect(reports.flatMap(\.differences) == [])
+		// The root's text differs from the tree's only where it declares its functions, which entry 24 approves.
+		let outcomes = rootReports.map { NodeRecordsChecks.outcome(of: $0) }
+		#expect(outcomes.map(\.differences) == [[]])
+		#expect(outcomes.map(\.approvedEntries) == [[24]])
+		#expect(reports.filter { $0.root != "Root" }.flatMap(\.differences) == [])
+	}
+
+	@Test(arguments: [
+		// Outside every function: the root's argument.
+		["self.init(outer: outer)", "self.init(outer: __safeDI_outer())"],
+		// Inside a function, as it builds its value.
+		["return Inner(screen: screen)", "return Inner(screen: __safeDI_screen())"],
+	])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func outcome_failsRoot_whenAFilledCallsRootLaidOutByTheTypeKeyDiffersBesideWhereItDeclaresItsFunctions(replacement: [String]) async throws {
+		let (_, reports) = try await NodeRecordsObservation.$recordsFilledCalls.withValue(true) {
+			try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+				try await executeSafeDIToolMultiModuleTest(modules: Self.modulesCallingAFilledSeamTwoPlacesBelowTheRoot, integration: .swiftPackagePlugin, filesToDelete: &filesToDelete)
+			}
+		}
+		var report = try #require(reports.first { $0.root == "Root" })
+		let texts = try #require(report.comparedTexts)
+		#expect(texts.nodeRecords.components(separatedBy: replacement[0]).count == 2)
+		// A second difference, which no entry approves, beside entry 24's.
+		report.comparedTexts = NodeRecordsComparedTexts(tree: texts.tree, nodeRecords: texts.nodeRecords.replacingOccurrences(of: replacement[0], with: replacement[1]))
+		let outcome = NodeRecordsChecks.outcome(of: report)
+		#expect(outcome.differences == report.differences)
+		#expect(outcome.differences.contains("root: the code laid out from node records differs from the tree’s"))
+		#expect(outcome.approvedEntries == [])
 	}
 
 	// MARK: Private
+
+	/// `App`'s `Root` builds `Outer`, which builds `Inner`, which calls `Feature`'s seam `Screen` and fills its hole `api`.
+	private static let modulesCallingAFilledSeamTwoPlacesBelowTheRoot = [
+		ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+			"public protocol Api {}",
+			seamFixtureType(named: "Screen", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let detailBuilder: Instantiator<Detail>"]),
+			seamFixtureType(named: "Detail", isFinalClass: true, declarations: ["@Instantiated public let api: any Api"]),
+		], dependencies: []),
+		ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
+			"import Feature\n\n" + seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let outer: Outer"]),
+			"import Feature\n\n" + seamFixtureType(named: "Outer", isFinalClass: true, declarations: ["@Instantiated let inner: Inner"]),
+			"import Feature\n\n" + seamFixtureType(named: "Inner", isFinalClass: true, declarations: ["@Instantiated let screen: Screen"]),
+			"""
+			import Feature
+
+			@Instantiable(fulfillingAdditionalTypes: [Api.self])
+			public final class LiveApi: Api, Instantiable {
+			    public init() {}
+			}
+			""",
+		], dependencies: ["Feature"]),
+	]
+
 
 	private var filesToDelete: [URL]
 

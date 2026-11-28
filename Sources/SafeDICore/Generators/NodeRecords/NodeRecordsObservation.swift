@@ -123,23 +123,6 @@ public enum NodeRecordsObservation {
 		return (differences, treePlaceCount)
 	}
 
-	/// Whether `body`, a root's body node records make, holds a call that fills a place. Node records declare a fill's
-	/// builders at the top of its body, where the tree nests each where it is built, so the root's text is compared nowhere:
-	/// the root's expectations, its compiled code and the value comparison with the last release check it instead.
-	static func holdsAFilledCall(_ body: [GeneratedCode]) -> Bool {
-		var pending = body
-		while let code = pending.popLast() {
-			for statement in statements(of: code) {
-				guard case let .place(plan) = unindented(statement).code.node, let record = plan.record else { continue }
-				guard !fillsAPlace(record) else { return true }
-				if case let .built(built) = record {
-					pending += built.children
-				}
-			}
-		}
-		return false
-	}
-
 	/// Whether `record` is a call that fills a place, whose record only node records make (`ScopeGenerator.seamCallRecord`).
 	private static func fillsAPlace(_ record: PlaceRecord) -> Bool {
 		guard case let .alias(alias) = record, let call = alias.call else { return false }

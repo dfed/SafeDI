@@ -84,6 +84,41 @@ struct ApprovedDifferencesTests: ~Copyable {
 		#expect(ApprovedDifferences.normalized(nodeRecordsText: "let a = A()", treeText: "let a = A()") == nil)
 	}
 
+	// MARK: Tests – entry 24, a filled call's root laid out by the type key
+
+	@Test
+	func rewrite_returnsNil_whenTextDeclaresNoFillsDispatcher() {
+		// The same functions, nested in one text and declared at the top in the other, in a root that fills no place.
+		let nested = """
+		    public init() {
+		        func __safeDI_outer() -> Outer {
+		            func __safeDI_inner() -> Inner {
+		                Inner()
+		            }
+		            let inner: Inner = __safeDI_inner()
+		            return Outer(inner: inner)
+		        }
+		        let outer: Outer = __safeDI_outer()
+		        self.init(outer: outer)
+		    }
+		"""
+		let flat = """
+		    public init() {
+		        func __safeDI_inner() -> Inner {
+		            Inner()
+		        }
+		        func __safeDI_outer() -> Outer {
+		            let inner: Inner = __safeDI_inner()
+		            return Outer(inner: inner)
+		        }
+		        let outer: Outer = __safeDI_outer()
+		        self.init(outer: outer)
+		    }
+		"""
+		#expect(FlattenedFunctionText(flat) == FlattenedFunctionText(nested))
+		#expect(FilledCallFunctionsRewrite.rewritten(flat, treeText: nested) == nil)
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
