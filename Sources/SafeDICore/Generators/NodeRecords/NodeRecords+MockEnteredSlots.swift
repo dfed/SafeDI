@@ -72,8 +72,8 @@ extension NodeRecords {
 /// way round).
 ///
 /// Cost: two passes over the declarations, one walk up from the slots, one walk down from the declarations off every
-/// cycle that enter a place, and one walk up per configuration that has a nearest name, each visiting a declaration
-/// once. Memory: a few entries per declaration and one per slot, for as long as a caller holds it.
+/// cycle that enter a place, one walk down from the declarations that take the places, and one walk up per
+/// configuration that has a nearest name, each visiting a declaration once. Memory: a few entries per declaration and one per slot, for as long as a caller holds it.
 struct MockEnteredSlots: Sendable {
 	init(world: some NodeRecordSources) {
 		let declarations = 0..<Int32(world.declarationCount)
@@ -164,6 +164,20 @@ struct MockEnteredSlots: Sendable {
 				|| nearestEntered[Int(declaration)] != nil
 				|| isBeneathAnEntry[Int(declaration)] && isAboveASlot[Int(declaration)])
 		}
+		let takesEnteredPlaces = takesEnteredPlacesByDeclaration
+		handsPlacesToSendableFunction = declarations.contains { declaration in
+			NodeRecords.isBuiltInSendableFunction(declaration, in: world)
+				&& (takesEnteredPlaces[Int(declaration)] || world.edges(from: declaration).contains { takesEnteredPlaces[Int($0)] })
+		}
+		var isBuiltBeneathEnteredPlaces = [Bool](repeating: false, count: world.declarationCount)
+		var pendingBeneath = declarations.filter { takesEnteredPlaces[Int($0)] }
+		while let declaration = pendingBeneath.popLast() {
+			for child in world.edges(from: declaration) where !takesEnteredPlaces[Int(child)] && !isBuiltBeneathEnteredPlaces[Int(child)] {
+				isBuiltBeneathEnteredPlaces[Int(child)] = true
+				pendingBeneath.append(child)
+			}
+		}
+		isBuiltBeneathEnteredPlacesByDeclaration = isBuiltBeneathEnteredPlaces
 		self.slots = slots
 		self.slotIndexByDeclaration = slotIndexByDeclaration
 		self.nearestEnteredByDeclaration = nearestEnteredByDeclaration
@@ -177,6 +191,15 @@ struct MockEnteredSlots: Sendable {
 	let nearestEnteredByDeclaration: [String?]
 	/// By declaration: whether its function takes and hands on the entered places.
 	let takesEnteredPlacesByDeclaration: [Bool]
+	/// Whether some `@Sendable` function takes the entered places, or hands them to a function it builds: the closure
+	/// that calls a function that takes them captures the places it hands, and a `@Sendable` function that takes none
+	/// captures `mock()`'s own, so `mock()` declares them in their `Sendable` form
+	/// (`NodeRecords.mockConfigurationTypeNamesHandedWithPlacesThatMustBeSendable(in:slots:)`).
+	let handsPlacesToSendableFunction: Bool
+	/// By declaration: whether its function takes no places and is built by one that takes them, or beneath one. Its
+	/// override is a field of a configuration handed with the places, or of one beneath it
+	/// (`NodeRecords.mockOverridesStayOutsideSendableFunctions(of:in:)`).
+	let isBuiltBeneathEnteredPlacesByDeclaration: [Bool]
 
 	/// Whether some function on no cycle enters the nearest place of its type alone, and whether some function only hands
 	/// the places on: the two functions `mock()` declares for them only where one is called

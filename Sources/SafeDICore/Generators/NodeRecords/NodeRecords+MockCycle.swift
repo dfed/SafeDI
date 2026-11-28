@@ -71,6 +71,8 @@ extension NodeRecords {
 		let configurationType = mockConfigurationType(of: world.scope(of: declaration).instantiable)
 		let configuration: ValuePath = if mockConfigurationLeavesOut(declaration, builtBy: parent, in: world) {
 			.emptyInitialization(configurationType)
+		} else if let local = mockEnteredConfigurationLocal(of: declaration, labeled: label, handedBy: parent, in: world, slots: slots) {
+			.read(local)
 		} else {
 			.member(label, of: mockOverridesOfChildren(of: parent, in: world, slots: slots))
 		}
@@ -91,15 +93,38 @@ extension NodeRecords {
 			.callHanding(ReservedName.mockPassingFunctionName, of: entered, slot: nil, value: configuration, flags: [])
 		}
 		return [
-			// No call inside a `@Sendable` function hands the configuration or the places on, also where the places are declared
-			// `Sendable` (`mockConfigurationTypeNamesHandedWithPlacesThatMustBeSendable(in:slots:)`).
+			// No call inside a `@Sendable` function hands the configuration or the places on, but where a function that takes
+			// the places is `@Sendable`: the places and every configuration handed with them are then `Sendable`
+			// (`mockConfigurationTypeNamesHandedWithPlacesThatMustBeSendable(in:slots:)`).
 			PassedArgument(
 				parameterName: ReservedName.mockEnteredPlacesParameterName,
 				type: .simple(name: ReservedName.mockEnteredTypeName, generics: [configurationType]),
 				value: value,
-				staysOutsideSendableFunctions: true,
+				staysOutsideSendableFunctions: !slots.handsPlacesToSendableFunction,
 			),
 		]
+	}
+
+	/// The local the body of `parent`'s place binds the configuration it hands `declaration`'s function to, where
+	/// `declaration`, a node that takes the places entered, is built in a `@Sendable` function and `parent`'s body takes
+	/// no places; `nil` in every other body. The closure that calls the node's function is `@Sendable`, and the overrides
+	/// such a body reads are not: `mock()`'s own hold what the mock receives only if available, and a configuration built
+	/// outside every `@Sendable` function is not of the `Sendable` form. So the body binds the field to the local before
+	/// the node's place (`mockPlace(_:record:of:builtBy:in:slots:)`), as the walk reads a `@Sendable` function's overrides
+	/// into a local before it, and the closure captures the local. A body that takes the places hands a field of the
+	/// configuration it was handed with them, which is `Sendable`, and an edge the configurations leave out hands an
+	/// empty one.
+	static func mockEnteredConfigurationLocal(of declaration: DeclarationID, labeled label: String, handedBy parent: DeclarationID, in world: some NodeRecordSources, slots: MockEnteredSlots) -> PlaceRead? {
+		guard isBuiltInSendableFunction(declaration, in: world), !takesMockEnteredPlaces(parent, in: slots), !mockConfigurationLeavesOut(declaration, builtBy: parent, in: world) else { return nil }
+		return mockOverridesLocal(ofNodeLabeled: label, typed: mockConfigurationType(of: world.scope(of: declaration).instantiable), isConfigured: true)
+	}
+
+	/// Whether the overrides `declaration`'s function is handed stay outside `@Sendable` functions, as overrides do
+	/// unless they are known to be of the `Sendable` form: those of a function built beneath one that takes the places
+	/// are, where a `@Sendable` function is handed the places
+	/// (`mockConfigurationTypeNamesHandedWithPlacesThatMustBeSendable(in:slots:)`).
+	static func mockOverridesStayOutsideSendableFunctions(of declaration: DeclarationID, in slots: MockEnteredSlots?) -> Bool {
+		!(slots.map { $0.handsPlacesToSendableFunction && $0.isBuiltBeneathEnteredPlacesByDeclaration[Int(declaration)] } ?? false)
 	}
 
 	/// The configuration the body of `declaration`'s function reads as its own, where the function takes the places
@@ -118,8 +143,15 @@ extension NodeRecords {
 	static func mockPlace(_ place: GeneratedCode, record: PlaceRecord?, of declaration: DeclarationID, builtBy parent: DeclarationID, in world: some NodeRecordSources, slots: MockEnteredSlots?) -> GeneratedCode {
 		guard let slots, case var .built(built) = record else { return place }
 		if takesMockEnteredPlaces(declaration, in: slots) {
-			let handed = mockArgumentsHanded(to: declaration, labeled: built.property.label, by: parent, in: world, slots: slots)
+			let label = built.property.label
+			let handed = mockArgumentsHanded(to: declaration, labeled: label, by: parent, in: world, slots: slots)
 			built.passedArguments = handed + built.passedArguments.dropFirst(handed.count)
+			// A body that takes no places binds the configuration it hands a `@Sendable` function to a local before it.
+			guard let local = mockEnteredConfigurationLocal(of: declaration, labeled: label, handedBy: parent, in: world, slots: slots) else {
+				return .place(PlacePlan(code: .empty, record: .built(built)))
+			}
+			let binding = mockOverridesBinding(of: local, to: .member(label, of: mockOverridesOfChildren(of: parent, in: world, slots: slots)))
+			return .sequence([.place(PlacePlan(code: .empty, record: .built(binding))), .place(PlacePlan(code: .empty, record: .built(built)))])
 		} else {
 			let firstParent = world.parents(of: declaration).first?.parent ?? 0
 			guard takesMockEnteredPlaces(parent, in: slots) != takesMockEnteredPlaces(firstParent, in: slots) else { return place }
@@ -151,23 +183,34 @@ extension NodeRecords {
 	}
 
 	/// The types of the configurations the functions of `world`, a mock root's, that take the places entered are handed,
-	/// where an actor the mock builds with its initializer is sent a value such a function builds; `nil` where none is.
+	/// where an actor the mock builds with its initializer is sent a value such a function builds, or a `@Sendable`
+	/// function takes the places or hands them on (`MockEnteredSlots.handsPlacesToSendableFunction`); `nil` where neither
+	/// is so.
 	///
-	/// A value a function builds of an argument that is not `Sendable` cannot be sent, so there `mock()` declares the
-	/// places in their `Sendable` form (`MockEnteredSlot.mockEnteredPlacesDeclaration(isSendable:entersNearest:passes:slotCount:)`),
-	/// which holds only configurations of the `Sendable` form: the root's lowering, which knows which types take that
-	/// form, refuses the world as `mockActor` where one of these does not
+	/// A value a function builds of an argument that is not `Sendable` cannot be sent, and the closure that calls a
+	/// `@Sendable` function captures the places it hands, so there `mock()` declares the places in their `Sendable` form
+	/// (`MockEnteredSlot.mockEnteredPlacesDeclaration(isSendable:entersNearest:passes:slotCount:)`), which holds only configurations
+	/// of the `Sendable` form: the root's lowering, which knows which types take that form, refuses the world where one
+	/// of these does not, as `mockActor` where an actor is sent the value and otherwise as `sendable`
 	/// (`ScopeGenerator.nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:sendableConfigurationTypeNames:rootNames:outerDeclarations:)`).
-	/// The walk builds such a value of what the actor's own function captures.
+	/// The walk builds such a value of what the actor's own function captures, and reads a `@Sendable` function's
+	/// overrides into a local before it.
+	///
+	/// Where a `@Sendable` function takes the places, each function it calls is `@Sendable` too, and so on down: a
+	/// function built beneath one that takes the places is then handed a field of a configuration handed with them
+	/// (`mockOverridesStayOutsideSendableFunctions(of:in:)`). That field is of the `Sendable` form too: a type whose
+	/// configuration takes that form is built inside a `@Sendable` function somewhere in a mock's tree, and so is every
+	/// type it configures beneath it there (`ScopeGenerator.sendableConfigurationTypeNames(ofMockRootOf:)`), so only the
+	/// types handed the places are listed.
 	static func mockConfigurationTypeNamesHandedWithPlacesThatMustBeSendable(in world: some NodeRecordSources, slots: MockEnteredSlots) -> MockConfigurationTypeNamesThatMustBeSendable? {
 		let declarationsHandedPlaces = (1..<Int32(world.declarationCount)).filter { takesMockEnteredPlaces($0, in: slots) }
 		let actorIsSentValue = declarationsHandedPlaces.contains { declaration in
 			world.parents(of: declaration).contains { isActorBuiltWithInitializer($0.parent, in: world) }
 		}
-		guard actorIsSentValue else { return nil }
+		guard actorIsSentValue || slots.handsPlacesToSendableFunction else { return nil }
 		return MockConfigurationTypeNamesThatMustBeSendable(
 			typeNames: Set(declarationsHandedPlaces.map { world.scope(of: $0).instantiable.concreteInstantiable.asSource }),
-			refusalWhereOneIsNot: .mockActor,
+			refusalWhereOneIsNot: actorIsSentValue ? .mockActor : .sendable,
 		)
 	}
 
@@ -188,11 +231,10 @@ extension NodeRecords {
 
 	/// Refuses `world`, a mock root's that holds a cycle, in the shapes the slot form does not make yet.
 	///
-	/// A function that takes the places and is `@Sendable` needs no refusal here: a node built in a `@Sendable` function
-	/// whose child is built in a function of its own is refused as `sendable` before this
-	/// (`mockSendableRefusals(of:in:)`), and every node that takes the places has such a child, the next node toward the
-	/// place entered, a `SendableLazilyInstantiated`'s instance included. The engine also lays out no `@Sendable` function
-	/// that is handed a value that stays outside one, as the places and the overrides do (`TypeKeyLayout.checkSendableMarks()`).
+	/// A function that takes the places and is `@Sendable` needs no refusal here: the places are then declared `Sendable`,
+	/// and the root's lowering refuses the world as `sendable` where a configuration handed with them is not of that form
+	/// (`mockConfigurationTypeNamesHandedWithPlacesThatMustBeSendable(in:slots:)`). The engine lays out no `@Sendable`
+	/// function that is handed any other value that stays outside one (`TypeKeyLayout.checkSendableMarks()`).
 	/// A function that takes the places and builds a `LazilyInstantiated` needs none either: its builder function is handed
 	/// the places as an instantiator's is, and the wrapper makes the instance once, where the walk's does. Nor does an
 	/// actor that is sent a value such a function builds: the places are then declared `Sendable`
@@ -201,8 +243,12 @@ extension NodeRecords {
 	///   configurations leave out, or beneath one, reads a field of its configuration for a default-valued parameter. The
 	///   empty configuration such a call hands holds one value of the parameter's default, which every node built of it
 	///   and of the place that keeps it would share, where the walk leaves each construction beneath such an edge to its
-	///   initializer's own default, evaluated again each time.
-	static func checkMockCycles(in world: some NodeRecordSources, slots _: MockEnteredSlots) throws(NodeRecordRefusal) {
+	///   initializer's own default, evaluated again each time. `sendable` where a `@Sendable` function is handed the
+	///   places and a node built in a `@Sendable` function, or beneath one, is a property nothing fulfills that `mock()`
+	///   takes an override of: its function is `@Sendable`, as every function a `@Sendable` one calls is, and would
+	///   capture the override, which is not `Sendable`. The walk binds the property to `nil` there and to the override
+	///   outside every `@Sendable` function, which one function called from both does not do yet.
+	static func checkMockCycles(in world: some NodeRecordSources, slots: MockEnteredSlots) throws(NodeRecordRefusal) {
 		var builtOfEmptyConfiguration = Set<DeclarationID>()
 		var pending = (1..<Int32(world.declarationCount)).filter { declaration in
 			world.parents(of: declaration).contains { mockConfigurationLeavesOut(declaration, builtBy: $0.parent, in: world) }
@@ -212,5 +258,22 @@ extension NodeRecords {
 			pending.append(contentsOf: world.edges(from: declaration))
 		}
 		guard builtOfEmptyConfiguration.allSatisfy({ mockConfigurationFieldArguments(of: $0, in: world).isEmpty }) else { throw .mockDefaultValuedParameter }
+		guard slots.handsPlacesToSendableFunction else { return }
+		var isBuiltInsideSendableFunction = [Bool](repeating: false, count: world.declarationCount)
+		var pendingInside = (1..<Int32(world.declarationCount)).filter { isBuiltInSendableFunction($0, in: world) }
+		while let declaration = pendingInside.popLast() {
+			guard !isBuiltInsideSendableFunction[Int(declaration)] else { continue }
+			isBuiltInsideSendableFunction[Int(declaration)] = true
+			guard !readsMockUnavailableDependencyOverride(declaration, in: world) else { throw .sendable }
+			pendingInside.append(contentsOf: world.edges(from: declaration))
+		}
+	}
+
+	/// Whether `declaration`, a node of a mock root's world, is a property nothing fulfills that reads the override
+	/// `mock()` takes of it, under the property's label or a name apart
+	/// (`mockUnavailableDependencyRecord(of:in:)`).
+	static func readsMockUnavailableDependencyOverride(_ declaration: DeclarationID, in world: some NodeRecordSources) -> Bool {
+		guard world.scope(of: declaration).isUnavailableDependency, let property = world.property(of: declaration) else { return false }
+		return world.mockRootNames.unavailableDependencyOverrideName(of: property) != nil
 	}
 }

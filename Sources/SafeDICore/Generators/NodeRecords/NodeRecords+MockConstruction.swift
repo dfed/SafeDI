@@ -206,10 +206,11 @@ extension NodeRecords {
 		if !handsOverridesToChildren, world.parents(of: declaration).allSatisfy({ $0.parent == 0 }) {
 			return (.member(label, of: .rootDeclaration(ReservedName.mockOverridesParameterName)), [])
 		} else {
-			// The overrides are not `Sendable`: no call inside a `@Sendable` function hands them on.
+			// The overrides are not `Sendable`: no call inside a `@Sendable` function hands them on, but those of the `Sendable`
+			// form a function that takes the places was handed with them.
 			return (
 				.passedArgument(ReservedName.mockOverridesParameterName),
-				[PassedArgument(parameterName: ReservedName.mockOverridesParameterName, type: type, value: field, staysOutsideSendableFunctions: true)],
+				[PassedArgument(parameterName: ReservedName.mockOverridesParameterName, type: type, value: field, staysOutsideSendableFunctions: mockOverridesStayOutsideSendableFunctions(of: declaration, in: slots))],
 			)
 		}
 	}
