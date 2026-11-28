@@ -235,9 +235,7 @@ struct OnlyIfAvailableAnswers: Sendable {
 						for var pinsAbove in pinsOfCalls {
 							for requiredReceive in requiredReceives where requiredReceive.label == label {
 								pinsAbove = pinsAbove.filter { $0.propertiesRead != requiredReceive.propertiesRead }
-								// The mock root's own receive pins its binding for the child it builds, not for its level, which
-								// holds the binding itself.
-								pinsAbove.insert(Pin(propertiesRead: requiredReceive.propertiesRead, variant: variant == 0 ? callee : variant, isMockRootsOwn: variant == 0))
+								pinsAbove.insert(Pin(propertiesRead: requiredReceive.propertiesRead, variant: variant, isMockRootsOwn: variant == 0))
 							}
 							if pinsByVariant[Int(callee)][label, default: []].insert(pinsAbove).inserted {
 								calleeIsReadAgain = true
@@ -313,20 +311,7 @@ struct OnlyIfAvailableAnswers: Sendable {
 		}
 		self.unavailablePropertiesByVariant = unavailablePropertiesByVariant
 		self.renameBindingByVariant = renameBindingByVariant
-		// A child of the mock root binds `nil` for everything it builds only where the mock root's own receive pins every
-		// call of it that reads the mock root's binding, and it is not the receiver itself, which other calls build too.
-		var variantsPinningReceiveByVariant = [[Property: Set<VariantID>]](repeating: [:], count: world.variantCount)
-		for variant in pinsOfReceiveByVariant.indices {
-			for (property, pins) in pinsOfReceiveByVariant[variant] {
-				for pin in pins where pin.isMockRootsOwn {
-					guard Int(pin.variant) != variant, pinsByVariant[Int(pin.variant)][property.label]?.allSatisfy({ $0.contains(pin) }) == true else {
-						throw .onlyIfAvailableAnsweredApart
-					}
-				}
-				variantsPinningReceiveByVariant[variant][property] = Set(pins.map(\.variant))
-			}
-		}
-		self.variantsPinningReceiveByVariant = variantsPinningReceiveByVariant
+		variantsPinningReceiveByVariant = pinsOfReceiveByVariant.map { $0.mapValues { Set($0.map(\.variant)) } }
 	}
 
 	/// What a required receive above a call reads of the mock root's binding of a label, which pins that binding to its
@@ -334,10 +319,10 @@ struct OnlyIfAvailableAnswers: Sendable {
 	private struct Pin: Hashable {
 		/// What the required receive reads.
 		let propertiesRead: Set<Property>
-		/// The variant whose type declares the receive, the nearest one above the call that reads these properties; for a
-		/// receive of the mock root's own, the child of the mock root the call is beneath.
+		/// The variant whose type declares the receive, the nearest one above the call that reads these properties.
 		let variant: VariantID
-		/// Whether the mock root's own type declares the receive.
+		/// Whether the mock root's own type declares the receive: the mock root's level holds the binding itself, so no
+		/// function of its own binds `nil` for only what it builds.
 		let isMockRootsOwn: Bool
 	}
 
@@ -405,7 +390,8 @@ struct OnlyIfAvailableAnswers: Sendable {
 	/// whether every call that reads the mock root's binding of the label is beneath one; none, at no call, where
 	/// `pinsOfCalls` is empty: no call reads that binding of a label pinned from above.
 	/// - Throws: `onlyIfAvailableAnsweredApart` where only some calls are beneath such a receive and two receives above
-	///   one call make the pin, so that no one variant's function binds `nil` for what is beneath both.
+	///   one call make the pin, or the mock root's own receive makes it, so that no one variant's function binds `nil`
+	///   for what is beneath it.
 	private static func pins(of dependency: Dependency, among pinsOfCalls: Set<Set<Pin>>) throws(NodeRecordRefusal) -> (pins: Set<Pin>, isPinnedAtEveryCall: Bool) {
 		var pins = Set<Pin>()
 		var isPinnedAtEveryCall = !pinsOfCalls.isEmpty
@@ -414,7 +400,7 @@ struct OnlyIfAvailableAnswers: Sendable {
 			let pinning = pinsAbove.filter { DependencyTreeGenerator.requiredReceive(reading: $0.propertiesRead, pinsReceiveOf: dependency) }
 			pins.formUnion(pinning)
 			isPinnedAtEveryCall = isPinnedAtEveryCall && !pinning.isEmpty
-			pinsOnlyOncePerCall = pinsOnlyOncePerCall && pinning.count <= 1
+			pinsOnlyOncePerCall = pinsOnlyOncePerCall && pinning.count <= 1 && !pinning.contains(where: \.isMockRootsOwn)
 		}
 		guard isPinnedAtEveryCall || pinsOnlyOncePerCall else { throw .onlyIfAvailableAnsweredApart }
 		return (pins, isPinnedAtEveryCall)
