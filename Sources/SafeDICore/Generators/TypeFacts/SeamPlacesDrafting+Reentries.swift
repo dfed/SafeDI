@@ -129,8 +129,8 @@ extension SeamPlacesDrafts {
 		// Each declaration's field where a level's list is alike, projected to what the facts give it: its property with its
 		// type, its declaring type and location, and whether it is received only if available. The root's parameters are
 		// the signature's, so its lists are left out.
-		func projected(property: Property, declaringType: TypeDescription, location: Dependency.DeclarationLocation?, isReceivedOnlyIfAvailable: Bool, labelsHeldAboveSeam: [String]?) -> String {
-			"\(property.label): \(property.typeDescription.asSource) declared by \(declaringType.asSource) at \(location.map { "\($0.order) \($0.placement)" } ?? "none")\(isReceivedOnlyIfAvailable ? " only if available" : "") buildable \(labelsHeldAboveSeam?.joined(separator: " ") ?? "none")"
+		func projected(property: Property, declaringType: TypeDescription, location: Dependency.DeclarationLocation?, isReceivedOnlyIfAvailable: Bool, labelsHeldAboveSeam: [String]?, childFacts: SeamSignature.Places.ChildFacts?) -> String {
+			"\(property.label): \(property.typeDescription.asSource) declared by \(declaringType.asSource) at \(location.map { "\($0.order) \($0.placement)" } ?? "none")\(isReceivedOnlyIfAvailable ? " only if available" : "") buildable \(labelsHeldAboveSeam?.joined(separator: " ") ?? "none") \(childFacts.map(spelled(childFacts:)) ?? "no child")"
 		}
 		// The labels the seam's caller holds: its parameters but the ones the seam forwards. A child that is no alias is
 		// buildable above the seam where its tree receives only those labels or its own.
@@ -172,6 +172,34 @@ extension SeamPlacesDrafts {
 			}
 			return places.uniqued()
 		}
+		// A child's facts as the stored graph keeps them, but its carriers, which the facts hold no column for yet.
+		func spelled(childFacts: SeamSignature.Places.ChildFacts) -> String {
+			"child at \(childFacts.position)\(childFacts.isBuilder ? " builder" : "") loop \(childFacts.loop.map(String.init) ?? "none") builds \(childFacts.builtType?.asSource ?? "none")\(childFacts.isPlace ? " place" : "") only if available [\(childFacts.receivesOnlyIfAvailable.map(\.label).joined(separator: " "))]"
+		}
+		func childFacts(ofBinding property: Property, atVariant variant: VariantID) -> SeamSignature.Places.ChildFacts? {
+			let declaration = world.declaration(of: variant)
+			let targets = world.edges(from: declaration)
+			let edgeFacts = world.edgeFacts(from: Int(declaration))
+			guard let edge = targets.firstIndex(where: { world.graph.nodes[Int($0)].property == property }) else { return nil }
+			let child = targets[edge]
+			let node = world.graph.nodes[Int(child)]
+			let facts = edgeFacts[edgeFacts.startIndex + (edge - targets.startIndex)]
+			guard !facts.isFill else { return nil }
+			let receivedOnlyIfAvailable = Set(world.receives.onlyIfAvailableUnwrapped.columns(inRow: Int(child)).map { world.propertyTable[Int($0)] })
+			let siblings = zip(targets, edgeFacts).compactMap { target, siblingFacts -> (position: Int32, property: Property)? in
+				guard !siblingFacts.isFill, let siblingProperty = world.graph.nodes[Int(target)].property, receivedOnlyIfAvailable.contains(siblingProperty.asUnwrappedProperty) else { return nil }
+				return (siblingFacts.buildPosition, siblingProperty)
+			}
+			return SeamSignature.Places.ChildFacts(
+				position: Int(facts.buildPosition),
+				isBuilder: ScopeGenerator.isBuilder(property),
+				loop: facts.loop < 0 ? nil : Int(facts.loop),
+				builtType: node.key.leaf == .none ? world.typeTable[Int(world.builtTypes[Int(child)])] : nil,
+				isPlace: node.key.leaf == .hole,
+				receivesOnlyIfAvailable: siblings.sorted { $0.position < $1.position }.map(\.property),
+				carriers: [],
+			)
+		}
 		func spelledPlaces(inTree cases: [Int]) -> [String] {
 			cases.map { index in
 				let level = places.levels[places.cases[index].ownerLevel]
@@ -185,7 +213,7 @@ extension SeamPlacesDrafts {
 			let next = world.graph.nodes[Int(targets[targets.startIndex + Int(level.id.edge)])]
 			let key = "\(builtType(of: level.id.variant)) before \(next.key.isFill ? "fill" : next.property?.label ?? "fill"): \(list(of: level.id.variant))"
 			let fields = world.worldBindings(of: Int(declaration)).map { binding in
-				projected(property: world.propertyTable[Int(binding.property)], declaringType: world.typeTable[Int(binding.declaringType)], location: binding.declarationLocation < 0 ? nil : world.declarationLocations[Int(binding.declarationLocation)], isReceivedOnlyIfAvailable: binding.isReceivedOnlyIfAvailable, labelsHeldAboveSeam: labelsHeldAboveSeam(ofBinding: world.propertyTable[Int(binding.property)], atVariant: level.id.variant))
+				projected(property: world.propertyTable[Int(binding.property)], declaringType: world.typeTable[Int(binding.declaringType)], location: binding.declarationLocation < 0 ? nil : world.declarationLocations[Int(binding.declarationLocation)], isReceivedOnlyIfAvailable: binding.isReceivedOnlyIfAvailable, labelsHeldAboveSeam: labelsHeldAboveSeam(ofBinding: world.propertyTable[Int(binding.property)], atVariant: level.id.variant), childFacts: childFacts(ofBinding: world.propertyTable[Int(binding.property)], atVariant: level.id.variant))
 			}
 			factsFieldsByList[key, default: []].insert(fields)
 		}
@@ -195,7 +223,7 @@ extension SeamPlacesDrafts {
 			let list = places.declarationLists[level.declarationList]
 			let key = "\(level.key.builtType?.asSource ?? "fill") before \(level.key.nextProperty?.label ?? "fill"): \(list.map { spelled(label: $0.field.property.label, isCycleParameter: $0.isCycleParameter, isRebound: $0.isReboundByBuilderFunction, isForwarded: $0.isForwarded) }.joined(separator: ", "))"
 			guard let factsFields = factsFieldsByList[key] else { continue }
-			let storedFields = list.map { projected(property: $0.field.property, declaringType: $0.field.declaringType, location: $0.field.declarationLocation, isReceivedOnlyIfAvailable: $0.field.isReceivedOnlyIfAvailable, labelsHeldAboveSeam: $0.buildability.map { $0.labelsHeldAboveSeam + ["in tree:"] + spelledPlaces(inTree: $0.placesInTree) }) }
+			let storedFields = list.map { projected(property: $0.field.property, declaringType: $0.field.declaringType, location: $0.field.declarationLocation, isReceivedOnlyIfAvailable: $0.field.isReceivedOnlyIfAvailable, labelsHeldAboveSeam: $0.buildability.map { $0.labelsHeldAboveSeam + ["in tree:"] + spelledPlaces(inTree: $0.placesInTree) }, childFacts: $0.child) }
 			comparedFieldCount += storedFields.count
 			guard !factsFields.contains(storedFields) else { continue }
 			let nearest = factsFields.sorted { $0.lexicographicallyPrecedes($1) }[0]
