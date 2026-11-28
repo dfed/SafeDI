@@ -145,6 +145,8 @@ struct SeamPlacesDrafts: Sendable {
 				}
 			}
 		}
+		let rootVariant = world.rootVariant(0)
+		let (buildsInLine, closesCycle) = Self.routeFold(of: world)
 		// Which variants hold a place beneath them on a route, and which a call that closes a cycle: a fold up the calls
 		// that build in line, from the variants whose own edges hold one.
 		var holdsPlace = [Bool](repeating: false, count: variantCount)
@@ -153,10 +155,12 @@ struct SeamPlacesDrafts: Sendable {
 		for variant in 0..<VariantID(variantCount) {
 			let declaration = world.declaration(of: variant)
 			let targets = world.edges(from: declaration)
-			for ((target, edge), callee) in zip(zip(targets, world.edgeFacts(from: declaration)), world.calls(of: variant)) {
-				if edge.isCallEdge {
+			let callOffset = world.variants.callOffset(of: Int(variant))
+			for (index, (target, callee)) in zip(targets, world.calls(of: variant)).enumerated() {
+				if closesCycle[callOffset + index] {
 					holdsClosingCall[Int(variant)] = true
-				} else {
+				}
+				if buildsInLine[callOffset + index] {
 					if isPlaceEdge(target: target) {
 						holdsPlace[Int(variant)] = true
 					}
@@ -184,7 +188,6 @@ struct SeamPlacesDrafts: Sendable {
 		var parentsByVariant = [[SeamPlacesLevelID]](repeating: [], count: variantCount)
 		var visited = [Bool](repeating: false, count: variantCount)
 		var order = [VariantID]()
-		let rootVariant = world.rootVariant(0)
 		var pending = [rootVariant]
 		visited[Int(rootVariant)] = true
 		while let variant = pending.popLast() {
@@ -193,15 +196,17 @@ struct SeamPlacesDrafts: Sendable {
 			let targets = world.edges(from: declaration)
 			let facts = world.edgeFacts(from: declaration)
 			let callees = world.calls(of: variant)
+			let callOffset = world.variants.callOffset(of: Int(variant))
 			let edgeIndices = facts.indices.sorted { facts[$0].buildPosition < facts[$1].buildPosition }
 			var children = [VariantID]()
 			for edgeIndex in edgeIndices {
 				let edge = facts[edgeIndex]
 				let callee = callees[callees.startIndex + edgeIndex - facts.startIndex]
 				let target = targets[targets.startIndex + edgeIndex - facts.startIndex]
-				let isPlace = !edge.isCallEdge && isPlaceEdge(target: target)
-				let leadsToPlace = !edge.isCallEdge && holdsPlace[Int(callee)]
-				let leadsToClosingCall = edge.isCallEdge || holdsClosingCall[Int(callee)]
+				let isInLine = buildsInLine[callOffset + edgeIndex - facts.startIndex]
+				let isPlace = isInLine && isPlaceEdge(target: target)
+				let leadsToPlace = isInLine && holdsPlace[Int(callee)]
+				let leadsToClosingCall = closesCycle[callOffset + edgeIndex - facts.startIndex] || isInLine && holdsClosingCall[Int(callee)]
 				guard isPlace || leadsToPlace || leadsToClosingCall else { continue }
 				let id = SeamPlacesLevelID(variant: variant, edge: Int32(edgeIndex - facts.startIndex))
 				let level = SeamPlacesLevelDraft(
@@ -230,7 +235,7 @@ struct SeamPlacesDrafts: Sendable {
 					}
 					sites.append(SeamPlacesSiteDraft(owner: id, hole: target, fields: fields))
 				}
-				if !edge.isCallEdge {
+				if isInLine {
 					parentsByVariant[Int(callee)].append(id)
 					if !visited[Int(callee)] {
 						visited[Int(callee)] = true
@@ -259,7 +264,8 @@ struct SeamPlacesDrafts: Sendable {
 		var familyWork = [rootVariant]
 		while let variant = familyWork.popLast() {
 			let declaration = world.declaration(of: variant)
-			for (edge, callee) in zip(world.edgeFacts(from: declaration), world.calls(of: variant)) where !edge.isCallEdge && holdsPlace[Int(callee)] {
+			let callOffset = world.variants.callOffset(of: Int(variant))
+			for (index, (edge, callee)) in zip(world.edgeFacts(from: declaration), world.calls(of: variant)).enumerated() where buildsInLine[callOffset + index] && holdsPlace[Int(callee)] {
 				let reached = edge.opens.opensSendableFunction ? SeamPlacesFamilies.sendable : families[Int(variant)]
 				guard !families[Int(callee)].isSuperset(of: reached) else { continue }
 				families[Int(callee)].formUnion(reached)
@@ -310,7 +316,7 @@ struct SeamPlacesDrafts: Sendable {
 				let steps = world.edgeFacts(from: declaration).indices.compactMap { index -> SeamPlacesLevelID? in
 					let offset = index - world.edgeFacts(from: declaration).startIndex
 					let callee = callees[callees.startIndex + offset]
-					guard !world.edgeFacts(from: declaration)[index].isCallEdge, reachesOwner.contains(callee) else { return nil }
+					guard buildsInLine[world.variants.callOffset(of: Int(variant)) + offset], reachesOwner.contains(callee) else { return nil }
 					return SeamPlacesLevelID(variant: variant, edge: Int32(offset))
 				}
 				guard let step = steps.min(by: precedes) else { return [] }
@@ -346,6 +352,8 @@ struct SeamPlacesDrafts: Sendable {
 			guard lhs.namingRoute == rhs.namingRoute else { return routePrecedes(lhs.namingRoute, rhs.namingRoute) }
 			return !lhs.isBuiltInSendableFunction && rhs.isBuiltInSendableFunction
 		}
+		self.buildsInLine = buildsInLine
+		self.closesCycle = closesCycle
 		self.levels = levels.map(withParents)
 		self.closingLevels = closingLevels.map(withParents)
 		self.sites = sites
@@ -366,6 +374,83 @@ struct SeamPlacesDrafts: Sendable {
 	/// The variants the walk reached, in the order it reached them.
 	let variantOrder: [VariantID]
 	let world: TypeFactsGraph
+	/// For each call of each variant, by its position among every variant's calls (`TypeFactsVariants.callOffset(of:)`):
+	/// whether some route builds the callee in line there, and whether some route closes a cycle there (`routeFold(of:)`).
+	/// A call can do both, where routes with and without the callee's cycle identity above reach it.
+	let buildsInLine: [Bool]
+	let closesCycle: [Bool]
+
+	/// Whether some route builds the level's edge in line, and whether some route closes a cycle at it.
+	func buildsInLine(_ level: SeamPlacesLevelID) -> Bool {
+		buildsInLine[world.variants.callOffset(of: Int(level.variant)) + Int(level.edge)]
+	}
+
+	func closesCycle(_ level: SeamPlacesLevelID) -> Bool {
+		closesCycle[world.variants.callOffset(of: Int(level.variant)) + Int(level.edge)]
+	}
+
+	/// Where each call builds its callee in line and where it closes a cycle, as the tree unfolds it
+	/// (`TypeFactsGraph.unfolded`): a call closes where its callee's cycle identity is on the route above it, the route
+	/// beneath a fill starting again from the fills above it. An edge off every cycle (`isCallEdge` false) only builds in
+	/// line. Routes are folded down the calls that build in line, keeping for each variant the identities some route has
+	/// above it and those every route has, so the fold grows with the variants and identities, never with the routes.
+	static func routeFold(of world: TypeFactsGraph) -> (buildsInLine: [Bool], closesCycle: [Bool]) {
+		struct Above: Equatable {
+			/// The identities on some route above, and on every route above (`nil` before any route arrives).
+			var some = Set<CycleID>()
+			var every: Set<CycleID>?
+			/// The same, of the fills above alone, which the route beneath a fill starts again from.
+			var someFills = Set<CycleID>()
+			var everyFill: Set<CycleID>?
+
+			mutating func meet(some: Set<CycleID>, every: Set<CycleID>, someFills: Set<CycleID>, everyFill: Set<CycleID>) -> Bool {
+				let before = self
+				self.some.formUnion(some)
+				self.every = self.every.map { $0.intersection(every) } ?? every
+				self.someFills.formUnion(someFills)
+				self.everyFill = self.everyFill.map { $0.intersection(everyFill) } ?? everyFill
+				return self != before
+			}
+		}
+		let callCount = (0..<world.variantCount).reduce(0) { $0 + world.calls(of: VariantID($1)).count }
+		var buildsInLine = [Bool](repeating: false, count: callCount)
+		var closesCycle = [Bool](repeating: false, count: callCount)
+		var above = [Above](repeating: Above(), count: world.variantCount)
+		let rootVariant = world.rootVariant(0)
+		_ = above[Int(rootVariant)].meet(some: [], every: [], someFills: [], everyFill: [])
+		var pending = [rootVariant]
+		var isPending = [Bool](repeating: false, count: world.variantCount)
+		isPending[Int(rootVariant)] = true
+		while let variant = pending.popLast() {
+			isPending[Int(variant)] = false
+			let declaration = world.declaration(of: variant)
+			let own = world.cycle(of: declaration)
+			let state = above[Int(variant)]
+			let callOffset = world.variants.callOffset(of: Int(variant))
+			for (index, (edge, callee)) in zip(world.edgeFacts(from: declaration), world.calls(of: variant)).enumerated() {
+				// What the callee has above it on the routes through this call.
+				let (some, every, someFills, everyFill): (Set<CycleID>, Set<CycleID>, Set<CycleID>, Set<CycleID>)
+				if edge.isFill {
+					let target = world.cycle(of: world.declaration(of: callee))
+					(some, every, someFills, everyFill) = (state.someFills, state.everyFill ?? [], state.someFills.union([target]), (state.everyFill ?? []).union([target]))
+				} else {
+					(some, every, someFills, everyFill) = (state.some.union([own]), (state.every ?? []).union([own]), state.someFills, state.everyFill ?? [])
+				}
+				let identity = world.cycle(of: world.declaration(of: callee))
+				let inLine = !edge.isCallEdge || !every.contains(identity)
+				if edge.isCallEdge, some.contains(identity) {
+					closesCycle[callOffset + index] = true
+				}
+				guard inLine else { continue }
+				buildsInLine[callOffset + index] = true
+				if above[Int(callee)].meet(some: some, every: every, someFills: someFills, everyFill: everyFill), !isPending[Int(callee)] {
+					isPending[Int(callee)] = true
+					pending.append(callee)
+				}
+			}
+		}
+		return (buildsInLine, closesCycle)
+	}
 
 	/// Test only, deleted before merge: how the drafts' levels and own cases differ from `places`, the stored place graph
 	/// of the same seam, a line per difference, empty where none does. A stored level is a type built before a next
@@ -377,9 +462,10 @@ struct SeamPlacesDrafts: Sendable {
 			let targets = world.edges(from: world.declaration(of: level.variant))
 			return world.graph.nodes[Int(targets[targets.startIndex + Int(level.edge)])]
 		}
+		// A fill's declaration builds the fulfiller's scope, which the stored graph holds as a level of its own beneath the
+		// fill's, which builds no type and is followed by the fill's property.
 		func builtType(of variant: VariantID) -> String {
-			let node = world.graph.nodes[Int(world.declaration(of: variant))]
-			return node.key.isFill ? "fill" : node.scope.instantiable.concreteInstantiable.asSource
+			world.graph.nodes[Int(world.declaration(of: variant))].scope.instantiable.concreteInstantiable.asSource
 		}
 		func key(of level: SeamPlacesLevelDraft) -> String {
 			let next = edgeTarget(of: level.id)
@@ -399,7 +485,13 @@ struct SeamPlacesDrafts: Sendable {
 				storedKeys.insert(storedKey(of: level))
 			}
 		}
-		let draftKeys = Set((levels + closingLevels).map(key(of:)))
+		var draftKeys = Set((levels + closingLevels).map(key(of:)))
+		for level in levels + closingLevels {
+			let node = world.graph.nodes[Int(world.declaration(of: level.id.variant))]
+			if node.key.isFill, let property = node.property {
+				draftKeys.insert("fill before \(property.label)")
+			}
+		}
 		var differences = [String]()
 		for draftKey in draftKeys.subtracting(storedKeys).sorted() {
 			differences.append("level \(draftKey): drafted, not stored")
@@ -426,7 +518,16 @@ struct SeamPlacesDrafts: Sendable {
 				continue
 			}
 			guard storedCases.count == 1 else { continue }
-			let draftRoute = draftCase.namingRoute.dropLast().map { edgeTarget(of: $0).property?.label ?? "fill" }
+			let draftRoute = draftCase.namingRoute.dropLast().flatMap { level -> [String] in
+				let target = edgeTarget(of: level)
+				let declaration = world.declaration(of: level.variant)
+				guard target.key.isFill, let fill = world.fills.first(where: { Int($0.edge) == world.graph.edgeOffset(of: Int(declaration)) + Int(level.edge) }) else {
+					return [target.property?.label ?? "fill"]
+				}
+				// A fill's segment is the way to the hole it fills: the fill's stack, then the hole's property.
+				let stack = world.fillPathEntries[Int(fill.stackStart)..<Int(fill.stackStart + fill.stackCount)]
+				return stack.map { world.propertyTable[Int($0.property)].label } + [target.property?.label ?? "fill"]
+			}
 			let storedRoute = storedCases[0].namingRoute.flatMap { places.levels[$0].pathSegment.map(\.label) }
 			if draftRoute != storedRoute {
 				differences.append("case \(draftKey): named by \(draftRoute.joined(separator: ".")) drafted, \(storedRoute.joined(separator: ".")) stored")
