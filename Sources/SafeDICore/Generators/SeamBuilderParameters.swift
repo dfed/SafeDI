@@ -2728,13 +2728,16 @@ extension DependencyTreeGenerator {
 	/// case's routes read of that label (`SeamSignature.Places.Query.labelVariants(ofLabel:at:)`), each against the emitting
 	/// place with that label's facts and naming route the variant's. A cycle a fill closes on the seam's path is judged by the
 	/// graph's depths for a case of the called seam's own places, and at each place for a place the call passes up, whose
-	/// path runs through the seams that pass it up. A case some of whose places have no holding case, and every case of a call
-	/// with no graph, is judged per label by place.
+	/// path runs through the seams that pass it up. Every case of a call with no graph, or with a case whose places no one
+	/// graph holds (`heldCases(of:by:)`), is judged per label by place.
 	private static func caseJudgement(of entries: [CaseJudgementEntry], call: ScopeGenerator, callerModule: ModuleIdentity, compilesGeneratedMocks: Bool, seamTreeReceives: inout SeamTreeReceives) -> [DependencyTreeGeneratorError.FillFinding] {
-		guard let calledBuilders = call.calledBuilders, !calledBuilders.places.cases.isEmpty else {
+		guard let calledBuilders = call.calledBuilders,
+		      !calledBuilders.places.cases.isEmpty,
+		      let held = heldCases(of: entries, by: calledBuilders)
+		else {
 			return placeCaseJudgement(of: entries, call: call, callerModule: callerModule, compilesGeneratedMocks: compilesGeneratedMocks, seamTreeReceives: &seamTreeReceives)
 		}
-		let callQuery = calledBuilders.placesQuery
+		let callQuery = held.callQuery
 		// The first site of the call's places of each case, in the call's graph and in the graph of the seam whose tree holds
 		// the place, found the first time a declaration's buildability asks.
 		var siteByHoldingCase: [HoldingCaseKey: SeamSignature.Hole.Site]?
@@ -2752,26 +2755,8 @@ extension DependencyTreeGenerator {
 			}
 			return siteByHoldingCase?[HoldingCaseKey(holding)]
 		}
-		var groupKeys = [String]()
-		var groups = [String: [CaseJudgementEntry]]()
-		for (index, entry) in entries.enumerated() {
-			let key = entry.hole.enumPlace != nil ? ScopeGenerator.fillCaseKey(of: entry.hole) : "#\(index)"
-			if groups[key] == nil {
-				groupKeys.append(key)
-			}
-			groups[key, default: []].append(entry)
-		}
 		var findings = [DependencyTreeGeneratorError.FillFinding]()
-		for key in groupKeys {
-			guard let group = groups[key] else { continue }
-			// Every place of a case is held by one seam's tree, whose graph answers them all.
-			guard let holdingCases = calledBuilders.holdingCases(ofSites: group.map(\.hole.site), in: callQuery),
-			      let query = holdingCases.first?.query,
-			      holdingCases.allSatisfy({ $0.query === query })
-			else {
-				findings += placeCaseJudgement(of: group, call: call, callerModule: callerModule, compilesGeneratedMocks: compilesGeneratedMocks, seamTreeReceives: &seamTreeReceives)
-				continue
-			}
+		for (group, holdingCases, query) in held.cases {
 			let caseIndices = holdingCases.map(\.caseIndex)
 			let isPassedUp = query !== callQuery
 			guard let emitting = group.first(where: { $0.fill.fillEmitsCode }) ?? group.first, let child = (emitting.fill.fillJudgementTree ?? emitting.fill).children.first else { continue }
@@ -3027,6 +3012,29 @@ extension DependencyTreeGenerator {
 			passedUpRoute: hole.passedUpRoute,
 			isSendable: hole.isSendable,
 		)
+	}
+
+	/// The query of the call's own graph, and the places of each case of the call, in the order the cases are first met, a
+	/// place with no enum place a case of its own, each with the cases holding it and the graph of the seam whose tree holds
+	/// them all, or `nil` where some case's places no one graph holds.
+	private static func heldCases(of entries: [CaseJudgementEntry], by calledBuilders: CalledBuilders) -> (callQuery: SeamSignature.Places.Query, cases: [(group: [CaseJudgementEntry], holdingCases: [SeamSignature.Places.Query.ResolvedCase], query: SeamSignature.Places.Query)])? {
+		let callQuery = calledBuilders.placesQuery
+		var groupKeys = [String]()
+		var groups = [String: [CaseJudgementEntry]]()
+		for (index, entry) in entries.enumerated() {
+			let key = entry.hole.enumPlace != nil ? ScopeGenerator.fillCaseKey(of: entry.hole) : "#\(index)"
+			if groups[key] == nil {
+				groupKeys.append(key)
+			}
+			groups[key, default: []].append(entry)
+		}
+		var heldCases = [(group: [CaseJudgementEntry], holdingCases: [SeamSignature.Places.Query.ResolvedCase], query: SeamSignature.Places.Query)]()
+		for group in groupKeys.compactMap({ groups[$0] }) {
+			// Every place of a case is held by one seam's tree, whose graph answers them all.
+			guard let holdingCases = calledBuilders.holdingCases(ofSites: group.map(\.hole.site), in: callQuery), let query = holdingCases.first?.query, holdingCases.allSatisfy({ $0.query === query }) else { return nil }
+			heldCases.append((group, holdingCases, query))
+		}
+		return (callQuery, heldCases)
 	}
 
 	/// EXPERIMENT: the places of each case of one call judged once per distinct answer, each answer by the place whose
