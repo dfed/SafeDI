@@ -311,9 +311,11 @@ public struct FilledCallRecordsObservation: Sendable {
 				continue
 			}
 			functions.merge(records.spelledFunctions(typesDeclaredEscaping: typesDeclaredEscaping), uniquingKeysWith: { first, _ in first })
-			// The tree writes no record of a call in a world with a loop of builders, whose members' functions rebind what the
-			// call reads (`ScopeGenerator.observeFilledCall`).
-			for (argument, closure) in zip(records.closureArguments, records.builtClosures) where !holdsBuilderLoop {
+			// The tree writes no record of a call in a world with a loop of builders it refuses, whose members' functions rebind
+			// what the call reads, nor of a call that is itself a member, which makes its rebindings again in its body
+			// (`ScopeGenerator.observeFilledCall`).
+			let writesNoRecord = holdsBuilderLoop || !world.madeAgain(from: declaration).isEmpty
+			for (argument, closure) in zip(records.closureArguments, records.builtClosures) where !writesNoRecord {
 				closureArguments.append("\(argument.label): \(closure.spelled(dispatcherName: records.dispatcherNames[closure.rootDispatcherKey] ?? "", structNames: []))")
 			}
 		}
