@@ -92,9 +92,6 @@ extension DependencyTreeGenerator {
 		var memberBindingKeysByFamily = [Bool: [ValuesBindingKey: Set<BindingNode>]]()
 		/// The node of the seam's graph each call's inner scope is bound at, which names it (`innerScopeNames`).
 		var innerScopeNodesByKey = [InnerScopeKey: Set<BindingNode>]()
-		/// The step of each case on a route, with its member call, by its edge, with no binding path length: what a path decides
-		/// of a step is only where its member and inner scope are bound (`SeamRouteStepAndMember.atBindingPathLength(_:)`).
-		var routeStepByEdge = [RouteEdge: SeamRouteStepAndMember]()
 		/// Each route beside its steps by edge, while the tests observe the seam's places.
 		var routeStepObservations = [SeamRouteStepObservation]()
 
@@ -631,7 +628,7 @@ extension DependencyTreeGenerator {
 							seamType: seamType,
 							sitePath: reached.sitePath,
 							computed: computedSteps,
-							rebuilt: edgesOfSteps.compactMap { result.routeStepByEdge[$0.edge]?.atBindingPathLength($0.bindingPathLength) },
+							rebuilt: edgesOfSteps.compactMap { (stepByEdge[$0.edge] ?? nil)?.atBindingPathLength($0.bindingPathLength) },
 						))
 					}
 				}
@@ -688,7 +685,6 @@ extension DependencyTreeGenerator {
 					} else {
 						stepOfEdge = routeStep(of: caseOfProperty, bindingPrefix: bindingPrefix, buildsInSendableFunction: buildsInSendableFunction)?.atBindingPathLength(0)
 						stepByEdge[edge] = .some(stepOfEdge)
-						result.routeStepByEdge[edge] = stepOfEdge
 					}
 					guard let stepOfEdge else { break }
 					let boundStep = stepOfEdge.atBindingPathLength(bindingPrefix?.count ?? 0)
@@ -1449,10 +1445,10 @@ extension SeamSignature.ScopeEnum {
 	}
 }
 
-/// A route a seam's or a public mock's enums nested by type compute, beside the same route rebuilt from its steps by edge
-/// (`DependencyTreeGenerator.ScopeEnumsByType.routeStepByEdge`), for the tests: a step is a function of its edge and the
-/// length of the path its member is bound at, which the tests check on every route until the seam's tree reads the steps
-/// by edge.
+/// The place graph's test read, deleted when places come from facts: a route a seam's or a public mock's enums nested
+/// by type compute, beside the same route rebuilt from the step of each of its edges, with no binding path length
+/// (`SeamRouteStepAndMember.atBindingPathLength(_:)`). A step is a function of its edge and the length of the path its
+/// member is bound at, which the tests check on every route until the seam's tree reads the steps by edge.
 public struct SeamRouteStepObservation: Sendable {
 	public let seamType: TypeDescription
 	/// The properties from the seam's root to the place or the call the route leads to.

@@ -942,7 +942,7 @@ enum SplitPositionsRun {
 		// that keeps nothing, so both runs read their files' graphs and differ in where the positions are stored alone,
 		// and the whole run's observer sees no place twice.
 		let splitRun: Result<Generate.Output, any Error> = await Task.detached {
-			await SeamPlaceLevels.$observer.withValue({ _ in }) {
+			await SeamPlaceLevels.$observer.withValue(TaskLocalFunction { _ in }) {
 				do {
 					return try await .success(Generate.parse(splitArguments).generate())
 				} catch {

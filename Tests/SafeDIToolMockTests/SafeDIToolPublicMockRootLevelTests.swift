@@ -2361,10 +2361,6 @@ struct SafeDIToolPublicMockRootLevelTests: ~Copyable {
 				        public init(api: @escaping (Int) -> __safeDI_Built) {
 				            self.api = api
 				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(api: { _ in __safeDI_builder() })
-				        }
 				    }
 
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -2431,10 +2427,6 @@ struct SafeDIToolPublicMockRootLevelTests: ~Copyable {
 
 				        public init(api: @escaping (Session) -> __safeDI_Built) {
 				            self.api = api
-				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(api: { _ in __safeDI_builder() })
 				        }
 				    }
 
@@ -2503,10 +2495,6 @@ struct SafeDIToolPublicMockRootLevelTests: ~Copyable {
 				        public init(api: @escaping (Token?) -> __safeDI_Built) {
 				            self.api = api
 				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(api: { _ in __safeDI_builder() })
-				        }
 				    }
 
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -2574,10 +2562,6 @@ struct SafeDIToolPublicMockRootLevelTests: ~Copyable {
 				        public init(api: @escaping (LazilyInstantiated<Session>) -> __safeDI_Built) {
 				            self.api = api
 				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(api: { _ in __safeDI_builder() })
-				        }
 				    }
 
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -2644,10 +2628,6 @@ struct SafeDIToolPublicMockRootLevelTests: ~Copyable {
 
 				        public init(api: @escaping (LazilyInstantiated<Session>?) -> __safeDI_Built) {
 				            self.api = api
-				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(api: { _ in __safeDI_builder() })
 				        }
 				    }
 

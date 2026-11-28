@@ -21,7 +21,7 @@
 import Foundation
 import SafeDICore
 
-/// Test only, deleted before merge: the place graph one walk of a seam's tree builds
+/// Deleted when places come from facts: the place graph one walk of a seam's tree builds
 /// (`DependencyTreeGenerator.placesWalkingTreeOnce`) must equal the graph the per-site walk builds, level for level and case
 /// for case, numbered alike, and the walk must visit the per-site walk's sites with the same cases and routes.
 /// `SeamPlacesOracle.mismatches(of:)` reports what this finds beside its own.

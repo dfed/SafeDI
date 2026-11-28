@@ -145,7 +145,12 @@ struct SafeDIToolSeamNestedUnfilledHoleTests: ~Copyable {
 		            func __safeDI_p0Builder_S0_p() -> any P0 {
 		                func __safeDI_p() -> S1 {
 		                    _ = S1.__safeDI_S1_9C5AE37B60FDC075.self\(integration.seamCallComment(type: "S1", declaringModule: "M1"))
-		                    return S1(__safeDI_p1OptionalBuilder: .init(__safeDI_noScope: { nil }))
+		                    return S1(__safeDI_p1OptionalBuilder: {
+		                        @Sendable nonisolated func __safeDI_noScope_S1_SafeDICarrierScope_P1Optional<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> S1.__safeDI_P1OptionalCarrier<__safeDI_Built> {
+		                            .init(p: { __safeDI_builder() })
+		                        }
+		                        return __safeDI_noScope_S1_SafeDICarrierScope_P1Optional({ nil })
+		                    }())
 		                }
 		                let p: any P0 = __safeDI_p()
 		                return p

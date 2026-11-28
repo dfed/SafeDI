@@ -52,25 +52,29 @@ struct CallGuard: Hashable, Sendable {
 	}
 }
 
-/// A call of another module's seam as `ScopeGenerator.seamCallRecord` writes it, where it passes no fill: its text, and
-/// what its record, as the engine is to spell it, says of that text. Handed to `observer`, which the tests set to check that
+/// A call of another module's seam as `ScopeGenerator.seamCallRecord` writes it: its text, and what its record, as the
+/// engine is to spell it, says of that text. Handed to `observer`, which the tests set to check that
 /// the record lists every value the text reads, binds and declares, and that the engine's spelling of the record's guard
 /// and builder arguments is the text's, where the call's code is generated in a task that inherits it.
 public struct SeamCallRecordObservation: Sendable {
 	/// The call's code.
 	public let text: String
-	/// The names the record says the text reads: its arguments' reads, and each struct it passes a builder up from, by
-	/// the name the tree binds it under.
+	/// The names the record says the text reads: its arguments' reads, what its fills and dispatchers read of the caller's
+	/// scope, and each struct it passes a builder up from, by the name the tree binds it under.
 	public let readNames: [String]
-	/// The names the record says the text binds, and the functions it declares.
+	/// The names the record says the text binds, and the functions it declares: its builder function, and the fills,
+	/// dispatchers and level functions it keeps in place.
 	public let boundNames: [String]
+	/// The fills, dispatchers and level functions the text keeps in place (`AliasPlaceRecord.keptFunctionNames`), each of
+	/// which binds its own parameters and values: what one reads of the caller's scope is among `readNames`.
+	public let keptFunctionNames: [String]
 	/// The record's guard line and builder arguments, spelled as the engine is to spell them.
 	public let spelledFromRecord: [String]
 	/// The guard line and builder arguments the text writes, in the same order.
 	public let written: [String]
 
 	/// Called with each call as its record is made, when set: by the tests, never by the tool.
-	@TaskLocal public static var observer: (@Sendable (SeamCallRecordObservation) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (SeamCallRecordObservation) -> Void>?
 }
 
 /// One builder a call hands the seam it calls, under the builder's label in the tier called.

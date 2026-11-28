@@ -62,10 +62,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 			        public init(profile: @escaping (Analytics) -> __safeDI_UserServiceCarrier_Profile<__safeDI_Built>) {
 			            self.profile = profile
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(profile: { _ in .init(__safeDI_noScope: __safeDI_builder) })
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -74,10 +70,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 
 			        public init(userService: @escaping () -> __safeDI_Built) {
 			            self.userService = userService
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(userService: { __safeDI_builder() })
 			        }
 			    }
 
@@ -737,10 +729,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		        public init(profileBuilder: @escaping (Analytics, Session) -> __safeDI_UserServiceCarrier_ProfileI<__safeDI_Built>) {
 		            self.profileBuilder = profileBuilder
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(profileBuilder: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -749,10 +737,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 
 		        public init(userService: @escaping (String, Cache) -> __safeDI_Built) {
 		            self.userService = userService
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(userService: { _, _ in __safeDI_builder() })
 		        }
 		    }
 
@@ -786,10 +770,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		        public init(userService: @escaping (Analytics) -> __safeDI_Built) {
 		            self.userService = userService
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(userService: { _ in __safeDI_builder() })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -799,10 +779,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		        public init(screenBuilder_Sendable: __safeDI_UserServiceSendableCarrier_Screen<__safeDI_Built>) {
 		            self.screenBuilder_Sendable = screenBuilder_Sendable
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		            self.init(screenBuilder_Sendable: .init(__safeDI_noScope: __safeDI_builder))
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -811,10 +787,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 
 		        public init(profileBuilder: @escaping @Sendable () -> __safeDI_UserServiceCarrier_ProfileN<__safeDI_Built>) {
 		            self.profileBuilder = profileBuilder
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		            self.init(profileBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
 		    }
 
@@ -856,10 +828,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		        public init(userService: @escaping (String, Cache, Analytics) -> __safeDI_Built) {
 		            self.userService = userService
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(userService: { _, _, _ in __safeDI_builder() })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -868,10 +836,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 
 		        public init(profileBuilder: @escaping @Sendable () -> __safeDI_UserServiceCarrier_ProfileS<__safeDI_Built>) {
 		            self.profileBuilder = profileBuilder
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		            self.init(profileBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
 		    }
 
@@ -1012,10 +976,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		        public init(erasedUserServiceBuilder: @escaping (Analytics, LazilyInstantiated<any UserService>, SendableLazilyInstantiated<any UserService>) -> ErasedInstantiator<String, __safeDI_Built>.Builder) {
 		            self.erasedUserServiceBuilder = erasedUserServiceBuilder
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<String, __safeDI_Built>.Builder) {
-		            self.init(erasedUserServiceBuilder: { _, _, _ in __safeDI_builder })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1024,10 +984,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 
 		        public init(sendableErasedUserServiceBuilder: @escaping @Sendable () -> SendableErasedInstantiator<String, __safeDI_Built>.Builder) {
 		            self.sendableErasedUserServiceBuilder = sendableErasedUserServiceBuilder
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<String, __safeDI_Built>.Builder) {
-		            self.init(sendableErasedUserServiceBuilder: { __safeDI_builder })
 		        }
 		    }
 
@@ -1038,10 +994,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		        public init(lazyUserService: @escaping (Analytics) -> __safeDI_Built) {
 		            self.lazyUserService = lazyUserService
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(lazyUserService: { _ in __safeDI_builder() })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1050,10 +1002,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 
 		        public init(sendableLazyUserService: @escaping @Sendable () -> __safeDI_Built) {
 		            self.sendableLazyUserService = sendableLazyUserService
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		            self.init(sendableLazyUserService: { __safeDI_builder() })
 		        }
 		    }
 
@@ -1181,10 +1129,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.home = home
 		            self.settings = settings
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(home: { _ in .init(__safeDI_noScope: __safeDI_builder) }, settings: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1193,10 +1137,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 
 		        public init(avatar: @escaping (Session) -> __safeDI_UserServiceCarrier_Avatar<__safeDI_Built>) {
 		            self.avatar = avatar
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(avatar: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
 		    }
 
@@ -1207,10 +1147,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		        public init(avatar: @escaping (Theme) -> __safeDI_UserServiceCarrier_Avatar<__safeDI_Built>) {
 		            self.avatar = avatar
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(avatar: { _ in .init(__safeDI_noScope: __safeDI_builder) })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1219,10 +1155,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 
 		        public init(userService: @escaping () -> __safeDI_Built) {
 		            self.userService = userService
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(userService: { __safeDI_builder() })
 		        }
 		    }
 
@@ -1327,10 +1259,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		        public init(profile: @escaping (Theme) -> __safeDI_UserServiceCarrier_Profile<__safeDI_Built>) {
 		            self.profile = profile
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(profile: { _ in .init(__safeDI_noScope: __safeDI_builder) })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1339,10 +1267,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 
 		        public init(userService: @escaping (Cache) -> __safeDI_Built) {
 		            self.userService = userService
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(userService: { _ in __safeDI_builder() })
 		        }
 		    }
 
@@ -1423,10 +1347,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 			        public init(profile: @escaping (Analytics) -> __safeDI_UserServiceCarrier_Profile<__safeDI_Built>) {
 			            self.profile = profile
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(profile: { _ in .init(__safeDI_noScope: __safeDI_builder) })
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1435,10 +1355,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 
 			        public init(userService: @escaping () -> __safeDI_Built) {
 			            self.userService = userService
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(userService: { __safeDI_builder() })
 			        }
 			    }
 
@@ -1791,10 +1707,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		        public init(profileBuilder: @escaping (Logger) -> __safeDI_RouterCarrier_Profile<__safeDI_Built>) {
 		            self.profileBuilder = profileBuilder
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(profileBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1803,10 +1715,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 
 		        public init(router: @escaping () -> __safeDI_Built) {
 		            self.router = router
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(router: { __safeDI_builder() })
 		        }
 		    }
 
@@ -2257,10 +2165,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 			        public init(service: Service.__safeDI_UserServiceCarrier<__safeDI_Built>) {
 			            self.service = service
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(service: .init(__safeDI_noScope: __safeDI_builder))
-			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -2439,10 +2343,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 			                public init(logger: @escaping (logger_Values) -> __safeDI_Built) {
 			                    self.logger = logger
 			                }
-
-			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.init(logger: { _ in __safeDI_builder() })
-			                }
 			            }
 			        }
 
@@ -2452,10 +2352,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 
 			            public init(service_userServiceBuilder: @escaping (service_userServiceBuilder_Values) -> Service.__safeDI_UserServiceCarrier<SafeDIScope_Logger.DefaultUserService_Scope.__safeDI_Builder<__safeDI_Built>>) {
 			                self.service_userServiceBuilder = service_userServiceBuilder
-			            }
-
-			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.init(service_userServiceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 			            }
 			        }
 			    }
@@ -2557,10 +2453,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 			        public init(xBuilder: @escaping (Analytics) -> __safeDI_UserServiceCarrier_X<__safeDI_Built>) {
 			            self.xBuilder = xBuilder
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(xBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -2569,10 +2461,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 
 			        public init(service: Service.__safeDI_UserServiceCarrier<__safeDI_Built>) {
 			            self.service = service
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(service: .init(__safeDI_noScope: __safeDI_builder))
 			        }
 			    }
 
@@ -2784,10 +2672,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 
 		        public init(serviceBuilder: @escaping @Sendable () -> Service.__safeDI_UserServiceCarrier<__safeDI_Built>) {
 		            self.serviceBuilder = serviceBuilder
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		            self.init(serviceBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
 		    }
 
@@ -3019,10 +2903,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.home = home
 		            self.card = card
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(home: { _ in .init(__safeDI_noScope: __safeDI_builder) }, card: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -3031,10 +2911,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 
 		        public init(avatar: @escaping (Theme) -> __safeDI_UserServiceCarrier_Avatar<__safeDI_Built>) {
 		            self.avatar = avatar
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(avatar: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
 		    }
 
@@ -3045,10 +2921,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		        public init(userService: @escaping () -> __safeDI_Built) {
 		            self.userService = userService
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(userService: { __safeDI_builder() })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -3057,10 +2929,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 
 		        public init(userService: @escaping () -> __safeDI_Built) {
 		            self.userService = userService
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(userService: { __safeDI_builder() })
 		        }
 		    }
 
@@ -3141,10 +3009,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		                public init(logger: @escaping (logger_Values) -> __safeDI_Built) {
 		                    self.logger = logger
 		                }
-
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.init(logger: { _ in __safeDI_builder() })
-		                }
 		            }
 		        }
 
@@ -3154,10 +3018,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 
 		            public init(service_userServiceBuilder: @escaping (service_userServiceBuilder_Values) -> Service.__safeDI_UserServiceCarrier<SafeDIScope_Logger.DefaultUserService_Scope.__safeDI_Builder<__safeDI_Built>>) {
 		                self.service_userServiceBuilder = service_userServiceBuilder
-		            }
-
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.init(service_userServiceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 		            }
 		        }
 		    }
@@ -3408,10 +3268,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.xBuilder = xBuilder
 		            self.profile = profile
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(xBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) }, profile: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -3421,10 +3277,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		        public init(serviceBuilder: @escaping () -> Service.__safeDI_UserServiceCarrier<__safeDI_Built>) {
 		            self.serviceBuilder = serviceBuilder
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(serviceBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -3433,10 +3285,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 
 		        public init(userService: @escaping () -> __safeDI_Built) {
 		            self.userService = userService
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(userService: { __safeDI_builder() })
 		        }
 		    }
 
@@ -3912,10 +3760,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		        public init(serviceBuilder: @escaping () -> Service.__safeDI_UserServiceCarrier<__safeDI_Built>) {
 		            self.serviceBuilder = serviceBuilder
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(serviceBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
-		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -3944,10 +3788,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.xBuilder = xBuilder
 		            self.profile = profile
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(xBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) }, profile: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -3957,10 +3797,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		        public init(otherBuilder: @escaping () -> Other.__safeDI_UserServiceCarrier<__safeDI_Built>) {
 		            self.otherBuilder = otherBuilder
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(otherBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -3969,10 +3805,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 
 		        public init(userService: @escaping () -> __safeDI_Built) {
 		            self.userService = userService
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(userService: { __safeDI_builder() })
 		        }
 		    }
 
@@ -4086,10 +3918,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		        public init(profileBuilder: @escaping (Instantiator<Shell>) -> __safeDI_UserServiceCarrier_Profile<__safeDI_Built>) {
 		            self.profileBuilder = profileBuilder
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(profileBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -4099,10 +3927,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		        public init(userService: @escaping () -> __safeDI_Built) {
 		            self.userService = userService
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(userService: { __safeDI_builder() })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -4111,10 +3935,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 
 		        public init(shellBuilder_Sendable: @escaping @Sendable () -> Shell.__safeDI_UserServiceSendableCarrier<__safeDI_Built>) {
 		            self.shellBuilder_Sendable = shellBuilder_Sendable
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		            self.init(shellBuilder_Sendable: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
 		    }
 
@@ -4149,10 +3969,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		        public init(innerBuilder: @escaping @Sendable () -> Inner.__safeDI_UserServiceCarrier<__safeDI_Built>, innerBuilder_Sendable: @escaping @Sendable () -> Inner.__safeDI_UserServiceSendableCarrier<__safeDI_Built>) {
 		            self.innerBuilder = innerBuilder
 		            self.innerBuilder_Sendable = innerBuilder_Sendable
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		            self.init(innerBuilder: { .init(__safeDI_noScope: __safeDI_builder) }, innerBuilder_Sendable: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
 		    }
 
@@ -4228,10 +4044,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		        public init(profile: @escaping (Analytics, SendableInstantiator<X>) -> __safeDI_UserServiceCarrier_Profile<__safeDI_Built>) {
 		            self.profile = profile
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(profile: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -4241,10 +4053,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		        public init(userService: @escaping () -> __safeDI_Built) {
 		            self.userService = userService
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(userService: { __safeDI_builder() })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -4253,10 +4061,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 
 		        public init(serviceBuilder: Service.__safeDI_UserServiceCarrier<__safeDI_Built>) {
 		            self.serviceBuilder = serviceBuilder
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(serviceBuilder: .init(__safeDI_noScope: __safeDI_builder))
 		        }
 		    }
 
@@ -4269,10 +4073,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.xBuilder = xBuilder
 		            self.xBuilder_Sendable = xBuilder_Sendable
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		            self.init(xBuilder: { .init(__safeDI_noScope: __safeDI_builder) }, xBuilder_Sendable: { .init(__safeDI_noScope: __safeDI_builder) })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -4281,10 +4081,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 
 		        public init(serviceBuilder_Sendable: @escaping @Sendable () -> Service.__safeDI_UserServiceSendableCarrier<__safeDI_Built>) {
 		            self.serviceBuilder_Sendable = serviceBuilder_Sendable
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		            self.init(serviceBuilder_Sendable: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
 		    }
 
@@ -4381,10 +4177,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		        public init(inner: Inner.__safeDI_UserServiceCarrier<__safeDI_Built>) {
 		            self.inner = inner
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(inner: .init(__safeDI_noScope: __safeDI_builder))
-		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -4410,10 +4202,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 
 		        public init(inner: Inner.__safeDI_UserServiceCarrier<__safeDI_Built>) {
 		            self.inner = inner
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(inner: .init(__safeDI_noScope: __safeDI_builder))
 		        }
 		    }
 
@@ -4441,10 +4229,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		        public init(userService: @escaping (Analytics) -> __safeDI_Built) {
 		            self.userService = userService
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(userService: { _ in __safeDI_builder() })
-		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -4469,10 +4253,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		        public init(aBuilder: A.__safeDI_UserServiceCarrier<__safeDI_Built>, bBuilder: B.__safeDI_UserServiceCarrier<__safeDI_Built>) {
 		            self.aBuilder = aBuilder
 		            self.bBuilder = bBuilder
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(aBuilder: .init(__safeDI_noScope: __safeDI_builder), bBuilder: .init(__safeDI_noScope: __safeDI_builder))
 		        }
 		    }
 
@@ -4558,10 +4338,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		        public init(inner: Inner.__safeDI_UserServiceCarrier<__safeDI_Built>) {
 		            self.inner = inner
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(inner: .init(__safeDI_noScope: __safeDI_builder))
-		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -4587,10 +4363,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 
 		        public init(innerBuilder: @escaping @Sendable () -> Inner.__safeDI_UserServiceCarrier<__safeDI_Built>) {
 		            self.innerBuilder = innerBuilder
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		            self.init(innerBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
 		    }
 
@@ -4618,10 +4390,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		        public init(profile: __safeDI_UserServiceCarrier_Profile<__safeDI_Built>) {
 		            self.profile = profile
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(profile: .init(__safeDI_noScope: __safeDI_builder))
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -4630,10 +4398,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 
 		        public init(userService: @escaping () -> __safeDI_Built) {
 		            self.userService = userService
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(userService: { __safeDI_builder() })
 		        }
 		    }
 
@@ -4662,10 +4426,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		        public init(a: A.__safeDI_UserServiceCarrier<__safeDI_Built>) {
 		            self.a = a
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(a: .init(__safeDI_noScope: __safeDI_builder))
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -4674,10 +4434,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 
 		        public init(b_Sendable: B.__safeDI_UserServiceSendableCarrier<__safeDI_Built>) {
 		            self.b_Sendable = b_Sendable
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		            self.init(b_Sendable: .init(__safeDI_noScope: __safeDI_builder))
 		        }
 		    }
 
@@ -5174,10 +4930,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		        public init(profile: @escaping (Instantiator<Impl>?, Count) -> __safeDI_ClockCarrier_Profile<__safeDI_Built>) {
 		            self.profile = profile
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(profile: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -5186,10 +4938,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 
 		        public init(`case`: @escaping (Badge) -> __safeDI_Built) {
 		            self.`case` = `case`
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(case: { _ in __safeDI_builder() })
 		        }
 		    }
 
@@ -5200,10 +4948,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		        public init(profile: @escaping (Instantiator<Impl>?, Count) -> __safeDI_UserServiceCarrier_Profile<__safeDI_Built>) {
 		            self.profile = profile
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(profile: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -5212,10 +4956,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 
 		        public init(userService: @escaping (Badge, any Clock) -> __safeDI_Built) {
 		            self.userService = userService
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(userService: { _, _ in __safeDI_builder() })
 		        }
 		    }
 
@@ -5248,10 +4988,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		        public init(panel: __safeDI_UserServiceCarrier_Panel<__safeDI_Built>) {
 		            self.panel = panel
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(panel: .init(__safeDI_noScope: __safeDI_builder))
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -5260,10 +4996,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 
 		        public init(userService: @escaping (Gadget) -> __safeDI_Built) {
 		            self.userService = userService
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(userService: { _ in __safeDI_builder() })
 		        }
 		    }
 
@@ -5302,10 +5034,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.a_b = a_b
 		            self.a = a
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(a_b: .init(__safeDI_noScope: __safeDI_builder), a: { _ in .init(__safeDI_noScope: __safeDI_builder) })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -5314,10 +5042,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 
 		        public init(c: __safeDI_UserServiceCarrier_Owner<__safeDI_Built>) {
 		            self.c = c
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(c: .init(__safeDI_noScope: __safeDI_builder))
 		        }
 		    }
 
@@ -5328,10 +5052,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		        public init(b_c: __safeDI_UserServiceCarrier_Owner<__safeDI_Built>) {
 		            self.b_c = b_c
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(b_c: .init(__safeDI_noScope: __safeDI_builder))
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -5340,10 +5060,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 
 		        public init(userService: @escaping () -> __safeDI_Built) {
 		            self.userService = userService
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(userService: { __safeDI_builder() })
 		        }
 		    }
 
@@ -5596,10 +5312,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		        public init(profile: @escaping (__safeDI_Values4) -> __safeDI_UserServiceCarrier_Profile<__safeDI_Built>) {
 		            self.profile = profile
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(profile: { _ in .init(__safeDI_noScope: __safeDI_builder) })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -5608,10 +5320,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 
 		        public init(userService: @escaping () -> __safeDI_Built) {
 		            self.userService = userService
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(userService: { __safeDI_builder() })
 		        }
 		    }
 
@@ -5725,10 +5433,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		        public init(profile: @escaping (Analytics) -> __safeDI_UserServiceCarrier_Profile<__safeDI_Built>) {
 		            self.profile = profile
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(profile: { _ in .init(__safeDI_noScope: __safeDI_builder) })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -5737,10 +5441,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 
 		        public init(userService: @escaping () -> __safeDI_Built) {
 		            self.userService = userService
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(userService: { __safeDI_builder() })
 		        }
 		    }
 
@@ -6254,10 +5954,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 			                public init(serviceBuilder: @escaping (serviceBuilder_Values) -> Service.__safeDI_UserServiceCarrier<__safeDI_Built>) {
 			                    self.serviceBuilder = serviceBuilder
 			                }
-
-			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.init(serviceBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
-			                }
 			            }
 			        }
 
@@ -6267,10 +5963,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 
 			            public init(inner_trackerBuilder: @escaping (inner_trackerBuilder_Values) -> Inner.__safeDI_TrackerCarrier<SafeDIScope_UserService.DefaultTracker_Scope.__safeDI_Builder<__safeDI_Built>>) {
 			                self.inner_trackerBuilder = inner_trackerBuilder
-			            }
-
-			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.init(inner_trackerBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 			            }
 			        }
 			    }
@@ -6419,10 +6111,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		        public init(profile: @escaping (Analytics) -> __safeDI_UserServiceCarrier_Profile<__safeDI_Built>) {
 		            self.profile = profile
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(profile: { _ in .init(__safeDI_noScope: __safeDI_builder) })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -6431,10 +6119,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 
 		        public init(userService: @escaping () -> __safeDI_Built) {
 		            self.userService = userService
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(userService: { __safeDI_builder() })
 		        }
 		    }
 
@@ -7356,10 +7040,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 	        public init(profile: @escaping (Analytics) -> __safeDI_UserServiceCarrier_Profile<__safeDI_Built>) {
 	            self.profile = profile
 	        }
-
-	        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-	            self.init(profile: { _ in .init(__safeDI_noScope: __safeDI_builder) })
-	        }
 	    }
 
 	    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -7368,10 +7048,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 
 	        public init(userService: @escaping () -> __safeDI_Built) {
 	            self.userService = userService
-	        }
-
-	        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-	            self.init(userService: { __safeDI_builder() })
 	        }
 	    }
 

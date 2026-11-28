@@ -3191,10 +3191,6 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		            self.panel = panel
 		            self.serviceBuilder = serviceBuilder
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		            self.init(panel: { .init(__safeDI_noScope: __safeDI_builder) }, serviceBuilder: { { _ in __safeDI_builder() } })
-		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.

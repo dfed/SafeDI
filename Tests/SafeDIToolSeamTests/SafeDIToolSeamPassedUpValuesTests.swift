@@ -167,15 +167,14 @@ struct SafeDIToolSeamPassedUpValuesTests: ~Copyable {
 		        public init(api: @escaping (Int) -> __safeDI_Built) {
 		            self.api = api
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(api: { _ in __safeDI_builder() })
-		        }
 		    }
 
 		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
 		    public convenience init(id: Int, apiBuilder: @escaping () -> any Api) {
-		        self.init(__safeDI_id: id, __safeDI_apiBuilder: .init(__safeDI_noScope: apiBuilder))
+		        @Sendable nonisolated func __safeDI_noScope_Detail_SafeDICarrierScope_Api<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Detail.__safeDI_ApiCarrier<__safeDI_Built> {
+		            .init(api: { _ in __safeDI_builder() })
+		        }
+		        self.init(__safeDI_id: id, __safeDI_apiBuilder: __safeDI_noScope_Detail_SafeDICarrierScope_Api(apiBuilder))
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -205,15 +204,17 @@ struct SafeDIToolSeamPassedUpValuesTests: ~Copyable {
 		            self.api = api
 		            self.detailBuilder = detailBuilder
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(api: { _, _ in __safeDI_builder() }, detailBuilder: .init(__safeDI_noScope: __safeDI_builder))
-		        }
 		    }
 
 		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
 		    public init(id: Int, apiBuilder: @escaping () -> any Api) {
-		        self.init(__safeDI_id: id, __safeDI_apiBuilder: .init(__safeDI_noScope: apiBuilder))
+		        @Sendable nonisolated func __safeDI_noScope_List_SafeDICarrierScope_Api<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> List.__safeDI_ApiCarrier<__safeDI_Built> {
+		            .init(api: { _, _ in __safeDI_builder() }, detailBuilder: __safeDI_noScope_Detail_SafeDICarrierScope_Api(__safeDI_builder))
+		        }
+		        @Sendable nonisolated func __safeDI_noScope_Detail_SafeDICarrierScope_Api<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Detail.__safeDI_ApiCarrier<__safeDI_Built> {
+		            .init(api: { _ in __safeDI_builder() })
+		        }
+		        self.init(__safeDI_id: id, __safeDI_apiBuilder: __safeDI_noScope_List_SafeDICarrierScope_Api(apiBuilder))
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -293,15 +294,14 @@ struct SafeDIToolSeamPassedUpValuesTests: ~Copyable {
 		            self.api = api
 		            self.nextBuilder = nextBuilder
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(api: { _, _ in __safeDI_builder() }, nextBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
-		        }
 		    }
 
 		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
 		    public convenience init(id: Int, apiBuilder: @escaping () -> any Api) {
-		        self.init(__safeDI_id: id, __safeDI_apiBuilder: .init(__safeDI_noScope: apiBuilder))
+		        @Sendable nonisolated func __safeDI_noScope_Node_SafeDICarrierScope_Api<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Node.__safeDI_ApiCarrier<__safeDI_Built> {
+		            .init(api: { _, _ in __safeDI_builder() }, nextBuilder: { __safeDI_noScope_Node_SafeDICarrierScope_Api(__safeDI_builder) })
+		        }
+		        self.init(__safeDI_id: id, __safeDI_apiBuilder: __safeDI_noScope_Node_SafeDICarrierScope_Api(apiBuilder))
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -590,15 +590,26 @@ struct SafeDIToolSeamPassedUpValuesTests: ~Copyable {
 		        public init(home: Home.__safeDI_ApiCarrier<__safeDI_Built>) {
 		            self.home = home
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(home: .init(__safeDI_noScope: __safeDI_builder))
-		        }
 		    }
 
 		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
 		    public convenience init(apiBuilder: @escaping () -> any Api) {
-		        self.init(__safeDI_apiBuilder: .init(__safeDI_noScope: apiBuilder))
+		        @Sendable nonisolated func __safeDI_noScope_Shell_SafeDICarrierScope_Api<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Shell.__safeDI_ApiCarrier<__safeDI_Built> {
+		            .init(home: __safeDI_noScope_Home_SafeDICarrierScope_Api(__safeDI_builder))
+		        }
+		        @Sendable nonisolated func __safeDI_noScope_Home_SafeDICarrierScope_Api<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Home.__safeDI_ApiCarrier<__safeDI_Built> {
+		            .init(first: __safeDI_noScope_Home_SafeDICarrierScope_Api_First_Scope(__safeDI_builder), second: { _ in __safeDI_noScope_Home_SafeDICarrierScope_Api_Second_Scope(__safeDI_builder) })
+		        }
+		        @Sendable nonisolated func __safeDI_noScope_Home_SafeDICarrierScope_Api_First_Scope<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Home.__safeDI_ApiCarrier_First<__safeDI_Built> {
+		            .init(panel: __safeDI_noScope_Home_SafeDICarrierScope_Api_Panel_Scope(__safeDI_builder))
+		        }
+		        @Sendable nonisolated func __safeDI_noScope_Home_SafeDICarrierScope_Api_Panel_Scope<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Home.__safeDI_ApiCarrier_Panel<__safeDI_Built> {
+		            .init(api: { __safeDI_builder() })
+		        }
+		        @Sendable nonisolated func __safeDI_noScope_Home_SafeDICarrierScope_Api_Second_Scope<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Home.__safeDI_ApiCarrier_Second<__safeDI_Built> {
+		            .init(panel: __safeDI_noScope_Home_SafeDICarrierScope_Api_Panel_Scope(__safeDI_builder))
+		        }
+		        self.init(__safeDI_apiBuilder: __safeDI_noScope_Shell_SafeDICarrierScope_Api(apiBuilder))
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.

@@ -73,15 +73,14 @@ struct SafeDIToolSeamKeywordLabelTests: ~Copyable {
 		            self.Type = Type
 		            self.Protocol = Protocol
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		            self.init(Type: { __safeDI_builder() }, Protocol: { __safeDI_builder() })
-		        }
 		    }
 
 		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
 		    public init(gadgetSendableBuilder: @escaping @Sendable () -> any Gadget) {
-		        self.init(__safeDI_gadgetSendableBuilder: .init(__safeDI_noScope: gadgetSendableBuilder))
+		        @Sendable nonisolated func __safeDI_noScope_Host_SafeDISendableCarrierScope_Gadget<__safeDI_Built>(_ __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) -> Host.__safeDI_GadgetSendableCarrier<__safeDI_Built> {
+		            .init(Type: { __safeDI_builder() }, Protocol: { __safeDI_builder() })
+		        }
+		        self.init(__safeDI_gadgetSendableBuilder: __safeDI_noScope_Host_SafeDISendableCarrierScope_Gadget(gadgetSendableBuilder))
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -159,15 +158,14 @@ struct SafeDIToolSeamKeywordLabelTests: ~Copyable {
 		        public init(Type: @escaping () -> __safeDI_Built) {
 		            self.Type = Type
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(Type: { __safeDI_builder() })
-		        }
 		    }
 
 		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
 		    public init(apiBuilder: @escaping () -> any Api) {
-		        self.init(__safeDI_apiBuilder: .init(__safeDI_noScope: apiBuilder))
+		        @Sendable nonisolated func __safeDI_noScope_F_SafeDICarrierScope_Api<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> F.__safeDI_ApiCarrier<__safeDI_Built> {
+		            .init(Type: { __safeDI_builder() })
+		        }
+		        self.init(__safeDI_apiBuilder: __safeDI_noScope_F_SafeDICarrierScope_Api(apiBuilder))
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -220,10 +218,6 @@ struct SafeDIToolSeamKeywordLabelTests: ~Copyable {
 		        public init(Type: @escaping (Name) -> __safeDI_ApiCarrier_Detail<__safeDI_Built>) {
 		            self.Type = Type
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(Type: { _ in .init(__safeDI_noScope: __safeDI_builder) })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -237,10 +231,6 @@ struct SafeDIToolSeamKeywordLabelTests: ~Copyable {
 		            self.`init` = `init`
 		            self.`my leaf` = `my leaf`
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(Self: { __safeDI_builder() }, init: { _ in __safeDI_builder() }, `my leaf`: { _, _ in __safeDI_builder() })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -249,10 +239,6 @@ struct SafeDIToolSeamKeywordLabelTests: ~Copyable {
 
 		        public init(Protocol: @escaping () -> __safeDI_Built) {
 		            self.Protocol = Protocol
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(Protocol: { __safeDI_builder() })
 		        }
 		    }
 
@@ -263,15 +249,23 @@ struct SafeDIToolSeamKeywordLabelTests: ~Copyable {
 		        public init(Protocol: @escaping @Sendable () -> __safeDI_GizmoCarrier_Gadget<__safeDI_Built>) {
 		            self.Protocol = Protocol
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		            self.init(Protocol: { .init(__safeDI_noScope: __safeDI_builder) })
-		        }
 		    }
 
 		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
 		    public init(apiBuilder: @escaping () -> any Api, gizmoSendableBuilder: @escaping @Sendable () -> any Gizmo) {
-		        self.init(__safeDI_apiBuilder: .init(__safeDI_noScope: apiBuilder), __safeDI_gizmoSendableBuilder: .init(__safeDI_noScope: gizmoSendableBuilder))
+		        @Sendable nonisolated func __safeDI_noScope_Home_SafeDICarrierScope_Api<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Home.__safeDI_ApiCarrier<__safeDI_Built> {
+		            .init(Type: { _ in __safeDI_noScope_Home_SafeDICarrierScope_Api_Detail_Scope(__safeDI_builder) })
+		        }
+		        @Sendable nonisolated func __safeDI_noScope_Home_SafeDICarrierScope_Api_Detail_Scope<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Home.__safeDI_ApiCarrier_Detail<__safeDI_Built> {
+		            .init(Self: { __safeDI_builder() }, init: { _ in __safeDI_builder() }, `my leaf`: { _, _ in __safeDI_builder() })
+		        }
+		        @Sendable nonisolated func __safeDI_noScope_Home_SafeDISendableCarrierScope_Gizmo<__safeDI_Built>(_ __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) -> Home.__safeDI_GizmoSendableCarrier<__safeDI_Built> {
+		            .init(Protocol: { __safeDI_noScope_Home_SafeDICarrierScope_Gizmo_Gadget_Scope(__safeDI_builder) })
+		        }
+		        @Sendable nonisolated func __safeDI_noScope_Home_SafeDICarrierScope_Gizmo_Gadget_Scope<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Home.__safeDI_GizmoCarrier_Gadget<__safeDI_Built> {
+		            .init(Protocol: { __safeDI_builder() })
+		        }
+		        self.init(__safeDI_apiBuilder: __safeDI_noScope_Home_SafeDICarrierScope_Api(apiBuilder), __safeDI_gizmoSendableBuilder: __safeDI_noScope_Home_SafeDISendableCarrierScope_Gizmo(gizmoSendableBuilder))
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -374,10 +368,6 @@ struct SafeDIToolSeamKeywordLabelTests: ~Copyable {
 		            self.Type = Type
 		            self.`default` = `default`
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(Type: { __safeDI_builder() }, default: { _ in __safeDI_builder() })
-		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -405,10 +395,6 @@ struct SafeDIToolSeamKeywordLabelTests: ~Copyable {
 
 		        public init(Protocol: Inner.__safeDI_ApiCarrier<__safeDI_Built>) {
 		            self.Protocol = Protocol
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(Protocol: .init(__safeDI_noScope: __safeDI_builder))
 		        }
 		    }
 

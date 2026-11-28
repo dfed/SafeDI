@@ -1548,7 +1548,7 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 
 		// The run tells of the one block that threw, which is all that shows it computed again what the file stores.
 		let (failedBlocks, failedBlocksContinuation) = AsyncStream<StoredBlockDecodeObservation.Block>.makeStream()
-		let cutShort = try await StoredBlockDecodeObservation.$failureObserver.withValue({ failedBlocksContinuation.yield($0) }) {
+		let cutShort = try await StoredBlockDecodeObservation.$failureObserver.withValue(TaskLocalFunction { failedBlocksContinuation.yield($0) }) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [Self.downstreamSeamCallerSource],
 				dependentModuleInfoPaths: [upstreamModuleInfoURL.path],
@@ -1643,7 +1643,7 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 
 		// The run tells of the one block that threw, which is all that shows it computed again what the file stores.
 		let (failedBlocks, failedBlocksContinuation) = AsyncStream<StoredBlockDecodeObservation.Block>.makeStream()
-		let cutShort = try await StoredBlockDecodeObservation.$failureObserver.withValue({ failedBlocksContinuation.yield($0) }) {
+		let cutShort = try await StoredBlockDecodeObservation.$failureObserver.withValue(TaskLocalFunction { failedBlocksContinuation.yield($0) }) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [Self.downstreamPublicMockCallerSource],
 				dependentModuleInfoPaths: [upstreamModuleInfoURL.path],

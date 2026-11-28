@@ -196,7 +196,7 @@ struct SafeDIToolReceivedCycleFoldTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private mutating func run(_ fixture: [String]) async throws -> Run {
 		let (stream, continuation) = AsyncStream.makeStream(of: FulfillmentFoldComparison.self)
-		let errorDescription: String? = try await ValidationWalkObservation.$foldComparison.withValue({ continuation.yield($0) }) {
+		let errorDescription: String? = try await ValidationWalkObservation.$foldComparison.withValue(TaskLocalFunction { continuation.yield($0) }) {
 			do {
 				_ = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 				return nil

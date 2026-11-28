@@ -19,8 +19,9 @@
 // SOFTWARE.
 
 extension SeamSignature.Places {
-	/// Test only, deleted before merge: a seam's places as today's per-site walk gives them, beside the place graph built for
-	/// the same seam, which the differential oracle of the tests compares (`SeamPlacesOracle`). Nothing generated reads it.
+	/// The place graph's test read, deleted when places come from facts: a seam's places as today's per-site walk gives
+	/// them, beside the place graph built for the same seam, which the differential oracle of the tests compares
+	/// (`SeamPlacesOracle`). Nothing generated reads it.
 	/// It rides on the levels a test observes (`SeamPlaceLevels.placesObservation`), so a test sets no task-local value of its
 	/// own for it.
 	public struct Observation: Sendable {

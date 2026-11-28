@@ -1487,7 +1487,6 @@ public struct SeamSignature: Sendable {
 		self.typesDeclaredEscaping = typesDeclaredEscaping
 		callShape = Self.callShape(parameters: parameters, holes: holes, builders: builders, scopeEnums: scopeEnums, tiers: tiers, places: places, caseIndexByHole: caseIndexByHole)
 		guardTypeName = Self.guardTypeName(of: seamType, callShape: callShape)
-		observeCallShapeFold()
 	}
 
 	/// How the seam's tree hands an inner seam's enum up from a call whose case is in an enum nested by type: the call's path,
@@ -1596,7 +1595,6 @@ public struct SeamSignature: Sendable {
 		didSet {
 			callShape = Self.callShape(parameters: parameters, holes: holes, builders: builders, scopeEnums: scopeEnums, tiers: tiers, places: places, caseIndexByHole: caseIndexByHole)
 			guardTypeName = Self.guardTypeName(of: seamType, callShape: callShape)
-			observeCallShapeFold()
 		}
 	}
 
@@ -1831,7 +1829,7 @@ public struct SeamSignature: Sendable {
 		/// emitted and not hashed.
 		public let parameterTypeWithoutAny: TypeDescription
 		/// The parameter's type, as the initializer people call spells it, which a diagnostic names: the builder a person
-		/// writes, from which the readable initializer makes the builder struct (`init(__safeDI_noScope:)`).
+		/// writes, from which the readable initializer builds the root level in a local function (`ScopeGenerator.LevelsWithoutScope`).
 		public let readableParameterType: TypeDescription
 		/// Whether the generated-only initializer takes the root enum's builder struct: every builder's does.
 		public let takesBuilderStruct: Bool
@@ -2052,8 +2050,7 @@ public struct SeamSignature: Sendable {
 	/// (`Places.Query.labels(reaching:)`), every distinct field the case's routes carry, in the order of the label's answers
 	/// (`Places.Query.answers(ofLabel:at:)`, the naming route's first), which follows no name.
 	/// Where two routes carry one label as two types (`token: Token` and `token: Token?`), both stay, so the call shape
-	/// tells apart every signature a hole per place would, though the case's scope struct declares one
-	/// (`Places.Query.fields(of:)`).
+	/// tells apart every signature a hole per place would, though the case's scope struct declares one.
 	private static func callShapeFields(ofCaseAt caseIndex: Int, in query: Places.Query) -> [CallShape.Hole.Field] {
 		query.labels(reaching: caseIndex).flatMap { label in
 			var fieldsOfLabel = [CallShape.Hole.Field]()
@@ -2065,33 +2062,6 @@ public struct SeamSignature: Sendable {
 			}
 			return fieldsOfLabel
 		}
-	}
-
-	/// Test only, deleted before merge: hands the tests this signature's call shape holes beside its holes per site
-	/// (`SeamPlaceLevels.CallShapeFold`), so they check that a hole per case keeps what the holes per site of its case hold.
-	private func observeCallShapeFold() {
-		if let observer = SeamPlaceLevels.observer {
-			var observation = SeamPlaceLevels(seamType: seamType, places: [])
-			observation.callShapeFold = .init(
-				caseHoles: callShape.holes,
-				siteHoles: holes.map(CallShape.Hole.init),
-				caseIndexBySite: caseIndexByHole,
-				caseHasAccess: places.cases.map { $0.narrowestAccess != nil },
-			)
-			observer(observation)
-		}
-	}
-
-	/// Test only, deleted before merge: the call shape with a hole per site, as it was before holes were compared per case,
-	/// which the tests compare the per-case comparison with (`SeamPlaceLevels.CallShapeComparison`).
-	public var callShapeHeldPerSite: CallShape {
-		CallShape(
-			parameters: parameters.map(CallShape.Parameter.init),
-			holes: holes.map(CallShape.Hole.init),
-			builders: builders.map(CallShape.Builder.init),
-			scopeEnums: Self.scopeEnumShapes(of: scopeEnums, holes: holes),
-			tiers: tiers,
-		)
 	}
 
 	/// What a call depends on of `scopeEnums`, whose own cases build `holes`: each enum by its key's spelling, in that
@@ -2943,7 +2913,10 @@ public struct SeamResolution: Sendable {
 	public struct ForeignPublicMock: Sendable {
 		public init(declaringModule: ModuleIdentity, visibleDeclarations: @escaping @Sendable () throws -> VisibleDeclarations, callComment: SeamCallComment, declaringModuleMockCondition: MockCondition, storedPlans: StoredPublicMockPlans? = nil) {
 			self.declaringModule = declaringModule
-			self.visibleDeclarations = visibleDeclarations
+			self.visibleDeclarations = {
+				GenerationWork.record(1, by: .resolvingWhatAPublicMocksModuleSees)
+				return try visibleDeclarations()
+			}
 			self.callComment = callComment
 			self.declaringModuleMockCondition = declaringModuleMockCondition
 			self.storedPlans = storedPlans

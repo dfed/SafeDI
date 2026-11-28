@@ -31,14 +31,14 @@ enum FulfillmentFoldChecks {
 
 	/// What the executors set as `ValidationWalkObservation.foldComparison`: the check below, or nothing where a test
 	/// turned the comparison off.
-	static func comparison(handingOn enclosingObserver: (@Sendable (FulfillmentFoldComparison) -> Void)?) -> (@Sendable (FulfillmentFoldComparison) -> Void)? {
+	static func comparison(handingOn enclosingObserver: TaskLocalFunction<@Sendable (FulfillmentFoldComparison) -> Void>?) -> TaskLocalFunction<@Sendable (FulfillmentFoldComparison) -> Void>? {
 		comparesFoldWithWalk ? recordingClearedRejections(handingOn: enclosingObserver) : nil
 	}
 
 	/// An observer that records an issue for each validation whose trees the walk rejected where the fold found no route
 	/// that may fail, then hands the comparison to `enclosingObserver`.
-	static func recordingClearedRejections(handingOn enclosingObserver: (@Sendable (FulfillmentFoldComparison) -> Void)?) -> @Sendable (FulfillmentFoldComparison) -> Void {
-		{ comparison in
+	static func recordingClearedRejections(handingOn enclosingObserver: TaskLocalFunction<@Sendable (FulfillmentFoldComparison) -> Void>?) -> TaskLocalFunction<@Sendable (FulfillmentFoldComparison) -> Void> {
+		TaskLocalFunction { comparison in
 			if comparison.walkRejected, comparison.routeThatMayFail == nil {
 				Issue.record("The fold over the facts of each type found no route that may fail in trees the walk of every route rejects.")
 			}

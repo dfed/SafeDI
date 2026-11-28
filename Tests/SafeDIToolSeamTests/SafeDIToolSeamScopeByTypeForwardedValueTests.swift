@@ -93,10 +93,6 @@ struct SafeDIToolSeamScopeByTypeForwardedValueTests: ~Copyable {
 		        public init(panel: __safeDI_NamedGadget_AnyGadgetCarrier_Panel<__safeDI_Built>) {
 		            self.panel = panel
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Name, __safeDI_Built>.Builder) {
-		            self.init(panel: .init(__safeDI_noScope: __safeDI_builder))
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -105,10 +101,6 @@ struct SafeDIToolSeamScopeByTypeForwardedValueTests: ~Copyable {
 
 		        public init(maker: @escaping (Value) -> ErasedInstantiator<Name, __safeDI_Built>.Builder) {
 		            self.maker = maker
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Name, __safeDI_Built>.Builder) {
-		            self.init(maker: { _ in __safeDI_builder })
 		        }
 		    }
 

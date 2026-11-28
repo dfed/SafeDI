@@ -60,10 +60,6 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 		        public init(detailBuilder: @escaping (detailBuilder_Values) -> __safeDI_ApiCarrier_Detail<__safeDI_Built>) {
 		            self.detailBuilder = detailBuilder
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(detailBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -73,10 +69,6 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 		        public init(leafBuilder: __safeDI_ApiCarrier_Leaf<__safeDI_Built>) {
 		            self.leafBuilder = leafBuilder
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(leafBuilder: .init(__safeDI_noScope: __safeDI_builder))
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -85,10 +77,6 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 
 		        public init(api: @escaping () -> __safeDI_Built) {
 		            self.api = api
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(api: { __safeDI_builder() })
 		        }
 		    }
 
@@ -164,10 +152,6 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 		        public init(detailBuilder: __safeDI_ApiCarrier_Detail<__safeDI_Built>) {
 		            self.detailBuilder = detailBuilder
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(detailBuilder: .init(__safeDI_noScope: __safeDI_builder))
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -176,10 +160,6 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 
 		        public init(scopeBuilder: __safeDI_ApiCarrier_Detail_Scope<__safeDI_Built>) {
 		            self.scopeBuilder = scopeBuilder
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(scopeBuilder: .init(__safeDI_noScope: __safeDI_builder))
 		        }
 		    }
 
@@ -190,10 +170,6 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 		        public init(leafBuilder: __safeDI_ApiCarrier_Leaf<__safeDI_Built>) {
 		            self.leafBuilder = leafBuilder
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(leafBuilder: .init(__safeDI_noScope: __safeDI_builder))
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -202,10 +178,6 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 
 		        public init(api: @escaping () -> __safeDI_Built) {
 		            self.api = api
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(api: { __safeDI_builder() })
 		        }
 		    }
 
@@ -290,10 +262,6 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 		        public init(detailBuilder: __safeDI_ApiCarrier_Detail<__safeDI_Built>) {
 		            self.detailBuilder = detailBuilder
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(detailBuilder: .init(__safeDI_noScope: __safeDI_builder))
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -303,10 +271,6 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 		        public init(leafBuilder: __safeDI_ApiCarrier_Leaf<__safeDI_Built>) {
 		            self.leafBuilder = leafBuilder
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(leafBuilder: .init(__safeDI_noScope: __safeDI_builder))
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -315,10 +279,6 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 
 		        public init(api: @escaping () -> __safeDI_Built) {
 		            self.api = api
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(api: { __safeDI_builder() })
 		        }
 		    }
 
@@ -394,10 +354,6 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 		        public init(detailBuilder: __safeDI_LiveApi_ApiCarrier_Detail<__safeDI_Built>) {
 		            self.detailBuilder = detailBuilder
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Built, __safeDI_Built>.Builder) {
-		            self.init(detailBuilder: .init(__safeDI_noScope: __safeDI_builder))
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -407,10 +363,6 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 		        public init(leafBuilder: __safeDI_LiveApi_ApiCarrier_Leaf<__safeDI_Built>) {
 		            self.leafBuilder = leafBuilder
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Built, __safeDI_Built>.Builder) {
-		            self.init(leafBuilder: .init(__safeDI_noScope: __safeDI_builder))
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -419,10 +371,6 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 
 		        public init(apiBuilder: @escaping () -> ErasedInstantiator<Built, __safeDI_Built>.Builder) {
 		            self.apiBuilder = apiBuilder
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Built, __safeDI_Built>.Builder) {
-		            self.init(apiBuilder: { __safeDI_builder })
 		        }
 		    }
 
@@ -503,10 +451,6 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 		        public init(detailBuilder: __safeDI_LiveApi_ApiCarrier_Detail<__safeDI_Built>) {
 		            self.detailBuilder = detailBuilder
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<(built: Built, id: Int), __safeDI_Built>.Builder) {
-		            self.init(detailBuilder: .init(__safeDI_noScope: __safeDI_builder))
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -516,10 +460,6 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 		        public init(leafBuilder: __safeDI_LiveApi_ApiCarrier_Leaf<__safeDI_Built>) {
 		            self.leafBuilder = leafBuilder
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<(built: Built, id: Int), __safeDI_Built>.Builder) {
-		            self.init(leafBuilder: .init(__safeDI_noScope: __safeDI_builder))
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -528,10 +468,6 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 
 		        public init(apiBuilder: @escaping () -> ErasedInstantiator<(built: Built, id: Int), __safeDI_Built>.Builder) {
 		            self.apiBuilder = apiBuilder
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<(built: Built, id: Int), __safeDI_Built>.Builder) {
-		            self.init(apiBuilder: { __safeDI_builder })
 		        }
 		    }
 

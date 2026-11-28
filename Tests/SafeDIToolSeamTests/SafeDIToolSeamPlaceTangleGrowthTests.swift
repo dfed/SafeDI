@@ -52,25 +52,6 @@ struct SafeDIToolSeamPlaceTangleGrowthTests: ~Copyable {
 		#expect(places.levels.count <= declarationCount + edgeCount, "\(places.levels.count) levels for \(memberCount) members")
 	}
 
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func query_answersNothing_whenQuestionVisitsMoreStatesThanItsLimit() async throws {
-		// The query's search counts the states it visits, so a question it cannot decide within its limit gives no answer,
-		// rather than a partial one, while a query with room for it answers.
-		let places = try await placesOfHub(memberCount: 4)
-		let label = "markM0"
-		let entry = SeamSignature.Places.StackEntry(property: Property(label: "m1Builder", typeDescription: .simple(name: "Instantiator", generics: [.simple(name: "M1")])), concreteType: .simple(name: "M1"))
-		let limited = SeamSignature.Places.Query(of: places, stateLimit: 10)
-		let unlimited = SeamSignature.Places.Query(of: places)
-		let caseIndex = try #require(places.cases.indices.first)
-		#expect(limited.labelVariants(ofLabel: label, at: caseIndex) == nil)
-		#expect(limited.cycleReentryDeclarations(ofLabel: label, at: caseIndex) == nil)
-		#expect(limited.depthsBelowOwner(ofProperty: entry.property, builtAs: entry.concreteType, at: caseIndex) == nil)
-		#expect(unlimited.labelVariants(ofLabel: label, at: caseIndex)?.isEmpty == false)
-		#expect(unlimited.cycleReentryDeclarations(ofLabel: label, at: caseIndex)?.isEmpty == false)
-		#expect(unlimited.depthsBelowOwner(ofProperty: entry.property, builtAs: entry.concreteType, at: caseIndex)?.isEmpty == false)
-	}
-
 	private mutating func placesOfHub(memberCount: Int) async throws -> SeamSignature.Places {
 		let members = (0..<memberCount).map { "M\($0)" }
 		var feature = ["public protocol Api {}"]
@@ -84,7 +65,8 @@ struct SafeDIToolSeamPlaceTangleGrowthTests: ~Copyable {
 			.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(fulfillingAdditionalTypes: [Api.self])\n")
 		let root = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated public let hub: Hub"])
 		let (stream, continuation) = AsyncStream.makeStream(of: SeamSignature.Places.self)
-		_ = try await SeamPlaceLevels.$observer.withValue({ placeLevels in
+		// No member always encloses another here, so the graph answers routes no tree builds (`SeamPlaceTreeRoutes`).
+		_ = try await SeamPlaceTreeRoutes.$areCompared.withValue(false) { try await SeamPlaceLevels.$observer.withValue(TaskLocalFunction { placeLevels in
 			if let observation = placeLevels.placesObservation, observation.seamType.asSource == "Hub" {
 				continuation.yield(observation.places)
 			}
@@ -98,7 +80,7 @@ struct SafeDIToolSeamPlaceTangleGrowthTests: ~Copyable {
 				compileVerification: .skipped,
 				filesToDelete: &filesToDelete,
 			)
-		}
+		} }
 		continuation.finish()
 		var observed = [SeamSignature.Places]()
 		for await places in stream {

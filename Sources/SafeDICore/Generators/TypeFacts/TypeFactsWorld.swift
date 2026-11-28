@@ -496,26 +496,6 @@ extension TypeFactsGraph: TypeFactsWorld {
 	}
 
 	func owedFacts(of declaration: DeclarationID) -> TypeFactsOwedFacts {
-		var owed: TypeFactsOwedFacts = []
-		if forMockGeneration {
-			owed.formUnion([.mockRootPin, .mockRootRecord, .mockRootBinding])
-		}
-		// A member of a loop of builders: an edge into it is in a loop.
-		for parent in parents(of: declaration) where edgeFacts(from: parent.parent).contains(where: { $0.child == declaration && $0.loop >= 0 }) {
-			owed.insert(.madeAgain)
-		}
-		// A declaration is beneath a fill where any of its routes enters one: a walk up its parents.
-		var visited: Set = [declaration]
-		var pending = [declaration]
-		while let current = pending.popLast() {
-			guard !graph.nodes[Int(current)].key.isFill else {
-				owed.insert(.fillBeingBuilt)
-				break
-			}
-			for parent in parents(of: current) where visited.insert(parent.parent).inserted {
-				pending.append(parent.parent)
-			}
-		}
-		return owed
+		owedFactsByNode[Int(declaration)]
 	}
 }

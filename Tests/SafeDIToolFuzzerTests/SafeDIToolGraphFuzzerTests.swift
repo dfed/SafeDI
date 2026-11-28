@@ -358,7 +358,8 @@ struct SafeDIToolGraphFuzzerTests {
 	func seamSmokeSeeds_judgeLevelFunctionCaptures_withSameCountsWithAndWithoutCompiles() async throws {
 		// The level function capture check reads the generated text, so the call in `GraphFuzzerOracle.results(of:)` puts the
 		// same findings and counts on each accepted graph's result whether or not the run compiles: these literals hold in
-		// both modes.
+		// both modes. The level function counts include the functions a seam's plain initializer and a `{ nil }` fill declare,
+		// one per level each builds from the builder it is handed.
 		let captures = try await seamSmokeResults.value.reduce(into: [UInt64: GraphFuzzerLevelFunctionCaptures]()) { captures, result in
 			captures[result.fixture.seed] = result.levelFunctionCaptures
 		}
@@ -366,35 +367,35 @@ struct SafeDIToolGraphFuzzerTests {
 		#expect(captures == [
 			1: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 0, namedMemberClosureCount: 0, conversionFunctionCount: 0, fillFunctionCount: 0),
 			16: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 0, namedMemberClosureCount: 0, conversionFunctionCount: 0, fillFunctionCount: 0),
-			24: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 26, namedMemberClosureCount: 1, conversionFunctionCount: 0, fillFunctionCount: 0),
-			68: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 76, namedMemberClosureCount: 11, conversionFunctionCount: 0, fillFunctionCount: 1),
-			84: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 68, namedMemberClosureCount: 6, conversionFunctionCount: 0, fillFunctionCount: 3),
+			24: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 59, namedMemberClosureCount: 1, conversionFunctionCount: 0, fillFunctionCount: 0),
+			68: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 203, namedMemberClosureCount: 11, conversionFunctionCount: 0, fillFunctionCount: 1),
+			84: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 151, namedMemberClosureCount: 6, conversionFunctionCount: 0, fillFunctionCount: 3),
 			92: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 0, namedMemberClosureCount: 0, conversionFunctionCount: 0, fillFunctionCount: 0),
-			93: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 67, namedMemberClosureCount: 6, conversionFunctionCount: 0, fillFunctionCount: 0),
-			151: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 62, namedMemberClosureCount: 8, conversionFunctionCount: 0, fillFunctionCount: 2),
-			153: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 67, namedMemberClosureCount: 4, conversionFunctionCount: 0, fillFunctionCount: 2),
-			164: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 40, namedMemberClosureCount: 10, conversionFunctionCount: 0, fillFunctionCount: 0),
-			180: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 52, namedMemberClosureCount: 2, conversionFunctionCount: 0, fillFunctionCount: 1),
-			215: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 39, namedMemberClosureCount: 0, conversionFunctionCount: 0, fillFunctionCount: 0),
-			227: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 66, namedMemberClosureCount: 2, conversionFunctionCount: 0, fillFunctionCount: 0),
-			273: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 154, namedMemberClosureCount: 22, conversionFunctionCount: 0, fillFunctionCount: 2),
-			277: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 50, namedMemberClosureCount: 2, conversionFunctionCount: 0, fillFunctionCount: 2),
-			309: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 50, namedMemberClosureCount: 12, conversionFunctionCount: 0, fillFunctionCount: 2),
-			347: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 80, namedMemberClosureCount: 15, conversionFunctionCount: 0, fillFunctionCount: 2),
-			468: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 63, namedMemberClosureCount: 3, conversionFunctionCount: 0, fillFunctionCount: 1),
-			594: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 75, namedMemberClosureCount: 26, conversionFunctionCount: 0, fillFunctionCount: 11),
-			605: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 96, namedMemberClosureCount: 22, conversionFunctionCount: 0, fillFunctionCount: 1),
-			705: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 42, namedMemberClosureCount: 1, conversionFunctionCount: 0, fillFunctionCount: 1),
-			850: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 81, namedMemberClosureCount: 16, conversionFunctionCount: 0, fillFunctionCount: 3),
+			93: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 183, namedMemberClosureCount: 8, conversionFunctionCount: 0, fillFunctionCount: 0),
+			151: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 158, namedMemberClosureCount: 8, conversionFunctionCount: 0, fillFunctionCount: 2),
+			153: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 145, namedMemberClosureCount: 4, conversionFunctionCount: 0, fillFunctionCount: 2),
+			164: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 109, namedMemberClosureCount: 10, conversionFunctionCount: 0, fillFunctionCount: 0),
+			180: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 118, namedMemberClosureCount: 2, conversionFunctionCount: 0, fillFunctionCount: 1),
+			215: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 113, namedMemberClosureCount: 0, conversionFunctionCount: 0, fillFunctionCount: 0),
+			227: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 162, namedMemberClosureCount: 2, conversionFunctionCount: 0, fillFunctionCount: 0),
+			273: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 462, namedMemberClosureCount: 18, conversionFunctionCount: 0, fillFunctionCount: 2),
+			277: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 101, namedMemberClosureCount: 2, conversionFunctionCount: 0, fillFunctionCount: 2),
+			309: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 161, namedMemberClosureCount: 34, conversionFunctionCount: 0, fillFunctionCount: 2),
+			347: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 200, namedMemberClosureCount: 15, conversionFunctionCount: 0, fillFunctionCount: 2),
+			468: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 157, namedMemberClosureCount: 3, conversionFunctionCount: 0, fillFunctionCount: 1),
+			594: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 190, namedMemberClosureCount: 43, conversionFunctionCount: 0, fillFunctionCount: 11),
+			605: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 235, namedMemberClosureCount: 22, conversionFunctionCount: 0, fillFunctionCount: 1),
+			705: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 89, namedMemberClosureCount: 1, conversionFunctionCount: 0, fillFunctionCount: 1),
+			850: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 190, namedMemberClosureCount: 22, conversionFunctionCount: 0, fillFunctionCount: 3),
 			881: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 0, namedMemberClosureCount: 0, conversionFunctionCount: 0, fillFunctionCount: 0),
-			892: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 100, namedMemberClosureCount: 19, conversionFunctionCount: 0, fillFunctionCount: 7),
-			934: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 54, namedMemberClosureCount: 1, conversionFunctionCount: 0, fillFunctionCount: 1),
-			969: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 77, namedMemberClosureCount: 18, conversionFunctionCount: 0, fillFunctionCount: 11),
-			1_020: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 83, namedMemberClosureCount: 25, conversionFunctionCount: 0, fillFunctionCount: 4),
-			1_450: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 91, namedMemberClosureCount: 9, conversionFunctionCount: 0, fillFunctionCount: 4),
+			892: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 243, namedMemberClosureCount: 19, conversionFunctionCount: 0, fillFunctionCount: 7),
+			934: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 129, namedMemberClosureCount: 1, conversionFunctionCount: 0, fillFunctionCount: 1),
+			969: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 177, namedMemberClosureCount: 18, conversionFunctionCount: 0, fillFunctionCount: 11),
+			1_020: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 239, namedMemberClosureCount: 53, conversionFunctionCount: 0, fillFunctionCount: 4),
+			1_450: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 211, namedMemberClosureCount: 13, conversionFunctionCount: 0, fillFunctionCount: 4),
 			1_837: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 0, namedMemberClosureCount: 0, conversionFunctionCount: 0, fillFunctionCount: 0),
-			1_890: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 102, namedMemberClosureCount: 6, conversionFunctionCount: 0, fillFunctionCount: 4),
-			1_986: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 87, namedMemberClosureCount: 4, conversionFunctionCount: 0, fillFunctionCount: 2),
+			1_890: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 294, namedMemberClosureCount: 10, conversionFunctionCount: 0, fillFunctionCount: 4),
+			1_986: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 219, namedMemberClosureCount: 4, conversionFunctionCount: 0, fillFunctionCount: 2),
 		])
 	}
 
@@ -7563,7 +7564,7 @@ struct SafeDIToolGraphFuzzerTests {
 
 	/// What the level function capture check judges over the seam corpus (`Corpus.levelFunctionCaptureCounts`). Pins:
 	/// derived on CI.
-	static let seamCorpusLevelFunctionCaptureCounts = GraphFuzzerLevelFunctionCaptureCounts(judged: 246, judgedWithNamed: 211, named: 2_090, conversions: 0, fills: 422)
+	static let seamCorpusLevelFunctionCaptureCounts = GraphFuzzerLevelFunctionCaptureCounts(judged: 246, judgedWithNamed: 211, named: 2_528, conversions: 0, fills: 422)
 
 	/// What the level function capture check judges over the public mock corpus (`Corpus.levelFunctionCaptureCounts`).
 	/// Pins: derived on CI.
@@ -7740,7 +7741,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.carriedLevelFillReadsSendableWrapper: 14,
 		.carriedLevelFillReadsSendableWrapperAlone: 14,
 		.reenteredFillSendableCall: 13,
-		.seamDependencyChainReadThroughView: 11,
+		.seamDependencyChainReadThroughView: 12,
 		.seamDependencyReadThroughView: 77,
 		.spelledAliasNamingProtocolWithoutAny: 23,
 		.spelledAliasOnlyReceiveOfMockedChild: 13,
@@ -7772,6 +7773,12 @@ struct SafeDIToolGraphFuzzerTests {
 		.seamRingOfSendableInstantiators: 15,
 		.seamRingWithoutRootValues: 27,
 		.seamRingRooted: 29,
+		.holeSeamCallReachedOnTwoPaths: 68,
+		.holeSendableFillKeptInItsCallCallsSeamItFills: 26,
+		.holeRootDispatcherHandsCallersValue: 65,
+		.holeFillBodySharedByCallsAtTwoDepths: 75,
+		.holeFillBodySharedByPlacesAtTwoLevels: 39,
+		.holeFillBodySharedReadsValueLevelBindsAgain: 16,
 	]
 	/// How many of the seam corpus's graphs name a type no declaration SafeDI reads declares, which the oracle compares
 	/// with their read twin.
@@ -7857,7 +7864,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// `seamCorpus_drawsEachShapeInThePinnedNumberOfGraphs_whenFixturesAreGeneratedWithoutTheTool`.
 	static let seamCorpusDrawFeatureCounts: [GraphFuzzerSeamDrawFeature: Int] = [
 		.collidingFormsBeneathSeam: 136,
-		.innerSeam: 1_262,
+		.innerSeam: 1_263,
 		.instanceHeldByCaller: 771,
 		.instanceReceiveBeneathSeam: 1_146,
 		.otherKindWrapperReceiveBeneathSeam: 63,
@@ -7943,9 +7950,9 @@ struct SafeDIToolGraphFuzzerTests {
 		.samePackageCallerRunWithoutPackageName: 116,
 		.seamModuleRunWithoutPackageName: 124,
 		.seamDependency: 749,
-		.seamDependencyChain: 103,
+		.seamDependencyChain: 108,
 		.seamDependencyReadThroughView: 400,
-		.seamDependencyChainReadThroughView: 60,
+		.seamDependencyChainReadThroughView: 62,
 		.hole: 647,
 		.holeOwnedBySeam: 159,
 		.holeProtocolInMarkerFreeFile: 314,
@@ -8235,6 +8242,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.callersViewPackageDeclarationReceivedBySeam: 48,
 		.callersViewTypeInExtensionOfAddedPlainDeclaration: 55,
 		.callersViewDeclarationInstantiatedBySeam: 67,
+		.holeSeamCallReachedOnTwoPaths: 251,
 		.carrierDrawUnequalSiblings: 299,
 		.carrierDrawUnequalSiblingsBeneathChild: 153,
 		.carrierDrawCoincidingLabel: 332,

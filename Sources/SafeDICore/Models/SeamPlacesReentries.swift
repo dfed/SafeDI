@@ -146,11 +146,10 @@ extension SeamSignature.Places {
 	/// scope between that a nested cycle closes on stands for what that cycle declares of the labels it does not bind.
 	///
 	/// The way down is read from the graph, where a level can enclose levels of several builds alike, as the tree beneath
-	/// the scope builds it where a route stacks `entriesAbove` above the scope: a child whose entry the way already stacks
-	/// is a call that closes a cycle, not a build. Each step of a way down that can come again holds the entries of the way
-	/// that can (`CycleContext.entriesComingAgain`), so the steps grow with those sets, not with the ways; `statesVisited`
-	/// counts them, and the walk stops once it passes `stateLimit`, which leaves the answer partial.
-	public func cycleReentries(ofLevel level: Int, beneath parent: Int, context: CycleContext, excluding entriesAbove: Set<StackEntry>, statesVisited: inout Int, stateLimit: Int = .max) -> [CycleReentry] {
+	/// the scope builds it: a child whose entry the way already stacks is a call that closes a cycle, not a build. Each step
+	/// of a way down that can come again holds the entries of the way that can (`CycleContext.entriesComingAgain`), so the
+	/// steps grow with those sets, not with the ways.
+	public func cycleReentries(ofLevel level: Int, beneath parent: Int, context: CycleContext) -> [CycleReentry] {
 		let reentered = levels[level]
 		guard let builtType = reentered.key.builtType, let closedOnProperty = levels[parent].key.nextProperty else { return [] }
 		let closedOn = StackEntry(property: closedOnProperty, concreteType: builtType)
@@ -164,9 +163,6 @@ extension SeamSignature.Places {
 
 		var outcomesByKey = [OutcomesKey: [String: [Outcome]]]()
 		var keysInProgress = Set<OutcomesKey>()
-		let statesBefore = statesVisited
-		var steps = 0
-		defer { statesVisited += steps }
 		/// What the calls beneath `scope` that close on its entry take, per label (`closedOutcomes`); where
 		/// `includingNestedCycles`, a scope between that a cycle nested inside closes on also stands for what that cycle
 		/// declares.
@@ -176,12 +172,11 @@ extension SeamSignature.Places {
 				return known
 			}
 			// No way down passes a scope twice, but a nested cycle's way down asks for its own scope's.
-			guard keysInProgress.insert(key).inserted, let entry = entry(of: scope.scope), statesBefore + steps <= stateLimit else { return [:] }
-			let (found, stepsRead) = closedOutcomes(beneath: scope, closingOn: entry, context: context, stepLimit: stateLimit - statesBefore - steps) { nestedScope in
+			guard keysInProgress.insert(key).inserted, let entry = entry(of: scope.scope) else { return [:] }
+			let found = closedOutcomes(beneath: scope, closingOn: entry, context: context) { nestedScope in
 				guard includingNestedCycles else { return [:] }
 				return nestedCycleDeclarations(of: nestedScope)
 			}
-			steps += stepsRead
 			keysInProgress.remove(key)
 			outcomesByKey[key] = found
 			return found
@@ -201,7 +196,7 @@ extension SeamSignature.Places {
 			}
 			return declarations
 		}
-		let root = ScopeOnWay(scope: reenteredScope, entriesAbove: entriesAbove.union([closedOn]).intersection(context.entriesComingAgain[parent]))
+		let root = ScopeOnWay(scope: reenteredScope, entriesAbove: Set([closedOn]).intersection(context.entriesComingAgain[parent]))
 		let outcomesByLabel = outcomes(beneath: root, includingNestedCycles: true)
 		var reentries = [CycleReentry]()
 		for label in outcomesByLabel.keys.sorted() where !ownLabels.contains(label) {
@@ -241,15 +236,15 @@ extension SeamSignature.Places {
 	/// the first is the first call's whose way down declares the label, as a walk of the tree finds it. The scope's own
 	/// declarations are left out; `nestedDeclarations` gives, for a scope beneath, what it stands for besides its own.
 	///
-	/// One pass over the steps of the ways down, which it counts and stops past `stepLimit`, each a scope with the entries above it that can come again, in post-order:
+	/// One pass over the steps of the ways down, each a scope with the entries above it that can come again, in post-order:
 	/// a step leads only to steps that stack more, so the steps hold no cycle, and a step two ways share is read once.
-	private func closedOutcomes(beneath root: ScopeOnWay, closingOn entry: StackEntry, context: CycleContext, stepLimit: Int, nestedDeclarations: (ScopeOnWay) -> [String: DeclarationOnWayDown]) -> (outcomes: [String: [Outcome]], steps: Int) {
+	private func closedOutcomes(beneath root: ScopeOnWay, closingOn entry: StackEntry, context: CycleContext, nestedDeclarations: (ScopeOnWay) -> [String: DeclarationOnWayDown]) -> [String: [Outcome]] {
 		// The steps beneath, each with what it does in order: a level's call closing on `entry`, or a step it leads to.
 		var stepsByScope = [ScopeOnWay: [ScopeStep]]()
 		var scopesInPostOrder = [ScopeOnWay]()
 		var toVisit = [(scope: root, isExpanded: false)]
 		var visited: Set<ScopeOnWay> = [root]
-		while visited.count <= stepLimit, let (scope, isExpanded) = toVisit.popLast() {
+		while let (scope, isExpanded) = toVisit.popLast() {
 			if isExpanded {
 				scopesInPostOrder.append(scope)
 				continue
@@ -331,11 +326,10 @@ extension SeamSignature.Places {
 			callersByScope[scope] = callers
 			outcomesByScope[scope] = outcomesByLabel
 		}
-		let closedOutcomes = (outcomesByScope[root] ?? [:]).compactMapValues { outcomes -> [Outcome]? in
+		return (outcomesByScope[root] ?? [:]).compactMapValues { outcomes -> [Outcome]? in
 			let closed = outcomes.filter { $0.declaration != nil }
 			return closed.isEmpty ? nil : closed
 		}
-		return (closedOutcomes, visited.count)
 	}
 
 	/// The nearest declaration of each label `scope` binds for the scopes beneath it: a parameter of its builder function a
@@ -371,22 +365,6 @@ extension SeamSignature.Places {
 	private struct ScopeOnWay: Hashable {
 		let scope: Scope
 		let entriesAbove: Set<StackEntry>
-	}
-
-	/// The entries `route` stacks from its root to each of its levels, its root's empty: an edge into a level that builds a
-	/// type stacks its property and that type, and a fill starts a stack of its own.
-	public func stackEntries(along route: [Int]) -> [Set<StackEntry>] {
-		var entries = Set<StackEntry>()
-		var entriesByPosition = [entries]
-		for (parent, level) in zip(route, route.dropFirst()) {
-			if let property = levels[parent].key.nextProperty, let builtType = levels[level].key.builtType {
-				entries.insert(StackEntry(property: property, concreteType: builtType))
-			} else {
-				entries = []
-			}
-			entriesByPosition.append(entries)
-		}
-		return entriesByPosition
 	}
 
 	/// One build of a type beneath a level: the levels beneath `parent` that build `builtType` with `declarationList`.

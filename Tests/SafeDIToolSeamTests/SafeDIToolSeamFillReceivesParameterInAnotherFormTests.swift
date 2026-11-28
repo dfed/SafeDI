@@ -275,10 +275,6 @@ struct SafeDIToolSeamFillReceivesParameterInAnotherFormTests: ~Copyable {
 			        public init(service: @escaping (LazilyInstantiated<Tag>, Reader) -> __safeDI_Built) {
 			            self.service = service
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(service: { _, _ in __safeDI_builder() })
-			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.

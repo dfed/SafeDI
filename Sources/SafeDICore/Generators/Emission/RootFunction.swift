@@ -170,7 +170,7 @@ public enum RootFunctionHoisting {
 
 	/// Handed every root function each root's plan reaches, once per call that reaches it, in the order the plan reaches
 	/// them, so the graph fuzzer can check that equal keys give equal text, which nothing in the generator compares.
-	@TaskLocal public static var observer: (@Sendable ([Occurrence]) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable ([Occurrence]) -> Void>?
 
 	/// The root functions a root's body reaches, read once, and the body with those the root declares at its top.
 	struct Hoisting {

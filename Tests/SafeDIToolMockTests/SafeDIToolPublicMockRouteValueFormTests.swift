@@ -1018,10 +1018,6 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		        public init(a: @escaping (LazilyInstantiated<Log>, Z) -> __safeDI_ApiCarrier_A<__safeDI_Built>) {
 		            self.a = a
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(a: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1030,10 +1026,6 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 
 		        public init(api: @escaping () -> __safeDI_Built) {
 		            self.api = api
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(api: { __safeDI_builder() })
 		        }
 		    }
 
@@ -1348,10 +1340,6 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		        public init(a: @escaping (LazilyInstantiated<Log>, Z) -> __safeDI_ApiCarrier_A<__safeDI_Built>) {
 		            self.a = a
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(a: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1360,10 +1348,6 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 
 		        public init(api: @escaping () -> __safeDI_Built) {
 		            self.api = api
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(api: { __safeDI_builder() })
 		        }
 		    }
 
@@ -1676,10 +1660,6 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		        public init(a: @escaping (LazilyInstantiated<Log>, Z) -> __safeDI_ApiCarrier_A<__safeDI_Built>) {
 		            self.a = a
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(a: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1688,10 +1668,6 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 
 		        public init(api: @escaping () -> __safeDI_Built) {
 		            self.api = api
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(api: { __safeDI_builder() })
 		        }
 		    }
 
