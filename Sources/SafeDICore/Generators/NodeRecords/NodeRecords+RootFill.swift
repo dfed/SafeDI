@@ -155,10 +155,24 @@ struct FillFacts: Sendable {
 			dispatcher.cases.contains { $0.carriesDeferredFields && $0.values?.contains(where: \.isDeferredParameter) == true }
 		}
 		guard !handsMemo else { return .refused(.fillHandedMemo) }
-		// The fill nodes the call passes, one per fill argument, in their order.
+		// The fill nodes the call passes, one per fill argument, in the order of the call's fill arguments (`TypeFactsGraph`),
+		// by the key of the place each fills: a fill is matched to its node by its key, never by its position among the fills.
 		let fillNodes = world.edges(from: call).filter { world.construction(of: $0) == .fill }
+		let filledHoles = scope.holeArguments.compactMap { holeArgument -> SeamSignature.Hole? in
+			switch holeArgument {
+			case let .fill(hole, _, _):
+				hole
+			case .passUp:
+				nil
+			}
+		}
+		var fillNodeByKey = [String: DeclarationID]()
+		for (hole, fillNode) in zip(filledHoles, fillNodes) {
+			fillNodeByKey[ScopeGenerator.fillKey(of: hole)] = fillNode
+		}
 		var allFacts = [FillFacts]()
-		for ((fill, _, _), fillNode) in zip(callFills.fills, fillNodes) where fill.emitsCode {
+		for (fill, _, _) in callFills.fills where fill.emitsCode {
+			guard let fillNode = fillNodeByKey[fill.key] else { continue }
 			allFacts.append(facts(of: fill, node: fillNode, in: world, log: &log))
 		}
 		return .facts(allFacts)
@@ -299,7 +313,9 @@ struct FillCallerSources {
 			switch source.kind {
 			case .none:
 				// No declaration before the call answers the read: the scope that makes the call builds a declaration of its own
-				// made after the call first, where it makes one.
+				// made after the call first, where it makes one. That is the tree's answer: a scope's nearest declarations hold
+				// every label the scope builds, wherever it builds it (`NearestDeclarations`), and the fill facts observation
+				// compares this answer with the tree's in every test that fills a place.
 				return world.edges(from: world.declaration(of: callee)).lazy.filter { world.construction(of: $0) != .fill }.compactMap { world.property(of: $0) }.first { $0.label == label }
 			case .bound:
 				// The declaration that binds the read: a property its scope builds, else one its type receives or forwards.
@@ -405,6 +421,8 @@ extension NodeRecords {
 	/// does but `fill`, and refuses the call with why node records leave it to the tree (`FillFacts.refusal(ofCall:in:routeCount:)`),
 	/// or `fill` where no reason holds, until the call's record is assembled.
 	static func filledSeamCallClaim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
+		// A mock root's world builds every seam inline, so it holds no seam call to fill (`seamCallClaim(of:in:)`), and its nodes
+		// are the mock writer's alone (`claim(of:in:)`): the same check guards both seam call claims.
 		guard !world.isMockWorld, world.construction(of: declaration) == .seamCall else { return nil }
 		let scope = world.scope(of: declaration)
 		let fillsAPlace = scope.holeArguments.contains { holeArgument in
@@ -419,8 +437,11 @@ extension NodeRecords {
 		let forwardsValues = scope.instantiable.dependencies.contains { $0.source == .forwarded }
 		let routeCount = (0..<Int32(world.variantCount)).count(where: { world.declaration(of: $0) == declaration })
 		// A call held in a wrapper, erased or not, or in a `@Sendable` function is bound as a built place of its form is, which
-		// discharges what that form's claim does.
-		let wrapperDischarges = (erasedClaim(of: declaration, in: world) ?? lazyClaim(of: declaration, in: world) ?? sendableClaim(of: declaration, in: world))?.discharges ?? []
+		// discharges what each claim of its form does: the three claim apart kinds of wrapper today, and their union stays
+		// right where a form is claimed by more than one.
+		let wrapperDischarges = [erasedClaim(of: declaration, in: world), lazyClaim(of: declaration, in: world), sendableClaim(of: declaration, in: world)].reduce(into: Set<NodeRecordRefusal>()) { discharges, claim in
+			discharges.formUnion(claim?.discharges ?? [])
+		}
 		return NodeRecordClaim(
 			kind: .seamCall,
 			discharges: Set<NodeRecordRefusal>([.construction]).union(wrapperDischarges),
