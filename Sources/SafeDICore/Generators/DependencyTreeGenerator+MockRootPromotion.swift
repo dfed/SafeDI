@@ -596,7 +596,7 @@ extension DependencyTreeGenerator {
 			return builders
 		}
 		let builders = shapedBuilders(namedApartFrom: [])
-		holes.handOnObservedPlaceLevels(with: builders)
+		holes.handOnObservedPlaceLevels(with: builders, isPublicMock: true)
 		let builtGenerator = try mockRootGeneratorWithHoles(builders: builders)
 		// The builders follow every other parameter, and each tier's are named apart from the parameters it takes as a seam's
 		// are. A builder's name changes no other parameter's, so the tree is built again only when a builder takes another

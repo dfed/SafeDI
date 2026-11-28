@@ -44,6 +44,17 @@ public enum SeamPlacesOracle {
 	/// (`placesOracleCappedGraphCount`).
 	public static let passedUpCaseLimit = 8
 
+	/// Whether the places oracle compares only the last pass that settles each seam's signature, and each public mock's
+	/// one computation of its places (`collectingPlaceLevelDisagreements`), as the long run sets. A seam is observed on
+	/// every pass that settles its signature, five or six times a seam on seed 614, and each was compared twice, by the
+	/// run's own observer (`SeamPlaceLevels.checkingPathStructs`) and by the graph's oracle: seam corpus seed 1358 spent
+	/// 33 seconds of each tool run here, and the seam coverage shards ran past their step's limit. The last pass's places
+	/// are the signature's. The seam suite and the smoke seeds compare every pass, which is where a case whose chain ends
+	/// at a place of another pass (`Report.passedUpCasesOfAnotherPass`, `passedUpReasonsOfAnotherPass`) stays proven.
+	/// Under it, the long run's other tool runs of a graph (the clean-subtree skip off, the holes visible, the SwiftPM
+	/// plugin's scan) compare no places: the graph's first run compares them.
+	@TaskLocal public static var comparesLastSettlingPassOnly = false
+
 	/// Told of each graph `mismatches(of:)` compares whether its report was capped, when a long run counts them.
 	@TaskLocal public static var cappedGraphObserver: TaskLocalFunction<@Sendable (_ isCapped: Bool) -> Void>?
 

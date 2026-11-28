@@ -37,6 +37,9 @@ public struct SeamPlaceLevels: Sendable, Equatable {
 	/// The place graph's test read, deleted when places come from facts: each route the seam's enums nested by type
 	/// compute, beside the same route rebuilt from its steps by edge (`SeamRouteStepObservation`). Left out of `==`.
 	public var routeSteps = [SeamRouteStepObservation]()
+	/// The place graph's test read, deleted when places come from facts: whether these are a public mock's places rather than
+	/// a seam's, which a type with both computes apart. Left out of `==`.
+	public var isPublicMock = false
 
 	public static func == (lhs: SeamPlaceLevels, rhs: SeamPlaceLevels) -> Bool {
 		lhs.seamType == rhs.seamType && lhs.places == rhs.places

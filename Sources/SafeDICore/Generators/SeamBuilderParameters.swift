@@ -572,7 +572,7 @@ extension DependencyTreeGenerator {
 		var places = SeamSignature.Places(levels: [], cases: [])
 		var caseIndexBySite = [SeamSignature.Hole.Site: Int]()
 		/// What the tests observe of the places, while they observe them (`SeamPlaceLevels.observer`), which the caller hands
-		/// on with the routes its builders compute (`handOnObservedPlaceLevels(with:)`).
+		/// on with the routes its builders compute (`handOnObservedPlaceLevels(with:isPublicMock:)`).
 		var observedPlaceLevels: SeamPlaceLevels?
 
 		/// The case of each of `holes`, or `-1` for a place a call passes up.
@@ -580,10 +580,12 @@ extension DependencyTreeGenerator {
 			holes.map { caseIndexBySite[$0.site] ?? -1 }
 		}
 
-		/// Hands what the tests observe of the places on to them, with each route `builders` computed beside its steps by edge.
-		func handOnObservedPlaceLevels(with builders: ShapedBuilders) {
+		/// Hands what the tests observe of the places on to them, with each route `builders` computed beside its steps by edge,
+		/// and whether they are a public mock's.
+		func handOnObservedPlaceLevels(with builders: ShapedBuilders, isPublicMock: Bool) {
 			guard var observedPlaceLevels else { return }
 			observedPlaceLevels.routeSteps = builders.routeStepObservations
+			observedPlaceLevels.isPublicMock = isPublicMock
 			SeamPlaceLevels.observer?(observedPlaceLevels)
 		}
 	}

@@ -104,8 +104,10 @@ extension SeamPlaceLevels {
 	/// hands the levels to `enclosingObserver`, the observer the caller set, if any.
 	static func checkingPathStructs(handingOn enclosingObserver: TaskLocalFunction<@Sendable (SeamPlaceLevels) -> Void>?) -> TaskLocalFunction<@Sendable (SeamPlaceLevels) -> Void> {
 		TaskLocalFunction { placeLevels in
-			// The place graph must answer as the per-site walk (`SeamPlacesOracle`) until places come from facts.
-			let routeAnswerMismatches = SeamPlaceTreeRoutes.areCompared ? placeLevels.placesOracleMismatches + placeLevels.placeVariantMismatches : []
+			// The place graph must answer as the per-site walk (`SeamPlacesOracle`) until places come from facts, on every pass
+			// unless only the last settling pass is compared, which the graph's oracle does then.
+			let placesOracleMismatches = SeamPlacesOracle.comparesLastSettlingPassOnly ? [] : placeLevels.placesOracleMismatches
+			let routeAnswerMismatches = SeamPlaceTreeRoutes.areCompared ? placesOracleMismatches + placeLevels.placeVariantMismatches : []
 			for mismatch in placeLevels.pathStructMismatches + routeAnswerMismatches + placeLevels.routeStepMismatches + placeLevels.placeCaseFactMismatches {
 				Issue.record(Comment(rawValue: mismatch))
 			}
@@ -122,21 +124,45 @@ extension SeamPlaceLevels {
 	}
 }
 
+/// One computation of places: a seam's, which each pass that settles its signature computes again, or a public mock's.
+private struct PlacesComputationKey: Hashable {
+	let seamType: TypeDescription
+	let isPublicMock: Bool
+}
+
 /// What `operation` returns, with each distinct level disagreement (`SeamPlaceLevels.levelDisagreements`) of the holes
-/// of every seam the tool computes while it runs, in the order the tool first computes them.
+/// of every seam the tool computes while it runs, in the order the tool first computes them. Where only the last settling
+/// pass is compared (`SeamPlacesOracle.comparesLastSettlingPassOnly`), the places oracle's follow, for the last computation
+/// of each seam's places and each public mock's, in the order the tool first computes each: one run settles each seam in
+/// one place, its own module's generation, and a later pass of a seam always follows the earlier in one task.
 func collectingPlaceLevelDisagreements<Result>(during operation: () async throws -> Result) async rethrows -> (result: Result, disagreements: [String]) {
-	let (stream, continuation) = AsyncStream.makeStream(of: [String].self)
+	let comparesLastSettlingPassOnly = SeamPlacesOracle.comparesLastSettlingPassOnly
+	let (stream, continuation) = AsyncStream.makeStream(of: (disagreements: [String], placeLevels: SeamPlaceLevels?).self)
 	let enclosingObserver = SeamPlaceLevels.observer
 	let result = try await SeamPlaceLevels.$observer.withValue(TaskLocalFunction { placeLevels in
-		continuation.yield(placeLevels.levelDisagreements() + placeLevels.routeQueryShadowMismatches + placeLevels.placesOracleMismatches + placeLevels.routeStepMismatches + placeLevels.placeVariantMismatches + placeLevels.placeCaseFactMismatches)
+		let placesOracleMismatches = comparesLastSettlingPassOnly ? [] : placeLevels.placesOracleMismatches
+		continuation.yield((placeLevels.levelDisagreements() + placeLevels.routeQueryShadowMismatches + placesOracleMismatches + placeLevels.routeStepMismatches + placeLevels.placeVariantMismatches + placeLevels.placeCaseFactMismatches, comparesLastSettlingPassOnly ? placeLevels : nil))
 		enclosingObserver?(placeLevels)
 	}) {
 		try await operation()
 	}
 	continuation.finish()
 	var disagreements = [String]()
-	for await computedDisagreements in stream {
+	var lastPlaceLevelsByKey = [PlacesComputationKey: SeamPlaceLevels]()
+	var keysInOrder = [PlacesComputationKey]()
+	for await (computedDisagreements, placeLevels) in stream {
 		for disagreement in computedDisagreements where !disagreements.contains(disagreement) {
+			disagreements.append(disagreement)
+		}
+		if let placeLevels {
+			let key = PlacesComputationKey(seamType: placeLevels.seamType, isPublicMock: placeLevels.isPublicMock)
+			if lastPlaceLevelsByKey.updateValue(placeLevels, forKey: key) == nil {
+				keysInOrder.append(key)
+			}
+		}
+	}
+	for key in keysInOrder {
+		for disagreement in lastPlaceLevelsByKey[key]?.placesOracleMismatches ?? [] where !disagreements.contains(disagreement) {
 			disagreements.append(disagreement)
 		}
 	}

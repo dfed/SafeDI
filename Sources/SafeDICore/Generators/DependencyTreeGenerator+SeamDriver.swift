@@ -2336,7 +2336,7 @@ extension DependencyTreeGenerator {
 			instantiables: instantiables,
 			ownScopeEnums: ownScopeEnums,
 		)
-		holesAndPlaces.handOnObservedPlaceLevels(with: shapedBuilders)
+		holesAndPlaces.handOnObservedPlaceLevels(with: shapedBuilders, isPublicMock: false)
 		let holes = shapedBuilders.holes
 		let tiers = Self.tiers(of: seam, parameters: parameters)
 		for omitted in parameters where omitted.tierAccess < seamTypeAccess && !omitted.isOnlyIfAvailable {

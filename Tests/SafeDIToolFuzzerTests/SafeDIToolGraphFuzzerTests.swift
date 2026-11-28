@@ -3242,6 +3242,41 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
+	func placesOracle_comparesEachSeamsLastSettlingPassOnce_whenComparingLastSettlingPassOnly() async throws {
+		// Seam corpus seed 614 settles each of its 19 seams over five or six observed passes, and the long run compares only
+		// the last of each: once, by the graph's oracle, with the run's own observer leaving the places to it.
+		let fixture = GraphFuzzerGenerator.fixture(forSeed: 614, features: [.generateDependencyTree])
+		let (observedSeams, observedSeamsContinuation) = AsyncStream.makeStream(of: String.self)
+		let (comparisons, comparisonsContinuation) = AsyncStream.makeStream(of: Void.self)
+		_ = try await SeamPlacesOracle.$comparesLastSettlingPassOnly.withValue(true) {
+			try await SeamPlacesOracle.$cappedGraphObserver.withValue(TaskLocalFunction { _ in comparisonsContinuation.yield() }) {
+				try await SeamPlaceLevels.$observer.withValue(TaskLocalFunction { placeLevels in
+					if placeLevels.placesObservation != nil {
+						observedSeamsContinuation.yield(placeLevels.seamType.asSource)
+					}
+				}) {
+					try await collectingPlaceLevelDisagreements {
+						try await GraphFuzzerOracle.toolOutcome(of: fixture, integration: .moduleInfo)
+					}
+				}
+			}
+		}
+		observedSeamsContinuation.finish()
+		comparisonsContinuation.finish()
+		var observationCountBySeam = [String: Int]()
+		for await seam in observedSeams {
+			observationCountBySeam[seam, default: 0] += 1
+		}
+		var comparisonCount = 0
+		for await _ in comparisons {
+			comparisonCount += 1
+		}
+		#expect(observationCountBySeam.count == 19)
+		#expect(observationCountBySeam.values.allSatisfy { $0 >= 5 })
+		#expect(comparisonCount == observationCountBySeam.count)
+	}
+
+	@Test
 	func placesOracle_comparesFirstPassedUpCasesAndCountsTheRest_whenGraphPassesUpMoreThanTheLimit() async throws {
 		// Seam corpus seed 614's `HoleTop` and `HoleRelay` each pass up the places of 11 cases, past the limit of 8, and
 		// `HoleSeam` those of 1.
@@ -6842,7 +6877,7 @@ struct SafeDIToolGraphFuzzerTests {
 					let seeds = (batchStart..<min(batchStart + Self.longRunBatchSize, configuration.iterations))
 						.map(configuration.seed(at:))
 					nextBatchIndex += 1
-					group.addTask { try await SeamPlacesOracle.$cappedGraphObserver.withValue(placesOracleCappedGraphObserver) { try await GraphFuzzerPhaseAccount.$current.withValue(phaseContext) {
+					group.addTask { try await SeamPlacesOracle.$comparesLastSettlingPassOnly.withValue(true) { try await SeamPlacesOracle.$cappedGraphObserver.withValue(placesOracleCappedGraphObserver) { try await GraphFuzzerPhaseAccount.$current.withValue(phaseContext) {
 						var results = try await GraphFuzzerOracle.results(forSeeds: seeds, features: corpus.features, isolatingValueGraphsOf: corpus.isolatedValueGraphSeeds, concurrentToolRuns: 1) { seed in
 							report.append("seed \(seed)")
 						}
@@ -6877,7 +6912,7 @@ struct SafeDIToolGraphFuzzerTests {
 							report.append("finished \(result.fixture.seed)")
 						}
 						return (batchIndex, results)
-					} } }
+					} } } }
 				}
 				for _ in 0..<concurrentBatchCount {
 					addNextBatch()
