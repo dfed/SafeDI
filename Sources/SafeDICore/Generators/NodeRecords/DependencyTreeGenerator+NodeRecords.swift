@@ -102,9 +102,19 @@ extension DependencyTreeGenerator {
 		declaredTypeNames: DeclaredTypeNames,
 		forcers: [TreeForcer],
 	) throws -> (layout: NodeRecordsLayout?, treeForcers: [TreeForcer]) {
-		switch NodeRecords.refusingWhatRecordsThrow({ try NodeRecordsLayout(of: instantiable, nodeRecords: NodeRecords(world: world, declaredTypeNames: declaredTypeNames)) }) {
+		switch NodeRecords.refusingWhatRecordsThrow({ () throws -> NodeRecordsLayout? in
+			let nodeRecords = try NodeRecords(world: world, declaredTypeNames: declaredTypeNames)
+			// A world that holds a cycle keeps its tree, or its plan by type, as a root of a module without seams does
+			// (`nodeRecordsLayout(of:constructionScope:declaredTypeNames:readersOfEveryTree:)`).
+			guard !(0..<Int32(world.declarationCount)).contains(where: world.isOnCycle) else { return nil }
+			return try NodeRecordsLayout(of: instantiable, nodeRecords: nodeRecords)
+		}) {
 		case let .success(layout):
-			(forcers.isEmpty ? layout : nil, forcers)
+			if let layout {
+				(forcers.isEmpty ? layout : nil, forcers)
+			} else {
+				(nil, [.nodeRecordKind(NodeRecordRefusal.cycle.rawValue)] + forcers)
+			}
 		case let .failure(refusal):
 			(nil, [.nodeRecordKind(refusal.rawValue)] + forcers)
 		}
