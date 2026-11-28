@@ -51,7 +51,77 @@ struct TypeKeyBodyLoopPlacementTests {
 		#expect(TypeKeyBody.statements(ofRootBody: Self.rootBody(bindsXBetweenMembers: true), laysOutEveryLoop: true, declaresLoopMembersAsThePathKeyDoes: true) == nil)
 	}
 
+	@Test
+	func statements_nestsEachCycleFunctionInTheBodyThatBuildsIt_whenTheCycleHoldsALoopRebinding() throws {
+		// `cBuilder`'s function closes the cycle on `aBuilder`'s and makes itself again, so the three functions are one
+		// component of calls that the root's body enters once: the path key nests each in the body that builds it.
+		let statements = try #require(TypeKeyBody.statements(ofRootBody: [Self.cycle()], laysOutEveryLoop: true, declaresLoopMembersAsThePathKeyDoes: true))
+		#expect(GeneratedCode.lines(statements).spelled() == """
+		        func __safeDI_aBuilder() -> A {
+		            func __safeDI_bBuilder() -> B {
+		                func __safeDI_cBuilder() -> C {
+		                    let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+		                    let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+		                    return C(cBuilder: cBuilder, aBuilder: aBuilder)
+		                }
+		                let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+		                return B(cBuilder: cBuilder)
+		            }
+		            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+		            return A(bBuilder: bBuilder)
+		        }
+		        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+		""")
+	}
+
 	// MARK: Private
+
+	/// The root's `aBuilder: Instantiator<A>`, whose `A` builds `bBuilder`, whose `B` builds `cBuilder`, whose `C` makes
+	/// `cBuilder` again, as a member of a loop of builders, and closes the cycle on `aBuilder`, as a walk builds them.
+	private static func cycle() -> GeneratedCode {
+		let c = built("c", children: [closer("c", rebindsLoopMember: true), closer("a", rebindsLoopMember: false)], reads: ["c", "a"])
+		let b = built("b", children: [c], reads: ["c"])
+		return built("a", children: [b], reads: ["b"])
+	}
+
+	/// The place `<label>Builder: Instantiator<Label>`, whose function holds `children` and builds its type with
+	/// `<read>Builder` for each of `reads`.
+	private static func built(_ label: String, children: [GeneratedCode], reads: [String]) -> GeneratedCode {
+		let type = TypeDescription.simple(name: label.uppercased())
+		let record = BuiltPlaceRecord(
+			property: builderProperty(label),
+			isErased: false,
+			concreteType: type,
+			isExtension: false,
+			target: .initializer(type),
+			arguments: reads.map { read("\($0)Builder", type: builderProperty($0).typeDescription) },
+			forwardedProperties: [],
+			cycleParameters: [],
+			callCycleArguments: [],
+			functionName: "__safeDI_\(label)Builder",
+			isSendable: false,
+			typesDeclaredEscaping: [],
+			lineEnd: "",
+			hasFunction: true,
+			children: children.map { .indented($0, by: "    ") },
+			node: PlanNode(),
+		)
+		return .place(PlacePlan(code: .text("let \(label)Builder = Instantiator<\(label.uppercased())>(__safeDI_\(label)Builder)"), record: .built(record)))
+	}
+
+	/// A call of `<label>Builder`'s function, which closes a cycle on it or makes a member of a loop again.
+	private static func closer(_ label: String, rebindsLoopMember: Bool) -> GeneratedCode {
+		.place(PlacePlan(code: .empty, record: .closer(ClosingPlaceRecord(
+			property: builderProperty(label),
+			isErased: false,
+			isExtension: false,
+			closedOnFunctionName: "__safeDI_\(label)Builder",
+			forwardedProperties: [],
+			cycleArguments: [],
+			rebindsLoopMember: rebindsLoopMember,
+		))))
+	}
+
 
 	/// The root's `aBuilder: Instantiator<A>` and `bBuilder: Instantiator<B>`, a loop whose members each make the other
 	/// again, and `let x = 1`, which `B` receives: first, or between the two members where `bindsXBetweenMembers`.
