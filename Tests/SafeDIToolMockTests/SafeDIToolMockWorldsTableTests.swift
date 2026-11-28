@@ -410,6 +410,38 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsRootsChildInTopGraph_whenWorldFirstReachesItBeneathAnotherChild() async throws {
+		let reports = try await Self.tableReports(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					Self.type("Screen", mocked: true, instantiating: [("page", "Page"), ("session", "LazilyInstantiated<Session>"), ("clock", "Clock")]),
+					Self.type("Page", instantiating: [("clock", "Clock")], receivingOnlyIfAvailable: [("session", "Session")]),
+					Self.type("Session"),
+					Self.type("Clock"),
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		// `page` receives `session` only if available, which the module declares lazily, so it is built per world. The walk
+		// first reaches the shareable `clock` beneath `page`, but the root builds `clock` itself too, so the world keeps it
+		// in its own graph, and calls nothing in the shared one.
+		#expect(reports == [
+			MockWorldsTableReport(
+				declarationCount: 4,
+				sharedDeclarationCount: 0,
+				sharedVariantCount: 0,
+				shareableDeclarations: ["2: clock: Clock", "3: session: LazilyInstantiated<Session>"],
+				differences: [],
+				worlds: [
+					.init(mockedType: "Screen", rootDeclaration: 0, declarationCount: 4, shareableDeclarationCount: 2, topDeclarationCount: 4, frontierDeclarationCount: 0, sharedVariantsCalled: [], sharedDeclarationParents: []),
+				],
+			),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_givesSameTableInMockRootOrder_whenSourceOrderIsReversed() async throws {
 		// Twenty-two mock roots: the even ones build `store`, the odd ones `feed`, each through a `page`, and both build
 		// `clock`.

@@ -139,7 +139,11 @@ struct TypeFactsGraph: Sendable {
 	/// declarations the mock worlds' top graphs call into, whose variants start from `seeds`, those calls by value
 	/// (`MockWorldsSharedGraph`). The shared graph has no root: it pins nothing (`mockRootPins` is `nil`, since the table
 	/// shares no declaration a pin can reach) and holds no place.
-	init(roots: [TypeFactsDeclaration], forMockGeneration: Bool, mockRootNames: MockRootNames, seeds: [Seed]?) {
+	///
+	/// A declaration `frontierRows` gives rows of is a frontier of a mock world's top graph: a leaf of it, whose rows are
+	/// those of its subtree in the shared graph, by value, which no declaration of its own hides again, since they already
+	/// hid what they hide there (`init(topOf:forMockGeneration:mockRootNames:frontierRows:)`).
+	init(roots: [TypeFactsDeclaration], forMockGeneration: Bool, mockRootNames: MockRootNames, seeds: [Seed]?, frontierRows: (TypeFactsDeclaration) -> FrontierRows? = { _ in nil }) {
 		// Building the graph is an edge: it reads each record's properties and labels once per node, and interns them. The
 		// walk asks for a node's edges once, when it first reaches the node, so in node order, and each edge's entry among
 		// its scope's properties to generate, or among its fills, is appended in edge order.
@@ -147,6 +151,7 @@ struct TypeFactsGraph: Sendable {
 		var edgeIsFill = [Bool]()
 		var fillHoles = [(edge: Int32, hole: SeamSignature.Hole)]()
 		let graph = OrderedGraph(roots: roots) { declaration in
+			guard frontierRows(declaration) == nil else { return [] }
 			let edges = declaration.edges
 			for edge in edges {
 				if let filledHole = edge.filledHole {
@@ -158,6 +163,7 @@ struct TypeFactsGraph: Sendable {
 			return edges.map(\.target)
 		}
 		let nodes = graph.nodes
+		let frontiers = nodes.map(frontierRows)
 		var properties = TypeFactsInterner<Property>()
 		var types = TypeFactsInterner<TypeDescription>()
 		var labels = TypeFactsInterner<String>()
@@ -183,8 +189,18 @@ struct TypeFactsGraph: Sendable {
 		var ownOnlyIfAvailableUnwrapped = [[Int32]]()
 		var declared = [[Int32]]()
 		var ownEscapingTypes = [[Int32]]()
+		var frontierTypesBeneath = [[Int32]](repeating: [], count: nodes.count)
 		ownRequired.reserveCapacity(nodes.count)
-		for node in nodes {
+		for (index, node) in nodes.enumerated() {
+			if let frontier = frontiers[index] {
+				ownRequired.append(frontier.required.map { properties.id(of: $0) })
+				ownOnlyIfAvailable.append(frontier.onlyIfAvailable.map { properties.id(of: $0) })
+				ownOnlyIfAvailableUnwrapped.append(frontier.onlyIfAvailableUnwrappedIncludingRequired.map { properties.id(of: $0) })
+				declared.append([])
+				ownEscapingTypes.append(frontier.typesDeclaredEscaping.map { types.id(of: $0) })
+				frontierTypesBeneath[index] = frontier.typesBeneath.map { types.id(of: $0) }
+				continue
+			}
 			var required = [Int32]()
 			var onlyIfAvailable = [Int32]()
 			var onlyIfAvailableUnwrapped = [Int32]()
@@ -250,7 +266,10 @@ struct TypeFactsGraph: Sendable {
 			ownEscapingTypes.append(escaping)
 		}
 		// A seam call whose tree requires a pass-through through an alias received only if available requires it too.
-		var ownRequiredThroughAlias = nodes.map { node -> [Int32] in
+		var ownRequiredThroughAlias = nodes.enumerated().map { index, node -> [Int32] in
+			if let frontier = frontiers[index] {
+				return frontier.requiredAliasFulfilling.map { properties.id(of: $0) }
+			}
 			guard node.key.leaf == .none, let seamCall = node.scope.seamCall else { return [] }
 			return seamCall.requiredThroughAliasProperties.sorted().map { properties.id(of: $0) }
 		}
@@ -402,7 +421,9 @@ struct TypeFactsGraph: Sendable {
 		let typesBeneath = ReadsFromAbove(
 			graph: graph,
 			own: BitRows(rowCount: nodes.count, columnCount: types.values.count) { node, insert in
-				if nodes[node].key.leaf == .none {
+				if frontiers[node] != nil {
+					frontierTypesBeneath[node].forEach(insert)
+				} else if nodes[node].key.leaf == .none {
 					insert(builtTypes[node])
 				}
 			},
@@ -686,7 +707,11 @@ struct TypeFactsGraph: Sendable {
 		// The forms each node's own receives only if available declare, by label and kind, as columns of their own.
 		var formInterner = TypeFactsInterner<OnlyIfAvailableForm>()
 		var ownFormsByNode = [[Int32]]()
-		let ownReadsByNode = nodes.map { node in
+		let ownReadsByNode = zip(nodes, frontiers).map { node, frontier in
+			if let frontier {
+				ownFormsByNode.append(frontier.formsRead.map { formInterner.id(of: OnlyIfAvailableForm(label: labels.id(of: $0.label), kindPosition: $0.kindPosition)) })
+				return frontier.reads.map { read in readInterner.id(of: read.label.map { Read(read.channel, label: labels.id(of: $0)) } ?? Read(read.channel)) }
+			}
 			var ownForms = [OnlyIfAvailableForm]()
 			let reads = Self.ownReads(of: node, forMockGeneration: forMockGeneration, labels: &labels, formsReadOnlyIfAvailable: &ownForms).map { readInterner.id(of: $0) }
 			ownFormsByNode.append(ownForms.map { formInterner.id(of: $0) })
@@ -700,7 +725,7 @@ struct TypeFactsGraph: Sendable {
 			readsByLabel[Int(read.label)].append(Int32(id))
 		}
 		let hidden = BitRows(rowCount: nodes.count, columnCount: readInterner.values.count) { index, insert in
-			for binding in bindings[Int(bindingOffsets[index])..<Int(bindingOffsets[index + 1])] {
+			for binding in bindings[Int(bindingOffsets[index])..<Int(bindingOffsets[index + 1])] where frontiers[index] == nil {
 				readsByLabel[Int(binding.label)].forEach(insert)
 			}
 		}
@@ -797,7 +822,7 @@ struct TypeFactsGraph: Sendable {
 				ownFormsByNode[index].forEach(insert)
 			},
 			hidden: BitRows(rowCount: nodes.count, columnCount: formInterner.values.count) { index, insert in
-				for binding in bindings[Int(bindingOffsets[index])..<Int(bindingOffsets[index + 1])] {
+				for binding in bindings[Int(bindingOffsets[index])..<Int(bindingOffsets[index + 1])] where frontiers[index] == nil {
 					formsByLabel[Int(binding.label)].forEach(insert)
 				}
 			},
@@ -827,8 +852,21 @@ struct TypeFactsGraph: Sendable {
 		self.readOffsets = readOffsets
 		self.labelColumn = labelColumn
 		self.labelOffsets = labelOffsets
-		let mockRootPins = forMockGeneration && seeds == nil ? TypeFactsMockRootPins(graph: graph, edgeIsFill: edgeIsFill, labels: labels) : nil
+		let mockRootPins = forMockGeneration && seeds == nil ? TypeFactsMockRootPins(graph: graph, edgeIsFill: edgeIsFill, labels: labels, frontierRequiredReads: frontiers.map { $0?.requiredReads }) : nil
 		self.mockRootPins = mockRootPins
+		frontierRowsByNode = seeds == nil ? [] : Self.frontierRows(
+			of: graph,
+			properties: properties.values,
+			types: types.values,
+			labels: labels.values,
+			reads: (table: readInterner.values, rows: reads.rows),
+			forms: (table: formInterner.values, rows: formsReadFromAbove.rows),
+			receives: receives,
+			onlyIfAvailable: onlyIfAvailableRows,
+			onlyIfAvailableUnwrappedIncludingRequired: onlyIfAvailableUnwrappedIncludingRequired,
+			typesBeneath: typesBeneath,
+			typesDeclaredEscaping: typesDeclaredEscaping,
+		)
 		let edgeOpens = edgeFacts.map(\.opens)
 		let answers = Self.answers(
 			of: graph,
@@ -922,6 +960,10 @@ struct TypeFactsGraph: Sendable {
 	let answerKindPositions: [Int]
 	let answerIsInReadForm: [Bool]
 
+	/// Each node's rows by value where the graph is the mock worlds' shared graph, which a mock world's top graph copies
+	/// into a frontier of it (`FrontierRows`); empty for any other graph.
+	let frontierRowsByNode: [FrontierRows]
+
 	/// The variants of the world's bodies, answered by what each node binds at its edges (`answers(of:reads:…)`).
 	let variants: TypeFactsVariants
 
@@ -1014,6 +1056,12 @@ struct TypeFactsGraph: Sendable {
 		init(label: Int32, kind: Property.PropertyType) {
 			self.label = label
 			self.kind = Self.position(of: kind)
+		}
+
+		/// A form by the kind's position, as a frontier's rows carry it (`FrontierRows.FormRead`).
+		init(label: Int32, kindPosition: Int) {
+			self.label = label
+			kind = kindPosition
 		}
 
 		let label: Int32

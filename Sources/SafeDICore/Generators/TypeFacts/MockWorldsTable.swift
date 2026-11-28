@@ -337,7 +337,8 @@ struct MockWorldsTable: Sendable {
 			frames.append(frame)
 			guard !isReached[Int(target)] else { continue }
 			isReached[Int(target)] = true
-			if shareableByDeclaration[Int(target)], !(frame.declaration == root && rootChildren.contains(target)) {
+			// A child of the root is the root's own wherever the walk first reaches it.
+			if shareableByDeclaration[Int(target)], !rootChildren.contains(target) {
 				frontier.append(target)
 			} else {
 				top.append(target)

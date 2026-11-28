@@ -50,7 +50,10 @@ struct TypeFactsMockRootPins: Sendable {
 	///   - edgeIsFill: Whether each edge, by its position among every node's edges, is a fill, which the walk enters no
 	///     tree of.
 	///   - labels: The world's labels, which every read of a pinnable label names.
-	init(graph: OrderedGraph<TypeFactsDeclaration>, edgeIsFill: [Bool], labels: TypeFactsInterner<String>) {
+	///   - frontierRequiredReads: For each node that is a frontier of a mock world's top graph, the required receives of its
+	///     subtree in the shared graph that the walk below would collect beneath it, by label (`FrontierRows.requiredReads`);
+	///     `nil` for every other node, or empty for a world built whole.
+	init(graph: OrderedGraph<TypeFactsDeclaration>, edgeIsFill: [Bool], labels: TypeFactsInterner<String>, frontierRequiredReads: [[TypeFactsGraph.FrontierRows.RequiredRead]?] = []) {
 		let nodes = graph.nodes
 		var pinSets = TypeFactsInterner<Set<Property>>()
 		// Each node's required receives of a label and its receives of one only if available, as the walk judges them.
@@ -58,7 +61,15 @@ struct TypeFactsMockRootPins: Sendable {
 		var onlyIfAvailableByNode = [[(property: Property, dependency: Dependency)]]()
 		var declaredLabelsByNode = [Set<String>]()
 		requiredByNode.reserveCapacity(nodes.count)
-		for node in nodes {
+		for (index, node) in nodes.enumerated() {
+			if node.key.leaf == .none, index < frontierRequiredReads.count, let required = frontierRequiredReads[index] {
+				// A frontier has no children here: its subtree's required receives stand in its own place, and the declarations
+				// that stop the walk beneath it already stopped them.
+				requiredByNode.append(required.map { ($0.label, pinSets.id(of: $0.propertiesRead)) })
+				onlyIfAvailableByNode.append(DependencyTreeGenerator.onlyIfAvailableReceivesFromAbove(of: node.scope))
+				declaredLabelsByNode.append([])
+				continue
+			}
 			guard node.key.leaf == .none else {
 				requiredByNode.append([])
 				onlyIfAvailableByNode.append([])
