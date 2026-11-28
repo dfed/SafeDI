@@ -25,6 +25,10 @@ public enum UnpassableCycleLabelObservation {
 	/// Called for each production root with the root's type, whether the detector keeps it on today's tree, and whether
 	/// today's tree reports a label no one parameter can pass.
 	@TaskLocal public static var observer: (@Sendable (_ root: String, _ detectorFires: Bool, _ todaysTreeReports: Bool) -> Void)?
+	/// Called for each production root with the root's type, the labels the per-type facts find no one parameter can
+	/// pass (`TypeFactsWorld.unpassableCycleLabels()`) and those today's tree reports, each as `<built type>.<label>`,
+	/// sorted.
+	@TaskLocal public static var factsObserver: (@Sendable (_ root: String, _ factsLabels: [String], _ todaysTreeLabels: [String]) -> Void)?
 }
 
 extension DependencyTreeGenerator {
