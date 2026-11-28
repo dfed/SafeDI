@@ -1626,12 +1626,12 @@ struct SafeDIToolNodeRecordsMockCycleWalkTests: ~Copyable {
 		)
 	}
 
-	/// `First` holds `token` as a `LazilyInstantiated` and `Second` by value, and each builds the `Reader` that receives
-	/// it: one node of one label and type is built beneath both forms in one `mock()`, and each `Reader` holds the token
-	/// of the type that built it.
+	/// `First` holds `token` as a `LazilyInstantiated` and `Second` by value, and each builds, through an `Instantiator`,
+	/// the `Reader` that receives it: one node of one label and type is built beneath both forms in one `mock()`, by two
+	/// functions of one name that the mock names apart, and each `Reader` holds the token of the type that built it.
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_buildsTheWalksValues_whenOneNodeIsBuiltBeneathItsLabelHeldLazilyAndByValue() async throws {
+	mutating func mock_buildsTheWalksValues_whenOneNodeIsBuiltByBuildersBeneathItsLabelHeldLazilyAndByValue() async throws {
 		try await expectWalksValues(
 			fixture: [
 				"Root.swift": """
@@ -1649,24 +1649,24 @@ struct SafeDIToolNodeRecordsMockCycleWalkTests: ~Copyable {
 				"First.swift": """
 				@Instantiable
 				public final class First: Instantiable, Marked {
-				    public init(token: LazilyInstantiated<Token>, reader: Reader) {
+				    public init(token: LazilyInstantiated<Token>, readerBuilder: Instantiator<Reader>) {
 				        self.token = token
-				        self.reader = reader
+				        self.readerBuilder = readerBuilder
 				    }
 				    @Instantiated let token: LazilyInstantiated<Token>
-				    @Instantiated let reader: Reader
+				    @Instantiated let readerBuilder: Instantiator<Reader>
 				    public var marker = ""
 				}
 				""",
 				"Second.swift": """
 				@Instantiable
 				public final class Second: Instantiable, Marked {
-				    public init(token: Token, reader: Reader) {
+				    public init(token: Token, readerBuilder: Instantiator<Reader>) {
 				        self.token = token
-				        self.reader = reader
+				        self.readerBuilder = readerBuilder
 				    }
 				    @Instantiated let token: Token
-				    @Instantiated let reader: Reader
+				    @Instantiated let readerBuilder: Instantiator<Reader>
 				    public var marker = ""
 				}
 				""",
@@ -1688,8 +1688,8 @@ struct SafeDIToolNodeRecordsMockCycleWalkTests: ~Copyable {
 			],
 			probes: [
 				DifferentialValueProbe("Root.mock()"),
-				DifferentialValueProbe(name: "each reader holds the token of the type that built it", expression: "{ () -> [Bool] in let root = Root.mock(); return [root.first.reader.token === root.first.token.instance, root.second.reader.token === root.second.token, root.first.reader.token !== root.second.reader.token] }()"),
-				DifferentialValueProbe(name: "overridden", expression: #"Root.mock(safeDIOverrides: .init(first: .init(token: { marked(Token(), "first.token") }, reader: { marked(Reader(token: $0), "first.reader") }), second: .init(token: { marked(Token(), "second.token") }, reader: { marked(Reader(token: $0), "second.reader") })))"#),
+				DifferentialValueProbe(name: "each reader holds the token of the type that built it", expression: "{ () -> [Bool] in let root = Root.mock(); return [root.first.readerBuilder.instantiate().token === root.first.token.instance, root.second.readerBuilder.instantiate().token === root.second.token, root.first.readerBuilder.instantiate().token !== root.second.readerBuilder.instantiate().token] }()"),
+				DifferentialValueProbe(name: "overridden", expression: #"Root.mock(safeDIOverrides: .init(first: .init(token: { marked(Token(), "first.token") }, readerBuilder: { marked(Reader(token: $0), "first.reader") }), second: .init(token: { marked(Token(), "second.token") }, readerBuilder: { marked(Reader(token: $0), "second.reader") })))"#),
 			],
 			markers: ["first.token", "first.reader", "second.token", "second.reader"],
 		)
