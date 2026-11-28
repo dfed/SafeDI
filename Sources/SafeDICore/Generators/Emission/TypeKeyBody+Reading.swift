@@ -109,15 +109,8 @@ extension TypeKeyLayout {
 						))
 						viewsByKey[key] = newBody
 						statement = .built(body: newBody)
-						let children: [GeneratedCode]
-						if let declared = nodeFacts.declaredChildrenByNode[built.node] {
-							children = declared.codes
-							declare(declared, ofBody: newBody)
-						} else {
-							let declared = DeclaredChildren(declaringStatementsOf: Self.statementCodes(of: built.children))
-							children = declared.codes
-							declare(declared, ofBody: newBody)
-						}
+						let children = Self.statementCodes(of: built.children)
+						declareChildren(children, ofBody: newBody)
 						frames.append((body: newBody, children: children, next: 0))
 					}
 				} else {
@@ -157,16 +150,9 @@ extension TypeKeyLayout {
 					}
 					statement = .closer(closer, target: target)
 					recordCloser(closer, at: (body: body, index: position), closing: target)
-				} else if !closer.rebindsLoopMember {
-					// A closer that rebinds no member of a loop of builders calls the function of an enclosing place, the nearest
-					// of its name.
-					let target = enclosingFunction(named: closer.closedOnFunctionName, from: body)
-					guard target != 0 else { return false }
-					statement = .closer(closer, target: target)
-					recordCloser(closer, at: (body: body, index: position), closing: target)
 				} else {
-					// The function a member of a loop of builders calls is the nearest of its name, as Swift resolves it: one a
-					// statement of an enclosing body declares, or an enclosing place's.
+					// The function a closing scope calls is the nearest of its name, as Swift resolves it: an enclosing place's, or,
+					// for a member of a loop of builders, one a statement of an enclosing body declares.
 					switch resolvedFunction(named: closer.closedOnFunctionName, from: body) {
 					case let .enclosing(target):
 						statement = .closer(closer, target: target)
@@ -221,75 +207,36 @@ extension TypeKeyLayout {
 
 	mutating func declareChildren(_ children: [GeneratedCode], ofBody body: Int) {
 		let first = bodies[body].statements.count
-		var declared = DeclaredChildren(codes: children, first: first)
-		declared.positionsByLabel = bodies[body].positionsByLabel
-		declared.positionsByDeclaredFunction = bodies[body].positionsByDeclaredFunction
-		declared.declare()
-		declare(declared, ofBody: body)
-	}
-
-	/// Declares in `body` what `declared` holds of its statements.
-	mutating func declare(_ declared: DeclaredChildren, ofBody body: Int) {
-		bodies[body].positionsByLabel = declared.positionsByLabel
-		bodies[body].positionsByDeclaredFunction = declared.positionsByDeclaredFunction
-		declaredFunctionsByBody[body] = declared.functions
-	}
-
-	/// What a body declares of its children's statements (`declareChildren(_:ofBody:)`): the positions of the labels each
-	/// binds, the positions of the functions text declares, and the functions a closer's function is resolved among. A
-	/// snapshot of shared plan nodes holds one for each node's body, whose statements start at its first position
-	/// (`NodeLayoutFacts.declaredChildrenByNode`).
-	struct DeclaredChildren: Sendable {
-		/// The body's statements (`statementCodes(of:)`).
-		let codes: [GeneratedCode]
-		/// The position of the first of `codes` among the body's statements.
-		let first: Int
-		var positionsByLabel = [String: [Int]]()
-		var positionsByDeclaredFunction = [String: [Int]]()
 		var functions = [String: DeclaredFunction]()
-
-		/// The declarations of a plan node's body, which holds `codes` alone.
-		init(declaringStatementsOf codes: [GeneratedCode]) {
-			GenerationWork.record(1, by: .declaringPlanNodeStatements)
-			self.init(codes: codes, first: 0)
-			declare()
-		}
-
-		fileprivate init(codes: [GeneratedCode], first: Int) {
-			self.codes = codes
-			self.first = first
-		}
-
-		fileprivate mutating func declare() {
-			for (offset, code) in codes.enumerated() {
-				let record = TypeKeyLayout.record(of: code)
-				switch record {
-				case let .built(built):
-					if built.hasFunction, functions[built.functionName] == nil {
-						functions[built.functionName] = .statement(index: first + offset, record: built)
-					}
-				case let .alias(alias):
-					for name in alias.declaredFunctionNames where functions[name] == nil {
-						functions[name] = .text
-					}
-					for name in alias.declaredFunctionNames {
-						positionsByDeclaredFunction[name, default: []].append(first + offset)
-					}
-					for binding in alias.otherBindings {
-						positionsByLabel[binding.label, default: []].append(first + offset)
-					}
-				case .closer, nil:
-					break
+		for (offset, code) in children.enumerated() {
+			let record = Self.record(of: code)
+			switch record {
+			case let .built(built):
+				if built.hasFunction, functions[built.functionName] == nil {
+					functions[built.functionName] = .statement(index: first + offset, record: built)
 				}
-				guard let label = record.map(\.boundProperty.label) else { continue }
-				positionsByLabel[label, default: []].append(first + offset)
+			case let .alias(alias):
+				for name in alias.declaredFunctionNames where functions[name] == nil {
+					functions[name] = .text
+				}
+				for name in alias.declaredFunctionNames {
+					bodies[body].positionsByDeclaredFunction[name, default: []].append(first + offset)
+				}
+				for binding in alias.otherBindings {
+					bodies[body].positionsByLabel[binding.label, default: []].append(first + offset)
+				}
+			case .closer, nil:
+				break
 			}
+			guard let label = record.map(\.boundProperty.label) else { continue }
+			bodies[body].positionsByLabel[label, default: []].append(first + offset)
 		}
+		declaredFunctionsByBody[body] = functions
 	}
 
 	/// A function a statement of a body declares: a place's, at its index among the body's statements, or one a place
 	/// written as text declares, which no closer's function resolves to.
-	enum DeclaredFunction: Sendable {
+	enum DeclaredFunction {
 		case statement(index: Int, record: BuiltPlaceRecord)
 		case text
 	}
@@ -299,16 +246,6 @@ extension TypeKeyLayout {
 	enum ResolvedFunction {
 		case enclosing(Int)
 		case statement(body: Int, index: Int, record: BuiltPlaceRecord)
-	}
-
-	/// The body of the nearest enclosing place, from `body` outward, whose function is named `name`, or the root's body
-	/// where none is.
-	func enclosingFunction(named name: String, from body: Int) -> Int {
-		var target = body
-		while target != 0, bodies[target].record?.functionName != name {
-			target = bodies[target].parent
-		}
-		return target
 	}
 
 	/// The function named `name` that code in `body` calls, as Swift resolves the name: from `body` outward, a function a
@@ -403,12 +340,6 @@ extension TypeKeyLayout {
 				stack.removeLast()
 				continue
 			}
-			// A node several roots share has its domain worked out once for all of them.
-			if let shared = nodeFacts.domainsByNode[current.node] {
-				domainsByNode[current.node] = shared
-				stack.removeLast()
-				continue
-			}
 			var children = [PlaceRecord]()
 			for code in Self.statementCodes(of: current.children) {
 				guard let record = Self.record(of: code) else { return nil }
@@ -423,7 +354,6 @@ extension TypeKeyLayout {
 				continue
 			}
 			stack.removeLast()
-			GenerationWork.record(1, by: .computingPlanNodeDomains)
 			let bound = Set(current.parameterProperties.map(\.label)).union(current.cycleParameters.map(\.label))
 			var boundBefore = Set<String>()
 			var domain = Domain()

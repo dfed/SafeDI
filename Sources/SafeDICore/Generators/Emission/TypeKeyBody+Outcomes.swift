@@ -112,10 +112,10 @@ extension TypeKeyLayout {
 		}
 	}
 
-	/// What each class's function does with each label it reads. A cycle parameter is read from the caller, or, where a
-	/// variant captures it, is the root's statement, so the variants' classes are settled first. Every other class's
-	/// outcomes depend only on those of the functions declaring it (`computePlacement`), so one pass after them, outer
-	/// functions first, settles them.
+	/// What each class's function does with each label it reads. Every function is declared in the root's body
+	/// (`computePlacement`), and a cycle parameter is read from the caller, or, where a variant captures it, is the
+	/// root's statement, so the variants' classes are settled first. Every other function's outcomes depend only on those
+	/// of the functions declaring it (`computePlacement`), so one pass after them, outer functions first, settles them.
 	mutating func computeOutcomes() {
 		rootStatementsCapturedByVariant = rootStatementsCapturedByVariants()
 		outcomes = [[String: ReadOutcome]](repeating: [:], count: membersByClass.count)

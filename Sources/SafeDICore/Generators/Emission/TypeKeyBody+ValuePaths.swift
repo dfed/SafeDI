@@ -104,6 +104,8 @@ extension ValuePath {
 			base.value.reads
 		case let .call(_, value, arguments, _):
 			value.reads + arguments
+		case let .implicitMemberCall(_, arguments):
+			arguments
 		case let .spliced(segments):
 			segments.flatMap(\.reads)
 		}
@@ -116,7 +118,8 @@ extension ValuePath {
 		case .rootDeclaration,
 		     .read,
 		     .passedArgument,
-		     .emptyInitialization:
+		     .emptyInitialization,
+		     .implicitMemberCall:
 			[]
 		case let .memberRead(_, base),
 		     let .optionalMemberRead(_, base):
@@ -142,7 +145,8 @@ extension ValuePath {
 		switch self {
 		case .rootDeclaration,
 		     .read,
-		     .emptyInitialization:
+		     .emptyInitialization,
+		     .implicitMemberCall:
 			[]
 		case let .passedArgument(name):
 			[name]
@@ -205,6 +209,7 @@ extension PassedArgument {
 		     .memberRead,
 		     .optionalMemberRead,
 		     .call,
+		     .implicitMemberCall,
 		     .emptyInitialization,
 		     .spliced:
 			part(parts: &parts)
@@ -331,6 +336,13 @@ extension TypeKeyLayout {
 			} else {
 				return "\(receiver).\(name)(\(joined))"
 			}
+		case let .implicitMemberCall(name, arguments):
+			var spelledArguments = [String]()
+			for argument in arguments {
+				guard let value = spelledValue(of: argument, inClass: owner, before: index) else { return nil }
+				spelledArguments.append("\(argument.argumentLabel.spelledAsArgumentLabel): \(value)")
+			}
+			return ".\(name)(\(spelledArguments.joined(separator: ", ")))"
 		case let .spliced(segments):
 			var spelled = ""
 			for segment in segments {
@@ -346,6 +358,22 @@ extension TypeKeyLayout {
 			}
 			return spelled
 		}
+	}
+
+	/// `contents` as a string literal, each quotation mark and backslash in it escaped: a label spelled as a raw identifier
+	/// can hold a quotation mark.
+	static func spelledStringLiteral(_ contents: String) -> String {
+		let quotationMark = UInt8(ascii: "\"")
+		let backslash = UInt8(ascii: "\\")
+		var bytes = [quotationMark]
+		for byte in contents.utf8 {
+			if byte == quotationMark || byte == backslash {
+				bytes.append(backslash)
+			}
+			bytes.append(byte)
+		}
+		bytes.append(quotationMark)
+		return String(decoding: bytes, as: UTF8.self)
 	}
 
 	/// The value `read` passes where a statement before `index` of `owner`'s body makes it.
@@ -401,7 +429,7 @@ extension TypeKeyLayout {
 /// equality, never for order. It holds one entry per distinct part and path met, and dies with `computeClasses`.
 struct StructuralKeyParts {
 	/// A part of a structural key. Each case is a kind of string the key held, so no two kinds of part are alike.
-	enum Part: Hashable, Sendable {
+	enum Part: Hashable {
 		/// What the place builds and how, as `structuralKey(of:isInSendableFamily:parts:)` lists it.
 		case header(
 			concreteType: String,
@@ -413,8 +441,6 @@ struct StructuralKeyParts {
 			reads: [String],
 		)
 		case argument(argumentLabel: String, label: String, property: String)
-		/// The statement a place's function begins with (`BuiltPlaceRecord.leadingStatement`).
-		case leadingStatement(LeadingStatement)
 		/// A part spelled as text: what a construction does besides calling its target, or an inline or alias statement.
 		case text(String)
 		case parameter(name: String, type: String)
@@ -429,11 +455,8 @@ struct StructuralKeyParts {
 
 	/// The id of `part`.
 	mutating func id(of part: Part) -> Int {
-		if let id = frozen?.idsByPart[part] {
-			return id
-		}
 		guard let id = idsByPart[part] else {
-			let id = (frozen?.idsByPart.count ?? 0) + idsByPart.count
+			let id = idsByPart.count
 			idsByPart[part] = id
 			return id
 		}
@@ -447,38 +470,27 @@ struct StructuralKeyParts {
 
 	// MARK: Private
 
-	fileprivate enum Node: Hashable, Sendable {
+	private enum Node: Hashable {
 		case rootDeclaration(String)
 		case read(String)
 		case passedArgument(String)
 		case member(name: String, base: Int, throughOptional: Bool)
 		case call(name: String, value: Int, arguments: [String], argumentsWrapper: String?)
+		case implicitMemberCall(name: String, arguments: [String])
 		case emptyInitialization(String)
 		case spliced([Segment])
 	}
 
 	/// A segment of a spliced path: its text, its value's id, or the function's name, each a case of its own so no two
 	/// kinds of segment are alike.
-	fileprivate enum Segment: Hashable, Sendable {
+	private enum Segment: Hashable {
 		case text(String)
 		case value(Int)
 		case declaredFunction(String)
 	}
 
-	/// The ids a snapshot of shared plan nodes gave its parts (`NodeLayoutFacts`), which every id of this value reads first,
-	/// so a part the snapshot holds has the snapshot's id, and every other part an id after all of the snapshot's.
-	private let frozen: FrozenStructuralKeyParts?
 	private var idsByPart = [Part: Int]()
 	private var idsByNode = [Node: Int]()
-
-	init(frozen: FrozenStructuralKeyParts? = nil) {
-		self.frozen = frozen
-	}
-
-	/// These ids, which no value adds to again.
-	var frozenIDs: FrozenStructuralKeyParts {
-		FrozenStructuralKeyParts(idsByPart: idsByPart, idsByNode: idsByNode)
-	}
 
 	/// The id of `value`, reached through its member reads without recursing, since a chain of them can be as deep as the
 	/// configurations it reads through.
@@ -510,6 +522,9 @@ struct StructuralKeyParts {
 					arguments: arguments.map(\.shape),
 					argumentsWrapper: argumentsWrapper?.asSource,
 				)
+				break reading
+			case let .implicitMemberCall(name, arguments):
+				node = .implicitMemberCall(name: name, arguments: arguments.map(\.shape))
 				break reading
 			case let .emptyInitialization(type):
 				node = .emptyInitialization(type.asSource)
@@ -543,26 +558,11 @@ struct StructuralKeyParts {
 	}
 
 	private mutating func id(of node: Node) -> Int {
-		if let id = frozen?.idsByNode[node] {
-			return id
-		}
 		guard let id = idsByNode[node] else {
-			let id = (frozen?.idsByNode.count ?? 0) + idsByNode.count
+			let id = idsByNode.count
 			idsByNode[node] = id
 			return id
 		}
 		return id
-	}
-}
-
-/// The ids of the parts a snapshot of shared plan nodes interned (`NodeLayoutFacts`), read by every root's layout. It holds
-/// them for as long as the snapshot holds it.
-final class FrozenStructuralKeyParts: Sendable {
-	fileprivate let idsByPart: [StructuralKeyParts.Part: Int]
-	fileprivate let idsByNode: [StructuralKeyParts.Node: Int]
-
-	fileprivate init(idsByPart: [StructuralKeyParts.Part: Int], idsByNode: [StructuralKeyParts.Node: Int]) {
-		self.idsByPart = idsByPart
-		self.idsByNode = idsByNode
 	}
 }

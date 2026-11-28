@@ -21,9 +21,9 @@
 extension NodeRecords {
 	/// Claims a node built as a `LazilyInstantiated`, erased or not: the wrapper is made of its builder function, which the
 	/// node's place always declares, and its record is otherwise its type's initializer's
-	/// (`builtByInitializerRecord(of:variant:in:unavailableProperties:lazilyInstantiatedInstanceProperties:typesDeclaredEscaping:children:lineEnd:)`). A
+	/// (`builtByInitializerRecord(of:variant:in:unavailableProperties:lazilyInstantiatedInstanceProperties:construction:typeFunctionReturns:typesDeclaredEscaping:children:lineEnd:)`). A
 	/// `SendableLazilyInstantiated` is `sendableClaim(of:in:)`'s.
-	static func lazyClaim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
+	static func lazyClaim(of declaration: DeclarationID, in world: some NodeRecordVariantFacts) -> NodeRecordClaim? {
 		switch world.kind(of: declaration) {
 		case .lazy:
 			NodeRecordClaim(kind: .lazy, discharges: [.lazy])

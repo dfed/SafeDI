@@ -60,7 +60,7 @@ extension DependencyTreeGenerator {
 	func observePlanCaptures(of roots: [RootScopeInfo]) async {
 		guard let observer = PlanCaptureObservation.observer else { return }
 		for root in roots {
-			guard case .perType = root.tree, let todaysTree = root.drawnTree else { continue }
+			guard case .perType = root.built, let todaysTree = root.drawnTree else { continue }
 			let captures = await todaysTree.nonSendableWrapperCaptures(ofTreeRootedAt: root.instantiable)
 			observer(root.instantiable.concreteInstantiable.asSource, !captures.isEmpty)
 		}
@@ -84,9 +84,8 @@ extension DependencyTreeGenerator {
 		// its module.
 		guard !seams.isEmpty, let emittingModule else { return }
 		var omissions = [DependencyTreeGeneratorError.ProvidedValueOmission]()
-		for root in roots {
-			// A module that holds a seam builds every root's tree per path.
-			guard let scopeGenerator = root.scopeGenerator else { continue }
+		// A root laid out from its plan by type or from its node records has no tree per path.
+		for (root, scopeGenerator) in roots.compactMap({ root in root.scopeGenerator.map { (root, $0) } }) {
 			for omission in await scopeGenerator.seamTierOmissions(ofTreeRootedAt: root.instantiable, isOwnFile: emittingModule.isOwnFile) {
 				// A provider in a file this run cannot read – another module's, in a build that hands this run that
 				// module's declarations but not its files – is reported where this module refers to what leads to the

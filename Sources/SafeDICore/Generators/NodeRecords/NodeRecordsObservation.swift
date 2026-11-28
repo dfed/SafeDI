@@ -30,10 +30,6 @@ public enum NodeRecordsObservation {
 	/// plan before it is turned on for every run, or generate time doubles.
 	@TaskLocal public static var laysOutRoots = false
 
-	/// Whether `generate` lays out a root whose world node records accept from them and builds no tree for it
-	/// (`DependencyTreeGenerator.nodeRecordsLayout`). Off until the switch to node records lands: only a test turns it on.
-	@TaskLocal public static var buildsNoTreeForAcceptedRoots = false
-
 	/// The nodes a test claims as a kind would (`NodeRecords.claim(of:in:)`), by their concrete type's name, each
 	/// with the raw values of the refusals the claim discharges. Only a test sets it.
 	@TaskLocal public static var claimsForTesting = [String: [String]]()
@@ -43,10 +39,14 @@ public enum NodeRecordsObservation {
 	/// text for a node beneath a function, which is handed its override where the walk's captures the root's.
 	@TaskLocal public static var laysOutMockRoots = false
 
-	/// Handed each mocked type and the root of its mock root's world as the mock root is built, where a test observes node records
+	/// Whether a mock root's world joins the terms that claim a node in the reverse of their order
+	/// (`NodeRecords.joiningProductionMarks(_:to:of:in:)`), so that a test shows the order cannot matter. Only a test sets it.
+	@TaskLocal public static var joinsMockWorldTermsInReverse = false
+
+	/// Handed each mocked type and its mock root's world (`MockWorldRoot`) as the mock root is built, where a test observes node records
 	/// (`DependencyTreeGenerator.createMockRootScopeGenerator`). A task local rather than a parameter: an optional closure
 	/// threaded through the mock roots' construction raised the peak memory of a run that sets none by a fifth on Linux.
-	@TaskLocal static var recordsMockWorldRoot: (@Sendable (TypeDescription, ConstructionScope) -> Void)?
+	@TaskLocal static var recordsMockWorldRoot: (@Sendable (TypeDescription, MockWorldRoot) -> Void)?
 
 	/// Handed each root's report, where set. Only a test sets it.
 	@TaskLocal public static var observer: (@Sendable (NodeRecordsReport) -> Void)?
@@ -57,10 +57,8 @@ public enum NodeRecordsObservation {
 
 	/// The ways `nodeRecordsBody`, the root's body node records make, differs from `treeBody`, the body the tree's places
 	/// make: a line per difference, each naming the place by the labels on its path, and how many places the tree's body
-	/// holds, each place a shared plan reaches counted once per path. `comparingSharingFields` also compares what a built
-	/// place records in its sharing fields (`BuiltPlaceRecord.sharingFields`), which the mock worlds' table compares and the
-	/// tree's places, which hold other values there, do not yet.
-	static func differences(between treeBody: [GeneratedCode], and nodeRecordsBody: [GeneratedCode], comparingSharingFields: Bool = false) -> (differences: [String], treePlaceCount: Int) {
+	/// holds, each place a shared plan reaches counted once per path.
+	static func differences(between treeBody: [GeneratedCode], and nodeRecordsBody: [GeneratedCode]) -> (differences: [String], treePlaceCount: Int) {
 		var differences = [String]()
 		var treePlaceCount = 0
 		var pending = [(tree: treeBody, nodeRecords: nodeRecordsBody, path: "root")]
@@ -96,10 +94,10 @@ public enum NodeRecordsObservation {
 				}
 				switch (treeRecord, nodeRecordsRecord) {
 				case let (.built(treeBuilt), .built(nodeRecordsBuilt)):
-					differences += fieldDifferences(between: treeBuilt, and: nodeRecordsBuilt, comparingSharingFields: comparingSharingFields).map { "\(placePath): \($0)" }
+					differences += fieldDifferences(between: treeBuilt, and: nodeRecordsBuilt).map { "\(placePath): \($0)" }
 					pending.append((tree: treeBuilt.children, nodeRecords: nodeRecordsBuilt.children, path: placePath))
 				case let (.alias(treeAlias), .alias(nodeRecordsAlias)):
-					differences += fieldDifferences(between: treeAlias, and: nodeRecordsAlias, comparingSharingFields: comparingSharingFields).map { "\(placePath): \($0)" }
+					differences += fieldDifferences(between: treeAlias, and: nodeRecordsAlias).map { "\(placePath): \($0)" }
 				case let (.closer(treeCloser), .closer(nodeRecordsCloser)):
 					differences += fieldDifferences(between: treeCloser, and: nodeRecordsCloser).map { "\(placePath): \($0)" }
 				case (.built, _), (.alias, _), (.closer, _):
@@ -145,9 +143,8 @@ public enum NodeRecordsObservation {
 		return pieces.flatMap { statements(of: .indented($0, by: indentation)) }
 	}
 
-	/// The fields of `nodeRecords`, a rename or a hole's place, that differ from `tree`'s, the sharing fields of the call it
-	/// holds only where `comparingSharingFields`.
-	private static func fieldDifferences(between tree: AliasPlaceRecord, and nodeRecords: AliasPlaceRecord, comparingSharingFields: Bool) -> [String] {
+	/// The fields of `nodeRecords`, a rename or a hole's place, that differ from `tree`'s.
+	private static func fieldDifferences(between tree: AliasPlaceRecord, and nodeRecords: AliasPlaceRecord) -> [String] {
 		var differences = [String]()
 		func compare<Value: Equatable>(_ name: String, _ treeValue: Value, _ nodeRecordsValue: Value) {
 			guard treeValue != nodeRecordsValue else { return }
@@ -166,7 +163,7 @@ public enum NodeRecordsObservation {
 		compare("calledRootFunctionNames", tree.calledRootFunctionNames, nodeRecords.calledRootFunctionNames)
 		compare("holdsCall", tree.call != nil, nodeRecords.call != nil)
 		if let treeCall = tree.call, let nodeRecordsCall = nodeRecords.call {
-			differences += fieldDifferences(between: treeCall.record, and: nodeRecordsCall.record, comparingSharingFields: comparingSharingFields).map { "call: \($0)" }
+			differences += fieldDifferences(between: treeCall.record, and: nodeRecordsCall.record).map { "call: \($0)" }
 			compare("call: argumentValues", treeCall.record.argumentValues, nodeRecordsCall.record.argumentValues)
 			compare("call: statements before the leading statement", treeCall.statementsBeforeLeadingStatement.count, nodeRecordsCall.statementsBeforeLeadingStatement.count)
 			compare("call: statements after the leading statement", treeCall.statementsAfterLeadingStatement.count, nodeRecordsCall.statementsAfterLeadingStatement.count)
@@ -174,9 +171,19 @@ public enum NodeRecordsObservation {
 		return differences
 	}
 
-	/// The fields of `nodeRecords` that differ from `tree`'s, children aside, the sharing fields' values only where
-	/// `comparingSharingFields`.
-	private static func fieldDifferences(between tree: BuiltPlaceRecord, and nodeRecords: BuiltPlaceRecord, comparingSharingFields: Bool) -> [String] {
+	/// Whether each argument of `nodeRecords` is `tree`'s, or reads the nearest declaration of its label where `tree`'s,
+	/// the same argument otherwise, reads `nil`.
+	static func differOnlyWhereTreeReadsNilOfLabel(_ tree: [PlaceRead], _ nodeRecords: [PlaceRead]) -> Bool {
+		guard tree.count == nodeRecords.count else { return false }
+		for (treeRead, nodeRecordsRead) in zip(tree, nodeRecords) where treeRead != nodeRecordsRead {
+			let treeReadWithRecordsSource = PlaceRead(argumentLabel: treeRead.argumentLabel, label: treeRead.label, property: treeRead.property, source: .binding(label: treeRead.label), staysOutsideSendableFunctions: treeRead.staysOutsideSendableFunctions)
+			guard treeRead.source == .nil, treeReadWithRecordsSource == nodeRecordsRead else { return false }
+		}
+		return true
+	}
+
+	/// The fields of `nodeRecords` that differ from `tree`'s, children aside.
+	private static func fieldDifferences(between tree: BuiltPlaceRecord, and nodeRecords: BuiltPlaceRecord) -> [String] {
 		var differences = [String]()
 		func compare<Value: Equatable>(_ name: String, _ treeValue: Value, _ nodeRecordsValue: Value) {
 			guard treeValue != nodeRecordsValue else { return }
@@ -187,7 +194,11 @@ public enum NodeRecordsObservation {
 		compare("concreteType", tree.concreteType, nodeRecords.concreteType)
 		compare("isExtension", tree.isExtension, nodeRecords.isExtension)
 		compare("target", tree.target, nodeRecords.target)
-		compare("arguments", tree.arguments, nodeRecords.arguments)
+		// Where one function serves a call that answers a read only if available and a call that does not, its record
+		// reads the declaration at each argument the tree's place at the second call reads `nil` at, and the two write the
+		// same code, the call passing `nil`: such a difference has a name of its own, which a test may approve where the
+		// two texts are equal. Any other difference of the arguments keeps the plain name.
+		compare(differOnlyWhereTreeReadsNilOfLabel(tree.arguments, nodeRecords.arguments) ? NodeRecordsReport.argumentsOfOptionalParameterDifferenceName : "arguments", tree.arguments, nodeRecords.arguments)
 		compare("forwardedProperties", tree.forwardedProperties, nodeRecords.forwardedProperties)
 		compare("cycleParameters", tree.cycleParameters, nodeRecords.cycleParameters)
 		compare("callCycleArguments", tree.callCycleArguments, nodeRecords.callCycleArguments)
@@ -199,18 +210,17 @@ public enum NodeRecordsObservation {
 		compare("holdsSharingFields", tree.sharingFields != nil, nodeRecords.sharingFields != nil)
 		compare("leadingStatement", tree.leadingStatement, nodeRecords.leadingStatement)
 		compare("closureArguments", tree.closureArguments, nodeRecords.closureArguments)
-		if comparingSharingFields {
-			compare("passedArguments", tree.passedArguments, nodeRecords.passedArguments)
-			compare("constructionValue", tree.constructionValue, nodeRecords.constructionValue)
-			compare("alternatives", tree.alternatives, nodeRecords.alternatives)
-			compare("argumentValues", tree.argumentValues, nodeRecords.argumentValues)
-		}
 		return differences
 	}
 }
 
 /// One production root's node records, beside its tree's places (`NodeRecordsObservation`).
 public struct NodeRecordsReport: Sendable {
+	/// The name, in a line of `differences`, of a place's arguments where they differ only as one function with an
+	/// optional parameter makes them differ: the tree's place reads `nil` where the records read the nearest declaration
+	/// of the argument's label.
+	public static let argumentsOfOptionalParameterDifferenceName = "arguments of an optional parameter"
+
 	/// The root's concrete type.
 	public let root: String
 	/// Why node records refused the root's world (`NodeRecordRefusal`), or `nil` where they made its records.
@@ -232,4 +242,27 @@ public struct NodeRecordsReport: Sendable {
 	/// Whether the root is a mock's: its records are compared with no tree's, so `differences` is empty, and a test
 	/// compares the code laid out from them, or the values that code builds, with the mock's walk's.
 	public var isMockRoot = false
+	/// The root's code as its tree spells it and as it is laid out from node records, where both were laid out: what a
+	/// test rewrites by the approved differences before it reports the root as differing.
+	public var comparedTexts: NodeRecordsComparedTexts?
+	/// The differences among `differences` that no text shows, a capture or a label only the tree's checks see: no
+	/// approved difference of the texts accounts for one.
+	public var differencesNoTextShows = [String]()
+}
+
+/// One root's code, spelled from its tree and laid out from its node records (`NodeRecordsReport.comparedTexts`).
+public struct NodeRecordsComparedTexts: Sendable {
+	/// The code the tree's places spell.
+	public let tree: String
+	/// The code laid out from node records.
+	public let nodeRecords: String
+}
+
+/// What node records are made of for a mock root, where a test observes them: the root of the mock root's world, and the
+/// receives only if available its promotion found production passes `nil`
+/// (`DependencyTreeGenerator.receivesPassedNilInMockTree`), which the mock root's bindings hold for the tree and no fact
+/// of the world holds.
+struct MockWorldRoot: Sendable {
+	let scope: ConstructionScope
+	let receivesPassedNil: MockReceivesPassedNil
 }

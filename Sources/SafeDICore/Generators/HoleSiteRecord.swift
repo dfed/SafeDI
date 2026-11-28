@@ -26,8 +26,8 @@ enum HoleSitePlaces {
 	/// property and nothing otherwise; else the payloads bound at its path, each a place of its own unless a loop's box holds
 	/// them (`loopBindsPayloads`), then the site's own place.
 	/// - Parameters:
-	///   - valuesBindings: The payloads the tree binds just before the site (`SeamHoles.CarrierSite.formations`).
 	///   - routeMembers: The member call each step of the site's route makes (`SeamHoles.routeMembers(at:)`).
+	///   - valuesBindings: The payloads the tree binds just before the site (`SeamHoles.CarrierSite.formations`).
 	///   - functionName: The name of the function the site builds a wrapper around, where it is renamed.
 	///   - lazilyInstantiatedInstanceProperties: The by-value properties whose labels the site's owner holds only as a
 	///     `LazilyInstantiated` property.
@@ -94,6 +94,7 @@ enum HoleSitePlaces {
 	/// of the seam's own. Any other wrapper is built around a function that makes the call, as inline builds a wrapper around
 	/// its builder function, which is `@Sendable` for a `Sendable` wrapper.
 	/// - Parameters:
+	///   - routeMembers: The member call each step of the site's route makes (`SeamHoles.routeMembers(at:)`).
 	///   - functionName: The name of that function where it differs from `functionName(toBuild:)`.
 	///   - lazilyInstantiatedInstanceProperties: The by-value properties whose labels the site's owner holds only as a
 	///     `LazilyInstantiated` property, whose instance the payload reads, as the owner's receivers do

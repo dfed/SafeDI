@@ -102,7 +102,7 @@ extension NodeRecords {
 			record.argumentValues = argumentValues
 		}
 		// Never `nil`: the node is of kind `seamCall` (`seamCallClaim(of:in:)`), whose construction is a call of the seam.
-		record.callFields = CallFields(leadingStatement: scope.seamCall.map { .callGuard($0.callGuard(for: construction.concreteType)) }, closureArguments: closureArguments)
+		record.callFields = CallFields(leadingStatement: scope.seamCall?.callGuard(for: construction.concreteType), closureArguments: closureArguments)
 		var alias = AliasPlaceRecord(property: construction.property, fulfillingProperty: nil, text: "", reads: reads)
 		alias.declaredFunctionNames = [construction.functionName]
 		alias.call = InPlaceCall(record: record, statementsBeforeLeadingStatement: [], statementsAfterLeadingStatement: children)
@@ -118,16 +118,15 @@ struct SeamCallRoutes: Sendable {
 		readsByCall = [:]
 	}
 
-	/// The routes of `seamTree`'s tree, whose world is `world`.
+	/// The routes of `seamTree`, whose world is `world`.
 	init(world: some NodeRecordSources, seamTree: DependencyTreeGenerator.RootScopeInfo.SeamTree) {
-		let callRoutes = seamTree.seamRoot.callRoutes
-		guard !callRoutes.isEmpty else {
+		guard !seamTree.callRoutes.isEmpty else {
 			readsByCall = [:]
 			return
 		}
-		let seamHoles = SeamHoles(of: seamTree.seamRoot, seamType: seamTree.seamType)
+		let seamHoles = seamTree.makeSeamHoles()
 		var routesByCall = [Call: (read: PassedUp?, count: Int)]()
-		for callRoute in callRoutes where !callRoute.reentersEnclosingFill {
+		for callRoute in seamTree.callRoutes where !callRoute.reentersEnclosingFill {
 			// The node at the end of the route's path: each step the child of the step before built as the step's property. A
 			// path into a fill names no edge's property, and leaves its call without a read.
 			var declaration: DeclarationID = 0

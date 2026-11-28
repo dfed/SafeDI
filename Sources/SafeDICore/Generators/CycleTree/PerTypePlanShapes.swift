@@ -50,24 +50,20 @@ extension DependencyTreeGenerator {
 		guard graph.nodes.indices.contains(where: { graph.isOnCycle($0) }) else { return nil }
 		// Every node is a scope the walk met, in the graph's order.
 		let scopes = graph.nodes.compactMap { scopeByIdentifier[$0] }
-		// The nodes each label of a builder builds, wherever the tree declares one.
-		var nodesBuiltByBuilderLabel = [String: [Int]]()
+		// The nodes that receive, or rename, a builder by each label.
+		var receiversByBuilderLabel = [String: [Int]]()
 		for (index, scope) in scopes.enumerated() {
-			var edge = 0
-			// The graph's edges are these properties, in this order.
-			for case let .instantiated(property, _, _) in scope.propertiesToGenerate {
-				let target = graph.targets(from: index)[edge]
-				edge += 1
-				if !property.propertyType.isConstant {
-					nodesBuiltByBuilderLabel[property.label, default: []].append(target)
+			for dependency in scope.instantiable.dependencies {
+				if let builderLabel = dependency.receivedBuilderLabel {
+					receiversByBuilderLabel[builderLabel, default: []].append(index)
 				}
 			}
 		}
-		// The nodes each node reaches, itself among them, found once for each node a received builder may build.
+		// The nodes each node reaches, itself among them, found once for each node a received builder's label builds.
 		var nodesReachedByNode = [Int: Set<Int>]()
-		func reaches(_ node: Int, _ receiver: Int) -> Bool {
+		func nodesReached(by node: Int) -> Set<Int> {
 			if let reached = nodesReachedByNode[node] {
-				return reached.contains(receiver)
+				return reached
 			} else {
 				var reached: Set = [node]
 				var stack = [node]
@@ -77,8 +73,44 @@ extension DependencyTreeGenerator {
 					}
 				}
 				nodesReachedByNode[node] = reached
-				return reached.contains(receiver)
+				return reached
 			}
+		}
+		// Whether a scope declares a loop of builders, as today's tree finds one (`ReceivedBuilderLoops`): builders it
+		// declares, each of whose trees receives the label of the next, back to the first; one builder whose tree
+		// receives its own label is a loop of one. Only builders whose labels the tree receives can be members.
+		func declaresLoopOfBuilders(_ index: Int) -> Bool {
+			var members = [(label: String, target: Int)]()
+			var edge = 0
+			// The graph's edges are these properties, in this order.
+			for case let .instantiated(property, _, _) in scopes[index].propertiesToGenerate {
+				let target = graph.targets(from: index)[edge]
+				edge += 1
+				if !property.propertyType.isConstant, receiversByBuilderLabel[property.label] != nil {
+					members.append((property.label, target))
+				}
+			}
+			guard !members.isEmpty else { return false }
+			// An arrow from each member to each member whose label its tree receives.
+			let arrows = members.map { member in
+				let reached = nodesReached(by: member.target)
+				return members.indices.filter { other in
+					receiversByBuilderLabel[members[other].label, default: []].contains(where: reached.contains)
+				}
+			}
+			// A member on a circle of arrows reaches itself.
+			for start in members.indices {
+				var visited = Set<Int>()
+				var stack = arrows[start]
+				while let next = stack.popLast() {
+					if next == start {
+						return true
+					} else if visited.insert(next).inserted {
+						stack += arrows[next]
+					}
+				}
+			}
+			return false
 		}
 		var reason: RootTreeChoiceObservation.PerPathReason?
 		for (index, scope) in scopes.enumerated() where reason == nil {
@@ -93,13 +125,11 @@ extension DependencyTreeGenerator {
 			// declarations that answer it, so no body reads a form another path's declaration gives.
 			for dependency in scope.instantiable.dependencies where reason == nil {
 				reason = Self.shapeOutsidePerTypePlan(of: dependency)
-				// A builder received, or renamed, by a label whose declaration builds a type that reaches the receiver
-				// closes a loop of builders, whose member the layout does not make again at the call yet.
-				if reason == nil, let builderLabel = dependency.receivedBuilderLabel,
-				   nodesBuiltByBuilderLabel[builderLabel, default: []].contains(where: { reaches($0, index) })
-				{
-					reason = .receivesBuilderThatClosesLoop
-				}
+			}
+			// A member of a loop of builders makes the other members' wrappers again in its function, which the layout
+			// does not write yet.
+			if reason == nil, declaresLoopOfBuilders(index) {
+				reason = .declaresLoopOfBuilders
 			}
 		}
 		if reason == nil {

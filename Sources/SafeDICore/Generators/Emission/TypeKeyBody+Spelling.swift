@@ -103,26 +103,29 @@ extension TypeKeyLayout {
 					typesDeclaredEscaping.insert(argument.type)
 				}
 			}
-			// A function that returns a type of its own erases an erased place's value itself, so its calls do not.
+			// A function that returns a type of its own erases an erased place's value itself, so its calls do not
+			// (`callErases`, `spelledCall`).
+			let functionReturnType = representative.functionReturnType ?? (representative.returnsPropertyType ? representative.property.typeDescription.asInstantiatedTypeSpelledAsDeclared : nil)
 			var value = Expression.construction(representative.target, arguments: arguments)
-			if let functionReturnType = representative.functionReturnType {
+			if let functionReturnType {
 				value = value.erased(to: functionReturnType, where: representative.isErased)
 			}
 			if !representative.alternatives.isEmpty || representative.constructionValue != nil {
 				guard let construction = spelledConstruction(of: representative, call: value.spelled, argumentValues: argumentValues, inClass: owner, before: statements(ofClass: owner).count) else { return nil }
 				value = .spelledConstruction(construction)
 			}
+			var builderBody = BuilderBody(statements: body)
+			builderBody.alwaysWritesReturn = representative.functionAlwaysWritesReturn
 			functionCode[owner] = BuilderNode(
 				name: functionNames[owner],
 				isSendable: isDecorated[owner],
 				parameters: parameters,
 				typesDeclaredEscaping: typesDeclaredEscaping,
-				returnType: representative.functionReturnType ?? representative.concreteType,
-				// A statement a kind supplies comes first in the function's body, before the functions declared in it.
-				body: BuilderBody(statements: (representative.leadingStatement?.spelledLines ?? []).map { .text("\(ScopeGenerator.standardIndent)\($0)") } + body),
+				returnType: functionReturnType ?? representative.concreteType,
+				body: builderBody,
 				value: value,
 				lineEnd: representative.lineEnd,
-			).spelled()
+			).spelled(after: representative.target.leadingLine.map { "\($0)\n" } ?? "")
 		}
 		return spelledStatements(ofClass: 0, indentation: TypeKeyBody.rootStatementIndentation, functionCode: functionCode)
 	}
@@ -137,6 +140,10 @@ extension TypeKeyLayout {
 			}
 			if let function = attachedFunction[site] {
 				code.append(.indented(functionCode[function], by: indentation))
+			}
+			// A place that declares only its function binds nothing.
+			if case let .built(child) = statement, bodies[child].record?.declaresOnlyItsFunction == true {
+				continue
 			}
 			guard let text = spelledStatement(statement, inClass: owner, at: index) else { return nil }
 			code.append(.indented(.text(text), by: indentation))
@@ -163,16 +170,24 @@ extension TypeKeyLayout {
 			)
 			let call = Expression.construction(record.target, arguments: arguments).erased(to: record.property.typeDescription.unwrapped, where: record.isErased).spelled
 			guard let value = spelledConstruction(of: record, call: call, argumentValues: argumentValues, inClass: owner, before: index) else { return nil }
-			return "\(declaration.spelled) = \(value)\(record.lineEnd)"
+			let leadingLine = record.target.leadingLine.map { "\($0)\n" } ?? ""
+			return "\(leadingLine)\(declaration.spelled) = \(value)\(record.lineEnd)"
 		case let .built(child):
 			guard let record = bodies[child].record else { return nil }
-			return spelledCall(of: classByBody[child], binding: record.property, isErased: record.isErased, isExtension: record.isExtension, inClass: owner, at: index)
+			return spelledCall(of: classByBody[child], binding: record.property, isErased: callErases(record.isErased, theFunctionOf: child), isExtension: record.isExtension, inClass: owner, at: index)
 		case let .closer(record, target):
-			return spelledCall(of: classByBody[target], binding: record.property, isErased: record.isErased, isExtension: record.isExtension, inClass: owner, at: index)
+			return spelledCall(of: classByBody[target], binding: record.property, isErased: callErases(record.isErased, theFunctionOf: target), isExtension: record.isExtension, inClass: owner, at: index)
 		case let .alias(record):
 			guard let call = record.call else { return record.text }
 			return spelledInPlace(call, inClass: owner, at: index)
 		}
+	}
+
+	/// Whether a call of `body`'s function erases what it returns into a binding that `isErased`: a function that returns
+	/// the property's type has erased it already, whichever place calls it, the place it builds or one that closes a
+	/// cycle on it.
+	func callErases(_ isErased: Bool, theFunctionOf body: Int) -> Bool {
+		isErased && !(bodies[body].record?.returnsPropertyType ?? false)
 	}
 
 	/// The text of a call written where its place is, at `index` of `owner`'s body: its builder function, then the binding
@@ -184,8 +199,8 @@ extension TypeKeyLayout {
 			return memberCall.record.arguments[position].source
 		}) else { return nil }
 		var statements = call.statementsBeforeLeadingStatement
-		for line in record.leadingStatement?.spelledLines ?? [] {
-			statements.append(.text("\(ScopeGenerator.standardIndent)\(line)"))
+		if let leadingStatement = record.leadingStatement {
+			statements.append(.text("\(ScopeGenerator.standardIndent)\(leadingStatement.spelled)"))
 		}
 		statements += call.statementsAfterLeadingStatement
 		let function = SafeDICore.Statement.function(BuilderNode(

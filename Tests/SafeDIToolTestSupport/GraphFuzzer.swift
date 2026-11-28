@@ -2147,6 +2147,44 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 		rawValue.hasPrefix("holeScreen")
 	}
 
+	/// Twins over a shared screen beneath a seam (`addingTwinsOverSharedScreen`), one case per `TwinShape`, whose count in
+	/// accepted graphs the seam corpus pins (`acceptedDrawFeatureCounts`).
+	case twinsOverSharedScreen
+	case twinsOverSharedScreenValueFirst
+	case twinsOverSharedScreenWrapperFirst
+	case twinsOverSharedScreenSendableWrapper
+	case twinsOverSharedScreenScreenReceivesOnlyIfAvailable
+	case twinsOverSharedScreenScreenBuildsPanel
+	case twinsOverSharedScreenFirstThroughInstantiator
+	case twinsOverSharedScreenTopOpensSecond
+	case twinsOverSharedScreenInSeam
+	case twinsOverSharedScreenThemeInSameForm
+	case twinsOverSharedScreenThemeInMixedForms
+	case twinsOverSharedScreenThemeInMixedFormsInsideSendableBuilder
+
+	/// The feature of the seam corpus that `shape` is.
+	static func twinsOverSharedScreen(_ shape: TwinShape) -> GraphFuzzerSeamDrawFeature {
+		switch shape {
+		case .drawn: .twinsOverSharedScreen
+		case .valueFirst: .twinsOverSharedScreenValueFirst
+		case .wrapperFirst: .twinsOverSharedScreenWrapperFirst
+		case .sendableWrapper: .twinsOverSharedScreenSendableWrapper
+		case .screenReceivesOnlyIfAvailable: .twinsOverSharedScreenScreenReceivesOnlyIfAvailable
+		case .screenBuildsPanel: .twinsOverSharedScreenScreenBuildsPanel
+		case .firstThroughInstantiator: .twinsOverSharedScreenFirstThroughInstantiator
+		case .topOpensSecond: .twinsOverSharedScreenTopOpensSecond
+		case .inSeam: .twinsOverSharedScreenInSeam
+		case .themeInSameForm: .twinsOverSharedScreenThemeInSameForm
+		case .themeInMixedForms: .twinsOverSharedScreenThemeInMixedForms
+		case .themeInMixedFormsInsideSendableBuilder: .twinsOverSharedScreenThemeInMixedFormsInsideSendableBuilder
+		}
+	}
+
+	/// Whether `addingTwinsOverSharedScreen` draws this shape.
+	var isTwinShape: Bool {
+		rawValue.hasPrefix("twinsOverSharedScreen")
+	}
+
 	/// Whether `addingHoleShapes` draws this case of two routes whose fill reads a value one route binds lazily and the
 	/// caller holds by value, whose count in accepted graphs the seam corpus pins (`acceptedDrawFeatureCounts`), at least
 	/// ten each.
@@ -2947,6 +2985,7 @@ enum GraphFuzzerGenerator {
 			retentionRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.retentionRandomSeedMask)
 			retentionLoopRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.retentionLoopRandomSeedMask)
 			builderReceivedBesideReceiveLeftNilRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.builderReceivedBesideReceiveLeftNilRandomSeedMask)
+			builderLoopAtTwoLevelsRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.builderLoopAtTwoLevelsRandomSeedMask)
 			sendableOnlyInsideClosureRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.sendableOnlyInsideClosureRandomSeedMask)
 			throwingAutoclosureRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.throwingAutoclosureRandomSeedMask)
 			sendableAutoclosureRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.sendableAutoclosureRandomSeedMask)
@@ -2970,13 +3009,15 @@ enum GraphFuzzerGenerator {
 			differingPinsRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.differingPinsRandomSeedMask)
 			wrapperKindsRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.wrapperKindsRandomSeedMask)
 			actorArgumentRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.actorArgumentRandomSeedMask)
+			actorClassWrapperRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.actorClassWrapperRandomSeedMask)
 			instantiatedOnlyIfAvailableRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.instantiatedOnlyIfAvailableRandomSeedMask)
 			instantiatedOnlyIfAvailableErasureRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.instantiatedOnlyIfAvailableErasureRandomSeedMask)
 			optionalPlaceRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.optionalPlaceRandomSeedMask)
 			nestedCycleRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.nestedCycleRandomSeedMask)
-			renamedLazyReaderRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.renamedLazyReaderRandomSeedMask)
 			perTypePlanRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.perTypePlanRandomSeedMask)
 			perTypePlanJobRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.perTypePlanJobRandomSeedMask)
+			twinRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.twinRandomSeedMask)
+			renamedLazyReaderRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.renamedLazyReaderRandomSeedMask)
 			renameSplitRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.renameSplitRandomSeedMask)
 			seamDependencyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ GraphFuzzerSeamDependencyDraw.seamRandomSeedMask)
 			prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
@@ -3064,10 +3105,15 @@ enum GraphFuzzerGenerator {
 			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
 			finalDeclarations = addingTypeBuiltAgainThroughSecondLazyCycle(to: finalDeclarations)
 			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
-			finalDeclarations = addingReadersOfRenamedLazyInstance(to: finalDeclarations)
 			finalDeclarations = addingScreensLaidOutFromPerTypePlan(to: finalDeclarations)
 			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
+			finalDeclarations = addingTwinsOverSharedScreen(to: finalDeclarations)
+			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
+			finalDeclarations = addingReadersOfRenamedLazyInstance(to: finalDeclarations)
+			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
 			finalDeclarations = addingRenameFulfilledByValueAndWrapper(to: finalDeclarations)
+			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
+			finalDeclarations = addingActorAndClassBuildingSameWrapper(to: finalDeclarations)
 			// In a graph split across modules, every file names its module and imports the seam's, so that a type of the
 			// caller can name what the seam's module declares, such as the creation stamps' counter.
 			let isSplit = finalDeclarations.contains { $0.module == .seamModule }
@@ -3299,7 +3345,10 @@ enum GraphFuzzerGenerator {
 		/// ring of two now and then has an instantiated cycle close on a member: the first member instantiates a third type
 		/// that declares both members' instantiators again, so each member built beneath it receives that type's, and the
 		/// first member's builder function takes the second's as a cycle parameter. The ring's wrappers are `Sendable` in a
-		/// `Sendable` graph and in half the mixed ones.
+		/// `Sendable` graph and in half the mixed ones. Half the rings of two that close no instantiated cycle, on a stream of
+		/// their own (`builderLoopAtTwoLevelsRandom`), are declared at two levels of different types instead: by `T9`, which
+		/// a root instantiates and whose mock is generated, and again by `LoopLevel`, which `T9` instantiates, so the mock's
+		/// loop is built at both levels and each level hands the members a configuration of `T9`'s overrides type.
 		private mutating func appendReceivedBuilderLoopMotif(to declarations: inout [TypeDeclaration]) {
 			let wrapper = sendability == .sendable || sendability == .mixed && random.percentChance(50) ? "SendableInstantiator" : "Instantiator"
 			func builder(_ index: Int) -> PropertyDeclaration {
@@ -3328,7 +3377,15 @@ enum GraphFuzzerGenerator {
 			}
 			let mockedIndex = random.percentChance(50) ? random.element(of: members) : nil
 			let builders = members.map(builder)
-			if !closesCycle, propertiesByIndex[9] == nil, random.percentChance(30) {
+			var mockedIndices: Set<Int> = mockedIndex.map { [$0] } ?? []
+			if length == 2, !closesCycle, builderLoopAtTwoLevelsRandom.percentChance(50) {
+				// The mocked `T9` declares the ring and builds `LoopLevel`, which declares it again.
+				let level = PropertyDeclaration(attribute: "@Instantiated", label: "loopLevel", type: "\(prefix)LoopLevel")
+				propertiesByIndex[9] = builderLoopAtTwoLevelsRandom.percentChance(50) ? [level] + builders : builders + [level]
+				mockedIndices.insert(9)
+				declarations[0].properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "t9", type: typeName(9)))
+				declarations.append(TypeDeclaration(name: "\(prefix)LoopLevel", instantiableArguments: [], properties: builders, declaresHelperTypes: false))
+			} else if !closesCycle, propertiesByIndex[9] == nil, random.percentChance(30) {
 				// A type a root instantiates as a constant declares the ring.
 				propertiesByIndex[9] = builders
 				declarations[0].properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "t9", type: typeName(9)))
@@ -3338,7 +3395,7 @@ enum GraphFuzzerGenerator {
 			for index in propertiesByIndex.keys.sorted() {
 				declarations.append(TypeDeclaration(
 					name: typeName(index),
-					instantiableArguments: index == mockedIndex ? ["generateMock: true"] : [],
+					instantiableArguments: mockedIndices.contains(index) ? ["generateMock: true"] : [],
 					properties: propertiesByIndex[index, default: []],
 					declaresHelperTypes: true,
 				))
@@ -3376,6 +3433,7 @@ enum GraphFuzzerGenerator {
 		}
 
 		private static let builderReceivedBesideReceiveLeftNilRandomSeedMask: UInt64 = 0x73656C6652656376
+		private static let builderLoopAtTwoLevelsRandomSeedMask: UInt64 = 0x4C6F6F704C766C73
 		/// The stream of the `Sendable` builder motif's closure default that is `@Sendable` only inside its type.
 		private static let sendableOnlyInsideClosureRandomSeedMask: UInt64 = 0x53656E64496E7369
 		/// The stream of the extension's throwing `@autoclosure` parameter.
@@ -3505,6 +3563,8 @@ enum GraphFuzzerGenerator {
 		/// Draws only `appendBuilderReceivedBesideReceiveLeftNilMotif`'s choices: whether a graph without another motif
 		/// ends with it, and its shapes.
 		private var builderReceivedBesideReceiveLeftNilRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only whether `appendReceivedBuilderLoopMotif`'s ring of two is declared at two levels of a mocked type's tree.
+		private var builderLoopAtTwoLevelsRandom: GraphFuzzerRandomNumberGenerator
 		private var sendableOnlyInsideClosureRandom: GraphFuzzerRandomNumberGenerator
 		private var throwingAutoclosureRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only whether the extension's `instantiate(…)` takes a `@Sendable` `@autoclosure` parameter.
@@ -3551,6 +3611,7 @@ enum GraphFuzzerGenerator {
 		/// Draws only `addingActorArgumentShapes`' choices: whether a graph gains `ActorStore`'s tree, and every shape of
 		/// that tree.
 		private var actorArgumentRandom: GraphFuzzerRandomNumberGenerator
+		private var actorClassWrapperRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only `addingDependencyInstantiatedOnlyIfAvailable`'s choices: whether a graph gains `IfAvailableRoot`'s
 		/// tree, and every shape of that tree.
 		private var instantiatedOnlyIfAvailableRandom: GraphFuzzerRandomNumberGenerator
@@ -3563,14 +3624,17 @@ enum GraphFuzzerGenerator {
 		/// Draws only `addingTypeBuiltAgainThroughSecondLazyCycle`'s choices: whether a graph gains `NestRoot`'s tree, and
 		/// every shape of that tree.
 		private var nestedCycleRandom: GraphFuzzerRandomNumberGenerator
-		/// Draws only `addingReadersOfRenamedLazyInstance`'s choices: whether a graph gains `RenamedLazyTop`'s tree, and
-		/// every shape of that tree.
-		private var renamedLazyReaderRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only `addingScreensLaidOutFromPerTypePlan`'s choices: whether a graph gains `PlanRoot`'s tree, and every
 		/// shape of that tree.
 		private var perTypePlanRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only whether `addingScreensLaidOutFromPerTypePlan`'s tree gains `PlanJob`, and where.
 		private var perTypePlanJobRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only `addingTwinsOverSharedScreen`'s choices: whether a graph gains `TwinRoot`'s tree, and every shape of
+		/// that tree.
+		private var twinRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only `addingReadersOfRenamedLazyInstance`'s choices: whether a graph gains `RenamedLazyTop`'s tree, and
+		/// every shape of that tree.
+		private var renamedLazyReaderRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only `addingRenameFulfilledByValueAndWrapper`'s choices: whether a graph gains `RenameSplitRoot`'s tree, and
 		/// every shape of that tree.
 		private var renameSplitRandom: GraphFuzzerRandomNumberGenerator
@@ -8338,6 +8402,78 @@ enum GraphFuzzerGenerator {
 
 		private static let actorArgumentRandomSeedMask: UInt64 = 0x6163746F72417267
 
+		// MARK: An actor and a class building the same wrapper
+
+		/// The base corpus's draw, outside `Sendable` graphs, of an actor and a class that each build the same wrapper of one
+		/// leaf. `ActorClassHost`, whose mock is generated, instantiates `ActorClassStore`, an actor, and
+		/// `ActorClassShelf`, a class, in either order, and each instantiates `actorClassLeafBuilder`: an `Instantiator`, a
+		/// `LazilyInstantiated`, or an `ErasedInstantiator` that erases `ActorClassLeaf` to `AnyActorClassLeaf`, a struct the
+		/// leaf's file declares. The actor is sent the wrapper with its closure, so a mock whose closure reads a field of a
+		/// configuration that is not `Sendable` does not compile. Half the time the leaf takes a default-valued parameter,
+		/// so its configuration has a field; a quarter of the time it receives `actorClassToken`, a `Sendable` class the
+		/// host instantiates before both; three draws in ten also generate the actor's own mock. No root reaches the tree, so the
+		/// compile and the value oracle's mirror of the host judge it. `actorClassWrapperRandom` draws only for this pass,
+		/// after every other, and only in the base corpus.
+		private mutating func addingActorAndClassBuildingSameWrapper(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			guard !omitsDrawsOlderReleasesReject, features.isEmpty, actorClassWrapperRandom.percentChance(12), sendability != .sendable else { return declarations }
+			var declarations = declarations
+			let wrapperKind = actorClassWrapperRandom.integer(in: 0...2)
+			let storeComesFirst = actorClassWrapperRandom.percentChance(50)
+			let leafTakesDefault = actorClassWrapperRandom.percentChance(50)
+			let leafReceivesToken = actorClassWrapperRandom.percentChance(25)
+			let storeGeneratesMock = actorClassWrapperRandom.percentChance(30)
+			func declaration(_ name: String, generatesMock: Bool = false, _ properties: [PropertyDeclaration]) -> TypeDeclaration {
+				TypeDeclaration(
+					name: name,
+					instantiableArguments: generatesMock ? ["generateMock: true"] : [],
+					properties: properties,
+					declaresHelperTypes: false,
+					additionalConformances: [],
+				)
+			}
+			let tokenName = "\(prefix)ActorClassToken"
+			let leafName = "\(prefix)ActorClassLeaf"
+			let erasedLeafName = "\(prefix)AnyActorClassLeaf"
+			let storeName = "\(prefix)ActorClassStore"
+			let shelfName = "\(prefix)ActorClassShelf"
+			let leafBuilder = switch wrapperKind {
+			case 0:
+				PropertyDeclaration(attribute: "@Instantiated", label: "actorClassLeafBuilder", type: "Instantiator<\(leafName)>")
+			case 1:
+				PropertyDeclaration(attribute: "@Instantiated", label: "actorClassLeafBuilder", type: "LazilyInstantiated<\(leafName)>")
+			default:
+				PropertyDeclaration(attribute: "@Instantiated(fulfilledByType: \"\(leafName)\", erasedToConcreteExistential: true)", label: "actorClassLeafBuilder", type: "ErasedInstantiator<(), \(erasedLeafName)>")
+			}
+			var leaf = declaration(leafName, leafReceivesToken ? [PropertyDeclaration(attribute: "@Received", label: "actorClassToken", type: tokenName)] : [])
+			if leafTakesDefault {
+				leaf.defaultValuedParameters = [ParameterDeclaration(name: "name", type: "String", defaultValue: "\"leaf\"")]
+			}
+			if wrapperKind == 2 {
+				leaf.additionalDeclarations.append("public struct \(erasedLeafName) {\n\tpublic init(_ value: \(leafName)) {\n\t\tself.value = value\n\t}\n\n\tpublic let value: \(leafName)\n}")
+			}
+			declarations.append(leaf)
+			var hostProperties = [PropertyDeclaration]()
+			if leafReceivesToken {
+				// A token that is not `Sendable`, captured by the wrapper the actor is sent and held by the host too, is a
+				// data race production reports as a mock does ("sending … risks causing data races"), so it is `Sendable`.
+				var token = declaration(tokenName, [])
+				token.additionalConformances = ["Sendable"]
+				declarations.append(token)
+				hostProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "actorClassToken", type: tokenName))
+			}
+			var store = declaration(storeName, generatesMock: storeGeneratesMock, [leafBuilder])
+			store.isActor = true
+			declarations.append(store)
+			declarations.append(declaration(shelfName, [leafBuilder]))
+			let storeProperty = PropertyDeclaration(attribute: "@Instantiated", label: "actorClassStore", type: storeName)
+			let shelfProperty = PropertyDeclaration(attribute: "@Instantiated", label: "actorClassShelf", type: shelfName)
+			hostProperties.append(contentsOf: storeComesFirst ? [storeProperty, shelfProperty] : [shelfProperty, storeProperty])
+			declarations.append(declaration("\(prefix)ActorClassHost", generatesMock: true, hostProperties))
+			return declarations
+		}
+
+		private static let actorClassWrapperRandomSeedMask: UInt64 = 0x6163744373577270
+
 		// MARK: A dependency instantiated only if available
 
 		/// The base corpus's draw of `@Instantiated(onlyIfAvailable: true)`. `IfAvailableRoot`, a root, instantiates
@@ -8464,57 +8600,6 @@ enum GraphFuzzerGenerator {
 		}
 
 		private static let nestedCycleRandomSeedMask: UInt64 = 0x6E657374437963
-
-		// MARK: Readers of a renamed lazy instance
-
-		/// The base corpus's draw, in one graph of eight, of a choice between declarations of one type, decided by where
-		/// each is declared. `RenamedLazyTop`, a root, instantiates a lazily instantiated `RenamedLazyValue` and
-		/// `RenamedLazyOwner`, which renames it under six labels and instantiates `RenamedLazyReader`, which receives
-		/// the instance under every one of them, in an order drawn apart from the labels'. So creating `RenamedLazyTop`
-		/// creates the value, and the warning that says so names the reader's receive declared first
-		/// (`InstantiationAnalysis`' `recordReads(whileCreating:)`), never the first label. The multi-module partition
-		/// puts the reader in a module beneath the root's when it splits the tree, where a run over module info files that
-		/// store positions apart reads the receives' places by their order in the reader's file alone, and must name the
-		/// same one (`SplitPositionsRun`). `renamedLazyReaderRandom` draws only for this pass, after every other, and only
-		/// in the base corpus.
-		private mutating func addingReadersOfRenamedLazyInstance(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
-			guard features.isEmpty, renamedLazyReaderRandom.percentChance(12) else { return declarations }
-			var declarations = declarations
-			// Six, so that a choice made in any other order than the reader's declarations' differs on nearly every run.
-			let labels = ["renamedLazyFirst", "renamedLazySecond", "renamedLazyThird", "renamedLazyFourth", "renamedLazyFifth", "renamedLazySixth"]
-			var readOrder = Array(labels)
-			for index in readOrder.indices.dropLast() {
-				readOrder.swapAt(index, renamedLazyReaderRandom.integer(in: index...(readOrder.count - 1)))
-			}
-			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
-			func append(_ name: String, isRoot: Bool = false, _ properties: [PropertyDeclaration]) {
-				declarations.append(TypeDeclaration(
-					name: name,
-					instantiableArguments: isRoot ? ["isRoot: true"] : [],
-					properties: properties,
-					declaresHelperTypes: false,
-					additionalConformances: conformances,
-				))
-			}
-			let valueName = "\(prefix)RenamedLazyValue"
-			let wrapped = "\(lazilyInstantiatedWrapper(isSendable: sendability == .sendable))<\(valueName)>"
-			append(valueName, [])
-			append("\(prefix)RenamedLazyReader", readOrder.map { PropertyDeclaration(attribute: "@Received", label: $0, type: valueName) })
-			append("\(prefix)RenamedLazyOwner", labels.map {
-				PropertyDeclaration(attribute: "@Received(fulfilledByDependencyNamed: \"renamedLazyValue\", ofType: \(wrapped).self)", label: $0, type: wrapped)
-			} + [PropertyDeclaration(attribute: "@Instantiated", label: "renamedLazyReader", type: "\(prefix)RenamedLazyReader")])
-			// The value, the reader and the owner come first, and the root last, so that the multi-module partition, which
-			// deals the files out to modules in that order, puts the reader in a module beneath the root's wherever it
-			// makes more than one.
-			declarations = declarations.suffix(3) + declarations.dropLast(3)
-			append("\(prefix)RenamedLazyTop", isRoot: true, [
-				PropertyDeclaration(attribute: "@Instantiated", label: "renamedLazyValue", type: wrapped),
-				PropertyDeclaration(attribute: "@Instantiated", label: "renamedLazyOwner", type: "\(prefix)RenamedLazyOwner"),
-			])
-			return declarations
-		}
-
-		private static let renamedLazyReaderRandomSeedMask: UInt64 = 0x52656E4C617A79
 
 		// MARK: Screens laid out from the per-type plan
 
@@ -8655,6 +8740,151 @@ enum GraphFuzzerGenerator {
 
 		private static let perTypePlanRandomSeedMask: UInt64 = 0x506C616E547970
 		private static let perTypePlanJobRandomSeedMask: UInt64 = 0x506C616E4A6F62
+
+		// MARK: Twins over a shared screen
+
+		/// Adds `TwinRoot`'s tree, in which one label is declared as a value by one parent and as a lazy wrapper by another,
+		/// above a screen both parents build, on a cycle: twins (`PerTypePlan.twins`, `CallPlaceShadow.twinValues`), the
+		/// shape `TwinIdentityChecks` judges, which the corpora drew in no root before. `TwinRoot` builds `TwinFirst` by
+		/// value or through an instantiator, and now and then opens `TwinSecond` too. `TwinFirst` declares `twinModel` in
+		/// one form and `TwinSecond` in the other (`LazilyInstantiated`, or `SendableLazilyInstantiated` where the graph's
+		/// wrappers may be `Sendable`), the value first on the path or the wrapper first, and each builds `TwinScreen`,
+		/// which receives `twinModel` by value, required or only if available, and now and then builds `TwinPanel`, which
+		/// receives it too. `TwinModel` opens `TwinSecond` through an instantiator, so the cycle closes on `TwinSecond`'s
+		/// declaration of the model, whichever twin a path built first. Each type's properties are in an order of their
+		/// own. In the seam corpus `TwinRoot` builds `TwinSeam`, a seam whose own tree holds the twins, and in the base
+		/// corpus the root holds them. `twinRandom` draws only for this pass, after every other, so that every graph without
+		/// the tree is drawn as before; the public mock corpus draws the same tree beneath a public mock
+		/// (`GraphFuzzerPublicMockDraw`'s twins).
+		private mutating func addingTwinsOverSharedScreen(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			let drawsSeam = features.contains(.generateDependencyTree)
+			guard twinRandom.percentChance(drawsSeam ? 10 : 4) else { return declarations }
+			var declarations = declarations
+			// A graph of `Sendable` types stores only `Sendable` wrappers; a mixed graph draws the wrapper kind per graph.
+			let isSendable = switch sendability {
+			case .nonSendable: false
+			case .sendable: true
+			case .mixed: twinRandom.percentChance(50)
+			}
+			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
+			func append(_ name: String, isRoot: Bool = false, arguments: [String] = [], leading: [PropertyDeclaration] = [], _ properties: [PropertyDeclaration]) {
+				var properties = properties
+				for index in properties.indices.reversed() {
+					properties.swapAt(index, twinRandom.integer(in: 0...index))
+				}
+				declarations.append(TypeDeclaration(
+					name: "\(prefix)\(name)",
+					instantiableArguments: (isRoot ? ["isRoot: true"] : []) + arguments,
+					properties: leading + properties,
+					declaresHelperTypes: false,
+					additionalConformances: conformances,
+				))
+			}
+			let instantiator = isSendable ? "SendableInstantiator" : "Instantiator"
+			let lazyWrapper = isSendable ? "SendableLazilyInstantiated" : "LazilyInstantiated"
+			let modelName = "\(prefix)TwinModel"
+			let valueModel = PropertyDeclaration(attribute: "@Instantiated", label: "twinModel", type: modelName)
+			let lazyModel = PropertyDeclaration(attribute: "@Instantiated", label: "twinModel", type: "\(lazyWrapper)<\(modelName)>")
+			let valueFirst = twinRandom.percentChance(50)
+			let screen = PropertyDeclaration(attribute: "@Instantiated", label: "twinScreen", type: "\(prefix)TwinScreen")
+			let secondBuilder = PropertyDeclaration(attribute: "@Instantiated", label: "twinSecondBuilder", type: "\(instantiator)<\(prefix)TwinSecond>")
+			let screenReceive = twinRandom.percentChance(70)
+				? PropertyDeclaration(attribute: "@Received", label: "twinModel", type: modelName)
+				: PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "twinModel", type: modelName + "?")
+			let buildsPanel = twinRandom.percentChance(40)
+			let firstBuiltThroughInstantiator = twinRandom.percentChance(50)
+			let rootOpensSecond = twinRandom.percentChance(40)
+			// Two rolls of their own: four graphs in ten give both parents a declaration of `twinTheme` in one form, by value,
+			// which `TwinModel`, the twins' type, receives, so each twin reads its own parent's theme; of the rest, four in
+			// ten declare it by value on `TwinFirst` and as the lazy wrapper on `TwinSecond`, so the twins read it in two
+			// forms. Where the lazy twin is a `SendableLazilyInstantiated`, one graph in five draws the one form and the rest
+			// the two forms, so that enough graphs read a label in two forms inside a `@Sendable` builder.
+			let themeInSameForm = twinRandom.percentChance(isSendable ? 20 : 40)
+			let themeInMixedForms = twinRandom.percentChance(isSendable ? 100 : 40) && !themeInSameForm
+			let readsTheme = themeInSameForm || themeInMixedForms
+			let themeName = "\(prefix)TwinTheme"
+			let valueTheme = PropertyDeclaration(attribute: "@Instantiated", label: "twinTheme", type: themeName)
+			let firstTheme = readsTheme ? [valueTheme] : []
+			let secondTheme = themeInMixedForms
+				? [PropertyDeclaration(attribute: "@Instantiated", label: "twinTheme", type: "\(lazyWrapper)<\(themeName)>")]
+				: firstTheme
+			append("TwinFirst", leading: firstTheme, [valueFirst ? valueModel : lazyModel, screen])
+			append("TwinSecond", leading: secondTheme, [valueFirst ? lazyModel : valueModel, screen])
+			append("TwinModel", [secondBuilder] + (readsTheme ? [PropertyDeclaration(attribute: "@Received", label: "twinTheme", type: themeName)] : []))
+			if readsTheme {
+				append("TwinTheme", [])
+			}
+			append("TwinScreen", [screenReceive] + (buildsPanel ? [PropertyDeclaration(attribute: "@Instantiated", label: "twinPanel", type: "\(prefix)TwinPanel")] : []))
+			if buildsPanel {
+				append("TwinPanel", [PropertyDeclaration(attribute: "@Received", label: "twinModel", type: modelName)])
+			}
+			var treeProperties = [firstBuiltThroughInstantiator
+				? PropertyDeclaration(attribute: "@Instantiated", label: "twinFirstBuilder", type: "\(instantiator)<\(prefix)TwinFirst>")
+				: PropertyDeclaration(attribute: "@Instantiated", label: "twinFirst", type: "\(prefix)TwinFirst")]
+			if rootOpensSecond {
+				treeProperties.append(secondBuilder)
+			}
+			if drawsSeam {
+				append("TwinSeam", arguments: ["generateDependencyTree: true"], treeProperties)
+				append("TwinRoot", isRoot: true, [PropertyDeclaration(attribute: "@Instantiated", label: "twinSeam", type: "\(prefix)TwinSeam")])
+			} else {
+				append("TwinRoot", isRoot: true, treeProperties)
+			}
+			return declarations
+		}
+
+		private static let twinRandomSeedMask: UInt64 = 0x5477696E53686172
+
+		// MARK: Readers of a renamed lazy instance
+
+		/// The base corpus's draw, in one graph of eight, of a choice between declarations of one type, decided by where
+		/// each is declared. `RenamedLazyTop`, a root, instantiates a lazily instantiated `RenamedLazyValue` and
+		/// `RenamedLazyOwner`, which renames it under six labels and instantiates `RenamedLazyReader`, which receives
+		/// the instance under every one of them, in an order drawn apart from the labels'. So creating `RenamedLazyTop`
+		/// creates the value, and the warning that says so names the reader's receive declared first
+		/// (`InstantiationAnalysis`' `recordReads(whileCreating:)`), never the first label. The multi-module partition
+		/// puts the reader in a module beneath the root's when it splits the tree, where a run over module info files that
+		/// store positions apart reads the receives' places by their order in the reader's file alone, and must name the
+		/// same one (`SplitPositionsRun`). `renamedLazyReaderRandom` draws only for this pass, after every other, and only
+		/// in the base corpus.
+		private mutating func addingReadersOfRenamedLazyInstance(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			guard features.isEmpty, renamedLazyReaderRandom.percentChance(12) else { return declarations }
+			var declarations = declarations
+			// Six, so that a choice made in any other order than the reader's declarations' differs on nearly every run.
+			let labels = ["renamedLazyFirst", "renamedLazySecond", "renamedLazyThird", "renamedLazyFourth", "renamedLazyFifth", "renamedLazySixth"]
+			var readOrder = Array(labels)
+			for index in readOrder.indices.dropLast() {
+				readOrder.swapAt(index, renamedLazyReaderRandom.integer(in: index...(readOrder.count - 1)))
+			}
+			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
+			func append(_ name: String, isRoot: Bool = false, _ properties: [PropertyDeclaration]) {
+				declarations.append(TypeDeclaration(
+					name: name,
+					instantiableArguments: isRoot ? ["isRoot: true"] : [],
+					properties: properties,
+					declaresHelperTypes: false,
+					additionalConformances: conformances,
+				))
+			}
+			let valueName = "\(prefix)RenamedLazyValue"
+			let wrapped = "\(lazilyInstantiatedWrapper(isSendable: sendability == .sendable))<\(valueName)>"
+			append(valueName, [])
+			append("\(prefix)RenamedLazyReader", readOrder.map { PropertyDeclaration(attribute: "@Received", label: $0, type: valueName) })
+			append("\(prefix)RenamedLazyOwner", labels.map {
+				PropertyDeclaration(attribute: "@Received(fulfilledByDependencyNamed: \"renamedLazyValue\", ofType: \(wrapped).self)", label: $0, type: wrapped)
+			} + [PropertyDeclaration(attribute: "@Instantiated", label: "renamedLazyReader", type: "\(prefix)RenamedLazyReader")])
+			// The value, the reader and the owner come first, and the root last, so that the multi-module partition, which
+			// deals the files out to modules in that order, puts the reader in a module beneath the root's wherever it
+			// makes more than one.
+			declarations = declarations.suffix(3) + declarations.dropLast(3)
+			append("\(prefix)RenamedLazyTop", isRoot: true, [
+				PropertyDeclaration(attribute: "@Instantiated", label: "renamedLazyValue", type: wrapped),
+				PropertyDeclaration(attribute: "@Instantiated", label: "renamedLazyOwner", type: "\(prefix)RenamedLazyOwner"),
+			])
+			return declarations
+		}
+
+		private static let renamedLazyReaderRandomSeedMask: UInt64 = 0x52656E4C617A79
 
 		// MARK: A rename fulfilled by a value and by a wrapper
 
@@ -11593,6 +11823,19 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 	/// A type declared with `generateDependencyTree: true`, whose tree SafeDI generates in an initializer of its own
 	/// that every tree reaching it calls. Drawn only with the `generateDependencyTree` generator feature on; what its
 	/// initializer takes is a `GraphFuzzerSeamOutputFeature`, read from the generated code.
+	/// Twins over a shared screen in a root's own tree (`addingTwinsOverSharedScreen`), one case per `TwinShape` the base
+	/// corpus draws.
+	case twinsOverSharedScreen
+	case twinsOverSharedScreenValueFirst
+	case twinsOverSharedScreenWrapperFirst
+	case twinsOverSharedScreenSendableWrapper
+	case twinsOverSharedScreenScreenReceivesOnlyIfAvailable
+	case twinsOverSharedScreenScreenBuildsPanel
+	case twinsOverSharedScreenFirstThroughInstantiator
+	case twinsOverSharedScreenTopOpensSecond
+	case twinsOverSharedScreenThemeInSameForm
+	case twinsOverSharedScreenThemeInMixedForms
+	case twinsOverSharedScreenThemeInMixedFormsInsideSendableBuilder
 	case generateDependencyTree
 
 	/// The features only a graph drawn with the `generateDependencyTree` generator feature has.
@@ -11601,6 +11844,24 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 	/// The features a graph drawn without any generator feature can have, which the smoke batch must exercise.
 	static var baseCases: [GraphFuzzerFeature] {
 		allCases.filter { !seamCases.contains($0) }
+	}
+
+	/// The feature of the base corpus that `shape` is, where a root's own tree holds the twins.
+	static func twinsOverSharedScreen(_ shape: TwinShape) -> GraphFuzzerFeature? {
+		switch shape {
+		case .drawn: .twinsOverSharedScreen
+		case .valueFirst: .twinsOverSharedScreenValueFirst
+		case .wrapperFirst: .twinsOverSharedScreenWrapperFirst
+		case .sendableWrapper: .twinsOverSharedScreenSendableWrapper
+		case .screenReceivesOnlyIfAvailable: .twinsOverSharedScreenScreenReceivesOnlyIfAvailable
+		case .screenBuildsPanel: .twinsOverSharedScreenScreenBuildsPanel
+		case .firstThroughInstantiator: .twinsOverSharedScreenFirstThroughInstantiator
+		case .topOpensSecond: .twinsOverSharedScreenTopOpensSecond
+		case .themeInSameForm: .twinsOverSharedScreenThemeInSameForm
+		case .themeInMixedForms: .twinsOverSharedScreenThemeInMixedForms
+		case .themeInMixedFormsInsideSendableBuilder: .twinsOverSharedScreenThemeInMixedFormsInsideSendableBuilder
+		case .inSeam: nil
+		}
 	}
 
 	static func < (lhs: GraphFuzzerFeature, rhs: GraphFuzzerFeature) -> Bool {
@@ -12255,6 +12516,10 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		if !mockOnlyExtendedTypeNames.intersection(productionTypeNames).isDisjoint(with: receivedTypes) {
 			features.insert(.mockOnlyExtensionOfReceivedType)
 		}
+		let twinShapes = TwinShape.shapes(of: fixture)
+		if !twinShapes.contains(.inSeam) {
+			features.formUnion(twinShapes.compactMap(GraphFuzzerFeature.twinsOverSharedScreen))
+		}
 		return features
 	}
 
@@ -12872,6 +13137,7 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 				}
 			}
 		}
+		features.formUnion(TwinShape.shapes(of: fixture).map(GraphFuzzerSeamDrawFeature.twinsOverSharedScreen))
 		return features
 	}
 
@@ -14291,7 +14557,7 @@ enum GraphFuzzerSourceLine: Equatable {
 			if line.hasPrefix("@Instantiable") {
 				parsedLine = .instantiableAttribute(arguments: String(line.dropFirst("@Instantiable".count)))
 			} else if previousLineWasInstantiableAttribute, let declaration = droppingAccessModifier(from: line), let keyword = ["final class ", "actor "].first(where: { declaration.hasPrefix($0) }) {
-				// Only `addingActorArgumentShapes` draws an actor, so reading one changes no other graph's files or model.
+				// Only `addingActorArgumentShapes` and `addingActorAndClassBuildingSameWrapper` draw an actor, so reading one changes no other graph's files or model.
 				let name = declaration.dropFirst(keyword.count).prefix { $0.isLetter || $0.isNumber || $0 == "_" }
 				parsedLine = .typeDeclaration(name: String(name))
 			} else if previousLineWasInstantiableAttribute, let declaration = droppingAccessModifier(from: line), declaration.hasPrefix("extension ") {

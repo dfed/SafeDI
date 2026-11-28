@@ -4109,7 +4109,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// string or a `fulfillingAdditionalTypes:` entry, or as what a mock promotes for such a property, and, in a mock, by
 	/// calling a hand-written mock another module merges in. The code generated for the tree names each, while no
 	/// declaration of the property does, so no file SafeDI read need import its module. A root's file takes its imports
-	/// from its world's declarations instead (`TypeFactsImports`), which the tests compare with this walk of its tree.
+	/// from its world's declarations instead (`TypeFactsImports`), a mock root's beside what lies outside them
+	/// (`fulfillersOfMockOutsideTree(mockDefaults:)`), and the tests compare those with this walk of its tree.
 	/// - Parameter buildingMock: Whether the tree is a mock's, which builds a type with its hand-written mock.
 	func fulfillersOfTree(buildingMock: Bool) async -> Set<FulfillerImports.Fulfiller> {
 		var fulfillers = Set<FulfillerImports.Fulfiller>()
@@ -4146,12 +4147,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		GenerationWork.record(visitCount, by: .collectingTypesOfATree)
 	}
 
-	/// The types a mock rooted at this scope names that its declarations do not: those its tree builds, those a flat
-	/// parameter of `mock()` defaults to, which no scope of the tree builds, and the type it extends, which a mock listed
-	/// in `additionalMocksToGenerate` extends from another module.
+	/// The types a mock rooted at this scope names that its world's declarations do not: those a flat parameter of
+	/// `mock()` defaults to, which no scope of the tree builds, and the type it extends, which a mock listed in
+	/// `additionalMocksToGenerate` extends from another module. Those its tree builds are its world's
+	/// (`TypeFactsImports(root:buildingMock:)`).
 	/// - Parameter mockDefaults: The hand-written mock a flat parameter of each type defaults to.
-	func fulfillersOfMock(mockDefaults: [TypeDescription: FlatParameterMockDefault]) async -> Set<FulfillerImports.Fulfiller> {
-		var fulfillers = await fulfillersOfTree(buildingMock: true)
+	func fulfillersOfMockOutsideTree(mockDefaults: [TypeDescription: FlatParameterMockDefault]) -> Set<FulfillerImports.Fulfiller> {
+		var fulfillers = Set<FulfillerImports.Fulfiller>()
 		guard case let .root(instantiable, _) = scopeData else { return fulfillers }
 		if let fulfiller = FulfillerImports.Fulfiller(instantiable: instantiable) {
 			fulfillers.insert(fulfiller)
@@ -7178,7 +7180,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			node: PlanNode(),
 		)
 		record.callFields = CallFields(
-			leadingStatement: .callGuard(seamCall.callGuard(for: instantiable.concreteInstantiable)),
+			leadingStatement: seamCall.callGuard(for: instantiable.concreteInstantiable),
 			closureArguments: closureArguments,
 			builtClosures: builtClosures,
 		)
@@ -7187,16 +7189,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// The text declares the call's dispatchers and fills, whose names and reads the record does not hold yet.
 			readNames: nil,
 			boundNames: nil,
-			spelledFromRecord: (record.leadingStatement?.spelledLines ?? []) + spelledArguments,
+			spelledFromRecord: (record.leadingStatement.map { [$0.spelled] } ?? []) + spelledArguments,
 			written: [seamCall.guardLine(for: instantiable.concreteInstantiable)] + builderCallArguments.map { "\($0.label): \($0.value)" },
 		))
 	}
 
 	/// The record of this scope's place where it calls another module's seam and is built by value: its text, with the reads
-	/// of the call's arguments, or `nil` where the type key does not plan it. A builder's forwarded values are bound inside its
-	/// text, so a read of one of `forwardedProperties`' labels is no read outside it. Where a test observes it
-	/// (`SeamCallRecordObservation`) and the call forwards nothing, the place's record as the engine is to spell it is handed
-	/// to the test beside its text.
+	/// of the call's arguments, or `nil` where the type key does not plan it. Where a test observes it
+	/// (`SeamCallRecordObservation`), the place's record as the engine is to spell it is handed to the test beside its text.
+	/// A builder's forwarded values are bound inside its text, so a read of one of `forwardedProperties`' labels is no read
+	/// outside it; only a call that forwards nothing is observed or spelled by the engine in place.
 	nonisolated private func seamCallRecord(
 		of property: Property,
 		instantiable: Instantiable,
@@ -7213,7 +7215,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		inPlaceStatements: (before: [GeneratedCode], after: [GeneratedCode])?,
 		lineEnd: String,
 	) throws(Initializer.GenerationError) -> PlaceRecord? {
-		if SeamCallRecordObservation.observer != nil {
+		if SeamCallRecordObservation.observer != nil, forwardedProperties.isEmpty {
 			try observeFilledCall(of: property, instantiable: instantiable, seamCall: seamCall, erasedToConcreteExistential: erasedToConcreteExistential, code: code, unavailableProperties: unavailableProperties, builderFunctionNames: builderFunctionNames, inlinePlaceBuilder: inlinePlaceBuilder)
 		}
 		guard isPlannedByTypeKey(builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings, separatesValuesBindings: separatesValuesBindings),
@@ -7274,14 +7276,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				node: PlanNode(),
 			)
 			record.callFields = CallFields(
-				leadingStatement: .callGuard(seamCall.callGuard(for: instantiable.concreteInstantiable)),
+				leadingStatement: seamCall.callGuard(for: instantiable.concreteInstantiable),
 				closureArguments: passedOn.map { ClosureArgumentEntry(label: $0.label, value: .passedOn($0.read)) },
 			)
 			observer(SeamCallRecordObservation(
 				text: text,
 				readNames: record.arguments.filter { $0.source != .nil }.map(\.label) + passedOn.map(\.structName),
 				boundNames: [property.label] + (declaredFunctionName.map { [$0] } ?? []),
-				spelledFromRecord: (record.leadingStatement?.spelledLines ?? []) + passedOn.map { "\($0.label): \($0.read.member.spelled(on: $0.structName, caseName: $0.read.caseName))" },
+				spelledFromRecord: (record.leadingStatement.map { [$0.spelled] } ?? []) + passedOn.map { "\($0.label): \($0.read.member.spelled(on: $0.structName, caseName: $0.read.caseName))" },
 				written: [seamCall.guardLine(for: instantiable.concreteInstantiable)] + passedOn.map(\.written),
 			))
 		}
@@ -7291,7 +7293,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// A call that reaches no root function, outside a loop of builders, is spelled by the engine from its record where
 		// its text is written: the guard line, and a construction that hands each builder the member of the struct it
 		// passes up.
-		if let inPlaceStatements, rootFunctionNames.isEmpty, reboundProperties.isEmpty, let declaredFunctionName {
+		if let inPlaceStatements, rootFunctionNames.isEmpty, reboundProperties.isEmpty, forwardedProperties.isEmpty, let declaredFunctionName {
 			var arguments = argumentReads
 			var argumentValues = [Int: ValuePath]()
 			var closureArguments = [ClosureArgumentEntry]()
@@ -7335,7 +7337,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				callRecord.argumentValues = argumentValues
 			}
 			callRecord.callFields = CallFields(
-				leadingStatement: .callGuard(seamCall.callGuard(for: instantiable.concreteInstantiable)),
+				leadingStatement: seamCall.callGuard(for: instantiable.concreteInstantiable),
 				closureArguments: closureArguments,
 			)
 			record.call = InPlaceCall(
@@ -7949,14 +7951,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			generatedProperties.append(.rootFunction(record))
 		}
 		if let publicMockLevelFunctions {
-			generatedProperties += publicMockLevelFunctions.declarations(
-				indent: leadingMemberWhitespace,
+			generatedProperties += publicMockLevelFunctions.records(
 				sendableKeys: sendableFillKeys,
 				inlinedFills: body.inlinedFills,
 				fillsTakingPayloadFields: body.fillsTakingPayloadFields,
 				fillMemberParameterFieldsByKey: body.fillParametersByKey,
 				typesDeclaredEscaping: typesDeclaredEscaping,
-			).map(GeneratedCode.text)
+			).declarations(indent: leadingMemberWhitespace, inlinedFillBodies: body.inlinedFills.mapValues(\.body)).map(GeneratedCode.text)
 		}
 		return generatedProperties
 	}
@@ -9178,6 +9179,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					fillPlaceBindings: fillPlaceBindings,
 				) : nil
 			} else if let seamCall {
+				// A seam call's forwarded values are bound inside its text, which lists only the reads outside it.
 				try seamCallRecord(of: property, instantiable: instantiable, seamCall: seamCall, erasedToConcreteExistential: erasedToConcreteExistential, forwardedProperties: forwardedProperties, code: code, declaredFunctionName: functionName, unavailableProperties: unavailableProperties, builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings, inlinePlaceBuilder: inlinePlaceBuilder, separatesValuesBindings: separatesValuesBindings, inPlaceStatements: nil, lineEnd: constructionLineEnd)
 			} else {
 				try builtRecord(functionName: functionName, hasFunction: true, rebindings: rebindingLines)

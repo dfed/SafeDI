@@ -456,7 +456,7 @@ extension DependencyTreeGenerator {
 			promotedScopesValidatedForHiddenReceives: &promotedScopesValidatedForHiddenReceives,
 			scopesWithValidatedDeclarations: &scopesWithValidatedDeclarations,
 			constructionMemo: &constructionMemo,
-		)
+		).generator
 		return await Self.ownPublicMockPlan(of: instantiable, mockRoot: mockRoot, mockDefaults: mockScopes.flatParameterMockDefaults, publicMockContext: publicMockContext)
 	}
 

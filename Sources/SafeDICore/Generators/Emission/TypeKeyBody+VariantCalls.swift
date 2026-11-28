@@ -105,8 +105,8 @@ enum TypeKeyRefusal: Error, Hashable, Sendable {
 	case loopWrittenOnce
 	/// A function has no place every call of it sees (`computePlacement`).
 	case functionNotPlaced
-	/// A function declared as the path key declares a loop member captures a statement bound after it
-	/// (`keepsCapturesOfLoopMembersDeclaredAsThePathKeyDoes`).
+	/// A loop member declared as the path key declares it calls a function that captures what the root binds after its
+	/// statement (`keepsCapturesOfLoopMembersDeclaredAsThePathKeyDoes`).
 	case loopMemberCapturesLaterBinding
 	/// No one type takes what every call of a function passes for a label (`computeParameterTypes`).
 	case parameterHasNoType

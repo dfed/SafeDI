@@ -46,7 +46,6 @@ enum TypeKeyBody {
 	/// path key nests it. It applies only where the path key writes each loop once, and exists
 	/// so that a root laid out from node records writes the path key's bytes where the path key keeps 2.4.0's form for a
 	/// loop; once the records place functions themselves, placement comes from them and this goes.
-	/// `nodeFacts` holds what the layout reads of the plan nodes the root shares with other roots, worked out once for them.
 	static func statements(
 		ofRootBody rootBody: [GeneratedCode],
 		outerDeclarations: [Property] = [],
@@ -54,10 +53,8 @@ enum TypeKeyBody {
 		rootPassedArgumentNames: Set<String> = [],
 		laysOutEveryLoop: Bool = false,
 		declaresLoopMembersAsThePathKeyDoes: Bool = false,
-		nodeFacts: NodeLayoutFacts = .none,
 	) -> [GeneratedCode]? {
 		var layout = TypeKeyLayout()
-		layout.nodeFacts = nodeFacts
 		layout.declareOuter(outerDeclarations)
 		layout.namesInScope = namesInScope.union(rootPassedArgumentNames)
 		layout.rootPassedArgumentNames = rootPassedArgumentNames
@@ -91,8 +88,7 @@ enum TypeKeyBody {
 
 	/// `rootBody` laid out by `layout`, which holds the declarations before it and the variants its call places call, or
 	/// the stage of the layout that kept the path key's body. Where `laysOutEveryLoop` holds, a loop of builders the path key
-	/// writes once is laid out too, and where `declaresLoopMembersAsThePathKeyDoes` holds, its members are declared as
-	/// `statements(ofRootBody:…)` says.
+	/// writes once is laid out too.
 	private static func layOut(_ rootBody: [GeneratedCode], in layout: inout TypeKeyLayout, laysOutEveryLoop: Bool = false, declaresLoopMembersAsThePathKeyDoes: Bool = false) -> Result<[GeneratedCode], TypeKeyRefusal> {
 		// The root functions the plan's places call are declared once, before every statement, as the path key declares
 		// them (`RootFunctionHoisting`); a root that keeps one in place keeps the path key's body, since the type key spells
@@ -310,8 +306,6 @@ struct TypeKeyLayout {
 	var postOrder = [Int]()
 	/// The domain of each plan node the walk reached.
 	var domainsByNode = [PlanNode: Domain]()
-	/// The facts of the plan nodes the root shares with other roots, which `domain(of:)` reads rather than computes.
-	var nodeFacts = NodeLayoutFacts.none
 	/// The functions the statements of each body the walk has reached declare, by name, the first of each name: where a
 	/// closer's function is resolved (`resolvedFunction(named:from:)`), in one look-up per enclosing body rather than a scan
 	/// of its statements, which a wide body of a cycle would repeat for each of its statements.

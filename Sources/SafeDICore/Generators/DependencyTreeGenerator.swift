@@ -353,7 +353,13 @@ public actor DependencyTreeGenerator {
 		// root's scope once its tree is built.
 		let trees = try await buildsDependencyTrees
 			? RootScopeInfo.$keepsRootScopes.withValue(request.namesNodeRecordRefusals) {
-				try await dependencyTrees(unreadTypeComment: publicMockContext?.unreadTypeComment, ownAccessProof: ownAccessProof, readersOfEveryTree: request.generatesDOTTree ? [.reader(.dotGraph)] : [], plansCyclesPerType: request.generatesDependencyTrees, drawsTrees: request.generatesDOTTree)
+				try await dependencyTrees(
+					unreadTypeComment: publicMockContext?.unreadTypeComment,
+					ownAccessProof: ownAccessProof,
+					plansCyclesPerType: request.generatesDependencyTrees,
+					drawsTrees: request.generatesDOTTree,
+					readersOfEveryTree: request.generatesDOTTree ? [.reader(.dotGraph)] : [],
+				)
 			}
 			: nil
 		// The checks run in this task, not the one that plans the code: their walks are as deep as the trees, and a task
@@ -429,7 +435,7 @@ public actor DependencyTreeGenerator {
 			inTreesRootedAt: roots.compactMap(\.scopeGenerator),
 			callerModule: seams.currentModule,
 		)
-		try await validateSendableBuildersCaptureNoNonSendableWrapper(inTreesRootedAt: roots.compactMap { root in root.scopeGenerator.map { (root.instantiable, $0) } })
+		try await validateSendableBuildersCaptureNoNonSendableWrapper(inTreesRootedAt: roots.compactMap(\.tree))
 		await observePlanCaptures(of: roots)
 		try await validateNoSeamTierOmitsProvidedValue(inTreesRootedAt: roots)
 	}
@@ -450,35 +456,58 @@ public actor DependencyTreeGenerator {
 			) { taskGroup in
 				for rootInfo in rootScopeGenerators {
 					taskGroup.addTask {
-						let code = try await Self.plannedRootCode(of: rootInfo, declaredTypeNames: declaredTypeNames)
-						// The fold's imports, found where the tree was built, are compared with the walk of the tree emitted,
-						// which for a seam whose first signature pass settled is that pass's tree made again.
-						if let observer = TypeFactsImportsObservation.comparesWalk, let tree = rootInfo.observedTree {
-							let walkedFulfillers = await GenerationWork.$observer.withValue(nil) {
-								await tree.fulfillersOfTree(buildingMock: false)
+						// The imports are the root's union fact, read from its declarations where its tree was built, not from
+						// its generator tree.
+						let fulfillers = rootInfo.fulfillers
+						switch rootInfo.built {
+						case .tree, .nodeRecords:
+							let code = try await Self.plannedRootCode(of: rootInfo, declaredTypeNames: declaredTypeNames)
+							if let observer = TypeFactsImportsObservation.comparesWalk, let tree = rootInfo.observedTree {
+								let walkedFulfillers = await GenerationWork.$observer.withValue(nil) {
+									await tree.fulfillersOfTree(buildingMock: false)
+								}
+								observer(TypeFactsImportsComparison(root: rootInfo.typeDescription.asSource, foldedFulfillers: fulfillers, walkedFulfillers: walkedFulfillers))
 							}
-							observer(TypeFactsImportsComparison(root: rootInfo.typeDescription.asSource, foldedFulfillers: rootInfo.fulfillers, walkedFulfillers: walkedFulfillers))
-						}
-						if let observer = TypeFactsReceivedValueSuppliesObservation.comparesWalk, let tree = rootInfo.observedTree, let folded = rootInfo.receivedValueSupplies {
-							await GenerationWork.$observer.withValue(nil) {
-								// A tree `generate` plans is built around no receive nothing provides, which the walk always judges.
-								let walked = await tree.receivedValueSupplies(
-									ofTreeRootedAt: rootInfo.instantiable,
-									unfulfilledReceives: ScopeGenerator.UnfulfilledReceives(locations: [], labels: []),
-								)
-								observer(TypeFactsReceivedValueSuppliesComparison(
-									root: rootInfo.typeDescription.asSource,
-									folded: folded,
-									walked: walked.map { ReceivedValueSupplies(supplies: $0.supplies.uniqued(), constructedTypes: $0.constructedTypes.uniqued()) },
-								))
+							if let observer = TypeFactsReceivedValueSuppliesObservation.comparesWalk, let tree = rootInfo.observedTree, let folded = rootInfo.receivedValueSupplies {
+								await GenerationWork.$observer.withValue(nil) {
+									// A tree `generate` plans is built around no receive nothing provides, which the walk always judges.
+									let walked = await tree.receivedValueSupplies(
+										ofTreeRootedAt: rootInfo.instantiable,
+										unfulfilledReceives: ScopeGenerator.UnfulfilledReceives(locations: [], labels: []),
+									)
+									observer(TypeFactsReceivedValueSuppliesComparison(
+										root: rootInfo.typeDescription.asSource,
+										folded: folded,
+										walked: walked.map { ReceivedValueSupplies(supplies: $0.supplies.uniqued(), constructedTypes: $0.constructedTypes.uniqued()) },
+									))
+								}
 							}
+							return PlannedRoot(
+								typeDescription: rootInfo.typeDescription,
+								sourceFilePath: rootInfo.sourceFilePath,
+								code: code,
+								fulfillers: fulfillers,
+							)
+						case let .perType(code, bodies):
+							if let observer = TypeFactsImportsObservation.comparesWalk {
+								// Each body's generator is the tree of one function, so the bodies together build what the root's tree
+								// builds. No tree per path is built here, so the received values are not compared with a walk's.
+								let walkedFulfillers = await GenerationWork.$observer.withValue(nil) {
+									var walkedFulfillers = Set<FulfillerImports.Fulfiller>()
+									for body in bodies {
+										await walkedFulfillers.formUnion(body.fulfillersOfTree(buildingMock: false))
+									}
+									return walkedFulfillers
+								}
+								observer(TypeFactsImportsComparison(root: rootInfo.typeDescription.asSource, foldedFulfillers: fulfillers, walkedFulfillers: walkedFulfillers))
+							}
+							return PlannedRoot(
+								typeDescription: rootInfo.typeDescription,
+								sourceFilePath: rootInfo.sourceFilePath,
+								code: code,
+								fulfillers: fulfillers,
+							)
 						}
-						return PlannedRoot(
-							typeDescription: rootInfo.typeDescription,
-							sourceFilePath: rootInfo.sourceFilePath,
-							code: code,
-							fulfillers: rootInfo.fulfillers,
-						)
 					}
 				}
 				var plannedRoots = [PlannedRoot]()
@@ -493,13 +522,14 @@ public actor DependencyTreeGenerator {
 		if let observer = HeldCodeTasks.observer {
 			for rootInfo in rootScopeGenerators {
 				switch rootInfo.built {
-				case let .tree(.perPath(scopeGenerator)):
+				case let .tree(scopeGenerator):
 					await observer(scopeGenerator.codeTasksHeldInTree())
-				case let .tree(.perType(_, bodies)):
+				case let .perType(_, bodies):
 					for body in bodies {
 						await observer(body.codeTasksHeldInTree())
 					}
 				case .nodeRecords:
+					// A root laid out from its node records holds no tree.
 					break
 				}
 			}
@@ -618,30 +648,21 @@ public actor DependencyTreeGenerator {
 		/// How a root's code is made.
 		enum Built: Sendable {
 			/// From its place tree.
-			case tree(Tree)
+			case tree(ScopeGenerator)
 			/// From its node records, where no `TreeForcer` holds. `comparisonTree` is the tree built beside them only
 			/// where a test observes node records, which compares the two (`plannedRootCode(of:declaredTypeNames:)`); a plain run builds
 			/// none.
 			case nodeRecords(NodeRecordsLayout, comparisonTree: ScopeGenerator?)
+			/// From the per-type plan of its cycles, as the type key laid it out, with the generator of each body of that plan,
+			/// the root's own first, whose children on a cycle are call places: a root whose tree per path passed
+			/// `scopeGeneratorLimitOfTodaysTree`.
+			case perType(code: GeneratedCode, bodies: [ScopeGenerator])
 		}
 
 		let typeDescription: TypeDescription
 		let instantiable: Instantiable
 		let sourceFilePath: String?
 		let built: Built
-		/// The root's tree per path where its code is laid out from its plan by type and the caller draws the trees.
-		var drawnTree: ScopeGenerator?
-
-		/// How a root's tree is built: once per path, as every tree was before a cyclic tree was planned per type, or once
-		/// per type.
-		enum Tree: Sendable {
-			/// The root's generator, whose tree holds a generator per place.
-			case perPath(ScopeGenerator)
-			/// The root's code as the type key laid it out of the per-type plan of its cycles, and the generator of each
-			/// body of that plan, the root's own first, whose children on a cycle are call places.
-			case perType(code: GeneratedCode, bodies: [ScopeGenerator])
-		}
-
 		/// The modules the root's file imports for the types its tree builds, the union over the declarations its tree is
 		/// built from (`TypeFactsImports`). Read where the tree is built, so that the table the root's scope is frozen
 		/// into, a copy of the module's frozen map, is freed with the build rather than kept for every root at once.
@@ -654,7 +675,7 @@ public actor DependencyTreeGenerator {
 		/// table is freed with the build. A production root, of a module with seams or without, or a seam's own root,
 		/// whose records a test only compares.
 		let rootScope: ConstructionScope?
-		/// For a seam's own tree, its root; `nil` for every other root.
+		/// For a seam's own tree, its root, held only where `rootScope` is; `nil` for every other root.
 		let ownSeamRoot: ScopeGenerator.SeamRoot?
 
 		/// Whether a root's scope is kept after its tree is built (`rootScope`): set where the run names what node records
@@ -696,6 +717,16 @@ public actor DependencyTreeGenerator {
 				self.seamRoot = seamRoot
 				seamType = seam.concreteInstantiable
 			}
+
+			/// How the seam's tree hands each inner seam's enum up from a call (`ScopeGenerator.SeamRoot.callRoutes`).
+			var callRoutes: [SeamSignature.CallRoute] {
+				seamRoot.callRoutes
+			}
+
+			/// The seam's holes, by path (`SeamHoles(of:seamType:)`).
+			func makeSeamHoles() -> SeamHoles {
+				SeamHoles(of: seamRoot, seamType: seamType)
+			}
 		}
 
 		/// For a seam's own tree, what node records read of it beside its world, worked out only where it is read; `nil` for
@@ -706,6 +737,8 @@ public actor DependencyTreeGenerator {
 
 		/// What made this run build the root's tree (`TreeForcer`); empty where it built none.
 		var treeForcers: [TreeForcer] = [.seamWorld]
+		/// The root's tree per path where its code is laid out from its plan by type and the caller draws the trees.
+		var drawnTree: ScopeGenerator?
 
 		init(typeDescription: TypeDescription, instantiable: Instantiable, sourceFilePath: String?, built: Built, fulfillers: Set<FulfillerImports.Fulfiller>, receivedValueSupplies: ReceivedValueSupplies?, rootScope: ConstructionScope?, ownSeamRoot: ScopeGenerator.SeamRoot? = nil, treeForcers: [TreeForcer] = [.seamWorld], drawnTree: ScopeGenerator? = nil) {
 			self.typeDescription = typeDescription
@@ -720,22 +753,12 @@ public actor DependencyTreeGenerator {
 			self.drawnTree = drawnTree
 		}
 
-		/// The root's place tree, where this run built one per path for its code.
+		/// The root's place tree, where this run built one for its code.
 		var scopeGenerator: ScopeGenerator? {
 			switch built {
-			case let .tree(.perPath(scopeGenerator)):
+			case let .tree(scopeGenerator):
 				scopeGenerator
-			case .tree(.perType), .nodeRecords:
-				nil
-			}
-		}
-
-		/// How the root's tree is built, where this run built one for its code.
-		var tree: Tree? {
-			switch built {
-			case let .tree(tree):
-				tree
-			case .nodeRecords:
+			case .nodeRecords, .perType:
 				nil
 			}
 		}
@@ -744,15 +767,18 @@ public actor DependencyTreeGenerator {
 		/// compares them.
 		var observedTree: ScopeGenerator? {
 			switch built {
-			case let .tree(.perPath(scopeGenerator)):
+			case let .tree(scopeGenerator):
 				scopeGenerator
-			case .tree(.perType):
-				// A root laid out from its per-type plan has no one place tree; its imports and received values are read
-				// from its per-type graph alone.
-				nil
 			case let .nodeRecords(_, comparisonTree):
 				comparisonTree
+			case .perType:
+				nil
 			}
+		}
+
+		/// The root and its place tree, where this run built one for its code.
+		var tree: (instantiable: Instantiable, scopeGenerator: ScopeGenerator)? {
+			scopeGenerator.map { (instantiable, $0) }
 		}
 	}
 
@@ -834,14 +860,14 @@ public actor DependencyTreeGenerator {
 	///     (`PublicMockContext.unreadTypeComment`).
 	///   - ownAccessProof: The proof of every type's access over the module's declarations, which the signatures of the
 	///     seams this module generates read (`ownAccessProof()`).
-	///   - readersOfEveryTree: What this run reads of every root's tree beside its code, which no root's node records stand
-	///     in for (`TreeForcer`).
 	///   - plansCyclesPerType: Whether a root whose tree per path passes `scopeGeneratorLimitOfTodaysTree` may be laid
-	///     out from its plan by type (`RootScopeInfo.Tree.perType`). `false` where the caller generates no code from
+	///     out from its plan by type (`RootScopeInfo.Built.perType`). `false` where the caller generates no code from
 	///     the trees: to draw the DOT graph alone, or to list what each receive is handed.
 	///   - drawsTrees: Whether the caller draws the trees, so a root laid out from its plan also keeps a tree per path
 	///     (`RootScopeInfo.drawnTree`). It decides nothing about any root's code.
-	func dependencyTrees(unreadTypeComment: UnreadTypeComment?, ownAccessProof: OwnAccessProof, readersOfEveryTree: [TreeForcer], plansCyclesPerType: Bool, drawsTrees: Bool = false) async throws -> DependencyTrees {
+	///   - readersOfEveryTree: What this run reads of every root's tree beside its code, which no root's node records stand
+	///     in for (`TreeForcer`).
+	func dependencyTrees(unreadTypeComment: UnreadTypeComment?, ownAccessProof: OwnAccessProof, plansCyclesPerType: Bool, drawsTrees: Bool = false, readersOfEveryTree: [TreeForcer]) async throws -> DependencyTrees {
 		// The trees of the foreign seams with holes, built inline with the fills this module generates.
 		var inlineForeignSeamTrees = [ScopeGenerator]()
 		var validatedScopes = Set<Scope>()
@@ -905,56 +931,15 @@ public actor DependencyTreeGenerator {
 				)
 				rootsOfOtherModules = rootScopesToGenerate.rootsOfOtherModules
 				var constructionMemo = ConstructionMemo()
-				// Each root is laid out from its node records where they stand in for its tree; every other root is built as
-				// in a run without them, per path or from its plan by type. The trees a test builds beside the node records,
-				// which keep a memo of their own, so that the trees a plain run builds share what they share without them.
-				var comparisonMemo = ConstructionMemo()
-				var roots = [RootScopeInfo?]()
-				var rootsBuiltAsTrees = [(index: Int, typeDescription: TypeDescription, scope: Scope, treeForcers: [TreeForcer])]()
-				for (typeDescription, scope) in rootScopesToGenerate.rootScopes {
-					let (table, record) = validatedWorld.frozenScopeMap.freezing(rootScope: scope)
-					let constructionScope = ConstructionScope(table: table, record: record)
-					let (layout, treeForcers) = Self.nodeRecordsLayout(of: scope.instantiable, constructionScope: constructionScope, declaredTypeNames: declaredTypeNames, readersOfEveryTree: readersOfEveryTree)
-					guard let layout else {
-						rootsBuiltAsTrees.append((index: roots.count, typeDescription: typeDescription, scope: scope, treeForcers: treeForcers))
-						roots.append(nil)
-						continue
-					}
-					func tree(memo: inout ConstructionMemo) throws -> ScopeGenerator {
-						try record.createScopeGenerator(
-							in: table,
-							lazilyInstantiatedInstanceProperties: [],
-							erasedToConcreteExistential: false,
-							declaredTypeNames: declaredTypeNames,
-							constructionMemo: &memo,
-						)
-					}
-					// The work of building it is no run's, so the tests that count a run's work count none of it.
-					let comparisonTree = try NodeRecordsObservation.observer == nil ? nil : GenerationWork.$observer.withValue(nil) { try tree(memo: &comparisonMemo) }
-					roots.append(RootScopeInfo(
-						typeDescription: typeDescription,
-						instantiable: scope.instantiable,
-						sourceFilePath: typeDescriptionToFulfillingInstantiableMap[typeDescription]?.sourceFilePath,
-						built: .nodeRecords(layout, comparisonTree: comparisonTree),
-						fulfillers: TypeFactsImports(root: constructionScope).fulfillers,
-						receivedValueSupplies: TypeFactsReceivedValueSupplies.whereRead(root: constructionScope),
-						rootScope: RootScopeInfo.kept(constructionScope),
-						treeForcers: treeForcers,
-					))
-				}
-				let trees = try await rootTrees(
-					of: rootsBuiltAsTrees.map { (typeDescription: $0.typeDescription, scope: $0.scope) },
+				rootScopeGenerators = try await rootTrees(
+					of: rootScopesToGenerate.rootScopes,
 					frozenScopeMap: validatedWorld.frozenScopeMap,
 					plansCyclesPerType: plansCyclesPerType,
 					drawsTrees: drawsTrees,
+					readersOfEveryTree: readersOfEveryTree,
 					constructionMemo: &constructionMemo,
 					cache: &receivedPropertiesCache,
 				)
-				for (rootBuiltAsTree, var tree) in zip(rootsBuiltAsTrees, trees) {
-					tree.treeForcers = rootBuiltAsTree.treeForcers
-					roots[rootBuiltAsTree.index] = tree
-				}
-				rootScopeGenerators = roots.compactMap(\.self)
 			} else {
 				let seamWorldRoots = try await seamWorldRootScopeGenerators(validatedWorld: validatedWorld, foreignSeamRoots: foreignSeamRoots, unreadTypeComment: unreadTypeComment, ownAccessProof: ownAccessProof, plansCyclesPerType: plansCyclesPerType, drawsTrees: drawsTrees)
 				rootsOfOtherModules = seamWorldRoots.rootsOfOtherModules
@@ -962,8 +947,8 @@ public actor DependencyTreeGenerator {
 				rootScopeGenerators = seamWorldRoots.roots
 			}
 		}
-		// A root planned per type holds no such label (`mayHaveUnpassableCycleLabel(inTreeOf:cache:)`), and a root laid out
-		// from its node records has no tree, and no cycle: node records refuse a world with one (`cycle`).
+		// A root planned per type holds no such label (`mayHaveUnpassableCycleLabel(inTreeOf:cache:)`).
+		// A root laid out from its node records has no tree, and no cycle: node records refuse a world with one (`cycle`).
 		try Self.validateCycleLabelsArePassable(inTreesRootedAt: rootScopeGenerators.compactMap(\.scopeGenerator) + inlineForeignSeamTrees)
 		for root in rootScopeGenerators {
 			GenerationLayerObservation.record(.dependencyTree(of: root.typeDescription), inRunOf: seams.currentModule.moduleName)
@@ -978,11 +963,15 @@ public actor DependencyTreeGenerator {
 	///   - plansCyclesPerType: Whether a root whose tree per path passes `scopeGeneratorLimitOfTodaysTree` may be laid
 	///     out from its per-type plan.
 	///   - drawsTrees: Whether a tree per path is built for a root laid out from its plan, to draw.
+	///   - readersOfEveryTree: What the run reads of every root's tree beside its code, where a root whose world node
+	///     records accept may be laid out from them (`nodeRecordsLayout`); `nil` in a module that holds a seam, whose
+	///     roots no run lays out from node records yet.
 	func rootTrees(
 		of rootScopes: [(typeDescription: TypeDescription, scope: Scope)],
 		frozenScopeMap: FrozenScopeMap,
 		plansCyclesPerType: Bool,
 		drawsTrees: Bool,
+		readersOfEveryTree: [TreeForcer]?,
 		constructionMemo: inout ConstructionMemo,
 		cache: inout ReceivedPropertiesCache,
 	) async throws -> [RootScopeInfo] {
@@ -990,6 +979,9 @@ public actor DependencyTreeGenerator {
 		var receivedPropertiesCache = cache
 		defer { cache = receivedPropertiesCache }
 		var roots = [RootScopeInfo]()
+		// The trees a test builds beside the node records of roots that need none, which keep a memo of their own,
+		// so that the trees a plain run builds share what they share without them.
+		var comparisonMemo = ConstructionMemo()
 		// A test that compares a root's plan with today's tree has both built for every root that reaches a cycle,
 		// but a test that sets a limit no tree passes, which counts the work of today's trees alone.
 		let comparesWithTodaysTree = Self.observesPerTypePlan
@@ -1006,6 +998,38 @@ public actor DependencyTreeGenerator {
 		let walksPlansForCaptures = namesNonSendableWrapperAndSendableBuilder
 		for (typeDescription, scope) in rootScopes {
 			let (table, record) = frozenScopeMap.freezing(rootScope: scope)
+			let constructionScope = ConstructionScope(table: table, record: record)
+			// A root whose world node records accept, and whose tree nothing forces, is laid out from them and builds no
+			// tree. Node records refuse a world with a cycle (`cycle`), so no such root has a plan by type.
+			var treeForcers: [TreeForcer] = [.seamWorld]
+			var nodeRecordsLayout: NodeRecordsLayout?
+			if let readersOfEveryTree {
+				(nodeRecordsLayout, treeForcers) = Self.nodeRecordsLayout(of: scope.instantiable, constructionScope: constructionScope, declaredTypeNames: declaredTypeNames, readersOfEveryTree: readersOfEveryTree)
+			}
+			if let nodeRecordsLayout {
+				// The work of building the tree a test compares is no run's, so the tests that count a run's work count
+				// none of it.
+				let comparisonTree = try NodeRecordsObservation.observer == nil ? nil : GenerationWork.$observer.withValue(nil) {
+					try record.createScopeGenerator(
+						in: table,
+						lazilyInstantiatedInstanceProperties: [],
+						erasedToConcreteExistential: false,
+						declaredTypeNames: declaredTypeNames,
+						constructionMemo: &comparisonMemo,
+					)
+				}
+				roots.append(RootScopeInfo(
+					typeDescription: typeDescription,
+					instantiable: scope.instantiable,
+					sourceFilePath: typeDescriptionToFulfillingInstantiableMap[typeDescription]?.sourceFilePath,
+					built: .nodeRecords(nodeRecordsLayout, comparisonTree: comparisonTree),
+					fulfillers: TypeFactsImports(root: constructionScope, buildingMock: false).fulfillers,
+					receivedValueSupplies: TypeFactsReceivedValueSupplies.whereRead(root: constructionScope),
+					rootScope: RootScopeInfo.kept(constructionScope),
+					treeForcers: treeForcers,
+				))
+			}
+			guard nodeRecordsLayout == nil else { continue }
 			// Today's tree, one generator per place, or `nil` where it passed the limit and was abandoned. A root within
 			// the limit is built, checked and generated exactly as before any root was planned by type. So is a root
 			// past it whose tree reaches no cycle or holds a shape outside the plan: the tree is built on, and nothing
@@ -1040,7 +1064,7 @@ public actor DependencyTreeGenerator {
 			let passedLimit = todaysTree == nil
 			// The root's code laid out from the per-type plan of its cycles, where today's tree was abandoned, the root
 			// has a plan and the type key lays it out.
-			var perTypeTree: RootScopeInfo.Tree?
+			var perTypeTree: RootScopeInfo.Built?
 			if passedLimit || comparesWithTodaysTree && scopeGeneratorLimit != .max {
 				var perPathReason: RootTreeChoiceObservation.PerPathReason?
 				var reachesCycle = false
@@ -1084,10 +1108,10 @@ public actor DependencyTreeGenerator {
 					rootTreeChoiceObserver?(scope.instantiable.concreteInstantiable.asSource, perPathReason)
 				}
 			}
-			let tree: RootScopeInfo.Tree
+			let built: RootScopeInfo.Built
 			var drawnTree: ScopeGenerator?
 			if passedLimit, let perTypeTree {
-				tree = perTypeTree
+				built = perTypeTree
 				if drawsTrees || comparesWithTodaysTree {
 					// The graph is drawn from a tree per path, whatever the root's code is laid out from, so the code is
 					// the same with and without a graph. A test that compares the plan with today's tree has the tree
@@ -1114,17 +1138,17 @@ public actor DependencyTreeGenerator {
 					constructionMemo: &constructionMemo,
 				)
 				todaysTree = scopeGenerator
-				tree = .perPath(scopeGenerator)
+				built = .tree(scopeGenerator)
 			}
-			let rootScope = ConstructionScope(table: table, record: record)
 			roots.append(RootScopeInfo(
 				typeDescription: typeDescription,
 				instantiable: scope.instantiable,
 				sourceFilePath: typeDescriptionToFulfillingInstantiableMap[typeDescription]?.sourceFilePath,
-				built: .tree(tree),
-				fulfillers: TypeFactsImports(root: rootScope).fulfillers,
-				receivedValueSupplies: TypeFactsReceivedValueSupplies.whereRead(root: rootScope),
-				rootScope: RootScopeInfo.kept(rootScope),
+				built: built,
+				fulfillers: TypeFactsImports(root: constructionScope, buildingMock: false).fulfillers,
+				receivedValueSupplies: TypeFactsReceivedValueSupplies.whereRead(root: constructionScope),
+				rootScope: RootScopeInfo.kept(constructionScope),
+				treeForcers: treeForcers,
 				drawnTree: drawnTree,
 			))
 			// Each scope the root reaches with its children on a cycle as call places, built only where a test compares

@@ -509,6 +509,9 @@ extension DependencyTreeGenerator {
 			frozenScopeMap: seamWorld.frozenScopeMap,
 			plansCyclesPerType: plansCyclesPerType,
 			drawsTrees: drawsTrees,
+			// A test compares the records of a seam world's production root with its tree's places, and no run lays it out
+			// from them until node records make a seam call (`NodeRecords`).
+			readersOfEveryTree: nil,
 			constructionMemo: &constructionMemo,
 			cache: &receivedPropertiesCache,
 		)
@@ -550,7 +553,7 @@ extension DependencyTreeGenerator {
 			} else {
 				let tree = try builtTree()
 				scopeGenerator = tree.generator
-				fulfillers = TypeFactsImports(root: tree.rootScope).fulfillers
+				fulfillers = TypeFactsImports(root: tree.rootScope, buildingMock: false).fulfillers
 				receivedValueSupplies = TypeFactsReceivedValueSupplies.whereRead(root: tree.rootScope)
 				rootScope = RootScopeInfo.kept(tree.rootScope)
 			}
@@ -560,11 +563,13 @@ extension DependencyTreeGenerator {
 				typeDescription: seam.concreteInstantiable,
 				instantiable: seam,
 				sourceFilePath: seam.sourceFilePath,
-				built: .tree(.perPath(scopeGenerator)),
+				built: .tree(scopeGenerator),
 				fulfillers: fulfillers,
 				receivedValueSupplies: receivedValueSupplies,
 				rootScope: rootScope,
-				ownSeamRoot: finalSeamRoot,
+				// Held only beside the root's scope, where node records are made of it: a run keeps a root's info for
+				// every seam, and holding each seam's root in it grew what a run of many seams allocates by about 1%.
+				ownSeamRoot: rootScope == nil ? nil : finalSeamRoot,
 			))
 		}
 		// The signature of each seam this module generates, sorted by seam, which its module info carries for the modules
@@ -1123,7 +1128,7 @@ extension DependencyTreeGenerator {
 						if skipsConfirmingPass, keepsFirstPassTrees, seamRoot != nil {
 							firstPassTree = SeamRootTree(
 								generator: generator,
-								fulfillers: TypeFactsImports(root: tree.rootScope).fulfillers,
+								fulfillers: TypeFactsImports(root: tree.rootScope, buildingMock: false).fulfillers,
 								receivedValueSupplies: TypeFactsReceivedValueSupplies.whereRead(root: tree.rootScope),
 								rootScope: RootScopeInfo.kept(tree.rootScope),
 							)

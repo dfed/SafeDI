@@ -79,17 +79,15 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_laysOutRootFromNodeRecords_whenTheRootBuildsNothing() async throws {
 		// A root whose tree's body holds nothing is compared at no place, so only a run that builds no tree for it reports it.
-		let (output, reports) = try await NodeRecordsObservation.$buildsNoTreeForAcceptedRoots.withValue(true) {
-			try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
-				try await executeSafeDIToolTest(swiftFileContent: [
-					"""
-					@Instantiable(isRoot: true)
-					public struct Root: Instantiable {
-					    public init() {}
-					}
-					""",
-				], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
-			}
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true)
+				public struct Root: Instantiable {
+				    public init() {}
+				}
+				""",
+			], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		}
 		#expect(output.generatedFiles == ["Root+SafeDI.swift": generatedFileHeader])
 		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
@@ -414,12 +412,13 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 		    }
 		}
 		"""])
-		// `Screen`'s own tree reads its deferred parameter through its memo, which node records read as its tree does; a
-		// seam's own tree is compared, not laid out.
+		// `Screen`'s own tree reads its deferred parameter through its memo, which a record would read from its variant's
+		// key; a seam's root's keys are not yet seeded from its parameters, so its world is refused as `lazy` until they
+		// are.
 		#expect(reports.map(\.root) == ["Screen", "Root"])
-		#expect(reports.map(\.refusal) == ["notLaidOut", nil])
+		#expect(reports.map(\.refusal) == ["lazy", nil])
 		#expect(reports.map(\.isLaidOutFromNodeRecords) == [false, true])
-		#expect(reports.map(\.recordCount) == [1, 2])
+		#expect(reports.map(\.recordCount) == [0, 2])
 		#expect(reports.flatMap(\.differences) == [])
 	}
 
@@ -519,10 +518,10 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_refusesWorldAsCallsAnswerAVariantApart_whenOneVariantsRenameReadsAValueUnderOneParentAndAWrapperUnderTheOther() async throws {
+	mutating func generate_laysOutRootFromNodeRecords_whenOneVariantsRenameReadsAValueUnderOneParentAndAWrapperUnderTheOther() async throws {
 		// `Reader` renames `x`, which `ValueParent` declares as an `X` and `LazyParent` as a `LazilyInstantiated<X>`: one
-		// variant whose rename is bound from the value under one parent and from the wrapper's instance under the other.
-		// Whichever parent the root builds first, the world keeps its tree.
+		// rename keyed by the form that answers it, so it has a variant beneath each parent, and each variant's record binds
+		// it as its own key says. Whichever parent the root builds first, the root is laid out from its records.
 		var everyRefusal = [[String]]()
 		for parents in [["lazyParent: LazyParent", "valueParent: ValueParent"], ["valueParent: ValueParent", "lazyParent: LazyParent"]] {
 			let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
@@ -622,10 +621,11 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 				"""
 			}
 			#expect(output.dependencyTreeFiles == ["Root+SafeDI.swift": expectedCode])
-			#expect(reports.map(\.refusal) == ["callsAnswerAVariantApart"])
+			#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
+			#expect(reports.flatMap(\.differences) == [])
 			everyRefusal += reports.map(\.everyRefusal)
 		}
-		#expect(everyRefusal == [["callsAnswerAVariantApart"], ["callsAnswerAVariantApart"]])
+		#expect(everyRefusal == [[], []])
 	}
 
 	@Test
@@ -814,9 +814,9 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_refusesMockWorldAsReadAnsweredTwoWays_whenTheMockRootsPinsRecordsAndBindingsAreOwed() async throws {
-		// The facts still owe every declaration of a mock root's world its pins, required-receive records and bindings
-		// (`mockRootPin`, `mockRootRecord`, `mockRootBinding`), which are set together.
+	mutating func generate_refusesMockWorldAsReadAnsweredTwoWays_whenTheMockRootsRecordsAndBindingsAreOwed() async throws {
+		// The facts still owe every declaration of a mock root's world its required-receive records and bindings
+		// (`mockRootRecord`, `mockRootBinding`), which are set together.
 		let (_, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
 			try await executeSafeDIToolTest(swiftFileContent: [
 				"""
@@ -845,11 +845,14 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 		// the static helpers of `ScopeGenerator` listed here are called, until they move: a new one is a decision. The
 		// generator's hook (`DependencyTreeGenerator+NodeRecords.swift`) also calls `rootInitializer(of:)`, and plans the
 		// tree beside the records for the comparison. A mock world's records (`NodeRecords+MockConstruction.swift`) read two
-		// more, both facts of one type: its default-valued parameters, and the name of the configuration it declares.
+		// more, both facts of one type: its default-valued parameters, and the name of the configuration it declares. A world
+		// with a cycle names a body's functions apart as the tree does (`identifierSafeNames`), from the labels and types of
+		// the places the body holds. A mock world with a cycle asks which edges its module's configurations leave out
+		// (`CycleEdge`), a fact of the module's types together that the world is made with until an edge fact holds it.
 		let directory = URL(fileURLWithPath: #filePath)
 			.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
 			.appendingPathComponent("Sources/SafeDICore/Generators/NodeRecords")
-		let staticHelpers: Set = ["functionName", "standardIndent", "provides", "referencingDeclaration", "aliasDeclaration", "isBuilder", "DefaultParameter", "mockConfigurationStructName"]
+		let staticHelpers: Set = ["functionName", "standardIndent", "provides", "referencingDeclaration", "aliasDeclaration", "isBuilder", "DefaultParameter", "mockConfigurationStructName", "identifierSafeNames", "CycleEdge"]
 		let files = try FileManager.default.contentsOfDirectory(atPath: directory.path).filter { $0.hasSuffix(".swift") && $0 != "DependencyTreeGenerator+NodeRecords.swift" }.sorted()
 		#expect(files.count >= 4)
 		for file in files {

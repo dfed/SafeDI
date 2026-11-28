@@ -38,9 +38,9 @@ public enum RootTreeChoiceObservation {
 		case holdsValueOnlyIfAvailable
 		/// A type of the root's tree holds a `@Sendable` function.
 		case holdsSendableFunction
-		/// A type of the root's tree receives, or renames, a builder by a label whose declaration builds a type that
-		/// reaches the receiver, which closes a loop of builders.
-		case receivesBuilderThatClosesLoop
+		/// A type of the root's tree declares a loop of builders: builders each of whose trees receives, or renames, the
+		/// next one's label, back to the first, or one builder whose tree receives its own.
+		case declaresLoopOfBuilders
 		/// The root's tree calls a seam's generated initializer or a public mock with a builder.
 		case buildsSeam
 		/// A type on a cycle of the root's tree receives a label that no type of its cycle declares, and that a type other
@@ -138,26 +138,6 @@ struct WrittenVariantPlan: TypeKeyVariantPlan {
 				return true
 			}
 			return false
-		}
-
-		/// Why the layout cannot write some call's argument yet, the first such reason among the calls: a member of a
-		/// loop of builders made again at the call (`Answer.declaredMadeAgainAtCall`), whose wrapper the layout does not
-		/// write. The instance of a lazily instantiated declaration (`Answer.instance`) is no reason: the function takes
-		/// the wrapper (`Answer.parameter(labeled:)`) and creates the instance where its body first reads it.
-		var argumentTheLayoutCannotWrite: RootTreeChoiceObservation.PerPathReason? {
-			for callsOfBody in calls {
-				for call in callsOfBody {
-					for argument in call.arguments {
-						switch argument {
-						case .declaredMadeAgainAtCall:
-							return .passesLoopMemberMadeAgainAtCall
-						case .none, .declared, .instance:
-							continue
-						}
-					}
-				}
-			}
-			return nil
 		}
 
 		/// The bodies of `plan` in `bodies`, each call of the body it calls by its position here, and each body's labels,

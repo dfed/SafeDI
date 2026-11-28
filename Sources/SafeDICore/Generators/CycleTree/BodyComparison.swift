@@ -35,9 +35,10 @@ extension DependencyTreeGenerator {
 	/// The per-type plan of the cycles of a production root, built with no tree of the root's built per path, for the type
 	/// key to lay the root's code out of; or why the root's tree is built per path: it reaches no cycle
 	/// (`nil`), its tree can hold a label no one parameter of a cycle's function can pass
-	/// (`mayHaveUnpassableCycleLabel(inTreeOf:cache:)`, whose error only a tree per path reports), the root has no plan,
-	/// or a call of the plan passes an argument the layout cannot write yet
-	/// (`WrittenVariantPlan.Unplanned.argumentTheLayoutCannotWrite`).
+	/// (`mayHaveUnpassableCycleLabel(inTreeOf:cache:)`, whose error only a tree per path reports), or the root has no
+	/// plan. No call of a plan passes a member of a loop of builders made again at the call
+	/// (`Answer.declaredMadeAgainAtCall`), which the layout cannot write yet: a root whose tree declares such a loop is
+	/// refused for its shape (`declaresLoopOfBuilders`).
 	static func perTypePlan(
 		ofRoot scope: Scope,
 		frozenScopeMap: FrozenScopeMap,
@@ -52,12 +53,7 @@ extension DependencyTreeGenerator {
 		guard !mayHaveUnpassableCycleLabel(inTreeOf: scope, cache: &cache) else { return .perPath(.mayHaveUnpassableCycleLabel) }
 		var bodies = VariantBodies(frozenScopeMap: frozenScopeMap, declaredTypeNames: declaredTypeNames, sharesConstructionMemo: true)
 		guard let shadow = CallPlaceShadow(root: scope, cache: &cache), let plan = try bodies.plan(ofRoot: scope, shadow: shadow, cache: &cache) else { return .perPath(.noPlan) }
-		let unplanned = WrittenVariantPlan.Unplanned(of: bodies, plan: plan)
-		if let reason = unplanned.argumentTheLayoutCannotWrite {
-			return .perPath(reason)
-		} else {
-			return .perType(unplanned)
-		}
+		return .perType(WrittenVariantPlan.Unplanned(of: bodies, plan: plan))
 	}
 
 	/// What `perTypePlan(ofRoot:frozenScopeMap:declaredTypeNames:cache:)` decides of a root that reaches a cycle.

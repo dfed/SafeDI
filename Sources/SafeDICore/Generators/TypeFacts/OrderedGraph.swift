@@ -18,9 +18,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-/// A directed graph over `Node`s in a fixed order: the nodes in the order a depth-first walk from the root, or from each
-/// root in turn, taking each node's edges in the order given, first reaches them, and each node's edges in that order,
-/// duplicates kept. A node is
+/// A directed graph over `Node`s in a fixed order: the nodes in the order a depth-first walk from the root, taking each
+/// node's edges in the order given, first reaches them, and each node's edges in that order, duplicates kept. A node is
 /// named by its position, a dense 32-bit ID. No `Set` or `Dictionary` order reaches a result: the one dictionary only
 /// finds a node's position while the graph is built and when a caller asks for one.
 ///
@@ -30,71 +29,18 @@
 struct OrderedGraph<Node: Hashable & Sendable>: Sendable {
 	/// Walks from `root`, asking `edges` once for each node, when the walk first reaches it.
 	init(root: Node, edges: (Node) -> [Node]) {
-		self.init(roots: [root], edges: edges)
-	}
-
-	/// Walks from each of `roots` in turn, asking `edges` once for each node, when the walk first reaches it: a forest
-	/// whose trees are the roots no earlier walk reached. A root an earlier walk reached starts no walk of its own, and
-	/// keeps the position and parent that walk gave it. `roots` holds at least one node.
-	init(roots: [Node], edges: (Node) -> [Node]) {
-		var nodes = [Node]()
-		var indexByNode = [Node: Int32]()
+		var nodes = [root]
+		var indexByNode = [root: Int32(0)]
 		// Each frame's targets are kept until it is finished, and then appended to the flat columns in node order below.
-		var targetsByNode = [[Int32]]()
-		var parentByNode = [Int32]()
+		var targetsByNode = [[Int32]()]
+		var parentByNode: [Int32] = [0]
 		// Tarjan's strongly connected components, in the same walk: a node's position is its discovery number.
-		var lowestReachedByNode = [Int32]()
-		var isOnComponentStack = [Bool]()
-		var componentStack = [Int32]()
-		var componentByNode = [Int32]()
+		var lowestReachedByNode: [Int32] = [0]
+		var isOnComponentStack = [true]
+		var componentStack: [Int32] = [0]
+		var componentByNode: [Int32] = [0]
 		var componentSizes = [Int32]()
-		var frames = [Frame]()
-		for root in roots where indexByNode[root] == nil {
-			// A root is its own parent: `firstRoute(to:)` stops there.
-			let rootIndex = Int32(nodes.count)
-			nodes.append(root)
-			indexByNode[root] = rootIndex
-			targetsByNode.append([])
-			parentByNode.append(rootIndex)
-			lowestReachedByNode.append(rootIndex)
-			isOnComponentStack.append(true)
-			componentStack.append(rootIndex)
-			componentByNode.append(0)
-			frames.append(Frame(node: rootIndex, edges: edges(root)))
-			Self.walk(frames: &frames, edges: edges, nodes: &nodes, indexByNode: &indexByNode, targetsByNode: &targetsByNode, parentByNode: &parentByNode, lowestReachedByNode: &lowestReachedByNode, isOnComponentStack: &isOnComponentStack, componentStack: &componentStack, componentByNode: &componentByNode, componentSizes: &componentSizes)
-		}
-		var edgeOffsets = [Int32]()
-		edgeOffsets.reserveCapacity(nodes.count + 1)
-		var edgeTargets = [Int32]()
-		edgeTargets.reserveCapacity(targetsByNode.reduce(0) { $0 + $1.count })
-		for targets in targetsByNode {
-			edgeOffsets.append(Int32(edgeTargets.count))
-			edgeTargets.append(contentsOf: targets)
-		}
-		edgeOffsets.append(Int32(edgeTargets.count))
-		self.nodes = nodes
-		self.indexByNode = indexByNode
-		self.edgeOffsets = edgeOffsets
-		self.edgeTargets = edgeTargets
-		self.parentByNode = parentByNode
-		self.componentByNode = componentByNode
-		self.componentSizes = componentSizes
-	}
-
-	/// The depth-first walk from the root on top of `frames`, until its frame is finished.
-	private static func walk(
-		frames: inout [Frame],
-		edges: (Node) -> [Node],
-		nodes: inout [Node],
-		indexByNode: inout [Node: Int32],
-		targetsByNode: inout [[Int32]],
-		parentByNode: inout [Int32],
-		lowestReachedByNode: inout [Int32],
-		isOnComponentStack: inout [Bool],
-		componentStack: inout [Int32],
-		componentByNode: inout [Int32],
-		componentSizes: inout [Int32],
-	) {
+		var frames = [Frame(node: 0, edges: edges(root))]
 		while let frame = frames.last {
 			let node = Int(frame.node)
 			if frame.nextEdge < frame.edges.count {
@@ -136,9 +82,25 @@ struct OrderedGraph<Node: Hashable & Sendable>: Sendable {
 				}
 			}
 		}
+		var edgeOffsets = [Int32]()
+		edgeOffsets.reserveCapacity(nodes.count + 1)
+		var edgeTargets = [Int32]()
+		edgeTargets.reserveCapacity(targetsByNode.reduce(0) { $0 + $1.count })
+		for targets in targetsByNode {
+			edgeOffsets.append(Int32(edgeTargets.count))
+			edgeTargets.append(contentsOf: targets)
+		}
+		edgeOffsets.append(Int32(edgeTargets.count))
+		self.nodes = nodes
+		self.indexByNode = indexByNode
+		self.edgeOffsets = edgeOffsets
+		self.edgeTargets = edgeTargets
+		self.parentByNode = parentByNode
+		self.componentByNode = componentByNode
+		self.componentSizes = componentSizes
 	}
 
-	/// The nodes in first-reach order: `nodes[0]` is the first root.
+	/// The nodes in first-reach order: `nodes[0]` is the root.
 	let nodes: [Node]
 
 	/// The strongly connected component of each node. Components are numbered in the order the walk completes them, so a
@@ -154,21 +116,15 @@ struct OrderedGraph<Node: Hashable & Sendable>: Sendable {
 		indexByNode[node].map(Int.init)
 	}
 
+	/// The targets of the node's edges, in the order its edges were given.
 	/// The position of the node's first edge among every node's edges, in node order: an edge's position is this plus its
 	/// index among the node's edges.
 	func edgeOffset(of index: Int) -> Int {
 		Int(edgeOffsets[index])
 	}
 
-	/// The targets of the node's edges, in the order its edges were given.
 	func edges(from index: Int) -> ArraySlice<Int32> {
 		edgeTargets[Int(edgeOffsets[index])..<Int(edgeOffsets[index + 1])]
-	}
-
-	/// The positions of the node's edges among every edge of the graph, in the order its edges were given: what a column
-	/// parallel to the edges is indexed by.
-	func edgeIndices(from index: Int) -> Range<Int> {
-		Int(edgeOffsets[index])..<Int(edgeOffsets[index + 1])
 	}
 
 	/// The targets of the node's edges as indices of `nodes`, in the order its edges were given.
@@ -179,6 +135,12 @@ struct OrderedGraph<Node: Hashable & Sendable>: Sendable {
 	/// The strongly connected component of the node, numbered as `componentByNode` numbers it.
 	func component(of index: Int) -> Int {
 		Int(componentByNode[index])
+	}
+
+	/// The positions of the node's edges among every edge of the graph, in the order its edges were given: what a column
+	/// parallel to the edges is indexed by.
+	func edgeIndices(from index: Int) -> Range<Int> {
+		Int(edgeOffsets[index])..<Int(edgeOffsets[index + 1])
 	}
 
 	/// How many edges the graph has, duplicates included.
@@ -197,12 +159,12 @@ struct OrderedGraph<Node: Hashable & Sendable>: Sendable {
 		componentSizes[Int(componentByNode[index])] > 1 || edges(from: index).contains(Int32(index))
 	}
 
-	/// The first chain from a root to the node, depth first in edge order, the root first and the node last: the chain
+	/// The first chain from the root to the node, depth first in edge order, the root first and the node last: the chain
 	/// along which the walk first reached it.
 	func firstRoute(to index: Int) -> [Int] {
 		var route = [index]
 		var node = index
-		while Int(parentByNode[node]) != node {
+		while node != 0 {
 			node = Int(parentByNode[node])
 			route.append(node)
 		}
@@ -220,7 +182,7 @@ struct OrderedGraph<Node: Hashable & Sendable>: Sendable {
 	private let edgeOffsets: [Int32]
 	/// The target of every edge, each node's in a run starting at its offset.
 	let edgeTargets: [Int32]
-	/// The node the walk first reached each node from; a root's is itself.
+	/// The node the walk first reached each node from; the root's is itself.
 	private let parentByNode: [Int32]
 	private let componentSizes: [Int32]
 }
