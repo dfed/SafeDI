@@ -488,7 +488,8 @@ private struct Rendering {
 		} else if let call = node.as(FunctionCallExprSyntax.self), scope.isInFunctionBody, let entry = leftOutEntryOfDroppedField(call) {
 			// The other outcome has no field to hand, so its call enters the place left out with a new configuration of the
 			// field's type.
-			return "\(call.leadingTrivia)\(Self.enteredPlacesParameterName).\(Self.leavingOutMemberName).\(Self.enteringFunctionName)(\(entry.slot), \(entry.field.type)())\(call.trailingTrivia)"
+			let enteredPlaces = Self.mayLeavePlacesOut(around: Syntax(call)) ? "\(Self.enteredPlacesParameterName).\(Self.leavingOutMemberName)" : Self.enteredPlacesParameterName
+			return "\(call.leadingTrivia)\(enteredPlaces).\(Self.enteringFunctionName)(\(entry.slot), \(entry.field.type)()\(entry.entersNearestOfType ? ", \(Self.nearestOfTypeArgumentLabel): true" : ""))\(call.trailingTrivia)"
 		} else if let list = node.as(LabeledExprListSyntax.self), scope.isInFunctionBody {
 			return argumentsText(of: list, in: scope)
 		} else if let expression = node.as(IfExprSyntax.self), let elseStatements = elseStatementsOfDroppedOverride(expression, in: scope) ?? elseStatementsOfOverrideNoConfigurationReaches(expression) {
@@ -711,24 +712,48 @@ private struct Rendering {
 		return field
 	}
 
-	/// The slot and the dropped field of `call`, when it enters a place by name with a dropped field where the place is
-	/// not left out (`__safeDI_entered.entering(<slot>, <read>)`): in a mock that may leave a place out, the field the
-	/// handed configuration holds, read where the places entered are not left out
-	/// (`__safeDI_entered.isLeftOut ? C() : __safeDI_entered.configuration.<label>`), or a field of the configuration a
-	/// function that takes no places entered is handed as its overrides (`safeDIOverrides.<label>`). The other outcome,
-	/// whose configuration has no such field, enters the place left out with a new configuration of the field's type
-	/// (`__safeDI_entered.leavingOut.entering(<slot>, C())`), as its edge is one the configurations leave out.
-	func leftOutEntryOfDroppedField(_ call: FunctionCallExprSyntax) -> (slot: String, field: GraphFuzzerMockDifference.ConfigurationField)? {
+	/// The slot and the dropped field of `call`, when it enters a place by name with a dropped field
+	/// (`__safeDI_entered.entering(<slot>, <read>[, nearestOfType: true])`): the field the handed configuration holds
+	/// (`__safeDI_entered.configuration.<label>`), in a mock that may leave a place out read only where the places entered
+	/// are not left out (`__safeDI_entered.isLeftOut ? C() : __safeDI_entered.configuration.<label>`), or a field of the
+	/// configuration a function that takes no places entered is handed as its overrides (`safeDIOverrides.<label>`). The
+	/// other outcome, whose configuration has no such field, hands a new configuration of the field's type, and in a mock
+	/// that may leave a place out enters the place left out (`__safeDI_entered.leavingOut.entering(<slot>, C())`), as its
+	/// edge is one the configurations leave out.
+	func leftOutEntryOfDroppedField(_ call: FunctionCallExprSyntax) -> (slot: String, field: GraphFuzzerMockDifference.ConfigurationField, entersNearestOfType: Bool)? {
+		let arguments = Array(call.arguments)
+		// A call may also enter the nearest place of its type, `nearestOfType: true`, which both outcomes pass.
+		let entersNearestOfType = arguments.count == 3 && arguments[2].label?.text == Self.nearestOfTypeArgumentLabel && arguments[2].expression.trimmedDescription == "true"
 		guard let callee = call.calledExpression.as(MemberAccessExprSyntax.self),
 		      callee.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == Self.enteredPlacesParameterName,
 		      callee.declName.baseName.text == Self.enteringFunctionName,
 		      call.trailingClosure == nil,
-		      call.arguments.count == 2,
-		      let slot = call.arguments.first, slot.label == nil,
-		      let handed = call.arguments.last, handed.label == nil,
-		      let field = droppedFieldHandedWhereNotLeftOut(by: handed.expression)
+		      arguments.count == 2 || entersNearestOfType,
+		      arguments[0].label == nil,
+		      arguments[1].label == nil,
+		      let field = droppedFieldHandedWhereNotLeftOut(by: arguments[1].expression)
 		else { return nil }
-		return (slot.expression.trimmedDescription, field)
+		return (arguments[0].expression.trimmedDescription, field, entersNearestOfType)
+	}
+
+	/// Whether the mock method around `position` may leave a place out: its places entered declare `leavingOut`
+	/// (`MockEnteredPlacesDeclaration`). A mock that leaves none out enters every place with `entering`.
+	private static func mayLeavePlacesOut(around position: Syntax) -> Bool {
+		var outermostFunction: FunctionDeclSyntax?
+		var ancestor = position.parent
+		while let current = ancestor {
+			if let function = current.as(FunctionDeclSyntax.self) {
+				outermostFunction = function
+			}
+			ancestor = current.parent
+		}
+		return outermostFunction?.body?.statements.contains { item in
+			item.item.as(StructDeclSyntax.self).map { declaration in
+				declaration.name.text == enteredTypeName && declaration.memberBlock.members.contains { member in
+					member.decl.as(VariableDeclSyntax.self)?.bindings.contains { $0.pattern.trimmedDescription == leavingOutMemberName } ?? false
+				}
+			} ?? false
+		} ?? false
 	}
 
 	/// The dropped field `expression` hands a place entered by name, as `leftOutEntryOfDroppedField(_:)` describes.
@@ -745,6 +770,9 @@ private struct Rendering {
 			      let field = droppedFieldOfHandedConfiguration(readBy: elements[2]),
 			      new.calledExpression.trimmedDescription == field.type
 			else { return nil }
+			return field
+		} else if let field = droppedFieldOfHandedConfiguration(readBy: expression) {
+			// Where the places entered are never left out, the field itself.
 			return field
 		} else if let read = expression.as(MemberAccessExprSyntax.self),
 		          read.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == mockOverridesParameterName,
@@ -915,7 +943,9 @@ private struct Rendering {
 			      let callee = handed.calledExpression.as(MemberAccessExprSyntax.self),
 			      Self.isEnteredPlaces(callee.base),
 			      callee.declName.baseName.text == Self.enteringFunctionName,
-			      handed.arguments.count >= 2,
+			      // A call that enters the nearest place of its type takes that place's configuration where there is one,
+			      // which may set an override, whatever configuration it hands.
+			      handed.arguments.count == 2,
 			      let handedConfiguration = handed.arguments.dropFirst().first, handedConfiguration.label == nil
 			else {
 				candidates.remove(name)
@@ -1170,5 +1200,6 @@ private struct Rendering {
 	private static let enteredConfigurationMemberName = "configuration"
 	private static let enteringFunctionName = "entering"
 	private static let leavingOutMemberName = "leavingOut"
+	private static let nearestOfTypeArgumentLabel = "nearestOfType"
 	private static let isLeftOutMemberName = "isLeftOut"
 }
