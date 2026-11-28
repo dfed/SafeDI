@@ -941,6 +941,155 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_handsInnerSeamsBuilderOnAlongEachPath_whenTwoTypesOfSeamBuildTheTypeThatCallsInnerSeam() async throws {
+		try await expectOutput(
+			of: Self.sharedCallerModules(),
+			[
+				"App": ["App.swift": """
+				#if canImport(Feature)
+				import Feature
+				#endif
+				#if canImport(Middle)
+				import Middle
+				#endif
+
+				extension Root {
+				    public init() {
+				        func __safeDI_apiBuilder_Outer() -> Outer.__safeDI_ApiCarrier<any Api> {
+				            .init(first: __safeDI_apiBuilder_Outer_First_Scope(), second: { values_first in __safeDI_apiBuilder_Outer_Second_Scope() })
+				        }
+				        func __safeDI_apiBuilder_Outer_First_Scope() -> Outer.__safeDI_ApiCarrier_First<any Api> {
+				            .init(shared: __safeDI_apiBuilder_Outer_Shared_Scope())
+				        }
+				        func __safeDI_apiBuilder_Outer_Shared_Scope() -> Outer.__safeDI_ApiCarrier_Shared<any Api> {
+				            .init(inner: __safeDI_apiBuilder_Inner())
+				        }
+				        func __safeDI_apiBuilder_Inner() -> Inner.__safeDI_ApiCarrier<any Api> {
+				            .init(api: {
+				                let api: any Api = LiveApi()
+				                return api
+				            })
+				        }
+				        func __safeDI_apiBuilder_Outer_Second_Scope() -> Outer.__safeDI_ApiCarrier_Second<any Api> {
+				            .init(shared: __safeDI_apiBuilder_Outer_Shared_Scope())
+				        }
+				        func __safeDI_outer() -> Outer {
+				            _ = Outer.__safeDI_Outer_FFFFEE986A210224.self // If this line does not compile, compile the code SafeDI generates for module Middle into Middle: under Bazel, add Middle’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+				            return Outer(__safeDI_apiBuilder: __safeDI_apiBuilder_Outer())
+				        }
+				        let outer: Outer = __safeDI_outer()
+				        self.init(outer: outer)
+				    }
+				}
+				"""],
+				"Feature": ["Feature.swift": """
+				extension Inner {
+				    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+				    nonisolated public final class __safeDI_ApiCarrier<__safeDI_Built> {
+				        public let api: () -> __safeDI_Built
+
+				        public init(api: @escaping () -> __safeDI_Built) {
+				            self.api = api
+				        }
+				    }
+
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+				    public init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
+				        let api: any Api = __safeDI_apiBuilder.api()
+				        self.init(api: api)
+				    }
+				}
+
+				extension Inner {
+				    public enum __safeDI_Inner_41C26D1D60F916DF {}
+				}
+				"""],
+				"Middle": ["Middle.swift": """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				extension Outer {
+				    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+				    nonisolated public final class __safeDI_ApiCarrier<__safeDI_Built> {
+				        public let first: __safeDI_ApiCarrier_First<__safeDI_Built>
+				        public let second: (First) -> __safeDI_ApiCarrier_Second<__safeDI_Built>
+
+				        public init(first: __safeDI_ApiCarrier_First<__safeDI_Built>, second: @escaping (First) -> __safeDI_ApiCarrier_Second<__safeDI_Built>) {
+				            self.first = first
+				            self.second = second
+				        }
+				    }
+
+				    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+				    nonisolated public final class __safeDI_ApiCarrier_First<__safeDI_Built> {
+				        public let shared: __safeDI_ApiCarrier_Shared<__safeDI_Built>
+
+				        public init(shared: __safeDI_ApiCarrier_Shared<__safeDI_Built>) {
+				            self.shared = shared
+				        }
+				    }
+
+				    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+				    nonisolated public final class __safeDI_ApiCarrier_Second<__safeDI_Built> {
+				        public let shared: __safeDI_ApiCarrier_Shared<__safeDI_Built>
+
+				        public init(shared: __safeDI_ApiCarrier_Shared<__safeDI_Built>) {
+				            self.shared = shared
+				        }
+				    }
+
+				    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+				    nonisolated public final class __safeDI_ApiCarrier_Shared<__safeDI_Built> {
+				        public let inner: Inner.__safeDI_ApiCarrier<__safeDI_Built>
+
+				        public init(inner: Inner.__safeDI_ApiCarrier<__safeDI_Built>) {
+				            self.inner = inner
+				        }
+				    }
+
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+				    public init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
+				        let __safeDI_apiBuilder_first = __safeDI_apiBuilder.first
+				        @inline(never) func __safeDI_shared(__safeDI_apiBuilder_shared: __safeDI_ApiCarrier_Shared<any Api>) -> Shared {
+				            @inline(never) func __safeDI_inner() -> Inner {
+				                _ = Inner.__safeDI_Inner_41C26D1D60F916DF.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+				                return Inner(__safeDI_apiBuilder: __safeDI_apiBuilder_shared.inner)
+				            }
+				            let inner: Inner = __safeDI_inner()
+				            return Shared(inner: inner)
+				        }
+				        @inline(never) func __safeDI_first() -> First {
+				            let __safeDI_apiBuilder_shared = __safeDI_apiBuilder_first.shared
+				            let shared: Shared = __safeDI_shared(__safeDI_apiBuilder_shared: __safeDI_apiBuilder_shared)
+				            return First(shared: shared)
+				        }
+				        let first: First = __safeDI_first()
+				        let __safeDI_apiBuilder_second = __safeDI_apiBuilder.second(first)
+				        @inline(never) func __safeDI_second() -> Second {
+				            let __safeDI_apiBuilder_shared = __safeDI_apiBuilder_second.shared
+				            let shared: Shared = __safeDI_shared(__safeDI_apiBuilder_shared: __safeDI_apiBuilder_shared)
+				            return Second(shared: shared)
+				        }
+				        let second: Second = __safeDI_second()
+				        self.init(first: first, second: second)
+				    }
+				}
+
+				extension Outer {
+				    public enum __safeDI_Outer_FFFFEE986A210224 {}
+				}
+				"""],
+			],
+			inline: Self.sharedCallerModules(liveApiInFeature: true),
+			probes: [DifferentialValueProbe("Root().outer.first.shared.inner.api"), DifferentialValueProbe("Root().outer.second.shared.inner.api")],
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_handsInnerSeamsSendableBuilderOn_whenSeamHoldsInnerSeamInSendableInstantiator() async throws {
 		try await expectOutput(
 			of: Self.handedOnModules(outerDeclaration: "@Instantiated public let innerBuilder: SendableInstantiator<Inner>", isSendable: true),
@@ -3268,6 +3417,36 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 			middle.append(seamFixtureType(named: "Top", isSeam: true, declarations: ["@Instantiated public let outer: Outer"]))
 		}
 		var app = [seamFixtureType(named: "Root", isRoot: true, declarations: [top ? "@Instantiated public let top: Top" : "@Instantiated public let outer: Outer"])]
+		if liveApiInFeature {
+			feature.append(liveApi)
+		} else {
+			app.insert(liveApi, at: 0)
+		}
+		return [
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: feature),
+			ModuleFixture(name: "Middle", packageName: "Shop", swiftFileContent: middle.map { "import Feature\n\n" + $0 }, dependencies: ["Feature"]),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: app.map { "import Feature\nimport Middle\n\n" + $0 }, dependencies: ["Feature", "Middle"]),
+		]
+	}
+
+	/// `Inner { api: any Api }` in `Feature`; in `Middle`, `Outer { first: First; second: Second }`, a seam, whose `First`
+	/// and `Second` each build `shared: Shared`, which builds `inner: Inner`; only `App` fills `Api`, unless
+	/// `liveApiInFeature`.
+	private static func sharedCallerModules(liveApiInFeature: Bool = false) -> [ModuleFixture] {
+		let liveApi = """
+		@Instantiable(fulfillingAdditionalTypes: [Api.self])
+		public struct LiveApi: Instantiable, Api {
+		    public init() {}
+		}
+		"""
+		var feature = ["public protocol Api {}", seamFixtureType(named: "Inner", isSeam: true, declarations: ["@Instantiated public let api: any Api"])]
+		let middle = [
+			seamFixtureType(named: "Outer", isSeam: true, declarations: ["@Instantiated public let first: First", "@Instantiated public let second: Second"]),
+			seamFixtureType(named: "First", declarations: ["@Instantiated public let shared: Shared"]),
+			seamFixtureType(named: "Second", declarations: ["@Instantiated public let shared: Shared"]),
+			seamFixtureType(named: "Shared", declarations: ["@Instantiated public let inner: Inner"]),
+		]
+		var app = [seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated public let outer: Outer"])]
 		if liveApiInFeature {
 			feature.append(liveApi)
 		} else {
