@@ -458,14 +458,13 @@ extension DependencyTreeGenerator {
 				return (labels, forms)
 			}
 
-			/// Whether the subtree of `node` receives `field` from above it, its optional form, or its instance.
+			/// Whether the subtree of `node` receives `field` from above it, or its optional form. `field` is a deferred
+			/// field, whose property is a by-value pass-through's (a seam defers a parameter only where its unwrapped type is
+			/// a constant, `seamRoot`'s deferral in `DependencyTreeGenerator+SeamDriver.swift`, and a handed memo is one such
+			/// field's, `FillDispatcher.memosHanded`), so it is never a wrapper whose instance `ScopeGenerator.reads(_:among:)`
+			/// would also look for.
 			func reads(_ field: Property, beneath node: Int) -> Bool {
-				var forms = [field, field.asOptionalProperty]
-				if let instance = field.asLazilyInstantiatedInstancePropertyOfDeclaredBinding {
-					forms.append(instance)
-					forms.append(instance.asOptionalProperty)
-				}
-				return forms.contains { form in
+				[field, field.asOptionalProperty].contains { form in
 					requestIDs[form].map { rows.contains($0, inRow: node) } == true
 				}
 			}

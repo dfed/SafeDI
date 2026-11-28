@@ -251,6 +251,17 @@ struct SafeDIToolSeamTreeReadsTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsNoDifference_whenFillHandedPlainMemoReadsLabelThroughAliasInsideSendableInstantiator() async throws {
+		// `Desk`'s fill of `Parcel` is handed `Inbox`'s plain memo of `credential`, and builds `Stamp` in a
+		// `SendableInstantiator`; `Stamp` renames `credential` to `token`, so the fill's tree reads `credential` inside a
+		// `@Sendable` function through the alias, and the fill binds the memo's value, which serves no read of the wrapper.
+		let comparisons = try await comparisonsAllowingRejection(ofSeam: "Desk", in: Self.modules(besideParcelReader: "", Self.aliasReaderDeclaration, parcelBuilds: "stampBuilder: SendableInstantiator<Stamp>"))
+		#expect(!comparisons.isEmpty)
+		#expect(comparisons.flatMap(\.differences).isEmpty)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_reportsNoDifference_whenFillOfSeamCallRequiresValueOfSeamsCaller() async throws {
 		// `Desk`'s fill of `Drawer`'s place builds `PenImpl`, which requires `clock` of `Desk`'s caller: the tree's
 		// required receives count it, as the facts' must.
@@ -814,6 +825,15 @@ struct SafeDIToolSeamTreeReadsTests: ~Copyable {
 	    public init(credential: Credential, alphaBuilder: Instantiator<Alpha>) { self.credential = credential; self.alphaBuilder = alphaBuilder }
 	    @Instantiated public let credential: Credential
 	    @Instantiated public let alphaBuilder: Instantiator<Alpha>
+	}
+	"""
+
+	/// `Stamp`, of `Feature`, which receives `credential` through an alias of it, `token`.
+	private static let aliasReaderDeclaration = """
+	@Instantiable
+	public final class Stamp: Instantiable, Sendable {
+	    public init(token: Credential) { self.token = token }
+	    @Received(fulfilledByDependencyNamed: "credential", ofType: Credential.self) public let token: Credential
 	}
 	"""
 
