@@ -45,11 +45,11 @@ struct SafeDIToolMockSendableCaptureCheckTests: ~Copyable {
 	// MARK: Tests
 
 	@Test
-	mutating func mock_findsNoCaptureOfForwardedValue_whenRootAlsoPromotesLazyWrapperOfItsLabelWhoseTypeSortsEitherSide() async throws {
+	mutating func mock_findsNoCaptureOfForwardedValue_whenRootAlsoPromotesLazyWrapperOfItsLabelWhoseTypeSortsEitherSide() async {
 		// Each root forwards `value` and promotes a `LazilyInstantiated` of the same label and type for the panel it
 		// receives; the worker built in a `@Sendable` function reads the forwarded value, which the tree looks up first,
 		// whichever way the type's name sorts against the wrapper's.
-		let findings = try await sendableCaptureFindingByRoot(of: ["Zeta", "Alpha"].flatMap(Self.forwardedValueBesideLazyWrapper(of:)))
+		let findings = await sendableCaptureFindingByRoot(of: ["Zeta", "Alpha"].flatMap(Self.forwardedValueBesideLazyWrapper(of:)))
 		#expect(findings == [
 			"ZetaRoot": SendableCaptureFinding(world: false, tree: false),
 			"AlphaRoot": SendableCaptureFinding(world: false, tree: false),
@@ -57,19 +57,21 @@ struct SafeDIToolMockSendableCaptureCheckTests: ~Copyable {
 	}
 
 	@Test
-	mutating func mock_findsCaptureAsTreeDoes_whenRootPromotesTwoLazyWrapperKindsOfOneLabelAndSendableFunctionReadsTheInstance() async throws {
-		let findings = try await sendableCaptureFindingByRoot(of: [
+	mutating func mock_findsCaptureAsTreeDoes_whenRootPromotesTwoLazyWrapperKindsOfOneLabelAndSendableFunctionReadsTheInstance() async {
+		// The root promotes the `LazilyInstantiated` its panel receives before the `SendableLazilyInstantiated` its gauge
+		// receives, and the worker built in a `@Sendable` function reads the instance of the first, which it captures.
+		let findings = await sendableCaptureFindingByRoot(of: [
 			"""
 			@Instantiable(generateMock: true)
 			public final class Screen: Instantiable {
-			    public init(gauge: Gauge, panel: Panel, workerBuilder: SendableInstantiator<Worker>) {
-			        self.gauge = gauge
+			    public init(panel: Panel, gauge: Gauge, workerBuilder: SendableInstantiator<Worker>) {
 			        self.panel = panel
+			        self.gauge = gauge
 			        self.workerBuilder = workerBuilder
 			    }
 
-			    @Instantiated let gauge: Gauge
 			    @Instantiated let panel: Panel
+			    @Instantiated let gauge: Gauge
 			    @Instantiated let workerBuilder: SendableInstantiator<Worker>
 			}
 			""",
@@ -109,8 +111,8 @@ struct SafeDIToolMockSendableCaptureCheckTests: ~Copyable {
 			    public init() {}
 			}
 			""",
-		])
-		#expect(findings == ["Screen": SendableCaptureFinding(world: false, tree: false)])
+		], expectsError: true)
+		#expect(findings == ["Screen": SendableCaptureFinding(world: true, tree: true)])
 	}
 
 	@Test
@@ -214,11 +216,11 @@ struct SafeDIToolMockSendableCaptureCheckTests: ~Copyable {
 	}
 
 	@Test
-	mutating func mock_findsNoCapture_whenAliasKeepingItsLabelInsideSendableFunctionAnswersChildBesideRootLazyWrapperOfAliasedType() async throws {
+	mutating func mock_findsNoCapture_whenAliasKeepingItsLabelInsideSendableFunctionAnswersChildBesideRootLazyWrapperOfAliasedType() async {
 		// `Middle`'s alias keeps the label `token` and answers `Leaf`'s receive of the protocol; the wrapper of the protocol
 		// the root promotes for the gauge it receives answers nothing beneath the call, since `Middle` reads the concrete
 		// type from above.
-		let findings = try await sendableCaptureFindingByRoot(of: [
+		let findings = await sendableCaptureFindingByRoot(of: [
 			"""
 			@Instantiable(generateMock: true)
 			public final class Screen: Instantiable {
@@ -249,7 +251,7 @@ struct SafeDIToolMockSendableCaptureCheckTests: ~Copyable {
 			        self.leaf = leaf
 			    }
 
-			    @Received(fulfilledByDependencyNamed: "token", ofType: Token.self, erasedToConcreteExistential: true) let token: TokenProtocol
+			    @Received(fulfilledByDependencyNamed: "token", ofType: Token.self) let token: TokenProtocol
 			    @Instantiated let leaf: Leaf
 			}
 			""",
@@ -350,15 +352,22 @@ struct SafeDIToolMockSendableCaptureCheckTests: ~Copyable {
 
 	private var filesToDelete: [URL]
 
-	/// What each mock root's world and tree find of a `Sendable` capture, by mocked type, of a run over `swiftFileContent`.
-	private mutating func sendableCaptureFindingByRoot(of swiftFileContent: [String]) async throws -> [String: SendableCaptureFinding] {
+	/// What each mock root's world and tree find of a `Sendable` capture, by mocked type, of a run over `swiftFileContent`,
+	/// which reports an error exactly where `expectsError`.
+	private mutating func sendableCaptureFindingByRoot(of swiftFileContent: [String], expectsError: Bool = false) async -> [String: SendableCaptureFinding] {
 		let (comparisons, continuation) = AsyncStream.makeStream(of: MockRootTreeChecksComparison.self)
-		_ = try await MockRootTreeChecksObservation.$comparesTree.withValue({ continuation.yield($0) }) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: swiftFileContent,
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
+		await MockRootTreeChecksObservation.$comparesTree.withValue({ continuation.yield($0) }) {
+			do {
+				_ = try await executeSafeDIToolTest(
+					swiftFileContent: swiftFileContent,
+					buildSwiftOutputDirectory: true,
+					filesToDelete: &filesToDelete,
+				)
+				#expect(!expectsError)
+			} catch {
+				// The tree reports the capture it finds as the error.
+				#expect(expectsError, "\(error)")
+			}
 		}
 		continuation.finish()
 		var findings = [String: SendableCaptureFinding]()
