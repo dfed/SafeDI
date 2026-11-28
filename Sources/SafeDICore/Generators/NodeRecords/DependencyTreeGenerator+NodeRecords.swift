@@ -158,10 +158,12 @@ extension DependencyTreeGenerator {
 				})
 			}
 			let (treeCode, comparisons) = planned
-			// A root whose tree's body holds nothing is compared nowhere.
+			// A root whose tree's body holds nothing is compared nowhere, nor one that fills a place
+			// (`NodeRecordsObservation.holdsAFilledCall`).
+			let comparesText = !NodeRecordsObservation.holdsAFilledCall(nodeRecords.rootBody)
 			// A hole's one record stands for its place only where one route reaches it (`holesReachedOnSeveralRoutes(in:)`).
 			let holeDifferences = NodeRecords.holesReachedOnSeveralRoutes(in: world).map { "root: node records accept the hole \($0), which more than one route reaches" }
-			let codeDifferences = (laidOutCode.map { $0.spelled() == treeCode.spelled() ? [] : ["root: the code laid out from node records differs from the tree’s"] } ?? []) + fillLevelDifferences + holeDifferences
+			let codeDifferences = (laidOutCode.map { !comparesText || $0.spelled() == treeCode.spelled() ? [] : ["root: the code laid out from node records differs from the tree’s"] } ?? []) + fillLevelDifferences + holeDifferences
 			for comparison in comparisons {
 				var report = NodeRecordsReport(
 					root: root,
@@ -214,7 +216,7 @@ extension DependencyTreeGenerator {
 		// The texts' difference comes first, and what no text shows after it, which a test that accepts an approved
 		// difference of the texts still reports (`NodeRecordsReport.differencesNoTextShows`).
 		let factsTheRecordsMiss: [(holds: Bool, difference: String)] = [
-			(texts.tree == texts.nodeRecords, "root: the code laid out from node records differs from the tree’s"),
+			(NodeRecordsObservation.holdsAFilledCall(layout.rootBody) || texts.tree == texts.nodeRecords, "root: the code laid out from node records differs from the tree’s"),
 			(captures.isEmpty, "root: the tree’s @Sendable builder functions capture a wrapper, which node records cannot see"),
 			(tree.unpassableCycleLabelsInTree.isEmpty, "root: the tree holds a label no cycle parameter can pass, which node records cannot see"),
 		]

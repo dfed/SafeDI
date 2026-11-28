@@ -19,16 +19,32 @@
 // SOFTWARE.
 
 extension TypeKeyBody {
-	/// The lines, unindented and without empty ones, of a function's body whose one statement is `place`, laid out as a
-	/// root's body is with `outerDeclarations` declared before it and each function declared in the body that calls it,
-	/// as the path key nests a function's functions; `nil` where the layout keeps the path key's body.
-	static func lines(ofBodyHolding place: GeneratedCode, outerDeclarations: [Property], namesInScope: Set<String>) -> [String]? {
+	/// The statements, unindented, of a function's body whose one statement is `place`, laid out as a root's body is with
+	/// `outerDeclarations` declared before it and its functions placed as a production root's are, in the body itself
+	/// where no loop is; `nil` where the layout keeps the path key's body.
+	static func statements(ofBodyHolding place: GeneratedCode, outerDeclarations: [Property], namesInScope: Set<String>) -> [GeneratedCode]? {
 		guard let statements = statements(
 			ofRootBody: [.indented(place, by: rootStatementIndentation)],
 			outerDeclarations: outerDeclarations,
 			namesInScope: namesInScope,
+			// As a production root laid out from node records is (`DependencyTreeGenerator+NodeRecords.swift`).
+			laysOutEveryLoop: true,
 			declaresLoopMembersAsThePathKeyDoes: true,
 		) else { return nil }
-		return GeneratedCodeText.lines(of: GeneratedCode.lines(statements).spelled()).filter { !$0.isEmpty }.map { String($0.dropFirst(rootStatementIndentation.count)) }
+		var unindented = [GeneratedCode]()
+		for statement in statements {
+			// Each statement of a root's body is indented as one (`spelledRootStatements`).
+			guard case let .indented(inner, indentation) = statement.node, indentation == rootStatementIndentation else { return nil }
+			unindented.append(inner)
+		}
+		return unindented
+	}
+
+	/// The lines of `statements(ofBodyHolding:outerDeclarations:namesInScope:)`. A bridge, until a dispatcher's case holds
+	/// an inlined body as code (`ScopeGenerator.FillDispatcher.InlinedFill`), which takes the body's lines.
+	static func lines(ofBodyHolding place: GeneratedCode, outerDeclarations: [Property], namesInScope: Set<String>) -> [String]? {
+		statements(ofBodyHolding: place, outerDeclarations: outerDeclarations, namesInScope: namesInScope).map { statements in
+			GeneratedCodeText.lines(of: GeneratedCode.lines(statements).spelled())
+		}
 	}
 }

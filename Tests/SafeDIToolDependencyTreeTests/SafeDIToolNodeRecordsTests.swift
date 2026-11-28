@@ -1406,6 +1406,80 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 		#expect(reports.flatMap(\.differences) == [])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysOutAFilledSeamCallsDispatchersAsTheTreeDoes_whenTheCallIsTwoPlacesBelowTheRoot() async throws {
+		// `App`'s `Root` builds `Outer`, which builds `Inner`, which calls `Feature`'s seam `Screen`, whose hole `api` is beneath
+		// the level `detailBuilder` opens: the call's dispatchers sit in a place two places below the root, where the root's
+		// functions are found only if every place on the way holds its children's code. Node records lay out the whole root
+		// by type, where the tree nests each function where it is built.
+		let modules = [
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+				"public protocol Api {}",
+				seamFixtureType(named: "Screen", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let detailBuilder: Instantiator<Detail>"]),
+				seamFixtureType(named: "Detail", isFinalClass: true, declarations: ["@Instantiated public let api: any Api"]),
+			], dependencies: []),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
+				"import Feature\n\n" + seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let outer: Outer"]),
+				"import Feature\n\n" + seamFixtureType(named: "Outer", isFinalClass: true, declarations: ["@Instantiated let inner: Inner"]),
+				"import Feature\n\n" + seamFixtureType(named: "Inner", isFinalClass: true, declarations: ["@Instantiated let screen: Screen"]),
+				"""
+				import Feature
+
+				@Instantiable(fulfillingAdditionalTypes: [Api.self])
+				public final class LiveApi: Api, Instantiable {
+				    public init() {}
+				}
+				""",
+			], dependencies: ["Feature"]),
+		]
+		let (output, reports) = try await NodeRecordsObservation.$recordsFilledCalls.withValue(true) {
+			try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+				// Under the plugin, which runs no second pass over module info files that store their positions apart: that pass
+				// runs unobserved, and a root that fills a place is laid out from node records only where a test observes them.
+				try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .swiftPackagePlugin, filesToDelete: &filesToDelete)
+			}
+		}
+		// The dispatchers are declared first in the root's body, and every function the root's records lay out is beside them.
+		#expect(output.modules["App"]?.generatedFiles == ["Root+SafeDI.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_apiBuilder_Screen() -> Screen.__safeDI_ApiCarrier<any Api> {
+		            .init(detailBuilder: __safeDI_apiBuilder_Screen_Detail_Scope())
+		        }
+		        func __safeDI_apiBuilder_Screen_Detail_Scope() -> Screen.__safeDI_ApiCarrier_Detail<any Api> {
+		            .init(api: {
+		                let api: any Api = LiveApi()
+		                return api
+		            })
+		        }
+		        func __safeDI_inner() -> Inner {
+		            func __safeDI_screen() -> Screen {
+		                _ = Screen.__safeDI_Screen_1715FFCF39BF335A.self // If this line does not compile, add the SafeDI plugin to the target that declares Screen.
+		                return Screen(__safeDI_apiBuilder: __safeDI_apiBuilder_Screen())
+		            }
+		            let screen: Screen = __safeDI_screen()
+		            return Inner(screen: screen)
+		        }
+		        func __safeDI_outer() -> Outer {
+		            let inner: Inner = __safeDI_inner()
+		            return Outer(inner: inner)
+		        }
+		        let outer: Outer = __safeDI_outer()
+		        self.init(outer: outer)
+		    }
+		}
+		"""])
+		let rootReports = reports.filter { $0.root == "Root" }
+		#expect(rootReports.map(\.refusal) == [nil])
+		#expect(rootReports.map(\.isLaidOutFromNodeRecords) == [true])
+		#expect(reports.flatMap(\.differences) == [])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
