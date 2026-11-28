@@ -156,8 +156,7 @@ extension NodeRecords {
 	/// names apart a parameter of `mock()` or an override beside another form of its label, so the override of such a child
 	/// is the root's field under the name, and each type that receives the label where no declaration between hides it binds
 	/// the name again under the label at the top of its function (`mockNamesReadApart(in:)`). Refused, and left to the
-	/// walk: two children of one label under any other node, or under a root that was handed no name for one; a child of the
-	/// root named apart whose property is optional, which the walk binds as the value it builds; a rename of such a label
+	/// walk: two children of one label under any other node, or under a root that was handed no name for one; a rename of such a label
 	/// or from one, whose binding the walk reads otherwise; and a receive of the label only if available, which reads the name or `nil`
 	/// by its place, since a required receive of another form above a place pins the label there
 	/// (`MockLowering.receiveReadsLabelByName`), and one function serves every place.
@@ -166,9 +165,6 @@ extension NodeRecords {
 		var labels = Set<String>()
 		for child in world.edges(from: declaration) {
 			guard let property = world.property(of: child) else { continue }
-			// The walk binds an optional form the root names apart without its type, so the binding is not optional; a
-			// record's binding declares the property's type.
-			guard declaration != 0 || mockRootNames.nameApart(of: property) == nil || !property.typeDescription.isOptional else { return .mockOverrideNotParentField }
 			guard !labels.insert(property.label).inserted else { continue }
 			// Both children of the label are named apart, or neither is.
 			guard declaration == 0, mockRootNames.namesApart(label: property.label) else { return .mockOverrideNotParentField }
