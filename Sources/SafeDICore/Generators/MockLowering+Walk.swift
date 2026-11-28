@@ -24,8 +24,8 @@
 /// overflows a thread's stack nor releases a chain of nested nodes.
 extension ScopeGenerator {
 	/// The mock of `instantiable`, the mocked type of this root, whose tree is its generator's children.
-	/// `worldRoot` is the root of the mock root's world, where a test observes node records.
-	func lowerMockRootWithTree(of instantiable: Instantiable, context: MockContext, worldRoot: ConstructionScope? = nil) async throws -> MockLowering.Result {
+	/// `worldRoot` is the mock root's world, where a test observes node records.
+	func lowerMockRootWithTree(of instantiable: Instantiable, context: MockContext, worldRoot: MockWorldRoot? = nil) async throws -> MockLowering.Result {
 		// The mocked type's hand-written mock builds it, internal or public (`MockLowering+HandWrittenMocks.swift`), and every
 		// dependency is a node of its tree, a parameter of `mock()`, an override's binding or passed `nil`.
 		// The parameters `mock()` takes before its overrides (`lowerRootSignature(of:context:)`).
@@ -290,7 +290,7 @@ extension ScopeGenerator {
 			outerDeclarations += signature.lazilyInstantiatedBindings.map { Property(label: $0.name, typeDescription: $0.boundType) }
 			if let statements = Self.nodeRecordsMockStatements(
 				of: instantiable,
-				worldRoot: worldRoot,
+				worldRoot: worldRoot.scope,
 				bindsOnlyNodes: bindsOnlyNodes,
 				sendableConfigurationTypeNames: context.sendableConfigurationTypeNames,
 				rootNames: MockRootNames(
@@ -305,6 +305,7 @@ extension ScopeGenerator {
 					placeBuilderBindings: placeBuilderBindings,
 					wrapperBindingNames: signature.lazilyInstantiatedBindingNamesByLabelAndType,
 					loopMembersBoundNowhere: Set(mockLoweringLoopMembersReadOnlyInsideTheirLoop.compactMap { propertiesToGenerate[$0].property }),
+					receivesPassedNil: worldRoot.receivesPassedNil,
 				),
 				outerDeclarations: outerDeclarations,
 			) {

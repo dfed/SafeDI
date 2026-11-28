@@ -42,7 +42,7 @@ extension DependencyTreeGenerator {
 		}
 		// The root of each mock root's world, by mocked type, where a test observes node records: handed on through a task
 		// local, so that a run no test observes threads nothing through the mock roots' construction.
-		let worldRootRecording = AsyncStream.makeStream(of: (mockedType: TypeDescription, worldRoot: ConstructionScope).self)
+		let worldRootRecording = AsyncStream.makeStream(of: (mockedType: TypeDescription, worldRoot: MockWorldRoot).self)
 		return try await NodeRecordsObservation.$recordsMockWorldRoot.withValue({ worldRootRecording.continuation.yield(($0, $1)) }) {
 			try await generateMockCode(
 				mockConditionalCompilation: mockConditionalCompilation,
@@ -63,7 +63,7 @@ extension DependencyTreeGenerator {
 		additionalMocksToGenerate: Set<String>,
 		storesPublicMockPlans: Bool,
 		publicMockContext: PublicMockContext?,
-		worldRootRecording: (stream: AsyncStream<(mockedType: TypeDescription, worldRoot: ConstructionScope)>, continuation: AsyncStream<(mockedType: TypeDescription, worldRoot: ConstructionScope)>.Continuation)?,
+		worldRootRecording: (stream: AsyncStream<(mockedType: TypeDescription, worldRoot: MockWorldRoot)>, continuation: AsyncStream<(mockedType: TypeDescription, worldRoot: MockWorldRoot)>.Continuation)?,
 	) async throws -> MockGenerationResult {
 		var receivedPropertiesCache = ReceivedPropertiesCache()
 		// The plans of the public mocks of other modules this module's mock trees call, computed once each.
@@ -258,7 +258,7 @@ extension DependencyTreeGenerator {
 			foreignPublicMocks: foreignPublicMocks,
 		)
 		let fulfillingInstantiables = typeDescriptionToFulfillingInstantiableMap
-		var recordedWorldRoots = [TypeDescription: ConstructionScope]()
+		var recordedWorldRoots = [TypeDescription: MockWorldRoot]()
 		if let worldRootRecording {
 			worldRootRecording.continuation.finish()
 			for await (mockedType, worldRoot) in worldRootRecording.stream {

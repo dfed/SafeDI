@@ -43,10 +43,10 @@ public enum NodeRecordsObservation {
 	/// (`NodeRecords.joiningProductionMarks(_:to:of:in:)`), so that a test shows the order cannot matter. Only a test sets it.
 	@TaskLocal public static var joinsMockWorldTermsInReverse = false
 
-	/// Handed each mocked type and the root of its mock root's world as the mock root is built, where a test observes node records
+	/// Handed each mocked type and its mock root's world (`MockWorldRoot`) as the mock root is built, where a test observes node records
 	/// (`DependencyTreeGenerator.createMockRootScopeGenerator`). A task local rather than a parameter: an optional closure
 	/// threaded through the mock roots' construction raised the peak memory of a run that sets none by a fifth on Linux.
-	@TaskLocal static var recordsMockWorldRoot: (@Sendable (TypeDescription, ConstructionScope) -> Void)?
+	@TaskLocal static var recordsMockWorldRoot: (@Sendable (TypeDescription, MockWorldRoot) -> Void)?
 
 	/// Handed each root's report, where set. Only a test sets it.
 	@TaskLocal public static var observer: (@Sendable (NodeRecordsReport) -> Void)?
@@ -256,4 +256,13 @@ public struct NodeRecordsComparedTexts: Sendable {
 	public let tree: String
 	/// The code laid out from node records.
 	public let nodeRecords: String
+}
+
+/// What node records are made of for a mock root, where a test observes them: the root of the mock root's world, and the
+/// receives only if available its promotion found production passes `nil`
+/// (`DependencyTreeGenerator.receivesPassedNilInMockTree`), which the mock root's bindings hold for the tree and no fact
+/// of the world holds.
+struct MockWorldRoot: Sendable {
+	let scope: ConstructionScope
+	let receivesPassedNil: MockReceivesPassedNil
 }

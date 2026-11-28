@@ -59,6 +59,21 @@ extension NodeRecords {
 		var wrapperArgumentNames: [[Property: String]]
 		/// The name of the wrapper each variant that is a rename of such a wrapper reads, as the walk reads it by name.
 		var wrapperNamesReadByRenames: [VariantID: String]
+		/// The receives only if available each variant is passed `nil` for wherever its type is built beneath the mock
+		/// root's bindings of their labels (`MockRootNames.passesNilWhereverBuilt(toReceiveOf:on:)`), unless a sibling
+		/// built before it declares what the receive reads (`OnlyIfAvailableAnswers`).
+		var receivesPassedNil: [Set<Property>]
+
+		/// Leaves each variant only the receives it binds again that it is not passed `nil` for: a receive only if
+		/// available whose name apart is not built where the variant is, as `answers` find it, binds nothing, as the walk
+		/// binds nothing for a receive it passes `nil` (`ScopeGenerator.bodyUnavailableProperties(_:)`).
+		mutating func removeReceivesBoundAgain(passedNilBy answers: OnlyIfAvailableAnswers) {
+			for variant in receivesBoundAgain.indices {
+				let unavailableProperties = answers.unavailableProperties(of: VariantID(variant))
+				guard !unavailableProperties.isEmpty else { continue }
+				receivesBoundAgain[variant].removeAll { unavailableProperties.contains($0.property) }
+			}
+		}
 	}
 
 	/// What each variant of a mock root's world reads under a name the mock root binds apart, read from the names the mock
@@ -79,6 +94,7 @@ extension NodeRecords {
 			receivesBoundAgain: [[MockReceiveBoundAgain]](repeating: [], count: world.variantCount),
 			wrapperArgumentNames: [[Property: String]](repeating: [:], count: world.variantCount),
 			wrapperNamesReadByRenames: [:],
+			receivesPassedNil: [Set<Property>](repeating: [], count: world.variantCount),
 		)
 		let namesBoundAgain = world.mockRootNames.namesBoundAgain
 		let wrapperBindingNames = world.mockRootNames.wrapperBindingNames
@@ -128,6 +144,16 @@ extension NodeRecords {
 				let wrapperNames = MockLowering.removingRenames(hiddenBy: declarations, from: visible.wrapperNames)
 				functionNames = (namesApart, wrapperNames)
 				for dependency in instantiable.dependencies where dependency.source.isReceived {
+					// A receive only if available that a required receive on its type, or beneath it, pins is passed `nil`
+					// where the label's nearest declaration is the mock root's, unless a sibling built before the node declares
+					// what it reads, which the answers find per call; it binds its name again only there
+					// (`removeReceivesBoundAgain(passedNilBy:)`).
+					if dependency.source == .received(onlyIfAvailable: true),
+					   !((namesApart[dependency.property.label]?.isEmpty ?? true) && (wrapperNames[dependency.property.label]?.isEmpty ?? true)),
+					   world.mockRootNames.passesNilWhereverBuilt(toReceiveOf: dependency.property, on: instantiable.concreteInstantiable)
+					{
+						namesRead.receivesPassedNil[Int(variant)].insert(dependency.property)
+					}
 					if let name = Self.name(of: dependency.property, among: wrapperNames) {
 						// A receive of a wrapper `mock()` makes of an instance it takes is passed the wrapper by name.
 						namesRead.wrapperArgumentNames[Int(variant)][dependency.property] = name
@@ -160,6 +186,18 @@ extension NodeRecords {
 	/// the walk finds it, beside any value the root binds under the label.
 	static func mockWrapperDeclarations(in world: some NodeRecordSources) -> [Property] {
 		world.mockRootNames.wrapperBindingNames.flatMap { label, names in names.keys.map { Property(label: label, typeDescription: $0) } }.sorted()
+	}
+
+	/// The parameters and overrides a mock root names apart, each under the label of the receives that read it, in label
+	/// and then type order: a receive only if available of that label finds the form it reads available from the root, as
+	/// the walk finds it, and binds its name again (`mockNamesReadApart(in:)`). A child of the root named apart is none: a
+	/// read finds it where it is built, as it finds any child.
+	static func mockNamesApartDeclarations(in world: some NodeRecordSources) -> [Property] {
+		let rootChildren = Set(world.edges(from: 0).compactMap { world.property(of: $0) })
+		return world.mockRootNames.namesApart
+			.flatMap { label, names in names.keys.map { Property(label: label, typeDescription: $0) } }
+			.filter { !rootChildren.contains($0) }
+			.sorted()
 	}
 
 	/// The name among `names`, by label and then type, of `property` or of its unwrapped form, which a non-optional wrapper
