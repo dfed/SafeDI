@@ -296,6 +296,10 @@ def expand(lines,hoisted,base_indent,entered={},nearest={},visible=frozenset(),r
         sub=[ (ind+'    '+b if b else b) for b in (fold_empty(TOKEN.sub(lambda _:expr,x)) if expr is not None else x for x in body)]
         if handed: sub=[handed.sub(lambda _:loop,x) for x in sub]
         if how: sub=[choose_left_out(x,left_out) for x in sub]
+        if how:
+            SERVED.setdefault(name,set()).add(left_out)
+            if left_out and name in SERVES_BOTH and expr is not None and FRESH_CONFIGURATION.match(expr):
+                sub=[drop_fresh_fields(x,expr) for x in sub]
         if base_indent>8000: raise RecursionError('functions nest without end')
         inside=dict(entered)
         inside[('current',)]=(name,('slot',how[1]) if how and how[0]=='entering' else name if not how else None)
@@ -346,6 +350,35 @@ def expand(lines,hoisted,base_indent,entered={},nearest={},visible=frozenset(),r
 # entry 20, the places enum: the records write a wrapper's closure on one line where the function is handed the
 # places; once the call hands nothing, the walk hands the wrapper the function itself
 LEFT_OUT_CHOICE='__safeDI_entered.isLeftOut ? '
+# entry 27 (lead, 11-28 08:00Z): one function serves a call that has a configuration and a call that has none.
+# The records' function hands a default-valued parameter its configuration's field, so its copy for the call
+# with none hands the field of a fresh configuration; the walk's copy there omits the argument. The argument is
+# dropped only in a copy placed left out, of a function another copy of which is placed with a configuration
+# (a function reached only left out was the defect half, and stays different), only where the value is the
+# field, of the argument's own label, of the fresh configuration the copy was handed, and only where the walk's
+# mock holds the line without the argument (one fact read from the walk).
+SERVED={}
+WALK_LINES=set()
+SERVES_BOTH=set()
+FRESH_CONFIGURATION=re.compile(r'^[\w.]+\.SafeDIMockConfiguration\(\)$')
+def drop_fresh_fields(line,fresh):
+    argument=re.compile(r'(, )?(?<![\w.`])(\w+): '+re.escape(fresh)+r'\.(\w+)(?![\w.(\[?!])(, )?')
+    position=0
+    while True:
+        found=argument.search(line,position)
+        if not found: return line
+        before=line[:found.start()]
+        if found.group(2)!=found.group(3) or not (found.group(1) or before.endswith('(')):
+            position=found.end(2); continue
+        dropped=before+(', ' if found.group(1) and found.group(4) else '')+line[found.end():]
+        # the walk omits the argument of an initializer's default and hands that of a hand-written mock's, so
+        # which this is is read from the walk: dropped only where the walk's mock holds the line without the
+        # argument and does not hold the line with it
+        if dropped.strip() not in WALK_LINES or line.strip() in WALK_LINES:
+            position=found.end(2); continue
+        ALSO_USED.append('27')
+        line=dropped
+        position=len(before)
 def choose_left_out(line,left_out):
     """entry 20, places entered left out: `__safeDI_entered.isLeftOut ? A : B` in a function's copy is A where the
     copy's place is left out and B where it is not, which the copy's place decides once"""
@@ -390,8 +423,9 @@ def unhoist(text,walk=None):
             number+=1
             # entry 20, the places enum: the parameters the walk's functions declare in this mock, by indentation
             # and name, which decide only whether a parameter the records declare too is left declared
-            WALK_PARAMETERS.clear();WALK_PLAIN.clear()
+            WALK_PARAMETERS.clear();WALK_PLAIN.clear();WALK_LINES.clear()
             for walk_line in (walk_mocks[number].split('\n') if number<len(walk_mocks) else []):
+                WALK_LINES.add(walk_line.strip())
                 declared=FUNC.match(walk_line)
                 if declared:
                     WALK_PARAMETERS.setdefault((len(declared.group(1)),declared.group(3)),set()).update(split_top(declared.group(4)))
@@ -412,7 +446,14 @@ def unhoist(text,walk=None):
                     k=e+1
                 else:
                     rest.append(body[k]);k+=1
-            res+=lines[i:j+1]+expand([choose_left_out(x,False) for x in rest],hoisted,8)
+            SERVED.clear();SERVES_BOTH.clear()
+            expanded=expand([choose_left_out(x,False) for x in rest],hoisted,8)
+            both=set(served for served,ways in SERVED.items() if len(ways)==2)
+            if both:
+                # entry 27 needs every copy's placing, known only once the body is written out: written again
+                SERVES_BOTH.update(both)
+                expanded=expand([choose_left_out(x,False) for x in rest],hoisted,8)
+            res+=lines[i:j+1]+expanded
             i=end
         else:
             res.append(lines[i]);i+=1
@@ -1333,6 +1374,9 @@ AWAITING_CELLS = {
     # one builder function for several properties of one type (lead, 11-28 08:00Z): the cell (20 properties
     # of one type with shuffled labels, compiled and value-compared, plus seed 1080) is not named yet
     '28': [],
+    # one function serving a call with a configuration and one without (lead, 11-28 08:00Z): the kinds
+    # integrator's value cells for it are not named yet
+    '27': [],
     '18': ['SafeDIToolNodeRecordsMockCycleWalkTests/mock_buildsTheWalksValues_whenEveryCallPassesNilForLabelBuiltAfterTheCycle'],
     '26': ['SafeDIToolMockKindsLazyCycleValueTests/mock_buildsWalksValues_whenCycleClosingCallPassesValueMockTakesUnderNameApartFromItsLabel'],
     '21 per function': [
@@ -1369,7 +1413,7 @@ def main():
                 failures += 1
                 held += failure.startswith('held: ')
                 print('%s: %s' % (records_path, failure))
-        for name in [name for name, _ in REWRITES] + ['10', '13', '17', '21 per function', '21 two variants', '23', '24']:
+        for name in [name for name, _ in REWRITES] + ['10', '13', '17', '21 per function', '21 two variants', '23', '24', '27']:
             print('entry %s: used on %d pairs' % (name, counts[name]))
         print('held for a value cell: %d pairs' % held)
         print('%d of %d pairs equal after rewrite' % (total - failures, total))

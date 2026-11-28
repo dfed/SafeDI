@@ -199,6 +199,12 @@ CASES = [
      once('@Sendable nonisolated func __safeDI_t4Builder(', 'func __safeDI_t4Builder('), 'both'),
     ('24-named-apart', 'the moved function, named apart, is marked @Sendable only',
      once('@Sendable nonisolated func __safeDI_anyT5Builder_(', '@Sendable func __safeDI_anyT5Builder_(')),
+    ('27', 'the function is reached only by calls that have no configuration',
+     once('__safeDI_entered.entering(1, safeDIOverrides.childBuilder)', '__safeDI_entered.leavingOut.entering(1, safeDIOverrides.childBuilder)')),
+    ('27', 'the call with no configuration hands one that is not fresh',
+     once('__safeDI_entered.leavingOut.entering(1, Child.SafeDIMockConfiguration())', '__safeDI_entered.leavingOut.entering(1, Child.SafeDIMockConfiguration(state: nil))')),
+    ('27', 'the argument reads a field of another name',
+     once('Child(parentBuilder: parentBuilder, state: __safeDI_entered.configuration.state)', 'Child(parentBuilder: parentBuilder, state: __safeDI_entered.configuration.title)')),
 ]
 
 
