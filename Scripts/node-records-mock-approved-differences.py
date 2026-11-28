@@ -717,6 +717,9 @@ def e21(text,walk):
     for (x,_),y in renamed.items(): given.setdefault(x,set()).add(y)
     if any(len(names)>1 or (x.endswith('_') and x[:-1] in names) for x,names in given.items()):
         ALSO_USED.append('21 per function')
+    # two variants of one node: the records' function named apart returns the type the plain one returns
+    if any(x.endswith('_') and x[:-1] in names and returns.get(x,set())&returns.get(x.rstrip('_'),set()) for x,names in given.items()):
+        ALSO_USED.append('21 two variants')
     out=[]
     for i,line in enumerate(lines):
         out.append(name.sub(lambda found:renamed[(found.group(0),declaration(found.group(0),i))],line))
@@ -1054,7 +1057,15 @@ used_none = []
 # Lead, 2026-11-28 04:25Z: an entry approved on the condition that its values are equal counts as unclassified
 # until the tests that compare those values are named. Each entry here lists those tests; an empty list holds
 # every pair the entry is used on, which then prints "held" and not the words a gate reads as equal.
-AWAITING_CELLS = {'18': [], '26': [], '21 per function': []}
+AWAITING_CELLS = {
+    '18': [],  # in a mock: the mock writer is writing a cell on Home's fixture (04:30Z)
+    '26': ['SafeDIToolMockKindsLazyCycleValueTests/mock_buildsWalksValues_whenCycleClosingCallPassesValueMockTakesUnderNameApartFromItsLabel'],
+    '21 per function': [
+        'SafeDIToolNodeRecordsMockCycleWalkTests/mock_buildsTheWalksValues_whenTwoBodiesNameOneVariantsFunctionApart',
+        'SafeDIToolNodeRecordsMockCycleWalkTests/mock_buildsTheWalksValues_whenTheBodyThatNamesAVariantsFunctionApartIsReadBeforeTheOneThatKeepsItsName',
+    ],
+    '21 two variants': [],  # no cell named yet for two variants of one node
+}
 IGNORE_HOLDS = False
 
 def main():
@@ -1081,7 +1092,7 @@ def main():
                 failures += 1
                 held += failure.startswith('held: ')
                 print('%s: %s' % (records_path, failure))
-        for name in [name for name, _ in REWRITES] + ['10', '13', '17', '21 per function', '23']:
+        for name in [name for name, _ in REWRITES] + ['10', '13', '17', '21 per function', '21 two variants', '23']:
             print('entry %s: used on %d pairs' % (name, counts[name]))
         print('held for a value cell: %d pairs' % held)
         print('%d of %d pairs equal after rewrite' % (total - failures, total))
