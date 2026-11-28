@@ -226,6 +226,24 @@ struct SafeDIToolTypeFactsParameterTests: ~Copyable {
 		#expect(TypeFactsChecks.findings(of: report).findingsByCheck[35, default: []].isEmpty)
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keysReaderApart_whenOnePlaceBindsLabelAsValueAndAnotherAsLazilyInstantiatedWrapper() async throws {
+		// `Reader` receives `theme` by value beneath `Plain`, which declares the value, and beneath `Lazy`, which declares
+		// its wrapper: a read is keyed by the declaration that answers it, wrapper included, so `Reader` is two variants.
+		// One function bound as a value in one place and lazily in another is one variant only because no reader of the
+		// label shares a variant across the two forms.
+		let report = try await rootReport(of: [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let plain: Plain", "@Instantiated let lazy: Lazy"]),
+			seamFixtureType(named: "Plain", isFinalClass: true, declarations: ["@Instantiated let theme: Theme", "@Instantiated let reader: Reader"]),
+			seamFixtureType(named: "Lazy", isFinalClass: true, declarations: ["@Instantiated let theme: LazilyInstantiated<Theme>", "@Instantiated let reader: Reader"]),
+			seamFixtureType(named: "Reader", isFinalClass: true, declarations: ["@Received let theme: Theme"]),
+			seamFixtureType(named: "Theme", isFinalClass: true, declarations: []),
+		])
+
+		#expect(report.variantNodes.count { report.nodes[$0].description.hasPrefix("Reader ") } == 2, "\(report.world)")
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
