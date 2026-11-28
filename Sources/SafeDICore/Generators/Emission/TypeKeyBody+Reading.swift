@@ -559,8 +559,17 @@ extension TypeKeyLayout {
 		let positions = bodies[owner == 0 ? 0 : membersByClass[owner][0]].positionsByLabel[read.label]
 		if passesNil(read, positions: positions, at: index, nearest: { lastPosition(of: read.label, inClass: owner, before: index).map { statements(ofClass: owner)[$0] } }) {
 			return true
-		} else if read.isOnlyIfAvailable, positions == nil, owner != 0, typeLookUp(read.label, inClass: owner, before: index) == .read(owner: owner, label: read.label), let parameterType = parameterTypes[owner][read.label] {
-			return !ScopeGenerator.provides(Property(label: read.label, typeDescription: parameterType.unwrapped), aFormReadBy: read.property)
+		} else if read.isOnlyIfAvailable, positions == nil, owner != 0 {
+			switch typeLookUp(read.label, inClass: owner, before: index) {
+			case let .read(owner: reader, label: _):
+				guard reader == owner, let parameterType = parameterTypes[owner][read.label] else { return false }
+				return !ScopeGenerator.provides(Property(label: read.label, typeDescription: parameterType.unwrapped), aFormReadBy: read.property)
+			case let .statement(owner: declaringClass, index: declaringIndex):
+				// A statement of an enclosing class or the root's body, which every member reads alike (`outerValue(of:_:)`).
+				return hides(statements(ofClass: declaringClass)[declaringIndex], from: read)
+			case .none, .forwarded:
+				return false
+			}
 		} else {
 			return false
 		}
