@@ -192,14 +192,12 @@ struct SafeDIToolNodeRecordsMockRootTests: ~Copyable {
 		}
 		continuation.finish()
 		var countsByStep = [GenerationWork.Step: Int]()
-		for await work in stream where [.computingPlanNodeDomains, .spellingStructuralKeyFacts, .declaringPlanNodeStatements, .computingViewReads].contains(work.step) {
+		for await work in stream where [.computingPlanNodeDomains, .spellingStructuralKeyFacts, .declaringPlanNodeStatements].contains(work.step) {
 			countsByStep[work.step, default: 0] += work.elementCount
 		}
-		// `storeBuilder` and `clockBuilder` are the same two nodes in every world: their domains, the parts of their keys,
-		// their bodies' statements and their views' reads are worked out once for the three roots, where each root's layout
-		// worked out each. Their reads are computed once each, `storeBuilder`'s tree laid out alone once, and no root
-		// computes them again.
-		#expect(countsByStep == [.computingPlanNodeDomains: 2, .spellingStructuralKeyFacts: 2, .declaringPlanNodeStatements: 2, .computingViewReads: 2])
+		// `storeBuilder` and `clockBuilder` are the same two nodes in every world: their domains, the parts of their keys and
+		// their bodies' statements are worked out once for the three roots, where each root's layout worked out each.
+		#expect(countsByStep == [.computingPlanNodeDomains: 2, .spellingStructuralKeyFacts: 2, .declaringPlanNodeStatements: 2])
 		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [true, true, true])
 	}
 
