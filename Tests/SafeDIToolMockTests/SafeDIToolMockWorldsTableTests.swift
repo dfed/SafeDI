@@ -671,6 +671,128 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_sharesLoopWithItsParent_whenBuilderLoopIsWhollyInsideSharedSubtree() async throws {
+		let reports = try await Self.tableReports(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(
+				swiftFileContent: Self.loopFixtures(.whollyInsidePane),
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		// `pane`, which holds the loop of `alphaBuilder` and `betaBuilder`, is shareable by every other condition and each
+		// member has `pane` alone as its parent, so the loop is shared whole with it: `pane`, both members, `clock` and
+		// `ticker` are the shared graph's, each in one variant, whose made-again calls and the answer `betaBuilder`'s
+		// rebinding gives `ticker` the shared graph finds as each world's graph does. A mock world's loop member is refused
+		// (`builderLoop`), with or without the table, so neither member is a row and `pane`, which calls them, is none:
+		// the rows are `clock`'s and `ticker`'s, and neither world takes a record.
+		#expect(reports == [
+			MockWorldsTableReport(
+				declarationCount: 7,
+				shareableDeclarationCount: 5,
+				sharedGraphDeclarations: [1, 2, 3, 4, 5], sharedVariantCount: 5, graphDeclarationCounts: [2, 2],
+				sharedRecordCount: 2,
+				rows: ["3: clock: Clock", "5: ticker: Ticker"],
+				differences: [],
+				worlds: [
+					.init(mockedType: "NorthShell", rootDeclaration: 0, declarationCount: 6, shareableDeclarationCount: 5, recordCount: 0, sharedRecordCount: 0, recordCountWithoutTable: 0, declarationKeys: [1, 3, 4, 8, 6, 10]),
+					.init(mockedType: "SouthShell", rootDeclaration: 6, declarationCount: 6, shareableDeclarationCount: 5, recordCount: 0, sharedRecordCount: 0, recordCountWithoutTable: 0, declarationKeys: [13, 3, 4, 8, 6, 10]),
+				],
+			),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsLoopMembersOutOfSharedGraph_whenLoopsParentIsOnCycle() async throws {
+		let reports = try await Self.tableReports(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(
+				swiftFileContent: Self.loopFixtures(.paneOnCycle),
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		// `pane` is on a cycle through `gizmoBuilder`, so it stays in each world's top graph, and its loop with it: neither
+		// member is shareable, though nothing beneath them reaches a cycle, so no loop crosses the frontier. Only `clock` is
+		// shared, and is the one row.
+		#expect(reports == [
+			MockWorldsTableReport(
+				declarationCount: 8,
+				shareableDeclarationCount: 1,
+				sharedGraphDeclarations: [3], sharedVariantCount: 1, graphDeclarationCounts: [7, 7],
+				sharedRecordCount: 1,
+				rows: ["3: clock: Clock"],
+				differences: [],
+				worlds: [
+					.init(mockedType: "NorthShell", rootDeclaration: 0, declarationCount: 7, shareableDeclarationCount: 1, recordCount: 0, sharedRecordCount: 0, recordCountWithoutTable: 0, declarationKeys: [1, 3, 4, 8, 10, 6, 12]),
+					.init(mockedType: "SouthShell", rootDeclaration: 7, declarationCount: 7, shareableDeclarationCount: 1, recordCount: 0, sharedRecordCount: 0, recordCountWithoutTable: 0, declarationKeys: [15, 3, 4, 8, 10, 6, 12]),
+				],
+			),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsLoopMembersOutOfSharedGraph_whenMemberHasSecondParent() async throws {
+		let reports = try await Self.tableReports(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(
+				swiftFileContent: Self.loopFixtures(.memberBuiltWithoutLoopToo),
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		// `alphaBuilder` has two parents: `pane`, whose loop makes `betaBuilder` again in it, and `dock`, under which it is
+		// no member. A world reaching both would share it apart and one reaching one would not, so `pane`'s loop stays in
+		// each world's top graph. Only `clock` is shared, and is the one row.
+		#expect(reports == [
+			MockWorldsTableReport(
+				declarationCount: 8,
+				shareableDeclarationCount: 1,
+				sharedGraphDeclarations: [3], sharedVariantCount: 1, graphDeclarationCounts: [5, 5, 4],
+				sharedRecordCount: 1,
+				rows: ["3: clock: Clock"],
+				differences: [],
+				worlds: [
+					.init(mockedType: "NorthShell", rootDeclaration: 0, declarationCount: 5, shareableDeclarationCount: 1, recordCount: 0, sharedRecordCount: 0, recordCountWithoutTable: 0, declarationKeys: [1, 3, 4, 8, 6]),
+					.init(mockedType: "SouthShell", rootDeclaration: 5, declarationCount: 5, shareableDeclarationCount: 1, recordCount: 0, sharedRecordCount: 0, recordCountWithoutTable: 0, declarationKeys: [11, 3, 4, 8, 6]),
+					.init(mockedType: "WestShell", rootDeclaration: 6, declarationCount: 4, shareableDeclarationCount: 1, recordCount: 0, sharedRecordCount: 0, recordCountWithoutTable: 0, declarationKeys: [13, 15, 4, 6]),
+				],
+			),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsOuterLoopOutOfSharedGraph_whenInnerLoopBeneathItIsUnshared() async throws {
+		let reports = try await Self.tableReports(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(
+				swiftFileContent: Self.loopFixtures(.innerLoopMemberBuiltByMockRootToo),
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		// `hub`'s loop of `deltaBuilder` and `epsilonBuilder` is `WestShell`'s mock root's loop too, so it stays unshared,
+		// and `alphaBuilder`, which reaches `hub`, is unshareable. `pane` was shareable by every other condition, but now
+		// reaches an unshared loop, so its own loop stays in each world's top graph too: `betaBuilder`, which reaches no
+		// unshared loop, is no frontier beneath a top-graph loop parent. Nothing is shared.
+		#expect(reports == [
+			MockWorldsTableReport(
+				declarationCount: 9,
+				shareableDeclarationCount: 0,
+				sharedGraphDeclarations: [], sharedVariantCount: 0, graphDeclarationCounts: [7, 7, 3],
+				sharedRecordCount: 0,
+				rows: [],
+				differences: [],
+				worlds: [
+					.init(mockedType: "NorthShell", rootDeclaration: 0, declarationCount: 7, shareableDeclarationCount: 0, recordCount: 0, sharedRecordCount: 0, recordCountWithoutTable: 0, declarationKeys: [1, 3, 4, 12, 6, 8, 10]),
+					.init(mockedType: "SouthShell", rootDeclaration: 7, declarationCount: 7, shareableDeclarationCount: 0, recordCount: 0, sharedRecordCount: 0, recordCountWithoutTable: 0, declarationKeys: [15, 3, 4, 12, 6, 8, 10]),
+					.init(mockedType: "WestShell", rootDeclaration: 8, declarationCount: 3, shareableDeclarationCount: 0, recordCount: 0, sharedRecordCount: 0, recordCountWithoutTable: 0, declarationKeys: [17, 9, 11]),
+				],
+			),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_makesFillUnshareable_whenMockCallsAnotherModulesPublicMock() async throws {
 		let reports = try await Self.tableReports(filesToDelete: &filesToDelete) { filesToDelete in
 			try await executeSafeDIToolMultiModuleTest(
@@ -1145,6 +1267,362 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 		}
 		""",
 	]
+
+	/// Where a loop of builders sits in the fixtures of the loop tests: `Pane`, which two mock roots instantiate, holds the
+	/// loop of `alphaBuilder` and `betaBuilder`.
+	private enum LoopShape {
+		/// The loop and everything beneath it are wholly inside `Pane`'s subtree, where `Ticker`, beneath `betaBuilder`,
+		/// receives `alphaBuilder`, which `betaBuilder`'s rebinding answers.
+		case whollyInsidePane
+		/// `Pane` is on a cycle through `Gizmo`, so it stays in each world's top graph.
+		case paneOnCycle
+		/// `Alpha` receives `betaBuilder` only if available, and a third mock root, `WestShell`, instantiates `Dock`, which
+		/// instantiates `alphaBuilder` with no `betaBuilder` beside it: the member has a second parent, under which it is no
+		/// member of a loop and its `betaBuilder` is `nil`.
+		case memberBuiltWithoutLoopToo
+		/// `Alpha` instantiates `Hub`, which holds a loop of `deltaBuilder` and `epsilonBuilder` that `WestShell`, a third
+		/// mock root, instantiates too.
+		case innerLoopMemberBuiltByMockRootToo
+	}
+
+	private static func loopFixtures(_ shape: LoopShape) -> [String] {
+		switch shape {
+		case .whollyInsidePane:
+			[
+			"""
+			@Instantiable(generateMock: true)
+			public struct NorthShell: Instantiable {
+			    public init(pane: Pane) {
+			        self.pane = pane
+			    }
+
+			    @Instantiated let pane: Pane
+			}
+			""",
+			"""
+			@Instantiable(generateMock: true)
+			public struct SouthShell: Instantiable {
+			    public init(pane: Pane) {
+			        self.pane = pane
+			    }
+
+			    @Instantiated let pane: Pane
+			}
+			""",
+			"""
+			@Instantiable
+			public struct Alpha: Instantiable {
+			    public init(betaBuilder: Instantiator<Beta>, clock: Clock) {
+			        self.betaBuilder = betaBuilder
+			        self.clock = clock
+			    }
+
+			    @Received let betaBuilder: Instantiator<Beta>
+			    @Instantiated let clock: Clock
+			}
+			""",
+			"""
+			@Instantiable
+			public struct Beta: Instantiable {
+			    public init(alphaBuilder: Instantiator<Alpha>, ticker: Ticker) {
+			        self.alphaBuilder = alphaBuilder
+			        self.ticker = ticker
+			    }
+
+			    @Received let alphaBuilder: Instantiator<Alpha>
+			    @Instantiated let ticker: Ticker
+			}
+			""",
+			"""
+			@Instantiable
+			public struct Ticker: Instantiable {
+			    public init(alphaBuilder: Instantiator<Alpha>) {
+			        self.alphaBuilder = alphaBuilder
+			    }
+
+			    @Received let alphaBuilder: Instantiator<Alpha>
+			}
+			""",
+			"""
+			@Instantiable
+			public struct Clock: Instantiable {
+			    public init() {}
+			}
+			""",
+			"""
+			@Instantiable
+			public struct Pane: Instantiable {
+			    public init(alphaBuilder: Instantiator<Alpha>, betaBuilder: Instantiator<Beta>) {
+			        self.alphaBuilder = alphaBuilder
+			        self.betaBuilder = betaBuilder
+			    }
+
+			    @Instantiated let alphaBuilder: Instantiator<Alpha>
+			    @Instantiated let betaBuilder: Instantiator<Beta>
+			}
+			""",
+			]
+		case .paneOnCycle:
+			[
+			"""
+			@Instantiable(generateMock: true)
+			public struct NorthShell: Instantiable {
+			    public init(pane: Pane) {
+			        self.pane = pane
+			    }
+
+			    @Instantiated let pane: Pane
+			}
+			""",
+			"""
+			@Instantiable(generateMock: true)
+			public struct SouthShell: Instantiable {
+			    public init(pane: Pane) {
+			        self.pane = pane
+			    }
+
+			    @Instantiated let pane: Pane
+			}
+			""",
+			"""
+			@Instantiable
+			public struct Alpha: Instantiable {
+			    public init(betaBuilder: Instantiator<Beta>, clock: Clock) {
+			        self.betaBuilder = betaBuilder
+			        self.clock = clock
+			    }
+
+			    @Received let betaBuilder: Instantiator<Beta>
+			    @Instantiated let clock: Clock
+			}
+			""",
+			"""
+			@Instantiable
+			public struct Beta: Instantiable {
+			    public init(alphaBuilder: Instantiator<Alpha>) {
+			        self.alphaBuilder = alphaBuilder
+			    }
+
+			    @Received let alphaBuilder: Instantiator<Alpha>
+			}
+			""",
+			"""
+			@Instantiable
+			public struct Clock: Instantiable {
+			    public init() {}
+			}
+			""",
+			"""
+			@Instantiable
+			public struct Pane: Instantiable {
+			    public init(alphaBuilder: Instantiator<Alpha>, betaBuilder: Instantiator<Beta>, gizmoBuilder: Instantiator<Gizmo>) {
+			        self.alphaBuilder = alphaBuilder
+			        self.betaBuilder = betaBuilder
+			        self.gizmoBuilder = gizmoBuilder
+			    }
+
+			    @Instantiated let alphaBuilder: Instantiator<Alpha>
+			    @Instantiated let betaBuilder: Instantiator<Beta>
+			    @Instantiated let gizmoBuilder: Instantiator<Gizmo>
+			}
+			""",
+			"""
+			@Instantiable
+			public struct Gizmo: Instantiable {
+			    public init(paneBuilder: Instantiator<Pane>) {
+			        self.paneBuilder = paneBuilder
+			    }
+
+			    @Instantiated let paneBuilder: Instantiator<Pane>
+			}
+			""",
+			]
+		case .memberBuiltWithoutLoopToo:
+			[
+			"""
+			@Instantiable(generateMock: true)
+			public struct NorthShell: Instantiable {
+			    public init(pane: Pane) {
+			        self.pane = pane
+			    }
+
+			    @Instantiated let pane: Pane
+			}
+			""",
+			"""
+			@Instantiable(generateMock: true)
+			public struct SouthShell: Instantiable {
+			    public init(pane: Pane) {
+			        self.pane = pane
+			    }
+
+			    @Instantiated let pane: Pane
+			}
+			""",
+			"""
+			@Instantiable
+			public struct Alpha: Instantiable {
+			    public init(betaBuilder: Instantiator<Beta>?, clock: Clock) {
+			        self.betaBuilder = betaBuilder
+			        self.clock = clock
+			    }
+
+			    @Received(onlyIfAvailable: true) let betaBuilder: Instantiator<Beta>?
+			    @Instantiated let clock: Clock
+			}
+			""",
+			"""
+			@Instantiable
+			public struct Beta: Instantiable {
+			    public init(alphaBuilder: Instantiator<Alpha>) {
+			        self.alphaBuilder = alphaBuilder
+			    }
+
+			    @Received let alphaBuilder: Instantiator<Alpha>
+			}
+			""",
+			"""
+			@Instantiable
+			public struct Clock: Instantiable {
+			    public init() {}
+			}
+			""",
+			"""
+			@Instantiable
+			public struct Pane: Instantiable {
+			    public init(alphaBuilder: Instantiator<Alpha>, betaBuilder: Instantiator<Beta>) {
+			        self.alphaBuilder = alphaBuilder
+			        self.betaBuilder = betaBuilder
+			    }
+
+			    @Instantiated let alphaBuilder: Instantiator<Alpha>
+			    @Instantiated let betaBuilder: Instantiator<Beta>
+			}
+			""",
+			"""
+			@Instantiable(generateMock: true)
+			public struct WestShell: Instantiable {
+			    public init(dock: Dock) {
+			        self.dock = dock
+			    }
+
+			    @Instantiated let dock: Dock
+			}
+			""",
+			"""
+			@Instantiable
+			public struct Dock: Instantiable {
+			    public init(alphaBuilder: Instantiator<Alpha>) {
+			        self.alphaBuilder = alphaBuilder
+			    }
+
+			    @Instantiated let alphaBuilder: Instantiator<Alpha>
+			}
+			""",
+		]
+		case .innerLoopMemberBuiltByMockRootToo:
+			[
+			"""
+			@Instantiable(generateMock: true)
+			public struct NorthShell: Instantiable {
+			    public init(pane: Pane) {
+			        self.pane = pane
+			    }
+
+			    @Instantiated let pane: Pane
+			}
+			""",
+			"""
+			@Instantiable(generateMock: true)
+			public struct SouthShell: Instantiable {
+			    public init(pane: Pane) {
+			        self.pane = pane
+			    }
+
+			    @Instantiated let pane: Pane
+			}
+			""",
+			"""
+			@Instantiable
+			public struct Alpha: Instantiable {
+			    public init(betaBuilder: Instantiator<Beta>, hub: Hub) {
+			        self.betaBuilder = betaBuilder
+			        self.hub = hub
+			    }
+
+			    @Received let betaBuilder: Instantiator<Beta>
+			    @Instantiated let hub: Hub
+			}
+			""",
+			"""
+			@Instantiable
+			public struct Beta: Instantiable {
+			    public init(alphaBuilder: Instantiator<Alpha>) {
+			        self.alphaBuilder = alphaBuilder
+			    }
+
+			    @Received let alphaBuilder: Instantiator<Alpha>
+			}
+			""",
+			"""
+			@Instantiable
+			public struct Pane: Instantiable {
+			    public init(alphaBuilder: Instantiator<Alpha>, betaBuilder: Instantiator<Beta>) {
+			        self.alphaBuilder = alphaBuilder
+			        self.betaBuilder = betaBuilder
+			    }
+
+			    @Instantiated let alphaBuilder: Instantiator<Alpha>
+			    @Instantiated let betaBuilder: Instantiator<Beta>
+			}
+			""",
+			"""
+			@Instantiable
+			public struct Hub: Instantiable {
+			    public init(deltaBuilder: Instantiator<Delta>, epsilonBuilder: Instantiator<Epsilon>) {
+			        self.deltaBuilder = deltaBuilder
+			        self.epsilonBuilder = epsilonBuilder
+			    }
+
+			    @Instantiated let deltaBuilder: Instantiator<Delta>
+			    @Instantiated let epsilonBuilder: Instantiator<Epsilon>
+			}
+			""",
+			"""
+			@Instantiable
+			public struct Delta: Instantiable {
+			    public init(epsilonBuilder: Instantiator<Epsilon>) {
+			        self.epsilonBuilder = epsilonBuilder
+			    }
+
+			    @Received let epsilonBuilder: Instantiator<Epsilon>
+			}
+			""",
+			"""
+			@Instantiable
+			public struct Epsilon: Instantiable {
+			    public init(deltaBuilder: Instantiator<Delta>) {
+			        self.deltaBuilder = deltaBuilder
+			    }
+
+			    @Received let deltaBuilder: Instantiator<Delta>
+			}
+			""",
+			"""
+			@Instantiable(generateMock: true)
+			public struct WestShell: Instantiable {
+			    public init(deltaBuilder: Instantiator<Delta>, epsilonBuilder: Instantiator<Epsilon>) {
+			        self.deltaBuilder = deltaBuilder
+			        self.epsilonBuilder = epsilonBuilder
+			    }
+
+			    @Instantiated let deltaBuilder: Instantiator<Delta>
+			    @Instantiated let epsilonBuilder: Instantiator<Epsilon>
+			}
+			""",
+			]
+		}
+	}
 
 	private var filesToDelete: [URL]
 

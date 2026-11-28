@@ -51,8 +51,10 @@ struct MockWorld: Sendable {
 /// parent's configuration), so a declaration that is the root's child in one world and deeper in another is two rows. A
 /// shared variant is a row where its declaration is of kind `mockConstruction` and holds no refusal
 /// (`NodeRecords.mockKindAndRefusals(of:in:)`) and every variant it calls is a row: facts of the shared graph alone, found
-/// once for the run. A shareable declaration is no member of a loop of builders and holds none (`MockWorldsTable`), so
-/// no world's loop decides a row.
+/// once for the run. A loop of builders a shareable declaration takes part in is wholly in the shared graph, its parent
+/// included (`MockWorldsTable`), so no world's loop decides a row; its members are refused as a mock world's members are
+/// (`NodeRecords.loopRefusals(of:in:)`), so neither they nor what calls them is a row, and a world that reaches them is
+/// not clean and reports the refusal its whole graph holds.
 ///
 /// Five passes, three of them parallel, each task reading only frozen values: each world's top graph and its calls into
 /// the shared graph (one task per world); the shared graph's variants and which are rows (serial); each world's walk of
@@ -540,6 +542,11 @@ struct MockWorlds: Sendable {
 							isSharedVariantMade[Int(callee)] = true
 							origins.append((true, callee))
 						}
+					}
+					// A member made again is a child of its loop's parent, a shared declaration, so it is interior already.
+					for callee in sources.madeAgainCalls(of: variant) where !isSharedVariantMade[Int(callee)] {
+						isSharedVariantMade[Int(callee)] = true
+						origins.append((true, callee))
 					}
 					continue
 				}

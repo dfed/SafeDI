@@ -83,19 +83,30 @@ struct MockWorldGraph: NodeRecordSources, Sendable {
 			return table.declarationID(of: top.graph.nodes[Int(origin.node)]) ?? -1
 		}
 		edgeFacts = Self.edgeFacts(of: graph, top: top, shared: shared)
-		// A declaration of a loop of builders is never shareable (`MockWorldsTable.isShareable`), so every loop is the top
-		// graph's, its members and the declarations that make them again among its own declarations.
+		// A loop of builders is wholly the top graph's or wholly the shared graph's (`MockWorldsTable.isShareable`): its
+		// members and the declarations that make them again are of one graph, which says what each makes again.
 		var madeAgainOffsets: [Int32] = [0]
 		var madeAgainTargets = [Int32]()
 		for node in graph.nodes {
-			if !node.isShared {
+			if node.isShared, let shared {
+				madeAgainTargets += (shared.graph.facts.madeAgain?.targets(of: Int(node.node)) ?? []).map { denseByOrigin[Origin(isShared: true, node: $0)] ?? -1 }
+			} else {
 				madeAgainTargets += top.madeAgain(from: DeclarationID(node.node)).map { denseByOrigin[origin(ofTopNode: $0)] ?? -1 }
 			}
 			madeAgainOffsets.append(Int32(madeAgainTargets.count))
 		}
 		self.madeAgainOffsets = madeAgainOffsets
 		self.madeAgainTargets = madeAgainTargets
-		loopMembersSharedApart = top.loopMembersSharedApart.map { denseByOrigin[origin(ofTopNode: $0)] ?? -1 }
+		// In the dense view's order, as the world's graph lists them: a shared member the world does not reach is no member
+		// of its loops.
+		var isSharedApart = [Bool](repeating: false, count: graph.nodes.count)
+		let membersSharedApart = top.loopMembersSharedApart.map(origin(ofTopNode:)) + (shared?.graph.facts.loopMembersSharedApart ?? []).map { Origin(isShared: true, node: $0) }
+		for member in membersSharedApart {
+			if let dense = denseByOrigin[member] {
+				isSharedApart[Int(dense)] = true
+			}
+		}
+		loopMembersSharedApart = isSharedApart.indices.filter { isSharedApart[$0] }.map(Int32.init)
 		parentOffsetsAndParents = Self.parents(of: graph, edgeFacts: edgeFacts, top: top, shared: shared)
 		let reads = Self.reads(of: graph, top: top, shared: shared)
 		readTable = reads.readTable
@@ -409,6 +420,9 @@ struct MockWorldGraph: NodeRecordSources, Sendable {
 						readsFromAbove(of: calleeOrigin, top: top, shared: shared),
 						denseByOrigin[calleeOrigin] ?? -1,
 					))
+				}
+				for callee in sharedVariants.madeAgainCallees(of: Int(variant)) {
+					_ = viewVariant(isShared: true, variant: callee)
 				}
 			} else {
 				let node = top.declaration(of: variant)

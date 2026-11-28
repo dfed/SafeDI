@@ -25,11 +25,17 @@
 /// before the lowerings run, and never changed, so the parallel lowerings only read it. One walk, depth first from each
 /// root in turn, taking each declaration's edges in the order a world's graph takes them (`TypeFactsDeclaration.edges`),
 /// gives each declaration its ID (`RunFactsInterning`) and records its edges once. A declaration is shareable only if no
-/// declaration it reaches, itself included, lies on a cycle of that graph, may take part in a loop of builders
-/// (`loopDeclarations(of:nodesByComponent:)`), is a hole or is a fill: a hole of a public mock's
-/// world is a place, bound from the builder that world's mock takes, and a fill, what a call of another module's public
-/// mock is passed, reads the values of the scope that makes the call (`FillCallerReads`), so whatever holds either is
-/// built per world. A mock root's own
+/// declaration it reaches, itself included, lies on a cycle of that graph, is a hole or is a fill, or may take part in a
+/// loop of builders that is not shared whole: a hole of a public mock's world is a place, bound from the builder that
+/// world's mock takes, and a fill, what a call of another module's public mock is passed, reads the values of the scope
+/// that makes the call (`FillCallerReads`), so whatever holds either is built per world. A loop of builders
+/// (`loopsOfBuilders(of:nodesByComponent:)`) is shared whole, with its parent, where its parent is shareable by every
+/// other condition and every member has that parent alone: its rebindings are a fact of the parent's children and their
+/// subtrees, alike in every world that reaches the parent by one variant, and the shared graph finds its made-again calls
+/// as a world's graph does. Any other loop stays in each world's top graph, its declarations unshareable, so no loop
+/// crosses the frontier. The one-parent limit is deliberate: whether a member is shared apart is decided over its
+/// parents in the graph that holds it, which in the shared graph would be every world's and in a world's graph only its
+/// own. A mock root's own
 /// declaration is never shareable: its record is made for its world alone. These are facts of the run, known before any
 /// world is built, so no world decides another's.
 ///
@@ -69,21 +75,43 @@ struct MockWorldsTable: Sendable {
 		for node in graph.nodes.indices {
 			nodesByComponent[Int(graph.componentByNode[node])].append(node)
 		}
-		let isOnLoopOfBuilders = Self.loopDeclarations(of: graph, nodesByComponent: nodesByComponent)
-		var reachesExclusionByComponent = [Bool](repeating: false, count: graph.componentCount)
-		for (component, nodes) in nodesByComponent.enumerated() {
-			var reachesExclusion = false
-			for node in nodes {
-				let declarationKey = graph.nodes[node].declaration?.key
-				reachesExclusion = reachesExclusion || graph.isOnCycle(node) || declarationKey?.leaf == .hole || declarationKey?.isFill == true || isOnLoopOfBuilders[node]
-				for target in graph.edges(from: node) where Int(graph.componentByNode[Int(target)]) != component {
-					reachesExclusion = reachesExclusion || reachesExclusionByComponent[Int(graph.componentByNode[Int(target)])]
+		let worldRootDeclarations = rootDeclarations.compactMap(interning.declarationID(of:))
+		var isWorldRoot = [Bool](repeating: false, count: graph.nodes.count)
+		for root in worldRootDeclarations {
+			isWorldRoot[Int(root) + 1] = true
+		}
+		// Whether each component reaches a cycle, a hole or a fill: every exclusion but loops of builders.
+		let reachesOtherExclusionByComponent = Self.reachesExclusionByComponent(of: graph, nodesByComponent: nodesByComponent) { node in
+			let declarationKey = graph.nodes[node].declaration?.key
+			return graph.isOnCycle(node) || declarationKey?.leaf == .hole || declarationKey?.isFill == true
+		}
+		// A loop whose parent is shareable by every other condition is shared whole, with its parent: its rebindings are a
+		// fact of the parent's children and their subtrees, alike in every world that reaches the parent. Any other loop's
+		// declarations are unshareable, which can make another loop's parent unshareable in turn, so this runs until no loop
+		// is added: each pass only adds.
+		let loops = Self.loopsOfBuilders(of: graph, nodesByComponent: nodesByComponent)
+		var isOnUnsharedLoop = [Bool](repeating: false, count: graph.nodes.count)
+		var isLoopUnshared = loops.map { loop in
+			!loop.hasMembersOfOneParent || isWorldRoot[loop.parent] || reachesOtherExclusionByComponent[Int(graph.componentByNode[loop.parent])]
+		}
+		var reachesExclusionByComponent = reachesOtherExclusionByComponent
+		var addedLoop = true
+		while addedLoop {
+			for (loop, isUnshared) in zip(loops, isLoopUnshared) where isUnshared {
+				for node in loop.declarations {
+					isOnUnsharedLoop[node] = true
 				}
 			}
-			reachesExclusionByComponent[component] = reachesExclusion
+			reachesExclusionByComponent = Self.reachesExclusionByComponent(of: graph, nodesByComponent: nodesByComponent) { node in
+				reachesOtherExclusionByComponent[Int(graph.componentByNode[node])] || isOnUnsharedLoop[node]
+			}
+			addedLoop = false
+			for (index, loop) in loops.enumerated() where !isLoopUnshared[index] && reachesExclusionByComponent[Int(graph.componentByNode[loop.parent])] {
+				isLoopUnshared[index] = true
+				addedLoop = true
+			}
 		}
 		var isShareable = (1..<graph.nodes.count).map { !reachesExclusionByComponent[Int(graph.componentByNode[$0])] }
-		let worldRootDeclarations = rootDeclarations.compactMap(interning.declarationID(of:))
 		for root in worldRootDeclarations {
 			isShareable[Int(root)] = false
 		}
@@ -97,14 +125,39 @@ struct MockWorldsTable: Sendable {
 		sharedRecordIDByNode = [:]
 	}
 
-	/// Whether each node of the run’s graph may take part in a loop of builders (`SiblingOrder.loops(of:graph:facts:)`) in
-	/// some world: a scope with a child built as a builder whose subtree receives the label of a builder child of that
-	/// scope, which may be a loop’s parent; each such child, which may be a member, made again and shared apart; and each
+	/// Whether each component of the run’s graph reaches a node `isExcluded` holds of. A component's number is lower than
+	/// that of every other component that reaches it, so each is judged after every component it reaches.
+	private static func reachesExclusionByComponent(of graph: OrderedGraph<Node>, nodesByComponent: [[Int]], isExcluded: (Int) -> Bool) -> [Bool] {
+		var reachesExclusionByComponent = [Bool](repeating: false, count: graph.componentCount)
+		for (component, nodes) in nodesByComponent.enumerated() {
+			var reachesExclusion = false
+			for node in nodes {
+				reachesExclusion = reachesExclusion || isExcluded(node)
+				for target in graph.edges(from: node) where Int(graph.componentByNode[Int(target)]) != component {
+					reachesExclusion = reachesExclusion || reachesExclusionByComponent[Int(graph.componentByNode[Int(target)])]
+				}
+			}
+			reachesExclusionByComponent[component] = reachesExclusion
+		}
+		return reachesExclusionByComponent
+	}
+
+	/// Each scope of the run’s graph that may be the parent of a loop of builders (`SiblingOrder.loops(of:graph:facts:)`) in
+	/// some world, in node order, with the declarations that may take part in its loops: the scope; each child built as a
+	/// builder whose subtree receives the label of a builder child of that scope, which may be a member, made again; and each
 	/// declaration beneath such a child that receives one of those labels itself, whose read a member’s rebinding may
 	/// answer. A loop needs a member whose tree receives a sibling builder’s label, or its own, so this holds of every
 	/// declaration of every loop and of every read a rebinding answers, and of more: labels are compared without the
-	/// declarations that hide them. The shared graph knows nothing of loops, so none of these is shareable.
-	private static func loopDeclarations(of graph: OrderedGraph<Node>, nodesByComponent: [[Int]]) -> [Bool] {
+	/// declarations that hide them. `hasMembersOfOneParent` says whether every such child has that scope as its only
+	/// parent in the run: a member another parent builds may be made again under one and not the other, which a world
+	/// that reaches both shares apart and one that reaches one does not.
+	private static func loopsOfBuilders(of graph: OrderedGraph<Node>, nodesByComponent: [[Int]]) -> [LoopOfBuilders] {
+		var parentCounts = [Int](repeating: 0, count: graph.nodes.count)
+		for node in graph.nodes.indices {
+			for target in graph.edges(from: node) {
+				parentCounts[Int(target)] += 1
+			}
+		}
 		let ownReceivedLabels = graph.nodes.map { node in node.declaration.map(Self.labelsReceived(by:)) ?? [] }
 		// A component's number is lower than that of every other component that reaches it.
 		var subtreeLabelsByComponent = [Set<String>](repeating: [], count: graph.componentCount)
@@ -124,25 +177,38 @@ struct MockWorldsTable: Sendable {
 		func builderLabel(of node: Int) -> String? {
 			graph.nodes[node].declaration?.property.flatMap { ScopeGenerator.isBuilder($0) ? $0.label : nil }
 		}
-		var isOnLoop = [Bool](repeating: false, count: graph.nodes.count)
-		for parent in graph.nodes.indices where graph.nodes[parent].declaration?.key.leaf == TypeFactsDeclaration.Leaf.none {
+		var loops = [LoopOfBuilders]()
+		// Each scope's builder children's labels, and the builder children whose subtrees receive one of them.
+		let scopes = graph.nodes.indices.lazy.filter { graph.nodes[$0].declaration?.key.leaf == TypeFactsDeclaration.Leaf.none }.map { parent in
 			let children = graph.edges(from: parent).map(Int.init)
 			let builderLabels = Set(children.compactMap(builderLabel(of:)))
-			for child in children where builderLabel(of: child) != nil && !subtreeLabels(of: child).isDisjoint(with: builderLabels) {
-				isOnLoop[parent] = true
-				isOnLoop[child] = true
+			return (parent: parent, builderLabels: builderLabels, loopChildren: children.filter { builderLabel(of: $0) != nil && !subtreeLabels(of: $0).isDisjoint(with: builderLabels) })
+		}
+		for (parent, builderLabels, loopChildren) in scopes where !loopChildren.isEmpty {
+			var isOnLoop = Set([parent])
+			for child in loopChildren {
+				isOnLoop.insert(child)
 				var visited = Set<Int>()
 				var pending = [child]
 				while let current = pending.popLast() {
 					guard visited.insert(current).inserted else { continue }
 					if !ownReceivedLabels[current].isDisjoint(with: builderLabels) {
-						isOnLoop[current] = true
+						isOnLoop.insert(current)
 					}
 					pending.append(contentsOf: graph.edges(from: current).map(Int.init).filter { !subtreeLabels(of: $0).isDisjoint(with: builderLabels) })
 				}
 			}
+			loops.append(LoopOfBuilders(parent: parent, declarations: isOnLoop.sorted(), hasMembersOfOneParent: loopChildren.allSatisfy { parentCounts[$0] == 1 }))
 		}
-		return isOnLoop
+		return loops
+	}
+
+	/// A scope that may be the parent of a loop of builders, by its node in the run’s graph, the declarations that may take
+	/// part in its loops, in node order, and whether each child that may be a member has that scope as its only parent.
+	private struct LoopOfBuilders {
+		let parent: Int
+		let declarations: [Int]
+		let hasMembersOfOneParent: Bool
 	}
 
 	/// The labels `declaration` receives itself: its received dependencies’ and the property an alias renames.

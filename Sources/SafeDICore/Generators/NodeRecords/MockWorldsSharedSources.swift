@@ -20,9 +20,9 @@
 
 /// The mock worlds' shared graph and its variants as a shared row's kind and record read them (`NodeKindSources`), by
 /// the shared graph's positions and the shared variants' IDs: what every world that holds a row would read of its
-/// subtree alike, read once for the run. A shareable declaration reaches no cycle and no loop of builders
-/// (`MockWorldsTable.isShareable(_:)`), so none is on a cycle, makes a member again or is a member shared apart. It holds
-/// nothing of its own, only the two values it reads, for as long as `MockWorlds.build` holds it.
+/// subtree alike, read once for the run. A shareable declaration reaches no cycle (`MockWorldsTable.isShareable(_:)`), so
+/// none is on one; a loop of builders it holds is wholly inside the shared graph, whose facts say what each member makes
+/// again. It holds nothing of its own, only the two values it reads, for as long as `MockWorlds.build` holds it.
 struct MockWorldsSharedSources: NodeKindSources, Sendable {
 	let graph: MockWorldsSharedGraph
 	let variants: MockWorldsSharedVariants
@@ -47,12 +47,17 @@ struct MockWorldsSharedSources: NodeKindSources, Sendable {
 		graph.facts.edgeFacts[graph.graph.edgeIndices(from: Int(declaration))]
 	}
 
-	func madeAgain(from _: DeclarationID) -> ArraySlice<Int32> {
-		[]
+	func madeAgain(from declaration: DeclarationID) -> ArraySlice<Int32> {
+		graph.facts.madeAgain?.targets(of: Int(declaration)) ?? []
 	}
 
 	var loopMembersSharedApart: [Int32] {
-		[]
+		graph.facts.loopMembersSharedApart
+	}
+
+	/// The variants `variant` makes again, after its calls, as a world's graph orders them (`madeAgainCalls(of:)`).
+	func madeAgainCalls(of variant: VariantID) -> ArraySlice<VariantID> {
+		variants.variants.madeAgainCallees(of: Int(variant))
 	}
 
 	func declaration(of variant: VariantID) -> DeclarationID {
