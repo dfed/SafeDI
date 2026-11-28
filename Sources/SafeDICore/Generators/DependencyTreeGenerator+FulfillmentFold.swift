@@ -599,6 +599,36 @@ extension DependencyTreeGenerator {
 				}
 			}
 			walkStarts.append(contentsOf: [[Int32]](repeating: [], count: foldScopes.count - walkStarts.count))
+			// A walk that starts at a rename's property judges every receive of a property being built as being built, with
+			// no nearest declaration (`validatePropertiesAreFulfillable`), so where one starts no place hides anything.
+			var hiddenProperties = [[Int32]](repeating: [], count: foldScopes.count)
+			if walkStarts.allSatisfy(\.isEmpty) {
+				// The properties each label is declared and read as, as cycle validation sees them. A declaration hides a read
+				// only where the label is held as one property, so the nearest declaration of the read, wherever it is, declares
+				// the property read: a nearer declaration of another form fulfills nothing, and the walk then judges the read
+				// against every entry above it. The hidden-receive question asks that of no tree validated for cycles alone.
+				var propertiesByLabel = [String: Set<Property>]()
+				for scope in foldScopes {
+					for requiredReceivedProperty in scope.requiredReceivedProperties {
+						let property = requiredReceivedProperty.property.asValidatedForDependencyCycles
+						propertiesByLabel[property.label, default: []].insert(property)
+					}
+					// What `enterDeclarations` enters.
+					for dependency in scope.instantiable.dependencies where scope.createdProperties.contains(dependency.property) {
+						let property = dependency.property.asValidatedForDependencyCycles
+						propertiesByLabel[property.label, default: []].insert(property)
+					}
+				}
+				for scopeIndex in scopes.indices {
+					for dependency in scopes[scopeIndex].instantiable.dependencies where scopes[scopeIndex].createdProperties.contains(dependency.property) {
+						let property = dependency.property.asValidatedForDependencyCycles
+						// A property with no ID is neither required nor built by any scope, so no read of it is hidden.
+						if propertiesByLabel[property.label, default: []].count == 1, let id = propertyIDs[property] {
+							hiddenProperties[scopeIndex].append(id)
+						}
+					}
+				}
+			}
 			return ReceivedCycleFold.Input(
 				propertyCount: scopeOfProperty.count,
 				// Every scope of the trees, since a root of one tree can be built inside another.
@@ -608,6 +638,7 @@ extension DependencyTreeGenerator {
 				declaredRequiredProperties: declaredRequirements,
 				scopeOfProperty: scopeOfProperty,
 				walkStarts: walkStarts,
+				hiddenProperties: hiddenProperties,
 				renames: renames,
 			)
 		}

@@ -35,6 +35,11 @@
 ///   what its child reaches through a property it requires, or from a property a walk starts at.
 /// - The walk that starts at the property a rename only if available is bound from starts at the scope that declares
 ///   the rename, with that scope's stack: the property is an edge from that place's node.
+/// - The walk at a place judges a receive of an entry of its stack against the nearest declaration of the receive's
+///   label above the place (`isFulfilledByNearerDeclaration`), which fulfills it where it declares the received property
+///   and is nearer than the entry. A place's declarations are the nearest for the places it builds, so a place hides from
+///   the places above it what the places it builds read of the properties it declares (`hiddenProperties`), never what
+///   its own scope reads, which is judged against the declarations above it.
 ///
 /// The second question is of the same shape: whether a tree an edge builds holds a type that requires a property, for
 /// a required receive of a rename built inside the sibling the rename is fulfilled by.
@@ -79,6 +84,9 @@ struct ReceivedCycleFold: Sendable {
 		/// For each scope, the properties a walk starts at where the scope is built: what a rename only if available it
 		/// declares is bound from.
 		var walkStarts: [[Int32]]
+		/// For each scope of the trees, the properties whose reads by the places it builds it fulfills for every entry of
+		/// their stacks above it: those it declares of labels every declaration and read of which is that one property.
+		var hiddenProperties: [[Int32]]
 		var renames: [Rename]
 	}
 
@@ -95,8 +103,14 @@ struct ReceivedCycleFold: Sendable {
 				var targets = [Node.scope(scope)]
 				targets.append(contentsOf: input.walkStarts[Int(scope)].map { .property($0) })
 				targets.append(contentsOf: input.declaredRequiredProperties[Int(scope)].map { .declaredRequirement($0) })
-				targets.append(contentsOf: edgesByParent[Int(scope)].map { .place($0) })
+				if input.hiddenProperties[Int(scope)].isEmpty {
+					targets.append(contentsOf: edgesByParent[Int(scope)].map { .place($0) })
+				} else {
+					targets.append(.placesBuiltBy(scope))
+				}
 				return targets
+			case let .placesBuiltBy(scope):
+				return edgesByParent[Int(scope)].map { .place($0) }
 			case let .scope(scope):
 				return input.requiredProperties[Int(scope)].map { .property($0) }
 			case let .property(property):
@@ -109,7 +123,7 @@ struct ReceivedCycleFold: Sendable {
 		let propertyCount = Int32(input.propertyCount)
 		let own = BitRows(rowCount: graph.nodes.count, columnCount: input.propertyCount * 2) { index, insert in
 			switch graph.nodes[index] {
-			case .root, .place, .scope:
+			case .root, .place, .scope, .placesBuiltBy:
 				break
 			case let .property(property):
 				insert(property)
@@ -117,7 +131,16 @@ struct ReceivedCycleFold: Sendable {
 				insert(propertyCount + property)
 			}
 		}
-		let hidden = BitRows(rowCount: graph.nodes.count, columnCount: input.propertyCount * 2) { _, _ in }
+		let hidden = BitRows(rowCount: graph.nodes.count, columnCount: input.propertyCount * 2) { index, insert in
+			switch graph.nodes[index] {
+			case .root, .place, .scope, .property, .declaredRequirement:
+				break
+			case let .placesBuiltBy(scope):
+				for property in input.hiddenProperties[Int(scope)] {
+					insert(property)
+				}
+			}
+		}
 		let rows = ReadsFromAbove(graph: graph, own: own, hidden: hidden).rows
 		func reaches(_ property: Int32, from node: Node) -> Bool {
 			graph.index(of: node).map { rows.contains(property, inRow: $0) } ?? false
@@ -159,5 +182,7 @@ struct ReceivedCycleFold: Sendable {
 		case property(Int32)
 		/// A property a place's scope requires as declared.
 		case declaredRequirement(Int32)
+		/// The places a place's scope builds, beneath its declarations: its row holds what they read that it does not hide.
+		case placesBuiltBy(Int32)
 	}
 }

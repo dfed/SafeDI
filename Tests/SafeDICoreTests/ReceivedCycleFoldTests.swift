@@ -94,6 +94,32 @@ struct ReceivedCycleFoldTests {
 		#expect(fold.edgeThatMayCloseCycle == 0)
 	}
 
+	@Test(arguments: [false, true])
+	func edgeThatMayCloseCycle_isEdgeOfValue_onlyWhenNoPlaceBetweenHidesItFromScopeBeneath(placeBetweenHidesIt: Bool) {
+		// Scope 1 is built as value 0 and builds scope 2, which builds scope 3, which requires value 0. Where scope 2
+		// declares value 0 for the scopes it builds, scope 3 reads that declaration, not the value being built.
+		let fold = World(
+			scopes: [.init(), .init(), .init(hides: placeBetweenHidesIt ? [0] : []), .init(requires: [0])],
+			edges: [.value(0, from: 0, to: 1), .value(1, from: 1, to: 2), .value(2, from: 2, to: 3)],
+		).fold
+
+		#expect(fold.edgeThatMayCloseCycle == (placeBetweenHidesIt ? nil : 0))
+	}
+
+	@Test
+	func edgeThatMayCloseCycle_isEdgeOfValue_whenPlaceThatHidesItRequiresItThroughItsOwnScope() {
+		// Scope 1 is built as value 0 and builds scope 2, which declares value 0 for the scopes it builds and requires
+		// property 1, whose type's scope 3 requires value 0: a place's own receives are judged against the declarations
+		// above it.
+		let fold = World(
+			scopes: [.init(), .init(), .init(requires: [1], hides: [0]), .init(requires: [0])],
+			edges: [.value(0, from: 0, to: 1), .value(2, from: 1, to: 2)],
+			scopeOfProperty: [1: 3],
+		).fold
+
+		#expect(fold.edgeThatMayCloseCycle == 0)
+	}
+
 	@Test
 	func edgeThatMayCloseCycle_isNil_whenNoValidatedTreeReachesEdge() {
 		let fold = World(
@@ -149,6 +175,7 @@ struct ReceivedCycleFoldTests {
 			var requires = [Int32]()
 			var declaredRequirements = [Int32]()
 			var walkStarts = [Int32]()
+			var hides = [Int32]()
 		}
 
 		var scopes: [Scope]
@@ -166,6 +193,7 @@ struct ReceivedCycleFoldTests {
 				declaredRequiredProperties: scopes.map(\.declaredRequirements),
 				scopeOfProperty: (0..<Int32(propertyCount)).map { scopeOfProperty[$0] ?? -1 },
 				walkStarts: scopes.map(\.walkStarts),
+				hiddenProperties: scopes.map(\.hides),
 				renames: renames,
 			))
 		}

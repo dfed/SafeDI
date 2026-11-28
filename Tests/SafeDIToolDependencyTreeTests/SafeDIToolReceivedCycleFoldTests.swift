@@ -99,6 +99,73 @@ struct SafeDIToolReceivedCycleFoldTests: ~Copyable {
 		#expect(run.routesThatMayFail == ["receivedCycle"])
 	}
 
+	@Test(arguments: [false, true])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_findsNoRouteThatMayFail_whenReceiveInsideValueOfItsLabelIsBeneathTypeThatDeclaresLabelAgain(withLazyTwin: Bool) async throws {
+		// `Host` builds `model` and `screen`, which receives `model`; `Model` builds `hostBuilder`, so a `Screen` is built
+		// inside a `model` still being built, beneath a `Host` that declares `model` again: the screen reads that nearer
+		// declaration. With the lazy twin, `First` declares the same label and type as a `LazilyInstantiated`, which cycle
+		// validation sees as the same `model: Model`, and builds a `Host` inside it too.
+		var rootDeclarations = ["@Instantiated let hostBuilder: Instantiator<Host>"]
+		var fixture = [
+			seamFixtureType(named: "Host", declarations: ["@Instantiated let model: Model", "@Instantiated let screen: Screen"]),
+			seamFixtureType(named: "Model", declarations: ["@Instantiated let hostBuilder: Instantiator<Host>"]),
+			seamFixtureType(named: "Screen", declarations: ["@Received let model: Model"]),
+		]
+		if withLazyTwin {
+			rootDeclarations.append("@Instantiated let first: First")
+			fixture.append(seamFixtureType(named: "First", declarations: ["@Instantiated let model: LazilyInstantiated<Model>", "@Instantiated let screen: Screen"]))
+		}
+		fixture.append(seamFixtureType(named: "Root", isRoot: true, declarations: rootDeclarations))
+		let run = try await run(fixture)
+		#expect(run.isGenerated)
+		#expect(run.routesThatMayFail == [])
+	}
+
+	@Test(arguments: [false, true])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_findsReceivedCycle_whenTypeThatDeclaresLabelAgainReceivesValueWhoseTypeReadsLabel(withLazyTwin: Bool) async throws {
+		// The shape above with `Host` receiving the root's `session`, whose type receives `model`: `Host`'s own receives
+		// are judged against the declarations above `Host`, not its own, so through `session` the `Host` built inside the
+		// root's `model` reads that `model` while it is still being built. The walk rejects the trees, and the fold must
+		// send them to it, though `Host` declares `model` again for the types it builds.
+		var rootDeclarations = ["@Instantiated let model: Model", "@Instantiated let session: Session", "@Instantiated let hostBuilder: Instantiator<Host>"]
+		var fixture = [
+			seamFixtureType(named: "Host", declarations: ["@Received let session: Session", "@Instantiated let model: Model", "@Instantiated let screen: Screen"]),
+			seamFixtureType(named: "Model", declarations: ["@Instantiated let hostBuilder: Instantiator<Host>"]),
+			seamFixtureType(named: "Screen", declarations: ["@Received let model: Model"]),
+			seamFixtureType(named: "Session", declarations: ["@Received let model: Model"]),
+		]
+		if withLazyTwin {
+			rootDeclarations.append("@Instantiated let first: First")
+			fixture.append(seamFixtureType(named: "First", declarations: ["@Instantiated let model: LazilyInstantiated<Model>", "@Instantiated let screen: Screen"]))
+		}
+		fixture.append(seamFixtureType(named: "Root", isRoot: true, declarations: rootDeclarations))
+		let run = try await run(fixture)
+		#expect(run.errorDescription?.contains("error: Dependency cycle") == true)
+		#expect(run.routesThatMayFail == ["receivedCycle"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_findsReceivedCycle_whenRenameOnlyIfAvailableBeneathTypeThatDeclaresLabelAgainIsBoundFromValueWhoseTypeReadsLabel() async throws {
+		// `Screen`, built beneath a `Host` that declares `model` again, renames the root's `session` only if available, and
+		// `Panel` requires the rename. The walk of what the rename is bound from starts where `Screen` declares it, where it
+		// has no nearest declarations, so `Session`'s receive of `model` is judged as the root's `model`, which is still
+		// being built around `Screen`: the walk rejects the trees, and `Host`'s declaration must hide nothing from it.
+		let fixture = [
+			seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let model: Model", "@Instantiated let session: Session"]),
+			seamFixtureType(named: "Model", declarations: ["@Instantiated let hostBuilder: Instantiator<Host>"]),
+			seamFixtureType(named: "Host", declarations: ["@Instantiated let model: Model", "@Instantiated let screen: Screen"]),
+			seamFixtureType(named: "Screen", declarations: ["@Received(fulfilledByDependencyNamed: \"session\", ofType: Session.self, onlyIfAvailable: true) let renamedSession: Session?", "@Instantiated let panel: Panel"]),
+			seamFixtureType(named: "Panel", declarations: ["@Received let renamedSession: Session?"]),
+			seamFixtureType(named: "Session", declarations: ["@Received let model: Model"]),
+		]
+		let run = try await run(fixture)
+		#expect(run.errorDescription?.contains("error: Dependency cycle") == true)
+		#expect(run.routesThatMayFail == ["receivedCycle"])
+	}
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_findsRenamedReceive_whenRenameIsReceivedInsideSiblingItIsFulfilledBy() async throws {
