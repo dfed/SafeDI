@@ -2197,6 +2197,8 @@ public struct SeamSignature: Sendable {
 		public let tiers: [AccessLevel]
 		public let noTierParameters: [Parameter]
 		public let typesDeclaredEscaping: Set<TypeDescription>
+		/// EXPERIMENT, never merged: each case's reference to a called seam's case, so a pass that leaves one stale is not settled.
+		public let experimentPassedUpCases: [SeamSignature.Places.CalledCase?]
 	}
 
 	public var settledContent: SettledContent {
@@ -2225,6 +2227,7 @@ public struct SeamSignature: Sendable {
 			tiers: tiers,
 			noTierParameters: settledContent(of: noTierParameters),
 			typesDeclaredEscaping: typesDeclaredEscaping,
+			experimentPassedUpCases: places.cases.map(\.passedUp),
 		)
 	}
 
