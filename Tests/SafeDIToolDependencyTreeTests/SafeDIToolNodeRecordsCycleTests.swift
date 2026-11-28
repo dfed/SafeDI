@@ -1158,6 +1158,78 @@ struct SafeDIToolNodeRecordsCycleTests: ~Copyable {
 
 	private var filesToDelete: [URL]
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysOutRootAsTheTreeDoes_whenCycleClosesThroughErasedInstantiator() async throws {
+		// `A` is built at the root and again inside `C`, which `B` builds through an erased instantiator. Both calls of `A`
+		// read its label from a scope that declares it as a plain constant: that `C` is built erased changes nothing `A`
+		// reads, so one variant serves both.
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true) public final class Root: Instantiable {
+					    @Instantiated let a: A
+					    public init(a: A) { self.a = a }
+					}
+
+					@Instantiable public final class A: Instantiable {
+					    @Instantiated let b: B
+					    public init(b: B) { self.b = b }
+					}
+
+					@Instantiable public final class B: Instantiable {
+					    @Instantiated(fulfilledByType: "C", erasedToConcreteExistential: true) let cBuilder: ErasedInstantiator<(), AnyC>
+					    public init(cBuilder: ErasedInstantiator<(), AnyC>) { self.cBuilder = cBuilder }
+					}
+
+					@Instantiable(fulfillingAdditionalTypes: [CProtocol.self]) public final class C: Instantiable, CProtocol {
+					    @Instantiated let a: A
+					    public init(a: A) { self.a = a }
+					}
+
+					public protocol CProtocol {}
+
+					public struct AnyC: CProtocol {
+					    public init(_ c: any CProtocol) {
+					        self.c = c
+					    }
+
+					    public let c: any CProtocol
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_a() -> A {
+			            let b: B = __safeDI_b()
+			            return A(b: b)
+			        }
+			        func __safeDI_b() -> B {
+			            let cBuilder = ErasedInstantiator<(), AnyC> {
+			                AnyC(__safeDI_cBuilder())
+			            }
+			            return B(cBuilder: cBuilder)
+			        }
+			        func __safeDI_cBuilder() -> C {
+			            let a: A = __safeDI_a()
+			            return C(a: a)
+			        }
+			        let a: A = __safeDI_a()
+			        self.init(a: a)
+			    }
+			}
+			""",
+		])
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
+	}
+
 	private static func layingOutRoots<Output>(
 		filesToDelete: inout [URL],
 		_ body: (inout [URL]) async throws -> Output,
