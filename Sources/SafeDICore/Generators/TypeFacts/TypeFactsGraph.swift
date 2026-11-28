@@ -570,10 +570,14 @@ struct TypeFactsGraph: Sendable {
 				positions[edge] = unbuiltPosition
 				unbuiltPosition += 1
 			}
+			// The fills follow the children, as the generator orders a call's fills after what it builds: a fill whose tree
+			// holds a place starts after the fills that hold none (`ScopeGenerator.startsAsCarrier`).
 			var fillPosition = Int32(childEdges.count)
-			for edge in edges where !followsEdge(edge) {
-				positions[edge] = fillPosition
-				fillPosition += 1
+			for startsAsCarrier in [false, true] {
+				for edge in edges where !followsEdge(edge) && carrierEdges.contains(edge) == startsAsCarrier {
+					positions[edge] = fillPosition
+					fillPosition += 1
+				}
 			}
 		}
 
@@ -1734,13 +1738,13 @@ struct TypeFactsGraph: Sendable {
 		}
 		var holdsPlace = Set<TypeProperty>()
 		for source in nodes.indices {
-			for edge in graph.edgeIndices(from: source) where isLeft[edge] && !edgeIsFill[edge] && reachesHoleAlongLeftEdges[Int(graph.edgeTargets[edge])] {
+			for edge in graph.edgeIndices(from: source) where isLeft[edge] && reachesHoleAlongLeftEdges[Int(graph.edgeTargets[edge])] {
 				holdsPlace.insert(TypeProperty(type: builtTypes[source], property: nodeProperties[Int(graph.edgeTargets[edge])]))
 			}
 		}
 		var carrierEdges = Set<Int>()
 		for source in nodes.indices {
-			for edge in graph.edgeIndices(from: source) where !edgeIsFill[edge] && holdsPlace.contains(TypeProperty(type: builtTypes[source], property: nodeProperties[Int(graph.edgeTargets[edge])])) {
+			for edge in graph.edgeIndices(from: source) where holdsPlace.contains(TypeProperty(type: builtTypes[source], property: nodeProperties[Int(graph.edgeTargets[edge])])) {
 				carrierEdges.insert(edge)
 			}
 		}
