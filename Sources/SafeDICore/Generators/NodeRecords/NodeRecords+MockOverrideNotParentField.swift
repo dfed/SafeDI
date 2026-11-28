@@ -164,8 +164,7 @@ extension NodeRecords {
 		let mockRootNames = world.mockRootNames
 		var labels = Set<String>()
 		for child in world.edges(from: declaration) {
-			guard let property = world.property(of: child) else { continue }
-			guard !labels.insert(property.label).inserted else { continue }
+			guard let property = world.property(of: child), !labels.insert(property.label).inserted else { continue }
 			// Both children of the label are named apart, or neither is.
 			guard declaration == 0, mockRootNames.namesApart(label: property.label) else { return .mockOverrideNotParentField }
 		}
