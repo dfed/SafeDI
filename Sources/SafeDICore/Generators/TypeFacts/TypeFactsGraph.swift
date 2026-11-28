@@ -2127,6 +2127,9 @@ struct FillsOfCall {
 		let innerScopeReaders = calledBuilders.map { InnerScopeReaders(enumsByKey: $0.enumsByKey) }
 		var handedMemosByKey = [String: ScopeGenerator.FillDispatcher.HandedMemos]()
 		var emittedFills = [(fill: ScopeGenerator.FillDispatcher.EmittedFill, edge: Int32, placeFields: [SeamSignature.Hole.Field])]()
+		// The labels the one fill of each case nested by type reads of the caller's scope on a route no level of which
+		// holds them (`ScopeGenerator.CaseFields.callerReadLabels`), which hide nothing above the call on any route.
+		var callerReadLabelsByCaseKey = [String: Set<String>]()
 		// A public mock's caller hands values.
 		if let calledBuilders, !isPublicMockCall {
 			// Every place of a case nested by type is filled by one fill, the first place's, which takes every field any
@@ -2140,7 +2143,12 @@ struct FillsOfCall {
 				let caseKey = ScopeGenerator.fillCaseKey(of: hole)
 				guard hole.enumPlace == nil || emittedCaseKeys.insert(caseKey).inserted else { continue }
 				let places = placesByCaseKey[caseKey] ?? [hole]
-				let fields = hole.enumPlace == nil ? hole.fields : ScopeGenerator.caseFields(of: places).fields
+				var fields = hole.fields
+				if hole.enumPlace != nil {
+					let caseFields = ScopeGenerator.caseFields(of: places)
+					fields = caseFields.fields
+					callerReadLabelsByCaseKey[caseKey] = caseFields.callerReadLabels
+				}
 				emittedFills.append((ScopeGenerator.FillDispatcher.EmittedFill(key: ScopeGenerator.fillKey(of: hole), hole: hole, fields: fields), edge, places.flatMap(\.fields)))
 			}
 			var names = GeneratedNameAllocator(reserving: [])
@@ -2190,7 +2198,13 @@ struct FillsOfCall {
 		}
 		var bindingsByEdge = [Int32: ScopeGenerator.FillStructBindings]()
 		for (edge, hole) in fillEdges {
-			bindingsByEdge[edge] = ScopeGenerator.structBindings(ofFillOf: hole, passedByPublicMockCall: isPublicMockCall, innerScopeReaders: innerScopeReaders, handedMemoByLabel: memoByLabelByEdge[edge] ?? [:])
+			bindingsByEdge[edge] = ScopeGenerator.structBindings(
+				ofFillOf: hole,
+				passedByPublicMockCall: isPublicMockCall,
+				innerScopeReaders: innerScopeReaders,
+				handedMemoByLabel: memoByLabelByEdge[edge] ?? [:],
+				callerReadLabels: hole.enumPlace == nil ? [] : callerReadLabelsByCaseKey[ScopeGenerator.fillCaseKey(of: hole)] ?? [],
+			)
 		}
 		return (bindingsByEdge, memoByLabelByEdge)
 	}
