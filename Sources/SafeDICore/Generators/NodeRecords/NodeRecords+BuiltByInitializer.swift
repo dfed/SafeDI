@@ -138,7 +138,7 @@ extension NodeRecords {
 				// The value `mock()` binds under its name apart.
 				PlaceRead(argumentLabel: argument.label, label: name, property: Property(label: name, typeDescription: dependency.property.typeDescription), source: .binding(label: name))
 			} else {
-				PlaceRead(argumentLabel: argument.label, label: dependency.property.label, property: dependency.property, source: argument.source)
+				PlaceRead(argument: argument, passing: dependency)
 			}
 		}
 		// A kind sets the value of each of these, so the read only holds the argument's place and label in the call.

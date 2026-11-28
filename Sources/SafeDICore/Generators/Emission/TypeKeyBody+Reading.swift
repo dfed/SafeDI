@@ -78,7 +78,11 @@ extension TypeKeyLayout {
 					var outerView = [String: KeyedDeclaration]()
 					var resolvedOuterView = [String: PathValue]()
 					for label in labels {
-						let resolved = lookUp(label, inBody: body, before: position)
+						// A label of the view's own domain that its own place declares, and that every read of it there takes only if
+						// available, is read beneath that declaration while it is built: each such read reads `nil`, as the tree's
+						// reads do (`NearestDeclarations.resolvingBinding(of:)`).
+						let isReadOnlyIfAvailableWhileBuilt = label == built.property.label && domain.labels.contains(label) && !domain.labelsReadNotOnlyIfAvailable.contains(label)
+						let resolved = isReadOnlyIfAvailableWhileBuilt ? PathValue.none : lookUp(label, inBody: body, before: position)
 						resolvedOuterView[label] = resolved
 						outerView[label] = keyed(resolved, label: label, byKind: keysByKind)
 					}
@@ -361,6 +365,9 @@ extension TypeKeyLayout {
 			func lookUp(_ read: PlaceRead) {
 				if !bound.contains(read.label), !boundBefore.contains(read.label) {
 					domain.labels.insert(read.label)
+					if !read.isOnlyIfAvailable {
+						domain.labelsReadNotOnlyIfAvailable.insert(read.label)
+					}
 				}
 			}
 			// A function a place of the body declares is resolved inside it (`resolvedFunction(named:from:)`), as its own is.
@@ -381,6 +388,9 @@ extension TypeKeyLayout {
 					if childBuilt.hasFunction, let childDomain = domainsByNode[childBuilt.node] {
 						for label in childDomain.labels where !bound.contains(label) && !boundBefore.contains(label) {
 							domain.labels.insert(label)
+							if childDomain.labelsReadNotOnlyIfAvailable.contains(label) {
+								domain.labelsReadNotOnlyIfAvailable.insert(label)
+							}
 						}
 						for name in childDomain.closedOnFunctionNames {
 							close(name, beneathTheBody: true)
@@ -399,6 +409,7 @@ extension TypeKeyLayout {
 				case let .alias(alias):
 					if let fulfillingProperty = alias.fulfillingProperty, !bound.contains(fulfillingProperty.label), !boundBefore.contains(fulfillingProperty.label) {
 						domain.labels.insert(fulfillingProperty.label)
+						domain.labelsReadNotOnlyIfAvailable.insert(fulfillingProperty.label)
 					}
 					alias.listedReads.forEach(lookUp)
 					boundBefore.insert(alias.property.label)
@@ -554,7 +565,84 @@ extension TypeKeyLayout {
 		     .optionalWrapper,
 		     .builderArgument,
 		     .spelledArgument:
-			lookUp(read.label, inBody: body, before: index)
+			passesNil(read, positions: bodies[body].positionsByLabel[read.label], at: index, nearest: { Self.lastPosition(in: bodies[body].positionsByLabel[read.label], before: index).map { bodies[body].statements[$0] } })
+				? .none
+				: outerValue(of: read, lookUp(read.label, inBody: body, before: index))
+		}
+	}
+
+	/// Whether `read`, a read only if available made by the statement at `index` of a body whose statements declare its
+	/// label at `positions`, is passed `nil` as the tree passes it (`NearestDeclarations.resolvingBinding(of:)`): the body's
+	/// nearest declaration of the label is the statement being built, is built after it, or provides no form the read
+	/// takes, and hides any declaration farther up. Two binary searches of the positions, whatever the body's size.
+	func passesNil(_ read: PlaceRead, positions: [Int]?, at index: Int, nearest: () -> Statement?) -> Bool {
+		guard read.isOnlyIfAvailable, let positions, !positions.isEmpty else { return false }
+		GenerationWork.record(1, by: .askingWhetherReadsPassNil)
+		if Self.lastPosition(in: positions, before: index + 1) == index {
+			return true
+		} else if let declaration = nearest() {
+			GenerationWork.record(1, by: .askingWhetherReadsPassNil)
+			return hides(declaration, from: read)
+		} else {
+			return true
+		}
+	}
+
+	/// `value`, what a read looks its label up to, or `.none` where `read` is only if available and `value` is a statement
+	/// outside the read's body that provides no form the read takes: the tree's nearest declaration hides any farther up.
+	func outerValue(of read: PlaceRead, _ value: PathValue) -> PathValue {
+		guard read.isOnlyIfAvailable else { return value }
+		switch value {
+		case let .statement(declaringBody, index):
+			return hides(bodies[declaringBody].statements[index], from: read) ? .none : value
+		case .forwarded:
+			// A forwarded property is bound with exactly the type it declares.
+			guard let declaredType = type(of: value, label: read.label) else { return value }
+			return ScopeGenerator.provides(Property(label: read.label, typeDescription: declaredType), aFormReadBy: read.property) ? value : .none
+		case .none, .cycleParameter:
+			return value
+		}
+	}
+
+	/// Whether `declaration`, the nearest declaration of `read`'s label, provides no form `read` takes. A text statement
+	/// that fulfills no property, as the wrapper of a seam's handed parameter, binds the forms the tree gave the value it
+	/// wraps, which its record does not hold, so it hides nothing.
+	func hides(_ declaration: Statement, from read: PlaceRead) -> Bool {
+		if case let .alias(record) = declaration, record.fulfillingProperty == nil {
+			// The record does not hold the forms the tree bound to the value it wraps: it hides the read only where the
+			// read cannot be spelled from it.
+			Self.spelledRead(read, declaredAs: record.property.typeDescription) == nil
+		} else if let declared = property(of: declaration, label: read.label) {
+			!ScopeGenerator.provides(declared, aFormReadBy: read.property)
+		} else {
+			false
+		}
+	}
+
+	/// Whether the code of class `owner` passes `nil` for `read`, made before the class's statement at `index`, as the path
+	/// key's code of the class's members does (`passesNil(_:positions:at:nearest:)`).
+	/// A read the class takes as its parameter is passed `nil` where the parameter's type provides no form it takes: the
+	/// parameter's type is the declarations' its calls pass, each of which provides none (`outerValue(of:_:)`).
+	func passesNil(_ read: PlaceRead, inClass owner: Int, at index: Int) -> Bool {
+		let positions = bodies[owner == 0 ? 0 : membersByClass[owner][0]].positionsByLabel[read.label]
+		if passesNil(read, positions: positions, at: index, nearest: { lastPosition(of: read.label, inClass: owner, before: index).map { statements(ofClass: owner)[$0] } }) {
+			return true
+		} else if read.isOnlyIfAvailable, positions == nil, owner != 0 {
+			let declaration = typeLookUp(read.label, inClass: owner, before: index)
+			switch declaration {
+			case let .read(owner: reader, label: _):
+				guard reader == owner, let parameterType = parameterTypes[owner][read.label] else { return false }
+				return !ScopeGenerator.provides(Property(label: read.label, typeDescription: parameterType.unwrapped), aFormReadBy: read.property)
+			case let .statement(owner: declaringClass, index: declaringIndex):
+				// A statement of an enclosing class or the root's body, which every member reads alike (`outerValue(of:_:)`).
+				return hides(statements(ofClass: declaringClass)[declaringIndex], from: read)
+			case .forwarded:
+				return type(of: declaration, label: read.label).map { !ScopeGenerator.provides(Property(label: read.label, typeDescription: $0), aFormReadBy: read.property) } ?? false
+			case .none:
+				return false
+			}
+		} else {
+			return false
 		}
 	}
 

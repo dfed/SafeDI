@@ -91,7 +91,8 @@ struct TypeFactsVariants: Sendable {
 	///   - rootAnswer: What answers each read of the root's reads from above: a seam's parameter, or `nil` for none.
 	///   - binding: What a node binds for a read of the edge's target at the edge (the edge's position among every node's
 	///     edges, `OrderedGraph.edgeOffset(of:)` plus its index), or `nil` where it binds nothing for it there and the
-	///     caller's own answer passes through.
+	///     caller's own answer passes through. A binding whose answer is -1 answers the read none there: the node hides it
+	///     from above and hands no answer.
 	///   - family: The family a call at the edge builds its callee in, given the caller's. A world whose bodies are one per
 	///     node whatever encloses them (production: `@Sendable` is a mark folded over call edges)
 	///     returns the caller's, so the root's `.plain` reaches every node; only seam contracts and mocks whose parameter
@@ -151,8 +152,9 @@ struct TypeFactsVariants: Sendable {
 			reads.rows.forEachColumn(inRow: Int(target)) { read, _ in
 				work += 1
 				if let bound = binding(read) {
+					// A node that binds a read's label and answers it none hides it from above and hands no answer.
 					scratchKeys.append(key(read, bound.answer, target))
-					scratchSources.append(.bound(bound.declaration, answer: bound.answer))
+					scratchSources.append(bound.answer < 0 ? .none : .bound(bound.declaration, answer: bound.answer))
 				} else if let position = reads.rows.rank(of: read, inRow: node) {
 					// The caller's key, as it is: an answer its callers share, which is all a body shared by them can hand
 					// on. It is a key already, so `key` is never applied to it again.

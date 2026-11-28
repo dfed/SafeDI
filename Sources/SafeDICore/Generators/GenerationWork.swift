@@ -80,6 +80,10 @@ public struct GenerationWork: Sendable {
 		/// once per class and reads each member once; asked for every member, it read the members of a class of n members
 		/// n² times.
 		case checkingReadsAtEveryMember
+		/// Asking whether a read only if available is passed `nil` where the tree passes it (`TypeKeyBody.passesNil`): each
+		/// binary search of the positions at which the read's body declares its label. A read asks at most two, whatever
+		/// the size of its body, so the work grows with the reads; scanning the body before the read grew with its square.
+		case askingWhetherReadsPassNil
 		/// Collecting the types a tree builds: for the imports of a root's file, each declaration its world reaches
 		/// (`TypeFactsImports`); for the imports of a mock's file (`ScopeGenerator.fulfillersOfTree(buildingMock:)`) and the
 		/// public mocks a mock tree reaches (`concreteTypesOfTree()`), each generator the walk visits. A declaration stands

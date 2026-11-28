@@ -25,7 +25,7 @@ import Testing
 @testable import SafeDIToolTestSupport
 
 /// A production root one of whose types is built where a label it receives only if available has a declaration and where
-/// it has none, off every cycle, laid out from node records (`OnlyIfAvailableAnswers`,
+/// it has none, on a cycle or off it, laid out from node records (`OnlyIfAvailableAnswers`,
 /// `DeclarationsAnsweringReads`): the type's function takes the label as one optional parameter, and the call that finds
 /// no declaration passes `nil`, as the tree writes it.
 struct SafeDIToolNodeRecordsOptionalParameterTests: ~Copyable {
@@ -373,7 +373,61 @@ struct SafeDIToolNodeRecordsOptionalParameterTests: ~Copyable {
 		#expect(reports.map(\.refusal) == ["onlyIfAvailableAnsweredApart"])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_refusesWorldAsCycleVariantsPartitionApart_whenCycleMemberReceivesLabelOnlyOneCallerAnswers() async throws {
+		// `Leaf` receives `session` only if available and builds itself again through `leafBuilder`, so its function would
+		// take `session` as a cycle parameter, which `A`'s call passes `nil` and `B`'s call its `session`. Its variant
+		// holds an optional parameter's key, so the world is refused, and the tree writes the root.
+		let treeOutput = try await executeSafeDIToolTest(swiftFileContent: [Self.fixtureOfCycleMemberReadingSession], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: [Self.fixtureOfCycleMemberReadingSession], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(reports.map(\.refusal) == ["cycleVariantsPartitionApart"])
+		#expect(output.dependencyTreeFiles == treeOutput.dependencyTreeFiles)
+	}
+
+	@Test(arguments: LazyWrapperAnsweredApart.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsCaptureError_whenALazyWrapperOneCallOfAVariantAnswersIsReadInsideASendableFunction(shape: LazyWrapperAnsweredApart) async {
+		// `T0` is built through the `SendableErasedInstantiator` `T4` receives, so before the wrapper, where its read only if
+		// available is answered `nil`, and through a second builder declared before the wrapper, where it is answered. One
+		// variant for both calls would capture the wrapper inside the `@Sendable` function that builds `T1`, which no check
+		// of the records sees: the records refuse the world (`onlyIfAvailableAnsweredApart`), and the tree reports the
+		// capture.
+		await assertThrowsError(diagnostics: { fixtures in shape.expectedDiagnostics(fixtures) }) {
+			try await executeSafeDIToolTest(swiftFileContent: [shape.fixture], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+	}
+
 	// MARK: Shapes
+
+	/// `A` builds `Leaf` where nothing declares `session`, and `B` where it does; `Leaf` receives it and is on a cycle.
+	private static let fixtureOfCycleMemberReadingSession =
+		"""
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let a: A
+		    @Instantiated let b: B
+		    public init(a: A, b: B) { self.a = a; self.b = b }
+		}
+		@Instantiable public final class A: Instantiable {
+		    @Instantiated let leafBuilder: Instantiator<Leaf>
+		    public init(leafBuilder: Instantiator<Leaf>) { self.leafBuilder = leafBuilder }
+		}
+		@Instantiable public final class B: Instantiable {
+		    @Instantiated let session: Session
+		    @Instantiated let leafBuilder: Instantiator<Leaf>
+		    public init(session: Session, leafBuilder: Instantiator<Leaf>) { self.session = session; self.leafBuilder = leafBuilder }
+		}
+		@Instantiable public final class Leaf: Instantiable {
+		    @Received(onlyIfAvailable: true) let session: Session?
+		    @Instantiated let leafBuilder: Instantiator<Leaf>
+		    public init(session: Session?, leafBuilder: Instantiator<Leaf>) { self.session = session; self.leafBuilder = leafBuilder }
+		}
+		@Instantiable public final class Session: Instantiable {
+		    public init() {}
+		}
+		"""
 
 	enum ShapeLaidOut: CaseIterable {
 		/// `A` declares no `session`, and `B` builds one before its `viewModel`.
@@ -720,6 +774,113 @@ struct SafeDIToolNodeRecordsOptionalParameterTests: ~Copyable {
 		    public init() {}
 		}
 		"""
+	}
+
+	/// A graph of the seed-580 draw: a `LazilyInstantiated` value one call of `T0` is handed and another is not, read only
+	/// if available inside a `@Sendable` function.
+	struct LazyWrapperAnsweredApart: Sendable, CustomTestStringConvertible {
+		enum SecondBuilder: CaseIterable {
+			case instantiator
+			case erasedInstantiator
+			case constant
+		}
+
+		/// Whether `T0` builds `T1` through a `SendableErasedInstantiator`, else a `SendableInstantiator`.
+		let buildsErasedReader: Bool
+		/// Whether the root declares the second builder before the wrapper, else after it.
+		let declaresSecondBuilderFirst: Bool
+		let secondBuilder: SecondBuilder
+		/// Whether `T2`, beneath `T1`, reads the wrapper, else `T1` itself.
+		let readsTwoLevelsDown: Bool
+
+		static let allCases: [Self] = [false, true].flatMap { buildsErasedReader in
+			[false, true].flatMap { declaresSecondBuilderFirst in
+				SecondBuilder.allCases.flatMap { secondBuilder in
+					[false, true].map { Self(buildsErasedReader: buildsErasedReader, declaresSecondBuilderFirst: declaresSecondBuilderFirst, secondBuilder: secondBuilder, readsTwoLevelsDown: $0) }
+				}
+			}
+		}
+
+		var testDescription: String {
+			"\(buildsErasedReader ? "erased" : "plain") reader, \(declaresSecondBuilderFirst ? "second builder first" : "wrapper first"), \(secondBuilder), \(readsTwoLevelsDown ? "two levels down" : "one level down")"
+		}
+
+		var fixture: String {
+			let wrapper = (label: "lazyT4", type: "LazilyInstantiated<T4>", attribute: "@Instantiated")
+			let builder = (label: "anyT0Builder", type: "SendableErasedInstantiator<(), AnyT0>", attribute: #"@Instantiated(fulfilledByType: "T0", erasedToConcreteExistential: true)"#)
+			let second = switch secondBuilder {
+			case .instantiator:
+				(label: "t0Builder", type: "Instantiator<T0>", attribute: "@Instantiated")
+			case .erasedInstantiator:
+				(label: "anyT0BuilderB", type: "ErasedInstantiator<(), AnyT0>", attribute: #"@Instantiated(fulfilledByType: "T0", erasedToConcreteExistential: true)"#)
+			case .constant:
+				(label: "t0", type: "T0", attribute: "@Instantiated")
+			}
+			let properties = declaresSecondBuilderFirst ? [second, wrapper, builder] : [wrapper, second, builder]
+			let readerBuilder = buildsErasedReader
+				? (label: "anyT1Builder", type: "SendableErasedInstantiator<(), AnyT1>", attribute: #"@Instantiated(fulfilledByType: "T1", erasedToConcreteExistential: true)"#)
+				: (label: "t1Builder", type: "SendableInstantiator<T1>", attribute: "@Instantiated")
+			let reader = """
+				public init(lazyT4: LazilyInstantiated<T4>?) { self.lazyT4 = lazyT4 }
+				@Received(onlyIfAvailable: true) let lazyT4: LazilyInstantiated<T4>?
+			"""
+			let readers = readsTwoLevelsDown
+				? """
+				@Instantiable
+				public final class T1: Instantiable, @unchecked Sendable {
+					public init(t2: T2) { self.t2 = t2 }
+					@Instantiated let t2: T2
+				}
+				@Instantiable
+				public final class T2: Instantiable, @unchecked Sendable {
+				\(reader)
+				}
+				"""
+				: """
+				@Instantiable
+				public final class T1: Instantiable, @unchecked Sendable {
+				\(reader)
+				}
+				"""
+			return """
+			import SafeDI
+
+			@Instantiable(isRoot: true)
+			public final class Root: Instantiable {
+				public init(\(properties.map { "\($0.label): \($0.type)" }.joined(separator: ", "))) {
+			\(properties.map { "\t\tself.\($0.label) = \($0.label)" }.joined(separator: "\n"))
+				}
+			\(properties.map { "\t\($0.attribute) let \($0.label): \($0.type)" }.joined(separator: "\n"))
+			}
+			@Instantiable
+			public final class T0: Instantiable, @unchecked Sendable {
+				public init(\(readerBuilder.label): \(readerBuilder.type)) { self.\(readerBuilder.label) = \(readerBuilder.label) }
+				\(readerBuilder.attribute) let \(readerBuilder.label): \(readerBuilder.type)
+			}
+			public final class AnyT0: Sendable {
+				public init(_ value: T0) { self.value = value }
+				public let value: T0
+			}
+			\(readers)
+			public final class AnyT1: Sendable {
+				public init(_ value: T1) { self.value = value }
+				public let value: T1
+			}
+			@Instantiable
+			public final class T4: Instantiable, @unchecked Sendable {
+				public init(anyT0Builder: SendableErasedInstantiator<(), AnyT0>) { self.anyT0Builder = anyT0Builder }
+				@Received let anyT0Builder: SendableErasedInstantiator<(), AnyT0>
+			}
+			"""
+		}
+
+		func expectedDiagnostics(_ fixtures: FixturePaths) -> String {
+			let readerBuilder = buildsErasedReader ? "anyT1Builder: SendableErasedInstantiator<(), AnyT1>" : "t1Builder: SendableInstantiator<T1>"
+			return """
+			\(fixtures["Root.swift"]):\(readsTwoLevelsDown ? 31 : 26):2: error: @Received property `lazyT4: LazilyInstantiated<T4>?` cannot be received inside a `@Sendable` function in chain: Root -> T0 -> T1\(readsTwoLevelsDown ? " -> T2" : ""). SafeDI builds `\(readerBuilder)` on `T0` in a `@Sendable` function, which cannot capture `lazyT4: LazilyInstantiated<T4>` on `Root`, because `LazilyInstantiated<T4>` is not `Sendable`. Declare `lazyT4` on `Root`, and this property, as `SendableLazilyInstantiated<T4>` to fix. A `SendableLazilyInstantiated` requires its instance type, `T4`, to be `Sendable`.
+			\(fixtures["Root.swift"]):\(declaresSecondBuilderFirst ? 11 : 10):2: note: `lazyT4: LazilyInstantiated<T4>` is declared here
+			"""
+		}
 	}
 
 	private static func layingOutRoots<Output>(

@@ -61,6 +61,18 @@ struct PlaceRead: Hashable, Sendable {
 	/// Whether the value cannot cross into a `@Sendable` function, so that no function sharing puts its read in one
 	/// captures it.
 	var staysOutsideSendableFunctions = false
+	/// Whether the receiver reads the value only if available, so that the path key passes it `nil` where the nearest
+	/// declaration of its label is still being built, built after it, or of no form it reads (`TypeKeyBody.passesNil`).
+	var isOnlyIfAvailable = false
+}
+
+extension PlaceRead {
+	/// The read of a construction's `argument`, which passes `dependency`: what the tree's places and node records both
+	/// make, so that they mark a read only if available alike.
+	init(argument: CallArgument, passing dependency: Dependency) {
+		self.init(argumentLabel: argument.label, label: dependency.property.label, property: dependency.property, source: argument.source)
+		isOnlyIfAvailable = dependency.source == .received(onlyIfAvailable: true)
+	}
 }
 
 /// A place that builds `property`.

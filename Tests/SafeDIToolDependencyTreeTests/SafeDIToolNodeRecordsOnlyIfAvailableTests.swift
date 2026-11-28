@@ -109,7 +109,10 @@ struct SafeDIToolNodeRecordsOnlyIfAvailableTests: ~Copyable {
 		])
 		#expect(reports.map(\.refusal) == [nil])
 		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
-		#expect(reports.flatMap(\.differences) == [])
+		// The records read the declaration where the tree’s place reads `nil`, and the layout engine passes `nil` there, so
+		// the two texts are one.
+		#expect(reports.flatMap(\.differences).allSatisfy { $0.contains(": \(NodeRecordsReport.argumentsOfOptionalParameterDifferenceName) is ") })
+		#expect(reports.map { $0.comparedTexts.map { $0.tree == $0.nodeRecords } } == [true])
 	}
 
 	@Test
@@ -166,7 +169,10 @@ struct SafeDIToolNodeRecordsOnlyIfAvailableTests: ~Copyable {
 		])
 		#expect(reports.map(\.refusal) == [nil])
 		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
-		#expect(reports.flatMap(\.differences) == [])
+		// The records read the declaration where the tree’s place reads `nil`, and the layout engine passes `nil` there, so
+		// the two texts are one.
+		#expect(reports.flatMap(\.differences).allSatisfy { $0.contains(": \(NodeRecordsReport.argumentsOfOptionalParameterDifferenceName) is ") })
+		#expect(reports.map { $0.comparedTexts.map { $0.tree == $0.nodeRecords } } == [true])
 	}
 
 	@Test

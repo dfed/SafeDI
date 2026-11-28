@@ -169,6 +169,7 @@ public struct TypeFactsReport: Sendable {
 				sourceDescriptions(graph.sources(ofCall: call - graph.calls(of: VariantID(variant)).startIndex, of: VariantID(variant)))
 			}
 		}
+		rootSources = sourceDescriptions(graph.variants.rootSources[...])
 		variantMadeAgainCallSources = (0..<graph.variantCount).map { variant in
 			graph.madeAgainCalls(of: VariantID(variant)).indices.map { call in
 				sourceDescriptions(graph.sources(ofMadeAgainCall: call - graph.madeAgainCalls(of: VariantID(variant)).startIndex, of: VariantID(variant)))
@@ -476,6 +477,9 @@ public struct TypeFactsReport: Sendable {
 	/// For each call of each variant, in edge order, where each answer it hands comes from: `none`, `passedThrough`, or
 	/// `bound` with the answer's form.
 	public let variantCallSources: [[[String]]]
+	/// What answers each read of the root variant, in the root's read order, as `variantCallSources` spells a source: a
+	/// seam's parameter, or `none`.
+	public let rootSources: [String]
 	/// As `variantCallSources`, for each made-again call.
 	public let variantMadeAgainCallSources: [[[String]]]
 	/// The loop members whose parents' loops make different members again.

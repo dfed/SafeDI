@@ -87,13 +87,13 @@ extension NodeRecords {
 /// Holds, per variant, the set of the properties it is passed `nil` for, for as long as the world's records are made.
 ///
 /// A bridge: a private copy of the facts' rule of which declaration answers a read (the nearest above, bound before the
-/// edge), which the facts already apply but do not hand on for a read only if available, whose answer rule 1 keys alike
-/// whether it is `nil` or a value. It goes in the change that has the facts hand each call whether a read only if
-/// available finds a value there, beside the call's sources (`TypeFactsWorld.sources(ofCall:of:)`), which records then
-/// read instead.
+/// edge). Rule 1 keys a read only if available alike whether it is `nil` or a value, but the facts hand each call
+/// whether it finds a value there: the call's source of the read (`TypeFactsWorld.sources(ofCall:of:)`) is none exactly
+/// where this finds the receive unavailable (type facts check 37). It goes in the change that has records read those
+/// sources instead.
 struct OnlyIfAvailableAnswers: Sendable {
 	/// - Parameters:
-	///   - world: A world each of whose nodes is of a kind `NodeRecords` makes, off every cycle.
+	///   - world: A world each of whose nodes is of a kind `NodeRecords` makes.
 	///   - rootParameters: A seam's parameters, which its root is handed as the nearest declarations of their labels
 	///     (`DependencyTreeGenerator.seamRootDeclarations(of:seamRoot:)`), or what a mock root's body is declared inside,
 	///     the parameters of `mock()` and the overrides it binds before its nodes; empty for any other root.
@@ -266,21 +266,27 @@ struct OnlyIfAvailableAnswers: Sendable {
 				}
 				if let existingContext = contextByVariant[Int(callee)] {
 					let labelsOneCallAnswers = Set(existingContext.keys).symmetricDifference(calleeContext.keys)
-					// A rename only if available is bound where its scope is built, to the declaration or to `nil`, by one
-					// statement for every call, so a label one fulfills is not taken as a parameter.
+					// The layout engine passes a read only if available `nil` per view, as the tree does
+					// (`TypeKeyBody.passesNil`), so calls that answer a label apart share the variant. That holds for a
+					// member of a cycle too, whose calls each read through the view of the call
+					// (`SafeDIToolNodeRecordsOptionalParameterTests`'s `…whenTypeOnCycleIsBuiltWhereOnlyOneCallerDeclaresLabel`);
+					// where the member itself reads the label, its variant holds an optional parameter's key, which
+					// `checkVariantsPartitionAlike` refuses (`…whenCycleMemberReceivesLabelOnlyOneCallerAnswers`). A rename only
+					// if available is bound where its scope is built, to the declaration or to `nil`, by one statement for every
+					// call, so a label one fulfills is not taken as a parameter.
 					// A world with a hole or a fill writes the places beneath them from its sites' code, which passes `nil` where
 					// one call sees no declaration, so it takes no such parameter either.
-					guard labelsOneCallAnswers.isEmpty || (!holdsHoleOrFill && renamedLabels.isDisjoint(with: labelsOneCallAnswers)) else {
-						throw .onlyIfAvailableAnsweredApart
+					// A lazy wrapper one call answers and another does not is refused still. The facts key `nil` with a lazy
+					// wrapper where no answer in the declared form reaches the read (rule A's second stage), so one variant
+					// holds a call that passes the wrapper's instance and a call that passes `nil`, which records read from the
+					// variant's key alone (`lazilyInstantiatedInstanceProperties(of:variant:in:)`) cannot tell apart, until lane
+					// 2's emitted half of rule 3's second stage keys `nil` with the wrapper parameter in the code too; and one
+					// variant would capture the wrapper inside a `@Sendable` function beneath both calls, which no check judges
+					// per call yet.
+					let answersLazyWrapperApart = labelsOneCallAnswers.contains { label in
+						(existingContext[label] ?? calleeContext[label] ?? []).contains { $0.property.propertyType.isLazilyInstantiated }
 					}
-					// The facts key `nil` with a lazy wrapper where no answer in the declared form reaches the read (rule A's
-					// second stage), so one variant holds a call that passes the wrapper's instance and a call that passes `nil`,
-					// which records read from the variant's key alone (`lazilyInstantiatedInstanceProperties(of:variant:in:)`)
-					// cannot tell apart. Refused until lane 2's emitted half of rule 3's second stage (due Nov 30) keys `nil` with
-					// the wrapper parameter in the code too.
-					guard !labelsOneCallAnswers.contains(where: { label in
-						(existingContext[label] ?? calleeContext[label] ?? []).contains { $0.state == .available && $0.property.propertyType.isLazilyInstantiated }
-					}) else {
+					guard labelsOneCallAnswers.isEmpty || (!holdsHoleOrFill && !answersLazyWrapperApart && renamedLabels.isDisjoint(with: labelsOneCallAnswers)) else {
 						throw .onlyIfAvailableAnsweredApart
 					}
 					let mergedContext = try Self.context(merging: existingContext, with: calleeContext)
@@ -441,7 +447,14 @@ struct OnlyIfAvailableAnswers: Sendable {
 		return (pins, isPinnedAtEveryCall)
 	}
 
-	/// The properties `variant`'s construction is passed `nil` for.
+	/// The properties `variant`'s construction is passed `nil` for: a receive only if available no call of the variant
+	/// finds a declaration of, or that the mock root's pins pass `nil` at every call, and the declarations a rename only if
+	/// available is bound to `nil` in place of. A receive only if available that calls answer apart is passed `nil` per
+	/// view by the layout engine (`TypeKeyBody.passesNil`): a construction reads through `PlaceRead(argument:passing:)`,
+	/// which marks the read (`builtByInitializerRecord`, and through it `mockDecoratedRecord`). A cycle's arguments
+	/// (`cycleArguments`) carry no mark, and need none: a variant on a cycle that calls answer a label apart holds an
+	/// optional parameter's key, and its world is refused (`checkVariantsPartitionAlike`), so every call of a laid out
+	/// cycle variant passes the same.
 	func unavailableProperties(of variant: VariantID) -> Set<Property> {
 		unavailablePropertiesByVariant[Int(variant)]
 	}
