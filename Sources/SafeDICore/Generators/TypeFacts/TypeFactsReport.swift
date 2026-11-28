@@ -170,7 +170,8 @@ public struct TypeFactsReport: Sendable {
 			}
 		}
 		loopMembersSharedApart = graph.loopMembersSharedApart.map(Int.init)
-		variantParameters = (0..<graph.variantCount).map { graph.parameters(of: VariantID($0)).map(\.property.spelledWithoutAny) }
+		let arrivals = TypeFactsReadArrivals(world: graph)
+		variantParameters = (0..<graph.variantCount).map { graph.parameters(of: VariantID($0), arrivals: arrivals).map(\.property.spelledWithoutAny) }
 		columnElementCount = graph.columnElementCount
 		edgeCount = graph.graph.edgeCount
 		func spelled(_ row: BitRows, of index: Int, _ spelling: (Int32) -> String) -> [String] {
