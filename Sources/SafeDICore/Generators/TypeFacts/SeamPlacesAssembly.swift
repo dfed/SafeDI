@@ -72,7 +72,9 @@ extension SeamPlacesDrafts {
 				return .init(property: property, function: .other)
 			}
 		}
-		let cycleParameters = SeamPlacesCycleParameters(world: world)
+		// Solved only where the places from facts replace the walk's: the fold recurses on the graph's routes, which a
+		// tangle of cycles makes too many, until the per-variant fold of the facts core replaces it.
+		let cycleParameters = SeamPlacesCycleParameters(world: world, solvesCycleFunctionParameters: NodeRecordsObservation.assemblesPlacesFromFacts)
 		// The declarations a variant's scope binds: the seam's root, its parameters, then its children; any other scope, its
 		// bindings, with the members of loops its function makes again and the parameters of the function a lazy cycle closes on
 		// after the properties its type forwards.
@@ -405,8 +407,7 @@ extension SeamPlacesDrafts {
 					let isInLine = inLineLevelByDraft[draft.id] == index
 					for parent in draft.parents where buildsInLine(parent) {
 						let entries = self.entries(of: draft.id, through: parent)
-						guard isInLine ? entries.buildsInLine || !entries.closesCycle : entries.closesCycle else { continue }
-						guard let parentIndex = inLineLevelByDraft[parent], !assembled[index].parents.contains(parentIndex) else { continue }
+						guard isInLine ? entries.buildsInLine || !entries.closesCycle : entries.closesCycle, let parentIndex = inLineLevelByDraft[parent], !assembled[index].parents.contains(parentIndex) else { continue }
 						assembled[index].parents.append(parentIndex)
 						assembled[index].declaredSegmentByParent.append(declaredSegment(of: draft, from: parent))
 					}

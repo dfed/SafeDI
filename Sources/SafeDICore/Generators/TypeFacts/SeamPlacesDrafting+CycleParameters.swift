@@ -24,7 +24,13 @@
 
 /// The cycle parameters each variant's function takes, as the declarations its levels list.
 struct SeamPlacesCycleParameters {
-	init(world: TypeFactsGraph) {
+	/// - Parameters:
+	///   - solvesCycleFunctionParameters: Whether to solve the parameters at all; where not, no variant takes any.
+	init(world: TypeFactsGraph, solvesCycleFunctionParameters: Bool) {
+		guard solvesCycleFunctionParameters else {
+			parametersByVariant = [:]
+			return
+		}
 		let solved = world.cycleFunctionParameters()
 		/// Whether a call of `declaration` closes a cycle on `other`: one of its cycle identity being built above it.
 		func closes(_ declaration: DeclarationID, on other: DeclarationID) -> Bool {
