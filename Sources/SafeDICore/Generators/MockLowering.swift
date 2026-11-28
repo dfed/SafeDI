@@ -228,11 +228,13 @@ extension ScopeGenerator {
 		// Where a test compares them, the names `mock()`'s parameters are chosen from, read from the tree as
 		// `lowerRootSignature(of:context:)` reads them, and the signature itself, against those the root's world answers.
 		if let worldRoot, let promotion, let observer = MockTreeNamesObservation.observer {
+			let orderedChildren = orderedChildrenComputedAfresh(propertiesGeneratedLater: [])
 			observer(MockTreeNamesObservation.report(
 				of: instantiable,
 				tree: treeNames(of: instantiable, readsFills: false),
 				inputs: mockRootParameterInputs(of: instantiable),
-				childrenInBuildOrder: orderedChildrenComputedAfresh(propertiesGeneratedLater: []).compactMap(\.generator.property),
+				childrenInBuildOrder: orderedChildren.compactMap(\.generator.property),
+				rootLevelNodes: orderedChildren.map(\.generator.mockLevelNode),
 				signature: lowerRootSignature(of: instantiable, context: context),
 				flatParameterMockDefaults: context.flatParameterMockDefaults,
 				worldRoot: worldRoot.scope,

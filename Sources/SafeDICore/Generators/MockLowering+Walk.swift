@@ -225,37 +225,17 @@ extension ScopeGenerator {
 			// to, as a seam's parameters are for its root's body, each by its label: one named apart, or an uncovered
 			// parameter handed to the type that instantiates it, is no declaration the records read.
 			let overridesBoundBeforeNodes = signature.onlyIfAvailableOverrides.filter { signature.unavailableDependencyOverrideNames[$0.receivedProperty] == nil }
-			// A builder a call passes up is a parameter of `mock()`, bound again under the name the calls read it by, which the
-			// call's node binds again under its label (`NodeRecords.mockNamesReadApart(in:)`); an adapter of one, a builder
-			// of a seam's own places and a builder of a call's fills are not.
-			// A place of another module's public mock the tree builds inline reads such a builder too, which no record reads.
-			let bindsOnlyPassedUpBuilders = walk.filledCallBuilders.builderBindingLines.isEmpty
-				&& signature.passedUpBuilders.allSatisfy(\.adapters.isEmpty)
-				&& walk.filledCallBuilders.holeBuildersByInlinePlace.isEmpty
 			// The mocked type's own places of a seam's own mock, each bound from its builder before the nodes.
 			let rootPlaces = mockedTypeUncoveredProperties.filter { property in signature.passedUpBuilders.contains { $0.places.contains { $0.property == property } } }
 			let bindingsBeforeNodes = builderBindingCount + rootPlaces.count + overridesBoundBeforeNodes.count
-			// A parameter or override named apart is a declaration under its name, which the nodes that receive it bind again
-			// under its label (`NodeRecords.mockNamesReadApart(in:)`), and the mocked type's own receive of it is bound
-			// again before the nodes, as the walk binds it.
-			// A dependency the mock cannot build is a parameter of `mock()`, which the type that instantiates it reads by its
-			// name; one taken as a `@Sendable` autoclosure is read into a local before the nodes and bound again by that type.
-			// A lazy wrapper `mock()` makes of an instance it takes is bound before the nodes, which are passed it by name
-			// (`NodeRecords.mockNamesReadApart(in:)`).
-			let bindsOnlyNodes = rootReceiverBindingIndex == bindingsBeforeNodes
-				&& !signature.uncoveredRootParameters.contains(where: \.isSendableAutoclosure)
-				&& bindsOnlyPassedUpBuilders
-				// A node or an alias the root's level names apart is bound under that name by its record, and a parameter or override
-				// under the name `mock()` gives it, an uncovered dependency's included; any other name is neither's.
-				&& rootRenames.allSatisfy { label, names in
-					names.allSatisfy { type, name in
-						walk.rootPropertyNodeBindingNames.contains(name)
-							|| walk.rootAliasBindingNamesApart.contains(name)
-							|| signature.renamesByLabelAndType[label]?[type] == name
-							|| signature.uncoveredParameterNamesByLabelAndType[label]?[type] == name
-							|| signature.lazilyInstantiatedBindingNamesByLabelAndType[label]?[type] == name
-					}
-				}
+			// Whether `mock()` binds nothing but its nodes, by the one rule node records' acceptance reads from the root's world
+			// too (`MockLowering.rootLevelBindings(of:signature:rootLevelNodes:callsBindNothing:)`).
+			let bindsOnlyNodes = MockLowering.rootLevelBindings(
+				of: instantiable,
+				signature: signature,
+				rootLevelNodes: orderedChildren.map(\.generator.mockLevelNode),
+				callsBindNothing: walk.filledCallBuilders.builderBindingLines.isEmpty && walk.filledCallBuilders.holeBuildersByInlinePlace.isEmpty,
+			).bindsOnlyNodes
 			var outerDeclarations = signature.parameters.map { Property(label: $0.name, typeDescription: $0.property.typeDescription) }
 			for builder in signature.passedUpBuilders {
 				for property in builder.properties.prefix(1) {

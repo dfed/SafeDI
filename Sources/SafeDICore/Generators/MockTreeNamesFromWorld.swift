@@ -579,6 +579,19 @@ public enum MockTreeNamesObservation {
 		return projections.map { MockTreeNamesReport.Field(field: $0.field, tree: $0.tree, world: $0.world) }
 	}
 
+	/// Every field of what the root's level binds in the tree, `tree`, beside the same field read from the world, `world`
+	/// (`MockLowering.rootLevelBindings(of:signature:rootLevelNodes:callsBindNothing:)`), each projected to text.
+	static func fields(of tree: MockLowering.RootLevelBindings, besideThoseOf world: MockLowering.RootLevelBindings) -> [MockTreeNamesReport.Field] {
+		func names(_ namesByLabelAndType: [String: [TypeDescription: String]]) -> String {
+			namesByLabelAndType.flatMap { label, names in names.map { "\(label): \($0.key.asSource) -> \($0.value)" } }.sorted().joined(separator: "; ")
+		}
+		return [
+			MockTreeNamesReport.Field(field: "rootNamesApart", tree: names(tree.namesApart), world: names(world.namesApart)),
+			MockTreeNamesReport.Field(field: "rootPropertyNodeBindingNames", tree: tree.propertyNodeBindingNames.sorted().joined(separator: ", "), world: world.propertyNodeBindingNames.sorted().joined(separator: ", ")),
+			MockTreeNamesReport.Field(field: "bindsOnlyNodes", tree: "\(tree.bindsOnlyNodes)", world: "\(world.bindsOnlyNodes)"),
+		]
+	}
+
 	/// The report of the mocked type `instantiable`, whose tree's names are `tree`, whose generator's other inputs to
 	/// `mockRootParameters(instantiable:mockDefaults:treeNames:inputs:)` are `inputs`, whose root builds its children in
 	/// `childrenInBuildOrder`, and whose signature the generator lowered as `signature` with `flatParameterMockDefaults`,
@@ -589,6 +602,7 @@ public enum MockTreeNamesObservation {
 		tree: ScopeGenerator.TreeNames,
 		inputs: MockRootParameterInputs,
 		childrenInBuildOrder: [Property],
+		rootLevelNodes: [MockLowering.LevelNode],
 		signature: MockLowering.RootSignature,
 		flatParameterMockDefaults: [TypeDescription: ScopeGenerator.FlatParameterMockDefault],
 		worldRoot: ConstructionScope,
@@ -604,6 +618,12 @@ public enum MockTreeNamesObservation {
 				var comparedFields = fields(of: tree, besideThoseOf: world)
 				comparedFields.append(contentsOf: fields(of: inputs, besideThoseOf: worldInputs.inputs, childrenInBuildOrder: (childrenInBuildOrder, worldInputs.childrenInBuildOrder)))
 				comparedFields.append(contentsOf: fields(of: signature, besideThoseOf: worldSignature))
+				// What the root's level binds, which node records' acceptance reads (`bindsOnlyNodes`): a root the world answers
+				// makes no call, so its calls bind nothing.
+				comparedFields.append(contentsOf: fields(
+					of: MockLowering.rootLevelBindings(of: instantiable, signature: signature, rootLevelNodes: rootLevelNodes, callsBindNothing: true),
+					besideThoseOf: MockLowering.rootLevelBindings(of: instantiable, signature: worldSignature, rootLevelNodes: MockLowering.rootLevelNodes(ofWorldRootedAt: worldRoot), callsBindNothing: true),
+				))
 				return MockTreeNamesReport(root: instantiable.concreteInstantiable.asSource, refusal: nil, fields: comparedFields, declarationVisits: declarationVisits)
 			} else {
 				refusal = .spelling
