@@ -4744,6 +4744,99 @@ struct SafeDIToolGraphFuzzerTests {
 		#expect(differences.filter { $0.fileName == fileName }.map(\.aspect) == [.mockCode])
 	}
 
+	/// The oracle's runs of `fixture` with every mock root laid out from node records, with each mock root's report.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private static func toolRunsLayingOutMockRoots(of fixture: GraphFuzzerFixture) async throws -> (toolRuns: GraphFuzzerToolRuns, mockRootReports: [NodeRecordsReport]) {
+		let (stream, continuation) = AsyncStream.makeStream(of: NodeRecordsReport.self)
+		let toolRuns = try await NodeRecordsObservation.$laysOutMockRoots.withValue(true) {
+			try await NodeRecordsObservation.$observer.withValue({ continuation.yield($0) }) {
+				try await GraphFuzzerOracle.toolRuns(of: fixture, multiModuleRenamings: [])
+			}
+		}
+		continuation.finish()
+		var reports = [NodeRecordsReport]()
+		for await report in stream where report.isMockRoot {
+			reports.append(report)
+		}
+		return (toolRuns, reports)
+	}
+
+	/// The differences between the first outcome of `toolRuns` and its outcome under the reversal of type names alone, each
+	/// with its file named `fileName` edited: `editOutcome` edits the first outcome's and `editRenamedOutcome` the other's.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private static func differencesUnderReversalOfTypeNames(
+		of toolRuns: GraphFuzzerToolRuns,
+		editingFileNamed fileName: String,
+		outcomeBy editOutcome: (String) -> String,
+		renamedOutcomeBy editRenamedOutcome: (String) -> String,
+	) throws -> [GraphFuzzerOutcomeDifference] {
+		let reversalOfTypeNames = try #require(toolRuns.renamedOutcomes.first { $0.renaming.reversesTypeNames && !$0.renaming.reversesLabels && !$0.renaming.reversesFileNames })
+		guard case let .accepted(files, warnings) = toolRuns.firstOutcome, case let .accepted(renamedFiles, renamedWarnings) = reversalOfTypeNames.outcome else {
+			Issue.record("The fixture's graph is rejected.")
+			return []
+		}
+		var editedFiles = files
+		editedFiles[fileName] = editOutcome(files[fileName, default: ""])
+		var editedRenamedFiles = renamedFiles
+		editedRenamedFiles[fileName] = editRenamedOutcome(renamedFiles[fileName, default: ""])
+		return GraphFuzzerToolOutcome.differences(
+			between: .accepted(generatedFiles: editedFiles, warnings: warnings),
+			and: .accepted(generatedFiles: editedRenamedFiles, warnings: renamedWarnings),
+			comparingCode: .inAnyOrderOfExtensions,
+			renaming: reversalOfTypeNames.renaming,
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func renamedGraphFailures_nameThePresenceOfAConfigurationField_whenALazyCyclesMocksAreLaidOutFromNodeRecords() async throws {
+		let (toolRuns, mockRootReports) = try await Self.toolRunsLayingOutMockRoots(of: Self.lazyCycleFixture)
+
+		// Every mock was laid out, so the outcomes compared are in the form that hands each function the places entered.
+		#expect(!mockRootReports.isEmpty)
+		#expect(mockRootReports.map(\.isLaidOutFromNodeRecords) == mockRootReports.map { _ in true })
+		#expect(Set(toolRuns.renamedGraphFailures.map(\.renamedGraphDifference)) == [.mockConfigurationFieldPresence])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_nameNeitherReason_whenALaidOutMockHandsAConfigurationOfAnotherTypeInADroppedFieldsPlace() async throws {
+		let (toolRuns, _) = try await Self.toolRunsLayingOutMockRoots(of: Self.lazyCycleFixture)
+		let fileName = "\(Self.mockDifferencePrefix)T7+SafeDIMock.swift"
+		// The outcome under reversed type names has no field for the builder of T8, so its function hands a new
+		// configuration in the field's place.
+		let handed = "__safeDI_entered.entering(\"t8Builder\", \(Self.mockDifferencePrefix)T8.SafeDIMockConfiguration())"
+
+		let differences = try Self.differencesUnderReversalOfTypeNames(of: toolRuns, editingFileNamed: fileName, outcomeBy: { $0 }, renamedOutcomeBy: { code in
+			#expect(code.contains(handed))
+			return code.replacingOccurrences(of: handed, with: "__safeDI_entered.entering(\"t8Builder\", \(Self.mockDifferencePrefix)T7.SafeDIMockConfiguration())")
+		})
+
+		#expect(differences.filter { $0.fileName == fileName }.map(\.aspect) == [.mockCode])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_nameNeitherReason_whenALaidOutMockHandsADroppedFieldToAnotherFunctionThanTheOneThatEntersAPlace() async throws {
+		let (toolRuns, _) = try await Self.toolRunsLayingOutMockRoots(of: Self.lazyCycleFixture)
+		let fileName = "\(Self.mockDifferencePrefix)T7+SafeDIMock.swift"
+		let entering = "__safeDI_entered.entering(\"t8Builder\", "
+		let passing = "__safeDI_entered.passing(\"t8Builder\", "
+		let read = "__safeDI_entered.configuration.t8Builder)"
+		let newConfiguration = "\(Self.mockDifferencePrefix)T8.SafeDIMockConfiguration())"
+
+		// Both outcomes hand the configuration to the same other function, so only the dropped field's read differs.
+		let differences = try Self.differencesUnderReversalOfTypeNames(of: toolRuns, editingFileNamed: fileName, outcomeBy: { code in
+			#expect(code.contains("\(entering)\(read)"))
+			return code.replacingOccurrences(of: "\(entering)\(read)", with: "\(passing)\(read)")
+		}, renamedOutcomeBy: { code in
+			#expect(code.contains("\(entering)\(newConfiguration)"))
+			return code.replacingOccurrences(of: "\(entering)\(newConfiguration)", with: "\(passing)\(newConfiguration)")
+		})
+
+		#expect(differences.filter { $0.fileName == fileName }.map(\.aspect) == [.mockCode])
+	}
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func differences_nameNeitherReason_whenAConfigurationFieldOutsideAnyCycleIsAbsent() async throws {
