@@ -92,6 +92,43 @@ struct SafeDIToolNodeRecordsOptionalParameterTests: ~Copyable {
 		#expect(output.dependencyTreeFiles == treeOutput.dependencyTreeFiles)
 	}
 
+	@Test(arguments: ShapeLaidOut.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_failsNoDifference_whenSeamInModuleKeepsRootsTreeAndOnlyOneCallerAnswersReadOnlyIfAvailable(shape: ShapeLaidOut) async throws {
+		// A seam in the module keeps every root's tree, so the root is compared with its records and not laid out from
+		// them: the records are laid out for the comparison alone, which approves the optional parameter's difference only
+		// where the two texts are equal.
+		let seam = """
+		@Instantiable(generateDependencyTree: true)
+		public struct Harbor: Instantiable {
+		    public init(dock: Dock) {
+		        self.dock = dock
+		    }
+
+		    @Instantiated let dock: Dock
+		}
+
+		@Instantiable
+		public struct Dock: Instantiable {
+		    public init() {}
+		}
+		"""
+		let (stream, continuation) = AsyncStream.makeStream(of: NodeRecordsReport.self)
+		var filesMade = [URL]()
+		defer { filesToDelete += filesMade }
+		_ = try await NodeRecordsObservation.$observer.withValue({ continuation.yield($0) }) {
+			try await executeSafeDIToolTest(swiftFileContent: [shape.fixture, seam], buildSwiftOutputDirectory: true, filesToDelete: &filesMade)
+		}
+		continuation.finish()
+		var reports = [NodeRecordsReport]()
+		for await report in stream where report.root == "Root" {
+			reports.append(report)
+		}
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [false])
+		#expect(reports.map(\.differences.isEmpty) == [false])
+		#expect(reports.map { $0.comparedTexts.map { $0.tree == $0.nodeRecords } } == [true])
+	}
+
 	@Test(arguments: 0..<6)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_laysOutRootAsTheTreeWritesIt_whateverOrderCallersThatAnswerAndDoNotAreMetIn(rotation: Int) async throws {
