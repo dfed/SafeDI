@@ -44,15 +44,22 @@ extension TypeKeyLayout {
 		owner != 0 && bodies[membersByClass[owner][0]].callingFunction != nil
 	}
 
-	/// `site`, or, for a call made in a function a place written as text declares, the statement declaring the function, out
-	/// to the first that is no such call: where the call is made in the body that declares the function.
-	func declaringSite(of site: CallSite) -> CallSite {
-		var site = site
-		while isCallingFunctionClass(site.owner) {
-			let member = membersByClass[site.owner][0]
-			site = CallSite(owner: classByBody[bodies[member].parent], index: bodies[member].position)
+	/// `site`, or, for a call made in a function a place written as text declares, the statements declaring the function,
+	/// out to the first that is no such call: where the call is made in the bodies that declare it. Each member of the class
+	/// is spelled at its own statement, and the members' declaring bodies can be of several classes (a `_received` function
+	/// the root declares and one a place inside it declares, alike in what they read), so every member's statement counts.
+	func declaringSites(of site: CallSite) -> Set<CallSite> {
+		// Each member's declaring body is its parent, which the walk reached first, so the walk ends.
+		var sites = Set<CallSite>()
+		var pending = [site]
+		while let next = pending.popLast() {
+			if isCallingFunctionClass(next.owner) {
+				pending.append(contentsOf: membersByClass[next.owner].map { member in CallSite(owner: classByBody[bodies[member].parent], index: bodies[member].position) })
+			} else {
+				sites.insert(next)
+			}
 		}
-		return site
+		return sites
 	}
 
 	/// The statements of a class's body, which every member's body shares: its first member's, or the root's.
@@ -87,7 +94,8 @@ extension TypeKeyLayout {
 		placementOwner[0] = 0
 		// A function a place written as text declares is placed at its statement, in the body of its first member's: the
 		// members of its class spell one function, each at its own statement (`spelledStatement`), and a read its function
-		// would take from its callers it cannot take (`callingFunctionsTakeNoParameters`).
+		// would take from its callers it cannot take (`callingFunctionsTakeNoParameters`). Every member's statement counts
+		// for the functions it calls (`declaringSites(of:)`) and for what it captures (`declarationSites(ofClass:)`).
 		let callingFunctionClasses = (1..<max(classCount, 1)).filter(isCallingFunctionClass)
 		for owner in callingFunctionClasses {
 			let member = membersByClass[owner][0]
@@ -104,7 +112,7 @@ extension TypeKeyLayout {
 			let allSites = members.flatMap { callSitesByClass[$0] }.filter { !memberSet.contains($0.owner) || !isCallingFunctionClass($0.owner) }
 			// A call made in a function a place written as text declares is made, for placement, where that function's
 			// statement is.
-			let externalSites = Set(allSites.filter { !memberSet.contains($0.owner) }.map(declaringSite(of:)).filter { !memberSet.contains($0.owner) })
+			let externalSites = Set(allSites.filter { !memberSet.contains($0.owner) }.flatMap(declaringSites(of:)).filter { !memberSet.contains($0.owner) })
 			// Every function is declared in the root's body, never nested in another: Swift 6.2's compile time doubles with
 			// each level of nested local functions past about twenty. Under `declaresLoopMembersAsThePathKeyDoes` the nesting
 			// is the path key's own, which the tree writes too, so the type key adds no depth.

@@ -197,14 +197,14 @@ extension TypeKeyLayout {
 					// The function the place declares is a body of its own, read where the statement is, as a variant's body is
 					// read where its first call is: its statements, then the call it returns, its last statement. It is no view:
 					// its name is the place's, so it is declared by its statement, never shared with another body's.
-					guard alias.call == nil else { return false }
+					guard alias.call == nil, let functionDomain = Self.domain(of: function) else { return false }
 					let functionBody = bodies.count
 					bodies.append(Body(
 						parent: body,
 						position: position,
 						record: nil,
 						isInSendableFamily: function.isSendable || bodies[body].isInSendableFamily,
-						domainLabels: Self.domain(of: function).labels,
+						domainLabels: functionDomain.labels,
 						outerView: [:],
 						forwardedLabels: Set(function.parameters.map(\.label)),
 						cycleParameters: [],
@@ -225,7 +225,9 @@ extension TypeKeyLayout {
 			// declare functions it is in (`declaresOnlyFunctions(inBody:between:and:)`).
 			let target: Int
 			if closer.callsTextFunction {
-				// Such a closer rebinds a member of a loop at the top of the member's function, whose body the declaring body holds.
+				// Refused deeper: no closer reaches this. A closer that calls such a function rebinds a loop member at the top of a
+				// member's function or of a function written as text (the rebindings `ScopeGenerator` writes first in a member's function,
+				// the statements of `CallingFunction`, and their node records twins), each a body the declaring body holds.
 				guard bodies[closer.body].parent == closer.declaringBody,
 				      declaresOnlyFunctions(inBody: closer.declaringBody, between: bodies[closer.body].position, and: closer.index),
 				      case let .function(_, functionBody) = bodies[closer.declaringBody].statements[closer.index]
@@ -311,14 +313,16 @@ extension TypeKeyLayout {
 
 	/// What `function`, which a place written as text declares, looks up outside itself: what each of its closers reads
 	/// that neither its parameters nor a statement before the closer binds, and the names of the functions they call.
-	static func domain(of function: CallingFunction) -> Domain {
+	static func domain(of function: CallingFunction) -> Domain? {
 		var domain = Domain()
 		var bound = Set(function.parameters.map(\.label))
 		var closers = [ClosingPlaceRecord]()
 		for code in statementCodes(of: function.statements) {
-			if case let .closer(closer)? = record(of: code) {
-				closers.append(closer)
-			}
+			// Refused, as `domain(of:)` refuses a place's child without a record. No function reaches this: its statements
+			// are the rebindings of loop members, each a closer (`ScopeGenerator.LoopRebinding.record`, and
+			// `NodeRecords.rebinding(of:property:closedOnFunctionName:cycleArguments:in:)`).
+			guard case let .closer(closer)? = record(of: code) else { return nil }
+			closers.append(closer)
 		}
 		closers.append(function.returnedCall)
 		for closer in closers {
@@ -443,7 +447,7 @@ extension TypeKeyLayout {
 				keysByKind = false
 				resolutions.append(-3)
 				guard visitedCallingFunctions.insert([declaringBody, index]).inserted else { continue }
-				let domain = Self.domain(of: function)
+				guard let domain = Self.domain(of: function) else { return nil }
 				labels.formUnion(domain.labels)
 				pending.append(contentsOf: domain.closedOnFunctionNames.sorted().map { (name: $0, body: declaringBody) })
 			case nil:

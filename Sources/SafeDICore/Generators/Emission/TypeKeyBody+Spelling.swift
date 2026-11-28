@@ -210,7 +210,9 @@ extension TypeKeyLayout {
 		guard case let .closer(returnedCall, target) = statements.last,
 		      let body = spelledStatements(ofClass: owner, upTo: statements.count - 1, indentation: ScopeGenerator.standardIndent, functionCode: functionCode),
 		      let call = spelledArguments(toCallOf: classByBody[target], inClass: owner, at: statements.count - 1),
-		      // A returned call whose arguments need bindings of their own is not laid out yet.
+		      // Refused, though no call reaches this: a returned call passes no arguments that need bindings of their own, since
+		      // `CallingFunction.returnedCall` is made with no passed arguments (`ScopeGenerator`'s `_received` record and its
+		      // node records twin).
 		      call.bindings.isEmpty
 		else { return nil }
 		let forwardedArguments = returnedCall.forwardedProperties.map { CallArgument(label: $0.label, source: .binding(label: $0.label)).spelled }

@@ -218,8 +218,11 @@ extension TypeKeyLayout {
 	}
 
 	/// `classes` refined until alike places' bodies call alike places: a place's class joins the classes its body's calls
-	/// reach. Each pass refines the last, since a body's key starts with its class, so the count of classes grows with
-	/// every pass that changes the partition and the passes end within one per body.
+	/// reach, and a function a place written as text declares joins the classes of the declarations its reads resolve to,
+	/// since each member is spelled at its own statement and reads what is visible there: two types that declare one loop
+	/// each declare a `_received` function alike in name and shape, which reads its own type's declarations. Each pass
+	/// refines the last, since a body's key starts with its class, so the count of classes grows with every pass that
+	/// changes the partition and the passes end within one per body.
 	func refine(_ classes: [Int]) -> [Int] {
 		var previousCount = Set(classes.dropFirst()).count
 		var next = refinementPass(of: classes)
@@ -245,6 +248,13 @@ extension TypeKeyLayout {
 					key.append(previous[target])
 				case .inline, .alias:
 					key.append(0)
+				}
+			}
+			// A read that resolves to a forwarded property or a cycle parameter is left to the outcomes, which refuse a class
+			// whose members' reads resolve otherwise (`computeOutcomes`).
+			for (position, label) in reads[body].enumerated() where bodies[body].callingFunction != nil {
+				if case let .statement(declaringBody, index) = resolution(of: label, atPlace: body) {
+					key.append(contentsOf: [position, previous[declaringBody], index])
 				}
 			}
 			next[body] = interned[key] ?? {

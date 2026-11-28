@@ -112,10 +112,13 @@ extension TypeKeyLayout {
 		}
 	}
 
-	/// What each class's function does with each label it reads. Every function is declared in the root's body
-	/// (`computePlacement`), and a cycle parameter is read from the caller, or, where a variant captures it, is the
-	/// root's statement, so the variants' classes are settled first. Every other function's outcomes depend only on those
-	/// of the functions declaring it (`computePlacement`), so one pass after them, outer functions first, settles them.
+	/// Where `owner`'s function is declared: its placement, or, for a function a place written as text declares, each
+	/// member's statement, since each member is spelled where its statement is.
+	func declarationSites(ofClass owner: Int) -> [CallSite] {
+		guard isCallingFunctionClass(owner) else { return [CallSite(owner: placementOwner[owner], index: placementIndex[owner])] }
+		return membersByClass[owner].map { member in CallSite(owner: classByBody[bodies[member].parent], index: bodies[member].position) }
+	}
+
 	/// Whether no function a place written as text declares reads a label its calls pass: the text's binding hands its
 	/// wrapper the function by name, with only what the wrapper forwards.
 	func callingFunctionsTakeNoParameters() -> Bool {
@@ -124,6 +127,10 @@ extension TypeKeyLayout {
 		}
 	}
 
+	/// What each class's function does with each label it reads. Every function is declared in the root's body
+	/// (`computePlacement`), and a cycle parameter is read from the caller, or, where a variant captures it, is the
+	/// root's statement, so the variants' classes are settled first. Every other function's outcomes depend only on those
+	/// of the functions declaring it (`computePlacement`), so one pass after them, outer functions first, settles them.
 	mutating func computeOutcomes() {
 		rootStatementsCapturedByVariant = rootStatementsCapturedByVariants()
 		outcomes = [[String: ReadOutcome]](repeating: [:], count: membersByClass.count)
@@ -165,7 +172,7 @@ extension TypeKeyLayout {
 					.none
 				} else if let first = declarations.first,
 				          declarations.allSatisfy({ $0 == first }),
-				          typeLookUp(label, inClass: placementOwner[owner], before: placementIndex[owner]) == first
+				          declarationSites(ofClass: owner).allSatisfy({ typeLookUp(label, inClass: $0.owner, before: $0.index) == first })
 				{
 					.captured(first)
 				} else {
