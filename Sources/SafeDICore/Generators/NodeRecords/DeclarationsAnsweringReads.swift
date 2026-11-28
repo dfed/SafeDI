@@ -17,7 +17,6 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
-
 /// Whether a `@Sendable` function of a world reads a wrapper that is not `Sendable`, declared outside it, which the tree
 /// reports as an error (`ScopeGenerator.nonSendableWrapperCaptures(ofTreeRootedAt:)`): such a world keeps its tree
 /// (`NodeRecordRefusal.sendableFunctionCapturesWrapper`). A check that refuses a world, never an input of a record: it
@@ -39,18 +38,16 @@
 /// decided after its world is built (`ScopeGenerator.instancesReadThroughPublicMockWrapperParameters(of:mockDefaults:)`),
 /// and reach the world with the mock root tree checks' move of the capture check off the tree.
 ///
-/// A variant can be called from several places, and each call can hand a read another answer, where its key, which
-/// carries what the variant's body can be handed as a parameter, does not tell them apart (seed 580 of the seam corpus:
-/// one build of a type reads a wrapper only if available where it is passed `nil`, another where it is the wrapper). So
-/// what can answer each read of a variant is folded over every call into it, and each call that opens a `@Sendable`
-/// function is judged with what it hands, so the check finds every capture of every build of the variant.
+/// Each variant is resolved once, from the first call a walk from the root meets: a second call's capture is found only
+/// where its key differs, which makes a variant of its own. The check goes when the facts fold captures per variant
+/// (`TypeFactsOutcome`), the per-type facts' form of `nonSendableWrapperCaptures`.
 ///
-/// Memory: for each read of each variant reached, the answers a capture can come through, as small IDs, while the check
-/// runs; none in a world that opens no `@Sendable` function.
+/// Memory: the declaration that answers each read, one ID per key of every variant, while the check runs; none in a world
+/// that opens no `@Sendable` function.
 struct DeclarationsAnsweringReads: Sendable {
 	/// A declaration a receive resolves to, as `ScopeGenerator.nonSendableWrapperCaptures` looks it up: the property, and
 	/// the by-value property with which a receive reads its instance where it is a lazy wrapper that offers one.
-	struct Declaration: Hashable, Sendable {
+	struct Declaration: Equatable, Sendable {
 		let property: Property
 		let instanceProperty: Property?
 
@@ -84,152 +81,111 @@ struct DeclarationsAnsweringReads: Sendable {
 			sendableFunctionCapturesWrapper = false
 			return
 		}
+		var sendableFunctionCapturesWrapper = false
 		let receiveTypes = mockRoot == nil ? [] : Self.receiveTypesReadFromAbove(in: world)
 		let wrapperParametersByLabel = Dictionary(grouping: mockRoot?.wrapperParameters ?? [], by: \.property.label)
 		let root = world.declaration(of: 0)
 		// The declarations each declaration that answers a read makes, by label, built once each.
 		var declarationsByDeclaration = [DeclarationID: [String: [Declaration]]]()
-		// The answers a read can capture through, interned by what decides a capture: in a production or seam world one
-		// answer, a declaration of the label that is a wrapper that is not `Sendable` (spelled as no declarations); in a mock
-		// root's world the declarations of the label the nearest scope declaring it makes, which the receives beneath a
-		// call resolve among. An answer through which no read can capture is none.
-		var answerIDs = [[Declaration]: Int32]()
-		var answers = [[Declaration]]()
-		/// The answer the declaration `answeringDeclaration` gives a read of `label`, -1 for none, where a read through
-		/// `channel` made by the tree of `callee`, the child it builds on the path, can capture through it: never where the
-		/// read is only if available and `callee` is the node of the label still being built, which is passed `nil`
-		/// (`NearestDeclarations.resolvingBinding(of:)`), nor where nothing binds the label, which the call passes `nil`.
-		func answer(of label: String, through channel: ReadChannel, from answeringDeclaration: DeclarationID, buildingOnPath callee: DeclarationID?) -> Int32 {
-			if answeringDeclaration >= 0, let callee, Self.isPassedNil(channel, of: label, beingBuilt: callee, in: world) {
-				return -1
-			}
-			let declarations: [Declaration]
-			if let mockRoot {
-				// The root's declarations of the label replace what `mock()` declares above the tree, as any scope's
-				// replace those above it; a read nothing binds is read where the root is built.
-				let declaringDeclaration = answeringDeclaration < 0 ? root : answeringDeclaration
-				if declarationsByDeclaration[declaringDeclaration] == nil {
-					declarationsByDeclaration[declaringDeclaration] = Self.declarationsByLabel(madeBy: declaringDeclaration, in: world)
-				}
-				declarations = declarationsByDeclaration[declaringDeclaration]?[label]
-					?? (declaringDeclaration == root ? wrapperParametersByLabel[label] ?? [] : [])
-				guard answeringDeclaration >= 0 || !declarations.isEmpty || mockRoot.boundLabels.contains(label) else {
-					// Nothing binds the label, which the call passes `nil`.
-					return -1
-				}
-			} else if answeringDeclaration >= 0 {
-				guard world.scope(of: answeringDeclaration).sortedDeclaredPropertyForms.contains(where: { declared in
-					declared.property.label == label && Self.isNonSendableWrapper(declared.property)
-				}) else { return -1 }
-				declarations = []
-			} else {
-				guard rootNonSendableWrapperLabels.contains(label) else { return -1 }
-				declarations = []
-			}
-			if let id = answerIDs[declarations] {
-				return id
-			} else {
-				let id = Int32(answers.count)
-				answerIDs[declarations] = id
-				answers.append(declarations)
-				return id
-			}
-		}
-		/// The answers a call hands a read: `answer`, or none where it is -1.
-		func handing(_ answer: Int32) -> Set<Int32> {
-			answer < 0 ? [] : [answer]
-		}
-
-		// For each variant, the answers each of its reads can capture through, over every call into it: the union of what
-		// each call hands, grown by a worklist that queues a variant again only when its answers grow. The answers of a
-		// read are as few as the declarations of its label, so the fold costs the calls times those. No node is above the
-		// root, so what the root is handed answers what its tree reads.
-		var answersByVariant = [[Set<Int32>]?](repeating: nil, count: world.variantCount)
-		answersByVariant[0] = world.reads(of: root).map { readID in
-			let read = world.read(readID)
-			guard read.channel.asksAboutLabel else { return [] }
-			return handing(answer(of: world.text(ofLabel: read.label), through: read.channel, from: -1, buildingOnPath: nil))
-		}
-		var isQueued = [Bool](repeating: false, count: world.variantCount)
-		isQueued[0] = true
+		// For each variant reached, the declaration that answers each of its reads, -1 where none does. No node is above
+		// the root, so what the root is handed answers what its tree reads.
+		var answeringDeclarations = [[DeclarationID]?](repeating: nil, count: world.variantCount)
+		answeringDeclarations[0] = [DeclarationID](repeating: -1, count: world.reads(of: world.declaration(of: 0)).count)
+		// Each variant's caller, the first call a walk from the root meets, -1 for the root.
+		var callerByVariant = [VariantID](repeating: -1, count: world.variantCount)
 		// A stack, since a tree can be as deep as the module has types.
-		var worklist: [VariantID] = [0]
-		while let caller = worklist.popLast() {
-			isQueued[Int(caller)] = false
-			let callerAnswers = answersByVariant[Int(caller)] ?? []
+		var stack: [VariantID] = [0]
+		while let caller = stack.popLast() {
+			let callerAnsweringDeclarations = answeringDeclarations[Int(caller)] ?? []
 			let edgeFacts = world.edgeFacts(from: world.declaration(of: caller))
-			for (edgeIndex, callee) in world.calls(of: caller).enumerated() {
+			for (edgeIndex, callee) in world.calls(of: caller).enumerated() where answeringDeclarations[Int(callee)] == nil {
 				let opensSendableFunction = Self.opensSendableFunction(edgeFacts[edgeFacts.startIndex + edgeIndex])
-				let calleeDeclaration = world.declaration(of: callee)
-				let reads = world.reads(of: calleeDeclaration)
-				var calleeAnswers = answersByVariant[Int(callee)] ?? [Set<Int32>](repeating: [], count: reads.count)
-				var grew = answersByVariant[Int(callee)] == nil
-				for (position, (source, readID)) in zip(world.sources(ofCall: edgeIndex, of: caller), reads).enumerated() {
-					let read = world.read(readID)
-					guard read.channel.asksAboutLabel else { continue }
-					let label = world.text(ofLabel: read.label)
-					let handed: Set<Int32> = switch source.kind {
+				var calleeAnsweringDeclarations = [DeclarationID]()
+				callerByVariant[Int(callee)] = caller
+				for (source, readID) in zip(world.sources(ofCall: edgeIndex, of: caller), world.reads(of: world.declaration(of: callee))) {
+					let answeringDeclaration: DeclarationID = switch source.kind {
 					case .none:
-						handing(answer(of: label, through: read.channel, from: -1, buildingOnPath: nil))
+						-1
 					case .bound:
-						handing(answer(of: label, through: read.channel, from: source.payload, buildingOnPath: calleeDeclaration))
+						source.payload
 					case .passedThrough:
-						callerAnswers[Int(source.payload)]
+						callerAnsweringDeclarations[Int(source.payload)]
 					}
-					// The call builds its callee inside a `@Sendable` function: a read an answer from above the call gives
-					// captures that answer, judged for this call's answers alone.
-					if opensSendableFunction {
-						for handedAnswer in handed where Self.readsNonSendableWrapper(among: answers[Int(handedAnswer)], label: label, receivedAs: mockRoot == nil ? nil : receiveTypes[Int(callee)][read.label] ?? []) {
-							sendableFunctionCapturesWrapper = true
-							return
+					calleeAnsweringDeclarations.append(answeringDeclaration)
+					let read = world.read(readID)
+					guard opensSendableFunction, read.channel.asksAboutLabel else { continue }
+					let label = world.text(ofLabel: read.label)
+					let readsNonSendableWrapper: Bool
+					if let mockRoot {
+						// The root's declarations of the label replace what `mock()` declares above the tree, as any scope's
+						// replace those above it; a read nothing binds is read where the root is built.
+						let declaringDeclaration = answeringDeclaration < 0 ? root : answeringDeclaration
+						if declarationsByDeclaration[declaringDeclaration] == nil {
+							declarationsByDeclaration[declaringDeclaration] = Self.declarationsByLabel(madeBy: declaringDeclaration, in: world)
 						}
+						let declarations = declarationsByDeclaration[declaringDeclaration]?[label]
+							?? (declaringDeclaration == root ? wrapperParametersByLabel[label] ?? [] : [])
+						if answeringDeclaration < 0, declarations.isEmpty, !mockRoot.boundLabels.contains(label) {
+							// Nothing binds the label, which the call passes `nil`.
+							readsNonSendableWrapper = false
+						} else {
+							// Each type a receive beneath the call reads the label in resolves among the declarations. A read no
+							// receive's type reaches is the callee's read of its own label, made only to rebind it, which captures
+							// nothing.
+							readsNonSendableWrapper = (receiveTypes[Int(callee)][read.label] ?? []).contains { Self.readsNonSendableWrapper(receiving: Property(label: label, typeDescription: $0), among: declarations) }
+						}
+					} else if answeringDeclaration >= 0 {
+						readsNonSendableWrapper = world.scope(of: answeringDeclaration).sortedDeclaredPropertyForms.contains { declared in
+							declared.property.label == label && Self.isNonSendableWrapper(declared.property)
+						}
+					} else {
+						readsNonSendableWrapper = rootNonSendableWrapperLabels.contains(label)
 					}
-					if !handed.isSubset(of: calleeAnswers[position]) {
-						calleeAnswers[position].formUnion(handed)
-						grew = true
+					if readsNonSendableWrapper, !Self.isPassedNil(read.channel, of: label, answeredBy: answeringDeclaration, aboveCallOf: callee, by: caller, callerByVariant: callerByVariant, in: world) {
+						sendableFunctionCapturesWrapper = true
 					}
 				}
-				answersByVariant[Int(callee)] = calleeAnswers
-				if grew, !isQueued[Int(callee)] {
-					isQueued[Int(callee)] = true
-					worklist.append(callee)
-				}
+				answeringDeclarations[Int(callee)] = calleeAnsweringDeclarations
+				stack.append(callee)
 			}
 		}
-		sendableFunctionCapturesWrapper = false
+		self.sendableFunctionCapturesWrapper = sendableFunctionCapturesWrapper
 	}
 
 	/// Whether a `@Sendable` function of the world reads, from outside it, a wrapper that is not `Sendable`.
 	let sendableFunctionCapturesWrapper: Bool
 
-	/// Whether every read of `label` through `channel` that `callee`'s tree makes is passed `nil` where the call that
-	/// builds `callee` binds the label's answer: a read only if available (`optional`, `optionalValue`) of the
-	/// declaration still being built around the call, the node of the label that the caller builds as `callee`, which
-	/// captures nothing (`NearestDeclarations.resolvingBinding(of:)`). It is judged where the call binds the answer, so
-	/// each call into a variant gives its own; a call that passes the answer through hands on the judgment. A required
-	/// read of the label reads `value` beside it, which is judged on its own.
+	/// Whether every read of `label` through `channel` that `callee`'s tree makes is passed `nil` where `answeringDeclaration`,
+	/// the scope that declares the label, answers it: a read only if available (`optional`, `optionalValue`) of the
+	/// declaration still being built around the call, the node of the label that `answeringDeclaration` builds on the path
+	/// to `callee`, which captures nothing (`NearestDeclarations.resolvingBinding(of:)`). A required read of the label reads
+	/// `value` beside it, which is judged on its own.
 	///
 	/// A deliberate gap from the tree: a receive only if available that a required receive pins to a form it cannot read
 	/// (`MockReceivesPassedNil`) is passed `nil` by the tree, but not judged here, so the world finds a capture the tree does
 	/// not and keeps the tree, which is safe. `MockRootTreeChecksOracle` counts such roots in its log, and
 	/// `SafeDIToolMockSendableCaptureCheckTests` holds the tree's code for the shape.
-	private static func isPassedNil(_ channel: ReadChannel, of label: String, beingBuilt callee: DeclarationID, in world: some NodeRecordSources) -> Bool {
+	private static func isPassedNil(
+		_ channel: ReadChannel,
+		of label: String,
+		answeredBy answeringDeclaration: DeclarationID,
+		aboveCallOf callee: VariantID,
+		by caller: VariantID,
+		callerByVariant: [VariantID],
+		in world: some NodeRecordSources,
+	) -> Bool {
 		switch channel {
 		case .optional, .optionalValue:
-			world.property(of: callee)?.label == label
+			var child = callee
+			var parent = caller
+			while parent >= 0, world.declaration(of: parent) != answeringDeclaration {
+				child = parent
+				parent = callerByVariant[Int(parent)]
+			}
+			return parent >= 0 && world.property(of: world.declaration(of: child))?.label == label
 		case .value, .alias, .madeAgain, .mock, .carrier, .fill, .family, .override:
-			false
+			return false
 		}
-	}
-
-	/// Whether a read of `label` captures a wrapper that is not `Sendable` through an answer, `declarations`: in a
-	/// production or seam world, where `receiveTypes` is `nil`, every answer does; in a mock root's, one of the types the
-	/// receives beneath the call read the label in reads such a wrapper among the declarations
-	/// (`readsNonSendableWrapper(receiving:among:)`). A read no receive's type reaches is the callee's read of its own
-	/// label, made only to rebind it, which captures nothing.
-	private static func readsNonSendableWrapper(among declarations: [Declaration], label: String, receivedAs receiveTypes: Set<TypeDescription>?) -> Bool {
-		guard let receiveTypes else { return true }
-		return receiveTypes.contains { readsNonSendableWrapper(receiving: Property(label: label, typeDescription: $0), among: declarations) }
 	}
 
 	/// Whether a receive of `receive` reads a wrapper that is not `Sendable`, among the `declarations` of its label that
