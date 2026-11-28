@@ -92,8 +92,6 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	case readAnsweredTwoWays
 	/// The engine could not lay the root out from the records.
 	case notLaidOut
-	/// A member of a loop of builders under two parents whose loops make different members of it again.
-	case builderLoopSharedApart
 	/// A loop of builders in a seam's own tree, whose levels the tree holds in a box and whose members bind its holes'
 	/// payloads, which node records do not write.
 	case builderLoopBoxed
@@ -254,7 +252,7 @@ struct NodeRecords: Sendable {
 			// A member of a loop of builders first makes again the members its tree receives, whatever its kind
 			// (`NodeRecords+Loops.swift`): a call of a seam, before its guard. A label its function takes is that parameter.
 			let loopRebindings = Self.loopRebindings(
-				of: declaration,
+				of: variant,
 				functionName: functionName,
 				cycleParameters: cycleParameters,
 				hiddenLabels: Set(instantiable.dependencies.filter { $0.source == .forwarded }.map(\.property.label) + cycleParameters.map(\.label)),
@@ -817,7 +815,7 @@ struct NodeRecords: Sendable {
 	/// Refuses `declaration`'s world as `builderLoopBoxed` where it is a seam's own and `declaration` makes a member of a
 	/// loop of builders again.
 	private static func checkMakesNoLoopMemberAgain(inSeamTree seamTree: DependencyTreeGenerator.RootScopeInfo.SeamTree?, _ declaration: DeclarationID, in world: some NodeRecordSources) throws(NodeRecordRefusal) {
-		guard seamTree == nil || world.madeAgain(from: declaration).isEmpty else { throw .builderLoopBoxed }
+		guard seamTree == nil || world.madeAgain(from: declaration).isEmpty && !world.loopMembersSharedApart.contains(declaration) else { throw .builderLoopBoxed }
 	}
 
 	/// Refuses `declaration`'s world where it is an `ErasedInstantiator` or a `SendableErasedInstantiator` whose first

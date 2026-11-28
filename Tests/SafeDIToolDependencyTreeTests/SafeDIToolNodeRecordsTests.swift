@@ -748,9 +748,9 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_refusesWorld_whenTwoParentsLoopsMakeOneMemberAgainApart() async throws {
-		// The root's `A` and `B` are a loop. `Other` builds `A` as the same property without `B`, so one node would need a
-		// function per parent.
+	mutating func generate_refusesWorldAsNodeOfTwoVariants_whenTwoParentsLoopsMakeOneMemberAgainApart() async throws {
+		// The root's `A` and `B` are a loop. `Other` builds `A` as the same property without `B`, so `A` has a variant per
+		// parent, each making its own members again, where a world without a cycle has a record per node.
 		let (_, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
 			try await executeSafeDIToolTest(swiftFileContent: [
 				seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let aBuilder: Instantiator<A>", "@Instantiated let bBuilder: Instantiator<B>", "@Instantiated let other: Other"]),
@@ -759,7 +759,7 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 				seamFixtureType(named: "B", isFinalClass: true, declarations: ["@Received let aBuilder: Instantiator<A>"]),
 			], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		}
-		#expect(reports.map(\.refusal) == ["builderLoopSharedApart"])
+		#expect(reports.map(\.refusal) == ["nodeHasSeveralVariants"])
 	}
 
 	@Test

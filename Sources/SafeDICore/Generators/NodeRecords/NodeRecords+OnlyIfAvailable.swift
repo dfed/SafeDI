@@ -133,9 +133,9 @@ struct OnlyIfAvailableAnswers: Sendable {
 			guard let callContext = contextByVariant[Int(variant)], world.kind(of: declaration) != .alias, world.kind(of: declaration) != .hole else { continue }
 			let scope = world.scope(of: declaration)
 			// A member of a loop of builders begins its builder function by binding each member it makes again
-			// (`NodeRecords.loopRebindings(of:in:)`), so its construction and everything inside it read those bindings.
+			// (`NodeRecords.loopRebindings(of:functionName:cycleParameters:hiddenLabels:receivedFunctionNames:in:)`), so its construction and everything inside it read those bindings.
 			var context = callContext
-			for member in world.madeAgain(from: declaration) {
+			for member in world.madeAgain(of: variant) {
 				if let property = world.property(of: member), labels.contains(property.label) {
 					context[property.label] = [Binding(property: property, state: .available)]
 				}
@@ -277,7 +277,7 @@ struct OnlyIfAvailableAnswers: Sendable {
 
 	/// The declaration in `context` a read only if available of `property` is passed, or `nil` where none is available.
 	/// A declaration still being built, or built after the branch, is passed nothing: where the tree passes a builder of
-	/// its loop instead, the loop's member rebinds it at its top, which its context holds (`TypeFactsWorld.madeAgain(from:)`).
+	/// its loop instead, the loop's member rebinds it at its top, which its context holds (`TypeFactsWorld.madeAgain(of:)`).
 	private static func binding(reading property: Property, in context: [String: [Binding]]) -> Property? {
 		(context[property.label] ?? []).first { binding in
 			binding.state == .available && ScopeGenerator.provides(binding.property, aFormReadBy: property)
