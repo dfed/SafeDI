@@ -716,6 +716,13 @@ public actor DependencyTreeGenerator {
 			let rootNonSendableWrapperLabels: Set<String>
 			/// The seam's parameters, the nearest declarations of their labels in its tree, in signature order.
 			let parameters: [Property]
+			/// What the seam's root is handed, as its generated initializer declares it in the root's body, in signature
+			/// order: each parameter as it is taken, but a deferred one as the memo bound under its label, a
+			/// `LazilyInstantiated` or `SendableLazilyInstantiated` of its unwrapped value, whose instance the tree reads
+			/// wherever it reads the label (`DependencyTreeGenerator.seamRootDeclarations(of:seamRoot:)`). A deferred
+			/// parameter the seam's own rename of its label reads from the autoclosure binds no memo, and is the parameter.
+			/// The seam's world answers its root's reads with them (`TypeFactsGraph.init(root:forMockGeneration:mockRootNames:rootDeclarations:)`).
+			let rootDeclarations: [Property]
 			/// The labels of the deferred parameters the seam's own rename of the label reads from the autoclosure
 			/// (`ScopeGenerator.SeamRoot.autoclosureCallByLabel(of:)`).
 			let autoclosureLabels: Set<String>
@@ -733,7 +740,13 @@ public actor DependencyTreeGenerator {
 				rootLazilyInstantiatedInstanceProperties = declarations.lazilyInstantiatedInstanceProperties
 				rootNonSendableWrapperLabels = declarations.nonSendableWrapperLabels
 				parameters = seamRoot.signature.parameters.map(\.property)
-				autoclosureLabels = Set(seamRoot.autoclosureCallByLabel(of: seam).keys)
+				let autoclosureLabels = Set(seamRoot.autoclosureCallByLabel(of: seam).keys)
+				self.autoclosureLabels = autoclosureLabels
+				rootDeclarations = seamRoot.signature.parameters.map { parameter in
+					guard case let .deferred(isSendable) = parameter.deferral, !autoclosureLabels.contains(parameter.property.label) else { return parameter.property }
+					let instance = parameter.property.asUnwrappedProperty
+					return Property(label: instance.label, typeDescription: .simple(name: isSendable ? Dependency.sendableLazilyInstantiatedType : Dependency.lazilyInstantiatedType, generics: [instance.typeDescription]))
+				}
 				signature = seamRoot.signature
 				self.seamRoot = seamRoot
 				seamType = seam.concreteInstantiable

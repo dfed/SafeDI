@@ -176,7 +176,8 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_buildsAppRootsTree_whenRootsSeamCallDefersParameterSendable() async throws {
 		// `Screen`'s `Panel`, built in a `SendableInstantiator`'s `@Sendable` function, receives `token`, so the seam defers
-		// its pass-through `token` `@Sendable`, and the capture check reads `Root`'s call of it from `Root`'s tree.
+		// its pass-through `token` `@Sendable`, and the capture check reads `Root`'s call of it from `Root`'s tree. `Screen`'s
+		// own root's keys are seeded from its parameters, so node records lay it out with no tree.
 		let (forcers, _) = try await treeForcers(
 			of: [
 				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let token: Token", "@Instantiated let screen: Screen"]),
@@ -188,8 +189,8 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 		)
 		#expect(forcers == """
 		Root\tseam call defers a parameter @Sendable
-		Screen\tseam world, kind lazy
-		roots that built a tree: 2 of 2
+		Screen\tnone
+		roots that built a tree: 1 of 2
 
 		""")
 	}

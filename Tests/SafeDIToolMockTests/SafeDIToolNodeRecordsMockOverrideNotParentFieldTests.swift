@@ -573,6 +573,87 @@ struct SafeDIToolNodeRecordsMockOverrideNotParentFieldTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_keepsTheWalksStatements_whenPinnedReceiveInChildsTreeWouldOrderPromotedChildAheadOfIt() async throws {
+		// `Holder`’s required `token: Instantiator<Token>` pins the `Leaf` beneath it, which reads no `Token`, so the walk
+		// builds `holder` before the `token_Token` the root promotes for `Source`’s `Reader`. The world orders the root’s
+		// children by every receive, `Leaf`’s only-if-available one included, and would build `token_Token` first, which
+		// would reorder `mock()`’s overrides, so the world is refused, and the walk writes it.
+		let fixture = [
+			"""
+			@Instantiable(generateMock: true)
+			public final class Screen: Instantiable {
+			    public init(holder: Holder, source: Source) {
+			        self.holder = holder
+			        self.source = source
+			    }
+
+			    @Instantiated let holder: Holder
+			    @Received let source: Source
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Holder: Instantiable {
+			    public init(token: Instantiator<Token>, leaf: Leaf) {
+			        self.token = token
+			        self.leaf = leaf
+			    }
+
+			    @Received let token: Instantiator<Token>
+			    @Instantiated let leaf: Leaf
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Source: Instantiable {
+			    public init(reader: Reader, leaf: Leaf) {
+			        self.reader = reader
+			        self.leaf = leaf
+			    }
+
+			    @Instantiated let reader: Reader
+			    @Instantiated let leaf: Leaf
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Reader: Instantiable {
+			    public init(token: Token) {
+			        self.token = token
+			    }
+
+			    @Received let token: Token
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Leaf: Instantiable {
+			    public init(token: Token?) {
+			        self.token = token
+			    }
+
+			    @Received(onlyIfAvailable: true) let token: Token?
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Token: Instantiable {
+			    public init() {}
+			}
+			""",
+		]
+		let walkOutput = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+
+		#expect(reports.filter(\.isMockRoot).map(\.refusal) == ["mockOverrideNotParentField"])
+		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [false])
+		#expect(output.generatedFiles == walkOutput.generatedFiles)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_keepsTheWalksStatements_whenPinnedReceiveIsBuiltBesidePromotedChildAndBesideNoDeclaration() async throws {
 		// The root builds `Third` after the child it promotes for the form `Third` reads, and `Holder` builds it beside no
 		// declaration of the label: the one is handed the name and the other `nil`. One function serves both, so the

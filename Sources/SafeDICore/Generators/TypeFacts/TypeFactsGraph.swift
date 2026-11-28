@@ -132,7 +132,10 @@ struct TypeFactsGraph: Sendable {
 	///     receive's own form, which one parameter carries (`TypeFactsMockRootPins`).
 	///   - mockRootNames: What a mock root's lowering names that the node records of its world read; empty for a
 	///     production root's world, and read by no fact of the graph.
-	init(root: ConstructionScope, forMockGeneration: Bool, mockRootNames: MockRootNames = MockRootNames()) {
+	///   - rootDeclarations: What the root is handed, which answers the reads of its labels that its tree makes from above
+	///     it: a seam's parameters, each deferred one as the memo its generated initializer binds under its label
+	///     (`DependencyTreeGenerator.RootScopeInfo.SeamTree.rootDeclarations`); empty for every other root.
+	init(root: ConstructionScope, forMockGeneration: Bool, mockRootNames: MockRootNames = MockRootNames(), rootDeclarations: [Property] = []) {
 		// Building the graph is an edge: it reads each record's properties and labels once per node, and interns them. The
 		// walk asks for a node's edges once, when it first reaches the node, so in node order, and each edge's entry among
 		// its scope's properties to generate, or among its fills, is appended in edge order.
@@ -728,7 +731,9 @@ struct TypeFactsGraph: Sendable {
 			))
 		}
 
-		// The bindings and fills intern properties no node holds, whose facts an answer's provided forms read.
+		// The bindings and fills intern properties no node holds, whose facts an answer's provided forms read, and so do the
+		// root's declarations.
+		let rootDeclarationIDs = rootDeclarations.map { (property: $0, id: properties.id(of: $0)) }
 		let propertyFacts = Self.propertyFacts(of: &properties, labels: &labels, extending: propertyFactsOfNodes)
 
 		// The reads each node makes itself, and those it hides: each read of a label it binds.
@@ -923,6 +928,7 @@ struct TypeFactsGraph: Sendable {
 			madeAgain: madeAgain.map { ($0, madeAgainByNode, loopParentByMember) },
 			fills: fills,
 			fillFields: fillFields,
+			rootDeclarations: rootDeclarationIDs,
 		)
 		answerIsBeingBuilt = answers.isBeingBuilt
 		answerIsMadeAgain = answers.isMadeAgain
@@ -1107,6 +1113,7 @@ struct TypeFactsGraph: Sendable {
 		madeAgain: (edges: MadeAgainEdges, targetsByNode: [[LoopTarget]], parentByMember: [Int32])?,
 		fills: [TypeFactsFill],
 		fillFields: [TypeFactsFillField],
+		rootDeclarations: [(property: Property, id: Int32)],
 	) -> (variants: TypeFactsVariants, isBeingBuilt: [Bool], isMadeAgain: [Bool], texts: [String], keys: [Int32], properties: [Int32]) {
 		var answerIDByText = [String: Int32]()
 		var texts = [String]()
@@ -1278,6 +1285,31 @@ struct TypeFactsGraph: Sendable {
 			}
 			return VariantBinding(answer: answer(text: text, beingBuilt: beingBuilt, keyText: keyText, kind: kind, property: property, inReadForm: inReadForm), declaration: Int32(node))
 		}
+		// What the root is handed answers its reads of each label it is handed, as a declaration bound above the root's
+		// edges: keyed as a binding of the same property is (rules 1 and 2), and never being built.
+		var rootDeclarationByLabel = [Int32: (property: Property, id: Int32)]()
+		for declaration in rootDeclarations {
+			if let label = labels.existingID(of: declaration.property.label), rootDeclarationByLabel[label] == nil {
+				rootDeclarationByLabel[label] = declaration
+			}
+		}
+		func rootAnswer(of readID: Int32) -> VariantBinding? {
+			let read = readTable[Int(readID)]
+			guard read.channel != .mock, let declaration = rootDeclarationByLabel[read.label] else { return nil }
+			let kind = declaration.property.propertyType
+			let declarationForms = formsText(of: declaration.property)
+			var inReadForm = false
+			if kind.isLazilyInstantiated, read.channel == .optional || read.channel == .optionalValue {
+				inReadForm = true
+				forms.readFromAbove.rows.forEachColumn(inRow: 0) { form, _ in
+					if forms.table[Int(form)].label == read.label, forms.table[Int(form)].kind != OnlyIfAvailableForm.position(of: kind) {
+						inReadForm = false
+					}
+				}
+			}
+			let text = "\(read.channel.name) \(declarationForms)\(inReadForm ? " in the form read" : "")"
+			return VariantBinding(answer: answer(text: text, beingBuilt: false, keyText: text, kind: kind, property: declaration.id, inReadForm: inReadForm), declaration: 0)
+		}
 		// Rule A's second stage: `nil` passes through an optional wrapper parameter as well as through the declared form's,
 		// so where no answer in the declared form reaches a read and a wrapper of its value does, `nil` keys with the
 		// wrapper (the lazy one where both kinds reach), and its call shares that wrapper's function. What reaches a read is
@@ -1301,13 +1333,30 @@ struct TypeFactsGraph: Sendable {
 			}
 			rankOffsets[node + 1] = Int32(slotByRank.count)
 		}
-		let rootSlotCount = slotByRank[0..<Int(rankOffsets[1])].count { $0 >= 0 }
 		/// The slot of `read` among `node`'s optional reads from above, nil where it reads no such read.
 		func optionalSlot(of read: Int32, in node: Int) -> Int? {
 			guard isOptionalRead[Int(read)], let rank = reads.rows.rank(of: read, inRow: node) else { return nil }
 			return Int(slotByRank[Int(rankOffsets[node]) + rank])
 		}
 		var reaching = [UInt8](repeating: 0, count: Int(slotCount))
+		/// The class of what reaches a read where `answer` binds it.
+		func bit(of answer: Int32) -> UInt8 {
+			let answer = Int(answer)
+			return if isBeingBuilt[answer], isTwin(kinds[answer]) {
+				8
+			} else if isInReadForm[answer] {
+				1
+			} else {
+				switch kinds[answer] {
+				case .lazilyInstantiated:
+					2
+				case .sendableLazilyInstantiated:
+					4
+				case .constant, .instantiator, .sendableInstantiator, .erasedInstantiator, .sendableErasedInstantiator:
+					1
+				}
+			}
+		}
 		// What each edge's optional reads are bound to, by slot of the target, and the caller's slot each passes through.
 		var edgeClasses = [(target: Int, slot: Int, bound: UInt8, passedFrom: Int?)]()
 		var edgeIndex = 0
@@ -1318,22 +1367,7 @@ struct TypeFactsGraph: Sendable {
 				reads.rows.forEachColumn(inRow: Int(target)) { read, _ in
 					guard isOptionalRead[Int(read)], let slot = optionalSlot(of: read, in: Int(target)) else { return }
 					if let bound = binding(at: edge, of: read) {
-						let answer = Int(bound.answer)
-						let bit: UInt8 = if isBeingBuilt[answer], isTwin(kinds[answer]) {
-							8
-						} else if isInReadForm[answer] {
-							1
-						} else {
-							switch kinds[answer] {
-							case .lazilyInstantiated:
-								2
-							case .sendableLazilyInstantiated:
-								4
-							case .constant, .instantiator, .sendableInstantiator, .erasedInstantiator, .sendableErasedInstantiator:
-								1
-							}
-						}
-						edgeClasses.append((Int(target), slot, bit, nil))
+						edgeClasses.append((Int(target), slot, bit(of: bound.answer), nil))
 					} else if let callerSlot = optionalSlot(of: read, in: node) {
 						edgeClasses.append((Int(target), slot, 0, callerSlot))
 					} else {
@@ -1342,9 +1376,14 @@ struct TypeFactsGraph: Sendable {
 				}
 			}
 		}
-		// The root's slots come first, and nothing answers the root's own reads.
-		for root in 0..<rootSlotCount {
-			reaching[root] = 8
+		// The root's slots come first: what the root is handed answers its own reads, and nothing answers the rest.
+		reads.rows.forEachColumn(inRow: 0) { read, _ in
+			guard let slot = optionalSlot(of: read, in: 0) else { return }
+			reaching[slot] = if let bound = rootAnswer(of: read) {
+				bit(of: bound.answer)
+			} else {
+				8
+			}
 		}
 		var changed = true
 		while changed {
@@ -1385,7 +1424,7 @@ struct TypeFactsGraph: Sendable {
 		let variants = TypeFactsVariants(
 			graph: graph,
 			reads: reads,
-			rootAnswer: { _ in nil },
+			rootAnswer: rootAnswer(of:),
 			binding: { edge, readID in binding(at: edge, of: readID) },
 			family: family,
 			key: { readID, answer, target in
