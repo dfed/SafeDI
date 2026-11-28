@@ -163,7 +163,7 @@ struct TypeFactsGraph: Sendable {
 			var fillEdges = [(edge: Int32, hole: SeamSignature.Hole)]()
 			for case let (index, .fill(hole, child, fillContext)) in declaration.scope.holeArguments.enumerated() {
 				fillEdges.append((Int32(edgeEntries.count), hole))
-				targets.append(TypeFactsDeclaration(scope: child, property: hole.property, propertyID: fillContext.propertyID, erasedToConcreteExistential: false, isFill: true))
+				targets.append(TypeFactsDeclaration(scope: child, property: hole.property, propertyID: fillContext.propertyID, erasedToConcreteExistential: hole.erasedToConcreteExistential, isFill: true))
 				edgeEntries.append(Int32(index))
 				edgeIsFill.append(true)
 			}

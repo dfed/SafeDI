@@ -42,7 +42,7 @@ struct TypeFactsImports: Sendable {
 				targets.append(TypeFactsDeclaration(scope: child, property: property, propertyID: propertyID, erasedToConcreteExistential: erasedToConcreteExistential, isFill: false))
 			}
 			for case let .fill(hole, child, fillContext) in declaration.scope.holeArguments {
-				targets.append(TypeFactsDeclaration(scope: child, property: hole.property, propertyID: fillContext.propertyID, erasedToConcreteExistential: false, isFill: true))
+				targets.append(TypeFactsDeclaration(scope: child, property: hole.property, propertyID: fillContext.propertyID, erasedToConcreteExistential: hole.erasedToConcreteExistential, isFill: true))
 			}
 			return targets
 		}
