@@ -659,6 +659,7 @@ struct TypeFactsGraph: Sendable {
 		self.fills = fills
 		self.fillPathEntries = fillPathEntries
 		self.propertyFacts = propertyFacts
+		owedFactsByNode = Self.owedFacts(of: graph, edgeFacts: edgeFacts, forMockGeneration: forMockGeneration)
 		propertyTable = properties.values
 		typeTable = types.values
 		moduleNames = modules.values
@@ -967,6 +968,38 @@ struct TypeFactsGraph: Sendable {
 	let moduleNames: [String]
 	/// Each declaration location ID's location.
 	let declarationLocations: [Dependency.DeclarationLocation]
+
+	/// The facts producers still owe each node's answers (`TypeFactsOwedFacts`), found once for the whole world.
+	let owedFactsByNode: [TypeFactsOwedFacts]
+
+	/// The facts producers still owe each node's answers, in one pass over the edges and one walk down from the fills:
+	/// a node is made again where an edge into it is in a loop of builders, and beneath a fill where a fill reaches it.
+	/// Each node, each edge and each node a walk from a fill reaches counts as one visit of `findingOwedFacts`; asked
+	/// of each declaration with a walk up its parents, a chain of n declarations walked n² parents.
+	private static func owedFacts(of graph: OrderedGraph<TypeFactsDeclaration>, edgeFacts: [TypeFactsEdge], forMockGeneration: Bool) -> [TypeFactsOwedFacts] {
+		let everyNode: TypeFactsOwedFacts = forMockGeneration ? [.mockRootPin, .mockRootRecord, .mockRootBinding] : []
+		var owed = [TypeFactsOwedFacts](repeating: everyNode, count: graph.nodes.count)
+		var visits = graph.nodes.count + edgeFacts.count
+		// A member of a loop of builders: an edge into it is in a loop.
+		for edge in edgeFacts where edge.loop >= 0 {
+			owed[Int(edge.child)].insert(.madeAgain)
+		}
+		// A declaration is beneath a fill where any of its routes enters one: a walk down from every fill.
+		var pending = [Int]()
+		for index in graph.nodes.indices where graph.nodes[index].key.isFill {
+			owed[index].insert(.fillBeingBuilt)
+			pending.append(index)
+		}
+		while let current = pending.popLast() {
+			visits += 1
+			for target in graph.edges(from: current) where !owed[Int(target)].contains(.fillBeingBuilt) {
+				owed[Int(target)].insert(.fillBeingBuilt)
+				pending.append(Int(target))
+			}
+		}
+		GenerationWork.record(visits, by: .findingOwedFacts)
+		return owed
+	}
 
 	/// The facts of the node's edges, parallel to `graph.edges(from:)`.
 	func edgeFacts(from index: Int) -> ArraySlice<TypeFactsEdge> {

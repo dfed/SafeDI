@@ -124,6 +124,10 @@ public struct GenerationWork: Sendable {
 		/// each place the walk visits. The walk enters no tree that holds no call of a seam tier that omits a parameter, and
 		/// in a tree that holds one only a place whose subtree holds such a call or a scope that closes a lazy cycle.
 		case findingSeamTierOmissions
+		/// Finding the facts producers still owe each declaration of a world (`TypeFactsGraph.owedFactsByNode`): each
+		/// declaration, each edge, and each declaration a walk down from the fills reaches, once per world. Asked of each
+		/// declaration with a walk up its parents, a chain of n declarations walked n² parents.
+		case findingOwedFacts
 	}
 
 	/// The step that did the work.
