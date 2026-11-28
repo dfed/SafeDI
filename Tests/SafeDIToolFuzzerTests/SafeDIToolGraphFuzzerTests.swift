@@ -3241,6 +3241,37 @@ struct SafeDIToolGraphFuzzerTests {
 		#expect(results.map { $0.multiModuleFailures.map(\.kind) } == [[.integrationsDiffer]])
 	}
 
+	@Test
+	func placesOracle_comparesFirstPassedUpCasesAndCountsTheRest_whenGraphPassesUpMoreThanTheLimit() async throws {
+		// Seam corpus seed 614's `HoleTop` and `HoleRelay` each pass up the places of 11 cases, past the limit of 8, and
+		// `HoleSeam` those of 1.
+		let fixture = GraphFuzzerGenerator.fixture(forSeed: 614, features: [.generateDependencyTree])
+		let (reports, continuation) = AsyncStream.makeStream(of: SeamPlacesOracle.Report.self)
+		_ = try await SeamPlaceLevels.$observer.withValue(TaskLocalFunction { placeLevels in
+			if let observation = placeLevels.placesObservation {
+				continuation.yield(SeamPlacesOracle.report(of: observation))
+			}
+		}) {
+			try await GraphFuzzerOracle.toolOutcome(of: fixture, integration: .moduleInfo)
+		}
+		continuation.finish()
+		var cappedCasesBySeam = [String: Set<Int>]()
+		for await report in reports {
+			cappedCasesBySeam[report.seamType, default: []].insert(report.passedUpCasesCapped)
+		}
+		#expect(SeamPlacesOracle.passedUpCaseLimit == 8)
+		#expect(cappedCasesBySeam["S614_HoleTop"] == [3])
+		#expect(cappedCasesBySeam["S614_HoleRelay"] == [3])
+		#expect(cappedCasesBySeam["S614_HoleSeam"] == [0])
+	}
+
+	@Test
+	func placesOracleCappedShare_isAProblem_whenOneGraphInTwentyIsCapped() {
+		#expect(SeamPlacesOracle.cappedShareProblem(cappedGraphCount: 4, graphCount: 81, corpusName: "generateDependencyTree") == nil)
+		#expect(SeamPlacesOracle.cappedShareProblem(cappedGraphCount: 0, graphCount: 0, corpusName: "generateDependencyTree") == nil)
+		#expect(SeamPlacesOracle.cappedShareProblem(cappedGraphCount: 4, graphCount: 80, corpusName: "generateDependencyTree") == "The places oracle capped the passed-up cases of 4 of the 80 seam graphs of the generateDependencyTree corpus, 5% or more: raise `SeamPlacesOracle.passedUpCaseLimit` (8) to the percentile of passed-up cases that compares 95% of graphs whole.")
+	}
+
 	// MARK: Rename invariance
 
 	@Test
@@ -6793,6 +6824,11 @@ struct SafeDIToolGraphFuzzerTests {
 		// time of the test process and of its child processes.
 		let phaseAccount = GraphFuzzerPhaseAccount()
 		let phaseContext = GraphFuzzerPhaseAccount.Context(account: phaseAccount, phase: nil)
+		// Whether the places oracle compared each seam graph whole or capped its passed-up cases (`SeamPlacesOracle.passedUpCaseLimit`).
+		let (placesOracleGraphs, placesOracleGraphsContinuation) = AsyncStream.makeStream(of: Bool.self)
+		let placesOracleCappedGraphObserver = TaskLocalFunction<@Sendable (_ isCapped: Bool) -> Void> { isCapped in
+			placesOracleGraphsContinuation.yield(isCapped)
+		}
 		let startNanoseconds = DispatchTime.now().uptimeNanoseconds
 		let startProcessCPUSeconds = GraphFuzzerPhaseAccount.processCPUSeconds()
 		let startChildProcessCPUSeconds = GraphFuzzerPhaseAccount.childProcessCPUSeconds()
@@ -6806,7 +6842,7 @@ struct SafeDIToolGraphFuzzerTests {
 					let seeds = (batchStart..<min(batchStart + Self.longRunBatchSize, configuration.iterations))
 						.map(configuration.seed(at:))
 					nextBatchIndex += 1
-					group.addTask { try await GraphFuzzerPhaseAccount.$current.withValue(phaseContext) {
+					group.addTask { try await SeamPlacesOracle.$cappedGraphObserver.withValue(placesOracleCappedGraphObserver) { try await GraphFuzzerPhaseAccount.$current.withValue(phaseContext) {
 						var results = try await GraphFuzzerOracle.results(forSeeds: seeds, features: corpus.features, isolatingValueGraphsOf: corpus.isolatedValueGraphSeeds, concurrentToolRuns: 1) { seed in
 							report.append("seed \(seed)")
 						}
@@ -6841,7 +6877,7 @@ struct SafeDIToolGraphFuzzerTests {
 							report.append("finished \(result.fixture.seed)")
 						}
 						return (batchIndex, results)
-					} }
+					} } }
 				}
 				for _ in 0..<concurrentBatchCount {
 					addNextBatch()
@@ -6969,6 +7005,13 @@ struct SafeDIToolGraphFuzzerTests {
 			reportProblem("The long run stopped after \(graphCount) graphs: \(error)")
 			return
 		}
+		placesOracleGraphsContinuation.finish()
+		var placesOracleGraphCount = 0
+		var placesOracleCappedGraphCount = 0
+		for await isCapped in placesOracleGraphs {
+			placesOracleGraphCount += 1
+			placesOracleCappedGraphCount += isCapped ? 1 : 0
+		}
 
 		// The oracle accepts any error the tool reports, so pin which graphs the tool accepts: a change that makes
 		// it reject valid graphs changes this. A shard of the corpus reports its part, which ci.yml's combine job
@@ -7005,6 +7048,9 @@ struct SafeDIToolGraphFuzzerTests {
 		// The graphs the oracle ran again with no skip of a clean subtree in the validation walk, against no pin: a run of the
 		// whole corpus checks the floor below.
 		report.append("clean-subtree-skips \(cleanSubtreeSkipOffGraphCount) \(corpus.name)")
+		// The seam graphs the places oracle compared, and those whose passed-up cases it capped, which ci.yml's combine job adds
+		// up and checks: no more than one graph in twenty capped (`SeamPlacesOracle.passedUpCaseLimit`).
+		report.append("places-oracle \(placesOracleCappedGraphCount) \(placesOracleGraphCount) \(corpus.name)")
 		// The accepted graphs whose seam's own internal mock takes a builder as a closure that takes nothing, which ci.yml's
 		// combine job adds up and checks against a floor of ten: the only count of that shape the corpus draws.
 		if corpus.features.contains(.generateDependencyTree) {
@@ -7078,6 +7124,9 @@ struct SafeDIToolGraphFuzzerTests {
 			}
 			if let pinnedValueOracleCounts = corpus.valueOracleCounts, valueOracleCounts != pinnedValueOracleCounts {
 				reportProblem("The value oracle compared and skipped, over the \(corpus.name) corpus, \(valueOracleCounts.reportField), but \(pinnedValueOracleCounts.reportField) is pinned (`corpusValueOracleCounts`).")
+			}
+			if let problem = SeamPlacesOracle.cappedShareProblem(cappedGraphCount: placesOracleCappedGraphCount, graphCount: placesOracleGraphCount, corpusName: corpus.name) {
+				reportProblem(problem)
 			}
 			if cleanSubtreeSkipOffGraphCount < Self.cleanSubtreeSkipOffGraphFloor {
 				reportProblem("The oracle ran \(cleanSubtreeSkipOffGraphCount) graphs of the \(corpus.name) corpus again with no skip of a clean subtree in the validation walk, fewer than \(Self.cleanSubtreeSkipOffGraphFloor): the oracle that compares the two runs judges too few graphs to stand in for unit tests.")

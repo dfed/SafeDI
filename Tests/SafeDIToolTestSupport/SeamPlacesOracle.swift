@@ -35,6 +35,25 @@ import SafeDICore
 ///    route is its first site's, which names are made from; and its sites are the places of one case of the generated enums.
 /// 3. (Callers' findings, with step 2: not yet.)
 public enum SeamPlacesOracle {
+	/// The most passed-up cases one graph's report compares through the called seams' graphs (`checkPassedUpCase`), each
+	/// in case order; the rest are counted (`Report.passedUpCasesCapped`), never compared. Each such case follows its chain of
+	/// calls through every called seam's graph, and a seam is observed on each pass that settles its signature, so a graph of
+	/// many such cases cost the long run more than a shard's step allows: seam corpus seed 1358 spent ten minutes here. The
+	/// limit is the 96th percentile of the passed-up cases of the seam corpus's graphs (every fifth seed: 13,730 observed
+	/// graphs, 3.7% with more), so at least 95% of graphs are compared whole, which the long run checks over the corpus
+	/// (`placesOracleCappedGraphCount`).
+	public static let passedUpCaseLimit = 8
+
+	/// Told of each graph `mismatches(of:)` compares whether its report was capped, when a long run counts them.
+	@TaskLocal public static var cappedGraphObserver: TaskLocalFunction<@Sendable (_ isCapped: Bool) -> Void>?
+
+	/// The long run's problem when one graph in twenty or more of a corpus had its passed-up cases capped: the limit then
+	/// leaves too much of the corpus uncompared, and is raised with the percentile it stands for.
+	public static func cappedShareProblem(cappedGraphCount: Int, graphCount: Int, corpusName: String) -> String? {
+		guard cappedGraphCount * 20 >= graphCount, cappedGraphCount > 0 else { return nil }
+		return "The places oracle capped the passed-up cases of \(cappedGraphCount) of the \(graphCount) seam graphs of the \(corpusName) corpus, 5% or more: raise `SeamPlacesOracle.passedUpCaseLimit` (\(passedUpCaseLimit)) to the percentile of passed-up cases that compares 95% of graphs whole."
+	}
+
 	public struct Report: Sendable {
 		public var seamType = ""
 		public var sites = 0
@@ -51,6 +70,11 @@ public enum SeamPlacesOracle {
 		public var passedUpCasesOfAnotherPass = 0
 		/// The cases compared whose facts the references alone gave too, and those whose path through the calls was compared.
 		public var passedUpCasesJoinedBothWays = 0
+		/// The passed-up cases past `passedUpCaseLimit`, counted and not compared; a graph with any is capped.
+		public var passedUpCasesCapped = 0
+		public var isCapped: Bool {
+			passedUpCasesCapped > 0
+		}
 		public var passedUpPathQuestions = 0
 		/// The cases compared whose places, the first of each case the called seam hands, carry fewer fields than the case.
 		public var passedUpCasesHandedFewerFields = 0
@@ -210,7 +234,11 @@ public enum SeamPlacesOracle {
 		// A place a call passes up, along the route to the first call that presents it: the route is one of the graph's to the
 		// level that declares the call, whose types and declared properties begin the copy's, the call's property next, and
 		// the case refers to the seam whose call presented the place.
-		for (caseIndex, sites) in passedUpSitesByCase.sorted(by: { $0.key < $1.key }) {
+		for (comparedCount, (caseIndex, sites)) in passedUpSitesByCase.sorted(by: { $0.key < $1.key }).enumerated() {
+			guard comparedCount < passedUpCaseLimit else {
+				report.passedUpCasesCapped += 1
+				continue
+			}
 			for site in sites {
 				let hole = holes[site]
 				let route = observation.routeBySite[site]
@@ -301,6 +329,7 @@ public enum SeamPlacesOracle {
 	/// The issues `report(of:)` finds, one per observation that has any.
 	public static func mismatches(of observation: SeamSignature.Places.Observation) -> [String] {
 		let report = report(of: observation)
+		cappedGraphObserver?(report.isCapped)
 		if report.passedUpDeclarationsBehindNearerSeams > 0 || report.passedUpDeclarationsBehindHoldingSeams > 0 {
 			// Counted from a run's output, for the release note's line on the passed-up path.
 			print("[SeamPlacesOracle] `\(report.seamType)`: \(report.passedUpDeclarationsBehindNearerSeams) declarations behind a nearer seam's, \(report.passedUpDeclarationsBehindHoldingSeams) behind the holding seam's own")

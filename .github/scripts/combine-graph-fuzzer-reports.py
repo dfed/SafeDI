@@ -44,7 +44,8 @@ each draw a corpus counts must add up to its pinned count (`draws`), the graphs 
 add up to their pins (`errors`: a public mock's own errors, or a cycle's in a seam's tree), the graphs the builder
 surface judges as each kind a corpus floors must add up to at least ten (`builder-surface`), what the base corpus's value oracle compares and
 skips must add up to its pins (`value-oracle`: counts, and set sums whose keys end in `Sum`, which add up wrapping
-like the accepted seed-set sum), and no shard may report a failure,
+like the accepted seed-set sum), fewer than one in twenty of the seam graphs the places oracle compares may have their
+passed-up cases capped (`places-oracle`: capped, then compared), and no shard may report a failure,
 a stale known issue, a misfiled seed, or a problem. Every long run writes `features`, `inspected`, `retention`, `gating`, `read-twins`, `draws`, `errors` and `builder-surface` for its corpus,
 `value-oracle` for the base corpus, and `level-captures` for the seam corpus, so a complete report that names a corpus without one of them is a problem: a
 run that stopped writing the line would otherwise skip that line's check silently. The `cpu` lines check nothing:
@@ -81,6 +82,8 @@ read_twins_pins_by_corpus = {}
 # The accepted graphs, per corpus, whose seam's own internal mock takes a builder as a closure that takes nothing: at least
 # `SEAM_MOCK_BUILDER_FLOOR`, the only count of that shape the seam corpus draws.
 seam_mock_builders_by_corpus = {}
+# The seam graphs the places oracle compared, and those whose passed-up cases it capped (`places-oracle`), by corpus.
+places_oracle_by_corpus = {}
 SEAM_MOCK_BUILDER_FLOOR = 10
 omitted_values_by_corpus = {}
 # The graphs the builder surface judged per kind, added up across shards, and the kinds each corpus floors.
@@ -178,6 +181,10 @@ for path in report_paths:
                 read_twin_corpora.add(fields[3])
                 read_twins_by_corpus[fields[3]] = read_twins_by_corpus.get(fields[3], 0) + int(fields[1])
                 read_twins_pins_by_corpus.setdefault(fields[3], set()).add(int(fields[2]))
+            elif fields[0] == "places-oracle" and len(fields) == 4:
+                totals = places_oracle_by_corpus.setdefault(fields[3], [0, 0])
+                totals[0] += int(fields[1])
+                totals[1] += int(fields[2])
             elif fields[0] == "seam-mock-builders" and len(fields) == 3:
                 seam_mock_builders_by_corpus[fields[2]] = seam_mock_builders_by_corpus.get(fields[2], 0) + int(fields[1])
             elif fields[0] == "builder-surface" and len(fields) >= 3:
@@ -377,6 +384,13 @@ if not problems:
             problems.append(
                 f"The oracle compared {read_twins_by_corpus.get(corpus, 0)} graphs of the {corpus} corpus with their read twin, "
                 f"but {next(iter(read_twins_pins))} are pinned."
+            )
+        capped_graphs, oracle_graphs = places_oracle_by_corpus.get(corpus, [0, 0])
+        if capped_graphs > 0 and capped_graphs * 20 >= oracle_graphs:
+            problems.append(
+                f"The places oracle capped the passed-up cases of {capped_graphs} of the {oracle_graphs} seam graphs of the "
+                f"{corpus} corpus, 5% or more: raise `SeamPlacesOracle.passedUpCaseLimit` to the percentile of passed-up cases "
+                f"that compares 95% of graphs whole."
             )
         if corpus in seam_mock_builders_by_corpus and seam_mock_builders_by_corpus[corpus] < SEAM_MOCK_BUILDER_FLOOR:
             problems.append(
