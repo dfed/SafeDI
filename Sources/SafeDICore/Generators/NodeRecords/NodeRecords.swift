@@ -71,6 +71,9 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	case fillCallSeveralVariants
 	/// A fill of the node's call makes a call of a seam or a public mock, which may re-enter the call's levels.
 	case fillHoldsCall
+	/// A fill of the node's call reads what `DependencyTreeGenerator.validateFills` judges on the tree
+	/// (`FillFindingFacts.mayBeReported(_:in:)`), so the root keeps its tree for the check.
+	case fillFinding
 	/// A dispatcher of the node's call carries a seam's deferred fields, so a fill may take a memo in a form only the forms
 	/// its tree reads decide, which the world's reads, by label, do not hold.
 	case fillHandedMemo

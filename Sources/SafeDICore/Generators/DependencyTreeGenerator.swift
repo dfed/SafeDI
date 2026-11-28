@@ -452,7 +452,8 @@ public actor DependencyTreeGenerator {
 			}
 			throw error
 		}
-		try await validateSendableBuildersCaptureNoNonSendableWrapper(inTreesRootedAt: roots.compactMap(\.tree))
+		// A fill's tree a root laid out from its records keeps is judged too: its @Sendable functions are the tree's.
+		try await validateSendableBuildersCaptureNoNonSendableWrapper(inTreesRootedAt: roots.compactMap { root in root.tree ?? root.fillValidationTree.map { (instantiable: root.instantiable, scopeGenerator: $0) } })
 		await observePlanCaptures(of: roots)
 		try await validateNoSeamTierOmitsProvidedValue(inTreesRootedAt: roots)
 	}

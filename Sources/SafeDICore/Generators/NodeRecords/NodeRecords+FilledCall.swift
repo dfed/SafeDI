@@ -60,6 +60,7 @@ struct FilledCallRecords: Sendable {
 		case let .refused(refusal):
 			throw refusal
 		}
+		guard !FillFindingFacts.mayBeReported(allFacts, in: world) else { throw .fillFinding }
 		let innerScopes = try FillInnerScopes.of(call: call, in: world, seamTree: nil)
 		// What the root dispatcher hands each parameter of the caller's scope a fill takes: the first fill that reads it bound.
 		var callerArguments = [Property: ArgumentSource]()

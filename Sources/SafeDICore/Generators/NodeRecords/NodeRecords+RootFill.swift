@@ -453,14 +453,19 @@ extension NodeRecords {
 
 	/// Why node records leave `declaration`, a filled seam call, to the tree: what `FillFacts.refusal(ofCall:in:routeCount:)`
 	/// says, else `fill` until a test turns on records of filled calls (`NodeRecordsObservation.recordsFilledCalls`), and then
-	/// where the call's records do not assemble.
+	/// why the call's records do not assemble.
 	private static func fillRefusals(ofCall declaration: DeclarationID, in world: some NodeRecordSources, routeCount: Int) -> [NodeRecordRefusal] {
 		if let refusal = FillFacts.refusal(ofCall: declaration, in: world, routeCount: routeCount) {
 			[refusal]
-		} else if NodeRecordsObservation.recordsFilledCalls, case let .success(records) = world.filledCallRecords(of: declaration) {
-			// A fill of a wrapper returns what the wrapper's builder function builds, or the builder itself, where its place
-			// would bind the wrapper: no record spells that return yet.
-			records.fills.allSatisfy(\.facts.returnsBoundValue) ? [] : [.fill]
+		} else if NodeRecordsObservation.recordsFilledCalls {
+			switch world.filledCallRecords(of: declaration) {
+			case let .success(records):
+				// A fill of a wrapper returns what the wrapper's builder function builds, or the builder itself, where its place
+				// would bind the wrapper: no record spells that return yet.
+				records.fills.allSatisfy(\.facts.returnsBoundValue) ? [] : [.fill]
+			case let .failure(refusal):
+				[refusal]
+			}
 		} else {
 			[.fill]
 		}
